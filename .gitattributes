@@ -1,0 +1,16 @@
+# Auto-detect text files and normalize line endings
+* text=auto
+
+# Force LF for shell scripts
+*.sh text eol=lf
+
+# Force CRLF for Windows-specific files
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.rc text eol=crlf
+
+# Binary files
+*.ico binary
+*.png binary
+*.exe binary
+*.dll binary

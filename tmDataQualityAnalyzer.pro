@@ -1,0 +1,115 @@
+QT       += core gui printsupport concurrent svg
+
+greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
+
+CONFIG += c++17
+VERSION = 3.1.2
+
+
+INCLUDEPATH += \
+    $$PWD/include/ \
+    $$PWD/lib/irig106/include/ \
+    $$PWD/lib/qcustomplot/
+
+# You can make your code fail to compile if it uses deprecated APIs.
+# In order to do so, uncomment the following line.
+#DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
+
+win32 {
+    LIBS += -lws2_32 # Need this for Windows 32-bit functions, specifically WSASocketW()
+    QMAKE_CXXFLAGS += -Wa,-mbig-obj  # Required for QCustomPlot large object file on MinGW
+}
+
+SOURCES += \
+    src/channeldata.cpp \
+    src/chapter10reader.cpp \
+    src/framesetup.cpp \
+    src/main.cpp \
+    src/mainviewmodel.cpp \
+    src/processingcoordinator.cpp \
+    src/mainview.cpp \
+    src/streamconfigdialog.cpp \
+    src/timeextractionwidget.cpp \
+    src/exportdialog.cpp \
+    src/frameprocessor.cpp \
+    src/plotviewmodel.cpp \
+    src/plotwidget.cpp \
+    src/tomlconfighelper.cpp \
+    lib/irig106/src/irig106ch10.c \
+    lib/irig106/src/i106_time.c \
+    lib/irig106/src/i106_data_stream.c \
+    lib/irig106/src/i106_decode_time.c \
+    lib/irig106/src/i106_decode_tmats.c \
+    lib/irig106/src/i106_decode_tmats_g.c \
+    lib/irig106/src/i106_decode_tmats_r.c \
+    lib/irig106/src/i106_decode_tmats_m.c \
+    lib/irig106/src/i106_decode_tmats_p.c \
+    lib/irig106/src/i106_decode_tmats_b.c \
+    lib/irig106/src/i106_decode_tmats_c.c \
+    lib/irig106/src/i106_decode_tmats_d.c \
+    lib/irig106/src/i106_decode_pcmf1.c \
+    lib/qcustomplot/qcustomplot.cpp
+
+HEADERS += \
+    include/channeldata.h \
+    include/chapter10reader.h \
+    include/constants.h \
+    include/framesetup.h \
+    include/mainviewmodel.h \
+    include/processingcoordinator.h \
+    include/mainview.h \
+    include/streamconfig.h \
+    include/streamconfigdialog.h \
+    include/processedstreamdata.h \
+    include/frameprocessor.h \
+    include/processingparams.h \
+    include/timefields.h \
+    include/timeextractionwidget.h \
+    include/exportdialog.h \
+    include/plotviewmodel.h \
+    include/plotwidget.h \
+    include/tomlconfighelper.h \
+    lib/irig106/include/irig106ch10.h \
+    lib/irig106/include/i106_data_stream.h \
+    lib/irig106/include/i106_decode_time.h \
+    lib/irig106/include/i106_time.h \
+    lib/irig106/include/i106_stdint.h \
+    lib/irig106/include/config.h \
+    lib/irig106/include/i106_decode_tmats.h \
+    lib/irig106/include/i106_decode_tmats_g.h \
+    lib/irig106/include/i106_decode_tmats_r.h \
+    lib/irig106/include/i106_decode_tmats_m.h \
+    lib/irig106/include/i106_decode_tmats_p.h \
+    lib/irig106/include/i106_decode_tmats_b.h \
+    lib/irig106/include/i106_decode_tmats_c.h \
+    lib/irig106/include/i106_decode_tmats_d.h \
+    lib/irig106/include/i106_decode_tmats_common.h \
+    lib/irig106/include/i106_decode_pcmf1.h \
+    lib/qcustomplot/qcustomplot.h
+
+RESOURCES += \
+    resources/win11-dark.qss \
+    resources/win11-light.qss \
+    resources/icon.ico \
+    resources/checkmark.svg \
+    resources/chevron-down-dark.svg \
+    resources/chevron-down-light.svg \
+    resources/chevron-right-dark.svg \
+    resources/chevron-right-light.svg \
+    resources/chevron-down-disabled-dark.svg \
+    resources/chevron-down-disabled-light.svg \
+    resources/folder-open.svg \
+    resources/floppy-save.svg \
+    resources/play.svg \
+    resources/stop.svg \
+    resources/gear.svg \
+    resources/retry.svg
+
+RC_FILE = resources/tmDataQualityAnalyzer_resource.rc
+
+# Default rules for deployment.
+qnx: target.path = /tmp/$${TARGET}/bin
+else: unix:!android: target.path = /opt/$${TARGET}/bin
+!isEmpty(target.path): INSTALLS += target
+
+TARGET = tmDataQualityAnalyzer

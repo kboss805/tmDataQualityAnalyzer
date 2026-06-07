@@ -1,0 +1,54 @@
+tmDataQualityAnalyzer v0.8.0 - What's New
+=================================
+
+Architecture & UX Improvements
+  - Extracted ProcessingCoordinator class from MainViewModel to own all worker thread lifecycle and batch sequencing
+  - ProcessingSettings struct groups frameSync, polarityIdx, slopeIdx, scale, and receiverStates — replaces 5-parameter signatures across all processing entry points
+  - ProcessingParams struct extracted to include/processingparams.h — single source of truth for all processing input parameters
+  - TimeFields struct extracted to include/timefields.h — groups DOY/hour/minute/second for start and stop times
+  - MainViewModel significantly slimmed — delegates all processing orchestration to ProcessingCoordinator
+  - Batch results dialog: clear visualization of succeeded (green), failed (red), and skipped (gray) files after every batch run
+  - View Plot combo integrated into batch results dialog — no separate plot selection prompt
+  - Retry button auto-hides on click and only reappears if the retry run itself produces failures
+
+Previous Releases
+-----------------
+
+v3.2.0 - Plot & Batch Improvements
+  - Plot hover tooltip: shows series name, time (DDD:HH:MM:SS), and dB value
+  - Copy Data to Clipboard: copies visible plot range as comma-separated values
+  - Ctrl+E keyboard shortcut to expand/collapse all receivers in the plot legend
+  - Fixed plot legend scroll overdraw (transparent background issue)
+  - Fixed worker thread use-after-free: replaced deleteLater() with delete after wait()
+  - Fixed destructor memory leak: worker thread now deleted on application exit
+  - Added 100 MB ceiling on packet buffer allocation to guard against malformed Ch10 files
+  - Optimized RNRZ-L derandomization loop: replaced division/modulo with bit shifts
+  - Cached batch status summary string to avoid redundant rebuilds
+  - Ctrl+E keyboard shortcut added to expand/collapse receivers in the main panel
+
+v3.1.1 - Code Quality & Test Coverage
+  - Clang-tidy efficiency improvements
+  - TestFrameProcessor, TestTimeExtractionWidget, TestReceiverGridWidget tests
+
+v3.0.0 - AGC Signal Plot Window
+  - Interactive QCustomPlot chart with zoom and pan
+  - Auto-scale Y axis with manual override
+  - Time window controls for X axis
+  - Per-receiver-channel visibility toggles
+  - Auto-assigned color palette
+  - Dark/light theme support
+
+v2.4.0 - Batch Ch10 Processing
+  - Multi-file selection and processing
+  - Per-file channel selection
+  - Sequential queue-based processing
+  - Color-coded file status tracking
+
+v2.3.0 - Easy Deployment
+  - Inno Setup installer (admin/non-admin)
+  - Portable ZIP distribution
+  - Automatic INI settings migration
+  - Code-signed executable
+
+For the full changelog, visit:
+https://github.com/kevinbossoletti/tmDataQualityAnalyzer

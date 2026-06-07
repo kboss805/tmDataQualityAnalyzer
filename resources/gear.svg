@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <defs>
+    <linearGradient id="g1" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#90A4AE"/>
+      <stop offset="100%" stop-color="#546E7A"/>
+    </linearGradient>
+  </defs>
+  <!-- Outer gear ring with 8 teeth -->
+  <path fill="url(#g1)" d="
+    M 13.8 2
+    L 10.2 2
+    L 9.5 4.5
+    Q 8.4 4.9 7.5 5.6
+    L 5.0 4.7
+    L 2.7 7.5
+    L 4.4 9.5
+    Q 4.0 10.6 4.0 12
+    Q 4.0 13.4 4.4 14.5
+    L 2.7 16.5
+    L 5.0 19.3
+    L 7.5 18.4
+    Q 8.4 19.1 9.5 19.5
+    L 10.2 22
+    L 13.8 22
+    L 14.5 19.5
+    Q 15.6 19.1 16.5 18.4
+    L 19.0 19.3
+    L 21.3 16.5
+    L 19.6 14.5
+    Q 20.0 13.4 20.0 12
+    Q 20.0 10.6 19.6 9.5
+    L 21.3 7.5
+    L 19.0 4.7
+    L 16.5 5.6
+    Q 15.6 4.9 14.5 4.5
+    Z
+  "/>
+  <!-- Inner cutout circle -->
+  <circle cx="12" cy="12" r="3.8" fill="#263238"/>
+</svg>

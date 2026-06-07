@@ -1,0 +1,19 @@
+# IRIG 106 Library Files - Third-party code, DO NOT MODIFY
+# These files are from the irig106utils library and should not be edited
+
+# IRIG 106 source files
+src/irig106*.c
+src/i106_*.c
+
+# IRIG 106 header files
+include/irig106*.h
+include/i106_*.h
+include/config.h
+
+# Build artifacts (already in .gitignore but listed here for completeness)
+debug/
+release/
+*.o
+*.obj
+Makefile
+Makefile.*

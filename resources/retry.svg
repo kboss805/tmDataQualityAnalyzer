@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <defs>
+    <linearGradient id="r1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFA726"/>
+      <stop offset="100%" stop-color="#E65100"/>
+    </linearGradient>
+  </defs>
+  <!-- Circular arrow (retry) -->
+  <path d="M12 4 A8 8 0 1 0 19.3 8.5" fill="none" stroke="url(#r1)" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Arrowhead pointing right/down at the open end -->
+  <polyline points="15.5,5 19.5,8.5 16,12" fill="none" stroke="url(#r1)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
