@@ -12,14 +12,10 @@
 
 TimeExtractionWidget::TimeExtractionWidget(QWidget* parent)
     : QWidget(parent)
-    , m_time_all(new QCheckBox("Extract All Time"))
+    , m_time_all(new QCheckBox("Extract All"))
     , m_start_time(new QLineEdit)
     , m_stop_time(new QLineEdit)
 {
-    QGridLayout* time_grid = new QGridLayout;
-    time_grid->setContentsMargins(0, 0, 0, 0);
-    time_grid->setVerticalSpacing(4);
-
     m_start_time->setInputMask("000:00:00:00;_");
     m_start_time->setPlaceholderText("DDD:HH:MM:SS");
     m_start_time->setMaximumWidth(UIConstants::kTimeInputMaxWidth);
@@ -28,15 +24,19 @@ TimeExtractionWidget::TimeExtractionWidget(QWidget* parent)
     m_stop_time->setPlaceholderText("DDD:HH:MM:SS");
     m_stop_time->setMaximumWidth(UIConstants::kTimeInputMaxWidth);
 
-    // Row 0: Extract All Time (spans cols 0-1)
-    // Row 1: Start | start input | <stretch> | Stop | stop input
-    time_grid->addWidget(m_time_all,              0, 0, 1, 2);
-    time_grid->addWidget(new QLabel("Start"),     1, 0);
-    time_grid->addWidget(m_start_time,            1, 1);
-    time_grid->addWidget(new QLabel("Stop"),      1, 3, Qt::AlignRight);
-    time_grid->addWidget(m_stop_time,             1, 4, Qt::AlignLeft);
-    time_grid->setColumnStretch(2, 1);
-    setLayout(time_grid);
+    auto* grid = new QGridLayout(this);
+    grid->setContentsMargins(0, 4, 0, 4);
+    grid->setHorizontalSpacing(8);
+    grid->setVerticalSpacing(4);
+
+    // Checkbox in col 0, row 0 only — naturally aligns with the Start row
+    grid->addWidget(m_time_all,          0, 0, Qt::AlignVCenter);
+    grid->addWidget(m_start_time,        0, 1);
+    grid->addWidget(new QLabel("Start"), 0, 2);
+    grid->addWidget(m_stop_time,         1, 1);
+    grid->addWidget(new QLabel("Stop"),  1, 2);
+    grid->setColumnStretch(3, 1);
+    setLayout(grid);
 
     connect(m_time_all, &QAbstractButton::toggled, this, [this](bool checked) {
         m_start_time->setEnabled(!checked);

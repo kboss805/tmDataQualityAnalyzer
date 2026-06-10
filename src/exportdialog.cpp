@@ -93,10 +93,10 @@ void ExportDialog::browseCsvPath()
 void ExportDialog::browseImagePath()
 {
     QString dir = QFileInfo(m_image_path_edit->text()).absolutePath();
-    QString filename = QFileDialog::getSaveFileName(this, "Export Plot Image", dir, "PDF Files (*.pdf);;PNG Files (*.png);;SVG Files (*.svg);;All Files (*.*)");
+    QString filename = QFileDialog::getSaveFileName(this, "Export Plot Image", dir, "PNG Files (*.png);;PDF Files (*.pdf);;SVG Files (*.svg);;All Files (*.*)");
     if (!filename.isEmpty())
     {
-        if (QFileInfo(filename).suffix().isEmpty()) filename += ".pdf";
+        if (QFileInfo(filename).suffix().isEmpty()) filename += ".png";
         m_image_path_edit->setText(filename);
     }
 }

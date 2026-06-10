@@ -7,7 +7,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Qt Version**: 6.10.2 (minimum: Qt 6.0.0)
 - **MinGW Version**: 13.1.0 (minimum: GCC/MinGW 7.0)
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
-- **Project Version**: 0.8.0 — defined in `AppVersion` struct in `include/constants.h`
+- **Project Version**: 1.0.1 — defined in `AppVersion` struct in `include/constants.h`
 
 - **Target Users:** Telemetry engineers and data analysts who want to analyze telemetry framesync lock statistics and Signal to Noise Ratio (SNR) data (derived from receiver AGC samples) in IRIG 106 Chapter 10 formated telemetry files. To analyze the framesync lock statistics and SNR data the application presents the user with a plot window that displays the data vs. time. Additionally, the application allows the user to export selected data to CSV formatted files for further processing and analysis in 3rd party applications such as Microsoft Excel or Matlab. The application also allows the user to export plot window views as images such as pdf, png, etc. for importing into 3rd party presentation applications such as Microsoft PowerPoint.
 
@@ -22,12 +22,12 @@ This file provides context and guidelines for AI assistants working on the tmDat
 **So that** I can view the SNR signal data for one or more receiver channels versus time.
 
 **Acceptance Criteria:**
-- [ ] The user can view the SNR signal data (right hand y-axis) versus time (x-axis) in a plot window
-- [ ] The user can select which receiver/channels SNR signal data to view in the plot window
-- [ ] The user can select the time window to view the SNR signal data in the plot window
-- [ ] The user can select one of the following time periods to average SNR signal data over: 100 Hz, 10 Hz, 1 Hz
-- [ ] Samples are converted from raw integer energy values to Volts (V) using the voltage range and polarity, and then to decimal dB values using the scale (dB/V)
-- [ ] A progress bar updates as the application is processing the SNR signal data
+- [x] The user can view the SNR signal data (right hand y-axis) versus time (x-axis) in a plot window
+- [x] The user can select which receiver/channels SNR signal data to view in the plot window
+- [x] The user can select the time window to view the SNR signal data in the plot window
+- [x] The user can select one of the following time periods to average SNR signal data over: 100 Hz, 10 Hz, 1 Hz
+- [x] Samples are converted from raw integer energy values to Volts (V) using the voltage range and polarity, and then to decimal dB values using the scale (dB/V)
+- [x] A progress bar updates as the application is processing the SNR signal data
 
 ### US1.1: Define the key parameters required to process the receiver AGC sample data
 **As a** telemetry engineer or data analyst
@@ -35,15 +35,15 @@ This file provides context and guidelines for AI assistants working on the tmDat
 **So that** these parameters can be applied per-stream in the processing dialog window (defined in US5.0) and saved/loaded from configuration files (defined in US3.x).
 
 **Acceptance Criteria:**
-- [ ] The user can define the frame sync pattern and frame length for the telemetry stream of interest
-- [ ] The application accepts frame sync pattern sizes up to 64 bits in length
-- [ ] The application accepts frame sync masks up to 64 bits in length
-- [ ] The application accepts frame lengths up to 65,536 bits in length
-- [ ] The user can select from one of the following PCM code formats: NRZ-L, RNRZ-L
-- [ ] The user can define the number of receivers and the number of channels per receiver in the telemetry stream of interest
-- [ ] The user can define the scale of the receiver AGC sample data in dB/V
-- [ ] The user can define the voltage range of the receiver AGC sample from one of the following values: 0-5V, 0-10V, +/-5V, +/-10V
-- [ ] The user can define the polarity of the receiver AGC sample data: positive or negative
+- [x] The user can define the frame sync pattern and frame length for the telemetry stream of interest
+- [x] The application accepts frame sync pattern sizes up to 64 bits in length
+- [x] The application accepts frame sync masks up to 64 bits in length
+- [x] The application accepts frame lengths up to 65,536 bits in length
+- [x] The user can select from one of the following PCM code formats: NRZ-L, RNRZ-L
+- [x] The user can define the number of receivers and the number of channels per receiver in the telemetry stream of interest
+- [x] The user can define the scale of the receiver AGC sample data in dB/V
+- [x] The user can define the voltage range of the receiver AGC sample from one of the following values: 0-5V, 0-10V, +/-5V, +/-10V
+- [x] The user can define the polarity of the receiver AGC sample data: positive or negative
 
 ### US1.2: Export user specified SNR signal data with timestamps to a file
 **As an** As a telemetry engineer or data analyst
@@ -51,9 +51,9 @@ This file provides context and guidelines for AI assistants working on the tmDat
 **So that** I can import the file into 3rd party applications such as Excel and Matlab for further analysis (the export settings and file location are configured via the export dialog window defined in US7.0).
 
 **Acceptance Criteria:**
-- [ ] The current SNR signal data displayed in the plot window is exported to a CSV file
-- [ ] The CSV file includes at least the following columns: time stamps, receiver/channel identifiers, and SNR signal data
-- [ ] The CSV file includes headers describing the content of each column
+- [x] The current SNR signal data displayed in the plot window is exported to a CSV file
+- [x] The CSV file includes at least the following columns: time stamps, receiver/channel identifiers, and SNR signal data
+- [x] The CSV file includes headers describing the content of each column
 
 ### US1.3: Export user specified SNR signal data to an image file
 **As an** As a telemetry engineer or data analyst
@@ -61,8 +61,8 @@ This file provides context and guidelines for AI assistants working on the tmDat
 **So that** I can import the image file into 3rd party applications such as PowerPoint to create presentations (the export format and location are configured via the export dialog window defined in US7.0).
 
 **Acceptance Criteria:**
-- [ ] The current SNR signal data displayed in the plot window is exported to an image file
-- [ ] Images are exported to one of the following file formats as selected by the user: svg, png, pdf
+- [x] The current SNR signal data displayed in the plot window is exported to an image file
+- [x] Images are exported to one of the following file formats as selected by the user: svg, png, pdf
 
 ### US2.0: View the framesync lock statistics for IRIG 106 formatted PCM telemetry streams contained in .ch10 files
 **As a** telemetry engineer or data analyst
@@ -70,43 +70,53 @@ This file provides context and guidelines for AI assistants working on the tmDat
 **So that** I can view the framesync lock statistics for one or more telemetry streams versus time.
 
 **Acceptance Criteria:**
-- [ ] The user can view the framesync lock statistics (left hand y-axis) versus time (x-axis) in a plot window
-- [ ] The user can select which telemetry stream(s) framesync lock statistics to view in the plot window
-- [ ] The user can select the time window to view the framesync lock statistics in the plot window
-- [ ] The user can select framesync lock statistics for the following sample windows: 10ms, 100ms, and 1s
-- [ ] A progress bar updates as the application is processing the framesync lock statistics
+- [x] The user can view the framesync lock statistics (left hand y-axis) versus time (x-axis) in a plot window
+- [x] The user can select which telemetry stream(s) framesync lock statistics to view in the plot window
+- [x] The user can select the time window to view the framesync lock statistics in the plot window
+- [x] The user can select framesync lock statistics for the following sample windows: 10ms, 100ms, and 1s
+- [x] A progress bar updates as the application is processing the framesync lock statistics
 
-### US2.1: Define the key parameters required to process the framesync lock statistics
+### US2.1: View Bit Error Accumulation Over Time
+**As a** telemetry data analyst
+**I want to** quantify and plot the accumulated bit errors over time for my PCM streams 
+**So that** I can quantitatively evaluate how bit errors are accumulating over time
+
+**Acceptance Criteria:**
+- [ ] The user can view the accumulated bit errors (left hand y-axis) versus time (x-axis) in a plot window
+- [ ] The user can switch between framesync lock plot and bit error accumulation modes
+- [ ] The user can select which telemetry stream (bit error accumulation) to view in the plot window
+
+### US2.2: Define the key parameters required to process the framesync lock statistics and bit error accumulation
 **As a** telemetry engineer or data analyst
-**I want to** define the rules and key parameters (frame sync pattern, frame length, framesync mask, PCM code format, etc.) required to properly decommutate and calculate frame lock statistics for telemetry streams
+**I want to** define the rules and key parameters (frame sync pattern, frame length, framesync mask, PCM code format, etc.) required to properly decommutate and calculate frame lock statistics and bit error accumulation for telemetry streams
 **So that** these parameters can be applied per-stream in the processing dialog window (defined in US5.0) and saved/loaded from configuration files (defined in US4.0).
 
 **Acceptance Criteria:**
-- [ ] The user can define the frame sync pattern and frame length for each telemetry stream of interest
-- [ ] The application accepts frame sync pattern sizes up to 64 bits in length
-- [ ] The application accepts frame sync masks up to 64 bits in length
-- [ ] The application accepts frame lengths up to 65,536 bits in length
-- [ ] The user can select from one of the following PCM code formats: NRZ-L, RNRZ-L
-- [ ] The user can caculate frame sync lock statitics for up to 8 telemetry streams from the .ch10 file
+- [x] The user can define the frame sync pattern and frame length for each telemetry stream of interest
+- [x] The application accepts frame sync pattern sizes up to 64 bits in length
+- [x] The application accepts frame sync masks up to 64 bits in length
+- [x] The application accepts frame lengths up to 65,536 bits in length
+- [x] The user can select from one of the following PCM code formats: NRZ-L, RNRZ-L
+- [x] The user can caculate frame sync lock statitics for up to 8 telemetry streams from the .ch10 file
 
-### US2.2: Export user specified framesync lock statistics with timestamps to a file
+### US2.3: Export user specified framesync lock statistics and accumulated bit errors with timestamps to a file
 **As an** As a telemetry engineer or data analyst
-**I want to** to export framesync lock statistics of interest to a CSV file.
+**I want to** to export framesync lock statistics and accumulated bit errors of interest to a CSV file.
 **So that** I can import the file into 3rd party applications such as Excel and Matlab for further analysis (the export settings and file location are configured via the export dialog window defined in US7.0).
 
 **Acceptance Criteria:**
-- [ ] The current framesync lock statistics displayed in the plot window are exported to a CSV file
-- [ ] The CSV file includes at least the following columns: time stamps, stream identifier, and framesync lock statistics
-- [ ] The CSV file includes headers describing the content of each column
+- [ ] The current framesync lock statistics and accumulated bit errors displayed in the plot window are exported to a CSV file
+- [ ] The CSV file includes at least the following columns: time stamps, stream identifier, framesync lock statistics and accumulated bit errors
+- [x] The CSV file includes headers describing the content of each column
 
-### US2.3: Export user specified framesync lock statistics to an image file
+### US2.4: Export user specified framesync lock statistics and accumulated bit errors it errors to an image file
 **As an** As a telemetry engineer or data analyst
-**I want to** to export framesync lock statistics to an image file (e.g. png, pdf, etc.) from the plot window.
+**I want to** to export framesync lock statistics and accumulated bit errors to an image file (e.g. png, pdf, etc.) from the plot window.
 **So that** I can import the image file into 3rd party applications such as PowerPoint to create presentations (the export format and location are configured via the export dialog window defined in US7.0).
 
 **Acceptance Criteria:**
-- [ ] The current framesync lock statistics displayed in the plot window is exported to an image file
-- [ ] Images are exported to one of the following file formats as selected by the user: svg, png, pdf
+- [ ] The current framesync lock statistics and accumulated bit errors displayed in the plot window are exported to an image file
+- [x] Images are exported to one of the following file formats as selected by the user: svg, png, pdf
 
 ### US3.0: Recall/store the default SNR signal data parameters from/to configuration files
 **As an** As a telemetry engineer or data analyst
@@ -114,11 +124,11 @@ This file provides context and guidelines for AI assistants working on the tmDat
 **So that** I don't have to re-enter the parameters every time I open the application.
 
 **Acceptance Criteria:**
-- [ ] Configuration files include the default parameters used to process SNR data
-- [ ] User is able to save default parameters to a configuration file
-- [ ] User is able to recall default parameters from a configuration file
-- [ ] The configuration file is stored in a user specified location
-- [ ] The configuration file is stored in TOML format
+- [x] Configuration files include the default parameters used to process SNR data
+- [x] User is able to save default parameters to a configuration file
+- [x] User is able to recall default parameters from a configuration file
+- [x] The configuration file is stored in a user specified location
+- [x] The configuration file is stored in TOML format
 
 ### US3.1: Edit default SNR signal data parameters in configuration files via a dialog window
 **As an** As a telemetry engineer or data analyst 
@@ -126,15 +136,15 @@ This file provides context and guidelines for AI assistants working on the tmDat
 **So that** I can update the default key parameters to meet the requirements of different telemetry streams formats.
 
 **Acceptance Criteria:**
-- [ ] The dialog window includes the following default parameters used to process SNR signal data streams: 
+- [x] The dialog window includes the following default parameters used to process SNR signal data streams: 
 	- number of receivers
 	- number of channels per receiver
 	- scale
 	- voltage range
 	- slope
-- [ ] The dialog window includes a "Reset" button to reset the key parameters to their default values
-- [ ] The dialog window includes a "Save" button to save the key parameters to the configuration file
-- [ ] The dialog window includes a "Cancel" button to cancel the operation
+- [x] The dialog window includes a "Reset" button to reset the key parameters to their default values
+- [x] The dialog window includes a "Save" button to save the key parameters to the configuration file
+- [x] The dialog window includes a "Cancel" button to cancel the operation
 
 ### US4.0: Recall/store framesync pattern and frame length parameters from/to configuration files
 **As an** As a telemetry engineer or data analyst
@@ -142,11 +152,11 @@ This file provides context and guidelines for AI assistants working on the tmDat
 **So that** I don't have to re-enter the parameters every time I open the application.
 
 **Acceptance Criteria:**
-- [ ] Configuration files include the framesync pattern and frame length
-- [ ] User is able to save the framesync pattern and frame length to a configuration file
-- [ ] User is able to recall the framesync pattern and frame length from a configuration file
-- [ ] The configuration file is stored in a user specified location
-- [ ] The configuration file is stored in TOML format
+- [x] Configuration files include the framesync pattern and frame length
+- [x] User is able to save the framesync pattern and frame length to a configuration file
+- [x] User is able to recall the framesync pattern and frame length from a configuration file
+- [x] The configuration file is stored in a user specified location
+- [x] The configuration file is stored in TOML format
 
 ### US5.0: Determine which streams are processed and the parameters to use for each stream
 **As an** As a telemetry engineer or data analyst 
@@ -154,17 +164,17 @@ This file provides context and guidelines for AI assistants working on the tmDat
 **So that** I can apply the specific parameters defined in US1.1 and US2.1 to each individual telemetry stream before starting the decommutation process.
 
 **Acceptance Criteria:**
-- [ ] A dialog window is presented when the user opens a new ch10 file
-- [ ] The dialog window lists all streams identified in the ch10 file
-- [ ] The dialog window allows the user to select the streams to process for SNR data and/or framesync lock statistics
-- [ ] The dialog window allows the user to specify the framesync pattern, frame length, framesync mask, and bitrate parameters for each telemetry stream
-- [ ] The dialog window allows the user to recall/restore previous frame parameters for each stream using configuration files
+- [x] A dialog window is presented when the user opens a new ch10 file
+- [x] The dialog window lists all streams identified in the ch10 file
+- [x] The dialog window allows the user to select the streams to process for SNR data and/or framesync lock statistics
+- [x] The dialog window allows the user to specify the framesync pattern, frame length, framesync mask, and bitrate parameters for each telemetry stream
+- [x] The dialog window allows the user to recall/restore previous frame parameters for each stream using configuration files
   - **Scope:** Frame-sync Load/Save round-trips ONLY frame sync pattern, sync mask, and words/frame (bits per frame). Randomized, Data Rate, and Sample Rate are per-session operator inputs and are intentionally excluded — this is the meaning of the separator line in the setup-dialog wireframe. Keep `loadFrameSyncToml`/`saveFrameSyncToml` symmetric and do not widen them past that boundary.
-- [ ] The dialog window allows the user to specify the SNR signal data parameters to be used for SNR signal data streams
-- [ ] The dialog window allows the user to recall/restore previous SNR signal data parameters using configuration files
-- [ ] The dialog window closes when the user clicks the "Process" button
-- [ ] The dialog window closes when the user clicks the "Cancel" button
-- [ ] Once the user selects "Process", the dialog window closes and the main window is updated with the processed data
+- [x] The dialog window allows the user to specify the SNR signal data parameters to be used for SNR signal data streams
+- [x] The dialog window allows the user to recall/restore previous SNR signal data parameters using configuration files
+- [x] The dialog window closes when the user clicks the "Process" button
+- [x] The dialog window closes when the user clicks the "Cancel" button
+- [x] Once the user selects "Process", the dialog window closes and the main window is updated with the processed data
 
 ### US6.0: Configure plot window navigation and information
 **As an** As a telemetry engineer or data analyst 
@@ -172,20 +182,20 @@ This file provides context and guidelines for AI assistants working on the tmDat
 **So that** I can quickly analyze data in the plot window
 
 **Acceptance Criteria:**
-- [ ] Dockable plot window
-- [ ] User specified plot title
-- [ ] Left Y axis is labeled and states the unit of measure; average framesync lock (%)
-- [ ] Right Y axis is labeled and states the unit of measure; SNR (dB)
-- [ ] Bottom X axis is labeled and states the unit of measure; time (seconds)
-- [ ] Auto set Y axis to min/max values
-- [ ] Auto set X axis to the max time span in the processed csv file
-- [ ] Controls to set a time window; auto zoom and move the x-axis so only this time window is visible
-- [ ] Contol to overide Y axis min/max
-- [ ] Mouse wheel zooms the x-axis
-- [ ] Mouse click and hold pans the x-axis
-- [ ] Select/Unselect which framesync lock statitics and receiver channel data is visible
-- [ ] Auto set plot colors by default; framesync lock curves should be shades of red and SNR curves should be all other hues;channels from the same receiver should be hues of a single color
-- [ ] Framesync lock curves are highlighted; SNR curves are not
+- [x] Dockable plot window
+- [x] User specified plot title
+- [x] Left Y axis is labeled and states the unit of measure; average framesync lock (%)
+- [x] Right Y axis is labeled and states the unit of measure; SNR (dB)
+- [x] Bottom X axis is labeled and states the unit of measure; time (seconds)
+- [x] Auto set Y axis to min/max values
+- [x] Auto set X axis to the max time span in the processed csv file
+- [x] Controls to set a time window; auto zoom and move the x-axis so only this time window is visible
+- [x] Contol to overide Y axis min/max
+- [x] Mouse wheel zooms the x-axis
+- [x] Mouse click and hold pans the x-axis
+- [x] Select/Unselect which framesync lock statitics and receiver channel data is visible
+- [x] Auto set plot colors by default; framesync lock curves should be shades of red and SNR curves should be all other hues;channels from the same receiver should be hues of a single color
+- [x] Framesync lock curves are highlighted; SNR curves are not
 
 ### US7.0: Export file settings
 **As an** As a telemetry engineer or data analyst 
@@ -193,10 +203,10 @@ This file provides context and guidelines for AI assistants working on the tmDat
 **So that** I can specify the export types (CSV and/or images), file names, and directories for the data exports requested in US1.2, US1.3, US2.2, and US2.3 in a single action.
 
 **Acceptance Criteria:**
-- [ ] A dialog window is presented to the user when the user clicks the export button
-- [ ] The dialog window allows the user to determine what data is exported; SNR sample data and framesync lock statistic data, or plot images
-- [ ] The dialog window allows the user to specify the filename and location for the exported data files
-- [ ] The dialog window allows the user to specify the filename and location for the exported plot images
+- [x] A dialog window is presented to the user when the user clicks the export button
+- [x] The dialog window allows the user to determine what data is exported; SNR sample data and framesync lock statistic data, or plot images
+- [x] The dialog window allows the user to specify the filename and location for the exported data files
+- [x] The dialog window allows the user to specify the filename and location for the exported plot images
 
 ### US8.0: Error Checking
 **As an** As a telemetry engineer or data analyst 
@@ -204,10 +214,10 @@ This file provides context and guidelines for AI assistants working on the tmDat
 **So that** I can avoid errors and ensure the data I export is accurate
 
 **Acceptance Criteria:**
-- [ ] Ensure all input fields are validated
-- [ ] Error messages are displayed to the user when invalid values are entered
-- [ ] Application ensures frame sync pattern only contains hexadecimal values
-- [ ] Application ensures frame sync pattern is no larger than the user specified frame length
+- [x] Ensure all input fields are validated
+- [x] Error messages are displayed to the user when invalid values are entered
+- [x] Application ensures frame sync pattern only contains hexadecimal values
+- [x] Application ensures frame sync pattern is no larger than the user specified frame length
 
 ### US9.0: Application Installer
 **As a** developer
@@ -215,16 +225,34 @@ This file provides context and guidelines for AI assistants working on the tmDat
 **So that** I can quickly deploy the software/updates to users with all the necessary folders and settings files
 
 **Acceptance Criteria:**
-- [ ] Signed application
-- [ ] Install to "Program Files" and to a user-selected directory for users without admin privileges
-- [ ] Installer shows install progress
-- [ ] Installer should not overwrite TOML files; if new fields are in the TOML file, alert the user that a new TOML file was saved as "new_x.toml" — try to use as many parameters from the old default TOML file as possible in the new TOML file
+- [x] Signed application
+- [x] Install to "Program Files" and to a user-selected directory for users without admin privileges
+- [x] Installer shows install progress
+- [x] Installer should not overwrite TOML files; if new fields are in the TOML file, alert the user that a new TOML file was saved as "new_x.toml" — try to use as many parameters from the old default TOML file as possible in the new TOML file
 
 ## Version History
 
-### v0.8.0 — Initial Release
-- User stories 1 through 6 complete
+### v1.0.1 — Plot Legend & Lock Color Improvements
+- Frame Sync Lock plot lines rendered in distinct shades of blue, one per stream
+- Legend entries below the plot ordered by source PCM channel number rather than
+  parallel-processing completion order
+- Added framesync_PRN11.toml and framesync_PRN15.toml to installer/portable packages
+
+### v1.0.0 — Initial Public Release
+- User stories US1.0–US9.0 complete
+- Frame Sync Lock analysis with off-phase rejection and bit-span lock percentage
+- Receiver SNR / AGC analysis with voltage-to-dB calibration
+- Multi-stream concurrent processing with single-pass I/O (one reader + per-stream queues)
+- Per-stream stream configuration dialog with TOML load/save
+- Plot window with dual Y-axes, mouse zoom/pan, series visibility toggles, and light/dark theme
+- CSV and image (SVG/PNG/PDF) export via unified export dialog
+- Inno Setup installer (admin + non-admin) and portable ZIP packaging
 - Automated unit tests (Qt Test framework)
+- US10.0 (Bit Error Rate) targeted for a future release
+
+### v0.8.0 — Internal Milestone
+- User stories US1.0–US6.0 complete
+- Initial automated unit test suite
 
 ## Tech Stack
 - **Language**: C++

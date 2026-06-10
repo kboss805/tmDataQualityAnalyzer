@@ -38,6 +38,12 @@ private slots:
 
     // validateAndAccept rejects a checked stream with no frame sync pattern (US8.0)
     void validateRejectsCheckedStreamWithEmptyFrameSync();
+
+    // Data type validation and limits
+    void testFrameSyncValidation();
+    void testFrameMaskValidation();
+    void testDataRateLimits();
+    void testDefaultSampleRate();
 };
 
 #endif // TST_STREAMCONFIGDIALOG_H

@@ -54,16 +54,16 @@ void TestConstants::uiTimeValidationLimits()
     QCOMPARE(UIConstants::kMaxSecond, 59);
 }
 
-void TestConstants::uiSampleRates()
+void TestConstants::uiSamplePeriods()
 {
-    QCOMPARE(UIConstants::kSampleRate1Hz, 1);
-    QCOMPARE(UIConstants::kSampleRate10Hz, 10);
-    QCOMPARE(UIConstants::kSampleRate100Hz, 100);
+    QCOMPARE(UIConstants::kSamplePeriod1s,    1.0);
+    QCOMPARE(UIConstants::kSamplePeriod100ms, 0.1);
+    QCOMPARE(UIConstants::kSamplePeriod10ms,  0.01);
 }
 
-void TestConstants::uiMaxSampleRateIndex()
+void TestConstants::uiMaxSamplePeriodIndex()
 {
-    QCOMPARE(UIConstants::kMaxSampleRateIndex, 2);
+    QCOMPARE(UIConstants::kMaxSamplePeriodIndex, 2);
 }
 
 void TestConstants::uiChannelPrefixes()
@@ -176,8 +176,8 @@ void TestConstants::uiOutputFilenameConstants()
 
 void TestConstants::plotConstants()
 {
-    QCOMPARE(PlotConstants::kPlotDockMinWidth, 500);
-    QCOMPARE(PlotConstants::kPlotDockMinHeight, 300);
+    QCOMPARE(PlotConstants::kPlotDockMinWidth, 1024);
+    QCOMPARE(PlotConstants::kPlotDockMinHeight, 768);
     QCOMPARE(PlotConstants::kAxisMarginFactor, 0.05);
     QCOMPARE(QString(PlotConstants::kDefaultPlotTitle), QString("AGC/Lock vs Time"));
     QCOMPARE(QString(PlotConstants::kYAxisLabel),  QString("Framesync Lock (%)"));
@@ -231,10 +231,10 @@ void TestConstants::pcmMaxPacketBufferSize()
     QCOMPARE(PCMConstants::kMaxPacketBufferSize, static_cast<qsizetype>(100 * 1024 * 1024));
 }
 
-void TestConstants::uiDefaultSampleRateIndex()
+void TestConstants::uiDefaultSamplePeriodIndex()
 {
-    // Default is 10 Hz (index 1 in the 1/10/100 Hz combo).
-    QCOMPARE(UIConstants::kDefaultSampleRateIndex, 1);
+    // Default is 1 s (index 0 in the 1s/100ms/10ms combo).
+    QCOMPARE(UIConstants::kDefaultSamplePeriodIndex, 0);
 }
 
 void TestConstants::uiMaxSlopeIndex()

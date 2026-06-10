@@ -22,7 +22,6 @@
 #include "plotwidget.h"
 #include "processedstreamdata.h"
 #include "streamconfigdialog.h"
-#include "timeextractionwidget.h"
 #include "timefields.h"
 
 
@@ -63,12 +62,10 @@ void MainView::setUpMainLayout()
 {
     m_controls_layout = new QVBoxLayout;
     m_controls_layout->setSpacing(0);
-    m_controls_layout->setContentsMargins(2, UIConstants::kLayoutSpacingSmall, UIConstants::kLayoutSpacingLarge, UIConstants::kLayoutSpacingSmall);
+    m_controls_layout->setContentsMargins(2, UIConstants::kLayoutSpacingSmall, UIConstants::kLayoutSpacingSmall, UIConstants::kLayoutSpacingSmall);
 
     // set up constituent parts
     setUpMenuBar();
-
-    m_time_widget = new TimeExtractionWidget;
 
     m_progress_bar = new QProgressBar;
     m_progress_bar->setMinimum(0);
@@ -79,10 +76,6 @@ void MainView::setUpMainLayout()
     m_log_preview->setReadOnly(true);
     m_log_preview->setOpenLinks(false);
     m_log_preview->setMinimumHeight(UIConstants::kLogPreviewHeight);
-    // Match log preview background to the surrounding panel (same gray as file section).
-    QPalette log_palette = m_log_preview->palette();
-    log_palette.setColor(QPalette::Base, qApp->palette().color(QPalette::Window));
-    m_log_preview->setPalette(log_palette);
 
     // Log preview at the bottom of the controls panel, above the progress bar
     m_controls_layout->addWidget(m_log_preview, 1);
@@ -100,24 +93,17 @@ void MainView::setUpMainLayout()
                 == UIConstants::kThemeDark;
     m_plot_widget->applyTheme(dark);
 
-    // Wrap plot in a layout with a vertical separator on the left
-    QWidget* central_wrapper = new QWidget;
-    QHBoxLayout* central_layout = new QHBoxLayout(central_wrapper);
-    central_layout->setContentsMargins(0, 0, 0, 0);
-    central_layout->setSpacing(UIConstants::kLayoutSpacingLarge);
+    // The plot widget already has a layout with its own margins.
+    // Setting it directly as the central widget allows the QMainWindow
+    // dock separator to naturally space it ~4px away from the dock.
+    // With the dock right margin (8px) and plot left margin (4px), 
+    // the total visual gap becomes exactly 16px.
+    setCentralWidget(m_plot_widget);
 
-    QFrame* vsep = new QFrame;
-    vsep->setFrameShape(QFrame::VLine);
-    vsep->setFrameShadow(QFrame::Sunken);
-    central_layout->addWidget(vsep);
-    central_layout->addWidget(m_plot_widget, 1);
-
-    setCentralWidget(central_wrapper);
-
-    // Controls in a fixed left dock widget
+    // Controls in a left dock widget
     QWidget* controls_widget = new QWidget;
     controls_widget->setLayout(m_controls_layout);
-    controls_widget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    controls_widget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
 
     m_controls_dock = new QDockWidget(this);
     m_controls_dock->setTitleBarWidget(new QWidget);
@@ -134,18 +120,12 @@ void MainView::setUpMainLayout()
     // additional settings
     setWindowTitle("Chapter 10 to CSV AGC Converter");
 
-    // Initialize time widget state (hidden — time controls live in the stream config dialog)
-    m_time_widget->setAllEnabled(false);
-    m_time_widget->setExtractAllTime(true);
-    m_time_widget->clearTimes();
-    // Keep the widget alive but hidden (parented to this so it's cleaned up)
-    m_time_widget->hide();
-
     m_progress_bar->setValue(0);
 
     statusBar()->showMessage("No file loaded");
-
-    showMaximized();
+    
+    // Adjust size to minimum necessary to show the window instead of maximizing
+    adjustSize();
 }
 
 void MainView::setUpMenuBar()
@@ -202,14 +182,6 @@ void MainView::setUpMenuBar()
 
     m_toolbar->addSeparator();
 
-    m_process_action = m_toolbar->addAction(
-        QIcon(":/resources/play.svg"), "Process");
-    m_process_action->setToolTip("Process Ch10 to CSV (Ctrl+R)");
-    m_process_action->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
-    m_process_action->setEnabled(false);
-    connect(m_process_action, &QAction::triggered,
-            this, &MainView::progressProcessButtonPressed);
-
     m_cancel_action = m_toolbar->addAction(
         QIcon(":/resources/stop.svg"), "Cancel");
     m_cancel_action->setToolTip("Cancel Processing");
@@ -229,121 +201,15 @@ void MainView::setUpMenuBar()
 
 void MainView::setUpConnections()
 {
-    // TimeExtractionWidget -> ViewModel
-    connect(m_time_widget, &TimeExtractionWidget::extractAllTimeChanged,
-            m_view_model, &MainViewModel::setExtractAllTime);
-    // When "Extract All Time" is re-checked, restore the full file time range in the fields
-    connect(m_time_widget, &TimeExtractionWidget::extractAllTimeChanged,
-            this, [this](bool checked) {
-                if (checked)
-                {
-                    m_time_widget->fillTimes(
-                        {m_view_model->startDayOfYear(), m_view_model->startHour(),
-                         m_view_model->startMinute(),    m_view_model->startSecond()},
-                        {m_view_model->stopDayOfYear(),  m_view_model->stopHour(),
-                         m_view_model->stopMinute(),     m_view_model->stopSecond()});
-                }
-            });
-    // Clamp start/stop time fields to the file's actual time range on editingFinished
-    auto clampTimeFn = [this](bool is_start) {
-        // Parse a DDD:HH:MM:SS string to total seconds; returns -1 on parse error
-        auto toSeconds = [](const QString& text) -> long long {
-            const QStringList p = text.split(':');
-            if (p.size() != 4) { return -1LL; }
-            bool ok1, ok2, ok3, ok4;
-            int d = p[0].toInt(&ok1), h = p[1].toInt(&ok2),
-                m = p[2].toInt(&ok3), s = p[3].toInt(&ok4);
-            if (!ok1 || !ok2 || !ok3 || !ok4) { return -1LL; }
-            return d * 86400LL + h * 3600LL + m * 60LL + s;
-        };
-
-        auto fromSeconds = [](long long total, int& d, int& h, int& m, int& s) {
-            d = static_cast<int>(total / 86400);
-            int rem = static_cast<int>(total % 86400);
-            h = rem / 3600; rem %= 3600;
-            m = rem / 60;   s = rem % 60;
-        };
-
-        // File bounds (absolute seconds)
-        long long file_min = m_view_model->startDayOfYear() * 86400LL
-                           + m_view_model->startHour()   * 3600LL
-                           + m_view_model->startMinute() * 60LL
-                           + m_view_model->startSecond();
-        long long file_max = m_view_model->stopDayOfYear() * 86400LL
-                           + m_view_model->stopHour()   * 3600LL
-                           + m_view_model->stopMinute() * 60LL
-                           + m_view_model->stopSecond();
-
-        const QString entered_start = m_time_widget->startTimeText();
-        const QString entered_stop  = m_time_widget->stopTimeText();
-        long long start_sec = toSeconds(entered_start);
-        long long stop_sec  = toSeconds(entered_stop);
-
-        // On parse failure restore the corresponding file bound and warn
-        if (start_sec < 0)
-        {
-            logWarning(QString("Invalid start time \"%1\" — reset to file start.").arg(entered_start));
-            start_sec = file_min;
-        }
-        if (stop_sec < 0)
-        {
-            logWarning(QString("Invalid stop time \"%1\" — reset to file stop.").arg(entered_stop));
-            stop_sec = file_max;
-        }
-
-        // Clamp to file range and warn if out of bounds
-        if (start_sec < file_min || start_sec > file_max)
-        {
-            logWarning(QString("Start time \"%1\" is outside the file time range — clamped to file bounds.").arg(entered_start));
-            start_sec = qBound(file_min, start_sec, file_max);
-        }
-        if (stop_sec < file_min || stop_sec > file_max)
-        {
-            logWarning(QString("Stop time \"%1\" is outside the file time range — clamped to file bounds.").arg(entered_stop));
-            stop_sec = qBound(file_min, stop_sec, file_max);
-        }
-
-        // Enforce ordering: if the field being edited conflicts, clamp it to the other
-        if (start_sec > stop_sec)
-        {
-            if (is_start)
-            {
-                logWarning("Start time is after stop time — clamped to stop time.");
-                start_sec = stop_sec;
-            }
-            else
-            {
-                logWarning("Stop time is before start time — clamped to start time.");
-                stop_sec = start_sec;
-            }
-        }
-
-        TimeFields start_tf, stop_tf;
-        fromSeconds(start_sec, start_tf.ddd, start_tf.hh, start_tf.mm, start_tf.ss);
-        fromSeconds(stop_sec,  stop_tf.ddd,  stop_tf.hh,  stop_tf.mm,  stop_tf.ss);
-        m_time_widget->fillTimes(start_tf, stop_tf);
-    };
-
-    connect(m_time_widget, &TimeExtractionWidget::startTimeEditingFinished,
-            this, [clampTimeFn]() { clampTimeFn(true); });
-    connect(m_time_widget, &TimeExtractionWidget::stopTimeEditingFinished,
-            this, [clampTimeFn]() { clampTimeFn(false); });
-
     // ViewModel -> View: data binding
     connect(m_view_model, &MainViewModel::fileLoadedChanged, this, &MainView::onFileLoadedChanged);
     connect(m_view_model, &MainViewModel::fileLoadedChanged, this, &MainView::updateStatusBar);
     connect(m_view_model, &MainViewModel::recentFilesChanged, this, &MainView::updateRecentFilesMenu);
-    connect(m_view_model, &MainViewModel::fileTimesChanged, this, &MainView::onFileTimesChanged);
     connect(m_view_model, &MainViewModel::progressPercentChanged, this, &MainView::onProgressChanged);
     connect(m_view_model, &MainViewModel::processingChanged, this, &MainView::onProcessingChanged);
     connect(m_view_model, &MainViewModel::fileReadyForStreamConfig,
             this, &MainView::onFileReadyForStreamConfig);
     connect(m_view_model, &MainViewModel::streamProcessed, this, &MainView::onStreamProcessed);
-
-    // ViewModel -> TimeExtractionWidget
-    connect(m_view_model, &MainViewModel::extractAllTimeChanged, this, [this]() {
-        m_time_widget->setExtractAllTime(m_view_model->extractAllTime());
-    });
 
     connect(m_view_model, &MainViewModel::errorOccurred, this, &MainView::displayErrorMessage);
     connect(m_view_model, &MainViewModel::processingFinished, this, &MainView::onProcessingFinished);
@@ -367,29 +233,8 @@ void MainView::setUpConnections()
 
 void MainView::onFileLoadedChanged()
 {
-    bool loaded = m_view_model->fileLoaded();
-
-    m_process_action->setEnabled(loaded);
-
-    if (!loaded)
-    {
-        m_progress_bar->setValue(0);
-        m_process_action->setEnabled(false);
-    }
-}
-
-void MainView::onFileTimesChanged()
-{
     if (!m_view_model->fileLoaded())
-    {
-        return;
-    }
-    // Store file times into the hidden time widget so the dialog can read them.
-    m_time_widget->fillTimes(
-        {m_view_model->startDayOfYear(), m_view_model->startHour(),
-         m_view_model->startMinute(),    m_view_model->startSecond()},
-        {m_view_model->stopDayOfYear(),  m_view_model->stopHour(),
-         m_view_model->stopMinute(),     m_view_model->stopSecond()});
+        m_progress_bar->setValue(0);
 }
 
 void MainView::onProgressChanged()
@@ -403,7 +248,6 @@ void MainView::onProcessingChanged()
     {
         QApplication::setOverrideCursor(Qt::WaitCursor);
         setAllControlsEnabled(false);
-        m_process_action->setEnabled(false);
         m_cancel_action->setEnabled(true);
         m_progress_bar->setValue(0);
     }
@@ -417,7 +261,9 @@ void MainView::onProcessingChanged()
 
 void MainView::onStreamProcessed(const ProcessedStreamData& data)
 {
-    // Append this stream's in-memory series to the (accumulating) plot.
+    onLogMessage("  " + data.streamLabel + ": " +
+                 QString::number(data.timesSec.size()) + " samples, " +
+                 QString::number(data.channels.size()) + " channel(s)");
     m_plot_view_model->addStreamData(data);
 }
 
@@ -485,7 +331,6 @@ void MainView::onFileReadyForStreamConfig()
     // A fresh file starts a fresh plot; processing accumulates into it.
     m_plot_view_model->clearData();
 
-    // Build time fields from the hidden time widget (populated in onFileTimesChanged).
     TimeFields start_tf {m_view_model->startDayOfYear(), m_view_model->startHour(),
                          m_view_model->startMinute(),    m_view_model->startSecond()};
     TimeFields stop_tf  {m_view_model->stopDayOfYear(),  m_view_model->stopHour(),
@@ -497,7 +342,7 @@ void MainView::onFileReadyForStreamConfig()
                               m_view_model->timeChannelIndex(),
                               start_tf,
                               stop_tf,
-                              m_time_widget->extractAllTime(),
+                              m_view_model->extractAllTime(),
                               this);
     if (dialog.exec() == QDialog::Accepted)
     {
@@ -505,16 +350,8 @@ void MainView::onFileReadyForStreamConfig()
         m_view_model->setStreamConfigs(dialog.configs());
         m_view_model->setExtractAllTime(dialog.extractAllTime());
 
-        // Store the chosen time values back into the hidden widget
-        // so progressProcessButtonPressed() can read them.
-        m_time_widget->setExtractAllTime(dialog.extractAllTime());
-        // Parse and store start/stop time from dialog for processing
-        m_dialog_start_time = dialog.startTimeText();
-        m_dialog_stop_time  = dialog.stopTimeText();
-
-        int count = m_view_model->processableStreamCount();
-        logSuccess(QString("Configured %1 stream(s) for processing. Press Process (\u25b6) to run.")
-                       .arg(count));
+        startProcessingFromDialog(dialog.startTimeText(), dialog.stopTimeText(),
+                                  dialog.extractAllTime());
     }
 }
 
@@ -544,18 +381,12 @@ void MainView::onToggleTheme()
     m_plot_widget->applyTheme(new_theme == UIConstants::kThemeDark);
 }
 
-void MainView::progressProcessButtonPressed()
+void MainView::startProcessingFromDialog(const QString& start_time_text,
+                                         const QString& stop_time_text,
+                                         bool extract_all)
 {
-    if (m_view_model->processing())
-    {
-        m_view_model->cancelProcessing();
-        return;
-    }
-
-    // Use the time values stored from the last stream config dialog.
-    bool extract_all = m_time_widget->extractAllTime();
-    QString start_time = m_dialog_start_time;
-    QString stop_time  = m_dialog_stop_time;
+    QString start_time = start_time_text;
+    QString stop_time  = stop_time_text;
 
     if (!extract_all)
     {
@@ -566,16 +397,7 @@ void MainView::progressProcessButtonPressed()
             return;
         }
     }
-
-    if (m_view_model->processableStreamCount() == 0)
-    {
-        logWarning("No streams configured for processing. Use the stream configuration dialog "
-                   "(re-open the file) to enable one or more streams.");
-        return;
-    }
-
-    // If extract all time, pass the full file range as the time bounds.
-    if (extract_all)
+    else
     {
         start_time = QString("%1:%2:%3:%4")
             .arg(m_view_model->startDayOfYear(), 3, 10, QChar('0'))
@@ -657,7 +479,6 @@ void MainView::dropEvent(QDropEvent* event)
 void MainView::setAllControlsEnabled(bool enabled)
 {
     m_toolbar_open_action->setEnabled(enabled);
-    m_process_action->setEnabled(enabled);
 }
 
 void MainView::logError(const QString& message)

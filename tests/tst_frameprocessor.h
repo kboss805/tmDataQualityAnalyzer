@@ -15,9 +15,6 @@ class TestFrameProcessor : public QObject
 private slots:
     void constructorDefaults();
     void requestAbortSetsFlag();
-    void hasSyncPatternFindsMatch();
-    void hasSyncPatternNoMatch();
-    void hasSyncPatternShortBuffer();
     void derandomizeShortBufferIdentity();
     void derandomizeLongerBufferChanges();
     void processInvalidTimeChannel();
@@ -26,7 +23,7 @@ private slots:
     void processAccumulatesReceiverData();
     void processLockOnlyModeHasNoChannels();
     void processSlopeAffectsValues();
-    void processSampleRate100HzMoreSamples();
+    void processShortPeriodMoreSamples();
 };
 
 #endif // TST_FRAMEPROCESSOR_H

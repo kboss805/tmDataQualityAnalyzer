@@ -29,6 +29,7 @@ struct PlotSeriesData
     QString name;             ///< Column header, e.g., "L_RCVR1" or "Framesync Lock (%)".
     int receiverIndex = 0;    ///< 1-based receiver number from "_RCVR<N>" suffix; 0 for lock series.
     int channelIndex  = 0;    ///< 0-based within receiver, for color shade.
+    int streamOrder   = 0;    ///< Source PCM channel ID, for ordering series within a legend group.
     MetricType metricType = MetricType::SNR; ///< Which axis this series belongs to.
     QVector<double> xValues;  ///< Elapsed seconds from first sample.
     QVector<double> yValues;  ///< Calibrated dB (SNR) or percentage (lock) values.

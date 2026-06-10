@@ -13,9 +13,9 @@
 
 /// @brief Application version information.
 struct AppVersion {
-    static constexpr int kMajor = 0;   ///< Major version number.
-    static constexpr int kMinor = 8;   ///< Minor version number.
-    static constexpr int kPatch = 0;   ///< Patch version number.
+    static constexpr int kMajor = 1;   ///< Major version number.
+    static constexpr int kMinor = 0;   ///< Minor version number.
+    static constexpr int kPatch = 1;   ///< Patch version number.
 
     /// @return Version string in "major.minor.patch" format.
     static QString toString() { return QString("%1.%2.%3").arg(kMajor).arg(kMinor).arg(kPatch); }
@@ -110,7 +110,7 @@ namespace UIConstants {
     /// @}
     inline constexpr int kDefaultSlopeIndex           = 3;     ///< Default voltage slope index (0-5V range).
     inline constexpr int kMaxSlopeIndex               = 3;     ///< Maximum valid voltage slope index.
-    inline constexpr int kMaxSampleRateIndex           = 2;     ///< Maximum valid sample rate combo index.
+    inline constexpr int kMaxSamplePeriodIndex          = 2;     ///< Maximum valid sample period combo index.
     inline constexpr const char* kDefaultScale        = "20";  ///< Default calibration scale in dB per volt.
     inline constexpr std::array<const char*, 3> kChannelPrefixes = {"L", "R", "C"}; ///< Channel prefix labels (L/R/C).
     inline constexpr int kNumKnownPrefixes            = 3;     ///< Number of known channel prefixes.
@@ -124,12 +124,12 @@ namespace UIConstants {
     inline constexpr int kMaxSecond    = 59;   ///< Maximum valid second.
     /// @}
 
-    /// @name Sample rate options (Hz)
+    /// @name Sample period options (seconds)
     /// @{
-    inline constexpr int kSampleRate1Hz   = 1;   ///< 1 Hz sample rate.
-    inline constexpr int kSampleRate10Hz  = 10;  ///< 10 Hz sample rate.
-    inline constexpr int kSampleRate100Hz = 100; ///< 100 Hz sample rate.
-    inline constexpr int kDefaultSampleRateIndex = 1; ///< Default sample rate combo index (10 Hz).
+    inline constexpr double kSamplePeriod1s    = 1.0;  ///< 1 second sample period.
+    inline constexpr double kSamplePeriod100ms = 0.1;  ///< 100 ms sample period.
+    inline constexpr double kSamplePeriod10ms  = 0.01; ///< 10 ms sample period.
+    inline constexpr int kDefaultSamplePeriodIndex = 0; ///< Default sample period combo index (1 s).
     /// @}
 
     /// @name Voltage scale bounds (indexed by scale combo box)
@@ -154,7 +154,7 @@ namespace UIConstants {
     inline constexpr int kTimeInputMaxWidth               = 100;                          ///< Maximum width for time input fields (px).
     inline constexpr int kChannelComboFixedWidth           = 400;                          ///< Fixed width for Time/PCM channel combo boxes (px).
     inline constexpr int kFileNameColumnMinWidth           = 600;                          ///< Minimum width for the file name column in the file list tree (px).
-    inline constexpr int kControlsDockMinWidth            = 600;                          ///< Minimum width for the controls dock panel (file name column + margins).
+    inline constexpr int kControlsDockMinWidth            = 400;                          ///< Minimum width for the controls dock panel (file name column + margins).
     inline constexpr int kDecimalBase                    = 10;                           ///< Decimal (base-10) radix for QString::arg formatting.
     inline constexpr int kHexBase                        = 16;                           ///< Hexadecimal (base-16) radix for string parsing.
     inline constexpr int kBytesPerKB                     = 1024;                         ///< Bytes per kilobyte.
@@ -171,14 +171,26 @@ namespace UIConstants {
 
 /// @brief Constants for the AGC signal plot window.
 namespace PlotConstants {
-    inline constexpr int kPlotDockMinWidth   = 500;   ///< Minimum plot dock width in pixels.
-    inline constexpr int kPlotDockMinHeight  = 300;   ///< Minimum plot dock height in pixels.
+    inline constexpr int kPlotDockMinWidth   = 1024;   ///< Minimum plot dock width in pixels.
+    inline constexpr int kPlotDockMinHeight  = 768;   ///< Minimum plot dock height in pixels.
     inline constexpr double kAxisMarginFactor = 0.05; ///< Y-axis padding as fraction of data range.
     inline constexpr const char* kXAxisLabel        = "Elapsed Time (DDD:HH:MM:SS)"; ///< X axis label.
     inline constexpr const char* kYAxisLabel        = "Framesync Lock (%)"; ///< Left Y axis label.
     inline constexpr const char* kLockAxisLabel     = "Receiver SNR (dB)"; ///< Right Y axis label.
     inline constexpr const char* kDefaultPlotTitle  = "AGC/Lock vs Time"; ///< Default chart title.
     inline constexpr QColor kFrameSyncLockColor {0, 114, 189};           ///< Distinctive blue for lock series.
+
+    /// @brief Shades of blue for frame sync lock series, one per stream.
+    /// kFrameSyncLockColors[0] equals kFrameSyncLockColor for single-stream compatibility.
+    inline constexpr int kNumFrameSyncLockColors = 6;
+    inline constexpr std::array<QColor, kNumFrameSyncLockColors> kFrameSyncLockColors = {
+        QColor(0, 114, 189),    ///< Base blue
+        QColor(0, 32, 96),      ///< Dark navy
+        QColor(91, 155, 213),   ///< Light steel blue
+        QColor(0, 70, 140),     ///< Deep blue
+        QColor(0, 176, 240),    ///< Bright cyan-blue
+        QColor(68, 114, 196),   ///< Medium blue
+    };
     inline constexpr double kZoomFactor      = 0.1;   ///< Wheel zoom step (10% per notch).
 
     /// @name Theme colors

@@ -37,26 +37,11 @@ namespace {
 
 const QRegularExpression kHexRegex("^[0-9A-Fa-f]{1,16}$");
 
-QString receiverSNRSampleRateText(int hz)
+QString periodText(double sec)
 {
-    int window_ms = (hz > 0) ? (1000 / hz) : 0;
-    return QString::number(hz) + " Hz  (" + QString::number(window_ms) + " ms avg)";
-}
-
-QString frameSyncSampleRateText(int hz)
-{
-    int window_ms = (hz > 0) ? (1000 / hz) : 0;
-    return "Avg window: " + QString::number(window_ms) + " ms  (" + QString::number(hz) + " Hz)";
-}
-
-/// Creates a label+widget pair stacked vertically and adds it to @p layout.
-void addLabeledWidget(QHBoxLayout* layout, const QString& label, QWidget* widget)
-{
-    auto* col = new QVBoxLayout;
-    col->setSpacing(3);
-    col->addWidget(new QLabel(label));
-    col->addWidget(widget);
-    layout->addLayout(col);
+    if (sec >= 1.0)
+        return QString::number(static_cast<int>(sec)) + " s";
+    return QString::number(static_cast<int>(sec * 1000)) + " ms";
 }
 
 /// Loads frame sync fields from a TOML file into the provided widgets.
@@ -124,119 +109,106 @@ public:
         setWindowTitle("Frame Sync Lock Setup — " + cfg.label);
         setModal(true);
 
-        auto* layout = new QVBoxLayout(this);
-        layout->setSpacing(14);
+        // Grid columns: 0=FrameSync/Randomized, 1=SyncMask/DataRate,
+        //               2=BitsPerFrame/AveragePeriod, 3=16px gap, 4=LoadBtn, 5=SaveBtn, 6=stretch
+        auto* grid = new QGridLayout;
+        grid->setHorizontalSpacing(10);
+        grid->setVerticalSpacing(4);
+        grid->setColumnMinimumWidth(3, 16);
+        grid->setColumnStretch(3, 1);
 
-        // --- Row 1: Frame Sync, Sync Mask, Bits Per Frame, Load, Save ---
-        {
-            auto* row = new QWidget(this);
-            auto* hl  = new QHBoxLayout(row);
-            hl->setContentsMargins(0, 0, 0, 0);
-            hl->setSpacing(10);
+        // Row 0 labels / Row 1 inputs — Frame Sync group
+        m_syncPattern = new QLineEdit(this);
+        m_syncPattern->setValidator(new QRegularExpressionValidator(kHexRegex, this));
+        m_syncPattern->setText(cfg.frameSyncPattern);
+        m_syncPattern->setPlaceholderText("e.g. A345CA5C");
+        m_syncPattern->setMinimumWidth(110);
+        grid->addWidget(new QLabel("Frame Sync"),      0, 0, Qt::AlignHCenter);
+        grid->addWidget(m_syncPattern,                 1, 0, Qt::AlignHCenter);
 
-            m_syncPattern = new QLineEdit(this);
-            m_syncPattern->setValidator(new QRegularExpressionValidator(kHexRegex, this));
-            m_syncPattern->setText(cfg.frameSyncPattern);
-            m_syncPattern->setPlaceholderText("e.g. A345CA5C");
-            m_syncPattern->setMinimumWidth(110);
-            addLabeledWidget(hl, "Frame Sync", m_syncPattern);
+        m_syncMask = new QLineEdit(this);
+        m_syncMask->setValidator(new QRegularExpressionValidator(kHexRegex, this));
+        m_syncMask->setText(cfg.frameSyncMask);
+        m_syncMask->setPlaceholderText("e.g. FFFFFFFF");
+        m_syncMask->setMinimumWidth(110);
+        grid->addWidget(new QLabel("Frame Sync Mask"), 0, 1, Qt::AlignHCenter);
+        grid->addWidget(m_syncMask,                    1, 1, Qt::AlignHCenter);
 
-            m_syncMask = new QLineEdit(this);
-            m_syncMask->setValidator(new QRegularExpressionValidator(kHexRegex, this));
-            m_syncMask->setText(cfg.frameSyncMask);
-            m_syncMask->setPlaceholderText("e.g. FFFFFFFF");
-            m_syncMask->setMinimumWidth(110);
-            addLabeledWidget(hl, "Frame Sync Mask", m_syncMask);
+        m_bitsPerFrame = new QSpinBox(this);
+        m_bitsPerFrame->setRange(PCMConstants::kMinFrameLengthBits,
+                                 PCMConstants::kMaxFrameLengthBits);
+        m_bitsPerFrame->setValue(cfg.bitsInMinorFrame);
+        m_bitsPerFrame->setMinimumWidth(80);
+        grid->addWidget(new QLabel("Bits Per Frame"),  0, 2, Qt::AlignHCenter);
+        grid->addWidget(m_bitsPerFrame,                1, 2, Qt::AlignHCenter);
 
-            m_bitsPerFrame = new QSpinBox(this);
-            m_bitsPerFrame->setRange(PCMConstants::kMinFrameLengthBits,
-                                     PCMConstants::kMaxFrameLengthBits);
-            m_bitsPerFrame->setValue(cfg.bitsInMinorFrame);
-            m_bitsPerFrame->setMinimumWidth(80);
-            addLabeledWidget(hl, "Bits Per Frame", m_bitsPerFrame);
+        // Spacer row between the two groups
+        grid->setRowMinimumHeight(2, 8);
 
-            auto* btnCol = new QVBoxLayout;
-            btnCol->setSpacing(2);
-            btnCol->addSpacing(18);
-            auto* loadBtn = new QPushButton(this);
-            loadBtn->setIcon(QIcon(":/resources/folder-open.svg"));
-            loadBtn->setToolTip("Load frame sync fields from a TOML file");
-            loadBtn->setFixedSize(28, 28);
-            auto* saveBtn = new QPushButton(this);
-            saveBtn->setIcon(QIcon(":/resources/floppy-save.svg"));
-            saveBtn->setToolTip("Save frame sync fields to a TOML file");
-            saveBtn->setFixedSize(28, 28);
-            btnCol->addWidget(loadBtn);
-            btnCol->addWidget(saveBtn);
-            btnCol->addStretch();
-            hl->addLayout(btnCol);
-            hl->addStretch(1);
+        // Row 3 labels / Row 4 inputs — processing group
+        m_randomized = new QCheckBox(this);
+        m_randomized->setChecked(cfg.randomized);
+        grid->addWidget(new QLabel("Randomized"),      3, 0, Qt::AlignHCenter);
+        grid->addWidget(m_randomized,                  4, 0, Qt::AlignHCenter);
 
-            connect(loadBtn, &QPushButton::clicked, this, [this]() {
-                QString filename = QFileDialog::getOpenFileName(
-                    this, tr("Load Frame Sync Parameters"), m_toml_dir,
-                    tr("TOML Files (*.toml);;All Files (*.*)"));
-                if (!filename.isEmpty())
-                    loadFrameSyncFromToml(filename, m_syncPattern, m_syncMask,
-                                         m_bitsPerFrame, m_toml_dir);
-            });
-            connect(saveBtn, &QPushButton::clicked, this, [this]() {
-                QString filename = QFileDialog::getSaveFileName(
-                    this, tr("Save Frame Sync Parameters"), m_toml_dir,
-                    tr("TOML Files (*.toml);;All Files (*.*)"));
-                if (filename.isEmpty()) return;
-                if (QFileInfo(filename).suffix().isEmpty()) filename += ".toml";
-                saveFrameSyncToToml(filename,
-                                    m_syncPattern->text().trimmed().toUpper(),
-                                    m_syncMask->text().trimmed().toUpper(),
-                                    m_bitsPerFrame->value(),
-                                    m_toml_dir);
-            });
+        m_dataRate = new QDoubleSpinBox(this);
+        m_dataRate->setRange(0.0, 1000.0);
+        m_dataRate->setDecimals(3);
+        m_dataRate->setSingleStep(0.1);
+        if (cfg.tmatsDataRateMbps > 0.0)
+            m_dataRate->setSpecialValueText(
+                QString::number(cfg.tmatsDataRateMbps, 'f', 3));
+        else
+            m_dataRate->setSpecialValueText("TMATS");
+        m_dataRate->setValue(cfg.dataRateMbps);
+        m_dataRate->setMinimumWidth(130);
+        grid->addWidget(new QLabel("Data Rate (Mbps)"), 3, 1, Qt::AlignHCenter);
+        grid->addWidget(m_dataRate,                     4, 1, Qt::AlignHCenter);
 
-            layout->addWidget(row);
-        }
+        m_sampleRate = new QComboBox(this);
+        m_sampleRate->addItem(periodText(UIConstants::kSamplePeriod1s));
+        m_sampleRate->addItem(periodText(UIConstants::kSamplePeriod100ms));
+        m_sampleRate->addItem(periodText(UIConstants::kSamplePeriod10ms));
+        m_sampleRate->setCurrentIndex(cfg.samplePeriodIndex);
+        grid->addWidget(new QLabel("Average Period"),  3, 2, Qt::AlignHCenter);
+        grid->addWidget(m_sampleRate,                  4, 2, Qt::AlignHCenter);
 
-        // --- Row 2: Randomized, Data Rate, Sample Rate ---
-        {
-            auto* row = new QWidget(this);
-            auto* hl  = new QHBoxLayout(row);
-            hl->setContentsMargins(0, 0, 0, 0);
-            hl->setSpacing(16);
+        auto* loadBtn = new QPushButton(this);
+        loadBtn->setIcon(QIcon(":/resources/folder-open.svg"));
+        loadBtn->setToolTip("Load frame sync fields from a TOML file");
+        loadBtn->setFixedSize(28, 28);
+        grid->addWidget(loadBtn, 4, 4, Qt::AlignVCenter);
 
-            m_randomized = new QCheckBox(this);
-            m_randomized->setChecked(cfg.randomized);
-            {
-                auto* col = new QVBoxLayout;
-                col->setSpacing(3);
-                col->addWidget(new QLabel("Randomized"));
-                col->addWidget(m_randomized);
-                hl->addLayout(col);
-            }
+        auto* saveBtn = new QPushButton(this);
+        saveBtn->setIcon(QIcon(":/resources/floppy-save.svg"));
+        saveBtn->setToolTip("Save frame sync fields to a TOML file");
+        saveBtn->setFixedSize(28, 28);
+        grid->addWidget(saveBtn, 4, 5, Qt::AlignVCenter);
 
-            m_dataRate = new QDoubleSpinBox(this);
-            m_dataRate->setRange(0.0, 1000.0);
-            m_dataRate->setDecimals(3);
-            m_dataRate->setSingleStep(0.1);
-            m_dataRate->setSuffix(" Mbps");
-            if (cfg.tmatsDataRateMbps > 0.0)
-                m_dataRate->setSpecialValueText(
-                    QString("Auto (%1 Mbps)").arg(cfg.tmatsDataRateMbps, 0, 'f', 3));
-            else
-                m_dataRate->setSpecialValueText("Auto (TMATS)");
-            m_dataRate->setValue(cfg.dataRateMbps);
-            m_dataRate->setMinimumWidth(130);
-            addLabeledWidget(hl, "Data Rate (Mbps)", m_dataRate);
+        connect(loadBtn, &QPushButton::clicked, this, [this]() {
+            QString filename = QFileDialog::getOpenFileName(
+                this, tr("Load Frame Sync Parameters"), m_toml_dir,
+                tr("TOML Files (*.toml);;All Files (*.*)"));
+            if (!filename.isEmpty())
+                loadFrameSyncFromToml(filename, m_syncPattern, m_syncMask,
+                                      m_bitsPerFrame, m_toml_dir);
+        });
+        connect(saveBtn, &QPushButton::clicked, this, [this]() {
+            QString filename = QFileDialog::getSaveFileName(
+                this, tr("Save Frame Sync Parameters"), m_toml_dir,
+                tr("TOML Files (*.toml);;All Files (*.*)"));
+            if (filename.isEmpty()) return;
+            if (QFileInfo(filename).suffix().isEmpty()) filename += ".toml";
+            saveFrameSyncToToml(filename,
+                                m_syncPattern->text().trimmed().toUpper(),
+                                m_syncMask->text().trimmed().toUpper(),
+                                m_bitsPerFrame->value(),
+                                m_toml_dir);
+        });
 
-            m_sampleRate = new QComboBox(this);
-            m_sampleRate->addItem(frameSyncSampleRateText(UIConstants::kSampleRate1Hz));
-            m_sampleRate->addItem(frameSyncSampleRateText(UIConstants::kSampleRate10Hz));
-            m_sampleRate->addItem(frameSyncSampleRateText(UIConstants::kSampleRate100Hz));
-            m_sampleRate->setCurrentIndex(cfg.sampleRateIndex);
-            addLabeledWidget(hl, "Sample Rate", m_sampleRate);
-
-            hl->addStretch(1);
-            layout->addWidget(row);
-        }
+        auto* outer = new QVBoxLayout(this);
+        outer->addLayout(grid);
+        outer->addStretch(1);
 
         auto* buttons = new QDialogButtonBox(
             QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -250,7 +222,7 @@ public:
             accept();
         });
         connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-        layout->addWidget(buttons);
+        outer->addWidget(buttons);
 
         adjustSize();
     }
@@ -258,10 +230,10 @@ public:
     QString frameSyncPattern() const { return m_syncPattern->text().trimmed().toUpper(); }
     QString frameSyncMask()    const { return m_syncMask->text().trimmed().toUpper(); }
     int     bitsPerFrame()     const { return m_bitsPerFrame->value(); }
-    bool    randomized()       const { return m_randomized->isChecked(); }
-    int     sampleRateIndex()  const { return m_sampleRate->currentIndex(); }
-    double  dataRateMbps()     const { return m_dataRate->value(); }
-    QString lastTomlDir()      const { return m_toml_dir; }
+    bool    randomized()        const { return m_randomized->isChecked(); }
+    int     samplePeriodIndex() const { return m_sampleRate->currentIndex(); }
+    double  dataRateMbps()      const { return m_dataRate->value(); }
+    QString lastTomlDir()       const { return m_toml_dir; }
 
 private:
     QLineEdit*      m_syncPattern  = nullptr;
@@ -284,61 +256,96 @@ public:
                                const QString& toml_dir,
                                QWidget* parent = nullptr)
         : QDialog(parent)
-        , m_toml_dir(toml_dir)
         , m_receiverParamsToml(cfg.receiverParamsToml)
+        , m_toml_dir(toml_dir)
     {
         setWindowTitle("Receiver SNR Setup — " + cfg.label);
         setModal(true);
 
-        auto* layout = new QVBoxLayout(this);
-        layout->setSpacing(14);
+        auto* outer = new QVBoxLayout(this);
+        outer->setSpacing(12);
 
-        // --- Row 1: Frame Sync, Sync Mask, Bits Per Frame, Load, Save ---
+        // ---- Group 1: Frame sync + acquisition settings --------------------
         {
-            auto* row = new QWidget(this);
-            auto* hl  = new QHBoxLayout(row);
-            hl->setContentsMargins(0, 0, 0, 0);
-            hl->setSpacing(10);
+            auto* grid = new QGridLayout;
+            grid->setHorizontalSpacing(10);
+            grid->setVerticalSpacing(4);
 
+            // Row 0: labels
+            grid->addWidget(new QLabel("Frame Sync"),      0, 0, Qt::AlignHCenter);
+            grid->addWidget(new QLabel("Frame Sync Mask"), 0, 1, Qt::AlignHCenter);
+            grid->addWidget(new QLabel("Bits Per Frame"),  0, 2, Qt::AlignHCenter);
+
+            // Row 1: inputs
             m_syncPattern = new QLineEdit(this);
             m_syncPattern->setValidator(new QRegularExpressionValidator(kHexRegex, this));
             m_syncPattern->setText(cfg.frameSyncPattern);
             m_syncPattern->setPlaceholderText("e.g. FE6B2840");
-            m_syncPattern->setMinimumWidth(110);
-            addLabeledWidget(hl, "Frame Sync", m_syncPattern);
+            m_syncPattern->setMinimumWidth(90);
+            grid->addWidget(m_syncPattern, 1, 0, Qt::AlignHCenter);
 
             m_syncMask = new QLineEdit(this);
             m_syncMask->setValidator(new QRegularExpressionValidator(kHexRegex, this));
             m_syncMask->setText(cfg.frameSyncMask);
             m_syncMask->setPlaceholderText("e.g. FFFFFFFF");
-            m_syncMask->setMinimumWidth(110);
-            addLabeledWidget(hl, "Frame Sync Mask", m_syncMask);
+            m_syncMask->setMinimumWidth(90);
+            grid->addWidget(m_syncMask, 1, 1, Qt::AlignHCenter);
 
             m_bitsPerFrame = new QSpinBox(this);
             m_bitsPerFrame->setRange(PCMConstants::kMinFrameLengthBits,
                                      PCMConstants::kMaxFrameLengthBits);
             m_bitsPerFrame->setValue(cfg.bitsInMinorFrame);
             m_bitsPerFrame->setMinimumWidth(80);
-            addLabeledWidget(hl, "Bits Per Frame", m_bitsPerFrame);
+            grid->addWidget(m_bitsPerFrame, 1, 2, Qt::AlignHCenter);
 
-            auto* btnCol = new QVBoxLayout;
-            btnCol->setSpacing(2);
-            btnCol->addSpacing(18);
-            auto* loadBtn = new QPushButton(this);
-            loadBtn->setIcon(QIcon(":/resources/folder-open.svg"));
-            loadBtn->setToolTip("Load frame sync fields from a TOML file");
-            loadBtn->setFixedSize(28, 28);
-            auto* saveBtn = new QPushButton(this);
-            saveBtn->setIcon(QIcon(":/resources/floppy-save.svg"));
-            saveBtn->setToolTip("Save frame sync fields to a TOML file");
-            saveBtn->setFixedSize(28, 28);
-            btnCol->addWidget(loadBtn);
-            btnCol->addWidget(saveBtn);
-            btnCol->addStretch();
-            hl->addLayout(btnCol);
-            hl->addStretch(1);
+            // Row 2: spacer
+            grid->setRowMinimumHeight(2, 8);
 
-            connect(loadBtn, &QPushButton::clicked, this, [this]() {
+            // Row 3: labels
+            grid->addWidget(new QLabel("Randomized"),       3, 0, Qt::AlignHCenter);
+            grid->addWidget(new QLabel("Data Rate (Mbps)"), 3, 1, Qt::AlignHCenter);
+            grid->addWidget(new QLabel("Average Period"),   3, 2, Qt::AlignHCenter);
+
+            // Row 4: inputs + buttons
+            m_randomized = new QCheckBox(this);
+            m_randomized->setChecked(cfg.randomized);
+            grid->addWidget(m_randomized, 4, 0, Qt::AlignHCenter | Qt::AlignVCenter);
+
+            m_dataRate = new QDoubleSpinBox(this);
+            m_dataRate->setRange(0.0, 1000.0);
+            m_dataRate->setDecimals(3);
+            m_dataRate->setSingleStep(0.1);
+            if (cfg.tmatsDataRateMbps > 0.0)
+                m_dataRate->setSpecialValueText(
+                    QString::number(cfg.tmatsDataRateMbps, 'f', 3));
+            else
+                m_dataRate->setSpecialValueText("TMATS");
+            m_dataRate->setValue(cfg.dataRateMbps);
+            m_dataRate->setMinimumWidth(110);
+            grid->addWidget(m_dataRate, 4, 1, Qt::AlignHCenter);
+
+            m_sampleRate = new QComboBox(this);
+            m_sampleRate->addItem(periodText(UIConstants::kSamplePeriod1s));
+            m_sampleRate->addItem(periodText(UIConstants::kSamplePeriod100ms));
+            m_sampleRate->addItem(periodText(UIConstants::kSamplePeriod10ms));
+            m_sampleRate->setCurrentIndex(cfg.samplePeriodIndex);
+            grid->addWidget(m_sampleRate, 4, 2, Qt::AlignHCenter);
+
+            grid->setColumnMinimumWidth(3, 16);
+
+            auto* loadBtn1 = new QPushButton(this);
+            loadBtn1->setIcon(QIcon(":/resources/folder-open.svg"));
+            loadBtn1->setToolTip("Load frame sync fields from a TOML file");
+            loadBtn1->setFixedSize(28, 28);
+            auto* saveBtn1 = new QPushButton(this);
+            saveBtn1->setIcon(QIcon(":/resources/floppy-save.svg"));
+            saveBtn1->setToolTip("Save frame sync fields to a TOML file");
+            saveBtn1->setFixedSize(28, 28);
+            grid->addWidget(loadBtn1, 4, 4, Qt::AlignVCenter);
+            grid->addWidget(saveBtn1, 4, 5, Qt::AlignVCenter);
+            grid->setColumnStretch(3, 1);
+
+            connect(loadBtn1, &QPushButton::clicked, this, [this]() {
                 QString filename = QFileDialog::getOpenFileName(
                     this, tr("Load Frame Sync Parameters"), m_toml_dir,
                     tr("TOML Files (*.toml);;All Files (*.*)"));
@@ -346,7 +353,7 @@ public:
                     loadFrameSyncFromToml(filename, m_syncPattern, m_syncMask,
                                          m_bitsPerFrame, m_toml_dir);
             });
-            connect(saveBtn, &QPushButton::clicked, this, [this]() {
+            connect(saveBtn1, &QPushButton::clicked, this, [this]() {
                 QString filename = QFileDialog::getSaveFileName(
                     this, tr("Save Frame Sync Parameters"), m_toml_dir,
                     tr("TOML Files (*.toml);;All Files (*.*)"));
@@ -359,71 +366,34 @@ public:
                                     m_toml_dir);
             });
 
-            layout->addWidget(row);
+            outer->addLayout(grid);
         }
 
-        // --- Row 2: Randomized, Data Rate, Average Period ---
-        {
-            auto* row = new QWidget(this);
-            auto* hl  = new QHBoxLayout(row);
-            hl->setContentsMargins(0, 0, 0, 0);
-            hl->setSpacing(16);
-
-            m_randomized = new QCheckBox(this);
-            m_randomized->setChecked(cfg.randomized);
-            {
-                auto* col = new QVBoxLayout;
-                col->setSpacing(3);
-                col->addWidget(new QLabel("Randomized"));
-                col->addWidget(m_randomized);
-                hl->addLayout(col);
-            }
-
-            m_dataRate = new QDoubleSpinBox(this);
-            m_dataRate->setRange(0.0, 1000.0);
-            m_dataRate->setDecimals(3);
-            m_dataRate->setSingleStep(0.1);
-            m_dataRate->setSuffix(" Mbps");
-            if (cfg.tmatsDataRateMbps > 0.0)
-                m_dataRate->setSpecialValueText(
-                    QString("Auto (%1 Mbps)").arg(cfg.tmatsDataRateMbps, 0, 'f', 3));
-            else
-                m_dataRate->setSpecialValueText("Auto (TMATS)");
-            m_dataRate->setValue(cfg.dataRateMbps);
-            m_dataRate->setMinimumWidth(130);
-            addLabeledWidget(hl, "Data Rate (Mbps)", m_dataRate);
-
-            m_sampleRate = new QComboBox(this);
-            m_sampleRate->addItem(receiverSNRSampleRateText(UIConstants::kSampleRate1Hz));
-            m_sampleRate->addItem(receiverSNRSampleRateText(UIConstants::kSampleRate10Hz));
-            m_sampleRate->addItem(receiverSNRSampleRateText(UIConstants::kSampleRate100Hz));
-            m_sampleRate->setCurrentIndex(cfg.sampleRateIndex);
-            addLabeledWidget(hl, "Average Period", m_sampleRate);
-
-            hl->addStretch(1);
-            layout->addWidget(row);
-        }
-
-        // --- Separator ---
+        // ---- Separator ------------------------------------------------------
         {
             auto* sep = new QFrame(this);
             sep->setFrameShape(QFrame::HLine);
             sep->setFrameShadow(QFrame::Sunken);
-            layout->addWidget(sep);
+            outer->addWidget(sep);
         }
 
-        // --- Row 3: Polarity, Slope, Scale (dB/V), Load, Save ---
+        // ---- Group 2: Receiver calibration parameters ----------------------
         {
-            auto* row = new QWidget(this);
-            auto* hl  = new QHBoxLayout(row);
-            hl->setContentsMargins(0, 0, 0, 0);
-            hl->setSpacing(10);
+            auto* grid = new QGridLayout;
+            grid->setHorizontalSpacing(10);
+            grid->setVerticalSpacing(4);
 
+            // Row 0: labels
+            grid->addWidget(new QLabel("Polarity"),      0, 0, Qt::AlignHCenter);
+            grid->addWidget(new QLabel("Slope"),         0, 1, Qt::AlignHCenter);
+            grid->addWidget(new QLabel("Scale (dB/V)"),  0, 2, Qt::AlignHCenter);
+
+            // Row 1: inputs
             m_polarity = new QComboBox(this);
             m_polarity->addItem("Positive");
             m_polarity->addItem("Negative");
             m_polarity->setCurrentIndex(cfg.polarityIndex);
-            addLabeledWidget(hl, "Polarity", m_polarity);
+            grid->addWidget(m_polarity, 1, 0, Qt::AlignHCenter);
 
             m_slope = new QComboBox(this);
             m_slope->addItem("±10 V");
@@ -431,34 +401,48 @@ public:
             m_slope->addItem("0–10 V");
             m_slope->addItem("0–5 V");
             m_slope->setCurrentIndex(cfg.slopeIndex);
-            addLabeledWidget(hl, "Slope", m_slope);
+            grid->addWidget(m_slope, 1, 1, Qt::AlignHCenter);
 
             m_scale = new QDoubleSpinBox(this);
             m_scale->setRange(0.001, 999.999);
             m_scale->setDecimals(3);
-            m_scale->setSuffix(" dB/V");
             m_scale->setValue(cfg.scaleDdBPerV);
             m_scale->setMinimumWidth(100);
-            addLabeledWidget(hl, "Scale (dB/V)", m_scale);
+            grid->addWidget(m_scale, 1, 2, Qt::AlignHCenter);
 
-            auto* btnCol = new QVBoxLayout;
-            btnCol->setSpacing(2);
-            btnCol->addSpacing(18);
-            auto* loadBtn = new QPushButton(this);
-            loadBtn->setIcon(QIcon(":/resources/folder-open.svg"));
-            loadBtn->setToolTip("Load receiver parameters from a TOML file");
-            loadBtn->setFixedSize(28, 28);
-            auto* saveBtn = new QPushButton(this);
-            saveBtn->setIcon(QIcon(":/resources/floppy-save.svg"));
-            saveBtn->setToolTip("Save receiver parameters to a TOML file");
-            saveBtn->setFixedSize(28, 28);
-            btnCol->addWidget(loadBtn);
-            btnCol->addWidget(saveBtn);
-            btnCol->addStretch();
-            hl->addLayout(btnCol);
-            hl->addStretch(1);
+            // Row 2: spacer
+            grid->setRowMinimumHeight(2, 8);
 
-            connect(loadBtn, &QPushButton::clicked, this, [this]() {
+            // Row 3: labels
+            grid->addWidget(new QLabel("Num Receivers"),     3, 0, Qt::AlignHCenter);
+            grid->addWidget(new QLabel("Receiver Channels"), 3, 1, Qt::AlignHCenter);
+
+            // Row 4: inputs + buttons
+            m_numReceivers = new QSpinBox(this);
+            m_numReceivers->setRange(1, 100);
+            m_numReceivers->setValue(cfg.numReceivers);
+            grid->addWidget(m_numReceivers, 4, 0, Qt::AlignHCenter);
+
+            m_receiverChannels = new QSpinBox(this);
+            m_receiverChannels->setRange(1, 100);
+            m_receiverChannels->setValue(cfg.receiverChannels);
+            grid->addWidget(m_receiverChannels, 4, 1, Qt::AlignHCenter);
+
+            grid->setColumnMinimumWidth(3, 16);
+
+            auto* loadBtn2 = new QPushButton(this);
+            loadBtn2->setIcon(QIcon(":/resources/folder-open.svg"));
+            loadBtn2->setToolTip("Load receiver parameters from a TOML file");
+            loadBtn2->setFixedSize(28, 28);
+            auto* saveBtn2 = new QPushButton(this);
+            saveBtn2->setIcon(QIcon(":/resources/floppy-save.svg"));
+            saveBtn2->setToolTip("Save receiver parameters to a TOML file");
+            saveBtn2->setFixedSize(28, 28);
+            grid->addWidget(loadBtn2, 4, 4, Qt::AlignVCenter);
+            grid->addWidget(saveBtn2, 4, 5, Qt::AlignVCenter);
+            grid->setColumnStretch(3, 1);
+
+            connect(loadBtn2, &QPushButton::clicked, this, [this]() {
                 QString filename = QFileDialog::getOpenFileName(
                     this, tr("Load Receiver Parameters"), m_toml_dir,
                     tr("TOML Files (*.toml);;All Files (*.*)"));
@@ -480,7 +464,7 @@ public:
                                     PCMConstants::kDefaultReceiverChannels).toInt();
                 if (rc > 0) m_receiverChannels->setValue(rc);
             });
-            connect(saveBtn, &QPushButton::clicked, this, [this]() {
+            connect(saveBtn2, &QPushButton::clicked, this, [this]() {
                 QString filename = QFileDialog::getSaveFileName(
                     this, tr("Save Receiver Parameters"), m_toml_dir,
                     tr("TOML Files (*.toml);;All Files (*.*)"));
@@ -498,28 +482,7 @@ public:
                 cfg.sync();
             });
 
-            layout->addWidget(row);
-        }
-
-        // --- Row 4: Num Receivers, Receiver Channels ---
-        {
-            auto* row = new QWidget(this);
-            auto* hl  = new QHBoxLayout(row);
-            hl->setContentsMargins(0, 0, 0, 0);
-            hl->setSpacing(16);
-
-            m_numReceivers = new QSpinBox(this);
-            m_numReceivers->setRange(1, 100);
-            m_numReceivers->setValue(cfg.numReceivers);
-            addLabeledWidget(hl, "Num Receivers", m_numReceivers);
-
-            m_receiverChannels = new QSpinBox(this);
-            m_receiverChannels->setRange(1, 100);
-            m_receiverChannels->setValue(cfg.receiverChannels);
-            addLabeledWidget(hl, "Receiver Channels", m_receiverChannels);
-
-            hl->addStretch(1);
-            layout->addWidget(row);
+            outer->addLayout(grid);
         }
 
         auto* buttons = new QDialogButtonBox(
@@ -531,17 +494,10 @@ public:
                     tr("A frame sync pattern is required (e.g. FE6B2840)."));
                 return;
             }
-            if (m_receiverParamsToml.isEmpty())
-            {
-                QMessageBox::warning(this, tr("Missing Receiver Parameters"),
-                    tr("A Receiver Parameters TOML file must be loaded (use the Load button "
-                       "in the receiver section)."));
-                return;
-            }
             accept();
         });
         connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-        layout->addWidget(buttons);
+        outer->addWidget(buttons);
 
         adjustSize();
     }
@@ -550,7 +506,7 @@ public:
     QString frameSyncMask()      const { return m_syncMask->text().trimmed().toUpper(); }
     int     bitsPerFrame()       const { return m_bitsPerFrame->value(); }
     bool    randomized()         const { return m_randomized->isChecked(); }
-    int     sampleRateIndex()    const { return m_sampleRate->currentIndex(); }
+    int     samplePeriodIndex()    const { return m_sampleRate->currentIndex(); }
     double  dataRateMbps()       const { return m_dataRate->value(); }
     int     polarityIndex()      const { return m_polarity->currentIndex(); }
     int     slopeIndex()         const { return m_slope->currentIndex(); }
@@ -596,18 +552,17 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
 {
     setWindowTitle("Configure Streams");
     setModal(true);
-    resize(700, 500);
+    resize(600, 600);
 
     auto* layout = new QVBoxLayout(this);
     layout->setSpacing(10);
 
     // Time channel row
     {
-        auto* row = new QWidget(this);
-        auto* hl  = new QHBoxLayout(row);
+        auto* hl = new QHBoxLayout;
         hl->setContentsMargins(0, 4, 0, 4);
         hl->addWidget(new QLabel("Time Channel:"));
-        m_time_channel_combo = new QComboBox(row);
+        m_time_channel_combo = new QComboBox(this);
         m_time_channel_combo->addItems(time_channels);
         m_time_channel_combo->setEnabled(!time_channels.isEmpty());
         if (!time_channels.isEmpty())
@@ -617,27 +572,13 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
         }
         hl->addWidget(m_time_channel_combo);
         hl->addStretch(1);
-        layout->addWidget(row);
+        layout->addLayout(hl);
     }
 
     m_table = new QTableWidget(this);
-    m_table->setStyleSheet("QTableWidget { gridline-color: palette(mid); }"
-                           "QTableWidget::item { padding: 4px; }");
     layout->addWidget(m_table, 1);
 
     buildTable();
-
-    // Separator above time controls
-    auto* hsep = new QFrame(this);
-    hsep->setFrameShape(QFrame::HLine);
-    hsep->setFrameShadow(QFrame::Sunken);
-    layout->addWidget(hsep);
-
-    auto* time_label = new QLabel("Time Controls", this);
-    QFont bold_font = time_label->font();
-    bold_font.setBold(true);
-    time_label->setFont(bold_font);
-    layout->addWidget(time_label);
 
     m_time_widget = new TimeExtractionWidget(this);
     m_time_widget->setExtractAllTime(extract_all_time);
@@ -647,9 +588,13 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
 
     auto* buttons = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    m_ok_btn = buttons->button(QDialogButtonBox::Ok);
     connect(buttons, &QDialogButtonBox::accepted, this, &StreamConfigDialog::validateAndAccept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     layout->addWidget(buttons);
+
+    // m_ok_btn was nullptr during buildTable(), so call once now to reflect actual state.
+    updateOkButton();
 }
 
 void StreamConfigDialog::buildTable()
@@ -659,7 +604,7 @@ void StreamConfigDialog::buildTable()
     constexpr int kColMode    = 2;
     constexpr int kColSetup   = 3;
     constexpr int kColReady   = 4;
-    constexpr int kRowHeight  = 36;
+    constexpr int kRowHeight  = 52;
 
     m_table->setColumnCount(5);
     m_table->setHorizontalHeaderLabels({"Process", "Channel", "Mode", "Setup", "Ready"});
@@ -703,7 +648,7 @@ void StreamConfigDialog::buildTable()
         w.frameSyncMask     = cfg.frameSyncMask;
         w.bitsInFrame       = cfg.bitsInMinorFrame;
         w.randomized        = cfg.randomized;
-        w.sampleRateIndex   = cfg.sampleRateIndex;
+        w.samplePeriodIndex   = cfg.samplePeriodIndex;
         w.dataRateMbps      = cfg.dataRateMbps;
         w.polarityIndex     = cfg.polarityIndex;
         w.slopeIndex        = cfg.slopeIndex;
@@ -762,26 +707,49 @@ void StreamConfigDialog::updateReadyIcon(int row)
     RowWidgets& w = m_rows[row];
     bool checked = w.process->isChecked();
     w.gearBtn->setEnabled(checked);
+    w.mode->setEnabled(checked);
 
     if (!checked)
     {
         w.readyLabel->setText("<span style='color: gray; font-size: 16px;'>✗</span>");
-        return;
     }
-
-    if (!w.gearConfirmed)
+    else if (!w.gearConfirmed)
     {
         w.readyLabel->setText("<span style='color: red; font-size: 16px;'>✗</span>");
-        return;
+    }
+    else
+    {
+        bool frame_ok = !w.frameSyncPattern.isEmpty();
+        bool recv_ok  = (w.mode->currentIndex() == 1) || !w.receiverParamsToml.isEmpty();
+
+        if (frame_ok && recv_ok)
+            w.readyLabel->setText("<span style='color: green; font-size: 16px;'>✓</span>");
+        else
+            w.readyLabel->setText("<span style='color: red; font-size: 16px;'>✗</span>");
     }
 
-    bool frame_ok = !w.frameSyncPattern.isEmpty();
-    bool recv_ok  = (w.mode->currentIndex() == 1) || !w.receiverParamsToml.isEmpty();
+    updateOkButton();
+}
 
-    if (frame_ok && recv_ok)
-        w.readyLabel->setText("<span style='color: green; font-size: 16px;'>✓</span>");
-    else
-        w.readyLabel->setText("<span style='color: red; font-size: 16px;'>✗</span>");
+void StreamConfigDialog::updateOkButton()
+{
+    if (!m_ok_btn)
+        return;
+
+    bool any_ready = false;
+    for (const RowWidgets& w : m_rows)
+    {
+        if (!w.process->isChecked() || !w.gearConfirmed)
+            continue;
+        bool frame_ok = !w.frameSyncPattern.isEmpty();
+        bool recv_ok  = (w.mode->currentIndex() == 1) || !w.receiverParamsToml.isEmpty();
+        if (frame_ok && recv_ok)
+        {
+            any_ready = true;
+            break;
+        }
+    }
+    m_ok_btn->setEnabled(any_ready);
 }
 
 void StreamConfigDialog::openGearDialog(int row)
@@ -797,7 +765,7 @@ void StreamConfigDialog::openGearDialog(int row)
     temp.frameSyncMask      = w.frameSyncMask;
     temp.bitsInMinorFrame   = w.bitsInFrame;
     temp.randomized         = w.randomized;
-    temp.sampleRateIndex    = w.sampleRateIndex;
+    temp.samplePeriodIndex    = w.samplePeriodIndex;
     temp.dataRateMbps       = w.dataRateMbps;
     temp.polarityIndex      = w.polarityIndex;
     temp.slopeIndex         = w.slopeIndex;
@@ -833,7 +801,7 @@ void StreamConfigDialog::openGearDialog(int row)
             w.frameSyncMask      = dlg.frameSyncMask();
             w.bitsInFrame        = dlg.bitsPerFrame();
             w.randomized         = dlg.randomized();
-            w.sampleRateIndex    = dlg.sampleRateIndex();
+            w.samplePeriodIndex    = dlg.samplePeriodIndex();
             w.dataRateMbps       = dlg.dataRateMbps();
             m_toml_dir           = dlg.lastTomlDir();
             w.lastConfiguredMode = StreamMode::FrameSyncLockStats;
@@ -850,7 +818,7 @@ void StreamConfigDialog::openGearDialog(int row)
             w.frameSyncMask      = dlg.frameSyncMask();
             w.bitsInFrame        = dlg.bitsPerFrame();
             w.randomized         = dlg.randomized();
-            w.sampleRateIndex    = dlg.sampleRateIndex();
+            w.samplePeriodIndex    = dlg.samplePeriodIndex();
             w.dataRateMbps       = dlg.dataRateMbps();
             w.polarityIndex      = dlg.polarityIndex();
             w.slopeIndex         = dlg.slopeIndex();
@@ -868,6 +836,16 @@ void StreamConfigDialog::openGearDialog(int row)
 
 void StreamConfigDialog::validateAndAccept()
 {
+    bool any_checked = false;
+    for (const RowWidgets& w : m_rows)
+        if (w.process->isChecked()) { any_checked = true; break; }
+    if (!any_checked)
+    {
+        QMessageBox::warning(this, tr("No Streams Selected"),
+            tr("Check at least one stream to process."));
+        return;
+    }
+
     for (int row = 0; row < m_rows.size(); row++)
     {
         const RowWidgets& w = m_rows[row];
@@ -881,14 +859,6 @@ void StreamConfigDialog::validateAndAccept()
             QMessageBox::warning(this, tr("Missing Frame Sync"),
                 channel + tr(": a frame sync pattern is required. "
                              "Click the gear icon to configure this stream."));
-            return;
-        }
-
-        if (w.mode->currentIndex() == 0 && w.receiverParamsToml.isEmpty())
-        {
-            QMessageBox::warning(this, tr("Missing Receiver Parameters"),
-                channel + tr(": a Receiver Parameters TOML file is required for "
-                             "Receiver SNR mode. Click the gear icon to configure this stream."));
             return;
         }
     }
@@ -930,7 +900,7 @@ QVector<StreamConfig> StreamConfigDialog::configs() const
         result[row].frameSyncMask     = w.frameSyncMask;
         result[row].bitsInMinorFrame  = w.bitsInFrame;
         result[row].randomized        = w.randomized;
-        result[row].sampleRateIndex   = w.sampleRateIndex;
+        result[row].samplePeriodIndex   = w.samplePeriodIndex;
         result[row].dataRateMbps      = w.dataRateMbps;
         result[row].polarityIndex     = w.polarityIndex;
         result[row].slopeIndex        = w.slopeIndex;

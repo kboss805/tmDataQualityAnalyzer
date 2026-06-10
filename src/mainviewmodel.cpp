@@ -67,7 +67,7 @@ MainViewModel::MainViewModel(QObject* parent)
     connect(m_coordinator, &ProcessingCoordinator::progressChanged,
             this, [this]() { emit progressPercentChanged(); });
     connect(m_coordinator, &ProcessingCoordinator::processingStateChanged,
-            this, [this]() { emit processingChanged(); emit controlsEnabledChanged(); });
+            this, [this]() { emit processingChanged(); });
     connect(m_coordinator, &ProcessingCoordinator::streamProcessed,
             this, &MainViewModel::streamProcessed);
     connect(m_coordinator, &ProcessingCoordinator::processingFinished,
@@ -105,7 +105,6 @@ int MainViewModel::pcmChannelIndex() const { return m_pcm_channel_index; }
 bool MainViewModel::fileLoaded() const { return m_file_loaded; }
 int MainViewModel::progressPercent() const { return m_coordinator->progressPercent(); }
 bool MainViewModel::processing() const { return m_coordinator->processing(); }
-bool MainViewModel::controlsEnabled() const { return m_file_loaded && !m_coordinator->processing(); }
 
 bool MainViewModel::extractAllTime() const { return m_extract_all_time; }
 
@@ -189,19 +188,6 @@ void MainViewModel::setStreamConfigs(const QVector<StreamConfig>& configs)
 const QVector<StreamConfig>& MainViewModel::streamConfigs() const
 {
     return m_stream_configs;
-}
-
-int MainViewModel::processableStreamCount() const
-{
-    int count = 0;
-    for (const auto& cfg : m_stream_configs)
-    {
-        if (cfg.process)
-        {
-            count++;
-        }
-    }
-    return count;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -407,7 +393,9 @@ void MainViewModel::startProcessing(const QString& start_time, const QString& st
             QString::number(base.start_seconds) + "s - " +
             QString::number(base.stop_seconds) + "s");
     }
-    emit logMessageReceived("  Sample rate: " + QString::number(base.sample_rate) + " Hz");
+    for (const StreamJob& job : jobs)
+        emit logMessageReceived("  " + job.params.stream_label + ": "
+                                + QString::number(job.params.sample_period_sec * 1000.0) + " ms period");
 
     m_coordinator->startProcessing(std::move(jobs));
 }
@@ -428,7 +416,6 @@ void MainViewModel::clearState()
     emit fileTimesChanged();
     emit progressPercentChanged();
     emit processingChanged();
-    emit controlsEnabledChanged();
 }
 
 void MainViewModel::cancelProcessing()
@@ -579,7 +566,7 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
     {
         frame_sync_mask = (sync_pattern_length > 0 && sync_pattern_length < 64)
             ? (1ULL << sync_pattern_length) - 1
-            : 0x7FFFFFFFFFFFFFFFULL;
+            : 0xFFFFFFFFFFFFFFFFULL;
     }
     else
     {
@@ -616,13 +603,13 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
     out_job.params.data_rate_bps        = (cfg.dataRateMbps > 0.0) ? cfg.dataRateMbps * 1e6 : 0.0;
     out_job.params.stream_label         = stream_desc;
 
-    // Set per-stream sample rate.
-    switch (cfg.sampleRateIndex)
+    // Set per-stream sample period.
+    switch (cfg.samplePeriodIndex)
     {
-        case 0: out_job.params.sample_rate = UIConstants::kSampleRate1Hz;   break;
-        case 1: out_job.params.sample_rate = UIConstants::kSampleRate10Hz;  break;
-        case 2: out_job.params.sample_rate = UIConstants::kSampleRate100Hz; break;
-        default: out_job.params.sample_rate = UIConstants::kSampleRate10Hz; break;
+        case 0: out_job.params.sample_period_sec = UIConstants::kSamplePeriod1s;    break;
+        case 1: out_job.params.sample_period_sec = UIConstants::kSamplePeriod100ms; break;
+        case 2: out_job.params.sample_period_sec = UIConstants::kSamplePeriod10ms;  break;
+        default: out_job.params.sample_period_sec = UIConstants::kSamplePeriod100ms; break;
     }
 
     // ---- Frame parameter table (word map + calibration) ----
@@ -675,10 +662,6 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
     double voltage_lower = UIConstants::kSlopeVoltageLower[slope_idx] * scale_dB_per_V;
     double voltage_upper = UIConstants::kSlopeVoltageUpper[slope_idx] * scale_dB_per_V;
     bool negative_polarity = (polarity_idx == 1);
-
-    out_job.params.calibration.scale_lower_bound = voltage_lower;
-    out_job.params.calibration.scale_upper_bound = voltage_upper;
-    out_job.params.calibration.negative_polarity = negative_polarity;
 
     // Apply slope/scale to every parameter and enable it for output.
     for (int i = 0; i < frame_setup->length(); i++)

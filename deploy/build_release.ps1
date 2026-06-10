@@ -77,7 +77,7 @@ Copy-Item "$ProjectDir\build\release\tmDataQualityAnalyzer.exe" "$InstallerStage
 if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
 
 Copy-Item "$ProjectDir\settings\default.toml" "$InstallerStage\settings\"
-foreach ($toml in @('RASA.toml', 'TRC.toml')) {
+foreach ($toml in @('RASA.toml', 'TRC.toml', 'framesync_PRN11.toml', 'framesync_PRN15.toml')) {
     if (Test-Path "$ProjectDir\settings\$toml") {
         Copy-Item "$ProjectDir\settings\$toml" "$InstallerStage\settings\"
     }
@@ -103,7 +103,7 @@ foreach ($dir in @('platforms', 'styles', 'imageformats', 'tls', 'networkinforma
 }
 
 Copy-Item "$ProjectDir\settings\default.toml" "$PortableRoot\settings\"
-foreach ($toml in @('RASA.toml', 'TRC.toml')) {
+foreach ($toml in @('RASA.toml', 'TRC.toml', 'framesync_PRN11.toml', 'framesync_PRN15.toml')) {
     if (Test-Path "$ProjectDir\settings\$toml") {
         Copy-Item "$ProjectDir\settings\$toml" "$PortableRoot\settings\"
     }
@@ -126,15 +126,22 @@ elseif (Test-Path "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe")          {
 elseif (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")            { $IsccPath = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
 
 if ($IsccPath) {
+    # When signing, hand iscc a SignTool definition so it signs BOTH the setup
+    # executable and the embedded uninstaller (SignedUninstaller=yes in the .iss,
+    # gated by /DSIGN). 'signtool' is referenced by bare name: env.ps1 puts the
+    # WDK signtool directory on PATH and iscc inherits that PATH when it spawns the
+    # tool. A bare name has no spaces and no embedded quotes, so it survives
+    # PowerShell native-argument passing — a fully-qualified, quoted signtool path
+    # gets mis-split by PowerShell and makes iscc reject the command line.
     $isccArgs = @("/DMyAppVersion=$version")
     if ($SignCertSha1) {
-        $signCmd = "`"$SigntoolExe`" sign /sha1 $SignCertSha1 /tr $SignTimestamp /td sha256 /fd sha256 `$f"
+        $signCmd = "signtool sign /sha1 $SignCertSha1 /tr $SignTimestamp /td sha256 /fd sha256 `$f"
         $isccArgs += '/DSIGN'
         $isccArgs += "/Ssigntool=$signCmd"
     }
     $isccArgs += "$ProjectDir\deploy\tmDataQualityAnalyzer.iss"
     & $IsccPath @isccArgs
-    if ($LASTEXITCODE -ne 0) { Write-Warning "Inno Setup compilation failed" }
+    if ($LASTEXITCODE -ne 0) { Write-Warning "Inno Setup compilation or installer signing failed" }
 } else {
     Write-Host "  Skipping — Inno Setup not found. Install from https://jrsoftware.org/isinfo.php"
 }

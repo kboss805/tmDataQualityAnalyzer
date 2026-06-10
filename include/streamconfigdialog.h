@@ -85,7 +85,7 @@ private:
         QString frameSyncMask    = PCMConstants::kDefaultFrameSyncMask;
         int     bitsInFrame      = PCMConstants::kDefaultBitsPerFrame;
         bool    randomized       = false;
-        int     sampleRateIndex  = UIConstants::kDefaultSampleRateIndex;
+        int     samplePeriodIndex = UIConstants::kDefaultSamplePeriodIndex;
         double  dataRateMbps     = 0.0;
         int     polarityIndex    = UIConstants::kDefaultPolarityIndex;
         int     slopeIndex       = UIConstants::kDefaultSlopeIndex;
@@ -99,8 +99,11 @@ private:
 
     void buildTable();
 
-    /// Refreshes the ready icon for @p row based on process state and stored values.
+    /// Refreshes the ready icon for @p row and re-evaluates the OK button state.
     void updateReadyIcon(int row);
+
+    /// Enables the OK button iff at least one stream is ready (green check).
+    void updateOkButton();
 
     /// Opens the appropriate sub-dialog for @p row based on the current mode selection.
     void openGearDialog(int row);
@@ -111,6 +114,7 @@ private:
     QVector<RowWidgets>   m_rows;
     QComboBox*            m_time_channel_combo = nullptr;
     TimeExtractionWidget* m_time_widget        = nullptr;
+    QPushButton*          m_ok_btn             = nullptr;
 };
 
 #endif // STREAMCONFIGDIALOG_H

@@ -1,54 +1,120 @@
-tmDataQualityAnalyzer v0.8.0 - What's New
+tmDataQualityAnalyzer v1.0.1 - What's New
 =================================
 
-Architecture & UX Improvements
-  - Extracted ProcessingCoordinator class from MainViewModel to own all worker thread lifecycle and batch sequencing
-  - ProcessingSettings struct groups frameSync, polarityIdx, slopeIdx, scale, and receiverStates — replaces 5-parameter signatures across all processing entry points
-  - ProcessingParams struct extracted to include/processingparams.h — single source of truth for all processing input parameters
-  - TimeFields struct extracted to include/timefields.h — groups DOY/hour/minute/second for start and stop times
-  - MainViewModel significantly slimmed — delegates all processing orchestration to ProcessingCoordinator
-  - Batch results dialog: clear visualization of succeeded (green), failed (red), and skipped (gray) files after every batch run
-  - View Plot combo integrated into batch results dialog — no separate plot selection prompt
-  - Retry button auto-hides on click and only reappears if the retry run itself produces failures
+  - Frame Sync Lock plot lines are now rendered in distinct shades of blue,
+    one per stream, making it easier to tell streams apart while keeping
+    the lock series visually grouped by color
+  - Fixed legend ordering below the plot: per-stream entries (e.g. Frame
+    Sync Lock channels) now sort by source PCM channel number instead of
+    by the order in which parallel-processed streams finished
+  - Added framesync_PRN11.toml and framesync_PRN15.toml to the installer
+    and portable deployment packages
 
-Previous Releases
------------------
 
-v3.2.0 - Plot & Batch Improvements
-  - Plot hover tooltip: shows series name, time (DDD:HH:MM:SS), and dB value
-  - Copy Data to Clipboard: copies visible plot range as comma-separated values
-  - Ctrl+E keyboard shortcut to expand/collapse all receivers in the plot legend
-  - Fixed plot legend scroll overdraw (transparent background issue)
-  - Fixed worker thread use-after-free: replaced deleteLater() with delete after wait()
-  - Fixed destructor memory leak: worker thread now deleted on application exit
-  - Added 100 MB ceiling on packet buffer allocation to guard against malformed Ch10 files
-  - Optimized RNRZ-L derandomization loop: replaced division/modulo with bit shifts
-  - Cached batch status summary string to avoid redundant rebuilds
-  - Ctrl+E keyboard shortcut added to expand/collapse receivers in the main panel
+tmDataQualityAnalyzer v1.0.0 - What's New
+=================================
 
-v3.1.1 - Code Quality & Test Coverage
-  - Clang-tidy efficiency improvements
-  - TestFrameProcessor, TestTimeExtractionWidget, TestReceiverGridWidget tests
+This is the initial public release of tmDataQualityAnalyzer, a Qt 6 desktop
+application for analyzing telemetry data quality in IRIG 106 Chapter 10 (.ch10)
+recording files. The application visualizes Frame Sync Lock statistics and
+Receiver SNR/AGC data versus time, and exports results to CSV and image formats.
 
-v3.0.0 - AGC Signal Plot Window
-  - Interactive QCustomPlot chart with zoom and pan
-  - Auto-scale Y axis with manual override
-  - Time window controls for X axis
-  - Per-receiver-channel visibility toggles
-  - Auto-assigned color palette
-  - Dark/light theme support
 
-v2.4.0 - Batch Ch10 Processing
-  - Multi-file selection and processing
-  - Per-file channel selection
-  - Sequential queue-based processing
-  - Color-coded file status tracking
+Frame Sync Lock Analysis
+  - Frame Sync Lock mode: measures per-stream frame synchronization lock percentage
+    over time directly from the decoded PCM bitstream — no receiver parameters required
+  - Bit-serial frame sync scanner with acquire/lock phases: confirms a configurable
+    number of in-phase syncs (min syncs) before declaring lock
+  - Off-phase false-positive rejection while locked: sync patterns that appear inside
+    pseudo-random (PRN) data words no longer disrupt frame collection, eliminating
+    spurious lock oscillation on clean randomized streams
+  - Automatic lock loss and re-acquisition when a true frame sync is missed
+  - Bit-span lock percentage: lock % is computed from the actual number of frame-sized
+    bit slots traversed versus frames detected — the lock figure does not depend on
+    an exact TMATS/data-rate value
+  - Configurable frame sync pattern (hex), sync mask (hex), bits per frame, RNRZ-L
+    randomization, data rate (Mbps, or Auto from TMATS), and averaging window
+    (1 s / 100 ms / 10 ms)
+  - Lock percentage plotted against actual file time (DDD:HH:MM:SS)
 
-v2.3.0 - Easy Deployment
-  - Inno Setup installer (admin/non-admin)
-  - Portable ZIP distribution
-  - Automatic INI settings migration
-  - Code-signed executable
 
-For the full changelog, visit:
-https://github.com/kevinbossoletti/tmDataQualityAnalyzer
+Receiver SNR / AGC Analysis
+  - Receiver SNR mode: extracts calibrated receiver-channel AGC values from the minor
+    frame using a Receiver Parameters TOML (word map + calibration)
+  - Configurable polarity, voltage slope/range, scale (dB/V), receiver count, and
+    channels-per-receiver
+  - Voltage-to-dB conversion with per-receiver-channel plotting on a dedicated
+    right-hand Y-axis
+  - Averaging windows: 100 Hz, 10 Hz, 1 Hz
+
+
+Multi-Stream Processing
+  - Per-stream configuration: one row per PCM channel in the Configure Streams dialog,
+    each independently set to Receiver SNR or Frame Sync Lock mode with its own setup
+  - Concurrent processing: a single file-reader thread reads the Chapter 10 file once
+    and routes packets to per-stream queues; each stream is processed on its own worker
+    thread in parallel
+  - Single-pass I/O: the file is read exactly once regardless of stream count —
+    a large speedup on multi-stream, multi-gigabyte recordings
+  - Results accumulate into an in-memory plot; each completed stream is added as it
+    finishes
+  - Bounded per-stream queues and cooperative cancellation: cancel cleanly stops the
+    reader and all workers without deadlock
+
+
+Plot Window
+  - Dual Y-axis plot: Frame Sync Lock (%) on the left axis, Receiver SNR (dB) on the
+    right axis, with time (DDD:HH:MM:SS) on the X axis
+  - User-specified plot title
+  - Mouse wheel zoom and click-drag pan on the X axis
+  - Time-window controls to auto-zoom and move the X axis to a user-defined range
+  - Y-axis auto-range with manual min/max override
+  - Per-series visibility toggle via legend tree with tri-state checkboxes
+  - Automatic color palette assignment by receiver; channels within the same receiver
+    share a hue family
+  - Light and dark theme support synchronized with the application theme
+
+
+Configuration & Files
+  - TOML-based configuration: Frame Sync parameters (pattern, mask, bits per frame)
+    and Receiver SNR parameters (word map, calibration) stored in separate TOML files
+  - Per-stream load/save of configuration files directly from the stream setup dialog
+  - Per-file-type directory persistence for Ch10 and TOML file dialogs across sessions
+  - Recent files list (up to 5 entries) with persistence across sessions
+
+
+Data Export
+  - CSV export: timestamped frame sync lock percentages and/or SNR values with
+    labeled column headers
+  - Image export: plot window saved as SVG, PNG, or PDF
+  - Unified export dialog: select export types, filenames, and output directories
+    in a single action
+
+
+Error Checking
+  - All input fields validated with inline log messages for invalid entries
+  - Frame sync pattern validated to contain only hexadecimal characters
+  - Frame sync pattern length validated against the configured frame length
+
+
+Application Installer & Portable Package
+  - Inno Setup EXE installer: supports installation to Program Files (admin) or a
+    user-chosen directory (non-admin) via the privileges override dialog
+  - Installer preserves existing user TOML files on upgrade; a fresh copy of
+    default.toml is installed alongside as default_new.toml for application-driven
+    TOML merge/upgrade logic
+  - Portable ZIP: flat layout with a "portable" marker file; QSettings are redirected
+    to the application directory so no registry or AppData writes occur
+  - Optional code signing via SHA-1 certificate thumbprint (SIGN_CERT_SHA1)
+
+
+Developer / Build
+  - VS Code debugging configured for the Eclipse CDT GDB adapter (Debug/Release launch
+    configurations for both the application and the test suite)
+  - Automated unit tests using the Qt Test framework covering constants, frame
+    processor, stream config dialog, processing coordinator, export dialog, and
+    plot view model
+  - Single-script release build (deploy/build_release.ps1): qmake → mingw32-make →
+    windeployqt → optional code signing → portable ZIP → Inno Setup installer
+  - Version is defined once in include/constants.h (AppVersion struct) and propagated
+    automatically to the .pro file, Windows resource file, and installer script

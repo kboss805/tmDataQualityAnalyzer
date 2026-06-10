@@ -46,26 +46,26 @@ void TestProcessingCoordinator::startProcessingEmitsProcessingState()
 {
     ProcessingCoordinator coord;
     QSignalSpy state_spy(&coord, &ProcessingCoordinator::processingStateChanged);
+    QSignalSpy error_spy(&coord, &ProcessingCoordinator::errorOccurred);
 
-    // A lock-only job pointing at a nonexistent file: the worker launches, then
-    // fails quickly on file open. The state signal fires synchronously before launch.
+    // With the single-reader architecture, Ch10PacketReader::prepare() runs
+    // synchronously before any threads launch. A nonexistent file causes prepare()
+    // to fail immediately, so startProcessing() returns false and emits errorOccurred
+    // without ever flipping processingState to true.
     StreamJob job;
     job.params.filename = "nonexistent_coordinator_test.ch10";
     job.params.time_channel_id = 1;
     job.params.pcm_channel_id = 1;
     job.params.mode = StreamMode::FrameSyncLockStats;
-    job.frameSetup = new FrameSetup(nullptr);  // ownership transferred to coordinator
+    job.frameSetup = new FrameSetup(nullptr);
 
     QVector<StreamJob> jobs;
-    jobs.push_back(job);
+    jobs.push_back(std::move(job));
 
     bool started = coord.startProcessing(std::move(jobs));
 
-    QCOMPARE(started, true);
-    QVERIFY(!state_spy.isEmpty());
-    QCOMPARE(state_spy.first().first().toBool(), true);
-
-    // Let the worker fail and the queue drain.
-    coord.cancelProcessing();
-    QTest::qWait(300);
+    QCOMPARE(started, false);
+    QVERIFY(!error_spy.isEmpty());
+    QVERIFY(state_spy.isEmpty());  // no spurious "started" event
+    QCOMPARE(coord.processing(), false);
 }

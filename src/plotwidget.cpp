@@ -5,6 +5,8 @@
 
 #include "plotwidget.h"
 
+#include <algorithm>
+
 #include <QApplication>
 #include <QClipboard>
 #include <QFileDialog>
@@ -54,7 +56,7 @@ void PlotWidget::setViewModel(PlotViewModel* vm)
 {
     if (m_view_model != nullptr)
     {
-        disconnect(m_view_model, nullptr, this, nullptr);
+        m_view_model->disconnect(this);
     }
 
     m_view_model = vm;
@@ -173,7 +175,6 @@ void PlotWidget::initReceiverLegend(int receiver_count, int channels_per_receive
         tree->setFixedHeight((per_column * UIConstants::kTreeItemHeightFactor) +
                              UIConstants::kTreeHeightBuffer);
         tree->setFrameShape(QFrame::NoFrame);
-        tree->setStyleSheet("QTreeWidget { background: palette(window); }");
         tree->setEnabled(false);
 
         for (int r = start; r < end; r++)
@@ -462,7 +463,7 @@ void PlotWidget::onExportPlot()
     default_name.replace(QRegularExpression("[\\\\/:*?\"<>|]"), "_");
     QString base_path = QDir(last_dir).filePath(default_name);
 
-    ExportDialog dialog(base_path + ".csv", base_path + ".pdf", this);
+    ExportDialog dialog(base_path + ".csv", base_path + ".png", this);
     if (dialog.exec() == QDialog::Accepted)
     {
         if (dialog.exportCsv())
@@ -621,9 +622,7 @@ void PlotWidget::setUpLayout()
     // Loading overlay (child of m_plot so it floats over the chart)
     m_loading_label = new QLabel("Loading...", m_plot);
     m_loading_label->setAlignment(Qt::AlignCenter);
-    m_loading_label->setStyleSheet(
-        "background-color: rgba(0,0,0,160); color: white; "
-        "font-size: 14pt; border-radius: 8px; padding: 12px 24px;");
+    m_loading_label->setObjectName("LoadingLabel");
     m_loading_label->adjustSize();
     m_loading_label->hide();
 
@@ -699,6 +698,7 @@ void PlotWidget::setUpLayout()
     m_copy_data_btn->setToolTip("Copy visible data to clipboard as comma-separated values");
     m_copy_data_btn->setEnabled(false);
     bottom_bar->addWidget(m_copy_data_btn, 0, Qt::AlignTop);
+    bottom_bar->addSpacing(4);
 
     m_export_btn = new QPushButton("Export...");
     m_export_btn->setToolTip("Export plot data and images");
@@ -758,6 +758,21 @@ void PlotWidget::rebuildLegend()
         receiver_groups[all_series[i].receiverIndex].append(static_cast<int>(i));
     }
 
+    // Within each group, order by source stream and channel rather than the
+    // (possibly out-of-order) arrival order of parallel-processed streams.
+    for (auto& indices : receiver_groups)
+    {
+        std::sort(indices.begin(), indices.end(), [&all_series](int a, int b) {
+            const PlotSeriesData& sa = all_series[a];
+            const PlotSeriesData& sb = all_series[b];
+            if (sa.streamOrder != sb.streamOrder)
+            {
+                return sa.streamOrder < sb.streamOrder;
+            }
+            return sa.channelIndex < sb.channelIndex;
+        });
+    }
+
     int receiver_count = static_cast<int>(receiver_groups.size());
 
     QPushButton* toggle_btn = new QPushButton("Expand All");
@@ -802,10 +817,9 @@ void PlotWidget::rebuildLegend()
         tree->setFixedWidth(UIConstants::kTreeFixedWidth);
         tree->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         tree->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        tree->setFixedHeight((per_column * UIConstants::kTreeItemHeightFactor) +
-                             UIConstants::kTreeHeightBuffer);
+        int treeHeight = (per_column * UIConstants::kTreeItemHeightFactor) + UIConstants::kTreeHeightBuffer;
+        tree->setFixedHeight(qMax(treeHeight, 90));
         tree->setFrameShape(QFrame::NoFrame);
-        tree->setStyleSheet("QTreeWidget { background: palette(window); }");
 
         for (int r = start; r < end; r++)
         {
@@ -871,8 +885,8 @@ void PlotWidget::rebuildLegend()
     content_row->addLayout(btn_col);
     m_legend_layout->addLayout(content_row);
 
-    m_legend_panel->setFixedHeight((per_column * UIConstants::kTreeItemHeightFactor) +
-                                   UIConstants::kTreeHeightBuffer);
+    int panelHeight = (per_column * UIConstants::kTreeItemHeightFactor) + UIConstants::kTreeHeightBuffer;
+    m_legend_panel->setFixedHeight(qMax(panelHeight, 90));
     syncLegendScrollbars();
     connectExpandCollapseToggle(toggle_btn);
 

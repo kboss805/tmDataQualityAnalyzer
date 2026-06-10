@@ -19,6 +19,7 @@ win32 {
 SOURCES += \
     $$PWD/../src/channeldata.cpp \
     $$PWD/../src/chapter10reader.cpp \
+    $$PWD/../src/ch10packetreader.cpp \
     $$PWD/../src/framesetup.cpp \
     $$PWD/../src/mainviewmodel.cpp \
     $$PWD/../src/processingcoordinator.cpp \
@@ -36,6 +37,8 @@ SOURCES += \
 HEADERS += \
     $$PWD/../include/channeldata.h \
     $$PWD/../include/chapter10reader.h \
+    $$PWD/../include/ch10packetreader.h \
+    $$PWD/../include/packetqueue.h \
     $$PWD/../include/constants.h \
     $$PWD/../include/framesetup.h \
     $$PWD/../include/mainviewmodel.h \
@@ -103,7 +106,8 @@ SOURCES += \
     tst_frameprocessor.cpp \
     tst_timeextractionwidget.cpp \
     tst_processingcoordinator.cpp \
-    tst_streamconfigdialog.cpp
+    tst_streamconfigdialog.cpp \
+    tst_exportdialog.cpp
 
 # Test headers (needed for MOC processing)
 HEADERS += \
@@ -118,4 +122,5 @@ HEADERS += \
     tst_frameprocessor.h \
     tst_timeextractionwidget.h \
     tst_processingcoordinator.h \
-    tst_streamconfigdialog.h
+    tst_streamconfigdialog.h \
+    tst_exportdialog.h

@@ -18,6 +18,7 @@
 #include "tst_processingcoordinator.h"
 #include "tst_streamconfigdialog.h"
 #include "tst_timeextractionwidget.h"
+#include "tst_exportdialog.h"
 
 /// Runs a single test suite and appends results to the shared log file.
 template<typename T>
@@ -97,6 +98,7 @@ int main(int argc, char* argv[])
     status |= runSuite<TestMainView>(log_path);
     status |= runSuite<TestPlotWidget>(log_path);
     status |= runSuite<TestStreamConfigDialog>(log_path);
+    status |= runSuite<TestExportDialog>(log_path);
 
     return status;
 }

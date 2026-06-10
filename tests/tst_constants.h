@@ -17,8 +17,8 @@ private slots:
     void uiDefaultSlopeIndex();
     void uiDefaultScale();
     void uiTimeValidationLimits();
-    void uiSampleRates();
-    void uiMaxSampleRateIndex();
+    void uiSamplePeriods();
+    void uiMaxSamplePeriodIndex();
     void uiChannelPrefixes();
     void uiNumKnownPrefixes();
 
@@ -55,7 +55,7 @@ private slots:
 
     // v3.4 additions — previously untested constants
     void pcmMaxPacketBufferSize();
-    void uiDefaultSampleRateIndex();
+    void uiDefaultSamplePeriodIndex();
     void uiMaxSlopeIndex();
     void uiSlopeVoltageBounds();
     void plotFrameSyncLockColor();

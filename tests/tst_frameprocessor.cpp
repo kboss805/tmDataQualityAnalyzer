@@ -10,13 +10,16 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QSignalSpy>
+#include <QtConcurrent>
 #include <QtTest>
 #include <QVector>
 
+#include "ch10packetreader.h"
 #include "chapter10reader.h"
 #include "constants.h"
 #include "frameprocessor.h"
 #include "framesetup.h"
+#include "packetqueue.h"
 #include "processedstreamdata.h"
 
 /// Helper: resolves a path inside tests/data/ relative to the test executable.
@@ -45,6 +48,27 @@ static ProcessingParams makeTestParams(const QString& filename = {},
     p.words_in_minor_frame = words_in_frame;
     p.bits_in_minor_frame = bits_in_frame;
     return p;
+}
+
+/// Runs FrameProcessor through the full reader+queue pipeline synchronously.
+/// Mirrors what ProcessingCoordinator does: creates a PacketQueue, calls
+/// Ch10PacketReader::prepare() to resolve TMATS attributes, drives the reader
+/// on a background thread while fp.process() consumes on the calling thread.
+static bool runWithReader(FrameProcessor& fp, ProcessingParams& p, FrameSetup* setup)
+{
+    PacketQueue queue;
+    p.packet_queue = &queue;
+
+    Ch10PacketReader reader;
+    QVector<ProcessingParams*> params_list = { &p };
+    QString error;
+    if (!reader.prepare(p.filename, p.time_channel_id, params_list, error))
+        return false;
+
+    QFuture<void> future = QtConcurrent::run([&reader]() { reader.run(); });
+    bool ok = fp.process(p, setup);
+    future.waitForFinished();
+    return ok;
 }
 
 /// Helper: loads the default frame setup (word map) from settings/default.toml.
@@ -101,32 +125,6 @@ void TestFrameProcessor::requestAbortSetsFlag()
 //                         STATIC METHOD TESTS                                //
 ////////////////////////////////////////////////////////////////////////////////
 
-void TestFrameProcessor::hasSyncPatternFindsMatch()
-{
-    const char raw[] = {'\xFF', '\x00'};
-    QByteArray data(raw, 2);
-    bool found = FrameProcessor::hasSyncPattern(
-        reinterpret_cast<const uint8_t*>(data.constData()), 16, 0xFF00, 0xFFFF, 16);
-    QVERIFY2(found, "Should find 0xFF00 pattern in [0xFF, 0x00] buffer");
-}
-
-void TestFrameProcessor::hasSyncPatternNoMatch()
-{
-    const char raw[] = {'\xFF', '\x00'};
-    QByteArray data(raw, 2);
-    bool found = FrameProcessor::hasSyncPattern(
-        reinterpret_cast<const uint8_t*>(data.constData()), 16, 0x00FF, 0xFFFF, 16);
-    QVERIFY2(!found, "Should NOT find 0x00FF pattern in [0xFF, 0x00] buffer");
-}
-
-void TestFrameProcessor::hasSyncPatternShortBuffer()
-{
-    QByteArray data(1, '\xFF');
-    bool found = FrameProcessor::hasSyncPattern(
-        reinterpret_cast<const uint8_t*>(data.constData()), 8, 0xFF00, 0xFFFF, 16);
-    QVERIFY2(!found, "Should not find 16-bit pattern in 8-bit buffer");
-}
-
 void TestFrameProcessor::derandomizeShortBufferIdentity()
 {
     QByteArray data(1, '\xAB');
@@ -159,7 +157,7 @@ void TestFrameProcessor::processInvalidTimeChannel()
     ProcessingParams p = makeTestParams("dummy.ch10", -1, 1);
     p.start_seconds = 0;
     p.stop_seconds = 100;
-    p.sample_rate = 1;
+    p.sample_period_sec = 1.0;
     QVERIFY(!fp.process(p, &setup));
     QVERIFY(!error_spy.isEmpty());
     QVERIFY(!finished_spy.isEmpty());
@@ -176,7 +174,7 @@ void TestFrameProcessor::processInvalidPcmChannel()
     ProcessingParams p = makeTestParams("dummy.ch10", 1, -1);
     p.start_seconds = 0;
     p.stop_seconds = 100;
-    p.sample_rate = 1;
+    p.sample_period_sec = 1.0;
     QVERIFY(!fp.process(p, &setup));
     QVERIFY(!error_spy.isEmpty());
     QVERIFY(!finished_spy.isEmpty());
@@ -192,7 +190,7 @@ void TestFrameProcessor::processInvalidFile()
     ProcessingParams p = makeTestParams("nonexistent_file.ch10", 1, 1);
     p.start_seconds = 0;
     p.stop_seconds = 100;
-    p.sample_rate = 1;
+    p.sample_period_sec = 1.0;
     QVERIFY(!fp.process(p, &setup));
     QVERIFY(!error_spy.isEmpty());
 }
@@ -228,13 +226,13 @@ void TestFrameProcessor::processAccumulatesReceiverData()
     ProcessingParams p = makeTestParams(filepath, time_id, pcm_id);
     p.start_seconds = start_secs;
     p.stop_seconds = stop_secs;
-    p.sample_rate = 1;
+    p.sample_period_sec = 1.0;
     p.is_randomized = true;
     p.mode = StreamMode::ReceiverChannelInfo;
     p.stream_label = "Ch test";
 
     FrameProcessor fp;
-    QVERIFY2(fp.process(p, &setup), "Processing should succeed on valid RNRZ-L file");
+    QVERIFY2(runWithReader(fp, p, &setup), "Processing should succeed on valid RNRZ-L file");
 
     const ProcessedStreamData& r = fp.result();
     QVERIFY2(r.hasSamples(), "Result must contain at least one time sample");
@@ -280,13 +278,13 @@ void TestFrameProcessor::processLockOnlyModeHasNoChannels()
     ProcessingParams p = makeTestParams(filepath, time_id, pcm_id);
     p.start_seconds = start_secs;
     p.stop_seconds = stop_secs;
-    p.sample_rate = 1;
+    p.sample_period_sec = 1.0;
     p.is_randomized = true;
     p.mode = StreamMode::FrameSyncLockStats;
 
     FrameSetup empty_setup;  // No word map for lock-only mode.
     FrameProcessor fp;
-    QVERIFY2(fp.process(p, &empty_setup), "Lock-only processing should succeed");
+    QVERIFY2(runWithReader(fp, p, &empty_setup), "Lock-only processing should succeed");
 
     const ProcessedStreamData& r = fp.result();
     QVERIFY2(r.hasSamples(), "Lock-only result must contain time samples");
@@ -322,10 +320,10 @@ void TestFrameProcessor::processSlopeAffectsValues()
         ProcessingParams p = makeTestParams(filepath, time_id, pcm_id);
         p.start_seconds = start_secs;
         p.stop_seconds = stop_secs;
-        p.sample_rate = 1;
+        p.sample_period_sec = 1.0;
         p.is_randomized = true;
         FrameProcessor fp;
-        if (!fp.process(p, &setup) || fp.result().channels.isEmpty()
+        if (!runWithReader(fp, p, &setup) || fp.result().channels.isEmpty()
             || fp.result().channels[0].values.isEmpty())
             return 0.0;
         return fp.result().channels[0].values.first();
@@ -339,7 +337,7 @@ void TestFrameProcessor::processSlopeAffectsValues()
              qPrintable(QString("Expected v2 (%1) = 2 * v1 (%2)").arg(v2).arg(v1)));
 }
 
-void TestFrameProcessor::processSampleRate100HzMoreSamples()
+void TestFrameProcessor::processShortPeriodMoreSamples()
 {
     const QString filepath = testDataPath("rnrz-l_testfile.ch10");
     if (!QFileInfo::exists(filepath))
@@ -361,25 +359,25 @@ void TestFrameProcessor::processSampleRate100HzMoreSamples()
     if (stop_secs <= start_secs + 1)
         QSKIP("Test file too short for sample-rate comparison");
 
-    auto countAt = [&](int rate) -> int {
+    auto countAt = [&](double period) -> int {
         FrameSetup setup;
         if (!setupParams(setup, 1.0, 0.0))
             return -1;
         ProcessingParams p = makeTestParams(filepath, time_id, pcm_id);
         p.start_seconds = start_secs;
         p.stop_seconds = stop_secs;
-        p.sample_rate = rate;
+        p.sample_period_sec = period;
         p.is_randomized = true;
         FrameProcessor fp;
-        if (!fp.process(p, &setup))
+        if (!runWithReader(fp, p, &setup))
             return -1;
         return static_cast<int>(fp.result().timesSec.size());
     };
 
-    int n1 = countAt(UIConstants::kSampleRate1Hz);
-    int n100 = countAt(UIConstants::kSampleRate100Hz);
-    QVERIFY2(n1 > 0, "1 Hz run should produce samples");
-    QVERIFY2(n100 > n1,
-             qPrintable(QString("100 Hz (%1) should produce more samples than 1 Hz (%2)")
-                            .arg(n100).arg(n1)));
+    int n1s  = countAt(UIConstants::kSamplePeriod1s);
+    int n10ms = countAt(UIConstants::kSamplePeriod10ms);
+    QVERIFY2(n1s > 0, "1 s period run should produce samples");
+    QVERIFY2(n10ms > n1s,
+             qPrintable(QString("10 ms period (%1) should produce more samples than 1 s period (%2)")
+                            .arg(n10ms).arg(n1s)));
 }

@@ -41,7 +41,6 @@ class MainViewModel : public QObject
     Q_PROPERTY(bool fileLoaded READ fileLoaded NOTIFY fileLoadedChanged)
     Q_PROPERTY(int progressPercent READ progressPercent NOTIFY progressPercentChanged)
     Q_PROPERTY(bool processing READ processing NOTIFY processingChanged)
-    Q_PROPERTY(bool controlsEnabled READ controlsEnabled NOTIFY controlsEnabledChanged)
 
     Q_PROPERTY(int startDayOfYear READ startDayOfYear NOTIFY fileTimesChanged)
     Q_PROPERTY(int startHour READ startHour NOTIFY fileTimesChanged)
@@ -73,7 +72,6 @@ public:
     bool fileLoaded() const;                     ///< @return True if a .ch10 file is loaded.
     int progressPercent() const;                 ///< @return Current processing progress (0--100).
     bool processing() const;                     ///< @return True while background processing is active.
-    bool controlsEnabled() const;                ///< @return True when UI controls should be interactive.
 
     bool extractAllTime() const;                 ///< @return True if the full time range should be extracted.
 
@@ -103,8 +101,6 @@ public:
     void setStreamConfigs(const QVector<StreamConfig>& configs);
     /// @return The currently stored per-stream configuration.
     const QVector<StreamConfig>& streamConfigs() const;
-    /// @return Number of streams flagged for processing.
-    int processableStreamCount() const;
     /// @}
 
     /// @name Helpers
@@ -167,7 +163,6 @@ signals:
     void fileLoadedChanged();         ///< Emitted when the file-loaded state changes.
     void progressPercentChanged();    ///< Emitted when the processing progress updates.
     void processingChanged();         ///< Emitted when processing starts or stops.
-    void controlsEnabledChanged();    ///< Emitted when the controls-enabled state changes.
     void fileTimesChanged();          ///< Emitted when start/stop file times are updated.
     void extractAllTimeChanged();     ///< Emitted when the extract-all-time flag changes.
 

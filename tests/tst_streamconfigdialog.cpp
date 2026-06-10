@@ -15,6 +15,11 @@
 #include <QTemporaryFile>
 #include <QVector>
 #include <QtTest>
+#include <QTimer>
+#include <QLineEdit>
+#include <QDoubleSpinBox>
+#include <QComboBox>
+#include <QPushButton>
 
 #include "constants.h"
 #include "streamconfig.h"
@@ -41,7 +46,7 @@ static StreamConfig makeConfig(const QString& label = "Ch 01",
     cfg.frameSyncMask      = mask;
     cfg.bitsInMinorFrame   = words;
     cfg.randomized         = false;
-    cfg.sampleRateIndex    = UIConstants::kDefaultSampleRateIndex;
+    cfg.samplePeriodIndex  = UIConstants::kDefaultSamplePeriodIndex;
     cfg.dataRateMbps       = 0.0;
     return cfg;
 }
@@ -250,4 +255,145 @@ void TestStreamConfigDialog::validateRejectsCheckedStreamWithEmptyFrameSync()
     QVERIFY(out[0].frameSyncPattern.trimmed().isEmpty());
     // This is the exact state that validateAndAccept rejects with a QMessageBox.
     // Calling accept() directly bypasses validateAndAccept, so we verify state only.
+}
+
+// ---------------------------------------------------------------------------
+// UI Validation and Control Constraints
+// ---------------------------------------------------------------------------
+
+/// Locates the per-row gear button by tooltip (SVG icons are not loaded in the
+/// test binary, so the icon can't be used) and clicks it. The click blocks in
+/// the sub-dialog's exec(); a previously-scheduled singleShot fires within that
+/// nested event loop to inspect and close the modal.
+static void clickGearButton(StreamConfigDialog* dlg)
+{
+    const QList<QPushButton*> buttons = dlg->findChildren<QPushButton*>();
+    for (QPushButton* btn : buttons) {
+        if (btn->toolTip() == "Configure this stream") {
+            btn->click();
+            break;
+        }
+    }
+}
+
+void TestStreamConfigDialog::testFrameSyncValidation()
+{
+    StreamConfig cfg = makeConfig();
+    cfg.process = true;  // gear button is only enabled for processed streams
+    QScopedPointer<StreamConfigDialog> dlg(makeDialog({cfg}));
+
+    bool testExecuted = false;
+    QTimer::singleShot(50, [&]() {
+        QWidget* activeWindow = QApplication::activeModalWidget();
+        if (activeWindow) {
+            QList<QLineEdit*> edits = activeWindow->findChildren<QLineEdit*>();
+            if (edits.size() >= 2) {
+                // The first line edit is Frame Sync Pattern
+                QLineEdit* syncEdit = edits[0];
+                QVERIFY(syncEdit->validator() != nullptr);
+
+                int pos = 0;
+                QString validHex = "A34F";
+                QCOMPARE(syncEdit->validator()->validate(validHex, pos), QValidator::Acceptable);
+
+                QString invalidHex = "ZXY";
+                QCOMPARE(syncEdit->validator()->validate(invalidHex, pos), QValidator::Invalid);
+                testExecuted = true;
+            }
+            activeWindow->close();
+        }
+    });
+
+    clickGearButton(dlg.data());
+
+    QVERIFY(testExecuted);
+}
+
+void TestStreamConfigDialog::testFrameMaskValidation()
+{
+    StreamConfig cfg = makeConfig();
+    cfg.process = true;
+    QScopedPointer<StreamConfigDialog> dlg(makeDialog({cfg}));
+
+    bool testExecuted = false;
+    QTimer::singleShot(50, [&]() {
+        QWidget* activeWindow = QApplication::activeModalWidget();
+        if (activeWindow) {
+            QList<QLineEdit*> edits = activeWindow->findChildren<QLineEdit*>();
+            if (edits.size() >= 2) {
+                // The second line edit is Frame Sync Mask
+                QLineEdit* maskEdit = edits[1];
+                QVERIFY(maskEdit->validator() != nullptr);
+
+                int pos = 0;
+                QString validHex = "FFFF";
+                QCOMPARE(maskEdit->validator()->validate(validHex, pos), QValidator::Acceptable);
+
+                QString invalidHex = "FFZZ";
+                QCOMPARE(maskEdit->validator()->validate(invalidHex, pos), QValidator::Invalid);
+                testExecuted = true;
+            }
+            activeWindow->close();
+        }
+    });
+
+    clickGearButton(dlg.data());
+
+    QVERIFY(testExecuted);
+}
+
+void TestStreamConfigDialog::testDataRateLimits()
+{
+    StreamConfig cfg = makeConfig();
+    cfg.process = true;
+    QScopedPointer<StreamConfigDialog> dlg(makeDialog({cfg}));
+
+    bool testExecuted = false;
+    QTimer::singleShot(50, [&]() {
+        QWidget* activeWindow = QApplication::activeModalWidget();
+        if (activeWindow) {
+            QList<QDoubleSpinBox*> spins = activeWindow->findChildren<QDoubleSpinBox*>();
+            if (spins.size() >= 1) {
+                QDoubleSpinBox* dataRate = spins[0];
+                QCOMPARE(dataRate->minimum(), 0.0);
+                QCOMPARE(dataRate->maximum(), 1000.0);
+                testExecuted = true;
+            }
+            activeWindow->close();
+        }
+    });
+
+    clickGearButton(dlg.data());
+
+    QVERIFY(testExecuted);
+}
+
+void TestStreamConfigDialog::testDefaultSampleRate()
+{
+    StreamConfig cfg = makeConfig();
+    cfg.process = true;
+    QScopedPointer<StreamConfigDialog> dlg(makeDialog({cfg}));
+
+    bool testExecuted = false;
+    QTimer::singleShot(50, [&]() {
+        QWidget* activeWindow = QApplication::activeModalWidget();
+        if (activeWindow) {
+            QList<QComboBox*> combos = activeWindow->findChildren<QComboBox*>();
+            if (combos.size() >= 1) {
+                QComboBox* sampleRate = combos[0];
+                QCOMPARE(sampleRate->count(), 3);
+                // The default period index is 0 (1 s)
+                QCOMPARE(sampleRate->currentIndex(), 0);
+                QCOMPARE(sampleRate->itemText(0), QString("1 s"));
+                QCOMPARE(sampleRate->itemText(1), QString("100 ms"));
+                QCOMPARE(sampleRate->itemText(2), QString("10 ms"));
+                testExecuted = true;
+            }
+            activeWindow->close();
+        }
+    });
+
+    clickGearButton(dlg.data());
+
+    QVERIFY(testExecuted);
 }

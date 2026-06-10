@@ -18,7 +18,7 @@
 /*-----QWidget-----*/
 QWidget
 {
-    background-color: #202020;
+    background-color: #2C2C2C;
     color: #FFFFFF;
     font-family: "Segoe UI Variable", "Segoe UI", sans-serif;
     font-size: 14px;
@@ -43,7 +43,7 @@ QLabel::disabled
 /*-----QMenuBar-----*/
 QMenuBar
 {
-    background-color: #202020;
+    background-color: #2C2C2C;
     color: #FFFFFF;
     border: none;
 }
@@ -124,7 +124,7 @@ QPushButton
 {
     background-color: #2D2D2D;
     color: #FFFFFF;
-    border: 1px solid #303030;
+    border: 1px solid #505050;
     border-radius: 4px;
     padding: 5px 12px;
 }
@@ -133,14 +133,14 @@ QPushButton
 QPushButton::hover
 {
     background-color: #323232;
-    border: 1px solid #353535;
+    border: 1px solid #606060;
 }
 
 
 QPushButton::pressed
 {
     background-color: #272727;
-    border: 1px solid #303030;
+    border: 1px solid #505050;
 }
 
 
@@ -156,7 +156,7 @@ QPushButton::disabled
 QComboBox
 {
     background-color: #2D2D2D;
-    border: 1px solid #303030;
+    border: 1px solid #505050;
     border-radius: 4px;
     padding-left: 8px;
     color: #FFFFFF;
@@ -175,7 +175,7 @@ QComboBox::disabled
 QComboBox:hover
 {
     background-color: #323232;
-    border: 1px solid #353535;
+    border: 1px solid #606060;
 }
 
 
@@ -189,7 +189,7 @@ QComboBox QAbstractItemView
 {
     background-color: #2C2C2C;
     color: #FFFFFF;
-    border: 1px solid #303030;
+    border: 1px solid #505050;
     border-radius: 8px;
     selection-background-color: #323232;
     selection-color: #FFFFFF;
@@ -211,7 +211,7 @@ QComboBox::drop-down
 
 QComboBox:focus
 {
-    border: 1px solid #353535;
+    border: 1px solid #606060;
     border-bottom: 2px solid #60CDFF;
 }
 
@@ -235,7 +235,7 @@ QLineEdit
 {
     background-color: #2D2D2D;
     color: #FFFFFF;
-    border: 1px solid #303030;
+    border: 1px solid #505050;
     border-radius: 4px;
     padding: 4px 8px;
 }
@@ -243,7 +243,7 @@ QLineEdit
 
 QLineEdit:hover
 {
-    border: 1px solid #353535;
+    border: 1px solid #606060;
 }
 
 
@@ -267,7 +267,7 @@ QDoubleSpinBox
 {
     background-color: #2D2D2D;
     color: #FFFFFF;
-    border: 1px solid #303030;
+    border: 1px solid #505050;
     border-radius: 4px;
     padding: 4px 8px;
 }
@@ -276,7 +276,7 @@ QDoubleSpinBox
 QSpinBox:hover,
 QDoubleSpinBox:hover
 {
-    border: 1px solid #353535;
+    border: 1px solid #606060;
 }
 
 
@@ -346,33 +346,34 @@ QCheckBox
 
 QCheckBox::indicator
 {
-    background-color: #2D2D2D;
-    border: 1px solid #9E9E9E;
-    border-radius: 4px;
-    width: 18px;
-    height: 18px;
+    background-color: transparent;
+    border: none;
+    width: 40px;
+    height: 20px;
+}
+
+
+QCheckBox::indicator:unchecked
+{
+    image: url(:/resources/toggle-off-dark.svg);
 }
 
 
 QCheckBox::indicator:checked
 {
-    background-color: #60CDFF;
-    border: 1px solid #60CDFF;
-    image: url(:/resources/checkmark.svg);
+    image: url(:/resources/toggle-on-dark.svg);
 }
 
 
 QCheckBox::indicator:unchecked:hover
 {
-    border: 1px solid #FFFFFF;
+    image: url(:/resources/toggle-off-dark.svg);
 }
 
 
 QCheckBox::indicator:checked:hover
 {
-    background-color: #99ECFF;
-    border: 1px solid #99ECFF;
-    image: url(:/resources/checkmark.svg);
+    image: url(:/resources/toggle-on-dark.svg);
 }
 
 
@@ -384,8 +385,7 @@ QCheckBox:disabled
 
 QCheckBox::indicator:disabled
 {
-    background-color: #2A2A2A;
-    border: 1px solid #454545;
+    opacity: 0.5;
 }
 
 
@@ -690,7 +690,7 @@ QPlainTextEdit
 /*-----QToolBar-----*/
 QToolBar
 {
-    background-color: #202020;
+    background-color: #2C2C2C;
     border-bottom: 1px solid #303030;
     spacing: 4px;
     padding: 2px 4px;
@@ -749,3 +749,7 @@ QDialog
     background-color: #2C2C2C;
     border-radius: 8px;
 }
+QTextBrowser { background-color: #202020; border: 1px solid #303030; border-radius: 4px; padding: 4px; } 
+  
+#LoadingLabel { background-color: rgba(0,0,0,160); color: white; font-size: 14pt; border-radius: 8px; padding: 12px 24px; }  
+QTableView::item { padding: 4px; } 

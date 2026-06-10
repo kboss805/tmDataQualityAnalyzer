@@ -310,13 +310,15 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         }
     };
 
-    // Frame-sync lock series (always present).
+    // Frame-sync lock series — present for both lock-only and receiver modes.
+    if (!data.lockPercent.isEmpty())
     {
         PlotSeriesData lock;
         lock.name = data.streamLabel + " Lock (%)";
         lock.metricType = PlotSeriesData::MetricType::FrameSyncLock;
         lock.receiverIndex = 0;
         lock.channelIndex = 0;
+        lock.streamOrder = data.pcmChannelId;
         lock.xValues = elapsed;
         lock.yValues = data.lockPercent;
         fillCaches(lock);
@@ -339,6 +341,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         }
         s.channelIndex = receiver_channel_count.value(s.receiverIndex, 0);
         receiver_channel_count[s.receiverIndex]++;
+        s.streamOrder = data.pcmChannelId;
         s.xValues = elapsed;
         s.yValues = ch.values;
         fillCaches(s);
@@ -631,11 +634,14 @@ void PlotViewModel::resetYRange()
 
 void PlotViewModel::assignColors()
 {
+    int lock_color_idx = 0;
+
     for (auto& s : m_series)
     {
         if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock)
         {
-            s.color = PlotConstants::kFrameSyncLockColor;
+            s.color = PlotConstants::kFrameSyncLockColors[lock_color_idx % PlotConstants::kNumFrameSyncLockColors];
+            lock_color_idx++;
             continue;
         }
 

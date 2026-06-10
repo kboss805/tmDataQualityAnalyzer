@@ -29,14 +29,12 @@
 class MainViewModel;
 class PlotViewModel;
 class PlotWidget;
-class TimeExtractionWidget;
 struct ProcessedStreamData;
 
 /**
  * @brief Thin View layer: builds widgets, connects to ViewModel signals,
  *        and forwards user actions to MainViewModel.
  *
- * Delegates time controls to TimeExtractionWidget.
  */
 class MainView : public QMainWindow
 {
@@ -57,8 +55,6 @@ private slots:
     void inputFileButtonPressed();
     /// Toggles between light and dark themes.
     void onToggleTheme();
-    /// Validates inputs and starts background processing.
-    void progressProcessButtonPressed();
     /// Opens the StreamConfigDialog after a file has loaded.
     void onFileReadyForStreamConfig();
     /// @}
@@ -67,8 +63,6 @@ private slots:
     /// @{
     /// Enables or disables controls based on file-loaded state.
     void onFileLoadedChanged();
-    /// Fills the start/stop time fields from the loaded file.
-    void onFileTimesChanged();
     /// Updates the progress bar value.
     void onProgressChanged();
     /// Updates UI state when processing starts or stops.
@@ -96,6 +90,9 @@ private:
 
     /// @name Bulk state helpers
     /// @{
+    void startProcessingFromDialog(const QString& start_time_text,
+                                   const QString& stop_time_text,
+                                   bool extract_all);  ///< Validates time and starts background processing.
     void setAllControlsEnabled(bool enabled);          ///< Enables or disables all interactive controls.
     void saveLastCh10Dir();                              ///< Persists m_last_ch10_dir to QSettings.
     void logError(const QString& message);               ///< Appends a red error entry to the log window.
@@ -115,17 +112,12 @@ private:
 
     QToolBar* m_toolbar;                     ///< Main toolbar.
     QAction* m_toolbar_open_action;          ///< Toolbar open action.
-    QAction* m_process_action;               ///< Toolbar process/play action.
     QAction* m_cancel_action;                ///< Toolbar cancel/stop action (visible during processing).
-
-    TimeExtractionWidget* m_time_widget;     ///< Time extraction controls.
 
     QTextBrowser* m_log_preview;             ///< Compact log preview in the controls panel.
     QProgressBar* m_progress_bar;            ///< Processing progress bar.
     QMenu* m_recent_menu;                    ///< File > Recent Files submenu.
 
     QString m_last_ch10_dir;                 ///< Last directory used in Ch10 file dialogs.
-    QString m_dialog_start_time;             ///< Start time text last confirmed in the stream config dialog.
-    QString m_dialog_stop_time;              ///< Stop time text last confirmed in the stream config dialog.
 };
 #endif // MAINVIEW_H

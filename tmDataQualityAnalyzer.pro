@@ -3,7 +3,7 @@ QT       += core gui printsupport concurrent svg
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 CONFIG += c++17
-VERSION = 3.1.2
+VERSION = 1.0.1
 
 
 INCLUDEPATH += \
@@ -23,6 +23,7 @@ win32 {
 SOURCES += \
     src/channeldata.cpp \
     src/chapter10reader.cpp \
+    src/ch10packetreader.cpp \
     src/framesetup.cpp \
     src/main.cpp \
     src/mainviewmodel.cpp \
@@ -53,8 +54,10 @@ SOURCES += \
 HEADERS += \
     include/channeldata.h \
     include/chapter10reader.h \
+    include/ch10packetreader.h \
     include/constants.h \
     include/framesetup.h \
+    include/packetqueue.h \
     include/mainviewmodel.h \
     include/processingcoordinator.h \
     include/mainview.h \
@@ -103,7 +106,11 @@ RESOURCES += \
     resources/play.svg \
     resources/stop.svg \
     resources/gear.svg \
-    resources/retry.svg
+    resources/retry.svg \
+    resources/toggle-on-dark.svg \
+    resources/toggle-off-dark.svg \
+    resources/toggle-on-light.svg \
+    resources/toggle-off-light.svg
 
 RC_FILE = resources/tmDataQualityAnalyzer_resource.rc
 

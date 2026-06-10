@@ -1,13 +1,14 @@
 /**
  * @file processingcoordinator.h
- * @brief Orchestrates worker-thread lifecycle for sequential multi-stream processing.
+ * @brief Orchestrates the single-reader / parallel-worker processing pipeline.
  *
- * Owns all transient processing state: the background QThread, the active
- * FrameProcessor, the queue of per-stream jobs, and progress tracking.
+ * Owns all transient processing state: one Ch10PacketReader thread that reads the
+ * file once and fans PCM packets out to per-stream PacketQueues, and one
+ * FrameProcessor worker thread per stream that drains its queue concurrently.
  * MainViewModel builds a list of fully-formed StreamJob objects (each carrying a
  * validated ProcessingParams plus an owned FrameSetup) and hands them off here.
- * The coordinator processes them one at a time, emitting streamProcessed() with
- * each stream's in-memory result and processingFinished() when the queue drains.
+ * The coordinator emits streamProcessed() with each stream's in-memory result and
+ * processingFinished() when every worker has completed.
  */
 
 #ifndef PROCESSINGCOORDINATOR_H
@@ -23,13 +24,11 @@
 
 class FrameProcessor;
 class FrameSetup;
+class Ch10PacketReader;
+class PacketQueue;
 
 /**
  * @brief One unit of work: a stream's parameters plus its frame parameter table.
- *
- * @c frameSetup is owned by the coordinator once the job is submitted and is
- * deleted after the job completes. It may be an empty FrameSetup (no parameters)
- * for FrameSyncLockStats streams.
  */
 struct StreamJob
 {
@@ -38,10 +37,7 @@ struct StreamJob
 };
 
 /**
- * @brief Owns the worker-thread lifecycle for sequential multi-stream processing.
- *
- * Constructed by MainViewModel as a child QObject so it is destroyed before the
- * ViewModel's own members.
+ * @brief Owns the reader + worker thread lifecycle for multi-stream processing.
  */
 class ProcessingCoordinator : public QObject
 {
@@ -57,63 +53,66 @@ public:
     ProcessingCoordinator& operator=(ProcessingCoordinator&&)      = delete;
 
     /**
-     * @brief Starts processing the supplied stream jobs in sequence.
+     * @brief Starts processing the supplied stream jobs concurrently.
      *
      * Takes ownership of each StreamJob::frameSetup. Returns false (and frees the
      * supplied frame setups) if @p jobs is empty or a run is already active.
      */
     bool startProcessing(QVector<StreamJob> jobs);
 
-    /// Requests abort of the active processor and cancels remaining queued jobs.
+    /// Requests abort of all workers and the reader.
     void cancelProcessing();
 
     /// Resets transient counters. Called by MainViewModel::clearState().
     void reset();
 
-    // State queries — used by MainViewModel property getters
     bool  processing()      const;  ///< @return True while background processing is active.
-    int   progressPercent() const;  ///< @return Overall progress across all jobs (0--100).
+    int   progressPercent() const;  ///< @return Overall progress (0--100), driven by the reader.
 
 signals:
-    /// Emitted when overall processing progress changes.
     void progressChanged(int percent);
-    /// Emitted when active processing state changes.
     void processingStateChanged(bool active);
-    /// Emitted once per stream with its accumulated in-memory result.
     void streamProcessed(const ProcessedStreamData& data);
-    /// Emitted when the whole queue finishes (or aborts).
     void processingFinished(bool success);
-    /// Forwarded log message from the worker thread.
     void logMessageReceived(const QString& message);
-    /// Emitted on processing error.
     void errorOccurred(const QString& message);
 
 private:
-    /// Frees and clears any remaining queued jobs (including the active one's frame setup).
+    /// Per-stream worker bookkeeping.
+    struct Worker
+    {
+        QThread*        thread    = nullptr;
+        FrameProcessor* processor = nullptr;
+        PacketQueue*    queue     = nullptr;
+    };
+
+    /// Frees and clears any remaining queued jobs (including frame setups).
     void clearJobs();
-    /// Launches a worker thread for the job at @p m_job_index.
-    void launchWorkerThread();
-    /// Tears down the active worker thread (quit + wait + delete).
-    void teardownWorkerThread();
+    /// Tears down all worker threads, the reader thread, and queues.
+    void teardownAll();
+    /// Finalizes the run once all workers have reported completion.
+    void finalize();
 
-    // Slots connected to FrameProcessor signals
-    void onProgressUpdated(int percent);
-    void onProcessingFinished(bool success);
-    void onLogMessage(const QString& message);
+    // Slots
+    void onReaderProgress(int percent);
+    void onWorkerFinished(FrameProcessor* processor, bool success);
 
-    // Thread lifecycle
-    QThread*        m_worker_thread     = nullptr;
-    FrameProcessor* m_current_processor = nullptr;
+    // Reader
+    QThread*          m_reader_thread = nullptr;
+    Ch10PacketReader* m_reader        = nullptr;
 
-    // Job queue
+    // Workers (one per job)
+    QVector<Worker>   m_workers;
+    QVector<PacketQueue*> m_queues;
+
+    // Job storage (frame setups owned here)
     QVector<StreamJob> m_jobs;
-    int                m_job_index    = 0;
-    bool               m_any_success  = false;
-    bool               m_cancelled    = false;
 
-    // Processing state
-    bool m_processing       = false;
-    int  m_progress_percent = 0;
+    int  m_workers_remaining = 0;
+    bool m_any_success       = false;
+    bool m_cancelled         = false;
+    bool m_processing        = false;
+    int  m_progress_percent  = 0;
 };
 
 #endif // PROCESSINGCOORDINATOR_H

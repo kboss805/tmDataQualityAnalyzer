@@ -1,13 +1,15 @@
 /**
  * @file processingcoordinator.cpp
- * @brief Implementation of ProcessingCoordinator — sequential multi-stream worker lifecycle.
+ * @brief Implementation of ProcessingCoordinator — single reader + parallel workers.
  */
 
 #include "processingcoordinator.h"
 
 #include "constants.h"
+#include "ch10packetreader.h"
 #include "frameprocessor.h"
 #include "framesetup.h"
+#include "packetqueue.h"
 
 ProcessingCoordinator::ProcessingCoordinator(QObject* parent)
     : QObject(parent)
@@ -16,16 +18,7 @@ ProcessingCoordinator::ProcessingCoordinator(QObject* parent)
 
 ProcessingCoordinator::~ProcessingCoordinator()
 {
-    if (m_worker_thread != nullptr && m_worker_thread->isRunning())
-    {
-        if (m_current_processor != nullptr)
-        {
-            m_current_processor->requestAbort();
-        }
-        m_worker_thread->quit();
-        m_worker_thread->wait();
-    }
-    delete m_worker_thread;
+    teardownAll();
     clearJobs();
 }
 
@@ -44,7 +37,6 @@ bool ProcessingCoordinator::startProcessing(QVector<StreamJob> jobs)
 {
     if (m_processing)
     {
-        // Already running — free the rejected jobs' frame setups.
         for (StreamJob& job : jobs)
         {
             delete job.frameSetup;
@@ -59,32 +51,141 @@ bool ProcessingCoordinator::startProcessing(QVector<StreamJob> jobs)
     }
 
     clearJobs();
-    m_jobs          = std::move(jobs);
-    m_job_index     = 0;
-    m_any_success   = false;
-    m_cancelled     = false;
-    m_processing    = true;
-    m_progress_percent = 0;
+    m_jobs              = std::move(jobs);
+    m_any_success       = false;
+    m_cancelled         = false;
+    m_progress_percent  = 0;
 
+    // One queue per stream; wire each into its params before resolving attributes.
+    m_queues.clear();
+    m_queues.reserve(m_jobs.size());
+    for (StreamJob& job : m_jobs)
+    {
+        auto* q = new PacketQueue();
+        m_queues.push_back(q);
+        job.params.packet_queue = q;
+    }
+
+    // Resolve TMATS-derived attributes once, synchronously, via the reader.
+    m_reader = new Ch10PacketReader;
+    QVector<ProcessingParams*> params_list;
+    params_list.reserve(m_jobs.size());
+    for (StreamJob& job : m_jobs)
+    {
+        params_list.push_back(&job.params);
+    }
+
+    const QString filename       = m_jobs[0].params.filename;
+    const int     time_channel   = m_jobs[0].params.time_channel_id;
+
+    QString error;
+    if (!m_reader->prepare(filename, time_channel, params_list, error))
+    {
+        emit errorOccurred(error);
+        delete m_reader;
+        m_reader = nullptr;
+        for (PacketQueue* q : m_queues) { delete q; }
+        m_queues.clear();
+        clearJobs();
+        return false;
+    }
+
+    // Spin up one worker thread per stream. Workers block on their (empty)
+    // queues until the reader begins producing.
+    m_workers.clear();
+    m_workers.reserve(m_jobs.size());
+    m_workers_remaining = static_cast<int>(m_jobs.size());
+
+    for (int i = 0; i < m_jobs.size(); ++i)
+    {
+        Worker w;
+        w.thread    = new QThread;
+        w.processor = new FrameProcessor;
+        w.queue     = m_queues[i];
+        w.processor->moveToThread(w.thread);
+
+        FrameProcessor* processor = w.processor;
+        connect(processor, &FrameProcessor::processingFinished, this,
+                [this, processor](bool ok) { onWorkerFinished(processor, ok); });
+        connect(processor, &FrameProcessor::logMessage,
+                this, &ProcessingCoordinator::logMessageReceived);
+        connect(processor, &FrameProcessor::errorOccurred,
+                this, &ProcessingCoordinator::errorOccurred);
+        connect(w.thread, &QThread::finished, processor, &QObject::deleteLater);
+
+        ProcessingParams params = m_jobs[i].params; // includes resolved_attrs + queue
+        FrameSetup* setup = m_jobs[i].frameSetup;
+        connect(w.thread, &QThread::started, processor, [processor, params, setup]() {
+            processor->process(params, setup);
+        });
+
+        m_workers.push_back(w);
+    }
+
+    // Reader thread.
+    m_reader_thread = new QThread;
+    m_reader->moveToThread(m_reader_thread);
+    connect(m_reader, &Ch10PacketReader::progressUpdated,
+            this, &ProcessingCoordinator::onReaderProgress);
+    connect(m_reader, &Ch10PacketReader::logMessage,
+            this, &ProcessingCoordinator::logMessageReceived);
+    connect(m_reader, &Ch10PacketReader::errorOccurred,
+            this, &ProcessingCoordinator::errorOccurred);
+    connect(m_reader_thread, &QThread::started, m_reader, &Ch10PacketReader::run);
+
+    m_processing = true;
     emit processingStateChanged(true);
     emit progressChanged(0);
-    launchWorkerThread();
+
+    if (m_jobs.size() > 1)
+    {
+        emit logMessageReceived(QString("--- Processing %1 streams concurrently ---")
+                                .arg(m_jobs.size()));
+    }
+
+    // Start workers first so they are waiting before the reader produces.
+    for (Worker& w : m_workers)
+    {
+        w.thread->start();
+    }
+    m_reader_thread->start();
+
     return true;
 }
 
 void ProcessingCoordinator::cancelProcessing()
 {
-    m_cancelled = true;
-    if (m_current_processor != nullptr)
+    if (!m_processing)
     {
-        m_current_processor->requestAbort();
+        return;
+    }
+    m_cancelled = true;
+
+    if (m_reader != nullptr)
+    {
+        m_reader->requestAbort();
+    }
+    for (Worker& w : m_workers)
+    {
+        if (w.processor != nullptr)
+        {
+            w.processor->requestAbort();
+        }
+    }
+    // Unblock anyone waiting on a queue.
+    for (PacketQueue* q : m_queues)
+    {
+        q->close();
     }
 }
 
 void ProcessingCoordinator::reset()
 {
+    if (m_processing)
+    {
+        return;
+    }
     m_progress_percent = 0;
-    m_processing       = false;
     clearJobs();
 }
 
@@ -100,94 +201,48 @@ void ProcessingCoordinator::clearJobs()
         job.frameSetup = nullptr;
     }
     m_jobs.clear();
-    m_job_index = 0;
 }
 
-void ProcessingCoordinator::launchWorkerThread()
+void ProcessingCoordinator::teardownAll()
 {
-    teardownWorkerThread();
-
-    StreamJob& job = m_jobs[m_job_index];
-
-    m_worker_thread = new QThread;
-    auto* processor = new FrameProcessor;
-    m_current_processor = processor;
-    processor->moveToThread(m_worker_thread);
-
-    connect(processor, &FrameProcessor::progressUpdated,
-            this, &ProcessingCoordinator::onProgressUpdated);
-    connect(processor, &FrameProcessor::processingFinished,
-            this, &ProcessingCoordinator::onProcessingFinished);
-    connect(processor, &FrameProcessor::logMessage,
-            this, &ProcessingCoordinator::onLogMessage);
-    connect(processor, &FrameProcessor::errorOccurred,
-            this, &ProcessingCoordinator::errorOccurred);
-
-    connect(m_worker_thread, &QThread::finished,
-            processor, &QObject::deleteLater);
-
-    ProcessingParams params = job.params;
-    FrameSetup* setup = job.frameSetup;
-    connect(m_worker_thread, &QThread::started, processor, [processor, params, setup]() {
-        processor->process(params, setup);
-    });
-
-    if (m_jobs.size() > 1)
+    // Stop worker threads (processors auto-delete via deleteLater on finished).
+    for (Worker& w : m_workers)
     {
-        emit logMessageReceived(QString("--- Stream %1 of %2: %3 ---")
-            .arg(m_job_index + 1)
-            .arg(m_jobs.size())
-            .arg(job.params.stream_label));
+        if (w.thread != nullptr)
+        {
+            w.thread->quit();
+            w.thread->wait();
+            delete w.thread;
+        }
+    }
+    m_workers.clear();
+
+    // Stop the reader thread.
+    if (m_reader_thread != nullptr)
+    {
+        m_reader_thread->quit();
+        m_reader_thread->wait();
+        delete m_reader_thread;
+        m_reader_thread = nullptr;
+    }
+    if (m_reader != nullptr)
+    {
+        delete m_reader;
+        m_reader = nullptr;
     }
 
-    m_worker_thread->start();
+    // Queues are safe to delete now that all threads have stopped.
+    for (PacketQueue* q : m_queues)
+    {
+        delete q;
+    }
+    m_queues.clear();
 }
 
-void ProcessingCoordinator::teardownWorkerThread()
+void ProcessingCoordinator::finalize()
 {
-    if (m_worker_thread != nullptr)
-    {
-        m_worker_thread->quit();
-        m_worker_thread->wait();
-        delete m_worker_thread;
-        m_worker_thread     = nullptr;
-        m_current_processor = nullptr;
-    }
-}
+    teardownAll();
 
-////////////////////////////////////////////////////////////////////////////////
-//                            SLOTS                                           //
-////////////////////////////////////////////////////////////////////////////////
-
-void ProcessingCoordinator::onProgressUpdated(int percent)
-{
-    // Blend per-job progress into an overall percentage across the whole queue.
-    const int total = m_jobs.isEmpty() ? 1 : static_cast<int>(m_jobs.size());
-    m_progress_percent = ((m_job_index * UIConstants::kProgressBarMax) + percent) / total;
-    emit progressChanged(m_progress_percent);
-}
-
-void ProcessingCoordinator::onProcessingFinished(bool success)
-{
-    // The worker's process() has returned; collect its in-memory result before teardown.
-    if (success && m_current_processor != nullptr)
-    {
-        ProcessedStreamData data = m_current_processor->takeResult();
-        m_any_success = true;
-        emit streamProcessed(data);
-    }
-
-    teardownWorkerThread();
-
-    m_job_index++;
-
-    if (!m_cancelled && m_job_index < m_jobs.size())
-    {
-        launchWorkerThread();
-        return;
-    }
-
-    // Queue drained (or cancelled) — finalize.
     m_progress_percent = UIConstants::kProgressBarMax;
     m_processing = false;
     clearJobs();
@@ -197,7 +252,32 @@ void ProcessingCoordinator::onProcessingFinished(bool success)
     emit processingFinished(m_any_success && !m_cancelled);
 }
 
-void ProcessingCoordinator::onLogMessage(const QString& message)
+////////////////////////////////////////////////////////////////////////////////
+//                            SLOTS                                           //
+////////////////////////////////////////////////////////////////////////////////
+
+void ProcessingCoordinator::onReaderProgress(int percent)
 {
-    emit logMessageReceived(message);
+    m_progress_percent = percent;
+    emit progressChanged(percent);
+}
+
+void ProcessingCoordinator::onWorkerFinished(FrameProcessor* processor, bool success)
+{
+    if (success && !m_cancelled && processor != nullptr)
+    {
+        ProcessedStreamData data = processor->takeResult();
+        m_any_success = true;
+        emit streamProcessed(data);
+    }
+
+    if (m_workers_remaining > 0)
+    {
+        m_workers_remaining--;
+    }
+
+    if (m_workers_remaining == 0)
+    {
+        finalize();
+    }
 }

@@ -59,11 +59,21 @@ bool matches(uint64_t candidate, uint64_t pattern, uint64_t mask, int max_errors
 
 ## 3. Frame State Machine
 
-### Current Behavior
+### Current Behavior — Acquire / Lock with off-phase rejection
 
-The current code is a single-pass bit-serial scanner with no distinct SEARCH/CHECK/LOCK phases. It reads every bit, maintains a sliding `test_word`, and records a frame whenever the sync word is found exactly `bits_in_frame` bits after the previous sync. Lock percentage is computed per output window from the count of successfully extracted frames versus the theoretically expected count.
+The scanner is a single-pass bit-serial loop, but it distinguishes two phases by tracking a running in-phase sync count (`sync_count`). It still reads every bit and maintains a sliding `test_word`, but it no longer blindly reacts to every pattern match.
+
+**Acquire phase** (`sync_count < min_syncs`): every sync-pattern match is honored. Each match resets the frame-bit counter (`minor_frame_bit_count`) and starts collecting a candidate frame. Matches that land exactly `bits_in_frame` apart are *in-phase* and increment `sync_count`.
+
+**Lock phase** (`sync_count >= min_syncs`): the frame boundary is known, so the scanner only honors a sync match that lands exactly `bits_in_frame` after the previous one (`minor_frame_bit_count == bits_in_frame`). Any *off-phase* match — a false positive produced by data that coincidentally equals the sync pattern, which is common on PRN/randomized streams — is tallied in `total_syncs_found` for diagnostics but otherwise **ignored**: the frame-collection state is left completely intact.
+
+**Lock loss**: if, while locked, a sync match arrives *after* the expected boundary (`minor_frame_bit_count > bits_in_frame`), the genuine sync at the boundary was missed. The scanner drops lock (`sync_count = 0`) and re-enters the acquire phase, where it will re-confirm `min_syncs` in-phase syncs before locking again.
+
+**Why this fixed the spiky lock:** before off-phase rejection, every false-positive match inside the pseudo-random data words reset the frame collector mid-frame. The real sync that followed then arrived with an incomplete frame (`save_data == 1`), so that frame was discarded — producing the characteristic ~98–100% oscillation on otherwise clean PRN streams. Holding the collector to the true frame grid while locked removes that self-inflicted frame loss.
 
 ### Target: Flywheel State Machine
+
+Off-phase rejection above is the first piece of a flywheel already in place. The remaining value of the full state machine below is the **multi-frame CHECK confirmation** before declaring lock and, most importantly, the **data-word skip** in LOCK state (§5) — neither of which is implemented yet; the current loop still reads every bit even when locked.
 
 The proposed optimization replaces the flat bit-serial loop with a three-state machine that avoids scanning data words once lock is established.
 
@@ -198,26 +208,25 @@ Do not prefetch in LOCK state — the access pattern is a large stride (jumping 
 
 ### Per-Stream Parallelism & I/O Architecture
 
-**Current situation:** `ProcessingCoordinator` runs streams one at a time. Each `FrameProcessor` opens the Ch10 file independently and reads the entire file from start to finish to filter for its channel ID. With four streams on a 24 GB file, that is 96 GB of total file I/O — 4× what is needed.
-
-**Proposed: single reader + per-stream queues.** A dedicated reader thread opens the file once, reads packets sequentially, and routes each packet to the appropriate stream's queue by channel ID lookup. Four worker threads consume from their queues concurrently.
+**Implemented: single reader + per-stream queues.** A dedicated `Ch10PacketReader` thread opened the file once, read packets sequentially, and routed each packet to the appropriate stream's queue by channel ID lookup. Worker threads (one `FrameProcessor` per stream) consumed from their queues concurrently. This replaced the earlier design where each `FrameProcessor` opened the file independently and re-read it end-to-end — which on a 4-stream 24 GB file meant 96 GB of total file I/O (4× what was needed).
 
 ```
-[ File Reader Thread ]   — reads the file once (24 GB total I/O)
+[ Ch10PacketReader Thread ]   — reads the file once (24 GB total I/O)
     routes by channel ID → per-stream bounded PacketQueue
          |            |            |            |
   [ Stream 0 ]  [ Stream 1 ]  [ Stream 2 ]  [ Stream 3 ]
    worker thread  worker thread  worker thread  worker thread
 ```
 
-Key design constraints:
-- **Bounded queues** (e.g., 64 packets per stream): the reader blocks when a queue is full, preventing the whole file from being buffered in RAM.
-- **Sentinel packet**: the reader posts an empty end-of-stream marker to each queue when the file is exhausted so workers know when to stop.
-- **TMATS parsed once** by the reader and distributed to workers before the packet loop starts.
-- **Time reference**: time packets are decoded by the reader and bundled into the dispatched packet struct so each worker has the correct timestamp without needing its own file handle.
-- **Progress tracking** moves from the per-FrameProcessor file position to the reader's file position, since only the reader has the handle.
+Design points as built:
+- **Bounded queues** (64 packets per stream): the reader blocked when a queue was full, preventing the whole file from being buffered in RAM.
+- **Sentinel packet**: the reader posted an empty end-of-stream marker to each queue when the file was exhausted so workers knew when to stop.
+- **TMATS parsed once** by the reader in `prepare()`, which also resolved each stream's PCM attributes (`Set_Attributes_Ext_PcmF1`) into a `ResolvedPcmAttrs` struct before any worker started — so workers never needed the file handle or the irig106 attribute structs.
+- **Time reference**: the reader pre-converted each PCM packet's base time to absolute seconds (`enI106_RelInt2IrigTime`, per packet, capturing the current time-sync state) and bundled it into the dispatched `PacketItem`. Workers interpolated per-frame time linearly from that anchor without a file handle.
+- **Progress tracking** moved from the per-FrameProcessor file position to the reader's file position, since only the reader held the handle.
+- **Cancellation**: cancel aborted the reader and all workers and closed every queue, so no thread could deadlock on a blocking enqueue/dequeue.
 
-**Qt signal emission** is already windowed correctly: `recordTimeSample()` emits once per output window (at 10 Hz, that is one emission per ~970 frames at 20 Mbps / 2047 bits per frame). No batching change is needed there.
+**Qt signal emission** was already windowed correctly: `recordTimeSample()` emits once per output window (at 10 Hz, that is one emission per ~970 frames at 20 Mbps / 2047 bits per frame). No batching change was needed there.
 
 ---
 
@@ -229,18 +238,23 @@ Key design constraints:
 lock_pct = (frames_locked_in_window / expected_frames_in_window) × 100
 ```
 
-Where `expected_frames_in_window` is the *theoretical* frame count derived from the data bit rate and frame length:
+The denominator is computed from the **actual bit span traversed**, not a theoretical time-based estimate. As each locked frame is recorded, the scanner captures the global bit offset of the first frame (`first_frame_bit_in_window`) and continuously updates the last frame (`last_frame_bit_in_window`) in the current averaging window. When the window closes:
 
 ```
-expected_frames_in_window = (bit_rate_bps / bits_in_frame) × sample_period_seconds
+bit_span           = last_frame_bit_in_window − next_expected_frame_bit + bits_in_frame
+expected_in_window = bit_span / bits_in_frame
+lock_pct           = (n_samples / expected_in_window) × 100        // capped at 100%
+next_expected_frame_bit = last_frame_bit_in_window + bits_in_frame  // carried to next window
 ```
 
-The bit rate comes from TMATS unless the user provides an explicit override via `StreamConfig::dataRateMbps`. Lock percentage can slightly exceed 100% due to false syncs; the output is capped at 100%.
+`next_expected_frame_bit` carries across windows so there is neither a gap nor a double-count at window seams: one window's expected-frame denominator begins exactly where the previous window's last frame ended.
+
+**Why bit-span instead of `time × bit_rate`:** the lock percentage is now a pure bit-domain quantity — locked frames divided by the number of `bits_in_frame`-sized frame slots that physically fit in the bitstream span actually covered. **Time is used only to delimit the averaging window** (`sample_rate_hz`); it no longer enters the numerator or denominator. This removes the lock figure's dependency on an accurate TMATS / `dataRateMbps` bit rate — the value is correct even if the configured rate is slightly off. Lock percentage can still nudge above 100% (e.g. a boundary frame counted twice across a seam); the output is capped at 100%.
 
 **Per output window (set by `sample_rate_hz`):**
 
 * Frames locked in window (`n_samples`)
-* Expected frames in window (`expected_frames_per_window`)
+* Expected frames from bit span (`bit_span / bits_in_frame`)
 * Lock percentage (capped at 100%)
 
 These map to `ProcessedStreamData` series entries emitted by `FrameProcessor`.
