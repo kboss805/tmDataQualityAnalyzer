@@ -15,7 +15,7 @@
 struct AppVersion {
     static constexpr int kMajor = 1;   ///< Major version number.
     static constexpr int kMinor = 0;   ///< Minor version number.
-    static constexpr int kPatch = 1;   ///< Patch version number.
+    static constexpr int kPatch = 5;   ///< Patch version number.
 
     /// @return Version string in "major.minor.patch" format.
     static QString toString() { return QString("%1.%2.%3").arg(kMajor).arg(kMinor).arg(kPatch); }
@@ -94,7 +94,8 @@ namespace UIConstants {
 
     /// @name Plot legend layout
     /// @{
-    inline constexpr int kReceiverGridColumns   = 4;   ///< Number of columns in the plot legend grid.
+    inline constexpr int kLegendGridColumns     = 3;   ///< Fixed total legend columns: 1 for Lock + 2 for receivers.
+    inline constexpr int kLegendMaxVisibleRows  = 6;   ///< Rows shown before a column scrolls instead of growing.
     inline constexpr int kTreeItemHeightFactor  = 24;  ///< Approximate height per tree item in pixels.
     inline constexpr int kTreeHeightBuffer      = 4;   ///< Extra height buffer for tree widgets.
     inline constexpr int kTreeFixedWidth        = 100; ///< Fixed width for legend tree widgets.

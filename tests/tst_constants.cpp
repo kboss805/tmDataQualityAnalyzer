@@ -130,7 +130,8 @@ void TestConstants::uiThemeIdentifiers()
 
 void TestConstants::uiLayoutConstants()
 {
-    QCOMPARE(UIConstants::kReceiverGridColumns, 4);
+    QCOMPARE(UIConstants::kLegendGridColumns, 3);
+    QCOMPARE(UIConstants::kLegendMaxVisibleRows, 6);
     QCOMPARE(UIConstants::kTreeItemHeightFactor, 24);
     QCOMPARE(UIConstants::kTreeHeightBuffer, 4);
     QCOMPARE(UIConstants::kTreeFixedWidth, 100);

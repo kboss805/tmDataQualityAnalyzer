@@ -93,6 +93,11 @@ void MainView::setUpMainLayout()
                 == UIConstants::kThemeDark;
     m_plot_widget->applyTheme(dark);
 
+    // Generic placeholder legend so the Lock/SNR selection area isn't blank
+    // before any file has been loaded. Replaced with a config-derived
+    // skeleton once a Chapter 10 file is opened, then with real data.
+    m_plot_widget->initLegendSkeleton(1, 2, PCMConstants::kDefaultReceiverChannels);
+
     // The plot widget already has a layout with its own margins.
     // Setting it directly as the central widget allows the QMainWindow
     // dock separator to naturally space it ~4px away from the dock.
@@ -189,6 +194,13 @@ void MainView::setUpMenuBar()
     connect(m_cancel_action, &QAction::triggered,
             this, [this]() { m_view_model->cancelProcessing(); });
 
+    m_toolbar->addSeparator();
+
+    m_export_action = m_toolbar->addAction(
+        QIcon(":/resources/export.svg"), "Export");
+    m_export_action->setToolTip("Export plot data and images");
+    m_export_action->setEnabled(false);
+
     QWidget* toolbar_spacer = new QWidget;
     toolbar_spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     m_toolbar->addWidget(toolbar_spacer);
@@ -220,6 +232,16 @@ void MainView::setUpConnections()
     connect(m_plot_view_model, &PlotViewModel::loadFailed, this, [this]() {
         displayErrorMessage("Failed to load CSV file for plotting.");
     });
+
+    // Update toolbar button enablement when data changes
+    connect(m_plot_view_model, &PlotViewModel::dataChanged, this, [this]() {
+        bool has_data = m_plot_view_model->hasData();
+        m_export_action->setEnabled(has_data);
+    });
+
+    // Connect toolbar actions to PlotWidget slots
+    connect(m_export_action, &QAction::triggered,
+            m_plot_widget, &PlotWidget::onExportPlot);
 
     connect(m_log_preview, &QTextBrowser::anchorClicked, this, [](const QUrl& url) {
         QDesktopServices::openUrl(url);
@@ -349,6 +371,28 @@ void MainView::onFileReadyForStreamConfig()
         m_view_model->setTimeChannelIndex(dialog.timeChannelIndex());
         m_view_model->setStreamConfigs(dialog.configs());
         m_view_model->setExtractAllTime(dialog.extractAllTime());
+
+        // Show a placeholder legend (Lock + RCVR groups) while processing runs.
+        int lock_count = 0;
+        int receiver_count = 0;
+        int channels_per_receiver = PCMConstants::kDefaultReceiverChannels;
+        for (const StreamConfig& cfg : dialog.configs())
+        {
+            if (!cfg.process)
+            {
+                continue;
+            }
+            if (cfg.mode == StreamMode::FrameSyncLockStats)
+            {
+                lock_count++;
+            }
+            else
+            {
+                receiver_count += cfg.numReceivers;
+                channels_per_receiver = cfg.receiverChannels;
+            }
+        }
+        m_plot_widget->initLegendSkeleton(lock_count, receiver_count, channels_per_receiver);
 
         startProcessingFromDialog(dialog.startTimeText(), dialog.stopTimeText(),
                                   dialog.extractAllTime());

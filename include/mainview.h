@@ -113,6 +113,7 @@ private:
     QToolBar* m_toolbar;                     ///< Main toolbar.
     QAction* m_toolbar_open_action;          ///< Toolbar open action.
     QAction* m_cancel_action;                ///< Toolbar cancel/stop action (visible during processing).
+    QAction* m_export_action;                ///< Toolbar export plot action.
 
     QTextBrowser* m_log_preview;             ///< Compact log preview in the controls panel.
     QProgressBar* m_progress_bar;            ///< Processing progress bar.

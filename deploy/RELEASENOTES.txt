@@ -1,3 +1,29 @@
+tmDataQualityAnalyzer v1.0.5 - What's New
+=================================
+
+  - Fixed a crash (SIGSEGV) that could occur when opening a Chapter 10 file,
+    caused by a double-free during legend layout teardown
+  - Plot legend now uses a fixed 3-column layout (1 column for Frame Sync
+    Lock groups, 2 columns for receiver groups) that stays in the same
+    position regardless of the number of locks/receivers in a file, with a
+    vertical scrollbar for columns that exceed the visible row count
+  - Plot export moved from a button below the plot to an Export action in
+    the main toolbar; the separate "Copy Data to Clipboard" button has been
+    removed
+  - Configure Streams dialog: Load/Save TOML and gear "Setup" icon buttons
+    are now sized to fill the button with a transparent, borderless
+    background
+  - Configure Streams dialog: Load/Save TOML buttons in the Frame Sync Lock
+    and Receiver SNR setup dialogs moved to the top row, away from the
+    OK/Cancel buttons
+  - Configure Streams dialog: table cell backgrounds are now consistent
+    across the Process, Channel, Mode, Setup, and Ready columns
+  - Configure Streams dialog: the Ready column's check/X icons are now the
+    same size as the gear "Setup" icon
+  - Fixed: Receiver SNR streams now correctly show "Ready" after configuring
+    in the gear dialog, even if no Receiver Parameters TOML was loaded
+
+
 tmDataQualityAnalyzer v1.0.1 - What's New
 =================================
 

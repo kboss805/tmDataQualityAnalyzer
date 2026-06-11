@@ -44,6 +44,15 @@ QString periodText(double sec)
     return QString::number(static_cast<int>(sec * 1000)) + " ms";
 }
 
+/// Sizes an icon-only button so its SVG icon fills the button, with a
+/// transparent, borderless background.
+void styleIconButton(QPushButton* button, int size)
+{
+    button->setFixedSize(size, size);
+    button->setIconSize(QSize(size, size));
+    button->setStyleSheet("QPushButton { border: none; background: transparent; }");
+}
+
 /// Loads frame sync fields from a TOML file into the provided widgets.
 /// Handles both the new BitsPerFrame key and the old WordsInMinorFrame key for
 /// backward compatibility with previously saved files.
@@ -176,14 +185,14 @@ public:
         auto* loadBtn = new QPushButton(this);
         loadBtn->setIcon(QIcon(":/resources/folder-open.svg"));
         loadBtn->setToolTip("Load frame sync fields from a TOML file");
-        loadBtn->setFixedSize(28, 28);
-        grid->addWidget(loadBtn, 4, 4, Qt::AlignVCenter);
+        styleIconButton(loadBtn, 28);
+        grid->addWidget(loadBtn, 1, 4, Qt::AlignVCenter);
 
         auto* saveBtn = new QPushButton(this);
         saveBtn->setIcon(QIcon(":/resources/floppy-save.svg"));
         saveBtn->setToolTip("Save frame sync fields to a TOML file");
-        saveBtn->setFixedSize(28, 28);
-        grid->addWidget(saveBtn, 4, 5, Qt::AlignVCenter);
+        styleIconButton(saveBtn, 28);
+        grid->addWidget(saveBtn, 1, 5, Qt::AlignVCenter);
 
         connect(loadBtn, &QPushButton::clicked, this, [this]() {
             QString filename = QFileDialog::getOpenFileName(
@@ -336,13 +345,13 @@ public:
             auto* loadBtn1 = new QPushButton(this);
             loadBtn1->setIcon(QIcon(":/resources/folder-open.svg"));
             loadBtn1->setToolTip("Load frame sync fields from a TOML file");
-            loadBtn1->setFixedSize(28, 28);
+            styleIconButton(loadBtn1, 28);
             auto* saveBtn1 = new QPushButton(this);
             saveBtn1->setIcon(QIcon(":/resources/floppy-save.svg"));
             saveBtn1->setToolTip("Save frame sync fields to a TOML file");
-            saveBtn1->setFixedSize(28, 28);
-            grid->addWidget(loadBtn1, 4, 4, Qt::AlignVCenter);
-            grid->addWidget(saveBtn1, 4, 5, Qt::AlignVCenter);
+            styleIconButton(saveBtn1, 28);
+            grid->addWidget(loadBtn1, 1, 4, Qt::AlignVCenter);
+            grid->addWidget(saveBtn1, 1, 5, Qt::AlignVCenter);
             grid->setColumnStretch(3, 1);
 
             connect(loadBtn1, &QPushButton::clicked, this, [this]() {
@@ -433,13 +442,13 @@ public:
             auto* loadBtn2 = new QPushButton(this);
             loadBtn2->setIcon(QIcon(":/resources/folder-open.svg"));
             loadBtn2->setToolTip("Load receiver parameters from a TOML file");
-            loadBtn2->setFixedSize(28, 28);
+            styleIconButton(loadBtn2, 28);
             auto* saveBtn2 = new QPushButton(this);
             saveBtn2->setIcon(QIcon(":/resources/floppy-save.svg"));
             saveBtn2->setToolTip("Save receiver parameters to a TOML file");
-            saveBtn2->setFixedSize(28, 28);
-            grid->addWidget(loadBtn2, 4, 4, Qt::AlignVCenter);
-            grid->addWidget(saveBtn2, 4, 5, Qt::AlignVCenter);
+            styleIconButton(saveBtn2, 28);
+            grid->addWidget(loadBtn2, 1, 4, Qt::AlignVCenter);
+            grid->addWidget(saveBtn2, 1, 5, Qt::AlignVCenter);
             grid->setColumnStretch(3, 1);
 
             connect(loadBtn2, &QPushButton::clicked, this, [this]() {
@@ -623,6 +632,7 @@ void StreamConfigDialog::buildTable()
 
     auto centeredWidget = [](QWidget* inner) -> QWidget* {
         auto* container = new QWidget;
+        container->setStyleSheet("background-color: transparent;");
         auto* l = new QHBoxLayout(container);
         l->setContentsMargins(4, 2, 4, 2);
         l->setAlignment(Qt::AlignCenter);
@@ -632,6 +642,7 @@ void StreamConfigDialog::buildTable()
 
     auto paddedWidget = [](QWidget* inner) -> QWidget* {
         auto* container = new QWidget;
+        container->setStyleSheet("background-color: transparent;");
         auto* l = new QHBoxLayout(container);
         l->setContentsMargins(4, 2, 4, 2);
         l->addWidget(inner);
@@ -680,7 +691,7 @@ void StreamConfigDialog::buildTable()
         w.gearBtn = new QPushButton(m_table);
         w.gearBtn->setIcon(QIcon(":/resources/gear.svg"));
         w.gearBtn->setToolTip("Configure this stream");
-        w.gearBtn->setFixedSize(28, 28);
+        styleIconButton(w.gearBtn, 28);
         w.gearBtn->setEnabled(cfg.process);
         m_table->setCellWidget(row, kColSetup, centeredWidget(w.gearBtn));
 
@@ -711,21 +722,20 @@ void StreamConfigDialog::updateReadyIcon(int row)
 
     if (!checked)
     {
-        w.readyLabel->setText("<span style='color: gray; font-size: 16px;'>✗</span>");
+        w.readyLabel->setText("<span style='color: gray; font-size: 28px;'>✗</span>");
     }
     else if (!w.gearConfirmed)
     {
-        w.readyLabel->setText("<span style='color: red; font-size: 16px;'>✗</span>");
+        w.readyLabel->setText("<span style='color: red; font-size: 28px;'>✗</span>");
     }
     else
     {
         bool frame_ok = !w.frameSyncPattern.isEmpty();
-        bool recv_ok  = (w.mode->currentIndex() == 1) || !w.receiverParamsToml.isEmpty();
 
-        if (frame_ok && recv_ok)
-            w.readyLabel->setText("<span style='color: green; font-size: 16px;'>✓</span>");
+        if (frame_ok)
+            w.readyLabel->setText("<span style='color: green; font-size: 28px;'>✓</span>");
         else
-            w.readyLabel->setText("<span style='color: red; font-size: 16px;'>✗</span>");
+            w.readyLabel->setText("<span style='color: red; font-size: 28px;'>✗</span>");
     }
 
     updateOkButton();
@@ -742,8 +752,7 @@ void StreamConfigDialog::updateOkButton()
         if (!w.process->isChecked() || !w.gearConfirmed)
             continue;
         bool frame_ok = !w.frameSyncPattern.isEmpty();
-        bool recv_ok  = (w.mode->currentIndex() == 1) || !w.receiverParamsToml.isEmpty();
-        if (frame_ok && recv_ok)
+        if (frame_ok)
         {
             any_ready = true;
             break;

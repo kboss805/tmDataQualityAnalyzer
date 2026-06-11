@@ -46,10 +46,10 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 
 ### Plot & Visualization
 - **Interactive Plot Window**: Plot showing frame sync lock (%) and/or receiver AGC (dB) series with mouse wheel zoom, click-drag pan, auto-scale axes, per-series visibility toggles, and auto-assigned color palette
+- **Fixed-Layout Legend**: Series controls below the plot use a constant 3-column grid (1 column for Frame Sync Lock groups, 2 columns for receiver groups), so the layout doesn't shift between files; columns scroll vertically once they exceed the visible row count
 - **X-Axis Time Display**: Actual file time (DDD:HH:MM:SS) on the X axis instead of elapsed seconds
-- **Plot PDF Export**: Export current plot to high-quality PDF file
+- **Toolbar Export**: Export the current plot and its data (CSV plus PNG/SVG/PDF) via the Export action in the main toolbar
 - **Hover Tooltip**: Shows series name, time (DDD:HH:MM:SS), and value (lock % or dB) on mouse hover
-- **Copy Data to Clipboard**: Copies the visible plot range as comma-separated values
 
 ### Logging & Feedback
 - **Inline Log Window**: Persistent, scrollable log with color-coded messages (green for success, yellow for warnings, red for errors)
@@ -176,6 +176,7 @@ tmDataQualityAnalyzer/
 │   ├── stop.svg               # Toolbar cancel/stop icon
 │   ├── gear.svg               # Toolbar settings icon
 │   ├── retry.svg              # Toolbar retry-failed icon
+│   ├── export.svg             # Toolbar plot export icon
 │   └── icon.ico               # Application icon
 ├── scripts/                    # Build and utility scripts
 │   ├── build_ide.ps1          # IDE/VS Code test build helper (reads QTDIR/MINGW_DIR from env)

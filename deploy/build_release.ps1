@@ -1,4 +1,4 @@
-# =============================================================================
+﻿# =============================================================================
 # build_release.ps1  —  Release build, sign, and package script
 #
 # Builds a release binary, runs windeployqt, and produces both an Inno Setup
@@ -7,16 +7,17 @@
 # Parameters:
 #   -SignCertSha1   SHA-1 thumbprint of the code-signing certificate in the
 #                   Windows Certificate Store (CurrentUser\My).
-#                   Current cert: 1DCBF23B52067A8D52E9C517345EA77B9D926669
+#                   Defaults to the SimplySign Certum OSS cert
+#                   (1DCBF23B52067A8D52E9C517345EA77B9D926669). Pass an empty
+#                   string (-SignCertSha1 '') to build unsigned.
 #   -SignTimestamp  Timestamp server URL (default: http://timestamp.digicert.com)
 #
 # Usage:
-#   powershell -ExecutionPolicy Bypass -File deploy\build_release.ps1 `
-#       -SignCertSha1 1DCBF23B52067A8D52E9C517345EA77B9D926669
+#   powershell -ExecutionPolicy Bypass -File deploy\build_release.ps1
 # =============================================================================
 
 param(
-    [string]$SignCertSha1  = $env:SIGN_CERT_SHA1,
+    [string]$SignCertSha1  = $(if ($env:SIGN_CERT_SHA1) { $env:SIGN_CERT_SHA1 } else { '1DCBF23B52067A8D52E9C517345EA77B9D926669' }),
     [string]$SignTimestamp = 'http://timestamp.digicert.com'
 )
 
@@ -65,7 +66,23 @@ if ($LASTEXITCODE -ne 0) { throw "Build failed" }
 
 # --- Step 2: Prepare staging directories ---
 Write-Host "[3/7] Preparing staging directories..."
-if (Test-Path $StageDir) { Remove-Item $StageDir -Recurse -Force }
+if (Test-Path $StageDir) {
+    $resolvedStage = (Resolve-Path $StageDir).Path
+    $expectedStage = Join-Path $ProjectDir 'deploy\staging'
+    if ($resolvedStage -ne $expectedStage) {
+        throw "Refusing to clean staging dir: '$resolvedStage' does not match expected '$expectedStage'"
+    }
+    $stageItem = Get-Item $StageDir -Force
+    if ($stageItem.LinkType) {
+        # $StageDir is a reparse point (symlink/junction). Remove-Item -Recurse -Force on a
+        # directory reparse point can recurse into and delete the TARGET's contents instead
+        # of just the link (this previously wiped sibling release artifacts in deploy\ and
+        # deploy\README_portable.txt). Delete() on the link itself removes only the link.
+        $stageItem.Delete()
+    } else {
+        Remove-Item $StageDir -Recurse -Force
+    }
+}
 New-Item -ItemType Directory -Force -Path "$InstallerStage\bin"      | Out-Null
 New-Item -ItemType Directory -Force -Path "$InstallerStage\settings" | Out-Null
 New-Item -ItemType Directory -Force -Path "$PortableRoot\settings"   | Out-Null
@@ -116,7 +133,20 @@ New-Item  -ItemType File -Path "$PortableRoot\portable" -Force | Out-Null
 # --- Step 6: Create portable ZIP ---
 Write-Host "[7/8] Creating portable ZIP..."
 $ZipPath = "$ProjectDir\deploy\tmDataQualityAnalyzer-v${version}_portable.zip"
-Compress-Archive -Path $PortableRoot -DestinationPath $ZipPath -Force
+# Freshly-copied .exe/.dll files are briefly locked by antivirus real-time
+# scanning, which makes Compress-Archive fail with "being used by another
+# process". Retry with a short delay to ride out the scan.
+$maxAttempts = 5
+for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+    try {
+        Compress-Archive -Path $PortableRoot -DestinationPath $ZipPath -Force
+        break
+    } catch {
+        if ($attempt -eq $maxAttempts) { throw }
+        Write-Host "  Compress-Archive attempt $attempt failed (likely antivirus scan lock), retrying..."
+        Start-Sleep -Seconds 3
+    }
+}
 
 # --- Step 7: Compile Inno Setup installer ---
 Write-Host "[8/8] Compiling Inno Setup installer..."

@@ -6,8 +6,6 @@
 #ifndef PLOTWIDGET_H
 #define PLOTWIDGET_H
 
-#include <functional>
-
 #include <QDoubleSpinBox>
 #include <QLabel>
 #include <QLineEdit>
@@ -60,13 +58,16 @@ public:
     /// Applies theme colors (dark/light) to the chart.
     void applyTheme(bool dark);
 
-    /// Builds the receiver legend tree from settings (disabled until data loads).
-    void initReceiverLegend(int receiver_count, int channels_per_receiver,
-                            const std::function<QString(int)>& channel_prefix_fn);
+    /// Builds a disabled placeholder legend showing the Lock/RCVR groups that
+    /// will be populated once the loaded file finishes processing.
+    void initLegendSkeleton(int lock_count, int receiver_count, int channels_per_receiver);
 
 public slots:
     /// Rebuilds all chart series from the ViewModel data (no legend rebuild).
     void rebuildChart();
+
+    /// Exports the current plot to an image file (PDF, PNG, SVG).
+    void onExportPlot();
 
 private slots:
     /// Called when new CSV data is loaded — rebuilds both chart and legend.
@@ -85,10 +86,6 @@ private slots:
     void onXRangeChanged();
     /// Resets all axes to auto/full range.
     void onResetAxes();
-    /// Exports the current plot to an image file (PDF, PNG, SVG).
-    void onExportPlot();
-    /// Copies visible plot data to the clipboard as comma-separated values.
-    void onCopyDataToClipboard();
     /// Shows a tooltip with the nearest data point value under the cursor.
     void onPlotMouseMove(QMouseEvent* event);
 
@@ -138,8 +135,6 @@ private:
     QLineEdit* m_x_start_edit = nullptr;
     QLineEdit* m_x_stop_edit = nullptr;
     QPushButton* m_reset_btn = nullptr;
-    QPushButton* m_export_btn = nullptr;
-    QPushButton* m_copy_data_btn = nullptr;
     /// @}
 
     /// @name Graph tracking

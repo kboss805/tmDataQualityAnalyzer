@@ -7,7 +7,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Qt Version**: 6.10.2 (minimum: Qt 6.0.0)
 - **MinGW Version**: 13.1.0 (minimum: GCC/MinGW 7.0)
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
-- **Project Version**: 1.0.1 — defined in `AppVersion` struct in `include/constants.h`
+- **Project Version**: 1.0.5 — defined in `AppVersion` struct in `include/constants.h`
 
 - **Target Users:** Telemetry engineers and data analysts who want to analyze telemetry framesync lock statistics and Signal to Noise Ratio (SNR) data (derived from receiver AGC samples) in IRIG 106 Chapter 10 formated telemetry files. To analyze the framesync lock statistics and SNR data the application presents the user with a plot window that displays the data vs. time. Additionally, the application allows the user to export selected data to CSV formatted files for further processing and analysis in 3rd party applications such as Microsoft Excel or Matlab. The application also allows the user to export plot window views as images such as pdf, png, etc. for importing into 3rd party presentation applications such as Microsoft PowerPoint.
 
@@ -232,6 +232,25 @@ This file provides context and guidelines for AI assistants working on the tmDat
 
 ## Version History
 
+### v1.0.5 — Legend Layout, Toolbar Export, and Stream Config UI Polish
+- Fixed a SIGSEGV crash on file open caused by a double-free during legend
+  layout teardown
+- Plot legend redesigned as a fixed 3-column grid (1 column for Frame Sync
+  Lock groups, 2 columns for receiver groups) so the layout no longer
+  rearranges between files; columns scroll vertically beyond the visible
+  row count (`UIConstants::kLegendGridColumns`)
+- Plot export moved from a button below the plot to a toolbar Export
+  action; the "Copy Data to Clipboard" button was removed
+- Configure Streams dialog: Load/Save TOML and gear "Setup" icon buttons
+  resized to fill the button with a transparent, borderless background, and
+  the Ready column's check/X icons enlarged to match
+- Configure Streams dialog: Load/Save TOML buttons relocated to the top row
+  of the Frame Sync Lock and Receiver SNR setup dialogs, away from OK/Cancel
+- Configure Streams dialog: table cell backgrounds made consistent across
+  the Process, Channel, Mode, Setup, and Ready columns
+- Fixed: Receiver SNR streams now show "Ready" after gear-dialog
+  configuration even without loading a Receiver Parameters TOML
+
 ### v1.0.1 — Plot Legend & Lock Color Improvements
 - Frame Sync Lock plot lines rendered in distinct shades of blue, one per stream
 - Legend entries below the plot ordered by source PCM channel number rather than
@@ -409,7 +428,7 @@ The application follows the **MVVM (Model-View-ViewModel)** pattern:
 
 - **`AppVersion`** struct (in `include/constants.h`) — Version information with `kMajor`, `kMinor`, `kPatch` and `toString()`
 - **`PCMConstants`** namespace (in `include/constants.h`) — Named constants for PCM frame parameters (word count, frame length, sync pattern length, time rounding, channel type identifiers, max raw sample value, default buffer size, progress report interval)
-- **`UIConstants`** namespace (in `include/constants.h`) — Named constants for UI configuration (QSettings keys, theme identifiers, receiver grid layout, time conversion, receiver count, default slope/scale, button text, time validation limits, sample rates, output filename format, deployment/portable mode constants)
+- **`UIConstants`** namespace (in `include/constants.h`) — Named constants for UI configuration (QSettings keys, theme identifiers, plot legend grid layout, time conversion, receiver count, default slope/scale, button text, time validation limits, sample rates, output filename format, deployment/portable mode constants)
 - **`SettingsData`** struct (in `include/settingsdata.h`) — Value type used to transfer UI state between MainViewModel and SettingsManager without `friend class` coupling
 - **`BatchFileInfo`** struct (in `include/batchfileinfo.h`) — Per-file metadata for batch processing (filepath, channel strings/IDs, resolved channel indices, validation state, encoding, processing result)
 - **`PlotConstants`** namespace (in `include/constants.h`) — Named constants for plot dock dimensions, axis margin factor, default title, axis labels, zoom factor, and receiver color palette (10 hues)

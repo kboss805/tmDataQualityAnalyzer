@@ -3,7 +3,7 @@ QT       += core gui printsupport concurrent svg
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 CONFIG += c++17
-VERSION = 1.0.1
+VERSION = 1.0.5
 
 
 INCLUDEPATH += \
@@ -107,6 +107,7 @@ RESOURCES += \
     resources/stop.svg \
     resources/gear.svg \
     resources/retry.svg \
+    resources/export.svg \
     resources/toggle-on-dark.svg \
     resources/toggle-off-dark.svg \
     resources/toggle-on-light.svg \

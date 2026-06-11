@@ -15,7 +15,7 @@
 #include <QHBoxLayout>
 #include <QScrollBar>
 #include <QToolTip>
-#include <QSvgGenerator>
+#include <QtSvg/QSvgGenerator>
 #include <QVBoxLayout>
 #include <QSettings>
 #include <QDir>
@@ -56,7 +56,7 @@ void PlotWidget::setViewModel(PlotViewModel* vm)
 {
     if (m_view_model != nullptr)
     {
-        m_view_model->disconnect(this);
+        QObject::disconnect(m_view_model, nullptr, this, nullptr);
     }
 
     m_view_model = vm;
@@ -120,15 +120,53 @@ void PlotWidget::applyTheme(bool dark)
     m_plot->replot(QCustomPlot::rpQueuedReplot);
 }
 
-void PlotWidget::initReceiverLegend(int receiver_count, int channels_per_receiver,
-                                     const std::function<QString(int)>& channel_prefix_fn)
+void PlotWidget::initLegendSkeleton(int lock_count, int receiver_count, int channels_per_receiver)
 {
     clearLegendContents();
 
-    if (receiver_count <= 0)
+    // One group per lock stream (collapses to "Lock") plus one per receiver.
+    QVector<QPair<QString, int>> groups;
+    for (int l = 0; l < lock_count; l++)
+    {
+        groups.append({"Lock", -1});
+    }
+    for (int r = 0; r < receiver_count; r++)
+    {
+        groups.append({"RCVR " + QString::number(r + 1), channels_per_receiver});
+    }
+
+    int group_count = static_cast<int>(groups.size());
+    if (group_count <= 0)
     {
         return;
     }
+
+    // Lock groups get their own dedicated column; receiver groups are split
+    // round-robin across up to two more columns.
+    QVector<QPair<QString, int>> lock_groups;
+    QVector<QPair<QString, int>> receiver_group_list;
+    for (const auto& group : groups)
+    {
+        if (group.second < 0)
+        {
+            lock_groups.append(group);
+        }
+        else
+        {
+            receiver_group_list.append(group);
+        }
+    }
+
+    // Always render the full fixed-width grid (1 lock column + N receiver
+    // columns) so the panel's width — and the buttons to its right — stay in
+    // a constant position regardless of whether this file has lock/receiver
+    // data of either kind.
+    const int receiver_columns = UIConstants::kLegendGridColumns - 1;
+    int receiver_rows = receiver_group_list.isEmpty()
+        ? 0 : (receiver_group_list.size() + receiver_columns - 1) / receiver_columns;
+    int max_rows = qMax(qMax(static_cast<int>(lock_groups.size()), receiver_rows), 1);
+    int visible_rows = qMin(max_rows, UIConstants::kLegendMaxVisibleRows);
+    int treeHeight = (visible_rows * UIConstants::kTreeItemHeightFactor) + UIConstants::kTreeHeightBuffer;
 
     QPushButton* toggle_btn = new QPushButton("Expand All");
     toggle_btn->setFlat(true);
@@ -145,24 +183,7 @@ void PlotWidget::initReceiverLegend(int receiver_count, int channels_per_receive
     select_none_btn->setMinimumWidth(UIConstants::kFlatButtonMinWidth);
     select_none_btn->setEnabled(false);
 
-    // Distribute receivers across up to 4 columns
-    const int num_columns = UIConstants::kReceiverGridColumns;
-    int actual_columns = qMin(num_columns, receiver_count);
-    int per_column = (receiver_count + actual_columns - 1) / actual_columns;
-
-    QHBoxLayout* columns_layout = new QHBoxLayout;
-    columns_layout->setSpacing(2);
-    columns_layout->setContentsMargins(0, 0, 0, 0);
-
-    for (int col = 0; col < actual_columns; col++)
-    {
-        int start = col * per_column;
-        int end = qMin(start + per_column, receiver_count);
-        if (start >= receiver_count)
-        {
-            break;
-        }
-
+    auto build_tree = [&](const QVector<QPair<QString, int>>& tree_groups) {
         QTreeWidget* tree = new QTreeWidget;
         tree->setHeaderHidden(true);
         tree->setColumnCount(1);
@@ -172,34 +193,71 @@ void PlotWidget::initReceiverLegend(int receiver_count, int channels_per_receive
         tree->setFixedWidth(UIConstants::kTreeFixedWidth);
         tree->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         tree->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        tree->setFixedHeight((per_column * UIConstants::kTreeItemHeightFactor) +
-                             UIConstants::kTreeHeightBuffer);
+        tree->setFixedHeight(qMax(treeHeight, 90));
         tree->setFrameShape(QFrame::NoFrame);
         tree->setEnabled(false);
 
-        for (int r = start; r < end; r++)
+        for (const auto& [group_label, child_count] : tree_groups)
         {
-            QTreeWidgetItem* receiver_item = new QTreeWidgetItem;
-            receiver_item->setText(0, "RCVR " + QString::number(r + 1));
-            receiver_item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable | Qt::ItemIsAutoTristate);
-            receiver_item->setData(0, Qt::UserRole, -1);
+            QTreeWidgetItem* group_item = new QTreeWidgetItem;
+            group_item->setText(0, group_label);
+            group_item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable | Qt::ItemIsAutoTristate);
+            group_item->setData(0, Qt::UserRole, -1);
 
-            for (int c = 0; c < channels_per_receiver; c++)
+            if (child_count < 0)
             {
+                // Lock group: a single placeholder row, no per-channel breakdown.
                 QTreeWidgetItem* channel_item = new QTreeWidgetItem;
-                channel_item->setText(0, channel_prefix_fn(c));
+                channel_item->setText(0, "Lock %");
                 channel_item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
                 channel_item->setCheckState(0, Qt::Checked);
                 channel_item->setData(0, Qt::UserRole, -1);
-                receiver_item->addChild(channel_item);
+                group_item->addChild(channel_item);
+            }
+            else
+            {
+                for (int c = 0; c < child_count; c++)
+                {
+                    QTreeWidgetItem* channel_item = new QTreeWidgetItem;
+                    channel_item->setText(0, c < static_cast<int>(UIConstants::kChannelPrefixes.size())
+                                              ? QString(UIConstants::kChannelPrefixes[c])
+                                              : QString::number(c + 1));
+                    channel_item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
+                    channel_item->setCheckState(0, Qt::Checked);
+                    channel_item->setData(0, Qt::UserRole, -1);
+                    group_item->addChild(channel_item);
+                }
             }
 
-            tree->addTopLevelItem(receiver_item);
+            tree->addTopLevelItem(group_item);
         }
 
         tree->collapseAll();
+        return tree;
+    };
+
+    QHBoxLayout* columns_layout = new QHBoxLayout;
+    columns_layout->setSpacing(2);
+    columns_layout->setContentsMargins(0, 0, 0, 0);
+
+    {
+        QTreeWidget* tree = build_tree(lock_groups);
         columns_layout->addWidget(tree);
         m_legend_trees.append(tree);
+    }
+
+    {
+        QVector<QVector<QPair<QString, int>>> column_groups(receiver_columns);
+        for (int i = 0; i < receiver_group_list.size(); i++)
+        {
+            column_groups[i % receiver_columns].append(receiver_group_list[i]);
+        }
+        for (const auto& tree_groups : column_groups)
+        {
+            QTreeWidget* tree = build_tree(tree_groups);
+            columns_layout->addWidget(tree);
+            m_legend_trees.append(tree);
+        }
     }
 
     // Buttons stacked vertically to the right of the tree columns
@@ -219,8 +277,7 @@ void PlotWidget::initReceiverLegend(int receiver_count, int channels_per_receive
     content_row->addLayout(btn_col);
     m_legend_layout->addLayout(content_row);
 
-    m_legend_panel->setFixedHeight((per_column * UIConstants::kTreeItemHeightFactor) +
-                                   UIConstants::kTreeHeightBuffer);
+    m_legend_panel->setFixedHeight(qMax(treeHeight, 90));
     syncLegendScrollbars();
     connectExpandCollapseToggle(toggle_btn);
 }
@@ -268,8 +325,6 @@ void PlotWidget::rebuildChart()
     m_y_min_spin->setEnabled(has_data);
     m_y_max_spin->setEnabled(has_data);
     m_reset_btn->setEnabled(has_data);
-    m_copy_data_btn->setEnabled(has_data);
-    m_export_btn->setEnabled(has_data);
     m_plot->setInteractions(has_data
         ? QCP::iRangeDrag | QCP::iRangeZoom
         : QCP::Interactions());
@@ -681,7 +736,7 @@ void PlotWidget::setUpLayout()
     axis_widget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
     bottom_bar->addWidget(axis_widget, 0, Qt::AlignTop);
 
-    // Equal stretches on both sides center the legend between axis controls and Export PDF
+    // Equal stretches on both sides center the legend between axis controls and right margin
     bottom_bar->addStretch(1);
 
     // Legend tree panel — centered in the bottom bar
@@ -692,18 +747,6 @@ void PlotWidget::setUpLayout()
     bottom_bar->addWidget(m_legend_panel, 0, Qt::AlignTop);
 
     bottom_bar->addStretch(1);
-
-    // Copy Data and Export PDF — right-justified
-    m_copy_data_btn = new QPushButton("Copy Data");
-    m_copy_data_btn->setToolTip("Copy visible data to clipboard as comma-separated values");
-    m_copy_data_btn->setEnabled(false);
-    bottom_bar->addWidget(m_copy_data_btn, 0, Qt::AlignTop);
-    bottom_bar->addSpacing(4);
-
-    m_export_btn = new QPushButton("Export...");
-    m_export_btn->setToolTip("Export plot data and images");
-    m_export_btn->setEnabled(false);
-    bottom_bar->addWidget(m_export_btn, 0, Qt::AlignTop);
 
     main_layout->addLayout(bottom_bar);
 }
@@ -726,8 +769,6 @@ void PlotWidget::setUpConnections()
     connect(m_x_stop_edit, &QLineEdit::editingFinished, this, &PlotWidget::onXRangeChanged);
 
     connect(m_reset_btn, &QPushButton::clicked, this, &PlotWidget::onResetAxes);
-    connect(m_copy_data_btn, &QPushButton::clicked, this, &PlotWidget::onCopyDataToClipboard);
-    connect(m_export_btn, &QPushButton::clicked, this, &PlotWidget::onExportPlot);
     connect(m_plot, &QCustomPlot::mouseMove, this, &PlotWidget::onPlotMouseMove);
 
     connect(m_plot->xAxis, QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
@@ -773,8 +814,6 @@ void PlotWidget::rebuildLegend()
         });
     }
 
-    int receiver_count = static_cast<int>(receiver_groups.size());
-
     QPushButton* toggle_btn = new QPushButton("Expand All");
     toggle_btn->setFlat(true);
     toggle_btn->setMinimumWidth(UIConstants::kFlatButtonMinWidth);
@@ -787,27 +826,31 @@ void PlotWidget::rebuildLegend()
     select_none_btn->setFlat(true);
     select_none_btn->setMinimumWidth(UIConstants::kFlatButtonMinWidth);
 
-    // Distribute receivers across up to 4 columns
-    const int num_columns = UIConstants::kReceiverGridColumns;
-    int actual_columns = qMin(num_columns, receiver_count);
-    int per_column = (receiver_count + actual_columns - 1) / actual_columns;
-
-    QHBoxLayout* columns_layout = new QHBoxLayout;
-    columns_layout->setSpacing(2);
-    columns_layout->setContentsMargins(0, 0, 0, 0);
-
-    // Build ordered list of receiver keys
-    const QVector<int> receiver_keys = receiver_groups.keys();
-
-    for (int col = 0; col < actual_columns; col++)
+    // Lock (receiver index 0) gets its own dedicated column; receiver groups
+    // are split round-robin across up to two more columns.
+    bool has_lock = receiver_groups.contains(0);
+    QVector<int> rcvr_keys;
+    for (int key : receiver_groups.keys())
     {
-        int start = col * per_column;
-        int end = qMin(start + per_column, receiver_count);
-        if (start >= receiver_count)
+        if (key != 0)
         {
-            break;
+            rcvr_keys.append(key);
         }
+    }
 
+    // Always render the full fixed-width grid (1 lock column + N receiver
+    // columns) so the panel's width — and the buttons to its right — stay in
+    // a constant position regardless of whether this file has lock/receiver
+    // data of either kind.
+    const int receiver_columns = UIConstants::kLegendGridColumns - 1;
+    int receiver_rows = rcvr_keys.isEmpty()
+        ? 0 : (rcvr_keys.size() + receiver_columns - 1) / receiver_columns;
+    int lock_rows = has_lock ? 1 : 0;
+    int max_rows = qMax(qMax(lock_rows, receiver_rows), 1);
+    int visible_rows = qMin(max_rows, UIConstants::kLegendMaxVisibleRows);
+    int treeHeight = (visible_rows * UIConstants::kTreeItemHeightFactor) + UIConstants::kTreeHeightBuffer;
+
+    auto build_tree = [&](const QVector<int>& keys) {
         QTreeWidget* tree = new QTreeWidget;
         tree->setHeaderHidden(true);
         tree->setColumnCount(1);
@@ -817,13 +860,11 @@ void PlotWidget::rebuildLegend()
         tree->setFixedWidth(UIConstants::kTreeFixedWidth);
         tree->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         tree->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        int treeHeight = (per_column * UIConstants::kTreeItemHeightFactor) + UIConstants::kTreeHeightBuffer;
         tree->setFixedHeight(qMax(treeHeight, 90));
         tree->setFrameShape(QFrame::NoFrame);
 
-        for (int r = start; r < end; r++)
+        for (int receiver_num : keys)
         {
-            int receiver_num = receiver_keys[r];
             const QVector<int>& indices = receiver_groups[receiver_num];
 
             QTreeWidgetItem* receiver_item = new QTreeWidgetItem;
@@ -863,9 +904,31 @@ void PlotWidget::rebuildLegend()
 
         tree->collapseAll();
         connectLegendItemChanged(tree);
+        return tree;
+    };
 
+    QHBoxLayout* columns_layout = new QHBoxLayout;
+    columns_layout->setSpacing(2);
+    columns_layout->setContentsMargins(0, 0, 0, 0);
+
+    {
+        QTreeWidget* tree = build_tree(has_lock ? QVector<int>{0} : QVector<int>{});
         columns_layout->addWidget(tree);
         m_legend_trees.append(tree);
+    }
+
+    {
+        QVector<QVector<int>> column_keys(receiver_columns);
+        for (int i = 0; i < rcvr_keys.size(); i++)
+        {
+            column_keys[i % receiver_columns].append(rcvr_keys[i]);
+        }
+        for (const auto& keys : column_keys)
+        {
+            QTreeWidget* tree = build_tree(keys);
+            columns_layout->addWidget(tree);
+            m_legend_trees.append(tree);
+        }
     }
 
     // Buttons stacked vertically to the right of the tree columns
@@ -885,8 +948,7 @@ void PlotWidget::rebuildLegend()
     content_row->addLayout(btn_col);
     m_legend_layout->addLayout(content_row);
 
-    int panelHeight = (per_column * UIConstants::kTreeItemHeightFactor) + UIConstants::kTreeHeightBuffer;
-    m_legend_panel->setFixedHeight(qMax(panelHeight, 90));
+    m_legend_panel->setFixedHeight(qMax(treeHeight, 90));
     syncLegendScrollbars();
     connectExpandCollapseToggle(toggle_btn);
 
@@ -905,30 +967,34 @@ void PlotWidget::rebuildLegend()
 // Legend helpers
 ////////////////////////////////////////////////////////////////////////////////
 
-void PlotWidget::clearLegendContents()
+namespace
 {
-    m_legend_trees.clear();
+/// Recursively removes and deletes all items (and nested layouts/widgets) from a layout.
+void deleteLayoutContents(QLayout* layout)
+{
     QLayoutItem* item = nullptr;
-    while ((item = m_legend_layout->takeAt(0)) != nullptr)
+    while ((item = layout->takeAt(0)) != nullptr)
     {
-        if (item->widget() != nullptr)
+        if (QLayout* child_layout = item->layout())
+        {
+            // child_layout is owned by `item`; deleting `item` below also
+            // deletes child_layout (QBoxLayoutItem takes ownership), so we
+            // only need to empty its contents here, not delete it ourselves.
+            deleteLayoutContents(child_layout);
+        }
+        else if (item->widget() != nullptr)
         {
             item->widget()->deleteLater();
         }
-        if (item->layout() != nullptr)
-        {
-            QLayoutItem* child = nullptr;
-            while ((child = item->layout()->takeAt(0)) != nullptr)
-            {
-                if (child->widget() != nullptr)
-                {
-                    child->widget()->deleteLater();
-                }
-                delete child;
-            }
-        }
         delete item;
     }
+}
+}
+
+void PlotWidget::clearLegendContents()
+{
+    m_legend_trees.clear();
+    deleteLayoutContents(m_legend_layout);
 }
 
 void PlotWidget::syncLegendScrollbars()
@@ -1018,75 +1084,6 @@ void PlotWidget::setAllLegendChecks(bool checked)
     rebuildChart();
 }
 
-void PlotWidget::onCopyDataToClipboard()
-{
-    if (m_view_model == nullptr || !m_view_model->hasData())
-    {
-        return;
-    }
-
-    const auto& all_series = m_view_model->allSeries();
-    const double x_min = m_view_model->xViewMin();
-    const double x_max = m_view_model->xViewMax();
-
-    // Build header row: Time\tSeriesName...
-    QStringList header;
-    header << "Time";
-    for (const auto& s : all_series)
-    {
-        if (s.visible)
-        {
-            header << s.name;
-        }
-    }
-    QString output = header.join(',') + '\n';
-
-    // Collect all unique x values in the visible range across visible series
-    QVector<double> x_union;
-    for (const auto& s : all_series)
-    {
-        if (!s.visible)
-        {
-            continue;
-        }
-        for (double x : s.xValues)
-        {
-            if (x >= x_min && x <= x_max && !x_union.contains(x))
-            {
-                x_union.append(x);
-            }
-        }
-    }
-    std::sort(x_union.begin(), x_union.end());
-
-    // For each time point write a row
-    for (double x : x_union)
-    {
-        QStringList row;
-        row << m_view_model->formatTime(x);
-        for (const auto& s : all_series)
-        {
-            if (!s.visible)
-            {
-                continue;
-            }
-            // Find the closest x value in this series
-            int idx = s.xValues.indexOf(x);
-            if (idx >= 0)
-            {
-                row << QString::number(s.yValues[idx], 'f', 2);
-            }
-            else
-            {
-                row << QString();
-            }
-        }
-        output += row.join(',') + '\n';
-    }
-
-    QApplication::clipboard()->setText(output);
-    emit logMessage(QString("Copied %1 rows to clipboard.").arg(x_union.size()));
-}
 
 void PlotWidget::onPlotMouseMove(QMouseEvent* event)
 {
