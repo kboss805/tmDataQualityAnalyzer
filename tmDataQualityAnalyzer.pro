@@ -3,7 +3,7 @@ QT       += core gui printsupport concurrent svg
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 CONFIG += c++17
-VERSION = 2.0.0
+VERSION = 2.1.0
 
 
 INCLUDEPATH += \
@@ -34,6 +34,7 @@ SOURCES += \
     src/exportdialog.cpp \
     src/frameprocessor.cpp \
     src/plotviewmodel.cpp \
+    src/plotcustomizationdialog.cpp \
     src/plotwidget.cpp \
     src/tomlconfighelper.cpp \
     lib/irig106/src/irig106ch10.c \
@@ -70,6 +71,7 @@ HEADERS += \
     include/timeextractionwidget.h \
     include/exportdialog.h \
     include/plotviewmodel.h \
+    include/plotcustomizationdialog.h \
     include/plotwidget.h \
     include/tomlconfighelper.h \
     lib/irig106/include/irig106ch10.h \

@@ -93,10 +93,7 @@ void MainView::setUpMainLayout()
                 == UIConstants::kThemeDark;
     m_plot_widget->applyTheme(dark);
 
-    // Generic placeholder legend so the Lock/SNR selection area isn't blank
-    // before any file has been loaded. Replaced with a config-derived
-    // skeleton once a Chapter 10 file is opened, then with real data.
-    m_plot_widget->initLegendSkeleton(1, 2, PCMConstants::kDefaultReceiverChannels);
+    // The Customize Plot button replaces the old legend and is initialized disabled.
 
     // The plot widget already has a layout with its own margins.
     // Setting it directly as the central widget allows the QMainWindow
@@ -372,27 +369,7 @@ void MainView::onFileReadyForStreamConfig()
         m_view_model->setStreamConfigs(dialog.configs());
         m_view_model->setExtractAllTime(dialog.extractAllTime());
 
-        // Show a placeholder legend (Lock + RCVR groups) while processing runs.
-        int lock_count = 0;
-        int receiver_count = 0;
-        int channels_per_receiver = PCMConstants::kDefaultReceiverChannels;
-        for (const StreamConfig& cfg : dialog.configs())
-        {
-            if (!cfg.process)
-            {
-                continue;
-            }
-            if (cfg.mode == StreamMode::FrameSyncLockStats)
-            {
-                lock_count++;
-            }
-            else
-            {
-                receiver_count += cfg.numReceivers;
-                channels_per_receiver = cfg.receiverChannels;
-            }
-        }
-        m_plot_widget->initLegendSkeleton(lock_count, receiver_count, channels_per_receiver);
+
 
         startProcessingFromDialog(dialog.startTimeText(), dialog.stopTimeText(),
                                   dialog.extractAllTime());

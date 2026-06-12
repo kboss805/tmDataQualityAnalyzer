@@ -35,6 +35,13 @@ protected:
     /// Overrides the default numeric label with DDD:HH:MM:SS format.
     QString getTickLabel(double tick, const QLocale& locale,
                          QChar formatChar, int precision) override;
+    /// Forces an even step so createTickVector() yields exactly tickCount() ticks.
+    double getTickStep(const QCPRange& range) override;
+    /// No sub-ticks — keeps the time axis from getting more cluttered.
+    int getSubTickCount(double tickStep) override;
+    /// Generates exactly tickCount() ticks evenly spaced across the range.
+    QVector<double> createTickVector(double tickStep, const QCPRange& range) override;
+
 private:
     PlotViewModel* m_vm = nullptr;
 };
@@ -58,9 +65,7 @@ public:
     /// Applies theme colors (dark/light) to the chart.
     void applyTheme(bool dark);
 
-    /// Builds a disabled placeholder legend showing the Lock/RCVR groups that
-    /// will be populated once the loaded file finishes processing.
-    void initLegendSkeleton(int lock_count, int receiver_count, int channels_per_receiver);
+
 
 public slots:
     /// Rebuilds all chart series from the ViewModel data (no legend rebuild).
@@ -78,8 +83,8 @@ private slots:
     void updateAxes();
     /// Updates chart title from ViewModel.
     void updateTitle();
-    /// Handles a series visibility checkbox toggle.
-    void onLegendCheckboxToggled(int series_index, bool checked);
+    /// Handles opening the Customize Plot dialog.
+    void onCustomizePlotClicked();
     /// Handles user editing manual Y range spinboxes.
     void onManualYChanged();
     /// Handles user editing X range spinboxes.
@@ -104,21 +109,14 @@ private:
     double parseTimeToElapsed(const QString& text) const;
     void setUpLayout();
     void setUpConnections();
-    void rebuildLegend();
+
     /// Syncs the left-axis toggle button's text/enabled state to the ViewModel.
     void updateAxisViewButton();
     /// Shows or hides the centered "Loading..." overlay over the chart.
     void showLoadingIndicator(bool visible);
     void resizeEvent(QResizeEvent* event) override;
 
-    /// @name Legend helpers (extracted to reduce cognitive complexity)
-    /// @{
-    void clearLegendContents();
-    void syncLegendScrollbars();
-    void connectExpandCollapseToggle(QPushButton* toggle_btn);
-    void connectLegendItemChanged(QTreeWidget* tree);
-    void setAllLegendChecks(bool checked);
-    /// @}
+
 
     PlotViewModel* m_view_model = nullptr;
 
@@ -147,12 +145,7 @@ private:
     QVector<QCPGraph*> m_graphs;          ///< Maps series index → QCPGraph pointer.
     /// @}
 
-    /// @name Legend tree panel
-    /// @{
-    QWidget* m_legend_panel;
-    QVBoxLayout* m_legend_layout;
-    QVector<QTreeWidget*> m_legend_trees;
-    /// @}
+    QPushButton* m_customize_btn = nullptr;
 
     QLabel* m_loading_label = nullptr; ///< Overlay label shown while CSV is parsing.
     bool m_updating_from_vm = false;  ///< Guard against signal loops.

@@ -1,4 +1,4 @@
-tmDataQualityAnalyzer v2.0.0 - What's New
+tmDataQualityAnalyzer v2.1.0 - What's New
 =================================
 
   - New: Frame Sync Error Accumulation plot view. The plot toolbar now has a

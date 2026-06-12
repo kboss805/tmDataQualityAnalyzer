@@ -1,4 +1,4 @@
-﻿tmDataQualityAnalyzer v2.0.0 - Portable Edition
+tmDataQualityAnalyzer v2.1.0 - Portable Edition
 =======================================
 
 Run tmDataQualityAnalyzer.exe to launch the application.

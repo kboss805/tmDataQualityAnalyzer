@@ -14,7 +14,7 @@
 /// @brief Application version information.
 struct AppVersion {
     static constexpr int kMajor = 2;   ///< Major version number.
-    static constexpr int kMinor = 0;   ///< Minor version number.
+    static constexpr int kMinor = 1;   ///< Minor version number.
     static constexpr int kPatch = 0;   ///< Patch version number.
 
     /// @return Version string in "major.minor.patch" format.
@@ -179,7 +179,7 @@ namespace PlotConstants {
     inline constexpr const char* kYAxisLabel        = "Framesync Lock (%)"; ///< Left Y axis label (lock-% mode).
     inline constexpr const char* kMissedFramesAxisLabel = "Accumulated Missed Frames"; ///< Left Y axis label (missed frames mode).
     inline constexpr const char* kSnrAxisLabel      = "Receiver SNR (dB)"; ///< Right Y axis label.
-    inline constexpr const char* kDefaultPlotTitle  = "AGC/Lock vs Time"; ///< Default chart title.
+    inline constexpr const char* kDefaultPlotTitle  = "Framesync/SNR Plot"; ///< Default chart title.
     inline constexpr QColor kFrameSyncLockColor {0, 114, 189};           ///< Distinctive blue for lock series.
 
     /// @brief Shades of blue for frame sync lock series, one per stream.
