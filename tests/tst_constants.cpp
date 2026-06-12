@@ -180,13 +180,13 @@ void TestConstants::plotConstants()
     QCOMPARE(PlotConstants::kPlotDockMinWidth, 1024);
     QCOMPARE(PlotConstants::kPlotDockMinHeight, 768);
     QCOMPARE(PlotConstants::kAxisMarginFactor, 0.05);
-    QCOMPARE(QString(PlotConstants::kDefaultPlotTitle), QString("AGC/Lock vs Time"));
+    QCOMPARE(QString(PlotConstants::kDefaultPlotTitle), QString("Framesync/SNR Plot"));
     QCOMPARE(QString(PlotConstants::kYAxisLabel),  QString("Framesync Lock (%)"));
     QCOMPARE(QString(PlotConstants::kMissedFramesAxisLabel), QString("Accumulated Missed Frames"));
     QCOMPARE(QString(PlotConstants::kSnrAxisLabel), QString("Receiver SNR (dB)"));
     QCOMPARE(QString(PlotConstants::kXAxisLabel), QString("Elapsed Time (DDD:HH:MM:SS)"));
     QCOMPARE(PlotConstants::kZoomFactor, 0.1);
-    QCOMPARE(PlotConstants::kNumReceiverColors, 10);
+    QCOMPARE(PlotConstants::kNumSnrPrimaryColors, 3);
 
     // Theme colors
     QCOMPARE(PlotConstants::kDarkBackground, QColor(32, 32, 32));
@@ -261,6 +261,6 @@ void TestConstants::uiSlopeVoltageBounds()
 
 void TestConstants::plotFrameSyncLockColor()
 {
-    // Distinctive blue used to render framesync lock series (US6.0).
-    QCOMPARE(PlotConstants::kFrameSyncLockColor, QColor(0, 114, 189));
+    // Distinctive purple used to render framesync lock series (US6.0).
+    QCOMPARE(PlotConstants::kFrameSyncLockColor, QColor(106, 13, 173));
 }

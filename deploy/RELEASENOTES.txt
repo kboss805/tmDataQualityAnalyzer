@@ -3,9 +3,25 @@ tmDataQualityAnalyzer v2.1.0 - What's New
 
   - New: Frame Sync Error Accumulation plot view. The plot toolbar now has a
     view toggle that switches the left axis between "Framesync Lock (%)" and
-    "Accumulated Frame Sync Errors" — a per-stream, monotonically increasing
+    "Accumulated Missed Frames" — a per-stream, monotonically increasing
     count of loss-of-lock events. The left axis auto-scales to the maximum
     accumulated value, and both metrics are included in CSV export.
+
+  - New: Redesigned "Customize Plot Series" dialog. The Receiver SNR tab now
+    presents each stream as a collapsible tree of receivers (RCVR groups),
+    each containing its L/R/C channel checkboxes with tri-state group toggles
+    and an Expand/Collapse All control. Streams with many receivers split
+    across two columns for easier scanning. The Frame Sync Lock tab toggles a
+    stream's lock and missed-frame series together, showing only the metric
+    that matches the active left-axis view.
+
+  - Changed: New plot color scheme. Frame Sync Lock series use purple, blue,
+    and green primaries (one per stream); Receiver SNR series use red, orange,
+    and yellow primaries (one per receiver). Additional streams, receivers, and
+    channels are rendered as progressively lighter shades of their primary so
+    related series stay visually grouped.
+
+  - Changed: Default plot title is now "Framesync/SNR Plot".
 
 Previous release (v1.0.5)
 =========================

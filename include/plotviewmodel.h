@@ -148,6 +148,9 @@ private slots:
 private:
     /// Assigns colors to all series based on receiver grouping.
     void assignColors();
+    /// Returns a shaded variant of `base` for shadeLevel > 0 (0 returns `base` unchanged).
+    /// Used to derive additional stream/channel colors from a small set of primaries.
+    static QColor shadeOfColor(const QColor& base, int shadeLevel);
     /// Computes Y axis range from visible series data with margin.
     void computeYRange();
     /// Commits a CsvParseResult into member state and emits dataChanged().

@@ -45,8 +45,10 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **Per-File-Type Directory Persistence**: Independently remembers the last used directory for Ch10 and TOML file dialogs between sessions
 
 ### Plot & Visualization
-- **Interactive Plot Window**: Plot showing frame sync lock (%) and/or receiver AGC (dB) series with mouse wheel zoom, click-drag pan, auto-scale axes, per-series visibility toggles, and auto-assigned color palette
-- **Fixed-Layout Legend**: Series controls below the plot use a constant 3-column grid (1 column for Frame Sync Lock groups, 2 columns for receiver groups), so the layout doesn't shift between files; columns scroll vertically once they exceed the visible row count
+- **Interactive Plot Window**: Plot showing frame sync lock (%) and/or receiver AGC (dB) series with mouse wheel zoom, click-drag pan, auto-scale axes, per-series visibility toggles, and an auto-assigned color palette
+- **Color Coding**: Frame Sync Lock series use purple/blue/green primaries (one per stream) and Receiver SNR series use red/orange/yellow primaries (one per receiver); additional streams, receivers, and channels are derived as progressively lighter shades so related series stay grouped
+- **Customize Plot Series Dialog**: A tabbed dialog selects which series are visible — a Frame Sync Lock tab (one toggle per stream) and a Receiver SNR tab that presents each stream as a collapsible tree of receivers with L/R/C channel checkboxes, tri-state group toggles, and Expand/Collapse All; streams with many receivers split across two columns
+- **Left-Axis View Toggle**: Switch the left axis between Framesync Lock (%) and Accumulated Missed Frames
 - **X-Axis Time Display**: Actual file time (DDD:HH:MM:SS) on the X axis instead of elapsed seconds
 - **Toolbar Export**: Export the current plot and its data (CSV plus PNG/SVG/PDF) via the Export action in the main toolbar
 - **Hover Tooltip**: Shows series name, time (DDD:HH:MM:SS), and value (lock % or dB) on mouse hover

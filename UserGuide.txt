@@ -95,7 +95,10 @@ Once processing completes, the plot area will populate with your stream data.
 - Receiver SNR: Plots the calibrated signal-to-noise ratio.
 
 Interactive Controls:
-- Use the Legend to toggle the visibility of specific streams or metric types.
+- Use the Customize Plot Series dialog (toolbar) to toggle the visibility of
+  specific streams, receivers, or individual L/R/C channels. Switch the left
+  axis between Framesync Lock (%) and Accumulated Missed Frames with the
+  left-axis view toggle.
 - Zoom / Pan: Click and drag the plot to pan, or use your scroll wheel to zoom 
   into specific anomalies.
 

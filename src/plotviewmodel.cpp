@@ -684,35 +684,46 @@ void PlotViewModel::assignColors()
                 idx = next_left_color++;
                 left_axis_color_idx.insert(s.streamOrder, idx);
             }
-            s.color = PlotConstants::kFrameSyncLockColors[idx % PlotConstants::kNumFrameSyncLockColors];
+            int num_primaries = PlotConstants::kNumFrameSyncLockPrimaryColors;
+            QColor primary = PlotConstants::kFrameSyncLockPrimaryColors[idx % num_primaries];
+            s.color = shadeOfColor(primary, idx / num_primaries);
             continue;
         }
 
-        int color_idx = (s.receiverIndex - 1) % PlotConstants::kNumReceiverColors;
-        color_idx = qMax(0, color_idx);
+        int num_primaries = PlotConstants::kNumSnrPrimaryColors;
+        int receiver_idx = qMax(0, s.receiverIndex - 1);
+        QColor primary = PlotConstants::kSnrPrimaryColors[receiver_idx % num_primaries];
 
-        QColor base = PlotConstants::kReceiverColors[color_idx];
-
-        // Vary saturation for channels within the same receiver
-        if (s.channelIndex > 0)
-        {
-            int h = 0;
-            int sat = 0;
-            int val = 0;
-            base.getHsv(&h, &sat, &val);
-            // Reduce saturation by 25% per subsequent channel, minimum 40
-            constexpr int kMinSaturation = 40;
-            constexpr int kSaturationStep = 60;
-            sat = qMax(kMinSaturation, sat - (s.channelIndex * kSaturationStep));
-            // Increase value slightly for lighter shade
-            constexpr int kMaxValue = 255;
-            constexpr int kValueStep = 20;
-            val = qMin(kMaxValue, val + (s.channelIndex * kValueStep));
-            base.setHsv(h, sat, val);
-        }
-
-        s.color = base;
+        // Shade level combines the receiver's primary-color cycle with its channel index,
+        // so additional receivers and additional channels both shift toward a new shade.
+        int shade_level = (receiver_idx / num_primaries) + s.channelIndex;
+        s.color = shadeOfColor(primary, shade_level);
     }
+}
+
+QColor PlotViewModel::shadeOfColor(const QColor& base, int shadeLevel)
+{
+    if (shadeLevel <= 0)
+    {
+        return base;
+    }
+
+    int h = 0;
+    int sat = 0;
+    int val = 0;
+    base.getHsv(&h, &sat, &val);
+
+    // Reduce saturation and increase value per shade level for a progressively lighter tint.
+    constexpr int kMinSaturation = 40;
+    constexpr int kSaturationStep = 60;
+    constexpr int kMaxValue = 255;
+    constexpr int kValueStep = 20;
+    sat = qMax(kMinSaturation, sat - (shadeLevel * kSaturationStep));
+    val = qMin(kMaxValue, val + (shadeLevel * kValueStep));
+
+    QColor shaded;
+    shaded.setHsv(h, sat, val);
+    return shaded;
 }
 
 void PlotViewModel::computeYRange()

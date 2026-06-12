@@ -29,6 +29,7 @@ SOURCES += \
     $$PWD/../src/frameprocessor.cpp \
     $$PWD/../src/plotviewmodel.cpp \
     $$PWD/../src/plotwidget.cpp \
+    $$PWD/../src/plotcustomizationdialog.cpp \
     $$PWD/../src/exportdialog.cpp \
     $$PWD/../src/tomlconfighelper.cpp \
     $$PWD/../lib/qcustomplot/qcustomplot.cpp
@@ -53,6 +54,7 @@ HEADERS += \
     $$PWD/../include/timeextractionwidget.h \
     $$PWD/../include/plotviewmodel.h \
     $$PWD/../include/plotwidget.h \
+    $$PWD/../include/plotcustomizationdialog.h \
     $$PWD/../include/exportdialog.h \
     $$PWD/../include/tomlconfighelper.h \
     $$PWD/../lib/qcustomplot/qcustomplot.h

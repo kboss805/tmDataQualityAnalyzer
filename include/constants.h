@@ -180,18 +180,17 @@ namespace PlotConstants {
     inline constexpr const char* kMissedFramesAxisLabel = "Accumulated Missed Frames"; ///< Left Y axis label (missed frames mode).
     inline constexpr const char* kSnrAxisLabel      = "Receiver SNR (dB)"; ///< Right Y axis label.
     inline constexpr const char* kDefaultPlotTitle  = "Framesync/SNR Plot"; ///< Default chart title.
-    inline constexpr QColor kFrameSyncLockColor {0, 114, 189};           ///< Distinctive blue for lock series.
+    inline constexpr QColor kFrameSyncLockColor {106, 13, 173};           ///< Distinctive purple for lock series.
 
-    /// @brief Shades of blue for frame sync lock series, one per stream.
-    /// kFrameSyncLockColors[0] equals kFrameSyncLockColor for single-stream compatibility.
-    inline constexpr int kNumFrameSyncLockColors = 6;
-    inline constexpr std::array<QColor, kNumFrameSyncLockColors> kFrameSyncLockColors = {
-        QColor(0, 114, 189),    ///< Base blue
-        QColor(0, 32, 96),      ///< Dark navy
-        QColor(91, 155, 213),   ///< Light steel blue
-        QColor(0, 70, 140),     ///< Deep blue
-        QColor(0, 176, 240),    ///< Bright cyan-blue
-        QColor(68, 114, 196),   ///< Medium blue
+    /// @brief Primary colors for frame sync lock series (purple, blue, green), one per stream.
+    /// Additional streams reuse these primaries with a runtime-computed shade (see
+    /// PlotViewModel::shadeOfColor). kFrameSyncLockPrimaryColors[0] equals kFrameSyncLockColor
+    /// for single-stream compatibility.
+    inline constexpr int kNumFrameSyncLockPrimaryColors = 3;
+    inline constexpr std::array<QColor, kNumFrameSyncLockPrimaryColors> kFrameSyncLockPrimaryColors = {
+        QColor(106, 13, 173),   ///< Purple
+        QColor(67, 97, 238),    ///< Blue
+        QColor(46, 184, 92),    ///< Green
     };
     inline constexpr double kZoomFactor      = 0.1;   ///< Wheel zoom step (10% per notch).
 
@@ -214,19 +213,14 @@ namespace PlotConstants {
     inline constexpr double kYSpinBoxMax     = 999.0;            ///< Maximum range for Y axis spinboxes.
     /// @}
 
-    /// @brief Base color palette for receiver series (one hue per receiver).
-    inline constexpr int kNumReceiverColors = 10;
-    inline constexpr std::array<QColor, kNumReceiverColors> kReceiverColors = {
-        QColor(31, 119, 180),   ///< Blue
-        QColor(255, 127, 14),   ///< Orange
-        QColor(44, 160, 44),    ///< Green
-        QColor(214, 39, 40),    ///< Red
-        QColor(148, 103, 189),  ///< Purple
-        QColor(140, 86, 75),    ///< Brown
-        QColor(227, 119, 194),  ///< Pink
-        QColor(127, 127, 127),  ///< Gray
-        QColor(188, 189, 34),   ///< Olive
-        QColor(23, 190, 207),   ///< Cyan
+    /// @brief Primary colors for SNR receiver series (red, orange, yellow), one per receiver.
+    /// Additional receivers/channels reuse these primaries with a runtime-computed shade
+    /// (see PlotViewModel::shadeOfColor).
+    inline constexpr int kNumSnrPrimaryColors = 3;
+    inline constexpr std::array<QColor, kNumSnrPrimaryColors> kSnrPrimaryColors = {
+        QColor(204, 0, 0),      ///< Red
+        QColor(255, 140, 0),    ///< Orange
+        QColor(230, 200, 30),   ///< Yellow
     };
 }
 
