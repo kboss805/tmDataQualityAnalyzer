@@ -27,6 +27,15 @@
 #include "plotviewmodel.h"
 #include "exportdialog.h"
 
+namespace {
+    /// @return true for metrics drawn on the left axis (lock % and frame-sync errors).
+    bool isLeftAxisMetric(PlotSeriesData::MetricType type)
+    {
+        return type == PlotSeriesData::MetricType::FrameSyncLock
+            || type == PlotSeriesData::MetricType::AccumulatedMissedFrames;
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // TimeHackTicker
 ////////////////////////////////////////////////////////////////////////////////
@@ -299,7 +308,7 @@ void PlotWidget::rebuildChart()
     for (qsizetype i = 0; i < all_series.size(); i++)
     {
         const PlotSeriesData& s = all_series[i];
-        QCPAxis* value_axis = (s.metricType == PlotSeriesData::MetricType::FrameSyncLock)
+        QCPAxis* value_axis = isLeftAxisMetric(s.metricType)
             ? m_plot->yAxis : m_plot->yAxis2;
         QCPGraph* graph = m_plot->addGraph(m_plot->xAxis, value_axis);
         graph->setName(s.name);
@@ -309,13 +318,17 @@ void PlotWidget::rebuildChart()
         m_graphs.append(graph);
     }
 
-    // Set axis labels
+    // Set axis labels. The left axis label tracks the active left-axis view.
     m_plot->xAxis->setLabel(PlotConstants::kXAxisLabel);
-    m_plot->yAxis->setLabel(PlotConstants::kYAxisLabel);
+    m_plot->yAxis->setLabel(
+        m_view_model->lockAxisView() == PlotViewModel::LockAxisView::MissedFrames
+            ? PlotConstants::kMissedFramesAxisLabel
+            : PlotConstants::kYAxisLabel);
 
     // Update title and axes without triggering extra replots
     updateTitle();
     updateAxes();
+    updateAxisViewButton();
 
     // Enable all controls when data is loaded
     bool has_data = m_view_model->hasData();
@@ -373,10 +386,19 @@ void PlotWidget::updateAxes()
     m_updating_from_vm = true;
 
     m_plot->xAxis->setRange(m_view_model->xViewMin(), m_view_model->xViewMax());
-    
-    // Left axis (yAxis) is fixed 0-100 for Lock %
-    m_plot->yAxis->setRange(0, 100);
-    
+
+    // Left axis (yAxis): fixed 0-100 for Lock %, or auto-scaled to the maximum
+    // accumulated value in Missed Frames mode.
+    if (m_view_model->lockAxisView() == PlotViewModel::LockAxisView::MissedFrames)
+    {
+        const double err_max = m_view_model->missedFramesMax();
+        m_plot->yAxis->setRange(0.0, err_max * (1.0 + PlotConstants::kAxisMarginFactor));
+    }
+    else
+    {
+        m_plot->yAxis->setRange(0, 100);
+    }
+
     // Right axis (yAxis2) auto-scales to SNR data limits, or manual limits
     m_plot->yAxis2->setRange(m_view_model->yMin(), m_view_model->yMax());
 
@@ -658,6 +680,15 @@ void PlotWidget::setUpLayout()
     m_title_edit->setToolTip("Plot title");
     m_title_edit->setEnabled(false);
     title_bar->addWidget(m_title_edit, 1);
+
+    // Left-axis mode toggle button: switches between the Lock % metric and the
+    // accumulated Missed Frames metric (both share the left axis).
+    m_axis_view_btn = new QPushButton(QStringLiteral("View: Accumulated Missed Frames"));
+    m_axis_view_btn->setToolTip(QStringLiteral("Toggle left axis between Lock Percentage "
+                                "and Accumulated Missed Frames"));
+    m_axis_view_btn->setEnabled(false);
+    title_bar->addWidget(m_axis_view_btn);
+
     main_layout->addLayout(title_bar);
     main_layout->addSpacing(8);
 
@@ -670,7 +701,7 @@ void PlotWidget::setUpLayout()
     m_plot->yAxis->setLabel(PlotConstants::kYAxisLabel);
     m_plot->yAxis->setRange(0, 100);
     m_plot->yAxis2->setVisible(true);
-    m_plot->yAxis2->setLabel(PlotConstants::kLockAxisLabel);
+    m_plot->yAxis2->setLabel(PlotConstants::kSnrAxisLabel);
     main_layout->addWidget(m_plot, 1);
     main_layout->addSpacing(8);
 
@@ -769,6 +800,7 @@ void PlotWidget::setUpConnections()
     connect(m_x_stop_edit, &QLineEdit::editingFinished, this, &PlotWidget::onXRangeChanged);
 
     connect(m_reset_btn, &QPushButton::clicked, this, &PlotWidget::onResetAxes);
+    connect(m_axis_view_btn, &QPushButton::clicked, this, &PlotWidget::onAxisViewToggleClicked);
     connect(m_plot, &QCustomPlot::mouseMove, this, &PlotWidget::onPlotMouseMove);
 
     connect(m_plot->xAxis, QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
@@ -792,11 +824,24 @@ void PlotWidget::rebuildLegend()
         return;
     }
 
-    // Group series by receiver index (sorted)
+    // Group series by receiver index (sorted). Lock and Missed Frames share
+    // receiver index 0 and channel index 0. Only one is visible at a time.
     QMap<int, QVector<int>> receiver_groups;
-    for (qsizetype i = 0; i < all_series.size(); i++)
+    PlotViewModel::LockAxisView axis_view = m_view_model->lockAxisView();
+    for (int i = 0; i < m_view_model->seriesCount(); i++)
     {
-        receiver_groups[all_series[i].receiverIndex].append(static_cast<int>(i));
+        const PlotSeriesData& s = m_view_model->seriesAt(i);
+        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock &&
+            axis_view != PlotViewModel::LockAxisView::LockPercent)
+        {
+            continue;
+        }
+        if (s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames &&
+            axis_view != PlotViewModel::LockAxisView::MissedFrames)
+        {
+            continue;
+        }
+        receiver_groups[s.receiverIndex].append(static_cast<int>(i));
     }
 
     // Within each group, order by source stream and channel rather than the
@@ -869,7 +914,8 @@ void PlotWidget::rebuildLegend()
 
             QTreeWidgetItem* receiver_item = new QTreeWidgetItem;
             const QString receiver_label = (receiver_num == 0)
-                ? QStringLiteral("Lock")
+                ? (axis_view == PlotViewModel::LockAxisView::MissedFrames
+                       ? QStringLiteral("Errors") : QStringLiteral("Lock"))
                 : "RCVR " + QString::number(receiver_num);
             receiver_item->setText(0, receiver_label);
             receiver_item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable | Qt::ItemIsAutoTristate);
@@ -886,7 +932,7 @@ void PlotWidget::rebuildLegend()
                 const PlotSeriesData& s = all_series[idx];
                 QTreeWidgetItem* channel_item = new QTreeWidgetItem;
                 const QString channel_label =
-                    (s.metricType == PlotSeriesData::MetricType::FrameSyncLock)
+                    isLeftAxisMetric(s.metricType)
                     ? s.name
                     : (s.channelIndex < static_cast<int>(UIConstants::kChannelPrefixes.size()))
                         ? QString(UIConstants::kChannelPrefixes[s.channelIndex])
@@ -1148,8 +1194,14 @@ void PlotWidget::onPlotMouseMove(QMouseEvent* event)
     const double pixel_dist = qAbs(m_plot->xAxis->coordToPixel(best_x) - event->pos().x());
     if (pixel_dist <= 10.0 && !best_name.isEmpty() && best_series_index >= 0)
     {
-        const bool is_lock = (all_series[best_series_index].metricType == PlotSeriesData::MetricType::FrameSyncLock);
-        const QString unit = is_lock ? "%" : " dB";
+        const PlotSeriesData::MetricType metric = all_series[best_series_index].metricType;
+        QString unit;
+        switch (metric)
+        {
+            case PlotSeriesData::MetricType::FrameSyncLock:         unit = "%";        break;
+            case PlotSeriesData::MetricType::AccumulatedMissedFrames: unit = " frames"; break;
+            case PlotSeriesData::MetricType::SNR:                   unit = " dB";      break;
+        }
         QString tip = QString("%1\n%2\n%3%4")
             .arg(best_name)
             .arg(m_view_model->formatTime(best_x))
@@ -1160,6 +1212,40 @@ void PlotWidget::onPlotMouseMove(QMouseEvent* event)
     else
     {
         QToolTip::hideText();
+    }
+}
+
+void PlotWidget::onAxisViewToggleClicked()
+{
+    if (m_view_model == nullptr)
+    {
+        return;
+    }
+    const PlotViewModel::LockAxisView new_view =
+        (m_view_model->lockAxisView() == PlotViewModel::LockAxisView::LockPercent)
+            ? PlotViewModel::LockAxisView::MissedFrames
+            : PlotViewModel::LockAxisView::LockPercent;
+
+    m_view_model->setLockAxisView(new_view);
+}
+
+void PlotWidget::updateAxisViewButton()
+{
+    if (m_axis_view_btn == nullptr || m_view_model == nullptr)
+    {
+        return;
+    }
+
+    // The button is only meaningful when both metrics are available; it shows the
+    // view it will switch *to*.
+    const bool enabled = m_view_model->hasLockSeries() && m_view_model->hasMissedFramesSeries();
+    m_axis_view_btn->setEnabled(enabled);
+
+    if (enabled)
+    {
+        m_axis_view_btn->setText(m_view_model->lockAxisView() == PlotViewModel::LockAxisView::LockPercent
+            ? QStringLiteral("View: Accumulated Missed Frames")
+            : QStringLiteral("View: Framesync Lock (%)"));
     }
 }
 

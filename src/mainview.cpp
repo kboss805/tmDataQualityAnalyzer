@@ -123,7 +123,7 @@ void MainView::setUpMainLayout()
     qApp->installEventFilter(this);
 
     // additional settings
-    setWindowTitle("Chapter 10 to CSV AGC Converter");
+    setWindowTitle("TM Data Quality Analyzer");
 
     m_progress_bar->setValue(0);
 
@@ -165,10 +165,10 @@ void MainView::setUpMenuBar()
             UIConstants::kAboutIconSize, UIConstants::kAboutIconSize,
             Qt::KeepAspectRatio, Qt::SmoothTransformation));
         about_box.setText(
-            "<h3>Chapter 10 to CSV AGC Converter</h3>"
+            "<h3>TM Data Quality Analyzer</h3>"
             "<p>Version " + AppVersion::toString() + "</p>"
-            "<p>Extracts PCM data from IRIG 106 Chapter 10 recordings "
-            "and exports receiver channel samples to CSV format.</p>");
+            "<p>Analyzes framesync lock statistics and receiver SNR data from "
+            "IRIG 106 Chapter 10 PCM recordings and plots the results over time.</p>");
         about_box.exec();
     });
 

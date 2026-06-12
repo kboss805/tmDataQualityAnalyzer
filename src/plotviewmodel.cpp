@@ -202,12 +202,16 @@ void PlotViewModel::commitParseResult(CsvParseResult&& result)
     m_x_view_max        = m_x_max;
 
     m_has_lock_series = false;
+    m_has_missed_frames_series = false;
     for (const auto& s : m_series)
     {
         if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock)
         {
             m_has_lock_series = true;
-            break;
+        }
+        else if (s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
+        {
+            m_has_missed_frames_series = true;
         }
     }
 
@@ -321,8 +325,26 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         lock.streamOrder = data.pcmChannelId;
         lock.xValues = elapsed;
         lock.yValues = data.lockPercent;
+        lock.visible = (m_lock_axis_view == LockAxisView::LockPercent);
         fillCaches(lock);
         m_series.push_back(lock);
+    }
+
+    // Missed frames accumulation series — left-axis sibling of the lock series,
+    // shown only when the left-axis view is in MissedFrames mode.
+    if (!data.accumulatedMissedFrames.isEmpty())
+    {
+        PlotSeriesData errors;
+        errors.name = data.streamLabel + " Accumulated Missed Frames";
+        errors.metricType = PlotSeriesData::MetricType::AccumulatedMissedFrames;
+        errors.receiverIndex = 0;
+        errors.channelIndex = 0;
+        errors.streamOrder = data.pcmChannelId;
+        errors.xValues = elapsed;
+        errors.yValues = data.accumulatedMissedFrames;
+        errors.visible = (m_lock_axis_view == LockAxisView::MissedFrames);
+        fillCaches(errors);
+        m_series.push_back(errors);
     }
 
     // Receiver-channel (SNR) series — one per processed parameter word.
@@ -361,12 +383,16 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
     m_x_view_max = m_x_max;
 
     m_has_lock_series = false;
+    m_has_missed_frames_series = false;
     for (const auto& s : m_series)
     {
         if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock)
         {
             m_has_lock_series = true;
-            break;
+        }
+        else if (s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
+        {
+            m_has_missed_frames_series = true;
         }
     }
 
@@ -388,6 +414,8 @@ void PlotViewModel::clearData()
     m_data_y_min = m_data_y_max = 0.0;
     m_y_auto_scale = true;
     m_has_lock_series = false;
+    m_has_missed_frames_series = false;
+    m_lock_axis_view = LockAxisView::LockPercent;
     m_base_day = 0;
     m_base_time_offset = 0.0;
     m_base_abs_seconds = 0.0;
@@ -634,14 +662,29 @@ void PlotViewModel::resetYRange()
 
 void PlotViewModel::assignColors()
 {
-    int lock_color_idx = 0;
+    // Left-axis metrics (lock % and frame-sync errors) share one color per stream,
+    // keyed by source PCM channel, so a stream's lock and error curves match (only
+    // one is ever visible at a time).
+    QMap<int, int> left_axis_color_idx;
+    int next_left_color = 0;
 
     for (auto& s : m_series)
     {
-        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock)
+        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock ||
+            s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
         {
-            s.color = PlotConstants::kFrameSyncLockColors[lock_color_idx % PlotConstants::kNumFrameSyncLockColors];
-            lock_color_idx++;
+            auto it = left_axis_color_idx.find(s.streamOrder);
+            int idx = 0;
+            if (it != left_axis_color_idx.end())
+            {
+                idx = it.value();
+            }
+            else
+            {
+                idx = next_left_color++;
+                left_axis_color_idx.insert(s.streamOrder, idx);
+            }
+            s.color = PlotConstants::kFrameSyncLockColors[idx % PlotConstants::kNumFrameSyncLockColors];
             continue;
         }
 
@@ -684,9 +727,10 @@ void PlotViewModel::computeYRange()
         {
             continue;
         }
-        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock)
+        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock ||
+            s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
         {
-            continue;  // Lock series use the fixed right axis (0-100), not this range.
+            continue;  // Left-axis metrics use their own range, not the SNR range.
         }
 
         has_visible = true;
@@ -736,6 +780,55 @@ double PlotViewModel::baseTimeOffset() const { return m_base_time_offset; }
 double PlotViewModel::lockYMin() const { return m_lock_y_min; }
 double PlotViewModel::lockYMax() const { return m_lock_y_max; }
 bool PlotViewModel::hasLockSeries() const { return m_has_lock_series; }
+bool PlotViewModel::hasMissedFramesSeries() const { return m_has_missed_frames_series; }
+PlotViewModel::LockAxisView PlotViewModel::lockAxisView() const { return m_lock_axis_view; }
+
+double PlotViewModel::missedFramesMax() const
+{
+    double max_val = 0.0;
+    for (const auto& s : m_series)
+    {
+        if (s.metricType != PlotSeriesData::MetricType::AccumulatedMissedFrames || !s.visible)
+        {
+            continue;
+        }
+        max_val = qMax(max_val, s.yMaxCached);
+    }
+    // Never return a degenerate range; a flat (no-error) stream still needs a
+    // visible Y axis scale, e.g. [0, 10]
+    if (max_val <= 0.0)
+    {
+        return 10.0;
+    }
+    return max_val;
+}
+
+void PlotViewModel::setLockAxisView(LockAxisView view)
+{
+    if (m_lock_axis_view == view)
+    {
+        return;
+    }
+    m_lock_axis_view = view;
+
+    // Flip visibility: lock series shown in LockPercent mode, missed frames series in
+    // MissedFrames mode. SNR series are unaffected.
+    for (int i = 0; i < m_series.size(); i++)
+    {
+        PlotSeriesData& s = m_series[i];
+        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock)
+        {
+            s.visible = (view == LockAxisView::LockPercent);
+        }
+        else if (s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
+        {
+            s.visible = (view == LockAxisView::MissedFrames);
+        }
+    }
+
+    emit lockAxisViewChanged();
+    emit dataChanged();
+}
 
 QString PlotViewModel::formatTime(double elapsed) const
 {

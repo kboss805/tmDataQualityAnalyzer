@@ -22,6 +22,7 @@ private slots:
     void processInvalidFile();
     void processAccumulatesReceiverData();
     void processLockOnlyModeHasNoChannels();
+    void processFrameSyncErrorsMonotonic();
     void processSlopeAffectsValues();
     void processShortPeriodMoreSamples();
 };

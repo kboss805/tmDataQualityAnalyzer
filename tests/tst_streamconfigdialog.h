@@ -44,6 +44,11 @@ private slots:
     void testFrameMaskValidation();
     void testDataRateLimits();
     void testDefaultSampleRate();
+
+    // "Apply to all" fan-out (US2.5)
+    void applyToAllCopiesSettingsToSameModeStreams();
+    void applyToAllLeavesDifferentModeStreamsUnchanged();
+    void applyToAllUncheckedDoesNotAffectOtherStreams();
 };
 
 #endif // TST_STREAMCONFIGDIALOG_H

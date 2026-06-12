@@ -46,10 +46,17 @@ private slots:
     void addStreamDataMultipleStreamsAccumulate();
     void addStreamDataEmptyDataNoOp();
 
+    // Frame sync error accumulation (US2.1) tests
+    void addStreamDataErrorSeriesCreated();
+    void errorSeriesSharesLockColor();
+    void setLockAxisViewTogglesVisibility();
+    void frameSyncErrorMaxReflectsData();
+
     // exportCsv tests
     void exportCsvCreatesFile();
     void exportCsvHeaderAndData();
     void exportCsvEmptyNoFile();
+    void exportCsvIncludesErrorColumn();
 };
 
 #endif // TST_PLOTVIEWMODEL_H

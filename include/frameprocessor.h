@@ -101,6 +101,7 @@ private:
     void recordTimeSample(double current_time_sample,
                           int n_samples,
                           double lock_percentage,
+                          double accumulated_missed_frames,
                           const QVector<ParameterInfo*>& enabled_params);
 
     std::atomic<bool> m_abort_requested; ///< Thread-safe abort flag.

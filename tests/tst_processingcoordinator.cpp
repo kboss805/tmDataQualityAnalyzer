@@ -54,8 +54,8 @@ void TestProcessingCoordinator::startProcessingEmitsProcessingState()
     // without ever flipping processingState to true.
     StreamJob job;
     job.params.filename = "nonexistent_coordinator_test.ch10";
-    job.params.time_channel_id = 1;
-    job.params.pcm_channel_id = 1;
+    job.params.timeChannelId = 1;
+    job.params.pcmChannelId = 1;
     job.params.mode = StreamMode::FrameSyncLockStats;
     job.frameSetup = new FrameSetup(nullptr);
 

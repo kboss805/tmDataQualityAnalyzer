@@ -11,6 +11,7 @@
 #include "tst_streamconfigdialog.h"
 
 #include <QCheckBox>
+#include <QDialogButtonBox>
 #include <QSettings>
 #include <QTemporaryFile>
 #include <QVector>
@@ -276,6 +277,23 @@ static void clickGearButton(StreamConfigDialog* dlg)
     }
 }
 
+/// Clicks the @p row -th "Configure this stream" gear button (rows are built
+/// in order, so gear buttons appear in the same order in findChildren()).
+static void clickGearButtonForRow(StreamConfigDialog* dlg, int row)
+{
+    int seen = 0;
+    const QList<QPushButton*> buttons = dlg->findChildren<QPushButton*>();
+    for (QPushButton* btn : buttons) {
+        if (btn->toolTip() == "Configure this stream") {
+            if (seen == row) {
+                btn->click();
+                return;
+            }
+            seen++;
+        }
+    }
+}
+
 void TestStreamConfigDialog::testFrameSyncValidation()
 {
     StreamConfig cfg = makeConfig();
@@ -396,4 +414,127 @@ void TestStreamConfigDialog::testDefaultSampleRate()
     clickGearButton(dlg.data());
 
     QVERIFY(testExecuted);
+}
+
+// ---------------------------------------------------------------------------
+// "Apply to all" fan-out (US2.5)
+// ---------------------------------------------------------------------------
+
+void TestStreamConfigDialog::applyToAllCopiesSettingsToSameModeStreams()
+{
+    // Two Frame Sync Lock streams, both selected for processing.
+    StreamConfig cfg0 = makeConfig("Ch 01", "FE6B2840", "FFFFFFFF", 64);
+    cfg0.process = true;
+    StreamConfig cfg1 = makeConfig("Ch 02", "11111111", "FFFFFFFF", 64);
+    cfg1.process = true;
+
+    QScopedPointer<StreamConfigDialog> dlg(makeDialog({cfg0, cfg1}));
+
+    bool testExecuted = false;
+    QTimer::singleShot(50, [&]() {
+        QWidget* activeWindow = QApplication::activeModalWidget();
+        QVERIFY(activeWindow != nullptr);
+
+        QList<QLineEdit*> edits = activeWindow->findChildren<QLineEdit*>();
+        QVERIFY(edits.size() >= 1);
+        edits[0]->setText("A345CA5C"); // Frame Sync Pattern
+
+        QCheckBox* applyToAll = nullptr;
+        for (QCheckBox* cb : activeWindow->findChildren<QCheckBox*>()) {
+            if (cb->text().contains("Apply to all")) { applyToAll = cb; break; }
+        }
+        QVERIFY(applyToAll != nullptr);
+        applyToAll->setChecked(true);
+
+        auto* buttons = activeWindow->findChild<QDialogButtonBox*>();
+        QVERIFY(buttons != nullptr);
+        testExecuted = true;
+        buttons->button(QDialogButtonBox::Ok)->click();
+    });
+
+    clickGearButtonForRow(dlg.data(), 0);
+    QVERIFY(testExecuted);
+
+    QVector<StreamConfig> out = dlg->configs();
+    QCOMPARE(out[0].frameSyncPattern, QString("A345CA5C"));
+    QCOMPARE(out[1].frameSyncPattern, QString("A345CA5C"));
+}
+
+void TestStreamConfigDialog::applyToAllLeavesDifferentModeStreamsUnchanged()
+{
+    // Row 0: Frame Sync Lock; Row 1: Receiver SNR. Both selected for processing.
+    StreamConfig cfg0 = makeConfig("Ch 01", "FE6B2840", "FFFFFFFF", 64);
+    cfg0.process = true;
+    cfg0.mode    = StreamMode::FrameSyncLockStats;
+
+    StreamConfig cfg1 = makeConfig("Ch 02", "22222222", "FFFFFFFF", 64);
+    cfg1.process = true;
+    cfg1.mode    = StreamMode::ReceiverChannelInfo;
+
+    QScopedPointer<StreamConfigDialog> dlg(makeDialog({cfg0, cfg1}));
+
+    bool testExecuted = false;
+    QTimer::singleShot(50, [&]() {
+        QWidget* activeWindow = QApplication::activeModalWidget();
+        QVERIFY(activeWindow != nullptr);
+
+        QList<QLineEdit*> edits = activeWindow->findChildren<QLineEdit*>();
+        QVERIFY(edits.size() >= 1);
+        edits[0]->setText("A345CA5C"); // Frame Sync Pattern
+
+        QCheckBox* applyToAll = nullptr;
+        for (QCheckBox* cb : activeWindow->findChildren<QCheckBox*>()) {
+            if (cb->text().contains("Apply to all")) { applyToAll = cb; break; }
+        }
+        QVERIFY(applyToAll != nullptr);
+        applyToAll->setChecked(true);
+
+        auto* buttons = activeWindow->findChild<QDialogButtonBox*>();
+        QVERIFY(buttons != nullptr);
+        testExecuted = true;
+        buttons->button(QDialogButtonBox::Ok)->click();
+    });
+
+    clickGearButtonForRow(dlg.data(), 0);
+    QVERIFY(testExecuted);
+
+    QVector<StreamConfig> out = dlg->configs();
+    QCOMPARE(out[0].frameSyncPattern, QString("A345CA5C"));
+    // Row 1 is a different mode (Receiver SNR) — left unchanged.
+    QCOMPARE(out[1].frameSyncPattern, QString("22222222"));
+    QCOMPARE(out[1].mode, StreamMode::ReceiverChannelInfo);
+}
+
+void TestStreamConfigDialog::applyToAllUncheckedDoesNotAffectOtherStreams()
+{
+    StreamConfig cfg0 = makeConfig("Ch 01", "FE6B2840", "FFFFFFFF", 64);
+    cfg0.process = true;
+    StreamConfig cfg1 = makeConfig("Ch 02", "11111111", "FFFFFFFF", 64);
+    cfg1.process = true;
+
+    QScopedPointer<StreamConfigDialog> dlg(makeDialog({cfg0, cfg1}));
+
+    bool testExecuted = false;
+    QTimer::singleShot(50, [&]() {
+        QWidget* activeWindow = QApplication::activeModalWidget();
+        QVERIFY(activeWindow != nullptr);
+
+        QList<QLineEdit*> edits = activeWindow->findChildren<QLineEdit*>();
+        QVERIFY(edits.size() >= 1);
+        edits[0]->setText("A345CA5C"); // Frame Sync Pattern
+
+        // Leave the "Apply to all" checkbox unchecked.
+
+        auto* buttons = activeWindow->findChild<QDialogButtonBox*>();
+        QVERIFY(buttons != nullptr);
+        testExecuted = true;
+        buttons->button(QDialogButtonBox::Ok)->click();
+    });
+
+    clickGearButtonForRow(dlg.data(), 0);
+    QVERIFY(testExecuted);
+
+    QVector<StreamConfig> out = dlg->configs();
+    QCOMPARE(out[0].frameSyncPattern, QString("A345CA5C"));
+    QCOMPARE(out[1].frameSyncPattern, QString("11111111"));
 }

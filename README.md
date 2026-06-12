@@ -1,4 +1,4 @@
-# Chapter 10 to CSV AGC Converter (tmDataQualityAnalyzer)
+# TM Data Quality Analyzer (tmDataQualityAnalyzer)
 
 A desktop application for analyzing the data quality of IRIG 106 Chapter 10 PCM telemetry streams and receiver Automatic Gain Control (AGC) samples contained in telemetry streams. It measures per-stream **frame sync lock** statistics and extracts multiplexed receiver **AGC** samples, plotting both against time. Multiple PCM streams can be configured and processed concurrently.
 

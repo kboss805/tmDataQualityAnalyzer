@@ -231,7 +231,15 @@ public:
             accept();
         });
         connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-        outer->addWidget(buttons);
+        
+        auto* bottomLayout = new QHBoxLayout;
+        m_applyToAll = new QCheckBox("Apply to all Frame Sync Lock streams", this);
+        m_applyToAll->setToolTip("Copy these settings to every other selected "
+                                  "stream currently set to Frame Sync Lock mode.");
+        bottomLayout->addWidget(m_applyToAll);
+        bottomLayout->addStretch(1);
+        bottomLayout->addWidget(buttons);
+        outer->addLayout(bottomLayout);
 
         adjustSize();
     }
@@ -243,6 +251,7 @@ public:
     int     samplePeriodIndex() const { return m_sampleRate->currentIndex(); }
     double  dataRateMbps()      const { return m_dataRate->value(); }
     QString lastTomlDir()       const { return m_toml_dir; }
+    bool    applyToAll()        const { return m_applyToAll->isChecked(); }
 
 private:
     QLineEdit*      m_syncPattern  = nullptr;
@@ -251,6 +260,7 @@ private:
     QCheckBox*      m_randomized   = nullptr;
     QDoubleSpinBox* m_dataRate     = nullptr;
     QComboBox*      m_sampleRate   = nullptr;
+    QCheckBox*      m_applyToAll   = nullptr;
     QString         m_toml_dir;
 };
 
@@ -458,6 +468,7 @@ public:
                 if (filename.isEmpty()) return;
                 m_toml_dir = QFileInfo(filename).absolutePath();
                 m_receiverParamsToml = filename;
+                updateReceiverParamsLabel();
                 QSettings cfg(filename, TomlConfigHelper::format());
                 m_polarity->setCurrentIndex(
                     cfg.value("Parameters/Polarity", UIConstants::kDefaultPolarityIndex).toInt());
@@ -492,6 +503,14 @@ public:
             });
 
             outer->addLayout(grid);
+
+            auto* paramsRow = new QHBoxLayout;
+            paramsRow->addWidget(new QLabel("Receiver Parameters File:"));
+            m_receiverParamsLabel = new QLabel(this);
+            paramsRow->addWidget(m_receiverParamsLabel);
+            paramsRow->addStretch(1);
+            outer->addLayout(paramsRow);
+            updateReceiverParamsLabel();
         }
 
         auto* buttons = new QDialogButtonBox(
@@ -506,7 +525,15 @@ public:
             accept();
         });
         connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-        outer->addWidget(buttons);
+        
+        auto* bottomLayout = new QHBoxLayout;
+        m_applyToAll = new QCheckBox("Apply to all Receiver SNR streams", this);
+        m_applyToAll->setToolTip("Copy these settings to every other selected "
+                                  "stream currently set to Receiver SNR mode.");
+        bottomLayout->addWidget(m_applyToAll);
+        bottomLayout->addStretch(1);
+        bottomLayout->addWidget(buttons);
+        outer->addLayout(bottomLayout);
 
         adjustSize();
     }
@@ -524,8 +551,17 @@ public:
     int     receiverChannels()   const { return m_receiverChannels->value(); }
     QString receiverParamsToml() const { return m_receiverParamsToml; }
     QString lastTomlDir()        const { return m_toml_dir; }
+    bool    applyToAll()         const { return m_applyToAll->isChecked(); }
 
 private:
+    void updateReceiverParamsLabel()
+    {
+        if (m_receiverParamsToml.isEmpty())
+            m_receiverParamsLabel->setText("<span style='color: gray;'>(none — using default word map)</span>");
+        else
+            m_receiverParamsLabel->setText(QFileInfo(m_receiverParamsToml).fileName());
+    }
+
     QLineEdit*      m_syncPattern      = nullptr;
     QLineEdit*      m_syncMask         = nullptr;
     QSpinBox*       m_bitsPerFrame     = nullptr;
@@ -537,6 +573,8 @@ private:
     QDoubleSpinBox* m_scale            = nullptr;
     QSpinBox*       m_numReceivers     = nullptr;
     QSpinBox*       m_receiverChannels = nullptr;
+    QCheckBox*      m_applyToAll       = nullptr;
+    QLabel*         m_receiverParamsLabel = nullptr;
     QString         m_receiverParamsToml;
     QString         m_toml_dir;
 };
@@ -723,19 +761,27 @@ void StreamConfigDialog::updateReadyIcon(int row)
     if (!checked)
     {
         w.readyLabel->setText("<span style='color: gray; font-size: 28px;'>✗</span>");
+        w.readyLabel->setToolTip(QString());
     }
     else if (!w.gearConfirmed)
     {
         w.readyLabel->setText("<span style='color: red; font-size: 28px;'>✗</span>");
+        w.readyLabel->setToolTip("Click the gear icon to configure this stream.");
     }
     else
     {
         bool frame_ok = !w.frameSyncPattern.isEmpty();
 
         if (frame_ok)
+        {
             w.readyLabel->setText("<span style='color: green; font-size: 28px;'>✓</span>");
+            w.readyLabel->setToolTip(QString());
+        }
         else
+        {
             w.readyLabel->setText("<span style='color: red; font-size: 28px;'>✗</span>");
+            w.readyLabel->setToolTip("A frame sync pattern is required.");
+        }
     }
 
     updateOkButton();
@@ -816,6 +862,25 @@ void StreamConfigDialog::openGearDialog(int row)
             w.lastConfiguredMode = StreamMode::FrameSyncLockStats;
             w.gearConfirmed      = true;
             updateReadyIcon(row);
+            
+            if (dlg.applyToAll())
+            {
+                for (int i = 0; i < m_rows.size(); i++)
+                {
+                    if (i == row || !m_rows[i].process->isChecked()) continue;
+                    if (m_rows[i].mode->currentIndex() != 1) continue; // different mode: leave unchanged
+                    RowWidgets& rw = m_rows[i];
+                    rw.frameSyncPattern   = dlg.frameSyncPattern();
+                    rw.frameSyncMask      = dlg.frameSyncMask();
+                    rw.bitsInFrame        = dlg.bitsPerFrame();
+                    rw.randomized         = dlg.randomized();
+                    rw.samplePeriodIndex  = dlg.samplePeriodIndex();
+                    rw.dataRateMbps       = dlg.dataRateMbps();
+                    rw.lastConfiguredMode = StreamMode::FrameSyncLockStats;
+                    rw.gearConfirmed      = true;
+                    updateReadyIcon(i);
+                }
+            }
         }
     }
     else
@@ -839,6 +904,31 @@ void StreamConfigDialog::openGearDialog(int row)
             w.lastConfiguredMode = StreamMode::ReceiverChannelInfo;
             w.gearConfirmed      = true;
             updateReadyIcon(row);
+            
+            if (dlg.applyToAll())
+            {
+                for (int i = 0; i < m_rows.size(); i++)
+                {
+                    if (i == row || !m_rows[i].process->isChecked()) continue;
+                    if (m_rows[i].mode->currentIndex() != 0) continue; // different mode: leave unchanged
+                    RowWidgets& rw = m_rows[i];
+                    rw.frameSyncPattern   = dlg.frameSyncPattern();
+                    rw.frameSyncMask      = dlg.frameSyncMask();
+                    rw.bitsInFrame        = dlg.bitsPerFrame();
+                    rw.randomized         = dlg.randomized();
+                    rw.samplePeriodIndex  = dlg.samplePeriodIndex();
+                    rw.dataRateMbps       = dlg.dataRateMbps();
+                    rw.polarityIndex      = dlg.polarityIndex();
+                    rw.slopeIndex         = dlg.slopeIndex();
+                    rw.scaleDdBPerV       = dlg.scaleDdBPerV();
+                    rw.numReceivers       = dlg.numReceivers();
+                    rw.receiverChannels   = dlg.receiverChannels();
+                    rw.receiverParamsToml = dlg.receiverParamsToml();
+                    rw.lastConfiguredMode = StreamMode::ReceiverChannelInfo;
+                    rw.gearConfirmed      = true;
+                    updateReadyIcon(i);
+                }
+            }
         }
     }
 }

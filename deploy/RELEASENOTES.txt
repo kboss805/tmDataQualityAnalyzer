@@ -1,5 +1,14 @@
-tmDataQualityAnalyzer v1.0.5 - What's New
+tmDataQualityAnalyzer v2.0.0 - What's New
 =================================
+
+  - New: Frame Sync Error Accumulation plot view. The plot toolbar now has a
+    view toggle that switches the left axis between "Framesync Lock (%)" and
+    "Accumulated Frame Sync Errors" — a per-stream, monotonically increasing
+    count of loss-of-lock events. The left axis auto-scales to the maximum
+    accumulated value, and both metrics are included in CSV export.
+
+Previous release (v1.0.5)
+=========================
 
   - Fixed a crash (SIGSEGV) that could occur when opening a Chapter 10 file,
     caused by a double-free during legend layout teardown

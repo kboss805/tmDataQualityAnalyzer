@@ -5,17 +5,14 @@
 
 #include "frameprocessor.h"
 
-#include <utility>
-
 #include <QElapsedTimer>
 #include <QVector>
 
-#include "constants.h"
 #include "framesetup.h"
 #include "packetqueue.h"
-#include "irig106ch10.h"
-#include "i106_time.h"
-#include "i106_decode_tmats.h"
+#include "irig106ch10.h"       // IWYU pragma: keep
+#include "i106_time.h"         // IWYU pragma: keep
+#include "i106_decode_tmats.h" // IWYU pragma: keep
 #include "i106_decode_pcmf1.h"
 
 using namespace Irig106;
@@ -85,12 +82,12 @@ void FrameProcessor::requestAbort()
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_setup)
 {
-    const auto  start_seconds  = params.start_seconds;
-    const auto  stop_seconds   = params.stop_seconds;
-    const bool  is_randomized  = params.is_randomized;
+    const auto  start_seconds  = params.startSeconds;
+    const auto  stop_seconds   = params.stopSeconds;
+    const bool  is_randomized  = params.isRandomized;
     const bool  receiver_mode  = (params.mode == StreamMode::ReceiverChannelInfo);
 
-    PacketQueue* queue = params.packet_queue;
+    PacketQueue* queue = params.packetQueue;
     if (queue == nullptr)
     {
         emit errorOccurred("Internal error: no packet queue for stream.");
@@ -98,7 +95,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         return false;
     }
 
-    const ResolvedPcmAttrs& attrs = params.resolved_attrs;
+    const ResolvedPcmAttrs& attrs = params.resolvedAttrs;
     if (!attrs.resolved)
     {
         emit errorOccurred("Internal error: PCM attributes not resolved.");
@@ -111,8 +108,8 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
 
     // Initialize the in-memory result bundle for this run.
     m_result = ProcessedStreamData();
-    m_result.streamLabel  = params.stream_label;
-    m_result.pcmChannelId = params.pcm_channel_id;
+    m_result.streamLabel  = params.streamLabel;
+    m_result.pcmChannelId = params.pcmChannelId;
     m_result.mode         = params.mode;
 
     // Pre-cache enabled parameters to avoid repeated iteration in hot loops.
@@ -141,16 +138,16 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     }
 
     // ---- Frame extraction state (resolved by the reader from TMATS) ----
-    uint64_t sync_pat      = attrs.sync_pat;
-    uint64_t sync_mask     = attrs.sync_mask;
-    uint32_t sync_pat_len  = attrs.sync_pat_len;
-    uint32_t bits_in_frame = attrs.bits_in_frame;
-    uint32_t words_in_frame = attrs.words_in_frame;
-    uint32_t word_len      = attrs.word_len;
-    uint64_t word_mask     = attrs.word_mask;
-    uint32_t min_syncs     = attrs.min_syncs;
-    double   delta_100ns   = attrs.delta_100ns;
-    const bool needs_swap  = attrs.needs_swap;
+    uint64_t sync_pat      = attrs.syncPat;
+    uint64_t sync_mask     = attrs.syncMask;
+    uint32_t sync_pat_len  = attrs.syncPatLen;
+    uint32_t bits_in_frame = attrs.bitsInFrame;
+    uint32_t words_in_frame = attrs.wordsInFrame;
+    uint32_t word_len      = attrs.wordLen;
+    uint64_t word_mask     = attrs.wordMask;
+    uint32_t min_syncs     = attrs.minSyncs;
+    double   delta_100ns   = attrs.delta100ns;
+    const bool needs_swap  = attrs.needsSwap;
 
     uint64_t test_word = 0;
     uint64_t bits_loaded = 0;
@@ -159,6 +156,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     uint32_t data_word_bit_count = 0;
     int32_t save_data = 0;     // 0=waiting, 1=collecting, 2=frame complete
     uint64_t sync_count = UINT64_MAX; // -1 equivalent: no sync found yet
+    bool first_sync_interval_found = false;
     uint64_t total_syncs_found = 0;
     uint64_t total_frames_extracted = 0;
     uint64_t total_bytes_processed = 0;
@@ -167,16 +165,19 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     QVector<uint64_t> frame_words(words_in_frame, 0);
 
     // Output sample windowing state.
-    double sample_period = params.sample_period_sec;
+    double sample_period = params.samplePeriodSec;
     double current_time_sample = static_cast<double>(start_seconds);
     double next_time_sample = current_time_sample + sample_period;
     int n_samples = 0;
 
-    // Independent counters for pure lock percentage calculation
+    // Counters for lock percentage calculation
     uint64_t valid_bits_in_window = 0;
     uint64_t total_bits_in_window = 0;
-    bool pure_in_lock = false;
-    uint64_t pure_bits_since_sync = 0;
+
+    // Cumulative count of missed frames within the
+    // processing window. Monotonic across the whole run — one value emitted per
+    // output sample alongside the lock percentage.
+    uint64_t accumulated_missed_frames = 0;
 
     for (auto* param : enabled_params)
     {
@@ -194,7 +195,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     uint16_t lfsr_state = 0;
 
     emit logMessage(QString("Processing stream %1 (window: start=%2s stop=%3s)...")
-                    .arg(params.stream_label).arg(start_seconds).arg(stop_seconds));
+                    .arg(params.streamLabel).arg(start_seconds).arg(stop_seconds));
 
     // -----------------------------------------------------------------------
     // Consume packets from the queue until the end-of-stream sentinel.
@@ -260,17 +261,33 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
                     if (total_bits_in_window > 0)
                     {
                         lock_pct = (static_cast<double>(valid_bits_in_window) / static_cast<double>(total_bits_in_window)) * 100.0;
-                        if (lock_pct > 100.0) lock_pct = 100.0;
                     }
 
                     if (n_samples > 0)
                     {
-                        recordTimeSample(current_time_sample, n_samples, lock_pct, enabled_params);
+                        recordTimeSample(current_time_sample, n_samples, lock_pct,
+                                         static_cast<double>(accumulated_missed_frames), enabled_params);
                     }
                     else
                     {
-                        // Output sample for missed window (pass 1 to avoid div by zero for params)
-                        recordTimeSample(current_time_sample, 1, lock_pct, enabled_params);
+                        // Time gap detected (no packets processed for this second).
+                        // Extrapolate missed frames for this gap based on expected data rate.
+                        double bit_rate = params.dataRateBps;
+                        if (bit_rate <= 0.0 && params.resolvedAttrs.delta100ns > 0.0)
+                        {
+                            bit_rate = 1e7 / params.resolvedAttrs.delta100ns;
+                        }
+
+                        if (first_sync_interval_found && bit_rate > 0.0)
+                        {
+                            double expected_bits = sample_period * bit_rate;
+                            uint64_t extrapolated_frames = static_cast<uint64_t>(expected_bits / bits_in_frame);
+                            accumulated_missed_frames += extrapolated_frames;
+                            sync_count = UINT64_MAX; // Ensure lock is dropped during gap
+                        }
+
+                        recordTimeSample(current_time_sample, 1, 0.0, // lock_pct is 0.0 during gap
+                                         static_cast<double>(accumulated_missed_frames), enabled_params);
                     }
                     
                     rows_written++;
@@ -292,22 +309,27 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
             bits_loaded++;
             minor_frame_bit_count++;
 
-            bool in_lock = (sync_count != UINT64_MAX) && (sync_count >= min_syncs);
-            if (in_lock && minor_frame_bit_count > bits_in_frame)
+            if (minor_frame_bit_count > bits_in_frame)
             {
-                sync_count = 0;
-                in_lock = false;
+                if (first_sync_interval_found) // Don't accumulate missed frames before the very first valid interval is EVER found
+                {
+                    if (current_time_eval >= static_cast<double>(start_seconds) &&
+                        current_time_eval <= static_cast<double>(stop_seconds))
+                    {
+                        accumulated_missed_frames++;
+                    }
+                    sync_count = UINT64_MAX; // Loss of lock
+                }
+                minor_frame_bit_count = 1; // Roll over to continuously track missed frames
             }
+            
+            bool in_lock = (sync_count != UINT64_MAX) && (sync_count >= min_syncs);
 
             // Check for sync word
             if (bits_loaded >= sync_pat_len &&
                 (test_word & sync_mask) == sync_pat)
             {
                 total_syncs_found++;
-
-                // Start a pure lock interval for exactly one frame's worth of bits
-                pure_in_lock = true;
-                pure_bits_since_sync = 0;
 
                 // In LOCK state, ignore false positives (off-phase matches). Only
                 // process sync matches at the exact expected frame boundary so that PRN
@@ -318,6 +340,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
                     if (at_boundary)
                     {
                         sync_count++;
+                        first_sync_interval_found = true;
 
                         if (sync_count >= min_syncs && save_data > 1)
                         {
@@ -374,15 +397,8 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
             if (current_time_eval >= static_cast<double>(start_seconds) && current_time_eval <= static_cast<double>(stop_seconds))
             {
                 total_bits_in_window++;
-                if (pure_in_lock) {
+                if (in_lock) {
                     valid_bits_in_window++;
-                }
-            }
-
-            if (pure_in_lock) {
-                pure_bits_since_sync++;
-                if (pure_bits_since_sync >= bits_in_frame) {
-                    pure_in_lock = false;
                 }
             }
         }
@@ -400,7 +416,8 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
             lock_pct = (static_cast<double>(valid_bits_in_window) / static_cast<double>(total_bits_in_window)) * 100.0;
             if (lock_pct > 100.0) lock_pct = 100.0;
         }
-        recordTimeSample(current_time_sample, n_samples, lock_pct, enabled_params);
+        recordTimeSample(current_time_sample, n_samples, lock_pct,
+                         static_cast<double>(accumulated_missed_frames), enabled_params);
         rows_written++;
     }
 
@@ -429,7 +446,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     double elapsed_sec = static_cast<double>(elapsed_ms) / kMsPerSec;
 
     emit logMessage(QString("Stream %1 complete — %2 samples extracted, elapsed %3s.")
-        .arg(params.stream_label)
+        .arg(params.streamLabel)
         .arg(rows_written)
         .arg(elapsed_sec, 0, 'f', 1));
 
@@ -440,11 +457,21 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
 void FrameProcessor::recordTimeSample(double current_time_sample,
                                       int n_samples,
                                       double lock_percentage,
+                                      double accumulated_missed_frames,
                                       const QVector<ParameterInfo*>& enabled_params)
 {
     // Store the absolute IRIG seconds; the plot derives DOY/HH:MM:SS from this.
     m_result.timesSec.push_back(current_time_sample);
-    m_result.lockPercent.push_back(lock_percentage);
+
+    // Frame-sync lock percentage and missed-frame accumulation are only
+    // meaningful for FrameSyncLockStats streams. Receiver (SNR) streams are
+    // fed from a separate piece of equipment and are always considered
+    // locked, so no lock series is produced for them.
+    if (m_result.mode == StreamMode::FrameSyncLockStats)
+    {
+        m_result.lockPercent.push_back(lock_percentage);
+        m_result.accumulatedMissedFrames.push_back(accumulated_missed_frames);
+    }
 
     // enabled_params is index-aligned to m_result.channels (built in process()).
     for (int i = 0; i < enabled_params.size(); i++)

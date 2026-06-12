@@ -7,14 +7,9 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Qt Version**: 6.10.2 (minimum: Qt 6.0.0)
 - **MinGW Version**: 13.1.0 (minimum: GCC/MinGW 7.0)
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
-- **Project Version**: 1.0.5 — defined in `AppVersion` struct in `include/constants.h`
+- **Project Version**: 2.0.0 — defined in `AppVersion` struct in `include/constants.h`
 
-- **Target Users:** Telemetry engineers and data analysts who want to analyze telemetry framesync lock statistics and Signal to Noise Ratio (SNR) data (derived from receiver AGC samples) in IRIG 106 Chapter 10 formated telemetry files. To analyze the framesync lock statistics and SNR data the application presents the user with a plot window that displays the data vs. time. Additionally, the application allows the user to export selected data to CSV formatted files for further processing and analysis in 3rd party applications such as Microsoft Excel or Matlab. The application also allows the user to export plot window views as images such as pdf, png, etc. for importing into 3rd party presentation applications such as Microsoft PowerPoint.
-
-## Project Overview
-
-**tmDataQualityAnalyzer** is a Qt 6 desktop application that processes telemetry data in IRIG 106 Chapter 10 telemetry recording files (.ch10) allowing to visualize framelock statistics and/or SNR data against time as well as export timestamped data to standard file formats such as CSV and Matlab for further analysis.  The application is built using Qt Widgets with Windows 11 styled dark and light themes.
-## User Stories (v1.0 Requirements)
+## User Stories
 
 ### US1.0: View SNR signal data from IRIG 106 formatted PCM telemetry streams contained in .ch10 files
 **As a** telemetry engineer or data analyst
@@ -76,19 +71,22 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - [x] The user can select framesync lock statistics for the following sample windows: 10ms, 100ms, and 1s
 - [x] A progress bar updates as the application is processing the framesync lock statistics
 
-### US2.1: View Bit Error Accumulation Over Time
+### US2.1: View Frame Sync Error Accumulation Over Time
 **As a** telemetry data analyst
-**I want to** quantify and plot the accumulated bit errors over time for my PCM streams 
-**So that** I can quantitatively evaluate how bit errors are accumulating over time
+**I want to** quantify and plot the accumulated frame sync errors over time for my PCM streams
+**So that** I can quantitatively evaluate how frame sync errors are accumulating over time
 
 **Acceptance Criteria:**
-- [ ] The user can view the accumulated bit errors (left hand y-axis) versus time (x-axis) in a plot window
-- [ ] The user can switch between framesync lock plot and bit error accumulation modes
-- [ ] The user can select which telemetry stream (bit error accumulation) to view in the plot window
+- [ ] The user can view the accumulated frame sync errors (left hand y-axis) versus time (x-axis) in a plot window
+- [ ] The user can switch the left-axis view between framesync lock (%) and frame sync error accumulation modes
+- [ ] The user can select which telemetry stream's frame sync error accumulation to view in the plot window
+- [ ] Frame sync errors are accumulated per telemetry stream against that stream's own frame parameters
 
-### US2.2: Define the key parameters required to process the framesync lock statistics and bit error accumulation
+  - **Scope:** A frame sync error is a discrete loss-of-lock event — while in lock, the stream ran past the expected minor-frame boundary (`bits_in_frame`) without a sync match. The metric is a cumulative count of these events per stream, counted only within the selected `[start, stop]` processing window, and only ever increases. It is NOT a bit-level (Hamming/BER) error count.
+
+### US2.2: Define the key parameters required to process the framesync lock statistics and frame sync error accumulation
 **As a** telemetry engineer or data analyst
-**I want to** define the rules and key parameters (frame sync pattern, frame length, framesync mask, PCM code format, etc.) required to properly decommutate and calculate frame lock statistics and bit error accumulation for telemetry streams
+**I want to** define the rules and key parameters (frame sync pattern, frame length, framesync mask, PCM code format, etc.) required to properly decommutate and calculate frame lock statistics and frame sync error accumulation for telemetry streams
 **So that** these parameters can be applied per-stream in the processing dialog window (defined in US5.0) and saved/loaded from configuration files (defined in US4.0).
 
 **Acceptance Criteria:**
@@ -99,24 +97,37 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - [x] The user can select from one of the following PCM code formats: NRZ-L, RNRZ-L
 - [x] The user can caculate frame sync lock statitics for up to 8 telemetry streams from the .ch10 file
 
-### US2.3: Export user specified framesync lock statistics and accumulated bit errors with timestamps to a file
+### US2.3: Export user specified framesync lock statistics and accumulated frame sync errors with timestamps to a file
 **As an** As a telemetry engineer or data analyst
-**I want to** to export framesync lock statistics and accumulated bit errors of interest to a CSV file.
+**I want to** to export framesync lock statistics and accumulated frame sync errors of interest to a CSV file.
 **So that** I can import the file into 3rd party applications such as Excel and Matlab for further analysis (the export settings and file location are configured via the export dialog window defined in US7.0).
 
 **Acceptance Criteria:**
-- [ ] The current framesync lock statistics and accumulated bit errors displayed in the plot window are exported to a CSV file
-- [ ] The CSV file includes at least the following columns: time stamps, stream identifier, framesync lock statistics and accumulated bit errors
+- [ ] The current framesync lock statistics and accumulated frame sync errors displayed in the plot window are exported to a CSV file
+- [ ] The CSV file includes at least the following columns: time stamps, stream identifier, framesync lock statistics and accumulated frame sync errors
 - [x] The CSV file includes headers describing the content of each column
 
-### US2.4: Export user specified framesync lock statistics and accumulated bit errors it errors to an image file
+### US2.4: Export user specified framesync lock statistics and accumulated frame sync errors to an image file
 **As an** As a telemetry engineer or data analyst
-**I want to** to export framesync lock statistics and accumulated bit errors to an image file (e.g. png, pdf, etc.) from the plot window.
+**I want to** to export framesync lock statistics and accumulated frame sync errors to an image file (e.g. png, pdf, etc.) from the plot window.
 **So that** I can import the image file into 3rd party applications such as PowerPoint to create presentations (the export format and location are configured via the export dialog window defined in US7.0).
 
 **Acceptance Criteria:**
-- [ ] The current framesync lock statistics and accumulated bit errors displayed in the plot window are exported to an image file
+- [ ] The current framesync lock statistics and accumulated frame sync errors displayed in the plot window are exported to an image file
 - [x] Images are exported to one of the following file formats as selected by the user: svg, png, pdf
+
+### US2.5: Apply one stream's configuration to all matching streams
+**As a** telemetry engineer or data analyst
+**I want to** configure one telemetry stream in the per-stream setup dialog and apply those settings to every other selected stream of the same mode in a single action
+**So that** I don't have to re-enter identical parameters across many streams when a file contains several streams with the same format.
+
+**Acceptance Criteria:**
+- [x] The Frame Sync Lock and Receiver SNR setup dialogs each provide an "Apply to all <mode> streams" toggle next to the OK/Cancel buttons
+- [x] When enabled and the user clicks OK, the entered settings are copied to every stream that is selected for processing and shares the same mode
+- [x] Streams of a different mode are left unchanged
+- [x] Each affected stream is marked configured/ready and its readiness indicator updates
+
+  - **Scope:** Orthogonal to US2.1 (frame sync error accumulation); split out as its own story. Fan-out copies the same fields written by the gear dialog today (see `openGearDialog` in `streamconfigdialog.cpp`); it does not widen the Frame Sync Load/Save TOML boundary defined in US5.0.
 
 ### US3.0: Recall/store the default SNR signal data parameters from/to configuration files
 **As an** As a telemetry engineer or data analyst
@@ -231,6 +242,22 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - [x] Installer should not overwrite TOML files; if new fields are in the TOML file, alert the user that a new TOML file was saved as "new_x.toml" — try to use as many parameters from the old default TOML file as possible in the new TOML file
 
 ## Version History
+
+### v2.0.0 — Frame Sync Error Accumulation
+- New plot view: the left axis can toggle between "Framesync Lock (%)" and
+  "Accumulated Frame Sync Errors" via a toolbar button (US2.1)
+- Frame sync errors are accumulated per telemetry stream against that stream's
+  own frame parameters — a monotonic count of loss-of-lock events within the
+  selected processing window (not a bit-level/BER metric)
+- Left axis auto-scales to the maximum accumulated error value in error mode;
+  lock % retains its fixed 0–100 range
+- Lock and error curves for a stream share a color (only one shown at a time);
+  both metrics are included in CSV export
+- Renamed the misleading `PlotConstants::kLockAxisLabel` (which held the SNR
+  label) to `kSnrAxisLabel`; added `kErrorAxisLabel`
+- US2.5 (apply one stream's configuration to all matching streams) tracked as a
+  separate story; US2.2–2.4 terminology updated from "bit error" to
+  "frame sync error"
 
 ### v1.0.5 — Legend Layout, Toolbar Export, and Stream Config UI Polish
 - Fixed a SIGSEGV crash on file open caused by a double-free during legend

@@ -691,6 +691,132 @@ void TestPlotViewModel::addStreamDataEmptyDataNoOp()
 }
 
 // ---------------------------------------------------------------------------
+// Frame sync error accumulation (US2.1) tests
+// ---------------------------------------------------------------------------
+
+/// Builds a lock-only stream with parallel lock % and cumulative error vectors.
+static ProcessedStreamData makeLockAndErrorStream(const QString& label,
+                                                  int pcm_channel_id,
+                                                  const QVector<double>& times,
+                                                  const QVector<double>& lock,
+                                                  const QVector<double>& errors)
+{
+    ProcessedStreamData d;
+    d.streamLabel = label;
+    d.pcmChannelId = pcm_channel_id;
+    d.mode = StreamMode::FrameSyncLockStats;
+    d.timesSec = times;
+    d.lockPercent = lock;
+    d.accumulatedMissedFrames = errors;
+    return d;
+}
+
+void TestPlotViewModel::addStreamDataErrorSeriesCreated()
+{
+    PlotViewModel vm;
+    ProcessedStreamData d = makeLockAndErrorStream(
+        "Ch32", 32, {1000000.0, 1000001.0}, {90.0, 80.0}, {0.0, 3.0});
+    vm.addStreamData(d);
+
+    QVERIFY(vm.hasLockSeries());
+    QVERIFY(vm.hasMissedFramesSeries());
+    // Lock series + error series = 2.
+    QCOMPARE(vm.seriesCount(), 2);
+
+    int lock_idx = -1;
+    int err_idx = -1;
+    for (int i = 0; i < vm.seriesCount(); i++)
+    {
+        if (vm.seriesAt(i).metricType == PlotSeriesData::MetricType::FrameSyncLock) lock_idx = i;
+        if (vm.seriesAt(i).metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames) err_idx = i;
+    }
+    QVERIFY(lock_idx >= 0);
+    QVERIFY(err_idx >= 0);
+
+    // Default view is LockPercent: lock visible, errors hidden.
+    QCOMPARE(vm.lockAxisView(), PlotViewModel::LockAxisView::LockPercent);
+    QVERIFY(vm.seriesAt(lock_idx).visible);
+    QVERIFY(!vm.seriesAt(err_idx).visible);
+
+    // Error series carries the cumulative counts.
+    QCOMPARE(vm.seriesAt(err_idx).yValues, QVector<double>({0.0, 3.0}));
+}
+
+void TestPlotViewModel::errorSeriesSharesLockColor()
+{
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch32", 32, {0.0}, {90.0}, {2.0}));
+
+    QColor lock_color;
+    QColor err_color;
+    for (int i = 0; i < vm.seriesCount(); i++)
+    {
+        if (vm.seriesAt(i).metricType == PlotSeriesData::MetricType::FrameSyncLock)
+            lock_color = vm.seriesAt(i).color;
+        if (vm.seriesAt(i).metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
+            err_color = vm.seriesAt(i).color;
+    }
+    // A stream's lock and error curves represent the same stream, one visible at
+    // a time, so they must share a color.
+    QCOMPARE(err_color, lock_color);
+}
+
+void TestPlotViewModel::setLockAxisViewTogglesVisibility()
+{
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream(
+        "Ch32", 32, {0.0, 1.0}, {90.0, 80.0}, {0.0, 3.0}));
+
+    QSignalSpy view_spy(&vm, &PlotViewModel::lockAxisViewChanged);
+    QSignalSpy data_spy(&vm, &PlotViewModel::dataChanged);
+
+    vm.setLockAxisView(PlotViewModel::LockAxisView::MissedFrames);
+    QCOMPARE(vm.lockAxisView(), PlotViewModel::LockAxisView::MissedFrames);
+    QCOMPARE(view_spy.count(), 1);
+    QCOMPARE(data_spy.count(), 1);
+
+    for (int i = 0; i < vm.seriesCount(); i++)
+    {
+        const PlotSeriesData& s = vm.seriesAt(i);
+        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock)
+            QVERIFY(!s.visible);
+        if (s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
+            QVERIFY(s.visible);
+    }
+
+    // Setting the same view again is a no-op (no extra signals).
+    vm.setLockAxisView(PlotViewModel::LockAxisView::MissedFrames);
+    QCOMPARE(view_spy.count(), 1);
+
+    // Toggle back.
+    vm.setLockAxisView(PlotViewModel::LockAxisView::LockPercent);
+    QCOMPARE(view_spy.count(), 2);
+    for (int i = 0; i < vm.seriesCount(); i++)
+    {
+        const PlotSeriesData& s = vm.seriesAt(i);
+        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock)
+            QVERIFY(s.visible);
+        if (s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
+            QVERIFY(!s.visible);
+    }
+}
+
+void TestPlotViewModel::frameSyncErrorMaxReflectsData()
+{
+    PlotViewModel vm;
+    // A degenerate (no error) stream still yields a sensible (>=1) top.
+    vm.addStreamData(makeLockAndErrorStream("Ch32", 32, {0.0}, {100.0}, {0.0}));
+    vm.setLockAxisView(PlotViewModel::LockAxisView::MissedFrames);
+    QVERIFY(vm.missedFramesMax() >= 1.0);
+
+    PlotViewModel vm2;
+    vm2.addStreamData(makeLockAndErrorStream(
+        "Ch32", 32, {0.0, 1.0, 2.0}, {90.0, 80.0, 70.0}, {1.0, 4.0, 9.0}));
+    vm2.setLockAxisView(PlotViewModel::LockAxisView::MissedFrames);
+    QCOMPARE(vm2.missedFramesMax(), 9.0);
+}
+
+// ---------------------------------------------------------------------------
 // exportCsv tests
 // ---------------------------------------------------------------------------
 
@@ -762,5 +888,28 @@ void TestPlotViewModel::exportCsvEmptyNoFile()
 
     QVERIFY(!vm.exportCsv(out_path));
     QVERIFY(!QFile::exists(out_path));
+}
+
+void TestPlotViewModel::exportCsvIncludesErrorColumn()
+{
+    // A stream with frame sync errors must export a "Frame Sync Errors" column
+    // alongside the lock column (exportCsv iterates all series).
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream(
+        "Ch32", 32, {0.0, 1.0}, {90.0, 80.0}, {0.0, 3.0}));
+
+    QString out_path = QDir::tempPath() + "/tst_export_errors.csv";
+    QFile::remove(out_path);
+    QVERIFY(vm.exportCsv(out_path));
+
+    QFile f(out_path);
+    QVERIFY(f.open(QIODevice::ReadOnly | QIODevice::Text));
+    QTextStream stream(&f);
+    QString header = stream.readLine();
+    QVERIFY2(header.contains("Lock (%)"), "Header must contain the lock column");
+    QVERIFY2(header.contains("Accumulated Missed Frames"), "Header must contain the missed-frames column");
+    f.close();
+
+    QFile::remove(out_path);
 }
 

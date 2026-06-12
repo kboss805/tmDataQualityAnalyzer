@@ -390,12 +390,12 @@ void MainViewModel::startProcessing(const QString& start_time, const QString& st
     else
     {
         emit logMessageReceived("  Time range: " +
-            QString::number(base.start_seconds) + "s - " +
-            QString::number(base.stop_seconds) + "s");
+            QString::number(base.startSeconds) + "s - " +
+            QString::number(base.stopSeconds) + "s");
     }
     for (const StreamJob& job : jobs)
-        emit logMessageReceived("  " + job.params.stream_label + ": "
-                                + QString::number(job.params.sample_period_sec * 1000.0) + " ms period");
+        emit logMessageReceived("  " + job.params.streamLabel + ": "
+                                + QString::number(job.params.samplePeriodSec * 1000.0) + " ms period");
 
     m_coordinator->startProcessing(std::move(jobs));
 }
@@ -492,8 +492,8 @@ bool MainViewModel::buildBaseParams(const QString& start_time, const QString& st
 {
     out.filename = m_input_filename;
 
-    out.time_channel_id = m_reader->getCurrentTimeChannelID();
-    if (out.time_channel_id < 0)
+    out.timeChannelId = m_reader->getCurrentTimeChannelID();
+    if (out.timeChannelId < 0)
     {
         error = "Invalid time channel.";
         return false;
@@ -511,7 +511,7 @@ bool MainViewModel::buildBaseParams(const QString& start_time, const QString& st
         error = "Invalid start time.";
         return false;
     }
-    out.start_seconds = m_reader->dhmsToUInt64(s.ddd, s.hh, s.mm, s.ss);
+    out.startSeconds = m_reader->dhmsToUInt64(s.ddd, s.hh, s.mm, s.ss);
 
     QStringList stop_parts = stop_time.split(":");
     if (stop_parts.size() != 4)
@@ -525,9 +525,9 @@ bool MainViewModel::buildBaseParams(const QString& start_time, const QString& st
         error = "Invalid stop time.";
         return false;
     }
-    out.stop_seconds = m_reader->dhmsToUInt64(e.ddd, e.hh, e.mm, e.ss);
+    out.stopSeconds = m_reader->dhmsToUInt64(e.ddd, e.hh, e.mm, e.ss);
 
-    if (out.stop_seconds < out.start_seconds)
+    if (out.stopSeconds < out.startSeconds)
     {
         error = "Stop time must be after start time.";
         return false;
@@ -592,24 +592,24 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
 
     // ---- Assemble the per-stream ProcessingParams ----
     out_job.params = base;
-    out_job.params.pcm_channel_id       = cfg.pcmChannelId;
-    out_job.params.frame_sync           = frame_sync;
-    out_job.params.frame_sync_mask      = frame_sync_mask;
-    out_job.params.sync_pattern_length  = sync_pattern_length;
-    out_job.params.words_in_minor_frame = words_in_minor_frame;
-    out_job.params.bits_in_minor_frame  = bits_in_minor_frame;
-    out_job.params.is_randomized        = cfg.randomized;
-    out_job.params.mode                 = cfg.mode;
-    out_job.params.data_rate_bps        = (cfg.dataRateMbps > 0.0) ? cfg.dataRateMbps * 1e6 : 0.0;
-    out_job.params.stream_label         = stream_desc;
+    out_job.params.pcmChannelId       = cfg.pcmChannelId;
+    out_job.params.frameSync          = frame_sync;
+    out_job.params.frameSyncMask      = frame_sync_mask;
+    out_job.params.syncPatternLength  = sync_pattern_length;
+    out_job.params.wordsInMinorFrame  = words_in_minor_frame;
+    out_job.params.bitsInMinorFrame   = bits_in_minor_frame;
+    out_job.params.isRandomized       = cfg.randomized;
+    out_job.params.mode               = cfg.mode;
+    out_job.params.dataRateBps        = (cfg.dataRateMbps > 0.0) ? cfg.dataRateMbps * 1e6 : 0.0;
+    out_job.params.streamLabel        = stream_desc;
 
     // Set per-stream sample period.
     switch (cfg.samplePeriodIndex)
     {
-        case 0: out_job.params.sample_period_sec = UIConstants::kSamplePeriod1s;    break;
-        case 1: out_job.params.sample_period_sec = UIConstants::kSamplePeriod100ms; break;
-        case 2: out_job.params.sample_period_sec = UIConstants::kSamplePeriod10ms;  break;
-        default: out_job.params.sample_period_sec = UIConstants::kSamplePeriod100ms; break;
+        case 0: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod1s;    break;
+        case 1: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod100ms; break;
+        case 2: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod10ms;  break;
+        default: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod100ms; break;
     }
 
     // ---- Frame parameter table (word map + calibration) ----
@@ -620,14 +620,35 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
         return true;
     }
 
-    if (cfg.receiverParamsToml.isEmpty() || !QFileInfo::exists(cfg.receiverParamsToml))
+    auto* frame_setup = new FrameSetup(nullptr);
+    if (cfg.receiverParamsToml.isEmpty())
     {
-        error = stream_desc + ": Receiver Parameters file is required for Receiver Channel mode.";
+        // No Receiver Parameters TOML provided: build a default word map by
+        // assigning sequential words to NumReceivers x ReceiverChannels parameters.
+        const int total_params = cfg.numReceivers * cfg.receiverChannels;
+        if (total_params <= 0 || total_params >= words_in_minor_frame)
+        {
+            delete frame_setup;
+            error = stream_desc + ": Num Receivers x Receiver Channels exceeds the "
+                    "words available in the minor frame.";
+            return false;
+        }
+        for (int r = 0; r < cfg.numReceivers; r++)
+        {
+            for (int c = 0; c < cfg.receiverChannels; c++)
+            {
+                frame_setup->addParameter(parameterName(c, r), r * cfg.receiverChannels + c);
+            }
+        }
+    }
+    else if (!QFileInfo::exists(cfg.receiverParamsToml))
+    {
+        delete frame_setup;
+        error = stream_desc + ": Receiver Parameters file '" +
+                QFileInfo(cfg.receiverParamsToml).fileName() + "' was not found.";
         return false;
     }
-
-    auto* frame_setup = new FrameSetup(nullptr);
-    if (!frame_setup->tryLoadingFile(cfg.receiverParamsToml, words_in_minor_frame))
+    else if (!frame_setup->tryLoadingFile(cfg.receiverParamsToml, words_in_minor_frame))
     {
         delete frame_setup;
         error = stream_desc + ": Failed to load Receiver Parameters from '" +

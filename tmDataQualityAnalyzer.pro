@@ -3,7 +3,7 @@ QT       += core gui printsupport concurrent svg
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 CONFIG += c++17
-VERSION = 1.0.5
+VERSION = 2.0.0
 
 
 INCLUDEPATH += \

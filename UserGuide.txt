@@ -1,0 +1,111 @@
+================================================================================
+                           tmDataQualityAnalyzer
+                                User Guide
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+1. Introduction
+2. Quick Start
+3. Time Extraction Setup
+4. Stream Configuration
+   - Frame Sync Lock Mode
+   - Receiver SNR Mode
+5. Analyzing Data
+6. Exporting Results
+
+================================================================================
+1. INTRODUCTION
+================================================================================
+tmDataQualityAnalyzer is an advanced desktop application designed for analyzing
+telemetry data quality from IRIG 106 Chapter 10 (.ch10) data files. By processing
+Pulse Code Modulation (PCM) streams, the tool allows test engineers and analysts 
+to visualize critical data metrics like Framesync Lock Percentages, Accumulated 
+Missed Frames, and Receiver Signal-to-Noise Ratios (SNR) over time to easily 
+identify dropouts, disconnects, or signal degradation.
+
+================================================================================
+2. QUICK START
+================================================================================
+1. Load a File: Use the File menu or the open icon in the toolbar to load a 
+   .ch10 file into the application.
+2. Select Channels: Once loaded, select your target Time Channel and PCM Channel 
+   from the dropdown menus.
+3. Set Time Bounds: Define the time segment you wish to analyze in the Time 
+   Extraction panel.
+4. Configure Streams: Click the "Configure Streams" button to review the active 
+   streams and assign their modes and sync parameters.
+5. Process: Click "Process" to parse the .ch10 file and generate the data 
+   quality plots.
+6. Export: Click "Export" to save your plots as an image or extract the 
+   underlying data to a CSV.
+
+================================================================================
+3. TIME EXTRACTION SETUP
+================================================================================
+By default, analyzing large .ch10 files can be time-consuming. You can restrict 
+the analysis to a specific window of interest using the Time Extraction controls.
+
+- Extract All: Check this box to process the entire duration of the file.
+- Start / Stop Time: If "Extract All" is unchecked, input the specific start 
+  and stop times using the standard IRIG format: DDD:HH:MM:SS.
+
+================================================================================
+4. STREAM CONFIGURATION
+================================================================================
+While the application will parse the TMATS (Telemetry Attributes Transfer 
+Standard) header to provide initial guesses for channel setups, TMATS should 
+only be used as a guide. All parameters used for processing are strictly driven 
+by the Stream Configuration dialog.
+
+When you click "Configure Streams", you can selectively enable or disable 
+individual sub-streams. For each active stream, you must define its operation 
+mode:
+
+--- Frame Sync Lock Mode ---
+Use this mode to evaluate the structural integrity of the PCM stream.
+- Frame Sync Pattern: The expected synchronization bit pattern.
+- Frame Sync Mask: The mask applied to the sync pattern.
+- Bits in Frame / Words in Frame: The structural dimensions of your minor frames.
+
+Tip (Batch Configuration): If you have multiple streams using the same sync 
+parameters, check the "Apply to all Frame Sync Lock streams" box at the bottom 
+of the dialog. This will instantly copy the current stream's sync settings to 
+all other active streams configured in Frame Sync Lock mode.
+
+--- Receiver SNR Mode ---
+Use this mode to evaluate raw signal strength.
+- Configure the calibration slope and scale offsets specific to your receiver 
+  equipment.
+
+Tip (Batch Configuration): Similar to Frame Sync mode, check the "Apply to all 
+Receiver SNR streams" box to broadcast your calibration settings to all other 
+active Receiver SNR streams.
+
+================================================================================
+5. ANALYZING DATA
+================================================================================
+Once processing completes, the plot area will populate with your stream data.
+
+- Framesync Lock (%): Displays the percentage of successful syncs within the 
+  time window. Drops in this graph indicate noisy data or signal loss.
+- Missed Frames: Displays an accumulating sum of dropped minor frames. Look for 
+  steep upward slopes to identify prolonged physical disconnects or massive 
+  dropouts.
+- Receiver SNR: Plots the calibrated signal-to-noise ratio.
+
+Interactive Controls:
+- Use the Legend to toggle the visibility of specific streams or metric types.
+- Zoom / Pan: Click and drag the plot to pan, or use your scroll wheel to zoom 
+  into specific anomalies.
+
+================================================================================
+6. EXPORTING RESULTS
+================================================================================
+To share your findings or process the data in external tools (like MATLAB or 
+Excel), use the Export feature.
+
+- Export to Image: Saves the current visual state of the plot (including your 
+  current zoom/pan window) to a .png or .jpg file.
+- Export to CSV: Dumps the raw, interpolated plot points into a comma-separated 
+  text file, organized by timestamp and stream.

@@ -34,7 +34,6 @@ QSettings::Format TomlConfigHelper::format()
         &TomlConfigHelper::readToml,
         &TomlConfigHelper::writeToml
     );
-    qDebug() << "TomlConfigHelper::format() returned" << (int)s_format;
     return s_format;
 }
 
@@ -115,7 +114,6 @@ bool TomlConfigHelper::readToml(QIODevice& device, QSettings::SettingsMap& map)
 
 bool TomlConfigHelper::writeToml(QIODevice& device, const QSettings::SettingsMap& map)
 {
-    qDebug() << "writeToml called with" << map.size() << "keys";
     QTextStream out(&device);
 
     // Group keys by section so we can emit one [Header] per section.

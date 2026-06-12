@@ -130,6 +130,19 @@ void FrameSetup::clearParameters()
     m_parameters.clear();
 }
 
+void FrameSetup::addParameter(const QString& name, int word)
+{
+    ParameterInfo parameter = ParameterInfo();
+    parameter.name = name;
+    parameter.word = word;
+    parameter.slope = 0;
+    parameter.scale = 0;
+    parameter.is_enabled = true;
+    parameter.sample_sum = 0;
+
+    m_parameters.append(parameter);
+}
+
 void FrameSetup::saveToSettings(QSettings& settings)
 {
     for (const auto& param : m_parameters)

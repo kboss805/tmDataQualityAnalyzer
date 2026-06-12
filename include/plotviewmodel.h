@@ -23,8 +23,10 @@
  */
 struct PlotSeriesData
 {
-    /// Distinguishes SNR series (left axis) from frame sync lock series (right axis).
-    enum class MetricType { SNR, FrameSyncLock };
+    /// Distinguishes SNR series (right axis) from the left-axis frame-sync metrics.
+    /// FrameSyncLock and AccumulatedMissedFrames share the left axis and are shown one at a
+    /// time per the active LockAxisView.
+    enum class MetricType { SNR, FrameSyncLock, AccumulatedMissedFrames };
 
     QString name;             ///< Column header, e.g., "L_RCVR1" or "Framesync Lock (%)".
     int receiverIndex = 0;    ///< 1-based receiver number from "_RCVR<N>" suffix; 0 for lock series.
@@ -65,6 +67,10 @@ class PlotViewModel : public QObject
     Q_OBJECT
 
 public:
+    /// Which left-axis metric is currently shown. Lock % and missed frames
+    /// share the left axis; only one is visible at a time.
+    enum class LockAxisView { LockPercent, MissedFrames };
+
     explicit PlotViewModel(QObject* parent = nullptr);
 
     /// @name Data loading
@@ -101,6 +107,10 @@ public:
     double lockYMax() const;                       ///< @return Lock axis maximum (always 100).
     bool hasLockSeries() const;                    ///< @return True if any FrameSyncLock series are loaded.
 
+    LockAxisView lockAxisView() const;             ///< @return Active left-axis metric (lock % vs missed frames).
+    bool hasMissedFramesSeries() const;            ///< @return True if any AccumulatedMissedFrames series are loaded.
+    double missedFramesMax() const;                ///< @return Max value across visible AccumulatedMissedFrames series (>= 1).
+
     double xViewMin() const;                       ///< @return Current X viewport minimum.
     double xViewMax() const;                       ///< @return Current X viewport maximum.
 
@@ -119,10 +129,13 @@ public:
     void setXViewRange(double min, double max);
     void resetXRange();
     void resetYRange();
+    /// Switches the left-axis metric and flips visibility of lock/missed frames series.
+    void setLockAxisView(LockAxisView view);
     /// @}
 
 signals:
     void dataChanged();                            ///< Emitted when CSV data is loaded or cleared.
+    void lockAxisViewChanged();                     ///< Emitted when the left-axis metric mode changes.
     void loadStarted();                            ///< Emitted when an async load begins.
     void loadFailed();                             ///< Emitted when an async load fails.
     void seriesVisibilityChanged(int index);        ///< Emitted when a series visibility toggles.
@@ -164,6 +177,8 @@ private:
     double m_lock_y_min = 0.0;                     ///< Lock axis minimum (fixed at 0).
     double m_lock_y_max = 100.0;                   ///< Lock axis maximum (fixed at 100).
     bool m_has_lock_series = false;                ///< True if any FrameSyncLock series are present.
+    bool m_has_missed_frames_series = false;       ///< True if any AccumulatedMissedFrames series are present.
+    LockAxisView m_lock_axis_view = LockAxisView::LockPercent; ///< Active left-axis metric.
 
     int m_base_day = 0;                            ///< DOY of the first sample (for display).
     double m_base_time_offset = 0.0;               ///< Seconds-since-midnight of first sample.

@@ -13,9 +13,9 @@
 
 /// @brief Application version information.
 struct AppVersion {
-    static constexpr int kMajor = 1;   ///< Major version number.
+    static constexpr int kMajor = 2;   ///< Major version number.
     static constexpr int kMinor = 0;   ///< Minor version number.
-    static constexpr int kPatch = 5;   ///< Patch version number.
+    static constexpr int kPatch = 0;   ///< Patch version number.
 
     /// @return Version string in "major.minor.patch" format.
     static QString toString() { return QString("%1.%2.%3").arg(kMajor).arg(kMinor).arg(kPatch); }
@@ -176,8 +176,9 @@ namespace PlotConstants {
     inline constexpr int kPlotDockMinHeight  = 768;   ///< Minimum plot dock height in pixels.
     inline constexpr double kAxisMarginFactor = 0.05; ///< Y-axis padding as fraction of data range.
     inline constexpr const char* kXAxisLabel        = "Elapsed Time (DDD:HH:MM:SS)"; ///< X axis label.
-    inline constexpr const char* kYAxisLabel        = "Framesync Lock (%)"; ///< Left Y axis label.
-    inline constexpr const char* kLockAxisLabel     = "Receiver SNR (dB)"; ///< Right Y axis label.
+    inline constexpr const char* kYAxisLabel        = "Framesync Lock (%)"; ///< Left Y axis label (lock-% mode).
+    inline constexpr const char* kMissedFramesAxisLabel = "Accumulated Missed Frames"; ///< Left Y axis label (missed frames mode).
+    inline constexpr const char* kSnrAxisLabel      = "Receiver SNR (dB)"; ///< Right Y axis label.
     inline constexpr const char* kDefaultPlotTitle  = "AGC/Lock vs Time"; ///< Default chart title.
     inline constexpr QColor kFrameSyncLockColor {0, 114, 189};           ///< Distinctive blue for lock series.
 

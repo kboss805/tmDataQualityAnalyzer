@@ -41,12 +41,12 @@ static ProcessingParams makeTestParams(const QString& filename = {},
 {
     ProcessingParams p;
     p.filename = filename;
-    p.time_channel_id = time_channel_id;
-    p.pcm_channel_id = pcm_channel_id;
-    p.frame_sync = frame_sync;
-    p.sync_pattern_length = sync_len;
-    p.words_in_minor_frame = words_in_frame;
-    p.bits_in_minor_frame = bits_in_frame;
+    p.timeChannelId = time_channel_id;
+    p.pcmChannelId = pcm_channel_id;
+    p.frameSync = frame_sync;
+    p.syncPatternLength = sync_len;
+    p.wordsInMinorFrame = words_in_frame;
+    p.bitsInMinorFrame = bits_in_frame;
     return p;
 }
 
@@ -57,12 +57,12 @@ static ProcessingParams makeTestParams(const QString& filename = {},
 static bool runWithReader(FrameProcessor& fp, ProcessingParams& p, FrameSetup* setup)
 {
     PacketQueue queue;
-    p.packet_queue = &queue;
+    p.packetQueue = &queue;
 
     Ch10PacketReader reader;
     QVector<ProcessingParams*> params_list = { &p };
     QString error;
-    if (!reader.prepare(p.filename, p.time_channel_id, params_list, error))
+    if (!reader.prepare(p.filename, p.timeChannelId, params_list, error))
         return false;
 
     QFuture<void> future = QtConcurrent::run([&reader]() { reader.run(); });
@@ -155,9 +155,9 @@ void TestFrameProcessor::processInvalidTimeChannel()
 
     FrameSetup setup;
     ProcessingParams p = makeTestParams("dummy.ch10", -1, 1);
-    p.start_seconds = 0;
-    p.stop_seconds = 100;
-    p.sample_period_sec = 1.0;
+    p.startSeconds = 0;
+    p.stopSeconds = 100;
+    p.samplePeriodSec = 1.0;
     QVERIFY(!fp.process(p, &setup));
     QVERIFY(!error_spy.isEmpty());
     QVERIFY(!finished_spy.isEmpty());
@@ -172,9 +172,9 @@ void TestFrameProcessor::processInvalidPcmChannel()
 
     FrameSetup setup;
     ProcessingParams p = makeTestParams("dummy.ch10", 1, -1);
-    p.start_seconds = 0;
-    p.stop_seconds = 100;
-    p.sample_period_sec = 1.0;
+    p.startSeconds = 0;
+    p.stopSeconds = 100;
+    p.samplePeriodSec = 1.0;
     QVERIFY(!fp.process(p, &setup));
     QVERIFY(!error_spy.isEmpty());
     QVERIFY(!finished_spy.isEmpty());
@@ -188,9 +188,9 @@ void TestFrameProcessor::processInvalidFile()
 
     FrameSetup setup;
     ProcessingParams p = makeTestParams("nonexistent_file.ch10", 1, 1);
-    p.start_seconds = 0;
-    p.stop_seconds = 100;
-    p.sample_period_sec = 1.0;
+    p.startSeconds = 0;
+    p.stopSeconds = 100;
+    p.samplePeriodSec = 1.0;
     QVERIFY(!fp.process(p, &setup));
     QVERIFY(!error_spy.isEmpty());
 }
@@ -224,19 +224,22 @@ void TestFrameProcessor::processAccumulatesReceiverData()
         reader.getStopMinute(), reader.getStopSecond());
 
     ProcessingParams p = makeTestParams(filepath, time_id, pcm_id);
-    p.start_seconds = start_secs;
-    p.stop_seconds = stop_secs;
-    p.sample_period_sec = 1.0;
-    p.is_randomized = true;
+    p.startSeconds = start_secs;
+    p.stopSeconds = stop_secs;
+    p.samplePeriodSec = 1.0;
+    p.isRandomized = true;
     p.mode = StreamMode::ReceiverChannelInfo;
-    p.stream_label = "Ch test";
+    p.streamLabel = "Ch test";
 
     FrameProcessor fp;
     QVERIFY2(runWithReader(fp, p, &setup), "Processing should succeed on valid RNRZ-L file");
 
     const ProcessedStreamData& r = fp.result();
     QVERIFY2(r.hasSamples(), "Result must contain at least one time sample");
-    QCOMPARE(r.lockPercent.size(), r.timesSec.size());
+    // Receiver (SNR) streams are always considered locked (they come from a
+    // separate piece of equipment), so no lock/error series is produced.
+    QVERIFY2(r.lockPercent.isEmpty(), "Receiver mode must produce no lock series");
+    QVERIFY2(r.accumulatedMissedFrames.isEmpty(), "Receiver mode must produce no missed-frames series");
     QCOMPARE(r.channels.size(), setup.length());
     QCOMPARE(r.streamLabel, QString("Ch test"));
     QCOMPARE(r.mode, StreamMode::ReceiverChannelInfo);
@@ -246,12 +249,10 @@ void TestFrameProcessor::processAccumulatesReceiverData()
     {
         QCOMPARE(ch.values.size(), r.timesSec.size());
     }
-    // Lock percentages are in range and timestamps are non-decreasing.
-    for (int i = 0; i < r.timesSec.size(); i++)
+    // Timestamps are non-decreasing.
+    for (int i = 1; i < r.timesSec.size(); i++)
     {
-        QVERIFY(r.lockPercent[i] >= 0.0 && r.lockPercent[i] <= 100.0);
-        if (i > 0)
-            QVERIFY(r.timesSec[i] >= r.timesSec[i - 1]);
+        QVERIFY(r.timesSec[i] >= r.timesSec[i - 1]);
     }
 }
 
@@ -276,10 +277,10 @@ void TestFrameProcessor::processLockOnlyModeHasNoChannels()
         reader.getStopMinute(), reader.getStopSecond());
 
     ProcessingParams p = makeTestParams(filepath, time_id, pcm_id);
-    p.start_seconds = start_secs;
-    p.stop_seconds = stop_secs;
-    p.sample_period_sec = 1.0;
-    p.is_randomized = true;
+    p.startSeconds = start_secs;
+    p.stopSeconds = stop_secs;
+    p.samplePeriodSec = 1.0;
+    p.isRandomized = true;
     p.mode = StreamMode::FrameSyncLockStats;
 
     FrameSetup empty_setup;  // No word map for lock-only mode.
@@ -290,7 +291,52 @@ void TestFrameProcessor::processLockOnlyModeHasNoChannels()
     QVERIFY2(r.hasSamples(), "Lock-only result must contain time samples");
     QVERIFY2(r.channels.isEmpty(), "Lock-only mode must produce no receiver channels");
     QCOMPARE(r.lockPercent.size(), r.timesSec.size());
+    QCOMPARE(r.accumulatedMissedFrames.size(), r.timesSec.size());
     QCOMPARE(r.mode, StreamMode::FrameSyncLockStats);
+}
+
+void TestFrameProcessor::processFrameSyncErrorsMonotonic()
+{
+    const QString filepath = testDataPath("rnrz-l_testfile.ch10");
+    if (!QFileInfo::exists(filepath))
+        QSKIP("RNRZ-L test file not available");
+
+    Chapter10Reader reader;
+    QVERIFY(reader.loadChannels(filepath));
+    int pcm_id = reader.getFirstPCMChannelID();
+    int time_id = reader.getCurrentTimeChannelID();
+    if (pcm_id < 0 || time_id < 0)
+        QSKIP("Missing channels in test file");
+
+    uint64_t start_secs = reader.dhmsToUInt64(
+        reader.getStartDayOfYear(), reader.getStartHour(),
+        reader.getStartMinute(), reader.getStartSecond());
+    uint64_t stop_secs = reader.dhmsToUInt64(
+        reader.getStopDayOfYear(), reader.getStopHour(),
+        reader.getStopMinute(), reader.getStopSecond());
+
+    ProcessingParams p = makeTestParams(filepath, time_id, pcm_id);
+    p.startSeconds = start_secs;
+    p.stopSeconds = stop_secs;
+    p.samplePeriodSec = 1.0;
+    p.isRandomized = true;
+    p.mode = StreamMode::FrameSyncLockStats;
+
+    FrameSetup empty_setup;
+    FrameProcessor fp;
+    QVERIFY2(runWithReader(fp, p, &empty_setup), "Lock-only processing should succeed");
+
+    const ProcessedStreamData& r = fp.result();
+    QVERIFY2(r.hasSamples(), "Result must contain time samples");
+    QCOMPARE(r.accumulatedMissedFrames.size(), r.timesSec.size());
+
+    // The accumulated count starts at >= 0 and never decreases.
+    QVERIFY(r.accumulatedMissedFrames.first() >= 0.0);
+    for (int i = 1; i < r.accumulatedMissedFrames.size(); i++)
+    {
+        QVERIFY2(r.accumulatedMissedFrames[i] >= r.accumulatedMissedFrames[i - 1],
+                 "Frame sync error accumulation must be monotonically non-decreasing");
+    }
 }
 
 void TestFrameProcessor::processSlopeAffectsValues()
@@ -318,10 +364,10 @@ void TestFrameProcessor::processSlopeAffectsValues()
         if (!setupParams(setup, slope, 0.0))
             return 0.0;
         ProcessingParams p = makeTestParams(filepath, time_id, pcm_id);
-        p.start_seconds = start_secs;
-        p.stop_seconds = stop_secs;
-        p.sample_period_sec = 1.0;
-        p.is_randomized = true;
+        p.startSeconds = start_secs;
+        p.stopSeconds = stop_secs;
+        p.samplePeriodSec = 1.0;
+        p.isRandomized = true;
         FrameProcessor fp;
         if (!runWithReader(fp, p, &setup) || fp.result().channels.isEmpty()
             || fp.result().channels[0].values.isEmpty())
@@ -364,10 +410,10 @@ void TestFrameProcessor::processShortPeriodMoreSamples()
         if (!setupParams(setup, 1.0, 0.0))
             return -1;
         ProcessingParams p = makeTestParams(filepath, time_id, pcm_id);
-        p.start_seconds = start_secs;
-        p.stop_seconds = stop_secs;
-        p.sample_period_sec = period;
-        p.is_randomized = true;
+        p.startSeconds = start_secs;
+        p.stopSeconds = stop_secs;
+        p.samplePeriodSec = period;
+        p.isRandomized = true;
         FrameProcessor fp;
         if (!runWithReader(fp, p, &setup))
             return -1;

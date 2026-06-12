@@ -235,7 +235,7 @@ bool Ch10PacketReader::prepare(const QString& filename,
     // Resolve per-stream PCM attributes and build the routing table.
     for (ProcessingParams* p : params_list)
     {
-        const int ch = p->pcm_channel_id;
+        const int ch = p->pcmChannelId;
         if (ch < 0 || ch >= PCMConstants::kMaxChannelCount || m_channel_info[ch] == nullptr)
         {
             error = "Channel info not set up for PCM channel " + QString::number(ch) + ".";
@@ -248,10 +248,10 @@ bool Ch10PacketReader::prepare(const QString& filename,
             return false;
         }
 
-        const int64_t sync_mask_i64 = (p->frame_sync_mask != 0)
-            ? static_cast<int64_t>(p->frame_sync_mask)
-            : static_cast<int64_t>((p->sync_pattern_length > 0 && p->sync_pattern_length < 64)
-                ? (1ULL << p->sync_pattern_length) - 1
+        const int64_t sync_mask_i64 = (p->frameSyncMask != 0)
+            ? static_cast<int64_t>(p->frameSyncMask)
+            : static_cast<int64_t>((p->syncPatternLength > 0 && p->syncPatternLength < 64)
+                ? (1ULL << p->syncPatternLength) - 1
                 : 0xFFFFFFFFFFFFFFFFULL);
 
         Set_Attributes_Ext_PcmF1(pcm_attrs->psuRDataSrc, pcm_attrs,
@@ -259,43 +259,44 @@ bool Ch10PacketReader::prepare(const QString& filename,
                                  PCMConstants::kCommonWordLen,
                                  -1, -1, -1,
                                  PCMConstants::kNumMinorFrames,
-                                 p->words_in_minor_frame,
-                                 p->bits_in_minor_frame,
+                                 p->wordsInMinorFrame,
+                                 p->bitsInMinorFrame,
                                  -1,
-                                 p->sync_pattern_length,
-                                 static_cast<int64_t>(p->frame_sync),
+                                 p->syncPatternLength,
+                                 static_cast<int64_t>(p->frameSync),
                                  -1,
                                  sync_mask_i64,
                                  -1);
 
         ResolvedPcmAttrs ra;
-        ra.sync_pat       = p->frame_sync;
-        ra.sync_mask      = sync_mask_i64;
-        ra.sync_pat_len   = p->sync_pattern_length;
-        ra.bits_in_frame  = p->bits_in_minor_frame;
-        ra.words_in_frame = p->words_in_minor_frame;
-        ra.word_len       = pcm_attrs->ulCommonWordLen;
-        ra.word_mask      = pcm_attrs->ullCommonWordMask;
-        ra.min_syncs      = pcm_attrs->ulMinSyncs;
-        ra.needs_swap     = (pcm_attrs->bDontSwapRawData == 0);
+        ra.syncPat       = p->frameSync;
+        ra.syncMask      = static_cast<uint64_t>(sync_mask_i64);
+        ra.syncPatLen    = p->syncPatternLength;
+        ra.bitsInFrame   = p->bitsInMinorFrame;
+        ra.wordsInFrame  = p->wordsInMinorFrame;
+        ra.wordLen       = pcm_attrs->ulCommonWordLen;
+        ra.wordMask      = pcm_attrs->ullCommonWordMask;
+        ra.minSyncs      = pcm_attrs->ulMinSyncs;
+        ra.needsSwap     = (pcm_attrs->bDontSwapRawData == 0); // Need swap if not mapped yet
+        ra.resolved      = true;
 
         double delta_100ns = pcm_attrs->dDelta100NanoSeconds;
-        if (p->data_rate_bps > 0.0)
+        if (p->dataRateBps > 0.0)
         {
             constexpr double k100NsPerSecond = 1e7;
-            delta_100ns = k100NsPerSecond / p->data_rate_bps;
+            delta_100ns = k100NsPerSecond / p->dataRateBps;
         }
-        ra.delta_100ns = delta_100ns;
-        ra.resolved    = true;
+        ra.delta100ns = delta_100ns;
 
-        p->resolved_attrs = ra;
+        // Give the resolved struct to the worker params
+        p->resolvedAttrs = ra;
 
-        if (p->packet_queue != nullptr)
+        if (p->packetQueue != nullptr)
         {
-            m_routing[ch].push_back(p->packet_queue);
-            if (!m_all_queues.contains(p->packet_queue))
+            m_routing[ch].push_back(p->packetQueue);
+            if (!m_all_queues.contains(p->packetQueue))
             {
-                m_all_queues.push_back(p->packet_queue);
+                m_all_queues.push_back(p->packetQueue);
             }
         }
     }

@@ -63,7 +63,7 @@ bool ProcessingCoordinator::startProcessing(QVector<StreamJob> jobs)
     {
         auto* q = new PacketQueue();
         m_queues.push_back(q);
-        job.params.packet_queue = q;
+        job.params.packetQueue = q;
     }
 
     // Resolve TMATS-derived attributes once, synchronously, via the reader.
@@ -76,7 +76,7 @@ bool ProcessingCoordinator::startProcessing(QVector<StreamJob> jobs)
     }
 
     const QString filename       = m_jobs[0].params.filename;
-    const int     time_channel   = m_jobs[0].params.time_channel_id;
+    const int     time_channel   = m_jobs[0].params.timeChannelId;
 
     QString error;
     if (!m_reader->prepare(filename, time_channel, params_list, error))
@@ -113,7 +113,7 @@ bool ProcessingCoordinator::startProcessing(QVector<StreamJob> jobs)
                 this, &ProcessingCoordinator::errorOccurred);
         connect(w.thread, &QThread::finished, processor, &QObject::deleteLater);
 
-        ProcessingParams params = m_jobs[i].params; // includes resolved_attrs + queue
+        ProcessingParams params = m_jobs[i].params; // includes resolvedAttrs + queue
         FrameSetup* setup = m_jobs[i].frameSetup;
         connect(w.thread, &QThread::started, processor, [processor, params, setup]() {
             processor->process(params, setup);

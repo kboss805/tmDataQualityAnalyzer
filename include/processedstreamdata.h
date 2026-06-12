@@ -42,6 +42,7 @@ struct ProcessedStreamData
 
     QVector<double> timesSec;       ///< Absolute IRIG seconds per output sample.
     QVector<double> lockPercent;    ///< Frame-sync lock percentage (0..100) per output sample.
+    QVector<double> accumulatedMissedFrames; ///< Cumulative missed frames count per output sample (monotonic, parallel to timesSec).
     QVector<ProcessedChannelSeries> channels; ///< SNR channel series (empty in lock-only mode).
 
     /// @return true if at least one output sample was recorded.

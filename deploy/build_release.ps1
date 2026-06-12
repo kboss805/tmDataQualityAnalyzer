@@ -1,4 +1,4 @@
-﻿# =============================================================================
+# =============================================================================
 # build_release.ps1  —  Release build, sign, and package script
 #
 # Builds a release binary, runs windeployqt, and produces both an Inno Setup
@@ -128,6 +128,7 @@ foreach ($toml in @('RASA.toml', 'TRC.toml', 'framesync_PRN11.toml', 'framesync_
 
 Copy-Item "$ProjectDir\LICENSE"                    "$PortableRoot\LICENSE.txt"
 Copy-Item "$ProjectDir\deploy\README_portable.txt" "$PortableRoot\README.txt"
+Copy-Item "$ProjectDir\UserGuide.txt"              "$PortableRoot\UserGuide.txt"
 New-Item  -ItemType File -Path "$PortableRoot\portable" -Force | Out-Null
 
 # --- Step 6: Create portable ZIP ---

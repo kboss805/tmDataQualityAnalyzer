@@ -88,6 +88,8 @@ private slots:
     void onResetAxes();
     /// Shows a tooltip with the nearest data point value under the cursor.
     void onPlotMouseMove(QMouseEvent* event);
+    /// Toggles the left axis between Framesync Lock (%) and Missed Frames.
+    void onAxisViewToggleClicked();
 
 signals:
     /// Emitted when a log message should be displayed.
@@ -103,6 +105,8 @@ private:
     void setUpLayout();
     void setUpConnections();
     void rebuildLegend();
+    /// Syncs the left-axis toggle button's text/enabled state to the ViewModel.
+    void updateAxisViewButton();
     /// Shows or hides the centered "Loading..." overlay over the chart.
     void showLoadingIndicator(bool visible);
     void resizeEvent(QResizeEvent* event) override;
@@ -126,6 +130,7 @@ private:
     /// @name Top toolbar controls
     /// @{
     QLineEdit* m_title_edit = nullptr;
+    QPushButton* m_axis_view_btn = nullptr; ///< Toggles left axis: Lock (%) vs Missed Frames.
     QDoubleSpinBox* m_y_min_spin = nullptr;
     QDoubleSpinBox* m_y_max_spin = nullptr;
     /// @}

@@ -60,6 +60,9 @@ public:
     /// Removes all parameters.
     void clearParameters();
 
+    /// Appends a parameter with the given name and zero-based word index.
+    void addParameter(const QString& name, int word);
+
 private:
     /// Reads TOML section names in the order they appear in the file.
     static QStringList readGroupsInFileOrder(const QString& filename);

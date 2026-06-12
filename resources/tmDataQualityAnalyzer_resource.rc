@@ -3,8 +3,8 @@
 IDI_ICON1	ICON	"icon.ico"
 
 VS_VERSION_INFO VERSIONINFO
-	FILEVERSION 1,0,5,0
-	PRODUCTVERSION 1,0,5,0
+	FILEVERSION 2,0,0,0
+	PRODUCTVERSION 2,0,0,0
 	FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
 	FILEFLAGS VS_FF_DEBUG
@@ -20,14 +20,14 @@ VS_VERSION_INFO VERSIONINFO
 			BLOCK "040904b0"
 			BEGIN
 				VALUE "CompanyName", "tmDataQualityAnalyzer\0"
-				VALUE "FileDescription", "Chapter 10 to CSV AGC Converter\0"
-				VALUE "FileVersion", "1.0.5.0\0"
+				VALUE "FileDescription", "TM Data Quality Analyzer\0"
+				VALUE "FileVersion", "2.0.0.0\0"
 				VALUE "LegalCopyright", "Copyright (C) 2024-2026 tmDataQualityAnalyzer contributors. GPLv3.\0"
-				VALUE "OriginalFilename", "tmDataQualityAnalyzer-1.0.5.exe\0"
-				VALUE "ProductName", "tmDataQualityAnalyzer\0"
-				VALUE "ProductVersion", "1.0.5.0\0"
+				VALUE "OriginalFilename", "tmDataQualityAnalyzer-2.0.0.exe\0"
+				VALUE "ProductName", "TM Data Quality Analyzer\0"
+				VALUE "ProductVersion", "2.0.0.0\0"
 				VALUE "InternalName", "tmDataQualityAnalyzer\0"
-				VALUE "Comments", "Converts AGC data in IRIG 106 Chapter 10 files to CSV format.\0"
+				VALUE "Comments", "Analyzes telemetry data quality (framesync lock and receiver SNR) from IRIG 106 Chapter 10 files.\0"
 				VALUE "LegalTrademarks", "\0"
 			END
 		END
