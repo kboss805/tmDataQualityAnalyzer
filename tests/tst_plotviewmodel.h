@@ -50,6 +50,7 @@ private slots:
     void addStreamDataErrorSeriesCreated();
     void errorSeriesSharesLockColor();
     void setLockAxisViewTogglesVisibility();
+    void setLockAxisViewPreservesStreamSelection();
     void frameSyncErrorMaxReflectsData();
 
     // exportCsv tests

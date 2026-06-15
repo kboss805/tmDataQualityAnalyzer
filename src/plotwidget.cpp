@@ -9,10 +9,13 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QFile>
 #include <QFileDialog>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QPainter>
+#include <QScrollArea>
 #include <QScrollBar>
 #include <QToolTip>
 #include <QtSvg/QSvgGenerator>
@@ -20,8 +23,10 @@
 #include <QSettings>
 #include <QDir>
 #include <QRegularExpression>
+#include <QTextStream>
 
-#include "qcustomplot.h"
+#include "qcustomplot.
+h"
 
 #include "constants.h"
 #include "plotviewmodel.h"
@@ -111,6 +116,15 @@ void PlotWidget::setViewModel(PlotViewModel* vm)
     connect(vm, &PlotViewModel::seriesVisibilityChanged, this, &PlotWidget::onSeriesVisibilityToggled);
     connect(vm, &PlotViewModel::axisRangeChanged, this, &PlotWidget::updateAxes);
     connect(vm, &PlotViewModel::plotTitleChanged, this, &PlotWidget::updateTitle);
+    connect(vm, &PlotViewModel::lockAxisViewChanged, this, [this]() {
+        rebuildChart();
+        rebuildLegend();
+    });
+}
+
+void PlotWidget::setLogTextProvider(std::function<QString()> provider)
+{
+    m_log_text_provider = std::move(provider);
 }
 
 void PlotWidget::applyTheme(bool dark)
@@ -223,6 +237,7 @@ void PlotWidget::rebuildChart()
 void PlotWidget::onDataChanged()
 {
     rebuildChart();
+    rebuildLegend();
 }
 
 void PlotWidget::onSeriesVisibilityToggled(int index)
@@ -238,6 +253,7 @@ void PlotWidget::onSeriesVisibilityToggled(int index)
 
     m_graphs[index]->setVisible(m_view_model->seriesAt(index).visible);
     m_plot->replot(QCustomPlot::rpQueuedReplot);
+    rebuildLegend();
 }
 
 void PlotWidget::updateAxes()
@@ -401,12 +417,12 @@ void PlotWidget::onExportPlot()
 
     QSettings settings;
     QString last_dir = settings.value(UIConstants::kSettingsKeyLastCh10Dir, QCoreApplication::applicationDirPath()).toString();
-    
+
     QString default_name = m_view_model->plotTitle().isEmpty() ? "plot" : m_view_model->plotTitle();
     default_name.replace(QRegularExpression("[\\\\/:*?\"<>|]"), "_");
     QString base_path = QDir(last_dir).filePath(default_name);
 
-    ExportDialog dialog(base_path + ".csv", base_path + ".png", this);
+    ExportDialog dialog(base_path + ".csv", base_path + ".png", base_path + "_log.txt", this);
     if (dialog.exec() == QDialog::Accepted)
     {
         if (dialog.exportCsv())
@@ -432,7 +448,25 @@ void PlotWidget::onExportPlot()
 
             if (suffix == "png")
             {
-                success = m_plot->savePng(filename);
+                // Composite: render m_plot + legend panel into a single pixmap
+                const int plot_w = m_plot->width();
+                const int plot_h = m_plot->height();
+                const int leg_h  = m_legend_scroll->height();
+                const int total_h = plot_h + leg_h;
+
+                QPixmap composite(plot_w, total_h);
+                composite.fill(m_plot->palette().color(QPalette::Window));
+                QPainter painter(&composite);
+
+                // Draw the QCustomPlot into the top portion
+                QPixmap plot_px = m_plot->toPixmap(plot_w, plot_h);
+                painter.drawPixmap(0, 0, plot_px);
+
+                // Render the legend widget into the bottom portion
+                m_legend_widget->render(&painter, QPoint(0, plot_h));
+
+                painter.end();
+                success = composite.save(filename, "PNG");
                 formatStr = "PNG";
             }
             else if (suffix == "svg")
@@ -474,6 +508,31 @@ void PlotWidget::onExportPlot()
             {
                 emit logMessage(QString("<span style='color:red;'>Error: Failed to export plot to %1</span>")
                                 .arg(filename));
+            }
+        }
+
+        if (dialog.exportLog())
+        {
+            const QString log_path = dialog.logPath();
+            const QString log_text = m_log_text_provider ? m_log_text_provider() : QString();
+
+            QFile file(log_path);
+            if (file.open(QIODevice::WriteOnly | QIODevice::Text))
+            {
+                QTextStream stream(&file);
+                stream << log_text;
+                if (!log_text.endsWith('\n'))
+                {
+                    stream << '\n';
+                }
+                file.close();
+                emit logMessage(QString("<span style='color:green;'>Log exported to <a href='file:///%1'>%1</a></span>")
+                                .arg(log_path));
+            }
+            else
+            {
+                emit logMessage(QString("<span style='color:red;'>Error: Failed to export log to %1</span>")
+                                .arg(log_path));
             }
         }
     }
@@ -569,7 +628,33 @@ void PlotWidget::setUpLayout()
     m_plot->yAxis2->setVisible(true);
     m_plot->yAxis2->setLabel(PlotConstants::kSnrAxisLabel);
     main_layout->addWidget(m_plot, 1);
-    main_layout->addSpacing(8);
+    main_layout->addSpacing(4);
+
+    // --- Legend panel (between chart and bottom controls) ---
+    // A fixed-height scroll area showing a 4-column grid of swatch+name pairs.
+    // Height locks to exactly 2 visible rows; scrolls vertically for more entries.
+    m_legend_widget = new QWidget;
+    m_legend_widget->setObjectName("legendWidget");
+    m_legend_grid = new QGridLayout(m_legend_widget);
+    m_legend_grid->setContentsMargins(4, PlotConstants::kLegendPanelVPad,
+                                      4, PlotConstants::kLegendPanelVPad);
+    m_legend_grid->setHorizontalSpacing(16);
+    m_legend_grid->setVerticalSpacing(2);
+
+    m_legend_scroll = new QScrollArea;
+    m_legend_scroll->setWidget(m_legend_widget);
+    m_legend_scroll->setWidgetResizable(true);
+    m_legend_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_legend_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_legend_scroll->setFrameShape(QFrame::StyledPanel);
+    // Fixed height: 2 visible rows + padding + frame border
+    const int legend_panel_height = PlotConstants::kLegendPanelVisibleRows
+                                    * PlotConstants::kLegendItemHeight
+                                    + 2 * PlotConstants::kLegendPanelVPad + 6;
+    m_legend_scroll->setFixedHeight(legend_panel_height);
+    m_legend_scroll->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    main_layout->addWidget(m_legend_scroll);
+    main_layout->addSpacing(4);
 
     // Loading overlay (child of m_plot so it floats over the chart)
     m_loading_label = new QLabel("Loading...", m_plot);
@@ -674,6 +759,83 @@ void PlotWidget::setUpConnections()
             this, [this](const QCPRange& range) { handlePlotYRangeChanged(range.lower, range.upper); });
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Legend panel
+////////////////////////////////////////////////////////////////////////////////
+
+void PlotWidget::rebuildLegend()
+{
+    // Remove all existing items from the grid
+    QLayoutItem* item;
+    while ((item = m_legend_grid->takeAt(0)) != nullptr)
+    {
+        if (item->widget())
+        {
+            item->widget()->deleteLater();
+        }
+        delete item;
+    }
+
+    if (m_view_model == nullptr || !m_view_model->hasData())
+    {
+        return;
+    }
+
+    const auto& all_series = m_view_model->allSeries();
+    const PlotViewModel::LockAxisView axis_view = m_view_model->lockAxisView();
+    const int cols = PlotConstants::kLegendPanelColumns;
+    int col = 0;
+    int row = 0;
+
+    for (const PlotSeriesData& s : all_series)
+    {
+        // Only show visible series; also skip whichever lock metric is not active
+        if (!s.visible)
+        {
+            continue;
+        }
+        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock &&
+            axis_view != PlotViewModel::LockAxisView::LockPercent)
+        {
+            continue;
+        }
+        if (s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames &&
+            axis_view != PlotViewModel::LockAxisView::MissedFrames)
+        {
+            continue;
+        }
+
+        // Two sub-columns per logical column: [swatch | label].
+        // Pinning the swatch to a fixed sub-column keeps all swatches aligned
+        // regardless of label length — true left-alignment within the grid.
+        QLabel* swatch = new QLabel;
+        swatch->setFixedSize(PlotConstants::kLegendSwatchSize, PlotConstants::kLegendSwatchSize);
+        swatch->setStyleSheet(
+            QString("background-color: %1; border: 1px solid rgba(0,0,0,60);").arg(s.color.name()));
+
+        QLabel* lbl = new QLabel(s.name);
+        lbl->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+        lbl->setToolTip(s.name);
+
+        m_legend_grid->addWidget(swatch, row, col * 2,     Qt::AlignVCenter | Qt::AlignRight);
+        m_legend_grid->addWidget(lbl,    row, col * 2 + 1, Qt::AlignVCenter | Qt::AlignLeft);
+
+        ++col;
+        if (col >= cols)
+        {
+            col = 0;
+            ++row;
+        }
+    }
+
+    // Add a phantom stretch column to the right of all entry columns.
+    // QGridLayout will absorb remaining horizontal space into this column,
+    // which pins the four [swatch | label] column groups to the left edge.
+    m_legend_grid->setColumnStretch(cols * 2, 1);
+
+    // Ensure the inner widget resizes to fit its new content
+    m_legend_widget->adjustSize();
+}
 
 void PlotWidget::onPlotMouseMove(QMouseEvent* event)
 {

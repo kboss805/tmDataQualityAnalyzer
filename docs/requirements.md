@@ -7,7 +7,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Qt Version**: 6.10.2 (minimum: Qt 6.0.0)
 - **MinGW Version**: 13.1.0 (minimum: GCC/MinGW 7.0)
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
-- **Project Version**: 2.0.0 — defined in `AppVersion` struct in `include/constants.h`
+- **Project Version**: 2.2.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
 
 ## User Stories
 
@@ -71,18 +71,18 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - [x] The user can select framesync lock statistics for the following sample windows: 10ms, 100ms, and 1s
 - [x] A progress bar updates as the application is processing the framesync lock statistics
 
-### US2.1: View Frame Sync Error Accumulation Over Time
+### US2.1: View Accumulated Missed Frames Over Time
 **As a** telemetry data analyst
-**I want to** quantify and plot the accumulated frame sync errors over time for my PCM streams
+**I want to** quantify and plot the accumulated missed frames over time for my PCM streams
 **So that** I can quantitatively evaluate how frame sync errors are accumulating over time
 
 **Acceptance Criteria:**
-- [ ] The user can view the accumulated frame sync errors (left hand y-axis) versus time (x-axis) in a plot window
-- [ ] The user can switch the left-axis view between framesync lock (%) and frame sync error accumulation modes
-- [ ] The user can select which telemetry stream's frame sync error accumulation to view in the plot window
-- [ ] Frame sync errors are accumulated per telemetry stream against that stream's own frame parameters
+- [x] The user can view the accumulated missed frames (left hand y-axis) versus time (x-axis) in a plot window
+- [x] The user can switch the left-axis view between framesync lock (%) and accumulated missed frames modes
+- [x] The user can select which telemetry stream's accumulated missed frames to view in the plot window
+- [x] Missed frames are accumulated per telemetry stream against that stream's own frame parameters
 
-  - **Scope:** A frame sync error is a discrete loss-of-lock event — while in lock, the stream ran past the expected minor-frame boundary (`bits_in_frame`) without a sync match. The metric is a cumulative count of these events per stream, counted only within the selected `[start, stop]` processing window, and only ever increases. It is NOT a bit-level (Hamming/BER) error count.
+  - **Scope:** A "missed frame" is a discrete loss-of-lock event — while in lock, the stream ran past the expected minor-frame boundary (`bits_in_frame`) without a sync match. The metric is a cumulative count of these events per stream, counted only within the selected `[start, stop]` processing window, and only ever increases. It is NOT a bit-level (Hamming/BER) error count. The user-facing label is "Accumulated Missed Frames" (`PlotConstants::kMissedFramesAxisLabel`); this is the canonical term across the UI, release notes, and code.
 
 ### US2.2: Define the key parameters required to process the framesync lock statistics and frame sync error accumulation
 **As a** telemetry engineer or data analyst
@@ -97,23 +97,23 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - [x] The user can select from one of the following PCM code formats: NRZ-L, RNRZ-L
 - [x] The user can caculate frame sync lock statitics for up to 8 telemetry streams from the .ch10 file
 
-### US2.3: Export user specified framesync lock statistics and accumulated frame sync errors with timestamps to a file
+### US2.3: Export user specified framesync lock statistics and accumulated missed frames with timestamps to a file
 **As an** As a telemetry engineer or data analyst
-**I want to** to export framesync lock statistics and accumulated frame sync errors of interest to a CSV file.
+**I want to** to export framesync lock statistics and accumulated missed frames of interest to a CSV file.
 **So that** I can import the file into 3rd party applications such as Excel and Matlab for further analysis (the export settings and file location are configured via the export dialog window defined in US7.0).
 
 **Acceptance Criteria:**
-- [ ] The current framesync lock statistics and accumulated frame sync errors displayed in the plot window are exported to a CSV file
-- [ ] The CSV file includes at least the following columns: time stamps, stream identifier, framesync lock statistics and accumulated frame sync errors
+- [x] The current framesync lock statistics and accumulated missed frames displayed in the plot window are exported to a CSV file
+- [x] The CSV file includes at least the following columns: time stamps, stream identifier, framesync lock statistics and accumulated missed frames
 - [x] The CSV file includes headers describing the content of each column
 
-### US2.4: Export user specified framesync lock statistics and accumulated frame sync errors to an image file
+### US2.4: Export user specified framesync lock statistics and accumulated missed frames to an image file
 **As an** As a telemetry engineer or data analyst
-**I want to** to export framesync lock statistics and accumulated frame sync errors to an image file (e.g. png, pdf, etc.) from the plot window.
+**I want to** to export framesync lock statistics and accumulated missed frames to an image file (e.g. png, pdf, etc.) from the plot window.
 **So that** I can import the image file into 3rd party applications such as PowerPoint to create presentations (the export format and location are configured via the export dialog window defined in US7.0).
 
 **Acceptance Criteria:**
-- [ ] The current framesync lock statistics and accumulated frame sync errors displayed in the plot window are exported to an image file
+- [x] The current framesync lock statistics and accumulated missed frames displayed in the plot window are exported to an image file
 - [x] Images are exported to one of the following file formats as selected by the user: svg, png, pdf
 
 ### US2.5: Apply one stream's configuration to all matching streams
@@ -156,6 +156,16 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - [x] The dialog window includes a "Reset" button to reset the key parameters to their default values
 - [x] The dialog window includes a "Save" button to save the key parameters to the configuration file
 - [x] The dialog window includes a "Cancel" button to cancel the operation
+
+### US3.2: SNR Calibration (placeholder)
+**As a** telemetry engineer or data analyst
+**I want to** _TBD — placeholder for an SNR calibration workflow_
+**So that** _TBD_
+
+**Acceptance Criteria:**
+- [ ] _TBD — to be defined_
+
+  - **Scope:** Placeholder story. Title and details to be filled in; no implementation work is tracked here yet.
 
 ### US4.0: Recall/store framesync pattern and frame length parameters from/to configuration files
 **As an** As a telemetry engineer or data analyst
@@ -205,7 +215,8 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - [x] Mouse wheel zooms the x-axis
 - [x] Mouse click and hold pans the x-axis
 - [x] Select/Unselect which framesync lock statitics and receiver channel data is visible
-- [x] Auto set plot colors by default; framesync lock curves should be shades of red and SNR curves should be all other hues;channels from the same receiver should be hues of a single color
+- [x] An on-plot legend panel below the chart shows a color swatch and label for each visible series, scrolls vertically when entries exceed the visible rows, and is composited into exported PNG images
+- [x] Auto set plot colors by default; framesync lock curves use purple/blue/green primaries (one per stream) and SNR curves use red/orange/yellow primaries (one per receiver); additional streams, receivers, and channels are progressively lighter shades of their primary so related series stay grouped
 - [x] Framesync lock curves are highlighted; SNR curves are not
 
 ### US7.0: Export file settings
@@ -215,9 +226,10 @@ This file provides context and guidelines for AI assistants working on the tmDat
 
 **Acceptance Criteria:**
 - [x] A dialog window is presented to the user when the user clicks the export button
-- [x] The dialog window allows the user to determine what data is exported; SNR sample data and framesync lock statistic data, or plot images
+- [x] The dialog window allows the user to determine what data is exported; SNR sample data and framesync lock statistic data, plot images, or the log window contents
 - [x] The dialog window allows the user to specify the filename and location for the exported data files
 - [x] The dialog window allows the user to specify the filename and location for the exported plot images
+- [x] The dialog window allows the user to export the log window contents to a text file, with its own filename and location
 
 ### US8.0: Error Checking
 **As an** As a telemetry engineer or data analyst 
@@ -243,21 +255,43 @@ This file provides context and guidelines for AI assistants working on the tmDat
 
 ## Version History
 
-### v2.0.0 — Frame Sync Error Accumulation
+### v2.2.0 — On-Plot Legend, Log Export, and Single-Source Versioning
+- New on-plot legend panel below the chart: a fixed-height, vertically
+  scrolling 4-column grid of color swatch + series-name pairs that lists every
+  visible series and updates as series are toggled or the left-axis view
+  changes (US6.0)
+- PNG export now composites the legend panel beneath the chart into a single
+  image (US2.4); SVG/PDF export the chart as before
+- Export dialog gains an "Export Log (Text)" option that writes the log window
+  contents to a `.txt` file; the dialog now lists Image first and defaults to
+  Image export (US7.0)
+- Switching the left-axis view between Framesync Lock (%) and Accumulated Missed
+  Frames now preserves each stream's per-stream visibility selection instead of
+  re-showing every stream
+- Frame Sync Lock and Receiver SNR setup dialogs gain a separator line above the
+  OK/Cancel row, matching the in-body wireframe separator
+- Single-source versioning: `AppVersion` in `include/constants.h` is the only
+  place the version is defined; qmake parses it and generates
+  `version_autogen.h` for the Windows resource file, so the `.pro` and `.rc` no
+  longer carry duplicate version literals
+
+### v2.1.0 — Accumulated Missed Frames
 - New plot view: the left axis can toggle between "Framesync Lock (%)" and
-  "Accumulated Frame Sync Errors" via a toolbar button (US2.1)
-- Frame sync errors are accumulated per telemetry stream against that stream's
+  "Accumulated Missed Frames" via a toolbar button (US2.1)
+- Missed frames are accumulated per telemetry stream against that stream's
   own frame parameters — a monotonic count of loss-of-lock events within the
   selected processing window (not a bit-level/BER metric)
-- Left axis auto-scales to the maximum accumulated error value in error mode;
-  lock % retains its fixed 0–100 range
-- Lock and error curves for a stream share a color (only one shown at a time);
-  both metrics are included in CSV export
+- Left axis auto-scales to the maximum accumulated missed-frame value in that
+  mode; lock % retains its fixed 0–100 range
+- Lock and missed-frame curves for a stream share a color (only one shown at a
+  time); both metrics are included in CSV export
 - Renamed the misleading `PlotConstants::kLockAxisLabel` (which held the SNR
-  label) to `kSnrAxisLabel`; added `kErrorAxisLabel`
+  label) to `kSnrAxisLabel`; added `kMissedFramesAxisLabel`
+- Redesigned "Customize Plot Series" dialog with per-stream Frame Sync Lock
+  toggles and a collapsible receiver/channel tree on the Receiver SNR tab; new
+  purple/blue/green (lock) and red/orange/yellow (SNR) primary color scheme
 - US2.5 (apply one stream's configuration to all matching streams) tracked as a
-  separate story; US2.2–2.4 terminology updated from "bit error" to
-  "frame sync error"
+  separate story; US2.2–2.4 terminology standardized on "missed frames"
 
 ### v1.0.5 — Legend Layout, Toolbar Export, and Stream Config UI Polish
 - Fixed a SIGSEGV crash on file open caused by a double-free during legend
@@ -332,6 +366,17 @@ The following files are third-party library code and **MUST NOT be modified** un
 **If changes are needed**: They should be made by wrapping/adapting the library in application code (e.g., `chapter10reader.cpp`, `frameprocessor.cpp`, `plotwidget.cpp`), NOT by modifying the library files directly.
 
 ## Architecture
+
+> ⚠️ **This section is partially out of date (as of v2.2.0).** It still describes a
+> previous single-file + batch architecture and several classes that no longer
+> exist (`SettingsDialog`, `SettingsManager`, `ReceiverGridWidget`) and structs
+> that were removed (`SettingsData`, `BatchFileInfo`). The current design is the
+> per-stream **Configure Streams** flow: `StreamConfigDialog` (per-stream setup),
+> `Ch10PacketReader` (single reader → per-stream `PacketQueue`s), per-stream
+> `FrameProcessor` workers, `ProcessingCoordinator` (worker lifecycle/batch),
+> `TomlConfigHelper` (TOML I/O), `PlotCustomizationDialog`, and `ExportDialog`.
+> See the README "Overview" / "Project Structure" for the accurate component
+> roster until this section is rewritten.
 
 ### Core Components
 
@@ -651,18 +696,21 @@ Tasks are defined in `.vscode/tasks.json`:
 Automated unit tests use the **Qt Test** framework. Test sources are in the `tests/` directory with a separate `tests/tests.pro` project file.
 
 ### Test Suites
+The suites below are registered (and run, in this order) in `tests/main.cpp`; the
+source/header files are listed in `tests/tests.pro`.
 - **TestChannelData** (`tst_channeldata`) — ChannelData model object tests
-- **TestConstants** (`tst_constants`) — Verifies all PCMConstants, UIConstants, AppVersion, and recent files constants (including kMaxPacketBufferSize, kFrameSyncHexPattern)
-- **TestMainViewModelHelpers** (`tst_mainviewmodel_helpers`) — ViewModel helper methods (channelPrefix, parameterName, generateOutputFilename)
-- **TestMainViewModelState** (`tst_mainviewmodel_state`) — ViewModel property defaults, setters, signals, receiver grid, SettingsData roundtrip, frame setup loading, recent files, file metadata summary
-- **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration
-- **TestSettingsDialog** (`tst_settingsdialog`) — SettingsDialog widget defaults, setter/getter roundtrips, SettingsData roundtrip, signal emission
-- **TestSettingsManager** (`tst_settingsmanager`) — TOML load/save validation (invalid FrameSync, Slope, Scale, Polarity, receiver counts, parameter count mismatch, roundtrip, frame setup preservation)
-- **TestMainViewModelBatch** (`tst_mainviewmodel_batch`) — Batch mode defaults, generateBatchOutputFilename format, batchStatusSummary, clearState/cancelProcessing batch reset, per-file channel setter bounds checking, reorderBatchFile guard conditions (empty batch, out-of-bounds, same-index no-op), retryFailedFiles no-op outside batch mode
-- **TestPlotViewModel** (`tst_plotviewmodel`) — PlotViewModel default state, CSV loading, time conversion, series color assignment, Y auto/manual range, X time window, series visibility, clear data, plot title, invalid/empty file handling
+- **TestChapter10Reader** (`tst_chapter10reader`) — Chapter 10 metadata reader: channel discovery, time/PCM channel lists, channel ID resolution against real Ch10 test data
+- **TestConstants** (`tst_constants`) — Verifies all PCMConstants, UIConstants, PlotConstants, AppVersion, and recent files constants (including kMaxPacketBufferSize, kFrameSyncHexPattern)
 - **TestFrameProcessor** (`tst_frameprocessor`) — FrameProcessor constructor, abort flag, private static helpers (hasSyncPattern, derandomizeBitstream, writeTimeSample), preScan with valid/invalid files and encodings, process with real Ch10 test data
+- **TestMainViewModelHelpers** (`tst_mainviewmodel_helpers`) — ViewModel helper methods (channelPrefix, parameterName, generateOutputFilename)
+- **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration
+- **TestPlotViewModel** (`tst_plotviewmodel`) — PlotViewModel default state, CSV loading, time conversion, series color assignment, Y auto/manual range, X time window, series visibility, clear data, plot title, invalid/empty file handling, missed-frames series creation, left-axis view toggle, and preservation of per-stream selection across the toggle
 - **TestTimeExtractionWidget** (`tst_timeextractionwidget`) — Widget defaults, extractAllTime toggle, sampleRate setter/getter, fillTimes/clearTimes, enable/disable controls, sample rate options
-- **TestReceiverGridWidget** (`tst_receivergridwidget`) — Widget construction, rebuild with tree items, mass check/uncheck, Select All/Select None signal emission, zero and single receiver edge cases
+- **TestProcessingCoordinator** (`tst_processingcoordinator`) — Worker-thread lifecycle, single vs. batch sequencing, pre-scan, retry/cancel state transitions
+- **TestMainView** (`tst_mainview`) — Main window construction, widget wiring, log routing, dock visibility behavior
+- **TestPlotWidget** (`tst_plotwidget`) — Plot widget construction, control enable/disable on data load, theme application, legend rebuild
+- **TestStreamConfigDialog** (`tst_streamconfigdialog`) — Per-stream Configure Streams dialog: stream rows, mode selection, gear setup dialogs, TOML load/save round-trips, "Apply to all" fan-out
+- **TestExportDialog** (`tst_exportdialog`) — Export dialog checkbox-to-field enable logic, export-button validation, and the log-export row defaults/accessors and log-only validation
 
 ### Running Tests
 ```bash

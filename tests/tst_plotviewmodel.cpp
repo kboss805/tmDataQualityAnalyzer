@@ -801,6 +801,51 @@ void TestPlotViewModel::setLockAxisViewTogglesVisibility()
     }
 }
 
+void TestPlotViewModel::setLockAxisViewPreservesStreamSelection()
+{
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream(
+        "Ch32", 32, {0.0, 1.0}, {90.0, 80.0}, {0.0, 3.0}));
+    vm.addStreamData(makeLockAndErrorStream(
+        "Ch33", 33, {0.0, 1.0}, {95.0, 85.0}, {0.0, 1.0}));
+
+    // Deselect stream 32 while in LockPercent mode by hiding its lock series.
+    int deselected_lock_index = -1;
+    for (int i = 0; i < vm.seriesCount(); i++)
+    {
+        const PlotSeriesData& s = vm.seriesAt(i);
+        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock
+            && s.streamOrder == 32)
+        {
+            deselected_lock_index = i;
+        }
+    }
+    QVERIFY(deselected_lock_index >= 0);
+    vm.setSeriesVisible(deselected_lock_index, false);
+
+    // Switch to MissedFrames: stream 32 must stay hidden, stream 33 visible.
+    vm.setLockAxisView(PlotViewModel::LockAxisView::MissedFrames);
+    for (int i = 0; i < vm.seriesCount(); i++)
+    {
+        const PlotSeriesData& s = vm.seriesAt(i);
+        if (s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
+            QCOMPARE(s.visible, s.streamOrder != 32);
+        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock)
+            QVERIFY(!s.visible);
+    }
+
+    // Switch back to LockPercent: selection still respected.
+    vm.setLockAxisView(PlotViewModel::LockAxisView::LockPercent);
+    for (int i = 0; i < vm.seriesCount(); i++)
+    {
+        const PlotSeriesData& s = vm.seriesAt(i);
+        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock)
+            QCOMPARE(s.visible, s.streamOrder != 32);
+        if (s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
+            QVERIFY(!s.visible);
+    }
+}
+
 void TestPlotViewModel::frameSyncErrorMaxReflectsData()
 {
     PlotViewModel vm;

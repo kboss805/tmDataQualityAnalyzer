@@ -226,6 +226,11 @@ void MainView::setUpConnections()
 
     // PlotWidget -> Log window
     connect(m_plot_widget, &PlotWidget::logMessage, this, &MainView::onLogMessage);
+
+    // Let the Export dialog pull the current log window contents as plain text.
+    m_plot_widget->setLogTextProvider([this]() {
+        return m_log_preview->toPlainText();
+    });
     connect(m_plot_view_model, &PlotViewModel::loadFailed, this, [this]() {
         displayErrorMessage("Failed to load CSV file for plotting.");
     });

@@ -12,9 +12,12 @@
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QResizeEvent>
+#include <QScrollArea>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 #include <QWidget>
+
+#include <functional>
 
 #include "qcustomplot.h"
 
@@ -61,6 +64,10 @@ public:
 
     /// Connects this widget to a PlotViewModel instance.
     void setViewModel(PlotViewModel* vm);
+
+    /// Sets a callback that returns the current log window text, used to
+    /// optionally export the log to a file from the Export dialog.
+    void setLogTextProvider(std::function<QString()> provider);
 
     /// Applies theme colors (dark/light) to the chart.
     void applyTheme(bool dark);
@@ -112,6 +119,8 @@ private:
 
     /// Syncs the left-axis toggle button's text/enabled state to the ViewModel.
     void updateAxisViewButton();
+    /// Rebuilds the legend panel from current ViewModel series visibility.
+    void rebuildLegend();
     /// Shows or hides the centered "Loading..." overlay over the chart.
     void showLoadingIndicator(bool visible);
     void resizeEvent(QResizeEvent* event) override;
@@ -119,6 +128,9 @@ private:
 
 
     PlotViewModel* m_view_model = nullptr;
+
+    /// Callback returning the current log window text for log export.
+    std::function<QString()> m_log_text_provider;
 
     /// @name Chart
     /// @{
@@ -146,6 +158,13 @@ private:
     /// @}
 
     QPushButton* m_customize_btn = nullptr;
+
+    /// @name Legend panel
+    /// @{
+    QScrollArea*  m_legend_scroll  = nullptr; ///< Scroll area wrapping the legend grid.
+    QWidget*      m_legend_widget  = nullptr; ///< Inner container inside the scroll area.
+    QGridLayout*  m_legend_grid    = nullptr; ///< 4-column grid of swatch+label pairs.
+    /// @}
 
     QLabel* m_loading_label = nullptr; ///< Overlay label shown while CSV is parsing.
     bool m_updating_from_vm = false;  ///< Guard against signal loops.

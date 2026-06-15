@@ -14,7 +14,7 @@
 /// @brief Application version information.
 struct AppVersion {
     static constexpr int kMajor = 2;   ///< Major version number.
-    static constexpr int kMinor = 1;   ///< Minor version number.
+    static constexpr int kMinor = 2;   ///< Minor version number.
     static constexpr int kPatch = 0;   ///< Patch version number.
 
     /// @return Version string in "major.minor.patch" format.
@@ -92,13 +92,8 @@ namespace UIConstants {
     inline constexpr int kMaxRecentFiles            = 5;              ///< Maximum number of recent files to remember.
     /// @}
 
-    /// @name Plot legend layout
+    /// @name Layout
     /// @{
-    inline constexpr int kLegendGridColumns     = 3;   ///< Fixed total legend columns: 1 for Lock + 2 for receivers.
-    inline constexpr int kLegendMaxVisibleRows  = 6;   ///< Rows shown before a column scrolls instead of growing.
-    inline constexpr int kTreeItemHeightFactor  = 24;  ///< Approximate height per tree item in pixels.
-    inline constexpr int kTreeHeightBuffer      = 4;   ///< Extra height buffer for tree widgets.
-    inline constexpr int kTreeFixedWidth        = 100; ///< Fixed width for legend tree widgets.
     inline constexpr int kFlatButtonMinWidth    = 90;  ///< Minimum width for flat action buttons (accommodates "Collapse All").
     inline constexpr int kLogPreviewHeight      = 80;  ///< Fixed height for the log preview panel.
     /// @}
@@ -211,6 +206,15 @@ namespace PlotConstants {
     inline constexpr int kTitleFontSize      = 10;               ///< Plot title font size in points.
     inline constexpr double kSpinBoxMaxRange = 1e9;              ///< Maximum range for X axis spinboxes.
     inline constexpr double kYSpinBoxMax     = 999.0;            ///< Maximum range for Y axis spinboxes.
+    /// @}
+
+    /// @name Legend panel (between chart and bottom controls)
+    /// @{
+    inline constexpr int kLegendPanelColumns     = 4;   ///< Number of columns in the legend grid.
+    inline constexpr int kLegendPanelVisibleRows = 2;   ///< Rows visible before scrolling.
+    inline constexpr int kLegendItemHeight       = 22;  ///< Approximate pixel height of one legend row.
+    inline constexpr int kLegendSwatchSize       = 12;  ///< Colored swatch square size (px).
+    inline constexpr int kLegendPanelVPad        = 4;   ///< Vertical padding inside the legend panel.
     /// @}
 
     /// @brief Primary colors for SNR receiver series (red, orange, yellow), one per receiver.

@@ -53,6 +53,21 @@ void styleIconButton(QPushButton* button, int size)
     button->setStyleSheet("QPushButton { border: none; background: transparent; }");
 }
 
+/// Appends a sunken horizontal separator to a vertical layout, with 16px of
+/// padding above and below it so it visually divides the dialog body from the
+/// button row.
+void addSeparator(QVBoxLayout* layout, QWidget* parent)
+{
+    auto* sep = new QFrame(parent);
+    sep->setFrameShape(QFrame::HLine);
+    sep->setFrameShadow(QFrame::Sunken);
+
+    auto* wrapper = new QVBoxLayout;
+    wrapper->setContentsMargins(0, 16, 0, 16);
+    wrapper->addWidget(sep);
+    layout->addLayout(wrapper);
+}
+
 /// Loads frame sync fields from a TOML file into the provided widgets.
 /// Handles both the new BitsPerFrame key and the old WordsInMinorFrame key for
 /// backward compatibility with previously saved files.
@@ -219,6 +234,8 @@ public:
         outer->addLayout(grid);
         outer->addStretch(1);
 
+        addSeparator(outer, this);
+
         auto* buttons = new QDialogButtonBox(
             QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
         connect(buttons, &QDialogButtonBox::accepted, this, [this]() {
@@ -231,7 +248,7 @@ public:
             accept();
         });
         connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-        
+
         auto* bottomLayout = new QHBoxLayout;
         m_applyToAll = new QCheckBox("Apply to all Frame Sync Lock streams", this);
         m_applyToAll->setToolTip("Copy these settings to every other selected "
@@ -513,6 +530,8 @@ public:
             updateReceiverParamsLabel();
         }
 
+        addSeparator(outer, this);
+
         auto* buttons = new QDialogButtonBox(
             QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
         connect(buttons, &QDialogButtonBox::accepted, this, [this]() {
@@ -525,7 +544,7 @@ public:
             accept();
         });
         connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-        
+
         auto* bottomLayout = new QHBoxLayout;
         m_applyToAll = new QCheckBox("Apply to all Receiver SNR streams", this);
         m_applyToAll->setToolTip("Copy these settings to every other selected "

@@ -1,7 +1,29 @@
+tmDataQualityAnalyzer v2.2.0 - What's New
+=================================
+
+  - New: On-plot legend panel. A legend now sits directly below the chart,
+    showing a color swatch and label for every visible series. It updates as
+    you toggle series or switch the left-axis view, and scrolls vertically when
+    there are more entries than fit. Exported PNG images now include the legend
+    panel beneath the plot.
+
+  - New: Export the log window to a text file. The Export dialog now offers an
+    "Export Log (Text)" option alongside CSV data and the plot image, each with
+    its own filename and location. The dialog lists the plot image first and
+    defaults to image export.
+
+  - Improved: Switching the left axis between "Framesync Lock (%)" and
+    "Accumulated Missed Frames" now keeps your per-stream selection instead of
+    re-showing every stream.
+
+  - Improved: The Frame Sync Lock and Receiver SNR setup dialogs now show a
+    separator line above the OK/Cancel buttons for clearer visual grouping.
+
+
 tmDataQualityAnalyzer v2.1.0 - What's New
 =================================
 
-  - New: Frame Sync Error Accumulation plot view. The plot toolbar now has a
+  - New: Accumulated Missed Frames plot view. The plot toolbar now has a
     view toggle that switches the left axis between "Framesync Lock (%)" and
     "Accumulated Missed Frames" — a per-stream, monotonically increasing
     count of loss-of-lock events. The left axis auto-scales to the maximum

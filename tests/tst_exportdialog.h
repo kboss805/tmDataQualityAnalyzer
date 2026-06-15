@@ -10,6 +10,8 @@ class TestExportDialog : public QObject
 private slots:
     void testCheckboxTogglesFields();
     void testExportButtonValidation();
+    void testLogRowDefaultsAndAccessors();
+    void testLogOnlyExportValidation();
 };
 
 #endif // TST_EXPORTDIALOG_H

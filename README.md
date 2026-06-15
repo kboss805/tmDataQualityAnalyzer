@@ -48,9 +48,10 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **Interactive Plot Window**: Plot showing frame sync lock (%) and/or receiver AGC (dB) series with mouse wheel zoom, click-drag pan, auto-scale axes, per-series visibility toggles, and an auto-assigned color palette
 - **Color Coding**: Frame Sync Lock series use purple/blue/green primaries (one per stream) and Receiver SNR series use red/orange/yellow primaries (one per receiver); additional streams, receivers, and channels are derived as progressively lighter shades so related series stay grouped
 - **Customize Plot Series Dialog**: A tabbed dialog selects which series are visible — a Frame Sync Lock tab (one toggle per stream) and a Receiver SNR tab that presents each stream as a collapsible tree of receivers with L/R/C channel checkboxes, tri-state group toggles, and Expand/Collapse All; streams with many receivers split across two columns
-- **Left-Axis View Toggle**: Switch the left axis between Framesync Lock (%) and Accumulated Missed Frames
+- **Left-Axis View Toggle**: Switch the left axis between Framesync Lock (%) and Accumulated Missed Frames; the per-stream visibility selection is preserved across the toggle
+- **On-Plot Legend Panel**: A scrolling, multi-column legend below the chart shows a color swatch and label for each visible series and updates live as series are toggled
 - **X-Axis Time Display**: Actual file time (DDD:HH:MM:SS) on the X axis instead of elapsed seconds
-- **Toolbar Export**: Export the current plot and its data (CSV plus PNG/SVG/PDF) via the Export action in the main toolbar
+- **Toolbar Export**: Export the current plot and its data via the Export action in the main toolbar — choose any combination of CSV data, a plot image (PNG/SVG/PDF), and the log window contents (text); the PNG image includes the legend panel
 - **Hover Tooltip**: Shows series name, time (DDD:HH:MM:SS), and value (lock % or dB) on mouse hover
 
 ### Logging & Feedback
@@ -145,17 +146,23 @@ tmDataQualityAnalyzer/
 ├── docs/                       # Project documentation and requirements
 ├── include/                    # Header files
 │   ├── mainview.h
-│   ├── receivergridwidget.h
-│   ├── timeextractionwidget.h
-│   ├── settingsdialog.h
 │   ├── mainviewmodel.h
+│   ├── timeextractionwidget.h
+│   ├── streamconfigdialog.h    # Per-stream Configure Streams dialog
+│   ├── streamconfig.h          # Per-stream configuration value type
+│   ├── plotcustomizationdialog.h # Customize Plot Series dialog
+│   ├── exportdialog.h          # Unified export dialog (CSV/image/log)
 │   ├── chapter10reader.h
+│   ├── ch10packetreader.h      # Single-reader thread that routes packets to per-stream queues
+│   ├── packetqueue.h           # Bounded per-stream packet queue
 │   ├── frameprocessor.h
 │   ├── framesetup.h
 │   ├── channeldata.h
-│   ├── settingsmanager.h
-│   ├── settingsdata.h
-│   ├── batchfileinfo.h
+│   ├── processingcoordinator.h # Worker-thread lifecycle and batch sequencing
+│   ├── processingparams.h      # Inputs for a single processing run
+│   ├── processedstreamdata.h   # Per-stream processed result series
+│   ├── tomlconfighelper.h      # TOML load/save helpers
+│   ├── timefields.h            # DOY/HMS time field grouping
 │   ├── plotviewmodel.h
 │   ├── plotwidget.h
 │   └── constants.h
@@ -187,17 +194,20 @@ tmDataQualityAnalyzer/
 ├── src/                        # Source files
 │   ├── main.cpp               # Application entry point
 │   ├── mainview.cpp           # Main GUI window (View)
-│   ├── receivergridwidget.cpp # Receiver/channel selection grid (View)
 │   ├── timeextractionwidget.cpp # Time range and sample rate controls (View)
-│   ├── settingsdialog.cpp     # Settings dialog (View)
+│   ├── streamconfigdialog.cpp # Per-stream Configure Streams dialog (View)
+│   ├── plotcustomizationdialog.cpp # Customize Plot Series dialog (View)
+│   ├── exportdialog.cpp       # Unified export dialog: CSV/image/log (View)
 │   ├── mainviewmodel.cpp      # Application logic (ViewModel)
 │   ├── chapter10reader.cpp    # Chapter 10 file metadata (Model)
+│   ├── ch10packetreader.cpp   # Single-reader thread; routes packets to per-stream queues (Model)
 │   ├── frameprocessor.cpp     # PCM frame extraction and CSV output (Model)
 │   ├── framesetup.cpp         # Frame configuration parameters (Model)
 │   ├── channeldata.cpp        # Channel metadata (Model)
-│   ├── settingsmanager.cpp    # Settings persistence (Model)
+│   ├── processingcoordinator.cpp # Worker-thread lifecycle and batch sequencing (ViewModel)
+│   ├── tomlconfighelper.cpp   # TOML load/save helpers (Model)
 │   ├── plotviewmodel.cpp      # Plot data parsing and axis management (ViewModel)
-│   └── plotwidget.cpp         # QCustomPlot chart widget (View)
+│   └── plotwidget.cpp         # QCustomPlot chart widget + on-plot legend (View)
 ├── tmDataQualityAnalyzer.pro   # Qt project file
 └── README.md                   # This file
 ```

@@ -31,17 +31,17 @@ void TestExportDialog::testCheckboxTogglesFields()
     QVERIFY(csvEdit != nullptr);
     QVERIFY(imgEdit != nullptr);
 
-    // Initial state (from constructor): CSV true, Image false
-    QVERIFY(csvEdit->isEnabled() == true);
-    QVERIFY(imgEdit->isEnabled() == false);
-
-    // Toggle Image
-    imgCheck->setChecked(true);
+    // Initial state (from constructor): Image true, CSV false
     QVERIFY(imgEdit->isEnabled() == true);
-
-    // Toggle CSV
-    csvCheck->setChecked(false);
     QVERIFY(csvEdit->isEnabled() == false);
+
+    // Toggle CSV on
+    csvCheck->setChecked(true);
+    QVERIFY(csvEdit->isEnabled() == true);
+
+    // Toggle Image off
+    imgCheck->setChecked(false);
+    QVERIFY(imgEdit->isEnabled() == false);
 }
 
 void TestExportDialog::testExportButtonValidation()
@@ -71,21 +71,80 @@ void TestExportDialog::testExportButtonValidation()
         if (le->text() == "default.png") imgEdit = le;
     }
 
-    // Default state: CSV checked and populated -> valid
+    // Default state: Image checked and populated -> valid
     QVERIFY(exportBtn->isEnabled() == true);
 
-    // Clear CSV text
-    csvEdit->setText("");
-    QVERIFY(exportBtn->isEnabled() == false);
-
-    // Check Image, still empty text -> invalid (CSV also checked+empty)
-    imgCheck->setChecked(true);
+    // Clear Image text
     imgEdit->setText("");
     QVERIFY(exportBtn->isEnabled() == false);
 
-    // Switch to image-only export: uncheck the empty CSV and give the image a
+    // Check CSV, still empty text -> invalid (Image also checked+empty)
+    csvCheck->setChecked(true);
+    csvEdit->setText("");
+    QVERIFY(exportBtn->isEnabled() == false);
+
+    // Switch to CSV-only export: uncheck the empty Image and give the CSV a
     // path. Every checked export now has a non-empty path -> valid.
-    csvCheck->setChecked(false);
-    imgEdit->setText("test.png");
+    imgCheck->setChecked(false);
+    csvEdit->setText("test.csv");
     QVERIFY(exportBtn->isEnabled() == true);
+}
+
+void TestExportDialog::testLogRowDefaultsAndAccessors()
+{
+    ExportDialog dlg("default.csv", "default.png", "default_log.txt");
+
+    QCheckBox* logCheck = nullptr;
+    for (auto* cb : dlg.findChildren<QCheckBox*>()) {
+        if (cb->text() == "Export Log") logCheck = cb;
+    }
+    QVERIFY(logCheck != nullptr);
+
+    QLineEdit* logEdit = nullptr;
+    for (auto* le : dlg.findChildren<QLineEdit*>()) {
+        if (le->text() == "default_log.txt") logEdit = le;
+    }
+    QVERIFY(logEdit != nullptr);
+
+    // Default: log export off, so its accessors and field reflect that.
+    QVERIFY(logCheck->isChecked() == false);
+    QVERIFY(dlg.exportLog() == false);
+    QVERIFY(logEdit->isEnabled() == false);
+    QCOMPARE(dlg.logPath(), QString("default_log.txt"));
+
+    // Enabling the checkbox enables the path field and flips the accessor.
+    logCheck->setChecked(true);
+    QVERIFY(dlg.exportLog() == true);
+    QVERIFY(logEdit->isEnabled() == true);
+}
+
+void TestExportDialog::testLogOnlyExportValidation()
+{
+    ExportDialog dlg("default.csv", "default.png", "default_log.txt");
+
+    QPushButton* exportBtn = nullptr;
+    for (auto* btn : dlg.findChildren<QPushButton*>()) {
+        if (btn->text() == "Export") exportBtn = btn;
+    }
+    QVERIFY(exportBtn != nullptr);
+
+    QCheckBox* imgCheck = nullptr;
+    QCheckBox* logCheck = nullptr;
+    for (auto* cb : dlg.findChildren<QCheckBox*>()) {
+        if (cb->text() == "Export Image") imgCheck = cb;
+        if (cb->text() == "Export Log") logCheck = cb;
+    }
+    QLineEdit* logEdit = nullptr;
+    for (auto* le : dlg.findChildren<QLineEdit*>()) {
+        if (le->text() == "default_log.txt") logEdit = le;
+    }
+
+    // Log-only export with a populated path is valid.
+    imgCheck->setChecked(false);
+    logCheck->setChecked(true);
+    QVERIFY(exportBtn->isEnabled() == true);
+
+    // Clearing the log path (the only checked export) invalidates the dialog.
+    logEdit->setText("");
+    QVERIFY(exportBtn->isEnabled() == false);
 }

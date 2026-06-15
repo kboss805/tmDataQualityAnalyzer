@@ -820,20 +820,40 @@ void PlotViewModel::setLockAxisView(LockAxisView view)
     {
         return;
     }
+
+    const LockAxisView old_view = m_lock_axis_view;
     m_lock_axis_view = view;
 
+    auto metricMatchesView = [](PlotSeriesData::MetricType type, LockAxisView v) {
+        return (v == LockAxisView::LockPercent)
+            ? type == PlotSeriesData::MetricType::FrameSyncLock
+            : type == PlotSeriesData::MetricType::AccumulatedMissedFrames;
+    };
+
+    // A stream is "selected" if its currently-active metric series is visible. Capture
+    // that per-stream selection from the outgoing view so it can be carried over to the
+    // incoming metric — otherwise switching modes would make every stream visible again
+    // and discard the user's stream selection.
+    QMap<int, bool> selected;
+    for (const PlotSeriesData& s : m_series)
+    {
+        if (metricMatchesView(s.metricType, old_view))
+        {
+            selected.insert(s.streamOrder, s.visible);
+        }
+    }
+
     // Flip visibility: lock series shown in LockPercent mode, missed frames series in
-    // MissedFrames mode. SNR series are unaffected.
+    // MissedFrames mode — but only for streams that were selected. SNR series are
+    // unaffected.
     for (int i = 0; i < m_series.size(); i++)
     {
         PlotSeriesData& s = m_series[i];
-        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock)
+        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock ||
+            s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
         {
-            s.visible = (view == LockAxisView::LockPercent);
-        }
-        else if (s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
-        {
-            s.visible = (view == LockAxisView::MissedFrames);
+            s.visible = metricMatchesView(s.metricType, view)
+                && selected.value(s.streamOrder, true);
         }
     }
 
