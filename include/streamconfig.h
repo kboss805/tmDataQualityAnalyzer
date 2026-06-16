@@ -7,8 +7,10 @@
 #ifndef STREAMCONFIG_H
 #define STREAMCONFIG_H
 
+#include <QHash>
 #include <QString>
 
+#include "calibrationprofile.h"
 #include "constants.h"
 
 /**
@@ -54,6 +56,11 @@ struct StreamConfig
     int        numReceivers      = PCMConstants::kDefaultNumReceivers;   ///< Number of receivers.
     int        receiverChannels  = PCMConstants::kDefaultReceiverChannels; ///< Receiver channels per receiver.
     QString    receiverParamsToml;  ///< Path to the Receiver Parameters TOML (word map, required for ReceiverChannelInfo mode).
+
+    /// Optional non-linear step calibration profiles (US3.2), keyed by zero-based
+    /// word index within the minor frame (matches ParameterInfo::word). Session-only;
+    /// never serialized. Empty = linear math for every channel.
+    QHash<int, CalibrationProfile> calibrationByWord;
 };
 
 #endif // STREAMCONFIG_H

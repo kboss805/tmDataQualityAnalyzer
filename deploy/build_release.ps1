@@ -94,7 +94,7 @@ Copy-Item "$ProjectDir\build\release\tmDataQualityAnalyzer.exe" "$InstallerStage
 if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
 
 Copy-Item "$ProjectDir\settings\default.toml" "$InstallerStage\settings\"
-foreach ($toml in @('RASA.toml', 'TRC.toml', 'framesync_PRN11.toml', 'framesync_PRN15.toml')) {
+foreach ($toml in @('RASA.toml', 'TRC.toml', 'framesync_PRN11.toml', 'framesync_PRN15.toml', 'snr_cal_0to60dB_6dB_5s.toml')) {
     if (Test-Path "$ProjectDir\settings\$toml") {
         Copy-Item "$ProjectDir\settings\$toml" "$InstallerStage\settings\"
     }
@@ -120,7 +120,7 @@ foreach ($dir in @('platforms', 'styles', 'imageformats', 'tls', 'networkinforma
 }
 
 Copy-Item "$ProjectDir\settings\default.toml" "$PortableRoot\settings\"
-foreach ($toml in @('RASA.toml', 'TRC.toml', 'framesync_PRN11.toml', 'framesync_PRN15.toml')) {
+foreach ($toml in @('RASA.toml', 'TRC.toml', 'framesync_PRN11.toml', 'framesync_PRN15.toml', 'snr_cal_0to60dB_6dB_5s.toml')) {
     if (Test-Path "$ProjectDir\settings\$toml") {
         Copy-Item "$ProjectDir\settings\$toml" "$PortableRoot\settings\"
     }

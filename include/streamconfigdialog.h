@@ -39,6 +39,8 @@ public:
      * @param[in] toml_dir           Default directory for the TOML file browse dialogs.
      * @param[in] time_channels      List of available time channel display strings.
      * @param[in] time_channel_index Currently selected time channel index (1-based, 0 = none).
+     * @param[in] time_channel_id    Resolved channel ID of the selected time channel (-1 = none),
+     *                               inherited by the Receiver SNR calibration extraction (US3.2).
      * @param[in] start_time         Initial start time (from the file's time range).
      * @param[in] stop_time          Initial stop time (from the file's time range).
      * @param[in] extract_all_time   Initial state of the "Extract All Time" checkbox.
@@ -48,6 +50,7 @@ public:
                                 const QString& toml_dir,
                                 const QStringList& time_channels,
                                 int time_channel_index,
+                                int time_channel_id,
                                 const TimeFields& start_time,
                                 const TimeFields& stop_time,
                                 bool extract_all_time,
@@ -93,6 +96,7 @@ private:
         int     numReceivers     = PCMConstants::kDefaultNumReceivers;
         int     receiverChannels = PCMConstants::kDefaultReceiverChannels;
         QString    receiverParamsToml;
+        QHash<int, CalibrationProfile> calibrationByWord; ///< Non-linear step calibration profiles (US3.2).
         StreamMode lastConfiguredMode = StreamMode::FrameSyncLockStats; ///< Mode whose values are currently stored.
         bool       gearConfirmed      = false; ///< True only after the user has opened and accepted the gear dialog.
     };
@@ -115,6 +119,7 @@ private:
     QComboBox*            m_time_channel_combo = nullptr;
     TimeExtractionWidget* m_time_widget        = nullptr;
     QPushButton*          m_ok_btn             = nullptr;
+    int                   m_time_channel_id    = -1; ///< Resolved time channel ID for calibration extraction (US3.2).
 };
 
 #endif // STREAMCONFIGDIALOG_H

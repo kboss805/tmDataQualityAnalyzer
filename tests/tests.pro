@@ -27,6 +27,8 @@ SOURCES += \
     $$PWD/../src/streamconfigdialog.cpp \
     $$PWD/../src/timeextractionwidget.cpp \
     $$PWD/../src/frameprocessor.cpp \
+    $$PWD/../src/stepdetector.cpp \
+    $$PWD/../src/calibrationextractor.cpp \
     $$PWD/../src/plotviewmodel.cpp \
     $$PWD/../src/plotwidget.cpp \
     $$PWD/../src/plotcustomizationdialog.cpp \
@@ -42,6 +44,9 @@ HEADERS += \
     $$PWD/../include/packetqueue.h \
     $$PWD/../include/constants.h \
     $$PWD/../include/framesetup.h \
+    $$PWD/../include/calibrationprofile.h \
+    $$PWD/../include/stepdetector.h \
+    $$PWD/../include/calibrationextractor.h \
     $$PWD/../include/mainviewmodel.h \
     $$PWD/../include/processingcoordinator.h \
     $$PWD/../include/mainview.h \
@@ -109,7 +114,8 @@ SOURCES += \
     tst_timeextractionwidget.cpp \
     tst_processingcoordinator.cpp \
     tst_streamconfigdialog.cpp \
-    tst_exportdialog.cpp
+    tst_exportdialog.cpp \
+    tst_stepdetector.cpp
 
 # Test headers (needed for MOC processing)
 HEADERS += \
@@ -125,4 +131,5 @@ HEADERS += \
     tst_timeextractionwidget.h \
     tst_processingcoordinator.h \
     tst_streamconfigdialog.h \
-    tst_exportdialog.h
+    tst_exportdialog.h \
+    tst_stepdetector.h

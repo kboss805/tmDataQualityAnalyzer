@@ -1,6 +1,16 @@
 tmDataQualityAnalyzer v2.2.0 - What's New
 =================================
 
+  - New: Non-linear step calibration for Receiver SNR. The Receiver SNR setup
+    dialog gains an "Extract Calibration..." action that reads a calibration
+    Chapter 10 file plus a step-config TOML (expected dB levels and dwell
+    times), detects the step plateaus on each receiver channel, and builds a
+    per-channel raw-to-dB profile. During processing those channels convert
+    samples with piecewise-linear interpolation (extrapolating past the end
+    steps) instead of the linear slope/offset; channels that don't calibrate
+    fall back to linear automatically. The profile is session-only and is not
+    saved to disk.
+
   - New: On-plot legend panel. A legend now sits directly below the chart,
     showing a color swatch and label for every visible series. It updates as
     you toggle series or switch the left-axis view, and scrolls vertically when

@@ -353,7 +353,11 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
                                         param->word < static_cast<int>(words_in_frame))
                                     {
                                         int64_t raw_value = static_cast<int64_t>(frame_words[param->word] & word_mask);
-                                        double scaled_value = (static_cast<double>(raw_value) + param->scale) * param->slope;
+                                        // Non-linear step calibration (US3.2) when a valid profile is present;
+                                        // otherwise the linear (raw + offset) * slope model.
+                                        double scaled_value = param->profile.valid
+                                            ? interpolateCalibration(static_cast<double>(raw_value), param->profile)
+                                            : (static_cast<double>(raw_value) + param->scale) * param->slope;
                                         param->sample_sum += scaled_value;
                                     }
                                 }

@@ -32,6 +32,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **AGC Processing**: Extract calibrated receiver-channel AGC/SNR values with V-to-dB conversion
 - **Calibration**: Configurable polarity, voltage slope/range, scale (dB/V), receiver count, and channels per receiver
 - **Receiver Parameters TOML**: Word map and calibration loaded from a TOML configuration file
+- **Non-Linear Step Calibration**: Optionally build a per-channel raw→dB calibration profile from a calibration .ch10 file plus a `[[Step]]` step-config TOML ("Extract Calibration…" in the Receiver SNR setup); applied during processing via piecewise-linear interpolation (with linear extrapolation past the end steps), and falling back to linear slope/offset for channels that don't calibrate. Session-only; not saved to disk.
 
 ### Multi-Stream Processing
 - **Per-Stream Configuration**: One row per PCM channel in the Configure Streams dialog, each independently set to Frame Sync Lock or Receiver SNR mode with its own setup

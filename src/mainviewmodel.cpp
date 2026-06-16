@@ -702,6 +702,21 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
         param->sample_sum = 0;
     }
 
+    // Attach any non-linear step calibration profiles (US3.2), matched by word
+    // index. Channels without a valid profile keep the linear slope/scale above.
+    if (!cfg.calibrationByWord.isEmpty())
+    {
+        for (int i = 0; i < frame_setup->length(); i++)
+        {
+            ParameterInfo* param = frame_setup->getParameter(i);
+            auto it = cfg.calibrationByWord.constFind(param->word);
+            if (it != cfg.calibrationByWord.constEnd() && it.value().valid)
+            {
+                param->profile = it.value();
+            }
+        }
+    }
+
     out_job.frameSetup = frame_setup;
     return true;
 }

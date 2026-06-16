@@ -165,6 +165,30 @@ namespace UIConstants {
     /// @}
 }
 
+/// @brief Constants for non-linear step calibration extraction (US3.2).
+namespace CalibrationConstants {
+    /// Fine output sample period (seconds) used when extracting raw calibration
+    /// data, so dwell plateaus are resolved with many samples each.
+    inline constexpr double kExtractSamplePeriodSec = 0.01; // 10 ms (100 Hz)
+
+    /// Edge-detection threshold as a multiple of the robust (MAD-based) standard
+    /// deviation of the in-plateau sample-to-sample derivative. A derivative
+    /// larger than this is treated as a step transition.
+    inline constexpr double kEdgeSigmaMultiple = 6.0;
+
+    /// Absolute floor on the edge threshold in raw counts, so flat/noise-free
+    /// data does not produce a degenerate (near-zero) threshold.
+    inline constexpr double kMinEdgeRawCounts = 2.0;
+
+    /// Fraction of each detected plateau trimmed from both ends before averaging,
+    /// to discard transition settling and keep only the stable core.
+    inline constexpr double kEdgeTrimFraction = 0.125; // 12.5% each side
+
+    /// Minimum plateau length, as a fraction of the shortest expected dwell, for
+    /// a run of stable samples to count as a real step (rejects transient spans).
+    inline constexpr double kMinPlateauDwellFraction = 0.5;
+}
+
 /// @brief Constants for the AGC signal plot window.
 namespace PlotConstants {
     inline constexpr int kPlotDockMinWidth   = 1024;   ///< Minimum plot dock width in pixels.

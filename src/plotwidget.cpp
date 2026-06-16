@@ -25,8 +25,7 @@
 #include <QRegularExpression>
 #include <QTextStream>
 
-#include "qcustomplot.
-h"
+#include "qcustomplot.h"
 
 #include "constants.h"
 #include "plotviewmodel.h"

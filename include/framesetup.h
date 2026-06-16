@@ -9,11 +9,15 @@
 #include <QObject>
 #include <QSettings>
 
+#include "calibrationprofile.h"
+
 /**
  * @brief Describes one named parameter within a PCM minor frame.
  *
  * Each parameter maps to a word position in the frame and carries calibration
  * values (slope/scale) used to convert raw 16-bit samples to engineering units.
+ * When @c profile.valid is true the non-linear step calibration (piecewise
+ * interpolation) is used instead of the linear slope/scale model.
  */
 struct ParameterInfo
 {
@@ -23,6 +27,7 @@ struct ParameterInfo
     double scale;      ///< Calibration offset applied before slope.
     bool is_enabled;   ///< Whether this parameter is included in output.
     double sample_sum; ///< Running sum of scaled values for averaging.
+    CalibrationProfile profile; ///< Optional non-linear step calibration (US3.2); linear math used when invalid.
 };
 
 /**

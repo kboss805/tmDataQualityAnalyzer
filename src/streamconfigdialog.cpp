@@ -9,6 +9,7 @@
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
+#include <QEventLoop>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFrame>
@@ -17,6 +18,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QProgressDialog>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
@@ -25,7 +27,9 @@
 #include <QTableWidget>
 #include <QVBoxLayout>
 
+#include "calibrationextractor.h"
 #include "constants.h"
+#include "stepdetector.h"
 #include "timeextractionwidget.h"
 #include "tomlconfighelper.h"
 
@@ -290,10 +294,14 @@ class ReceiverSNRDialog : public QDialog
 public:
     explicit ReceiverSNRDialog(const StreamConfig& cfg,
                                const QString& toml_dir,
+                               int time_channel_id,
                                QWidget* parent = nullptr)
         : QDialog(parent)
         , m_receiverParamsToml(cfg.receiverParamsToml)
         , m_toml_dir(toml_dir)
+        , m_timeChannelId(time_channel_id)
+        , m_pcmChannelId(cfg.pcmChannelId)
+        , m_calibrationByWord(cfg.calibrationByWord)
     {
         setWindowTitle("Receiver SNR Setup — " + cfg.label);
         setModal(true);
@@ -530,6 +538,34 @@ public:
             updateReceiverParamsLabel();
         }
 
+        // ---- Separator ------------------------------------------------------
+        {
+            auto* sep = new QFrame(this);
+            sep->setFrameShape(QFrame::HLine);
+            sep->setFrameShadow(QFrame::Sunken);
+            outer->addWidget(sep);
+        }
+
+        // ---- Group 3: Non-linear step calibration (US3.2) -------------------
+        {
+            auto* row = new QHBoxLayout;
+            auto* extractBtn = new QPushButton("Extract Calibration...", this);
+            extractBtn->setToolTip(
+                "Build a non-linear calibration profile from a calibration "
+                "Chapter 10 file and a step-config TOML. Uses the word map, "
+                "frame sync, and polarity above plus the time channel from the "
+                "main dialog. Session-only; not saved to disk.");
+            connect(extractBtn, &QPushButton::clicked, this,
+                    [this]() { onExtractCalibration(); });
+            row->addWidget(extractBtn);
+
+            m_calibrationLabel = new QLabel(this);
+            row->addWidget(m_calibrationLabel);
+            row->addStretch(1);
+            outer->addLayout(row);
+            updateCalibrationLabel();
+        }
+
         addSeparator(outer, this);
 
         auto* buttons = new QDialogButtonBox(
@@ -571,6 +607,7 @@ public:
     QString receiverParamsToml() const { return m_receiverParamsToml; }
     QString lastTomlDir()        const { return m_toml_dir; }
     bool    applyToAll()         const { return m_applyToAll->isChecked(); }
+    QHash<int, CalibrationProfile> calibrationByWord() const { return m_calibrationByWord; }
 
 private:
     void updateReceiverParamsLabel()
@@ -579,6 +616,111 @@ private:
             m_receiverParamsLabel->setText("<span style='color: gray;'>(none — using default word map)</span>");
         else
             m_receiverParamsLabel->setText(QFileInfo(m_receiverParamsToml).fileName());
+    }
+
+    void updateCalibrationLabel()
+    {
+        int n = 0;
+        for (const CalibrationProfile& p : m_calibrationByWord)
+        {
+            if (p.valid) n++;
+        }
+        if (n == 0)
+            m_calibrationLabel->setText(
+                "<span style='color: gray;'>(none — using linear calibration)</span>");
+        else
+            m_calibrationLabel->setText(
+                QString("%1 channel(s) calibrated (non-linear)").arg(n));
+    }
+
+    /// Prompts for a step-config TOML and a calibration Ch10 file, runs the
+    /// extraction behind a modal progress dialog, and stores the resulting
+    /// per-channel profiles (US3.2).
+    void onExtractCalibration()
+    {
+        if (m_timeChannelId < 0)
+        {
+            QMessageBox::warning(this, tr("No Time Channel"),
+                tr("Select a Time Channel in the Configure Streams dialog before "
+                   "extracting calibration."));
+            return;
+        }
+
+        const QString step_path = QFileDialog::getOpenFileName(
+            this, tr("Select Step Configuration (TOML)"), m_toml_dir,
+            tr("TOML Files (*.toml);;All Files (*.*)"));
+        if (step_path.isEmpty()) return;
+
+        QVector<StepDefinition> steps;
+        QString parse_error;
+        if (!StepDetector::parseStepConfig(step_path, steps, parse_error))
+        {
+            QMessageBox::warning(this, tr("Invalid Step Configuration"), parse_error);
+            return;
+        }
+        m_toml_dir = QFileInfo(step_path).absolutePath();
+
+        const QString cal_path = QFileDialog::getOpenFileName(
+            this, tr("Select Calibration Chapter 10 File"), QString(),
+            tr("Chapter 10 Files (*.ch10 *.c10);;All Files (*.*)"));
+        if (cal_path.isEmpty()) return;
+
+        CalibrationExtractor::Request req;
+        req.calFilename       = cal_path;
+        req.timeChannelId     = m_timeChannelId;
+        req.pcmChannelId      = m_pcmChannelId;
+        req.frameSyncHex      = frameSyncPattern();
+        req.frameSyncMaskHex  = frameSyncMask();
+        req.bitsInMinorFrame  = bitsPerFrame();
+        req.randomized        = randomized();
+        req.dataRateMbps      = dataRateMbps();
+        req.receiverParamsToml = m_receiverParamsToml;
+        req.numReceivers      = numReceivers();
+        req.receiverChannels  = receiverChannels();
+        req.steps             = steps;
+
+        CalibrationExtractor extractor;
+        QProgressDialog progress(tr("Extracting calibration..."), tr("Cancel"),
+                                 0, 100, this);
+        progress.setWindowModality(Qt::WindowModal);
+        progress.setMinimumDuration(0);
+
+        connect(&extractor, &CalibrationExtractor::progressChanged,
+                &progress, &QProgressDialog::setValue);
+        connect(&progress, &QProgressDialog::canceled,
+                &extractor, &CalibrationExtractor::cancel);
+
+        QEventLoop loop;
+        bool success = false;
+        QString summary;
+        connect(&extractor, &CalibrationExtractor::finished, this,
+                [&](bool ok, const QString& msg) {
+                    success = ok;
+                    summary = msg;
+                    loop.quit();
+                });
+
+        extractor.start(req);
+        progress.show();
+        loop.exec();
+        progress.close();
+
+        if (!success)
+        {
+            QMessageBox::warning(this, tr("Calibration"), summary);
+            return;
+        }
+
+        m_calibrationByWord.clear();
+        for (const CalibrationChannelResult& r : extractor.results())
+        {
+            if (r.profile.valid)
+            {
+                m_calibrationByWord.insert(r.word, r.profile);
+            }
+        }
+        updateCalibrationLabel();
+        QMessageBox::information(this, tr("Calibration Extracted"), summary);
     }
 
     QLineEdit*      m_syncPattern      = nullptr;
@@ -596,6 +738,12 @@ private:
     QLabel*         m_receiverParamsLabel = nullptr;
     QString         m_receiverParamsToml;
     QString         m_toml_dir;
+
+    // Non-linear step calibration (US3.2)
+    int             m_timeChannelId = -1;     ///< Time channel ID inherited from the parent dialog.
+    int             m_pcmChannelId  = -1;     ///< PCM channel ID of the stream being calibrated.
+    QHash<int, CalibrationProfile> m_calibrationByWord; ///< Extracted profiles, keyed by word index.
+    QLabel*         m_calibrationLabel = nullptr; ///< Status text for the calibration section.
 };
 
 } // namespace
@@ -608,6 +756,7 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
                                        const QString& toml_dir,
                                        const QStringList& time_channels,
                                        int time_channel_index,
+                                       int time_channel_id,
                                        const TimeFields& start_time,
                                        const TimeFields& stop_time,
                                        bool extract_all_time,
@@ -615,6 +764,7 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
     : QDialog(parent)
     , m_configs(configs)
     , m_toml_dir(toml_dir)
+    , m_time_channel_id(time_channel_id)
 {
     setWindowTitle("Configure Streams");
     setModal(true);
@@ -847,6 +997,7 @@ void StreamConfigDialog::openGearDialog(int row)
     temp.numReceivers       = w.numReceivers;
     temp.receiverChannels   = w.receiverChannels;
     temp.receiverParamsToml = w.receiverParamsToml;
+    temp.calibrationByWord  = w.calibrationByWord;
 
     // If the user changed modes since last configure, reset frame sync fields to
     // this mode's defaults so the sub-dialog pre-fills with sensible values.
@@ -904,7 +1055,7 @@ void StreamConfigDialog::openGearDialog(int row)
     }
     else
     {
-        ReceiverSNRDialog dlg(temp, m_toml_dir, this);
+        ReceiverSNRDialog dlg(temp, m_toml_dir, m_time_channel_id, this);
         if (dlg.exec() == QDialog::Accepted)
         {
             w.frameSyncPattern   = dlg.frameSyncPattern();
@@ -919,11 +1070,12 @@ void StreamConfigDialog::openGearDialog(int row)
             w.numReceivers       = dlg.numReceivers();
             w.receiverChannels   = dlg.receiverChannels();
             w.receiverParamsToml = dlg.receiverParamsToml();
+            w.calibrationByWord  = dlg.calibrationByWord();
             m_toml_dir           = dlg.lastTomlDir();
             w.lastConfiguredMode = StreamMode::ReceiverChannelInfo;
             w.gearConfirmed      = true;
             updateReadyIcon(row);
-            
+
             if (dlg.applyToAll())
             {
                 for (int i = 0; i < m_rows.size(); i++)
@@ -943,6 +1095,7 @@ void StreamConfigDialog::openGearDialog(int row)
                     rw.numReceivers       = dlg.numReceivers();
                     rw.receiverChannels   = dlg.receiverChannels();
                     rw.receiverParamsToml = dlg.receiverParamsToml();
+                    rw.calibrationByWord  = dlg.calibrationByWord();
                     rw.lastConfiguredMode = StreamMode::ReceiverChannelInfo;
                     rw.gearConfirmed      = true;
                     updateReadyIcon(i);
@@ -1026,6 +1179,7 @@ QVector<StreamConfig> StreamConfigDialog::configs() const
         result[row].numReceivers      = w.numReceivers;
         result[row].receiverChannels  = w.receiverChannels;
         result[row].receiverParamsToml = w.receiverParamsToml;
+        result[row].calibrationByWord = w.calibrationByWord;
     }
     return result;
 }

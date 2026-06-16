@@ -64,6 +64,8 @@ SOURCES += \
     src/timeextractionwidget.cpp \
     src/exportdialog.cpp \
     src/frameprocessor.cpp \
+    src/stepdetector.cpp \
+    src/calibrationextractor.cpp \
     src/plotviewmodel.cpp \
     src/plotcustomizationdialog.cpp \
     src/plotwidget.cpp \
@@ -89,6 +91,9 @@ HEADERS += \
     include/ch10packetreader.h \
     include/constants.h \
     include/framesetup.h \
+    include/calibrationprofile.h \
+    include/stepdetector.h \
+    include/calibrationextractor.h \
     include/packetqueue.h \
     include/mainviewmodel.h \
     include/processingcoordinator.h \

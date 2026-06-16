@@ -16,6 +16,7 @@
 #include <QTime>
 #include <QUrl>
 
+#include "chapter10reader.h"
 #include "constants.h"
 #include "mainviewmodel.h"
 #include "plotviewmodel.h"
@@ -374,6 +375,7 @@ void MainView::onFileReadyForStreamConfig()
                               m_view_model->lastIniDir(),
                               m_view_model->timeChannelList(),
                               m_view_model->timeChannelIndex(),
+                              m_view_model->reader()->getCurrentTimeChannelID(),
                               start_tf,
                               stop_tf,
                               m_view_model->extractAllTime(),

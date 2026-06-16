@@ -157,15 +157,23 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - [x] The dialog window includes a "Save" button to save the key parameters to the configuration file
 - [x] The dialog window includes a "Cancel" button to cancel the operation
 
-### US3.2: SNR Calibration (placeholder)
+### US3.2: Non-Linear Receiver SNR Step Calibration
 **As a** telemetry engineer or data analyst
-**I want to** _TBD — placeholder for an SNR calibration workflow_
-**So that** _TBD_
+**I want to** apply a non-linear step calibration to Receiver SNR streams using a Calibration CH10 file and a TOML step configuration
+**So that** I can accurately groom out receiver non-linearities and plot true SNR values instead of relying on a simple linear slope/offset.
 
 **Acceptance Criteria:**
-- [ ] _TBD — to be defined_
+- [x] The user can enable non-linear step calibration for a specific Receiver SNR stream in the per-stream setup dialog (via the "Extract Calibration…" action).
+- [x] The user can load a TOML file defining the expected step values (in dB) and duration (dwell time in seconds).
+- [x] The user can load a Calibration CH10 file containing the recorded step data.
+- [x] The application automatically extracts plateaus from the CAL file, using the expected dwell times to filter noise and trimming transition edges to only average the stable "core" of the step.
+- [x] The application evaluates step extraction success independently for each receiver channel (up to 48).
+- [x] Channels that successfully map the expected number of steps are assigned a non-linear calibration profile for the session.
+- [x] Channels that fail step extraction (e.g., due to noise or no data) fall back to the standard linear (slope/offset) calibration.
+- [x] A summary message box informs the user which channels succeeded and which fell back.
+- [x] During main data processing, the application applies the non-linear profile using piece-wise linear interpolation between steps, and linear extrapolation for out-of-bounds values.
 
-  - **Scope:** Placeholder story. Title and details to be filled in; no implementation work is tracked here yet.
+  - **Scope:** Plateaus are found by derivative/edge detection and paired with the TOML steps in time order (if more plateaus than steps are detected, the first N are used). "Success" requires at least the expected number of plateaus. Profiles are session-only (never serialized), keyed by minor-frame word index, and applied per word-map parameter. Implemented by `StepDetector`, `CalibrationExtractor`, `interpolateCalibration()` (in `calibrationprofile.h`), and the `FrameProcessor` sample-conversion branch; the extraction reuses the production `Ch10PacketReader` + `FrameProcessor` pipeline with unit slope / zero offset to recover raw counts.
 
 ### US4.0: Recall/store framesync pattern and frame length parameters from/to configuration files
 **As an** As a telemetry engineer or data analyst
@@ -255,7 +263,14 @@ This file provides context and guidelines for AI assistants working on the tmDat
 
 ## Version History
 
-### v2.2.0 — On-Plot Legend, Log Export, and Single-Source Versioning
+### v2.2.0 — Non-Linear Calibration, On-Plot Legend, Log Export, and Single-Source Versioning
+- Non-linear step calibration for Receiver SNR (US3.2): an "Extract Calibration…"
+  action in the Receiver SNR setup dialog builds a per-channel raw→dB profile from
+  a calibration Chapter 10 file and a `[[Step]]` TOML, applied via piecewise-linear
+  interpolation/extrapolation during processing; channels that fail fall back to
+  linear math. New `StepDetector`, `CalibrationExtractor`, and
+  `interpolateCalibration()`; session-only, keyed by word index. New
+  `TestStepDetector` suite.
 - New on-plot legend panel below the chart: a fixed-height, vertically
   scrolling 4-column grid of color swatch + series-name pairs that lists every
   visible series and updates as series are toggled or the left-axis view
@@ -711,6 +726,7 @@ source/header files are listed in `tests/tests.pro`.
 - **TestPlotWidget** (`tst_plotwidget`) — Plot widget construction, control enable/disable on data load, theme application, legend rebuild
 - **TestStreamConfigDialog** (`tst_streamconfigdialog`) — Per-stream Configure Streams dialog: stream rows, mode selection, gear setup dialogs, TOML load/save round-trips, "Apply to all" fan-out
 - **TestExportDialog** (`tst_exportdialog`) — Export dialog checkbox-to-field enable logic, export-button validation, and the log-export row defaults/accessors and log-only validation
+- **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US3.2): `[[Step]]` TOML parsing (valid / missing dwell / empty), plateau detection (clean, too-few-fails, extra-plateaus-uses-first-N, noisy, edge-trim), and `interpolateCalibration()` (midpoint, below/above extrapolation, coincident-raw guard)
 
 ### Running Tests
 ```bash

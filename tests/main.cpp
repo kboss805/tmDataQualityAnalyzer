@@ -16,6 +16,7 @@
 #include "tst_plotviewmodel.h"
 #include "tst_plotwidget.h"
 #include "tst_processingcoordinator.h"
+#include "tst_stepdetector.h"
 #include "tst_streamconfigdialog.h"
 #include "tst_timeextractionwidget.h"
 #include "tst_exportdialog.h"
@@ -99,6 +100,7 @@ int main(int argc, char* argv[])
     status |= runSuite<TestPlotWidget>(log_path);
     status |= runSuite<TestStreamConfigDialog>(log_path);
     status |= runSuite<TestExportDialog>(log_path);
+    status |= runSuite<TestStepDetector>(log_path);
 
     return status;
 }

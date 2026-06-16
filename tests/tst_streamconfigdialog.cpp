@@ -59,7 +59,7 @@ static StreamConfigDialog* makeDialog(const QVector<StreamConfig>& configs = {},
 {
     TimeFields start{1, 0, 0, 0};
     TimeFields stop {1, 0, 0, 10};
-    return new StreamConfigDialog(configs, "", {"Ch 1"}, 1, start, stop, extract_all);
+    return new StreamConfigDialog(configs, "", {"Ch 1"}, 1, -1, start, stop, extract_all);
 }
 
 // ---------------------------------------------------------------------------

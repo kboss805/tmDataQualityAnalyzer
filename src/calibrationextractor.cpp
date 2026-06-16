@@ -1,0 +1,328 @@
+/**
+ * @file calibrationextractor.cpp
+ * @brief Implementation of CalibrationExtractor (US3.2).
+ */
+
+#include "calibrationextractor.h"
+
+#include <QFileInfo>
+#include <QThread>
+
+#include "ch10packetreader.h"
+#include "constants.h"
+#include "frameprocessor.h"
+#include "framesetup.h"
+#include "packetqueue.h"
+#include "processedstreamdata.h"
+#include "stepdetector.h"
+
+namespace {
+
+/// Mirrors MainViewModel::parameterName so the default word map matches the one
+/// built for the real processing run (channel L/R/C + receiver number).
+QString defaultParameterName(int channel_index, int receiver_index)
+{
+    QString prefix = (channel_index < UIConstants::kNumKnownPrefixes)
+        ? QString(UIConstants::kChannelPrefixes[channel_index])
+        : ("CH" + QString::number(channel_index + 1));
+    return prefix + "_RCVR" + QString::number(receiver_index + 1);
+}
+
+} // namespace
+
+CalibrationExtractor::CalibrationExtractor(QObject* parent)
+    : QObject(parent)
+{
+}
+
+CalibrationExtractor::~CalibrationExtractor()
+{
+    teardown();
+    delete m_frame_setup;
+}
+
+void CalibrationExtractor::start(const Request& request)
+{
+    if (m_running)
+    {
+        return;
+    }
+    m_running   = true;
+    m_cancelled = false;
+    m_error.clear();
+    m_results.clear();
+    m_steps = request.steps;
+    m_sample_period_sec = CalibrationConstants::kExtractSamplePeriodSec;
+
+    if (request.steps.isEmpty())
+    {
+        finishWithError("No calibration steps were provided.");
+        return;
+    }
+
+    // ---- Frame sync numeric values ----
+    bool sync_ok = false;
+    const uint64_t frame_sync = request.frameSyncHex.toULongLong(&sync_ok, UIConstants::kHexBase);
+    if (!sync_ok || request.frameSyncHex.isEmpty())
+    {
+        finishWithError("Invalid frame sync pattern '" + request.frameSyncHex + "'.");
+        return;
+    }
+    const int sync_pattern_length = static_cast<int>(request.frameSyncHex.length()) * 4;
+
+    uint64_t frame_sync_mask = 0;
+    if (request.frameSyncMaskHex.isEmpty())
+    {
+        frame_sync_mask = (sync_pattern_length > 0 && sync_pattern_length < 64)
+            ? (1ULL << sync_pattern_length) - 1
+            : 0xFFFFFFFFFFFFFFFFULL;
+    }
+    else
+    {
+        bool mask_ok = false;
+        frame_sync_mask = request.frameSyncMaskHex.toULongLong(&mask_ok, UIConstants::kHexBase);
+        if (!mask_ok)
+        {
+            finishWithError("Invalid frame sync mask '" + request.frameSyncMaskHex + "'.");
+            return;
+        }
+    }
+
+    const int words_in_minor_frame =
+        (request.bitsInMinorFrame + PCMConstants::kCommonWordLen - 1) / PCMConstants::kCommonWordLen;
+
+    // ---- Word map (unit slope, zero offset -> raw counts out) ----
+    QString setup_error;
+    if (!buildFrameSetup(request, words_in_minor_frame, setup_error))
+    {
+        finishWithError(setup_error);
+        return;
+    }
+
+    // ---- ProcessingParams ----
+    m_params = ProcessingParams{};
+    m_params.filename          = request.calFilename;
+    m_params.timeChannelId     = request.timeChannelId;
+    m_params.pcmChannelId      = request.pcmChannelId;
+    m_params.frameSync         = frame_sync;
+    m_params.frameSyncMask     = frame_sync_mask;
+    m_params.syncPatternLength = sync_pattern_length;
+    m_params.wordsInMinorFrame = words_in_minor_frame;
+    m_params.bitsInMinorFrame  = request.bitsInMinorFrame;
+    m_params.isRandomized      = request.randomized;
+    m_params.mode              = StreamMode::ReceiverChannelInfo;
+    m_params.dataRateBps       = (request.dataRateMbps > 0.0) ? request.dataRateMbps * 1e6 : 0.0;
+    m_params.streamLabel       = "Calibration";
+    m_params.samplePeriodSec   = m_sample_period_sec;
+    m_params.startSeconds      = 0;
+    m_params.stopSeconds       = UINT64_MAX; // whole file
+
+    // ---- Queue + reader ----
+    m_queue = new PacketQueue();
+    m_params.packetQueue = m_queue;
+
+    m_reader = new Ch10PacketReader;
+    QVector<ProcessingParams*> params_list{ &m_params };
+    QString error;
+    if (!m_reader->prepare(request.calFilename, request.timeChannelId, params_list, error))
+    {
+        finishWithError(error);
+        return;
+    }
+
+    // ---- Worker ----
+    m_worker = new FrameProcessor;
+    m_worker_thread = new QThread;
+    m_worker->moveToThread(m_worker_thread);
+    connect(m_worker, &FrameProcessor::processingFinished,
+            this, &CalibrationExtractor::onWorkerFinished);
+    connect(m_worker, &FrameProcessor::logMessage, this, &CalibrationExtractor::logMessage);
+    connect(m_worker_thread, &QThread::finished, m_worker, &QObject::deleteLater);
+
+    ProcessingParams params = m_params;
+    FrameSetup* setup = m_frame_setup;
+    connect(m_worker_thread, &QThread::started, m_worker, [this, params, setup]() {
+        m_worker->process(params, setup);
+    });
+
+    // ---- Reader thread ----
+    m_reader_thread = new QThread;
+    m_reader->moveToThread(m_reader_thread);
+    connect(m_reader, &Ch10PacketReader::progressUpdated, this, &CalibrationExtractor::progressChanged);
+    connect(m_reader, &Ch10PacketReader::logMessage, this, &CalibrationExtractor::logMessage);
+    connect(m_reader, &Ch10PacketReader::errorOccurred, this, [this](const QString& msg) {
+        m_error = msg;
+        emit logMessage(msg);
+    });
+    connect(m_reader_thread, &QThread::started, m_reader, &Ch10PacketReader::run);
+
+    m_worker_thread->start();
+    m_reader_thread->start();
+}
+
+void CalibrationExtractor::cancel()
+{
+    if (!m_running)
+    {
+        return;
+    }
+    m_cancelled = true;
+    if (m_reader != nullptr)
+    {
+        m_reader->requestAbort();
+    }
+    if (m_worker != nullptr)
+    {
+        m_worker->requestAbort();
+    }
+    if (m_queue != nullptr)
+    {
+        m_queue->close();
+    }
+}
+
+void CalibrationExtractor::onWorkerFinished(bool success)
+{
+    if (success && !m_cancelled && m_worker != nullptr)
+    {
+        const ProcessedStreamData data = m_worker->takeResult();
+
+        int calibrated = 0;
+        for (const ProcessedChannelSeries& ch : data.channels)
+        {
+            CalibrationChannelResult res;
+            res.name    = ch.name;
+            res.word    = ch.word;
+            res.hadData = !ch.values.isEmpty();
+
+            if (res.hadData)
+            {
+                StepDetector::Result det =
+                    StepDetector::detect(ch.values, m_sample_period_sec, m_steps);
+                res.profile          = det.profile;
+                res.detectedPlateaus = det.detectedPlateaus;
+                res.extraPlateaus    = det.extraPlateaus;
+                if (res.profile.valid)
+                {
+                    calibrated++;
+                }
+            }
+            m_results.push_back(res);
+        }
+
+        teardown();
+        m_running = false;
+
+        const int total = m_results.size();
+        QString summary = QString("Calibrated %1 of %2 channel(s).").arg(calibrated).arg(total);
+        if (calibrated < total)
+        {
+            summary += " The remaining channels had no data or did not match the "
+                       "expected steps and will use linear calibration.";
+        }
+        emit finished(true, summary);
+        return;
+    }
+
+    // Failure or cancellation path.
+    teardown();
+    m_running = false;
+    if (m_cancelled)
+    {
+        emit finished(false, "Calibration extraction cancelled.");
+    }
+    else
+    {
+        emit finished(false, m_error.isEmpty() ? "Calibration extraction failed." : m_error);
+    }
+}
+
+bool CalibrationExtractor::buildFrameSetup(const Request& request,
+                                           int wordsInMinorFrame,
+                                           QString& error)
+{
+    delete m_frame_setup;
+    m_frame_setup = new FrameSetup(nullptr);
+
+    if (request.receiverParamsToml.isEmpty())
+    {
+        const int total = request.numReceivers * request.receiverChannels;
+        if (total <= 0 || total >= wordsInMinorFrame)
+        {
+            error = "Num Receivers x Receiver Channels exceeds the words available "
+                    "in the minor frame.";
+            return false;
+        }
+        for (int r = 0; r < request.numReceivers; r++)
+        {
+            for (int c = 0; c < request.receiverChannels; c++)
+            {
+                m_frame_setup->addParameter(defaultParameterName(c, r),
+                                            r * request.receiverChannels + c);
+            }
+        }
+    }
+    else if (!QFileInfo::exists(request.receiverParamsToml))
+    {
+        error = "Receiver Parameters file '" +
+                QFileInfo(request.receiverParamsToml).fileName() + "' was not found.";
+        return false;
+    }
+    else if (!m_frame_setup->tryLoadingFile(request.receiverParamsToml, wordsInMinorFrame))
+    {
+        error = "Failed to load Receiver Parameters word map. Check the file.";
+        return false;
+    }
+
+    if (m_frame_setup->length() == 0)
+    {
+        error = "Receiver Parameters file contains no parameters.";
+        return false;
+    }
+
+    // Unit slope / zero offset so FrameProcessor emits raw counts (averaged per
+    // window) rather than calibrated dB.
+    for (int i = 0; i < m_frame_setup->length(); i++)
+    {
+        ParameterInfo* p = m_frame_setup->getParameter(i);
+        p->slope      = 1.0;
+        p->scale      = 0.0;
+        p->is_enabled = true;
+        p->sample_sum = 0.0;
+        p->profile    = CalibrationProfile{}; // ensure linear (raw) extraction
+    }
+    return true;
+}
+
+void CalibrationExtractor::teardown()
+{
+    if (m_worker_thread != nullptr)
+    {
+        m_worker_thread->quit();
+        m_worker_thread->wait();
+        delete m_worker_thread;
+        m_worker_thread = nullptr;
+    }
+    m_worker = nullptr; // auto-deleted via deleteLater on thread finish
+
+    if (m_reader_thread != nullptr)
+    {
+        m_reader_thread->quit();
+        m_reader_thread->wait();
+        delete m_reader_thread;
+        m_reader_thread = nullptr;
+    }
+    delete m_reader;
+    m_reader = nullptr;
+
+    delete m_queue;
+    m_queue = nullptr;
+}
+
+void CalibrationExtractor::finishWithError(const QString& error)
+{
+    m_error = error;
+    teardown();
+    m_running = false;
+    emit finished(false, error);
+}
