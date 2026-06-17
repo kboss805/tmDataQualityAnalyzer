@@ -549,7 +549,8 @@ public:
         // ---- Group 3: Non-linear step calibration (US3.2) -------------------
         {
             auto* row = new QHBoxLayout;
-            auto* extractBtn = new QPushButton("Extract Calibration...", this);
+            auto* extractBtn = new QPushButton("Extract Calibration... (Coming Soon)", this);
+            extractBtn->setEnabled(false);
             extractBtn->setToolTip(
                 "Build a non-linear calibration profile from a calibration "
                 "Chapter 10 file and a step-config TOML. Uses the word map, "
