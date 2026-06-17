@@ -235,7 +235,7 @@ namespace PlotConstants {
     /// @name Legend panel (between chart and bottom controls)
     /// @{
     inline constexpr int kLegendPanelColumns     = 4;   ///< Number of columns in the legend grid.
-    inline constexpr int kLegendPanelVisibleRows = 2;   ///< Rows visible before scrolling.
+    inline constexpr int kLegendPanelVisibleRows = 3;   ///< Rows visible before scrolling.
     inline constexpr int kLegendItemHeight       = 22;  ///< Approximate pixel height of one legend row.
     inline constexpr int kLegendSwatchSize       = 12;  ///< Colored swatch square size (px).
     inline constexpr int kLegendPanelVPad        = 4;   ///< Vertical padding inside the legend panel.

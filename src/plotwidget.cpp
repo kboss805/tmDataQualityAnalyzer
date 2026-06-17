@@ -9,6 +9,7 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QColorDialog>
 #include <QFile>
 #include <QFileDialog>
 #include <QFrame>
@@ -631,7 +632,7 @@ void PlotWidget::setUpLayout()
 
     // --- Legend panel (between chart and bottom controls) ---
     // A fixed-height scroll area showing a 4-column grid of swatch+name pairs.
-    // Height locks to exactly 2 visible rows; scrolls vertically for more entries.
+    // Height locks to exactly 3 visible rows; scrolls vertically for more entries.
     m_legend_widget = new QWidget;
     m_legend_widget->setObjectName("legendWidget");
     m_legend_grid = new QGridLayout(m_legend_widget);
@@ -646,7 +647,7 @@ void PlotWidget::setUpLayout()
     m_legend_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_legend_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_legend_scroll->setFrameShape(QFrame::StyledPanel);
-    // Fixed height: 2 visible rows + padding + frame border
+    // Fixed height: 3 visible rows + padding + frame border
     const int legend_panel_height = PlotConstants::kLegendPanelVisibleRows
                                     * PlotConstants::kLegendItemHeight
                                     + 2 * PlotConstants::kLegendPanelVPad + 6;
@@ -786,8 +787,10 @@ void PlotWidget::rebuildLegend()
     int col = 0;
     int row = 0;
 
-    for (const PlotSeriesData& s : all_series)
+    for (int i = 0; i < static_cast<int>(all_series.size()); ++i)
     {
+        const PlotSeriesData& s = all_series[i];
+
         // Only show visible series; also skip whichever lock metric is not active
         if (!s.visible)
         {
@@ -804,20 +807,63 @@ void PlotWidget::rebuildLegend()
             continue;
         }
 
-        // Two sub-columns per logical column: [swatch | label].
+        // Two sub-columns per logical column: [swatch-btn | name-edit].
         // Pinning the swatch to a fixed sub-column keeps all swatches aligned
         // regardless of label length — true left-alignment within the grid.
-        QLabel* swatch = new QLabel;
+        QPushButton* swatch = new QPushButton;
+        swatch->setFlat(true);
         swatch->setFixedSize(PlotConstants::kLegendSwatchSize, PlotConstants::kLegendSwatchSize);
+        swatch->setCursor(Qt::PointingHandCursor);
+        swatch->setToolTip("Click to change color");
         swatch->setStyleSheet(
-            QString("background-color: %1; border: 1px solid rgba(0,0,0,60);").arg(s.color.name()));
+            QString("QPushButton { background-color: %1; border: 1px solid rgba(0,0,0,60); }"
+                    "QPushButton:hover { border: 2px solid palette(highlight); }").arg(s.color.name()));
 
-        QLabel* lbl = new QLabel(s.name);
-        lbl->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-        lbl->setToolTip(s.name);
+        // Frameless QLineEdit — looks like a label at rest, editable on click.
+        QLineEdit* name_edit = new QLineEdit(s.name);
+        name_edit->setFrame(false);
+        name_edit->setStyleSheet("QLineEdit { background: transparent; }"
+                                 "QLineEdit:focus { background: palette(base); "
+                                 "border: 1px solid palette(highlight); }");
+        name_edit->setMinimumWidth(80);
+        name_edit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        name_edit->setToolTip("Click to rename this legend entry");
 
-        m_legend_grid->addWidget(swatch, row, col * 2,     Qt::AlignVCenter | Qt::AlignRight);
-        m_legend_grid->addWidget(lbl,    row, col * 2 + 1, Qt::AlignVCenter | Qt::AlignLeft);
+        const int series_idx = i;
+
+        connect(swatch, &QPushButton::clicked, this, [this, swatch, series_idx]() {
+            if (m_view_model == nullptr || series_idx >= static_cast<int>(m_view_model->allSeries().size()))
+            {
+                return;
+            }
+            const QColor current = m_view_model->allSeries()[series_idx].color;
+            const QColor picked  = QColorDialog::getColor(current, this, "Choose Series Color");
+            if (!picked.isValid())
+            {
+                return;
+            }
+            m_view_model->recolorSeries(series_idx, picked);
+            if (series_idx < m_graphs.size())
+            {
+                m_graphs[series_idx]->setPen(QPen(picked, PlotConstants::kGraphPenWidth));
+                m_plot->replot(QCustomPlot::rpQueuedReplot);
+            }
+            swatch->setStyleSheet(
+                QString("QPushButton { background-color: %1; border: 1px solid rgba(0,0,0,60); }"
+                        "QPushButton:hover { border: 2px solid palette(highlight); }").arg(picked.name()));
+        });
+
+        connect(name_edit, &QLineEdit::editingFinished, this, [this, name_edit, series_idx]() {
+            const QString new_name = name_edit->text();
+            m_view_model->renameSeries(series_idx, new_name);
+            if (series_idx < m_graphs.size())
+            {
+                m_graphs[series_idx]->setName(new_name);
+            }
+        });
+
+        m_legend_grid->addWidget(swatch,    row, col * 2,     Qt::AlignVCenter | Qt::AlignRight);
+        m_legend_grid->addWidget(name_edit, row, col * 2 + 1, Qt::AlignVCenter | Qt::AlignLeft);
 
         ++col;
         if (col >= cols)
@@ -827,10 +873,12 @@ void PlotWidget::rebuildLegend()
         }
     }
 
-    // Add a phantom stretch column to the right of all entry columns.
-    // QGridLayout will absorb remaining horizontal space into this column,
-    // which pins the four [swatch | label] column groups to the left edge.
-    m_legend_grid->setColumnStretch(cols * 2, 1);
+    // Give each name-edit sub-column equal stretch so the edit boxes divide all
+    // available horizontal space evenly rather than collapsing to their minimum.
+    for (int c = 0; c < cols; ++c)
+    {
+        m_legend_grid->setColumnStretch(c * 2 + 1, 1);
+    }
 
     // Ensure the inner widget resizes to fit its new content
     m_legend_widget->adjustSize();

@@ -163,7 +163,7 @@ private:
     /// @{
     QScrollArea*  m_legend_scroll  = nullptr; ///< Scroll area wrapping the legend grid.
     QWidget*      m_legend_widget  = nullptr; ///< Inner container inside the scroll area.
-    QGridLayout*  m_legend_grid    = nullptr; ///< 4-column grid of swatch+label pairs.
+    QGridLayout*  m_legend_grid    = nullptr; ///< 4-column grid of swatch+name-edit pairs.
     /// @}
 
     QLabel* m_loading_label = nullptr; ///< Overlay label shown while CSV is parsing.

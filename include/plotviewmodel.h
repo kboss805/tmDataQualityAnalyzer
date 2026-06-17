@@ -94,6 +94,8 @@ public:
     int seriesCount() const;                       ///< @return Number of loaded series.
     const PlotSeriesData& seriesAt(int index) const; ///< @return Series at the given index.
     const QVector<PlotSeriesData>& allSeries() const; ///< @return All series data.
+    void renameSeries(int index, const QString& name);   ///< Overrides the display name of a series.
+    void recolorSeries(int index, const QColor& color);  ///< Overrides the color of a series.
 
     QString plotTitle() const;                     ///< @return Current plot title.
     double xMin() const;                           ///< @return Data X minimum (elapsed seconds).

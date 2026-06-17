@@ -528,6 +528,22 @@ const QVector<PlotSeriesData>& PlotViewModel::allSeries() const
     return m_series;
 }
 
+void PlotViewModel::renameSeries(int index, const QString& name)
+{
+    if (index >= 0 && index < m_series.size())
+    {
+        m_series[index].name = name;
+    }
+}
+
+void PlotViewModel::recolorSeries(int index, const QColor& color)
+{
+    if (index >= 0 && index < m_series.size())
+    {
+        m_series[index].color = color;
+    }
+}
+
 QString PlotViewModel::plotTitle() const
 {
     return m_plot_title;
