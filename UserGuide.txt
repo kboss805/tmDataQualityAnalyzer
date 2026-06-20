@@ -7,7 +7,7 @@ TABLE OF CONTENTS
 -----------------
 1. Introduction
 2. Quick Start
-3. Time Extraction Setup
+3. Processing Scope & Averaging Window
 4. Stream Configuration
    - Frame Sync Lock Mode
    - Receiver SNR Mode
@@ -27,28 +27,32 @@ identify dropouts, disconnects, or signal degradation.
 ================================================================================
 2. QUICK START
 ================================================================================
-1. Load a File: Use the File menu or the open icon in the toolbar to load a 
-   .ch10 file into the application.
-2. Select Channels: Once loaded, select your target Time Channel and PCM Channel 
-   from the dropdown menus.
-3. Set Time Bounds: Define the time segment you wish to analyze in the Time 
-   Extraction panel.
-4. Configure Streams: Click the "Configure Streams" button to review the active 
-   streams and assign their modes and sync parameters.
-5. Process: Click "Process" to parse the .ch10 file and generate the data 
-   quality plots.
-6. Export: Click "Export" to save your plots as an image or extract the 
+1. Load a File: Use the File menu or the open icon in the toolbar to load a
+   .ch10 file. The Configure Streams dialog opens automatically, listing one row
+   per PCM channel found in the file.
+2. Select the Time Channel: Choose the Time Channel from the dropdown at the top
+   of the Configure Streams dialog.
+3. Configure Streams: For each PCM channel you want to analyze, check Process,
+   choose its Mode (Frame Sync Lock or Receiver SNR), and click the gear icon to
+   set its sync/calibration parameters and averaging window.
+4. Process: Click "Process" to read the .ch10 file and generate the data quality
+   plots. Each stream is added to the plot as it completes.
+5. Export: Click "Export" to save your plots as an image or extract the
    underlying data to a CSV.
 
 ================================================================================
-3. TIME EXTRACTION SETUP
+3. PROCESSING SCOPE & AVERAGING WINDOW
 ================================================================================
-By default, analyzing large .ch10 files can be time-consuming. You can restrict 
-the analysis to a specific window of interest using the Time Extraction controls.
+The application processes the entire .ch10 file in a single pass. You control the
+resolution of the output per stream via the Averaging Window in that stream's gear
+dialog:
 
-- Extract All: Check this box to process the entire duration of the file.
-- Start / Stop Time: If "Extract All" is unchecked, input the specific start 
-  and stop times using the standard IRIG format: DDD:HH:MM:SS.
+- Averaging Window: Choose 1 s, 100 ms, or 10 ms. The lock percentage and SNR
+  values are averaged over this period to produce one plotted point per window.
+  Smaller windows reveal finer detail (brief dropouts) at the cost of more points.
+
+To focus on a specific time span after processing, use the plot's X-axis zoom/pan
+and the time-window controls rather than restricting the input.
 
 ================================================================================
 4. STREAM CONFIGURATION
@@ -68,9 +72,9 @@ Use this mode to evaluate the structural integrity of the PCM stream.
 - Frame Sync Mask: The mask applied to the sync pattern.
 - Bits in Frame / Words in Frame: The structural dimensions of your minor frames.
 
-Tip (Batch Configuration): If you have multiple streams using the same sync 
-parameters, check the "Apply to all Frame Sync Lock streams" box at the bottom 
-of the dialog. This will instantly copy the current stream's sync settings to 
+Tip (Apply to All Streams): If you have multiple streams using the same sync
+parameters, check the "Apply to all Frame Sync Lock streams" box at the bottom
+of the dialog. This will instantly copy the current stream's sync settings to
 all other active streams configured in Frame Sync Lock mode.
 
 --- Receiver SNR Mode ---
@@ -78,8 +82,8 @@ Use this mode to evaluate raw signal strength.
 - Configure the calibration slope and scale offsets specific to your receiver 
   equipment.
 
-Tip (Batch Configuration): Similar to Frame Sync mode, check the "Apply to all 
-Receiver SNR streams" box to broadcast your calibration settings to all other 
+Tip (Apply to All Streams): Similar to Frame Sync mode, check the "Apply to all
+Receiver SNR streams" box to broadcast your calibration settings to all other
 active Receiver SNR streams.
 
 ================================================================================
@@ -108,7 +112,9 @@ Interactive Controls:
 To share your findings or process the data in external tools (like MATLAB or 
 Excel), use the Export feature.
 
-- Export to Image: Saves the current visual state of the plot (including your 
-  current zoom/pan window) to a .png or .jpg file.
-- Export to CSV: Dumps the raw, interpolated plot points into a comma-separated 
-  text file, organized by timestamp and stream.
+- Export to Image: Saves the current visual state of the plot (including your
+  current zoom/pan window) to a PNG, SVG, or PDF file. (PNG includes the legend
+  panel beneath the chart.)
+- Export to CSV: Writes the plotted data points into a comma-separated text file,
+  organized by timestamp and stream.
+- Export Log: Optionally saves the contents of the log window to a text file.

@@ -27,7 +27,6 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **Configurable Frame Parameters**: Frame sync pattern (hex), sync mask (hex), bits per frame, RNRZ-L randomization on/off, data rate (Mbps, or Auto from TMATS), and averaging window (1/10/100 Hz)
 
 ### Receiver AGC (SNR) Processing
-- **Time Range Filtering**: Specify start and stop times (Day of Year, Hour, Minute, Second)
 - **Averaging Window**: 1 Hz, 10 Hz, or 100 Hz output sample rates
 - **AGC Processing**: Extract calibrated receiver-channel AGC/SNR values with V-to-dB conversion
 - **Calibration**: Configurable polarity, voltage slope/range, scale (dB/V), receiver count, and channels per receiver
@@ -128,14 +127,10 @@ debug\tmDataQualityAnalyzer.exe
      - **Receiver SNR**: set the same frame parameters plus polarity, slope, scale (dB/V), receiver count and channels, and load a Receiver Parameters TOML
    - Use the **Load/Save** buttons in the setup dialogs to reuse TOML configurations
    - The **Ready** indicator turns green when a stream is fully configured
+   - The entire file is processed; output resolution is set per stream via the **averaging window** (1 s / 100 ms / 10 ms)
 
-4. **Set Time Range**
-   - In the Time Controls section, check **All** to process the entire file
-   - Or specify start/stop times (DDD HH:MM:SS format)
-
-5. **Process**
-   - Click **OK** to store the stream configuration
-   - Click the play icon in the toolbar (or press **Ctrl+R**) to run all enabled streams concurrently
+4. **Process**
+   - Click **Process** (the dialog's accept button) to read the file and run all enabled streams concurrently
    - Monitor progress in the progress bar and log window; each stream is added to the plot as it completes
 
 ## Project Structure
@@ -144,11 +139,10 @@ debug\tmDataQualityAnalyzer.exe
 tmDataQualityAnalyzer/
 ├── build/                      # Out-of-source build artifacts
 ├── deploy/                     # Build automation, installer, and release packaging
-├── docs/                       # Project documentation and requirements
+├── docs/                       # Project documentation (wireframes, design notes, future plans)
 ├── include/                    # Header files
 │   ├── mainview.h
 │   ├── mainviewmodel.h
-│   ├── timeextractionwidget.h
 │   ├── streamconfigdialog.h    # Per-stream Configure Streams dialog
 │   ├── streamconfig.h          # Per-stream configuration value type
 │   ├── plotcustomizationdialog.h # Customize Plot Series dialog
@@ -157,9 +151,12 @@ tmDataQualityAnalyzer/
 │   ├── ch10packetreader.h      # Single-reader thread that routes packets to per-stream queues
 │   ├── packetqueue.h           # Bounded per-stream packet queue
 │   ├── frameprocessor.h
+│   ├── stepdetector.h          # Non-linear calibration plateau detection (US3.2)
+│   ├── calibrationextractor.h  # Calibration .ch10 extraction driver (US3.2)
+│   ├── calibrationprofile.h    # Session-only step-calibration data types (US3.2)
 │   ├── framesetup.h
 │   ├── channeldata.h
-│   ├── processingcoordinator.h # Worker-thread lifecycle and batch sequencing
+│   ├── processingcoordinator.h # Reader + per-stream worker thread lifecycle
 │   ├── processingparams.h      # Inputs for a single processing run
 │   ├── processedstreamdata.h   # Per-stream processed result series
 │   ├── tomlconfighelper.h      # TOML load/save helpers
@@ -190,22 +187,24 @@ tmDataQualityAnalyzer/
 │   └── icon.ico               # Application icon
 ├── scripts/                    # Build and utility scripts
 │   ├── build_ide.ps1          # IDE/VS Code test build helper (reads QTDIR/MINGW_DIR from env)
-│   ├── env.bat                # Developer environment PATH setup helper
+│   ├── build_and_sign.ps1     # Release build + code-signing helper
+│   ├── env.ps1                # Developer environment PATH setup helper
 │   └── setup-env.ps1          # One-time Windows user environment variable registration
 ├── src/                        # Source files
 │   ├── main.cpp               # Application entry point
 │   ├── mainview.cpp           # Main GUI window (View)
-│   ├── timeextractionwidget.cpp # Time range and sample rate controls (View)
 │   ├── streamconfigdialog.cpp # Per-stream Configure Streams dialog (View)
 │   ├── plotcustomizationdialog.cpp # Customize Plot Series dialog (View)
 │   ├── exportdialog.cpp       # Unified export dialog: CSV/image/log (View)
 │   ├── mainviewmodel.cpp      # Application logic (ViewModel)
 │   ├── chapter10reader.cpp    # Chapter 10 file metadata (Model)
 │   ├── ch10packetreader.cpp   # Single-reader thread; routes packets to per-stream queues (Model)
-│   ├── frameprocessor.cpp     # PCM frame extraction and CSV output (Model)
+│   ├── frameprocessor.cpp     # Per-stream PCM frame extraction → in-memory result (Model)
+│   ├── stepdetector.cpp       # Non-linear calibration plateau detection (Model, US3.2)
+│   ├── calibrationextractor.cpp # Calibration .ch10 extraction driver (Model, US3.2)
 │   ├── framesetup.cpp         # Frame configuration parameters (Model)
 │   ├── channeldata.cpp        # Channel metadata (Model)
-│   ├── processingcoordinator.cpp # Worker-thread lifecycle and batch sequencing (ViewModel)
+│   ├── processingcoordinator.cpp # Reader + per-stream worker thread lifecycle (ViewModel)
 │   ├── tomlconfighelper.cpp   # TOML load/save helpers (Model)
 │   ├── plotviewmodel.cpp      # Plot data parsing and axis management (ViewModel)
 │   └── plotwidget.cpp         # QCustomPlot chart widget + on-plot legend (View)

@@ -7,7 +7,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Qt Version**: 6.10.2 (minimum: Qt 6.0.0)
 - **MinGW Version**: 13.1.0 (minimum: GCC/MinGW 7.0)
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
-- **Project Version**: 2.2.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
+- **Project Version**: 2.2.5 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
 
 ## User Stories
 
@@ -43,7 +43,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 ### US1.2: Export user specified SNR signal data with timestamps to a file
 **As an** As a telemetry engineer or data analyst
 **I want to** to export SNR signal data of interest to a CSV file.
-**So that** I can import the file into 3rd party applications such as Excel and Matlab for further analysis (the export settings and file location are configured via the export dialog window defined in US7.0).
+**So that** I can import the file into 3rd party applications such as Excel and Matlab for further analysis (the export settings and file location are configured via the export dialog window defined in US8.0).
 
 **Acceptance Criteria:**
 - [x] The current SNR signal data displayed in the plot window is exported to a CSV file
@@ -53,7 +53,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 ### US1.3: Export user specified SNR signal data to an image file
 **As an** As a telemetry engineer or data analyst
 **I want to** to export SNR signal data to an image file (e.g. png, pdf, etc.) from the plot window.
-**So that** I can import the image file into 3rd party applications such as PowerPoint to create presentations (the export format and location are configured via the export dialog window defined in US7.0).
+**So that** I can import the image file into 3rd party applications such as PowerPoint to create presentations (the export format and location are configured via the export dialog window defined in US8.0).
 
 **Acceptance Criteria:**
 - [x] The current SNR signal data displayed in the plot window is exported to an image file
@@ -100,7 +100,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 ### US2.3: Export user specified framesync lock statistics and accumulated missed frames with timestamps to a file
 **As an** As a telemetry engineer or data analyst
 **I want to** to export framesync lock statistics and accumulated missed frames of interest to a CSV file.
-**So that** I can import the file into 3rd party applications such as Excel and Matlab for further analysis (the export settings and file location are configured via the export dialog window defined in US7.0).
+**So that** I can import the file into 3rd party applications such as Excel and Matlab for further analysis (the export settings and file location are configured via the export dialog window defined in US8.0).
 
 **Acceptance Criteria:**
 - [x] The current framesync lock statistics and accumulated missed frames displayed in the plot window are exported to a CSV file
@@ -110,7 +110,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 ### US2.4: Export user specified framesync lock statistics and accumulated missed frames to an image file
 **As an** As a telemetry engineer or data analyst
 **I want to** to export framesync lock statistics and accumulated missed frames to an image file (e.g. png, pdf, etc.) from the plot window.
-**So that** I can import the image file into 3rd party applications such as PowerPoint to create presentations (the export format and location are configured via the export dialog window defined in US7.0).
+**So that** I can import the image file into 3rd party applications such as PowerPoint to create presentations (the export format and location are configured via the export dialog window defined in US8.0).
 
 **Acceptance Criteria:**
 - [x] The current framesync lock statistics and accumulated missed frames displayed in the plot window are exported to an image file
@@ -163,17 +163,15 @@ This file provides context and guidelines for AI assistants working on the tmDat
 **So that** I can accurately groom out receiver non-linearities and plot true SNR values instead of relying on a simple linear slope/offset.
 
 **Acceptance Criteria:**
-- [x] The user can enable non-linear step calibration for a specific Receiver SNR stream in the per-stream setup dialog (via the "Extract Calibration…" action).
-- [x] The user can load a TOML file defining the expected step values (in dB) and duration (dwell time in seconds).
-- [x] The user can load a Calibration CH10 file containing the recorded step data.
-- [x] The application automatically extracts plateaus from the CAL file, using the expected dwell times to filter noise and trimming transition edges to only average the stable "core" of the step.
-- [x] The application evaluates step extraction success independently for each receiver channel (up to 48).
-- [x] Channels that successfully map the expected number of steps are assigned a non-linear calibration profile for the session.
-- [x] Channels that fail step extraction (e.g., due to noise or no data) fall back to the standard linear (slope/offset) calibration.
-- [x] A summary message box informs the user which channels succeeded and which fell back.
-- [x] During main data processing, the application applies the non-linear profile using piece-wise linear interpolation between steps, and linear extrapolation for out-of-bounds values.
-
-  - **Scope:** Plateaus are found by derivative/edge detection and paired with the TOML steps in time order (if more plateaus than steps are detected, the first N are used). "Success" requires at least the expected number of plateaus. Profiles are session-only (never serialized), keyed by minor-frame word index, and applied per word-map parameter. Implemented by `StepDetector`, `CalibrationExtractor`, `interpolateCalibration()` (in `calibrationprofile.h`), and the `FrameProcessor` sample-conversion branch; the extraction reuses the production `Ch10PacketReader` + `FrameProcessor` pipeline with unit slope / zero offset to recover raw counts.
+- [ ] The user can enable non-linear step calibration for a specific Receiver SNR stream in the per-stream setup dialog (via the "Extract Calibration…" action).
+- [ ] The user can load a TOML file defining the expected step values (in dB).
+- [ ] The user can load a Calibration CH10 file containing the recorded step data.
+- [ ] The application automatically extracts "ideal" steps from the CAL file.
+- [ ] The application evaluates step extraction success independently for each receiver channel (up to 48).
+- [ ] Channels that successfully map the expected number of steps are assigned a non-linear calibration profile for the session.
+- [ ] Channels that fail step extraction (e.g., due to noise or no data) fall back to the standard linear (slope/offset) calibration.
+- [ ] A summary message box informs the user which channels succeeded and which fell back.
+- [ ] During main data processing, the application applies the non-linear profile using piece-wise linear interpolation between steps, and linear extrapolation for out-of-bounds values.
 
 ### US4.0: Recall/store framesync pattern and frame length parameters from/to configuration files
 **As an** As a telemetry engineer or data analyst
@@ -227,7 +225,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - [x] Auto set plot colors by default; framesync lock curves use purple/blue/green primaries (one per stream) and SNR curves use red/orange/yellow primaries (one per receiver); additional streams, receivers, and channels are progressively lighter shades of their primary so related series stay grouped
 - [x] Framesync lock curves are highlighted; SNR curves are not
 
-### US7.0: Export file settings
+### US8.0: Export file settings
 **As an** As a telemetry engineer or data analyst 
 **I want to** configure export preferences via a unified export dialog window
 **So that** I can specify the export types (CSV and/or images), file names, and directories for the data exports requested in US1.2, US1.3, US2.2, and US2.3 in a single action.
@@ -239,7 +237,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - [x] The dialog window allows the user to specify the filename and location for the exported plot images
 - [x] The dialog window allows the user to export the log window contents to a text file, with its own filename and location
 
-### US8.0: Error Checking
+### US9.0: Error Checking
 **As an** As a telemetry engineer or data analyst 
 **I want to** ensure the values I enter into the application are valid
 **So that** I can avoid errors and ensure the data I export is accurate
@@ -250,7 +248,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - [x] Application ensures frame sync pattern only contains hexadecimal values
 - [x] Application ensures frame sync pattern is no larger than the user specified frame length
 
-### US9.0: Application Installer
+### US10.0: Application Installer
 **As a** developer
 **I want to** create an application installer
 **So that** I can quickly deploy the software/updates to users with all the necessary folders and settings files
@@ -279,7 +277,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
   image (US2.4); SVG/PDF export the chart as before
 - Export dialog gains an "Export Log (Text)" option that writes the log window
   contents to a `.txt` file; the dialog now lists Image first and defaults to
-  Image export (US7.0)
+  Image export (US8.0)
 - Switching the left-axis view between Framesync Lock (%) and Accumulated Missed
   Frames now preserves each stream's per-stream visibility selection instead of
   re-showing every stream
@@ -334,7 +332,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - Added framesync_PRN11.toml and framesync_PRN15.toml to installer/portable packages
 
 ### v1.0.0 — Initial Public Release
-- User stories US1.0–US9.0 complete
+- User stories US1.0–US10.0 complete
 - Frame Sync Lock analysis with off-phase rejection and bit-span lock percentage
 - Receiver SNR / AGC analysis with voltage-to-dB calibration
 - Multi-stream concurrent processing with single-pass I/O (one reader + per-stream queues)
@@ -343,7 +341,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - CSV and image (SVG/PNG/PDF) export via unified export dialog
 - Inno Setup installer (admin + non-admin) and portable ZIP packaging
 - Automated unit tests (Qt Test framework)
-- US10.0 (Bit Error Rate) targeted for a future release
+- US11.0 (Bit Error Rate) targeted for a future release
 
 ### v0.8.0 — Internal Milestone
 - User stories US1.0–US6.0 complete
@@ -382,160 +380,128 @@ The following files are third-party library code and **MUST NOT be modified** un
 
 ## Architecture
 
-> ⚠️ **This section is partially out of date (as of v2.2.0).** It still describes a
-> previous single-file + batch architecture and several classes that no longer
-> exist (`SettingsDialog`, `SettingsManager`, `ReceiverGridWidget`) and structs
-> that were removed (`SettingsData`, `BatchFileInfo`). The current design is the
-> per-stream **Configure Streams** flow: `StreamConfigDialog` (per-stream setup),
-> `Ch10PacketReader` (single reader → per-stream `PacketQueue`s), per-stream
-> `FrameProcessor` workers, `ProcessingCoordinator` (worker lifecycle/batch),
-> `TomlConfigHelper` (TOML I/O), `PlotCustomizationDialog`, and `ExportDialog`.
-> See the README "Overview" / "Project Structure" for the accurate component
-> roster until this section is rewritten.
+The application follows the **MVVM (Model-View-ViewModel)** pattern. The processing
+core is a **single-reader / parallel-worker** pipeline: opening a Ch10 file shows the
+per-stream **Configure Streams** dialog, and pressing Process reads the file exactly
+once while each selected stream is processed concurrently on its own worker thread.
+Results are accumulated **in memory** (no CSV-on-disk intermediate) and appended to
+the plot as each stream finishes. There is **no batch / multi-file mode**.
 
 ### Core Components
 
-The application follows the **MVVM (Model-View-ViewModel)** pattern:
+#### View
 
-1. **MainView** (`src/mainview.cpp`, `include/mainview.h`) — *View*
-   - Thin GUI layer; creates and lays out all Qt widgets
-   - Delegates receiver grid to ReceiverGridWidget, time controls to TimeExtractionWidget
-   - Binds to MainViewModel Q_PROPERTYs and connects signals/slots
-   - Contains no business logic; delegates all actions to the ViewModel
-   - `logError()` / `logWarning()` / `logSuccess()` append colored HTML entries (red / #DAA520 / green) to the log window via `append()`
-   - Errors and warnings are shown inline in the log; QMessageBox reserved for About dialog only
-   - Log window uses `QTextBrowser` for clickable links; persistent (never cleared) with auto-scroll on new entries
-   - Status bar displays file metadata summary (filename, size, channel counts, time range)
-   - Read-only settings summary panel shows current frame sync, polarity, slope, scale, and receiver configuration
-   - Recent Files submenu under File menu with persistence across sessions
-   - Unified `QTreeWidget` file list for both single-file and batch modes with embedded per-file Time and PCM channel `QComboBox` selectors
-   - Color-coded per-file status (Ready/Valid/Done/Skip/Error) and encoding column in batch mode
-   - Multi-file selection via `QFileDialog::getOpenFileNames()` and multi-file drag-and-drop
-   - Batch output directory prompt via `QFileDialog::getExistingDirectory()`
-   - Dedicated cancel toolbar button (visible only during processing)
-   - Log window in bottom QDockWidget; auto-hides when plot dock opens, restores when plot closes
-   - Plot dock (right QDockWidget) with PlotWidget; auto-shown after single-file processing
-   - View menu (Show Plot / Show Log) between File and Help menus
+1. **MainView** (`src/mainview.cpp`, `include/mainview.h`)
+   - Thin GUI layer; creates and lays out all Qt widgets and the toolbar/menus
+   - Binds to MainViewModel Q_PROPERTYs and connects signals/slots; contains no business logic
+   - `logError()` / `logWarning()` / `logSuccess()` append colored HTML entries (red / #DAA520 / green) to the log window
+   - Errors/warnings shown inline in the log (`QTextBrowser`, clickable links, persistent, auto-scroll); QMessageBox reserved for About and the calibration summary
+   - Status bar shows the file metadata summary (filename, size, channel counts, time range)
+   - Recent Files submenu under File menu with QSettings persistence
+   - Drag-and-drop and File > Open of a single `.ch10` file; opening a file launches the StreamConfigDialog
+   - Cancel toolbar button visible only during processing
+   - Log window in a bottom QDockWidget; plot in a right QDockWidget (PlotWidget); View menu toggles each
 
-   a. **ReceiverGridWidget** (`src/receivergridwidget.cpp`, `include/receivergridwidget.h`) — *View*
-      - Self-contained multi-column tree grid for receiver/channel selection
-      - Manages expand/collapse, tri-state checkboxes, and synchronized scrollbars
-      - Emits `receiverChecked()` when the user toggles a channel checkbox
-      - Emits `selectAllRequested()` / `selectNoneRequested()` from dedicated buttons
+2. **StreamConfigDialog** (`src/streamconfigdialog.cpp`, `include/streamconfigdialog.h`)
+   - Modal "Configure Streams" dialog listing one row per PCM channel in the file
+   - Five columns: Process, Channel, Mode, Configure (gear), Ready (status icon); a Time Channel combo at top
+   - The gear opens a per-stream sub-dialog — Frame Sync Lock setup or Receiver SNR setup — keyed to the row's Mode
+   - Sub-dialogs Load/Save frame-sync and receiver-parameter TOML files (US4.0/US3.0) and host the "Extract Calibration…" action (US3.2) and the "Apply to all <mode> streams" fan-out (US2.5)
+   - Returns the configured `QVector<StreamConfig>` via `configs()` and the time channel via `timeChannelIndex()`
 
-   b. **TimeExtractionWidget** (`src/timeextractionwidget.cpp`, `include/timeextractionwidget.h`) — *View*
-      - Widget with extract-all toggle, start/stop time inputs, and sample rate selector
-      - `setSampleRateEnabled()` keeps sample rate active when other time controls are disabled (batch mode)
-      - Emits `extractAllTimeChanged()` and `sampleRateIndexChanged()` signals
+3. **PlotCustomizationDialog** (`src/plotcustomizationdialog.cpp`, `include/plotcustomizationdialog.h`)
+   - "Customize Plot Series" dialog: a Frame Sync Lock tab (one toggle per stream) and a Receiver SNR tab (collapsible per-stream receiver/channel tree with tri-state group toggles and Expand/Collapse All)
 
-2. **SettingsDialog** (`src/settingsdialog.cpp`, `include/settingsdialog.h`) — *View*
-   - Modal dialog for frame sync, polarity, scale, range, and receiver settings
-   - Uses `setData()`/`getData()` with `SettingsData` struct for clean data transfer
-   - Emits `loadRequested()` and `saveAsRequested()` for file I/O delegation
+4. **ExportDialog** (`src/exportdialog.cpp`, `include/exportdialog.h`)
+   - Unified export dialog: any combination of CSV data, a plot image (PNG/SVG/PDF), and the log text, each with its own filename/location; checkbox-to-field enable logic and export-button validation
 
-3. **MainViewModel** (`src/mainviewmodel.cpp`, `include/mainviewmodel.h`) — *ViewModel*
-   - Owns all application state, validation, and processing orchestration
-   - Exposes Q_PROPERTYs for the View to bind to
-   - `validateProcessingInputs()`, `prepareFrameSetupParameters()`, `launchWorkerThread()` orchestrate the processing pipeline
-   - `validateTimeFields()` shared by start/stop time validation; `generateOutputFilename()` shared by input-success and processing-finished flows
-   - Creates a fresh `FrameProcessor` per processing run on a worker thread
-   - `logStartupInfo()` emits default.ini settings at application startup (called after signal connections are established)
-   - `openFile()` logs channel info, time range, and current frame settings when a Ch10 file is loaded
-   - `runPreScan()` detects PCM encoding and verifies frame sync; runs on file open and on PCM channel change
-   - `fileMetadataSummary()` returns formatted string for the status bar
-   - `recentFiles()`, `addRecentFile()`, `clearRecentFiles()` manage recent file list with QSettings persistence
-   - Emits pre-process summary log messages before launching worker thread
-   - Batch processing: `openFiles()` loads multiple files, per-file channel discovery and validation
-   - `setBatchFilePcmChannel()` / `setBatchFileTimeChannel()` for per-file channel selection
-   - `startBatchProcessing(output_dir, sample_rate_index)` / `processNextBatchFile()` drive sequential batch execution with async continuation via `onProcessingFinished()`
-   - `retryFailedFiles()` resets ERROR files' `processed` state and re-runs `processNextBatchFile()`; `processNextBatchFile()` skips `processed && processedOk` files so successful files are never re-run
-   - `reorderBatchFile(from, to)` moves a file in `m_batch_files` and emits `batchFilesChanged()` to trigger a full list rebuild
+5. **PlotWidget** (`src/plotwidget.cpp`, `include/plotwidget.h`)
+   - Self-contained QCustomPlot chart with title field, axis-control spinboxes, and the on-plot legend panel
+   - Mouse wheel zoom and click-drag pan; `onSeriesVisibilityToggled()` toggles a graph without a full rebuild
+   - All replots use `rpQueuedReplot`; controls disabled until data loads; `applyTheme(bool dark)` syncs colors with the app theme
 
-4. **PlotViewModel** (`src/plotviewmodel.cpp`, `include/plotviewmodel.h`) — *ViewModel*
-   - Parses CSV output files into in-memory `PlotSeriesData` vectors (name, receiver index, x/y values, cached Y min/max, color)
-   - Pre-allocates data vectors from estimated file size for efficient CSV parsing
-   - Converts DOY + HMS timestamps to elapsed seconds from first sample
-   - Assigns colors from a 10-hue palette; channels within same receiver get varied saturation/value
-   - Manages axis ranges (auto Y with margin, manual Y override, X time window)
-   - Per-series visibility toggle; signals `dataChanged()`, `axisRangeChanged()`, `seriesVisibilityChanged()`
-   - `computeYRange()` uses per-series cached min/max (O(series) not O(data points))
+#### ViewModel
 
-5. **ProcessingCoordinator** (`src/processingcoordinator.cpp`, `include/processingcoordinator.h`) — *ViewModel*
-   - Owns all worker thread lifecycle and batch sequencing, extracted from MainViewModel
-   - `startSingleProcessing()` and `startBatchProcessing()` are the two entry points
-   - `retryFailedFiles()` resets ERROR files and re-invokes `processNextBatchFile()`; skips already-successful files
-   - `cancelProcessing()` sets abort flag on current processor and sets `m_batch_cancelled`
-   - `runPreScan()` (single file) and `preScanBatchFiles()` (batch) detect encoding and verify frame sync
-   - `launchWorkerThread()` creates a fresh `FrameProcessor`, moves it to a `QThread`, connects signals, starts the thread
-   - `onProcessingFinished()` tears down thread (`quit()`/`wait()`/`delete`), updates batch state, calls `processNextBatchFile()` or emits final `processingFinished()`
-   - Receives `QVector<BatchFileInfo>*`, `FrameSetup*`, `Chapter10Reader*` via constructor injection
-   - Emits: `processingStateChanged(bool)`, `progressChanged(int)`, `processingFinished(bool, QString)`, `logMessageReceived(QString)`, `errorOccurred(QString)`, `batchFilesChanged()`, `batchFileProcessing(int, int)`
+6. **MainViewModel** (`src/mainviewmodel.cpp`, `include/mainviewmodel.h`)
+   - Owns application state, validation, and the per-stream `StreamConfig` captured by StreamConfigDialog
+   - Exposes Q_PROPERTYs (`inputFilename`, channel lists/indices, `fileLoaded`, `progressPercent`, `processing`) for the View to bind to
+   - `openFile()` loads metadata via Chapter10Reader and logs channel/time/frame info
+   - Builds a list of `StreamJob` objects (validated `ProcessingParams` + an owned `FrameSetup`) and hands them to ProcessingCoordinator
+   - Receives each `ProcessedStreamData` and forwards it to PlotViewModel; manages recent files
 
-6. **PlotWidget** (`src/plotwidget.cpp`, `include/plotwidget.h`) — *View*
-   - Self-contained QCustomPlot chart widget with toolbar controls and legend panel
-   - Top toolbar: title QLineEdit
-   - Axis controls grid: X start/stop and Y min/max spinboxes in aligned columns, reset button
-   - Legend: scrollable colored tree checkboxes for per-series visibility
-   - Supports mouse wheel zoom (Y axis) and click-drag pan (both axes)
-   - `onSeriesVisibilityToggled()` toggles individual graph visibility without full rebuild
-   - All replots use `rpQueuedReplot` to coalesce redundant repaint requests
-   - All plot controls disabled until data loads; enabled in `rebuildChart()`
-   - `applyTheme(bool dark)` syncs chart colors with app dark/light theme
-   - Placed inside a right QDockWidget by MainView
+7. **ProcessingCoordinator** (`src/processingcoordinator.cpp`, `include/processingcoordinator.h`)
+   - Owns the reader + worker thread lifecycle for multi-stream processing
+   - `startProcessing(QVector<StreamJob>)` takes ownership of each job's FrameSetup, spins up one `Ch10PacketReader` thread plus one `FrameProcessor` worker thread (and a `PacketQueue`) per stream
+   - `cancelProcessing()` requests a cooperative abort of all workers and the reader; `reset()` clears transient state
+   - Emits `progressChanged(int)`, `processingStateChanged(bool)`, `streamProcessed(ProcessedStreamData)`, `processingFinished(bool)`, `logMessageReceived(QString)`, `errorOccurred(QString)`
 
-6. **Chapter10Reader** (`src/chapter10reader.cpp`, `include/chapter10reader.h`) — *Model*
-   - Reads IRIG 106 Chapter 10 file metadata and manages channel selection
-   - Scans TMATS records to catalog time and PCM channels
-   - Provides channel lists, time accessors, and channel ID resolution
-   - Wraps irig106utils C library for file I/O
+8. **PlotViewModel** (`src/plotviewmodel.cpp`, `include/plotviewmodel.h`)
+   - Converts each `ProcessedStreamData` into in-memory `PlotSeriesData` vectors (name, receiver/channel indices, x/y values, cached Y min/max, color)
+   - Converts absolute IRIG seconds to elapsed seconds; assigns the purple/blue/green (lock) and red/orange/yellow (SNR) palette
+   - Manages axis ranges (auto Y with margin, manual Y override, X time window), the left-axis view toggle (lock % vs accumulated missed frames), and per-series visibility
+   - Signals `dataChanged()`, `axisRangeChanged()`, `seriesVisibilityChanged()`; `computeYRange()` uses per-series cached min/max
 
-7. **FrameProcessor** (`src/frameprocessor.cpp`, `include/frameprocessor.h`) — *Model*
-   - Self-contained PCM frame extraction and CSV output processor
-   - Created fresh per processing run, moved to a worker thread, auto-deleted via `deleteLater`
-   - Owns its own irig106 file handle, buffers, and TMATS metadata
-   - `process()` method takes channel IDs (not indices) and emits progress/completion signals
-   - Private helper methods: `freeChanInfoTable()`, `assembleAttributesFromTMATS()`, `derandomizeBitstream()`, `hasSyncPattern()`
+#### Model
 
-8. **SettingsManager** (`src/settingsmanager.cpp`, `include/settingsmanager.h`) — *Model*
-   - Handles saving/loading user preferences using QSettings
-   - Persists UI state between sessions via `MainViewModel*`
-   - Validates all TOML values on load (FrameSync hex, Polarity, Slope, Scale, receiver count/channels)
-   - Validates parameter section count against receiver x channel configuration
-   - Emits `logMessage()` for load/save status, warnings, and errors routed to the log window
+9. **Chapter10Reader** (`src/chapter10reader.cpp`, `include/chapter10reader.h`)
+   - Reads Ch10 file **metadata** up front: scans TMATS to catalog time and PCM channels, provides channel lists, time accessors, and channel ID resolution. Wraps the irig106utils C library.
 
-9. **FrameSetup** (`src/framesetup.cpp`, `include/framesetup.h`) — *Model*
-   - Manages frame configuration parameters (word map, calibration)
-   - Handles frame setup file loading and saving
+10. **Ch10PacketReader** (`src/ch10packetreader.cpp`, `include/ch10packetreader.h`)
+    - The single-pass reader. `prepare()` opens the file, parses TMATS, resolves each stream's PCM attributes, and builds the channel-ID → `PacketQueue` routing; `run()` (on its own QThread) reads the file once, tracks IRIG time, and dispatches each PCM packet's payload to the matching queues, then posts end-of-stream sentinels
+    - Owns the `SuChanInfo` per-channel bookkeeping table
 
-10. **IRIG 106 Library** (`lib/irig106/src/irig106*.c`, `lib/irig106/include/i106*.h`)
-   - Third-party C library for Chapter 10 file format
-   - Handles low-level file parsing and data structures
+11. **PacketQueue** (`include/packetqueue.h`) — bounded, thread-safe per-stream packet queue connecting the reader to one worker (header-only)
+
+12. **FrameProcessor** (`src/frameprocessor.cpp`, `include/frameprocessor.h`)
+    - Per-stream worker: drains its PacketQueue, runs the bit-serial frame-sync scanner (acquire/lock, off-phase rejection, bit-span lock %), accumulates lock %, missed frames, and (SNR mode) calibrated channel values into a `ProcessedStreamData`
+    - Private helpers include `derandomizeBitstream()` and `hasSyncPattern()`; applies linear slope/offset or a non-linear `CalibrationProfile` per channel
+
+13. **FrameSetup** (`src/framesetup.cpp`, `include/framesetup.h`) — frame configuration / word-map + calibration table built per job
+
+14. **ChannelData** (`src/channeldata.cpp`, `include/channeldata.h`) — channel metadata value object
+
+15. **StepDetector** (`src/stepdetector.cpp`, `include/stepdetector.h`) — *US3.2*; pure (UI-free) logic that parses the `[[Step]]` step-config TOML and detects step plateaus in a raw-count series via derivative/edge detection, building a per-channel `CalibrationProfile`
+
+16. **CalibrationExtractor** (`src/calibrationextractor.cpp`, `include/calibrationextractor.h`) — *US3.2*; drives a raw extraction over a calibration Ch10 file (reusing the Ch10PacketReader + FrameProcessor pipeline with unit slope / zero offset) and runs StepDetector per channel to build session-only profiles
+
+17. **TomlConfigHelper** (`src/tomlconfighelper.cpp`, `include/tomlconfighelper.h`) — registers a custom QSettings TOML format and provides the frame-sync / receiver-parameter load/save helpers
+
+18. **IRIG 106 Library** (`lib/irig106/`) — third-party C library for the Chapter 10 file format (see Protected Files)
 
 ### Constants and Data Structures
 
-- **`AppVersion`** struct (in `include/constants.h`) — Version information with `kMajor`, `kMinor`, `kPatch` and `toString()`
-- **`PCMConstants`** namespace (in `include/constants.h`) — Named constants for PCM frame parameters (word count, frame length, sync pattern length, time rounding, channel type identifiers, max raw sample value, default buffer size, progress report interval)
-- **`UIConstants`** namespace (in `include/constants.h`) — Named constants for UI configuration (QSettings keys, theme identifiers, plot legend grid layout, time conversion, receiver count, default slope/scale, button text, time validation limits, sample rates, output filename format, deployment/portable mode constants)
-- **`SettingsData`** struct (in `include/settingsdata.h`) — Value type used to transfer UI state between MainViewModel and SettingsManager without `friend class` coupling
-- **`BatchFileInfo`** struct (in `include/batchfileinfo.h`) — Per-file metadata for batch processing (filepath, channel strings/IDs, resolved channel indices, validation state, encoding, processing result)
-- **`PlotConstants`** namespace (in `include/constants.h`) — Named constants for plot dock dimensions, axis margin factor, default title, axis labels, zoom factor, and receiver color palette (10 hues)
-- **`PlotSeriesData`** struct (in `include/plotviewmodel.h`) — Per-series data for plotting (name, receiver/channel indices, x/y value vectors, visibility, color, cached Y min/max)
-- **`ProcessingParams`** struct (in `include/processingparams.h`) — All input parameters for a single processing run (filename, channel IDs, frame sync, time range, sample rate, calibration, output path, randomization flag)
-- **`TimeFields`** struct (in `include/timefields.h`) — Groups DOY/hour/minute/second fields for start and stop times; used by MainViewModel and MainView for time range transfers
-- **`SuChanInfo`** typedef (in `include/frameprocessor.h`) — Per-channel bookkeeping struct for the irig106 C helper layer
+- **`AppVersion`** struct (`include/constants.h`) — version with `kMajor`, `kMinor`, `kPatch` and `toString()`
+- **`PCMConstants`** namespace (`include/constants.h`) — PCM frame parameters (defaults for sync pattern/mask, bits per frame, scale, receiver counts, max raw sample value, buffer size, progress interval)
+- **`UIConstants`** namespace (`include/constants.h`) — UI configuration (QSettings keys, theme identifiers, legend grid layout, sample-period/polarity/slope defaults, time validation limits, deployment/portable constants)
+- **`PlotConstants`** namespace (`include/constants.h`) — plot dock dimensions, axis margin factor, default title, axis labels (`kSnrAxisLabel`, `kMissedFramesAxisLabel`), zoom factor, color palette
+- **`CalibrationConstants`** namespace (`include/constants.h`) — non-linear calibration tuning (e.g. `kStepConfirmSeconds`)
+- **`StreamConfig`** struct + **`StreamMode`** enum (`include/streamconfig.h`) — per-stream configuration captured by StreamConfigDialog (frame params, SNR calibration fields, optional `calibrationByWord` profiles)
+- **`StreamJob`** struct (`include/processingcoordinator.h`) — one unit of work: a `ProcessingParams` plus an owned `FrameSetup`
+- **`ProcessingParams`** struct (`include/processingparams.h`) — all inputs for processing one stream (filename, channel IDs, frame sync, time range, sample period, calibration, randomization)
+- **`ProcessedStreamData`** + **`ProcessedChannelSeries`** structs (`include/processedstreamdata.h`) — in-memory per-stream result (parallel `timesSec` / `lockPercent` / `accumulatedMissedFrames` vectors plus SNR channel series)
+- **`PlotSeriesData`** struct (`include/plotviewmodel.h`) — per-series plot data (name, receiver/channel indices, x/y vectors, visibility, color, cached Y min/max)
+- **`CalibrationProfile`**, **`StepDefinition`**, **`CalibrationPoint`** (`include/calibrationprofile.h`) — non-linear step-calibration data types (session-only); `interpolateCalibration()` does the piecewise-linear lookup
+- **`TimeFields`** struct (`include/timefields.h`) — groups DOY/HMS fields for start/stop times
+- **`SuChanInfo`** typedef (`include/ch10packetreader.h`) — per-channel bookkeeping for the irig106 C helper layer
 
 ### Data Flow
 
 ```
-User Input → MainView → MainViewModel → Chapter10Reader (metadata)
-                              ↓                ↓
-                        SettingsManager    FrameSetup
-                              ↓
-                        FrameProcessor → IRIG106 Library
-                              ↓
-                          CSV Output
-                              ↓
-                        PlotViewModel → PlotWidget (QCustomPlot)
+User opens .ch10 ─► MainView ─► MainViewModel ─► Chapter10Reader (metadata)
+                                      │
+                            StreamConfigDialog (per-stream config)
+                                      │
+                      MainViewModel builds QVector<StreamJob>
+                                      │
+                             ProcessingCoordinator
+                          ┌───────────┴───────────┐
+                  Ch10PacketReader (one pass)      │
+                          │  routes packets        │
+                     PacketQueue ─► FrameProcessor (one worker per stream, parallel)
+                                              │
+                                   ProcessedStreamData (in memory)
+                                              │
+                                   PlotViewModel ─► PlotWidget (QCustomPlot)
 ```
 
 ## Qt-Specific Considerations
@@ -584,7 +550,7 @@ When using Qt classes, ensure proper headers are included:
 - **Member variables**: m_ prefix with snake_case (e.g., `m_frame_setup`, `m_reader`); widget members drop type suffixes when the declared type is clear (e.g., `m_input_file` not `m_input_file_lineedit`); buttons use `_btn` suffix (e.g., `m_process_btn`); settings members use `m_settings_` prefix (e.g., `m_settings_frame_sync`)
 - **Methods**: camelCase (e.g., `process()`, `getTimeChannelComboBoxList()`)
 - **Slots**: camelCase with descriptive names (e.g., `inputFileButtonPressed()`)
-- **Struct fields**: `ParameterInfo` and `ProcessingParams` use snake_case; `SettingsData` uses camelCase (Qt property style)
+- **Struct fields**: `ProcessingParams` uses snake_case; the newer value types (`StreamConfig`, `StreamJob`, `ProcessedStreamData`, `CalibrationProfile`) use camelCase (Qt property style)
 
 ### Memory Management
 - UI widgets created with `new` should specify parent widget for automatic cleanup
@@ -627,7 +593,7 @@ Tasks are defined in `.vscode/tasks.json`:
 - "Rebuild" - Clean + Build
 
 ### Deployment & Packaging
-- **Build automation**: `deploy/build_release.cmd` — builds release, runs `windeployqt`, stages installer and portable layouts, signs exe, creates ZIP, compiles Inno Setup installer
+- **Build automation**: `deploy/build_release.ps1` — builds release, runs `windeployqt`, stages installer and portable layouts, signs exe, creates ZIP, compiles Inno Setup installer
 - **Inno Setup installer**: `deploy/tmDataQualityAnalyzer.iss` — EXE installer with admin/non-admin support, TOML merge logic, `.ch10` file association, "What's New" page, Start Menu/desktop shortcuts
 - **Portable ZIP**: Flat layout with `portable` marker file; QSettings redirected to app directory via `QSettings::setPath()` in `main.cpp`; includes LICENSE.txt and README.txt
 - **Release notes**: `deploy/RELEASENOTES.txt` — shown as "What's New" page in installer (`InfoBeforeFile`)
@@ -650,12 +616,12 @@ Tasks are defined in `.vscode/tasks.json`:
 - Time conversions between different formats (DOY/HMS ↔ uint64)
 - UTC timezone enforced in Chapter10Reader and FrameProcessor constructors
 
-### AGC Processing
-- Central processing function: `FrameProcessor::process()`
-- Takes parameters: input file, frame setup, output file, channel IDs, sync, sync length, time range, sample rate
-- Returns bool indicating success/failure
-- Created fresh per run by `MainViewModel::launchWorkerThread()`, moved to a background `QThread`, auto-deleted via `deleteLater` when the thread finishes
-- Emits `progressUpdated(int)`, `processingFinished(bool)`, `logMessage(QString)`, and `errorOccurred(QString)` signals
+### AGC / Stream Processing
+- Central processing function: `FrameProcessor::process()`, driven per stream from its `ProcessingParams` + `FrameSetup`
+- Drains the stream's `PacketQueue` (fed by the single `Ch10PacketReader`) rather than opening the file itself
+- Accumulates results into an in-memory `ProcessedStreamData` (lock %, accumulated missed frames, and SNR channel series) — there is no CSV-on-disk intermediate
+- One `FrameProcessor` per stream runs on its own `QThread`; `ProcessingCoordinator` owns the lifecycle and tears the threads down when each worker finishes
+- Emits progress, completion, log, and error signals consumed by the coordinator
 
 ### Framesync Lock Statistics Calculation
 - **Fundamental Metrics:** 
@@ -684,12 +650,12 @@ Tasks are defined in `.vscode/tasks.json`:
 2. Re-run qmake from the project root: `qmake tmDataQualityAnalyzer.pro -spec win32-g++ CONFIG+=debug`
 3. Rebuild: `mingw32-make -f Makefile.Debug`
 
-### Adding a New Setting
-1. Add field to `SettingsData` struct in `include/settingsdata.h`
-2. Add to `MainViewModel::getSettingsData()` and `MainViewModel::applySettingsData()`
-3. Add to save logic in `SettingsManager::saveFile()`
-4. Add to load logic in `SettingsManager::loadFile()`
-5. Update UI initialization in `MainViewModel::clearState()`
+### Adding a New Per-Stream Setting
+1. Add the field to the `StreamConfig` struct in `include/streamconfig.h` (with a default in `constants.h` if appropriate)
+2. Surface it in the relevant gear sub-dialog in `StreamConfigDialog` (Frame Sync Lock or Receiver SNR setup), and include it in the "Apply to all" fan-out if it should propagate
+3. If it must round-trip to a TOML file, add it to the matching `TomlConfigHelper` load/save helper (respecting the US3.0/US5.0 boundaries)
+4. Carry it into `ProcessingParams` (and `FrameSetup` if it affects the word map) where `MainViewModel` builds each `StreamJob`
+5. Consume it in `FrameProcessor::process()`
 
 ## Debugging
 
@@ -716,17 +682,18 @@ source/header files are listed in `tests/tests.pro`.
 - **TestChannelData** (`tst_channeldata`) — ChannelData model object tests
 - **TestChapter10Reader** (`tst_chapter10reader`) — Chapter 10 metadata reader: channel discovery, time/PCM channel lists, channel ID resolution against real Ch10 test data
 - **TestConstants** (`tst_constants`) — Verifies all PCMConstants, UIConstants, PlotConstants, AppVersion, and recent files constants (including kMaxPacketBufferSize, kFrameSyncHexPattern)
-- **TestFrameProcessor** (`tst_frameprocessor`) — FrameProcessor constructor, abort flag, private static helpers (hasSyncPattern, derandomizeBitstream, writeTimeSample), preScan with valid/invalid files and encodings, process with real Ch10 test data
-- **TestMainViewModelHelpers** (`tst_mainviewmodel_helpers`) — ViewModel helper methods (channelPrefix, parameterName, generateOutputFilename)
+- **TestFrameProcessor** (`tst_frameprocessor`) — constructor defaults, abort flag, `derandomizeBitstream` (identity/short and changed/long), invalid time-channel/PCM-channel/file handling, and processing real Ch10 data (receiver-data accumulation, lock-only mode has no channels, monotonic frame-sync errors, slope affects values, shorter period → more samples, calibration round-trip clean steps, off-phase sync after lock-loss not extracted)
+- **TestMainViewModelHelpers** (`tst_mainviewmodel_helpers`) — ViewModel helper methods (`channelPrefix` and `parameterName` over known/unknown/boundary indices)
 - **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration
-- **TestPlotViewModel** (`tst_plotviewmodel`) — PlotViewModel default state, CSV loading, time conversion, series color assignment, Y auto/manual range, X time window, series visibility, clear data, plot title, invalid/empty file handling, missed-frames series creation, left-axis view toggle, and preservation of per-stream selection across the toggle
-- **TestTimeExtractionWidget** (`tst_timeextractionwidget`) — Widget defaults, extractAllTime toggle, sampleRate setter/getter, fillTimes/clearTimes, enable/disable controls, sample rate options
-- **TestProcessingCoordinator** (`tst_processingcoordinator`) — Worker-thread lifecycle, single vs. batch sequencing, pre-scan, retry/cancel state transitions
+- **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, Y auto/manual range, X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), and the left-axis view toggle preserving per-stream selection
+- **TestProcessingCoordinator** (`tst_processingcoordinator`) — constructor defaults, `reset()` clears state, cancel-with-no-run no-op, `startProcessing()` empty-returns-false and processing-state emission, plus single-vs-multi-stream throughput benchmarks
 - **TestMainView** (`tst_mainview`) — Main window construction, widget wiring, log routing, dock visibility behavior
 - **TestPlotWidget** (`tst_plotwidget`) — Plot widget construction, control enable/disable on data load, theme application, legend rebuild
 - **TestStreamConfigDialog** (`tst_streamconfigdialog`) — Per-stream Configure Streams dialog: stream rows, mode selection, gear setup dialogs, TOML load/save round-trips, "Apply to all" fan-out
 - **TestExportDialog** (`tst_exportdialog`) — Export dialog checkbox-to-field enable logic, export-button validation, and the log-export row defaults/accessors and log-only validation
-- **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US3.2): `[[Step]]` TOML parsing (valid / missing dwell / empty), plateau detection (clean, too-few-fails, extra-plateaus-uses-first-N, noisy, edge-trim), and `interpolateCalibration()` (midpoint, below/above extrapolation, coincident-raw guard)
+- **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US3.2): `[[Step]]` TOML parsing (valid / empty-fails), plateau detection (clean, too-few-fails, extra-plateaus-uses-first-N, short-blip doesn't steal a pairing slot, non-monotonic pairing rejected, noisy, settling-at-plateau-start excluded, round-trip exact), and `interpolateCalibration()` (midpoint, below/above extrapolation, coincident-raw guard)
+
+> **Coverage note:** `PlotCustomizationDialog` (Customize Plot Series) and `CalibrationExtractor` currently have no dedicated test suite. `StepDetector` covers the pure calibration logic, but the extractor's pipeline orchestration is exercised only manually.
 
 ### Running Tests
 ```bash
