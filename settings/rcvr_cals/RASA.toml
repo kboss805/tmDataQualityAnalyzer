@@ -1,8 +1,8 @@
 # SNR Calibration Step Configuration
-# Range: 0 to 60 dB, 6 dB increments
-# 11 steps total
+# Range: 0 to 36 dB, 3 to 6 dB increments
+# 8 steps total
 #
-# Usage: load this file via "Extract Calibration..." in the Receiver SNR
+# Usage: load this file via "Apply Cal" in the Receiver SNR
 # setup dialog alongside a calibration Chapter 10 recording that steps
 # through each level in the order listed below. No dwell/duration is
 # configured here -- each step is confirmed once its level holds steady
