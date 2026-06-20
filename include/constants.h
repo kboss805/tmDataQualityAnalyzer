@@ -15,7 +15,7 @@
 struct AppVersion {
     static constexpr int kMajor = 2;   ///< Major version number.
     static constexpr int kMinor = 2;   ///< Minor version number.
-    static constexpr int kPatch = 1;   ///< Patch version number.
+    static constexpr int kPatch = 5;   ///< Patch version number.
 
     /// @return Version string in "major.minor.patch" format.
     static QString toString() { return QString("%1.%2.%3").arg(kMajor).arg(kMinor).arg(kPatch); }
@@ -161,7 +161,10 @@ namespace UIConstants {
     /// @{
     inline constexpr const char* kPortableMarkerFilename = "portable";      ///< Marker file name for portable mode detection.
     inline constexpr const char* kSettingsDirName         = "settings";     ///< Settings directory name relative to app root.
-    inline constexpr const char* kDefaultTomlFilename     = "default.toml"; ///< Default TOML configuration filename.
+    inline constexpr const char* kDefaultTomlFilename     = "default.toml"; ///< Default TOML configuration filename, used in each settings subdirectory below.
+    inline constexpr const char* kReceiverParamsDirName   = "receiver_params";   ///< Receiver Parameters subdirectory name (relative to settings dir).
+    inline constexpr const char* kRcvrCalsDirName         = "rcvr_cals";         ///< Receiver/SNR step calibration subdirectory name (relative to settings dir).
+    inline constexpr const char* kFramesyncPatternsDirName = "framesync_patterns"; ///< Frame sync pattern subdirectory name (relative to settings dir).
     /// @}
 }
 
@@ -180,13 +183,20 @@ namespace CalibrationConstants {
     /// data does not produce a degenerate (near-zero) threshold.
     inline constexpr double kMinEdgeRawCounts = 2.0;
 
-    /// Fraction of each detected plateau trimmed from both ends before averaging,
-    /// to discard transition settling and keep only the stable core.
-    inline constexpr double kEdgeTrimFraction = 0.125; // 12.5% each side
+    /// Minimum stable-run duration (seconds) required to confirm a level as a
+    /// genuine step rather than a transient/partial-jump blip. The detector
+    /// requires a run to be stable for at least this long (in addition to the
+    /// kMinConfirmSamples floor below) before it is even considered a candidate
+    /// step; the calibration average is then taken from exactly this many
+    /// samples at the start of the confirmed run.
+    inline constexpr double kStepConfirmSeconds = 1.0;
 
-    /// Minimum plateau length, as a fraction of the shortest expected dwell, for
-    /// a run of stable samples to count as a real step (rejects transient spans).
-    inline constexpr double kMinPlateauDwellFraction = 0.5;
+    /// Absolute floor on the confirmation window, in samples, regardless of
+    /// sample period: a run must hold for at least this many consecutive
+    /// samples so a single noisy sample can't be mistaken for a settled step.
+    /// Matters when samplePeriodSec is coarse enough that kStepConfirmSeconds
+    /// alone would be only one or two samples.
+    inline constexpr int kMinConfirmSamples = 3;
 }
 
 /// @brief Constants for the AGC signal plot window.

@@ -19,14 +19,10 @@ private slots:
     void pcmChannelChangedUpdatesSelection();
     void loadChannelsReturnsFalseForInvalidFile();
     void getFirstPcmChannelIdReturnsValidId();
-    void timeAccessorsReturnNonZeroAfterLoad();
     void getTimeChannelIndexReturnsValidIndex();
     void getTimeChannelIndexReturnsMinusOneForUnknown();
     void getPcmChannelIndexReturnsValidIndex();
     void getPcmChannelIndexReturnsMinusOneForUnknown();
-
-    // v3.2 additions
-    void dhmsToUInt64ComputesCorrectOffset();
 };
 
 #endif // TST_CHAPTER10READER_H

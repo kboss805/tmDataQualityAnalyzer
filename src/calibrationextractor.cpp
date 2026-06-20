@@ -110,12 +110,17 @@ void CalibrationExtractor::start(const Request& request)
     m_params.wordsInMinorFrame = words_in_minor_frame;
     m_params.bitsInMinorFrame  = request.bitsInMinorFrame;
     m_params.isRandomized      = request.randomized;
+    m_params.isInverted        = request.inverted;
     m_params.mode              = StreamMode::ReceiverChannelInfo;
     m_params.dataRateBps       = (request.dataRateMbps > 0.0) ? request.dataRateMbps * 1e6 : 0.0;
     m_params.streamLabel       = "Calibration";
     m_params.samplePeriodSec   = m_sample_period_sec;
     m_params.startSeconds      = 0;
     m_params.stopSeconds       = UINT64_MAX; // whole file
+    // Measure steps over elapsed stream time from zero, independent of the cal
+    // file's IRIG time (which may be large/absent and would otherwise derail the
+    // per-period sample windowing).
+    m_params.useDataRateClock  = true;
 
     // ---- Queue + reader ----
     m_queue = new PacketQueue();
@@ -137,6 +142,12 @@ void CalibrationExtractor::start(const Request& request)
     connect(m_worker, &FrameProcessor::processingFinished,
             this, &CalibrationExtractor::onWorkerFinished);
     connect(m_worker, &FrameProcessor::logMessage, this, &CalibrationExtractor::logMessage);
+    // Capture the worker's failure reason (e.g. "Frame sync pattern was not
+    // found...") so finished() reports it instead of the generic fallback.
+    connect(m_worker, &FrameProcessor::errorOccurred, this, [this](const QString& msg) {
+        m_error = msg;
+        emit logMessage(msg);
+    });
     connect(m_worker_thread, &QThread::finished, m_worker, &QObject::deleteLater);
 
     ProcessingParams params = m_params;

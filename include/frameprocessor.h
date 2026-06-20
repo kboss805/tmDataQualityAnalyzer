@@ -93,6 +93,12 @@ private:
      * @param[in,out] lfsr       15-bit LFSR state carried across packets.
      */
     static void derandomizeBitstream(uint8_t* data, uint64_t total_bits, uint16_t& lfsr);
+    /**
+     * @brief Inverts every bit in the byte buffer (bitwise NOT on each byte).
+     * @param[in,out] data   Raw byte buffer to invert in-place.
+     * @param[in]     length Number of bytes in the buffer.
+     */
+    static void invertBytes(uint8_t* data, uint32_t length);
     /// @}
 
     /**

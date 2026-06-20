@@ -29,9 +29,13 @@ struct PlotSeriesData
     enum class MetricType { SNR, FrameSyncLock, AccumulatedMissedFrames };
 
     QString name;             ///< Column header, e.g., "L_RCVR1" or "Framesync Lock (%)".
+    QString streamLabel;      ///< Source stream's label (ProcessedStreamData::streamLabel); identifies
+                               ///< which logical stream this series belongs to, so reprocessing that
+                               ///< same stream replaces its prior series instead of stacking a duplicate.
     int receiverIndex = 0;    ///< 1-based receiver number from "_RCVR<N>" suffix; 0 for lock series.
     int channelIndex  = 0;    ///< 0-based within receiver, for color shade.
-    int streamOrder   = 0;    ///< Source PCM channel ID, for ordering series within a legend group.
+    int streamOrder    = 0;   ///< Source PCM channel ID, for ordering series within a legend group.
+    int streamSequence = 0;   ///< 0-based job index; used to sort legend entries in submission order regardless of parallel completion order.
     MetricType metricType = MetricType::SNR; ///< Which axis this series belongs to.
     QVector<double> xValues;  ///< Elapsed seconds from first sample.
     QVector<double> yValues;  ///< Calibrated dB (SNR) or percentage (lock) values.

@@ -10,15 +10,17 @@ class TestStepDetector : public QObject
 private slots:
     // Step-config TOML parsing
     void parseStepConfigValid();
-    void parseStepConfigMissingDwellFails();
     void parseStepConfigEmptyFails();
 
     // Plateau detection
     void detectCleanSteps();
     void detectTooFewPlateausFails();
     void detectExtraPlateausUsesFirstN();
+    void detectShortBlipDoesNotStealPairingSlot();
+    void detectNonMonotonicPairingRejected();
     void detectNoisyStepsStillDetected();
-    void detectEdgeTrimExcludesTransition();
+    void detectSettlingAtPlateauStartExcluded();
+    void roundTripSameDataIsExact();
 
     // Interpolation / extrapolation
     void interpolateMidpoint();

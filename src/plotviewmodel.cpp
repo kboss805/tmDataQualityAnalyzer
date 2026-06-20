@@ -5,6 +5,7 @@
 
 #include "plotviewmodel.h"
 
+#include <algorithm>
 #include <ctime>
 
 #include <QtConcurrent/QtConcurrent>
@@ -280,6 +281,22 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         return;
     }
 
+    // Reprocessing a stream (e.g. clicking "Process" again after switching a
+    // channel's mode) should replace its prior result, not stack a second copy
+    // on top of it. Drop any existing series from a previous run on this same
+    // stream before adding the new ones — otherwise a stale series from an
+    // earlier mode (e.g. Frame Sync Lock) lingers on the plot indefinitely
+    // alongside the new one, since addStreamData() only ever accumulates and
+    // the plot is only cleared when a new file is opened, not on reprocess.
+    // Keyed by streamLabel rather than pcmChannelId: callers identify distinct
+    // streams by label, and pcmChannelId may be left at its default (0) for
+    // streams that don't carry a real channel ID (e.g. synthetic/test data).
+    m_series.erase(std::remove_if(m_series.begin(), m_series.end(),
+                                   [&](const PlotSeriesData& s) {
+                                       return s.streamLabel == data.streamLabel;
+                                   }),
+                   m_series.end());
+
     // Establish the shared time base from the first accumulated sample so that
     // streams added later line up on the same elapsed-seconds X axis.
     if (m_series.isEmpty())
@@ -319,10 +336,12 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
     {
         PlotSeriesData lock;
         lock.name = data.streamLabel + " Lock (%)";
+        lock.streamLabel = data.streamLabel;
         lock.metricType = PlotSeriesData::MetricType::FrameSyncLock;
         lock.receiverIndex = 0;
         lock.channelIndex = 0;
         lock.streamOrder = data.pcmChannelId;
+        lock.streamSequence = data.jobIndex;
         lock.xValues = elapsed;
         lock.yValues = data.lockPercent;
         lock.visible = (m_lock_axis_view == LockAxisView::LockPercent);
@@ -336,10 +355,12 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
     {
         PlotSeriesData errors;
         errors.name = data.streamLabel + " Accumulated Missed Frames";
+        errors.streamLabel = data.streamLabel;
         errors.metricType = PlotSeriesData::MetricType::AccumulatedMissedFrames;
         errors.receiverIndex = 0;
         errors.channelIndex = 0;
         errors.streamOrder = data.pcmChannelId;
+        errors.streamSequence = data.jobIndex;
         errors.xValues = elapsed;
         errors.yValues = data.accumulatedMissedFrames;
         errors.visible = (m_lock_axis_view == LockAxisView::MissedFrames);
@@ -353,6 +374,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
     {
         PlotSeriesData s;
         s.name = data.streamLabel + " " + ch.name;
+        s.streamLabel = data.streamLabel;
         s.metricType = PlotSeriesData::MetricType::SNR;
         int rcvr_pos = static_cast<int>(ch.name.lastIndexOf("_RCVR"));
         if (rcvr_pos >= 0)
@@ -364,11 +386,19 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         s.channelIndex = receiver_channel_count.value(s.receiverIndex, 0);
         receiver_channel_count[s.receiverIndex]++;
         s.streamOrder = data.pcmChannelId;
+        s.streamSequence = data.jobIndex;
         s.xValues = elapsed;
         s.yValues = ch.values;
         fillCaches(s);
         m_series.push_back(s);
     }
+
+    // Keep legend order stable: sort by job submission index so streams always
+    // appear as Stream 1, 2, 3 ... regardless of which parallel worker finished first.
+    std::stable_sort(m_series.begin(), m_series.end(),
+                     [](const PlotSeriesData& a, const PlotSeriesData& b) {
+                         return a.streamSequence < b.streamSequence;
+                     });
 
     // Recompute global X range and refresh the viewport to show all data.
     m_x_min = 0.0;

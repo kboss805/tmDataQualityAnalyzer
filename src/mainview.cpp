@@ -136,8 +136,8 @@ void MainView::setUpMenuBar()
     QMenuBar* menu_bar = menuBar();
     QMenu* file_menu = menu_bar->addMenu("&File");
 
-    QAction* open_action = file_menu->addAction("Open...");
-    open_action->setShortcut(QKeySequence::Open);
+    m_open_action = file_menu->addAction("Open...");
+    m_open_action->setShortcut(QKeySequence::Open);
     m_recent_menu = file_menu->addMenu("Recent Files");
     updateRecentFilesMenu();
     file_menu->addSeparator();
@@ -150,7 +150,7 @@ void MainView::setUpMenuBar()
 
     QAction* exit_action = file_menu->addAction("Exit");
 
-    connect(open_action, &QAction::triggered, this, &MainView::inputFileButtonPressed);
+    connect(m_open_action, &QAction::triggered, this, &MainView::inputFileButtonPressed);
     connect(m_theme_action, &QAction::triggered, this, &MainView::onToggleTheme);
     connect(exit_action, &QAction::triggered, this, &QMainWindow::close);
 
@@ -187,7 +187,7 @@ void MainView::setUpMenuBar()
 
     m_cancel_action = m_toolbar->addAction(
         QIcon(":/resources/stop.svg"), "Cancel");
-    m_cancel_action->setToolTip("Cancel Processing");
+    m_cancel_action->setToolTip("Cancel");
     m_cancel_action->setEnabled(false);
     connect(m_cancel_action, &QAction::triggered,
             this, [this]() { m_view_model->cancelProcessing(); });
@@ -271,14 +271,12 @@ void MainView::onProcessingChanged()
 {
     if (m_view_model->processing())
     {
-        QApplication::setOverrideCursor(Qt::WaitCursor);
         setAllControlsEnabled(false);
         m_cancel_action->setEnabled(true);
         m_progress_bar->setValue(0);
     }
     else
     {
-        QApplication::restoreOverrideCursor();
         setAllControlsEnabled(true);
         m_cancel_action->setEnabled(false);
     }
@@ -298,6 +296,7 @@ void MainView::onProcessingFinished(bool success)
     {
         m_progress_bar->setValue(UIConstants::kProgressBarMax);
         logSuccess("Processing complete — results plotted from memory.");
+        m_plot_view_model->setPlotTitle(QFileInfo(m_view_model->inputFilename()).baseName());
     }
 }
 
@@ -366,30 +365,19 @@ void MainView::onFileReadyForStreamConfig()
     // A fresh file starts a fresh plot; processing accumulates into it.
     m_plot_view_model->clearData();
 
-    TimeFields start_tf {m_view_model->startDayOfYear(), m_view_model->startHour(),
-                         m_view_model->startMinute(),    m_view_model->startSecond()};
-    TimeFields stop_tf  {m_view_model->stopDayOfYear(),  m_view_model->stopHour(),
-                         m_view_model->stopMinute(),     m_view_model->stopSecond()};
-
     StreamConfigDialog dialog(m_view_model->buildDefaultStreamConfigs(),
                               m_view_model->lastIniDir(),
                               m_view_model->timeChannelList(),
                               m_view_model->timeChannelIndex(),
                               m_view_model->reader()->getCurrentTimeChannelID(),
-                              start_tf,
-                              stop_tf,
-                              m_view_model->extractAllTime(),
+                              m_view_model->appRoot(),
                               this);
     if (dialog.exec() == QDialog::Accepted)
     {
         m_view_model->setTimeChannelIndex(dialog.timeChannelIndex());
         m_view_model->setStreamConfigs(dialog.configs());
-        m_view_model->setExtractAllTime(dialog.extractAllTime());
 
-
-
-        startProcessingFromDialog(dialog.startTimeText(), dialog.stopTimeText(),
-                                  dialog.extractAllTime());
+        startProcessingFromDialog();
     }
 }
 
@@ -419,37 +407,9 @@ void MainView::onToggleTheme()
     m_plot_widget->applyTheme(new_theme == UIConstants::kThemeDark);
 }
 
-void MainView::startProcessingFromDialog(const QString& start_time_text,
-                                         const QString& stop_time_text,
-                                         bool extract_all)
+void MainView::startProcessingFromDialog()
 {
-    QString start_time = start_time_text;
-    QString stop_time  = stop_time_text;
-
-    if (!extract_all)
-    {
-        QString warning = MainViewModel::validateTimeRange(start_time, stop_time);
-        if (!warning.isEmpty())
-        {
-            logWarning(warning);
-            return;
-        }
-    }
-    else
-    {
-        start_time = QString("%1:%2:%3:%4")
-            .arg(m_view_model->startDayOfYear(), 3, 10, QChar('0'))
-            .arg(m_view_model->startHour(), 2, 10, QChar('0'))
-            .arg(m_view_model->startMinute(), 2, 10, QChar('0'))
-            .arg(m_view_model->startSecond(), 2, 10, QChar('0'));
-        stop_time = QString("%1:%2:%3:%4")
-            .arg(m_view_model->stopDayOfYear(), 3, 10, QChar('0'))
-            .arg(m_view_model->stopHour(), 2, 10, QChar('0'))
-            .arg(m_view_model->stopMinute(), 2, 10, QChar('0'))
-            .arg(m_view_model->stopSecond(), 2, 10, QChar('0'));
-    }
-
-    m_view_model->startProcessing(start_time, stop_time);
+    m_view_model->startProcessing();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -517,6 +477,8 @@ void MainView::dropEvent(QDropEvent* event)
 void MainView::setAllControlsEnabled(bool enabled)
 {
     m_toolbar_open_action->setEnabled(enabled);
+    m_open_action->setEnabled(enabled);
+    m_recent_menu->setEnabled(enabled);
 }
 
 void MainView::logError(const QString& message)

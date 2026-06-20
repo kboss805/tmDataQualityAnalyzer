@@ -10,6 +10,7 @@
 #define CHAPTER10READER_H
 
 #include <array>
+#include <atomic>
 
 #include <QByteArray>
 #include <QDateTime>
@@ -65,6 +66,9 @@ public:
      */
     bool loadChannels(const QString& filename);
 
+    /// Requests cooperative cancellation of an in-progress loadChannels() call.
+    void requestAbort();
+
     /// Ensures a ChannelData entry exists for @p channel_id.
     void addChannelInfoEntry(int channel_id);
 
@@ -74,23 +78,7 @@ public:
     /// @return (channel ID, display label) for every PCM channel, in list order.
     QList<QPair<int, QString>> getPCMChannelList() const;
 
-    /// @name File time accessors
-    /// @{
-    int getStartDayOfYear() const;  ///< @return 1-indexed day-of-year of the first data packet.
-    int getStartHour() const;       ///< @return Hour component of the start time.
-    int getStartMinute() const;     ///< @return Minute component of the start time.
-    int getStartSecond() const;     ///< @return Second component of the start time.
-    int getStopDayOfYear() const;   ///< @return 1-indexed day-of-year of the last data packet.
-    int getStopHour() const;        ///< @return Hour component of the stop time.
-    int getStopMinute() const;      ///< @return Minute component of the stop time.
-    int getStopSecond() const;      ///< @return Second component of the stop time.
     /// @}
-
-    /**
-     * @brief Converts day/hour/minute/second to IRIG-relative seconds.
-     * @return Absolute seconds accounting for the file's IRIG time offset.
-     */
-    uint64_t dhmsToUInt64(int day, int hour, int minute, int second) const;
 
     /**
      * @brief Returns the TMATS-declared bit rate for a PCM channel.
@@ -110,6 +98,10 @@ public:
 signals:
     /// Emitted when an error occurs during file operations.
     void displayErrorMessage(const QString& message);
+    /// Emitted periodically during loadChannels() with file-position completion percentage (0..100).
+    void progressUpdated(int percent);
+    /// Emitted once loadChannelsAsync() finishes (clean, EOF, or aborted).
+    void loadFinished(bool success);
 
 public slots:
 
@@ -117,15 +109,16 @@ public slots:
     void timeChannelChanged(int combobox_index);
     /// Updates the selected PCM channel from a combo box index.
     void pcmChannelChanged(int combobox_index);
+    /// Runs loadChannels(filename) and emits loadFinished() with the result. Intended to be
+    /// invoked on a worker thread via QThread::started after moveToThread().
+    void loadChannelsAsync(const QString& filename);
 
 private:
     /// Builds combo box display strings from a list of channel metadata.
     static QStringList buildChannelComboBoxList(const QList<ChannelData*>& channels);
     /// Returns the list index of @p channel_id, or -1 if not found.
     static int findChannelIndex(const QList<ChannelData*>& channels, int channel_id);
-    void processPacketTime(Irig106::SuI106Ch10Header& header, bool& found_start_time);
     bool processTmatsPacket(Irig106::SuI106Ch10Header& header);
-    void finalizeTimeCalc();
     void applyTmatsNames();
     void inferChannelTypeFromHeader(int channel_id);
     void categorizeChannels();
@@ -136,13 +129,6 @@ private:
 
     Irig106::SuI106Ch10Header m_header;                         ///< Reusable packet header buffer.
     QByteArray m_buffer;                                        ///< Packet data read buffer.
-    std::array<unsigned char, 6> m_relative_start_time;         ///< Relative time of first data packet.
-    std::array<unsigned char, 6> m_relative_stop_time;          ///< Relative time of last data packet.
-    tm m_file_start_time;                                       ///< Decoded calendar start time.
-    tm m_file_stop_time;                                        ///< Decoded calendar stop time.
-    bool m_times_loaded = false;                                ///< True if start/stop times have been decoded.
-    uint64_t m_time_difference;                                 ///< Offset between DOY-based and IRIG absolute seconds.
-    Irig106::SuIrig106Time m_irig_time;                         ///< Reusable IRIG time struct.
     Irig106::SuTmatsInfo m_tmats_info;                          ///< TMATS info structure.
 
     QMap<int, ChannelData*> m_channel_data;  ///< All channels discovered in the file.
@@ -150,6 +136,8 @@ private:
     QList<ChannelData*> m_pcm_channels;      ///< Subset of channels with type "PCMIN".
     int m_current_time_channel;              ///< Currently selected time channel ID (-1 = none).
     int m_current_pcm_channel;               ///< Currently selected PCM channel ID (-1 = none).
+
+    std::atomic<bool> m_abort_requested{false}; ///< Set by requestAbort(); checked in loadChannels().
 };
 
 #endif // CHAPTER10READER_H

@@ -161,6 +161,9 @@ void TestConstants::uiDeploymentConstants()
     QCOMPARE(QString(UIConstants::kPortableMarkerFilename), QString("portable"));
     QCOMPARE(QString(UIConstants::kSettingsDirName), QString("settings"));
     QCOMPARE(QString(UIConstants::kDefaultTomlFilename), QString("default.toml"));
+    QCOMPARE(QString(UIConstants::kReceiverParamsDirName), QString("receiver_params"));
+    QCOMPARE(QString(UIConstants::kRcvrCalsDirName), QString("rcvr_cals"));
+    QCOMPARE(QString(UIConstants::kFramesyncPatternsDirName), QString("framesync_patterns"));
 }
 
 // v2.4 additions

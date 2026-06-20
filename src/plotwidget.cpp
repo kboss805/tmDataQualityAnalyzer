@@ -213,8 +213,6 @@ void PlotWidget::rebuildChart()
     m_title_edit->setEnabled(has_data);
     m_x_start_edit->setEnabled(has_data);
     m_x_stop_edit->setEnabled(has_data);
-    m_y_min_spin->setEnabled(has_data);
-    m_y_max_spin->setEnabled(has_data);
     m_reset_btn->setEnabled(has_data);
     m_customize_btn->setEnabled(has_data);
     m_plot->setInteractions(has_data
@@ -225,9 +223,6 @@ void PlotWidget::rebuildChart()
     {
         m_x_start_edit->setText(m_view_model->formatTime(m_view_model->xViewMin()));
         m_x_stop_edit->setText(m_view_model->formatTime(m_view_model->xViewMax()));
-
-        m_y_min_spin->setValue(m_view_model->yMin());
-        m_y_max_spin->setValue(m_view_model->yMax());
     }
 
     m_plot->replot(QCustomPlot::rpQueuedReplot);
@@ -284,8 +279,6 @@ void PlotWidget::updateAxes()
 
     m_x_start_edit->setText(m_view_model->formatTime(m_view_model->xViewMin()));
     m_x_stop_edit->setText(m_view_model->formatTime(m_view_model->xViewMax()));
-    m_y_min_spin->setValue(m_view_model->yMin());
-    m_y_max_spin->setValue(m_view_model->yMax());
 
     m_plot->replot(QCustomPlot::rpQueuedReplot);
     m_updating_from_vm = false;
@@ -334,15 +327,6 @@ void PlotWidget::onCustomizePlotClicked()
     dialog.exec();
 }
 
-void PlotWidget::onManualYChanged()
-{
-    if (m_updating_from_vm || m_view_model == nullptr)
-    {
-        return;
-    }
-    m_view_model->setYManualRange(m_y_min_spin->value(), m_y_max_spin->value());
-}
-
 void PlotWidget::onXRangeChanged()
 {
     if (m_updating_from_vm || m_view_model == nullptr)
@@ -365,12 +349,12 @@ void PlotWidget::onXRangeChanged()
     // Warn if either value was clamped to the file bounds
     if (!qFuzzyCompare(start, raw_start))
     {
-        emit logMessage(QString("<span style='color:#DAA520;'>X Start \"%1\" is outside the file time range — clamped to file bounds.</span>")
+        emit logMessage(QString("<span style='color:#DAA520;'>Start \"%1\" is outside the file time range — clamped to file bounds.</span>")
                         .arg(entered_start));
     }
     if (!qFuzzyCompare(stop, raw_stop))
     {
-        emit logMessage(QString("<span style='color:#DAA520;'>X Stop \"%1\" is outside the file time range — clamped to file bounds.</span>")
+        emit logMessage(QString("<span style='color:#DAA520;'>Stop \"%1\" is outside the file time range — clamped to file bounds.</span>")
                         .arg(entered_stop));
     }
 
@@ -379,12 +363,12 @@ void PlotWidget::onXRangeChanged()
     {
         if (m_x_start_edit == focusWidget() || m_x_start_edit->hasFocus())
         {
-            emit logMessage("<span style='color:#DAA520;'>X Start time is after X Stop — clamped to stop time.</span>");
+            emit logMessage("<span style='color:#DAA520;'>Start time is after Stop — clamped to stop time.</span>");
             start = stop;
         }
         else
         {
-            emit logMessage("<span style='color:#DAA520;'>X Stop time is before X Start — clamped to start time.</span>");
+            emit logMessage("<span style='color:#DAA520;'>Stop time is before Start — clamped to start time.</span>");
             stop = start;
         }
     }
@@ -562,15 +546,6 @@ void PlotWidget::handlePlotXRangeChanged(double lower, double upper)
     m_view_model->setXViewRange(lower, upper);
 }
 
-void PlotWidget::handlePlotYRangeChanged(double lower, double upper)
-{
-    if (m_updating_from_vm || m_view_model == nullptr)
-    {
-        return;
-    }
-    m_view_model->setYManualRange(lower, upper);
-}
-
 double PlotWidget::parseTimeToElapsed(const QString& text) const
 {
     if (m_view_model == nullptr)
@@ -608,9 +583,9 @@ void PlotWidget::setUpLayout()
 
     // Left-axis mode toggle button: switches between the Lock % metric and the
     // accumulated Missed Frames metric (both share the left axis).
-    m_axis_view_btn = new QPushButton(QStringLiteral("View: Accumulated Missed Frames"));
-    m_axis_view_btn->setToolTip(QStringLiteral("Toggle left axis between Lock Percentage "
-                                "and Accumulated Missed Frames"));
+    m_axis_view_btn = new QPushButton(QStringLiteral("Frame lock percentage"));
+    m_axis_view_btn->setToolTip(QStringLiteral("Toggle left axis between Frame lock percentage "
+                                "and Missed frames"));
     m_axis_view_btn->setEnabled(false);
     title_bar->addWidget(m_axis_view_btn);
 
@@ -668,7 +643,7 @@ void PlotWidget::setUpLayout()
     bottom_bar->setContentsMargins(0, 0, 0, 0);
     bottom_bar->setSpacing(0);
 
-    // Axis controls grid (X/Y spinboxes + Reset), top-aligned in the bar
+    // Axis controls grid (Start/Stop + Reset), top-aligned in the bar
     auto* axis_grid = new QGridLayout;
     axis_grid->setContentsMargins(0, 0, 0, 0);
     axis_grid->setHorizontalSpacing(4);
@@ -676,35 +651,20 @@ void PlotWidget::setUpLayout()
     // Col 2 is a dedicated 8px spacer between the first control and second label pair
     axis_grid->setColumnMinimumWidth(2, 8);
 
-    axis_grid->addWidget(new QLabel("X Start:"), 0, 0);
+    axis_grid->addWidget(new QLabel("Start:"), 0, 0);
     m_x_start_edit = new QLineEdit;
     m_x_start_edit->setPlaceholderText("DDD:HH:MM:SS");
-    m_x_start_edit->setToolTip("X axis start time (DDD:HH:MM:SS)");
+    m_x_start_edit->setToolTip("Start time (DDD:HH:MM:SS)");
     m_x_start_edit->setEnabled(false);
     axis_grid->addWidget(m_x_start_edit, 0, 1);
 
-    axis_grid->addWidget(new QLabel("X Stop:"), 0, 3);
+    axis_grid->addWidget(new QLabel("Stop:"), 0, 3);
     m_x_stop_edit = new QLineEdit;
     m_x_stop_edit->setPlaceholderText("DDD:HH:MM:SS");
-    m_x_stop_edit->setToolTip("X axis stop time (DDD:HH:MM:SS)");
+    m_x_stop_edit->setToolTip("Stop time (DDD:HH:MM:SS)");
     m_x_stop_edit->setEnabled(false);
     axis_grid->addWidget(m_x_stop_edit, 0, 4);
 
-    axis_grid->addWidget(new QLabel("Y Min:"), 1, 0);
-    m_y_min_spin = new QDoubleSpinBox;
-    m_y_min_spin->setRange(0.0, PlotConstants::kYSpinBoxMax);
-    m_y_min_spin->setDecimals(1);
-    m_y_min_spin->setToolTip("Y axis minimum (dB)");
-    m_y_min_spin->setEnabled(false);
-    axis_grid->addWidget(m_y_min_spin, 1, 1);
-
-    axis_grid->addWidget(new QLabel("Y Max:"), 1, 3);
-    m_y_max_spin = new QDoubleSpinBox;
-    m_y_max_spin->setRange(0.0, PlotConstants::kYSpinBoxMax);
-    m_y_max_spin->setDecimals(1);
-    m_y_max_spin->setToolTip("Y axis maximum (dB)");
-    m_y_max_spin->setEnabled(false);
-    axis_grid->addWidget(m_y_max_spin, 1, 4);
 
     m_reset_btn = new QPushButton("Reset");
     m_reset_btn->setFlat(true);
@@ -718,15 +678,11 @@ void PlotWidget::setUpLayout()
     axis_widget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
     bottom_bar->addWidget(axis_widget, 0, Qt::AlignTop);
 
-    // Equal stretches on both sides center the legend between axis controls and right margin
     bottom_bar->addStretch(1);
 
-    // Customize Plot button — centered in the bottom bar
     m_customize_btn = new QPushButton("Customize Plot...");
     m_customize_btn->setEnabled(false);
     bottom_bar->addWidget(m_customize_btn, 0, Qt::AlignTop);
-
-    bottom_bar->addStretch(1);
 
     main_layout->addLayout(bottom_bar);
 }
@@ -740,10 +696,7 @@ void PlotWidget::setUpConnections()
         }
     });
 
-    connect(m_y_min_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, &PlotWidget::onManualYChanged);
-    connect(m_y_max_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, &PlotWidget::onManualYChanged);
+
 
     connect(m_x_start_edit, &QLineEdit::editingFinished, this, &PlotWidget::onXRangeChanged);
     connect(m_x_stop_edit, &QLineEdit::editingFinished, this, &PlotWidget::onXRangeChanged);
@@ -755,8 +708,6 @@ void PlotWidget::setUpConnections()
 
     connect(m_plot->xAxis, QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
             this, [this](const QCPRange& range) { handlePlotXRangeChanged(range.lower, range.upper); });
-    connect(m_plot->yAxis, QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
-            this, [this](const QCPRange& range) { handlePlotYRangeChanged(range.lower, range.upper); });
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -822,6 +773,10 @@ void PlotWidget::rebuildLegend()
         // Frameless QLineEdit — looks like a label at rest, editable on click.
         QLineEdit* name_edit = new QLineEdit(s.name);
         name_edit->setFrame(false);
+        // Right-justify the label text. When a name is wider than its box, a
+        // left-aligned edit clips the tail (where the channel number lives) out
+        // of view; right alignment keeps the channel number visible.
+        name_edit->setAlignment(Qt::AlignRight);
         name_edit->setStyleSheet("QLineEdit { background: transparent; }"
                                  "QLineEdit:focus { background: palette(base); "
                                  "border: 1px solid palette(highlight); }");
@@ -863,7 +818,7 @@ void PlotWidget::rebuildLegend()
         });
 
         m_legend_grid->addWidget(swatch,    row, col * 2,     Qt::AlignVCenter | Qt::AlignRight);
-        m_legend_grid->addWidget(name_edit, row, col * 2 + 1, Qt::AlignVCenter | Qt::AlignLeft);
+        m_legend_grid->addWidget(name_edit, row, col * 2 + 1, Qt::AlignVCenter | Qt::AlignRight);
 
         ++col;
         if (col >= cols)
@@ -997,8 +952,8 @@ void PlotWidget::updateAxisViewButton()
     if (enabled)
     {
         m_axis_view_btn->setText(m_view_model->lockAxisView() == PlotViewModel::LockAxisView::LockPercent
-            ? QStringLiteral("View: Accumulated Missed Frames")
-            : QStringLiteral("View: Framesync Lock (%)"));
+            ? QStringLiteral("Frame lock percentage")
+            : QStringLiteral("Missed frames"));
     }
 }
 

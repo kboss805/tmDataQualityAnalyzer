@@ -18,7 +18,7 @@
 #include "tst_processingcoordinator.h"
 #include "tst_stepdetector.h"
 #include "tst_streamconfigdialog.h"
-#include "tst_timeextractionwidget.h"
+
 #include "tst_exportdialog.h"
 
 /// Runs a single test suite and appends results to the shared log file.
@@ -94,7 +94,7 @@ int main(int argc, char* argv[])
     status |= runSuite<TestMainViewModelHelpers>(log_path);
     status |= runSuite<TestFrameSetup>(log_path);
     status |= runSuite<TestPlotViewModel>(log_path);
-    status |= runSuite<TestTimeExtractionWidget>(log_path);
+
     status |= runSuite<TestProcessingCoordinator>(log_path);
     status |= runSuite<TestMainView>(log_path);
     status |= runSuite<TestPlotWidget>(log_path);

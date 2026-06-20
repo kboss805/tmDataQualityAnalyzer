@@ -48,10 +48,20 @@ struct ProcessingParams {
     uint64_t stopSeconds = 0;     ///< End of extraction window (IRIG seconds).
     double samplePeriodSec = 0.1; ///< Output sample period in seconds (default 100 ms).
     bool isRandomized = false;    ///< True if RNRZ-L encoding (user-specified).
+    bool isInverted   = false;    ///< True if raw data should be bit-inverted before any other processing.
 
     StreamMode mode = StreamMode::ReceiverChannelInfo; ///< Processing mode for this stream.
     double dataRateBps = 0.0;     ///< User bit rate in bits/sec. 0 = use TMATS-derived rate.
     QString streamLabel;          ///< Display label of the source stream (for plot/logs).
+
+    /// Derive the sample-windowing clock from bits processed (data rate) starting
+    /// at zero, instead of from IRIG absolute time. Calibration extraction sets
+    /// this: it only needs steps measured over elapsed stream time, and a cal
+    /// file's IRIG time may be large/absent/non-monotonic (it is a different file
+    /// than the one the time channel was selected for), which would otherwise
+    /// derail the per-period windowing. The plot path leaves this false because it
+    /// genuinely needs wall/IRIG time for the x-axis and cross-stream alignment.
+    bool useDataRateClock = false;
 
     ResolvedPcmAttrs resolvedAttrs; ///< Filled by the reader before the worker starts.
     PacketQueue* packetQueue = nullptr; ///< Worker's input queue (owned by the coordinator).

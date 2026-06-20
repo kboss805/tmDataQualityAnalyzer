@@ -8,11 +8,13 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
+#include <QDir>
 #include <QDoubleSpinBox>
 #include <QEventLoop>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFrame>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -30,7 +32,6 @@
 #include "calibrationextractor.h"
 #include "constants.h"
 #include "stepdetector.h"
-#include "timeextractionwidget.h"
 #include "tomlconfighelper.h"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -46,6 +47,19 @@ QString periodText(double sec)
     if (sec >= 1.0)
         return QString::number(static_cast<int>(sec)) + " s";
     return QString::number(static_cast<int>(sec * 1000)) + " ms";
+}
+
+/// Resolves the settings subdirectory named @p subdir under @p app_root's
+/// settings directory, for use as a file dialog's starting directory. Falls
+/// back to @p fallback_dir if app_root is empty or the subdirectory doesn't
+/// exist (e.g. a dev build run without the settings/ tree alongside it).
+QString settingsSubdir(const QString& app_root, const char* subdir, const QString& fallback_dir)
+{
+    if (app_root.isEmpty())
+        return fallback_dir;
+
+    QString dir = app_root + "/" + UIConstants::kSettingsDirName + "/" + subdir;
+    return QDir(dir).exists() ? dir : fallback_dir;
 }
 
 /// Sizes an icon-only button so its SVG icon fills the button, with a
@@ -72,6 +86,7 @@ void addSeparator(QVBoxLayout* layout, QWidget* parent)
     layout->addLayout(wrapper);
 }
 
+
 /// Loads frame sync fields from a TOML file into the provided widgets.
 /// Handles both the new BitsPerFrame key and the old WordsInMinorFrame key for
 /// backward compatibility with previously saved files.
@@ -79,7 +94,8 @@ void loadFrameSyncFromToml(const QString& filename,
                            QLineEdit* syncEdit,
                            QLineEdit* maskEdit,
                            QSpinBox*  bitsSpinBox,
-                           QString&   toml_dir)
+                           QString&   toml_dir,
+                           QCheckBox* invertedBox = nullptr)
 {
     toml_dir = QFileInfo(filename).absolutePath();
     QSettings cfg(filename, TomlConfigHelper::format());
@@ -102,6 +118,12 @@ void loadFrameSyncFromToml(const QString& filename,
     }
     if (bits >= PCMConstants::kMinFrameLengthBits)
         bitsSpinBox->setValue(bits);
+
+    if (invertedBox)
+    {
+        bool inv = (cfg.value("Frame/Inverted", false).toString() == "true");
+        invertedBox->setChecked(inv);
+    }
 }
 
 /// Saves frame sync fields to a TOML file.
@@ -109,6 +131,7 @@ void saveFrameSyncToToml(const QString& filename,
                          const QString& syncPattern,
                          const QString& syncMask,
                          int            bitsPerFrame,
+                         bool           inverted,
                          QString&       toml_dir)
 {
     toml_dir = QFileInfo(filename).absolutePath();
@@ -117,6 +140,7 @@ void saveFrameSyncToToml(const QString& filename,
     cfg.setValue("FrameSync",     syncPattern);
     cfg.setValue("FrameSyncMask", syncMask);
     cfg.setValue("BitsPerFrame",  bitsPerFrame);
+    cfg.setValue("Inverted",      inverted);
     cfg.endGroup();
     cfg.sync();
 }
@@ -130,9 +154,11 @@ class FrameLockSetupDialog : public QDialog
 public:
     explicit FrameLockSetupDialog(const StreamConfig& cfg,
                                   const QString& toml_dir,
+                                  const QString& app_root,
                                   QWidget* parent = nullptr)
         : QDialog(parent)
         , m_toml_dir(toml_dir)
+        , m_app_root(app_root)
     {
         setWindowTitle("Frame Sync Lock Setup — " + cfg.label);
         setModal(true);
@@ -170,15 +196,10 @@ public:
         grid->addWidget(new QLabel("Bits Per Frame"),  0, 2, Qt::AlignHCenter);
         grid->addWidget(m_bitsPerFrame,                1, 2, Qt::AlignHCenter);
 
-        // Spacer row between the two groups
+        // Spacer row between frame-sync inputs and rate/period group
         grid->setRowMinimumHeight(2, 8);
 
-        // Row 3 labels / Row 4 inputs — processing group
-        m_randomized = new QCheckBox(this);
-        m_randomized->setChecked(cfg.randomized);
-        grid->addWidget(new QLabel("Randomized"),      3, 0, Qt::AlignHCenter);
-        grid->addWidget(m_randomized,                  4, 0, Qt::AlignHCenter);
-
+        // Row 3 labels / Row 4 inputs — Data Rate + Average Period
         m_dataRate = new QDoubleSpinBox(this);
         m_dataRate->setRange(0.0, 1000.0);
         m_dataRate->setDecimals(3);
@@ -190,16 +211,16 @@ public:
             m_dataRate->setSpecialValueText("TMATS");
         m_dataRate->setValue(cfg.dataRateMbps);
         m_dataRate->setMinimumWidth(130);
-        grid->addWidget(new QLabel("Data Rate (Mbps)"), 3, 1, Qt::AlignHCenter);
-        grid->addWidget(m_dataRate,                     4, 1, Qt::AlignHCenter);
+        grid->addWidget(new QLabel("Data Rate (Mbps)"), 3, 0, Qt::AlignHCenter);
+        grid->addWidget(m_dataRate,                     4, 0, Qt::AlignHCenter);
 
         m_sampleRate = new QComboBox(this);
         m_sampleRate->addItem(periodText(UIConstants::kSamplePeriod1s));
         m_sampleRate->addItem(periodText(UIConstants::kSamplePeriod100ms));
         m_sampleRate->addItem(periodText(UIConstants::kSamplePeriod10ms));
         m_sampleRate->setCurrentIndex(cfg.samplePeriodIndex);
-        grid->addWidget(new QLabel("Average Period"),  3, 2, Qt::AlignHCenter);
-        grid->addWidget(m_sampleRate,                  4, 2, Qt::AlignHCenter);
+        grid->addWidget(new QLabel("Average Period"),  3, 1, Qt::AlignHCenter);
+        grid->addWidget(m_sampleRate,                  4, 1, Qt::AlignHCenter);
 
         auto* loadBtn = new QPushButton(this);
         loadBtn->setIcon(QIcon(":/resources/folder-open.svg"));
@@ -215,11 +236,12 @@ public:
 
         connect(loadBtn, &QPushButton::clicked, this, [this]() {
             QString filename = QFileDialog::getOpenFileName(
-                this, tr("Load Frame Sync Parameters"), m_toml_dir,
+                this, tr("Load Frame Sync Parameters"),
+                settingsSubdir(m_app_root, UIConstants::kFramesyncPatternsDirName, m_toml_dir),
                 tr("TOML Files (*.toml);;All Files (*.*)"));
             if (!filename.isEmpty())
                 loadFrameSyncFromToml(filename, m_syncPattern, m_syncMask,
-                                      m_bitsPerFrame, m_toml_dir);
+                                      m_bitsPerFrame, m_toml_dir, m_inverted);
         });
         connect(saveBtn, &QPushButton::clicked, this, [this]() {
             QString filename = QFileDialog::getSaveFileName(
@@ -231,11 +253,39 @@ public:
                                 m_syncPattern->text().trimmed().toUpper(),
                                 m_syncMask->text().trimmed().toUpper(),
                                 m_bitsPerFrame->value(),
+                                m_inverted->isChecked(),
                                 m_toml_dir);
         });
 
         auto* outer = new QVBoxLayout(this);
         outer->addLayout(grid);
+
+        // Randomized toggle row
+        m_randomized = new QCheckBox(this);
+        m_randomized->setChecked(cfg.randomized);
+        m_randomized->setToolTip("Apply RNRZ-L self-synchronizing descrambler to the data stream.");
+        {
+            auto* row = new QHBoxLayout;
+            row->setSpacing(6);
+            row->addWidget(m_randomized);
+            row->addWidget(new QLabel("Randomized", this));
+            row->addStretch(1);
+            outer->addLayout(row);
+        }
+
+        // Invert Data toggle row
+        m_inverted = new QCheckBox(this);
+        m_inverted->setChecked(cfg.inverted);
+        m_inverted->setToolTip("Invert every bit of the raw data stream before processing (use when the PCM signal polarity is inverted).");
+        {
+            auto* row = new QHBoxLayout;
+            row->setSpacing(6);
+            row->addWidget(m_inverted);
+            row->addWidget(new QLabel("Invert Data", this));
+            row->addStretch(1);
+            outer->addLayout(row);
+        }
+
         outer->addStretch(1);
 
         addSeparator(outer, this);
@@ -253,11 +303,15 @@ public:
         });
         connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
-        auto* bottomLayout = new QHBoxLayout;
-        m_applyToAll = new QCheckBox("Apply to all Frame Sync Lock streams", this);
+        // Apply to all toggle row + dialog buttons
+        m_applyToAll = new QCheckBox(this);
         m_applyToAll->setToolTip("Copy these settings to every other selected "
                                   "stream currently set to Frame Sync Lock mode.");
-        bottomLayout->addWidget(m_applyToAll);
+        auto* bottomLayout = new QHBoxLayout;
+        {
+            bottomLayout->addWidget(m_applyToAll);
+            bottomLayout->addWidget(new QLabel("Apply to all Frame Sync Lock streams", this));
+        }
         bottomLayout->addStretch(1);
         bottomLayout->addWidget(buttons);
         outer->addLayout(bottomLayout);
@@ -269,6 +323,7 @@ public:
     QString frameSyncMask()    const { return m_syncMask->text().trimmed().toUpper(); }
     int     bitsPerFrame()     const { return m_bitsPerFrame->value(); }
     bool    randomized()        const { return m_randomized->isChecked(); }
+    bool    inverted()          const { return m_inverted->isChecked(); }
     int     samplePeriodIndex() const { return m_sampleRate->currentIndex(); }
     double  dataRateMbps()      const { return m_dataRate->value(); }
     QString lastTomlDir()       const { return m_toml_dir; }
@@ -279,10 +334,336 @@ private:
     QLineEdit*      m_syncMask     = nullptr;
     QSpinBox*       m_bitsPerFrame = nullptr;
     QCheckBox*      m_randomized   = nullptr;
+    QCheckBox*      m_inverted     = nullptr;
     QDoubleSpinBox* m_dataRate     = nullptr;
     QComboBox*      m_sampleRate   = nullptr;
     QCheckBox*      m_applyToAll   = nullptr;
     QString         m_toml_dir;
+    QString         m_app_root;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+//                      CALIBRATION SETUP DIALOG (US3.2)                       //
+////////////////////////////////////////////////////////////////////////////////
+
+/// Collects the two files needed for non-linear calibration extraction — the
+/// step-config TOML and the calibration Chapter 10 file — and produces the
+/// per-channel calibration profiles directly:
+///   * Step config: the [[Step]] table format must parse.
+///   * Cal Ch10: as soon as both files are present, the whole file is processed
+///     (CalibrationExtractor) to detect the step plateaus and build the
+///     profiles. This is the single, authoritative pass — there is no separate
+///     pre-flight lock check and nothing further to process on OK.
+/// OK is enabled once extraction has produced at least one valid profile. The
+/// owner reads calibrationByWord() on accept.
+class CalibrationSetupDialog : public QDialog
+{
+public:
+    CalibrationSetupDialog(const QString& frameSyncHex,
+                           const QString& frameSyncMaskHex,
+                           int bitsInMinorFrame,
+                           bool randomized,
+                           bool inverted,
+                           double dataRateMbps,
+                           int timeChannelId,
+                           int pcmChannelId,
+                           const QString& receiverParamsToml,
+                           int numReceivers,
+                           int receiverChannels,
+                           const QString& tomlDir,
+                           const QString& appRoot,
+                           QWidget* parent = nullptr)
+        : QDialog(parent)
+        , m_frameSyncHex(frameSyncHex)
+        , m_frameSyncMaskHex(frameSyncMaskHex)
+        , m_bitsInMinorFrame(bitsInMinorFrame)
+        , m_randomized(randomized)
+        , m_inverted(inverted)
+        , m_dataRateMbps(dataRateMbps)
+        , m_timeChannelId(timeChannelId)
+        , m_pcmChannelId(pcmChannelId)
+        , m_receiverParamsToml(receiverParamsToml)
+        , m_numReceivers(numReceivers)
+        , m_receiverChannels(receiverChannels)
+        , m_tomlDir(tomlDir)
+        , m_appRoot(appRoot)
+    {
+        setWindowTitle("Extract Calibration");
+        setModal(true);
+
+        auto* outer = new QVBoxLayout(this);
+        outer->setSpacing(8);
+
+        auto* grid = new QGridLayout;
+        grid->setHorizontalSpacing(10);
+        grid->setVerticalSpacing(4);
+        grid->setColumnStretch(1, 1);
+
+        // ---- Row 0/1: Step Cal file -----------------------------------------
+        grid->addWidget(new QLabel("Step Cal File:"), 0, 0);
+        m_stepPathLabel = new QLabel(this);
+        m_stepPathLabel->setMinimumWidth(260);
+        grid->addWidget(m_stepPathLabel, 0, 1);
+        auto* stepBrowse = new QPushButton("Browse...", this);
+        grid->addWidget(stepBrowse, 0, 2);
+        m_stepStatus = new QLabel(this);
+        grid->addWidget(m_stepStatus, 1, 1, 1, 2);
+
+        // ---- Row 2/3: Calibration Ch10 file ---------------------------------
+        grid->setRowMinimumHeight(2, 8);
+        grid->addWidget(new QLabel("Calibration Ch10:"), 3, 0);
+        m_calPathLabel = new QLabel(this);
+        m_calPathLabel->setMinimumWidth(260);
+        grid->addWidget(m_calPathLabel, 3, 1);
+        m_calBrowse = new QPushButton("Browse...", this);
+        grid->addWidget(m_calBrowse, 3, 2);
+        m_calStatus = new QLabel(this);
+        grid->addWidget(m_calStatus, 4, 1, 1, 2);
+
+        outer->addLayout(grid);
+
+        connect(stepBrowse,  &QPushButton::clicked, this, [this]() { onBrowseStep(); });
+        connect(m_calBrowse, &QPushButton::clicked, this, [this]() { onBrowseCal(); });
+
+        addSeparator(outer, this);
+
+        auto* buttons = new QDialogButtonBox(
+            QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+        connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+        connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+        outer->addWidget(buttons);
+        m_okButton = buttons->button(QDialogButtonBox::Ok);
+
+        setStatus(m_stepStatus, Pending, "No file selected.");
+        setStatus(m_calStatus,  Pending, "No file selected.");
+        updateOk();
+        adjustSize();
+    }
+
+    /// Per-channel calibration profiles produced by the whole-file extraction,
+    /// keyed by word index. Valid after the dialog is accepted.
+    QHash<int, CalibrationProfile> calibrationByWord() const { return m_calibrationByWord; }
+    QString lastTomlDir() const { return m_tomlDir; }
+
+private:
+    enum StatusKind { Pending, Ok, Fail };
+
+    void setStatus(QLabel* label, StatusKind kind, const QString& text)
+    {
+        QString prefix;
+        QString color;
+        switch (kind)
+        {
+            case Ok:      prefix = "✓ "; color = "green"; break;  // checkmark
+            case Fail:    prefix = "✗ "; color = "#cc0000"; break; // cross
+            case Pending: default: color = "gray"; break;
+        }
+        label->setText(QString("<span style='color: %1;'>%2%3</span>")
+                           .arg(color, prefix, text.toHtmlEscaped()));
+    }
+
+    void updateOk()
+    {
+        if (m_okButton != nullptr)
+        {
+            m_okButton->setEnabled(m_stepOk && m_calOk);
+        }
+    }
+
+    void onBrowseStep()
+    {
+        const QString path = QFileDialog::getOpenFileName(
+            this, tr("Select Step Configuration (TOML)"),
+            settingsSubdir(m_appRoot, UIConstants::kRcvrCalsDirName, m_tomlDir),
+            tr("TOML Files (*.toml);;All Files (*.*)"));
+        if (path.isEmpty()) return;
+
+        m_tomlDir = QFileInfo(path).absolutePath();
+        m_stepPath = path;
+        m_stepPathLabel->setText(QFileInfo(path).fileName());
+
+        QVector<StepDefinition> steps;
+        QString error;
+        if (StepDetector::parseStepConfig(path, steps, error))
+        {
+            m_steps  = steps;
+            m_stepOk = true;
+            setStatus(m_stepStatus, Ok,
+                      QString("%1 steps parsed.").arg(steps.size()));
+        }
+        else
+        {
+            m_steps.clear();
+            m_stepOk = false;
+            setStatus(m_stepStatus, Fail, error);
+        }
+        updateOk();
+        maybeRunExtraction();
+    }
+
+    void onBrowseCal()
+    {
+        if (m_frameSyncHex.trimmed().isEmpty())
+        {
+            QMessageBox::warning(this, tr("Missing Frame Sync"),
+                tr("Set a frame sync pattern before loading the calibration file."));
+            return;
+        }
+
+        const QString path = QFileDialog::getOpenFileName(
+            this, tr("Select Calibration Chapter 10 File"), QString(),
+            tr("Chapter 10 Files (*.ch10 *.c10);;All Files (*.*)"));
+        if (path.isEmpty()) return;
+
+        m_calPath = path;
+        m_calPathLabel->setText(QFileInfo(path).fileName());
+        maybeRunExtraction();
+    }
+
+    /// Runs the whole-file calibration extraction once both inputs are present.
+    /// This is the single processing pass: it detects the step plateaus and
+    /// builds the per-channel profiles. OK simply hands these back to the owner.
+    void maybeRunExtraction()
+    {
+        if (m_calPath.isEmpty())
+        {
+            return; // Nothing to do until a cal file is chosen.
+        }
+        if (!m_stepOk)
+        {
+            m_calOk = false;
+            setStatus(m_calStatus, Pending,
+                      tr("Select a valid step cal file to process this recording."));
+            updateOk();
+            return;
+        }
+
+        m_calOk = false;
+        m_calibrationByWord.clear();
+        setStatus(m_calStatus, Pending, tr("Processing calibration file…"));
+        updateOk();
+
+        CalibrationExtractor::Request req;
+        req.calFilename        = m_calPath;
+        req.timeChannelId      = m_timeChannelId;
+        req.pcmChannelId       = m_pcmChannelId;
+        req.frameSyncHex       = m_frameSyncHex;
+        req.frameSyncMaskHex   = m_frameSyncMaskHex;
+        req.bitsInMinorFrame   = m_bitsInMinorFrame;
+        req.randomized         = m_randomized;
+        req.inverted           = m_inverted;
+        req.dataRateMbps       = m_dataRateMbps;
+        // Resolve the word map the SAME way the main processing run does
+        // (mainviewmodel buildJob): when the user hasn't picked an explicit
+        // Receiver Parameters file, fall back to the shipped default.toml rather
+        // than letting the extractor synthesize a sequential grid. The two passes
+        // MUST agree on word indices, because the resulting profiles are matched
+        // to plot channels by word — a divergent map silently misattaches every
+        // profile and the plot falls back to linear calibration.
+        req.receiverParamsToml = m_receiverParamsToml;
+        if (req.receiverParamsToml.isEmpty())
+        {
+            const QString defaultRcvrParams = m_appRoot + "/" + UIConstants::kSettingsDirName +
+                "/" + UIConstants::kReceiverParamsDirName + "/" + UIConstants::kDefaultTomlFilename;
+            if (QFileInfo::exists(defaultRcvrParams))
+            {
+                req.receiverParamsToml = defaultRcvrParams;
+            }
+        }
+        req.numReceivers       = m_numReceivers;
+        req.receiverChannels   = m_receiverChannels;
+        req.steps              = m_steps;
+
+        CalibrationExtractor extractor;
+        QProgressDialog progress(tr("Processing calibration file…"), tr("Cancel"),
+                                 0, 100, this);
+        progress.setWindowModality(Qt::WindowModal);
+        progress.setMinimumDuration(0);
+        progress.setAutoClose(false);
+        progress.setAutoReset(false);
+
+        connect(&extractor, &CalibrationExtractor::progressChanged,
+                &progress, &QProgressDialog::setValue);
+        connect(&progress, &QProgressDialog::canceled, this, [&]() {
+            progress.setLabelText(tr("Cancelling…"));
+            progress.setCancelButton(nullptr);
+            extractor.cancel();
+        });
+
+        QEventLoop loop;
+        bool success = false;
+        bool finishedAlready = false;
+        QString summary;
+        connect(&extractor, &CalibrationExtractor::finished, this,
+                [&](bool ok, const QString& msg) {
+                    success = ok;
+                    summary = msg;
+                    finishedAlready = true;
+                    loop.quit();
+                });
+
+        extractor.start(req);
+        if (!finishedAlready)
+        {
+            progress.show();
+            loop.exec();
+        }
+        progress.close();
+
+        if (!success)
+        {
+            setStatus(m_calStatus, Fail, summary);
+            updateOk();
+            return;
+        }
+
+        int valid = 0;
+        for (const CalibrationChannelResult& r : extractor.results())
+        {
+            if (r.profile.valid)
+            {
+                m_calibrationByWord.insert(r.word, r.profile);
+                valid++;
+            }
+        }
+
+        m_calOk = (valid > 0);
+        setStatus(m_calStatus, m_calOk ? Ok : Fail, summary);
+        updateOk();
+    }
+
+    // Frame sync + receiver settings forwarded to the extractor.
+    QString m_frameSyncHex;
+    QString m_frameSyncMaskHex;
+    int     m_bitsInMinorFrame = 0;
+    bool    m_randomized       = false;
+    bool    m_inverted         = false;
+    double  m_dataRateMbps     = 0.0;
+    int     m_timeChannelId    = -1;
+    int     m_pcmChannelId     = -1;
+    QString m_receiverParamsToml;
+    int     m_numReceivers     = 0;
+    int     m_receiverChannels = 0;
+    QString m_tomlDir;
+    QString m_appRoot;
+
+    // Selected files + parsed steps.
+    QString m_stepPath;
+    QString m_calPath;
+    QVector<StepDefinition> m_steps;
+    bool    m_stepOk = false;
+    bool    m_calOk  = false;
+
+    // Extracted profiles, keyed by word index (populated by maybeRunExtraction).
+    QHash<int, CalibrationProfile> m_calibrationByWord;
+
+    // Widgets.
+    QLabel*      m_stepPathLabel = nullptr;
+    QLabel*      m_stepStatus    = nullptr;
+    QLabel*      m_calPathLabel  = nullptr;
+    QLabel*      m_calStatus     = nullptr;
+    QPushButton* m_calBrowse     = nullptr;
+    QPushButton* m_okButton      = nullptr;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -295,10 +676,12 @@ public:
     explicit ReceiverSNRDialog(const StreamConfig& cfg,
                                const QString& toml_dir,
                                int time_channel_id,
+                               const QString& app_root,
                                QWidget* parent = nullptr)
         : QDialog(parent)
         , m_receiverParamsToml(cfg.receiverParamsToml)
         , m_toml_dir(toml_dir)
+        , m_app_root(app_root)
         , m_timeChannelId(time_channel_id)
         , m_pcmChannelId(cfg.pcmChannelId)
         , m_calibrationByWord(cfg.calibrationByWord)
@@ -345,16 +728,7 @@ public:
             // Row 2: spacer
             grid->setRowMinimumHeight(2, 8);
 
-            // Row 3: labels
-            grid->addWidget(new QLabel("Randomized"),       3, 0, Qt::AlignHCenter);
-            grid->addWidget(new QLabel("Data Rate (Mbps)"), 3, 1, Qt::AlignHCenter);
-            grid->addWidget(new QLabel("Average Period"),   3, 2, Qt::AlignHCenter);
-
-            // Row 4: inputs + buttons
-            m_randomized = new QCheckBox(this);
-            m_randomized->setChecked(cfg.randomized);
-            grid->addWidget(m_randomized, 4, 0, Qt::AlignHCenter | Qt::AlignVCenter);
-
+            // Row 3: labels / Row 4: inputs — Data Rate + Average Period
             m_dataRate = new QDoubleSpinBox(this);
             m_dataRate->setRange(0.0, 1000.0);
             m_dataRate->setDecimals(3);
@@ -366,14 +740,16 @@ public:
                 m_dataRate->setSpecialValueText("TMATS");
             m_dataRate->setValue(cfg.dataRateMbps);
             m_dataRate->setMinimumWidth(110);
-            grid->addWidget(m_dataRate, 4, 1, Qt::AlignHCenter);
+            grid->addWidget(new QLabel("Data Rate (Mbps)"), 3, 0, Qt::AlignHCenter);
+            grid->addWidget(m_dataRate,                     4, 0, Qt::AlignHCenter);
 
             m_sampleRate = new QComboBox(this);
             m_sampleRate->addItem(periodText(UIConstants::kSamplePeriod1s));
             m_sampleRate->addItem(periodText(UIConstants::kSamplePeriod100ms));
             m_sampleRate->addItem(periodText(UIConstants::kSamplePeriod10ms));
             m_sampleRate->setCurrentIndex(cfg.samplePeriodIndex);
-            grid->addWidget(m_sampleRate, 4, 2, Qt::AlignHCenter);
+            grid->addWidget(new QLabel("Average Period"),   3, 1, Qt::AlignHCenter);
+            grid->addWidget(m_sampleRate,                   4, 1, Qt::AlignHCenter);
 
             grid->setColumnMinimumWidth(3, 16);
 
@@ -391,11 +767,12 @@ public:
 
             connect(loadBtn1, &QPushButton::clicked, this, [this]() {
                 QString filename = QFileDialog::getOpenFileName(
-                    this, tr("Load Frame Sync Parameters"), m_toml_dir,
+                    this, tr("Load Frame Sync Parameters"),
+                    settingsSubdir(m_app_root, UIConstants::kFramesyncPatternsDirName, m_toml_dir),
                     tr("TOML Files (*.toml);;All Files (*.*)"));
                 if (!filename.isEmpty())
                     loadFrameSyncFromToml(filename, m_syncPattern, m_syncMask,
-                                         m_bitsPerFrame, m_toml_dir);
+                                         m_bitsPerFrame, m_toml_dir, m_inverted);
             });
             connect(saveBtn1, &QPushButton::clicked, this, [this]() {
                 QString filename = QFileDialog::getSaveFileName(
@@ -407,10 +784,37 @@ public:
                                     m_syncPattern->text().trimmed().toUpper(),
                                     m_syncMask->text().trimmed().toUpper(),
                                     m_bitsPerFrame->value(),
+                                    m_inverted->isChecked(),
                                     m_toml_dir);
             });
 
             outer->addLayout(grid);
+        }
+
+        // Randomized toggle row
+        m_randomized = new QCheckBox(this);
+        m_randomized->setChecked(cfg.randomized);
+        m_randomized->setToolTip("Apply RNRZ-L self-synchronizing descrambler to the data stream.");
+        {
+            auto* row = new QHBoxLayout;
+            row->setSpacing(6);
+            row->addWidget(m_randomized);
+            row->addWidget(new QLabel("Randomized", this));
+            row->addStretch(1);
+            outer->addLayout(row);
+        }
+
+        // Invert Data toggle row
+        m_inverted = new QCheckBox(this);
+        m_inverted->setChecked(cfg.inverted);
+        m_inverted->setToolTip("Invert every bit of the raw data stream before processing (use when the PCM signal polarity is inverted).");
+        {
+            auto* row = new QHBoxLayout;
+            row->setSpacing(6);
+            row->addWidget(m_inverted);
+            row->addWidget(new QLabel("Invert Data", this));
+            row->addStretch(1);
+            outer->addLayout(row);
         }
 
         // ---- Separator ------------------------------------------------------
@@ -458,8 +862,8 @@ public:
             grid->setRowMinimumHeight(2, 8);
 
             // Row 3: labels
-            grid->addWidget(new QLabel("Num Receivers"),     3, 0, Qt::AlignHCenter);
-            grid->addWidget(new QLabel("Receiver Channels"), 3, 1, Qt::AlignHCenter);
+            grid->addWidget(new QLabel("Num Rcvrs"),    3, 0, Qt::AlignHCenter);
+            grid->addWidget(new QLabel("Num Channels"), 3, 1, Qt::AlignHCenter);
 
             // Row 4: inputs + buttons
             m_numReceivers = new QSpinBox(this);
@@ -488,7 +892,8 @@ public:
 
             connect(loadBtn2, &QPushButton::clicked, this, [this]() {
                 QString filename = QFileDialog::getOpenFileName(
-                    this, tr("Load Receiver Parameters"), m_toml_dir,
+                    this, tr("Load Receiver Parameters"),
+                    settingsSubdir(m_app_root, UIConstants::kReceiverParamsDirName, m_toml_dir),
                     tr("TOML Files (*.toml);;All Files (*.*)"));
                 if (filename.isEmpty()) return;
                 m_toml_dir = QFileInfo(filename).absolutePath();
@@ -549,8 +954,7 @@ public:
         // ---- Group 3: Non-linear step calibration (US3.2) -------------------
         {
             auto* row = new QHBoxLayout;
-            auto* extractBtn = new QPushButton("Extract Calibration... (Coming Soon)", this);
-            extractBtn->setEnabled(false);
+            auto* extractBtn = new QPushButton("Apply Cal", this);
             extractBtn->setToolTip(
                 "Build a non-linear calibration profile from a calibration "
                 "Chapter 10 file and a step-config TOML. Uses the word map, "
@@ -582,11 +986,15 @@ public:
         });
         connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
-        auto* bottomLayout = new QHBoxLayout;
-        m_applyToAll = new QCheckBox("Apply to all Receiver SNR streams", this);
+        // Apply to all toggle row + dialog buttons
+        m_applyToAll = new QCheckBox(this);
         m_applyToAll->setToolTip("Copy these settings to every other selected "
                                   "stream currently set to Receiver SNR mode.");
-        bottomLayout->addWidget(m_applyToAll);
+        auto* bottomLayout = new QHBoxLayout;
+        {
+            bottomLayout->addWidget(m_applyToAll);
+            bottomLayout->addWidget(new QLabel("Apply to all Receiver SNR streams", this));
+        }
         bottomLayout->addStretch(1);
         bottomLayout->addWidget(buttons);
         outer->addLayout(bottomLayout);
@@ -598,6 +1006,7 @@ public:
     QString frameSyncMask()      const { return m_syncMask->text().trimmed().toUpper(); }
     int     bitsPerFrame()       const { return m_bitsPerFrame->value(); }
     bool    randomized()         const { return m_randomized->isChecked(); }
+    bool    inverted()           const { return m_inverted->isChecked(); }
     int     samplePeriodIndex()    const { return m_sampleRate->currentIndex(); }
     double  dataRateMbps()       const { return m_dataRate->value(); }
     int     polarityIndex()      const { return m_polarity->currentIndex(); }
@@ -634,9 +1043,9 @@ private:
                 QString("%1 channel(s) calibrated (non-linear)").arg(n));
     }
 
-    /// Prompts for a step-config TOML and a calibration Ch10 file, runs the
-    /// extraction behind a modal progress dialog, and stores the resulting
-    /// per-channel profiles (US3.2).
+    /// Opens the calibration setup dialog. The dialog processes the calibration
+    /// file in full as soon as both inputs are loaded and exposes the resulting
+    /// per-channel profiles; here we simply adopt them on accept (US3.2).
     void onExtractCalibration()
     {
         if (m_timeChannelId < 0)
@@ -647,87 +1056,26 @@ private:
             return;
         }
 
-        const QString step_path = QFileDialog::getOpenFileName(
-            this, tr("Select Step Configuration (TOML)"), m_toml_dir,
-            tr("TOML Files (*.toml);;All Files (*.*)"));
-        if (step_path.isEmpty()) return;
+        CalibrationSetupDialog setup(frameSyncPattern(), frameSyncMask(),
+                                     bitsPerFrame(), randomized(), inverted(), dataRateMbps(),
+                                     m_timeChannelId, m_pcmChannelId,
+                                     m_receiverParamsToml, numReceivers(),
+                                     receiverChannels(), m_toml_dir, m_app_root, this);
+        if (setup.exec() != QDialog::Accepted) return;
+        m_toml_dir = setup.lastTomlDir();
 
-        QVector<StepDefinition> steps;
-        QString parse_error;
-        if (!StepDetector::parseStepConfig(step_path, steps, parse_error))
-        {
-            QMessageBox::warning(this, tr("Invalid Step Configuration"), parse_error);
-            return;
-        }
-        m_toml_dir = QFileInfo(step_path).absolutePath();
-
-        const QString cal_path = QFileDialog::getOpenFileName(
-            this, tr("Select Calibration Chapter 10 File"), QString(),
-            tr("Chapter 10 Files (*.ch10 *.c10);;All Files (*.*)"));
-        if (cal_path.isEmpty()) return;
-
-        CalibrationExtractor::Request req;
-        req.calFilename       = cal_path;
-        req.timeChannelId     = m_timeChannelId;
-        req.pcmChannelId      = m_pcmChannelId;
-        req.frameSyncHex      = frameSyncPattern();
-        req.frameSyncMaskHex  = frameSyncMask();
-        req.bitsInMinorFrame  = bitsPerFrame();
-        req.randomized        = randomized();
-        req.dataRateMbps      = dataRateMbps();
-        req.receiverParamsToml = m_receiverParamsToml;
-        req.numReceivers      = numReceivers();
-        req.receiverChannels  = receiverChannels();
-        req.steps             = steps;
-
-        CalibrationExtractor extractor;
-        QProgressDialog progress(tr("Extracting calibration..."), tr("Cancel"),
-                                 0, 100, this);
-        progress.setWindowModality(Qt::WindowModal);
-        progress.setMinimumDuration(0);
-
-        connect(&extractor, &CalibrationExtractor::progressChanged,
-                &progress, &QProgressDialog::setValue);
-        connect(&progress, &QProgressDialog::canceled,
-                &extractor, &CalibrationExtractor::cancel);
-
-        QEventLoop loop;
-        bool success = false;
-        QString summary;
-        connect(&extractor, &CalibrationExtractor::finished, this,
-                [&](bool ok, const QString& msg) {
-                    success = ok;
-                    summary = msg;
-                    loop.quit();
-                });
-
-        extractor.start(req);
-        progress.show();
-        loop.exec();
-        progress.close();
-
-        if (!success)
-        {
-            QMessageBox::warning(this, tr("Calibration"), summary);
-            return;
-        }
-
-        m_calibrationByWord.clear();
-        for (const CalibrationChannelResult& r : extractor.results())
-        {
-            if (r.profile.valid)
-            {
-                m_calibrationByWord.insert(r.word, r.profile);
-            }
-        }
+        m_calibrationByWord = setup.calibrationByWord();
         updateCalibrationLabel();
-        QMessageBox::information(this, tr("Calibration Extracted"), summary);
+        QMessageBox::information(this, tr("Calibration Extracted"),
+            tr("Applied non-linear calibration to %1 channel(s).")
+                .arg(m_calibrationByWord.size()));
     }
 
     QLineEdit*      m_syncPattern      = nullptr;
     QLineEdit*      m_syncMask         = nullptr;
     QSpinBox*       m_bitsPerFrame     = nullptr;
     QCheckBox*      m_randomized       = nullptr;
+    QCheckBox*      m_inverted         = nullptr;
     QDoubleSpinBox* m_dataRate         = nullptr;
     QComboBox*      m_sampleRate       = nullptr;
     QComboBox*      m_polarity         = nullptr;
@@ -739,6 +1087,7 @@ private:
     QLabel*         m_receiverParamsLabel = nullptr;
     QString         m_receiverParamsToml;
     QString         m_toml_dir;
+    QString         m_app_root;
 
     // Non-linear step calibration (US3.2)
     int             m_timeChannelId = -1;     ///< Time channel ID inherited from the parent dialog.
@@ -758,13 +1107,12 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
                                        const QStringList& time_channels,
                                        int time_channel_index,
                                        int time_channel_id,
-                                       const TimeFields& start_time,
-                                       const TimeFields& stop_time,
-                                       bool extract_all_time,
+                                       const QString& app_root,
                                        QWidget* parent)
     : QDialog(parent)
     , m_configs(configs)
     , m_toml_dir(toml_dir)
+    , m_app_root(app_root)
     , m_time_channel_id(time_channel_id)
 {
     setWindowTitle("Configure Streams");
@@ -797,15 +1145,10 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
 
     buildTable();
 
-    m_time_widget = new TimeExtractionWidget(this);
-    m_time_widget->setExtractAllTime(extract_all_time);
-    m_time_widget->fillTimes(start_time, stop_time);
-    m_time_widget->setAllEnabled(true);
-    layout->addWidget(m_time_widget);
-
     auto* buttons = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     m_ok_btn = buttons->button(QDialogButtonBox::Ok);
+    m_ok_btn->setText(tr("Process"));
     connect(buttons, &QDialogButtonBox::accepted, this, &StreamConfigDialog::validateAndAccept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     layout->addWidget(buttons);
@@ -824,14 +1167,18 @@ void StreamConfigDialog::buildTable()
     constexpr int kRowHeight  = 52;
 
     m_table->setColumnCount(5);
-    m_table->setHorizontalHeaderLabels({"Process", "Channel", "Mode", "Setup", "Ready"});
+    m_table->setHorizontalHeaderLabels({"Process", "Channel", "Mode", "Configure", "Ready"});
     m_table->verticalHeader()->setVisible(false);
     m_table->verticalHeader()->setDefaultSectionSize(kRowHeight);
     m_table->setSelectionMode(QAbstractItemView::NoSelection);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_table->horizontalHeader()->setSectionResizeMode(kColMode, QHeaderView::Stretch);
     m_table->horizontalHeader()->setSectionResizeMode(kColProcess, QHeaderView::ResizeToContents);
-    m_table->horizontalHeader()->setSectionResizeMode(kColChannel, QHeaderView::ResizeToContents);
+    // Clamp the Channel column to a fixed width. ResizeToContents would let a
+    // long stream name stretch the whole dialog very wide; instead we cap it and
+    // let the cell elide, surfacing the full name via tooltip (see below).
+    m_table->horizontalHeader()->setSectionResizeMode(kColChannel, QHeaderView::Fixed);
+    m_table->setColumnWidth(kColChannel, 150);
     m_table->horizontalHeader()->setSectionResizeMode(kColSetup,   QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(kColReady,   QHeaderView::ResizeToContents);
 
@@ -867,6 +1214,7 @@ void StreamConfigDialog::buildTable()
         w.frameSyncMask     = cfg.frameSyncMask;
         w.bitsInFrame       = cfg.bitsInMinorFrame;
         w.randomized        = cfg.randomized;
+        w.inverted          = cfg.inverted;
         w.samplePeriodIndex   = cfg.samplePeriodIndex;
         w.dataRateMbps      = cfg.dataRateMbps;
         w.polarityIndex     = cfg.polarityIndex;
@@ -877,15 +1225,27 @@ void StreamConfigDialog::buildTable()
         w.receiverParamsToml  = cfg.receiverParamsToml;
         w.lastConfiguredMode  = cfg.mode;
 
-        // Process checkbox
+        // Process toggle
         w.process = new QCheckBox(m_table);
         w.process->setChecked(cfg.process);
-        m_table->setCellWidget(row, kColProcess, centeredWidget(w.process));
+        {
+            auto* cell = new QWidget(m_table);
+            cell->setStyleSheet("background-color: transparent;");
+            auto* l = new QHBoxLayout(cell);
+            l->setContentsMargins(4, 2, 4, 2);
+            l->setSpacing(6);
+            l->setAlignment(Qt::AlignCenter);
+            l->addWidget(w.process);
+            m_table->setCellWidget(row, kColProcess, cell);
+        }
 
         // Channel label
         auto* channel_item = new QTableWidgetItem(cfg.label);
         channel_item->setFlags(Qt::ItemIsEnabled);
-        channel_item->setTextAlignment(Qt::AlignCenter);
+        // Left-align so that when the label is wider than the clamped column the
+        // cell elides the tail (…), keeping the leading channel number visible.
+        channel_item->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        channel_item->setToolTip(cfg.label);
         m_table->setItem(row, kColChannel, channel_item);
 
         // Mode combo
@@ -990,6 +1350,7 @@ void StreamConfigDialog::openGearDialog(int row)
     temp.frameSyncMask      = w.frameSyncMask;
     temp.bitsInMinorFrame   = w.bitsInFrame;
     temp.randomized         = w.randomized;
+    temp.inverted           = w.inverted;
     temp.samplePeriodIndex    = w.samplePeriodIndex;
     temp.dataRateMbps       = w.dataRateMbps;
     temp.polarityIndex      = w.polarityIndex;
@@ -1020,13 +1381,14 @@ void StreamConfigDialog::openGearDialog(int row)
 
     if (is_frame_sync_lock)
     {
-        FrameLockSetupDialog dlg(temp, m_toml_dir, this);
+        FrameLockSetupDialog dlg(temp, m_toml_dir, m_app_root, this);
         if (dlg.exec() == QDialog::Accepted)
         {
             w.frameSyncPattern   = dlg.frameSyncPattern();
             w.frameSyncMask      = dlg.frameSyncMask();
             w.bitsInFrame        = dlg.bitsPerFrame();
             w.randomized         = dlg.randomized();
+            w.inverted           = dlg.inverted();
             w.samplePeriodIndex    = dlg.samplePeriodIndex();
             w.dataRateMbps       = dlg.dataRateMbps();
             m_toml_dir           = dlg.lastTomlDir();
@@ -1045,6 +1407,7 @@ void StreamConfigDialog::openGearDialog(int row)
                     rw.frameSyncMask      = dlg.frameSyncMask();
                     rw.bitsInFrame        = dlg.bitsPerFrame();
                     rw.randomized         = dlg.randomized();
+                    rw.inverted           = dlg.inverted();
                     rw.samplePeriodIndex  = dlg.samplePeriodIndex();
                     rw.dataRateMbps       = dlg.dataRateMbps();
                     rw.lastConfiguredMode = StreamMode::FrameSyncLockStats;
@@ -1056,13 +1419,14 @@ void StreamConfigDialog::openGearDialog(int row)
     }
     else
     {
-        ReceiverSNRDialog dlg(temp, m_toml_dir, m_time_channel_id, this);
+        ReceiverSNRDialog dlg(temp, m_toml_dir, m_time_channel_id, m_app_root, this);
         if (dlg.exec() == QDialog::Accepted)
         {
             w.frameSyncPattern   = dlg.frameSyncPattern();
             w.frameSyncMask      = dlg.frameSyncMask();
             w.bitsInFrame        = dlg.bitsPerFrame();
             w.randomized         = dlg.randomized();
+            w.inverted           = dlg.inverted();
             w.samplePeriodIndex    = dlg.samplePeriodIndex();
             w.dataRateMbps       = dlg.dataRateMbps();
             w.polarityIndex      = dlg.polarityIndex();
@@ -1088,6 +1452,7 @@ void StreamConfigDialog::openGearDialog(int row)
                     rw.frameSyncMask      = dlg.frameSyncMask();
                     rw.bitsInFrame        = dlg.bitsPerFrame();
                     rw.randomized         = dlg.randomized();
+                    rw.inverted           = dlg.inverted();
                     rw.samplePeriodIndex  = dlg.samplePeriodIndex();
                     rw.dataRateMbps       = dlg.dataRateMbps();
                     rw.polarityIndex      = dlg.polarityIndex();
@@ -1144,21 +1509,6 @@ int StreamConfigDialog::timeChannelIndex() const
     return m_time_channel_combo->currentIndex() + 1;
 }
 
-bool StreamConfigDialog::extractAllTime() const
-{
-    return m_time_widget ? m_time_widget->extractAllTime() : true;
-}
-
-QString StreamConfigDialog::startTimeText() const
-{
-    return m_time_widget ? m_time_widget->startTimeText() : QString();
-}
-
-QString StreamConfigDialog::stopTimeText() const
-{
-    return m_time_widget ? m_time_widget->stopTimeText() : QString();
-}
-
 QVector<StreamConfig> StreamConfigDialog::configs() const
 {
     QVector<StreamConfig> result = m_configs;
@@ -1172,6 +1522,7 @@ QVector<StreamConfig> StreamConfigDialog::configs() const
         result[row].frameSyncMask     = w.frameSyncMask;
         result[row].bitsInMinorFrame  = w.bitsInFrame;
         result[row].randomized        = w.randomized;
+        result[row].inverted          = w.inverted;
         result[row].samplePeriodIndex   = w.samplePeriodIndex;
         result[row].dataRateMbps      = w.dataRateMbps;
         result[row].polarityIndex     = w.polarityIndex;

@@ -95,7 +95,7 @@ private:
 
     // Slots
     void onReaderProgress(int percent);
-    void onWorkerFinished(FrameProcessor* processor, bool success);
+    void onWorkerFinished(FrameProcessor* processor, bool success, int job_index);
 
     // Reader
     QThread*          m_reader_thread = nullptr;

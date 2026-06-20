@@ -58,6 +58,16 @@ void FrameProcessor::derandomizeBitstream(uint8_t* data, uint64_t total_bits, ui
     }
 }
 
+// Static method
+void FrameProcessor::invertBytes(uint8_t* data, uint32_t length)
+{
+    for (uint32_t i = 0; i < length; i++)
+    {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+        data[i] = ~data[i];
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 //                       CONSTRUCTOR / DESTRUCTOR                             //
 ////////////////////////////////////////////////////////////////////////////////
@@ -85,6 +95,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     const auto  start_seconds  = params.startSeconds;
     const auto  stop_seconds   = params.stopSeconds;
     const bool  is_randomized  = params.isRandomized;
+    const bool  is_inverted    = params.isInverted;
     const bool  receiver_mode  = (params.mode == StreamMode::ReceiverChannelInfo);
 
     PacketQueue* queue = params.packetQueue;
@@ -156,19 +167,35 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     uint32_t data_word_bit_count = 0;
     int32_t save_data = 0;     // 0=waiting, 1=collecting, 2=frame complete
     uint64_t sync_count = UINT64_MAX; // -1 equivalent: no sync found yet
-    bool first_sync_interval_found = false;
     uint64_t total_syncs_found = 0;
     uint64_t total_frames_extracted = 0;
     uint64_t total_bytes_processed = 0;
     uint64_t rows_written = 0;
 
+    // Diagnostics for the "syncs found but no frames extracted" error path.
+    uint64_t boundary_syncs        = 0;  // syncs that landed at the exact frame boundary
+    uint64_t max_sync_run          = 0;  // highest consecutive boundary-sync count reached
+    uint64_t current_sync_run      = 0;  // clean consecutive counter (avoids UINT64_MAX overflow)
+    bool     buffer_ever_filled    = false; // whether words_in_frame words were ever collected
+    double   first_data_time       = -1.0;
+    double   last_data_time        = 0.0;
+
     QVector<uint64_t> frame_words(words_in_frame, 0);
 
-    // Output sample windowing state.
+    // Output sample windowing state. Seeded lazily from the first packet's
+    // actual IRIG timestamp below (not from start_seconds, which is just 0
+    // when the caller has no real time bound) so the windowing clock doesn't
+    // have to "catch up" sample-by-sample from the IRIG day epoch to wherever
+    // the data actually starts.
     double sample_period = params.samplePeriodSec;
     double current_time_sample = static_cast<double>(start_seconds);
     double next_time_sample = current_time_sample + sample_period;
+    bool time_seeded = false;
     int n_samples = 0;
+
+    // When set, the windowing clock is derived from bits processed (data rate)
+    // starting at zero, rather than IRIG absolute time. See ProcessingParams.
+    const bool use_rate_clock = params.useDataRateClock;
 
     // Counters for lock percentage calculation
     uint64_t valid_bits_in_window = 0;
@@ -178,6 +205,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     // processing window. Monotonic across the whole run — one value emitted per
     // output sample alongside the lock percentage.
     uint64_t accumulated_missed_frames = 0;
+
 
     for (auto* param : enabled_params)
     {
@@ -224,6 +252,10 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         {
             SwapBytes_PcmF1(raw_data, static_cast<long>(raw_len));
         }
+        if (is_inverted)
+        {
+            invertBytes(raw_data, raw_len);
+        }
         if (needs_derand)
         {
             derandomizeBitstream(raw_data, packet_bits, lfsr_state);
@@ -239,6 +271,16 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         current_time_ref.num_bits         = packet_bits;
         has_time_ref = true;
 
+        if (!time_seeded && !use_rate_clock)
+        {
+            double seed = item.baseAbsSeconds > static_cast<double>(start_seconds)
+                ? item.baseAbsSeconds
+                : static_cast<double>(start_seconds);
+            current_time_sample = seed;
+            next_time_sample = seed + sample_period;
+            time_seeded = true;
+        }
+
         double time_per_bit = delta_100ns * k100NsToSeconds;
 
         constexpr uint64_t kAbortCheckMask = 0xFFFF;
@@ -251,7 +293,12 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
                 return false;
             }
 
-            double current_time_eval = current_time_ref.base_abs_seconds + (static_cast<double>(bit_pos) * time_per_bit);
+            double current_time_eval = use_rate_clock
+                ? static_cast<double>(global_bit_offset + bit_pos) * time_per_bit
+                : current_time_ref.base_abs_seconds + (static_cast<double>(bit_pos) * time_per_bit);
+
+            if (first_data_time < 0.0) first_data_time = current_time_eval;
+            last_data_time = current_time_eval;
 
             if (current_time_eval >= static_cast<double>(start_seconds) && current_time_eval <= static_cast<double>(stop_seconds))
             {
@@ -263,30 +310,41 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
                         lock_pct = (static_cast<double>(valid_bits_in_window) / static_cast<double>(total_bits_in_window)) * 100.0;
                     }
 
-                    if (n_samples > 0)
+                    if (total_bits_in_window > 0)
                     {
+                        // Bits were processed for this window — real data, whether
+                        // or not any frame locked. If the window was entirely out
+                        // of lock (n_samples == 0) its missed frames were ALREADY
+                        // counted bit-by-bit by the in-stream rollover below, so we
+                        // must NOT extrapolate here. Extrapolating data-present
+                        // dropouts double-counts and biases long-frame streams,
+                        // whose windows more often contain zero locked frames than
+                        // short-frame streams with many more frames per window.
                         recordTimeSample(current_time_sample, n_samples, lock_pct,
                                          static_cast<double>(accumulated_missed_frames), enabled_params);
                     }
                     else
                     {
-                        // Time gap detected (no packets processed for this second).
-                        // Extrapolate missed frames for this gap based on expected data rate.
+                        // Genuine recording gap: no packets at all spanned this
+                        // window, so the in-stream counter never ran. Extrapolate
+                        // the frames that would have been received from the
+                        // expected data rate.
                         double bit_rate = params.dataRateBps;
                         if (bit_rate <= 0.0 && params.resolvedAttrs.delta100ns > 0.0)
                         {
                             bit_rate = 1e7 / params.resolvedAttrs.delta100ns;
                         }
 
-                        if (first_sync_interval_found && bit_rate > 0.0)
+                        if (bit_rate > 0.0)
                         {
                             double expected_bits = sample_period * bit_rate;
                             uint64_t extrapolated_frames = static_cast<uint64_t>(expected_bits / bits_in_frame);
                             accumulated_missed_frames += extrapolated_frames;
                             sync_count = UINT64_MAX; // Ensure lock is dropped during gap
+                            current_sync_run = 0;
                         }
 
-                        recordTimeSample(current_time_sample, 1, 0.0, // lock_pct is 0.0 during gap
+                        recordTimeSample(current_time_sample, 0, 0.0, // lock_pct is 0.0 during gap
                                          static_cast<double>(accumulated_missed_frames), enabled_params);
                     }
                     
@@ -311,15 +369,13 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
 
             if (minor_frame_bit_count > bits_in_frame)
             {
-                if (first_sync_interval_found) // Don't accumulate missed frames before the very first valid interval is EVER found
+                if (current_time_eval >= static_cast<double>(start_seconds) &&
+                    current_time_eval <= static_cast<double>(stop_seconds))
                 {
-                    if (current_time_eval >= static_cast<double>(start_seconds) &&
-                        current_time_eval <= static_cast<double>(stop_seconds))
-                    {
-                        accumulated_missed_frames++;
-                    }
-                    sync_count = UINT64_MAX; // Loss of lock
+                    accumulated_missed_frames++;
                 }
+                sync_count = UINT64_MAX; // Loss of lock
+                current_sync_run = 0;
                 minor_frame_bit_count = 1; // Roll over to continuously track missed frames
             }
             
@@ -340,31 +396,45 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
                     if (at_boundary)
                     {
                         sync_count++;
-                        first_sync_interval_found = true;
+                        boundary_syncs++;
+                        current_sync_run++;
+                        if (current_sync_run > max_sync_run)
+                            max_sync_run = current_sync_run;
+                    }
+                    else
+                    {
+                        sync_count = 1;
+                        boundary_syncs++;
+                        current_sync_run = 1;
+                    }
 
-                        if (sync_count >= min_syncs && save_data > 1)
+                    minor_frame_bit_count = 0; // Reset for next frame
+
+                    // Only extract a sample once the sync match is boundary-aligned;
+                    // an off-phase match (re-acquiring lock) must not be treated as a
+                    // confirmed frame, or PRN data can be sampled as if it were locked.
+                    if (at_boundary && sync_count >= min_syncs && save_data > 1)
+                    {
+                        // We only extract parameters if we are within the selected processing time bounds
+                        if (current_time_eval >= static_cast<double>(start_seconds) && current_time_eval <= static_cast<double>(stop_seconds))
                         {
-                            // We only extract parameters if we are within the selected processing time bounds
-                            if (current_time_eval >= static_cast<double>(start_seconds) && current_time_eval <= static_cast<double>(stop_seconds))
+                            for (auto* param : enabled_params)
                             {
-                                for (auto* param : enabled_params)
+                                if (param->word >= 0 &&
+                                    param->word < static_cast<int>(words_in_frame))
                                 {
-                                    if (param->word >= 0 &&
-                                        param->word < static_cast<int>(words_in_frame))
-                                    {
-                                        int64_t raw_value = static_cast<int64_t>(frame_words[param->word] & word_mask);
-                                        // Non-linear step calibration (US3.2) when a valid profile is present;
-                                        // otherwise the linear (raw + offset) * slope model.
-                                        double scaled_value = param->profile.valid
-                                            ? interpolateCalibration(static_cast<double>(raw_value), param->profile)
-                                            : (static_cast<double>(raw_value) + param->scale) * param->slope;
-                                        param->sample_sum += scaled_value;
-                                    }
+                                    int64_t raw_value = static_cast<int64_t>(frame_words[param->word] & word_mask);
+                                    // Non-linear step calibration (US3.2) when a valid profile is present;
+                                    // otherwise the linear (raw + offset) * slope model.
+                                    double scaled_value = param->profile.valid
+                                        ? interpolateCalibration(static_cast<double>(raw_value), param->profile)
+                                        : (static_cast<double>(raw_value) + param->scale) * param->slope;
+                                    param->sample_sum += scaled_value;
                                 }
-
-                                n_samples++;
-                                total_frames_extracted++;
                             }
+
+                            n_samples++;
+                            total_frames_extracted++;
                         }
                     }
 
@@ -394,6 +464,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
                     if (minor_frame_word_count >= words_in_frame)
                     {
                         save_data = 2;
+                        buffer_ever_filled = true;
                     }
                 }
             }
@@ -439,8 +510,18 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
 
     if (total_frames_extracted == 0)
     {
-        emit errorOccurred("Frame sync pattern was found but no valid frames were extracted. "
-                           "Check the frame parameters and time window settings.");
+        emit errorOccurred(
+            QString("Frame sync pattern was found but no valid frames were extracted.\n"
+                    "  Config:          bits/frame=%1  words/frame=%2  sync_len=%3 bits  min_syncs=%4\n"
+                    "  Syncs:           %5 total  |  %6 boundary-aligned  |  longest run=%7 (need %8)\n"
+                    "  Frame buffer:    %9\n"
+                    "  Data time range: %10s – %11s  (window: %12s – %13s)")
+            .arg(bits_in_frame).arg(words_in_frame).arg(sync_pat_len).arg(min_syncs)
+            .arg(total_syncs_found).arg(boundary_syncs).arg(max_sync_run).arg(min_syncs)
+            .arg(buffer_ever_filled ? "filled at least once (save_data reached 2)"
+                                    : "NEVER filled — words_in_frame may be too large")
+            .arg(first_data_time, 0, 'f', 3).arg(last_data_time, 0, 'f', 3)
+            .arg(start_seconds).arg(stop_seconds));
         emit processingFinished(false);
         return false;
     }
@@ -478,10 +559,14 @@ void FrameProcessor::recordTimeSample(double current_time_sample,
     }
 
     // enabled_params is index-aligned to m_result.channels (built in process()).
+    // n_samples can be 0 for a window that produced no extracted frames (a
+    // recording gap, or an SNR window entirely out of lock); sample_sum is 0 in
+    // that case, so divide by 1 to emit 0 rather than a NaN/divide-by-zero.
+    const int divisor = (n_samples > 0) ? n_samples : 1;
     for (int i = 0; i < enabled_params.size(); i++)
     {
         ParameterInfo* param = enabled_params[i];
-        m_result.channels[i].values.push_back(param->sample_sum / n_samples);
+        m_result.channels[i].values.push_back(param->sample_sum / divisor);
         param->sample_sum = 0;
     }
 }

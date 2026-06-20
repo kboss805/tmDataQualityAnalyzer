@@ -45,6 +45,7 @@ struct StreamConfig
     QString    frameSyncMask     = PCMConstants::kDefaultFrameSyncMask;  ///< Frame sync mask as hex string (e.g. "FFFFFFFF").
     int        bitsInMinorFrame  = PCMConstants::kDefaultBitsPerFrame;   ///< Total bits per minor frame (including sync word bits).
     bool       randomized        = false;   ///< true = RNRZ-L descrambler; false = NRZ-L.
+    bool       inverted          = false;   ///< true = bit-for-bit inversion of raw data before derandomization.
     int        samplePeriodIndex  = UIConstants::kDefaultSamplePeriodIndex; ///< Output sample period index (0=1s, 1=100ms, 2=10ms).
     double     dataRateMbps      = 0.0;     ///< Data rate in Mbps. 0 = use the TMATS-derived bit rate.
     double     tmatsDataRateMbps = 0.0;     ///< TMATS-declared bit rate in Mbps (read-only, for display).

@@ -92,8 +92,6 @@ private slots:
     void updateTitle();
     /// Handles opening the Customize Plot dialog.
     void onCustomizePlotClicked();
-    /// Handles user editing manual Y range spinboxes.
-    void onManualYChanged();
     /// Handles user editing X range spinboxes.
     void onXRangeChanged();
     /// Resets all axes to auto/full range.
@@ -141,8 +139,6 @@ private:
     /// @{
     QLineEdit* m_title_edit = nullptr;
     QPushButton* m_axis_view_btn = nullptr; ///< Toggles left axis: Lock (%) vs Missed Frames.
-    QDoubleSpinBox* m_y_min_spin = nullptr;
-    QDoubleSpinBox* m_y_max_spin = nullptr;
     /// @}
 
     /// @name Bottom controls

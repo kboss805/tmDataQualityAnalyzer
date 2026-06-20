@@ -24,9 +24,6 @@ private slots:
     void configsRoundtripWordsInFrame();
     void configsRoundtripProcessFlag();
 
-    // Time controls
-    void extractAllTimeDefault();
-    void extractAllTimeFalsePreserved();
 
     // Frame-sync TOML scope boundary (US4.0 / US5.0):
     // Save writes exactly FrameSync, FrameSyncMask, WordsInMinorFrame under [Frame].

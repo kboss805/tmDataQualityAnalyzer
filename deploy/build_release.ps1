@@ -84,8 +84,12 @@ if (Test-Path $StageDir) {
     }
 }
 New-Item -ItemType Directory -Force -Path "$InstallerStage\bin"      | Out-Null
-New-Item -ItemType Directory -Force -Path "$InstallerStage\settings" | Out-Null
-New-Item -ItemType Directory -Force -Path "$PortableRoot\settings"   | Out-Null
+New-Item -ItemType Directory -Force -Path "$InstallerStage\settings\receiver_params"   | Out-Null
+New-Item -ItemType Directory -Force -Path "$InstallerStage\settings\rcvr_cals"         | Out-Null
+New-Item -ItemType Directory -Force -Path "$InstallerStage\settings\framesync_patterns" | Out-Null
+New-Item -ItemType Directory -Force -Path "$PortableRoot\settings\receiver_params"   | Out-Null
+New-Item -ItemType Directory -Force -Path "$PortableRoot\settings\rcvr_cals"         | Out-Null
+New-Item -ItemType Directory -Force -Path "$PortableRoot\settings\framesync_patterns" | Out-Null
 
 # --- Step 3: Copy exe and run windeployqt for installer layout ---
 Write-Host "[4/7] Running windeployqt (installer layout)..."
@@ -93,10 +97,9 @@ Copy-Item "$ProjectDir\build\release\tmDataQualityAnalyzer.exe" "$InstallerStage
 & windeployqt --release --no-translations --no-opengl-sw --no-system-d3d-compiler "$InstallerStage\bin\tmDataQualityAnalyzer.exe"
 if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
 
-Copy-Item "$ProjectDir\settings\default.toml" "$InstallerStage\settings\"
-foreach ($toml in @('RASA.toml', 'TRC.toml', 'framesync_PRN11.toml', 'framesync_PRN15.toml', 'snr_cal_0to60dB_6dB_5s.toml')) {
-    if (Test-Path "$ProjectDir\settings\$toml") {
-        Copy-Item "$ProjectDir\settings\$toml" "$InstallerStage\settings\"
+foreach ($dir in @('receiver_params', 'rcvr_cals', 'framesync_patterns')) {
+    if (Test-Path "$ProjectDir\settings\$dir\*.toml") {
+        Copy-Item "$ProjectDir\settings\$dir\*.toml" "$InstallerStage\settings\$dir\"
     }
 }
 
@@ -119,10 +122,9 @@ foreach ($dir in @('platforms', 'styles', 'imageformats', 'tls', 'networkinforma
     if (Test-Path $src) { Copy-Item $src "$PortableRoot\$dir" -Recurse }
 }
 
-Copy-Item "$ProjectDir\settings\default.toml" "$PortableRoot\settings\"
-foreach ($toml in @('RASA.toml', 'TRC.toml', 'framesync_PRN11.toml', 'framesync_PRN15.toml', 'snr_cal_0to60dB_6dB_5s.toml')) {
-    if (Test-Path "$ProjectDir\settings\$toml") {
-        Copy-Item "$ProjectDir\settings\$toml" "$PortableRoot\settings\"
+foreach ($dir in @('receiver_params', 'rcvr_cals', 'framesync_patterns')) {
+    if (Test-Path "$ProjectDir\settings\$dir\*.toml") {
+        Copy-Item "$ProjectDir\settings\$dir\*.toml" "$PortableRoot\settings\$dir\"
     }
 }
 

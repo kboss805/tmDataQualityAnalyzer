@@ -106,7 +106,7 @@ bool ProcessingCoordinator::startProcessing(QVector<StreamJob> jobs)
 
         FrameProcessor* processor = w.processor;
         connect(processor, &FrameProcessor::processingFinished, this,
-                [this, processor](bool ok) { onWorkerFinished(processor, ok); });
+                [this, processor, i](bool ok) { onWorkerFinished(processor, ok, i); });
         connect(processor, &FrameProcessor::logMessage,
                 this, &ProcessingCoordinator::logMessageReceived);
         connect(processor, &FrameProcessor::errorOccurred,
@@ -136,12 +136,8 @@ bool ProcessingCoordinator::startProcessing(QVector<StreamJob> jobs)
     m_processing = true;
     emit processingStateChanged(true);
     emit progressChanged(0);
-
-    if (m_jobs.size() > 1)
-    {
-        emit logMessageReceived(QString("--- Processing %1 streams concurrently ---")
-                                .arg(m_jobs.size()));
-    }
+    emit logMessageReceived(QString("--- Processing %1 stream(s) concurrently ---")
+                            .arg(m_jobs.size()));
 
     // Start workers first so they are waiting before the reader produces.
     for (Worker& w : m_workers)
@@ -262,11 +258,12 @@ void ProcessingCoordinator::onReaderProgress(int percent)
     emit progressChanged(percent);
 }
 
-void ProcessingCoordinator::onWorkerFinished(FrameProcessor* processor, bool success)
+void ProcessingCoordinator::onWorkerFinished(FrameProcessor* processor, bool success, int job_index)
 {
     if (success && !m_cancelled && processor != nullptr)
     {
         ProcessedStreamData data = processor->takeResult();
+        data.jobIndex = job_index;
         m_any_success = true;
         emit streamProcessed(data);
     }

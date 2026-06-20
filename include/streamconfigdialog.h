@@ -12,21 +12,19 @@
 #include <QVector>
 
 #include "streamconfig.h"
-#include "timefields.h"
 
 class QCheckBox;
 class QComboBox;
 class QLabel;
 class QPushButton;
 class QTableWidget;
-class TimeExtractionWidget;
 
 /**
  * @brief Lets the user choose which PCM streams to process and how.
  *
- * Main table has five columns: Process, Channel, Mode, Setup (gear button), Ready (status icon).
+ * Main table has five columns: Process, Channel, Mode, Configure (gear button), Ready (status icon).
  * Clicking the gear opens a per-stream sub-dialog (Frame Lock Setup or Receiver SNR) whose
- * type is determined by the Mode combo. Time range controls are embedded at the bottom.
+ * type is determined by the Mode combo.
  * Read configured streams back via configs() and timeChannelIndex() after the dialog is accepted.
  */
 class StreamConfigDialog : public QDialog
@@ -41,9 +39,10 @@ public:
      * @param[in] time_channel_index Currently selected time channel index (1-based, 0 = none).
      * @param[in] time_channel_id    Resolved channel ID of the selected time channel (-1 = none),
      *                               inherited by the Receiver SNR calibration extraction (US3.2).
-     * @param[in] start_time         Initial start time (from the file's time range).
-     * @param[in] stop_time          Initial stop time (from the file's time range).
-     * @param[in] extract_all_time   Initial state of the "Extract All Time" checkbox.
+     * @param[in] app_root           Application root directory, used to locate the
+     *                               settings/receiver_params, settings/rcvr_cals, and
+     *                               settings/framesync_patterns directories so the relevant
+     *                               "Load" file dialogs can open there by default.
      * @param[in] parent             Optional parent widget.
      */
     explicit StreamConfigDialog(const QVector<StreamConfig>& configs,
@@ -51,9 +50,7 @@ public:
                                 const QStringList& time_channels,
                                 int time_channel_index,
                                 int time_channel_id,
-                                const TimeFields& start_time,
-                                const TimeFields& stop_time,
-                                bool extract_all_time,
+                                const QString& app_root,
                                 QWidget* parent = nullptr);
 
     /// @return The per-stream configuration as currently edited.
@@ -61,15 +58,6 @@ public:
 
     /// @return Selected time channel index (1-based; matches MainViewModel convention).
     int timeChannelIndex() const;
-
-    /// @return Whether "Extract All Time" is checked.
-    bool extractAllTime() const;
-
-    /// @return Start time text in "DDD:HH:MM:SS" format.
-    QString startTimeText() const;
-
-    /// @return Stop time text in "DDD:HH:MM:SS" format.
-    QString stopTimeText() const;
 
 private slots:
     void validateAndAccept();
@@ -88,6 +76,7 @@ private:
         QString frameSyncMask    = PCMConstants::kDefaultFrameSyncMask;
         int     bitsInFrame      = PCMConstants::kDefaultBitsPerFrame;
         bool    randomized       = false;
+        bool    inverted         = false;
         int     samplePeriodIndex = UIConstants::kDefaultSamplePeriodIndex;
         double  dataRateMbps     = 0.0;
         int     polarityIndex    = UIConstants::kDefaultPolarityIndex;
@@ -114,12 +103,13 @@ private:
 
     QVector<StreamConfig> m_configs;
     QString               m_toml_dir;
+    QString               m_app_root;
     QTableWidget*         m_table              = nullptr;
     QVector<RowWidgets>   m_rows;
     QComboBox*            m_time_channel_combo = nullptr;
-    TimeExtractionWidget* m_time_widget        = nullptr;
     QPushButton*          m_ok_btn             = nullptr;
     int                   m_time_channel_id    = -1; ///< Resolved time channel ID for calibration extraction (US3.2).
 };
 
 #endif // STREAMCONFIGDIALOG_H
+

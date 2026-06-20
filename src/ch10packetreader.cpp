@@ -276,7 +276,9 @@ bool Ch10PacketReader::prepare(const QString& filename,
         ra.wordsInFrame  = p->wordsInMinorFrame;
         ra.wordLen       = pcm_attrs->ulCommonWordLen;
         ra.wordMask      = pcm_attrs->ullCommonWordMask;
-        ra.minSyncs      = pcm_attrs->ulMinSyncs;
+        // ulMinSyncs == 0 means the TMATS field was not set; treat as 1 (at minimum
+        // one confirmed boundary-aligned sync is required before extracting frames).
+        ra.minSyncs      = std::max(1u, pcm_attrs->ulMinSyncs);
         ra.needsSwap     = (pcm_attrs->bDontSwapRawData == 0); // Need swap if not mapped yet
         ra.resolved      = true;
 

@@ -25,6 +25,8 @@ private slots:
     void processFrameSyncErrorsMonotonic();
     void processSlopeAffectsValues();
     void processShortPeriodMoreSamples();
+    void calibrationRoundTripOnRealFileProducesCleanSteps();
+    void offPhaseSyncAfterLockLossIsNotExtracted();
 };
 
 #endif // TST_FRAMEPROCESSOR_H

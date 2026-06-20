@@ -5,15 +5,21 @@
 
 #include "tst_frameprocessor.h"
 
+#include <cmath>
+
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QDir>
+#include <QEventLoop>
 #include <QFileInfo>
+#include <QHash>
 #include <QSignalSpy>
 #include <QtConcurrent>
 #include <QtTest>
 #include <QVector>
 
+#include "calibrationextractor.h"
+#include "calibrationprofile.h"
 #include "ch10packetreader.h"
 #include "chapter10reader.h"
 #include "constants.h"
@@ -21,6 +27,7 @@
 #include "framesetup.h"
 #include "packetqueue.h"
 #include "processedstreamdata.h"
+#include "stepdetector.h"
 
 /// Helper: resolves a path inside tests/data/ relative to the test executable.
 static QString testDataPath(const QString& filename)
@@ -71,13 +78,29 @@ static bool runWithReader(FrameProcessor& fp, ProcessingParams& p, FrameSetup* s
     return ok;
 }
 
-/// Helper: loads the default frame setup (word map) from settings/default.toml.
+/// Helper: packs a string of '1'/'0' characters MSB-first into bytes, for
+/// building synthetic PCM bitstreams without a real Chapter 10 file.
+static QByteArray packBitString(const QString& bits)
+{
+    QByteArray data((bits.size() + 7) / 8, '\0');
+    for (int i = 0; i < bits.size(); i++)
+    {
+        if (bits[i] == QChar('1'))
+        {
+            data[i / 8] = static_cast<char>(data[i / 8] | (0x80 >> (i % 8)));
+        }
+    }
+    return data;
+}
+
+/// Helper: loads the default frame setup (word map) from
+/// settings/receiver_params/default.toml.
 static bool loadDefaultFrameSetup(FrameSetup& setup)
 {
     QDir dir(QCoreApplication::applicationDirPath());
     dir.cdUp();  // tests/
     dir.cdUp();  // project root
-    QString toml_path = dir.filePath("settings/default.toml");
+    QString toml_path = dir.filePath("settings/receiver_params/default.toml");
     if (!QFileInfo::exists(toml_path))
     {
         return false;
@@ -216,12 +239,8 @@ void TestFrameProcessor::processAccumulatesReceiverData()
     if (!setupParams(setup, 1.0, 0.0))
         QSKIP("Could not load default frame setup");
 
-    uint64_t start_secs = reader.dhmsToUInt64(
-        reader.getStartDayOfYear(), reader.getStartHour(),
-        reader.getStartMinute(), reader.getStartSecond());
-    uint64_t stop_secs = reader.dhmsToUInt64(
-        reader.getStopDayOfYear(), reader.getStopHour(),
-        reader.getStopMinute(), reader.getStopSecond());
+    uint64_t start_secs = 0;
+    uint64_t stop_secs = UINT64_MAX;
 
     ProcessingParams p = makeTestParams(filepath, time_id, pcm_id);
     p.startSeconds = start_secs;
@@ -269,12 +288,8 @@ void TestFrameProcessor::processLockOnlyModeHasNoChannels()
     if (pcm_id < 0 || time_id < 0)
         QSKIP("Missing channels in test file");
 
-    uint64_t start_secs = reader.dhmsToUInt64(
-        reader.getStartDayOfYear(), reader.getStartHour(),
-        reader.getStartMinute(), reader.getStartSecond());
-    uint64_t stop_secs = reader.dhmsToUInt64(
-        reader.getStopDayOfYear(), reader.getStopHour(),
-        reader.getStopMinute(), reader.getStopSecond());
+    uint64_t start_secs = 0;
+    uint64_t stop_secs = UINT64_MAX;
 
     ProcessingParams p = makeTestParams(filepath, time_id, pcm_id);
     p.startSeconds = start_secs;
@@ -308,12 +323,8 @@ void TestFrameProcessor::processFrameSyncErrorsMonotonic()
     if (pcm_id < 0 || time_id < 0)
         QSKIP("Missing channels in test file");
 
-    uint64_t start_secs = reader.dhmsToUInt64(
-        reader.getStartDayOfYear(), reader.getStartHour(),
-        reader.getStartMinute(), reader.getStartSecond());
-    uint64_t stop_secs = reader.dhmsToUInt64(
-        reader.getStopDayOfYear(), reader.getStopHour(),
-        reader.getStopMinute(), reader.getStopSecond());
+    uint64_t start_secs = 0;
+    uint64_t stop_secs = UINT64_MAX;
 
     ProcessingParams p = makeTestParams(filepath, time_id, pcm_id);
     p.startSeconds = start_secs;
@@ -352,12 +363,8 @@ void TestFrameProcessor::processSlopeAffectsValues()
     if (pcm_id < 0 || time_id < 0)
         QSKIP("Missing channels in test file");
 
-    uint64_t start_secs = reader.dhmsToUInt64(
-        reader.getStartDayOfYear(), reader.getStartHour(),
-        reader.getStartMinute(), reader.getStartSecond());
-    uint64_t stop_secs = reader.dhmsToUInt64(
-        reader.getStopDayOfYear(), reader.getStopHour(),
-        reader.getStopMinute(), reader.getStopSecond());
+    uint64_t start_secs = 0;
+    uint64_t stop_secs = UINT64_MAX;
 
     auto run = [&](double slope) -> double {
         FrameSetup setup;
@@ -396,14 +403,8 @@ void TestFrameProcessor::processShortPeriodMoreSamples()
     if (pcm_id < 0 || time_id < 0)
         QSKIP("Missing channels in test file");
 
-    uint64_t start_secs = reader.dhmsToUInt64(
-        reader.getStartDayOfYear(), reader.getStartHour(),
-        reader.getStartMinute(), reader.getStartSecond());
-    uint64_t stop_secs = reader.dhmsToUInt64(
-        reader.getStopDayOfYear(), reader.getStopHour(),
-        reader.getStopMinute(), reader.getStopSecond());
-    if (stop_secs <= start_secs + 1)
-        QSKIP("Test file too short for sample-rate comparison");
+    uint64_t start_secs = 0;
+    uint64_t stop_secs = UINT64_MAX;
 
     auto countAt = [&](double period) -> int {
         FrameSetup setup;
@@ -426,4 +427,261 @@ void TestFrameProcessor::processShortPeriodMoreSamples()
     QVERIFY2(n10ms > n1s,
              qPrintable(QString("10 ms period (%1) should produce more samples than 1 s period (%2)")
                             .arg(n10ms).arg(n1s)));
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//                  REAL-FILE CALIBRATION ROUND TRIP (US3.2)                  //
+////////////////////////////////////////////////////////////////////////////////
+
+/// End-to-end check on real decoded data (not synthetic, unlike
+/// TestStepDetector::roundTripSameDataIsExact): use rnrz-l_testfile.ch10 as BOTH
+/// the calibration file and the "main" file being measured. Since they are the
+/// same recording, the resulting calibration should reproduce the exact step
+/// values (0, 6, 12, ... 60 dB) when re-applied — this is the full real
+/// pipeline (derandomization, frame sync, word extraction, CalibrationExtractor,
+/// StepDetector, interpolateCalibration) exercised together on genuine decoded
+/// RNRZ-L data, rather than hand-built raw series.
+void TestFrameProcessor::calibrationRoundTripOnRealFileProducesCleanSteps()
+{
+    const QString filepath = testDataPath("rnrz-l_testfile.ch10");
+    if (!QFileInfo::exists(filepath))
+        QSKIP("RNRZ-L test file not available");
+
+    Chapter10Reader reader;
+    QVERIFY(reader.loadChannels(filepath));
+    int pcm_id = reader.getFirstPCMChannelID();
+    int time_id = reader.getCurrentTimeChannelID();
+    if (pcm_id < 0 || time_id < 0)
+        QSKIP("Missing channels in test file");
+
+    // Resolve the step-config TOML shipped under settings/rcvr_cals/.
+    QDir dir(QCoreApplication::applicationDirPath());
+    dir.cdUp();  // tests/
+    dir.cdUp();  // project root
+    const QString step_toml = dir.filePath("settings/rcvr_cals/default.toml");
+    if (!QFileInfo::exists(step_toml))
+        QSKIP("default.toml (rcvr_cals) not available");
+
+    QVector<StepDefinition> steps;
+    QString step_error;
+    QVERIFY2(StepDetector::parseStepConfig(step_toml, steps, step_error),
+             qPrintable(step_error));
+    QVERIFY(!steps.isEmpty());
+
+    // ---- Extraction pass: build calibration profiles from this same file ----
+    CalibrationExtractor::Request req;
+    req.calFilename       = filepath;
+    req.timeChannelId      = time_id;
+    req.pcmChannelId       = pcm_id;
+    req.frameSyncHex       = "FE6B2840";
+    req.bitsInMinorFrame   = 800;
+    req.randomized         = true; // RNRZ-L
+    req.numReceivers       = 16;
+    req.receiverChannels   = 3;
+    req.steps              = steps;
+
+    CalibrationExtractor extractor;
+    QEventLoop loop;
+    bool extract_ok = false;
+    bool finished_already = false;
+    QString summary;
+    connect(&extractor, &CalibrationExtractor::finished, &loop,
+            [&](bool ok, const QString& msg) {
+                extract_ok = ok;
+                summary = msg;
+                finished_already = true;
+                loop.quit();
+            });
+    extractor.start(req);
+    if (!finished_already)
+    {
+        loop.exec();
+    }
+    QVERIFY2(extract_ok, qPrintable(summary));
+
+    QHash<int, CalibrationProfile> calibration_by_word;
+    for (const CalibrationChannelResult& r : extractor.results())
+    {
+        if (r.profile.valid)
+        {
+            calibration_by_word.insert(r.word, r.profile);
+        }
+    }
+    QVERIFY2(!calibration_by_word.isEmpty(),
+             "Expected at least one channel to calibrate from the real file");
+
+    // ---- Main pass: re-measure the SAME file with the extracted profiles ----
+    FrameSetup setup;
+    static const char* kPrefixes[] = {"L", "R", "C"};
+    for (int r = 0; r < req.numReceivers; r++)
+    {
+        for (int c = 0; c < req.receiverChannels; c++)
+        {
+            setup.addParameter(QString(kPrefixes[c]) + "_RCVR" + QString::number(r + 1),
+                               r * req.receiverChannels + c);
+        }
+    }
+    for (int i = 0; i < setup.length(); i++)
+    {
+        ParameterInfo* param = setup.getParameter(i);
+        param->is_enabled = true;
+        param->slope       = 1.0;
+        param->scale       = 0.0;
+        param->sample_sum  = 0.0;
+        auto it = calibration_by_word.constFind(param->word);
+        if (it != calibration_by_word.constEnd())
+        {
+            param->profile = it.value();
+        }
+    }
+
+    uint64_t start_secs = 0;
+    uint64_t stop_secs = UINT64_MAX;
+
+    ProcessingParams p = makeTestParams(filepath, time_id, pcm_id);
+    p.startSeconds     = start_secs;
+    p.stopSeconds      = stop_secs;
+    // Match the extraction pass's sample period: each step only holds for
+    // about a second (per settings/rcvr_cals/default.toml), so a 1 s sample
+    // period leaves only one raw sample per plateau -- never enough to satisfy
+    // StepDetector's confirm-samples floor. Also match its rate-based clock,
+    // for the same IRIG-time-fragility reason the extraction pass uses it.
+    p.samplePeriodSec  = CalibrationConstants::kExtractSamplePeriodSec;
+    p.useDataRateClock = true;
+    p.isRandomized     = true;
+    p.mode             = StreamMode::ReceiverChannelInfo;
+
+    FrameProcessor fp;
+    QVERIFY2(runWithReader(fp, p, &setup), "Main-pass processing should succeed");
+    const ProcessedStreamData& result = fp.result();
+
+    // ---- Verify: each detected plateau in the calibrated output lands within
+    //      a small tolerance of SOME multiple of 6 dB. We scope the check to
+    //      StepDetector's own plateau detection (rather than the raw 198 s
+    //      series, only ~55 s of which is the actual step sweep — the rest is
+    //      pre/post-roll content never meant to land on a clean multiple), and
+    //      we check each detected point against its nearest multiple of 6
+    //      rather than against a chronologically-paired step index: detect()
+    //      sorts its output points ascending by value, so a pre-roll plateau
+    //      ahead of the official sweep would misalign index-based pairing even
+    //      though the calibration itself is correct. "Close to *a* multiple of
+    //      6" sidesteps that ordering ambiguity and tests the literal property
+    //      the user cares about.
+    constexpr double kToleranceDb = 1.0;
+    bool any_channel_checked = false;
+    QStringList failures;
+    for (int ci = 0; ci < result.channels.size(); ci++)
+    {
+        const ProcessedChannelSeries& series = result.channels[ci];
+        if (!calibration_by_word.contains(series.word) || series.values.isEmpty())
+        {
+            continue;
+        }
+
+        StepDetector::Result det = StepDetector::detect(series.values, p.samplePeriodSec, steps);
+        if (!det.profile.valid)
+        {
+            continue; // This word's main-pass series didn't show clean re-detectable plateaus.
+        }
+
+        any_channel_checked = true;
+        for (const CalibrationPoint& pt : det.profile.points)
+        {
+            double nearest_multiple_of_6 = std::round(pt.rawAvg / 6.0) * 6.0;
+            if (qAbs(pt.rawAvg - nearest_multiple_of_6) > kToleranceDb)
+            {
+                failures << QString("%1 (word %2): plateau at %3 dB is not close to a 6 dB multiple")
+                                .arg(series.name).arg(series.word).arg(pt.rawAvg);
+            }
+        }
+    }
+
+    QVERIFY2(any_channel_checked, "No calibrated channel produced a re-detectable step series");
+    QVERIFY2(failures.isEmpty(), qPrintable(failures.join("; ")));
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//                    OFF-PHASE SYNC / LOCK-LOSS REGRESSION                   //
+////////////////////////////////////////////////////////////////////////////////
+
+/// Regression test for a frame-sync bug: a sync-word match that is NOT
+/// boundary-aligned (i.e. a false positive while not locked, such as one
+/// occurring right after a loss of lock) must never trigger sample
+/// extraction. Builds a synthetic 4-bit sync / 4-bit word stream by hand:
+///   1. An initial sync match (never boundary-aligned by definition) that
+///      starts collecting word A = 0.
+///   2. A run of zero filler bits long enough to exceed bitsInFrame and
+///      force a "loss of lock" (sync_count reset).
+///   3. An off-phase sync-pattern collision, not aligned to the frame
+///      boundary, while still unlocked — this must be rejected rather than
+///      extracting the stale word A.
+///   4. Word B = 15, followed by a genuine boundary-aligned sync that
+///      confirms the new frame and legitimately extracts word B.
+/// If the off-phase match in step 3 is wrongly treated as a confirmed frame,
+/// the averaged result mixes in the stale word A (0) and reads 7.5 instead
+/// of the correct 15.
+void TestFrameProcessor::offPhaseSyncAfterLockLossIsNotExtracted()
+{
+    QString bits;
+    bits += "1001";       // initial sync acquisition (not boundary-aligned)
+    bits += "0000";       // word 0 of frame 1 = 0
+    bits += "000000000";  // filler -> minor_frame_bit_count exceeds bitsInFrame, losing lock
+    bits += "1001";       // off-phase false-positive sync while unlocked (NOT boundary-aligned)
+    bits += "1111";       // word 0 of frame 2 = 15
+    bits += "00001001";   // word 1 filler + genuine sync, boundary-aligned -> confirms frame 2
+
+    QByteArray payload = packBitString(bits);
+
+    FrameSetup setup;
+    setup.addParameter("W0", 0);
+    ParameterInfo* param = setup.getParameter(0);
+    param->is_enabled = true;
+    param->slope = 1.0;
+    param->scale = 0.0;
+    param->sample_sum = 0.0;
+
+    PacketQueue queue;
+    ProcessingParams p;
+    p.packetQueue       = &queue;
+    p.streamLabel       = "off-phase-test";
+    p.mode              = StreamMode::ReceiverChannelInfo;
+    p.startSeconds      = 0;
+    p.stopSeconds       = UINT64_MAX;
+    p.samplePeriodSec   = 1e9; // huge: keep every extracted sample in one output window
+    p.useDataRateClock  = true;
+    p.isRandomized      = false;
+    p.isInverted        = false;
+
+    p.resolvedAttrs.syncPat     = 0x9; // 1001b
+    p.resolvedAttrs.syncMask    = 0xF;
+    p.resolvedAttrs.syncPatLen  = 4;
+    p.resolvedAttrs.bitsInFrame = 12;
+    p.resolvedAttrs.wordsInFrame = 2;
+    p.resolvedAttrs.wordLen     = 4;
+    p.resolvedAttrs.wordMask    = 0xF;
+    p.resolvedAttrs.minSyncs    = 1;
+    p.resolvedAttrs.delta100ns  = 1.0;
+    p.resolvedAttrs.needsSwap   = false;
+    p.resolvedAttrs.resolved    = true;
+
+    PacketItem item;
+    item.payload     = payload;
+    item.baseAbsSeconds = 0.0;
+    item.packetBits   = static_cast<uint64_t>(bits.size());
+    QVERIFY(queue.enqueue(item));
+
+    PacketItem eos;
+    eos.endOfStream = true;
+    QVERIFY(queue.enqueue(eos));
+
+    FrameProcessor fp;
+    QVERIFY2(fp.process(p, &setup), "Synthetic off-phase-sync stream should process successfully");
+
+    const ProcessedStreamData& r = fp.result();
+    QVERIFY2(!r.channels.isEmpty() && !r.channels[0].values.isEmpty(),
+             "Expected at least one extracted sample");
+    // Only the boundary-aligned sync should yield a sample (word B = 15). If the
+    // off-phase false positive after lock loss were wrongly extracted, the stale
+    // word A (0) would be averaged in, producing 7.5 instead of 15.
+    QCOMPARE(r.channels[0].values.first(), 15.0);
 }

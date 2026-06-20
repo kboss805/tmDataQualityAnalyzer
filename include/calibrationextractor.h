@@ -56,10 +56,11 @@ public:
         QString frameSyncMaskHex;        ///< Frame sync mask (hex).
         int     bitsInMinorFrame = 0;    ///< Bits per minor frame.
         bool    randomized = false;      ///< RNRZ-L on/off.
+        bool    inverted = false;        ///< Bit-inversion on/off; MUST match the main run or the extracted raw counts won't line up with it.
         double  dataRateMbps = 0.0;      ///< Data rate (0 = TMATS).
-        QString receiverParamsToml;      ///< Word-map TOML (empty = default grid).
-        int     numReceivers = 0;        ///< Used only when receiverParamsToml is empty.
-        int     receiverChannels = 0;    ///< Used only when receiverParamsToml is empty.
+        QString receiverParamsToml;      ///< Word-map TOML; callers resolve the shipped default.toml here so the map matches the main run (empty only if that file is missing).
+        int     numReceivers = 0;        ///< Sequential-grid fallback, used only when receiverParamsToml is empty.
+        int     receiverChannels = 0;    ///< Sequential-grid fallback, used only when receiverParamsToml is empty.
         QVector<StepDefinition> steps;   ///< Expected steps parsed from the step-config TOML.
     };
 

@@ -38,6 +38,7 @@ struct ProcessedStreamData
 {
     QString    streamLabel;         ///< Display label of the source stream, e.g. "Ch 32".
     int        pcmChannelId = -1;   ///< Source PCM channel ID.
+    int        jobIndex     = 0;    ///< 0-based position of this stream in the original job list; used to preserve legend order regardless of parallel completion order.
     StreamMode mode = StreamMode::ReceiverChannelInfo; ///< Mode used to produce this data.
 
     QVector<double> timesSec;       ///< Absolute IRIG seconds per output sample.

@@ -157,15 +157,6 @@ void TestChapter10Reader::getFirstPcmChannelIdReturnsValidId()
     QCOMPARE(first_pcm, reader.getCurrentPCMChannelID());
 }
 
-void TestChapter10Reader::timeAccessorsReturnNonZeroAfterLoad()
-{
-    Chapter10Reader reader;
-    reader.loadChannels(testDataPath("nrz-l_testfile.ch10"));
-
-    // At least DOY should be non-zero for a valid file
-    QVERIFY2(reader.getStartDayOfYear() > 0, "Start DOY should be positive after loading");
-    QVERIFY2(reader.getStopDayOfYear() > 0, "Stop DOY should be positive after loading");
-}
 
 void TestChapter10Reader::getTimeChannelIndexReturnsValidIndex()
 {
@@ -209,26 +200,3 @@ void TestChapter10Reader::getPcmChannelIndexReturnsMinusOneForUnknown()
     QCOMPARE(reader.getPCMChannelIndex(9999), -1);
 }
 
-// v3.2 additions
-
-void TestChapter10Reader::dhmsToUInt64ComputesCorrectOffset()
-{
-    // m_time_difference is 0 on a freshly constructed reader (no file loaded),
-    // so dhmsToUInt64 reduces to: (day-1)*86400 + hour*3600 + minute*60 + second.
-    Chapter10Reader reader;
-
-    // Day 1, 00:00:00  →  0
-    QCOMPARE(reader.dhmsToUInt64(1, 0, 0, 0), static_cast<uint64_t>(0));
-
-    // Day 1, 00:00:01  →  1
-    QCOMPARE(reader.dhmsToUInt64(1, 0, 0, 1), static_cast<uint64_t>(1));
-
-    // Day 1, 01:00:00  →  3600
-    QCOMPARE(reader.dhmsToUInt64(1, 1, 0, 0), static_cast<uint64_t>(3600));
-
-    // Day 2, 00:00:00  →  86400
-    QCOMPARE(reader.dhmsToUInt64(2, 0, 0, 0), static_cast<uint64_t>(86400));
-
-    // Day 2, 01:30:15  →  86400 + 3600 + 1800 + 15 = 91815
-    QCOMPARE(reader.dhmsToUInt64(2, 1, 30, 15), static_cast<uint64_t>(91815));
-}

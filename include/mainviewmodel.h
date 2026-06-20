@@ -19,6 +19,7 @@
 class Chapter10Reader;
 class FrameSetup;
 class ProcessingCoordinator;
+class QThread;
 struct StreamJob;
 
 /**
@@ -42,16 +43,7 @@ class MainViewModel : public QObject
     Q_PROPERTY(int progressPercent READ progressPercent NOTIFY progressPercentChanged)
     Q_PROPERTY(bool processing READ processing NOTIFY processingChanged)
 
-    Q_PROPERTY(int startDayOfYear READ startDayOfYear NOTIFY fileTimesChanged)
-    Q_PROPERTY(int startHour READ startHour NOTIFY fileTimesChanged)
-    Q_PROPERTY(int startMinute READ startMinute NOTIFY fileTimesChanged)
-    Q_PROPERTY(int startSecond READ startSecond NOTIFY fileTimesChanged)
-    Q_PROPERTY(int stopDayOfYear READ stopDayOfYear NOTIFY fileTimesChanged)
-    Q_PROPERTY(int stopHour READ stopHour NOTIFY fileTimesChanged)
-    Q_PROPERTY(int stopMinute READ stopMinute NOTIFY fileTimesChanged)
-    Q_PROPERTY(int stopSecond READ stopSecond NOTIFY fileTimesChanged)
 
-    Q_PROPERTY(bool extractAllTime READ extractAllTime WRITE setExtractAllTime NOTIFY extractAllTimeChanged)
 
 public:
     explicit MainViewModel(QObject* parent = nullptr);
@@ -73,23 +65,13 @@ public:
     int progressPercent() const;                 ///< @return Current processing progress (0--100).
     bool processing() const;                     ///< @return True while background processing is active.
 
-    bool extractAllTime() const;                 ///< @return True if the full time range should be extracted.
 
-    int startDayOfYear() const;                  ///< @return File start day-of-year.
-    int startHour() const;                       ///< @return File start hour.
-    int startMinute() const;                     ///< @return File start minute.
-    int startSecond() const;                     ///< @return File start second.
-    int stopDayOfYear() const;                   ///< @return File stop day-of-year.
-    int stopHour() const;                        ///< @return File stop hour.
-    int stopMinute() const;                      ///< @return File stop minute.
-    int stopSecond() const;                      ///< @return File stop second.
     /// @}
 
     /// @name Property setters
     /// @{
     void setTimeChannelIndex(int index);         ///< Sets the selected time channel index.
     void setPcmChannelIndex(int index);           ///< Sets the selected PCM channel index.
-    void setExtractAllTime(bool value);           ///< Sets whether to extract the full time range.
     /// @}
 
     /// @name Stream configuration
@@ -111,13 +93,7 @@ public:
     /// @return Full parameter name (e.g., "L_RCVR1") for a channel/receiver pair.
     static QString parameterName(int channel_index, int receiver_index);
 
-    /// Validates and parses day/hour/minute/second time field strings.
-    static bool validateTimeFields(const QString& ddd, const QString& hh,
-                                    const QString& mm, const QString& ss,
-                                    TimeFields& out);
 
-    /// Pre-validates time range strings. Returns empty on success, or a warning message.
-    static QString validateTimeRange(const QString& start_text, const QString& stop_text);
     /// @}
 
     /// @return Human-readable metadata summary for the status bar.
@@ -145,10 +121,8 @@ public:
 
     /**
      * @brief Validates the configured streams and starts background processing.
-     * @param[in] start_time Start time in "DDD:HH:MM:SS" format.
-     * @param[in] stop_time  Stop time in "DDD:HH:MM:SS" format.
      */
-    void startProcessing(const QString& start_time, const QString& stop_time);
+    void startProcessing();
 
     /// Resets all state to defaults and closes the loaded file.
     void clearState();
@@ -163,8 +137,7 @@ signals:
     void fileLoadedChanged();         ///< Emitted when the file-loaded state changes.
     void progressPercentChanged();    ///< Emitted when the processing progress updates.
     void processingChanged();         ///< Emitted when processing starts or stops.
-    void fileTimesChanged();          ///< Emitted when start/stop file times are updated.
-    void extractAllTimeChanged();     ///< Emitted when the extract-all-time flag changes.
+
 
     /// Emitted after a file loads successfully so the View can show StreamConfigDialog.
     void fileReadyForStreamConfig();
@@ -187,11 +160,17 @@ private:
                         StreamJob& out_job,
                         QString& error);
     /// Validates and fills the time/file fields shared by all streams.
-    bool buildBaseParams(const QString& start_time, const QString& stop_time,
-                         ProcessingParams& out, QString& error);
+    bool buildBaseParams(ProcessingParams& out, QString& error);
 
-    Chapter10Reader*        m_reader;       ///< Chapter 10 file reader instance.
+    /// Finishes the channel-enumeration phase started by openFile(), on the GUI thread.
+    void onLoadFinished(bool success);
+    /// Relays Chapter10Reader::progressUpdated() during the channel-enumeration phase.
+    void onLoadProgress(int percent);
+
+    Chapter10Reader*        m_reader;       ///< Reader instance backing the currently loaded file's channel data.
+    Chapter10Reader*        m_loading_reader = nullptr; ///< Reader for the in-flight load; replaces m_reader on success.
     ProcessingCoordinator*  m_coordinator;  ///< Owns worker thread(s).
+    QThread*                m_load_thread = nullptr; ///< Hosts the channel-enumeration scan.
 
     QString m_app_root;                      ///< Application root directory.
     QString m_input_filename;                ///< Path to the loaded .ch10 file.
@@ -201,10 +180,14 @@ private:
     int m_time_channel_index;                ///< Selected time channel combo box index.
     int m_pcm_channel_index;                 ///< Selected PCM channel combo box index.
 
-    bool m_extract_all_time;                 ///< True to extract full time duration.
+
 
     QVector<StreamConfig> m_stream_configs;  ///< Per-stream configuration from StreamConfigDialog.
     QStringList m_recent_files;              ///< Most-recently-opened file paths.
+
+    bool m_loading = false;                  ///< True while channel enumeration is running.
+    bool m_load_cancel_requested = false;    ///< True if cancelProcessing() was called during loading.
+    int  m_load_progress_percent = 0;        ///< Channel-enumeration progress (0--100).
 };
 
 #endif // MAINVIEWMODEL_H

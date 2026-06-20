@@ -21,13 +21,16 @@
  * @code
  * [[Step]]
  * db = 0.0
- * dwell_sec = 5.0
  * @endcode
+ *
+ * No dwell/duration is configured: StepDetector confirms a step by requiring
+ * the level to hold steady for a fixed window (see
+ * CalibrationConstants::kStepConfirmSeconds) rather than a per-step duration,
+ * so technicians don't have to know or configure how long each step lasts.
  */
 struct StepDefinition
 {
-    double db       = 0.0; ///< True SNR value (dB) injected during this step.
-    double dwellSec = 0.0; ///< How long the step is held, in seconds.
+    double db = 0.0; ///< True SNR value (dB) injected during this step.
 };
 
 /**
@@ -36,7 +39,7 @@ struct StepDefinition
  */
 struct CalibrationPoint
 {
-    double rawAvg = 0.0; ///< Edge-trimmed average raw count for this step's plateau.
+    double rawAvg = 0.0; ///< Average raw count over the confirmed-stable window for this step.
     double trueDb = 0.0; ///< True dB value of the paired step (from the TOML).
 };
 

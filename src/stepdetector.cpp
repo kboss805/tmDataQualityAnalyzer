@@ -120,24 +120,10 @@ bool StepDetector::parseStepConfig(const QString& path,
         {
             current.db = num;
         }
-        else if (key == "dwell_sec")
-        {
-            current.dwellSec = num;
-        }
         // Each step is pushed on the next [[Step]] header or at EOF by flush().
     }
     flush();
 
-    // Validate.
-    for (const StepDefinition& s : out)
-    {
-        if (s.dwellSec <= 0.0)
-        {
-            error = "Every [[Step]] must define a positive dwell_sec.";
-            out.clear();
-            return false;
-        }
-    }
     if (out.isEmpty())
     {
         error = "No [[Step]] entries found in '" + QFileInfo(path).fileName() + "'.";
@@ -191,16 +177,15 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
         }
     }
 
-    // 4. Collect maximal runs of stable samples that are long enough to be a
-    //    real dwell (rejects short transition slivers).
-    double min_dwell = steps[0].dwellSec;
-    for (const StepDefinition& s : steps)
-    {
-        min_dwell = std::min(min_dwell, s.dwellSec);
-    }
-    const int min_plateau_samples = std::max(
-        2, static_cast<int>(CalibrationConstants::kMinPlateauDwellFraction
-                            * (min_dwell / samplePeriodSec)));
+    // 4. Collect maximal runs of stable samples, then keep only those that hold
+    //    long enough to be confirmed as a genuine settled step rather than a
+    //    transient/partial-jump blip. The confirmation window is a fixed
+    //    duration (not a fraction of a configured dwell, since steps no longer
+    //    carry one) with an absolute sample-count floor for coarse sample
+    //    periods where the duration alone would be only one or two samples.
+    const int confirm_samples = std::max(
+        CalibrationConstants::kMinConfirmSamples,
+        static_cast<int>(std::ceil(CalibrationConstants::kStepConfirmSeconds / samplePeriodSec)));
 
     QVector<Plateau> plateaus;
     int run_begin = -1;
@@ -213,7 +198,7 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
         }
         else if (!is_stable && run_begin >= 0)
         {
-            if (i - run_begin >= min_plateau_samples)
+            if (i - run_begin >= confirm_samples)
             {
                 plateaus.push_back(Plateau{run_begin, i});
             }
@@ -223,31 +208,71 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
 
     result.detectedPlateaus = plateaus.size();
 
-    // 5. Validity: need at least as many plateaus as expected steps.
+    // 5. Validity: need at least as many confirmed plateaus as expected steps.
     if (plateaus.size() < expected)
     {
         return result; // profile stays invalid -> linear fallback
     }
     result.extraPlateaus = plateaus.size() > expected;
 
-    // 6. Pair the first `expected` plateaus (time order) with the steps.
+    // 6. Pair the first `expected` confirmed plateaus (time order) with the
+    //    steps. Extras (e.g. a technician running the step sequence two or
+    //    three times back to back) are simply discarded rather than averaged
+    //    in, since the first complete run is sufficient and keeps this simple.
+    //    Average the confirmation window at the END of each plateau (the
+    //    samples immediately before the next transition) rather than its
+    //    start: any settling after a jump has had the rest of the plateau to
+    //    die out by then, so this avoids transition contamination without
+    //    needing a separate trim fraction.
     CalibrationProfile& profile = result.profile;
     profile.points.reserve(expected);
     for (int k = 0; k < expected; k++)
     {
+        const Plateau& p = plateaus[k];
+        const int lo = std::max(p.begin, p.end - confirm_samples);
+        double sum = 0.0;
+        for (int i = lo; i < p.end; i++)
+        {
+            sum += rawValues[i];
+        }
+
         CalibrationPoint pt;
-        pt.rawAvg = trimmedMean(rawValues, plateaus[k]);
+        pt.rawAvg = sum / (p.end - lo);
         pt.trueDb = steps[k].db;
         profile.points.push_back(pt);
     }
 
     // Sort by raw so interpolateCalibration() can assume ascending rawAvg. We
-    // make no monotonicity assumption about the receiver response, so the dB
-    // values are simply carried along with their raw averages.
+    // make no monotonicity assumption about the receiver response (it may be
+    // increasing or decreasing), so the dB values are simply carried along
+    // with their raw averages.
     std::sort(profile.points.begin(), profile.points.end(),
               [](const CalibrationPoint& a, const CalibrationPoint& b) {
                   return a.rawAvg < b.rawAvg;
               });
+
+    // 7. Sanity check: a real receiver response is monotonic in one direction
+    // (increasing or decreasing dB with raw count) — it does not zigzag. If
+    // sorting by rawAvg does NOT also produce a monotonic dB sequence, the
+    // positional "Nth plateau <-> Nth step" pairing above paired the wrong
+    // plateaus with the wrong steps (e.g. extra/missed plateaus shifted the
+    // alignment). Reject the profile rather than handing interpolateCalibration()
+    // two near-identical raw values pinned to opposite dB extremes, which
+    // produces a near-vertical extrapolation slope and wildly wrong output for
+    // any raw value outside that narrow pair.
+    bool non_decreasing = true;
+    bool non_increasing = true;
+    for (int i = 1; i < profile.points.size(); i++)
+    {
+        if (profile.points[i].trueDb < profile.points[i - 1].trueDb) non_decreasing = false;
+        if (profile.points[i].trueDb > profile.points[i - 1].trueDb) non_increasing = false;
+    }
+    if (!non_decreasing && !non_increasing)
+    {
+        profile = CalibrationProfile{}; // stays invalid -> linear fallback
+        return result;
+    }
+
     profile.valid = true;
     return result;
 }
@@ -273,21 +298,3 @@ double StepDetector::robustStdDev(const QVector<double>& values)
     return 1.4826 * median(abs_dev);
 }
 
-double StepDetector::trimmedMean(const QVector<double>& rawValues, const Plateau& p)
-{
-    const int len = p.end - p.begin;
-    const int trim = static_cast<int>(CalibrationConstants::kEdgeTrimFraction * len);
-    int lo = p.begin + trim;
-    int hi = p.end - trim;
-    if (hi - lo < 1) // trimming removed everything; fall back to the full span
-    {
-        lo = p.begin;
-        hi = p.end;
-    }
-    double sum = 0.0;
-    for (int i = lo; i < hi; i++)
-    {
-        sum += rawValues[i];
-    }
-    return sum / (hi - lo);
-}

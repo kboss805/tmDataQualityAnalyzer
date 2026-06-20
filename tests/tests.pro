@@ -25,7 +25,6 @@ SOURCES += \
     $$PWD/../src/processingcoordinator.cpp \
     $$PWD/../src/mainview.cpp \
     $$PWD/../src/streamconfigdialog.cpp \
-    $$PWD/../src/timeextractionwidget.cpp \
     $$PWD/../src/frameprocessor.cpp \
     $$PWD/../src/stepdetector.cpp \
     $$PWD/../src/calibrationextractor.cpp \
@@ -56,7 +55,6 @@ HEADERS += \
     $$PWD/../include/frameprocessor.h \
     $$PWD/../include/processingparams.h \
     $$PWD/../include/timefields.h \
-    $$PWD/../include/timeextractionwidget.h \
     $$PWD/../include/plotviewmodel.h \
     $$PWD/../include/plotwidget.h \
     $$PWD/../include/plotcustomizationdialog.h \
@@ -111,7 +109,6 @@ SOURCES += \
     tst_plotviewmodel.cpp \
     tst_plotwidget.cpp \
     tst_frameprocessor.cpp \
-    tst_timeextractionwidget.cpp \
     tst_processingcoordinator.cpp \
     tst_streamconfigdialog.cpp \
     tst_exportdialog.cpp \
@@ -128,7 +125,6 @@ HEADERS += \
     tst_plotviewmodel.h \
     tst_plotwidget.h \
     tst_frameprocessor.h \
-    tst_timeextractionwidget.h \
     tst_processingcoordinator.h \
     tst_streamconfigdialog.h \
     tst_exportdialog.h \

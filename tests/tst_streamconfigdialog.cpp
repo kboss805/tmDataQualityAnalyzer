@@ -54,12 +54,9 @@ static StreamConfig makeConfig(const QString& label = "Ch 01",
 
 /// Constructs a dialog for testing. Uses one FrameSyncLockStats stream so no
 /// file dialogs are triggered during construction.
-static StreamConfigDialog* makeDialog(const QVector<StreamConfig>& configs = {},
-                                      bool extract_all = true)
+static StreamConfigDialog* makeDialog(const QVector<StreamConfig>& configs = {})
 {
-    TimeFields start{1, 0, 0, 0};
-    TimeFields stop {1, 0, 0, 10};
-    return new StreamConfigDialog(configs, "", {"Ch 1"}, 1, -1, start, stop, extract_all);
+    return new StreamConfigDialog(configs, "", {"Ch 1"}, 1, -1, "");
 }
 
 // ---------------------------------------------------------------------------
@@ -125,21 +122,7 @@ void TestStreamConfigDialog::configsRoundtripProcessFlag()
     QCOMPARE(dlg->configs()[0].process, false);
 }
 
-// ---------------------------------------------------------------------------
-// Time controls
-// ---------------------------------------------------------------------------
 
-void TestStreamConfigDialog::extractAllTimeDefault()
-{
-    QScopedPointer<StreamConfigDialog> dlg(makeDialog({}, true));
-    QVERIFY(dlg->extractAllTime());
-}
-
-void TestStreamConfigDialog::extractAllTimeFalsePreserved()
-{
-    QScopedPointer<StreamConfigDialog> dlg(makeDialog({}, false));
-    QVERIFY(!dlg->extractAllTime());
-}
 
 // ---------------------------------------------------------------------------
 // Frame-sync TOML scope boundary (US4.0 / US5.0)

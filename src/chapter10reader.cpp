@@ -5,9 +5,16 @@
 
 #include "chapter10reader.h"
 
+#include <QFileInfo>
+
 #include "constants.h"
 
 using namespace Irig106;
+
+namespace
+{
+    constexpr int kPercent100 = 100;
+}
 
 Chapter10Reader::Chapter10Reader(QObject* parent) :
     QObject(parent),
@@ -15,21 +22,11 @@ Chapter10Reader::Chapter10Reader(QObject* parent) :
     m_filename(""),
     m_file_handle(0),
     m_header(),
-    m_relative_start_time{},
-    m_relative_stop_time{},
-    m_file_start_time(),
-    m_file_stop_time(),
-    m_time_difference(0),
-    m_irig_time(),
     m_tmats_info(),
     m_current_time_channel(-1),
     m_current_pcm_channel(-1)
 {
     m_buffer.resize(PCMConstants::kDefaultBufferSize);
-
-    // Initialize start/stop time structures to zero
-    memset(&m_file_start_time, 0, sizeof(tm));
-    memset(&m_file_stop_time, 0, sizeof(tm));
 }
 
 Chapter10Reader::~Chapter10Reader()
@@ -105,6 +102,9 @@ bool Chapter10Reader::loadChannels(const QString& filename)
     QByteArray ba_filename = m_filename.toLocal8Bit();
     char* psz_filename = ba_filename.data();
 
+    m_abort_requested.store(false, std::memory_order_relaxed);
+    const int64_t total_file_size = QFileInfo(m_filename).size();
+
     // Open the file
     m_status = enI106Ch10Open(&m_file_handle, psz_filename, I106_READ);
     if (m_status != I106_OK)
@@ -123,12 +123,20 @@ bool Chapter10Reader::loadChannels(const QString& filename)
         return false;
     }
 
-    bool found_start_time = false;
     qDeleteAll(m_channel_data);
     m_channel_data.clear();
 
+    int packet_count = 0;
+    int last_reported_percent = -1;
+
     while (true)
     {
+        if (m_abort_requested.load(std::memory_order_relaxed))
+        {
+            closeFile();
+            return false;
+        }
+
         // Read the next header
         m_status = enI106Ch10ReadNextHeader(m_file_handle, &m_header);
         if (m_status == I106_EOF)
@@ -139,6 +147,19 @@ bool Chapter10Reader::loadChannels(const QString& filename)
         if (m_status != I106_OK)
         {
             break;
+        }
+
+        packet_count++;
+        if (total_file_size > 0 && (packet_count % PCMConstants::kProgressReportInterval) == 0)
+        {
+            int64_t current_pos = 0;
+            enI106Ch10GetPos(m_file_handle, &current_pos);
+            int percent = static_cast<int>(current_pos * kPercent100 / total_file_size);
+            if (percent != last_reported_percent)
+            {
+                last_reported_percent = percent;
+                emit progressUpdated(percent);
+            }
         }
 
         // Make sure our buffer is big enough
@@ -174,23 +195,36 @@ bool Chapter10Reader::loadChannels(const QString& filename)
         // Set channel type and fallback name from packet header when not already set by TMATS
         inferChannelTypeFromHeader(channel_id);
 
-        processPacketTime(m_header, found_start_time);
-
         // Check for TMATS
         if (m_header.ubyDataType == I106CH10_DTYPE_TMATS)
         {
-            if (!processTmatsPacket(m_header))
+            if (processTmatsPacket(m_header))
             {
+                // We've found and successfully parsed the TMATS packet,
+                // which enumerates all channels we care about. We can stop
+                // scanning the file now to prevent long load times.
                 break;
             }
         }
     } // end while
 
-    finalizeTimeCalc();
     categorizeChannels();
     closeFile();
 
+    emit progressUpdated(kPercent100);
+
     return true;
+}
+
+void Chapter10Reader::requestAbort()
+{
+    m_abort_requested.store(true, std::memory_order_relaxed);
+}
+
+void Chapter10Reader::loadChannelsAsync(const QString& filename)
+{
+    bool success = loadChannels(filename);
+    emit loadFinished(success);
 }
 
 void Chapter10Reader::addChannelInfoEntry(int channel_id)
@@ -235,70 +269,7 @@ QList<QPair<int, QString>> Chapter10Reader::getPCMChannelList() const
     return list;
 }
 
-// DOY is 1-indexed, so add 1
-int Chapter10Reader::getStartDayOfYear() const
-{
-    return m_times_loaded ? m_file_start_time.tm_yday + 1 : 0;
-}
 
-int Chapter10Reader::getStartHour() const
-{
-    return m_times_loaded ? m_file_start_time.tm_hour : 0;
-}
-
-int Chapter10Reader::getStartMinute() const
-{
-    return m_times_loaded ? m_file_start_time.tm_min : 0;
-}
-
-int Chapter10Reader::getStartSecond() const
-{
-    return m_times_loaded ? m_file_start_time.tm_sec : 0;
-}
-
-// DOY is 1-indexed, so add 1
-int Chapter10Reader::getStopDayOfYear() const
-{
-    return m_times_loaded ? m_file_stop_time.tm_yday + 1 : 0;
-}
-
-int Chapter10Reader::getStopHour() const
-{
-    return m_times_loaded ? m_file_stop_time.tm_hour : 0;
-}
-
-int Chapter10Reader::getStopMinute() const
-{
-    return m_times_loaded ? m_file_stop_time.tm_min : 0;
-}
-
-int Chapter10Reader::getStopSecond() const
-{
-    return m_times_loaded ? m_file_stop_time.tm_sec : 0;
-}
-
-void Chapter10Reader::processPacketTime(Irig106::SuI106Ch10Header& header, bool& found_start_time)
-{
-    // If we haven't found a time yet, checks to see if this is one
-    if (!found_start_time)
-    {
-        if (header.ubyDataType == I106CH10_DTYPE_IRIG_TIME)
-        {
-            found_start_time = true;
-            memcpy(m_relative_start_time.data(),
-                   &header.aubyRefTime[0],
-                   sizeof(m_relative_start_time));
-        }
-    }
-
-    // Always catch the last time, which will be the stop time
-    if (header.ubyDataType == I106CH10_DTYPE_IRIG_TIME)
-    {
-        memcpy(m_relative_stop_time.data(),
-               &header.aubyRefTime[0],
-               sizeof(m_relative_stop_time));
-    }
-}
 
 bool Chapter10Reader::processTmatsPacket(Irig106::SuI106Ch10Header& header)
 {
@@ -310,30 +281,7 @@ bool Chapter10Reader::processTmatsPacket(Irig106::SuI106Ch10Header& header)
     return m_status == I106_OK;
 }
 
-void Chapter10Reader::finalizeTimeCalc()
-{
-    // Translate start and stop times
-    SuIrig106Time start_real_time;
-    enI106_Rel2IrigTime(m_file_handle, m_relative_start_time.data(), &start_real_time);
-    gmtime_s(&m_file_start_time, &(start_real_time.ulSecs));
 
-    SuIrig106Time stop_real_time;
-    enI106_Rel2IrigTime(m_file_handle, m_relative_stop_time.data(), &stop_real_time);
-    gmtime_s(&m_file_stop_time, &(stop_real_time.ulSecs));
-
-    m_times_loaded = true;
-
-    // Use constants and proper types to avoid overflow/implicit widening
-    const uint64_t seconds_in_day = static_cast<uint64_t>(PCMConstants::kHoursPerDay) *
-                                    PCMConstants::kMinutesPerHour *
-                                    PCMConstants::kSecondsPerMinute;
-
-    m_time_difference = start_real_time.ulSecs -
-        ((static_cast<uint64_t>(m_file_start_time.tm_yday) * seconds_in_day) +
-         (static_cast<uint64_t>(m_file_start_time.tm_hour) * PCMConstants::kMinutesPerHour * PCMConstants::kSecondsPerMinute) +
-         (static_cast<uint64_t>(m_file_start_time.tm_min) * PCMConstants::kSecondsPerMinute) +
-         static_cast<uint64_t>(m_file_start_time.tm_sec));
-}
 
 void Chapter10Reader::applyTmatsNames()
 {
@@ -346,35 +294,53 @@ void Chapter10Reader::applyTmatsNames()
         SuRDataSource* data_source = record->psuFirstDataSource;
         while (data_source != nullptr)
         {
-            if (data_source->szTrackNumber != nullptr)
+            // TMATS\R-x\CHE-n ("Channel Enabled") marks data sources the recorder
+            // is configured to capture but that may not actually be enabled for
+            // this recording. Skip explicitly-disabled sources so they don't show
+            // up as selectable channels; treat a missing CHE-n (common on older
+            // TMATS revisions) as enabled, since omission isn't a disable signal.
+            QString che = (data_source->szEnabled != nullptr)
+                          ? QString(data_source->szEnabled).trimmed().toUpper() : QString();
+            bool channel_enabled = che.isEmpty() || che == "T" || che == "TRUE" || che == "Y" || che == "1";
+
+            if (data_source->szTrackNumber != nullptr && channel_enabled)
             {
                 int track_number = atoi(data_source->szTrackNumber);
-                if (m_channel_data.contains(track_number))
+                if (!m_channel_data.contains(track_number))
                 {
-                    // Name priority: szDataSourceID (descriptive TMATS R-record identifier)
-                    //              → szChanDataLinkName (Ch10 rev 07+ link name, often generic)
-                    //              → szPcmDataLinkName (rev -04/-05 link name)
-                    QString dsid = (data_source->szDataSourceID != nullptr)
-                                   ? QString(data_source->szDataSourceID) : QString();
-                    QString cdln = (data_source->szChanDataLinkName != nullptr)
-                                   ? QString(data_source->szChanDataLinkName) : QString();
-                    QString pdln = (data_source->szPcmDataLinkName != nullptr)
-                                   ? QString(data_source->szPcmDataLinkName) : QString();
-                    if (!dsid.isEmpty())
-                    {
-                        m_channel_data[track_number]->setChannelName(dsid);
-                    }
-                    else if (!cdln.isEmpty())
-                    {
-                        m_channel_data[track_number]->setChannelName(cdln);
-                    }
-                    else if (!pdln.isEmpty())
-                    {
-                        m_channel_data[track_number]->setChannelName(pdln);
-                    }
-                    if (data_source->szChannelDataType != nullptr)
-                    {
-                        m_channel_data[track_number]->setChannelType(QString(data_source->szChannelDataType));
+                    m_channel_data.insert(track_number, new ChannelData(track_number));
+                }
+
+                // Name priority: szDataSourceID (descriptive TMATS R-record identifier)
+                //              → szChanDataLinkName (Ch10 rev 07+ link name, often generic)
+                //              → szPcmDataLinkName (rev -04/-05 link name)
+                QString dsid = (data_source->szDataSourceID != nullptr)
+                               ? QString(data_source->szDataSourceID) : QString();
+                QString cdln = (data_source->szChanDataLinkName != nullptr)
+                               ? QString(data_source->szChanDataLinkName) : QString();
+                QString pdln = (data_source->szPcmDataLinkName != nullptr)
+                               ? QString(data_source->szPcmDataLinkName) : QString();
+                if (!dsid.isEmpty())
+                {
+                    m_channel_data[track_number]->setChannelName(dsid);
+                }
+                else if (!cdln.isEmpty())
+                {
+                    m_channel_data[track_number]->setChannelName(cdln);
+                }
+                else if (!pdln.isEmpty())
+                {
+                    m_channel_data[track_number]->setChannelName(pdln);
+                }
+                if (data_source->szChannelDataType != nullptr)
+                {
+                    QString cdt = QString(data_source->szChannelDataType).trimmed();
+                    if (cdt == "11" || cdt == "TIMEIN") {
+                        m_channel_data[track_number]->setChannelType(PCMConstants::kChannelTypeTime);
+                    } else if (cdt == "01" || cdt == "09" || cdt == "PCMIN") {
+                        m_channel_data[track_number]->setChannelType(PCMConstants::kChannelTypePcm);
+                    } else {
+                        m_channel_data[track_number]->setChannelType(cdt);
                     }
                 }
             }
@@ -439,14 +405,7 @@ void Chapter10Reader::pcmChannelChanged(int combobox_index)
     }
 }
 
-uint64_t Chapter10Reader::dhmsToUInt64(int day, int hour, int minute, int second) const
-{
-    return m_time_difference +
-            (static_cast<uint64_t>(day - 1) * PCMConstants::kHoursPerDay * PCMConstants::kMinutesPerHour * PCMConstants::kSecondsPerMinute) +
-            (static_cast<uint64_t>(hour) * PCMConstants::kMinutesPerHour * PCMConstants::kSecondsPerMinute) +
-            (static_cast<uint64_t>(minute) * PCMConstants::kSecondsPerMinute) +
-            static_cast<uint64_t>(second);
-}
+
 
 double Chapter10Reader::getTmatsDataRateBps(int channel_id) const
 {

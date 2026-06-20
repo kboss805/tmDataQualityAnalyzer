@@ -5,9 +5,13 @@
  *
  * Pure logic with no Qt UI dependencies, so it is unit-testable in isolation.
  * Detection uses derivative/edge detection: large sample-to-sample changes mark
- * step transitions, the stable spans between them are plateaus, each plateau is
- * edge-trimmed and averaged, and plateaus are paired in time order with the
- * expected steps from the step-config TOML.
+ * step transitions, and the stable spans between them are candidate plateaus.
+ * A candidate is only confirmed as a real step once it holds steady for at
+ * least CalibrationConstants::kStepConfirmSeconds (so a partial/transient jump
+ * can't be mistaken for a settled level); the calibration average is then
+ * taken from the confirmation window immediately preceding the next
+ * transition (the most-settled part of the plateau). Confirmed plateaus are
+ * paired in time order with the expected steps from the step-config TOML.
  */
 
 #ifndef STEPDETECTOR_H
@@ -34,8 +38,7 @@ public:
      * @brief Parses an `[[Step]]` array-of-tables step-config TOML file.
      *
      * The custom QSettings TOML format does not support arrays, so this is a
-     * dedicated line parser. Each `[[Step]]` table must provide `db` and
-     * `dwell_sec`.
+     * dedicated line parser. Each `[[Step]]` table must provide `db`.
      *
      * @param[in]  path  Path to the step-config TOML file.
      * @param[out] out   Parsed steps, in file order.
@@ -47,12 +50,18 @@ public:
                                 QString& error);
 
     /**
-     * @brief Detects step plateaus in @p rawValues and builds a CalibrationProfile.
+     * @brief Detects confirmed step plateaus in @p rawValues and builds a
+     *        CalibrationProfile.
      *
-     * The Nth detected plateau (time order) is paired with @p steps[N]. The
-     * channel is valid only if at least @p steps.size() plateaus are detected;
-     * if more are detected, the first steps.size() are used and
-     * Result::extraPlateaus is set.
+     * A candidate plateau (a stable run between two detected edges) is only
+     * confirmed as a real step once it holds for at least
+     * CalibrationConstants::kStepConfirmSeconds (and kMinConfirmSamples,
+     * whichever is larger); shorter runs are discarded as transition/partial-
+     * jump noise rather than counted as a step. The Nth confirmed plateau
+     * (time order) is paired with @p steps[N]. The channel is valid only if at
+     * least @p steps.size() plateaus are confirmed; if more are found (e.g. a
+     * technician ran the step sequence two or three times back to back), only
+     * the first steps.size() are used and the rest are discarded.
      *
      * @param[in] rawValues       Per-sample raw counts for one channel.
      * @param[in] samplePeriodSec Seconds between consecutive samples.
@@ -69,9 +78,6 @@ private:
 
     /// Robust (MAD-based) standard-deviation estimate of @p values.
     static double robustStdDev(const QVector<double>& values);
-
-    /// Edge-trimmed mean of rawValues over [p.begin, p.end).
-    static double trimmedMean(const QVector<double>& rawValues, const Plateau& p);
 };
 
 #endif // STEPDETECTOR_H

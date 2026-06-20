@@ -61,7 +61,6 @@ SOURCES += \
     src/processingcoordinator.cpp \
     src/mainview.cpp \
     src/streamconfigdialog.cpp \
-    src/timeextractionwidget.cpp \
     src/exportdialog.cpp \
     src/frameprocessor.cpp \
     src/stepdetector.cpp \
@@ -104,7 +103,6 @@ HEADERS += \
     include/frameprocessor.h \
     include/processingparams.h \
     include/timefields.h \
-    include/timeextractionwidget.h \
     include/exportdialog.h \
     include/plotviewmodel.h \
     include/plotcustomizationdialog.h \

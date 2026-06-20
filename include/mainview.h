@@ -90,9 +90,7 @@ private:
 
     /// @name Bulk state helpers
     /// @{
-    void startProcessingFromDialog(const QString& start_time_text,
-                                   const QString& stop_time_text,
-                                   bool extract_all);  ///< Validates time and starts background processing.
+    void startProcessingFromDialog();                    ///< Starts background processing.
     void setAllControlsEnabled(bool enabled);          ///< Enables or disables all interactive controls.
     void saveLastCh10Dir();                              ///< Persists m_last_ch10_dir to QSettings.
     void logError(const QString& message);               ///< Appends a red error entry to the log window.
@@ -109,6 +107,7 @@ private:
     PlotWidget* m_plot_widget;               ///< Plot view widget (central widget).
     PlotViewModel* m_plot_view_model;        ///< Plot ViewModel owning series data.
     QAction* m_theme_action;                 ///< File > Toggle theme action.
+    QAction* m_open_action;                  ///< File > Open... action.
 
     QToolBar* m_toolbar;                     ///< Main toolbar.
     QAction* m_toolbar_open_action;          ///< Toolbar open action.
