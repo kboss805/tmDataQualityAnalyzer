@@ -1,0 +1,43 @@
+# SNR Calibration Step Configuration — TRC
+# Range: 0 to 60 dB, 6 dB increments
+# 11 steps total
+#
+# Usage: load this file via "Extract Calibration..." in the Receiver SNR
+# setup dialog alongside a calibration Chapter 10 recording that steps
+# through each level in the order listed below. No dwell/duration is
+# configured here -- each step is confirmed once its level holds steady
+# for about a second, so it doesn't matter exactly how long a technician
+# holds each step.
+
+[[Step]]
+db = 0.0
+
+[[Step]]
+db = 6.0
+
+[[Step]]
+db = 12.0
+
+[[Step]]
+db = 18.0
+
+[[Step]]
+db = 24.0
+
+[[Step]]
+db = 30.0
+
+[[Step]]
+db = 36.0
+
+[[Step]]
+db = 42.0
+
+[[Step]]
+db = 48.0
+
+[[Step]]
+db = 54.0
+
+[[Step]]
+db = 60.0

@@ -1,0 +1,87 @@
+[Frame]
+FrameSync = "FE6B2840"
+
+[Parameters]
+Polarity = 1
+Slope = 2
+Scale = "10"
+
+[Time]
+ExtractAllTime = true
+SampleRate = 0
+
+[Receivers]
+Count = 8
+ChannelsPerReceiver = 3
+
+[L_RCVR1]
+Word = 1
+
+[R_RCVR1]
+Word = 2
+
+[C_RCVR1]
+Word = 3
+
+[L_RCVR2]
+Word = 4
+
+[R_RCVR2]
+Word = 5
+
+[C_RCVR2]
+Word = 6
+
+[L_RCVR3]
+Word = 7
+
+[R_RCVR3]
+Word = 8
+
+[C_RCVR3]
+Word = 9
+
+[L_RCVR4]
+Word = 10
+
+[R_RCVR4]
+Word = 11
+
+[C_RCVR4]
+Word = 12
+
+[L_RCVR5]
+Word = 13
+
+[R_RCVR5]
+Word = 14
+
+[C_RCVR5]
+Word = 15
+
+[L_RCVR6]
+Word = 16
+
+[R_RCVR6]
+Word = 17
+
+[C_RCVR6]
+Word = 18
+
+[L_RCVR7]
+Word = 19
+
+[R_RCVR7]
+Word = 20
+
+[C_RCVR7]
+Word = 21
+
+[L_RCVR8]
+Word = 22
+
+[R_RCVR8]
+Word = 23
+
+[C_RCVR8]
+Word = 24

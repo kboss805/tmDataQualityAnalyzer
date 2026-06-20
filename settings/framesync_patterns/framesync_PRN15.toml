@@ -1,0 +1,4 @@
+[Frame]
+BitsPerFrame = 32767
+FrameSync = "334AABBF"
+FrameSyncMask = "FFFFFFFF"
