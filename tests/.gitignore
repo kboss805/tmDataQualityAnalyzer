@@ -1,0 +1,13 @@
+# Test artifacts
+*.txt
+scratch_tst.cpp
+-
+run_tests.ps1
+nul
+data/
+output/
+!output/.gitkeep
+
+# Test build outputs
+debug/
+release/

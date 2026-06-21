@@ -1,0 +1,7 @@
+# Ignore everything in deploy/ except tracked scripts and config
+*
+!.gitignore
+!build_release.ps1
+!agcCh10toCSV.iss
+!README_portable.txt
+!RELEASENOTES.txt
