@@ -474,8 +474,9 @@ void TestFrameProcessor::calibrationRoundTripOnRealFileProducesCleanSteps()
     req.timeChannelId      = time_id;
     req.pcmChannelId       = pcm_id;
     req.frameSyncHex       = "FE6B2840";
-    req.bitsInMinorFrame   = 800;
+    req.bitsInMinorFrame   = 8000; // true minor-frame length for this recording
     req.randomized         = true; // RNRZ-L
+    req.dataRateMbps       = 0.8;   // 800 kbps -> ~100 frames/s; drives the adaptive extract period
     req.numReceivers       = 16;
     req.receiverChannels   = 3;
     req.steps              = steps;
@@ -538,15 +539,16 @@ void TestFrameProcessor::calibrationRoundTripOnRealFileProducesCleanSteps()
     uint64_t start_secs = 0;
     uint64_t stop_secs = UINT64_MAX;
 
-    ProcessingParams p = makeTestParams(filepath, time_id, pcm_id);
+    ProcessingParams p = makeTestParams(filepath, time_id, pcm_id, 0xFE6B2840, 32, 500, 8000);
     p.startSeconds     = start_secs;
     p.stopSeconds      = stop_secs;
-    // Match the extraction pass's sample period: each step only holds for
-    // about a second (per settings/rcvr_cals/default.toml), so a 1 s sample
-    // period leaves only one raw sample per plateau -- never enough to satisfy
-    // StepDetector's confirm-samples floor. Also match its rate-based clock,
-    // for the same IRIG-time-fragility reason the extraction pass uses it.
-    p.samplePeriodSec  = CalibrationConstants::kExtractSamplePeriodSec;
+    // Use a 100 ms window: at this file's ~8000-bit / ~100 frames-per-second
+    // rate the shipped 10 ms period averages only ~1 frame (a sparse, gap-laced
+    // series), while 1 s leaves only a few samples per ~4.5 s dwell. 100 ms is
+    // the same neighbourhood the extractor now sizes itself to, giving clean
+    // plateaus for the re-detection check below. Rate-based clock matches the
+    // extraction pass (avoids IRIG-time fragility).
+    p.samplePeriodSec  = 0.1;
     p.useDataRateClock = true;
     p.isRandomized     = true;
     p.mode             = StreamMode::ReceiverChannelInfo;
@@ -684,4 +686,101 @@ void TestFrameProcessor::offPhaseSyncAfterLockLossIsNotExtracted()
     // off-phase false positive after lock loss were wrongly extracted, the stale
     // word A (0) would be averaged in, producing 7.5 instead of 15.
     QCOMPARE(r.channels[0].values.first(), 15.0);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//              NON-LINEAR CALIBRATION AVERAGING-ORDER REGRESSION             //
+////////////////////////////////////////////////////////////////////////////////
+
+/// Regression test for the non-linear calibration averaging-order bug. A
+/// CalibrationProfile maps the AVERAGED raw count of a plateau to its true dB,
+/// so within an output window the processor must average the raw counts first
+/// and apply interpolateCalibration() once -- NOT interpolate every frame and
+/// average the results. For a kinked (non-linear) profile the two orders differ:
+/// mean(interpolate(raw)) != interpolate(mean(raw)).
+///
+/// We feed two frames into a single output window with word 0 = 0 and word 0 =
+/// 15, and attach a convex profile with a flat low segment and a steep high
+/// segment:
+///     raw  0.0 -> 10 dB
+///     raw  7.5 -> 10 dB   (vertex)
+///     raw 15.0 -> 160 dB
+/// The mean raw is 7.5, so the correct (raw-first) output is
+/// interpolate(7.5) = 10 dB. The buggy (per-frame-first) order would yield
+/// mean(interpolate(0), interpolate(15)) = mean(10, 160) = 85 dB.
+void TestFrameProcessor::nonLinearCalibrationAveragesRawBeforeInterpolating()
+{
+    // Two boundary-aligned frames, 4-bit sync (1001) / 4-bit words, layout
+    // [w0][w1][sync] per 12-bit minor frame (mirrors the off-phase test geometry).
+    QString bits;
+    bits += "1001";       // initial sync acquisition (not boundary-aligned)
+    bits += "0000";       // frame 1, word 0 = 0
+    bits += "0000";       // frame 1, word 1 (unused)
+    bits += "1001";       // boundary sync -> extract frame 1 (word 0 = 0)
+    bits += "1111";       // frame 2, word 0 = 15
+    bits += "0000";       // frame 2, word 1 (unused)
+    bits += "1001";       // boundary sync -> extract frame 2 (word 0 = 15)
+
+    QByteArray payload = packBitString(bits);
+
+    FrameSetup setup;
+    setup.addParameter("W0", 0);
+    ParameterInfo* param = setup.getParameter(0);
+    param->is_enabled = true;
+    param->slope = 1.0;   // ignored once a valid profile is present
+    param->scale = 0.0;
+    param->sample_sum = 0.0;
+
+    CalibrationProfile profile;
+    profile.points.push_back({0.0, 10.0});
+    profile.points.push_back({7.5, 10.0});
+    profile.points.push_back({15.0, 160.0});
+    profile.valid = true;
+    param->profile = profile;
+
+    PacketQueue queue;
+    ProcessingParams p;
+    p.packetQueue       = &queue;
+    p.streamLabel       = "nonlinear-avg-test";
+    p.mode              = StreamMode::ReceiverChannelInfo;
+    p.startSeconds      = 0;
+    p.stopSeconds       = UINT64_MAX;
+    p.samplePeriodSec   = 1e9; // huge: keep both extracted samples in one output window
+    p.useDataRateClock  = true;
+    p.isRandomized      = false;
+    p.isInverted        = false;
+
+    p.resolvedAttrs.syncPat     = 0x9; // 1001b
+    p.resolvedAttrs.syncMask    = 0xF;
+    p.resolvedAttrs.syncPatLen  = 4;
+    p.resolvedAttrs.bitsInFrame = 12;
+    p.resolvedAttrs.wordsInFrame = 2;
+    p.resolvedAttrs.wordLen     = 4;
+    p.resolvedAttrs.wordMask    = 0xF;
+    p.resolvedAttrs.minSyncs    = 1;
+    p.resolvedAttrs.delta100ns  = 1.0;
+    p.resolvedAttrs.needsSwap   = false;
+    p.resolvedAttrs.resolved    = true;
+
+    PacketItem item;
+    item.payload        = payload;
+    item.baseAbsSeconds = 0.0;
+    item.packetBits     = static_cast<uint64_t>(bits.size());
+    QVERIFY(queue.enqueue(item));
+
+    PacketItem eos;
+    eos.endOfStream = true;
+    QVERIFY(queue.enqueue(eos));
+
+    FrameProcessor fp;
+    QVERIFY2(fp.process(p, &setup), "Synthetic non-linear-calibration stream should process successfully");
+
+    const ProcessedStreamData& r = fp.result();
+    QVERIFY2(!r.channels.isEmpty() && !r.channels[0].values.isEmpty(),
+             "Expected at least one extracted sample");
+    // Correct (average raw, then calibrate once): interpolate(mean(0,15)=7.5) = 10 dB.
+    // Buggy (calibrate each frame, then average): mean(10, 160) = 85 dB.
+    QVERIFY2(qAbs(r.channels[0].values.first() - 10.0) < 1e-9,
+             qPrintable(QString("Expected 10.0 dB (raw averaged before calibration), got %1")
+                            .arg(r.channels[0].values.first())));
 }

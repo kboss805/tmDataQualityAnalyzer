@@ -677,7 +677,6 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
     if (!cfg.calibrationByWord.isEmpty())
     {
         int attached = 0;
-        QVector<int> unmatchedWords;
         for (int i = 0; i < frame_setup->length(); i++)
         {
             ParameterInfo* param = frame_setup->getParameter(i);
@@ -688,31 +687,12 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
                 attached++;
             }
         }
-        // Diagnostic: surface whether profiles actually reached the word map. A
-        // mismatch here (provided > 0 but attached == 0) is the usual cause of
-        // "calibration not applied" — the plot then falls back to linear math.
-        for (auto it = cfg.calibrationByWord.constBegin();
-             it != cfg.calibrationByWord.constEnd(); ++it)
-        {
-            bool found = false;
-            for (int i = 0; i < frame_setup->length(); i++)
-            {
-                if (frame_setup->getParameter(i)->word == it.key()) { found = true; break; }
-            }
-            if (!found) unmatchedWords.push_back(it.key());
-        }
-        QString msg = "  " + stream_desc + ": non-linear calibration — provided "
+        // Surface whether profiles actually reached the word map: provided > 0 but
+        // attached == 0 means a word-index mismatch and a silent fall back to the
+        // linear model.
+        emit logMessageReceived("  " + stream_desc + ": non-linear calibration — provided "
                     + QString::number(cfg.calibrationByWord.size())
-                    + " profile(s), attached " + QString::number(attached)
-                    + " to word map.";
-        if (!unmatchedWords.isEmpty())
-        {
-            QStringList ws;
-            for (int w : unmatchedWords) ws << QString::number(w);
-            msg += " Unmatched profile word(s): " + ws.join(", ")
-                 + " (these channels stay on linear calibration).";
-        }
-        emit logMessageReceived(msg);
+                    + " profile(s), attached " + QString::number(attached) + " to word map.");
     }
     else
     {

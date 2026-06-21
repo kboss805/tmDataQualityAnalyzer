@@ -1,5 +1,5 @@
-[Frame]
-FrameSync = "FE6B2840"
+# Receiver-parameter file: word map + calibration only. Frame sync / mask /
+# bits-per-frame come from settings/framesync_patterns/default_rcvr.toml.
 
 [Parameters]
 Polarity = 0

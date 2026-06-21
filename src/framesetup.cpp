@@ -12,7 +12,12 @@
 #include "tomlconfighelper.h"
 
 const QStringList FrameSetup::kSettingsGroups = {
-    "Defaults", "Frame", "Parameters", "Time", "Receivers", "Bounds"
+    // Non-parameter metadata sections, skipped by tryLoadingFile(). "EMPTY"
+    // lets a word map explicitly list an unused/placeholder word (e.g. the
+    // unpopulated 4th channel of a 4-channel receiver card) so its Word number
+    // is not silently skipped in the file, without turning it into a plotted
+    // channel. Repeated [EMPTY] sections are fine — they are all skipped here.
+    "Defaults", "Frame", "Parameters", "Time", "Receivers", "Bounds", "EMPTY"
 };
 
 QStringList FrameSetup::readGroupsInFileOrder(const QString& filename)

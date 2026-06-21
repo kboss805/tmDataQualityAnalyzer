@@ -1,5 +1,17 @@
-[Frame]
-FrameSync = "FE6B2840"
+# RASA Receiver Parameters
+#
+# Frame layout (per scan of channel 26): 800-bit (50-word) minor frame =
+# 2 frame-sync words + 48 channel words. The hardware uses 4-channel cards;
+# RASA populates only 3 of the 4 channels per card:
+#   L (Left), R (Right), C (Combine), <unused 4th card channel>
+# The unused 4th channel of every card carries no AGC sample. It is listed
+# explicitly below as [EMPTY] (Word 4, 8, 12, ...) so the Word numbering stays
+# contiguous and does not appear to skip a word; the application ignores every
+# [EMPTY] entry, so these never become plotted channels.
+#
+# Frame sync / mask / bits-per-frame are NOT defined here — receiver-parameter
+# files carry only the word map and calibration. The frame sync defaults come
+# from settings/framesync_patterns/default_rcvr.toml.
 
 [Parameters]
 Polarity = 1
@@ -11,7 +23,7 @@ ExtractAllTime = true
 SampleRate = 0
 
 [Receivers]
-Count = 8
+Count = 12
 ChannelsPerReceiver = 3
 
 [L_RCVR1]
@@ -23,65 +35,137 @@ Word = 2
 [C_RCVR1]
 Word = 3
 
-[L_RCVR2]
+[EMPTY]
 Word = 4
 
-[R_RCVR2]
+[L_RCVR2]
 Word = 5
 
-[C_RCVR2]
+[R_RCVR2]
 Word = 6
 
-[L_RCVR3]
+[C_RCVR2]
 Word = 7
 
-[R_RCVR3]
+[EMPTY]
 Word = 8
 
-[C_RCVR3]
+[L_RCVR3]
 Word = 9
 
-[L_RCVR4]
+[R_RCVR3]
 Word = 10
 
-[R_RCVR4]
+[C_RCVR3]
 Word = 11
 
-[C_RCVR4]
+[EMPTY]
 Word = 12
 
-[L_RCVR5]
+[L_RCVR4]
 Word = 13
 
-[R_RCVR5]
+[R_RCVR4]
 Word = 14
 
-[C_RCVR5]
+[C_RCVR4]
 Word = 15
 
-[L_RCVR6]
+[EMPTY]
 Word = 16
 
-[R_RCVR6]
+[L_RCVR5]
 Word = 17
 
-[C_RCVR6]
+[R_RCVR5]
 Word = 18
 
-[L_RCVR7]
+[C_RCVR5]
 Word = 19
 
-[R_RCVR7]
+[EMPTY]
 Word = 20
 
-[C_RCVR7]
+[L_RCVR6]
 Word = 21
 
-[L_RCVR8]
+[R_RCVR6]
 Word = 22
 
-[R_RCVR8]
+[C_RCVR6]
 Word = 23
 
-[C_RCVR8]
+[EMPTY]
 Word = 24
+
+[L_RCVR7]
+Word = 25
+
+[R_RCVR7]
+Word = 26
+
+[C_RCVR7]
+Word = 27
+
+[EMPTY]
+Word = 28
+
+[L_RCVR8]
+Word = 29
+
+[R_RCVR8]
+Word = 30
+
+[C_RCVR8]
+Word = 31
+
+[EMPTY]
+Word = 32
+
+[L_RCVR9]
+Word = 33
+
+[R_RCVR9]
+Word = 34
+
+[C_RCVR9]
+Word = 35
+
+[EMPTY]
+Word = 36
+
+[L_RCVR10]
+Word = 37
+
+[R_RCVR10]
+Word = 38
+
+[C_RCVR10]
+Word = 39
+
+[EMPTY]
+Word = 40
+
+[L_RCVR11]
+Word = 41
+
+[R_RCVR11]
+Word = 42
+
+[C_RCVR11]
+Word = 43
+
+[EMPTY]
+Word = 44
+
+[L_RCVR12]
+Word = 45
+
+[R_RCVR12]
+Word = 46
+
+[C_RCVR12]
+Word = 47
+
+[EMPTY]
+Word = 48

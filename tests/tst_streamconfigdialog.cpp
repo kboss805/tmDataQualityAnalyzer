@@ -424,7 +424,9 @@ void TestStreamConfigDialog::applyToAllCopiesSettingsToSameModeStreams()
 
         QCheckBox* applyToAll = nullptr;
         for (QCheckBox* cb : activeWindow->findChildren<QCheckBox*>()) {
-            if (cb->text().contains("Apply to all")) { applyToAll = cb; break; }
+            // The "Apply to all" text lives in an adjacent QLabel (checkbox text
+            // is empty), so match the checkbox by its tooltip instead.
+            if (cb->toolTip().contains("Copy these settings")) { applyToAll = cb; break; }
         }
         QVERIFY(applyToAll != nullptr);
         applyToAll->setChecked(true);
@@ -467,7 +469,9 @@ void TestStreamConfigDialog::applyToAllLeavesDifferentModeStreamsUnchanged()
 
         QCheckBox* applyToAll = nullptr;
         for (QCheckBox* cb : activeWindow->findChildren<QCheckBox*>()) {
-            if (cb->text().contains("Apply to all")) { applyToAll = cb; break; }
+            // The "Apply to all" text lives in an adjacent QLabel (checkbox text
+            // is empty), so match the checkbox by its tooltip instead.
+            if (cb->toolTip().contains("Copy these settings")) { applyToAll = cb; break; }
         }
         QVERIFY(applyToAll != nullptr);
         applyToAll->setChecked(true);

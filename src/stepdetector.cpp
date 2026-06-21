@@ -215,18 +215,13 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
     }
     result.extraPlateaus = plateaus.size() > expected;
 
-    // 6. Pair the first `expected` confirmed plateaus (time order) with the
-    //    steps. Extras (e.g. a technician running the step sequence two or
-    //    three times back to back) are simply discarded rather than averaged
-    //    in, since the first complete run is sufficient and keeps this simple.
-    //    Average the confirmation window at the END of each plateau (the
-    //    samples immediately before the next transition) rather than its
-    //    start: any settling after a jump has had the rest of the plateau to
-    //    die out by then, so this avoids transition contamination without
-    //    needing a separate trim fraction.
-    CalibrationProfile& profile = result.profile;
-    profile.points.reserve(expected);
-    for (int k = 0; k < expected; k++)
+    // 6. Settled average of every confirmed plateau. Average the confirmation
+    //    window at the END of each plateau (the samples immediately before the
+    //    next transition) rather than its start: any settling after a jump has
+    //    had the rest of the plateau to die out by then, so this avoids
+    //    transition contamination without needing a separate trim fraction.
+    QVector<double> plateauAvg(plateaus.size());
+    for (int k = 0; k < plateaus.size(); k++)
     {
         const Plateau& p = plateaus[k];
         const int lo = std::max(p.begin, p.end - confirm_samples);
@@ -235,43 +230,75 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
         {
             sum += rawValues[i];
         }
+        plateauAvg[k] = sum / (p.end - lo);
+    }
 
+    // 7. Select one clean calibration sweep: the first run of `expected`
+    //    CONSECUTIVE plateaus whose settled averages move strictly in one
+    //    direction (a real receiver response is monotonic — increasing or
+    //    decreasing dB with raw count). A genuine step transition was already
+    //    large enough to split the plateaus (> `threshold`), so we require each
+    //    consecutive level change to exceed that same threshold and keep the
+    //    same sign across the whole run.
+    //
+    //    This is robust to the messy reality of recorded cal files (US3.2): it
+    //    skips leading pre-roll/no-signal plateaus, ignores trailing post-roll,
+    //    and takes the FIRST of several back-to-back repeats. Crucially it also
+    //    rejects flat/inactive channels — their plateau averages only jitter
+    //    around the noise floor, never forming a monotonic run — instead of the
+    //    old "first N plateaus" rule, which paired no-signal noise with the step
+    //    dB values and produced degenerate (all-equal rawAvg) profiles.
+    auto sign = [&](double delta) -> int {
+        if (delta > threshold) return 1;
+        if (delta < -threshold) return -1;
+        return 0; // change too small to be a real step transition
+    };
+
+    int run_start = -1;
+    for (int j = 0; j + expected <= plateaus.size(); j++)
+    {
+        const int dir = sign(plateauAvg[j + 1] - plateauAvg[j]);
+        if (dir == 0)
+        {
+            continue;
+        }
+        bool ok = true;
+        for (int i = j + 1; i < j + expected; i++)
+        {
+            if (sign(plateauAvg[i] - plateauAvg[i - 1]) != dir)
+            {
+                ok = false;
+                break;
+            }
+        }
+        if (ok)
+        {
+            run_start = j;
+            break;
+        }
+    }
+
+    if (run_start < 0)
+    {
+        return result; // no clean monotonic sweep -> linear fallback
+    }
+
+    // 8. Pair the selected sweep with the steps in time order (Nth plateau of
+    //    the sweep <-> Nth step), then sort by raw so interpolateCalibration()
+    //    can assume ascending rawAvg.
+    CalibrationProfile& profile = result.profile;
+    profile.points.reserve(expected);
+    for (int k = 0; k < expected; k++)
+    {
         CalibrationPoint pt;
-        pt.rawAvg = sum / (p.end - lo);
+        pt.rawAvg = plateauAvg[run_start + k];
         pt.trueDb = steps[k].db;
         profile.points.push_back(pt);
     }
-
-    // Sort by raw so interpolateCalibration() can assume ascending rawAvg. We
-    // make no monotonicity assumption about the receiver response (it may be
-    // increasing or decreasing), so the dB values are simply carried along
-    // with their raw averages.
     std::sort(profile.points.begin(), profile.points.end(),
               [](const CalibrationPoint& a, const CalibrationPoint& b) {
                   return a.rawAvg < b.rawAvg;
               });
-
-    // 7. Sanity check: a real receiver response is monotonic in one direction
-    // (increasing or decreasing dB with raw count) — it does not zigzag. If
-    // sorting by rawAvg does NOT also produce a monotonic dB sequence, the
-    // positional "Nth plateau <-> Nth step" pairing above paired the wrong
-    // plateaus with the wrong steps (e.g. extra/missed plateaus shifted the
-    // alignment). Reject the profile rather than handing interpolateCalibration()
-    // two near-identical raw values pinned to opposite dB extremes, which
-    // produces a near-vertical extrapolation slope and wildly wrong output for
-    // any raw value outside that narrow pair.
-    bool non_decreasing = true;
-    bool non_increasing = true;
-    for (int i = 1; i < profile.points.size(); i++)
-    {
-        if (profile.points[i].trueDb < profile.points[i - 1].trueDb) non_decreasing = false;
-        if (profile.points[i].trueDb > profile.points[i - 1].trueDb) non_increasing = false;
-    }
-    if (!non_decreasing && !non_increasing)
-    {
-        profile = CalibrationProfile{}; // stays invalid -> linear fallback
-        return result;
-    }
 
     profile.valid = true;
     return result;

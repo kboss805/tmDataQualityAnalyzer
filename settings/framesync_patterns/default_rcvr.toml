@@ -1,0 +1,14 @@
+# Default Receiver SNR frame sync parameters.
+#
+# The application loads this file as the default frame sync for Receiver SNR
+# streams, so these values can be changed without rebuilding. Edit them to match
+# your receiver telemetry format.
+#
+#   FrameSync     - frame sync pattern (hex)
+#   FrameSyncMask - frame sync mask (hex); FFFFFFFF = all 32 bits significant
+#   BitsPerFrame  - total bits per minor frame (including the sync words)
+
+[Frame]
+FrameSync = "FE6B2840"
+FrameSyncMask = "FFFFFFFF"
+BitsPerFrame = 800

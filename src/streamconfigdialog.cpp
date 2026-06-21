@@ -145,6 +145,39 @@ void saveFrameSyncToToml(const QString& filename,
     cfg.sync();
 }
 
+/// Default Receiver SNR frame parameters (pattern, mask, bits-per-frame),
+/// loaded from settings/framesync_patterns/default_rcvr.toml so they are
+/// user-editable rather than hard-coded. Falls back to the compiled constants
+/// if the file is missing or a field is absent/invalid.
+struct ReceiverFrameDefaults
+{
+    QString pattern = PCMConstants::kDefaultReceiverSNRPattern;
+    QString mask    = PCMConstants::kDefaultFrameSyncMask;
+    int     bits    = PCMConstants::kDefaultReceiverSNRBits;
+};
+
+ReceiverFrameDefaults loadReceiverFrameDefaults(const QString& app_root)
+{
+    ReceiverFrameDefaults d;
+    const QString path = app_root + "/" + UIConstants::kSettingsDirName + "/" +
+        UIConstants::kFramesyncPatternsDirName + "/" +
+        UIConstants::kDefaultReceiverFrameSyncFilename;
+    if (!QFileInfo::exists(path))
+        return d;
+
+    QSettings cfg(path, TomlConfigHelper::format());
+    const QString sync = cfg.value("Frame/FrameSync").toString();
+    if (!sync.isEmpty())
+        d.pattern = sync.toUpper();
+    const QString mask = cfg.value("Frame/FrameSyncMask").toString();
+    if (!mask.isEmpty())
+        d.mask = mask.toUpper();
+    const int bits = cfg.value("Frame/BitsPerFrame", 0).toInt();
+    if (bits >= PCMConstants::kMinFrameLengthBits)
+        d.bits = bits;
+    return d;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 //                        FRAME LOCK SETUP DIALOG                             //
 ////////////////////////////////////////////////////////////////////////////////
@@ -1365,17 +1398,21 @@ void StreamConfigDialog::openGearDialog(int row)
     // this mode's defaults so the sub-dialog pre-fills with sensible values.
     if (current_mode != w.lastConfiguredMode)
     {
-        temp.frameSyncMask = PCMConstants::kDefaultFrameSyncMask;
         if (is_frame_sync_lock)
         {
+            temp.frameSyncMask     = PCMConstants::kDefaultFrameSyncMask;
             temp.frameSyncPattern  = PCMConstants::kDefaultFrameSyncLockPattern;
             temp.bitsInMinorFrame  = PCMConstants::kDefaultFrameSyncLockBits;
             temp.receiverParamsToml.clear();
         }
         else
         {
-            temp.frameSyncPattern = PCMConstants::kDefaultReceiverSNRPattern;
-            temp.bitsInMinorFrame = PCMConstants::kDefaultReceiverSNRBits;
+            // Receiver SNR defaults are loaded from default_rcvr.toml (not
+            // hard-coded) so the user can change the receiver frame sync.
+            const ReceiverFrameDefaults d = loadReceiverFrameDefaults(m_app_root);
+            temp.frameSyncPattern = d.pattern;
+            temp.frameSyncMask    = d.mask;
+            temp.bitsInMinorFrame = d.bits;
         }
     }
 

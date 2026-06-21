@@ -165,14 +165,44 @@ namespace UIConstants {
     inline constexpr const char* kReceiverParamsDirName   = "receiver_params";   ///< Receiver Parameters subdirectory name (relative to settings dir).
     inline constexpr const char* kRcvrCalsDirName         = "rcvr_cals";         ///< Receiver/SNR step calibration subdirectory name (relative to settings dir).
     inline constexpr const char* kFramesyncPatternsDirName = "framesync_patterns"; ///< Frame sync pattern subdirectory name (relative to settings dir).
+    /// Frame sync pattern file the app loads as the default for Receiver SNR
+    /// streams (under kFramesyncPatternsDirName), so the receiver frame sync,
+    /// mask, and bits-per-frame are user-editable rather than hard-coded.
+    inline constexpr const char* kDefaultReceiverFrameSyncFilename = "default_rcvr.toml";
     /// @}
 }
 
 /// @brief Constants for non-linear step calibration extraction (US3.2).
 namespace CalibrationConstants {
     /// Fine output sample period (seconds) used when extracting raw calibration
-    /// data, so dwell plateaus are resolved with many samples each.
+    /// data, so dwell plateaus are resolved with many samples each. This is the
+    /// FLOOR; the actual period is sized up to hold ~kFramesPerExtractWindow
+    /// frames per window (see below) so low-frame-rate recordings don't produce
+    /// sparse/zero-laced windows.
     inline constexpr double kExtractSamplePeriodSec = 0.01; // 10 ms (100 Hz)
+
+    /// Target number of decoded frames to average into each extraction output
+    /// sample. The extractor derives its sample period from the resolved bit
+    /// rate so each window holds roughly this many frames: too few (e.g. ~1 on
+    /// an ~8000-bit/100 Hz stream at 10 ms) yields a noisy, gap-laced series the
+    /// step detector cannot read; too many over-coarsens the plateaus.
+    inline constexpr int kFramesPerExtractWindow = 10;
+
+    /// Lower bound (seconds) on the adaptively-sized extraction sample period.
+    /// Distinct from kExtractSamplePeriodSec (the raw default): on fast frames
+    /// (e.g. 800-bit minor frames at ~1000 Hz) the "~kFramesPerExtractWindow
+    /// frames/window" sizing collapses to a few milliseconds, which over-resolves
+    /// each dwell plateau into many samples. StepDetector then sees fine
+    /// settling/noise as extra sub-plateaus and mis-pairs small steps (a 3 dB
+    /// first step gets dropped, drifting every later step). Flooring the period at
+    /// ~kStepConfirmSeconds / kFramesPerExtractWindow keeps each confirm window to
+    /// a moderate sample count, which detects cleanly across slow and fast frames.
+    inline constexpr double kMinAdaptiveExtractPeriodSec = 0.1; // 100 ms
+
+    /// Upper bound (seconds) on the adaptively-sized extraction sample period,
+    /// so that a very low frame rate can't coarsen the window past the point of
+    /// leaving enough samples per dwell plateau to confirm a step.
+    inline constexpr double kMaxExtractSamplePeriodSec = 0.2; // 200 ms
 
     /// Edge-detection threshold as a multiple of the robust (MAD-based) standard
     /// deviation of the in-plateau sample-to-sample derivative. A derivative

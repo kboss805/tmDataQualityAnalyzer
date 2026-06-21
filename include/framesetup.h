@@ -26,7 +26,7 @@ struct ParameterInfo
     double slope;      ///< Calibration slope (dB per raw count).
     double scale;      ///< Calibration offset applied before slope.
     bool is_enabled;   ///< Whether this parameter is included in output.
-    double sample_sum; ///< Running sum of scaled values for averaging.
+    double sample_sum; ///< Running sum of RAW counts in the window; calibration is applied once to the windowed average.
     CalibrationProfile profile; ///< Optional non-linear step calibration (US3.2); linear math used when invalid.
 };
 

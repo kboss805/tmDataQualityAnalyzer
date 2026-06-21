@@ -424,12 +424,15 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
                                     param->word < static_cast<int>(words_in_frame))
                                 {
                                     int64_t raw_value = static_cast<int64_t>(frame_words[param->word] & word_mask);
-                                    // Non-linear step calibration (US3.2) when a valid profile is present;
-                                    // otherwise the linear (raw + offset) * slope model.
-                                    double scaled_value = param->profile.valid
-                                        ? interpolateCalibration(static_cast<double>(raw_value), param->profile)
-                                        : (static_cast<double>(raw_value) + param->scale) * param->slope;
-                                    param->sample_sum += scaled_value;
+                                    // Accumulate RAW counts; calibration (linear or
+                                    // non-linear) is applied once to the windowed
+                                    // average in recordTimeSample(). Averaging raw
+                                    // first is required for the non-linear profile:
+                                    // the profile maps averaged-raw -> true dB, so
+                                    // mean(interpolate(raw)) would bias each plateau
+                                    // off the true step value. For linear cal the two
+                                    // orders are identical.
+                                    param->sample_sum += static_cast<double>(raw_value);
                                 }
                             }
 
@@ -559,14 +562,24 @@ void FrameProcessor::recordTimeSample(double current_time_sample,
     }
 
     // enabled_params is index-aligned to m_result.channels (built in process()).
+    // sample_sum holds the running sum of RAW counts for this window; calibration
+    // is applied here, once, to the windowed average — see the sampling loop for
+    // why averaging precedes calibration (required for non-linear profiles).
     // n_samples can be 0 for a window that produced no extracted frames (a
-    // recording gap, or an SNR window entirely out of lock); sample_sum is 0 in
-    // that case, so divide by 1 to emit 0 rather than a NaN/divide-by-zero.
-    const int divisor = (n_samples > 0) ? n_samples : 1;
+    // recording gap, or an SNR window entirely out of lock); emit 0 in that case
+    // rather than calibrating a meaningless zero average.
     for (int i = 0; i < enabled_params.size(); i++)
     {
         ParameterInfo* param = enabled_params[i];
-        m_result.channels[i].values.push_back(param->sample_sum / divisor);
+        double value = 0.0;
+        if (n_samples > 0)
+        {
+            const double mean_raw = param->sample_sum / n_samples;
+            value = param->profile.valid
+                ? interpolateCalibration(mean_raw, param->profile)
+                : (mean_raw + param->scale) * param->slope;
+        }
+        m_result.channels[i].values.push_back(value);
         param->sample_sum = 0;
     }
 }

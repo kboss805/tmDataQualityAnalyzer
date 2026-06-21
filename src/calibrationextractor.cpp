@@ -5,6 +5,8 @@
 
 #include "calibrationextractor.h"
 
+#include <algorithm>
+
 #include <QFileInfo>
 #include <QThread>
 
@@ -133,6 +135,32 @@ void CalibrationExtractor::start(const Request& request)
     {
         finishWithError(error);
         return;
+    }
+
+    // Size the extraction sample period to the resolved bit rate so each window
+    // averages ~kFramesPerExtractWindow frames. The reader has just resolved the
+    // per-bit period (from the user's data rate or TMATS) into resolvedAttrs.
+    // The fixed 10 ms default starves windows on low-frame-rate recordings
+    // (e.g. ~8000-bit frames at ~100 frames/s -> ~1 frame per 10 ms -> a sparse,
+    // zero-laced series StepDetector reads as noise), so derive it instead.
+    const double bit_period_sec = m_params.resolvedAttrs.delta100ns * 1e-7;
+    if (bit_period_sec > 0.0 && m_params.bitsInMinorFrame > 0)
+    {
+        const double frame_duration_sec =
+            static_cast<double>(m_params.bitsInMinorFrame) * bit_period_sec;
+        double period = CalibrationConstants::kFramesPerExtractWindow * frame_duration_sec;
+        // Floor at kMinAdaptiveExtractPeriodSec (not the finer raw default): on
+        // fast frames the frames/window sizing collapses to a few ms, which
+        // over-resolves plateaus and makes StepDetector mis-pair small steps.
+        period = std::clamp(period, CalibrationConstants::kMinAdaptiveExtractPeriodSec,
+                            CalibrationConstants::kMaxExtractSamplePeriodSec);
+        m_sample_period_sec      = period;
+        m_params.samplePeriodSec = period;
+        emit logMessage(QString("Calibration extraction sample period: %1 ms "
+                                "(~%2 frames/window at %3-bit frames).")
+                            .arg(period * 1000.0, 0, 'f', 1)
+                            .arg(period / frame_duration_sec, 0, 'f', 0)
+                            .arg(m_params.bitsInMinorFrame));
     }
 
     // ---- Worker ----

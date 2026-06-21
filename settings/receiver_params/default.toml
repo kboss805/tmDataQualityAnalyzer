@@ -1,9 +1,6 @@
-# This file works as BOTH a Frame Sync Information file (the [Frame] section)
-# and a Receiver Parameters file (the [Parameters] section + the [*_RCVR*] word map).
-[Frame]
-FrameSync = "FE6B2840"
-FrameSyncMask = "FFFFFFFF"
-WordsInMinorFrame = 49
+# Receiver Parameters file: the [Parameters] section + the [*_RCVR*] word map.
+# Frame sync / mask / bits-per-frame are NOT defined here — they come from
+# settings/framesync_patterns/default_rcvr.toml.
 
 [Parameters]
 Polarity = 0

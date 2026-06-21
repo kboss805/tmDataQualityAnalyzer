@@ -27,6 +27,7 @@ private slots:
     void processShortPeriodMoreSamples();
     void calibrationRoundTripOnRealFileProducesCleanSteps();
     void offPhaseSyncAfterLockLossIsNotExtracted();
+    void nonLinearCalibrationAveragesRawBeforeInterpolating();
 };
 
 #endif // TST_FRAMEPROCESSOR_H
