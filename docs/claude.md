@@ -263,6 +263,26 @@ This file provides context and guidelines for AI assistants working on the tmDat
 
 ## Version History
 
+### v2.5.0 — Cleaner Stream Names, Plot Axis Overrides, Dialog Polish
+- Stream labels carry the **bare channel name** (no `<id> - ` TMATS prefix): drives
+  the Configure Streams dialog and Frame Sync Lock plot series. Receiver SNR plot
+  series re-add the channel number (`PlotViewModel::addStreamData`) so multiple SNR
+  streams in one file stay distinguishable; `getPCMChannelList()` now returns the
+  bare name while the channel-selection combos keep `<id> - name`.
+- Plot toolbar gains **L Max / R Max** y-axis maximum override spinboxes; `yMax()`
+  keeps a user override above `yMin()` (`PlotConstants::kMinAxisSpan`) and `Reset`
+  clears both overrides.
+- Source tree reorganized into `dto/model/view/viewmodel` subfolders under
+  `include/` and `src/`; CSV parsing extracted from `PlotViewModel` into the
+  Model-layer `CsvSeriesParser`.
+- Setup-dialog cleanup: shared `buildFrameSyncRow` / `makeDialogButtons` helpers
+  remove the duplicated frame-sync and button blocks; tooltips on every field;
+  "Randomized" relabelled "Derandomize".
+- The bundled receiver frame-sync defaults file was renamed
+  `default_rcvr.toml` → `framesync_rcvr_default.toml`
+  (`UIConstants::kDefaultReceiverFrameSyncFilename`).
+- Full test suite green (212 passing).
+
 ### v2.2.5 — Receiver SNR Step Calibration Complete
 - US3.2 (Non-Linear Receiver SNR Step Calibration) is **complete and field-validated**.
 - Robust, polarity-agnostic plateau selection in `StepDetector`: the calibration
