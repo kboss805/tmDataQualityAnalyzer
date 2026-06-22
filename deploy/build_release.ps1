@@ -1,5 +1,5 @@
 # =============================================================================
-# build_release.ps1  —  Release build, sign, and package script
+# build_release.ps1  -  Release build, sign, and package script
 #
 # Builds a release binary, runs windeployqt, and produces both an Inno Setup
 # installer and a portable ZIP.
@@ -41,7 +41,7 @@ $StageDir       = "$ProjectDir\deploy\staging"
 $InstallerStage = "$StageDir\installer"
 $PortableRoot   = "$StageDir\portable\tmDataQualityAnalyzer-v${version}_portable"
 
-# Locate signtool.exe — prefer WDK x64 path, fall back to PATH
+# Locate signtool.exe - prefer WDK x64 path, fall back to PATH
 $SigntoolExe = 'signtool'
 $wdkSigntool = 'C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe'
 if (Test-Path $wdkSigntool) { $SigntoolExe = $wdkSigntool }
@@ -107,9 +107,9 @@ foreach ($dir in @('receiver_params', 'rcvr_cals', 'framesync_patterns')) {
 Write-Host "[5/8] Code signing..."
 if ($SignCertSha1) {
     & $SigntoolExe sign /sha1 $SignCertSha1 /tr $SignTimestamp /td sha256 /fd sha256 "$InstallerStage\bin\tmDataQualityAnalyzer.exe"
-    if ($LASTEXITCODE -ne 0) { Write-Warning "Code signing failed — continuing without signature" }
+    if ($LASTEXITCODE -ne 0) { Write-Warning "Code signing failed - continuing without signature" }
 } else {
-    Write-Host "  Skipping — pass -SignCertSha1 to enable signing."
+    Write-Host "  Skipping - pass -SignCertSha1 to enable signing."
 }
 
 # --- Step 5: Create portable layout ---
@@ -164,7 +164,7 @@ if ($IsccPath) {
     # gated by /DSIGN). 'signtool' is referenced by bare name: env.ps1 puts the
     # WDK signtool directory on PATH and iscc inherits that PATH when it spawns the
     # tool. A bare name has no spaces and no embedded quotes, so it survives
-    # PowerShell native-argument passing — a fully-qualified, quoted signtool path
+    # PowerShell native-argument passing - a fully-qualified, quoted signtool path
     # gets mis-split by PowerShell and makes iscc reject the command line.
     $isccArgs = @("/DMyAppVersion=$version")
     if ($SignCertSha1) {
@@ -176,7 +176,7 @@ if ($IsccPath) {
     & $IsccPath @isccArgs
     if ($LASTEXITCODE -ne 0) { Write-Warning "Inno Setup compilation or installer signing failed" }
 } else {
-    Write-Host "  Skipping — Inno Setup not found. Install from https://jrsoftware.org/isinfo.php"
+    Write-Host "  Skipping - Inno Setup not found. Install from https://jrsoftware.org/isinfo.php"
 }
 
 $InstallerExe = "$ProjectDir\deploy\tmDataQualityAnalyzer-v${version}_setup.exe"
