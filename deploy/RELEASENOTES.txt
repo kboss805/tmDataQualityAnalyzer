@@ -1,3 +1,32 @@
+tmDataQualityAnalyzer v2.2.5 - What's New
+=================================
+
+  Receiver SNR step calibration is now complete and field-validated.
+
+  - Improved: Step detection is now robust to real calibration recordings. The
+    calibrated SNR steps from every receiver channel line up correctly in time,
+    whether the receiver's raw count rises or falls with signal (normal or
+    inverted polarity). A signal-generator turn-on transient at the start of the
+    recording, and an optional operator down-ramp at the end, are automatically
+    excluded — fixing the earlier "fat/skinny" time-skew and inverted-staircase
+    behavior.
+
+  - New: Clip Start / Clip End controls in the Apply Calibration dialog. Set the
+    number of seconds to ignore at the start and/or end of the calibration
+    recording before step detection, so any leading turn-on transients or
+    trailing junk don't get mistaken for calibration steps.
+
+  - Changed: Receivers driven past the calibrated range now read the calibration
+    ceiling/floor (clamped to the nearest defined step) instead of diverging.
+    This is the intended behavior for receivers that are far out of calibration.
+
+  - Improved: The calibration extraction window now adapts to the frame rate
+    (with a 100 ms floor) so fast minor frames calibrate cleanly.
+
+  - Changed: All settings files (step-cal, receiver-parameter, and frame-sync
+    TOMLs) are now tracked and shipped with the application.
+
+
 tmDataQualityAnalyzer v2.2.0 - What's New
 =================================
 

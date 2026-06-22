@@ -11,7 +11,7 @@
 #
 # Frame sync / mask / bits-per-frame are NOT defined here — receiver-parameter
 # files carry only the word map and calibration. The frame sync defaults come
-# from settings/framesync_patterns/default_rcvr.toml.
+# from settings/framesync_patterns/framesync_rcvr_default.toml.
 
 [Parameters]
 Polarity = 1

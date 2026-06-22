@@ -62,6 +62,8 @@ public:
         int     numReceivers = 0;        ///< Sequential-grid fallback, used only when receiverParamsToml is empty.
         int     receiverChannels = 0;    ///< Sequential-grid fallback, used only when receiverParamsToml is empty.
         QVector<StepDefinition> steps;   ///< Expected steps parsed from the step-config TOML.
+        double  clipStartSec = 0.0;      ///< Seconds of the cal recording to ignore at the START before step detection (skip signal-generator turn-on transients).
+        double  clipEndSec = 0.0;        ///< Seconds of the cal recording to ignore at the END before step detection.
     };
 
     explicit CalibrationExtractor(QObject* parent = nullptr);
@@ -106,6 +108,8 @@ private:
     ProcessingParams  m_params;
     QVector<StepDefinition> m_steps;
     double            m_sample_period_sec = 0.0;
+    double            m_clip_start_sec = 0.0; ///< Cal seconds to ignore at the start before step detection.
+    double            m_clip_end_sec = 0.0;   ///< Cal seconds to ignore at the end before step detection.
     QVector<CalibrationChannelResult> m_results;
     QString           m_error;
     bool              m_cancelled = false;

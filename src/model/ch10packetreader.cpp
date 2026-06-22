@@ -8,6 +8,9 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <QElapsedTimer>
+#include <QFileInfo>
+
 #include "constants.h"
 #include "packetqueue.h"
 #include "i106_decode_pcmf1.h"
@@ -168,17 +171,7 @@ bool Ch10PacketReader::prepare(const QString& filename,
                                QString& error)
 {
     m_time_channel_id = time_channel_id;
-    m_total_file_size = 0;
-    {
-        QByteArray fn = filename.toUtf8();
-        FILE* fp = fopen(fn.constData(), "rb");
-        if (fp != nullptr)
-        {
-            fseek(fp, 0, SEEK_END);
-            m_total_file_size = static_cast<int64_t>(ftell(fp));
-            fclose(fp);
-        }
-    }
+    m_total_file_size = QFileInfo(filename).size(); // qint64, handles >2 GB correctly
 
     m_status = enI106Ch10Open(&m_file_handle, filename.toUtf8().constData(), I106_READ);
     if (m_status != I106_OK && m_status != I106_OPEN_WARNING)
@@ -326,7 +319,8 @@ void Ch10PacketReader::run()
     emit logMessage("Reading Chapter 10 file...");
 
     int  last_reported_percent = -1;
-    int  packet_count = 0;
+    QElapsedTimer progress_timer;
+    progress_timer.start();
     double prev_time_seconds = -1.0;
     int  time_gaps_detected = 0;
 
@@ -349,9 +343,9 @@ void Ch10PacketReader::run()
             break;
         }
 
-        packet_count++;
-        if (m_total_file_size > 0 && (packet_count % PCMConstants::kProgressReportInterval) == 0)
+        if (m_total_file_size > 0 && progress_timer.elapsed() >= PCMConstants::kProgressReportIntervalMs)
         {
+            progress_timer.restart();
             int64_t current_pos = 0;
             enI106Ch10GetPos(m_file_handle, &current_pos);
             int percent = static_cast<int>(current_pos * kPercent100 / m_total_file_size);

@@ -79,12 +79,47 @@ all other active streams configured in Frame Sync Lock mode.
 
 --- Receiver SNR Mode ---
 Use this mode to evaluate raw signal strength.
-- Configure the calibration slope and scale offsets specific to your receiver 
+- Configure the calibration slope and scale offsets specific to your receiver
   equipment.
+- Load a Receiver Parameters TOML to define the word map (which minor-frame words
+  map to which receiver/channel) and the linear calibration.
 
 Tip (Apply to All Streams): Similar to Frame Sync mode, check the "Apply to all
 Receiver SNR streams" box to broadcast your calibration settings to all other
 active Receiver SNR streams.
+
+Non-Linear Step Calibration (Apply Calibration):
+For receivers whose response is non-linear, or that are out of calibration, you
+can build a per-channel raw-to-dB calibration profile from a known step-cal
+recording instead of relying on the linear slope/scale alone.
+
+1. Click "Extract Calibration..." in the Receiver SNR setup dialog.
+2. Step Cal File: Load the step-config TOML that lists the expected dB step
+   levels that were injected (for example 0, 3, 6, 12, 18, 24, 30, 36 dB).
+3. Calibration Ch10: Load the .ch10 file that recorded the step-cal sweep.
+4. The application detects the step plateaus on each receiver channel and builds
+   a calibration profile for every channel that cleanly resolves the expected
+   number of steps. A summary reports which channels calibrated and which fell
+   back to the standard linear calibration. The message log lists the plateau
+   count detected per channel.
+
+   Detection is automatic and works regardless of receiver polarity (whether the
+   raw count rises or falls as signal increases). A signal-generator turn-on
+   transient at the start of the recording, and an optional operator down-ramp at
+   the end, are excluded automatically.
+
+5. Clip Start / Clip End (optional): If the start or end of your recording
+   contains extra transients that confuse detection, enter the number of seconds
+   to ignore at the start and/or end before step detection runs. Defaults are 0.
+
+Notes:
+- The calibration profile is session-only; it is not saved to disk. Re-extract it
+  if you reopen the file.
+- During processing, calibrated channels convert samples using piecewise-linear
+  interpolation between the step levels. Readings beyond the calibrated range are
+  clamped to the nearest end step (the calibration ceiling or floor), so a
+  receiver driven far out of calibration reads the limit rather than an
+  exaggerated value.
 
 ================================================================================
 5. ANALYZING DATA

@@ -1,5 +1,5 @@
 # Receiver-parameter file: word map + calibration only. Frame sync / mask /
-# bits-per-frame come from settings/framesync_patterns/default_rcvr.toml.
+# bits-per-frame come from settings/framesync_patterns/framesync_rcvr_default.toml.
 
 [Parameters]
 Polarity = 0

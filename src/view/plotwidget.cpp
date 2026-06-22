@@ -215,6 +215,8 @@ void PlotWidget::rebuildChart()
     m_x_stop_edit->setEnabled(has_data);
     m_reset_btn->setEnabled(has_data);
     m_customize_btn->setEnabled(has_data);
+    m_left_y_max_spin->setEnabled(has_data);
+    m_right_y_max_spin->setEnabled(has_data);
     m_plot->setInteractions(has_data
         ? QCP::iRangeDrag | QCP::iRangeZoom
         : QCP::Interactions());
@@ -262,20 +264,18 @@ void PlotWidget::updateAxes()
 
     m_plot->xAxis->setRange(m_view_model->xViewMin(), m_view_model->xViewMax());
 
-    // Left axis (yAxis): fixed 0-100 for Lock %, or auto-scaled to the maximum
-    // accumulated value in Missed Frames mode.
-    if (m_view_model->lockAxisView() == PlotViewModel::LockAxisView::MissedFrames)
-    {
-        const double err_max = m_view_model->missedFramesMax();
-        m_plot->yAxis->setRange(0.0, err_max * (1.0 + PlotConstants::kAxisMarginFactor));
-    }
-    else
-    {
-        m_plot->yAxis->setRange(0, 100);
-    }
+    // Left axis (yAxis): uses user override if set, else 100 for Lock % or auto for Missed Frames.
+    const double left_max = m_view_model->leftYMax();
+    m_plot->yAxis->setRange(0.0, left_max);
 
-    // Right axis (yAxis2) auto-scales to SNR data limits, or manual limits
+    // Right axis (yAxis2) auto-scales to SNR data limits, or manual/user-override limits
     m_plot->yAxis2->setRange(m_view_model->yMin(), m_view_model->yMax());
+
+    // Sync spinboxes without triggering their valueChanged -> vm override cycle
+    m_updating_from_vm = true;
+    m_left_y_max_spin->setValue(left_max);
+    m_right_y_max_spin->setValue(m_view_model->yMax());
+    m_updating_from_vm = false;
 
     m_x_start_edit->setText(m_view_model->formatTime(m_view_model->xViewMin()));
     m_x_stop_edit->setText(m_view_model->formatTime(m_view_model->xViewMax()));
@@ -643,7 +643,7 @@ void PlotWidget::setUpLayout()
     bottom_bar->setContentsMargins(0, 0, 0, 0);
     bottom_bar->setSpacing(0);
 
-    // Axis controls grid (Start/Stop + Reset), top-aligned in the bar
+    // Axis controls grid (Start/Stop + Reset + Y-max spinboxes), top-aligned in the bar
     auto* axis_grid = new QGridLayout;
     axis_grid->setContentsMargins(0, 0, 0, 0);
     axis_grid->setHorizontalSpacing(4);
@@ -665,13 +665,35 @@ void PlotWidget::setUpLayout()
     m_x_stop_edit->setEnabled(false);
     axis_grid->addWidget(m_x_stop_edit, 0, 4);
 
-
     m_reset_btn = new QPushButton("Reset");
     m_reset_btn->setFlat(true);
     m_reset_btn->setMinimumWidth(UIConstants::kFlatButtonMinWidth);
     m_reset_btn->setToolTip("Reset axes to auto range");
     m_reset_btn->setEnabled(false);
     axis_grid->addWidget(m_reset_btn, 0, 5);
+
+    // Row 1: Left and right y-axis maximum overrides
+    axis_grid->setColumnMinimumWidth(7, 8);
+
+    axis_grid->addWidget(new QLabel("L Max:"), 1, 0);
+    m_left_y_max_spin = new QDoubleSpinBox;
+    m_left_y_max_spin->setRange(1.0, 10'000'000.0);
+    m_left_y_max_spin->setDecimals(0);
+    m_left_y_max_spin->setSingleStep(5.0);
+    m_left_y_max_spin->setValue(100.0);
+    m_left_y_max_spin->setToolTip("Maximum value for the left y-axis (lock % or missed frames). Use the arrows or type a value.");
+    m_left_y_max_spin->setEnabled(false);
+    axis_grid->addWidget(m_left_y_max_spin, 1, 1);
+
+    axis_grid->addWidget(new QLabel("R Max:"), 1, 3);
+    m_right_y_max_spin = new QDoubleSpinBox;
+    m_right_y_max_spin->setRange(1.0, 10'000.0);
+    m_right_y_max_spin->setDecimals(1);
+    m_right_y_max_spin->setSingleStep(5.0);
+    m_right_y_max_spin->setValue(100.0);
+    m_right_y_max_spin->setToolTip("Maximum value for the right y-axis (SNR in dB). Use the arrows or type a value.");
+    m_right_y_max_spin->setEnabled(false);
+    axis_grid->addWidget(m_right_y_max_spin, 1, 4);
 
     QWidget* axis_widget = new QWidget;
     axis_widget->setLayout(axis_grid);
@@ -703,6 +725,17 @@ void PlotWidget::setUpConnections()
 
     connect(m_reset_btn, &QPushButton::clicked, this, &PlotWidget::onResetAxes);
     connect(m_customize_btn, &QPushButton::clicked, this, &PlotWidget::onCustomizePlotClicked);
+
+    connect(m_left_y_max_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            this, [this](double value) {
+                if (!m_updating_from_vm && m_view_model != nullptr)
+                    m_view_model->setLeftYMaxOverride(value);
+            });
+    connect(m_right_y_max_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            this, [this](double value) {
+                if (!m_updating_from_vm && m_view_model != nullptr)
+                    m_view_model->setRightYMaxOverride(value);
+            });
     connect(m_axis_view_btn, &QPushButton::clicked, this, &PlotWidget::onAxisViewToggleClicked);
     connect(m_plot, &QCustomPlot::mouseMove, this, &PlotWidget::onPlotMouseMove);
 
@@ -773,10 +806,8 @@ void PlotWidget::rebuildLegend()
         // Frameless QLineEdit — looks like a label at rest, editable on click.
         QLineEdit* name_edit = new QLineEdit(s.name);
         name_edit->setFrame(false);
-        // Right-justify the label text. When a name is wider than its box, a
-        // left-aligned edit clips the tail (where the channel number lives) out
-        // of view; right alignment keeps the channel number visible.
-        name_edit->setAlignment(Qt::AlignRight);
+        name_edit->setAlignment(Qt::AlignLeft);
+        name_edit->setCursorPosition(0);
         name_edit->setStyleSheet("QLineEdit { background: transparent; }"
                                  "QLineEdit:focus { background: palette(base); "
                                  "border: 1px solid palette(highlight); }");
@@ -818,7 +849,7 @@ void PlotWidget::rebuildLegend()
         });
 
         m_legend_grid->addWidget(swatch,    row, col * 2,     Qt::AlignVCenter | Qt::AlignRight);
-        m_legend_grid->addWidget(name_edit, row, col * 2 + 1, Qt::AlignVCenter | Qt::AlignRight);
+        m_legend_grid->addWidget(name_edit, row, col * 2 + 1, Qt::AlignVCenter | Qt::AlignLeft);
 
         ++col;
         if (col >= cols)
@@ -951,9 +982,25 @@ void PlotWidget::updateAxisViewButton()
 
     if (enabled)
     {
-        m_axis_view_btn->setText(m_view_model->lockAxisView() == PlotViewModel::LockAxisView::LockPercent
+        const bool is_lock_pct = (m_view_model->lockAxisView() == PlotViewModel::LockAxisView::LockPercent);
+        m_axis_view_btn->setText(is_lock_pct
             ? QStringLiteral("Frame lock percentage")
             : QStringLiteral("Missed frames"));
+
+        // Adjust left spinbox range and step to match the active axis mode
+        m_updating_from_vm = true;
+        if (is_lock_pct)
+        {
+            m_left_y_max_spin->setRange(1.0, 100.0);
+            m_left_y_max_spin->setSingleStep(5.0);
+        }
+        else
+        {
+            m_left_y_max_spin->setRange(1.0, 10'000'000.0);
+            m_left_y_max_spin->setSingleStep(100.0);
+        }
+        m_left_y_max_spin->setValue(m_view_model->leftYMax());
+        m_updating_from_vm = false;
     }
 }
 

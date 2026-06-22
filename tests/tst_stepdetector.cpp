@@ -101,9 +101,12 @@ void TestStepDetector::detectTooFewPlateausFails()
     QCOMPARE(r.detectedPlateaus, 2);
 }
 
-void TestStepDetector::detectExtraPlateausUsesFirstN()
+void TestStepDetector::detectExtraPlateausUsesLastOfMonotonicRun()
 {
-    // Two steps expected, three plateaus present -> first two used in time order.
+    // Two steps expected, three increasing plateaus present. Selection takes the
+    // LAST `expected` plateaus of the first maximal monotonic run (here the run
+    // is all three: 1000 < 2000 < 3000), so (2000, 3000) pair with the steps and
+    // the lowest plateau (1000) is dropped as leading pre-roll / turn-on transient.
     QVector<StepDefinition> steps = {{0.0}, {6.0}};
 
     QVector<double> raw;
@@ -115,8 +118,10 @@ void TestStepDetector::detectExtraPlateausUsesFirstN()
     QVERIFY(r.profile.valid);
     QVERIFY(r.extraPlateaus);
     QCOMPARE(r.profile.points.size(), 2);
-    QVERIFY(qFuzzyCompare(r.profile.points[0].rawAvg, 1000.0));
-    QVERIFY(qFuzzyCompare(r.profile.points[1].rawAvg, 2000.0));
+    QVERIFY(qFuzzyCompare(r.profile.points[0].rawAvg, 2000.0));
+    QCOMPARE(r.profile.points[0].trueDb, 0.0);
+    QVERIFY(qFuzzyCompare(r.profile.points[1].rawAvg, 3000.0));
+    QCOMPARE(r.profile.points[1].trueDb, 6.0);
 }
 
 void TestStepDetector::detectShortBlipDoesNotStealPairingSlot()
@@ -146,6 +151,106 @@ void TestStepDetector::detectShortBlipDoesNotStealPairingSlot()
     QCOMPARE(r.profile.points[2].trueDb, 12.0);
 }
 
+void TestStepDetector::detectLongLeadingTransientDoesNotShiftPairing()
+{
+    // Reproduces the RASA "time skew" field failure. The signal generator is
+    // switched on a few seconds into the recording, producing a confirmed
+    // leading plateau (here 1.5s, ABOVE the 1.0s confirmation window, so unlike
+    // detectShortBlipDoesNotStealPairingSlot it is NOT rejected) below the real
+    // 0 dB level. The injected sweep then climbs 0,3,6,12,18,24,30,36 and falls
+    // back down (the operator's optional down-ramp).
+    //
+    // With a naive first-N-consecutive-increasing selection the leading transient
+    // steals pairing slot 0: the real 0 dB plateau gets paired with the 3 dB step,
+    // every subsequent pairing shifts up one, and the sweep stops one step short of
+    // the 36 dB peak. Applied to the main run that off-by-one makes the channel
+    // climb at the wrong rate — the staircase visibly drifts in time against
+    // channels whose transient was too small to register. Selection instead takes
+    // the LAST `expected` plateaus of the monotonic run, which drops the leading
+    // transient (it extends the run's start) and keeps the pairing correct.
+    QVector<StepDefinition> steps = {{0.0}, {3.0}, {6.0}, {12.0},
+                                     {18.0}, {24.0}, {30.0}, {36.0}};
+
+    // Raw counts: a leading turn-on transient, the 8 injected levels climbing to
+    // the peak, then the optional down-ramp.
+    const QVector<double> up = {1000.0, 1100.0, 1300.0, 1700.0,
+                                2100.0, 2500.0, 2900.0, 3300.0};
+    QVector<double> raw;
+    appendRun(raw, 600.0, 150); // generator-off / turn-on transient (1.5s, confirmed)
+    for (double level : up)
+    {
+        appendRun(raw, level, 150);
+    }
+    // Down-ramp (a separate, opposite-direction run; excluded).
+    for (int i = up.size() - 2; i >= 0; i--)
+    {
+        appendRun(raw, up[i], 150);
+    }
+
+    StepDetector::Result r = StepDetector::detect(raw, kPeriod, steps);
+    QVERIFY(r.profile.valid);
+    QCOMPARE(r.profile.points.size(), 8);
+    // Real 0 dB level (1000), NOT the 600 transient, must pair with step 0.
+    QVERIFY2(qFuzzyCompare(r.profile.points[0].rawAvg, 1000.0),
+             qPrintable(QString("first point rawAvg=%1, expected 1000 (leading "
+                                "transient stole the slot)").arg(r.profile.points[0].rawAvg)));
+    QCOMPARE(r.profile.points[0].trueDb, 0.0);
+    // Peak (3300) must pair with the top step (36 dB), not be left off the sweep.
+    QVERIFY(qFuzzyCompare(r.profile.points[7].rawAvg, 3300.0));
+    QCOMPARE(r.profile.points[7].trueDb, 36.0);
+}
+
+void TestStepDetector::detectInvertedPolaritySweepNotReversed()
+{
+    // RASA receivers are inverted polarity: the raw count FALLS as the injected
+    // signal climbs, so the peak-signal step (36 dB) is the MINIMUM raw plateau,
+    // not the maximum. Anchoring naively on the maximum raw plateau would treat
+    // the 0 dB end as the top step and pair the whole sweep backwards, flipping
+    // the calibrated staircase (the field "0.48 dB at the peak" inversion). The
+    // monotonic-run selection is direction-agnostic: it uses the run's own
+    // direction (here decreasing), takes its last `expected` plateaus, and pairs
+    // them with the steps in time order — so step 0 stays paired with the
+    // highest-raw plateau and step 7 with the lowest, without locking onto a
+    // raw max/min extreme (which would instead latch onto the return ramp).
+    QVector<StepDefinition> steps = {{0.0}, {3.0}, {6.0}, {12.0},
+                                     {18.0}, {24.0}, {30.0}, {36.0}};
+
+    // Raw counts descend as dB ascends. Leading turn-on transient sits on the
+    // low-signal (HIGH raw) side, ahead of the sweep, then a return ramp after.
+    const QVector<double> down = {3300.0, 2900.0, 2500.0, 2100.0,
+                                  1700.0, 1300.0, 1100.0, 1000.0};
+    QVector<double> raw;
+    appendRun(raw, 3500.0, 150); // turn-on transient (highest raw = no signal)
+    for (double level : down)
+    {
+        appendRun(raw, level, 150);
+    }
+    // Return ramp back up in raw (signal falling away); a separate opposite-
+    // direction run, excluded.
+    for (int i = down.size() - 2; i >= 0; i--)
+    {
+        appendRun(raw, down[i], 150);
+    }
+
+    StepDetector::Result r = StepDetector::detect(raw, kPeriod, steps);
+    QVERIFY(r.profile.valid);
+    QCOMPARE(r.profile.points.size(), 8);
+    // Points are sorted ascending by raw. Lowest raw (1000) is the 36 dB peak,
+    // highest raw within the sweep (3300) is the 0 dB step — NOT reversed, and the
+    // 3500 transient is excluded.
+    QVERIFY2(qFuzzyCompare(r.profile.points[0].rawAvg, 1000.0),
+             qPrintable(QString("lowest-raw point rawAvg=%1, expected 1000")
+                            .arg(r.profile.points[0].rawAvg)));
+    QCOMPARE(r.profile.points[0].trueDb, 36.0);
+    QVERIFY(qFuzzyCompare(r.profile.points[7].rawAvg, 3300.0));
+    QCOMPARE(r.profile.points[7].trueDb, 0.0);
+    // The 3500 transient must not appear as a calibration point.
+    for (const CalibrationPoint& p : r.profile.points)
+    {
+        QVERIFY(p.rawAvg < 3400.0);
+    }
+}
+
 void TestStepDetector::detectNonMonotonicPairingRejected()
 {
     // Chronological plateau order (2000, 1000, 3000) paired positionally with
@@ -155,7 +260,7 @@ void TestStepDetector::detectNonMonotonicPairingRejected()
     // mirrors a real failure mode: extra/missed plateaus shift the positional
     // step pairing, producing two near-adjacent raw values pinned to
     // contradictory dB values. The profile must be rejected (not handed to
-    // interpolateCalibration with a near-vertical extrapolation slope).
+    // interpolateCalibration with a near-vertical interpolation slope).
     QVector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}};
 
     QVector<double> raw;
@@ -249,22 +354,23 @@ void TestStepDetector::interpolateMidpoint()
     QVERIFY(qFuzzyCompare(interpolateCalibration(1500.0, p), 9.0));
 }
 
-void TestStepDetector::interpolateBelowFirstExtrapolates()
+void TestStepDetector::interpolateBelowFirstClamps()
 {
     CalibrationProfile p;
     p.points = {{1000.0, 6.0}, {2000.0, 12.0}};
     p.valid = true;
-    // slope = 6 dB / 1000 counts; at raw 500 -> 6 - 3 = 3.
-    QVERIFY(qFuzzyCompare(interpolateCalibration(500.0, p), 3.0));
+    // Below the first point clamps to its dB (out of calibrated range), not
+    // extrapolated: raw 500 -> 6.0 (the first point's dB), not 3.0.
+    QVERIFY(qFuzzyCompare(interpolateCalibration(500.0, p), 6.0));
 }
 
-void TestStepDetector::interpolateAboveLastExtrapolates()
+void TestStepDetector::interpolateAboveLastClamps()
 {
     CalibrationProfile p;
     p.points = {{1000.0, 6.0}, {2000.0, 12.0}};
     p.valid = true;
-    // at raw 2500 -> 12 + 3 = 15.
-    QVERIFY(qFuzzyCompare(interpolateCalibration(2500.0, p), 15.0));
+    // Above the last point clamps to its dB: raw 2500 -> 12.0, not 15.0.
+    QVERIFY(qFuzzyCompare(interpolateCalibration(2500.0, p), 12.0));
 }
 
 void TestStepDetector::interpolateCoincidentRawNoCrash()

@@ -254,27 +254,49 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
         return 0; // change too small to be a real step transition
     };
 
+    // Find the FIRST maximal run of plateaus whose settled averages move strictly
+    // in one direction, long enough to hold the whole sweep, and take its LAST
+    // `expected` plateaus.
+    //
+    // A real cal recording is, in time order:
+    //   [signal-generator turn-on transient] [the sweep: step 0 .. step N-1]
+    //   [optional operator return ramp back down]
+    // The sweep climbs monotonically to its peak step and then reverses (the ramp)
+    // or the recording ends. The turn-on transient sits on the low-signal side
+    // just ahead of the sweep and moves in the SAME direction into step 0, so it
+    // extends the first monotonic run by one (or more) plateau at its START. Taking
+    // the run's LAST `expected` plateaus drops that leading transient while keeping
+    // the genuine sweep, and pairs them with the steps in time order below.
+    //
+    // This is direction-agnostic, which matters because receiver polarity sets the
+    // raw-count direction: a normal receiver's raw count rises with signal, an
+    // inverted / negative-slope receiver's falls. Using the run's own direction
+    // (rather than anchoring on a max/min raw extreme) avoids locking onto the
+    // return ramp, which on a full pyramid/valley recording forms an equally valid
+    // monotonic run in the opposite half.
     int run_start = -1;
-    for (int j = 0; j + expected <= plateaus.size(); j++)
+    for (int begin = 0; begin + 1 < plateaus.size() && run_start < 0; )
     {
-        const int dir = sign(plateauAvg[j + 1] - plateauAvg[j]);
+        const int dir = sign(plateauAvg[begin + 1] - plateauAvg[begin]);
         if (dir == 0)
         {
+            begin++; // sub-threshold step: not a real transition, skip
             continue;
         }
-        bool ok = true;
-        for (int i = j + 1; i < j + expected; i++)
+        int end = begin + 1;
+        while (end + 1 < plateaus.size() &&
+               sign(plateauAvg[end + 1] - plateauAvg[end]) == dir)
         {
-            if (sign(plateauAvg[i] - plateauAvg[i - 1]) != dir)
-            {
-                ok = false;
-                break;
-            }
+            end++;
         }
-        if (ok)
+        // Maximal monotonic run is plateaus[begin..end].
+        if (end - begin + 1 >= expected)
         {
-            run_start = j;
-            break;
+            run_start = end - (expected - 1); // keep the last `expected` of the run
+        }
+        else
+        {
+            begin = end; // too short; the reversal starts the next run here
         }
     }
 

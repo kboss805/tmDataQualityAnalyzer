@@ -5,6 +5,7 @@
 
 #include "chapter10reader.h"
 
+#include <QElapsedTimer>
 #include <QFileInfo>
 
 #include "constants.h"
@@ -126,8 +127,9 @@ bool Chapter10Reader::loadChannels(const QString& filename)
     qDeleteAll(m_channel_data);
     m_channel_data.clear();
 
-    int packet_count = 0;
     int last_reported_percent = -1;
+    QElapsedTimer progress_timer;
+    progress_timer.start();
 
     while (true)
     {
@@ -149,9 +151,9 @@ bool Chapter10Reader::loadChannels(const QString& filename)
             break;
         }
 
-        packet_count++;
-        if (total_file_size > 0 && (packet_count % PCMConstants::kProgressReportInterval) == 0)
+        if (total_file_size > 0 && progress_timer.elapsed() >= PCMConstants::kProgressReportIntervalMs)
         {
+            progress_timer.restart();
             int64_t current_pos = 0;
             enI106Ch10GetPos(m_file_handle, &current_pos);
             int percent = static_cast<int>(current_pos * kPercent100 / total_file_size);
@@ -263,8 +265,13 @@ QList<QPair<int, QString>> Chapter10Reader::getPCMChannelList() const
     list.reserve(m_pcm_channels.size());
     for (const auto* channel : m_pcm_channels)
     {
-        list.append({channel->channelID(),
-                     QString::number(channel->channelID()) + " - " + channel->channelName()});
+        // Bare channel name (no "<id> - " prefix): this drives the per-stream
+        // label shown in the Configure Streams dialog and the Frame Sync Lock
+        // plot series, where the TMATS channel number is just noise. The Receiver
+        // SNR plot series re-adds the channel number itself (see
+        // PlotViewModel::addStreamData) since multiple SNR streams in one file
+        // need it to stay distinguishable.
+        list.append({channel->channelID(), channel->channelName()});
     }
     return list;
 }

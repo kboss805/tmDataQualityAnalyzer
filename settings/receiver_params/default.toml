@@ -1,6 +1,6 @@
 # Receiver Parameters file: the [Parameters] section + the [*_RCVR*] word map.
 # Frame sync / mask / bits-per-frame are NOT defined here — they come from
-# settings/framesync_patterns/default_rcvr.toml.
+# settings/framesync_patterns/framesync_rcvr_default.toml.
 
 [Parameters]
 Polarity = 0

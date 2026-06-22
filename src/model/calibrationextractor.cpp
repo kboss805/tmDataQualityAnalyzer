@@ -54,6 +54,8 @@ void CalibrationExtractor::start(const Request& request)
     m_error.clear();
     m_results.clear();
     m_steps = request.steps;
+    m_clip_start_sec = qMax(0.0, request.clipStartSec);
+    m_clip_end_sec   = qMax(0.0, request.clipEndSec);
     m_sample_period_sec = CalibrationConstants::kExtractSamplePeriodSec;
 
     if (request.steps.isEmpty())
@@ -236,8 +238,23 @@ void CalibrationExtractor::onWorkerFinished(bool success)
 
             if (res.hadData)
             {
+                // Clip the user-specified leading/trailing seconds before step
+                // detection, so signal-generator turn-on transients (and any
+                // trailing junk) don't get mistaken for cal plateaus. The series
+                // is sampled every m_sample_period_sec, so seconds -> sample count.
+                const QVector<double>& full = ch.values;
+                int lo = 0;
+                int hi = full.size();
+                if (m_sample_period_sec > 0.0)
+                {
+                    lo = qBound(0, static_cast<int>(m_clip_start_sec / m_sample_period_sec), full.size());
+                    hi = full.size() - qBound(0, static_cast<int>(m_clip_end_sec / m_sample_period_sec), full.size());
+                }
+                const QVector<double> clipped =
+                    (lo < hi) ? full.mid(lo, hi - lo) : full; // ignore an over-aggressive clip
+
                 StepDetector::Result det =
-                    StepDetector::detect(ch.values, m_sample_period_sec, m_steps);
+                    StepDetector::detect(clipped, m_sample_period_sec, m_steps);
                 res.profile          = det.profile;
                 res.detectedPlateaus = det.detectedPlateaus;
                 res.extraPlateaus    = det.extraPlateaus;
@@ -245,6 +262,22 @@ void CalibrationExtractor::onWorkerFinished(bool success)
                 {
                     calibrated++;
                 }
+
+                // Surface the per-channel plateau count: a channel that detects
+                // fewer plateaus than expected steps (near-saturation receivers
+                // merge adjacent low steps, e.g. 0 dB and 3 dB) builds a profile
+                // whose raw->dB pairing is shifted. Applied to the main run that
+                // mis-mapping makes the channel climb at a different rate, which
+                // shows up as the calibrated steps no longer lining up in time.
+                emit logMessage(QString("  %1 (word %2): %3 plateau(s) detected, "
+                                        "%4 step(s) expected%5%6")
+                                    .arg(res.name)
+                                    .arg(res.word)
+                                    .arg(res.detectedPlateaus)
+                                    .arg(m_steps.size())
+                                    .arg(res.detectedPlateaus != m_steps.size()
+                                             ? " — MISMATCH" : "")
+                                    .arg(res.profile.valid ? "" : " (no profile)"));
             }
             m_results.push_back(res);
         }
@@ -253,12 +286,7 @@ void CalibrationExtractor::onWorkerFinished(bool success)
         m_running = false;
 
         const int total = m_results.size();
-        QString summary = QString("Calibrated %1 of %2 channel(s).").arg(calibrated).arg(total);
-        if (calibrated < total)
-        {
-            summary += " The remaining channels had no data or did not match the "
-                       "expected steps and will use linear calibration.";
-        }
+        const QString summary = QString("Calibrated %1 of %2 channel(s).").arg(calibrated).arg(total);
         emit finished(true, summary);
         return;
     }
@@ -356,6 +384,10 @@ void CalibrationExtractor::teardown()
 
     delete m_queue;
     m_queue = nullptr;
+    // m_params.packetQueue aliases the queue we just freed; clear it so an early
+    // prepare() failure (which runs teardown before the queue is consumed) can't
+    // leave a dangling pointer behind in m_params.
+    m_params.packetQueue = nullptr;
 }
 
 void CalibrationExtractor::finishWithError(const QString& error)

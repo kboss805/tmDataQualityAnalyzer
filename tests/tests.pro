@@ -7,6 +7,10 @@ TARGET = tmDataQualityAnalyzer_tests
 
 INCLUDEPATH += \
     $$PWD/../include \
+    $$PWD/../include/dto \
+    $$PWD/../include/model \
+    $$PWD/../include/viewmodel \
+    $$PWD/../include/view \
     $$PWD/../lib/irig106/include \
     $$PWD/../lib/qcustomplot
 
@@ -15,51 +19,54 @@ win32 {
     QMAKE_CXXFLAGS += -Wa,-mbig-obj  # Required for QCustomPlot large object file on MinGW
 }
 
-# Application sources (exclude main.cpp to avoid duplicate main)
+# Application sources (exclude main.cpp to avoid duplicate main), grouped by layer.
 SOURCES += \
-    $$PWD/../src/channeldata.cpp \
-    $$PWD/../src/chapter10reader.cpp \
-    $$PWD/../src/ch10packetreader.cpp \
-    $$PWD/../src/framesetup.cpp \
-    $$PWD/../src/mainviewmodel.cpp \
-    $$PWD/../src/processingcoordinator.cpp \
-    $$PWD/../src/mainview.cpp \
-    $$PWD/../src/streamconfigdialog.cpp \
-    $$PWD/../src/frameprocessor.cpp \
-    $$PWD/../src/stepdetector.cpp \
-    $$PWD/../src/calibrationextractor.cpp \
-    $$PWD/../src/plotviewmodel.cpp \
-    $$PWD/../src/plotwidget.cpp \
-    $$PWD/../src/plotcustomizationdialog.cpp \
-    $$PWD/../src/exportdialog.cpp \
-    $$PWD/../src/tomlconfighelper.cpp \
+    $$PWD/../src/model/channeldata.cpp \
+    $$PWD/../src/model/chapter10reader.cpp \
+    $$PWD/../src/model/ch10packetreader.cpp \
+    $$PWD/../src/model/framesetup.cpp \
+    $$PWD/../src/model/frameprocessor.cpp \
+    $$PWD/../src/model/stepdetector.cpp \
+    $$PWD/../src/model/calibrationextractor.cpp \
+    $$PWD/../src/model/csvseriesparser.cpp \
+    $$PWD/../src/model/tomlconfighelper.cpp \
+    $$PWD/../src/viewmodel/mainviewmodel.cpp \
+    $$PWD/../src/viewmodel/processingcoordinator.cpp \
+    $$PWD/../src/viewmodel/plotviewmodel.cpp \
+    $$PWD/../src/view/mainview.cpp \
+    $$PWD/../src/view/streamconfigdialog.cpp \
+    $$PWD/../src/view/plotwidget.cpp \
+    $$PWD/../src/view/plotcustomizationdialog.cpp \
+    $$PWD/../src/view/exportdialog.cpp \
     $$PWD/../lib/qcustomplot/qcustomplot.cpp
 
-# Application headers
+# Application headers, grouped by layer.
 HEADERS += \
-    $$PWD/../include/channeldata.h \
-    $$PWD/../include/chapter10reader.h \
-    $$PWD/../include/ch10packetreader.h \
-    $$PWD/../include/packetqueue.h \
     $$PWD/../include/constants.h \
-    $$PWD/../include/framesetup.h \
-    $$PWD/../include/calibrationprofile.h \
-    $$PWD/../include/stepdetector.h \
-    $$PWD/../include/calibrationextractor.h \
-    $$PWD/../include/mainviewmodel.h \
-    $$PWD/../include/processingcoordinator.h \
-    $$PWD/../include/mainview.h \
-    $$PWD/../include/streamconfig.h \
-    $$PWD/../include/streamconfigdialog.h \
-    $$PWD/../include/processedstreamdata.h \
-    $$PWD/../include/frameprocessor.h \
-    $$PWD/../include/processingparams.h \
-    $$PWD/../include/timefields.h \
-    $$PWD/../include/plotviewmodel.h \
-    $$PWD/../include/plotwidget.h \
-    $$PWD/../include/plotcustomizationdialog.h \
-    $$PWD/../include/exportdialog.h \
-    $$PWD/../include/tomlconfighelper.h \
+    $$PWD/../include/model/channeldata.h \
+    $$PWD/../include/model/chapter10reader.h \
+    $$PWD/../include/model/ch10packetreader.h \
+    $$PWD/../include/model/packetqueue.h \
+    $$PWD/../include/model/framesetup.h \
+    $$PWD/../include/model/frameprocessor.h \
+    $$PWD/../include/model/stepdetector.h \
+    $$PWD/../include/model/calibrationextractor.h \
+    $$PWD/../include/model/csvseriesparser.h \
+    $$PWD/../include/model/tomlconfighelper.h \
+    $$PWD/../include/dto/streamconfig.h \
+    $$PWD/../include/dto/processingparams.h \
+    $$PWD/../include/dto/processedstreamdata.h \
+    $$PWD/../include/dto/plotseriesdata.h \
+    $$PWD/../include/dto/calibrationprofile.h \
+    $$PWD/../include/dto/timefields.h \
+    $$PWD/../include/viewmodel/mainviewmodel.h \
+    $$PWD/../include/viewmodel/processingcoordinator.h \
+    $$PWD/../include/viewmodel/plotviewmodel.h \
+    $$PWD/../include/view/mainview.h \
+    $$PWD/../include/view/streamconfigdialog.h \
+    $$PWD/../include/view/plotwidget.h \
+    $$PWD/../include/view/plotcustomizationdialog.h \
+    $$PWD/../include/view/exportdialog.h \
     $$PWD/../lib/qcustomplot/qcustomplot.h
 
 # irig106 library sources

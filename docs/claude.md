@@ -163,15 +163,17 @@ This file provides context and guidelines for AI assistants working on the tmDat
 **So that** I can accurately groom out receiver non-linearities and plot true SNR values instead of relying on a simple linear slope/offset.
 
 **Acceptance Criteria:**
-- [ ] The user can enable non-linear step calibration for a specific Receiver SNR stream in the per-stream setup dialog (via the "Extract Calibration…" action).
-- [ ] The user can load a TOML file defining the expected step values (in dB).
-- [ ] The user can load a Calibration CH10 file containing the recorded step data.
-- [ ] The application automatically extracts "ideal" steps from the CAL file.
-- [ ] The application evaluates step extraction success independently for each receiver channel (up to 48).
-- [ ] Channels that successfully map the expected number of steps are assigned a non-linear calibration profile for the session.
-- [ ] Channels that fail step extraction (e.g., due to noise or no data) fall back to the standard linear (slope/offset) calibration.
-- [ ] A summary message box informs the user which channels succeeded and which fell back.
-- [ ] During main data processing, the application applies the non-linear profile using piece-wise linear interpolation between steps, and linear extrapolation for out-of-bounds values.
+- [x] The user can enable non-linear step calibration for a specific Receiver SNR stream in the per-stream setup dialog (via the "Extract Calibration…" action).
+- [x] The user can load a TOML file defining the expected step values (in dB).
+- [x] The user can load a Calibration CH10 file containing the recorded step data.
+- [x] The application automatically extracts "ideal" steps from the CAL file.
+- [x] The application evaluates step extraction success independently for each receiver channel (up to 48).
+- [x] Channels that successfully map the expected number of steps are assigned a non-linear calibration profile for the session.
+- [x] Channels that fail step extraction (e.g., due to noise or no data) fall back to the standard linear (slope/offset) calibration.
+- [x] A summary message box informs the user which channels succeeded and which fell back.
+- [x] During main data processing, the application applies the non-linear profile using piece-wise linear interpolation between steps, and clamps to the nearest end-step dB for out-of-range values (so receivers driven past the calibrated range read the ceiling/floor rather than diverging).
+
+  - **Status (v2.2.5): COMPLETE.** Step selection is polarity-agnostic and robust to real recordings: it takes the first maximal monotonic plateau run and keeps its last `expected` plateaus, which excludes a signal-generator turn-on transient (leading) and the optional operator down-ramp (trailing) for both normal and inverted-polarity receivers — fixing the calibrated-staircase time skew. The extraction sample period is frame-rate-adaptive (100 ms floor) for fast frames, and the Apply Cal dialog adds optional **Clip Start / Clip End** controls so operators can trim leading/trailing seconds before detection. Out-of-range raw values clamp (not extrapolate) to the nearest end-step dB.
 
 ### US4.0: Recall/store framesync pattern and frame length parameters from/to configuration files
 **As an** As a telemetry engineer or data analyst
@@ -260,6 +262,29 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - [x] Installer should not overwrite TOML files; if new fields are in the TOML file, alert the user that a new TOML file was saved as "new_x.toml" — try to use as many parameters from the old default TOML file as possible in the new TOML file
 
 ## Version History
+
+### v2.2.5 — Receiver SNR Step Calibration Complete
+- US3.2 (Non-Linear Receiver SNR Step Calibration) is **complete and field-validated**.
+- Robust, polarity-agnostic plateau selection in `StepDetector`: the calibration
+  sweep is the first maximal monotonic plateau run, of which the last `expected`
+  plateaus are kept. This excludes a leading signal-generator turn-on transient and
+  a trailing operator down-ramp, and works whether the receiver's raw count rises
+  (normal) or falls (inverted) with signal — fixing the calibrated-staircase time
+  skew and inversion seen on RASA receivers.
+- Out-of-range raw values now **clamp** to the nearest end-step dB instead of
+  extrapolating, so receivers driven past the calibrated range read the ceiling/
+  floor rather than diverging per channel (`interpolateCalibration()`).
+- Frame-rate-adaptive extraction sample period with a 100 ms floor
+  (`CalibrationConstants::kMinAdaptiveExtractPeriodSec`) so fast (e.g. 800-bit)
+  minor frames don't over-resolve plateaus.
+- Apply Cal dialog adds optional **Clip Start / Clip End** controls to trim
+  leading/trailing seconds before step detection, and logs a per-channel plateau
+  count (flagging any channel whose detected plateaus ≠ expected steps).
+- All settings files (StepCal/receiver-params/framesync TOMLs) are tracked in git
+  and shipped in the deployment package; receiver SNR framesync defaults live in
+  `settings/framesync_patterns/framesync_rcvr_default.toml`.
+- `TestStepDetector` extended with leading-transient and inverted-polarity
+  regression cases; full suite green (212 passing).
 
 ### v2.2.0 — Non-Linear Calibration, On-Plot Legend, Log Export, and Single-Source Versioning
 - Non-linear step calibration for Receiver SNR (US3.2): an "Extract Calibration…"
@@ -391,7 +416,7 @@ the plot as each stream finishes. There is **no batch / multi-file mode**.
 
 #### View
 
-1. **MainView** (`src/mainview.cpp`, `include/mainview.h`)
+1. **MainView** (`src/view/mainview.cpp`, `include/view/mainview.h`)
    - Thin GUI layer; creates and lays out all Qt widgets and the toolbar/menus
    - Binds to MainViewModel Q_PROPERTYs and connects signals/slots; contains no business logic
    - `logError()` / `logWarning()` / `logSuccess()` append colored HTML entries (red / #DAA520 / green) to the log window
@@ -402,40 +427,40 @@ the plot as each stream finishes. There is **no batch / multi-file mode**.
    - Cancel toolbar button visible only during processing
    - Log window in a bottom QDockWidget; plot in a right QDockWidget (PlotWidget); View menu toggles each
 
-2. **StreamConfigDialog** (`src/streamconfigdialog.cpp`, `include/streamconfigdialog.h`)
+2. **StreamConfigDialog** (`src/view/streamconfigdialog.cpp`, `include/view/streamconfigdialog.h`)
    - Modal "Configure Streams" dialog listing one row per PCM channel in the file
    - Five columns: Process, Channel, Mode, Configure (gear), Ready (status icon); a Time Channel combo at top
    - The gear opens a per-stream sub-dialog — Frame Sync Lock setup or Receiver SNR setup — keyed to the row's Mode
    - Sub-dialogs Load/Save frame-sync and receiver-parameter TOML files (US4.0/US3.0) and host the "Extract Calibration…" action (US3.2) and the "Apply to all <mode> streams" fan-out (US2.5)
    - Returns the configured `QVector<StreamConfig>` via `configs()` and the time channel via `timeChannelIndex()`
 
-3. **PlotCustomizationDialog** (`src/plotcustomizationdialog.cpp`, `include/plotcustomizationdialog.h`)
+3. **PlotCustomizationDialog** (`src/view/plotcustomizationdialog.cpp`, `include/view/plotcustomizationdialog.h`)
    - "Customize Plot Series" dialog: a Frame Sync Lock tab (one toggle per stream) and a Receiver SNR tab (collapsible per-stream receiver/channel tree with tri-state group toggles and Expand/Collapse All)
 
-4. **ExportDialog** (`src/exportdialog.cpp`, `include/exportdialog.h`)
+4. **ExportDialog** (`src/view/exportdialog.cpp`, `include/view/exportdialog.h`)
    - Unified export dialog: any combination of CSV data, a plot image (PNG/SVG/PDF), and the log text, each with its own filename/location; checkbox-to-field enable logic and export-button validation
 
-5. **PlotWidget** (`src/plotwidget.cpp`, `include/plotwidget.h`)
+5. **PlotWidget** (`src/view/plotwidget.cpp`, `include/view/plotwidget.h`)
    - Self-contained QCustomPlot chart with title field, axis-control spinboxes, and the on-plot legend panel
    - Mouse wheel zoom and click-drag pan; `onSeriesVisibilityToggled()` toggles a graph without a full rebuild
    - All replots use `rpQueuedReplot`; controls disabled until data loads; `applyTheme(bool dark)` syncs colors with the app theme
 
 #### ViewModel
 
-6. **MainViewModel** (`src/mainviewmodel.cpp`, `include/mainviewmodel.h`)
+6. **MainViewModel** (`src/viewmodel/mainviewmodel.cpp`, `include/viewmodel/mainviewmodel.h`)
    - Owns application state, validation, and the per-stream `StreamConfig` captured by StreamConfigDialog
    - Exposes Q_PROPERTYs (`inputFilename`, channel lists/indices, `fileLoaded`, `progressPercent`, `processing`) for the View to bind to
    - `openFile()` loads metadata via Chapter10Reader and logs channel/time/frame info
    - Builds a list of `StreamJob` objects (validated `ProcessingParams` + an owned `FrameSetup`) and hands them to ProcessingCoordinator
    - Receives each `ProcessedStreamData` and forwards it to PlotViewModel; manages recent files
 
-7. **ProcessingCoordinator** (`src/processingcoordinator.cpp`, `include/processingcoordinator.h`)
+7. **ProcessingCoordinator** (`src/viewmodel/processingcoordinator.cpp`, `include/viewmodel/processingcoordinator.h`)
    - Owns the reader + worker thread lifecycle for multi-stream processing
    - `startProcessing(QVector<StreamJob>)` takes ownership of each job's FrameSetup, spins up one `Ch10PacketReader` thread plus one `FrameProcessor` worker thread (and a `PacketQueue`) per stream
    - `cancelProcessing()` requests a cooperative abort of all workers and the reader; `reset()` clears transient state
    - Emits `progressChanged(int)`, `processingStateChanged(bool)`, `streamProcessed(ProcessedStreamData)`, `processingFinished(bool)`, `logMessageReceived(QString)`, `errorOccurred(QString)`
 
-8. **PlotViewModel** (`src/plotviewmodel.cpp`, `include/plotviewmodel.h`)
+8. **PlotViewModel** (`src/viewmodel/plotviewmodel.cpp`, `include/viewmodel/plotviewmodel.h`)
    - Converts each `ProcessedStreamData` into in-memory `PlotSeriesData` vectors (name, receiver/channel indices, x/y values, cached Y min/max, color)
    - Converts absolute IRIG seconds to elapsed seconds; assigns the purple/blue/green (lock) and red/orange/yellow (SNR) palette
    - Manages axis ranges (auto Y with margin, manual Y override, X time window), the left-axis view toggle (lock % vs accumulated missed frames), and per-series visibility
@@ -443,30 +468,32 @@ the plot as each stream finishes. There is **no batch / multi-file mode**.
 
 #### Model
 
-9. **Chapter10Reader** (`src/chapter10reader.cpp`, `include/chapter10reader.h`)
+9. **Chapter10Reader** (`src/model/chapter10reader.cpp`, `include/model/chapter10reader.h`)
    - Reads Ch10 file **metadata** up front: scans TMATS to catalog time and PCM channels, provides channel lists, time accessors, and channel ID resolution. Wraps the irig106utils C library.
 
-10. **Ch10PacketReader** (`src/ch10packetreader.cpp`, `include/ch10packetreader.h`)
+10. **Ch10PacketReader** (`src/model/ch10packetreader.cpp`, `include/model/ch10packetreader.h`)
     - The single-pass reader. `prepare()` opens the file, parses TMATS, resolves each stream's PCM attributes, and builds the channel-ID → `PacketQueue` routing; `run()` (on its own QThread) reads the file once, tracks IRIG time, and dispatches each PCM packet's payload to the matching queues, then posts end-of-stream sentinels
     - Owns the `SuChanInfo` per-channel bookkeeping table
 
-11. **PacketQueue** (`include/packetqueue.h`) — bounded, thread-safe per-stream packet queue connecting the reader to one worker (header-only)
+11. **PacketQueue** (`include/model/packetqueue.h`) — bounded, thread-safe per-stream packet queue connecting the reader to one worker (header-only)
 
-12. **FrameProcessor** (`src/frameprocessor.cpp`, `include/frameprocessor.h`)
+12. **FrameProcessor** (`src/model/frameprocessor.cpp`, `include/model/frameprocessor.h`)
     - Per-stream worker: drains its PacketQueue, runs the bit-serial frame-sync scanner (acquire/lock, off-phase rejection, bit-span lock %), accumulates lock %, missed frames, and (SNR mode) calibrated channel values into a `ProcessedStreamData`
     - Private helpers include `derandomizeBitstream()` and `hasSyncPattern()`; applies linear slope/offset or a non-linear `CalibrationProfile` per channel
 
-13. **FrameSetup** (`src/framesetup.cpp`, `include/framesetup.h`) — frame configuration / word-map + calibration table built per job
+13. **FrameSetup** (`src/model/framesetup.cpp`, `include/model/framesetup.h`) — frame configuration / word-map + calibration table built per job
 
-14. **ChannelData** (`src/channeldata.cpp`, `include/channeldata.h`) — channel metadata value object
+14. **ChannelData** (`src/model/channeldata.cpp`, `include/model/channeldata.h`) — channel metadata value object
 
-15. **StepDetector** (`src/stepdetector.cpp`, `include/stepdetector.h`) — *US3.2*; pure (UI-free) logic that parses the `[[Step]]` step-config TOML and detects step plateaus in a raw-count series via derivative/edge detection, building a per-channel `CalibrationProfile`
+15. **StepDetector** (`src/model/stepdetector.cpp`, `include/model/stepdetector.h`) — *US3.2*; pure (UI-free) logic that parses the `[[Step]]` step-config TOML and detects step plateaus in a raw-count series via derivative/edge detection, building a per-channel `CalibrationProfile`
 
-16. **CalibrationExtractor** (`src/calibrationextractor.cpp`, `include/calibrationextractor.h`) — *US3.2*; drives a raw extraction over a calibration Ch10 file (reusing the Ch10PacketReader + FrameProcessor pipeline with unit slope / zero offset) and runs StepDetector per channel to build session-only profiles
+16. **CalibrationExtractor** (`src/model/calibrationextractor.cpp`, `include/model/calibrationextractor.h`) — *US3.2*; drives a raw extraction over a calibration Ch10 file (reusing the Ch10PacketReader + FrameProcessor pipeline with unit slope / zero offset) and runs StepDetector per channel to build session-only profiles
 
-17. **TomlConfigHelper** (`src/tomlconfighelper.cpp`, `include/tomlconfighelper.h`) — registers a custom QSettings TOML format and provides the frame-sync / receiver-parameter load/save helpers
+17. **TomlConfigHelper** (`src/model/tomlconfighelper.cpp`, `include/model/tomlconfighelper.h`) — registers a custom QSettings TOML format and provides the frame-sync / receiver-parameter load/save helpers
 
-18. **IRIG 106 Library** (`lib/irig106/`) — third-party C library for the Chapter 10 file format (see Protected Files)
+18. **CsvSeriesParser** (`src/model/csvseriesparser.cpp`, `include/model/csvseriesparser.h`) — pure (UI-free) static parser that turns a FrameProcessor `Day,Time,param…` CSV into `PlotSeriesData` (returned as a `CsvParseResult`). Extracted out of PlotViewModel so file parsing lives in the Model layer; thread-safe, so PlotViewModel runs `parse()` on a worker thread via `loadCsvFileAsync()`
+
+19. **IRIG 106 Library** (`lib/irig106/`) — third-party C library for the Chapter 10 file format (see Protected Files)
 
 ### Constants and Data Structures
 
@@ -475,14 +502,15 @@ the plot as each stream finishes. There is **no batch / multi-file mode**.
 - **`UIConstants`** namespace (`include/constants.h`) — UI configuration (QSettings keys, theme identifiers, legend grid layout, sample-period/polarity/slope defaults, time validation limits, deployment/portable constants)
 - **`PlotConstants`** namespace (`include/constants.h`) — plot dock dimensions, axis margin factor, default title, axis labels (`kSnrAxisLabel`, `kMissedFramesAxisLabel`), zoom factor, color palette
 - **`CalibrationConstants`** namespace (`include/constants.h`) — non-linear calibration tuning (e.g. `kStepConfirmSeconds`)
-- **`StreamConfig`** struct + **`StreamMode`** enum (`include/streamconfig.h`) — per-stream configuration captured by StreamConfigDialog (frame params, SNR calibration fields, optional `calibrationByWord` profiles)
-- **`StreamJob`** struct (`include/processingcoordinator.h`) — one unit of work: a `ProcessingParams` plus an owned `FrameSetup`
-- **`ProcessingParams`** struct (`include/processingparams.h`) — all inputs for processing one stream (filename, channel IDs, frame sync, time range, sample period, calibration, randomization)
-- **`ProcessedStreamData`** + **`ProcessedChannelSeries`** structs (`include/processedstreamdata.h`) — in-memory per-stream result (parallel `timesSec` / `lockPercent` / `accumulatedMissedFrames` vectors plus SNR channel series)
-- **`PlotSeriesData`** struct (`include/plotviewmodel.h`) — per-series plot data (name, receiver/channel indices, x/y vectors, visibility, color, cached Y min/max)
-- **`CalibrationProfile`**, **`StepDefinition`**, **`CalibrationPoint`** (`include/calibrationprofile.h`) — non-linear step-calibration data types (session-only); `interpolateCalibration()` does the piecewise-linear lookup
-- **`TimeFields`** struct (`include/timefields.h`) — groups DOY/HMS fields for start/stop times
-- **`SuChanInfo`** typedef (`include/ch10packetreader.h`) — per-channel bookkeeping for the irig106 C helper layer
+- **`StreamConfig`** struct + **`StreamMode`** enum (`include/dto/streamconfig.h`) — per-stream configuration captured by StreamConfigDialog (frame params, SNR calibration fields, optional `calibrationByWord` profiles)
+- **`StreamJob`** struct (`include/viewmodel/processingcoordinator.h`) — one unit of work: a `ProcessingParams` plus an owned `FrameSetup`
+- **`ProcessingParams`** struct (`include/dto/processingparams.h`) — all inputs for processing one stream (filename, channel IDs, frame sync, time range, sample period, calibration, randomization)
+- **`ProcessedStreamData`** + **`ProcessedChannelSeries`** structs (`include/dto/processedstreamdata.h`) — in-memory per-stream result (parallel `timesSec` / `lockPercent` / `accumulatedMissedFrames` vectors plus SNR channel series)
+- **`PlotSeriesData`** struct (`include/dto/plotseriesdata.h`) — per-series plot data (name, receiver/channel indices, x/y vectors, visibility, color, cached Y min/max)
+- **`CsvParseResult`** struct (`include/model/csvseriesparser.h`) — output of `CsvSeriesParser::parse()`: success flag, parsed `PlotSeriesData` vector, base day/time offset, and xMax; carried across the worker-thread boundary by PlotViewModel's `QFutureWatcher`
+- **`CalibrationProfile`**, **`StepDefinition`**, **`CalibrationPoint`** (`include/dto/calibrationprofile.h`) — non-linear step-calibration data types (session-only); `interpolateCalibration()` does the piecewise-linear lookup
+- **`TimeFields`** struct (`include/dto/timefields.h`) — groups DOY/HMS fields for start/stop times
+- **`SuChanInfo`** typedef (`include/model/ch10packetreader.h`) — per-channel bookkeeping for the irig106 C helper layer
 
 ### Data Flow
 
@@ -651,7 +679,7 @@ Tasks are defined in `.vscode/tasks.json`:
 3. Rebuild: `mingw32-make -f Makefile.Debug`
 
 ### Adding a New Per-Stream Setting
-1. Add the field to the `StreamConfig` struct in `include/streamconfig.h` (with a default in `constants.h` if appropriate)
+1. Add the field to the `StreamConfig` struct in `include/dto/streamconfig.h` (with a default in `constants.h` if appropriate)
 2. Surface it in the relevant gear sub-dialog in `StreamConfigDialog` (Frame Sync Lock or Receiver SNR setup), and include it in the "Apply to all" fan-out if it should propagate
 3. If it must round-trip to a TOML file, add it to the matching `TomlConfigHelper` load/save helper (respecting the US3.0/US5.0 boundaries)
 4. Carry it into `ProcessingParams` (and `FrameSetup` if it affects the word map) where `MainViewModel` builds each `StreamJob`
@@ -691,7 +719,7 @@ source/header files are listed in `tests/tests.pro`.
 - **TestPlotWidget** (`tst_plotwidget`) — Plot widget construction, control enable/disable on data load, theme application, legend rebuild
 - **TestStreamConfigDialog** (`tst_streamconfigdialog`) — Per-stream Configure Streams dialog: stream rows, mode selection, gear setup dialogs, TOML load/save round-trips, "Apply to all" fan-out
 - **TestExportDialog** (`tst_exportdialog`) — Export dialog checkbox-to-field enable logic, export-button validation, and the log-export row defaults/accessors and log-only validation
-- **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US3.2): `[[Step]]` TOML parsing (valid / empty-fails), plateau detection (clean, too-few-fails, extra-plateaus-uses-first-N, short-blip doesn't steal a pairing slot, non-monotonic pairing rejected, noisy, settling-at-plateau-start excluded, round-trip exact), and `interpolateCalibration()` (midpoint, below/above extrapolation, coincident-raw guard)
+- **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US3.2): `[[Step]]` TOML parsing (valid / empty-fails), plateau detection (clean, too-few-fails, extra-plateaus uses last of monotonic run, short-blip doesn't steal a pairing slot, long leading transient doesn't shift pairing, inverted-polarity sweep not reversed, non-monotonic pairing rejected, noisy, settling-at-plateau-start excluded, round-trip exact), and `interpolateCalibration()` (midpoint, below/above clamping, coincident-raw guard)
 
 > **Coverage note:** `PlotCustomizationDialog` (Customize Plot Series) and `CalibrationExtractor` currently have no dedicated test suite. `StepDetector` covers the pure calibration logic, but the extractor's pipeline orchestration is exercised only manually.
 

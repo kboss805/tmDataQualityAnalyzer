@@ -60,8 +60,11 @@ struct CalibrationProfile
  * @brief Converts a raw count to dB using piecewise-linear interpolation.
  *
  * Between calibration points the value is linearly interpolated. Below the
- * first / above the last point the value is extrapolated along the slope of the
- * nearest two points (so the response does not flatline at the extremes).
+ * first / above the last point the value is CLAMPED to that endpoint's dB
+ * (it does not extrapolate). A receiver driven outside its calibrated range
+ * (e.g. badly out of calibration) would otherwise extrapolate to wildly
+ * divergent values that differ per channel; clamping pegs it at the nearest
+ * calibrated limit so an out-of-range reading is obvious and bounded.
  *
  * @pre @p profile.points is sorted ascending by rawAvg and contains >= 2 points
  *      (guaranteed when profile.valid is true).
@@ -91,11 +94,11 @@ inline double interpolateCalibration(double raw, const CalibrationProfile& profi
 
     if (raw <= pts[0].rawAvg)
     {
-        return segmentValue(0, 1, raw);                 // extrapolate below
+        return pts[0].trueDb;                            // clamp below (out of cal range)
     }
     if (raw >= pts[n - 1].rawAvg)
     {
-        return segmentValue(n - 2, n - 1, raw);         // extrapolate above
+        return pts[n - 1].trueDb;                        // clamp above (out of cal range)
     }
     for (int i = 1; i < n; i++)
     {

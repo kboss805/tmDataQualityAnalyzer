@@ -110,7 +110,7 @@ void TestConstants::pcmDefaultBufferSize()
 
 void TestConstants::pcmProgressReportInterval()
 {
-    QCOMPARE(PCMConstants::kProgressReportInterval, 100);
+    QCOMPARE(PCMConstants::kProgressReportIntervalMs, 100);
 }
 
 void TestConstants::uiQSettingsKeys()

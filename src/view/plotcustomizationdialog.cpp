@@ -123,9 +123,13 @@ void PlotCustomizationDialog::populateData()
     QMap<int, QVector<int>> lockStreams;
     // streamOrder -> receiverIndex -> list of series indices (SNR tab)
     QMap<int, QMap<int, QVector<int>>> snrStreams;
+    // streamOrder -> human-readable stream label for display
+    QMap<int, QString> streamLabels;
 
     for (int i = 0; i < series.size(); ++i) {
         const auto& s = series.at(i);
+        if (!streamLabels.contains(s.streamOrder))
+            streamLabels.insert(s.streamOrder, s.streamLabel);
         if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock ||
             s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames) {
             lockStreams[s.streamOrder].append(i);
@@ -137,6 +141,8 @@ void PlotCustomizationDialog::populateData()
     // Populate Lock Tab
     for (auto it = lockStreams.begin(); it != lockStreams.end(); ++it) {
         int streamOrder = it.key();
+        const QString label = QString("CH %1 — %2").arg(streamOrder)
+                                                    .arg(streamLabels.value(streamOrder));
 
         // Find if any series in this group is currently visible
         bool anyVisible = false;
@@ -147,7 +153,7 @@ void PlotCustomizationDialog::populateData()
             }
         }
 
-        auto* cb = new QCheckBox(QString("Stream %1").arg(streamOrder), m_lockTab);
+        auto* cb = new QCheckBox(label, m_lockTab);
         cb->setChecked(anyVisible);
         m_lockListLayout->addWidget(cb);
 
@@ -189,7 +195,9 @@ void PlotCustomizationDialog::populateData()
 
         // Adding the first item triggers currentIndexChanged(0), which calls
         // onSnrStreamSelected(0) — by then this stream's container is already registered.
-        m_snrStreamCombo->addItem(QString("Stream %1").arg(streamOrder), streamOrder);
+        const QString comboLabel = QString("CH %1 — %2").arg(streamOrder)
+                                                         .arg(streamLabels.value(streamOrder));
+        m_snrStreamCombo->addItem(comboLabel, streamOrder);
     }
 
     if (m_snrStreamCombo->count() == 0) {

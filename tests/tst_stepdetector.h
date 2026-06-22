@@ -15,17 +15,19 @@ private slots:
     // Plateau detection
     void detectCleanSteps();
     void detectTooFewPlateausFails();
-    void detectExtraPlateausUsesFirstN();
+    void detectExtraPlateausUsesLastOfMonotonicRun();
     void detectShortBlipDoesNotStealPairingSlot();
+    void detectLongLeadingTransientDoesNotShiftPairing();
+    void detectInvertedPolaritySweepNotReversed();
     void detectNonMonotonicPairingRejected();
     void detectNoisyStepsStillDetected();
     void detectSettlingAtPlateauStartExcluded();
     void roundTripSameDataIsExact();
 
-    // Interpolation / extrapolation
+    // Interpolation / out-of-range clamping
     void interpolateMidpoint();
-    void interpolateBelowFirstExtrapolates();
-    void interpolateAboveLastExtrapolates();
+    void interpolateBelowFirstClamps();
+    void interpolateAboveLastClamps();
     void interpolateCoincidentRawNoCrash();
 };
 

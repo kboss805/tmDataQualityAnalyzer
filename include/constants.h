@@ -47,8 +47,8 @@ namespace PCMConstants {
     /// Maximum allowed packet buffer size to guard against malformed file headers (100 MB).
     inline constexpr qsizetype kMaxPacketBufferSize = 100 * 1024 * 1024;
 
-    /// Number of packets between progress position queries.
-    inline constexpr int kProgressReportInterval = 100;
+    /// Minimum milliseconds between progress position queries (time-based throttle).
+    inline constexpr int kProgressReportIntervalMs = 100;
 
     /// @name Channel type identifiers from TMATS records
     /// @{
@@ -168,7 +168,7 @@ namespace UIConstants {
     /// Frame sync pattern file the app loads as the default for Receiver SNR
     /// streams (under kFramesyncPatternsDirName), so the receiver frame sync,
     /// mask, and bits-per-frame are user-editable rather than hard-coded.
-    inline constexpr const char* kDefaultReceiverFrameSyncFilename = "default_rcvr.toml";
+    inline constexpr const char* kDefaultReceiverFrameSyncFilename = "framesync_rcvr_default.toml";
     /// @}
 }
 
@@ -234,6 +234,7 @@ namespace PlotConstants {
     inline constexpr int kPlotDockMinWidth   = 1024;   ///< Minimum plot dock width in pixels.
     inline constexpr int kPlotDockMinHeight  = 768;   ///< Minimum plot dock height in pixels.
     inline constexpr double kAxisMarginFactor = 0.05; ///< Y-axis padding as fraction of data range.
+    inline constexpr double kMinAxisSpan      = 1.0;  ///< Minimum span enforced so a user max override can't invert/collapse an axis.
     inline constexpr const char* kXAxisLabel        = "Elapsed Time (DDD:HH:MM:SS)"; ///< X axis label.
     inline constexpr const char* kYAxisLabel        = "Framesync Lock (%)"; ///< Left Y axis label (lock-% mode).
     inline constexpr const char* kMissedFramesAxisLabel = "Accumulated Missed Frames"; ///< Left Y axis label (missed frames mode).

@@ -146,6 +146,8 @@ private:
     QLineEdit* m_x_start_edit = nullptr;
     QLineEdit* m_x_stop_edit = nullptr;
     QPushButton* m_reset_btn = nullptr;
+    QDoubleSpinBox* m_left_y_max_spin = nullptr;  ///< User-adjustable max for the left (lock/missed-frames) axis.
+    QDoubleSpinBox* m_right_y_max_spin = nullptr; ///< User-adjustable max for the right (SNR) axis.
     /// @}
 
     /// @name Graph tracking

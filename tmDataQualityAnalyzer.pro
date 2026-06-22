@@ -37,8 +37,14 @@ RC_INCLUDEPATH += $$OUT_PWD
 # -----------------------------------------------------------------------------
 
 
+# include/ subfolders are all on the path so existing flat #include "foo.h"
+# directives keep resolving after the by-layer reorganization.
 INCLUDEPATH += \
     $$PWD/include/ \
+    $$PWD/include/dto/ \
+    $$PWD/include/model/ \
+    $$PWD/include/viewmodel/ \
+    $$PWD/include/view/ \
     $$PWD/lib/irig106/include/ \
     $$PWD/lib/qcustomplot/
 
@@ -51,24 +57,37 @@ win32 {
     QMAKE_CXXFLAGS += -Wa,-mbig-obj  # Required for QCustomPlot large object file on MinGW
 }
 
+# Application sources, grouped by MVVM layer.
+SOURCES += src/main.cpp
+
+# Model: data ingestion, processing pipeline, domain logic
 SOURCES += \
-    src/channeldata.cpp \
-    src/chapter10reader.cpp \
-    src/ch10packetreader.cpp \
-    src/framesetup.cpp \
-    src/main.cpp \
-    src/mainviewmodel.cpp \
-    src/processingcoordinator.cpp \
-    src/mainview.cpp \
-    src/streamconfigdialog.cpp \
-    src/exportdialog.cpp \
-    src/frameprocessor.cpp \
-    src/stepdetector.cpp \
-    src/calibrationextractor.cpp \
-    src/plotviewmodel.cpp \
-    src/plotcustomizationdialog.cpp \
-    src/plotwidget.cpp \
-    src/tomlconfighelper.cpp \
+    src/model/channeldata.cpp \
+    src/model/chapter10reader.cpp \
+    src/model/ch10packetreader.cpp \
+    src/model/framesetup.cpp \
+    src/model/frameprocessor.cpp \
+    src/model/stepdetector.cpp \
+    src/model/calibrationextractor.cpp \
+    src/model/csvseriesparser.cpp \
+    src/model/tomlconfighelper.cpp
+
+# ViewModel: presentation state + processing orchestration
+SOURCES += \
+    src/viewmodel/mainviewmodel.cpp \
+    src/viewmodel/processingcoordinator.cpp \
+    src/viewmodel/plotviewmodel.cpp
+
+# View: widgets and dialogs
+SOURCES += \
+    src/view/mainview.cpp \
+    src/view/streamconfigdialog.cpp \
+    src/view/exportdialog.cpp \
+    src/view/plotcustomizationdialog.cpp \
+    src/view/plotwidget.cpp
+
+# Third-party libraries
+SOURCES += \
     lib/irig106/src/irig106ch10.c \
     lib/irig106/src/i106_time.c \
     lib/irig106/src/i106_data_stream.c \
@@ -84,30 +103,49 @@ SOURCES += \
     lib/irig106/src/i106_decode_pcmf1.c \
     lib/qcustomplot/qcustomplot.cpp
 
+# Application headers, grouped by MVVM layer.
+# Shared / cross-cutting
 HEADERS += \
-    include/channeldata.h \
-    include/chapter10reader.h \
-    include/ch10packetreader.h \
-    include/constants.h \
-    include/framesetup.h \
-    include/calibrationprofile.h \
-    include/stepdetector.h \
-    include/calibrationextractor.h \
-    include/packetqueue.h \
-    include/mainviewmodel.h \
-    include/processingcoordinator.h \
-    include/mainview.h \
-    include/streamconfig.h \
-    include/streamconfigdialog.h \
-    include/processedstreamdata.h \
-    include/frameprocessor.h \
-    include/processingparams.h \
-    include/timefields.h \
-    include/exportdialog.h \
-    include/plotviewmodel.h \
-    include/plotcustomizationdialog.h \
-    include/plotwidget.h \
-    include/tomlconfighelper.h \
+    include/constants.h
+
+# Model: data ingestion, processing pipeline, domain logic
+HEADERS += \
+    include/model/channeldata.h \
+    include/model/chapter10reader.h \
+    include/model/ch10packetreader.h \
+    include/model/packetqueue.h \
+    include/model/framesetup.h \
+    include/model/frameprocessor.h \
+    include/model/stepdetector.h \
+    include/model/calibrationextractor.h \
+    include/model/csvseriesparser.h \
+    include/model/tomlconfighelper.h
+
+# DTOs: plain data carried across layers
+HEADERS += \
+    include/dto/streamconfig.h \
+    include/dto/processingparams.h \
+    include/dto/processedstreamdata.h \
+    include/dto/plotseriesdata.h \
+    include/dto/calibrationprofile.h \
+    include/dto/timefields.h
+
+# ViewModel: presentation state + processing orchestration
+HEADERS += \
+    include/viewmodel/mainviewmodel.h \
+    include/viewmodel/processingcoordinator.h \
+    include/viewmodel/plotviewmodel.h
+
+# View: widgets and dialogs
+HEADERS += \
+    include/view/mainview.h \
+    include/view/streamconfigdialog.h \
+    include/view/exportdialog.h \
+    include/view/plotcustomizationdialog.h \
+    include/view/plotwidget.h
+
+# Third-party libraries
+HEADERS += \
     lib/irig106/include/irig106ch10.h \
     lib/irig106/include/i106_data_stream.h \
     lib/irig106/include/i106_decode_time.h \

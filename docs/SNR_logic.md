@@ -213,8 +213,13 @@ Each channel is evaluated independently; success on one says nothing about anoth
 Given `mean_raw` and a valid profile (≥ 2 points, sorted ascending by `rawAvg`):
 
 - **Within range** — piecewise-linear interpolation between the two bracketing points.
-- **Below the first / above the last point** — linear *extrapolation* along the slope
-  of the nearest two points, so the response does not flatline at the extremes.
+- **Below the first / above the last point** — *clamped* to that endpoint's dB (the
+  response flatlines at the calibrated limits, it does NOT extrapolate). A receiver
+  driven outside its calibrated range — e.g. badly out of calibration, where the raw
+  AGC count runs past the last step — would otherwise extrapolate to wildly divergent
+  values that differ per channel and spread the plotted plateaus apart. Clamping pegs
+  such readings at the nearest calibrated limit (0 dB or the top step) so an
+  out-of-range value is bounded and obvious.
 - **Coincident raw values** (`dr == 0`) — return the lower point's dB rather than
   divide by zero.
 

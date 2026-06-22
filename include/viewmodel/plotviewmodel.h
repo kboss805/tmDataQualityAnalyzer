@@ -1,12 +1,10 @@
 /**
  * @file plotviewmodel.h
- * @brief ViewModel for the AGC signal plot — CSV parsing, series data, axis state.
+ * @brief ViewModel for the AGC signal plot — series state, axis ranges, colors.
  */
 
 #ifndef PLOTVIEWMODEL_H
 #define PLOTVIEWMODEL_H
-
-#include <limits>
 
 #include <QColor>
 #include <QFutureWatcher>
@@ -14,57 +12,16 @@
 #include <QString>
 #include <QVector>
 
+#include "csvseriesparser.h"
+#include "plotseriesdata.h"
 #include "processedstreamdata.h"
-
-/**
- * @brief Data for a single plot series (one receiver channel or lock statistic).
- *
- * Built by PlotViewModel::loadCsvFile() from the CSV output.
- */
-struct PlotSeriesData
-{
-    /// Distinguishes SNR series (right axis) from the left-axis frame-sync metrics.
-    /// FrameSyncLock and AccumulatedMissedFrames share the left axis and are shown one at a
-    /// time per the active LockAxisView.
-    enum class MetricType { SNR, FrameSyncLock, AccumulatedMissedFrames };
-
-    QString name;             ///< Column header, e.g., "L_RCVR1" or "Framesync Lock (%)".
-    QString streamLabel;      ///< Source stream's label (ProcessedStreamData::streamLabel); identifies
-                               ///< which logical stream this series belongs to, so reprocessing that
-                               ///< same stream replaces its prior series instead of stacking a duplicate.
-    int receiverIndex = 0;    ///< 1-based receiver number from "_RCVR<N>" suffix; 0 for lock series.
-    int channelIndex  = 0;    ///< 0-based within receiver, for color shade.
-    int streamOrder    = 0;   ///< Source PCM channel ID, for ordering series within a legend group.
-    int streamSequence = 0;   ///< 0-based job index; used to sort legend entries in submission order regardless of parallel completion order.
-    MetricType metricType = MetricType::SNR; ///< Which axis this series belongs to.
-    QVector<double> xValues;  ///< Elapsed seconds from first sample.
-    QVector<double> yValues;  ///< Calibrated dB (SNR) or percentage (lock) values.
-    bool visible = true;      ///< Whether this series is currently shown.
-    QColor color;             ///< Assigned display color.
-    double yMinCached = std::numeric_limits<double>::max();    ///< Cached min Y value.
-    double yMaxCached = std::numeric_limits<double>::lowest(); ///< Cached max Y value.
-};
-
-/**
- * @brief Result of a CSV parse operation.
- *
- * Returned by PlotViewModel::parseCsvData() and carried across the thread
- * boundary by QFutureWatcher.
- */
-struct CsvParseResult
-{
-    bool success = false;
-    QVector<PlotSeriesData> series;
-    int baseDay = 0;
-    double baseTimeOffset = 0.0;
-    double xMax = 0.0;
-};
 
 /**
  * @brief ViewModel for the AGC signal plot window.
  *
- * Parses a CSV file produced by FrameProcessor, stores all series data
- * in memory, and exposes axis ranges and series visibility for the View.
+ * Holds all series data in memory and exposes axis ranges, colors, and series
+ * visibility for the View. File parsing is delegated to the Model-layer
+ * CsvSeriesParser; in-memory results arrive via addStreamData().
  */
 class PlotViewModel : public QObject
 {
@@ -105,12 +62,13 @@ public:
     double xMin() const;                           ///< @return Data X minimum (elapsed seconds).
     double xMax() const;                           ///< @return Data X maximum (elapsed seconds).
     double yMin() const;                           ///< @return Current SNR Y minimum (auto or manual).
-    double yMax() const;                           ///< @return Current SNR Y maximum (auto or manual).
+    double yMax() const;                           ///< @return Current SNR Y maximum: user override (kept above yMin), else auto or manual.
     double dataYMin() const;                       ///< @return Computed SNR Y minimum from data.
     double dataYMax() const;                       ///< @return Computed SNR Y maximum from data.
     bool yAutoScale() const;                       ///< @return True if SNR Y axis is auto-scaled.
     double lockYMin() const;                       ///< @return Lock axis minimum (always 0).
     double lockYMax() const;                       ///< @return Lock axis maximum (always 100).
+    double leftYMax() const;                       ///< @return Left axis max: user override, or 100 (lock %) / auto (missed frames).
     bool hasLockSeries() const;                    ///< @return True if any FrameSyncLock series are loaded.
 
     LockAxisView lockAxisView() const;             ///< @return Active left-axis metric (lock % vs missed frames).
@@ -135,6 +93,8 @@ public:
     void setXViewRange(double min, double max);
     void resetXRange();
     void resetYRange();
+    void setLeftYMaxOverride(double max);   ///< User-set left axis maximum; resets on resetYRange().
+    void setRightYMaxOverride(double max);  ///< User-set right (SNR) axis maximum; resets on resetYRange().
     /// Switches the left-axis metric and flips visibility of lock/missed frames series.
     void setLockAxisView(LockAxisView view);
     /// @}
@@ -161,14 +121,6 @@ private:
     void computeYRange();
     /// Commits a CsvParseResult into member state and emits dataChanged().
     void commitParseResult(CsvParseResult&& result);
-    /// Parses a "HH:MM:SS.mmm" time string to seconds since midnight.
-    static double parseTimeToSeconds(const QString& time_str);
-    /// Parses the CSV data rows into the series structure.
-    static void parseCsvDataRows(QTextStream& stream, int param_count,
-                                 QVector<PlotSeriesData>& series,
-                                 int& out_base_day, double& out_base_time_offset);
-    /// Pure parse function — safe to run on any thread.
-    static CsvParseResult parseCsvData(const QString& filepath);
 
     QVector<PlotSeriesData> m_series;              ///< All loaded series data.
     QString m_plot_title;                          ///< User-defined plot title.
@@ -186,6 +138,10 @@ private:
     double m_lock_y_min = 0.0;                     ///< Lock axis minimum (fixed at 0).
     double m_lock_y_max = 100.0;                   ///< Lock axis maximum (fixed at 100).
     bool m_has_lock_series = false;                ///< True if any FrameSyncLock series are present.
+    bool m_left_y_max_user_set = false;            ///< True when user has overridden the left axis max.
+    double m_left_y_max_user = 100.0;             ///< User-set left axis max value.
+    bool m_right_y_max_user_set = false;           ///< True when user has overridden the right axis max.
+    double m_right_y_max_user = 0.0;              ///< User-set right axis max value.
     bool m_has_missed_frames_series = false;       ///< True if any AccumulatedMissedFrames series are present.
     LockAxisView m_lock_axis_view = LockAxisView::LockPercent; ///< Active left-axis metric.
 

@@ -25,7 +25,6 @@
 #include "constants.h"
 #include "streamconfig.h"
 #include "streamconfigdialog.h"
-#include "timefields.h"
 #include "tomlconfighelper.h"
 
 // ---------------------------------------------------------------------------
@@ -153,7 +152,7 @@ void TestStreamConfigDialog::tomlFrameSyncSaveRoundtrip()
     QCOMPARE(in.value("Frame/FrameSync").toString(),          QString("A345CA5C"));
     QCOMPARE(in.value("Frame/FrameSyncMask").toString(),      QString("FFFF0000"));
     QCOMPARE(in.value("Frame/WordsInMinorFrame").toInt(),     128);
-    
+
     QFile::remove(tmpFile);
 }
 
@@ -253,7 +252,7 @@ static void clickGearButton(StreamConfigDialog* dlg)
 {
     const QList<QPushButton*> buttons = dlg->findChildren<QPushButton*>();
     for (QPushButton* btn : buttons) {
-        if (btn->toolTip() == "Configure this stream") {
+        if (btn->toolTip().contains("configuration dialog")) {
             btn->click();
             break;
         }
@@ -267,7 +266,7 @@ static void clickGearButtonForRow(StreamConfigDialog* dlg, int row)
     int seen = 0;
     const QList<QPushButton*> buttons = dlg->findChildren<QPushButton*>();
     for (QPushButton* btn : buttons) {
-        if (btn->toolTip() == "Configure this stream") {
+        if (btn->toolTip().contains("configuration dialog")) {
             if (seen == row) {
                 btn->click();
                 return;
@@ -431,10 +430,17 @@ void TestStreamConfigDialog::applyToAllCopiesSettingsToSameModeStreams()
         QVERIFY(applyToAll != nullptr);
         applyToAll->setChecked(true);
 
-        auto* buttons = activeWindow->findChild<QDialogButtonBox*>();
-        QVERIFY(buttons != nullptr);
+        // The sub-dialogs use a plain OK QPushButton (not a QDialogButtonBox), so
+        // locate it by text. Finding it via findChild<QDialogButtonBox*>() returned
+        // null, and the resulting QVERIFY failure left the modal open inside its
+        // nested exec() loop — wedging the run.
+        QPushButton* okBtn = nullptr;
+        for (QPushButton* b : activeWindow->findChildren<QPushButton*>()) {
+            if (b->text() == "OK") { okBtn = b; break; }
+        }
+        QVERIFY(okBtn != nullptr);
         testExecuted = true;
-        buttons->button(QDialogButtonBox::Ok)->click();
+        okBtn->click();
     });
 
     clickGearButtonForRow(dlg.data(), 0);
@@ -476,10 +482,17 @@ void TestStreamConfigDialog::applyToAllLeavesDifferentModeStreamsUnchanged()
         QVERIFY(applyToAll != nullptr);
         applyToAll->setChecked(true);
 
-        auto* buttons = activeWindow->findChild<QDialogButtonBox*>();
-        QVERIFY(buttons != nullptr);
+        // The sub-dialogs use a plain OK QPushButton (not a QDialogButtonBox), so
+        // locate it by text. Finding it via findChild<QDialogButtonBox*>() returned
+        // null, and the resulting QVERIFY failure left the modal open inside its
+        // nested exec() loop — wedging the run.
+        QPushButton* okBtn = nullptr;
+        for (QPushButton* b : activeWindow->findChildren<QPushButton*>()) {
+            if (b->text() == "OK") { okBtn = b; break; }
+        }
+        QVERIFY(okBtn != nullptr);
         testExecuted = true;
-        buttons->button(QDialogButtonBox::Ok)->click();
+        okBtn->click();
     });
 
     clickGearButtonForRow(dlg.data(), 0);
@@ -512,10 +525,17 @@ void TestStreamConfigDialog::applyToAllUncheckedDoesNotAffectOtherStreams()
 
         // Leave the "Apply to all" checkbox unchecked.
 
-        auto* buttons = activeWindow->findChild<QDialogButtonBox*>();
-        QVERIFY(buttons != nullptr);
+        // The sub-dialogs use a plain OK QPushButton (not a QDialogButtonBox), so
+        // locate it by text. Finding it via findChild<QDialogButtonBox*>() returned
+        // null, and the resulting QVERIFY failure left the modal open inside its
+        // nested exec() loop — wedging the run.
+        QPushButton* okBtn = nullptr;
+        for (QPushButton* b : activeWindow->findChildren<QPushButton*>()) {
+            if (b->text() == "OK") { okBtn = b; break; }
+        }
+        QVERIFY(okBtn != nullptr);
         testExecuted = true;
-        buttons->button(QDialogButtonBox::Ok)->click();
+        okBtn->click();
     });
 
     clickGearButtonForRow(dlg.data(), 0);

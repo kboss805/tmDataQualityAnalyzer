@@ -62,6 +62,17 @@ QString settingsSubdir(const QString& app_root, const char* subdir, const QStrin
     return QDir(dir).exists() ? dir : fallback_dir;
 }
 
+/// Stylesheet for the primary (OK / Process) action button — WinUI 3 accent blue.
+const char* kBlueButtonStyle =
+    "QPushButton {"
+    "  background-color: #0067C0; color: white;"
+    "  border: none; border-radius: 4px;"
+    "  padding: 4px 16px; min-width: 64px;"
+    "}"
+    "QPushButton:hover   { background-color: #1A74C7; }"
+    "QPushButton:pressed { background-color: #0055A8; }"
+    "QPushButton:disabled{ background-color: #88B0D4; }";
+
 /// Sizes an icon-only button so its SVG icon fills the button, with a
 /// transparent, borderless background.
 void styleIconButton(QPushButton* button, int size)
@@ -146,7 +157,7 @@ void saveFrameSyncToToml(const QString& filename,
 }
 
 /// Default Receiver SNR frame parameters (pattern, mask, bits-per-frame),
-/// loaded from settings/framesync_patterns/default_rcvr.toml so they are
+/// loaded from settings/framesync_patterns/framesync_rcvr_default.toml so they are
 /// user-editable rather than hard-coded. Falls back to the compiled constants
 /// if the file is missing or a field is absent/invalid.
 struct ReceiverFrameDefaults
@@ -178,6 +189,107 @@ ReceiverFrameDefaults loadReceiverFrameDefaults(const QString& app_root)
     return d;
 }
 
+/// Bundles the frame-sync input widgets shared by the Frame Sync Lock and
+/// Receiver SNR dialogs so a single builder can create them.
+struct FrameSyncWidgets
+{
+    QLineEdit*      syncPattern  = nullptr;
+    QLineEdit*      syncMask     = nullptr;
+    QSpinBox*       bitsPerFrame = nullptr;
+    QDoubleSpinBox* dataRate     = nullptr;
+    QComboBox*      sampleRate   = nullptr;
+};
+
+/// Builds the standard frame-sync input block — Frame Sync / Mask / Bits Per
+/// Frame on rows 0-1 and Data Rate / Average Period on rows 3-4 — into @p grid
+/// and returns the widgets (columns 4+ are left free for the caller's Load/Save
+/// buttons). The two dialogs differ only in the sync field's placeholder and
+/// tooltip, which are passed in.
+FrameSyncWidgets buildFrameSyncRow(QGridLayout* grid, QWidget* parent,
+                                   const StreamConfig& cfg,
+                                   const QString& syncPlaceholder,
+                                   const QString& syncTooltip)
+{
+    FrameSyncWidgets w;
+
+    w.syncPattern = new QLineEdit(parent);
+    w.syncPattern->setValidator(new QRegularExpressionValidator(kHexRegex, parent));
+    w.syncPattern->setText(cfg.frameSyncPattern);
+    w.syncPattern->setPlaceholderText(syncPlaceholder);
+    w.syncPattern->setMinimumWidth(110);
+    w.syncPattern->setToolTip(syncTooltip);
+    grid->addWidget(new QLabel("Frame Sync"),      0, 0, Qt::AlignLeft | Qt::AlignVCenter);
+    grid->addWidget(w.syncPattern,                 1, 0, Qt::AlignLeft | Qt::AlignVCenter);
+
+    w.syncMask = new QLineEdit(parent);
+    w.syncMask->setValidator(new QRegularExpressionValidator(kHexRegex, parent));
+    w.syncMask->setText(cfg.frameSyncMask);
+    w.syncMask->setPlaceholderText("e.g. FFFFFFFF");
+    w.syncMask->setMinimumWidth(110);
+    w.syncMask->setToolTip("Hex mask applied during frame sync comparison. Set bits are compared; cleared bits are ignored.");
+    grid->addWidget(new QLabel("Frame Sync Mask"), 0, 1, Qt::AlignLeft | Qt::AlignVCenter);
+    grid->addWidget(w.syncMask,                    1, 1, Qt::AlignLeft | Qt::AlignVCenter);
+
+    w.bitsPerFrame = new QSpinBox(parent);
+    w.bitsPerFrame->setRange(PCMConstants::kMinFrameLengthBits,
+                             PCMConstants::kMaxFrameLengthBits);
+    w.bitsPerFrame->setValue(cfg.bitsInMinorFrame);
+    w.bitsPerFrame->setMinimumWidth(80);
+    w.bitsPerFrame->setToolTip("Total number of bits in one minor frame, including the frame sync word.");
+    grid->addWidget(new QLabel("Bits Per Frame"),  0, 2, Qt::AlignLeft | Qt::AlignVCenter);
+    grid->addWidget(w.bitsPerFrame,                1, 2, Qt::AlignLeft | Qt::AlignVCenter);
+
+    // Spacer row between the frame-sync inputs and the rate/period group.
+    grid->setRowMinimumHeight(2, 8);
+
+    w.dataRate = new QDoubleSpinBox(parent);
+    w.dataRate->setRange(0.0, 1000.0);
+    w.dataRate->setDecimals(3);
+    w.dataRate->setSingleStep(0.1);
+    if (cfg.tmatsDataRateMbps > 0.0)
+        w.dataRate->setSpecialValueText(QString::number(cfg.tmatsDataRateMbps, 'f', 3));
+    else
+        w.dataRate->setSpecialValueText("TMATS");
+    w.dataRate->setValue(cfg.dataRateMbps);
+    w.dataRate->setMinimumWidth(130);
+    w.dataRate->setToolTip("Telemetry data rate in Mbps. Set to 0 (TMATS) to derive the rate from the file metadata.");
+    grid->addWidget(new QLabel("Data Rate (Mbps)"), 3, 0, Qt::AlignLeft | Qt::AlignVCenter);
+    grid->addWidget(w.dataRate,                     4, 0, Qt::AlignLeft | Qt::AlignVCenter);
+
+    w.sampleRate = new QComboBox(parent);
+    w.sampleRate->addItem(periodText(UIConstants::kSamplePeriod1s));
+    w.sampleRate->addItem(periodText(UIConstants::kSamplePeriod100ms));
+    w.sampleRate->addItem(periodText(UIConstants::kSamplePeriod10ms));
+    w.sampleRate->setCurrentIndex(cfg.samplePeriodIndex);
+    w.sampleRate->setToolTip("Integration window for statistics. Shorter periods give finer time resolution; longer periods smooth noise.");
+    w.sampleRate->setFixedHeight(w.syncPattern->sizeHint().height());
+    grid->addWidget(new QLabel("Average Period"),  3, 1, Qt::AlignLeft | Qt::AlignVCenter);
+    grid->addWidget(w.sampleRate,                  4, 1, Qt::AlignLeft | Qt::AlignVCenter);
+
+    return w;
+}
+
+/// Cancel + primary action button pair shared by every stream dialog.
+struct DialogButtons
+{
+    QPushButton* cancel  = nullptr;
+    QPushButton* primary = nullptr;
+};
+
+/// Creates a Cancel button (pre-wired to reject @p dialog) and a blue, default
+/// primary button labelled @p primaryText. The caller wires the primary button's
+/// click handler and arranges both in a layout.
+DialogButtons makeDialogButtons(QDialog* dialog, const QString& primaryText)
+{
+    DialogButtons b;
+    b.cancel  = new QPushButton(QObject::tr("Cancel"), dialog);
+    b.primary = new QPushButton(primaryText, dialog);
+    b.primary->setStyleSheet(kBlueButtonStyle);
+    b.primary->setDefault(true);
+    QObject::connect(b.cancel, &QPushButton::clicked, dialog, &QDialog::reject);
+    return b;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 //                        FRAME LOCK SETUP DIALOG                             //
 ////////////////////////////////////////////////////////////////////////////////
@@ -193,67 +305,26 @@ public:
         , m_toml_dir(toml_dir)
         , m_app_root(app_root)
     {
-        setWindowTitle("Frame Sync Lock Setup — " + cfg.label);
+        setWindowTitle("Configure Frame Sync Lock — " + cfg.label);
         setModal(true);
 
-        // Grid columns: 0=FrameSync/Randomized, 1=SyncMask/DataRate,
-        //               2=BitsPerFrame/AveragePeriod, 3=16px gap, 4=LoadBtn, 5=SaveBtn, 6=stretch
+        // buildFrameSyncRow fills cols 0-2 (FrameSync/DataRate, Mask/Period,
+        // Bits); col 3 is a flexible 16px gap and cols 4-5 hold Load/Save below.
         auto* grid = new QGridLayout;
         grid->setHorizontalSpacing(10);
         grid->setVerticalSpacing(4);
         grid->setColumnMinimumWidth(3, 16);
         grid->setColumnStretch(3, 1);
 
-        // Row 0 labels / Row 1 inputs — Frame Sync group
-        m_syncPattern = new QLineEdit(this);
-        m_syncPattern->setValidator(new QRegularExpressionValidator(kHexRegex, this));
-        m_syncPattern->setText(cfg.frameSyncPattern);
-        m_syncPattern->setPlaceholderText("e.g. A345CA5C");
-        m_syncPattern->setMinimumWidth(110);
-        grid->addWidget(new QLabel("Frame Sync"),      0, 0, Qt::AlignHCenter);
-        grid->addWidget(m_syncPattern,                 1, 0, Qt::AlignHCenter);
-
-        m_syncMask = new QLineEdit(this);
-        m_syncMask->setValidator(new QRegularExpressionValidator(kHexRegex, this));
-        m_syncMask->setText(cfg.frameSyncMask);
-        m_syncMask->setPlaceholderText("e.g. FFFFFFFF");
-        m_syncMask->setMinimumWidth(110);
-        grid->addWidget(new QLabel("Frame Sync Mask"), 0, 1, Qt::AlignHCenter);
-        grid->addWidget(m_syncMask,                    1, 1, Qt::AlignHCenter);
-
-        m_bitsPerFrame = new QSpinBox(this);
-        m_bitsPerFrame->setRange(PCMConstants::kMinFrameLengthBits,
-                                 PCMConstants::kMaxFrameLengthBits);
-        m_bitsPerFrame->setValue(cfg.bitsInMinorFrame);
-        m_bitsPerFrame->setMinimumWidth(80);
-        grid->addWidget(new QLabel("Bits Per Frame"),  0, 2, Qt::AlignHCenter);
-        grid->addWidget(m_bitsPerFrame,                1, 2, Qt::AlignHCenter);
-
-        // Spacer row between frame-sync inputs and rate/period group
-        grid->setRowMinimumHeight(2, 8);
-
-        // Row 3 labels / Row 4 inputs — Data Rate + Average Period
-        m_dataRate = new QDoubleSpinBox(this);
-        m_dataRate->setRange(0.0, 1000.0);
-        m_dataRate->setDecimals(3);
-        m_dataRate->setSingleStep(0.1);
-        if (cfg.tmatsDataRateMbps > 0.0)
-            m_dataRate->setSpecialValueText(
-                QString::number(cfg.tmatsDataRateMbps, 'f', 3));
-        else
-            m_dataRate->setSpecialValueText("TMATS");
-        m_dataRate->setValue(cfg.dataRateMbps);
-        m_dataRate->setMinimumWidth(130);
-        grid->addWidget(new QLabel("Data Rate (Mbps)"), 3, 0, Qt::AlignHCenter);
-        grid->addWidget(m_dataRate,                     4, 0, Qt::AlignHCenter);
-
-        m_sampleRate = new QComboBox(this);
-        m_sampleRate->addItem(periodText(UIConstants::kSamplePeriod1s));
-        m_sampleRate->addItem(periodText(UIConstants::kSamplePeriod100ms));
-        m_sampleRate->addItem(periodText(UIConstants::kSamplePeriod10ms));
-        m_sampleRate->setCurrentIndex(cfg.samplePeriodIndex);
-        grid->addWidget(new QLabel("Average Period"),  3, 1, Qt::AlignHCenter);
-        grid->addWidget(m_sampleRate,                  4, 1, Qt::AlignHCenter);
+        // Frame Sync / Mask / Bits + Data Rate / Average Period (rows 0-4).
+        FrameSyncWidgets fs = buildFrameSyncRow(grid, this, cfg,
+            "e.g. A345CA5C",
+            "Hex frame synchronization word (e.g. A345CA5C). Used to detect frame boundaries in the PCM stream.");
+        m_syncPattern  = fs.syncPattern;
+        m_syncMask     = fs.syncMask;
+        m_bitsPerFrame = fs.bitsPerFrame;
+        m_dataRate     = fs.dataRate;
+        m_sampleRate   = fs.sampleRate;
 
         auto* loadBtn = new QPushButton(this);
         loadBtn->setIcon(QIcon(":/resources/folder-open.svg"));
@@ -291,9 +362,11 @@ public:
         });
 
         auto* outer = new QVBoxLayout(this);
+        outer->setSpacing(4);
         outer->addLayout(grid);
+        outer->addSpacing(16);
 
-        // Randomized toggle row
+        // Derandomize toggle row
         m_randomized = new QCheckBox(this);
         m_randomized->setChecked(cfg.randomized);
         m_randomized->setToolTip("Apply RNRZ-L self-synchronizing descrambler to the data stream.");
@@ -301,7 +374,7 @@ public:
             auto* row = new QHBoxLayout;
             row->setSpacing(6);
             row->addWidget(m_randomized);
-            row->addWidget(new QLabel("Randomized", this));
+            row->addWidget(new QLabel("Derandomize", this));
             row->addStretch(1);
             outer->addLayout(row);
         }
@@ -319,13 +392,15 @@ public:
             outer->addLayout(row);
         }
 
+        outer->addSpacing(8);
         outer->addStretch(1);
 
         addSeparator(outer, this);
 
-        auto* buttons = new QDialogButtonBox(
-            QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-        connect(buttons, &QDialogButtonBox::accepted, this, [this]() {
+        DialogButtons btns = makeDialogButtons(this, tr("OK"));
+        QPushButton* cancelBtn = btns.cancel;
+        QPushButton* okBtn     = btns.primary;
+        connect(okBtn, &QPushButton::clicked, this, [this]() {
             if (m_syncPattern->text().trimmed().isEmpty())
             {
                 QMessageBox::warning(this, tr("Missing Frame Sync"),
@@ -334,7 +409,6 @@ public:
             }
             accept();
         });
-        connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
         // Apply to all toggle row + dialog buttons
         m_applyToAll = new QCheckBox(this);
@@ -346,7 +420,9 @@ public:
             bottomLayout->addWidget(new QLabel("Apply to all Frame Sync Lock streams", this));
         }
         bottomLayout->addStretch(1);
-        bottomLayout->addWidget(buttons);
+        bottomLayout->addWidget(cancelBtn);
+        bottomLayout->addWidget(okBtn);
+        outer->addSpacing(4);
         outer->addLayout(bottomLayout);
 
         adjustSize();
@@ -438,6 +514,7 @@ public:
         m_stepPathLabel->setMinimumWidth(260);
         grid->addWidget(m_stepPathLabel, 0, 1);
         auto* stepBrowse = new QPushButton("Browse...", this);
+        stepBrowse->setToolTip("Browse for the step calibration configuration TOML file that defines the RF signal step levels.");
         grid->addWidget(stepBrowse, 0, 2);
         m_stepStatus = new QLabel(this);
         grid->addWidget(m_stepStatus, 1, 1, 1, 2);
@@ -449,9 +526,49 @@ public:
         m_calPathLabel->setMinimumWidth(260);
         grid->addWidget(m_calPathLabel, 3, 1);
         m_calBrowse = new QPushButton("Browse...", this);
+        m_calBrowse->setToolTip("Browse for the calibration Chapter 10 recording file. The last folder you used will be remembered.");
         grid->addWidget(m_calBrowse, 3, 2);
         m_calStatus = new QLabel(this);
         grid->addWidget(m_calStatus, 4, 1, 1, 2);
+
+        // ---- Rows 5-7: Clip Start / Clip End (seconds), stacked ----------------
+        // Ignore the first/last N seconds of the cal recording before detecting
+        // steps, so signal-generator turn-on transients (or trailing junk) don't
+        // get mistaken for calibration plateaus.
+        {
+            // 16 px breathing room between the cal-file status and the clip controls.
+            grid->addItem(new QSpacerItem(0, 16, QSizePolicy::Minimum, QSizePolicy::Fixed), 5, 0);
+
+            grid->addWidget(new QLabel("Clip Start (s):", this), 6, 0);
+            m_clipStart = new QDoubleSpinBox(this);
+            m_clipStart->setRange(0.0, 100000.0);
+            m_clipStart->setDecimals(1);
+            m_clipStart->setSingleStep(1.0);
+            m_clipStart->setValue(0.0);
+            m_clipStart->setFixedWidth(100);
+            m_clipStart->setToolTip("Ignore this many seconds at the START of the "
+                "calibration recording before detecting steps (skips signal-generator "
+                "turn-on transients).");
+            grid->addWidget(m_clipStart, 6, 1, Qt::AlignLeft);
+
+            grid->addWidget(new QLabel("Clip End (s):", this), 7, 0);
+            m_clipEnd = new QDoubleSpinBox(this);
+            m_clipEnd->setRange(0.0, 100000.0);
+            m_clipEnd->setDecimals(1);
+            m_clipEnd->setSingleStep(1.0);
+            m_clipEnd->setValue(0.0);
+            m_clipEnd->setFixedWidth(100);
+            m_clipEnd->setToolTip("Ignore this many seconds at the END of the "
+                "calibration recording before detecting steps.");
+            grid->addWidget(m_clipEnd, 7, 1, Qt::AlignLeft);
+
+            // Re-run extraction when the user changes a clip value (only fires if
+            // both files are already loaded).
+            connect(m_clipStart, &QDoubleSpinBox::editingFinished,
+                    this, [this]() { maybeRunExtraction(); });
+            connect(m_clipEnd, &QDoubleSpinBox::editingFinished,
+                    this, [this]() { maybeRunExtraction(); });
+        }
 
         outer->addLayout(grid);
 
@@ -460,12 +577,15 @@ public:
 
         addSeparator(outer, this);
 
-        auto* buttons = new QDialogButtonBox(
-            QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-        connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
-        connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-        outer->addWidget(buttons);
-        m_okButton = buttons->button(QDialogButtonBox::Ok);
+        DialogButtons calBtns = makeDialogButtons(this, tr("OK"));
+        m_okButton = calBtns.primary;
+        connect(m_okButton, &QPushButton::clicked, this, &QDialog::accept);
+
+        auto* calBtnLayout = new QHBoxLayout;
+        calBtnLayout->addStretch(1);
+        calBtnLayout->addWidget(calBtns.cancel);
+        calBtnLayout->addWidget(m_okButton);
+        outer->addLayout(calBtnLayout);
 
         setStatus(m_stepStatus, Pending, "No file selected.");
         setStatus(m_calStatus,  Pending, "No file selected.");
@@ -543,10 +663,16 @@ private:
             return;
         }
 
+        QSettings settings;
+        const QString lastCalDir = settings.value("CalibrationSetupDialog/lastCalDir").toString();
+
         const QString path = QFileDialog::getOpenFileName(
-            this, tr("Select Calibration Chapter 10 File"), QString(),
+            this, tr("Select Calibration Chapter 10 File"),
+            lastCalDir.isEmpty() ? m_tomlDir : lastCalDir,
             tr("Chapter 10 Files (*.ch10 *.c10);;All Files (*.*)"));
         if (path.isEmpty()) return;
+
+        settings.setValue("CalibrationSetupDialog/lastCalDir", QFileInfo(path).absolutePath());
 
         m_calPath = path;
         m_calPathLabel->setText(QFileInfo(path).fileName());
@@ -606,6 +732,8 @@ private:
         req.numReceivers       = m_numReceivers;
         req.receiverChannels   = m_receiverChannels;
         req.steps              = m_steps;
+        req.clipStartSec       = m_clipStart ? m_clipStart->value() : 0.0;
+        req.clipEndSec         = m_clipEnd ? m_clipEnd->value() : 0.0;
 
         CalibrationExtractor extractor;
         QProgressDialog progress(tr("Processing calibration file…"), tr("Cancel"),
@@ -697,6 +825,8 @@ private:
     QLabel*      m_calStatus     = nullptr;
     QPushButton* m_calBrowse     = nullptr;
     QPushButton* m_okButton      = nullptr;
+    QDoubleSpinBox* m_clipStart  = nullptr; ///< Seconds to clip from the start before step detection.
+    QDoubleSpinBox* m_clipEnd    = nullptr; ///< Seconds to clip from the end before step detection.
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -719,11 +849,11 @@ public:
         , m_pcmChannelId(cfg.pcmChannelId)
         , m_calibrationByWord(cfg.calibrationByWord)
     {
-        setWindowTitle("Receiver SNR Setup — " + cfg.label);
+        setWindowTitle("Configure Receiver SNR — " + cfg.label);
         setModal(true);
 
         auto* outer = new QVBoxLayout(this);
-        outer->setSpacing(12);
+        outer->setSpacing(6);
 
         // ---- Group 1: Frame sync + acquisition settings --------------------
         {
@@ -731,58 +861,15 @@ public:
             grid->setHorizontalSpacing(10);
             grid->setVerticalSpacing(4);
 
-            // Row 0: labels
-            grid->addWidget(new QLabel("Frame Sync"),      0, 0, Qt::AlignHCenter);
-            grid->addWidget(new QLabel("Frame Sync Mask"), 0, 1, Qt::AlignHCenter);
-            grid->addWidget(new QLabel("Bits Per Frame"),  0, 2, Qt::AlignHCenter);
-
-            // Row 1: inputs
-            m_syncPattern = new QLineEdit(this);
-            m_syncPattern->setValidator(new QRegularExpressionValidator(kHexRegex, this));
-            m_syncPattern->setText(cfg.frameSyncPattern);
-            m_syncPattern->setPlaceholderText("e.g. FE6B2840");
-            m_syncPattern->setMinimumWidth(90);
-            grid->addWidget(m_syncPattern, 1, 0, Qt::AlignHCenter);
-
-            m_syncMask = new QLineEdit(this);
-            m_syncMask->setValidator(new QRegularExpressionValidator(kHexRegex, this));
-            m_syncMask->setText(cfg.frameSyncMask);
-            m_syncMask->setPlaceholderText("e.g. FFFFFFFF");
-            m_syncMask->setMinimumWidth(90);
-            grid->addWidget(m_syncMask, 1, 1, Qt::AlignHCenter);
-
-            m_bitsPerFrame = new QSpinBox(this);
-            m_bitsPerFrame->setRange(PCMConstants::kMinFrameLengthBits,
-                                     PCMConstants::kMaxFrameLengthBits);
-            m_bitsPerFrame->setValue(cfg.bitsInMinorFrame);
-            m_bitsPerFrame->setMinimumWidth(80);
-            grid->addWidget(m_bitsPerFrame, 1, 2, Qt::AlignHCenter);
-
-            // Row 2: spacer
-            grid->setRowMinimumHeight(2, 8);
-
-            // Row 3: labels / Row 4: inputs — Data Rate + Average Period
-            m_dataRate = new QDoubleSpinBox(this);
-            m_dataRate->setRange(0.0, 1000.0);
-            m_dataRate->setDecimals(3);
-            m_dataRate->setSingleStep(0.1);
-            if (cfg.tmatsDataRateMbps > 0.0)
-                m_dataRate->setSpecialValueText(
-                    QString::number(cfg.tmatsDataRateMbps, 'f', 3));
-            else
-                m_dataRate->setSpecialValueText("TMATS");
-            m_dataRate->setValue(cfg.dataRateMbps);
-            m_dataRate->setMinimumWidth(110);
-            grid->addWidget(new QLabel("Data Rate (Mbps)"), 3, 0, Qt::AlignHCenter);
-            grid->addWidget(m_dataRate,                     4, 0, Qt::AlignHCenter);
-
-            m_sampleRate = new QComboBox(this);
-            m_sampleRate->addItem(periodText(UIConstants::kSamplePeriod1s));
-            m_sampleRate->addItem(periodText(UIConstants::kSamplePeriod100ms));
-            m_sampleRate->addItem(periodText(UIConstants::kSamplePeriod10ms));
-            m_sampleRate->setCurrentIndex(cfg.samplePeriodIndex);
-            grid->addWidget(new QLabel("Average Period"),   3, 1, Qt::AlignHCenter);
-            grid->addWidget(m_sampleRate,                   4, 1, Qt::AlignHCenter);
+            // Frame Sync / Mask / Bits + Data Rate / Average Period (rows 0-4).
+            FrameSyncWidgets fs = buildFrameSyncRow(grid, this, cfg,
+                "e.g. FE6B2840",
+                "Hex frame synchronization word (e.g. FE6B2840). Used to detect frame boundaries in the receiver PCM stream.");
+            m_syncPattern  = fs.syncPattern;
+            m_syncMask     = fs.syncMask;
+            m_bitsPerFrame = fs.bitsPerFrame;
+            m_dataRate     = fs.dataRate;
+            m_sampleRate   = fs.sampleRate;
 
             grid->setColumnMinimumWidth(3, 16);
 
@@ -824,7 +911,9 @@ public:
             outer->addLayout(grid);
         }
 
-        // Randomized toggle row
+        outer->addSpacing(16);
+
+        // Derandomize toggle row
         m_randomized = new QCheckBox(this);
         m_randomized->setChecked(cfg.randomized);
         m_randomized->setToolTip("Apply RNRZ-L self-synchronizing descrambler to the data stream.");
@@ -832,7 +921,7 @@ public:
             auto* row = new QHBoxLayout;
             row->setSpacing(6);
             row->addWidget(m_randomized);
-            row->addWidget(new QLabel("Randomized", this));
+            row->addWidget(new QLabel("Derandomize", this));
             row->addStretch(1);
             outer->addLayout(row);
         }
@@ -850,13 +939,10 @@ public:
             outer->addLayout(row);
         }
 
+        outer->addSpacing(8);
+
         // ---- Separator ------------------------------------------------------
-        {
-            auto* sep = new QFrame(this);
-            sep->setFrameShape(QFrame::HLine);
-            sep->setFrameShadow(QFrame::Sunken);
-            outer->addWidget(sep);
-        }
+        addSeparator(outer, this);
 
         // ---- Group 2: Receiver calibration parameters ----------------------
         {
@@ -874,6 +960,8 @@ public:
             m_polarity->addItem("Positive");
             m_polarity->addItem("Negative");
             m_polarity->setCurrentIndex(cfg.polarityIndex);
+            m_polarity->setToolTip("ADC output polarity. Positive = high voltage maps to highest dB; Negative = inverted.");
+            m_polarity->setFixedHeight(m_syncPattern->sizeHint().height());
             grid->addWidget(m_polarity, 1, 0, Qt::AlignHCenter);
 
             m_slope = new QComboBox(this);
@@ -882,6 +970,8 @@ public:
             m_slope->addItem("0–10 V");
             m_slope->addItem("0–5 V");
             m_slope->setCurrentIndex(cfg.slopeIndex);
+            m_slope->setToolTip("ADC voltage range. Select the range that matches your receiver's analog output voltage span.");
+            m_slope->setFixedHeight(m_syncPattern->sizeHint().height());
             grid->addWidget(m_slope, 1, 1, Qt::AlignHCenter);
 
             m_scale = new QDoubleSpinBox(this);
@@ -889,6 +979,7 @@ public:
             m_scale->setDecimals(3);
             m_scale->setValue(cfg.scaleDdBPerV);
             m_scale->setMinimumWidth(100);
+            m_scale->setToolTip("Calibration scale factor in dB/V. Maps the ADC voltage span to the receiver SNR range in dB.");
             grid->addWidget(m_scale, 1, 2, Qt::AlignHCenter);
 
             // Row 2: spacer
@@ -902,11 +993,13 @@ public:
             m_numReceivers = new QSpinBox(this);
             m_numReceivers->setRange(1, 100);
             m_numReceivers->setValue(cfg.numReceivers);
+            m_numReceivers->setToolTip("Number of individual receiver units contributing channels to this stream.");
             grid->addWidget(m_numReceivers, 4, 0, Qt::AlignHCenter);
 
             m_receiverChannels = new QSpinBox(this);
             m_receiverChannels->setRange(1, 100);
             m_receiverChannels->setValue(cfg.receiverChannels);
+            m_receiverChannels->setToolTip("Number of channels per receiver (e.g. 3 for L/R/C configuration).");
             grid->addWidget(m_receiverChannels, 4, 1, Qt::AlignHCenter);
 
             grid->setColumnMinimumWidth(3, 16);
@@ -931,7 +1024,6 @@ public:
                 if (filename.isEmpty()) return;
                 m_toml_dir = QFileInfo(filename).absolutePath();
                 m_receiverParamsToml = filename;
-                updateReceiverParamsLabel();
                 QSettings cfg(filename, TomlConfigHelper::format());
                 m_polarity->setCurrentIndex(
                     cfg.value("Parameters/Polarity", UIConstants::kDefaultPolarityIndex).toInt());
@@ -966,23 +1058,9 @@ public:
             });
 
             outer->addLayout(grid);
-
-            auto* paramsRow = new QHBoxLayout;
-            paramsRow->addWidget(new QLabel("Receiver Parameters File:"));
-            m_receiverParamsLabel = new QLabel(this);
-            paramsRow->addWidget(m_receiverParamsLabel);
-            paramsRow->addStretch(1);
-            outer->addLayout(paramsRow);
-            updateReceiverParamsLabel();
         }
 
-        // ---- Separator ------------------------------------------------------
-        {
-            auto* sep = new QFrame(this);
-            sep->setFrameShape(QFrame::HLine);
-            sep->setFrameShadow(QFrame::Sunken);
-            outer->addWidget(sep);
-        }
+        outer->addSpacing(8);
 
         // ---- Group 3: Non-linear step calibration (US3.2) -------------------
         {
@@ -1006,9 +1084,10 @@ public:
 
         addSeparator(outer, this);
 
-        auto* buttons = new QDialogButtonBox(
-            QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-        connect(buttons, &QDialogButtonBox::accepted, this, [this]() {
+        DialogButtons btns = makeDialogButtons(this, tr("OK"));
+        QPushButton* cancelBtn = btns.cancel;
+        QPushButton* okBtn     = btns.primary;
+        connect(okBtn, &QPushButton::clicked, this, [this]() {
             if (m_syncPattern->text().trimmed().isEmpty())
             {
                 QMessageBox::warning(this, tr("Missing Frame Sync"),
@@ -1017,7 +1096,6 @@ public:
             }
             accept();
         });
-        connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
         // Apply to all toggle row + dialog buttons
         m_applyToAll = new QCheckBox(this);
@@ -1029,7 +1107,9 @@ public:
             bottomLayout->addWidget(new QLabel("Apply to all Receiver SNR streams", this));
         }
         bottomLayout->addStretch(1);
-        bottomLayout->addWidget(buttons);
+        bottomLayout->addWidget(cancelBtn);
+        bottomLayout->addWidget(okBtn);
+        outer->addSpacing(4);
         outer->addLayout(bottomLayout);
 
         adjustSize();
@@ -1053,14 +1133,6 @@ public:
     QHash<int, CalibrationProfile> calibrationByWord() const { return m_calibrationByWord; }
 
 private:
-    void updateReceiverParamsLabel()
-    {
-        if (m_receiverParamsToml.isEmpty())
-            m_receiverParamsLabel->setText("<span style='color: gray;'>(none — using default word map)</span>");
-        else
-            m_receiverParamsLabel->setText(QFileInfo(m_receiverParamsToml).fileName());
-    }
-
     void updateCalibrationLabel()
     {
         int n = 0;
@@ -1117,7 +1189,6 @@ private:
     QSpinBox*       m_numReceivers     = nullptr;
     QSpinBox*       m_receiverChannels = nullptr;
     QCheckBox*      m_applyToAll       = nullptr;
-    QLabel*         m_receiverParamsLabel = nullptr;
     QString         m_receiverParamsToml;
     QString         m_toml_dir;
     QString         m_app_root;
@@ -1150,7 +1221,7 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
 {
     setWindowTitle("Configure Streams");
     setModal(true);
-    resize(600, 600);
+    resize(750, 600);
 
     auto* layout = new QVBoxLayout(this);
     layout->setSpacing(10);
@@ -1163,6 +1234,7 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
         m_time_channel_combo = new QComboBox(this);
         m_time_channel_combo->addItems(time_channels);
         m_time_channel_combo->setEnabled(!time_channels.isEmpty());
+        m_time_channel_combo->setToolTip("IRIG time channel used to timestamp frame samples. Required for calibration extraction.");
         if (!time_channels.isEmpty())
         {
             int idx = (time_channel_index > 0) ? time_channel_index - 1 : 0;
@@ -1178,13 +1250,15 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
 
     buildTable();
 
-    auto* buttons = new QDialogButtonBox(
-        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-    m_ok_btn = buttons->button(QDialogButtonBox::Ok);
-    m_ok_btn->setText(tr("Process"));
-    connect(buttons, &QDialogButtonBox::accepted, this, &StreamConfigDialog::validateAndAccept);
-    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-    layout->addWidget(buttons);
+    DialogButtons btns = makeDialogButtons(this, tr("Process"));
+    m_ok_btn = btns.primary;
+    connect(m_ok_btn, &QPushButton::clicked, this, &StreamConfigDialog::validateAndAccept);
+
+    auto* mainBtnLayout = new QHBoxLayout;
+    mainBtnLayout->addStretch(1);
+    mainBtnLayout->addWidget(btns.cancel);
+    mainBtnLayout->addWidget(m_ok_btn);
+    layout->addLayout(mainBtnLayout);
 
     // m_ok_btn was nullptr during buildTable(), so call once now to reflect actual state.
     updateOkButton();
@@ -1205,13 +1279,14 @@ void StreamConfigDialog::buildTable()
     m_table->verticalHeader()->setDefaultSectionSize(kRowHeight);
     m_table->setSelectionMode(QAbstractItemView::NoSelection);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_table->horizontalHeader()->setSectionResizeMode(kColMode, QHeaderView::Stretch);
+    m_table->horizontalHeader()->setSectionResizeMode(kColMode, QHeaderView::Fixed);
+    m_table->setColumnWidth(kColMode, 200);
     m_table->horizontalHeader()->setSectionResizeMode(kColProcess, QHeaderView::ResizeToContents);
     // Clamp the Channel column to a fixed width. ResizeToContents would let a
     // long stream name stretch the whole dialog very wide; instead we cap it and
     // let the cell elide, surfacing the full name via tooltip (see below).
     m_table->horizontalHeader()->setSectionResizeMode(kColChannel, QHeaderView::Fixed);
-    m_table->setColumnWidth(kColChannel, 150);
+    m_table->setColumnWidth(kColChannel, 200);
     m_table->horizontalHeader()->setSectionResizeMode(kColSetup,   QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(kColReady,   QHeaderView::ResizeToContents);
 
@@ -1276,7 +1351,7 @@ void StreamConfigDialog::buildTable()
         auto* channel_item = new QTableWidgetItem(cfg.label);
         channel_item->setFlags(Qt::ItemIsEnabled);
         // Left-align so that when the label is wider than the clamped column the
-        // cell elides the tail (…), keeping the leading channel number visible.
+        // cell elides the tail (…), keeping the leading channel identifier visible.
         channel_item->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         channel_item->setToolTip(cfg.label);
         m_table->setItem(row, kColChannel, channel_item);
@@ -1286,12 +1361,13 @@ void StreamConfigDialog::buildTable()
         w.mode->addItem("Receiver SNR");
         w.mode->addItem("Frame Sync Lock");
         w.mode->setCurrentIndex(cfg.mode == StreamMode::FrameSyncLockStats ? 1 : 0);
+        w.mode->setToolTip("Analysis mode: Receiver SNR measures channel signal quality; Frame Sync Lock measures synchronization stability.");
         m_table->setCellWidget(row, kColMode, paddedWidget(w.mode));
 
         // Gear button
         w.gearBtn = new QPushButton(m_table);
         w.gearBtn->setIcon(QIcon(":/resources/gear.svg"));
-        w.gearBtn->setToolTip("Configure this stream");
+        w.gearBtn->setToolTip("Open configuration dialog for this stream's frame sync, data rate, and receiver parameters.");
         styleIconButton(w.gearBtn, 28);
         w.gearBtn->setEnabled(cfg.process);
         m_table->setCellWidget(row, kColSetup, centeredWidget(w.gearBtn));
@@ -1407,7 +1483,7 @@ void StreamConfigDialog::openGearDialog(int row)
         }
         else
         {
-            // Receiver SNR defaults are loaded from default_rcvr.toml (not
+            // Receiver SNR defaults are loaded from framesync_rcvr_default.toml (not
             // hard-coded) so the user can change the receiver frame sync.
             const ReceiverFrameDefaults d = loadReceiverFrameDefaults(m_app_root);
             temp.frameSyncPattern = d.pattern;

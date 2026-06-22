@@ -1,6 +1,6 @@
-# SNR Calibration Step Configuration
-# Range: 0 to 36 dB, 3 to 6 dB increments
-# 8 steps total
+# SNR Calibration Step Configuration — RASA
+# Range: 0 to 36 dB; 3 dB for the first two increments (0->3->6), then 6 dB.
+# 8 steps total — the injected calibration sequence.
 #
 # Usage: load this file via "Apply Cal" in the Receiver SNR
 # setup dialog alongside a calibration Chapter 10 recording that steps
