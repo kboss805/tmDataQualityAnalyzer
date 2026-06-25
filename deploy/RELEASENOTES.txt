@@ -1,3 +1,23 @@
+tmDataQualityAnalyzer v2.5.1 - What's New
+=================================
+
+  - Improved: Frame Sync Lock and Accumulated Missed Frames plot series names
+    now show only the stream label — the "Lock (%)" and "Accumulated Missed
+    Frames" suffixes have been removed. If you enter a custom series name, it
+    automatically applies to both the Lock and Missed Frames series for that
+    stream, so the name stays consistent when you switch between modes.
+
+  - Fixed: Switching between Frame Sync Lock and Accumulated Missed Frames
+    modes now resets the left Y-axis to its automatic range. Previously, a
+    manual L Max override carried over to the other mode.
+
+  - Improved: The main window now opens at 1920×1080 by default.
+
+  - Fixed: At certain display resolutions or DPI scaling settings, maximizing
+    the window could clip the bottom plot controls (Start, Stop, L Max, R Max).
+    The plot area now shrinks as needed to keep all controls visible.
+
+
 tmDataQualityAnalyzer v2.5.0 - What's New
 =================================
 

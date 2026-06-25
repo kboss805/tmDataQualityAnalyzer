@@ -171,7 +171,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
     if (!data.lockPercent.isEmpty())
     {
         PlotSeriesData lock;
-        lock.name = data.streamLabel + " Lock (%)";
+        lock.name = data.streamLabel;
         lock.streamLabel = data.streamLabel;
         lock.metricType = PlotSeriesData::MetricType::FrameSyncLock;
         lock.receiverIndex = 0;
@@ -190,7 +190,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
     if (!data.accumulatedMissedFrames.isEmpty())
     {
         PlotSeriesData errors;
-        errors.name = data.streamLabel + " Accumulated Missed Frames";
+        errors.name = data.streamLabel;
         errors.streamLabel = data.streamLabel;
         errors.metricType = PlotSeriesData::MetricType::AccumulatedMissedFrames;
         errors.receiverIndex = 0;
@@ -401,9 +401,30 @@ const QVector<PlotSeriesData>& PlotViewModel::allSeries() const
 
 void PlotViewModel::renameSeries(int index, const QString& name)
 {
-    if (index >= 0 && index < m_series.size())
+    if (index < 0 || index >= m_series.size())
+        return;
+
+    m_series[index].name = name;
+
+    // For frame sync series, keep the paired sibling (same stream, other metric)
+    // in sync so a custom name survives switching between lock/missed-frames modes.
+    const PlotSeriesData& renamed = m_series[index];
+    const bool isFrameSyncMetric =
+        renamed.metricType == PlotSeriesData::MetricType::FrameSyncLock ||
+        renamed.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames;
+    if (isFrameSyncMetric)
     {
-        m_series[index].name = name;
+        for (PlotSeriesData& s : m_series)
+        {
+            if (&s == &renamed)
+                continue;
+            if (s.streamLabel == renamed.streamLabel &&
+                (s.metricType == PlotSeriesData::MetricType::FrameSyncLock ||
+                 s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames))
+            {
+                s.name = name;
+            }
+        }
     }
 }
 
@@ -721,6 +742,7 @@ void PlotViewModel::setLockAxisView(LockAxisView view)
 
     const LockAxisView old_view = m_lock_axis_view;
     m_lock_axis_view = view;
+    m_left_y_max_user_set = false;
 
     auto metricMatchesView = [](PlotSeriesData::MetricType type, LockAxisView v) {
         return (v == LockAxisView::LockPercent)
@@ -755,6 +777,7 @@ void PlotViewModel::setLockAxisView(LockAxisView view)
         }
     }
 
+    emit axisRangeChanged();
     emit lockAxisViewChanged();
     emit dataChanged();
 }

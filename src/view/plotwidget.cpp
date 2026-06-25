@@ -602,6 +602,7 @@ void PlotWidget::setUpLayout()
     m_plot->yAxis->setRange(0, 100);
     m_plot->yAxis2->setVisible(true);
     m_plot->yAxis2->setLabel(PlotConstants::kSnrAxisLabel);
+    m_plot->setMinimumHeight(PlotConstants::kPlotMinChartHeight);
     main_layout->addWidget(m_plot, 1);
     main_layout->addSpacing(4);
 

@@ -15,7 +15,7 @@
 struct AppVersion {
     static constexpr int kMajor = 2;   ///< Major version number.
     static constexpr int kMinor = 5;   ///< Minor version number.
-    static constexpr int kPatch = 0;   ///< Patch version number.
+    static constexpr int kPatch = 1;   ///< Patch version number.
 
     /// @return Version string in "major.minor.patch" format.
     static QString toString() { return QString("%1.%2.%3").arg(kMajor).arg(kMinor).arg(kPatch); }
@@ -151,6 +151,8 @@ namespace UIConstants {
     inline constexpr int kChannelComboFixedWidth           = 400;                          ///< Fixed width for Time/PCM channel combo boxes (px).
     inline constexpr int kFileNameColumnMinWidth           = 600;                          ///< Minimum width for the file name column in the file list tree (px).
     inline constexpr int kControlsDockMinWidth            = 400;                          ///< Minimum width for the controls dock panel (file name column + margins).
+    inline constexpr int kInitialWindowWidth              = 1920;                         ///< Initial main window width at launch (px).
+    inline constexpr int kInitialWindowHeight             = 1080;                         ///< Initial main window height at launch (px).
     inline constexpr int kDecimalBase                    = 10;                           ///< Decimal (base-10) radix for QString::arg formatting.
     inline constexpr int kHexBase                        = 16;                           ///< Hexadecimal (base-16) radix for string parsing.
     inline constexpr int kBytesPerKB                     = 1024;                         ///< Bytes per kilobyte.
@@ -231,8 +233,8 @@ namespace CalibrationConstants {
 
 /// @brief Constants for the AGC signal plot window.
 namespace PlotConstants {
-    inline constexpr int kPlotDockMinWidth   = 1024;   ///< Minimum plot dock width in pixels.
-    inline constexpr int kPlotDockMinHeight  = 768;   ///< Minimum plot dock height in pixels.
+    inline constexpr int kPlotDockMinWidth    = 1024;  ///< Minimum plot dock width in pixels.
+    inline constexpr int kPlotMinChartHeight = 250;   ///< Minimum height for the chart area (QCustomPlot) within the plot widget.
     inline constexpr double kAxisMarginFactor = 0.05; ///< Y-axis padding as fraction of data range.
     inline constexpr double kMinAxisSpan      = 1.0;  ///< Minimum span enforced so a user max override can't invert/collapse an axis.
     inline constexpr const char* kXAxisLabel        = "Elapsed Time (DDD:HH:MM:SS)"; ///< X axis label.

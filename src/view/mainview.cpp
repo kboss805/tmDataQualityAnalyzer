@@ -87,7 +87,7 @@ void MainView::setUpMainLayout()
     m_plot_view_model = new PlotViewModel(this);
     m_plot_widget = new PlotWidget;
     m_plot_widget->setViewModel(m_plot_view_model);
-    m_plot_widget->setMinimumSize(PlotConstants::kPlotDockMinWidth, PlotConstants::kPlotDockMinHeight);
+    m_plot_widget->setMinimumWidth(PlotConstants::kPlotDockMinWidth);
 
     QSettings plot_settings;
     bool dark = plot_settings.value(UIConstants::kSettingsKeyTheme, UIConstants::kThemeDark).toString()
@@ -127,8 +127,7 @@ void MainView::setUpMainLayout()
 
     statusBar()->showMessage("No file loaded");
     
-    // Adjust size to minimum necessary to show the window instead of maximizing
-    adjustSize();
+    resize(UIConstants::kInitialWindowWidth, UIConstants::kInitialWindowHeight);
 }
 
 void MainView::setUpMenuBar()
