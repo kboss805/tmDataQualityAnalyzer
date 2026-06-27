@@ -342,6 +342,62 @@ void TestStepDetector::roundTripSameDataIsExact()
     }
 }
 
+void TestStepDetector::detectMultiChannelSweepStaysTimeAligned()
+{
+    // Regression for the "staircases drift in time across channels" report:
+    // several receiver channels see the SAME injected dB sweep at the SAME times,
+    // but with different gain, opposite polarity, or a per-channel turn-on
+    // transient. Each channel is calibrated independently — yet every channel must
+    // map the k-th sweep segment back to the k-th step's dB. If one channel's
+    // plateau<->step pairing shifts, that channel crosses a given dB level at a
+    // different segment than its peers, so when the profiles are applied on the
+    // shared per-stream time axis the staircases visibly stagger. Identical dB per
+    // segment across all channels == time-aligned transitions.
+    const QVector<StepDefinition> steps = {{0.0}, {3.0}, {6.0}, {12.0}};
+    constexpr int kHold = 150; // > the 100-sample (1.0 s) confirmation window
+
+    // Per-channel raw plateau level at each of the four sweep segments.
+    const QVector<double> clean    = {1000.0, 1500.0, 2000.0, 3000.0}; // nominal gain
+    const QVector<double> hotGain  = {1300.0, 1900.0, 2500.0, 3700.0}; // higher gain, same sweep
+    const QVector<double> inverted = {3000.0, 2500.0, 2000.0, 1000.0}; // inverted polarity (raw falls as dB climbs)
+
+    auto buildRaw = [&](const QVector<double>& levels, double leadingTransient) {
+        QVector<double> raw;
+        if (leadingTransient >= 0.0)
+            appendRun(raw, leadingTransient, kHold); // confirmed transient, must be dropped
+        for (double level : levels)
+            appendRun(raw, level, kHold);
+        return raw;
+    };
+
+    struct Channel { QVector<double> levels; double transient; };
+    const QVector<Channel> channels = {
+        { clean,    -1.0 },    // nominal, no transient
+        { hotGain,  -1.0 },    // different gain
+        { inverted, -1.0 },    // opposite polarity
+        { clean,   600.0 },    // a per-channel turn-on transient below the 0 dB level
+    };
+
+    for (int c = 0; c < channels.size(); c++)
+    {
+        const QVector<double> raw = buildRaw(channels[c].levels, channels[c].transient);
+        StepDetector::Result r = StepDetector::detect(raw, kPeriod, steps);
+        QVERIFY2(r.profile.valid, qPrintable(QString("channel %1 profile invalid").arg(c)));
+        QCOMPARE(r.profile.points.size(), steps.size());
+
+        // The crux: each channel's own raw level for sweep segment k must
+        // calibrate back to step k's dB. Same dB per segment for every channel.
+        for (int k = 0; k < steps.size(); k++)
+        {
+            const double db = interpolateCalibration(channels[c].levels[k], r.profile);
+            QVERIFY2(qAbs(db - steps[k].db) < 1e-6,
+                     qPrintable(QString("channel %1 segment %2: raw %3 -> %4 dB, expected %5 dB "
+                                        "(pairing shifted -> staircase would stagger)")
+                                    .arg(c).arg(k).arg(channels[c].levels[k]).arg(db).arg(steps[k].db)));
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // interpolateCalibration
 // ---------------------------------------------------------------------------
