@@ -41,6 +41,15 @@ namespace {
 
 const QRegularExpression kHexRegex("^[0-9A-Fa-f]{1,16}$");
 
+// Stream-table geometry, shared by the header row, the data rows, and the
+// scroll-area height cap so the columns line up and stay in sync.
+constexpr int kColWidthProcess = 48;
+constexpr int kColWidthChannel = 200;
+constexpr int kColWidthMode    = 200;
+constexpr int kColWidthSetup   = 64;
+constexpr int kColWidthReady   = 64;
+constexpr int kRowHeight       = 52;
+
 QString periodText(double sec)
 {
     if (sec >= 1.0)
@@ -1247,12 +1256,6 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
 
     // Column header row
     {
-        constexpr int kColWidthProcess = 48;
-        constexpr int kColWidthChannel = 200;
-        constexpr int kColWidthMode    = 200;
-        constexpr int kColWidthSetup   = 64;
-        constexpr int kColWidthReady   = 64;
-
         auto* header = new QWidget(this);
         auto* hl = new QHBoxLayout(header);
         hl->setContentsMargins(0, 0, 0, 0);
@@ -1301,7 +1304,6 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
     buildTable();
 
     // Cap the scroll area to 8 visible rows; shrink if fewer streams exist.
-    constexpr int kRowHeight    = 52;
     constexpr int kVisibleRows  = 8;
     const int visible = qMin(static_cast<int>(m_configs.size()), kVisibleRows);
     m_scroll_area->setFixedHeight(visible * kRowHeight);
@@ -1333,13 +1335,6 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
 
 void StreamConfigDialog::buildTable()
 {
-    constexpr int kColWidthProcess = 48;
-    constexpr int kColWidthChannel = 200;
-    constexpr int kColWidthMode    = 200;
-    constexpr int kColWidthSetup   = 64;
-    constexpr int kColWidthReady   = 64;
-    constexpr int kRowHeight       = 52;
-
     auto* containerLayout = qobject_cast<QVBoxLayout*>(m_stream_container->layout());
 
     m_rows.resize(static_cast<int>(m_configs.size()));
@@ -1564,34 +1559,32 @@ void StreamConfigDialog::openGearDialog(int row)
         FrameLockSetupDialog dlg(temp, m_toml_dir, m_app_root, this);
         if (dlg.exec() == QDialog::Accepted)
         {
-            w.frameSyncPattern   = dlg.frameSyncPattern();
-            w.frameSyncMask      = dlg.frameSyncMask();
-            w.bitsInFrame        = dlg.bitsPerFrame();
-            w.randomized         = dlg.randomized();
-            w.inverted           = dlg.inverted();
-            w.samplePeriodIndex    = dlg.samplePeriodIndex();
-            w.dataRateMbps       = dlg.dataRateMbps();
-            m_toml_dir           = dlg.lastTomlDir();
-            w.lastConfiguredMode = StreamMode::FrameSyncLockStats;
-            w.gearConfirmed      = true;
+            // Single copy of the dialog->row field mapping, applied to the edited
+            // row and (on Apply to All) to every other same-mode row, so the two
+            // can't drift out of sync.
+            auto applyLock = [&dlg](RowWidgets& rw) {
+                rw.frameSyncPattern   = dlg.frameSyncPattern();
+                rw.frameSyncMask      = dlg.frameSyncMask();
+                rw.bitsInFrame        = dlg.bitsPerFrame();
+                rw.randomized         = dlg.randomized();
+                rw.inverted           = dlg.inverted();
+                rw.samplePeriodIndex  = dlg.samplePeriodIndex();
+                rw.dataRateMbps       = dlg.dataRateMbps();
+                rw.lastConfiguredMode = StreamMode::FrameSyncLockStats;
+                rw.gearConfirmed      = true;
+            };
+
+            applyLock(w);
+            m_toml_dir = dlg.lastTomlDir();
             updateReadyIcon(row);
-            
+
             if (dlg.applyToAll())
             {
                 for (int i = 0; i < m_rows.size(); i++)
                 {
                     if (i == row || !m_rows[i].process->isChecked()) continue;
                     if (m_rows[i].mode->currentIndex() != 1) continue; // different mode: leave unchanged
-                    RowWidgets& rw = m_rows[i];
-                    rw.frameSyncPattern   = dlg.frameSyncPattern();
-                    rw.frameSyncMask      = dlg.frameSyncMask();
-                    rw.bitsInFrame        = dlg.bitsPerFrame();
-                    rw.randomized         = dlg.randomized();
-                    rw.inverted           = dlg.inverted();
-                    rw.samplePeriodIndex  = dlg.samplePeriodIndex();
-                    rw.dataRateMbps       = dlg.dataRateMbps();
-                    rw.lastConfiguredMode = StreamMode::FrameSyncLockStats;
-                    rw.gearConfirmed      = true;
+                    applyLock(m_rows[i]);
                     updateReadyIcon(i);
                 }
             }
@@ -1602,23 +1595,28 @@ void StreamConfigDialog::openGearDialog(int row)
         ReceiverSNRDialog dlg(temp, m_toml_dir, m_time_channel_id, m_app_root, this);
         if (dlg.exec() == QDialog::Accepted)
         {
-            w.frameSyncPattern   = dlg.frameSyncPattern();
-            w.frameSyncMask      = dlg.frameSyncMask();
-            w.bitsInFrame        = dlg.bitsPerFrame();
-            w.randomized         = dlg.randomized();
-            w.inverted           = dlg.inverted();
-            w.samplePeriodIndex    = dlg.samplePeriodIndex();
-            w.dataRateMbps       = dlg.dataRateMbps();
-            w.polarityIndex      = dlg.polarityIndex();
-            w.slopeIndex         = dlg.slopeIndex();
-            w.scaleDdBPerV       = dlg.scaleDdBPerV();
-            w.numReceivers       = dlg.numReceivers();
-            w.receiverChannels   = dlg.receiverChannels();
-            w.receiverParamsToml = dlg.receiverParamsToml();
-            w.calibrationByWord  = dlg.calibrationByWord();
-            m_toml_dir           = dlg.lastTomlDir();
-            w.lastConfiguredMode = StreamMode::ReceiverChannelInfo;
-            w.gearConfirmed      = true;
+            // Single copy of the dialog->row field mapping (see the lock branch).
+            auto applySnr = [&dlg](RowWidgets& rw) {
+                rw.frameSyncPattern   = dlg.frameSyncPattern();
+                rw.frameSyncMask      = dlg.frameSyncMask();
+                rw.bitsInFrame        = dlg.bitsPerFrame();
+                rw.randomized         = dlg.randomized();
+                rw.inverted           = dlg.inverted();
+                rw.samplePeriodIndex  = dlg.samplePeriodIndex();
+                rw.dataRateMbps       = dlg.dataRateMbps();
+                rw.polarityIndex      = dlg.polarityIndex();
+                rw.slopeIndex         = dlg.slopeIndex();
+                rw.scaleDdBPerV       = dlg.scaleDdBPerV();
+                rw.numReceivers       = dlg.numReceivers();
+                rw.receiverChannels   = dlg.receiverChannels();
+                rw.receiverParamsToml = dlg.receiverParamsToml();
+                rw.calibrationByWord  = dlg.calibrationByWord();
+                rw.lastConfiguredMode = StreamMode::ReceiverChannelInfo;
+                rw.gearConfirmed      = true;
+            };
+
+            applySnr(w);
+            m_toml_dir = dlg.lastTomlDir();
             updateReadyIcon(row);
 
             if (dlg.applyToAll())
@@ -1627,23 +1625,7 @@ void StreamConfigDialog::openGearDialog(int row)
                 {
                     if (i == row || !m_rows[i].process->isChecked()) continue;
                     if (m_rows[i].mode->currentIndex() != 0) continue; // different mode: leave unchanged
-                    RowWidgets& rw = m_rows[i];
-                    rw.frameSyncPattern   = dlg.frameSyncPattern();
-                    rw.frameSyncMask      = dlg.frameSyncMask();
-                    rw.bitsInFrame        = dlg.bitsPerFrame();
-                    rw.randomized         = dlg.randomized();
-                    rw.inverted           = dlg.inverted();
-                    rw.samplePeriodIndex  = dlg.samplePeriodIndex();
-                    rw.dataRateMbps       = dlg.dataRateMbps();
-                    rw.polarityIndex      = dlg.polarityIndex();
-                    rw.slopeIndex         = dlg.slopeIndex();
-                    rw.scaleDdBPerV       = dlg.scaleDdBPerV();
-                    rw.numReceivers       = dlg.numReceivers();
-                    rw.receiverChannels   = dlg.receiverChannels();
-                    rw.receiverParamsToml = dlg.receiverParamsToml();
-                    rw.calibrationByWord  = dlg.calibrationByWord();
-                    rw.lastConfiguredMode = StreamMode::ReceiverChannelInfo;
-                    rw.gearConfirmed      = true;
+                    applySnr(m_rows[i]);
                     updateReadyIcon(i);
                 }
             }
