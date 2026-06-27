@@ -65,6 +65,7 @@ HEADERS += \
     $$PWD/../include/viewmodel/plotviewmodel.h \
     $$PWD/../include/view/mainview.h \
     $$PWD/../include/view/streamconfigdialog.h \
+    $$PWD/../include/view/streamsubdialogs.h \
     $$PWD/../include/view/plotwidget.h \
     $$PWD/../include/view/plotcustomizationdialog.h \
     $$PWD/../include/view/exportdialog.h \

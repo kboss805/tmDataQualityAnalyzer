@@ -141,6 +141,7 @@ HEADERS += \
 HEADERS += \
     include/view/mainview.h \
     include/view/streamconfigdialog.h \
+    include/view/streamsubdialogs.h \
     include/view/exportdialog.h \
     include/view/plotcustomizationdialog.h \
     include/view/plotwidget.h
