@@ -30,6 +30,7 @@ PlotViewModel::PlotViewModel(QObject* parent)
 
 void PlotViewModel::commitParseResult(CsvParseResult&& result)
 {
+    const int skipped_rows = result.skippedRows;
     m_series            = std::move(result.series);
     m_base_day          = result.baseDay;
     m_base_time_offset  = result.baseTimeOffset;
@@ -56,6 +57,14 @@ void PlotViewModel::commitParseResult(CsvParseResult&& result)
     computeYRange();
 
     emit dataChanged();
+
+    // Surface malformed-row skips so a partially-loaded file isn't silently
+    // presented as complete (the file is a data-quality artifact itself).
+    if (skipped_rows > 0)
+    {
+        emit loadWarning(QString("Skipped %1 malformed row(s) while loading the CSV.")
+                             .arg(skipped_rows));
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -314,14 +323,14 @@ bool PlotViewModel::exportCsv(const QString& filepath) const
         switch (s.metricType)
         {
         case PlotSeriesData::MetricType::FrameSyncLock:
-            return s.name + " Lock (%)";
+            return s.name + PlotConstants::kCsvLockSuffix;
         case PlotSeriesData::MetricType::AccumulatedMissedFrames:
-            return s.name + " Accumulated Missed Frames";
+            return s.name + PlotConstants::kCsvMissedFramesSuffix;
         default: // SNR series names already carry the channel and are unique
             return s.name;
         }
     };
-    out << "Time (DOY:HH:MM:SS.mmm)";
+    out << PlotConstants::kCsvTimeHeader;
     for (const auto& s : m_series)
     {
         out << "," << headerLabel(s);

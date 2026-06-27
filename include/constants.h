@@ -242,6 +242,16 @@ namespace PlotConstants {
     inline constexpr const char* kMissedFramesAxisLabel = "Accumulated Missed Frames"; ///< Left Y axis label (missed frames mode).
     inline constexpr const char* kSnrAxisLabel      = "Receiver SNR (dB)"; ///< Right Y axis label.
     inline constexpr const char* kDefaultPlotTitle  = "Framesync/SNR Plot"; ///< Default chart title.
+
+    /// CSV export/import header tokens. The exporter (PlotViewModel::exportCsv) and
+    /// the importer (CsvSeriesParser) MUST agree on these so an exported file can be
+    /// re-loaded. The first column is the combined day+time stamp; frame-sync series
+    /// names are qualified per metric (the bare name is shared by a stream's lock and
+    /// missed-frames series and would otherwise export as two identical headers).
+    inline constexpr const char* kCsvTimeHeader          = "Time (DOY:HH:MM:SS.mmm)"; ///< First CSV column header (combined DDD:HH:MM:SS.mmm stamp).
+    inline constexpr const char* kCsvLockSuffix          = " Lock (%)";                ///< Suffix marking a FrameSyncLock column.
+    inline constexpr const char* kCsvMissedFramesSuffix  = " Accumulated Missed Frames"; ///< Suffix marking an AccumulatedMissedFrames column.
+
     inline constexpr QColor kFrameSyncLockColor {106, 13, 173};           ///< Distinctive purple for lock series.
 
     /// @brief Primary colors for frame sync lock series (purple, blue, green), one per stream.

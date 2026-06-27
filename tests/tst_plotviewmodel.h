@@ -58,6 +58,7 @@ private slots:
     void exportCsvHeaderAndData();
     void exportCsvEmptyNoFile();
     void exportCsvIncludesErrorColumn();
+    void exportCsvRoundTripsThroughLoad();
 };
 
 #endif // TST_PLOTVIEWMODEL_H

@@ -44,10 +44,10 @@ void TestPlotViewModel::defaultState()
 void TestPlotViewModel::loadCsvFile()
 {
     QString csv =
-        "Day,Time,L_RCVR1,R_RCVR1,L_RCVR2\n"
-        "45,10:00:00.000,-80.5,-75.2,-90.1\n"
-        "45,10:00:01.000,-80.3,-75.0,-89.8\n"
-        "45,10:00:02.000,-80.1,-74.8,-89.5\n";
+        "Time (DOY:HH:MM:SS.mmm),L_RCVR1,R_RCVR1,L_RCVR2\n"
+        "45:10:00:00.000,-80.5,-75.2,-90.1\n"
+        "45:10:00:01.000,-80.3,-75.0,-89.8\n"
+        "45:10:00:02.000,-80.1,-74.8,-89.5\n";
     QString path = writeTempCsv(csv);
     QVERIFY(!path.isEmpty());
 
@@ -77,10 +77,10 @@ void TestPlotViewModel::loadCsvFile()
 void TestPlotViewModel::csvTimeConversion()
 {
     QString csv =
-        "Day,Time,L_RCVR1\n"
-        "45,10:00:00.000,-80.0\n"
-        "45,10:00:05.500,-79.0\n"
-        "46,10:00:00.000,-78.0\n";
+        "Time (DOY:HH:MM:SS.mmm),L_RCVR1\n"
+        "45:10:00:00.000,-80.0\n"
+        "45:10:00:05.500,-79.0\n"
+        "46:10:00:00.000,-78.0\n";
     QString path = writeTempCsv(csv);
 
     PlotViewModel vm;
@@ -103,8 +103,8 @@ void TestPlotViewModel::csvTimeConversion()
 void TestPlotViewModel::seriesColorAssignment()
 {
     QString csv =
-        "Day,Time,L_RCVR1,R_RCVR1,L_RCVR2\n"
-        "1,00:00:00.000,-80.0,-75.0,-90.0\n";
+        "Time (DOY:HH:MM:SS.mmm),L_RCVR1,R_RCVR1,L_RCVR2\n"
+        "1:00:00:00.000,-80.0,-75.0,-90.0\n";
     QString path = writeTempCsv(csv);
 
     PlotViewModel vm;
@@ -129,9 +129,9 @@ void TestPlotViewModel::seriesColorAssignment()
 void TestPlotViewModel::yAutoRange()
 {
     QString csv =
-        "Day,Time,L_RCVR1\n"
-        "1,00:00:00.000,12.3\n"
-        "1,00:00:01.000,47.8\n";
+        "Time (DOY:HH:MM:SS.mmm),L_RCVR1\n"
+        "1:00:00:00.000,12.3\n"
+        "1:00:00:01.000,47.8\n";
     QString path = writeTempCsv(csv);
 
     PlotViewModel vm;
@@ -151,9 +151,9 @@ void TestPlotViewModel::yAutoRange()
 void TestPlotViewModel::yManualRange()
 {
     QString csv =
-        "Day,Time,L_RCVR1\n"
-        "1,00:00:00.000,-100.0\n"
-        "1,00:00:01.000,-50.0\n";
+        "Time (DOY:HH:MM:SS.mmm),L_RCVR1\n"
+        "1:00:00:00.000,-100.0\n"
+        "1:00:00:01.000,-50.0\n";
     QString path = writeTempCsv(csv);
 
     PlotViewModel vm;
@@ -181,9 +181,9 @@ void TestPlotViewModel::yManualRange()
 void TestPlotViewModel::xTimeWindow()
 {
     QString csv =
-        "Day,Time,L_RCVR1\n"
-        "1,00:00:00.000,-80.0\n"
-        "1,00:01:00.000,-75.0\n";
+        "Time (DOY:HH:MM:SS.mmm),L_RCVR1\n"
+        "1:00:00:00.000,-80.0\n"
+        "1:00:01:00.000,-75.0\n";
     QString path = writeTempCsv(csv);
 
     PlotViewModel vm;
@@ -209,8 +209,8 @@ void TestPlotViewModel::xTimeWindow()
 void TestPlotViewModel::seriesVisibility()
 {
     QString csv =
-        "Day,Time,L_RCVR1,R_RCVR1\n"
-        "1,00:00:00.000,-80.0,-75.0\n";
+        "Time (DOY:HH:MM:SS.mmm),L_RCVR1,R_RCVR1\n"
+        "1:00:00:00.000,-80.0,-75.0\n";
     QString path = writeTempCsv(csv);
 
     PlotViewModel vm;
@@ -239,8 +239,8 @@ void TestPlotViewModel::seriesVisibility()
 void TestPlotViewModel::clearData()
 {
     QString csv =
-        "Day,Time,L_RCVR1\n"
-        "1,00:00:00.000,-80.0\n";
+        "Time (DOY:HH:MM:SS.mmm),L_RCVR1\n"
+        "1:00:00:00.000,-80.0\n";
     QString path = writeTempCsv(csv);
 
     PlotViewModel vm;
@@ -298,8 +298,8 @@ void TestPlotViewModel::formatTimeZeroElapsed()
 {
     // Load CSV to set base day/time, then test formatTime at zero elapsed
     QString csv =
-        "Day,Time,L_RCVR1\n"
-        "45,10:30:15.000,-80.0\n";
+        "Time (DOY:HH:MM:SS.mmm),L_RCVR1\n"
+        "45:10:30:15.000,-80.0\n";
     QString path = writeTempCsv(csv);
 
     PlotViewModel vm;
@@ -316,8 +316,8 @@ void TestPlotViewModel::formatTimeDayBoundary()
 {
     // Test elapsed seconds crossing into the next day
     QString csv =
-        "Day,Time,L_RCVR1\n"
-        "45,23:59:50.000,-80.0\n";
+        "Time (DOY:HH:MM:SS.mmm),L_RCVR1\n"
+        "45:23:59:50.000,-80.0\n";
     QString path = writeTempCsv(csv);
 
     PlotViewModel vm;
@@ -338,8 +338,8 @@ void TestPlotViewModel::formatTimeNegativeElapsed()
 {
     // Negative elapsed should wrap to previous day
     QString csv =
-        "Day,Time,L_RCVR1\n"
-        "45,00:00:30.000,-80.0\n";
+        "Time (DOY:HH:MM:SS.mmm),L_RCVR1\n"
+        "45:00:00:30.000,-80.0\n";
     QString path = writeTempCsv(csv);
 
     PlotViewModel vm;
@@ -359,7 +359,7 @@ void TestPlotViewModel::formatTimeNegativeElapsed()
 void TestPlotViewModel::loadCsvHeaderOnly()
 {
     // CSV with header but no data rows
-    QString csv = "Day,Time,L_RCVR1,R_RCVR1\n";
+    QString csv = "Time (DOY:HH:MM:SS.mmm),L_RCVR1,R_RCVR1\n";
     QString path = writeTempCsv(csv);
 
     PlotViewModel vm;
@@ -384,41 +384,49 @@ void TestPlotViewModel::loadCsvHeaderOnly()
 
 void TestPlotViewModel::loadCsvMalformedRows()
 {
-    // CSV with some valid and some malformed rows
+    // CSV with three valid rows and two malformed ones: a too-short row and a
+    // row whose combined timestamp is empty/unparseable.
     QString csv =
-        "Day,Time,L_RCVR1\n"
-        "45,10:00:00.000,-80.0\n"
+        "Time (DOY:HH:MM:SS.mmm),L_RCVR1\n"
+        "45:10:00:00.000,-80.0\n"
         "short_row\n"
-        "45,10:00:02.000,-78.0\n"
-        ",,-999.0\n"
-        "45,10:00:04.000,-76.0\n";
+        "45:10:00:02.000,-78.0\n"
+        ",-999.0\n"
+        "45:10:00:04.000,-76.0\n";
     QString path = writeTempCsv(csv);
 
     PlotViewModel vm;
+    QSignalSpy warn_spy(&vm, &PlotViewModel::loadWarning);
     QVERIFY(vm.loadCsvFile(path));
 
-    // Should load at least the valid rows without crashing
+    // The three valid rows load; the two malformed rows are skipped, not crashed on.
     QVERIFY(vm.hasData());
-    QVERIFY(vm.seriesAt(0).xValues.size() >= 2);
+    QCOMPARE(vm.seriesAt(0).xValues.size(), 3);
+
+    // C7: the skipped rows are surfaced via loadWarning rather than silently dropped.
+    QCOMPARE(warn_spy.count(), 1);
+    QVERIFY2(warn_spy.at(0).at(0).toString().contains("2"),
+             "Warning must report the count (2) of skipped malformed rows");
 
     QFile::remove(path);
 }
 
 void TestPlotViewModel::lockSeriesMetricType()
 {
-    // A CSV with the "Framesync Lock (%)" column must give that series MetricType::FrameSyncLock.
-    // All other columns must remain MetricType::SNR.
+    // A column qualified with the " Lock (%)" suffix must give that series
+    // MetricType::FrameSyncLock, with the suffix stripped back to the bare legend
+    // name. All other columns must remain MetricType::SNR.
     QString csv =
-        "Day,Time,Framesync Lock (%),L_RCVR1\n"
-        "1,00:00:00.000,95.0,-80.0\n"
-        "1,00:00:01.000,90.0,-79.5\n";
+        "Time (DOY:HH:MM:SS.mmm),Ch1 Lock (%),L_RCVR1\n"
+        "1:00:00:00.000,95.0,-80.0\n"
+        "1:00:00:01.000,90.0,-79.5\n";
     QString path = writeTempCsv(csv);
 
     PlotViewModel vm;
     QVERIFY(vm.loadCsvFile(path));
     QCOMPARE(vm.seriesCount(), 2);
 
-    QCOMPARE(vm.seriesAt(0).name, QString("Framesync Lock (%)"));
+    QCOMPARE(vm.seriesAt(0).name, QString("Ch1"));
     QCOMPARE(static_cast<int>(vm.seriesAt(0).metricType),
              static_cast<int>(PlotSeriesData::MetricType::FrameSyncLock));
 
@@ -433,8 +441,8 @@ void TestPlotViewModel::lockSeriesColor()
 {
     // Lock series must be assigned kFrameSyncLockColor, not a receiver-palette color.
     QString csv =
-        "Day,Time,Framesync Lock (%),L_RCVR1\n"
-        "1,00:00:00.000,87.5,-80.0\n";
+        "Time (DOY:HH:MM:SS.mmm),Ch1 Lock (%),L_RCVR1\n"
+        "1:00:00:00.000,87.5,-80.0\n";
     QString path = writeTempCsv(csv);
 
     PlotViewModel vm;
@@ -458,8 +466,8 @@ void TestPlotViewModel::lockAxisRange()
     QCOMPARE(vm.lockYMax(), 100.0);
 
     QString csv =
-        "Day,Time,Framesync Lock (%),L_RCVR1\n"
-        "1,00:00:00.000,50.0,-80.0\n";
+        "Time (DOY:HH:MM:SS.mmm),Ch1 Lock (%),L_RCVR1\n"
+        "1:00:00:00.000,50.0,-80.0\n";
     QString path = writeTempCsv(csv);
     QVERIFY(vm.loadCsvFile(path));
 
@@ -472,8 +480,8 @@ void TestPlotViewModel::lockAxisRange()
 void TestPlotViewModel::hasLockSeriesTrue()
 {
     QString csv =
-        "Day,Time,Framesync Lock (%),L_RCVR1\n"
-        "1,00:00:00.000,75.0,-80.0\n";
+        "Time (DOY:HH:MM:SS.mmm),Ch1 Lock (%),L_RCVR1\n"
+        "1:00:00:00.000,75.0,-80.0\n";
     QString path = writeTempCsv(csv);
 
     PlotViewModel vm;
@@ -488,8 +496,8 @@ void TestPlotViewModel::hasLockSeriesFalse()
 {
     // A CSV without the lock column must leave hasLockSeries() = false.
     QString csv =
-        "Day,Time,L_RCVR1,R_RCVR1\n"
-        "1,00:00:00.000,-80.0,-75.0\n";
+        "Time (DOY:HH:MM:SS.mmm),L_RCVR1,R_RCVR1\n"
+        "1:00:00:00.000,-80.0,-75.0\n";
     QString path = writeTempCsv(csv);
 
     PlotViewModel vm;
@@ -505,9 +513,9 @@ void TestPlotViewModel::yAutoRangeIgnoresLockSeries()
     // With SNR values of 12.3 and 47.8, the auto-range should be 10–50 (rounded to 5 dB),
     // unchanged regardless of the lock percentages present in the same file.
     QString csv =
-        "Day,Time,Framesync Lock (%),L_RCVR1\n"
-        "1,00:00:00.000,95.0,12.3\n"
-        "1,00:00:01.000,80.0,47.8\n";
+        "Time (DOY:HH:MM:SS.mmm),Ch1 Lock (%),L_RCVR1\n"
+        "1:00:00:00.000,95.0,12.3\n"
+        "1:00:00:01.000,80.0,47.8\n";
     QString path = writeTempCsv(csv);
 
     PlotViewModel vm;
@@ -528,9 +536,9 @@ void TestPlotViewModel::loadCsvFileAsyncEmitsDataChanged()
 {
     // The async path must emit dataChanged() on success and leave hasData() true.
     QString csv =
-        "Day,Time,L_RCVR1\n"
-        "1,00:00:00.000,-80.0\n"
-        "1,00:00:01.000,-79.0\n";
+        "Time (DOY:HH:MM:SS.mmm),L_RCVR1\n"
+        "1:00:00:00.000,-80.0\n"
+        "1:00:00:01.000,-79.0\n";
     QString path = writeTempCsv(csv);
     QVERIFY(!path.isEmpty());
 
@@ -869,9 +877,9 @@ void TestPlotViewModel::exportCsvCreatesFile()
 {
     // Load some data, then export — file must be created.
     QString csv =
-        "Day,Time,L_RCVR1\n"
-        "1,00:00:00.000,-80.0\n"
-        "1,00:00:01.000,-79.5\n";
+        "Time (DOY:HH:MM:SS.mmm),L_RCVR1\n"
+        "1:00:00:00.000,-80.0\n"
+        "1:00:00:01.000,-79.5\n";
     QString in_path = writeTempCsv(csv);
     QVERIFY(!in_path.isEmpty());
 
@@ -892,9 +900,9 @@ void TestPlotViewModel::exportCsvHeaderAndData()
 {
     // The exported CSV must have a time column header and value rows.
     QString csv =
-        "Day,Time,L_RCVR1\n"
-        "45,10:00:00.000,-80.0\n"
-        "45,10:00:01.000,-79.0\n";
+        "Time (DOY:HH:MM:SS.mmm),L_RCVR1\n"
+        "45:10:00:00.000,-80.0\n"
+        "45:10:00:01.000,-79.0\n";
     QString in_path = writeTempCsv(csv);
 
     PlotViewModel vm;
@@ -965,6 +973,47 @@ void TestPlotViewModel::exportCsvIncludesErrorColumn()
     const QString body = stream.readAll();
     QVERIFY2(body.contains(",3"), "Missed-frames value must appear in the exported rows");
     f.close();
+
+    QFile::remove(out_path);
+}
+
+void TestPlotViewModel::exportCsvRoundTripsThroughLoad()
+{
+    // C1: a file written by exportCsv must load back through loadCsvFile with the
+    // same series identities and values — the exporter and importer are a matched
+    // pair. This is the regression guard for the format divergence where exported
+    // CSVs could not be re-imported.
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream(
+        "Ch32", 32, {0.0, 1.0}, {90.0, 80.0}, {0.0, 3.0}));
+
+    QString out_path = QDir::tempPath() + "/tst_export_roundtrip.csv";
+    QFile::remove(out_path);
+    QVERIFY(vm.exportCsv(out_path));
+
+    PlotViewModel reloaded;
+    QVERIFY(reloaded.loadCsvFile(out_path));
+
+    // Both the lock and missed-frames series survive, re-typed from their qualified
+    // headers and stripped back to the bare "Ch32" legend name.
+    QCOMPARE(reloaded.seriesCount(), 2);
+    QVERIFY(reloaded.hasLockSeries());
+    QVERIFY(reloaded.hasMissedFramesSeries());
+
+    int lock_idx = -1;
+    int missed_idx = -1;
+    for (int i = 0; i < reloaded.seriesCount(); i++)
+    {
+        const PlotSeriesData& s = reloaded.seriesAt(i);
+        QCOMPARE(s.name, QString("Ch32"));
+        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock)            lock_idx = i;
+        if (s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)  missed_idx = i;
+    }
+    QVERIFY(lock_idx >= 0);
+    QVERIFY(missed_idx >= 0);
+
+    QCOMPARE(reloaded.seriesAt(lock_idx).yValues, QVector<double>({90.0, 80.0}));
+    QCOMPARE(reloaded.seriesAt(missed_idx).yValues, QVector<double>({0.0, 3.0}));
 
     QFile::remove(out_path);
 }
