@@ -16,7 +16,6 @@
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
-#include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -26,7 +25,7 @@
 #include <QRegularExpressionValidator>
 #include <QSettings>
 #include <QSpinBox>
-#include <QTableWidget>
+#include <QScrollArea>
 #include <QVBoxLayout>
 
 #include "calibrationextractor.h"
@@ -1221,10 +1220,9 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
 {
     setWindowTitle("Configure Streams");
     setModal(true);
-    resize(750, 600);
 
     auto* layout = new QVBoxLayout(this);
-    layout->setSpacing(10);
+    layout->setSpacing(8);
 
     // Time channel row
     {
@@ -1245,16 +1243,84 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
         layout->addLayout(hl);
     }
 
-    m_table = new QTableWidget(this);
-    layout->addWidget(m_table, 1);
+    layout->addSpacing(8);
+
+    // Column header row
+    {
+        constexpr int kColWidthProcess = 48;
+        constexpr int kColWidthChannel = 200;
+        constexpr int kColWidthMode    = 200;
+        constexpr int kColWidthSetup   = 64;
+        constexpr int kColWidthReady   = 64;
+
+        auto* header = new QWidget(this);
+        auto* hl = new QHBoxLayout(header);
+        hl->setContentsMargins(0, 0, 0, 0);
+        hl->setSpacing(0);
+
+        auto makeHdr = [&](const QString& text, int width) {
+            auto* lbl = new QLabel(text, header);
+            lbl->setFixedWidth(width);
+            lbl->setAlignment(Qt::AlignCenter | Qt::AlignVCenter);
+            lbl->setStyleSheet("color: rgba(255,255,255,0.6);");
+            hl->addWidget(lbl);
+        };
+        makeHdr("Process",   kColWidthProcess);
+        makeHdr("Channel",   kColWidthChannel);
+        makeHdr("Mode",      kColWidthMode);
+        makeHdr("Configure", kColWidthSetup);
+        makeHdr("Ready",     kColWidthReady);
+        hl->addStretch(1);
+
+        layout->addWidget(header);
+
+        // Separator line beneath headers
+        auto* line = new QFrame(this);
+        line->setFrameShape(QFrame::HLine);
+        line->setFrameShadow(QFrame::Plain);
+        line->setStyleSheet("color: rgba(255,255,255,0.15);");
+        layout->addWidget(line);
+    }
+
+    // Scrollable stream rows
+    m_stream_container = new QWidget(this);
+    m_stream_container->setAutoFillBackground(false);
+
+    auto* containerLayout = new QVBoxLayout(m_stream_container);
+    containerLayout->setContentsMargins(0, 0, 0, 0);
+    containerLayout->setSpacing(0);
+
+    m_scroll_area = new QScrollArea(this);
+    m_scroll_area->setWidget(m_stream_container);
+    m_scroll_area->setWidgetResizable(true);
+    m_scroll_area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_scroll_area->setFrameShape(QFrame::NoFrame);
+    m_scroll_area->setStyleSheet("QScrollArea { background: transparent; border: none; }");
+    m_scroll_area->viewport()->setAutoFillBackground(false);
 
     buildTable();
+
+    // Cap the scroll area to 8 visible rows; shrink if fewer streams exist.
+    constexpr int kRowHeight    = 52;
+    constexpr int kVisibleRows  = 8;
+    const int visible = qMin(static_cast<int>(m_configs.size()), kVisibleRows);
+    m_scroll_area->setFixedHeight(visible * kRowHeight);
+
+    layout->addWidget(m_scroll_area);
 
     DialogButtons btns = makeDialogButtons(this, tr("Process"));
     m_ok_btn = btns.primary;
     connect(m_ok_btn, &QPushButton::clicked, this, &StreamConfigDialog::validateAndAccept);
 
+    m_all_toggle = new QCheckBox(tr("All"), this);
+    m_all_toggle->setToolTip("Toggle all streams on or off.");
+    connect(m_all_toggle, &QCheckBox::toggled, this, [this](bool checked) {
+        for (RowWidgets& w : m_rows)
+            w.process->setChecked(checked);
+    });
+
     auto* mainBtnLayout = new QHBoxLayout;
+    mainBtnLayout->addWidget(m_all_toggle);
     mainBtnLayout->addStretch(1);
     mainBtnLayout->addWidget(btns.cancel);
     mainBtnLayout->addWidget(m_ok_btn);
@@ -1262,55 +1328,21 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
 
     // m_ok_btn was nullptr during buildTable(), so call once now to reflect actual state.
     updateOkButton();
+    adjustSize();
 }
 
 void StreamConfigDialog::buildTable()
 {
-    constexpr int kColProcess = 0;
-    constexpr int kColChannel = 1;
-    constexpr int kColMode    = 2;
-    constexpr int kColSetup   = 3;
-    constexpr int kColReady   = 4;
-    constexpr int kRowHeight  = 52;
+    constexpr int kColWidthProcess = 48;
+    constexpr int kColWidthChannel = 200;
+    constexpr int kColWidthMode    = 200;
+    constexpr int kColWidthSetup   = 64;
+    constexpr int kColWidthReady   = 64;
+    constexpr int kRowHeight       = 52;
 
-    m_table->setColumnCount(5);
-    m_table->setHorizontalHeaderLabels({"Process", "Channel", "Mode", "Configure", "Ready"});
-    m_table->verticalHeader()->setVisible(false);
-    m_table->verticalHeader()->setDefaultSectionSize(kRowHeight);
-    m_table->setSelectionMode(QAbstractItemView::NoSelection);
-    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_table->horizontalHeader()->setSectionResizeMode(kColMode, QHeaderView::Fixed);
-    m_table->setColumnWidth(kColMode, 200);
-    m_table->horizontalHeader()->setSectionResizeMode(kColProcess, QHeaderView::ResizeToContents);
-    // Clamp the Channel column to a fixed width. ResizeToContents would let a
-    // long stream name stretch the whole dialog very wide; instead we cap it and
-    // let the cell elide, surfacing the full name via tooltip (see below).
-    m_table->horizontalHeader()->setSectionResizeMode(kColChannel, QHeaderView::Fixed);
-    m_table->setColumnWidth(kColChannel, 200);
-    m_table->horizontalHeader()->setSectionResizeMode(kColSetup,   QHeaderView::ResizeToContents);
-    m_table->horizontalHeader()->setSectionResizeMode(kColReady,   QHeaderView::ResizeToContents);
+    auto* containerLayout = qobject_cast<QVBoxLayout*>(m_stream_container->layout());
 
-    m_table->setRowCount(static_cast<int>(m_configs.size()));
     m_rows.resize(static_cast<int>(m_configs.size()));
-
-    auto centeredWidget = [](QWidget* inner) -> QWidget* {
-        auto* container = new QWidget;
-        container->setStyleSheet("background-color: transparent;");
-        auto* l = new QHBoxLayout(container);
-        l->setContentsMargins(4, 2, 4, 2);
-        l->setAlignment(Qt::AlignCenter);
-        l->addWidget(inner);
-        return container;
-    };
-
-    auto paddedWidget = [](QWidget* inner) -> QWidget* {
-        auto* container = new QWidget;
-        container->setStyleSheet("background-color: transparent;");
-        auto* l = new QHBoxLayout(container);
-        l->setContentsMargins(4, 2, 4, 2);
-        l->addWidget(inner);
-        return container;
-    };
 
     for (int row = 0; row < m_configs.size(); row++)
     {
@@ -1318,65 +1350,98 @@ void StreamConfigDialog::buildTable()
         RowWidgets& w = m_rows[row];
 
         // Seed stored values from the incoming config
-        w.frameSyncPattern  = cfg.frameSyncPattern;
-        w.frameSyncMask     = cfg.frameSyncMask;
-        w.bitsInFrame       = cfg.bitsInMinorFrame;
-        w.randomized        = cfg.randomized;
-        w.inverted          = cfg.inverted;
-        w.samplePeriodIndex   = cfg.samplePeriodIndex;
-        w.dataRateMbps      = cfg.dataRateMbps;
-        w.polarityIndex     = cfg.polarityIndex;
-        w.slopeIndex        = cfg.slopeIndex;
-        w.scaleDdBPerV      = cfg.scaleDdBPerV;
-        w.numReceivers      = cfg.numReceivers;
-        w.receiverChannels  = cfg.receiverChannels;
-        w.receiverParamsToml  = cfg.receiverParamsToml;
-        w.lastConfiguredMode  = cfg.mode;
+        w.frameSyncPattern   = cfg.frameSyncPattern;
+        w.frameSyncMask      = cfg.frameSyncMask;
+        w.bitsInFrame        = cfg.bitsInMinorFrame;
+        w.randomized         = cfg.randomized;
+        w.inverted           = cfg.inverted;
+        w.samplePeriodIndex  = cfg.samplePeriodIndex;
+        w.dataRateMbps       = cfg.dataRateMbps;
+        w.polarityIndex      = cfg.polarityIndex;
+        w.slopeIndex         = cfg.slopeIndex;
+        w.scaleDdBPerV       = cfg.scaleDdBPerV;
+        w.numReceivers       = cfg.numReceivers;
+        w.receiverChannels   = cfg.receiverChannels;
+        w.receiverParamsToml = cfg.receiverParamsToml;
+        w.lastConfiguredMode = cfg.mode;
 
-        // Process toggle
-        w.process = new QCheckBox(m_table);
+        // Row container
+        auto* rowWidget = new QWidget(m_stream_container);
+        rowWidget->setFixedHeight(kRowHeight);
+        rowWidget->setAutoFillBackground(false);
+
+        auto* hl = new QHBoxLayout(rowWidget);
+        hl->setContentsMargins(0, 0, 0, 0);
+        hl->setSpacing(0);
+
+        // Process toggle (left-justified in fixed-width cell)
+        w.process = new QCheckBox(rowWidget);
         w.process->setChecked(cfg.process);
         {
-            auto* cell = new QWidget(m_table);
-            cell->setStyleSheet("background-color: transparent;");
-            auto* l = new QHBoxLayout(cell);
-            l->setContentsMargins(4, 2, 4, 2);
-            l->setSpacing(6);
-            l->setAlignment(Qt::AlignCenter);
-            l->addWidget(w.process);
-            m_table->setCellWidget(row, kColProcess, cell);
+            auto* cell = new QWidget(rowWidget);
+            cell->setFixedWidth(kColWidthProcess);
+            cell->setAutoFillBackground(false);
+            auto* cl = new QHBoxLayout(cell);
+            cl->setContentsMargins(0, 0, 0, 0);
+            cl->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+            cl->addWidget(w.process);
+            hl->addWidget(cell);
         }
 
-        // Channel label
-        auto* channel_item = new QTableWidgetItem(cfg.label);
-        channel_item->setFlags(Qt::ItemIsEnabled);
-        // Left-align so that when the label is wider than the clamped column the
-        // cell elides the tail (…), keeping the leading channel identifier visible.
-        channel_item->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-        channel_item->setToolTip(cfg.label);
-        m_table->setItem(row, kColChannel, channel_item);
+        // Channel label (elides if too long, tooltip shows full name)
+        {
+            auto* lbl = new QLabel(cfg.label, rowWidget);
+            lbl->setFixedWidth(kColWidthChannel);
+            lbl->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+            lbl->setToolTip(cfg.label);
+            lbl->setAutoFillBackground(false);
+            hl->addWidget(lbl);
+        }
 
         // Mode combo
-        w.mode = new QComboBox(m_table);
+        w.mode = new QComboBox(rowWidget);
         w.mode->addItem("Receiver SNR");
         w.mode->addItem("Frame Sync Lock");
         w.mode->setCurrentIndex(cfg.mode == StreamMode::FrameSyncLockStats ? 1 : 0);
+        w.mode->setFixedWidth(kColWidthMode);
         w.mode->setToolTip("Analysis mode: Receiver SNR measures channel signal quality; Frame Sync Lock measures synchronization stability.");
-        m_table->setCellWidget(row, kColMode, paddedWidget(w.mode));
+        hl->addWidget(w.mode);
 
-        // Gear button
-        w.gearBtn = new QPushButton(m_table);
+        // Gear button (centered in fixed-width cell)
+        w.gearBtn = new QPushButton(rowWidget);
         w.gearBtn->setIcon(QIcon(":/resources/gear.svg"));
         w.gearBtn->setToolTip("Open configuration dialog for this stream's frame sync, data rate, and receiver parameters.");
         styleIconButton(w.gearBtn, 28);
         w.gearBtn->setEnabled(cfg.process);
-        m_table->setCellWidget(row, kColSetup, centeredWidget(w.gearBtn));
+        {
+            auto* cell = new QWidget(rowWidget);
+            cell->setFixedWidth(kColWidthSetup);
+            cell->setAutoFillBackground(false);
+            auto* cl = new QHBoxLayout(cell);
+            cl->setContentsMargins(0, 0, 0, 0);
+            cl->setAlignment(Qt::AlignCenter);
+            cl->addWidget(w.gearBtn);
+            hl->addWidget(cell);
+        }
 
-        // Ready label
-        w.readyLabel = new QLabel(m_table);
+        // Ready label (centered in fixed-width cell)
+        w.readyLabel = new QLabel(rowWidget);
         w.readyLabel->setTextFormat(Qt::RichText);
         w.readyLabel->setAlignment(Qt::AlignCenter);
-        m_table->setCellWidget(row, kColReady, centeredWidget(w.readyLabel));
+        w.readyLabel->setAutoFillBackground(false);
+        {
+            auto* cell = new QWidget(rowWidget);
+            cell->setFixedWidth(kColWidthReady);
+            cell->setAutoFillBackground(false);
+            auto* cl = new QHBoxLayout(cell);
+            cl->setContentsMargins(0, 0, 0, 0);
+            cl->setAlignment(Qt::AlignCenter);
+            cl->addWidget(w.readyLabel);
+            hl->addWidget(cell);
+        }
+
+        hl->addStretch(1);
+        containerLayout->addWidget(rowWidget);
 
         updateReadyIcon(row);
 
@@ -1388,6 +1453,8 @@ void StreamConfigDialog::buildTable()
         connect(w.gearBtn, &QPushButton::clicked,
                 this, [this, row]() { openGearDialog(row); });
     }
+
+    containerLayout->addStretch(1);
 }
 
 void StreamConfigDialog::updateReadyIcon(int row)

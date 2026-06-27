@@ -17,7 +17,8 @@ class QCheckBox;
 class QComboBox;
 class QLabel;
 class QPushButton;
-class QTableWidget;
+class QScrollArea;
+class QWidget;
 
 /**
  * @brief Lets the user choose which PCM streams to process and how.
@@ -104,10 +105,12 @@ private:
     QVector<StreamConfig> m_configs;
     QString               m_toml_dir;
     QString               m_app_root;
-    QTableWidget*         m_table              = nullptr;
+    QScrollArea*          m_scroll_area        = nullptr;
+    QWidget*              m_stream_container   = nullptr;
     QVector<RowWidgets>   m_rows;
     QComboBox*            m_time_channel_combo = nullptr;
     QPushButton*          m_ok_btn             = nullptr;
+    QCheckBox*            m_all_toggle         = nullptr;
     int                   m_time_channel_id    = -1; ///< Resolved time channel ID for calibration extraction (US3.2).
 };
 

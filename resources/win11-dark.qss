@@ -486,7 +486,7 @@ QTreeWidget::indicator:disabled
 /*-----QTableView & QTableWidget-----*/
 QTableView
 {
-    background-color: #202020;
+    background-color: #2C2C2C;
     border: 1px solid #303030;
     color: #FFFFFF;
     gridline-color: #303030;
@@ -496,7 +496,7 @@ QTableView
 
 QTableView::disabled
 {
-    background-color: #202020;
+    background-color: #2C2C2C;
     border: 1px solid #303030;
     color: rgba(255, 255, 255, 0.36);
     gridline-color: #303030;

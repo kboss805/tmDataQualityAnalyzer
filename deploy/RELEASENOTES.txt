@@ -1,3 +1,15 @@
+tmDataQualityAnalyzer v2.5.2 - What's New
+=================================
+
+  - Improved: The Configure Streams dialog no longer shows a dark black
+    background behind the table row controls. The table background now matches
+    the dialog's dark gray background in dark mode.
+
+  - New: An "All" toggle has been added to the bottom-left of the Configure
+    Streams dialog. Flip it on to enable all streams for processing, or off
+    to disable all streams in one action.
+
+
 tmDataQualityAnalyzer v2.5.1 - What's New
 =================================
 
