@@ -222,7 +222,7 @@ FrameSyncWidgets buildFrameSyncRow(QGridLayout* grid, QWidget* parent,
 
     w.syncPattern = new QLineEdit(parent);
     w.syncPattern->setValidator(new QRegularExpressionValidator(kHexRegex, parent));
-    w.syncPattern->setText(cfg.frameSyncPattern);
+    w.syncPattern->setText(cfg.sync.pattern);
     w.syncPattern->setPlaceholderText(syncPlaceholder);
     w.syncPattern->setMinimumWidth(110);
     w.syncPattern->setToolTip(syncTooltip);
@@ -231,7 +231,7 @@ FrameSyncWidgets buildFrameSyncRow(QGridLayout* grid, QWidget* parent,
 
     w.syncMask = new QLineEdit(parent);
     w.syncMask->setValidator(new QRegularExpressionValidator(kHexRegex, parent));
-    w.syncMask->setText(cfg.frameSyncMask);
+    w.syncMask->setText(cfg.sync.mask);
     w.syncMask->setPlaceholderText("e.g. FFFFFFFF");
     w.syncMask->setMinimumWidth(110);
     w.syncMask->setToolTip("Hex mask applied during frame sync comparison. Set bits are compared; cleared bits are ignored.");
@@ -241,7 +241,7 @@ FrameSyncWidgets buildFrameSyncRow(QGridLayout* grid, QWidget* parent,
     w.bitsPerFrame = new QSpinBox(parent);
     w.bitsPerFrame->setRange(PCMConstants::kMinFrameLengthBits,
                              PCMConstants::kMaxFrameLengthBits);
-    w.bitsPerFrame->setValue(cfg.bitsInMinorFrame);
+    w.bitsPerFrame->setValue(cfg.sync.bitsInMinorFrame);
     w.bitsPerFrame->setMinimumWidth(80);
     w.bitsPerFrame->setToolTip("Total number of bits in one minor frame, including the frame sync word.");
     grid->addWidget(new QLabel("Bits Per Frame"),  0, 2, Qt::AlignLeft | Qt::AlignVCenter);
@@ -258,7 +258,7 @@ FrameSyncWidgets buildFrameSyncRow(QGridLayout* grid, QWidget* parent,
         w.dataRate->setSpecialValueText(QString::number(cfg.tmatsDataRateMbps, 'f', 3));
     else
         w.dataRate->setSpecialValueText("TMATS");
-    w.dataRate->setValue(cfg.dataRateMbps);
+    w.dataRate->setValue(cfg.sync.dataRateMbps);
     w.dataRate->setMinimumWidth(130);
     w.dataRate->setToolTip("Telemetry data rate in Mbps. Set to 0 (TMATS) to derive the rate from the file metadata.");
     grid->addWidget(new QLabel("Data Rate (Mbps)"), 3, 0, Qt::AlignLeft | Qt::AlignVCenter);
@@ -376,7 +376,7 @@ public:
 
         // Derandomize toggle row
         m_randomized = new QCheckBox(this);
-        m_randomized->setChecked(cfg.randomized);
+        m_randomized->setChecked(cfg.sync.randomized);
         m_randomized->setToolTip("Apply RNRZ-L self-synchronizing descrambler to the data stream.");
         {
             auto* row = new QHBoxLayout;
@@ -389,7 +389,7 @@ public:
 
         // Invert Data toggle row
         m_inverted = new QCheckBox(this);
-        m_inverted->setChecked(cfg.inverted);
+        m_inverted->setChecked(cfg.sync.inverted);
         m_inverted->setToolTip("Invert every bit of the raw data stream before processing (use when the PCM signal polarity is inverted).");
         {
             auto* row = new QHBoxLayout;
@@ -476,32 +476,15 @@ private:
 class CalibrationSetupDialog : public QDialog
 {
 public:
-    CalibrationSetupDialog(const QString& frameSyncHex,
-                           const QString& frameSyncMaskHex,
-                           int bitsInMinorFrame,
-                           bool randomized,
-                           bool inverted,
-                           double dataRateMbps,
-                           int timeChannelId,
-                           int pcmChannelId,
-                           const QString& receiverParamsToml,
-                           int numReceivers,
-                           int receiverChannels,
+    /// @param baseRequest Acquisition + receiver fields already filled by the
+    ///        caller (frame sync, channel IDs, word-map source). The dialog adds
+    ///        the cal file, parsed steps, and clip seconds before extracting.
+    CalibrationSetupDialog(const CalibrationExtractor::Request& baseRequest,
                            const QString& tomlDir,
                            const QString& appRoot,
                            QWidget* parent = nullptr)
         : QDialog(parent)
-        , m_frameSyncHex(frameSyncHex)
-        , m_frameSyncMaskHex(frameSyncMaskHex)
-        , m_bitsInMinorFrame(bitsInMinorFrame)
-        , m_randomized(randomized)
-        , m_inverted(inverted)
-        , m_dataRateMbps(dataRateMbps)
-        , m_timeChannelId(timeChannelId)
-        , m_pcmChannelId(pcmChannelId)
-        , m_receiverParamsToml(receiverParamsToml)
-        , m_numReceivers(numReceivers)
-        , m_receiverChannels(receiverChannels)
+        , m_baseRequest(baseRequest)
         , m_tomlDir(tomlDir)
         , m_appRoot(appRoot)
     {
@@ -664,7 +647,7 @@ private:
 
     void onBrowseCal()
     {
-        if (m_frameSyncHex.trimmed().isEmpty())
+        if (m_baseRequest.sync.pattern.trimmed().isEmpty())
         {
             QMessageBox::warning(this, tr("Missing Frame Sync"),
                 tr("Set a frame sync pattern before loading the calibration file."));
@@ -710,16 +693,13 @@ private:
         setStatus(m_calStatus, Pending, tr("Processing calibration file…"));
         updateOk();
 
-        CalibrationExtractor::Request req;
+        // Start from the caller-supplied acquisition/receiver fields and add the
+        // cal file, parsed steps, and clip seconds the dialog collected.
+        CalibrationExtractor::Request req = m_baseRequest;
         req.calFilename        = m_calPath;
-        req.timeChannelId      = m_timeChannelId;
-        req.pcmChannelId       = m_pcmChannelId;
-        req.frameSyncHex       = m_frameSyncHex;
-        req.frameSyncMaskHex   = m_frameSyncMaskHex;
-        req.bitsInMinorFrame   = m_bitsInMinorFrame;
-        req.randomized         = m_randomized;
-        req.inverted           = m_inverted;
-        req.dataRateMbps       = m_dataRateMbps;
+        req.steps              = m_steps;
+        req.clipStartSec       = m_clipStart ? m_clipStart->value() : 0.0;
+        req.clipEndSec         = m_clipEnd ? m_clipEnd->value() : 0.0;
         // Resolve the word map the SAME way the main processing run does
         // (mainviewmodel buildJob): when the user hasn't picked an explicit
         // Receiver Parameters file, fall back to the shipped default.toml rather
@@ -727,7 +707,6 @@ private:
         // MUST agree on word indices, because the resulting profiles are matched
         // to plot channels by word — a divergent map silently misattaches every
         // profile and the plot falls back to linear calibration.
-        req.receiverParamsToml = m_receiverParamsToml;
         if (req.receiverParamsToml.isEmpty())
         {
             const QString defaultRcvrParams = m_appRoot + "/" + UIConstants::kSettingsDirName +
@@ -737,11 +716,6 @@ private:
                 req.receiverParamsToml = defaultRcvrParams;
             }
         }
-        req.numReceivers       = m_numReceivers;
-        req.receiverChannels   = m_receiverChannels;
-        req.steps              = m_steps;
-        req.clipStartSec       = m_clipStart ? m_clipStart->value() : 0.0;
-        req.clipEndSec         = m_clipEnd ? m_clipEnd->value() : 0.0;
 
         CalibrationExtractor extractor;
         QProgressDialog progress(tr("Processing calibration file…"), tr("Cancel"),
@@ -801,18 +775,9 @@ private:
         updateOk();
     }
 
-    // Frame sync + receiver settings forwarded to the extractor.
-    QString m_frameSyncHex;
-    QString m_frameSyncMaskHex;
-    int     m_bitsInMinorFrame = 0;
-    bool    m_randomized       = false;
-    bool    m_inverted         = false;
-    double  m_dataRateMbps     = 0.0;
-    int     m_timeChannelId    = -1;
-    int     m_pcmChannelId     = -1;
-    QString m_receiverParamsToml;
-    int     m_numReceivers     = 0;
-    int     m_receiverChannels = 0;
+    // Caller-supplied acquisition + receiver settings forwarded to the extractor;
+    // the dialog only adds the cal file, steps, and clip seconds before running.
+    CalibrationExtractor::Request m_baseRequest;
     QString m_tomlDir;
     QString m_appRoot;
 
@@ -923,7 +888,7 @@ public:
 
         // Derandomize toggle row
         m_randomized = new QCheckBox(this);
-        m_randomized->setChecked(cfg.randomized);
+        m_randomized->setChecked(cfg.sync.randomized);
         m_randomized->setToolTip("Apply RNRZ-L self-synchronizing descrambler to the data stream.");
         {
             auto* row = new QHBoxLayout;
@@ -936,7 +901,7 @@ public:
 
         // Invert Data toggle row
         m_inverted = new QCheckBox(this);
-        m_inverted->setChecked(cfg.inverted);
+        m_inverted->setChecked(cfg.sync.inverted);
         m_inverted->setToolTip("Invert every bit of the raw data stream before processing (use when the PCM signal polarity is inverted).");
         {
             auto* row = new QHBoxLayout;
@@ -1130,6 +1095,11 @@ public:
     bool    inverted()           const { return m_inverted->isChecked(); }
     int     samplePeriodIndex()    const { return m_sampleRate->currentIndex(); }
     double  dataRateMbps()       const { return m_dataRate->value(); }
+    /// The acquisition fields as a bundle (for building a CalibrationExtractor::Request).
+    FrameSyncParams frameSyncParams() const {
+        return { frameSyncPattern(), frameSyncMask(), bitsPerFrame(),
+                 randomized(), inverted(), dataRateMbps() };
+    }
     int     polarityIndex()      const { return m_polarity->currentIndex(); }
     int     slopeIndex()         const { return m_slope->currentIndex(); }
     double  scaleDdBPerV()       const { return m_scale->value(); }
@@ -1169,11 +1139,14 @@ private:
             return;
         }
 
-        CalibrationSetupDialog setup(frameSyncPattern(), frameSyncMask(),
-                                     bitsPerFrame(), randomized(), inverted(), dataRateMbps(),
-                                     m_timeChannelId, m_pcmChannelId,
-                                     m_receiverParamsToml, numReceivers(),
-                                     receiverChannels(), m_toml_dir, m_app_root, this);
+        CalibrationExtractor::Request base;
+        base.timeChannelId      = m_timeChannelId;
+        base.pcmChannelId       = m_pcmChannelId;
+        base.sync               = frameSyncParams();
+        base.receiverParamsToml = m_receiverParamsToml;
+        base.numReceivers       = numReceivers();
+        base.receiverChannels   = receiverChannels();
+        CalibrationSetupDialog setup(base, m_toml_dir, m_app_root, this);
         if (setup.exec() != QDialog::Accepted) return;
         m_toml_dir = setup.lastTomlDir();
 
@@ -1345,13 +1318,13 @@ void StreamConfigDialog::buildTable()
         RowWidgets& w = m_rows[row];
 
         // Seed stored values from the incoming config
-        w.frameSyncPattern   = cfg.frameSyncPattern;
-        w.frameSyncMask      = cfg.frameSyncMask;
-        w.bitsInFrame        = cfg.bitsInMinorFrame;
-        w.randomized         = cfg.randomized;
-        w.inverted           = cfg.inverted;
+        w.frameSyncPattern   = cfg.sync.pattern;
+        w.frameSyncMask      = cfg.sync.mask;
+        w.bitsInFrame        = cfg.sync.bitsInMinorFrame;
+        w.randomized         = cfg.sync.randomized;
+        w.inverted           = cfg.sync.inverted;
         w.samplePeriodIndex  = cfg.samplePeriodIndex;
-        w.dataRateMbps       = cfg.dataRateMbps;
+        w.dataRateMbps       = cfg.sync.dataRateMbps;
         w.polarityIndex      = cfg.polarityIndex;
         w.slopeIndex         = cfg.slopeIndex;
         w.scaleDdBPerV       = cfg.scaleDdBPerV;
@@ -1517,13 +1490,13 @@ void StreamConfigDialog::openGearDialog(int row)
 
     // Populate temp from stored values, preserving tmatsDataRateMbps for display.
     StreamConfig temp = m_configs[row];
-    temp.frameSyncPattern   = w.frameSyncPattern;
-    temp.frameSyncMask      = w.frameSyncMask;
-    temp.bitsInMinorFrame   = w.bitsInFrame;
-    temp.randomized         = w.randomized;
-    temp.inverted           = w.inverted;
+    temp.sync.pattern   = w.frameSyncPattern;
+    temp.sync.mask      = w.frameSyncMask;
+    temp.sync.bitsInMinorFrame   = w.bitsInFrame;
+    temp.sync.randomized         = w.randomized;
+    temp.sync.inverted           = w.inverted;
     temp.samplePeriodIndex    = w.samplePeriodIndex;
-    temp.dataRateMbps       = w.dataRateMbps;
+    temp.sync.dataRateMbps       = w.dataRateMbps;
     temp.polarityIndex      = w.polarityIndex;
     temp.slopeIndex         = w.slopeIndex;
     temp.scaleDdBPerV       = w.scaleDdBPerV;
@@ -1538,9 +1511,9 @@ void StreamConfigDialog::openGearDialog(int row)
     {
         if (is_frame_sync_lock)
         {
-            temp.frameSyncMask     = PCMConstants::kDefaultFrameSyncMask;
-            temp.frameSyncPattern  = PCMConstants::kDefaultFrameSyncLockPattern;
-            temp.bitsInMinorFrame  = PCMConstants::kDefaultFrameSyncLockBits;
+            temp.sync.mask     = PCMConstants::kDefaultFrameSyncMask;
+            temp.sync.pattern  = PCMConstants::kDefaultFrameSyncLockPattern;
+            temp.sync.bitsInMinorFrame  = PCMConstants::kDefaultFrameSyncLockBits;
             temp.receiverParamsToml.clear();
         }
         else
@@ -1548,9 +1521,9 @@ void StreamConfigDialog::openGearDialog(int row)
             // Receiver SNR defaults are loaded from framesync_rcvr_default.toml (not
             // hard-coded) so the user can change the receiver frame sync.
             const ReceiverFrameDefaults d = loadReceiverFrameDefaults(m_app_root);
-            temp.frameSyncPattern = d.pattern;
-            temp.frameSyncMask    = d.mask;
-            temp.bitsInMinorFrame = d.bits;
+            temp.sync.pattern = d.pattern;
+            temp.sync.mask    = d.mask;
+            temp.sync.bitsInMinorFrame = d.bits;
         }
     }
 
@@ -1680,13 +1653,13 @@ QVector<StreamConfig> StreamConfigDialog::configs() const
         result[row].process           = w.process->isChecked();
         result[row].mode              = (w.mode->currentIndex() == 1)
             ? StreamMode::FrameSyncLockStats : StreamMode::ReceiverChannelInfo;
-        result[row].frameSyncPattern  = w.frameSyncPattern;
-        result[row].frameSyncMask     = w.frameSyncMask;
-        result[row].bitsInMinorFrame  = w.bitsInFrame;
-        result[row].randomized        = w.randomized;
-        result[row].inverted          = w.inverted;
+        result[row].sync.pattern  = w.frameSyncPattern;
+        result[row].sync.mask     = w.frameSyncMask;
+        result[row].sync.bitsInMinorFrame  = w.bitsInFrame;
+        result[row].sync.randomized        = w.randomized;
+        result[row].sync.inverted          = w.inverted;
         result[row].samplePeriodIndex   = w.samplePeriodIndex;
-        result[row].dataRateMbps      = w.dataRateMbps;
+        result[row].sync.dataRateMbps      = w.dataRateMbps;
         result[row].polarityIndex     = w.polarityIndex;
         result[row].slopeIndex        = w.slopeIndex;
         result[row].scaleDdBPerV      = w.scaleDdBPerV;

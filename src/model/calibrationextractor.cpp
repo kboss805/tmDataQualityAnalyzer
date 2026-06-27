@@ -52,16 +52,16 @@ void CalibrationExtractor::start(const Request& request)
 
     // ---- Frame sync numeric values ----
     bool sync_ok = false;
-    const uint64_t frame_sync = request.frameSyncHex.toULongLong(&sync_ok, UIConstants::kHexBase);
-    if (!sync_ok || request.frameSyncHex.isEmpty())
+    const uint64_t frame_sync = request.sync.pattern.toULongLong(&sync_ok, UIConstants::kHexBase);
+    if (!sync_ok || request.sync.pattern.isEmpty())
     {
-        finishWithError("Invalid frame sync pattern '" + request.frameSyncHex + "'.");
+        finishWithError("Invalid frame sync pattern '" + request.sync.pattern + "'.");
         return;
     }
-    const int sync_pattern_length = static_cast<int>(request.frameSyncHex.length()) * 4;
+    const int sync_pattern_length = static_cast<int>(request.sync.pattern.length()) * 4;
 
     uint64_t frame_sync_mask = 0;
-    if (request.frameSyncMaskHex.isEmpty())
+    if (request.sync.mask.isEmpty())
     {
         frame_sync_mask = (sync_pattern_length > 0 && sync_pattern_length < 64)
             ? (1ULL << sync_pattern_length) - 1
@@ -70,16 +70,16 @@ void CalibrationExtractor::start(const Request& request)
     else
     {
         bool mask_ok = false;
-        frame_sync_mask = request.frameSyncMaskHex.toULongLong(&mask_ok, UIConstants::kHexBase);
+        frame_sync_mask = request.sync.mask.toULongLong(&mask_ok, UIConstants::kHexBase);
         if (!mask_ok)
         {
-            finishWithError("Invalid frame sync mask '" + request.frameSyncMaskHex + "'.");
+            finishWithError("Invalid frame sync mask '" + request.sync.mask + "'.");
             return;
         }
     }
 
     const int words_in_minor_frame =
-        (request.bitsInMinorFrame + PCMConstants::kCommonWordLen - 1) / PCMConstants::kCommonWordLen;
+        (request.sync.bitsInMinorFrame + PCMConstants::kCommonWordLen - 1) / PCMConstants::kCommonWordLen;
 
     // ---- Word map (unit slope, zero offset -> raw counts out) ----
     QString setup_error;
@@ -98,11 +98,11 @@ void CalibrationExtractor::start(const Request& request)
     m_params.frameSyncMask     = frame_sync_mask;
     m_params.syncPatternLength = sync_pattern_length;
     m_params.wordsInMinorFrame = words_in_minor_frame;
-    m_params.bitsInMinorFrame  = request.bitsInMinorFrame;
-    m_params.isRandomized      = request.randomized;
-    m_params.isInverted        = request.inverted;
+    m_params.bitsInMinorFrame  = request.sync.bitsInMinorFrame;
+    m_params.isRandomized      = request.sync.randomized;
+    m_params.isInverted        = request.sync.inverted;
     m_params.mode              = StreamMode::ReceiverChannelInfo;
-    m_params.dataRateBps       = (request.dataRateMbps > 0.0) ? request.dataRateMbps * 1e6 : 0.0;
+    m_params.dataRateBps       = (request.sync.dataRateMbps > 0.0) ? request.sync.dataRateMbps * 1e6 : 0.0;
     m_params.streamLabel       = "Calibration";
     m_params.samplePeriodSec   = m_sample_period_sec;
     m_params.startSeconds      = 0;

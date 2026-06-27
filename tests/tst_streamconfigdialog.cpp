@@ -42,12 +42,12 @@ static StreamConfig makeConfig(const QString& label = "Ch 01",
     cfg.label              = label;
     cfg.process            = false;
     cfg.mode               = StreamMode::FrameSyncLockStats;
-    cfg.frameSyncPattern   = sync;
-    cfg.frameSyncMask      = mask;
-    cfg.bitsInMinorFrame   = words;
-    cfg.randomized         = false;
+    cfg.sync.pattern   = sync;
+    cfg.sync.mask      = mask;
+    cfg.sync.bitsInMinorFrame   = words;
+    cfg.sync.randomized         = false;
     cfg.samplePeriodIndex  = UIConstants::kDefaultSamplePeriodIndex;
-    cfg.dataRateMbps       = 0.0;
+    cfg.sync.dataRateMbps       = 0.0;
     return cfg;
 }
 
@@ -99,17 +99,17 @@ void TestStreamConfigDialog::configsRoundtripFrameSyncFields()
     QScopedPointer<StreamConfigDialog> dlg(makeDialog({cfg}));
 
     QVector<StreamConfig> out = dlg->configs();
-    QCOMPARE(out[0].frameSyncPattern, QString("A345CA5C"));
-    QCOMPARE(out[0].frameSyncMask,    QString("FFFF0000"));
+    QCOMPARE(out[0].sync.pattern, QString("A345CA5C"));
+    QCOMPARE(out[0].sync.mask,    QString("FFFF0000"));
 }
 
 void TestStreamConfigDialog::configsRoundtripWordsInFrame()
 {
     StreamConfig cfg = makeConfig();
-    cfg.bitsInMinorFrame = 512;
+    cfg.sync.bitsInMinorFrame = 512;
     QScopedPointer<StreamConfigDialog> dlg(makeDialog({cfg}));
 
-    QCOMPARE(dlg->configs()[0].bitsInMinorFrame, 512);
+    QCOMPARE(dlg->configs()[0].sync.bitsInMinorFrame, 512);
 }
 
 void TestStreamConfigDialog::configsRoundtripProcessFlag()
@@ -228,14 +228,14 @@ void TestStreamConfigDialog::validateRejectsCheckedStreamWithEmptyFrameSync()
     // that would trigger rejection.
     StreamConfig cfg = makeConfig();
     cfg.process          = true;
-    cfg.frameSyncPattern = "";   // invalid — empty
+    cfg.sync.pattern = "";   // invalid — empty
 
     QScopedPointer<StreamConfigDialog> dlg(makeDialog({cfg}));
 
     // The dialog's configs() should reflect the empty pattern (widget was set to "").
     QVector<StreamConfig> out = dlg->configs();
     QVERIFY(out[0].process);
-    QVERIFY(out[0].frameSyncPattern.trimmed().isEmpty());
+    QVERIFY(out[0].sync.pattern.trimmed().isEmpty());
     // This is the exact state that validateAndAccept rejects with a QMessageBox.
     // Calling accept() directly bypasses validateAndAccept, so we verify state only.
 }
@@ -447,8 +447,8 @@ void TestStreamConfigDialog::applyToAllCopiesSettingsToSameModeStreams()
     QVERIFY(testExecuted);
 
     QVector<StreamConfig> out = dlg->configs();
-    QCOMPARE(out[0].frameSyncPattern, QString("A345CA5C"));
-    QCOMPARE(out[1].frameSyncPattern, QString("A345CA5C"));
+    QCOMPARE(out[0].sync.pattern, QString("A345CA5C"));
+    QCOMPARE(out[1].sync.pattern, QString("A345CA5C"));
 }
 
 void TestStreamConfigDialog::applyToAllLeavesDifferentModeStreamsUnchanged()
@@ -499,9 +499,9 @@ void TestStreamConfigDialog::applyToAllLeavesDifferentModeStreamsUnchanged()
     QVERIFY(testExecuted);
 
     QVector<StreamConfig> out = dlg->configs();
-    QCOMPARE(out[0].frameSyncPattern, QString("A345CA5C"));
+    QCOMPARE(out[0].sync.pattern, QString("A345CA5C"));
     // Row 1 is a different mode (Receiver SNR) — left unchanged.
-    QCOMPARE(out[1].frameSyncPattern, QString("22222222"));
+    QCOMPARE(out[1].sync.pattern, QString("22222222"));
     QCOMPARE(out[1].mode, StreamMode::ReceiverChannelInfo);
 }
 
@@ -542,6 +542,6 @@ void TestStreamConfigDialog::applyToAllUncheckedDoesNotAffectOtherStreams()
     QVERIFY(testExecuted);
 
     QVector<StreamConfig> out = dlg->configs();
-    QCOMPARE(out[0].frameSyncPattern, QString("A345CA5C"));
-    QCOMPARE(out[1].frameSyncPattern, QString("11111111"));
+    QCOMPARE(out[0].sync.pattern, QString("A345CA5C"));
+    QCOMPARE(out[1].sync.pattern, QString("11111111"));
 }

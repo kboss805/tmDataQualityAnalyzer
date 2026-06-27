@@ -54,6 +54,7 @@ HEADERS += \
     $$PWD/../include/model/csvseriesparser.h \
     $$PWD/../include/model/tomlconfighelper.h \
     $$PWD/../include/dto/streamconfig.h \
+    $$PWD/../include/dto/framesyncparams.h \
     $$PWD/../include/dto/processingparams.h \
     $$PWD/../include/dto/processedstreamdata.h \
     $$PWD/../include/dto/plotseriesdata.h \

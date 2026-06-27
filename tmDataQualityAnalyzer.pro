@@ -124,6 +124,7 @@ HEADERS += \
 # DTOs: plain data carried across layers
 HEADERS += \
     include/dto/streamconfig.h \
+    include/dto/framesyncparams.h \
     include/dto/processingparams.h \
     include/dto/processedstreamdata.h \
     include/dto/plotseriesdata.h \

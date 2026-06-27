@@ -162,7 +162,7 @@ QVector<StreamConfig> MainViewModel::buildDefaultStreamConfigs() const
         cfg.label = ch.second;
         cfg.process = false;
         cfg.mode = StreamMode::FrameSyncLockStats;
-        cfg.dataRateMbps = 0.0;
+        cfg.sync.dataRateMbps = 0.0;
 
         // Populate the TMATS-reported bit rate so the dialog can display it.
         double bps = m_reader->getTmatsDataRateBps(ch.first);
@@ -500,7 +500,7 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
         ? ("Ch " + QString::number(cfg.pcmChannelId)) : cfg.label;
 
     // ---- Validate and decode inline frame sync fields ----
-    const QString& sync_hex = cfg.frameSyncPattern;
+    const QString& sync_hex = cfg.sync.pattern;
     if (sync_hex.isEmpty())
     {
         error = stream_desc + ": A frame sync pattern is required.";
@@ -516,7 +516,7 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
     int sync_pattern_length = static_cast<int>(sync_hex.length()) * 4;
 
     uint64_t frame_sync_mask = 0;
-    const QString& mask_hex = cfg.frameSyncMask;
+    const QString& mask_hex = cfg.sync.mask;
     if (mask_hex.isEmpty())
     {
         frame_sync_mask = (sync_pattern_length > 0 && sync_pattern_length < 64)
@@ -534,7 +534,7 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
         }
     }
 
-    const int bits_in_minor_frame = cfg.bitsInMinorFrame;
+    const int bits_in_minor_frame = cfg.sync.bitsInMinorFrame;
     if (bits_in_minor_frame < PCMConstants::kMinFrameLengthBits)
     {
         error = stream_desc + ": Bits/Frame must be >= " +
@@ -553,10 +553,10 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
     out_job.params.syncPatternLength  = sync_pattern_length;
     out_job.params.wordsInMinorFrame  = words_in_minor_frame;
     out_job.params.bitsInMinorFrame   = bits_in_minor_frame;
-    out_job.params.isRandomized       = cfg.randomized;
-    out_job.params.isInverted         = cfg.inverted;
+    out_job.params.isRandomized       = cfg.sync.randomized;
+    out_job.params.isInverted         = cfg.sync.inverted;
     out_job.params.mode               = cfg.mode;
-    out_job.params.dataRateBps        = (cfg.dataRateMbps > 0.0) ? cfg.dataRateMbps * 1e6 : 0.0;
+    out_job.params.dataRateBps        = (cfg.sync.dataRateMbps > 0.0) ? cfg.sync.dataRateMbps * 1e6 : 0.0;
     out_job.params.streamLabel        = stream_desc;
 
     // Set per-stream sample period.
