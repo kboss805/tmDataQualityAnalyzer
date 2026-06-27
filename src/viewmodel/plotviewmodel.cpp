@@ -306,11 +306,25 @@ bool PlotViewModel::exportCsv(const QString& filepath) const
 
     QTextStream out(&file);
 
-    // Write header
+    // Write header. Frame-sync series names are stored bare (no metric suffix) for
+    // the plot legend; qualify them HERE so the CSV columns are self-describing —
+    // a stream's lock and missed-frames series share the same bare name and would
+    // otherwise export as two identical, indistinguishable headers.
+    auto headerLabel = [](const PlotSeriesData& s) -> QString {
+        switch (s.metricType)
+        {
+        case PlotSeriesData::MetricType::FrameSyncLock:
+            return s.name + " Lock (%)";
+        case PlotSeriesData::MetricType::AccumulatedMissedFrames:
+            return s.name + " Accumulated Missed Frames";
+        default: // SNR series names already carry the channel and are unique
+            return s.name;
+        }
+    };
     out << "Time (DOY:HH:MM:SS.mmm)";
     for (const auto& s : m_series)
     {
-        out << "," << s.name;
+        out << "," << headerLabel(s);
     }
     out << "\n";
 

@@ -939,10 +939,9 @@ void TestPlotViewModel::exportCsvIncludesErrorColumn()
 {
     // A stream with frame sync errors must export BOTH the lock series and the
     // accumulated-missed-frames series as separate columns (exportCsv iterates
-    // all series). Since v2.5.1 the frame-sync series names are stripped of their
-    // metric suffixes ("Lock (%)" / "Accumulated Missed Frames"), so both columns
-    // carry the bare stream label and are distinguished by position/metric, not
-    // header text — assert the column structure rather than the old suffixes.
+    // all series). The plot-legend series names are stored bare (suffixes stripped
+    // since v2.5.1), but exportCsv qualifies the CSV header per metric so the two
+    // otherwise-identical columns are self-describing.
     PlotViewModel vm;
     vm.addStreamData(makeLockAndErrorStream(
         "Ch32", 32, {0.0, 1.0}, {90.0, 80.0}, {0.0, 3.0}));
@@ -955,10 +954,11 @@ void TestPlotViewModel::exportCsvIncludesErrorColumn()
     QVERIFY(f.open(QIODevice::ReadOnly | QIODevice::Text));
     QTextStream stream(&f);
     const QStringList header = stream.readLine().split(',');
-    // Time column + lock series + missed-frames series = 3 columns.
+    // Time column + lock series + missed-frames series = 3 columns, each carrying
+    // the stream label plus its metric qualifier.
     QCOMPARE(header.size(), 3);
-    QCOMPARE(header.at(1), QString("Ch32")); // lock series
-    QCOMPARE(header.at(2), QString("Ch32")); // accumulated missed frames series
+    QCOMPARE(header.at(1), QString("Ch32 Lock (%)"));
+    QCOMPARE(header.at(2), QString("Ch32 Accumulated Missed Frames"));
 
     // The missed-frames data must actually be written (value 3.0 at the 2nd row),
     // proving the second series is exported and not dropped.
