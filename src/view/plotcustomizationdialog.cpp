@@ -138,11 +138,16 @@ void PlotCustomizationDialog::populateData()
         }
     }
 
+    // Display label for a stream group: "CH <id> — <name>". The channel id is
+    // re-added here for the selection UI even though the bare name is used in the
+    // plot legend / config dialog.
+    auto groupLabel = [&](int streamOrder) {
+        return QStringLiteral("CH %1 — %2").arg(streamOrder).arg(streamLabels.value(streamOrder));
+    };
+
     // Populate Lock Tab
     for (auto it = lockStreams.begin(); it != lockStreams.end(); ++it) {
         int streamOrder = it.key();
-        const QString label = QString("CH %1 — %2").arg(streamOrder)
-                                                    .arg(streamLabels.value(streamOrder));
 
         // Find if any series in this group is currently visible
         bool anyVisible = false;
@@ -153,7 +158,7 @@ void PlotCustomizationDialog::populateData()
             }
         }
 
-        auto* cb = new QCheckBox(label, m_lockTab);
+        auto* cb = new QCheckBox(groupLabel(streamOrder), m_lockTab);
         cb->setChecked(anyVisible);
         m_lockListLayout->addWidget(cb);
 
@@ -195,9 +200,7 @@ void PlotCustomizationDialog::populateData()
 
         // Adding the first item triggers currentIndexChanged(0), which calls
         // onSnrStreamSelected(0) — by then this stream's container is already registered.
-        const QString comboLabel = QString("CH %1 — %2").arg(streamOrder)
-                                                         .arg(streamLabels.value(streamOrder));
-        m_snrStreamCombo->addItem(comboLabel, streamOrder);
+        m_snrStreamCombo->addItem(groupLabel(streamOrder), streamOrder);
     }
 
     if (m_snrStreamCombo->count() == 0) {

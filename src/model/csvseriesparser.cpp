@@ -44,7 +44,8 @@ CsvParseResult CsvSeriesParser::parse(const QString& filepath)
     // Count channels per receiver for shade assignment (SNR series only)
     QMap<int, int> receiver_channel_count;
 
-    static const QString kLockColumnName = "Framesync Lock (%)";
+    // Keep in sync with the lock-axis label rather than duplicating the literal.
+    static const QString kLockColumnName = QString::fromLatin1(PlotConstants::kYAxisLabel);
 
     for (int i = 0; i < param_count; i++)
     {
