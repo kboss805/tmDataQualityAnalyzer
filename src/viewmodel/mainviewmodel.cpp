@@ -189,16 +189,14 @@ const QVector<StreamConfig>& MainViewModel::streamConfigs() const
 
 QString MainViewModel::channelPrefix(int index)
 {
-    if (index < UIConstants::kNumKnownPrefixes)
-    {
-        return UIConstants::kChannelPrefixes[index];
-    }
-    return "CH" + QString::number(index + 1);
+    // Delegate to FrameSetup, the single source of truth for default parameter
+    // naming shared with the calibration extractor.
+    return FrameSetup::channelPrefix(index);
 }
 
 QString MainViewModel::parameterName(int channel_index, int receiver_index)
 {
-    return channelPrefix(channel_index) + "_RCVR" + QString::number(receiver_index + 1);
+    return FrameSetup::receiverParameterName(channel_index, receiver_index);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -592,22 +590,15 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
         }
         else
         {
-            // Default file missing or unusable: build a default word map by
-            // assigning sequential words to NumReceivers x ReceiverChannels parameters.
-            const int total_params = cfg.numReceivers * cfg.receiverChannels;
-            if (total_params <= 0 || total_params >= words_in_minor_frame)
+            // Default file missing or unusable: build the default word map
+            // (sequential words for NumReceivers x ReceiverChannels parameters).
+            QString map_error;
+            if (!frame_setup->buildDefaultReceiverMap(cfg.numReceivers, cfg.receiverChannels,
+                                                      words_in_minor_frame, map_error))
             {
                 delete frame_setup;
-                error = stream_desc + ": Num Receivers x Receiver Channels exceeds the "
-                        "words available in the minor frame.";
+                error = stream_desc + ": " + map_error;
                 return false;
-            }
-            for (int r = 0; r < cfg.numReceivers; r++)
-            {
-                for (int c = 0; c < cfg.receiverChannels; c++)
-                {
-                    frame_setup->addParameter(parameterName(c, r), r * cfg.receiverChannels + c);
-                }
             }
         }
     }

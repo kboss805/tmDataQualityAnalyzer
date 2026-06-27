@@ -18,20 +18,6 @@
 #include "processedstreamdata.h"
 #include "stepdetector.h"
 
-namespace {
-
-/// Mirrors MainViewModel::parameterName so the default word map matches the one
-/// built for the real processing run (channel L/R/C + receiver number).
-QString defaultParameterName(int channel_index, int receiver_index)
-{
-    QString prefix = (channel_index < UIConstants::kNumKnownPrefixes)
-        ? QString(UIConstants::kChannelPrefixes[channel_index])
-        : ("CH" + QString::number(channel_index + 1));
-    return prefix + "_RCVR" + QString::number(receiver_index + 1);
-}
-
-} // namespace
-
 CalibrationExtractor::CalibrationExtractor(QObject* parent)
     : QObject(parent)
 {
@@ -313,20 +299,10 @@ bool CalibrationExtractor::buildFrameSetup(const Request& request,
 
     if (request.receiverParamsToml.isEmpty())
     {
-        const int total = request.numReceivers * request.receiverChannels;
-        if (total <= 0 || total >= wordsInMinorFrame)
+        if (!m_frame_setup->buildDefaultReceiverMap(request.numReceivers, request.receiverChannels,
+                                                    wordsInMinorFrame, error))
         {
-            error = "Num Receivers x Receiver Channels exceeds the words available "
-                    "in the minor frame.";
             return false;
-        }
-        for (int r = 0; r < request.numReceivers; r++)
-        {
-            for (int c = 0; c < request.receiverChannels; c++)
-            {
-                m_frame_setup->addParameter(defaultParameterName(c, r),
-                                            r * request.receiverChannels + c);
-            }
         }
     }
     else if (!QFileInfo::exists(request.receiverParamsToml))

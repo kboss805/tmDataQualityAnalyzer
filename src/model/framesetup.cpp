@@ -9,6 +9,7 @@
 #include <QRegularExpression>
 #include <QTextStream>
 
+#include "constants.h"
 #include "tomlconfighelper.h"
 
 const QStringList FrameSetup::kSettingsGroups = {
@@ -151,6 +152,40 @@ void FrameSetup::addParameter(const QString& name, int word)
     parameter.sample_sum = 0;
 
     m_parameters.append(parameter);
+}
+
+QString FrameSetup::channelPrefix(int channel_index)
+{
+    if (channel_index < UIConstants::kNumKnownPrefixes)
+    {
+        return UIConstants::kChannelPrefixes[channel_index];
+    }
+    return "CH" + QString::number(channel_index + 1);
+}
+
+QString FrameSetup::receiverParameterName(int channel_index, int receiver_index)
+{
+    return channelPrefix(channel_index) + "_RCVR" + QString::number(receiver_index + 1);
+}
+
+bool FrameSetup::buildDefaultReceiverMap(int num_receivers, int receiver_channels,
+                                         int num_words_in_minor_frame, QString& error)
+{
+    const int total_params = num_receivers * receiver_channels;
+    if (total_params <= 0 || total_params >= num_words_in_minor_frame)
+    {
+        error = "Num Receivers x Receiver Channels exceeds the words available "
+                "in the minor frame.";
+        return false;
+    }
+    for (int r = 0; r < num_receivers; r++)
+    {
+        for (int c = 0; c < receiver_channels; c++)
+        {
+            addParameter(receiverParameterName(c, r), r * receiver_channels + c);
+        }
+    }
+    return true;
 }
 
 void FrameSetup::saveToSettings(QSettings& settings)
