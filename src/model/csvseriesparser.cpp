@@ -50,8 +50,11 @@ CsvParseResult CsvSeriesParser::parse(const QString& filepath)
     int param_count = static_cast<int>(columns.size() - 1);
     QVector<PlotSeriesData> series(param_count);
 
-    // Count channels per receiver for shade assignment (SNR series only).
-    QMap<int, int> receiver_channel_count;
+    // Count channels per (stream, receiver) for shade/channel-index assignment
+    // (SNR series only) — mirrors the per-stream counting in addStreamData so
+    // multiple SNR streams that reuse receiver numbers don't accumulate channel
+    // indices across the whole file.
+    QMap<int, QMap<int, int>> stream_receiver_channel_count;
 
     const QString lock_suffix   = QLatin1String(PlotConstants::kCsvLockSuffix);
     const QString missed_suffix = QLatin1String(PlotConstants::kCsvMissedFramesSuffix);
@@ -84,6 +87,28 @@ CsvParseResult CsvSeriesParser::parse(const QString& filepath)
         {
             s.name = header;
             s.metricType = PlotSeriesData::MetricType::SNR;
+
+            // SNR export names carry "<pcmChannelId> - <streamLabel> <chName>"
+            // (produced by PlotViewModel::addStreamData) so multiple receiver-SNR
+            // streams stay distinct. Recover the stream id and label so the Customize
+            // Plot Series dialog can group/label SNR channels per stream (it keys on
+            // streamOrder + streamLabel); without this every SNR channel collapses
+            // into one unnamed "CH 0" group on import. Keep in lockstep with the
+            // name format in addStreamData.
+            int dash = static_cast<int>(header.indexOf(QLatin1String(" - ")));
+            if (dash > 0)
+            {
+                bool id_ok = false;
+                int id = header.left(dash).toInt(&id_ok);
+                if (id_ok)
+                {
+                    s.streamOrder = id;
+                }
+                const QString rest = header.mid(dash + 3);  // "<streamLabel> <chName>"
+                int last_space = static_cast<int>(rest.lastIndexOf(QChar(' ')));
+                s.streamLabel = (last_space > 0) ? rest.left(last_space) : rest;
+            }
+
             // Extract receiver index from "_RCVR<N>" suffix.
             int rcvr_pos = static_cast<int>(s.name.lastIndexOf("_RCVR"));
             if (rcvr_pos >= 0)
@@ -92,6 +117,8 @@ CsvParseResult CsvSeriesParser::parse(const QString& filepath)
                 int rcvr_num = s.name.mid(rcvr_pos + 5).toInt(&ok);
                 s.receiverIndex = ok ? rcvr_num : 0;
             }
+            QMap<int, int>& receiver_channel_count =
+                stream_receiver_channel_count[s.streamOrder];
             s.channelIndex = receiver_channel_count.value(s.receiverIndex, 0);
             receiver_channel_count[s.receiverIndex]++;
         }

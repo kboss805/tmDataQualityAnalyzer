@@ -458,6 +458,124 @@ void TestPlotViewModel::lockSeriesColor()
     QFile::remove(path);
 }
 
+void TestPlotViewModel::importMultiStreamColorsAndVisibility()
+{
+    // Regression: an imported CSV must look like the live (processed) plot —
+    //   1. each stream's left-axis curve gets its own color (not all collapsed
+    //      onto one), and a stream's lock + missed-frames siblings share a color,
+    //   2. only the active left-axis metric (lock %) is visible, so lock curves
+    //      are not overdrawn by accumulated-missed-frames curves.
+    QString csv =
+        "Time (DOY:HH:MM:SS.mmm),"
+        "Stream1 Lock (%),Stream1 Accumulated Missed Frames,"
+        "Stream2 Lock (%),Stream2 Accumulated Missed Frames\n"
+        "1:00:00:00.000,100.0,0,98.0,1\n"
+        "1:00:00:01.000,99.0,2,97.0,3\n";
+    QString path = writeTempCsv(csv);
+
+    PlotViewModel vm;
+    QVERIFY(vm.loadCsvFile(path));
+    QCOMPARE(vm.seriesCount(), 4);
+
+    const PlotSeriesData& s1_lock   = vm.seriesAt(0);
+    const PlotSeriesData& s1_missed = vm.seriesAt(1);
+    const PlotSeriesData& s2_lock   = vm.seriesAt(2);
+    const PlotSeriesData& s2_missed = vm.seriesAt(3);
+
+    // Visibility follows the default lock-% view: lock visible, missed hidden.
+    QVERIFY(s1_lock.visible);
+    QVERIFY(!s1_missed.visible);
+    QVERIFY(s2_lock.visible);
+    QVERIFY(!s2_missed.visible);
+
+    // Distinct streams get distinct colors; a stream's lock/missed share a color.
+    QVERIFY2(s1_lock.color != s2_lock.color, "Each stream must get its own color");
+    QCOMPARE(s1_lock.color, s1_missed.color);
+    QCOMPARE(s2_lock.color, s2_missed.color);
+
+    QFile::remove(path);
+}
+
+void TestPlotViewModel::importSnrStreamGrouping()
+{
+    // Regression: SNR export columns are "<pcmId> - <label> <chName>". On import
+    // the parser must recover streamOrder (the PCM id) and streamLabel so the
+    // Customize Plot Series dialog groups/labels SNR channels per stream, and it
+    // must count channelIndex per (stream, receiver) — not file-wide — so two
+    // streams that both use RCVR1 don't accumulate channel indices across the file.
+    QString csv =
+        "Time (DOY:HH:MM:SS.mmm),"
+        "5 - PRN 15 5M L_RCVR1,5 - PRN 15 5M R_RCVR1,6 - PRN 11 1M L_RCVR1\n"
+        "1:00:00:00.000,-80.0,-81.0,-82.0\n"
+        "1:00:00:01.000,-79.0,-80.5,-81.5\n";
+    QString path = writeTempCsv(csv);
+
+    PlotViewModel vm;
+    QVERIFY(vm.loadCsvFile(path));
+    QCOMPARE(vm.seriesCount(), 3);
+
+    // Stream 5, receiver 1, two channels (L then R) -> channelIndex 0, 1.
+    QCOMPARE(vm.seriesAt(0).streamOrder, 5);
+    QCOMPARE(vm.seriesAt(0).streamLabel, QString("PRN 15 5M"));
+    QCOMPARE(vm.seriesAt(0).receiverIndex, 1);
+    QCOMPARE(vm.seriesAt(0).channelIndex, 0);
+
+    QCOMPARE(vm.seriesAt(1).streamOrder, 5);
+    QCOMPARE(vm.seriesAt(1).receiverIndex, 1);
+    QCOMPARE(vm.seriesAt(1).channelIndex, 1);
+
+    // Stream 6 is a distinct group, and its RCVR1 channel restarts at index 0.
+    QCOMPARE(vm.seriesAt(2).streamOrder, 6);
+    QCOMPARE(vm.seriesAt(2).streamLabel, QString("PRN 11 1M"));
+    QCOMPARE(vm.seriesAt(2).receiverIndex, 1);
+    QCOMPARE(vm.seriesAt(2).channelIndex, 0);
+
+    QFile::remove(path);
+}
+
+void TestPlotViewModel::importExportRoundTrip()
+{
+    // Integration: import a CSV (lock + missed + two SNR channels), re-export it,
+    // and import the result. The two loaded states must be equivalent — names,
+    // metric types, per-stream grouping/colors, visibility, and values — proving
+    // exportCsv() and the parser are faithful inverses for US7.0.
+    QString csv =
+        "Time (DOY:HH:MM:SS.mmm),"
+        "S1 Lock (%),S1 Accumulated Missed Frames,"
+        "5 - S1 L_RCVR1,5 - S1 R_RCVR1\n"
+        "1:00:00:00.000,100.0,0,-80.0,-81.0\n"
+        "1:00:00:01.000,99.0,1,-79.0,-80.5\n";
+    QString path_a = writeTempCsv(csv);
+
+    PlotViewModel vm1;
+    QVERIFY(vm1.loadCsvFile(path_a));
+
+    QString path_b = writeTempCsv("");   // mint a unique path; exportCsv overwrites it
+    QVERIFY(vm1.exportCsv(path_b));
+
+    PlotViewModel vm2;
+    QVERIFY(vm2.loadCsvFile(path_b));
+
+    QCOMPARE(vm2.seriesCount(), vm1.seriesCount());
+    for (int i = 0; i < vm1.seriesCount(); ++i)
+    {
+        const PlotSeriesData& a = vm1.seriesAt(i);
+        const PlotSeriesData& b = vm2.seriesAt(i);
+        QCOMPARE(b.name, a.name);
+        QCOMPARE(static_cast<int>(b.metricType), static_cast<int>(a.metricType));
+        QCOMPARE(b.streamOrder, a.streamOrder);
+        QCOMPARE(b.streamLabel, a.streamLabel);
+        QCOMPARE(b.receiverIndex, a.receiverIndex);
+        QCOMPARE(b.channelIndex, a.channelIndex);
+        QCOMPARE(b.visible, a.visible);
+        QCOMPARE(b.color, a.color);
+        QCOMPARE(b.yValues, a.yValues);
+    }
+
+    QFile::remove(path_a);
+    QFile::remove(path_b);
+}
+
 void TestPlotViewModel::lockAxisRange()
 {
     // lockYMin() / lockYMax() must always return 0 / 100 regardless of data.

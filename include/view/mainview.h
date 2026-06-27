@@ -46,13 +46,20 @@ public:
     ~MainView() override;
     Q_DISABLE_COPY_MOVE(MainView)
 
+    // Grants the unit test access to the private file-routing/import internals
+    // (openPath/importCsv/isSupportedFile and m_plot_view_model) so the View-layer
+    // CSV routing can be exercised without exposing it on the public API.
+    friend class TestMainView;
+
 private slots:
     /// @name User-initiated action slots
     /// @{
     /// Shows a message box with the given error text.
     void displayErrorMessage(const QString& message);
-    /// Opens a file dialog and loads the selected .ch10 file.
+    /// Opens a file dialog and loads the selected .ch10 or .csv file.
     void inputFileButtonPressed();
+    /// Opens a CSV-filtered file dialog and imports the selected exported CSV.
+    void importFileButtonPressed();
     /// Toggles between light and dark themes.
     void onToggleTheme();
     /// Opens the StreamConfigDialog after a file has loaded.
@@ -86,6 +93,8 @@ private:
     void setUpMenuBar();                     ///< Creates the menu bar.
     void setUpMainLayout();                  ///< Creates the top-level layout.
     void setUpConnections();                 ///< Connects all ViewModel signals to View slots.
+    /// Sets toolbar action icons (export/import) to the dark or light theme variant.
+    void applyToolbarIconsForTheme(bool dark);
     /// @}
 
     /// @name Bulk state helpers
@@ -93,6 +102,12 @@ private:
     void startProcessingFromDialog();                    ///< Starts background processing.
     void setAllControlsEnabled(bool enabled);          ///< Enables or disables all interactive controls.
     void saveLastCh10Dir();                              ///< Persists m_last_ch10_dir to QSettings.
+    /// Routes a path to the .ch10 processing pipeline or the CSV importer by extension.
+    void openPath(const QString& path);
+    /// Loads a previously exported CSV straight into the plot (no processing pipeline).
+    void importCsv(const QString& path);
+    /// @return True if the path is a supported input (.ch10 or .csv).
+    static bool isSupportedFile(const QString& path);
     void logError(const QString& message);               ///< Appends a red error entry to the log window.
     void logWarning(const QString& message);             ///< Appends a dark-yellow warning entry to the log window.
     void logSuccess(const QString& message);             ///< Appends a green success entry to the log window.
@@ -112,12 +127,14 @@ private:
     QToolBar* m_toolbar;                     ///< Main toolbar.
     QAction* m_toolbar_open_action;          ///< Toolbar open action.
     QAction* m_cancel_action;                ///< Toolbar cancel/stop action (visible during processing).
+    QAction* m_import_action;                ///< Toolbar import-CSV action (left of export).
     QAction* m_export_action;                ///< Toolbar export plot action.
 
     QTextBrowser* m_log_preview;             ///< Compact log preview in the controls panel.
     QProgressBar* m_progress_bar;            ///< Processing progress bar.
     QMenu* m_recent_menu;                    ///< File > Recent Files submenu.
 
-    QString m_last_ch10_dir;                 ///< Last directory used in Ch10 file dialogs.
+    QString m_last_ch10_dir;                 ///< Last directory used in the Open file dialog (.ch10/.csv).
+    QString m_pending_csv_path;              ///< CSV import in flight; finalized on the plot's load result.
 };
 #endif // MAINVIEW_H

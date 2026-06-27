@@ -183,7 +183,10 @@ RESOURCES += \
     resources/stop.svg \
     resources/gear.svg \
     resources/retry.svg \
-    resources/export.svg \
+    resources/export-dark.svg \
+    resources/export-light.svg \
+    resources/import-dark.svg \
+    resources/import-light.svg \
     resources/toggle-on-dark.svg \
     resources/toggle-off-dark.svg \
     resources/toggle-on-light.svg \

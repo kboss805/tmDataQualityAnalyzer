@@ -41,15 +41,54 @@ void PlotViewModel::commitParseResult(CsvParseResult&& result)
 
     m_has_lock_series = false;
     m_has_missed_frames_series = false;
+
+    // The parser yields presentation-neutral series. Mirror what addStreamData()
+    // does for processed data so an imported plot looks identical to the live one:
+    //   - assign a per-stream order so each stream's left-axis curve gets its own
+    //     color (assignColors() keys left-axis colors by streamOrder; without this
+    //     every lock curve collapses onto color 0).
+    //   - set visibility from the active left-axis view so a stream's lock and
+    //     missed-frames siblings are not drawn on top of each other.
+    //
+    // Receiver-SNR series carry the real PCM channel id (recovered from the CSV
+    // column name by the parser); reuse it for a stream's lock/missed siblings so
+    // both tabs of the Customize Plot Series dialog show the same "CH <id>" group.
+    // Lock-only streams have no SNR counterpart, so allocate fresh ids above any
+    // SNR id to avoid collisions.
+    QMap<QString, int> label_to_stream_order;
+    int next_stream_order = 0;
     for (const auto& s : m_series)
     {
-        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock)
+        if (s.metricType == PlotSeriesData::MetricType::SNR && !s.streamLabel.isEmpty())
         {
-            m_has_lock_series = true;
+            label_to_stream_order.insert(s.streamLabel, s.streamOrder);
         }
-        else if (s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
+        next_stream_order = qMax(next_stream_order, s.streamOrder + 1);
+    }
+
+    for (auto& s : m_series)
+    {
+        switch (s.metricType)
         {
-            m_has_missed_frames_series = true;
+        case PlotSeriesData::MetricType::FrameSyncLock:
+        case PlotSeriesData::MetricType::AccumulatedMissedFrames:
+        {
+            auto it = label_to_stream_order.find(s.streamLabel);
+            if (it == label_to_stream_order.end())
+            {
+                it = label_to_stream_order.insert(s.streamLabel, next_stream_order++);
+            }
+            s.streamOrder = it.value();
+            const bool is_lock = (s.metricType == PlotSeriesData::MetricType::FrameSyncLock);
+            s.visible = is_lock ? (m_lock_axis_view == LockAxisView::LockPercent)
+                                : (m_lock_axis_view == LockAxisView::MissedFrames);
+            if (is_lock) { m_has_lock_series = true; }
+            else         { m_has_missed_frames_series = true; }
+            break;
+        }
+        default:
+            s.visible = true;
+            break;
         }
     }
 
@@ -112,7 +151,11 @@ void PlotViewModel::onParseFinished()
         return;
     }
 
-    commitParseResult(std::move(result));
+    commitParseResult(std::move(result));  // emits dataChanged()
+    // Distinct from dataChanged() (which also fires for in-memory stream
+    // processing and clearData()): a dedicated success signal lets the View
+    // finalize an async import without guessing which dataChanged() it was.
+    emit loadSucceeded();
 }
 
 // ---------------------------------------------------------------------------
@@ -230,6 +273,9 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         // names (e.g. L_RCVR1) would otherwise collide in the legend. The
         // Configure Streams dialog and Frame Sync Lock series intentionally drop
         // this number (streamLabel is now the bare channel name).
+        // NOTE: this "<pcmChannelId> - <streamLabel> <ch.name>" format is parsed
+        // back by CsvSeriesParser on CSV import to recover streamOrder/streamLabel;
+        // keep the two in lockstep if this format changes.
         s.name = QString::number(data.pcmChannelId) + " - " + data.streamLabel + " " + ch.name;
         s.streamLabel = data.streamLabel;
         s.metricType = PlotSeriesData::MetricType::SNR;

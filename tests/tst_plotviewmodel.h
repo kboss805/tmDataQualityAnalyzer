@@ -33,6 +33,9 @@ private slots:
     void loadCsvMalformedRows();
     void lockSeriesMetricType();
     void lockSeriesColor();
+    void importMultiStreamColorsAndVisibility();
+    void importSnrStreamGrouping();
+    void importExportRoundTrip();
     void lockAxisRange();
     void hasLockSeriesTrue();
     void hasLockSeriesFalse();

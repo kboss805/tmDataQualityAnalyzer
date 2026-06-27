@@ -103,6 +103,7 @@ signals:
     void dataChanged();                            ///< Emitted when CSV data is loaded or cleared.
     void lockAxisViewChanged();                     ///< Emitted when the left-axis metric mode changes.
     void loadStarted();                            ///< Emitted when an async load begins.
+    void loadSucceeded();                          ///< Emitted after an async load completes successfully (follows dataChanged()).
     void loadFailed();                             ///< Emitted when an async load fails.
     void loadWarning(const QString& message);       ///< Emitted after a load that succeeded but skipped malformed rows.
     void seriesVisibilityChanged(int index);        ///< Emitted when a series visibility toggles.

@@ -59,7 +59,7 @@ void FrameProcessor::derandomizeBitstream(uint8_t* data, uint64_t total_bits, ui
 }
 
 // Static method
-void FrameProcessor::invertBytes(uint8_t* data, uint32_t length)
+void FrameProcessor::invertBits(uint8_t* data, uint32_t length)
 {
     for (uint32_t i = 0; i < length; i++)
     {
@@ -254,7 +254,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         }
         if (is_inverted)
         {
-            invertBytes(raw_data, raw_len);
+            invertBits(raw_data, raw_len);
         }
         if (needs_derand)
         {

@@ -1,3 +1,26 @@
+tmDataQualityAnalyzer v2.6.0 - What's New
+=================================
+
+  - New: You can now import a CSV file that this application exported earlier and
+    load it straight into the plot, so you can review old data sets without
+    re-processing the original Chapter 10 file. Use the new Import button on the
+    toolbar (left of Export) or drag and drop a .csv file; Frame Sync Lock,
+    Accumulated Missed Frames, and Receiver SNR series are restored to the correct
+    axis and color automatically.
+
+  - Improved: The Recent Files list now remembers imported CSV files alongside
+    Chapter 10 files and reopens each in the right way. File > Open remains for
+    Chapter 10 files; use Import for CSV.
+
+  - Improved: Refreshed toolbar Export and Import icons that adapt to the light
+    and dark themes.
+
+  - Improved: If you try to import a CSV that wasn't produced by this application
+    (or has no readable data rows), it is rejected with a clear message in the log
+    instead of drawing meaningless data. Any malformed rows in a valid file are
+    skipped and reported.
+
+
 tmDataQualityAnalyzer v2.5.2 - What's New
 =================================
 
