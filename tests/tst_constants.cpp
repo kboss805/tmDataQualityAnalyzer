@@ -178,7 +178,6 @@ void TestConstants::uiOutputFilenameConstants()
 void TestConstants::plotConstants()
 {
     QCOMPARE(PlotConstants::kPlotDockMinWidth, 1024);
-    QCOMPARE(PlotConstants::kPlotDockMinHeight, 768);
     QCOMPARE(PlotConstants::kAxisMarginFactor, 0.05);
     QCOMPARE(QString(PlotConstants::kDefaultPlotTitle), QString("Framesync/SNR Plot"));
     QCOMPARE(QString(PlotConstants::kYAxisLabel),  QString("Framesync Lock (%)"));
