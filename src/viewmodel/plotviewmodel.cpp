@@ -147,14 +147,21 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
     if (m_series.isEmpty())
     {
         m_base_abs_seconds = data.timesSec.first();
-        auto epoch = static_cast<time_t>(m_base_abs_seconds);
-        struct tm* t = gmtime(&epoch);
-        if (t != nullptr)
+        // Use a reentrant gmtime variant — plain gmtime() returns a pointer to a
+        // shared static tm and is not thread-safe.
+        std::time_t epoch = static_cast<std::time_t>(m_base_abs_seconds);
+        std::tm tm_buf{};
+#if defined(_WIN32)
+        const bool ok = (gmtime_s(&tm_buf, &epoch) == 0);
+#else
+        const bool ok = (gmtime_r(&epoch, &tm_buf) != nullptr);
+#endif
+        if (ok)
         {
-            m_base_day = t->tm_yday + 1;
-            m_base_time_offset = (t->tm_hour * UIConstants::kSecondsPerHour)
-                               + (t->tm_min * UIConstants::kSecondsPerMinute)
-                               + t->tm_sec
+            m_base_day = tm_buf.tm_yday + 1;
+            m_base_time_offset = (tm_buf.tm_hour * UIConstants::kSecondsPerHour)
+                               + (tm_buf.tm_min * UIConstants::kSecondsPerMinute)
+                               + tm_buf.tm_sec
                                + (m_base_abs_seconds - static_cast<double>(epoch));
         }
     }

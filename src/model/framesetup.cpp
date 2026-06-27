@@ -85,6 +85,11 @@ bool FrameSetup::tryLoadingFile(const QString& filename, int num_words_in_minor_
         bool word_ok = false;
         int parameter_word = settings.value("Word").toInt(&word_ok) - 1;
 
+        // num_words_in_minor_frame counts the sync word, so the last addressable
+        // DATA word is index num_words_in_minor_frame - 2 (the final slot is the
+        // sync word's, never populated as a parameter). Hence the "- 1" upper bound
+        // here. This intentionally rejects Word == num_words_in_minor_frame; see the
+        // tryLoadingFileWordEqualsFrameSize / ...RejectsBoundary tests.
         if (!word_ok || parameter_word < 0 || parameter_word >= num_words_in_minor_frame - 1)
         {
             settings.endGroup();
