@@ -1,0 +1,44 @@
+# tmDataQualityAnalyzer — code formatting style.
+# Reconstructed from the existing source: 4-space indent, 120-column limit,
+# Allman braces (opening brace on its own line for functions, types, and control
+# flow), left-aligned pointers (uint8_t* data). Run on a single file and diff
+# before applying repo-wide — this is the documented style, but verify it is a
+# no-op on already-clean files before any bulk reformat.
+---
+Language: Cpp
+Standard: c++17
+
+BasedOnStyle: LLVM
+
+ColumnLimit: 120
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+AccessModifierOffset: -4
+
+# Allman: braces on their own line everywhere.
+BreakBeforeBraces: Allman
+
+PointerAlignment: Left
+DerivePointerAlignment: false
+
+AllowShortFunctionsOnASingleLine: InlineOnly
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Empty
+AllowShortCaseLabelsOnASingleLine: false
+
+AlwaysBreakTemplateDeclarations: Yes
+BinPackArguments: false
+BinPackParameters: false
+BreakConstructorInitializers: BeforeColon
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+NamespaceIndentation: All
+FixNamespaceComments: true
+SortIncludes: false
+SpaceAfterCStyleCast: false
+SpaceBeforeParens: ControlStatements
+Cpp11BracedListStyle: true
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 2
+IndentCaseLabels: true
