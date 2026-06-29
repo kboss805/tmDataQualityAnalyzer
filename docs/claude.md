@@ -7,7 +7,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Qt Version**: 6.10.2 (minimum: Qt 6.0.0)
 - **MinGW Version**: 13.1.0 (minimum: GCC/MinGW 7.0)
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
-- **Project Version**: 2.5.2 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
+- **Project Version**: 2.6.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
 
 ## User Stories
 
@@ -227,6 +227,23 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - [x] Auto set plot colors by default; framesync lock curves use purple/blue/green primaries (one per stream) and SNR curves use red/orange/yellow primaries (one per receiver); additional streams, receivers, and channels are progressively lighter shades of their primary so related series stay grouped
 - [x] Framesync lock curves are highlighted; SNR curves are not
 
+### US7.0: Import a previously exported CSV file to visualize historical data
+**As a** telemetry engineer or data analyst
+**I want to** open a CSV file that this application exported in the past (US1.2 / US2.3) and load it directly into the plot window
+**So that** I can review and visualize old data sets without re-processing the original .ch10 file.
+
+**Acceptance Criteria:**
+- [x] The user can open a previously exported CSV file via the toolbar **Import** button (left of Export; CSV-only dialog, disabled while processing), drag-and-drop of a `.csv`, and the Recent Files list. (File > Open and the toolbar Open button are Chapter-10-only; Import is the CSV entry point.)
+- [x] Importing a CSV bypasses the Configure Streams dialog and the processing pipeline — the file is parsed straight into the plot
+- [x] The importer accepts the application's own export format: a `Time (DOY:HH:MM:SS.mmm)` first column followed by one column per series
+- [x] Frame Sync Lock (`Lock (%)` suffix), Accumulated Missed Frames (`Accumulated Missed Frames` suffix), and Receiver SNR (`_RCVR<N>`) series are recognized by their column headers and routed to the correct axis, metric type, and color
+- [x] Imported series populate the plot, the on-plot legend, and the Customize Plot Series dialog the same way processed data does (axis auto-ranging, time window, visibility toggles all apply)
+- [x] Imported data can be re-exported (CSV/image) and the recent-files list records the imported CSV
+- [x] A CSV that is not in the application's export format (e.g. the legacy `Day,Time,…` layout, a wrong/missing header, or a file with no parseable data rows) is rejected with a clear error in the log rather than producing garbage series
+- [x] Malformed or short data rows are skipped, and the user is informed how many rows were skipped
+
+  - **Scope:** Reuses the existing Model/ViewModel import path (`CsvSeriesParser::parse` + `PlotViewModel::loadCsvFile` / `loadCsvFileAsync`), which is the matched partner of `exportCsv`; this story is primarily the View-layer wiring (menu/drag-drop entry, format routing on file open) plus user-facing error reporting. It does not add a CSV import dialog with column mapping, and it does not attempt to import arbitrary third-party CSVs — only files this application produced.
+
 ### US8.0: Export file settings
 **As an** As a telemetry engineer or data analyst 
 **I want to** configure export preferences via a unified export dialog window
@@ -262,6 +279,35 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - [x] Installer should not overwrite TOML files; if new fields are in the TOML file, alert the user that a new TOML file was saved as "new_x.toml" — try to use as many parameters from the old default TOML file as possible in the new TOML file
 
 ## Version History
+
+### v2.6.0 — Import Exported CSV Files (US7.0)
+- New: the application can open a CSV it previously exported and load it straight
+  into the plot, so old data sets can be visualized without re-processing the
+  source `.ch10` file (US7.0).
+- A dedicated toolbar **Import** button (orange icon, left of Export) opens a
+  CSV-only dialog; it is enabled like Open and disabled while processing. CSV
+  files are imported through `importCsv()` and bypass the Configure Streams dialog
+  and processing pipeline entirely.
+- File > Open and the toolbar Open button remain Chapter-10-only; drag-and-drop
+  and the Recent Files list route by extension via the new `MainView::openPath()`
+  (`.ch10` → process, `.csv` → import).
+- A successful async import is finalized off a dedicated
+  `PlotViewModel::loadSucceeded()` signal (not `dataChanged()`), so recent-files /
+  title / success-log side effects only run after the parse actually succeeds.
+- Toolbar Export/Import icons are new Fluent bracket-and-arrow SVGs with
+  per-theme variants (`export-{dark,light}.svg`, `import-{dark,light}.svg`),
+  swapped by `MainView::applyToolbarIconsForTheme()` on startup and theme toggle.
+- Import reuses the existing Model/ViewModel path (`CsvSeriesParser::parse` +
+  `PlotViewModel::loadCsvFileAsync`), so Frame Sync Lock, Accumulated Missed
+  Frames, and Receiver SNR columns are recognized by header and routed to the
+  correct axis/metric/color; the plot, legend, and Customize Plot Series dialog
+  all populate as with processed data.
+- A CSV that isn't in the app's export format (wrong/missing
+  `Time (DOY:HH:MM:SS.mmm)` header, or no parseable rows) is rejected with a
+  clear log error rather than producing garbage series; malformed rows are
+  skipped and the skipped count is surfaced as a log warning. On success the
+  imported file is added to Recent Files and the plot title is set to its base
+  name.
 
 ### v2.5.2 — Stream Config Dialog Polish
 - Configure Streams dialog table background changed from near-black (#202020) to match the dialog background (#2C2C2C) in the dark theme QSS, removing the black-background appearance behind table row controls.
@@ -453,7 +499,7 @@ the plot as each stream finishes. There is **no batch / multi-file mode**.
    - Errors/warnings shown inline in the log (`QTextBrowser`, clickable links, persistent, auto-scroll); QMessageBox reserved for About and the calibration summary
    - Status bar shows the file metadata summary (filename, size, channel counts, time range)
    - Recent Files submenu under File menu with QSettings persistence
-   - Drag-and-drop and File > Open of a single `.ch10` file; opening a file launches the StreamConfigDialog
+   - Drag-and-drop and File > Open of a single `.ch10` file (launches the StreamConfigDialog) or a previously exported `.csv` file (US7.0: routed by `openPath()`/`importCsv()` straight into the plot via `PlotViewModel::loadCsvFileAsync`, bypassing the dialog and processing pipeline)
    - Cancel toolbar button visible only during processing
    - Log window in a bottom QDockWidget; plot in a right QDockWidget (PlotWidget); View menu toggles each
 

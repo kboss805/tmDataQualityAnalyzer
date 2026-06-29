@@ -23,6 +23,7 @@ private slots:
     void detectNoisyStepsStillDetected();
     void detectSettlingAtPlateauStartExcluded();
     void roundTripSameDataIsExact();
+    void detectMultiChannelSweepStaysTimeAligned();
 
     // Interpolation / out-of-range clamping
     void interpolateMidpoint();

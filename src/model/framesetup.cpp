@@ -9,6 +9,7 @@
 #include <QRegularExpression>
 #include <QTextStream>
 
+#include "constants.h"
 #include "tomlconfighelper.h"
 
 const QStringList FrameSetup::kSettingsGroups = {
@@ -85,6 +86,11 @@ bool FrameSetup::tryLoadingFile(const QString& filename, int num_words_in_minor_
         bool word_ok = false;
         int parameter_word = settings.value("Word").toInt(&word_ok) - 1;
 
+        // num_words_in_minor_frame counts the sync word, so the last addressable
+        // DATA word is index num_words_in_minor_frame - 2 (the final slot is the
+        // sync word's, never populated as a parameter). Hence the "- 1" upper bound
+        // here. This intentionally rejects Word == num_words_in_minor_frame; see the
+        // tryLoadingFileWordEqualsFrameSize / ...RejectsBoundary tests.
         if (!word_ok || parameter_word < 0 || parameter_word >= num_words_in_minor_frame - 1)
         {
             settings.endGroup();
@@ -146,6 +152,40 @@ void FrameSetup::addParameter(const QString& name, int word)
     parameter.sample_sum = 0;
 
     m_parameters.append(parameter);
+}
+
+QString FrameSetup::channelPrefix(int channel_index)
+{
+    if (channel_index < UIConstants::kNumKnownPrefixes)
+    {
+        return UIConstants::kChannelPrefixes[channel_index];
+    }
+    return "CH" + QString::number(channel_index + 1);
+}
+
+QString FrameSetup::receiverParameterName(int channel_index, int receiver_index)
+{
+    return channelPrefix(channel_index) + "_RCVR" + QString::number(receiver_index + 1);
+}
+
+bool FrameSetup::buildDefaultReceiverMap(int num_receivers, int receiver_channels,
+                                         int num_words_in_minor_frame, QString& error)
+{
+    const int total_params = num_receivers * receiver_channels;
+    if (total_params <= 0 || total_params >= num_words_in_minor_frame)
+    {
+        error = "Num Receivers x Receiver Channels exceeds the words available "
+                "in the minor frame.";
+        return false;
+    }
+    for (int r = 0; r < num_receivers; r++)
+    {
+        for (int c = 0; c < receiver_channels; c++)
+        {
+            addParameter(receiverParameterName(c, r), r * receiver_channels + c);
+        }
+    }
+    return true;
 }
 
 void FrameSetup::saveToSettings(QSettings& settings)

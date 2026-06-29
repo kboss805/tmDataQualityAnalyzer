@@ -59,7 +59,7 @@ void FrameProcessor::derandomizeBitstream(uint8_t* data, uint64_t total_bits, ui
 }
 
 // Static method
-void FrameProcessor::invertBytes(uint8_t* data, uint32_t length)
+void FrameProcessor::invertBits(uint8_t* data, uint32_t length)
 {
     for (uint32_t i = 0; i < length; i++)
     {
@@ -254,7 +254,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         }
         if (is_inverted)
         {
-            invertBytes(raw_data, raw_len);
+            invertBits(raw_data, raw_len);
         }
         if (needs_derand)
         {
@@ -408,8 +408,6 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
                         current_sync_run = 1;
                     }
 
-                    minor_frame_bit_count = 0; // Reset for next frame
-
                     // Only extract a sample once the sync match is boundary-aligned;
                     // an off-phase match (re-acquiring lock) must not be treated as a
                     // confirmed frame, or PRN data can be sampled as if it were locked.
@@ -491,8 +489,11 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         double lock_pct = 0.0;
         if (total_bits_in_window > 0)
         {
+            // valid_bits_in_window is only incremented inside the same window guard
+            // as total_bits_in_window and only while in lock, so it can never exceed
+            // it — lock_pct is already bounded at 100, no clamp needed (matching the
+            // in-loop computation above).
             lock_pct = (static_cast<double>(valid_bits_in_window) / static_cast<double>(total_bits_in_window)) * 100.0;
-            if (lock_pct > 100.0) lock_pct = 100.0;
         }
         recordTimeSample(current_time_sample, n_samples, lock_pct,
                          static_cast<double>(accumulated_missed_frames), enabled_params);

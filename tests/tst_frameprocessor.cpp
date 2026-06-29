@@ -473,10 +473,10 @@ void TestFrameProcessor::calibrationRoundTripOnRealFileProducesCleanSteps()
     req.calFilename       = filepath;
     req.timeChannelId      = time_id;
     req.pcmChannelId       = pcm_id;
-    req.frameSyncHex       = "FE6B2840";
-    req.bitsInMinorFrame   = 8000; // true minor-frame length for this recording
-    req.randomized         = true; // RNRZ-L
-    req.dataRateMbps       = 0.8;   // 800 kbps -> ~100 frames/s; drives the adaptive extract period
+    req.sync.pattern       = "FE6B2840";
+    req.sync.bitsInMinorFrame   = 8000; // true minor-frame length for this recording
+    req.sync.randomized         = true; // RNRZ-L
+    req.sync.dataRateMbps       = 0.8;   // 800 kbps -> ~100 frames/s; drives the adaptive extract period
     req.numReceivers       = 16;
     req.receiverChannels   = 3;
     req.steps              = steps;

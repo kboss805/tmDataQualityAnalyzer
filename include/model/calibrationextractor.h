@@ -52,12 +52,7 @@ public:
         QString calFilename;             ///< Calibration .ch10 file.
         int     timeChannelId = -1;      ///< Time channel ID (from the parent dialog).
         int     pcmChannelId = -1;       ///< PCM channel ID of the stream being calibrated.
-        QString frameSyncHex;            ///< Frame sync pattern (hex).
-        QString frameSyncMaskHex;        ///< Frame sync mask (hex).
-        int     bitsInMinorFrame = 0;    ///< Bits per minor frame.
-        bool    randomized = false;      ///< RNRZ-L on/off.
-        bool    inverted = false;        ///< Bit-inversion on/off; MUST match the main run or the extracted raw counts won't line up with it.
-        double  dataRateMbps = 0.0;      ///< Data rate (0 = TMATS).
+        FrameSyncParams sync;            ///< Frame sync pattern/mask, frame length, scrambling, data rate. MUST match the main run or the extracted raw counts won't line up with it.
         QString receiverParamsToml;      ///< Word-map TOML; callers resolve the shipped default.toml here so the map matches the main run (empty only if that file is missing).
         int     numReceivers = 0;        ///< Sequential-grid fallback, used only when receiverParamsToml is empty.
         int     receiverChannels = 0;    ///< Sequential-grid fallback, used only when receiverParamsToml is empty.

@@ -93,6 +93,7 @@ void MainView::setUpMainLayout()
     bool dark = plot_settings.value(UIConstants::kSettingsKeyTheme, UIConstants::kThemeDark).toString()
                 == UIConstants::kThemeDark;
     m_plot_widget->applyTheme(dark);
+    applyToolbarIconsForTheme(dark);
 
     // The Customize Plot button replaces the old legend and is initialized disabled.
 
@@ -178,7 +179,7 @@ void MainView::setUpMenuBar()
 
     m_toolbar_open_action = m_toolbar->addAction(
         QIcon(":/resources/folder-open.svg"), "Open Ch10 File");
-    m_toolbar_open_action->setToolTip("Open Ch10 File (Ctrl+O)");
+    m_toolbar_open_action->setToolTip("Open Chapter 10 File (Ctrl+O)");
     connect(m_toolbar_open_action, &QAction::triggered,
             this, &MainView::inputFileButtonPressed);
 
@@ -193,8 +194,15 @@ void MainView::setUpMenuBar()
 
     m_toolbar->addSeparator();
 
-    m_export_action = m_toolbar->addAction(
-        QIcon(":/resources/export.svg"), "Export");
+    // Import sits just left of Export. Icon (orange) is theme-dependent; set by
+    // applyToolbarIconsForTheme().
+    m_import_action = m_toolbar->addAction("Import");
+    m_import_action->setToolTip("Import a previously exported CSV file");
+    connect(m_import_action, &QAction::triggered,
+            this, &MainView::importFileButtonPressed);
+
+    // Icon (green) is theme-dependent; set by applyToolbarIconsForTheme().
+    m_export_action = m_toolbar->addAction("Export");
     m_export_action->setToolTip("Export plot data and images");
     m_export_action->setEnabled(false);
 
@@ -232,8 +240,37 @@ void MainView::setUpConnections()
         return m_log_preview->toPlainText();
     });
     connect(m_plot_view_model, &PlotViewModel::loadFailed, this, [this]() {
-        displayErrorMessage("Failed to load CSV file for plotting.");
+        if (!m_pending_csv_path.isEmpty())
+        {
+            const QString name = QFileInfo(m_pending_csv_path).fileName();
+            m_pending_csv_path.clear();
+            displayErrorMessage("ERROR: '" + name + "' is not a recognized exported CSV (expected a '"
+                                + QString(PlotConstants::kCsvTimeHeader)
+                                + "' column with data rows). Nothing was imported.");
+        }
+        else
+        {
+            displayErrorMessage("Failed to load CSV file for plotting.");
+        }
     });
+
+    // Finalize a successful CSV import (recent files, plot title, status bar,
+    // success log). loadSucceeded() fires only for async imports, so this never
+    // collides with dataChanged() from in-memory stream processing or clearData().
+    connect(m_plot_view_model, &PlotViewModel::loadSucceeded, this, [this]() {
+        if (m_pending_csv_path.isEmpty())
+        {
+            return;
+        }
+        const QString path = m_pending_csv_path;
+        m_pending_csv_path.clear();
+        m_view_model->addRecentFile(path);
+        m_plot_view_model->setPlotTitle(QFileInfo(path).baseName());
+        statusBar()->showMessage("Imported CSV: " + QFileInfo(path).fileName());
+        logSuccess("Imported CSV: " + QFileInfo(path).fileName());
+    });
+
+    connect(m_plot_view_model, &PlotViewModel::loadWarning, this, &MainView::logWarning);
 
     // Update toolbar button enablement when data changes
     connect(m_plot_view_model, &PlotViewModel::dataChanged, this, [this]() {
@@ -345,18 +382,67 @@ void MainView::displayErrorMessage(const QString& message)
 
 void MainView::inputFileButtonPressed()
 {
-    QString filename = QFileDialog::getOpenFileName(this, tr("Open Ch10 File"),
+    QString filename = QFileDialog::getOpenFileName(this, tr("Open Chapter 10 File"),
                                                     m_last_ch10_dir,
-                                                    tr("Chapter 10 Files (*.ch10);;All Files (*.*)"));
+                                                    tr("Chapter 10 Files (*.ch10)"));
     if (filename.isEmpty())
     {
         return;
     }
 
-    m_last_ch10_dir = QFileInfo(filename).absolutePath();
+    openPath(filename);
+}
+
+void MainView::importFileButtonPressed()
+{
+    QString filename = QFileDialog::getOpenFileName(this, tr("Import CSV File"),
+                                                    m_last_ch10_dir,
+                                                    tr("Exported CSV (*.csv)"));
+    if (filename.isEmpty())
+    {
+        return;
+    }
+
+    openPath(filename);
+}
+
+bool MainView::isSupportedFile(const QString& path)
+{
+    return path.endsWith(".ch10", Qt::CaseInsensitive)
+           || path.endsWith(".csv", Qt::CaseInsensitive);
+}
+
+void MainView::openPath(const QString& path)
+{
+    m_last_ch10_dir = QFileInfo(path).absolutePath();
     saveLastCh10Dir();
 
-    m_view_model->openFile(filename);
+    if (path.endsWith(".csv", Qt::CaseInsensitive))
+    {
+        importCsv(path);
+    }
+    else
+    {
+        m_view_model->openFile(path);
+    }
+}
+
+void MainView::importCsv(const QString& path)
+{
+    // Don't let a CSV import collide with a ch10 load/processing run or another
+    // in-flight import; the plot is shared state.
+    if (m_view_model->processing() || m_plot_view_model->isLoading())
+    {
+        return;
+    }
+
+    onLogMessage("Importing CSV: " + QFileInfo(path).fileName());
+
+    // m_pending_csv_path is consumed by the loadSucceeded/loadFailed handlers to
+    // finalize (or report) this import. clearData() resets the prior plot first.
+    m_plot_view_model->clearData();
+    m_pending_csv_path = path;
+    m_plot_view_model->loadCsvFileAsync(path);
 }
 
 void MainView::onFileReadyForStreamConfig()
@@ -404,6 +490,16 @@ void MainView::onToggleTheme()
         (new_theme == UIConstants::kThemeDark) ? "Switch to Light Theme" : "Switch to Dark Theme");
 
     m_plot_widget->applyTheme(new_theme == UIConstants::kThemeDark);
+    applyToolbarIconsForTheme(new_theme == UIConstants::kThemeDark);
+}
+
+void MainView::applyToolbarIconsForTheme(bool dark)
+{
+    // Green (export) / orange (import) icons have brighter dark-theme variants and
+    // deeper light-theme variants so they read against both toolbar backgrounds.
+    const QString suffix = dark ? "-dark" : "-light";
+    m_export_action->setIcon(QIcon(":/resources/export" + suffix + ".svg"));
+    m_import_action->setIcon(QIcon(":/resources/import" + suffix + ".svg"));
 }
 
 void MainView::startProcessingFromDialog()
@@ -445,7 +541,7 @@ void MainView::dragEnterEvent(QDragEnterEvent* event)
     {
         for (const QUrl& url : event->mimeData()->urls())
         {
-            if (url.toLocalFile().endsWith(".ch10", Qt::CaseInsensitive))
+            if (isSupportedFile(url.toLocalFile()))
             {
                 event->acceptProposedAction();
                 return;
@@ -459,11 +555,9 @@ void MainView::dropEvent(QDropEvent* event)
     for (const QUrl& url : event->mimeData()->urls())
     {
         QString file = url.toLocalFile();
-        if (file.endsWith(".ch10", Qt::CaseInsensitive))
+        if (isSupportedFile(file))
         {
-            m_last_ch10_dir = QFileInfo(file).absolutePath();
-            saveLastCh10Dir();
-            m_view_model->openFile(file);
+            openPath(file);
             return;
         }
     }
@@ -478,6 +572,7 @@ void MainView::setAllControlsEnabled(bool enabled)
     m_toolbar_open_action->setEnabled(enabled);
     m_open_action->setEnabled(enabled);
     m_recent_menu->setEnabled(enabled);
+    m_import_action->setEnabled(enabled);
 }
 
 void MainView::logError(const QString& message)
@@ -530,9 +625,7 @@ void MainView::updateRecentFilesMenu()
         QAction* action = m_recent_menu->addAction(display);
         action->setToolTip(filepath);
         connect(action, &QAction::triggered, this, [this, filepath]() {
-            m_last_ch10_dir = QFileInfo(filepath).absolutePath();
-            saveLastCh10Dir();
-            m_view_model->openFile(filepath);
+            openPath(filepath);
         });
     }
 

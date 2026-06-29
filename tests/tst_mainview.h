@@ -17,6 +17,12 @@ private slots:
     void windowTitleIsNonEmpty();
     void menuBarExists();
     void toolBarExists();
+
+    // US7.0 — CSV import / file routing
+    void supportedFileDetection();
+    void openPathImportsCsv();
+    void importValidCsvPopulatesPlot();
+    void importInvalidCsvIsRejected();
 };
 
 #endif // TST_MAINVIEW_H

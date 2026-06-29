@@ -68,6 +68,24 @@ public:
     /// Appends a parameter with the given name and zero-based word index.
     void addParameter(const QString& name, int word);
 
+    /// Channel-position prefix for a 0-based channel index: "L"/"R"/"C" for the
+    /// known positions, "CH<n+1>" beyond them.
+    static QString channelPrefix(int channel_index);
+
+    /// Canonical default parameter name "<prefix>_RCVR<receiver+1>" for a 0-based
+    /// channel and receiver index. The single source of truth shared by the main
+    /// processing run and the calibration extractor so their default word maps
+    /// agree on names (a divergence silently misattaches calibration profiles).
+    static QString receiverParameterName(int channel_index, int receiver_index);
+
+    /// Builds the default receiver word map — NumReceivers x ReceiverChannels
+    /// parameters named via receiverParameterName(), assigned sequential words —
+    /// into this FrameSetup (appending to any existing parameters). Returns false
+    /// with a base message in @p error if the requested parameters don't fit the
+    /// frame (the final word slot is the sync word, hence the strict "<" bound).
+    bool buildDefaultReceiverMap(int num_receivers, int receiver_channels,
+                                 int num_words_in_minor_frame, QString& error);
+
 private:
     /// Reads TOML section names in the order they appear in the file.
     static QStringList readGroupsInFileOrder(const QString& filename);

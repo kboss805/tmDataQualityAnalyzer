@@ -33,6 +33,9 @@ private slots:
     void loadCsvMalformedRows();
     void lockSeriesMetricType();
     void lockSeriesColor();
+    void importMultiStreamColorsAndVisibility();
+    void importSnrStreamGrouping();
+    void importExportRoundTrip();
     void lockAxisRange();
     void hasLockSeriesTrue();
     void hasLockSeriesFalse();
@@ -58,6 +61,7 @@ private slots:
     void exportCsvHeaderAndData();
     void exportCsvEmptyNoFile();
     void exportCsvIncludesErrorColumn();
+    void exportCsvRoundTripsThroughLoad();
 };
 
 #endif // TST_PLOTVIEWMODEL_H

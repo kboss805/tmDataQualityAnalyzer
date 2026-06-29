@@ -109,6 +109,14 @@ EnI106Status Ch10PacketReader::assembleAttributesFromTMATS(SuTmatsInfo* tmats_in
             }
 
             int iTrackNumber = atoi(psuRDataSrc->szTrackNumber);
+            // atoi() yields 0 on non-numeric text and can be negative for a
+            // malformed track string; a negative index would read out of bounds
+            // below, so skip such a data source rather than indexing with it.
+            if (iTrackNumber < 0)
+            {
+                psuRDataSrc = psuRDataSrc->psuNext;
+                continue;
+            }
             if (iTrackNumber >= PCMConstants::kMaxChannelCount)
             {
                 return I106_BUFFER_TOO_SMALL;

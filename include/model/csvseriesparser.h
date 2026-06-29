@@ -31,10 +31,18 @@ struct CsvParseResult
     int baseDay = 0;
     double baseTimeOffset = 0.0;
     double xMax = 0.0;
+    int skippedRows = 0;   ///< Count of malformed data rows skipped (too few columns or an unparseable timestamp).
 };
 
 /**
- * @brief Parses FrameProcessor "Day,Time,param..." CSV output into PlotSeriesData.
+ * @brief Parses the application's CSV export back into PlotSeriesData.
+ *
+ * The format is the one PlotViewModel::exportCsv writes (the two are a matched
+ * pair, see PlotConstants::kCsv* tokens): a single combined timestamp column
+ * "Time (DOY:HH:MM:SS.mmm)" (values "DDD:HH:MM:SS.mmm"), followed by one column
+ * per series whose header is qualified per metric — "<name> Lock (%)",
+ * "<name> Accumulated Missed Frames", or a bare SNR name. The legacy two-column
+ * "Day,Time,..." format is no longer read.
  */
 class CsvSeriesParser
 {
@@ -43,12 +51,14 @@ public:
     static CsvParseResult parse(const QString& filepath);
 
 private:
-    /// Parses the CSV data rows into the series structure.
+    /// Parses the CSV data rows into the series structure, counting malformed rows.
     static void parseDataRows(QTextStream& stream, int param_count,
                               QVector<PlotSeriesData>& series,
-                              int& out_base_day, double& out_base_time_offset);
-    /// Parses a "HH:MM:SS.mmm" time string to seconds since midnight.
-    static double parseTimeToSeconds(const QString& time_str);
+                              int& out_base_day, double& out_base_time_offset,
+                              int& out_skipped_rows);
+    /// Parses a combined "DDD:HH:MM:SS.mmm" stamp into its day and seconds-since-
+    /// midnight parts. Returns false (leaving outputs untouched) if malformed.
+    static bool parseCombinedTimestamp(const QString& stamp, int& out_day, double& out_seconds);
 };
 
 #endif // CSVSERIESPARSER_H

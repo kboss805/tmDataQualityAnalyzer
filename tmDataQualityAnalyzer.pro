@@ -124,6 +124,7 @@ HEADERS += \
 # DTOs: plain data carried across layers
 HEADERS += \
     include/dto/streamconfig.h \
+    include/dto/framesyncparams.h \
     include/dto/processingparams.h \
     include/dto/processedstreamdata.h \
     include/dto/plotseriesdata.h \
@@ -140,6 +141,7 @@ HEADERS += \
 HEADERS += \
     include/view/mainview.h \
     include/view/streamconfigdialog.h \
+    include/view/streamsubdialogs.h \
     include/view/exportdialog.h \
     include/view/plotcustomizationdialog.h \
     include/view/plotwidget.h
@@ -181,7 +183,10 @@ RESOURCES += \
     resources/stop.svg \
     resources/gear.svg \
     resources/retry.svg \
-    resources/export.svg \
+    resources/export-dark.svg \
+    resources/export-light.svg \
+    resources/import-dark.svg \
+    resources/import-light.svg \
     resources/toggle-on-dark.svg \
     resources/toggle-off-dark.svg \
     resources/toggle-on-light.svg \
