@@ -37,11 +37,7 @@ bool ProcessingCoordinator::startProcessing(QVector<StreamJob> jobs)
 {
     if (m_processing)
     {
-        for (StreamJob& job : jobs)
-        {
-            delete job.frameSetup;
-        }
-        return false;
+        return false; // jobs (and their owned FrameSetups) free automatically on return
     }
 
     if (jobs.isEmpty())
@@ -114,7 +110,7 @@ bool ProcessingCoordinator::startProcessing(QVector<StreamJob> jobs)
         connect(w.thread, &QThread::finished, processor, &QObject::deleteLater);
 
         ProcessingParams params = m_jobs[i].params; // includes resolvedAttrs + queue
-        FrameSetup* setup = m_jobs[i].frameSetup;
+        FrameSetup* setup = m_jobs[i].frameSetup.get(); // worker borrows; coordinator retains ownership
         connect(w.thread, &QThread::started, processor, [processor, params, setup]() {
             processor->process(params, setup);
         });
@@ -191,12 +187,7 @@ void ProcessingCoordinator::reset()
 
 void ProcessingCoordinator::clearJobs()
 {
-    for (StreamJob& job : m_jobs)
-    {
-        delete job.frameSetup;
-        job.frameSetup = nullptr;
-    }
-    m_jobs.clear();
+    m_jobs.clear(); // each StreamJob's shared_ptr frees its owned FrameSetup
 }
 
 void ProcessingCoordinator::teardownAll()

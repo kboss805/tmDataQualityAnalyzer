@@ -97,15 +97,7 @@ bool FrameSetup::tryLoadingFile(const QString& filename, int num_words_in_minor_
             return false;
         }
 
-        ParameterInfo parameter = ParameterInfo();
-        parameter.name = group;
-        parameter.word = parameter_word;
-        parameter.slope = 0;
-        parameter.scale = 0;
-        parameter.is_enabled = true;
-        parameter.sample_sum = 0;
-
-        m_parameters.append(parameter);
+        addParameter(group, parameter_word);
 
         settings.endGroup();
     }
@@ -143,13 +135,10 @@ void FrameSetup::clearParameters()
 
 void FrameSetup::addParameter(const QString& name, int word)
 {
-    ParameterInfo parameter = ParameterInfo();
+    ParameterInfo parameter;
     parameter.name = name;
     parameter.word = word;
-    parameter.slope = 0;
-    parameter.scale = 0;
-    parameter.is_enabled = true;
-    parameter.sample_sum = 0;
+    parameter.is_enabled = true; // slope/scale/sample_sum default to 0 via NSDMIs
 
     m_parameters.append(parameter);
 }

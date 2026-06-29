@@ -411,15 +411,11 @@ void MainViewModel::startProcessing()
         StreamJob job;
         if (!buildStreamJob(cfg, base, job, error))
         {
-            // Free any already-built jobs before bailing out.
-            for (StreamJob& built : jobs)
-            {
-                delete built.frameSetup;
-            }
+            // Already-built jobs free themselves: each StreamJob owns its FrameSetup.
             emit errorOccurred(error);
             return;
         }
-        jobs.push_back(job);
+        jobs.push_back(std::move(job));
     }
 
     if (jobs.isEmpty())
@@ -572,11 +568,11 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
     if (cfg.mode == StreamMode::FrameSyncLockStats)
     {
         // Lock-only: no receiver parameters needed.
-        out_job.frameSetup = new FrameSetup(nullptr);
+        out_job.frameSetup = std::make_shared<FrameSetup>(nullptr);
         return true;
     }
 
-    auto* frame_setup = new FrameSetup(nullptr);
+    auto frame_setup = std::make_shared<FrameSetup>(nullptr);
     if (cfg.receiverParamsToml.isEmpty())
     {
         // No Receiver Parameters TOML provided: fall back to the shipped default
@@ -596,7 +592,6 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
             if (!frame_setup->buildDefaultReceiverMap(cfg.numReceivers, cfg.receiverChannels,
                                                       words_in_minor_frame, map_error))
             {
-                delete frame_setup;
                 error = stream_desc + ": " + map_error;
                 return false;
             }
@@ -604,21 +599,18 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
     }
     else if (!QFileInfo::exists(cfg.receiverParamsToml))
     {
-        delete frame_setup;
         error = stream_desc + ": Receiver Parameters file '" +
                 QFileInfo(cfg.receiverParamsToml).fileName() + "' was not found.";
         return false;
     }
     else if (!frame_setup->tryLoadingFile(cfg.receiverParamsToml, words_in_minor_frame))
     {
-        delete frame_setup;
         error = stream_desc + ": Failed to load Receiver Parameters from '" +
                 QFileInfo(cfg.receiverParamsToml).fileName() + "'. Check the word map.";
         return false;
     }
     if (frame_setup->length() == 0)
     {
-        delete frame_setup;
         error = stream_desc + ": Receiver Parameters file contains no parameters.";
         return false;
     }
@@ -630,13 +622,11 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
 
     if (scale_dB_per_V <= 0)
     {
-        delete frame_setup;
         error = stream_desc + ": Scale (dB/V) must be a positive number.";
         return false;
     }
     if (slope_idx < 0 || slope_idx > UIConstants::kMaxSlopeIndex)
     {
-        delete frame_setup;
         error = stream_desc + ": Slope index is invalid.";
         return false;
     }
@@ -691,6 +681,6 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
             + ": no non-linear calibration profiles configured — using linear calibration.");
     }
 
-    out_job.frameSetup = frame_setup;
+    out_job.frameSetup = std::move(frame_setup);
     return true;
 }

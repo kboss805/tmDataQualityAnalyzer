@@ -21,12 +21,12 @@
  */
 struct ParameterInfo
 {
-    QString name;      ///< Parameter name (e.g., "L_RCVR1").
-    int word;          ///< Zero-based word index within the minor frame.
-    double slope;      ///< Calibration slope (dB per raw count).
-    double scale;      ///< Calibration offset applied before slope.
-    bool is_enabled;   ///< Whether this parameter is included in output.
-    double sample_sum; ///< Running sum of RAW counts in the window; calibration is applied once to the windowed average.
+    QString name;               ///< Parameter name (e.g., "L_RCVR1").
+    int word = -1;              ///< Zero-based word index within the minor frame.
+    double slope = 0.0;         ///< Calibration slope (dB per raw count).
+    double scale = 0.0;         ///< Calibration offset applied before slope.
+    bool is_enabled = false;    ///< Whether this parameter is included in output.
+    double sample_sum = 0.0;    ///< Running sum of RAW counts in the window; calibration is applied once to the windowed average.
     CalibrationProfile profile; ///< Optional non-linear step calibration (US3.2); linear math used when invalid.
 };
 

@@ -14,16 +14,18 @@
 #ifndef PROCESSINGCOORDINATOR_H
 #define PROCESSINGCOORDINATOR_H
 
+#include <memory>
+
 #include <QObject>
 #include <QString>
 #include <QThread>
 #include <QVector>
 
+#include "framesetup.h"
 #include "processedstreamdata.h"
 #include "processingparams.h"
 
 class FrameProcessor;
-class FrameSetup;
 class Ch10PacketReader;
 class PacketQueue;
 
@@ -32,8 +34,9 @@ class PacketQueue;
  */
 struct StreamJob
 {
-    ProcessingParams params;            ///< Fully-validated parameters for this stream.
-    FrameSetup*      frameSetup = nullptr; ///< Owned word-map/calibration table (transferred to coordinator).
+    ProcessingParams            params;     ///< Fully-validated parameters for this stream.
+    std::shared_ptr<FrameSetup> frameSetup; ///< Owned word-map/calibration table (moved into the coordinator).
+                                            ///< shared_ptr (not unique_ptr) so StreamJob stays copyable for QVector.
 };
 
 /**
