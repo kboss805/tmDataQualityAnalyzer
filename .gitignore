@@ -50,10 +50,11 @@ version_autogen.h
 
 # Deployment — see deploy/.gitignore for per-file rules
 
-# AI tool settings — track shared config, ignore local/machine-specific files
+# AI tool settings — track shared config + project skills, ignore local/machine-specific files
 .claude/*
 !.claude/settings.json
 !.claude/.claudeignore
+!.claude/skills/
 
 # Build artifacts
 *.pdb

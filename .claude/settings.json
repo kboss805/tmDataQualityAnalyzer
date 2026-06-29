@@ -1,2 +1,27 @@
 {
+  "permissions": {
+    "deny": [
+      "Edit(lib/irig106/**)",
+      "Edit(lib/qcustomplot/**)",
+      "Write(lib/irig106/**)",
+      "Write(lib/qcustomplot/**)"
+    ],
+    "allow": [
+      "Bash(qmake:*)",
+      "Bash(mingw32-make:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git rm:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr status:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)"
+    ]
+  }
 }
