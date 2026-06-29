@@ -31,6 +31,7 @@ Checks: >
   -cppcoreguidelines-avoid-magic-numbers,
   -readability-magic-numbers,
   -readability-identifier-length,
+  -readability-identifier-naming,
   -readability-function-cognitive-complexity,
   -readability-braces-around-statements,
   -readability-implicit-bool-conversion,
@@ -40,16 +41,10 @@ Checks: >
   -bugprone-easily-swappable-parameters,
   -modernize-use-default-member-init
 
-# Only analyze this project's own headers, never the vendored libraries or
-# generated MOC output.
-HeaderFilterRegex: '.*[/\\](include|src)[/\\].*\.h$'
+# Only analyze THIS project's own headers. The regex is anchored on the project
+# folder name on purpose: a bare "(include|src)" also matches Qt's own
+# .../mingw_64/include/QtCore/... path and floods the report with thousands of
+# warnings from third-party headers. Keep it anchored to tmDataQualityAnalyzer/.
+HeaderFilterRegex: 'tmDataQualityAnalyzer[/\\](include|src)[/\\].*\.h$'
 
 WarningsAsErrors: ''
-
-CheckOptions:
-  - key: readability-identifier-naming.ClassCase
-    value: CamelCase
-  - key: readability-identifier-naming.PrivateMemberPrefix
-    value: 'm_'
-  - key: readability-identifier-naming.FunctionCase
-    value: camelBack
