@@ -340,8 +340,8 @@ void PlotWidget::onXRangeChanged()
     const QString entered_start = m_x_start_edit->text();
     const QString entered_stop  = m_x_stop_edit->text();
 
-    double raw_start = parseTimeToElapsed(entered_start);
-    double raw_stop  = parseTimeToElapsed(entered_stop);
+    double raw_start = m_view_model->parseTime(entered_start);
+    double raw_stop  = m_view_model->parseTime(entered_stop);
 
     double start = qBound(data_min, raw_start, data_max);
     double stop  = qBound(data_min, raw_stop,  data_max);
@@ -544,26 +544,6 @@ void PlotWidget::handlePlotXRangeChanged(double lower, double upper)
     }
 
     m_view_model->setXViewRange(lower, upper);
-}
-
-double PlotWidget::parseTimeToElapsed(const QString& text) const
-{
-    if (m_view_model == nullptr)
-    {
-        return 0.0;
-    }
-    const QStringList parts = text.split(':');
-    if (parts.size() != 4)
-    {
-        return 0.0;
-    }
-    int day     = parts[0].toInt();
-    int hours   = parts[1].toInt();
-    int minutes = parts[2].toInt();
-    int secs    = parts[3].toInt();
-    double total_absolute = day * 86400.0 + hours * 3600.0 + minutes * 60.0 + secs;
-    double base_absolute  = m_view_model->baseDay() * 86400.0 + m_view_model->baseTimeOffset();
-    return total_absolute - base_absolute;
 }
 
 void PlotWidget::setUpLayout()

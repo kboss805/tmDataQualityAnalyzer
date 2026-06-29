@@ -881,3 +881,24 @@ QString PlotViewModel::formatTime(double elapsed) const
         .arg(minutes, 2, kBase10, QChar('0'))
         .arg(seconds, 2, kBase10, QChar('0'));
 }
+
+double PlotViewModel::parseTime(const QString& text) const
+{
+    const auto parts = text.split(':');
+    if (parts.size() != 4)
+    {
+        return 0.0;
+    }
+    const int day     = parts[0].toInt();
+    const int hours   = parts[1].toInt();
+    const int minutes = parts[2].toInt();
+    const int seconds = parts[3].toInt();
+
+    const double entered_absolute =
+        day * static_cast<double>(UIConstants::kSecondsPerDay) +
+        hours * static_cast<double>(UIConstants::kSecondsPerHour) +
+        minutes * static_cast<double>(UIConstants::kSecondsPerMinute) + seconds;
+    const double base_absolute =
+        m_base_day * static_cast<double>(UIConstants::kSecondsPerDay) + m_base_time_offset;
+    return entered_absolute - base_absolute;
+}

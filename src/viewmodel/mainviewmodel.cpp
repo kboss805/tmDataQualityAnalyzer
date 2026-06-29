@@ -631,46 +631,16 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
         return false;
     }
 
-    double voltage_lower = UIConstants::kSlopeVoltageLower[slope_idx] * scale_dB_per_V;
-    double voltage_upper = UIConstants::kSlopeVoltageUpper[slope_idx] * scale_dB_per_V;
-    bool negative_polarity = (polarity_idx == 1);
+    // The linear voltage→dB math lives in the Model (FrameSetup) so it is
+    // single-sourced and unit-testable rather than inline in the ViewModel.
+    frame_setup->applyLinearCalibration(polarity_idx, slope_idx, scale_dB_per_V);
 
-    // Apply slope/scale to every parameter and enable it for output.
-    for (int i = 0; i < frame_setup->length(); i++)
-    {
-        ParameterInfo* param = frame_setup->getParameter(i);
-        param->slope = (voltage_upper - voltage_lower) / PCMConstants::kMaxRawSampleValue;
-        if (negative_polarity)
-        {
-            param->slope *= -1;
-            param->scale = -voltage_upper / (voltage_upper - voltage_lower) * PCMConstants::kMaxRawSampleValue;
-        }
-        else
-        {
-            param->scale = voltage_lower / (voltage_upper - voltage_lower) * PCMConstants::kMaxRawSampleValue;
-        }
-        param->is_enabled = true;
-        param->sample_sum = 0;
-    }
-
-    // Attach any non-linear step calibration profiles (US3.2), matched by word
-    // index. Channels without a valid profile keep the linear slope/scale above.
+    // Attach non-linear step-calibration profiles (US3.2) by word index (Model side).
     if (!cfg.calibrationByWord.isEmpty())
     {
-        int attached = 0;
-        for (int i = 0; i < frame_setup->length(); i++)
-        {
-            ParameterInfo* param = frame_setup->getParameter(i);
-            auto it = cfg.calibrationByWord.constFind(param->word);
-            if (it != cfg.calibrationByWord.constEnd() && it.value().valid)
-            {
-                param->profile = it.value();
-                attached++;
-            }
-        }
+        const int attached = frame_setup->attachCalibrationProfiles(cfg.calibrationByWord);
         // Surface whether profiles actually reached the word map: provided > 0 but
-        // attached == 0 means a word-index mismatch and a silent fall back to the
-        // linear model.
+        // attached == 0 means a word-index mismatch and a silent fall back to linear.
         emit logMessageReceived("  " + stream_desc + ": non-linear calibration — provided "
                     + QString::number(cfg.calibrationByWord.size())
                     + " profile(s), attached " + QString::number(attached) + " to word map.");

@@ -143,6 +143,44 @@ void FrameSetup::addParameter(const QString& name, int word)
     m_parameters.append(parameter);
 }
 
+void FrameSetup::applyLinearCalibration(int polarity_index, int slope_index, double scale_dB_per_V)
+{
+    const double voltage_lower = UIConstants::kSlopeVoltageLower[slope_index] * scale_dB_per_V;
+    const double voltage_upper = UIConstants::kSlopeVoltageUpper[slope_index] * scale_dB_per_V;
+    const bool   negative_polarity = (polarity_index == 1);
+
+    for (ParameterInfo& param : m_parameters)
+    {
+        param.slope = (voltage_upper - voltage_lower) / PCMConstants::kMaxRawSampleValue;
+        if (negative_polarity)
+        {
+            param.slope *= -1;
+            param.scale = -voltage_upper / (voltage_upper - voltage_lower) * PCMConstants::kMaxRawSampleValue;
+        }
+        else
+        {
+            param.scale = voltage_lower / (voltage_upper - voltage_lower) * PCMConstants::kMaxRawSampleValue;
+        }
+        param.is_enabled = true;
+        param.sample_sum = 0;
+    }
+}
+
+int FrameSetup::attachCalibrationProfiles(const QHash<int, CalibrationProfile>& by_word)
+{
+    int attached = 0;
+    for (ParameterInfo& param : m_parameters)
+    {
+        const auto it = by_word.constFind(param.word);
+        if (it != by_word.constEnd() && it.value().valid)
+        {
+            param.profile = it.value();
+            attached++;
+        }
+    }
+    return attached;
+}
+
 QString FrameSetup::channelPrefix(int channel_index)
 {
     if (channel_index < UIConstants::kNumKnownPrefixes)
