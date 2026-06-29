@@ -84,6 +84,33 @@ private:
         uint64_t num_bits;         ///< Number of data bits from this packet.
     };
 
+    /// @brief Run totals/diagnostics collected during a scan, consumed once at the
+    /// end to emit the success log or the "no syncs / no frames" error report.
+    struct ScanDiagnostics {
+        uint64_t total_bytes_processed  = 0;
+        uint64_t total_syncs_found      = 0;
+        uint64_t total_frames_extracted = 0;
+        uint64_t boundary_syncs         = 0;
+        uint64_t max_sync_run           = 0;
+        bool     buffer_ever_filled     = false;
+        double   first_data_time        = -1.0;
+        double   last_data_time         = 0.0;
+        uint64_t rows_written           = 0;
+        uint32_t bits_in_frame          = 0;
+        uint32_t words_in_frame         = 0;
+        uint32_t sync_pat_len           = 0;
+        uint32_t min_syncs              = 0;
+        double   elapsed_sec            = 0.0;
+    };
+
+    /// Caches the enabled parameters for the hot loop and builds the index-aligned
+    /// in-memory channel series in m_result. @return the enabled-parameter pointers.
+    QVector<ParameterInfo*> buildEnabledParams(FrameSetup* frame_setup, bool receiver_mode);
+
+    /// Emits the completion log (or the no-syncs / no-frames error) for a finished
+    /// scan and signals processingFinished(). @return true on a successful run.
+    bool reportCompletion(const ProcessingParams& params, const ScanDiagnostics& diag);
+
     /// @name PCM bit-level helpers
     /// @{
     /**

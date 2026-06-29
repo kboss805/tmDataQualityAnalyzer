@@ -123,30 +123,9 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     m_result.pcmChannelId = params.pcmChannelId;
     m_result.mode         = params.mode;
 
-    // Pre-cache enabled parameters to avoid repeated iteration in hot loops.
-    QVector<ParameterInfo*> enabled_params;
-    if (receiver_mode && frame_setup != nullptr)
-    {
-        enabled_params.reserve(frame_setup->length());
-        for (int i = 0; i < frame_setup->length(); i++)
-        {
-            ParameterInfo* param = frame_setup->getParameter(i);
-            if (param->is_enabled)
-            {
-                enabled_params.push_back(param);
-            }
-        }
-    }
-
-    // Build the in-memory channel series, index-aligned to enabled_params.
-    m_result.channels.reserve(enabled_params.size());
-    for (const auto* param : enabled_params)
-    {
-        ProcessedChannelSeries series;
-        series.name = param->name;
-        series.word = param->word;
-        m_result.channels.push_back(series);
-    }
+    // Cache enabled parameters for the hot loop and build the index-aligned
+    // in-memory channel series (see buildEnabledParams).
+    QVector<ParameterInfo*> enabled_params = buildEnabledParams(frame_setup, receiver_mode);
 
     // ---- Frame extraction state (resolved by the reader from TMATS) ----
     uint64_t sync_pat      = attrs.syncPat;
@@ -500,11 +479,62 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         rows_written++;
     }
 
-    emit logMessage(QString::number(total_bytes_processed) + " bytes processed, "
-                    + QString::number(total_syncs_found) + " syncs found, "
-                    + QString::number(total_frames_extracted) + " frames extracted.");
+    qint64 elapsed_ms = elapsed_timer.elapsed();
+    constexpr double kMsPerSec = 1000.0;
 
-    if (total_syncs_found == 0)
+    ScanDiagnostics diag;
+    diag.total_bytes_processed  = total_bytes_processed;
+    diag.total_syncs_found      = total_syncs_found;
+    diag.total_frames_extracted = total_frames_extracted;
+    diag.boundary_syncs         = boundary_syncs;
+    diag.max_sync_run           = max_sync_run;
+    diag.buffer_ever_filled     = buffer_ever_filled;
+    diag.first_data_time        = first_data_time;
+    diag.last_data_time         = last_data_time;
+    diag.rows_written           = rows_written;
+    diag.bits_in_frame          = bits_in_frame;
+    diag.words_in_frame         = words_in_frame;
+    diag.sync_pat_len           = sync_pat_len;
+    diag.min_syncs              = min_syncs;
+    diag.elapsed_sec            = static_cast<double>(elapsed_ms) / kMsPerSec;
+    return reportCompletion(params, diag);
+}
+
+QVector<ParameterInfo*> FrameProcessor::buildEnabledParams(FrameSetup* frame_setup, bool receiver_mode)
+{
+    QVector<ParameterInfo*> enabled_params;
+    if (receiver_mode && frame_setup != nullptr)
+    {
+        enabled_params.reserve(frame_setup->length());
+        for (int i = 0; i < frame_setup->length(); i++)
+        {
+            ParameterInfo* param = frame_setup->getParameter(i);
+            if (param->is_enabled)
+            {
+                enabled_params.push_back(param);
+            }
+        }
+    }
+
+    // Build the in-memory channel series, index-aligned to enabled_params.
+    m_result.channels.reserve(enabled_params.size());
+    for (const auto* param : enabled_params)
+    {
+        ProcessedChannelSeries series;
+        series.name = param->name;
+        series.word = param->word;
+        m_result.channels.push_back(series);
+    }
+    return enabled_params;
+}
+
+bool FrameProcessor::reportCompletion(const ProcessingParams& params, const ScanDiagnostics& d)
+{
+    emit logMessage(QString::number(d.total_bytes_processed) + " bytes processed, "
+                    + QString::number(d.total_syncs_found) + " syncs found, "
+                    + QString::number(d.total_frames_extracted) + " frames extracted.");
+
+    if (d.total_syncs_found == 0)
     {
         emit errorOccurred("Frame sync pattern was not found in the data stream. "
                            "Verify the frame sync pattern and PCM channel are correct.");
@@ -512,7 +542,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         return false;
     }
 
-    if (total_frames_extracted == 0)
+    if (d.total_frames_extracted == 0)
     {
         emit errorOccurred(
             QString("Frame sync pattern was found but no valid frames were extracted.\n"
@@ -520,24 +550,20 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
                     "  Syncs:           %5 total  |  %6 boundary-aligned  |  longest run=%7 (need %8)\n"
                     "  Frame buffer:    %9\n"
                     "  Data time range: %10s – %11s  (window: %12s – %13s)")
-            .arg(bits_in_frame).arg(words_in_frame).arg(sync_pat_len).arg(min_syncs)
-            .arg(total_syncs_found).arg(boundary_syncs).arg(max_sync_run).arg(min_syncs)
-            .arg(buffer_ever_filled ? "filled at least once (save_data reached 2)"
-                                    : "NEVER filled — words_in_frame may be too large")
-            .arg(first_data_time, 0, 'f', 3).arg(last_data_time, 0, 'f', 3)
-            .arg(start_seconds).arg(stop_seconds));
+            .arg(d.bits_in_frame).arg(d.words_in_frame).arg(d.sync_pat_len).arg(d.min_syncs)
+            .arg(d.total_syncs_found).arg(d.boundary_syncs).arg(d.max_sync_run).arg(d.min_syncs)
+            .arg(d.buffer_ever_filled ? "filled at least once (save_data reached 2)"
+                                      : "NEVER filled — words_in_frame may be too large")
+            .arg(d.first_data_time, 0, 'f', 3).arg(d.last_data_time, 0, 'f', 3)
+            .arg(params.startSeconds).arg(params.stopSeconds));
         emit processingFinished(false);
         return false;
     }
 
-    qint64 elapsed_ms = elapsed_timer.elapsed();
-    constexpr double kMsPerSec = 1000.0;
-    double elapsed_sec = static_cast<double>(elapsed_ms) / kMsPerSec;
-
     emit logMessage(QString("Stream %1 complete — %2 samples extracted, elapsed %3s.")
         .arg(params.streamLabel)
-        .arg(rows_written)
-        .arg(elapsed_sec, 0, 'f', 1));
+        .arg(d.rows_written)
+        .arg(d.elapsed_sec, 0, 'f', 1));
 
     emit processingFinished(true);
     return true;
