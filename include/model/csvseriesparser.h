@@ -12,6 +12,7 @@
 #define CSVSERIESPARSER_H
 
 #include <QString>
+#include <QStringView>
 #include <QVector>
 
 #include "plotseriesdata.h"
@@ -58,7 +59,7 @@ private:
                               int& out_skipped_rows);
     /// Parses a combined "DDD:HH:MM:SS.mmm" stamp into its day and seconds-since-
     /// midnight parts. Returns false (leaving outputs untouched) if malformed.
-    static bool parseCombinedTimestamp(const QString& stamp, int& out_day, double& out_seconds);
+    static bool parseCombinedTimestamp(QStringView stamp, int& out_day, double& out_seconds);
 };
 
 #endif // CSVSERIESPARSER_H
