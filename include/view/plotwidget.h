@@ -7,6 +7,7 @@
 #define PLOTWIDGET_H
 
 #include <QDoubleSpinBox>
+#include <QHash>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMouseEvent>
@@ -153,7 +154,8 @@ private:
 
     /// @name Graph tracking
     /// @{
-    QVector<QCPGraph*> m_graphs;          ///< Maps series index → QCPGraph pointer.
+    QVector<QCPGraph*> m_graphs;          ///< Series index → QCPGraph, aligned to PlotViewModel::allSeries().
+    QHash<int, QCPGraph*> m_graph_by_id;  ///< Series id → QCPGraph, for incremental reconcile across appends.
     /// @}
 
     QPushButton* m_customize_btn = nullptr;

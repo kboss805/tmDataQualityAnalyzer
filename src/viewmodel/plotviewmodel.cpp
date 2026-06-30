@@ -68,6 +68,7 @@ void PlotViewModel::commitParseResult(CsvParseResult&& result)
 
     for (auto& s : m_series)
     {
+        s.id = m_next_series_id++;
         switch (s.metricType)
         {
         case PlotSeriesData::MetricType::FrameSyncLock:
@@ -237,6 +238,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         lock.channelIndex = 0;
         lock.streamOrder = data.pcmChannelId;
         lock.streamSequence = data.jobIndex;
+        lock.id = m_next_series_id++;
         lock.xValues = elapsed;
         lock.yValues = data.lockPercent;
         lock.visible = (m_lock_axis_view == LockAxisView::LockPercent);
@@ -256,6 +258,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         errors.channelIndex = 0;
         errors.streamOrder = data.pcmChannelId;
         errors.streamSequence = data.jobIndex;
+        errors.id = m_next_series_id++;
         errors.xValues = elapsed;
         errors.yValues = data.accumulatedMissedFrames;
         errors.visible = (m_lock_axis_view == LockAxisView::MissedFrames);
@@ -290,6 +293,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         receiver_channel_count[s.receiverIndex]++;
         s.streamOrder = data.pcmChannelId;
         s.streamSequence = data.jobIndex;
+        s.id = m_next_series_id++;
         s.xValues = elapsed;
         s.yValues = ch.values;
         fillCaches(s);
@@ -506,9 +510,31 @@ void PlotViewModel::renameSeries(int index, const QString& name)
 
 void PlotViewModel::recolorSeries(int index, const QColor& color)
 {
-    if (index >= 0 && index < m_series.size())
+    if (index < 0 || index >= m_series.size())
+        return;
+
+    m_series[index].color = color;
+
+    // For frame sync series, keep the paired sibling (same stream, other metric) in
+    // sync so a custom color survives switching between lock/missed-frames modes —
+    // mirrors renameSeries().
+    const PlotSeriesData& recolored = m_series[index];
+    const bool isFrameSyncMetric =
+        recolored.metricType == PlotSeriesData::MetricType::FrameSyncLock ||
+        recolored.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames;
+    if (isFrameSyncMetric)
     {
-        m_series[index].color = color;
+        for (PlotSeriesData& s : m_series)
+        {
+            if (&s == &recolored)
+                continue;
+            if (s.streamLabel == recolored.streamLabel &&
+                (s.metricType == PlotSeriesData::MetricType::FrameSyncLock ||
+                 s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames))
+            {
+                s.color = color;
+            }
+        }
     }
 }
 

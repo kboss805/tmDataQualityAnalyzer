@@ -38,6 +38,9 @@ struct PlotSeriesData
     int channelIndex  = 0;    ///< 0-based within receiver, for color shade.
     int streamOrder    = 0;   ///< Source PCM channel ID, for ordering series within a legend group.
     int streamSequence = 0;   ///< 0-based job index; used to sort legend entries in submission order regardless of parallel completion order.
+    int id = 0;               ///< Unique, stable per-series identity assigned by PlotViewModel. A given id's
+                               ///< data is immutable (reprocessing yields new ids), letting the View reconcile
+                               ///< graphs across appends without re-copying unchanged series data.
     MetricType metricType = MetricType::SNR; ///< Which axis this series belongs to.
     QVector<double> xValues;  ///< Elapsed seconds from first sample.
     QVector<double> yValues;  ///< Calibrated dB (SNR) or percentage (lock) values.

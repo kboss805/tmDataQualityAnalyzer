@@ -175,23 +175,45 @@ void PlotWidget::rebuildChart()
 
     m_updating_from_vm = true;
 
-    m_plot->clearGraphs();
-    m_graphs.clear();
-
     const auto& all_series = m_view_model->allSeries();
 
-    for (qsizetype i = 0; i < all_series.size(); i++)
+    // Reconcile graphs against the series list by stable series id: a stream
+    // appended mid-run reuses every existing graph (no re-setData of unchanged
+    // data) instead of clearing and recopying the whole chart. A given id's data
+    // is immutable — reprocessing a stream yields new ids — so a reused graph never
+    // needs its data re-copied; only color/visibility (cheap) are refreshed.
+    QHash<int, QCPGraph*> next_by_id;
+    next_by_id.reserve(static_cast<int>(all_series.size()));
+    QVector<QCPGraph*> ordered;
+    ordered.reserve(all_series.size());
+
+    for (const PlotSeriesData& s : all_series)
     {
-        const PlotSeriesData& s = all_series[i];
-        QCPAxis* value_axis = isLeftAxisMetric(s.metricType)
-            ? m_plot->yAxis : m_plot->yAxis2;
-        QCPGraph* graph = m_plot->addGraph(m_plot->xAxis, value_axis);
-        graph->setName(s.name);
+        QCPGraph* graph = m_graph_by_id.take(s.id); // reuse this id's graph if one exists
+        if (graph == nullptr)
+        {
+            QCPAxis* value_axis = isLeftAxisMetric(s.metricType)
+                ? m_plot->yAxis : m_plot->yAxis2;
+            graph = m_plot->addGraph(m_plot->xAxis, value_axis);
+            graph->setName(s.name);
+            graph->setData(s.xValues, s.yValues, true);
+        }
+        // Color and visibility can change on append (the re-sort recolors left-axis
+        // series) or on a metric toggle, so refresh them on every reconcile.
         graph->setPen(QPen(s.color, PlotConstants::kGraphPenWidth));
-        graph->setData(s.xValues, s.yValues, true);
         graph->setVisible(s.visible);
-        m_graphs.append(graph);
+        next_by_id.insert(s.id, graph);
+        ordered.append(graph);
     }
+
+    // Graphs left in m_graph_by_id belong to series that are gone (reprocess
+    // replaced them, or the data was cleared) — remove them from the chart.
+    for (auto it = m_graph_by_id.cbegin(); it != m_graph_by_id.cend(); ++it)
+    {
+        m_plot->removeGraph(it.value());
+    }
+    m_graph_by_id = std::move(next_by_id);
+    m_graphs = std::move(ordered);
 
     // Set axis labels. The left axis label tracks the active left-axis view.
     m_plot->xAxis->setLabel(PlotConstants::kXAxisLabel);
@@ -265,6 +287,10 @@ void PlotWidget::onLockAxisViewChanged()
     const qsizetype count = qMin(m_graphs.size(), all_series.size());
     for (qsizetype i = 0; i < count; i++)
     {
+        // Re-apply color as well as visibility: a custom recolor propagates to the
+        // lock/missed sibling in the ViewModel, and that sibling first becomes
+        // visible here, so its pen must be refreshed from the (updated) series color.
+        m_graphs[i]->setPen(QPen(all_series[i].color, PlotConstants::kGraphPenWidth));
         m_graphs[i]->setVisible(all_series[i].visible);
     }
 
