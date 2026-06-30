@@ -86,6 +86,9 @@ private slots:
     void onDataChanged();
     /// Toggles a single graph's visibility without full rebuild.
     void onSeriesVisibilityToggled(int index);
+    /// Switches the left-axis metric (lock % vs missed frames) by syncing graph
+    /// visibility and the axis label in place — no chart rebuild.
+    void onLockAxisViewChanged();
     /// Syncs axis ranges from ViewModel to the QCustomPlot axes.
     void updateAxes();
     /// Updates chart title from ViewModel.

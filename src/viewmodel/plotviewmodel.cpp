@@ -853,9 +853,11 @@ void PlotViewModel::setLockAxisView(LockAxisView view)
         }
     }
 
+    // No dataChanged(): the series and their data are unchanged — only per-series
+    // visibility and the left-axis metric flip. The View reacts to lockAxisViewChanged
+    // by syncing graph visibility in place instead of rebuilding the whole chart.
     emit axisRangeChanged();
     emit lockAxisViewChanged();
-    emit dataChanged();
 }
 
 QString PlotViewModel::formatTime(double elapsed) const

@@ -116,10 +116,7 @@ void PlotWidget::setViewModel(PlotViewModel* vm)
     connect(vm, &PlotViewModel::seriesVisibilityChanged, this, &PlotWidget::onSeriesVisibilityToggled);
     connect(vm, &PlotViewModel::axisRangeChanged, this, &PlotWidget::updateAxes);
     connect(vm, &PlotViewModel::plotTitleChanged, this, &PlotWidget::updateTitle);
-    connect(vm, &PlotViewModel::lockAxisViewChanged, this, [this]() {
-        rebuildChart();
-        rebuildLegend();
-    });
+    connect(vm, &PlotViewModel::lockAxisViewChanged, this, &PlotWidget::onLockAxisViewChanged);
 }
 
 void PlotWidget::setLogTextProvider(std::function<QString()> provider)
@@ -251,6 +248,34 @@ void PlotWidget::onSeriesVisibilityToggled(int index)
     m_graphs[index]->setVisible(m_view_model->seriesAt(index).visible);
     m_plot->replot(QCustomPlot::rpQueuedReplot);
     rebuildLegend();
+}
+
+void PlotWidget::onLockAxisViewChanged()
+{
+    if (m_view_model == nullptr)
+    {
+        return;
+    }
+
+    // The metric toggle only flips per-series visibility and the left-axis label;
+    // the graphs and their data are unchanged, so sync visibility in place instead
+    // of tearing down and rebuilding every QCPGraph. Axis ranges arrive separately
+    // via axisRangeChanged -> updateAxes().
+    const QVector<PlotSeriesData>& all_series = m_view_model->allSeries();
+    const qsizetype count = qMin(m_graphs.size(), all_series.size());
+    for (qsizetype i = 0; i < count; i++)
+    {
+        m_graphs[i]->setVisible(all_series[i].visible);
+    }
+
+    m_plot->yAxis->setLabel(
+        m_view_model->lockAxisView() == PlotViewModel::LockAxisView::MissedFrames
+            ? PlotConstants::kMissedFramesAxisLabel
+            : PlotConstants::kYAxisLabel);
+
+    updateAxisViewButton();
+    rebuildLegend();
+    m_plot->replot(QCustomPlot::rpQueuedReplot);
 }
 
 void PlotWidget::updateAxes()
