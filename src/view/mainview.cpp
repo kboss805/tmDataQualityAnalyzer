@@ -338,37 +338,40 @@ void MainView::onProcessingFinished(bool success)
 
 void MainView::onLogMessage(const QString& message)
 {
-    if (message.contains("ERROR"))
+    // Severity classification is ViewModel policy; the View only renders by level.
+    switch (MainViewModel::classifyLogMessage(message))
     {
+    case MainViewModel::LogLevel::Error:
         logError(message);
-    }
-    else if (message.contains("WARNING"))
-    {
+        return;
+    case MainViewModel::LogLevel::Warning:
         logWarning(message);
-    }
-    else if (message.startsWith("Pre-scan result:") || message.startsWith("Processing complete"))
-    {
+        return;
+    case MainViewModel::LogLevel::Success:
         logSuccess(message);
+        return;
+    case MainViewModel::LogLevel::Info:
+        break;
+    }
+
+    // Info: a timestamped neutral entry, with a passthrough for messages that
+    // already carry HTML color/link markup (e.g. export results).
+    QString timestamp = QTime::currentTime().toString("HH:mm:ss") + "&nbsp;&nbsp;";
+    QString html;
+    if (message.startsWith("<span"))
+    {
+        // Already pre-formatted HTML (e.g. export success/failure messages with
+        // color styling and clickable file links) — append as-is, don't escape.
+        html = timestamp + message;
     }
     else
     {
-        QString timestamp = QTime::currentTime().toString("HH:mm:ss") + "&nbsp;&nbsp;";
-        QString html;
-        if (message.startsWith("<span"))
-        {
-            // Already pre-formatted HTML (e.g. export success/failure messages with
-            // color styling and clickable file links) — append as-is, don't escape.
-            html = timestamp + message;
-        }
-        else
-        {
-            // Wrap in a neutral <span> so Qt treats this as explicit HTML and does not
-            // auto-detect bare file paths (e.g. C:/...) as clickable anchors.
-            html = "<span>" + timestamp + message.toHtmlEscaped() + "</span>";
-        }
-        m_log_preview->append(html);
-        m_log_preview->verticalScrollBar()->setValue(m_log_preview->verticalScrollBar()->maximum());
+        // Wrap in a neutral <span> so Qt treats this as explicit HTML and does not
+        // auto-detect bare file paths (e.g. C:/...) as clickable anchors.
+        html = "<span>" + timestamp + message.toHtmlEscaped() + "</span>";
     }
+    m_log_preview->append(html);
+    m_log_preview->verticalScrollBar()->setValue(m_log_preview->verticalScrollBar()->maximum());
 }
 
 ////////////////////////////////////////////////////////////////////////////////
