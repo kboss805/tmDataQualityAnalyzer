@@ -136,7 +136,7 @@ void loadFrameSyncFromToml(const QString& filename,
 
     if (invertedBox)
     {
-        bool inv = (cfg.value("Frame/Inverted", false).toString() == "true");
+        bool inv = cfg.value("Frame/Inverted", false).toBool();
         invertedBox->setChecked(inv);
     }
 }

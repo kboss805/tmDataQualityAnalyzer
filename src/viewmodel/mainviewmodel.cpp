@@ -13,7 +13,6 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QSettings>
-#include <QThread>
 
 #include "chapter10reader.h"
 #include "constants.h"
@@ -80,17 +79,7 @@ MainViewModel::MainViewModel(QObject* parent)
 
 MainViewModel::~MainViewModel()
 {
-    // m_coordinator is a child QObject and is auto-deleted before these.
-    if (m_loading && m_load_thread != nullptr)
-    {
-        m_loading_reader->requestAbort();
-        m_load_thread->quit();
-        m_load_thread->wait();
-        m_loading_reader->moveToThread(this->thread());
-        delete m_load_thread;
-        m_load_thread = nullptr;
-    }
-    delete m_loading_reader;
+    // m_coordinator is a child QObject and is auto-deleted after this body runs.
     delete m_reader;
 }
 
@@ -113,11 +102,8 @@ QStringList MainViewModel::pcmChannelList() const
 int MainViewModel::timeChannelIndex() const { return m_time_channel_index; }
 int MainViewModel::pcmChannelIndex() const { return m_pcm_channel_index; }
 bool MainViewModel::fileLoaded() const { return m_file_loaded; }
-int MainViewModel::progressPercent() const
-{
-    return m_loading ? m_load_progress_percent : m_coordinator->progressPercent();
-}
-bool MainViewModel::processing() const { return m_loading || m_coordinator->processing(); }
+int MainViewModel::progressPercent() const { return m_coordinator->progressPercent(); }
+bool MainViewModel::processing() const { return m_coordinator->processing(); }
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -271,7 +257,7 @@ void MainViewModel::logStartupInfo()
 
 void MainViewModel::openFile(const QString& filename)
 {
-    if (m_loading || m_coordinator->processing())
+    if (m_coordinator->processing())
     {
         return;
     }
@@ -282,80 +268,25 @@ void MainViewModel::openFile(const QString& filename)
     QFileInfo file_info(filename);
     emit logMessageReceived("Opening: " + file_info.fileName());
 
-    // Channel enumeration requires a full sequential scan of the file (there is no
-    // index to seek to), so run it on a worker thread and report progress instead
-    // of blocking the GUI thread on large files.
-    m_loading = true;
-    m_load_cancel_requested = false;
-    m_load_progress_percent = 0;
-    emit processingChanged();
-    emit progressPercentChanged();
-
-    // Use a fresh reader per load attempt rather than reusing m_reader across
-    // multiple moveToThread() cycles: repeatedly moving the same QObject between
-    // threads on every open/cancel/reopen left its queued connections vulnerable
-    // to silently failing to deliver on a subsequent cycle, which manifested as
-    // a permanent hang (load never reaches onLoadFinished, m_loading never
-    // clears) after cancelling and immediately opening another file.
-    m_loading_reader = new Chapter10Reader();
-    connect(m_loading_reader, &Chapter10Reader::displayErrorMessage,
+    // Channel enumeration reads only the file's first (TMATS) packet, which
+    // enumerates every channel, so it runs synchronously on the GUI thread — no
+    // worker thread, progress, or cancel machinery (and so no moveToThread races).
+    auto* reader = new Chapter10Reader();
+    connect(reader, &Chapter10Reader::displayErrorMessage,
             this, &MainViewModel::errorOccurred);
 
-    m_load_thread = new QThread;
-    m_loading_reader->moveToThread(m_load_thread);
-
-    connect(m_loading_reader, &Chapter10Reader::progressUpdated, this, &MainViewModel::onLoadProgress);
-    connect(m_loading_reader, &Chapter10Reader::loadFinished, this, &MainViewModel::onLoadFinished);
-    connect(m_load_thread, &QThread::started, m_loading_reader, [reader = m_loading_reader, filename]() {
-        reader->loadChannelsAsync(filename);
-    });
-
-    m_load_thread->start();
-}
-
-void MainViewModel::onLoadProgress(int percent)
-{
-    m_load_progress_percent = percent;
-    emit progressPercentChanged();
-}
-
-void MainViewModel::onLoadFinished(bool success)
-{
-    disconnect(m_loading_reader, &Chapter10Reader::progressUpdated, this, &MainViewModel::onLoadProgress);
-    disconnect(m_loading_reader, &Chapter10Reader::loadFinished, this, &MainViewModel::onLoadFinished);
-
-    m_load_thread->quit();
-    m_load_thread->wait();
-    m_loading_reader->moveToThread(this->thread());
-    delete m_load_thread;
-    m_load_thread = nullptr;
-
-    m_loading = false;
-    bool cancelled = m_load_cancel_requested;
-    m_load_cancel_requested = false;
-    emit processingChanged();
-    emit progressPercentChanged();
-
-    if (cancelled || !success)
+    if (!reader->loadChannels(filename))
     {
-        // The attempted load never became the active reader; discard it and
-        // leave m_reader (and whatever file it has loaded, if any) untouched.
-        delete m_loading_reader;
-        m_loading_reader = nullptr;
+        // The attempted load never became the active reader; discard it and leave
+        // m_reader (and whatever file it has loaded, if any) untouched.
+        delete reader;
         m_input_filename.clear();
-        if (cancelled)
-        {
-            emit logMessageReceived("File load cancelled.");
-        }
         return;
     }
 
     // Success: the new reader becomes the active one.
     delete m_reader;
-    m_reader = m_loading_reader;
-    m_loading_reader = nullptr;
-
-    QFileInfo file_info(m_input_filename);
+    m_reader = reader;
 
     // Log file metadata
     qint64 file_bytes = file_info.size();
@@ -411,15 +342,11 @@ void MainViewModel::startProcessing()
         StreamJob job;
         if (!buildStreamJob(cfg, base, job, error))
         {
-            // Free any already-built jobs before bailing out.
-            for (StreamJob& built : jobs)
-            {
-                delete built.frameSetup;
-            }
+            // Already-built jobs free themselves: each StreamJob owns its FrameSetup.
             emit errorOccurred(error);
             return;
         }
-        jobs.push_back(job);
+        jobs.push_back(std::move(job));
     }
 
     if (jobs.isEmpty())
@@ -459,12 +386,6 @@ void MainViewModel::clearState()
 
 void MainViewModel::cancelProcessing()
 {
-    if (m_loading)
-    {
-        m_load_cancel_requested = true;
-        m_loading_reader->requestAbort();
-        return;
-    }
     m_coordinator->cancelProcessing();
 }
 
@@ -572,11 +493,11 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
     if (cfg.mode == StreamMode::FrameSyncLockStats)
     {
         // Lock-only: no receiver parameters needed.
-        out_job.frameSetup = new FrameSetup(nullptr);
+        out_job.frameSetup = std::make_shared<FrameSetup>(nullptr);
         return true;
     }
 
-    auto* frame_setup = new FrameSetup(nullptr);
+    auto frame_setup = std::make_shared<FrameSetup>(nullptr);
     if (cfg.receiverParamsToml.isEmpty())
     {
         // No Receiver Parameters TOML provided: fall back to the shipped default
@@ -596,7 +517,6 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
             if (!frame_setup->buildDefaultReceiverMap(cfg.numReceivers, cfg.receiverChannels,
                                                       words_in_minor_frame, map_error))
             {
-                delete frame_setup;
                 error = stream_desc + ": " + map_error;
                 return false;
             }
@@ -604,21 +524,18 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
     }
     else if (!QFileInfo::exists(cfg.receiverParamsToml))
     {
-        delete frame_setup;
         error = stream_desc + ": Receiver Parameters file '" +
                 QFileInfo(cfg.receiverParamsToml).fileName() + "' was not found.";
         return false;
     }
     else if (!frame_setup->tryLoadingFile(cfg.receiverParamsToml, words_in_minor_frame))
     {
-        delete frame_setup;
         error = stream_desc + ": Failed to load Receiver Parameters from '" +
                 QFileInfo(cfg.receiverParamsToml).fileName() + "'. Check the word map.";
         return false;
     }
     if (frame_setup->length() == 0)
     {
-        delete frame_setup;
         error = stream_desc + ": Receiver Parameters file contains no parameters.";
         return false;
     }
@@ -630,57 +547,25 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
 
     if (scale_dB_per_V <= 0)
     {
-        delete frame_setup;
         error = stream_desc + ": Scale (dB/V) must be a positive number.";
         return false;
     }
     if (slope_idx < 0 || slope_idx > UIConstants::kMaxSlopeIndex)
     {
-        delete frame_setup;
         error = stream_desc + ": Slope index is invalid.";
         return false;
     }
 
-    double voltage_lower = UIConstants::kSlopeVoltageLower[slope_idx] * scale_dB_per_V;
-    double voltage_upper = UIConstants::kSlopeVoltageUpper[slope_idx] * scale_dB_per_V;
-    bool negative_polarity = (polarity_idx == 1);
+    // The linear voltage→dB math lives in the Model (FrameSetup) so it is
+    // single-sourced and unit-testable rather than inline in the ViewModel.
+    frame_setup->applyLinearCalibration(polarity_idx, slope_idx, scale_dB_per_V);
 
-    // Apply slope/scale to every parameter and enable it for output.
-    for (int i = 0; i < frame_setup->length(); i++)
-    {
-        ParameterInfo* param = frame_setup->getParameter(i);
-        param->slope = (voltage_upper - voltage_lower) / PCMConstants::kMaxRawSampleValue;
-        if (negative_polarity)
-        {
-            param->slope *= -1;
-            param->scale = -voltage_upper / (voltage_upper - voltage_lower) * PCMConstants::kMaxRawSampleValue;
-        }
-        else
-        {
-            param->scale = voltage_lower / (voltage_upper - voltage_lower) * PCMConstants::kMaxRawSampleValue;
-        }
-        param->is_enabled = true;
-        param->sample_sum = 0;
-    }
-
-    // Attach any non-linear step calibration profiles (US3.2), matched by word
-    // index. Channels without a valid profile keep the linear slope/scale above.
+    // Attach non-linear step-calibration profiles (US3.2) by word index (Model side).
     if (!cfg.calibrationByWord.isEmpty())
     {
-        int attached = 0;
-        for (int i = 0; i < frame_setup->length(); i++)
-        {
-            ParameterInfo* param = frame_setup->getParameter(i);
-            auto it = cfg.calibrationByWord.constFind(param->word);
-            if (it != cfg.calibrationByWord.constEnd() && it.value().valid)
-            {
-                param->profile = it.value();
-                attached++;
-            }
-        }
+        const int attached = frame_setup->attachCalibrationProfiles(cfg.calibrationByWord);
         // Surface whether profiles actually reached the word map: provided > 0 but
-        // attached == 0 means a word-index mismatch and a silent fall back to the
-        // linear model.
+        // attached == 0 means a word-index mismatch and a silent fall back to linear.
         emit logMessageReceived("  " + stream_desc + ": non-linear calibration — provided "
                     + QString::number(cfg.calibrationByWord.size())
                     + " profile(s), attached " + QString::number(attached) + " to word map.");
@@ -691,6 +576,6 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
             + ": no non-linear calibration profiles configured — using linear calibration.");
     }
 
-    out_job.frameSetup = frame_setup;
+    out_job.frameSetup = std::move(frame_setup);
     return true;
 }

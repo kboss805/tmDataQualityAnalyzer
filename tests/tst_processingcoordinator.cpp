@@ -1,6 +1,7 @@
 #include "tst_processingcoordinator.h"
 
 #include <algorithm>
+#include <memory>
 #include <numeric>
 
 #include <QCoreApplication>
@@ -49,7 +50,7 @@ StreamJob makeLockOnlyJob(const QString& filepath, int time_id, int pcm_id, cons
     job.params.isRandomized     = true;
     job.params.mode             = StreamMode::FrameSyncLockStats;
     job.params.streamLabel      = label;
-    job.frameSetup              = new FrameSetup(nullptr); // no channels needed for lock-only mode
+    job.frameSetup              = std::make_shared<FrameSetup>(nullptr); // no channels needed for lock-only mode
     return job;
 }
 
@@ -83,7 +84,7 @@ StreamJob makePrnJob(const QString& filepath, int time_id, int pcm_id,
     job.params.isRandomized      = false;
     job.params.mode              = StreamMode::FrameSyncLockStats;
     job.params.streamLabel       = label;
-    job.frameSetup               = new FrameSetup(nullptr);
+    job.frameSetup               = std::make_shared<FrameSetup>(nullptr);
     return job;
 }
 
@@ -161,7 +162,7 @@ void TestProcessingCoordinator::startProcessingEmitsProcessingState()
     job.params.timeChannelId = 1;
     job.params.pcmChannelId = 1;
     job.params.mode = StreamMode::FrameSyncLockStats;
-    job.frameSetup = new FrameSetup(nullptr);
+    job.frameSetup = std::make_shared<FrameSetup>(nullptr);
 
     QVector<StreamJob> jobs;
     jobs.push_back(std::move(job));

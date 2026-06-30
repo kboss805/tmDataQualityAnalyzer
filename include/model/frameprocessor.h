@@ -13,6 +13,7 @@
 #define FRAMEPROCESSOR_H
 
 #include <atomic>
+#include <cstdint>
 
 #include <QObject>
 #include <QString>
@@ -83,6 +84,75 @@ private:
         uint64_t start_bit;        ///< Starting bit position in the continuous stream.
         uint64_t num_bits;         ///< Number of data bits from this packet.
     };
+
+    /// @brief Run totals/diagnostics collected during a scan, consumed once at the
+    /// end to emit the success log or the "no syncs / no frames" error report.
+    struct ScanDiagnostics {
+        uint64_t total_bytes_processed  = 0;
+        uint64_t total_syncs_found      = 0;
+        uint64_t total_frames_extracted = 0;
+        uint64_t boundary_syncs         = 0;
+        uint64_t max_sync_run           = 0;
+        bool     buffer_ever_filled     = false;
+        double   first_data_time        = -1.0;
+        double   last_data_time         = 0.0;
+        uint64_t rows_written           = 0;
+        uint32_t bits_in_frame          = 0;
+        uint32_t words_in_frame         = 0;
+        uint32_t sync_pat_len           = 0;
+        uint32_t min_syncs              = 0;
+        double   elapsed_sec            = 0.0;
+    };
+
+    /// @brief Mutable working state of one frame-sync scan, threaded through the
+    /// per-bit helpers. Cached frame geometry + window bounds are set once at the
+    /// start of process(); the rest are the sliding sync/word registers, output
+    /// windowing, lock-percentage counters, and run totals.
+    struct ScanState {
+        // Frame geometry (cached from ResolvedPcmAttrs; read-only during the scan).
+        uint64_t sync_pat = 0, sync_mask = 0, word_mask = 0;
+        uint32_t sync_pat_len = 0, bits_in_frame = 0, words_in_frame = 0, word_len = 0, min_syncs = 0;
+        // Processing window bounds + output cadence (read-only during the scan).
+        double start_seconds = 0.0, stop_seconds = 0.0, sample_period = 0.0;
+        // Sliding sync/word registers.
+        uint64_t test_word = 0, bits_loaded = 0;
+        uint32_t minor_frame_bit_count = 0, minor_frame_word_count = 0, data_word_bit_count = 0;
+        int32_t  save_data = 0;            ///< 0=waiting, 1=collecting, 2=frame complete.
+        uint64_t sync_count = UINT64_MAX;  ///< No in-phase sync confirmed yet.
+        QVector<uint64_t> frame_words;     ///< Words of the minor frame being collected.
+        // Output windowing.
+        double current_time_sample = 0.0, next_time_sample = 0.0;
+        int    n_samples = 0;
+        // Lock-percentage counters (reset each output window).
+        uint64_t valid_bits_in_window = 0, total_bits_in_window = 0;
+        uint64_t accumulated_missed_frames = 0; ///< Monotonic across the run.
+        // Run totals / diagnostics.
+        uint64_t total_syncs_found = 0, total_frames_extracted = 0, rows_written = 0;
+        uint64_t boundary_syncs = 0, max_sync_run = 0, current_sync_run = 0;
+        bool     buffer_ever_filled = false;
+    };
+
+    /// Closes every output window whose end @p current_time_eval has passed, emitting
+    /// one averaged sample per window (or an extrapolated missed-frame count for a
+    /// genuine recording gap) and advancing the windowing clock in @p s.
+    void closeElapsedWindows(ScanState& s, double current_time_eval,
+                             const ProcessingParams& params,
+                             const QVector<ParameterInfo*>& enabled_params);
+
+    /// Feeds one decoded PCM bit through the acquire/lock state machine: shifts the
+    /// sync register, tracks frame-boundary rollover/missed frames, honors in-phase
+    /// sync matches (rejecting off-phase ones while locked), collects data words, and
+    /// tallies lock-percentage bits. @p in_window gates window-bounded accounting.
+    void scanBit(ScanState& s, uint8_t bit_val, bool in_window,
+                 const QVector<ParameterInfo*>& enabled_params);
+
+    /// Caches the enabled parameters for the hot loop and builds the index-aligned
+    /// in-memory channel series in m_result. @return the enabled-parameter pointers.
+    QVector<ParameterInfo*> buildEnabledParams(FrameSetup* frame_setup, bool receiver_mode);
+
+    /// Emits the completion log (or the no-syncs / no-frames error) for a finished
+    /// scan and signals processingFinished(). @return true on a successful run.
+    bool reportCompletion(const ProcessingParams& params, const ScanDiagnostics& diag);
 
     /// @name PCM bit-level helpers
     /// @{

@@ -8,7 +8,9 @@
 
 #include <QFile>
 #include <QMap>
+#include <QStringTokenizer>
 #include <QTextStream>
+#include <QVarLengthArray>
 #include <QtMath>
 
 #include "constants.h"
@@ -190,7 +192,12 @@ void CsvSeriesParser::parseDataRows(QTextStream& stream, int param_count,
             continue;
         }
 
-        QStringList fields = line.split(',');
+        // Tokenize into QStringViews over `line` — no per-field QString allocation.
+        QVarLengthArray<QStringView, 64> fields;
+        for (QStringView token : qTokenize(QStringView{line}, u',', Qt::KeepEmptyParts))
+        {
+            fields.append(token);
+        }
         if (fields.size() < param_count + 1)
         {
             out_skipped_rows++;
@@ -232,10 +239,14 @@ void CsvSeriesParser::parseDataRows(QTextStream& stream, int param_count,
     }
 }
 
-bool CsvSeriesParser::parseCombinedTimestamp(const QString& stamp, int& out_day, double& out_seconds)
+bool CsvSeriesParser::parseCombinedTimestamp(QStringView stamp, int& out_day, double& out_seconds)
 {
     // Format: "DDD:HH:MM:SS.mmm"
-    QStringList parts = stamp.split(':');
+    QVarLengthArray<QStringView, 4> parts;
+    for (QStringView token : qTokenize(stamp, u':', Qt::KeepEmptyParts))
+    {
+        parts.append(token);
+    }
     if (parts.size() != 4)
     {
         return false;

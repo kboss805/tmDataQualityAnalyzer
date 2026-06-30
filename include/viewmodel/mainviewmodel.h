@@ -19,7 +19,6 @@
 class Chapter10Reader;
 class FrameSetup;
 class ProcessingCoordinator;
-class QThread;
 struct StreamJob;
 
 /**
@@ -162,15 +161,8 @@ private:
     /// Validates and fills the time/file fields shared by all streams.
     bool buildBaseParams(ProcessingParams& out, QString& error);
 
-    /// Finishes the channel-enumeration phase started by openFile(), on the GUI thread.
-    void onLoadFinished(bool success);
-    /// Relays Chapter10Reader::progressUpdated() during the channel-enumeration phase.
-    void onLoadProgress(int percent);
-
-    Chapter10Reader*        m_reader;       ///< Reader instance backing the currently loaded file's channel data.
-    Chapter10Reader*        m_loading_reader = nullptr; ///< Reader for the in-flight load; replaces m_reader on success.
-    ProcessingCoordinator*  m_coordinator;  ///< Owns worker thread(s).
-    QThread*                m_load_thread = nullptr; ///< Hosts the channel-enumeration scan.
+    Chapter10Reader*        m_reader;       ///< Reader backing the currently loaded file's channel data.
+    ProcessingCoordinator*  m_coordinator;  ///< Owns processing worker thread(s).
 
     QString m_app_root;                      ///< Application root directory.
     QString m_input_filename;                ///< Path to the loaded .ch10 file.
@@ -184,10 +176,6 @@ private:
 
     QVector<StreamConfig> m_stream_configs;  ///< Per-stream configuration from StreamConfigDialog.
     QStringList m_recent_files;              ///< Most-recently-opened file paths.
-
-    bool m_loading = false;                  ///< True while channel enumeration is running.
-    bool m_load_cancel_requested = false;    ///< True if cancelProcessing() was called during loading.
-    int  m_load_progress_percent = 0;        ///< Channel-enumeration progress (0--100).
 };
 
 #endif // MAINVIEWMODEL_H

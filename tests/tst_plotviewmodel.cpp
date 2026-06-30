@@ -899,7 +899,10 @@ void TestPlotViewModel::setLockAxisViewTogglesVisibility()
     vm.setLockAxisView(PlotViewModel::LockAxisView::MissedFrames);
     QCOMPARE(vm.lockAxisView(), PlotViewModel::LockAxisView::MissedFrames);
     QCOMPARE(view_spy.count(), 1);
-    QCOMPARE(data_spy.count(), 1);
+    // The metric toggle is a visibility/axis change, not a data change: the View
+    // updates incrementally on lockAxisViewChanged rather than rebuilding the chart,
+    // so dataChanged() is intentionally NOT emitted here.
+    QCOMPARE(data_spy.count(), 0);
 
     for (int i = 0; i < vm.seriesCount(); i++)
     {

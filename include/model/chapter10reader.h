@@ -10,7 +10,6 @@
 #define CHAPTER10READER_H
 
 #include <array>
-#include <atomic>
 
 #include <QByteArray>
 #include <QDateTime>
@@ -66,9 +65,6 @@ public:
      */
     bool loadChannels(const QString& filename);
 
-    /// Requests cooperative cancellation of an in-progress loadChannels() call.
-    void requestAbort();
-
     /// Ensures a ChannelData entry exists for @p channel_id.
     void addChannelInfoEntry(int channel_id);
 
@@ -98,10 +94,6 @@ public:
 signals:
     /// Emitted when an error occurs during file operations.
     void displayErrorMessage(const QString& message);
-    /// Emitted periodically during loadChannels() with file-position completion percentage (0..100).
-    void progressUpdated(int percent);
-    /// Emitted once loadChannelsAsync() finishes (clean, EOF, or aborted).
-    void loadFinished(bool success);
 
 public slots:
 
@@ -109,9 +101,6 @@ public slots:
     void timeChannelChanged(int combobox_index);
     /// Updates the selected PCM channel from a combo box index.
     void pcmChannelChanged(int combobox_index);
-    /// Runs loadChannels(filename) and emits loadFinished() with the result. Intended to be
-    /// invoked on a worker thread via QThread::started after moveToThread().
-    void loadChannelsAsync(const QString& filename);
 
 private:
     /// Builds combo box display strings from a list of channel metadata.
@@ -136,8 +125,6 @@ private:
     QList<ChannelData*> m_pcm_channels;      ///< Subset of channels with type "PCMIN".
     int m_current_time_channel;              ///< Currently selected time channel ID (-1 = none).
     int m_current_pcm_channel;               ///< Currently selected PCM channel ID (-1 = none).
-
-    std::atomic<bool> m_abort_requested{false}; ///< Set by requestAbort(); checked in loadChannels().
 };
 
 #endif // CHAPTER10READER_H

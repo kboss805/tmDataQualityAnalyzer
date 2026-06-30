@@ -6,6 +6,7 @@
 #ifndef FRAMESETUP_H
 #define FRAMESETUP_H
 
+#include <QHash>
 #include <QObject>
 #include <QSettings>
 
@@ -21,12 +22,12 @@
  */
 struct ParameterInfo
 {
-    QString name;      ///< Parameter name (e.g., "L_RCVR1").
-    int word;          ///< Zero-based word index within the minor frame.
-    double slope;      ///< Calibration slope (dB per raw count).
-    double scale;      ///< Calibration offset applied before slope.
-    bool is_enabled;   ///< Whether this parameter is included in output.
-    double sample_sum; ///< Running sum of RAW counts in the window; calibration is applied once to the windowed average.
+    QString name;               ///< Parameter name (e.g., "L_RCVR1").
+    int word = -1;              ///< Zero-based word index within the minor frame.
+    double slope = 0.0;         ///< Calibration slope (dB per raw count).
+    double scale = 0.0;         ///< Calibration offset applied before slope.
+    bool is_enabled = false;    ///< Whether this parameter is included in output.
+    double sample_sum = 0.0;    ///< Running sum of RAW counts in the window; calibration is applied once to the windowed average.
     CalibrationProfile profile; ///< Optional non-linear step calibration (US3.2); linear math used when invalid.
 };
 
@@ -85,6 +86,18 @@ public:
     /// frame (the final word slot is the sync word, hence the strict "<" bound).
     bool buildDefaultReceiverMap(int num_receivers, int receiver_channels,
                                  int num_words_in_minor_frame, QString& error);
+
+    /// Applies the linear voltage→dB calibration (slope/scale) to every parameter
+    /// and enables it for output. @p polarity_index 0=positive, 1=negative;
+    /// @p slope_index selects the voltage range (UIConstants::kSlopeVoltageLower/Upper).
+    /// Inputs must be pre-validated by the caller. Lives in the Model so the
+    /// conversion is single-sourced and unit-testable, not embedded in the ViewModel.
+    void applyLinearCalibration(int polarity_index, int slope_index, double scale_dB_per_V);
+
+    /// Attaches non-linear step-calibration profiles (US3.2) by word index; only
+    /// profiles flagged valid are attached, others keep their linear slope/scale.
+    /// @return how many profiles were attached.
+    int attachCalibrationProfiles(const QHash<int, CalibrationProfile>& by_word);
 
 private:
     /// Reads TOML section names in the order they appear in the file.
