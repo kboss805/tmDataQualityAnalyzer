@@ -13,7 +13,6 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QSettings>
-#include <QThread>
 
 #include "chapter10reader.h"
 #include "constants.h"
@@ -80,17 +79,7 @@ MainViewModel::MainViewModel(QObject* parent)
 
 MainViewModel::~MainViewModel()
 {
-    // m_coordinator is a child QObject and is auto-deleted before these.
-    if (m_loading && m_load_thread != nullptr)
-    {
-        m_loading_reader->requestAbort();
-        m_load_thread->quit();
-        m_load_thread->wait();
-        m_loading_reader->moveToThread(this->thread());
-        delete m_load_thread;
-        m_load_thread = nullptr;
-    }
-    delete m_loading_reader;
+    // m_coordinator is a child QObject and is auto-deleted after this body runs.
     delete m_reader;
 }
 
@@ -113,11 +102,8 @@ QStringList MainViewModel::pcmChannelList() const
 int MainViewModel::timeChannelIndex() const { return m_time_channel_index; }
 int MainViewModel::pcmChannelIndex() const { return m_pcm_channel_index; }
 bool MainViewModel::fileLoaded() const { return m_file_loaded; }
-int MainViewModel::progressPercent() const
-{
-    return m_loading ? m_load_progress_percent : m_coordinator->progressPercent();
-}
-bool MainViewModel::processing() const { return m_loading || m_coordinator->processing(); }
+int MainViewModel::progressPercent() const { return m_coordinator->progressPercent(); }
+bool MainViewModel::processing() const { return m_coordinator->processing(); }
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -271,7 +257,7 @@ void MainViewModel::logStartupInfo()
 
 void MainViewModel::openFile(const QString& filename)
 {
-    if (m_loading || m_coordinator->processing())
+    if (m_coordinator->processing())
     {
         return;
     }
@@ -282,80 +268,25 @@ void MainViewModel::openFile(const QString& filename)
     QFileInfo file_info(filename);
     emit logMessageReceived("Opening: " + file_info.fileName());
 
-    // Channel enumeration requires a full sequential scan of the file (there is no
-    // index to seek to), so run it on a worker thread and report progress instead
-    // of blocking the GUI thread on large files.
-    m_loading = true;
-    m_load_cancel_requested = false;
-    m_load_progress_percent = 0;
-    emit processingChanged();
-    emit progressPercentChanged();
-
-    // Use a fresh reader per load attempt rather than reusing m_reader across
-    // multiple moveToThread() cycles: repeatedly moving the same QObject between
-    // threads on every open/cancel/reopen left its queued connections vulnerable
-    // to silently failing to deliver on a subsequent cycle, which manifested as
-    // a permanent hang (load never reaches onLoadFinished, m_loading never
-    // clears) after cancelling and immediately opening another file.
-    m_loading_reader = new Chapter10Reader();
-    connect(m_loading_reader, &Chapter10Reader::displayErrorMessage,
+    // Channel enumeration reads only the file's first (TMATS) packet, which
+    // enumerates every channel, so it runs synchronously on the GUI thread — no
+    // worker thread, progress, or cancel machinery (and so no moveToThread races).
+    auto* reader = new Chapter10Reader();
+    connect(reader, &Chapter10Reader::displayErrorMessage,
             this, &MainViewModel::errorOccurred);
 
-    m_load_thread = new QThread;
-    m_loading_reader->moveToThread(m_load_thread);
-
-    connect(m_loading_reader, &Chapter10Reader::progressUpdated, this, &MainViewModel::onLoadProgress);
-    connect(m_loading_reader, &Chapter10Reader::loadFinished, this, &MainViewModel::onLoadFinished);
-    connect(m_load_thread, &QThread::started, m_loading_reader, [reader = m_loading_reader, filename]() {
-        reader->loadChannelsAsync(filename);
-    });
-
-    m_load_thread->start();
-}
-
-void MainViewModel::onLoadProgress(int percent)
-{
-    m_load_progress_percent = percent;
-    emit progressPercentChanged();
-}
-
-void MainViewModel::onLoadFinished(bool success)
-{
-    disconnect(m_loading_reader, &Chapter10Reader::progressUpdated, this, &MainViewModel::onLoadProgress);
-    disconnect(m_loading_reader, &Chapter10Reader::loadFinished, this, &MainViewModel::onLoadFinished);
-
-    m_load_thread->quit();
-    m_load_thread->wait();
-    m_loading_reader->moveToThread(this->thread());
-    delete m_load_thread;
-    m_load_thread = nullptr;
-
-    m_loading = false;
-    bool cancelled = m_load_cancel_requested;
-    m_load_cancel_requested = false;
-    emit processingChanged();
-    emit progressPercentChanged();
-
-    if (cancelled || !success)
+    if (!reader->loadChannels(filename))
     {
-        // The attempted load never became the active reader; discard it and
-        // leave m_reader (and whatever file it has loaded, if any) untouched.
-        delete m_loading_reader;
-        m_loading_reader = nullptr;
+        // The attempted load never became the active reader; discard it and leave
+        // m_reader (and whatever file it has loaded, if any) untouched.
+        delete reader;
         m_input_filename.clear();
-        if (cancelled)
-        {
-            emit logMessageReceived("File load cancelled.");
-        }
         return;
     }
 
     // Success: the new reader becomes the active one.
     delete m_reader;
-    m_reader = m_loading_reader;
-    m_loading_reader = nullptr;
-
-    QFileInfo file_info(m_input_filename);
+    m_reader = reader;
 
     // Log file metadata
     qint64 file_bytes = file_info.size();
@@ -455,12 +386,6 @@ void MainViewModel::clearState()
 
 void MainViewModel::cancelProcessing()
 {
-    if (m_loading)
-    {
-        m_load_cancel_requested = true;
-        m_loading_reader->requestAbort();
-        return;
-    }
     m_coordinator->cancelProcessing();
 }
 

@@ -5,17 +5,9 @@
 
 #include "chapter10reader.h"
 
-#include <QElapsedTimer>
-#include <QFileInfo>
-
 #include "constants.h"
 
 using namespace Irig106;
-
-namespace
-{
-    constexpr int kPercent100 = 100;
-}
 
 Chapter10Reader::Chapter10Reader(QObject* parent) :
     QObject(parent),
@@ -103,9 +95,6 @@ bool Chapter10Reader::loadChannels(const QString& filename)
     QByteArray ba_filename = m_filename.toLocal8Bit();
     char* psz_filename = ba_filename.data();
 
-    m_abort_requested.store(false, std::memory_order_relaxed);
-    const int64_t total_file_size = QFileInfo(m_filename).size();
-
     // Open the file
     m_status = enI106Ch10Open(&m_file_handle, psz_filename, I106_READ);
     if (m_status != I106_OK)
@@ -127,18 +116,15 @@ bool Chapter10Reader::loadChannels(const QString& filename)
     qDeleteAll(m_channel_data);
     m_channel_data.clear();
 
-    int last_reported_percent = -1;
-    QElapsedTimer progress_timer;
-    progress_timer.start();
-
+    // A valid Chapter 10 file's FIRST packet is TMATS, which enumerates every
+    // channel — so channel discovery only needs that one packet (no full-file scan,
+    // no worker thread). Scan until the first TMATS packet and stop. A file whose
+    // first packet is not TMATS is not a processable Chapter 10 stream
+    // (Ch10PacketReader::prepare() enforces the same), so reject it immediately
+    // rather than scanning to EOF.
+    bool first_packet = true;
     while (true)
     {
-        if (m_abort_requested.load(std::memory_order_relaxed))
-        {
-            closeFile();
-            return false;
-        }
-
         // Read the next header
         m_status = enI106Ch10ReadNextHeader(m_file_handle, &m_header);
         if (m_status == I106_EOF)
@@ -151,18 +137,13 @@ bool Chapter10Reader::loadChannels(const QString& filename)
             break;
         }
 
-        if (total_file_size > 0 && progress_timer.elapsed() >= PCMConstants::kProgressReportIntervalMs)
+        if (first_packet && m_header.ubyDataType != I106CH10_DTYPE_TMATS)
         {
-            progress_timer.restart();
-            int64_t current_pos = 0;
-            enI106Ch10GetPos(m_file_handle, &current_pos);
-            int percent = static_cast<int>(current_pos * kPercent100 / total_file_size);
-            if (percent != last_reported_percent)
-            {
-                last_reported_percent = percent;
-                emit progressUpdated(percent);
-            }
+            emit displayErrorMessage("Failed to find TMATS message (expected as the first packet).");
+            closeFile();
+            return false;
         }
+        first_packet = false;
 
         // Make sure our buffer is big enough
         if (m_buffer.size() < static_cast<qsizetype>(uGetDataLen(&m_header)))
@@ -197,14 +178,11 @@ bool Chapter10Reader::loadChannels(const QString& filename)
         // Set channel type and fallback name from packet header when not already set by TMATS
         inferChannelTypeFromHeader(channel_id);
 
-        // Check for TMATS
+        // TMATS enumerates all channels we care about; stop scanning once it parses.
         if (m_header.ubyDataType == I106CH10_DTYPE_TMATS)
         {
             if (processTmatsPacket(m_header))
             {
-                // We've found and successfully parsed the TMATS packet,
-                // which enumerates all channels we care about. We can stop
-                // scanning the file now to prevent long load times.
                 break;
             }
         }
@@ -213,20 +191,7 @@ bool Chapter10Reader::loadChannels(const QString& filename)
     categorizeChannels();
     closeFile();
 
-    emit progressUpdated(kPercent100);
-
     return true;
-}
-
-void Chapter10Reader::requestAbort()
-{
-    m_abort_requested.store(true, std::memory_order_relaxed);
-}
-
-void Chapter10Reader::loadChannelsAsync(const QString& filename)
-{
-    bool success = loadChannels(filename);
-    emit loadFinished(success);
 }
 
 void Chapter10Reader::addChannelInfoEntry(int channel_id)
