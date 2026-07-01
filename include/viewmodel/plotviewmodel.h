@@ -128,6 +128,7 @@ private:
     void commitParseResult(CsvParseResult&& result);
 
     QVector<PlotSeriesData> m_series;              ///< All loaded series data.
+    int m_next_series_id = 1;                      ///< Monotonic source of stable per-series ids (PlotSeriesData::id).
     QString m_plot_title;                          ///< User-defined plot title.
 
     double m_x_min = 0.0;                          ///< Data X range minimum.
