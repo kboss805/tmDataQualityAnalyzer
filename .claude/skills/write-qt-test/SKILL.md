@@ -7,8 +7,7 @@ description: >-
   X", or "test this edge case". Wiring a new suite requires touching THREE files in lockstep
   (tst_*.h/.cpp, tests/tests.pro, tests/main.cpp) or it silently won't run; data-file tests depend on
   an exact exe location; and the project has established helpers (testDataPath, packBitString,
-  loadDefaultFrameSetup) and two specific known coverage gaps (PlotCustomizationDialog,
-  CalibrationExtractor) to target. This skill encodes all of that so new tests actually compile, run,
+  loadDefaultFrameSetup). This skill encodes all of that so new tests actually compile, run,
   and match house style.
 ---
 
@@ -73,18 +72,22 @@ Mirror the domain invariants the **tm-code-review** skill lists — a good test 
 future regression fails loudly (e.g. "off-phase sync after lock-loss is not extracted",
 "missed-frames stay monotonic", "averaging precedes calibration").
 
-## Priority gaps to close
+## Reference suites for tricky patterns
 
-`docs/CLAUDE.md` flags two classes with **no dedicated suite**:
-- **`PlotCustomizationDialog`** (Customize Plot Series) — tree build, tri-state group toggles,
-  expand/collapse, per-stream selection round-trip.
-- **`CalibrationExtractor`** — pipeline orchestration (only `StepDetector`'s pure logic is covered).
-  Build a small synthetic step-cal fixture (or reuse `rnrz-l_testfile`) and assert per-channel
-  success/fallback counts.
+Every app class now has a dedicated suite; two are worth copying from when you hit the same shapes:
+- **`tst_plotcustomizationdialog`** — dialog test that reaches private widgets/slots via a
+  `friend class` declaration (tree build, tri-state group cascade, expand/collapse, per-stream
+  visibility round-trip to the ViewModel). Mirror this for any View-layer widget with no public
+  accessors.
+- **`tst_calibrationextractor`** — async pipeline orchestration: drives the reader + FrameProcessor
+  workers to completion via a `QEventLoop` on the `finished(bool, QString)` signal, then asserts
+  per-channel success/fallback (over `rnrz-l_testfile`, exactly words 6/7/8 calibrate). Mirror this
+  for any signal-driven, thread-backed run.
 
-When adding a suite for either, follow the new-suite wiring above and target those behaviors first.
+When these change, add cases to the existing suite rather than starting a new one.
 
 ## Finish
 
-Always end with a **full-suite** green run (213+ passing, 0 failed, 0 skipped) via the build-and-test
-skill — not a trimmed `main.cpp`. Report the pass/fail counts from `tests/output/results.txt`.
+Always end with a **full-suite** green run (0 failed, 0 skipped — current baseline 236 passing) via
+the build-and-test skill, not a trimmed `main.cpp`. Report the pass/fail counts from
+`tests/output/results.txt`.
