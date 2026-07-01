@@ -14,6 +14,7 @@ private slots:
     void parameterNameUnknownChannels();
     void channelPrefixBoundaryIndex();
     void channelPrefixLargeIndex();
+    void classifyLogMessageSeverity();
 };
 
 #endif // TST_MAINVIEWMODEL_HELPERS_H

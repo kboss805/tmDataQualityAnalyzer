@@ -185,6 +185,20 @@ QString MainViewModel::parameterName(int channel_index, int receiver_index)
     return FrameSetup::receiverParameterName(channel_index, receiver_index);
 }
 
+MainViewModel::LogLevel MainViewModel::classifyLogMessage(const QString& message)
+{
+    // Severity cues, highest precedence first. These strings come from the
+    // processing pipeline / reader; this is the single place that maps them to a
+    // level so the View never has to sniff message text.
+    if (message.contains("ERROR"))
+        return LogLevel::Error;
+    if (message.contains("WARNING"))
+        return LogLevel::Warning;
+    if (message.startsWith("Pre-scan result:") || message.startsWith("Processing complete"))
+        return LogLevel::Success;
+    return LogLevel::Info;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 //                            MODEL ACCESSORS                                 //
 ////////////////////////////////////////////////////////////////////////////////
