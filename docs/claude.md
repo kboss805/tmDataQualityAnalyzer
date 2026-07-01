@@ -442,7 +442,6 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - CSV and image (SVG/PNG/PDF) export via unified export dialog
 - Inno Setup installer (admin + non-admin) and portable ZIP packaging
 - Automated unit tests (Qt Test framework)
-- US11.0 (Bit Error Rate) targeted for a future release
 
 ### v0.8.0 — Internal Milestone
 - User stories US1.0–US6.0 complete
