@@ -18,6 +18,7 @@
 #include "tst_plotcustomizationdialog.h"
 #include "tst_processingcoordinator.h"
 #include "tst_stepdetector.h"
+#include "tst_calibrationextractor.h"
 #include "tst_streamconfigdialog.h"
 
 #include "tst_exportdialog.h"
@@ -103,6 +104,7 @@ int main(int argc, char* argv[])
     status |= runSuite<TestStreamConfigDialog>(log_path);
     status |= runSuite<TestExportDialog>(log_path);
     status |= runSuite<TestStepDetector>(log_path);
+    status |= runSuite<TestCalibrationExtractor>(log_path);
 
     return status;
 }

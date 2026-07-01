@@ -122,7 +122,8 @@ SOURCES += \
     tst_processingcoordinator.cpp \
     tst_streamconfigdialog.cpp \
     tst_exportdialog.cpp \
-    tst_stepdetector.cpp
+    tst_stepdetector.cpp \
+    tst_calibrationextractor.cpp
 
 # Test headers (needed for MOC processing)
 HEADERS += \
@@ -139,4 +140,5 @@ HEADERS += \
     tst_processingcoordinator.h \
     tst_streamconfigdialog.h \
     tst_exportdialog.h \
-    tst_stepdetector.h
+    tst_stepdetector.h \
+    tst_calibrationextractor.h
