@@ -117,6 +117,7 @@ SOURCES += \
     tst_framesetup.cpp \
     tst_plotviewmodel.cpp \
     tst_plotwidget.cpp \
+    tst_plotcustomizationdialog.cpp \
     tst_frameprocessor.cpp \
     tst_processingcoordinator.cpp \
     tst_streamconfigdialog.cpp \
@@ -133,6 +134,7 @@ HEADERS += \
     tst_framesetup.h \
     tst_plotviewmodel.h \
     tst_plotwidget.h \
+    tst_plotcustomizationdialog.h \
     tst_frameprocessor.h \
     tst_processingcoordinator.h \
     tst_streamconfigdialog.h \

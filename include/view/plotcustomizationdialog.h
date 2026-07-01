@@ -25,6 +25,7 @@ struct PlotSeriesData;
 class PlotCustomizationDialog : public QDialog
 {
     Q_OBJECT
+    friend class TestPlotCustomizationDialog;
 
 public:
     explicit PlotCustomizationDialog(PlotViewModel* viewModel, QWidget* parent = nullptr);
