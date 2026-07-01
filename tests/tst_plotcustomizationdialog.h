@@ -16,6 +16,10 @@ private slots:
     void selectAllNoneSnr();
     void applyChangesSnrVisibility();
     void expandCollapseTogglesButton();
+    void lockRenameAppliesToViewModel();
+    void lockRecolorAppliesToViewModel();
+    void snrRenameRecolorAppliesToViewModel();
+    void applyChangesEmitsAppearanceSignal();
 };
 
 #endif // TST_PLOTCUSTOMIZATIONDIALOG_H

@@ -7,6 +7,7 @@
 #define PLOTWIDGET_H
 
 #include <QDoubleSpinBox>
+#include <QFrame>
 #include <QHash>
 #include <QLabel>
 #include <QLineEdit>
@@ -59,6 +60,7 @@ private:
 class PlotWidget : public QWidget
 {
     Q_OBJECT
+    friend class TestPlotWidget;
 
 public:
     explicit PlotWidget(QWidget* parent = nullptr);
@@ -87,6 +89,9 @@ private slots:
     void onDataChanged();
     /// Toggles a single graph's visibility without full rebuild.
     void onSeriesVisibilityToggled(int index);
+    /// Re-applies series colors to graphs and rebuilds the legend after color/name
+    /// edits made in the Customize Plot dialog (no axis/data changes).
+    void onSeriesAppearanceChanged();
     /// Switches the left-axis metric (lock % vs missed frames) by syncing graph
     /// visibility and the axis label in place — no chart rebuild.
     void onLockAxisViewChanged();
@@ -119,11 +124,21 @@ private:
 
     /// Syncs the left-axis toggle button's text/enabled state to the ViewModel.
     void updateAxisViewButton();
-    /// Rebuilds the legend panel from current ViewModel series visibility.
+    /// Rebuilds the floating legend's rows from current ViewModel series visibility.
     void rebuildLegend();
+    /// Sizes the legend to its content (height/width capped) and clamps it in view.
+    void layoutLegendOverlay();
+    /// Places the legend at its default top-right corner inside the chart.
+    void positionLegendTopRight();
+    /// Clamps the legend fully inside the chart's current bounds.
+    void clampLegendIntoView();
+    /// Applies the translucent background, border, and text colors for the theme.
+    void styleLegendOverlay(bool dark);
     /// Shows or hides the centered "Loading..." overlay over the chart.
     void showLoadingIndicator(bool visible);
     void resizeEvent(QResizeEvent* event) override;
+    /// Intercepts mouse events on the legend (and its viewport) to drag it.
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 
 
@@ -160,15 +175,21 @@ private:
 
     QPushButton* m_customize_btn = nullptr;
 
-    /// @name Legend panel
+    /// @name Legend overlay (movable box floating over the chart, child of m_plot)
     /// @{
-    QScrollArea*  m_legend_scroll  = nullptr; ///< Scroll area wrapping the legend grid.
-    QWidget*      m_legend_widget  = nullptr; ///< Inner container inside the scroll area.
-    QGridLayout*  m_legend_grid    = nullptr; ///< 4-column grid of swatch+name-edit pairs.
+    QFrame*      m_legend_overlay   = nullptr; ///< Translucent, rounded, draggable frame.
+    QScrollArea* m_legend_scroll    = nullptr; ///< Scroll area inside the frame (vertical scroll for dense plots).
+    QWidget*     m_legend_widget    = nullptr; ///< Inner container holding one row per visible series.
+    QVBoxLayout* m_legend_rows      = nullptr; ///< Single-column list of swatch+label rows.
+    bool         m_dragging_legend  = false;   ///< True while the user is dragging the legend.
+    bool         m_legend_user_moved = false;  ///< True once dragged; suppresses the top-right auto-anchor.
+    QPoint       m_drag_start_global;          ///< Global cursor position captured at drag start.
+    QPoint       m_legend_start_pos;           ///< Legend top-left (in m_plot coords) at drag start.
     /// @}
 
     QLabel* m_loading_label = nullptr; ///< Overlay label shown while CSV is parsing.
     bool m_updating_from_vm = false;  ///< Guard against signal loops.
+    bool m_dark_theme = false;        ///< Last applied theme, so rebuilt legend rows restyle correctly.
     QColor m_title_color;              ///< Chart title text color (accent blue).
 };
 

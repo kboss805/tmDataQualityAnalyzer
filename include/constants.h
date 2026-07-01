@@ -285,13 +285,17 @@ namespace PlotConstants {
     inline constexpr double kYSpinBoxMax     = 999.0;            ///< Maximum range for Y axis spinboxes.
     /// @}
 
-    /// @name Legend panel (between chart and bottom controls)
+    /// @name Legend overlay (movable, draggable box floating inside the plot)
     /// @{
-    inline constexpr int kLegendPanelColumns     = 4;   ///< Number of columns in the legend grid.
-    inline constexpr int kLegendPanelVisibleRows = 3;   ///< Rows visible before scrolling.
-    inline constexpr int kLegendItemHeight       = 22;  ///< Approximate pixel height of one legend row.
-    inline constexpr int kLegendSwatchSize       = 12;  ///< Colored swatch square size (px).
-    inline constexpr int kLegendPanelVPad        = 4;   ///< Vertical padding inside the legend panel.
+    inline constexpr int    kLegendMarginPx      = 8;    ///< Gap kept between the legend and the plot edges.
+    inline constexpr int    kLegendContentMargin = 6;    ///< Inner padding inside the legend frame (px).
+    inline constexpr int    kLegendRowSpacing    = 3;    ///< Vertical gap between legend rows (px).
+    inline constexpr int    kLegendSwatchLen     = 22;   ///< Length of the matplotlib-style line swatch (px).
+    inline constexpr int    kLegendSwatchThick   = 3;    ///< Thickness of the line swatch (px).
+    inline constexpr int    kLegendCornerRadius  = 6;    ///< Rounded-corner radius of the legend frame (px).
+    inline constexpr int    kLegendBgAlpha       = 185;  ///< Alpha of the translucent legend background (0-255).
+    inline constexpr double kLegendMaxHeightFrac = 0.60; ///< Cap the legend height to this fraction of the chart.
+    inline constexpr double kLegendMaxWidthFrac  = 0.45; ///< Cap the legend width to this fraction of the chart.
     /// @}
 
     /// @brief Primary colors for SNR receiver series (red, orange, yellow), one per receiver.

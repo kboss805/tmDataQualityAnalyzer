@@ -18,6 +18,7 @@ private slots:
     void setViewModelConnectsWithoutCrash();
     void applyThemeDarkDoesNotCrash();
     void applyThemeLightDoesNotCrash();
+    void legendOverlayPopulatesFromData();
 };
 
 #endif // TST_PLOTWIDGET_H

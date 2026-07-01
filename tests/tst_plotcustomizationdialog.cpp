@@ -10,7 +10,9 @@
 #include "tst_plotcustomizationdialog.h"
 
 #include <QCheckBox>
+#include <QColor>
 #include <QComboBox>
+#include <QLineEdit>
 #include <QPushButton>
 #include <QTreeWidget>
 #include <QtTest>
@@ -244,4 +246,68 @@ void TestPlotCustomizationDialog::expandCollapseTogglesButton()
 
     dlg.toggleExpandCollapseSnr();
     QCOMPARE(dlg.m_snrExpandBtn->text(), QString("Expand All"));
+}
+
+void TestPlotCustomizationDialog::lockRenameAppliesToViewModel()
+{
+    PlotViewModel vm;
+    populateVm(vm);
+    PlotCustomizationDialog dlg(&vm);
+
+    QCheckBox* cb = dlg.m_lockCheckboxes.at(0);
+    dlg.m_lockNameEdits.value(cb)->setText("Renamed Stream");
+    dlg.applyChanges();
+
+    // Applies to every series in the stream (the lock + missed-frames siblings).
+    const QVector<int> indices = dlg.m_lockCheckboxToSeriesIndices.value(cb);
+    QVERIFY(!indices.isEmpty());
+    for (int idx : indices)
+        QCOMPARE(vm.seriesAt(idx).name, QString("Renamed Stream"));
+}
+
+void TestPlotCustomizationDialog::lockRecolorAppliesToViewModel()
+{
+    PlotViewModel vm;
+    populateVm(vm);
+    PlotCustomizationDialog dlg(&vm);
+
+    QCheckBox* cb = dlg.m_lockCheckboxes.at(0);
+    dlg.m_lockColors[cb] = QColor(Qt::magenta); // simulate a swatch color pick
+    dlg.applyChanges();
+
+    const QVector<int> indices = dlg.m_lockCheckboxToSeriesIndices.value(cb);
+    QVERIFY(!indices.isEmpty());
+    for (int idx : indices)
+        QCOMPARE(vm.seriesAt(idx).color, QColor(Qt::magenta));
+}
+
+void TestPlotCustomizationDialog::snrRenameRecolorAppliesToViewModel()
+{
+    PlotViewModel vm;
+    populateVm(vm);
+    PlotCustomizationDialog dlg(&vm);
+
+    QTreeWidget* tree = dlg.m_snrStreamTrees.value(40).first();
+    QTreeWidgetItem* leaf = tree->topLevelItem(0)->child(0);
+    const int idx = leaf->data(0, Qt::UserRole).toInt();
+
+    // The channel context menu stores pending edits in these item roles
+    // (UserRole+1 name, UserRole+2 color); applyChanges() pushes them to the VM.
+    leaf->setData(0, Qt::UserRole + 1, QString("Custom SNR"));
+    leaf->setData(0, Qt::UserRole + 2, QColor(Qt::cyan));
+    dlg.applyChanges();
+
+    QCOMPARE(vm.seriesAt(idx).name, QString("Custom SNR"));
+    QCOMPARE(vm.seriesAt(idx).color, QColor(Qt::cyan));
+}
+
+void TestPlotCustomizationDialog::applyChangesEmitsAppearanceSignal()
+{
+    PlotViewModel vm;
+    populateVm(vm);
+    PlotCustomizationDialog dlg(&vm);
+
+    QSignalSpy spy(&vm, &PlotViewModel::seriesAppearanceChanged);
+    dlg.applyChanges();
+    QCOMPARE(spy.count(), 1); // batched: exactly one refresh notification per apply
 }

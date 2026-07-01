@@ -1,6 +1,7 @@
 #ifndef PLOTCUSTOMIZATIONDIALOG_H
 #define PLOTCUSTOMIZATIONDIALOG_H
 
+#include <QColor>
 #include <QDialog>
 #include <QMap>
 #include <QVector>
@@ -10,6 +11,7 @@ class QVBoxLayout;
 class QComboBox;
 class QScrollArea;
 class QCheckBox;
+class QLineEdit;
 class QTreeWidget;
 class QTreeWidgetItem;
 class QPushButton;
@@ -62,6 +64,12 @@ private:
     // Maps a lock checkbox to the list of series indices it controls
     // (typically both the FrameSyncLock and AccumulatedMissedFrames series for that stream)
     QMap<QCheckBox*, QVector<int>> m_lockCheckboxToSeriesIndices;
+
+    // Per-stream appearance editors on the Lock tab (name edit + color swatch), and
+    // the pending color chosen from the swatch. Applied to the ViewModel on OK.
+    QMap<QCheckBox*, QLineEdit*>   m_lockNameEdits;
+    QMap<QCheckBox*, QPushButton*> m_lockSwatches;
+    QMap<QCheckBox*, QColor>       m_lockColors;
 
     // SNR Tab UI
     QWidget* m_snrTab;
