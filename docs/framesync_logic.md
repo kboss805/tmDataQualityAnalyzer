@@ -264,5 +264,4 @@ These map to `ProcessedStreamData` series entries emitted by `FrameProcessor`.
 ## 7. Known Limitations & Deliberate Tradeoffs
 
 - **No bit-slip tolerance in LOCK state.** The current implementation (and the proposed flywheel) jumps to a fixed predicted offset without a ±N-bit search window. Real channels can insert or drop bits; a small jitter window (±2–4 bits) around the predicted offset would improve robustness on degraded links, at the cost of some complexity and a small number of additional bit reads per frame.
-- **No cross-frame BER tracking.** The current lock statistic is binary per frame (locked or not). A richer implementation could track cumulative bit errors within locked frames to characterize channel quality beyond lock percentage.
 - **Derandomization is all-or-nothing per stream.** If only some frames in a stream are randomized (e.g. due to a link anomaly), the stateful LFSR will produce incorrect descrambled data and sync will be lost until the LFSR re-synchronizes naturally.
