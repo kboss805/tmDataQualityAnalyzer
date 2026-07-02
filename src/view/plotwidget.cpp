@@ -16,7 +16,7 @@
 #include <QHBoxLayout>
 #include <QPainter>
 #include <QScrollArea>
-#include <QScrollBar>
+#include <QStyle>
 #include <QToolTip>
 #include <QtSvg/QSvgGenerator>
 #include <QVBoxLayout>
@@ -38,6 +38,27 @@ namespace {
     {
         return type == PlotSeriesData::MetricType::FrameSyncLock
             || type == PlotSeriesData::MetricType::AccumulatedMissedFrames;
+    }
+
+    /// @return the legend-overlay display text for a series. SNR series carry a
+    /// "<pcmChannelId> - <streamLabel> <ch.name>" identity in s.name (that exact
+    /// format matters for CSV export/import and renaming — see the NOTE in
+    /// PlotViewModel::addStreamData() — so it is left untouched there). The legend
+    /// only needs the channel number and receiver/channel suffix to disambiguate
+    /// series on screen, not the full TMATS-derived stream title, which can be long
+    /// enough to crowd the overlay. Rebuilt from receiverIndex/channelIndex rather
+    /// than parsed out of s.name so it can't drift from the SNR naming convention.
+    QString legendDisplayName(const PlotSeriesData& s)
+    {
+        if (s.metricType != PlotSeriesData::MetricType::SNR)
+        {
+            return s.name;
+        }
+        const QString prefix = (s.channelIndex >= 0
+                                && s.channelIndex < static_cast<int>(UIConstants::kChannelPrefixes.size()))
+            ? QString(UIConstants::kChannelPrefixes[s.channelIndex])
+            : QString::number(s.channelIndex + 1);
+        return QString("CH%1 %2_RCVR%3").arg(s.streamOrder).arg(prefix).arg(s.receiverIndex);
     }
 }
 
@@ -671,7 +692,14 @@ void PlotWidget::setUpLayout()
     m_legend_widget = new QWidget;
     m_legend_widget->setObjectName("legendContent");
     m_legend_rows = new QVBoxLayout(m_legend_widget);
-    m_legend_rows->setContentsMargins(0, 0, 0, 0);
+    // Reserve a permanent right-side gutter matching the style's scrollbar width so
+    // the vertical scrollbar — shown only once content overflows the height cap —
+    // never sits on top of the last few characters of a row's label. Always-on
+    // rather than conditional: whether a row's text runs into that gutter isn't
+    // knowable until the scrollbar decision is made, so a fixed reservation is the
+    // only way to guarantee no overlap regardless of content length.
+    const int scrollbar_gutter = QApplication::style()->pixelMetric(QStyle::PM_ScrollBarExtent);
+    m_legend_rows->setContentsMargins(0, 0, scrollbar_gutter, 0);
     m_legend_rows->setSpacing(PlotConstants::kLegendRowSpacing);
 
     m_legend_scroll = new QScrollArea(m_legend_overlay);
@@ -874,7 +902,7 @@ void PlotWidget::rebuildLegend()
         swatch->setFixedSize(PlotConstants::kLegendSwatchLen, PlotConstants::kLegendSwatchThick);
         swatch->setStyleSheet(QString("background-color: %1; border-radius: 1px;").arg(s.color.name()));
 
-        auto* name = new QLabel(s.name);
+        auto* name = new QLabel(legendDisplayName(s));
         name->setObjectName("legendLabel");
         name->setAttribute(Qt::WA_TransparentForMouseEvents, true);
 
@@ -898,8 +926,12 @@ void PlotWidget::rebuildLegend()
         return;
     }
 
+    // m_legend_rows carries a permanent right-side gutter (set in setUpLayout, same
+    // pixelMetric) so the vertical scrollbar never overlaps a row's text; include it
+    // here so the overlay is sized to fit that reserved space rather than clip it.
+    const int scrollbar_gutter = QApplication::style()->pixelMetric(QStyle::PM_ScrollBarExtent);
     styleLegendOverlay(m_dark_theme);
-    layoutLegendOverlay(QSize(content_w, content_h));
+    layoutLegendOverlay(QSize(content_w + scrollbar_gutter, content_h));
     m_legend_overlay->show();
     m_legend_overlay->raise();
 }
@@ -914,18 +946,14 @@ void PlotWidget::layoutLegendOverlay(const QSize& content)
     const int frame = 2 * PlotConstants::kLegendContentMargin;
 
     // Cap the legend to a fraction of the chart so a dense plot can't let it grow
-    // to swallow the data; overflow past the height cap scrolls.
+    // to swallow the data; overflow past the height cap scrolls. The scrollbar
+    // gutter is already folded into content's width (see rebuildLegend), so no
+    // further reservation is needed here even when the height cap forces scrolling.
     const int max_w = qMax(80, static_cast<int>(m_plot->width()  * PlotConstants::kLegendMaxWidthFrac));
     const int max_h = qMax(60, static_cast<int>(m_plot->height() * PlotConstants::kLegendMaxHeightFrac));
 
-    int w = qMin(content.width() + frame, max_w);
-    int h = qMin(content.height() + frame, max_h);
-    // If the content is taller than the cap, reserve room for the vertical
-    // scrollbar so labels are not clipped.
-    if (content.height() + frame > max_h)
-    {
-        w = qMin(w + m_legend_scroll->verticalScrollBar()->sizeHint().width(), max_w);
-    }
+    const int w = qMin(content.width() + frame, max_w);
+    const int h = qMin(content.height() + frame, max_h);
     m_legend_overlay->resize(w, h);
 
     // Keep the default top-right anchor until the user drags it; afterwards just

@@ -5,7 +5,11 @@
 
 #include "tst_plotwidget.h"
 
+#include <QApplication>
 #include <QFrame>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QStyle>
 #include <QVBoxLayout>
 #include <QtTest>
 
@@ -130,4 +134,46 @@ void TestPlotWidget::legendOverlaySizesCorrectlyAfterRebuild()
     QCOMPARE(widget.m_legend_rows->count(), 2);
     QVERIFY(widget.m_legend_overlay->width()  > frame_only + 20);
     QVERIFY(widget.m_legend_overlay->height() > frame_only + 8);
+}
+
+void TestPlotWidget::legendUsesShortNameForSnrSeries()
+{
+    // SNR series carry a long "<id> - <TMATS stream label> <ch.name>" identity for
+    // CSV export/import (PlotViewModel::addStreamData), which can be verbose enough
+    // to crowd the legend. The legend row should show a short "CH<id> <ch.name>"
+    // form instead, without losing the channel/receiver suffix.
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+
+    ProcessedStreamData d;
+    d.streamLabel  = "CH-01 2250.5MHZ AGC 800Kbps RNRZ-L"; // long, descriptive TMATS name
+    d.pcmChannelId = 40;
+    d.mode         = StreamMode::ReceiverChannelInfo;
+    d.timesSec     = { 0.0, 1.0, 2.0 };
+    ProcessedChannelSeries ch;
+    ch.name   = "L_RCVR3";
+    ch.values = { -80.0, -79.0, -78.0 };
+    d.channels.append(ch);
+    vm.addStreamData(d);
+
+    QCOMPARE(widget.m_legend_rows->count(), 1);
+    auto* row = widget.m_legend_rows->itemAt(0)->widget();
+    QVERIFY(row != nullptr);
+    auto* label = qobject_cast<QLabel*>(row->layout()->itemAt(1)->widget());
+    QVERIFY(label != nullptr);
+    QCOMPARE(label->text(), QString("CH40 L_RCVR3"));
+    QVERIFY(!label->text().contains("2250.5MHZ"));
+}
+
+void TestPlotWidget::legendReservesScrollbarGutter()
+{
+    // Regression guard: the legend's row layout must reserve a right-side gutter
+    // matching the style's scrollbar width, so the vertical scrollbar (shown once
+    // content overflows the height cap) never overlaps the last characters of a
+    // row's label.
+    PlotWidget widget;
+    const int expected_gutter = QApplication::style()->pixelMetric(QStyle::PM_ScrollBarExtent);
+    QVERIFY(expected_gutter > 0);
+    QCOMPARE(widget.m_legend_rows->contentsMargins().right(), expected_gutter);
 }

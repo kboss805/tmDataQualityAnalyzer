@@ -20,6 +20,8 @@ private slots:
     void applyThemeLightDoesNotCrash();
     void legendOverlayPopulatesFromData();
     void legendOverlaySizesCorrectlyAfterRebuild();
+    void legendUsesShortNameForSnrSeries();
+    void legendReservesScrollbarGutter();
 };
 
 #endif // TST_PLOTWIDGET_H
