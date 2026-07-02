@@ -177,3 +177,35 @@ void TestPlotWidget::legendReservesScrollbarGutter()
     QVERIFY(expected_gutter > 0);
     QCOMPARE(widget.m_legend_rows->contentsMargins().right(), expected_gutter);
 }
+
+void TestPlotWidget::legendRowsOverrideGlobalWidgetBackground()
+{
+    // Regression test: the app's global theme QSS (resources/win11-{dark,light}.qss)
+    // gives every plain QWidget a solid background-color via a bare "QWidget {}"
+    // selector, so each legend row (an unstyled QWidget wrapping the swatch+label)
+    // would otherwise paint as an opaque chip against the translucent overlay,
+    // producing a boxed/tabular look instead of just a line and text floating over
+    // the plot. rebuildLegend() must give each row an objectName the overlay's
+    // stylesheet can target with a more specific selector to force it transparent.
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+
+    ProcessedStreamData d;
+    d.streamLabel  = "Ch 7";
+    d.pcmChannelId = 7;
+    d.mode         = StreamMode::FrameSyncLockStats;
+    d.timesSec                = { 0.0, 1.0, 2.0 };
+    d.lockPercent             = { 90.0, 95.0, 100.0 };
+    d.accumulatedMissedFrames = { 0.0, 1.0, 1.0 };
+    vm.addStreamData(d);
+
+    QCOMPARE(widget.m_legend_rows->count(), 1);
+    auto* row = widget.m_legend_rows->itemAt(0)->widget();
+    QVERIFY(row != nullptr);
+    QCOMPARE(row->objectName(), QString("legendRow"));
+
+    const QString stylesheet = widget.m_legend_overlay->styleSheet();
+    QVERIFY(stylesheet.contains("QWidget#legendRow"));
+    QVERIFY(stylesheet.contains("background: transparent"));
+}

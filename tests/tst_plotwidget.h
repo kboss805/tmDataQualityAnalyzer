@@ -22,6 +22,7 @@ private slots:
     void legendOverlaySizesCorrectlyAfterRebuild();
     void legendUsesShortNameForSnrSeries();
     void legendReservesScrollbarGutter();
+    void legendRowsOverrideGlobalWidgetBackground();
 };
 
 #endif // TST_PLOTWIDGET_H

@@ -892,6 +892,7 @@ void PlotWidget::rebuildLegend()
         // anywhere on the content falls to the viewport and starts a drag; color
         // and name are edited from the Customize Plot Series dialog.
         auto* row = new QWidget;
+        row->setObjectName("legendRow");
         row->setAttribute(Qt::WA_TransparentForMouseEvents, true);
         auto* row_layout = new QHBoxLayout(row);
         row_layout->setContentsMargins(0, 0, 0, 0);
@@ -1004,11 +1005,17 @@ void PlotWidget::styleLegendOverlay(bool dark)
                                : QColor(255, 255, 255, PlotConstants::kLegendBgAlpha);
     const QColor border = dark ? QColor(90, 90, 90) : QColor(170, 170, 170);
     const QColor text   = dark ? QColor(230, 230, 230) : QColor(30, 30, 30);
+    // The app's global theme QSS (resources/win11-{dark,light}.qss) gives every
+    // plain QWidget a solid background-color, so each legend row would otherwise
+    // paint as an opaque chip against the overlay's own translucent background
+    // (a boxed/tabular look). QWidget#legendRow overrides that with a more
+    // specific id selector so only the swatch + text show through.
     m_legend_overlay->setStyleSheet(QString(
         "QFrame#legendOverlay { background-color: rgba(%1,%2,%3,%4);"
         " border: 1px solid %5; border-radius: %6px; }"
         "QScrollArea#legendScroll { background: transparent; border: none; }"
         "QWidget#legendContent { background: transparent; }"
+        "QWidget#legendRow { background: transparent; }"
         "QLabel#legendLabel { background: transparent; color: %7; }")
         .arg(bg.red()).arg(bg.green()).arg(bg.blue()).arg(bg.alpha())
         .arg(border.name())
