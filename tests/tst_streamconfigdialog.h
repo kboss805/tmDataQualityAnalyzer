@@ -46,6 +46,10 @@ private slots:
     void applyToAllCopiesSettingsToSameModeStreams();
     void applyToAllLeavesDifferentModeStreamsUnchanged();
     void applyToAllUncheckedDoesNotAffectOtherStreams();
+
+    // Channel column label (elides long names, keeps the full name in the tooltip)
+    void channelLabelShortNameShownInFull();
+    void channelLabelLongNameElidedWithFullTooltip();
 };
 
 #endif // TST_STREAMCONFIGDIALOG_H

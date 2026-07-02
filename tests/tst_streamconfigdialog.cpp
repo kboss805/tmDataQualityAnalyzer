@@ -12,6 +12,7 @@
 
 #include <QCheckBox>
 #include <QDialogButtonBox>
+#include <QLabel>
 #include <QSettings>
 #include <QTemporaryFile>
 #include <QVector>
@@ -544,4 +545,44 @@ void TestStreamConfigDialog::applyToAllUncheckedDoesNotAffectOtherStreams()
     QVector<StreamConfig> out = dlg->configs();
     QCOMPARE(out[0].sync.pattern, QString("A345CA5C"));
     QCOMPARE(out[1].sync.pattern, QString("11111111"));
+}
+
+// ---------------------------------------------------------------------------
+// Channel column label
+// ---------------------------------------------------------------------------
+
+void TestStreamConfigDialog::channelLabelShortNameShownInFull()
+{
+    // A name that comfortably fits the ~16-character-wide column shows in full,
+    // with no truncation and no ellipsis.
+    StreamConfig cfg = makeConfig("Ch 01");
+    QScopedPointer<StreamConfigDialog> dlg(makeDialog({cfg}));
+
+    QLabel* channelLabel = nullptr;
+    for (QLabel* lbl : dlg->findChildren<QLabel*>()) {
+        if (lbl->toolTip() == "Ch 01") { channelLabel = lbl; break; }
+    }
+    QVERIFY(channelLabel != nullptr);
+    QCOMPARE(channelLabel->text(), QString("Ch 01"));
+}
+
+void TestStreamConfigDialog::channelLabelLongNameElidedWithFullTooltip()
+{
+    // A long, TMATS-derived descriptive name (like "CH-01 2250.5MHZ AGC 800Kbps
+    // RNRZ-L") is wider than the fixed channel column, so it must be elided with
+    // "..." rather than hard-clipped — while the tooltip keeps the full name so
+    // it's never lost, just not fully on screen.
+    const QString fullName = "CH-01 2250.5MHZ AGC 800Kbps RNRZ-L";
+    StreamConfig cfg = makeConfig(fullName);
+    QScopedPointer<StreamConfigDialog> dlg(makeDialog({cfg}));
+
+    QLabel* channelLabel = nullptr;
+    for (QLabel* lbl : dlg->findChildren<QLabel*>()) {
+        if (lbl->toolTip() == fullName) { channelLabel = lbl; break; }
+    }
+    QVERIFY(channelLabel != nullptr);
+    QVERIFY(channelLabel->text() != fullName);
+    QVERIFY(channelLabel->text().length() < fullName.length());
+    QVERIFY(channelLabel->text().endsWith(QChar(0x2026))); // Unicode ellipsis "..."
+    QCOMPARE(channelLabel->toolTip(), fullName);
 }

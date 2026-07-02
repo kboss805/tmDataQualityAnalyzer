@@ -13,6 +13,7 @@
 #include <QEventLoop>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFontMetrics>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -40,11 +41,12 @@ namespace {
 // Stream-table geometry, shared by the header row, the data rows, and the
 // scroll-area height cap so the columns line up and stay in sync.
 constexpr int kColWidthProcess = 48;
-constexpr int kColWidthChannel = 200;
+constexpr int kColWidthChannel = 130; ///< Fits ~16 characters of a channel name before eliding.
 constexpr int kColWidthMode    = 200;
 constexpr int kColWidthSetup   = 64;
 constexpr int kColWidthReady   = 64;
 constexpr int kRowHeight       = 52;
+constexpr int kCellTextPadding = 8; ///< Safety margin subtracted before eliding cell text.
 
 } // namespace
 
@@ -221,11 +223,15 @@ void StreamConfigDialog::buildTable()
             hl->addWidget(cell);
         }
 
-        // Channel label (elides if too long, tooltip shows full name)
+        // Channel label: elided with "..." to fit the fixed column width (a plain
+        // QLabel doesn't elide on its own, just clips), full name always available
+        // via tooltip.
         {
-            auto* lbl = new QLabel(cfg.label, rowWidget);
+            auto* lbl = new QLabel(rowWidget);
             lbl->setFixedWidth(kColWidthChannel);
             lbl->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+            lbl->setText(QFontMetrics(lbl->font()).elidedText(
+                cfg.label, Qt::ElideRight, kColWidthChannel - kCellTextPadding));
             lbl->setToolTip(cfg.label);
             lbl->setAutoFillBackground(false);
             hl->addWidget(lbl);
