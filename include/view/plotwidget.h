@@ -126,8 +126,13 @@ private:
     void updateAxisViewButton();
     /// Rebuilds the floating legend's rows from current ViewModel series visibility.
     void rebuildLegend();
-    /// Sizes the legend to its content (height/width capped) and clamps it in view.
-    void layoutLegendOverlay();
+    /// Sizes the legend overlay to fit @p content (height/width capped) and
+    /// positions/clamps it in view. @p content is the natural, unconstrained size
+    /// of the legend rows, computed by the caller (rebuildLegend()) directly from
+    /// each row's sizeHint() — NOT re-derived here from the container widget, since
+    /// QWidget::sizeHint() on the QScrollArea's content widget can go stale once
+    /// the scroll area has resized it down on an earlier, sparser rebuild.
+    void layoutLegendOverlay(const QSize& content);
     /// Places the legend at its default top-right corner inside the chart.
     void positionLegendTopRight();
     /// Clamps the legend fully inside the chart's current bounds.

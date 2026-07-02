@@ -831,6 +831,15 @@ void PlotWidget::rebuildLegend()
     const auto& all_series = m_view_model->allSeries();
     const PlotViewModel::LockAxisView axis_view = m_view_model->lockAxisView();
     int shown = 0;
+    // Track the content's natural (unconstrained) size ourselves from each row's
+    // sizeHint() as it's built, rather than asking the container widget for its
+    // aggregate sizeHint() afterwards: once the QScrollArea (widgetResizable=true)
+    // has squeezed m_legend_widget down to a small viewport on an earlier, sparser
+    // rebuild, QWidget::sizeHint()/QLayout::sizeHint() can report a stale/zero size
+    // on the next rebuild even though the layout correctly holds the new rows —
+    // this was reproduced directly (row sizeHints valid, aggregate sizeHint (0,0)).
+    int content_w = 0;
+    int content_h = 0;
 
     for (const PlotSeriesData& s : all_series)
     {
@@ -872,6 +881,14 @@ void PlotWidget::rebuildLegend()
         row_layout->addWidget(swatch, 0, Qt::AlignVCenter);
         row_layout->addWidget(name, 1, Qt::AlignVCenter);
         m_legend_rows->addWidget(row);
+
+        const QSize row_hint = row->sizeHint();
+        content_w = qMax(content_w, row_hint.width());
+        content_h += row_hint.height();
+        if (shown > 0)
+        {
+            content_h += PlotConstants::kLegendRowSpacing;
+        }
         ++shown;
     }
 
@@ -881,21 +898,19 @@ void PlotWidget::rebuildLegend()
         return;
     }
 
-    m_legend_widget->adjustSize();
     styleLegendOverlay(m_dark_theme);
-    layoutLegendOverlay();
+    layoutLegendOverlay(QSize(content_w, content_h));
     m_legend_overlay->show();
     m_legend_overlay->raise();
 }
 
-void PlotWidget::layoutLegendOverlay()
+void PlotWidget::layoutLegendOverlay(const QSize& content)
 {
     if (m_legend_overlay == nullptr || m_plot == nullptr)
     {
         return;
     }
 
-    const QSize content = m_legend_widget->sizeHint();
     const int frame = 2 * PlotConstants::kLegendContentMargin;
 
     // Cap the legend to a fraction of the chart so a dense plot can't let it grow

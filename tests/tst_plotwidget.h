@@ -19,6 +19,7 @@ private slots:
     void applyThemeDarkDoesNotCrash();
     void applyThemeLightDoesNotCrash();
     void legendOverlayPopulatesFromData();
+    void legendOverlaySizesCorrectlyAfterRebuild();
 };
 
 #endif // TST_PLOTWIDGET_H
