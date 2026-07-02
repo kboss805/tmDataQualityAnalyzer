@@ -100,6 +100,10 @@ public:
     void setRightYMaxOverride(double max);  ///< User-set right (SNR) axis maximum; resets on resetYRange().
     /// Switches the left-axis metric and flips visibility of lock/missed frames series.
     void setLockAxisView(LockAxisView view);
+    /// Notifies views that series colors/names changed. Call once after a batch of
+    /// renameSeries()/recolorSeries() edits (e.g. from the Customize Plot dialog);
+    /// renameSeries()/recolorSeries() are pure setters and do not signal on their own.
+    void commitAppearanceChanges();
     /// @}
 
 signals:
@@ -110,6 +114,7 @@ signals:
     void loadFailed();                             ///< Emitted when an async load fails.
     void loadWarning(const QString& message);       ///< Emitted after a load that succeeded but skipped malformed rows.
     void seriesVisibilityChanged(int index);        ///< Emitted when a series visibility toggles.
+    void seriesAppearanceChanged();                 ///< Emitted after a batch of color/name edits so views can refresh.
     void plotTitleChanged();                        ///< Emitted when the plot title changes.
     void axisRangeChanged();                        ///< Emitted when X or Y axis ranges change.
 

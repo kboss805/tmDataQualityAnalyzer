@@ -18,6 +18,11 @@ private slots:
     void setViewModelConnectsWithoutCrash();
     void applyThemeDarkDoesNotCrash();
     void applyThemeLightDoesNotCrash();
+    void legendOverlayPopulatesFromData();
+    void legendOverlaySizesCorrectlyAfterRebuild();
+    void legendUsesShortNameForSnrSeries();
+    void legendReservesScrollbarGutter();
+    void legendRowsOverrideGlobalWidgetBackground();
 };
 
 #endif // TST_PLOTWIDGET_H

@@ -11,10 +11,27 @@
 #include <QScrollArea>
 #include <QComboBox>
 #include <QCheckBox>
+#include <QColorDialog>
+#include <QInputDialog>
+#include <QLineEdit>
+#include <QMenu>
 #include <QTreeWidget>
 #include <QLabel>
 #include <QDialogButtonBox>
 #include <QMap>
+
+namespace {
+    /// Item data roles storing pending per-channel edits on the SNR tree until OK.
+    constexpr int kRolePendingName  = Qt::UserRole + 1;
+    constexpr int kRolePendingColor = Qt::UserRole + 2;
+
+    /// @return QSS for a color swatch button filled with @p color.
+    QString swatchStyle(const QColor& color)
+    {
+        return QStringLiteral("background-color: %1; border: 1px solid rgba(0,0,0,60);")
+            .arg(color.name());
+    }
+} // namespace
 
 PlotCustomizationDialog::PlotCustomizationDialog(PlotViewModel* viewModel, QWidget* parent)
     : QDialog(parent)
@@ -158,12 +175,50 @@ void PlotCustomizationDialog::populateData()
             }
         }
 
-        auto* cb = new QCheckBox(groupLabel(streamOrder), m_lockTab);
+        // Row: [visibility checkbox "CH <id>"][color swatch][editable series name].
+        // The swatch recolors and the edit renames every series in the stream (the
+        // ViewModel propagates to the lock/missed sibling); applied to the VM on OK.
+        auto* row = new QWidget(m_lockTab);
+        auto* rowLayout = new QHBoxLayout(row);
+        rowLayout->setContentsMargins(0, 0, 0, 0);
+        rowLayout->setSpacing(6);
+
+        auto* cb = new QCheckBox(QStringLiteral("CH %1").arg(streamOrder), row);
         cb->setChecked(anyVisible);
-        m_lockListLayout->addWidget(cb);
+
+        const QColor color0 = it.value().isEmpty() ? QColor(Qt::gray)
+                                                   : series.at(it.value().first()).color;
+        const QString name0 = it.value().isEmpty() ? streamLabels.value(streamOrder)
+                                                   : series.at(it.value().first()).name;
+
+        auto* swatch = new QPushButton(row);
+        swatch->setFixedSize(20, 14);
+        swatch->setCursor(Qt::PointingHandCursor);
+        swatch->setToolTip(tr("Change series color"));
+        swatch->setStyleSheet(swatchStyle(color0));
+
+        auto* nameEdit = new QLineEdit(name0, row);
+        nameEdit->setToolTip(tr("Rename this stream's series"));
+
+        rowLayout->addWidget(cb);
+        rowLayout->addWidget(swatch);
+        rowLayout->addWidget(nameEdit, 1);
+        m_lockListLayout->addWidget(row);
 
         m_lockCheckboxes.append(cb);
         m_lockCheckboxToSeriesIndices.insert(cb, it.value());
+        m_lockNameEdits.insert(cb, nameEdit);
+        m_lockSwatches.insert(cb, swatch);
+        m_lockColors.insert(cb, color0);
+
+        connect(swatch, &QPushButton::clicked, this, [this, cb, swatch]() {
+            const QColor picked = QColorDialog::getColor(m_lockColors.value(cb), this,
+                                                         tr("Choose Series Color"));
+            if (!picked.isValid())
+                return;
+            m_lockColors[cb] = picked;
+            swatch->setStyleSheet(swatchStyle(picked));
+        });
     }
 
     // Populate SNR Tab: one or two trees per stream (columns), each with RCVR groups
@@ -255,6 +310,52 @@ QTreeWidget* PlotCustomizationDialog::buildSnrTree(const QVector<int>& receiverI
 
     tree->collapseAll();
     connect(tree, &QTreeWidget::itemChanged, this, &PlotCustomizationDialog::onSnrTreeItemChanged);
+
+    // Right-click a channel leaf to rename or recolor it (applied to the ViewModel
+    // on OK). The leaves show only the channel letter, so an inline editor would be
+    // ambiguous — a context menu keeps the compact tree intact.
+    tree->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(tree, &QTreeWidget::customContextMenuRequested, this,
+            [this, tree](const QPoint& pos) {
+        QTreeWidgetItem* item = tree->itemAt(pos);
+        if (item == nullptr || item->parent() == nullptr)
+            return; // channel leaves only, not RCVR groups
+        const int idx = item->data(0, Qt::UserRole).toInt();
+
+        QMenu menu;
+        QAction* renameAct = menu.addAction(tr("Rename series…"));
+        QAction* colorAct  = menu.addAction(tr("Change color…"));
+        QAction* chosen = menu.exec(tree->viewport()->mapToGlobal(pos));
+        if (chosen == nullptr)
+            return;
+
+        if (chosen == renameAct)
+        {
+            const QString cur = item->data(0, kRolePendingName).isValid()
+                ? item->data(0, kRolePendingName).toString()
+                : m_viewModel->seriesAt(idx).name;
+            bool ok = false;
+            const QString text = QInputDialog::getText(this, tr("Rename Series"),
+                tr("Series name:"), QLineEdit::Normal, cur, &ok);
+            if (ok)
+            {
+                item->setData(0, kRolePendingName, text);
+                item->setToolTip(0, text);
+            }
+        }
+        else if (chosen == colorAct)
+        {
+            const QColor cur = item->data(0, kRolePendingColor).isValid()
+                ? item->data(0, kRolePendingColor).value<QColor>()
+                : m_viewModel->seriesAt(idx).color;
+            const QColor picked = QColorDialog::getColor(cur, this, tr("Choose Series Color"));
+            if (picked.isValid())
+            {
+                item->setData(0, kRolePendingColor, picked);
+                item->setForeground(0, picked);
+            }
+        }
+    });
     return tree;
 }
 
@@ -375,6 +476,39 @@ void PlotCustomizationDialog::applyChanges()
             }
         }
     }
+
+    // Apply per-stream color/name edits (Lock tab). renameSeries/recolorSeries are
+    // pure setters that propagate to the lock/missed sibling by stream label.
+    for (auto* cb : m_lockCheckboxes) {
+        const auto& indices = m_lockCheckboxToSeriesIndices.value(cb);
+        if (indices.isEmpty())
+            continue;
+        const int firstIdx = indices.first();
+        if (m_lockNameEdits.contains(cb))
+            m_viewModel->renameSeries(firstIdx, m_lockNameEdits.value(cb)->text());
+        if (m_lockColors.contains(cb))
+            m_viewModel->recolorSeries(firstIdx, m_lockColors.value(cb));
+    }
+
+    // Apply per-channel color/name edits (SNR tab), taken from the pending item roles.
+    for (const auto& trees : m_snrStreamTrees) {
+        for (QTreeWidget* tree : trees) {
+            for (int r = 0; r < tree->topLevelItemCount(); r++) {
+                QTreeWidgetItem* rcvrItem = tree->topLevelItem(r);
+                for (int c = 0; c < rcvrItem->childCount(); c++) {
+                    QTreeWidgetItem* chItem = rcvrItem->child(c);
+                    const int idx = chItem->data(0, Qt::UserRole).toInt();
+                    if (chItem->data(0, kRolePendingName).isValid())
+                        m_viewModel->renameSeries(idx, chItem->data(0, kRolePendingName).toString());
+                    if (chItem->data(0, kRolePendingColor).isValid())
+                        m_viewModel->recolorSeries(idx, chItem->data(0, kRolePendingColor).value<QColor>());
+                }
+            }
+        }
+    }
+
+    // One batched refresh so the plot re-applies pens and rebuilds the legend once.
+    m_viewModel->commitAppearanceChanges();
 
     accept();
 }

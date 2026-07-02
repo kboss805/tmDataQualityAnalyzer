@@ -508,6 +508,11 @@ void PlotViewModel::renameSeries(int index, const QString& name)
     }
 }
 
+void PlotViewModel::commitAppearanceChanges()
+{
+    emit seriesAppearanceChanged();
+}
+
 void PlotViewModel::recolorSeries(int index, const QColor& color)
 {
     if (index < 0 || index >= m_series.size())
