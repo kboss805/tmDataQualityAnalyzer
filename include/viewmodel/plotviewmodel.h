@@ -127,6 +127,17 @@ private:
     /// Returns a shaded variant of `base` for shadeLevel > 0 (0 returns `base` unchanged).
     /// Used to derive additional stream/channel colors from a small set of primaries.
     static QColor shadeOfColor(const QColor& base, int shadeLevel);
+    /// @return True if `type` is one of the left-axis metrics (FrameSyncLock or
+    /// AccumulatedMissedFrames) that share the axis and a stream's color/name.
+    static bool isLeftAxisMetric(PlotSeriesData::MetricType type);
+    /// @return True if `candidate` is the left-axis sibling of the stream identified
+    /// by (streamLabel, streamOrder): the same stream's other left-axis metric (e.g.
+    /// a Lock series' Missed-Frames counterpart). Matches on streamLabel AND
+    /// streamOrder (source PCM channel id) together — streamLabel alone is not
+    /// unique (two streams can share a TMATS-derived name), so a rename/recolor
+    /// edit must not cross-apply to an unrelated same-labeled stream.
+    static bool isFrameSyncSibling(const QString& streamLabel, int streamOrder,
+                                   const PlotSeriesData& candidate);
     /// Computes Y axis range from visible series data with margin.
     void computeYRange();
     /// Commits a CsvParseResult into member state and emits dataChanged().
