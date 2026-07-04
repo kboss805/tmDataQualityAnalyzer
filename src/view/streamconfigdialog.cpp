@@ -232,15 +232,16 @@ void StreamConfigDialog::buildTable()
             hl->addWidget(cell);
         }
 
-        // Channel label: centered under the header, matching the other columns.
-        // Elided with "..." to fit the fixed column width (a plain QLabel doesn't
-        // elide on its own, just clips); full name always available via tooltip.
+        // Channel label: right-justified and elided on the LEFT ("…RNRZ-L") so the
+        // END of a long TMATS-derived name — where the distinguishing detail (band,
+        // rate, code) usually sits — stays visible instead of the common prefix. The
+        // cell doesn't move; only the text alignment. Full name is in the tooltip.
         {
             auto* lbl = new QLabel(rowWidget);
             lbl->setFixedWidth(kColWidthChannel);
-            lbl->setAlignment(Qt::AlignCenter);
+            lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
             lbl->setText(QFontMetrics(lbl->font()).elidedText(
-                cfg.label, Qt::ElideRight, kColWidthChannel - kCellTextPadding));
+                cfg.label, Qt::ElideLeft, kColWidthChannel - kCellTextPadding));
             lbl->setToolTip(cfg.label);
             lbl->setAutoFillBackground(false);
             hl->addWidget(lbl);

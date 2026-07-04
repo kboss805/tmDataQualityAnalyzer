@@ -570,9 +570,9 @@ void TestStreamConfigDialog::channelLabelShortNameShownInFull()
 void TestStreamConfigDialog::channelLabelLongNameElidedWithFullTooltip()
 {
     // A long, TMATS-derived descriptive name (like "CH-01 2250.5MHZ AGC 800Kbps
-    // RNRZ-L") is wider than the fixed channel column, so it must be elided with
-    // "..." rather than hard-clipped — while the tooltip keeps the full name so
-    // it's never lost, just not fully on screen.
+    // RNRZ-L") is wider than the fixed channel column, so it must be elided rather
+    // than hard-clipped. Elision is on the LEFT so the END of the name (the
+    // distinguishing tail) stays visible; the tooltip keeps the full name.
     const QString fullName = "CH-01 2250.5MHZ AGC 800Kbps RNRZ-L";
     StreamConfig cfg = makeConfig(fullName);
     QScopedPointer<StreamConfigDialog> dlg(makeDialog({cfg}));
@@ -584,7 +584,8 @@ void TestStreamConfigDialog::channelLabelLongNameElidedWithFullTooltip()
     QVERIFY(channelLabel != nullptr);
     QVERIFY(channelLabel->text() != fullName);
     QVERIFY(channelLabel->text().length() < fullName.length());
-    QVERIFY(channelLabel->text().endsWith(QChar(0x2026))); // Unicode ellipsis "..."
+    QVERIFY(channelLabel->text().startsWith(QChar(0x2026))); // Unicode ellipsis "…" at the FRONT
+    QVERIFY(channelLabel->text().endsWith("RNRZ-L"));        // the tail stays on screen
     QCOMPARE(channelLabel->toolTip(), fullName);
 }
 
