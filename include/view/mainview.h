@@ -18,7 +18,6 @@
 #include <QMimeData>
 #include <QTextBrowser>
 #include <QMenuBar>
-#include <QProgressBar>
 #include <QScrollBar>
 #include <QStringList>
 #include <QToolBar>
@@ -29,6 +28,7 @@
 class MainViewModel;
 class PlotViewModel;
 class PlotWidget;
+class ProcessingProgressDialog;
 struct ProcessedStreamData;
 
 /**
@@ -68,9 +68,7 @@ private slots:
 
     /// @name ViewModel-driven update slots
     /// @{
-    /// Enables or disables controls based on file-loaded state.
-    void onFileLoadedChanged();
-    /// Updates the progress bar value.
+    /// Updates the progress dialog's progress bar value.
     void onProgressChanged();
     /// Updates UI state when processing starts or stops.
     void onProcessingChanged();
@@ -126,12 +124,11 @@ private:
 
     QToolBar* m_toolbar;                     ///< Main toolbar.
     QAction* m_toolbar_open_action;          ///< Toolbar open action.
-    QAction* m_cancel_action;                ///< Toolbar cancel/stop action (visible during processing).
     QAction* m_import_action;                ///< Toolbar import-CSV action (left of export).
     QAction* m_export_action;                ///< Toolbar export plot action.
 
     QTextBrowser* m_log_preview;             ///< Compact log preview in the controls panel.
-    QProgressBar* m_progress_bar;            ///< Processing progress bar.
+    ProcessingProgressDialog* m_progress_dialog; ///< Modal progress/cancel dialog shown while processing runs.
     QMenu* m_recent_menu;                    ///< File > Recent Files submenu.
 
     QString m_last_ch10_dir;                 ///< Last directory used in the Open file dialog (.ch10/.csv).

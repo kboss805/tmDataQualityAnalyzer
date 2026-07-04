@@ -84,6 +84,7 @@ SOURCES += \
     src/view/streamconfigdialog.cpp \
     src/view/exportdialog.cpp \
     src/view/plotcustomizationdialog.cpp \
+    src/view/processingprogressdialog.cpp \
     src/view/plotwidget.cpp
 
 # Third-party libraries
@@ -144,6 +145,7 @@ HEADERS += \
     include/view/streamsubdialogs.h \
     include/view/exportdialog.h \
     include/view/plotcustomizationdialog.h \
+    include/view/processingprogressdialog.h \
     include/view/plotwidget.h
 
 # Third-party libraries
@@ -180,7 +182,6 @@ RESOURCES += \
     resources/folder-open.svg \
     resources/floppy-save.svg \
     resources/play.svg \
-    resources/stop.svg \
     resources/gear.svg \
     resources/retry.svg \
     resources/export-dark.svg \
