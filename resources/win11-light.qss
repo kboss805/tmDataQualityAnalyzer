@@ -39,6 +39,18 @@ QLabel::disabled
 }
 
 
+/*-----Configure Streams table header (dimmed, theme-aware)-----*/
+QLabel#streamHeaderLabel
+{
+    color: rgba(27, 27, 27, 0.55);
+}
+
+QFrame#streamHeaderSeparator
+{
+    color: rgba(27, 27, 27, 0.22);
+}
+
+
 /*-----QMenuBar-----*/
 QMenuBar
 {

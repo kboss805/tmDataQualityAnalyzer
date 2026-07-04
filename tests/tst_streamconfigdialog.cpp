@@ -12,6 +12,7 @@
 
 #include <QCheckBox>
 #include <QDialogButtonBox>
+#include <QFrame>
 #include <QLabel>
 #include <QSettings>
 #include <QTemporaryFile>
@@ -585,4 +586,22 @@ void TestStreamConfigDialog::channelLabelLongNameElidedWithFullTooltip()
     QVERIFY(channelLabel->text().length() < fullName.length());
     QVERIFY(channelLabel->text().endsWith(QChar(0x2026))); // Unicode ellipsis "..."
     QCOMPARE(channelLabel->toolTip(), fullName);
+}
+
+void TestStreamConfigDialog::headerLabelsUseThemeableObjectNames()
+{
+    QScopedPointer<StreamConfigDialog> dlg(makeDialog({makeConfig()}));
+
+    // Five header columns: Process, Channel, Mode, Configure, Ready. Their color
+    // must come from the theme QSS (matched by object name), so each header label
+    // carries no inline stylesheet — the old hard-coded white vanished on light.
+    const QList<QLabel*> headers = dlg->findChildren<QLabel*>("streamHeaderLabel");
+    QCOMPARE(headers.size(), 5);
+    for (QLabel* h : headers)
+        QVERIFY2(h->styleSheet().isEmpty(),
+                 "header color must be theme-driven, not an inline stylesheet");
+
+    QFrame* separator = dlg->findChild<QFrame*>("streamHeaderSeparator");
+    QVERIFY(separator != nullptr);
+    QVERIFY(separator->styleSheet().isEmpty());
 }

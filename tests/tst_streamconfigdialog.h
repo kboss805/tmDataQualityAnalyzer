@@ -50,6 +50,10 @@ private slots:
     // Channel column label (elides long names, keeps the full name in the tooltip)
     void channelLabelShortNameShownInFull();
     void channelLabelLongNameElidedWithFullTooltip();
+
+    // Table header colors come from the theme QSS (object names), not hard-coded
+    // inline stylesheets that only worked on the dark theme.
+    void headerLabelsUseThemeableObjectNames();
 };
 
 #endif // TST_STREAMCONFIGDIALOG_H

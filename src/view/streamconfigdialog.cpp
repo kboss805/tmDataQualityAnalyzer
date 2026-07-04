@@ -47,6 +47,14 @@ constexpr int kColWidthSetup   = 64;
 constexpr int kColWidthReady   = 64;
 constexpr int kRowHeight       = 52;
 constexpr int kCellTextPadding = 8; ///< Safety margin subtracted before eliding cell text.
+constexpr int kReadyGlyphPt    = 28; ///< Font size of the Ready-column ✓/✗ glyph.
+
+/// Builds the Ready-column status glyph markup (a large colored ✓ or ✗).
+QString readyMarkup(const char* color, const QString& glyph)
+{
+    return QString("<span style='color: %1; font-size: %2px;'>%3</span>")
+        .arg(color).arg(kReadyGlyphPt).arg(glyph);
+}
 
 } // namespace
 
@@ -101,11 +109,14 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
         hl->setContentsMargins(0, 0, 0, 0);
         hl->setSpacing(0);
 
+        // Dimmed header text; color comes from the theme QSS
+        // (QLabel#streamHeaderLabel) so it stays legible in both light and dark
+        // rather than the old hard-coded white that vanished on the light theme.
         auto makeHdr = [&](const QString& text, int width) {
             auto* lbl = new QLabel(text, header);
+            lbl->setObjectName("streamHeaderLabel");
             lbl->setFixedWidth(width);
             lbl->setAlignment(Qt::AlignCenter | Qt::AlignVCenter);
-            lbl->setStyleSheet("color: rgba(255,255,255,0.6);");
             hl->addWidget(lbl);
         };
         makeHdr("Process",   kColWidthProcess);
@@ -117,11 +128,12 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
 
         layout->addWidget(header);
 
-        // Separator line beneath headers
+        // Separator line beneath headers; color from the theme QSS
+        // (QFrame#streamHeaderSeparator) for the same light/dark reason as above.
         auto* line = new QFrame(this);
+        line->setObjectName("streamHeaderSeparator");
         line->setFrameShape(QFrame::HLine);
         line->setFrameShadow(QFrame::Plain);
-        line->setStyleSheet("color: rgba(255,255,255,0.15);");
         layout->addWidget(line);
     }
 
@@ -161,12 +173,9 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
             w.process->setChecked(checked);
     });
 
-    auto* mainBtnLayout = new QHBoxLayout;
-    mainBtnLayout->addWidget(m_all_toggle);
-    mainBtnLayout->addStretch(1);
-    mainBtnLayout->addWidget(btns.cancel);
-    mainBtnLayout->addWidget(m_ok_btn);
-    layout->addLayout(mainBtnLayout);
+    // Same footer builder as the sub-dialogs: bottom-left toggle, stretch, then
+    // Cancel + primary. The "All" checkbox carries its own text (no extra label).
+    addBottomBar(layout, btns, this, m_all_toggle);
 
     // m_ok_btn was nullptr during buildTable(), so call once now to reflect actual state.
     updateOkButton();
@@ -250,7 +259,7 @@ void StreamConfigDialog::buildTable()
         w.gearBtn = new QPushButton(rowWidget);
         w.gearBtn->setIcon(QIcon(":/resources/gear.svg"));
         w.gearBtn->setToolTip("Open configuration dialog for this stream's frame sync, data rate, and receiver parameters.");
-        styleIconButton(w.gearBtn, 28);
+        styleIconButton(w.gearBtn, DialogLayout::kIconButtonSize);
         w.gearBtn->setEnabled(cfg.process);
         {
             auto* cell = new QWidget(rowWidget);
@@ -305,28 +314,23 @@ void StreamConfigDialog::updateReadyIcon(int row)
 
     if (!checked)
     {
-        w.readyLabel->setText("<span style='color: gray; font-size: 28px;'>✗</span>");
+        w.readyLabel->setText(readyMarkup("gray", "✗"));
         w.readyLabel->setToolTip(QString());
     }
     else if (!w.gearConfirmed)
     {
-        w.readyLabel->setText("<span style='color: red; font-size: 28px;'>✗</span>");
+        w.readyLabel->setText(readyMarkup("red", "✗"));
         w.readyLabel->setToolTip("Click the gear icon to configure this stream.");
+    }
+    else if (!w.frameSyncPattern.isEmpty())
+    {
+        w.readyLabel->setText(readyMarkup("green", "✓"));
+        w.readyLabel->setToolTip(QString());
     }
     else
     {
-        bool frame_ok = !w.frameSyncPattern.isEmpty();
-
-        if (frame_ok)
-        {
-            w.readyLabel->setText("<span style='color: green; font-size: 28px;'>✓</span>");
-            w.readyLabel->setToolTip(QString());
-        }
-        else
-        {
-            w.readyLabel->setText("<span style='color: red; font-size: 28px;'>✗</span>");
-            w.readyLabel->setToolTip("A frame sync pattern is required.");
-        }
+        w.readyLabel->setText(readyMarkup("red", "✗"));
+        w.readyLabel->setToolTip("A frame sync pattern is required.");
     }
 
     updateOkButton();

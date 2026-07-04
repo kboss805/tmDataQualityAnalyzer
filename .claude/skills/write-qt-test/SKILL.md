@@ -88,6 +88,6 @@ When these change, add cases to the existing suite rather than starting a new on
 
 ## Finish
 
-Always end with a **full-suite** green run (0 failed, 0 skipped — current baseline 247 passing) via
+Always end with a **full-suite** green run (0 failed, 0 skipped — current baseline 248 passing) via
 the build-and-test skill, not a trimmed `main.cpp`. Report the pass/fail counts from
 `tests/output/results.txt`.
