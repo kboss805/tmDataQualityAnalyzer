@@ -606,3 +606,69 @@ void TestStreamConfigDialog::headerLabelsUseThemeableObjectNames()
     QVERIFY(separator != nullptr);
     QVERIFY(separator->styleSheet().isEmpty());
 }
+
+namespace {
+/// The Mode combo always carries exactly these two items; the Time Channel
+/// combo (also on the dialog) doesn't, so this reliably tells them apart
+/// regardless of QObject child-list ordering.
+QVector<QComboBox*> findModeCombos(QWidget* root)
+{
+    QVector<QComboBox*> found;
+    for (QComboBox* c : root->findChildren<QComboBox*>()) {
+        if (c->count() == 2 && c->itemText(0) == "Receiver SNR"
+            && c->itemText(1) == "Frame Sync Lock") {
+            found.append(c);
+        }
+    }
+    return found;
+}
+} // namespace
+
+void TestStreamConfigDialog::channelLabelHasComboBoxStyledObjectName()
+{
+    // The Channel cell is styled via this object name (see win11-{dark,light}.qss
+    // QLabel#channelNameCell) to mirror the Mode combo's border/fill.
+    StreamConfig cfg = makeConfig("Ch 01");
+    QScopedPointer<StreamConfigDialog> dlg(makeDialog({cfg}));
+
+    QLabel* channelLabel = nullptr;
+    for (QLabel* lbl : dlg->findChildren<QLabel*>()) {
+        if (lbl->toolTip() == "Ch 01") { channelLabel = lbl; break; }
+    }
+    QVERIFY(channelLabel != nullptr);
+    QCOMPARE(channelLabel->objectName(), QString("channelNameCell"));
+}
+
+void TestStreamConfigDialog::modeComboDisplaysTextRightJustified()
+{
+    // QComboBox has no built-in way to right-justify its closed-box text, so the
+    // Mode combo is made editable with a read-only internal line edit, which IS
+    // alignable. Typing must stay impossible — only the dropdown can change it.
+    QScopedPointer<StreamConfigDialog> dlg(makeDialog({makeConfig("Ch 01")}));
+
+    const QVector<QComboBox*> modeCombos = findModeCombos(dlg.data());
+    QCOMPARE(modeCombos.size(), 1);
+    QComboBox* mode = modeCombos.first();
+
+    QVERIFY(mode->isEditable());
+    QVERIFY(mode->lineEdit() != nullptr);
+    QVERIFY(mode->lineEdit()->isReadOnly());
+    QCOMPARE(mode->lineEdit()->alignment(), Qt::Alignment(Qt::AlignRight | Qt::AlignVCenter));
+}
+
+void TestStreamConfigDialog::modeComboSelectionStillTracksIndexChange()
+{
+    // Guards against the editable+readonly conversion silently breaking the
+    // combo's role as the source of truth for configs().mode.
+    StreamConfig cfg = makeConfig("Ch 01");
+    cfg.mode = StreamMode::FrameSyncLockStats; // starts as index 1
+    QScopedPointer<StreamConfigDialog> dlg(makeDialog({cfg}));
+
+    const QVector<QComboBox*> modeCombos = findModeCombos(dlg.data());
+    QCOMPARE(modeCombos.size(), 1);
+    QComboBox* mode = modeCombos.first();
+    QCOMPARE(mode->currentIndex(), 1);
+
+    mode->setCurrentIndex(0); // switch to Receiver SNR
+    QCOMPARE(dlg->configs()[0].mode, StreamMode::ReceiverChannelInfo);
+}
