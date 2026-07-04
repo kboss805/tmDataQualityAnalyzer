@@ -41,8 +41,8 @@ namespace {
 // Stream-table geometry, shared by the header row, the data rows, and the
 // scroll-area height cap so the columns line up and stay in sync.
 constexpr int kColWidthProcess = 48;
-constexpr int kColWidthChannel = 130; ///< Fits ~16 characters of a channel name before eliding.
-constexpr int kColWidthMode    = 200;
+constexpr int kColWidthChannel = 175; ///< Channel names past this width elide with "...".
+constexpr int kColWidthMode    = 175;
 constexpr int kColWidthSetup   = 64;
 constexpr int kColWidthReady   = 64;
 constexpr int kRowHeight       = 52;
