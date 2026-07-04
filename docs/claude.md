@@ -294,9 +294,11 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - A successful async import is finalized off a dedicated
   `PlotViewModel::loadSucceeded()` signal (not `dataChanged()`), so recent-files /
   title / success-log side effects only run after the parse actually succeeds.
-- Toolbar Export/Import icons are new Fluent bracket-and-arrow SVGs with
-  per-theme variants (`export-{dark,light}.svg`, `import-{dark,light}.svg`),
-  swapped by `MainView::applyToolbarIconsForTheme()` on startup and theme toggle.
+- Toolbar Export/Import icons use Microsoft's actual Fluent System Icons glyphs
+  (`ArrowExport` / `ArrowImport`, MIT licensed) recolored to the app's existing
+  green/orange convention, with per-theme variants (`export-{dark,light}.svg`,
+  `import-{dark,light}.svg`) swapped by `MainView::applyToolbarIconsForTheme()`
+  on startup and theme toggle.
 - Import reuses the existing Model/ViewModel path (`CsvSeriesParser::parse` +
   `PlotViewModel::loadCsvFileAsync`), so Frame Sync Lock, Accumulated Missed
   Frames, and Receiver SNR columns are recognized by header and routed to the
