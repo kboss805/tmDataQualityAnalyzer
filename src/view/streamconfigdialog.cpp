@@ -183,7 +183,7 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
     });
 
     // Same footer builder as the sub-dialogs: bottom-left toggle, stretch, then
-    // Cancel + primary. The "All" checkbox carries its own text (no extra label).
+    // primary + Cancel. The "All" checkbox carries its own text (no extra label).
     addBottomBar(layout, btns, this, m_all_toggle);
 
     // m_ok_btn was nullptr during buildTable(), so call once now to reflect actual state.

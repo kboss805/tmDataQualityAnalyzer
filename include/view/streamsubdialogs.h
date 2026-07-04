@@ -350,7 +350,7 @@ void addCheckboxRow(QVBoxLayout* layout, QWidget* parent, QCheckBox* box, const 
 }
 
 /// Appends the standard dialog footer: an optional left-aligned toggle (with an
-/// optional adjacent label), a stretch, then Cancel and the primary button. Used
+/// optional adjacent label), a stretch, then the primary button and Cancel. Used
 /// by every stream dialog so the footer is built one way.
 void addBottomBar(QVBoxLayout* layout, const DialogButtons& buttons, QWidget* parent,
                   QCheckBox* leftToggle = nullptr, const QString& toggleLabel = QString())
@@ -363,8 +363,10 @@ void addBottomBar(QVBoxLayout* layout, const DialogButtons& buttons, QWidget* pa
             bar->addWidget(new QLabel(toggleLabel, parent));
     }
     bar->addStretch(1);
-    bar->addWidget(buttons.cancel);
+    // Primary ("do it") action leftmost, Cancel (safe/dismissive) rightmost —
+    // matches Microsoft's WinUI3 dialog button-order guidance.
     bar->addWidget(buttons.primary);
+    bar->addWidget(buttons.cancel);
     layout->addLayout(bar);
 }
 
