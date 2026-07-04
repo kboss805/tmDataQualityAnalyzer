@@ -13,6 +13,7 @@
 #include <QEventLoop>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFontMetrics>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -40,11 +41,29 @@ namespace {
 // Stream-table geometry, shared by the header row, the data rows, and the
 // scroll-area height cap so the columns line up and stay in sync.
 constexpr int kColWidthProcess = 48;
-constexpr int kColWidthChannel = 200;
-constexpr int kColWidthMode    = 200;
+constexpr int kColWidthChannel = 175; ///< Channel names past this width elide with "...".
+constexpr int kColWidthMode    = 175;
 constexpr int kColWidthSetup   = 64;
 constexpr int kColWidthReady   = 64;
 constexpr int kRowHeight       = 52;
+// The Channel cell now has a combo-box-style border + inset padding (see the
+// channelNameCell QSS rule), so its available text width is narrower than the
+// column: border (~2px) + the QSS's own left/right padding (8px each). A little
+// slack beyond that exact sum is harmless — elidedText() is a max-width bound,
+// never an exact fit, so erring larger just shows a couple fewer characters.
+constexpr int kCellTextPadding = 20; ///< Safety margin subtracted before eliding cell text.
+constexpr int kReadyGlyphPt    = 28; ///< Font size of the Ready-column ✓/✗ glyph.
+// Matches the theme QSS's "QComboBox { height: 22px; }" plus its 1px border on
+// each side, so the boxed Channel cell is exactly as tall as the Mode combo
+// it's meant to visually pair with, rather than stretching to the full row.
+constexpr int kFieldCellHeight = 24;
+
+/// Builds the Ready-column status glyph markup (a large colored ✓ or ✗).
+QString readyMarkup(const char* color, const QString& glyph)
+{
+    return QString("<span style='color: %1; font-size: %2px;'>%3</span>")
+        .arg(color).arg(kReadyGlyphPt).arg(glyph);
+}
 
 } // namespace
 
@@ -99,11 +118,14 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
         hl->setContentsMargins(0, 0, 0, 0);
         hl->setSpacing(0);
 
+        // Dimmed header text; color comes from the theme QSS
+        // (QLabel#streamHeaderLabel) so it stays legible in both light and dark
+        // rather than the old hard-coded white that vanished on the light theme.
         auto makeHdr = [&](const QString& text, int width) {
             auto* lbl = new QLabel(text, header);
+            lbl->setObjectName("streamHeaderLabel");
             lbl->setFixedWidth(width);
             lbl->setAlignment(Qt::AlignCenter | Qt::AlignVCenter);
-            lbl->setStyleSheet("color: rgba(255,255,255,0.6);");
             hl->addWidget(lbl);
         };
         makeHdr("Process",   kColWidthProcess);
@@ -115,11 +137,12 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
 
         layout->addWidget(header);
 
-        // Separator line beneath headers
+        // Separator line beneath headers; color from the theme QSS
+        // (QFrame#streamHeaderSeparator) for the same light/dark reason as above.
         auto* line = new QFrame(this);
+        line->setObjectName("streamHeaderSeparator");
         line->setFrameShape(QFrame::HLine);
         line->setFrameShadow(QFrame::Plain);
-        line->setStyleSheet("color: rgba(255,255,255,0.15);");
         layout->addWidget(line);
     }
 
@@ -159,12 +182,9 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
             w.process->setChecked(checked);
     });
 
-    auto* mainBtnLayout = new QHBoxLayout;
-    mainBtnLayout->addWidget(m_all_toggle);
-    mainBtnLayout->addStretch(1);
-    mainBtnLayout->addWidget(btns.cancel);
-    mainBtnLayout->addWidget(m_ok_btn);
-    layout->addLayout(mainBtnLayout);
+    // Same footer builder as the sub-dialogs: bottom-left toggle, stretch, then
+    // primary + Cancel. The "All" checkbox carries its own text (no extra label).
+    addBottomBar(layout, btns, this, m_all_toggle);
 
     // m_ok_btn was nullptr during buildTable(), so call once now to reflect actual state.
     updateOkButton();
@@ -207,7 +227,7 @@ void StreamConfigDialog::buildTable()
         hl->setContentsMargins(0, 0, 0, 0);
         hl->setSpacing(0);
 
-        // Process toggle (left-justified in fixed-width cell)
+        // Process toggle (centered in fixed-width cell, matching the header)
         w.process = new QCheckBox(rowWidget);
         w.process->setChecked(cfg.process);
         {
@@ -216,35 +236,52 @@ void StreamConfigDialog::buildTable()
             cell->setAutoFillBackground(false);
             auto* cl = new QHBoxLayout(cell);
             cl->setContentsMargins(0, 0, 0, 0);
-            cl->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+            cl->setAlignment(Qt::AlignCenter);
             cl->addWidget(w.process);
             hl->addWidget(cell);
         }
 
-        // Channel label (elides if too long, tooltip shows full name)
+        // Channel label: right-justified and elided on the LEFT ("…RNRZ-L") so the
+        // END of a long TMATS-derived name — where the distinguishing detail (band,
+        // rate, code) usually sits — stays visible instead of the common prefix. The
+        // cell doesn't move; only the text alignment. Full name is in the tooltip.
+        // Styled (via the channelNameCell object name) to mimic the Mode combo
+        // box's border/fill, so the two columns read as a matched pair.
         {
-            auto* lbl = new QLabel(cfg.label, rowWidget);
+            auto* lbl = new QLabel(rowWidget);
+            lbl->setObjectName("channelNameCell");
             lbl->setFixedWidth(kColWidthChannel);
-            lbl->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+            lbl->setFixedHeight(kFieldCellHeight);
+            lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            lbl->setText(QFontMetrics(lbl->font()).elidedText(
+                cfg.label, Qt::ElideLeft, kColWidthChannel - kCellTextPadding));
             lbl->setToolTip(cfg.label);
             lbl->setAutoFillBackground(false);
-            hl->addWidget(lbl);
+            hl->addWidget(lbl, 0, Qt::AlignVCenter);
         }
 
-        // Mode combo
+        // Mode combo. Made editable-but-readonly so the CLOSED box's current-value
+        // text can be right-justified — QComboBox has no built-in alignment option
+        // for it — keeping "Frame Sync Lock"/"Receiver SNR" from crowding against
+        // the Channel column's now also-right-justified text. Selecting from the
+        // dropdown list (opened via the arrow) is unaffected; typing is disabled.
         w.mode = new QComboBox(rowWidget);
         w.mode->addItem("Receiver SNR");
         w.mode->addItem("Frame Sync Lock");
         w.mode->setCurrentIndex(cfg.mode == StreamMode::FrameSyncLockStats ? 1 : 0);
         w.mode->setFixedWidth(kColWidthMode);
         w.mode->setToolTip("Analysis mode: Receiver SNR measures channel signal quality; Frame Sync Lock measures synchronization stability.");
+        w.mode->setEditable(true);
+        w.mode->lineEdit()->setReadOnly(true);
+        w.mode->lineEdit()->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        w.mode->lineEdit()->setCursor(Qt::ArrowCursor); // reads as a selector, not free text
         hl->addWidget(w.mode);
 
         // Gear button (centered in fixed-width cell)
         w.gearBtn = new QPushButton(rowWidget);
         w.gearBtn->setIcon(QIcon(":/resources/gear.svg"));
         w.gearBtn->setToolTip("Open configuration dialog for this stream's frame sync, data rate, and receiver parameters.");
-        styleIconButton(w.gearBtn, 28);
+        styleIconButton(w.gearBtn, DialogLayout::kIconButtonSize);
         w.gearBtn->setEnabled(cfg.process);
         {
             auto* cell = new QWidget(rowWidget);
@@ -299,28 +336,23 @@ void StreamConfigDialog::updateReadyIcon(int row)
 
     if (!checked)
     {
-        w.readyLabel->setText("<span style='color: gray; font-size: 28px;'>✗</span>");
+        w.readyLabel->setText(readyMarkup("gray", "✗"));
         w.readyLabel->setToolTip(QString());
     }
     else if (!w.gearConfirmed)
     {
-        w.readyLabel->setText("<span style='color: red; font-size: 28px;'>✗</span>");
+        w.readyLabel->setText(readyMarkup("red", "✗"));
         w.readyLabel->setToolTip("Click the gear icon to configure this stream.");
+    }
+    else if (!w.frameSyncPattern.isEmpty())
+    {
+        w.readyLabel->setText(readyMarkup("green", "✓"));
+        w.readyLabel->setToolTip(QString());
     }
     else
     {
-        bool frame_ok = !w.frameSyncPattern.isEmpty();
-
-        if (frame_ok)
-        {
-            w.readyLabel->setText("<span style='color: green; font-size: 28px;'>✓</span>");
-            w.readyLabel->setToolTip(QString());
-        }
-        else
-        {
-            w.readyLabel->setText("<span style='color: red; font-size: 28px;'>✗</span>");
-            w.readyLabel->setToolTip("A frame sync pattern is required.");
-        }
+        w.readyLabel->setText(readyMarkup("red", "✗"));
+        w.readyLabel->setToolTip("A frame sync pattern is required.");
     }
 
     updateOkButton();

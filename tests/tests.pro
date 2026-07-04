@@ -38,6 +38,7 @@ SOURCES += \
     $$PWD/../src/view/plotwidget.cpp \
     $$PWD/../src/view/plotcustomizationdialog.cpp \
     $$PWD/../src/view/exportdialog.cpp \
+    $$PWD/../src/view/processingprogressdialog.cpp \
     $$PWD/../lib/qcustomplot/qcustomplot.cpp
 
 # Application headers, grouped by layer.
@@ -69,6 +70,7 @@ HEADERS += \
     $$PWD/../include/view/plotwidget.h \
     $$PWD/../include/view/plotcustomizationdialog.h \
     $$PWD/../include/view/exportdialog.h \
+    $$PWD/../include/view/processingprogressdialog.h \
     $$PWD/../lib/qcustomplot/qcustomplot.h
 
 # irig106 library sources

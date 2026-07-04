@@ -40,6 +40,29 @@ QLabel::disabled
 }
 
 
+/*-----Configure Streams table header (dimmed, theme-aware)-----*/
+QLabel#streamHeaderLabel
+{
+    color: rgba(255, 255, 255, 0.6);
+}
+
+QFrame#streamHeaderSeparator
+{
+    color: rgba(255, 255, 255, 0.15);
+}
+
+/* Channel name cell — mirrors the Mode combo box's resting-state border/fill
+   exactly (see QComboBox below) so the two columns read as a matched pair. */
+QLabel#channelNameCell
+{
+    background-color: #2D2D2D;
+    border: 1px solid #505050;
+    border-radius: 4px;
+    padding: 0px 8px;
+    color: #FFFFFF;
+}
+
+
 /*-----QMenuBar-----*/
 QMenuBar
 {
@@ -227,6 +250,20 @@ QComboBox::down-arrow
 QComboBox::down-arrow:disabled
 {
     image: url(:/resources/chevron-down-disabled-dark.svg);
+}
+
+
+/* An editable-but-readonly QComboBox (used to right-justify its closed-box text
+   — see StreamConfigDialog's Mode combo) draws its value in an internal
+   QLineEdit. Without this override that line edit would paint its OWN
+   background/border from the QLineEdit rule below, nesting a second box inside
+   the combo's box. This descendant selector outranks the plain QLineEdit rule
+   regardless of order, so only the combo's own frame shows. */
+QComboBox QLineEdit
+{
+    background: transparent;
+    border: none;
+    padding: 0px;
 }
 
 

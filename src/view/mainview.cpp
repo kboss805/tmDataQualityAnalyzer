@@ -22,6 +22,7 @@
 #include "plotviewmodel.h"
 #include "plotwidget.h"
 #include "processedstreamdata.h"
+#include "processingprogressdialog.h"
 #include "streamconfigdialog.h"
 #include "timefields.h"
 
@@ -68,20 +69,16 @@ void MainView::setUpMainLayout()
     // set up constituent parts
     setUpMenuBar();
 
-    m_progress_bar = new QProgressBar;
-    m_progress_bar->setMinimum(0);
-    m_progress_bar->setMaximum(UIConstants::kProgressBarMax);
-    m_progress_bar->setValue(0);
+    m_progress_dialog = new ProcessingProgressDialog(this);
 
     m_log_preview = new QTextBrowser;
     m_log_preview->setReadOnly(true);
     m_log_preview->setOpenLinks(false);
     m_log_preview->setMinimumHeight(UIConstants::kLogPreviewHeight);
 
-    // Log preview at the bottom of the controls panel, above the progress bar
+    // Log preview fills the controls panel; progress/cancel now live in
+    // ProcessingProgressDialog, shown only while processing is active.
     m_controls_layout->addWidget(m_log_preview, 1);
-    m_controls_layout->addSpacing(4);
-    m_controls_layout->addWidget(m_progress_bar);
 
     // PlotWidget as central widget — fills all space right of the controls dock
     m_plot_view_model = new PlotViewModel(this);
@@ -123,8 +120,6 @@ void MainView::setUpMainLayout()
 
     // additional settings
     setWindowTitle("TM Data Quality Analyzer");
-
-    m_progress_bar->setValue(0);
 
     statusBar()->showMessage("No file loaded");
     
@@ -185,15 +180,6 @@ void MainView::setUpMenuBar()
 
     m_toolbar->addSeparator();
 
-    m_cancel_action = m_toolbar->addAction(
-        QIcon(":/resources/stop.svg"), "Cancel");
-    m_cancel_action->setToolTip("Cancel");
-    m_cancel_action->setEnabled(false);
-    connect(m_cancel_action, &QAction::triggered,
-            this, [this]() { m_view_model->cancelProcessing(); });
-
-    m_toolbar->addSeparator();
-
     // Import sits just left of Export. Icon (orange) is theme-dependent; set by
     // applyToolbarIconsForTheme().
     m_import_action = m_toolbar->addAction("Import");
@@ -219,7 +205,6 @@ void MainView::setUpMenuBar()
 void MainView::setUpConnections()
 {
     // ViewModel -> View: data binding
-    connect(m_view_model, &MainViewModel::fileLoadedChanged, this, &MainView::onFileLoadedChanged);
     connect(m_view_model, &MainViewModel::fileLoadedChanged, this, &MainView::updateStatusBar);
     connect(m_view_model, &MainViewModel::recentFilesChanged, this, &MainView::updateRecentFilesMenu);
     connect(m_view_model, &MainViewModel::progressPercentChanged, this, &MainView::onProgressChanged);
@@ -231,6 +216,10 @@ void MainView::setUpConnections()
     connect(m_view_model, &MainViewModel::errorOccurred, this, &MainView::displayErrorMessage);
     connect(m_view_model, &MainViewModel::processingFinished, this, &MainView::onProcessingFinished);
     connect(m_view_model, &MainViewModel::logMessageReceived, this, &MainView::onLogMessage);
+
+    // ProcessingProgressDialog -> ViewModel: Cancel button
+    connect(m_progress_dialog, &ProcessingProgressDialog::cancelRequested,
+            this, [this]() { m_view_model->cancelProcessing(); });
 
     // PlotWidget -> Log window
     connect(m_plot_widget, &PlotWidget::logMessage, this, &MainView::onLogMessage);
@@ -292,15 +281,9 @@ void MainView::setUpConnections()
 ////////////////////////////////////////////////////////////////////////////////
 
 
-void MainView::onFileLoadedChanged()
-{
-    if (!m_view_model->fileLoaded())
-        m_progress_bar->setValue(0);
-}
-
 void MainView::onProgressChanged()
 {
-    m_progress_bar->setValue(m_view_model->progressPercent());
+    m_progress_dialog->setProgress(m_view_model->progressPercent());
 }
 
 void MainView::onProcessingChanged()
@@ -308,13 +291,13 @@ void MainView::onProcessingChanged()
     if (m_view_model->processing())
     {
         setAllControlsEnabled(false);
-        m_cancel_action->setEnabled(true);
-        m_progress_bar->setValue(0);
+        m_progress_dialog->reset();
+        m_progress_dialog->show();
     }
     else
     {
         setAllControlsEnabled(true);
-        m_cancel_action->setEnabled(false);
+        m_progress_dialog->hide();
     }
 }
 
@@ -330,7 +313,6 @@ void MainView::onProcessingFinished(bool success)
 {
     if (success)
     {
-        m_progress_bar->setValue(UIConstants::kProgressBarMax);
         logSuccess("Processing complete — results plotted from memory.");
         m_plot_view_model->setPlotTitle(QFileInfo(m_view_model->inputFilename()).baseName());
     }

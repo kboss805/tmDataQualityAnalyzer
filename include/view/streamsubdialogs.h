@@ -44,6 +44,21 @@
 
 namespace {
 
+/// Shared layout metrics so every stream dialog uses the same vertical rhythm and
+/// grid geometry. Previously each dialog hand-picked these (outer spacing varied
+/// 4/6/8 across the three; the input→Load/Save gap column and button offsets were
+/// re-declared per call site), which is what let the look-and-feel drift.
+namespace DialogLayout {
+    constexpr int kOuterSpacing     = 6;   ///< Spacing between a dialog's top-level rows.
+    constexpr int kSectionGap       = 16;  ///< Larger gap that introduces a logical group.
+    constexpr int kControlGap       = 8;   ///< Small gap between closely related controls.
+    constexpr int kGridHSpacing     = 10;  ///< Horizontal spacing inside a form grid.
+    constexpr int kGridVSpacing     = 4;   ///< Vertical spacing inside a form grid.
+    constexpr int kColGapWidth      = 16;  ///< Width of the gap column before Load/Save buttons.
+    constexpr int kIconButtonSize   = 28;  ///< Standard icon-button edge (gear, load, save).
+    constexpr int kCheckboxLabelGap = 6;   ///< Gap between a checkbox and its text label.
+}
+
 const QRegularExpression kHexRegex("^[0-9A-Fa-f]{1,16}$");
 
 QString periodText(double sec)
@@ -193,6 +208,13 @@ ReceiverFrameDefaults loadReceiverFrameDefaults(const QString& app_root)
     return d;
 }
 
+/// Makes @p control the same height as @p reference, so combo boxes line up with
+/// the line edits sharing their row.
+void matchControlHeight(QWidget* control, const QWidget* reference)
+{
+    control->setFixedHeight(reference->sizeHint().height());
+}
+
 /// Bundles the frame-sync input widgets shared by the Frame Sync Lock and
 /// Receiver SNR dialogs so a single builder can create them.
 struct FrameSyncWidgets
@@ -244,7 +266,7 @@ FrameSyncWidgets buildFrameSyncRow(QGridLayout* grid, QWidget* parent,
     grid->addWidget(w.bitsPerFrame,                1, 2, Qt::AlignLeft | Qt::AlignVCenter);
 
     // Spacer row between the frame-sync inputs and the rate/period group.
-    grid->setRowMinimumHeight(2, 8);
+    grid->setRowMinimumHeight(2, DialogLayout::kControlGap);
 
     w.dataRate = new QDoubleSpinBox(parent);
     w.dataRate->setRange(0.0, 1000.0);
@@ -266,7 +288,7 @@ FrameSyncWidgets buildFrameSyncRow(QGridLayout* grid, QWidget* parent,
     w.sampleRate->addItem(periodText(UIConstants::kSamplePeriod10ms));
     w.sampleRate->setCurrentIndex(cfg.samplePeriodIndex);
     w.sampleRate->setToolTip("Integration window for statistics. Shorter periods give finer time resolution; longer periods smooth noise.");
-    w.sampleRate->setFixedHeight(w.syncPattern->sizeHint().height());
+    matchControlHeight(w.sampleRate, w.syncPattern);
     grid->addWidget(new QLabel("Average Period"),  3, 1, Qt::AlignLeft | Qt::AlignVCenter);
     grid->addWidget(w.sampleRate,                  4, 1, Qt::AlignLeft | Qt::AlignVCenter);
 
@@ -294,6 +316,60 @@ DialogButtons makeDialogButtons(QDialog* dialog, const QString& primaryText)
     return b;
 }
 
+/// Applies the shared horizontal/vertical spacing to a dialog form grid, so every
+/// grid across the stream dialogs lines up on the same rhythm.
+void configureFormGrid(QGridLayout* grid)
+{
+    grid->setHorizontalSpacing(DialogLayout::kGridHSpacing);
+    grid->setVerticalSpacing(DialogLayout::kGridVSpacing);
+}
+
+/// Reserves the standard gap column to the right of a form grid's input columns
+/// (0-2) and drops the Load/Save icon buttons into the canonical cells. Callers no
+/// longer hard-code the gap-column index or the (row 1, col 4/5) button offsets —
+/// the one place that knows the frame-sync grid geometry.
+void addLoadSaveButtons(QGridLayout* grid, QPushButton* loadBtn, QPushButton* saveBtn)
+{
+    constexpr int kGapCol = 3, kLoadCol = 4, kSaveCol = 5, kButtonRow = 1;
+    grid->setColumnMinimumWidth(kGapCol, DialogLayout::kColGapWidth);
+    grid->setColumnStretch(kGapCol, 1);
+    grid->addWidget(loadBtn, kButtonRow, kLoadCol, Qt::AlignVCenter);
+    grid->addWidget(saveBtn, kButtonRow, kSaveCol, Qt::AlignVCenter);
+}
+
+/// Appends a left-aligned "[checkbox] label" row (with a trailing stretch) to a
+/// vertical layout. Shared by the Derandomize / Invert Data toggles.
+void addCheckboxRow(QVBoxLayout* layout, QWidget* parent, QCheckBox* box, const QString& text)
+{
+    auto* row = new QHBoxLayout;
+    row->setSpacing(DialogLayout::kCheckboxLabelGap);
+    row->addWidget(box);
+    row->addWidget(new QLabel(text, parent));
+    row->addStretch(1);
+    layout->addLayout(row);
+}
+
+/// Appends the standard dialog footer: an optional left-aligned toggle (with an
+/// optional adjacent label), a stretch, then the primary button and Cancel. Used
+/// by every stream dialog so the footer is built one way.
+void addBottomBar(QVBoxLayout* layout, const DialogButtons& buttons, QWidget* parent,
+                  QCheckBox* leftToggle = nullptr, const QString& toggleLabel = QString())
+{
+    auto* bar = new QHBoxLayout;
+    if (leftToggle != nullptr)
+    {
+        bar->addWidget(leftToggle);
+        if (!toggleLabel.isEmpty())
+            bar->addWidget(new QLabel(toggleLabel, parent));
+    }
+    bar->addStretch(1);
+    // Primary ("do it") action leftmost, Cancel (safe/dismissive) rightmost —
+    // matches Microsoft's WinUI3 dialog button-order guidance.
+    bar->addWidget(buttons.primary);
+    bar->addWidget(buttons.cancel);
+    layout->addLayout(bar);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 //                        FRAME LOCK SETUP DIALOG                             //
 ////////////////////////////////////////////////////////////////////////////////
@@ -312,15 +388,11 @@ public:
         setWindowTitle("Configure Frame Sync Lock — " + cfg.label);
         setModal(true);
 
-        // buildFrameSyncRow fills cols 0-2 (FrameSync/DataRate, Mask/Period,
-        // Bits); col 3 is a flexible 16px gap and cols 4-5 hold Load/Save below.
+        // Frame Sync / Mask / Bits + Data Rate / Average Period, then the Load/Save
+        // icon buttons in the gap column addLoadSaveButtons owns.
         auto* grid = new QGridLayout;
-        grid->setHorizontalSpacing(10);
-        grid->setVerticalSpacing(4);
-        grid->setColumnMinimumWidth(3, 16);
-        grid->setColumnStretch(3, 1);
+        configureFormGrid(grid);
 
-        // Frame Sync / Mask / Bits + Data Rate / Average Period (rows 0-4).
         FrameSyncWidgets fs = buildFrameSyncRow(grid, this, cfg,
             "e.g. A345CA5C",
             "Hex frame synchronization word (e.g. A345CA5C). Used to detect frame boundaries in the PCM stream.");
@@ -333,14 +405,14 @@ public:
         auto* loadBtn = new QPushButton(this);
         loadBtn->setIcon(QIcon(":/resources/folder-open.svg"));
         loadBtn->setToolTip("Load frame sync fields from a TOML file");
-        styleIconButton(loadBtn, 28);
-        grid->addWidget(loadBtn, 1, 4, Qt::AlignVCenter);
+        styleIconButton(loadBtn, DialogLayout::kIconButtonSize);
 
         auto* saveBtn = new QPushButton(this);
         saveBtn->setIcon(QIcon(":/resources/floppy-save.svg"));
         saveBtn->setToolTip("Save frame sync fields to a TOML file");
-        styleIconButton(saveBtn, 28);
-        grid->addWidget(saveBtn, 1, 5, Qt::AlignVCenter);
+        styleIconButton(saveBtn, DialogLayout::kIconButtonSize);
+
+        addLoadSaveButtons(grid, loadBtn, saveBtn);
 
         connect(loadBtn, &QPushButton::clicked, this, [this]() {
             QString filename = QFileDialog::getOpenFileName(
@@ -366,45 +438,25 @@ public:
         });
 
         auto* outer = new QVBoxLayout(this);
-        outer->setSpacing(4);
+        outer->setSpacing(DialogLayout::kOuterSpacing);
         outer->addLayout(grid);
-        outer->addSpacing(16);
+        outer->addSpacing(DialogLayout::kSectionGap);
 
-        // Derandomize toggle row
         m_randomized = new QCheckBox(this);
         m_randomized->setChecked(cfg.sync.randomized);
         m_randomized->setToolTip("Apply RNRZ-L self-synchronizing descrambler to the data stream.");
-        {
-            auto* row = new QHBoxLayout;
-            row->setSpacing(6);
-            row->addWidget(m_randomized);
-            row->addWidget(new QLabel("Derandomize", this));
-            row->addStretch(1);
-            outer->addLayout(row);
-        }
+        addCheckboxRow(outer, this, m_randomized, "Derandomize");
 
-        // Invert Data toggle row
         m_inverted = new QCheckBox(this);
         m_inverted->setChecked(cfg.sync.inverted);
         m_inverted->setToolTip("Invert every bit of the raw data stream before processing (use when the PCM signal polarity is inverted).");
-        {
-            auto* row = new QHBoxLayout;
-            row->setSpacing(6);
-            row->addWidget(m_inverted);
-            row->addWidget(new QLabel("Invert Data", this));
-            row->addStretch(1);
-            outer->addLayout(row);
-        }
+        addCheckboxRow(outer, this, m_inverted, "Invert Data");
 
-        outer->addSpacing(8);
         outer->addStretch(1);
-
         addSeparator(outer, this);
 
         DialogButtons btns = makeDialogButtons(this, tr("OK"));
-        QPushButton* cancelBtn = btns.cancel;
-        QPushButton* okBtn     = btns.primary;
-        connect(okBtn, &QPushButton::clicked, this, [this]() {
+        connect(btns.primary, &QPushButton::clicked, this, [this]() {
             if (m_syncPattern->text().trimmed().isEmpty())
             {
                 QMessageBox::warning(this, tr("Missing Frame Sync"),
@@ -414,20 +466,10 @@ public:
             accept();
         });
 
-        // Apply to all toggle row + dialog buttons
         m_applyToAll = new QCheckBox(this);
         m_applyToAll->setToolTip("Copy these settings to every other selected "
                                   "stream currently set to Frame Sync Lock mode.");
-        auto* bottomLayout = new QHBoxLayout;
-        {
-            bottomLayout->addWidget(m_applyToAll);
-            bottomLayout->addWidget(new QLabel("Apply to all Frame Sync Lock streams", this));
-        }
-        bottomLayout->addStretch(1);
-        bottomLayout->addWidget(cancelBtn);
-        bottomLayout->addWidget(okBtn);
-        outer->addSpacing(4);
-        outer->addLayout(bottomLayout);
+        addBottomBar(outer, btns, this, m_applyToAll, "Apply to all Frame Sync Lock streams");
 
         adjustSize();
     }
@@ -488,12 +530,11 @@ public:
         setModal(true);
 
         auto* outer = new QVBoxLayout(this);
-        outer->setSpacing(8);
+        outer->setSpacing(DialogLayout::kOuterSpacing);
 
         auto* grid = new QGridLayout;
-        grid->setHorizontalSpacing(10);
-        grid->setVerticalSpacing(4);
-        grid->setColumnStretch(1, 1);
+        configureFormGrid(grid);
+        grid->setColumnStretch(1, 1); // let the path-label column absorb slack
 
         // ---- Row 0/1: Step Cal file -----------------------------------------
         grid->addWidget(new QLabel("Step Cal File:"), 0, 0);
@@ -507,7 +548,7 @@ public:
         grid->addWidget(m_stepStatus, 1, 1, 1, 2);
 
         // ---- Row 2/3: Calibration Ch10 file ---------------------------------
-        grid->setRowMinimumHeight(2, 8);
+        grid->setRowMinimumHeight(2, DialogLayout::kControlGap);
         grid->addWidget(new QLabel("Calibration Ch10:"), 3, 0);
         m_calPathLabel = new QLabel(this);
         m_calPathLabel->setMinimumWidth(260);
@@ -523,8 +564,9 @@ public:
         // steps, so signal-generator turn-on transients (or trailing junk) don't
         // get mistaken for calibration plateaus.
         {
-            // 16 px breathing room between the cal-file status and the clip controls.
-            grid->addItem(new QSpacerItem(0, 16, QSizePolicy::Minimum, QSizePolicy::Fixed), 5, 0);
+            // Breathing room between the cal-file status and the clip controls.
+            grid->addItem(new QSpacerItem(0, DialogLayout::kSectionGap,
+                                          QSizePolicy::Minimum, QSizePolicy::Fixed), 5, 0);
 
             grid->addWidget(new QLabel("Clip Start (s):", this), 6, 0);
             m_clipStart = new QDoubleSpinBox(this);
@@ -567,12 +609,7 @@ public:
         DialogButtons calBtns = makeDialogButtons(this, tr("OK"));
         m_okButton = calBtns.primary;
         connect(m_okButton, &QPushButton::clicked, this, &QDialog::accept);
-
-        auto* calBtnLayout = new QHBoxLayout;
-        calBtnLayout->addStretch(1);
-        calBtnLayout->addWidget(calBtns.cancel);
-        calBtnLayout->addWidget(m_okButton);
-        outer->addLayout(calBtnLayout);
+        addBottomBar(outer, calBtns, this);
 
         setStatus(m_stepStatus, Pending, "No file selected.");
         setStatus(m_calStatus,  Pending, "No file selected.");
@@ -822,13 +859,12 @@ public:
         setModal(true);
 
         auto* outer = new QVBoxLayout(this);
-        outer->setSpacing(6);
+        outer->setSpacing(DialogLayout::kOuterSpacing);
 
         // ---- Group 1: Frame sync + acquisition settings --------------------
         {
             auto* grid = new QGridLayout;
-            grid->setHorizontalSpacing(10);
-            grid->setVerticalSpacing(4);
+            configureFormGrid(grid);
 
             // Frame Sync / Mask / Bits + Data Rate / Average Period (rows 0-4).
             FrameSyncWidgets fs = buildFrameSyncRow(grid, this, cfg,
@@ -840,19 +876,15 @@ public:
             m_dataRate     = fs.dataRate;
             m_sampleRate   = fs.sampleRate;
 
-            grid->setColumnMinimumWidth(3, 16);
-
             auto* loadBtn1 = new QPushButton(this);
             loadBtn1->setIcon(QIcon(":/resources/folder-open.svg"));
             loadBtn1->setToolTip("Load frame sync fields from a TOML file");
-            styleIconButton(loadBtn1, 28);
+            styleIconButton(loadBtn1, DialogLayout::kIconButtonSize);
             auto* saveBtn1 = new QPushButton(this);
             saveBtn1->setIcon(QIcon(":/resources/floppy-save.svg"));
             saveBtn1->setToolTip("Save frame sync fields to a TOML file");
-            styleIconButton(saveBtn1, 28);
-            grid->addWidget(loadBtn1, 1, 4, Qt::AlignVCenter);
-            grid->addWidget(saveBtn1, 1, 5, Qt::AlignVCenter);
-            grid->setColumnStretch(3, 1);
+            styleIconButton(saveBtn1, DialogLayout::kIconButtonSize);
+            addLoadSaveButtons(grid, loadBtn1, saveBtn1);
 
             connect(loadBtn1, &QPushButton::clicked, this, [this]() {
                 QString filename = QFileDialog::getOpenFileName(
@@ -880,49 +912,33 @@ public:
             outer->addLayout(grid);
         }
 
-        outer->addSpacing(16);
+        outer->addSpacing(DialogLayout::kSectionGap);
 
-        // Derandomize toggle row
         m_randomized = new QCheckBox(this);
         m_randomized->setChecked(cfg.sync.randomized);
         m_randomized->setToolTip("Apply RNRZ-L self-synchronizing descrambler to the data stream.");
-        {
-            auto* row = new QHBoxLayout;
-            row->setSpacing(6);
-            row->addWidget(m_randomized);
-            row->addWidget(new QLabel("Derandomize", this));
-            row->addStretch(1);
-            outer->addLayout(row);
-        }
+        addCheckboxRow(outer, this, m_randomized, "Derandomize");
 
-        // Invert Data toggle row
         m_inverted = new QCheckBox(this);
         m_inverted->setChecked(cfg.sync.inverted);
         m_inverted->setToolTip("Invert every bit of the raw data stream before processing (use when the PCM signal polarity is inverted).");
-        {
-            auto* row = new QHBoxLayout;
-            row->setSpacing(6);
-            row->addWidget(m_inverted);
-            row->addWidget(new QLabel("Invert Data", this));
-            row->addStretch(1);
-            outer->addLayout(row);
-        }
-
-        outer->addSpacing(8);
+        addCheckboxRow(outer, this, m_inverted, "Invert Data");
 
         // ---- Separator ------------------------------------------------------
         addSeparator(outer, this);
 
         // ---- Group 2: Receiver calibration parameters ----------------------
+        // Text inputs (combos/spin boxes) left-aligned so they line up with the
+        // frame-sync block above; icon buttons stay centered in their cells.
         {
             auto* grid = new QGridLayout;
-            grid->setHorizontalSpacing(10);
-            grid->setVerticalSpacing(4);
+            configureFormGrid(grid);
+            const auto kFieldAlign = Qt::Alignment(Qt::AlignLeft | Qt::AlignVCenter);
 
             // Row 0: labels
-            grid->addWidget(new QLabel("Polarity"),      0, 0, Qt::AlignHCenter);
-            grid->addWidget(new QLabel("Slope"),         0, 1, Qt::AlignHCenter);
-            grid->addWidget(new QLabel("Scale (dB/V)"),  0, 2, Qt::AlignHCenter);
+            grid->addWidget(new QLabel("Polarity"),      0, 0, kFieldAlign);
+            grid->addWidget(new QLabel("Slope"),         0, 1, kFieldAlign);
+            grid->addWidget(new QLabel("Scale (dB/V)"),  0, 2, kFieldAlign);
 
             // Row 1: inputs
             m_polarity = new QComboBox(this);
@@ -930,8 +946,8 @@ public:
             m_polarity->addItem("Negative");
             m_polarity->setCurrentIndex(cfg.polarityIndex);
             m_polarity->setToolTip("ADC output polarity. Positive = high voltage maps to highest dB; Negative = inverted.");
-            m_polarity->setFixedHeight(m_syncPattern->sizeHint().height());
-            grid->addWidget(m_polarity, 1, 0, Qt::AlignHCenter);
+            matchControlHeight(m_polarity, m_syncPattern);
+            grid->addWidget(m_polarity, 1, 0, kFieldAlign);
 
             m_slope = new QComboBox(this);
             m_slope->addItem("±10 V");
@@ -940,8 +956,8 @@ public:
             m_slope->addItem("0–5 V");
             m_slope->setCurrentIndex(cfg.slopeIndex);
             m_slope->setToolTip("ADC voltage range. Select the range that matches your receiver's analog output voltage span.");
-            m_slope->setFixedHeight(m_syncPattern->sizeHint().height());
-            grid->addWidget(m_slope, 1, 1, Qt::AlignHCenter);
+            matchControlHeight(m_slope, m_syncPattern);
+            grid->addWidget(m_slope, 1, 1, kFieldAlign);
 
             m_scale = new QDoubleSpinBox(this);
             m_scale->setRange(0.001, 999.999);
@@ -949,41 +965,37 @@ public:
             m_scale->setValue(cfg.scaleDdBPerV);
             m_scale->setMinimumWidth(100);
             m_scale->setToolTip("Calibration scale factor in dB/V. Maps the ADC voltage span to the receiver SNR range in dB.");
-            grid->addWidget(m_scale, 1, 2, Qt::AlignHCenter);
+            grid->addWidget(m_scale, 1, 2, kFieldAlign);
 
             // Row 2: spacer
-            grid->setRowMinimumHeight(2, 8);
+            grid->setRowMinimumHeight(2, DialogLayout::kControlGap);
 
             // Row 3: labels
-            grid->addWidget(new QLabel("Num Rcvrs"),    3, 0, Qt::AlignHCenter);
-            grid->addWidget(new QLabel("Num Channels"), 3, 1, Qt::AlignHCenter);
+            grid->addWidget(new QLabel("Num Rcvrs"),    3, 0, kFieldAlign);
+            grid->addWidget(new QLabel("Num Channels"), 3, 1, kFieldAlign);
 
-            // Row 4: inputs + buttons
+            // Row 4: inputs
             m_numReceivers = new QSpinBox(this);
             m_numReceivers->setRange(1, 100);
             m_numReceivers->setValue(cfg.numReceivers);
             m_numReceivers->setToolTip("Number of individual receiver units contributing channels to this stream.");
-            grid->addWidget(m_numReceivers, 4, 0, Qt::AlignHCenter);
+            grid->addWidget(m_numReceivers, 4, 0, kFieldAlign);
 
             m_receiverChannels = new QSpinBox(this);
             m_receiverChannels->setRange(1, 100);
             m_receiverChannels->setValue(cfg.receiverChannels);
             m_receiverChannels->setToolTip("Number of channels per receiver (e.g. 3 for L/R/C configuration).");
-            grid->addWidget(m_receiverChannels, 4, 1, Qt::AlignHCenter);
-
-            grid->setColumnMinimumWidth(3, 16);
+            grid->addWidget(m_receiverChannels, 4, 1, kFieldAlign);
 
             auto* loadBtn2 = new QPushButton(this);
             loadBtn2->setIcon(QIcon(":/resources/folder-open.svg"));
             loadBtn2->setToolTip("Load receiver parameters from a TOML file");
-            styleIconButton(loadBtn2, 28);
+            styleIconButton(loadBtn2, DialogLayout::kIconButtonSize);
             auto* saveBtn2 = new QPushButton(this);
             saveBtn2->setIcon(QIcon(":/resources/floppy-save.svg"));
             saveBtn2->setToolTip("Save receiver parameters to a TOML file");
-            styleIconButton(saveBtn2, 28);
-            grid->addWidget(loadBtn2, 1, 4, Qt::AlignVCenter);
-            grid->addWidget(saveBtn2, 1, 5, Qt::AlignVCenter);
-            grid->setColumnStretch(3, 1);
+            styleIconButton(saveBtn2, DialogLayout::kIconButtonSize);
+            addLoadSaveButtons(grid, loadBtn2, saveBtn2);
 
             connect(loadBtn2, &QPushButton::clicked, this, [this]() {
                 QString filename = QFileDialog::getOpenFileName(
@@ -1029,7 +1041,7 @@ public:
             outer->addLayout(grid);
         }
 
-        outer->addSpacing(8);
+        outer->addSpacing(DialogLayout::kControlGap);
 
         // ---- Group 3: Non-linear step calibration (US3.2) -------------------
         {
@@ -1054,9 +1066,7 @@ public:
         addSeparator(outer, this);
 
         DialogButtons btns = makeDialogButtons(this, tr("OK"));
-        QPushButton* cancelBtn = btns.cancel;
-        QPushButton* okBtn     = btns.primary;
-        connect(okBtn, &QPushButton::clicked, this, [this]() {
+        connect(btns.primary, &QPushButton::clicked, this, [this]() {
             if (m_syncPattern->text().trimmed().isEmpty())
             {
                 QMessageBox::warning(this, tr("Missing Frame Sync"),
@@ -1066,20 +1076,10 @@ public:
             accept();
         });
 
-        // Apply to all toggle row + dialog buttons
         m_applyToAll = new QCheckBox(this);
         m_applyToAll->setToolTip("Copy these settings to every other selected "
                                   "stream currently set to Receiver SNR mode.");
-        auto* bottomLayout = new QHBoxLayout;
-        {
-            bottomLayout->addWidget(m_applyToAll);
-            bottomLayout->addWidget(new QLabel("Apply to all Receiver SNR streams", this));
-        }
-        bottomLayout->addStretch(1);
-        bottomLayout->addWidget(cancelBtn);
-        bottomLayout->addWidget(okBtn);
-        outer->addSpacing(4);
-        outer->addLayout(bottomLayout);
+        addBottomBar(outer, btns, this, m_applyToAll, "Apply to all Receiver SNR streams");
 
         adjustSize();
     }

@@ -19,7 +19,7 @@ Toolchains are **not on PATH** — prepend them first via `. .\scripts\env.ps1` 
 - **Tests:** build **in-source inside `tests/`** (the exe must sit one level under `tests/` or the
   data-file tests fail), then `.\debug\tmDataQualityAnalyzer_tests.exe`. Full run ~85 s
   (FrameProcessor alone ~74 s). The harness runs **all 15 suites** — no CLI single-suite filter.
-  Green baseline: 245 passed / 0 failed / 0 skipped.
+  Green baseline: 251 passed / 0 failed / 0 skipped.
 
 The **`build-and-test`** skill encodes all of this; prefer it.
 

@@ -46,6 +46,20 @@ private slots:
     void applyToAllCopiesSettingsToSameModeStreams();
     void applyToAllLeavesDifferentModeStreamsUnchanged();
     void applyToAllUncheckedDoesNotAffectOtherStreams();
+
+    // Channel column label (elides long names, keeps the full name in the tooltip)
+    void channelLabelShortNameShownInFull();
+    void channelLabelLongNameElidedWithFullTooltip();
+
+    // Table header colors come from the theme QSS (object names), not hard-coded
+    // inline stylesheets that only worked on the dark theme.
+    void headerLabelsUseThemeableObjectNames();
+
+    // Channel name cell is styled (via object name) to mimic the Mode combo's
+    // box, and the Mode combo's displayed text is right-justified.
+    void channelLabelHasComboBoxStyledObjectName();
+    void modeComboDisplaysTextRightJustified();
+    void modeComboSelectionStillTracksIndexChange();
 };
 
 #endif // TST_STREAMCONFIGDIALOG_H

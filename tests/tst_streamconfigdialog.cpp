@@ -12,6 +12,8 @@
 
 #include <QCheckBox>
 #include <QDialogButtonBox>
+#include <QFrame>
+#include <QLabel>
 #include <QSettings>
 #include <QTemporaryFile>
 #include <QVector>
@@ -544,4 +546,129 @@ void TestStreamConfigDialog::applyToAllUncheckedDoesNotAffectOtherStreams()
     QVector<StreamConfig> out = dlg->configs();
     QCOMPARE(out[0].sync.pattern, QString("A345CA5C"));
     QCOMPARE(out[1].sync.pattern, QString("11111111"));
+}
+
+// ---------------------------------------------------------------------------
+// Channel column label
+// ---------------------------------------------------------------------------
+
+void TestStreamConfigDialog::channelLabelShortNameShownInFull()
+{
+    // A name that comfortably fits the ~16-character-wide column shows in full,
+    // with no truncation and no ellipsis.
+    StreamConfig cfg = makeConfig("Ch 01");
+    QScopedPointer<StreamConfigDialog> dlg(makeDialog({cfg}));
+
+    QLabel* channelLabel = nullptr;
+    for (QLabel* lbl : dlg->findChildren<QLabel*>()) {
+        if (lbl->toolTip() == "Ch 01") { channelLabel = lbl; break; }
+    }
+    QVERIFY(channelLabel != nullptr);
+    QCOMPARE(channelLabel->text(), QString("Ch 01"));
+}
+
+void TestStreamConfigDialog::channelLabelLongNameElidedWithFullTooltip()
+{
+    // A long, TMATS-derived descriptive name (like "CH-01 2250.5MHZ AGC 800Kbps
+    // RNRZ-L") is wider than the fixed channel column, so it must be elided rather
+    // than hard-clipped. Elision is on the LEFT so the END of the name (the
+    // distinguishing tail) stays visible; the tooltip keeps the full name.
+    const QString fullName = "CH-01 2250.5MHZ AGC 800Kbps RNRZ-L";
+    StreamConfig cfg = makeConfig(fullName);
+    QScopedPointer<StreamConfigDialog> dlg(makeDialog({cfg}));
+
+    QLabel* channelLabel = nullptr;
+    for (QLabel* lbl : dlg->findChildren<QLabel*>()) {
+        if (lbl->toolTip() == fullName) { channelLabel = lbl; break; }
+    }
+    QVERIFY(channelLabel != nullptr);
+    QVERIFY(channelLabel->text() != fullName);
+    QVERIFY(channelLabel->text().length() < fullName.length());
+    QVERIFY(channelLabel->text().startsWith(QChar(0x2026))); // Unicode ellipsis "…" at the FRONT
+    QVERIFY(channelLabel->text().endsWith("RNRZ-L"));        // the tail stays on screen
+    QCOMPARE(channelLabel->toolTip(), fullName);
+}
+
+void TestStreamConfigDialog::headerLabelsUseThemeableObjectNames()
+{
+    QScopedPointer<StreamConfigDialog> dlg(makeDialog({makeConfig()}));
+
+    // Five header columns: Process, Channel, Mode, Configure, Ready. Their color
+    // must come from the theme QSS (matched by object name), so each header label
+    // carries no inline stylesheet — the old hard-coded white vanished on light.
+    const QList<QLabel*> headers = dlg->findChildren<QLabel*>("streamHeaderLabel");
+    QCOMPARE(headers.size(), 5);
+    for (QLabel* h : headers)
+        QVERIFY2(h->styleSheet().isEmpty(),
+                 "header color must be theme-driven, not an inline stylesheet");
+
+    QFrame* separator = dlg->findChild<QFrame*>("streamHeaderSeparator");
+    QVERIFY(separator != nullptr);
+    QVERIFY(separator->styleSheet().isEmpty());
+}
+
+namespace {
+/// The Mode combo always carries exactly these two items; the Time Channel
+/// combo (also on the dialog) doesn't, so this reliably tells them apart
+/// regardless of QObject child-list ordering.
+QVector<QComboBox*> findModeCombos(QWidget* root)
+{
+    QVector<QComboBox*> found;
+    for (QComboBox* c : root->findChildren<QComboBox*>()) {
+        if (c->count() == 2 && c->itemText(0) == "Receiver SNR"
+            && c->itemText(1) == "Frame Sync Lock") {
+            found.append(c);
+        }
+    }
+    return found;
+}
+} // namespace
+
+void TestStreamConfigDialog::channelLabelHasComboBoxStyledObjectName()
+{
+    // The Channel cell is styled via this object name (see win11-{dark,light}.qss
+    // QLabel#channelNameCell) to mirror the Mode combo's border/fill.
+    StreamConfig cfg = makeConfig("Ch 01");
+    QScopedPointer<StreamConfigDialog> dlg(makeDialog({cfg}));
+
+    QLabel* channelLabel = nullptr;
+    for (QLabel* lbl : dlg->findChildren<QLabel*>()) {
+        if (lbl->toolTip() == "Ch 01") { channelLabel = lbl; break; }
+    }
+    QVERIFY(channelLabel != nullptr);
+    QCOMPARE(channelLabel->objectName(), QString("channelNameCell"));
+}
+
+void TestStreamConfigDialog::modeComboDisplaysTextRightJustified()
+{
+    // QComboBox has no built-in way to right-justify its closed-box text, so the
+    // Mode combo is made editable with a read-only internal line edit, which IS
+    // alignable. Typing must stay impossible — only the dropdown can change it.
+    QScopedPointer<StreamConfigDialog> dlg(makeDialog({makeConfig("Ch 01")}));
+
+    const QVector<QComboBox*> modeCombos = findModeCombos(dlg.data());
+    QCOMPARE(modeCombos.size(), 1);
+    QComboBox* mode = modeCombos.first();
+
+    QVERIFY(mode->isEditable());
+    QVERIFY(mode->lineEdit() != nullptr);
+    QVERIFY(mode->lineEdit()->isReadOnly());
+    QCOMPARE(mode->lineEdit()->alignment(), Qt::Alignment(Qt::AlignRight | Qt::AlignVCenter));
+}
+
+void TestStreamConfigDialog::modeComboSelectionStillTracksIndexChange()
+{
+    // Guards against the editable+readonly conversion silently breaking the
+    // combo's role as the source of truth for configs().mode.
+    StreamConfig cfg = makeConfig("Ch 01");
+    cfg.mode = StreamMode::FrameSyncLockStats; // starts as index 1
+    QScopedPointer<StreamConfigDialog> dlg(makeDialog({cfg}));
+
+    const QVector<QComboBox*> modeCombos = findModeCombos(dlg.data());
+    QCOMPARE(modeCombos.size(), 1);
+    QComboBox* mode = modeCombos.first();
+    QCOMPARE(mode->currentIndex(), 1);
+
+    mode->setCurrentIndex(0); // switch to Receiver SNR
+    QCOMPARE(dlg->configs()[0].mode, StreamMode::ReceiverChannelInfo);
 }
