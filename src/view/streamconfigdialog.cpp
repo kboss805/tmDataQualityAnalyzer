@@ -209,7 +209,7 @@ void StreamConfigDialog::buildTable()
         hl->setContentsMargins(0, 0, 0, 0);
         hl->setSpacing(0);
 
-        // Process toggle (left-justified in fixed-width cell)
+        // Process toggle (centered in fixed-width cell, matching the header)
         w.process = new QCheckBox(rowWidget);
         w.process->setChecked(cfg.process);
         {
@@ -218,18 +218,18 @@ void StreamConfigDialog::buildTable()
             cell->setAutoFillBackground(false);
             auto* cl = new QHBoxLayout(cell);
             cl->setContentsMargins(0, 0, 0, 0);
-            cl->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+            cl->setAlignment(Qt::AlignCenter);
             cl->addWidget(w.process);
             hl->addWidget(cell);
         }
 
-        // Channel label: elided with "..." to fit the fixed column width (a plain
-        // QLabel doesn't elide on its own, just clips), full name always available
-        // via tooltip.
+        // Channel label: centered under the header, matching the other columns.
+        // Elided with "..." to fit the fixed column width (a plain QLabel doesn't
+        // elide on its own, just clips); full name always available via tooltip.
         {
             auto* lbl = new QLabel(rowWidget);
             lbl->setFixedWidth(kColWidthChannel);
-            lbl->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+            lbl->setAlignment(Qt::AlignCenter);
             lbl->setText(QFontMetrics(lbl->font()).elidedText(
                 cfg.label, Qt::ElideRight, kColWidthChannel - kCellTextPadding));
             lbl->setToolTip(cfg.label);
