@@ -302,17 +302,21 @@ void PlotWidget::onSeriesAppearanceChanged()
     {
         return;
     }
-    // Re-apply per-series colors to the graphs (names live only in the legend/VM),
-    // then rebuild the legend rows. Axes and data are untouched, so no rebuildChart.
-    // Looked up by stable series id via m_graph_by_id (not by position in m_graphs)
-    // so this stays correct even if a background streamProcessed()/addStreamData()
-    // added or reordered series while this dialog-driven signal was in flight.
+    // Re-apply per-series color and visibility to the graphs (names live only in
+    // the legend/VM), then rebuild the legend rows. Axes/data are untouched, so no
+    // rebuildChart. Visibility is included here because PlotCustomizationDialog
+    // batches its checkbox edits through setSeriesVisibleQuiet() + this one signal
+    // instead of one seriesVisibilityChanged() per checkbox. Looked up by stable
+    // series id via m_graph_by_id (not by position in m_graphs) so this stays
+    // correct even if a background streamProcessed()/addStreamData() added or
+    // reordered series while this dialog-driven signal was in flight.
     for (const PlotSeriesData& s : m_view_model->allSeries())
     {
         QCPGraph* graph = m_graph_by_id.value(s.id, nullptr);
         if (graph != nullptr)
         {
             graph->setPen(QPen(s.color, PlotConstants::kGraphPenWidth));
+            graph->setVisible(s.visible);
         }
     }
     rebuildLegend();

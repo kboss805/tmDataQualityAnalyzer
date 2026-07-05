@@ -61,12 +61,25 @@ CsvParseResult CsvSeriesParser::parse(const QString& filepath)
     const QString lock_suffix   = QLatin1String(PlotConstants::kCsvLockSuffix);
     const QString missed_suffix = QLatin1String(PlotConstants::kCsvMissedFramesSuffix);
 
+    // SNR columns always start with "<pcmChannelId> - " (see the NOTE in
+    // PlotViewModel::addStreamData()); Lock/MissedFrames columns never do. Checked
+    // before the suffix match below so a header that happens to match both shapes
+    // (not reachable via this app's own export, but possible from a hand-crafted or
+    // third-party CSV) resolves as SNR rather than being silently misrouted to
+    // Lock/MissedFrames.
+    auto hasSnrIdPrefix = [](const QString& h) {
+        int digits = 0;
+        while (digits < h.size() && h.at(digits).isDigit()) digits++;
+        return digits > 0 && QStringView(h).mid(digits).startsWith(QLatin1String(" - "));
+    };
+
     for (int i = 0; i < param_count; i++)
     {
         PlotSeriesData& s = series[i];
         const QString header = columns[i + 1].trimmed();
+        const bool looks_like_snr = hasSnrIdPrefix(header);
 
-        if (header.endsWith(lock_suffix))
+        if (!looks_like_snr && header.endsWith(lock_suffix))
         {
             // Strip the metric suffix to recover the bare series name the legend
             // shows; keep it as streamLabel too so the lock/missed-frames pair is
@@ -77,7 +90,7 @@ CsvParseResult CsvSeriesParser::parse(const QString& filepath)
             s.receiverIndex = 0;
             s.channelIndex  = 0;
         }
-        else if (header.endsWith(missed_suffix))
+        else if (!looks_like_snr && header.endsWith(missed_suffix))
         {
             s.name = header.left(header.size() - missed_suffix.size());
             s.streamLabel = s.name;

@@ -80,8 +80,9 @@ public:
 
     int baseDay() const;                           ///< @return DOY of the first sample.
     double baseTimeOffset() const;                 ///< @return Seconds-since-midnight of first sample.
-    /// Converts elapsed seconds to "DDD:HH:MM:SS" using the file's base time.
-    QString formatTime(double elapsed) const;
+    /// Converts elapsed seconds to "DDD:HH:MM:SS" (or "DDD:HH:MM:SS.mmm" if
+    /// includeMilliseconds) using the file's base time.
+    QString formatTime(double elapsed, bool includeMilliseconds = false) const;
     /// Inverse of formatTime: parses "DDD:HH:MM:SS" to elapsed seconds against the
     /// file's base time. Returns 0.0 when the text is not in that 4-field format.
     double parseTime(const QString& text) const;
