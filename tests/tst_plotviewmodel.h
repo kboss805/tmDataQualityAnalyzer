@@ -56,6 +56,14 @@ private slots:
     void setLockAxisViewPreservesStreamSelection();
     void frameSyncErrorMaxReflectsData();
 
+    // Stream identity: two streams sharing a TMATS-derived streamLabel must stay
+    // distinct by streamOrder (pcmChannelId) — regression coverage for a
+    // pre-v2.6.0 cross-contamination bug (reprocess-replace and rename/recolor
+    // sibling-sync all matched on streamLabel alone).
+    void reprocessOnlySameStreamOrderReplaced();
+    void renameSeriesOnlySameStreamOrderSiblingRenamed();
+    void recolorSeriesOnlySameStreamOrderSiblingRecolored();
+
     // exportCsv tests
     void exportCsvCreatesFile();
     void exportCsvHeaderAndData();
