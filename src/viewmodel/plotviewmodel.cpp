@@ -177,12 +177,15 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
     // earlier mode (e.g. Frame Sync Lock) lingers on the plot indefinitely
     // alongside the new one, since addStreamData() only ever accumulates and
     // the plot is only cleared when a new file is opened, not on reprocess.
-    // Keyed by streamLabel rather than pcmChannelId: callers identify distinct
-    // streams by label, and pcmChannelId may be left at its default (0) for
-    // streams that don't carry a real channel ID (e.g. synthetic/test data).
+    // Matched on streamLabel AND pcmChannelId together: label alone isn't a
+    // unique stream key (two configured streams can share a TMATS-derived
+    // name), and pcmChannelId alone isn't either (it defaults to 0 for streams
+    // without a real channel id, e.g. synthetic/test data) — requiring both
+    // only erases the stream actually being reprocessed.
     m_series.erase(std::remove_if(m_series.begin(), m_series.end(),
                                    [&](const PlotSeriesData& s) {
-                                       return s.streamLabel == data.streamLabel;
+                                       return s.streamLabel == data.streamLabel &&
+                                              s.streamOrder == data.pcmChannelId;
                                    }),
                    m_series.end());
 
@@ -488,19 +491,15 @@ void PlotViewModel::renameSeries(int index, const QString& name)
 
     // For frame sync series, keep the paired sibling (same stream, other metric)
     // in sync so a custom name survives switching between lock/missed-frames modes.
-    const PlotSeriesData& renamed = m_series[index];
-    const bool isFrameSyncMetric =
-        renamed.metricType == PlotSeriesData::MetricType::FrameSyncLock ||
-        renamed.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames;
-    if (isFrameSyncMetric)
+    // Capture just the small identity fields (not a full PlotSeriesData copy —
+    // xValues/yValues can be large) before the loop mutates m_series.
+    const QString renamed_label = m_series[index].streamLabel;
+    const int renamed_order = m_series[index].streamOrder;
+    if (isLeftAxisMetric(m_series[index].metricType))
     {
         for (PlotSeriesData& s : m_series)
         {
-            if (&s == &renamed)
-                continue;
-            if (s.streamLabel == renamed.streamLabel &&
-                (s.metricType == PlotSeriesData::MetricType::FrameSyncLock ||
-                 s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames))
+            if (isFrameSyncSibling(renamed_label, renamed_order, s))
             {
                 s.name = name;
             }
@@ -522,20 +521,14 @@ void PlotViewModel::recolorSeries(int index, const QColor& color)
 
     // For frame sync series, keep the paired sibling (same stream, other metric) in
     // sync so a custom color survives switching between lock/missed-frames modes —
-    // mirrors renameSeries().
-    const PlotSeriesData& recolored = m_series[index];
-    const bool isFrameSyncMetric =
-        recolored.metricType == PlotSeriesData::MetricType::FrameSyncLock ||
-        recolored.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames;
-    if (isFrameSyncMetric)
+    // mirrors renameSeries(). Capture just the identity fields, not a full copy.
+    const QString recolored_label = m_series[index].streamLabel;
+    const int recolored_order = m_series[index].streamOrder;
+    if (isLeftAxisMetric(m_series[index].metricType))
     {
         for (PlotSeriesData& s : m_series)
         {
-            if (&s == &recolored)
-                continue;
-            if (s.streamLabel == recolored.streamLabel &&
-                (s.metricType == PlotSeriesData::MetricType::FrameSyncLock ||
-                 s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames))
+            if (isFrameSyncSibling(recolored_label, recolored_order, s))
             {
                 s.color = color;
             }
@@ -707,8 +700,7 @@ void PlotViewModel::assignColors()
 
     for (auto& s : m_series)
     {
-        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock ||
-            s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
+        if (isLeftAxisMetric(s.metricType))
         {
             auto it = left_axis_color_idx.find(s.streamOrder);
             int idx = 0;
@@ -763,6 +755,20 @@ QColor PlotViewModel::shadeOfColor(const QColor& base, int shadeLevel)
     return shaded;
 }
 
+bool PlotViewModel::isLeftAxisMetric(PlotSeriesData::MetricType type)
+{
+    return type == PlotSeriesData::MetricType::FrameSyncLock ||
+           type == PlotSeriesData::MetricType::AccumulatedMissedFrames;
+}
+
+bool PlotViewModel::isFrameSyncSibling(const QString& streamLabel, int streamOrder,
+                                       const PlotSeriesData& candidate)
+{
+    return isLeftAxisMetric(candidate.metricType) &&
+           candidate.streamLabel == streamLabel &&
+           candidate.streamOrder == streamOrder;
+}
+
 void PlotViewModel::computeYRange()
 {
     double y_min = std::numeric_limits<double>::max();
@@ -775,8 +781,7 @@ void PlotViewModel::computeYRange()
         {
             continue;
         }
-        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock ||
-            s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
+        if (isLeftAxisMetric(s.metricType))
         {
             continue;  // Left-axis metrics use their own range, not the SNR range.
         }
@@ -876,8 +881,7 @@ void PlotViewModel::setLockAxisView(LockAxisView view)
     for (int i = 0; i < m_series.size(); i++)
     {
         PlotSeriesData& s = m_series[i];
-        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock ||
-            s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
+        if (isLeftAxisMetric(s.metricType))
         {
             s.visible = metricMatchesView(s.metricType, view)
                 && selected.value(s.streamOrder, true);
