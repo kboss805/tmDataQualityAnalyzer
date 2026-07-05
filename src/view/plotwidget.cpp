@@ -304,11 +304,16 @@ void PlotWidget::onSeriesAppearanceChanged()
     }
     // Re-apply per-series colors to the graphs (names live only in the legend/VM),
     // then rebuild the legend rows. Axes and data are untouched, so no rebuildChart.
-    const QVector<PlotSeriesData>& all_series = m_view_model->allSeries();
-    const qsizetype count = qMin(m_graphs.size(), all_series.size());
-    for (qsizetype i = 0; i < count; i++)
+    // Looked up by stable series id via m_graph_by_id (not by position in m_graphs)
+    // so this stays correct even if a background streamProcessed()/addStreamData()
+    // added or reordered series while this dialog-driven signal was in flight.
+    for (const PlotSeriesData& s : m_view_model->allSeries())
     {
-        m_graphs[i]->setPen(QPen(all_series[i].color, PlotConstants::kGraphPenWidth));
+        QCPGraph* graph = m_graph_by_id.value(s.id, nullptr);
+        if (graph != nullptr)
+        {
+            graph->setPen(QPen(s.color, PlotConstants::kGraphPenWidth));
+        }
     }
     rebuildLegend();
     m_plot->replot(QCustomPlot::rpQueuedReplot);
@@ -324,16 +329,21 @@ void PlotWidget::onLockAxisViewChanged()
     // The metric toggle only flips per-series visibility and the left-axis label;
     // the graphs and their data are unchanged, so sync visibility in place instead
     // of tearing down and rebuilding every QCPGraph. Axis ranges arrive separately
-    // via axisRangeChanged -> updateAxes().
-    const QVector<PlotSeriesData>& all_series = m_view_model->allSeries();
-    const qsizetype count = qMin(m_graphs.size(), all_series.size());
-    for (qsizetype i = 0; i < count; i++)
+    // via axisRangeChanged -> updateAxes(). Looked up by stable series id via
+    // m_graph_by_id (not by position in m_graphs) so this stays correct even if a
+    // background streamProcessed()/addStreamData() added or reordered series while
+    // this signal was in flight.
+    for (const PlotSeriesData& s : m_view_model->allSeries())
     {
-        // Re-apply color as well as visibility: a custom recolor propagates to the
-        // lock/missed sibling in the ViewModel, and that sibling first becomes
-        // visible here, so its pen must be refreshed from the (updated) series color.
-        m_graphs[i]->setPen(QPen(all_series[i].color, PlotConstants::kGraphPenWidth));
-        m_graphs[i]->setVisible(all_series[i].visible);
+        QCPGraph* graph = m_graph_by_id.value(s.id, nullptr);
+        if (graph != nullptr)
+        {
+            // Re-apply color as well as visibility: a custom recolor propagates to the
+            // lock/missed sibling in the ViewModel, and that sibling first becomes
+            // visible here, so its pen must be refreshed from the (updated) series color.
+            graph->setPen(QPen(s.color, PlotConstants::kGraphPenWidth));
+            graph->setVisible(s.visible);
+        }
     }
 
     m_plot->yAxis->setLabel(
@@ -839,19 +849,14 @@ void PlotWidget::setUpConnections()
 
 void PlotWidget::rebuildLegend()
 {
-    // Clear existing rows.
-    QLayoutItem* item;
-    while ((item = m_legend_rows->takeAt(0)) != nullptr)
-    {
-        if (item->widget() != nullptr)
-        {
-            item->widget()->deleteLater();
-        }
-        delete item;
-    }
-
     if (m_view_model == nullptr || !m_view_model->hasData())
     {
+        for (const LegendRow& row : std::as_const(m_legend_row_by_id))
+        {
+            m_legend_rows->removeWidget(row.widget);
+            row.widget->deleteLater();
+        }
+        m_legend_row_by_id.clear();
         m_legend_overlay->hide();
         return;
     }
@@ -868,6 +873,15 @@ void PlotWidget::rebuildLegend()
     // this was reproduced directly (row sizeHints valid, aggregate sizeHint (0,0)).
     int content_w = 0;
     int content_h = 0;
+
+    // Reconciled by series id (mirrors rebuildChart()'s m_graph_by_id): a run with
+    // many streams calls rebuildLegend() once per completed stream, so rebuilding
+    // every row's widgets from scratch each time is O(streams^2) widget churn
+    // across the run. Existing rows are updated in place and only reordered in
+    // the layout (cheap bookkeeping); only genuinely new/removed series pay for
+    // widget construction/destruction.
+    QHash<int, LegendRow> next_row_by_id;
+    next_row_by_id.reserve(static_cast<int>(all_series.size()));
 
     for (const PlotSeriesData& s : all_series)
     {
@@ -888,30 +902,43 @@ void PlotWidget::rebuildLegend()
             continue;
         }
 
-        // Read-only row: [line swatch][label]. Both are click-through so a press
-        // anywhere on the content falls to the viewport and starts a drag; color
-        // and name are edited from the Customize Plot Series dialog.
-        auto* row = new QWidget;
-        row->setObjectName("legendRow");
-        row->setAttribute(Qt::WA_TransparentForMouseEvents, true);
-        auto* row_layout = new QHBoxLayout(row);
-        row_layout->setContentsMargins(0, 0, 0, 0);
-        row_layout->setSpacing(6);
+        LegendRow row = m_legend_row_by_id.take(s.id);
+        if (row.widget == nullptr)
+        {
+            // Read-only row: [line swatch][label]. Both are click-through so a press
+            // anywhere on the content falls to the viewport and starts a drag; color
+            // and name are edited from the Customize Plot Series dialog.
+            row.widget = new QWidget;
+            row.widget->setObjectName("legendRow");
+            row.widget->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+            auto* row_layout = new QHBoxLayout(row.widget);
+            row_layout->setContentsMargins(0, 0, 0, 0);
+            row_layout->setSpacing(6);
 
-        auto* swatch = new QLabel;
-        swatch->setAttribute(Qt::WA_TransparentForMouseEvents, true);
-        swatch->setFixedSize(PlotConstants::kLegendSwatchLen, PlotConstants::kLegendSwatchThick);
-        swatch->setStyleSheet(QString("background-color: %1; border-radius: 1px;").arg(s.color.name()));
+            row.swatch = new QLabel;
+            row.swatch->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+            row.swatch->setFixedSize(PlotConstants::kLegendSwatchLen, PlotConstants::kLegendSwatchThick);
 
-        auto* name = new QLabel(legendDisplayName(s));
-        name->setObjectName("legendLabel");
-        name->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+            row.label = new QLabel;
+            row.label->setObjectName("legendLabel");
+            row.label->setAttribute(Qt::WA_TransparentForMouseEvents, true);
 
-        row_layout->addWidget(swatch, 0, Qt::AlignVCenter);
-        row_layout->addWidget(name, 1, Qt::AlignVCenter);
-        m_legend_rows->addWidget(row);
+            row_layout->addWidget(row.swatch, 0, Qt::AlignVCenter);
+            row_layout->addWidget(row.label, 1, Qt::AlignVCenter);
+        }
+        row.swatch->setStyleSheet(QString("background-color: %1; border-radius: 1px;").arg(s.color.name()));
+        row.label->setText(legendDisplayName(s));
 
-        const QSize row_hint = row->sizeHint();
+        // Re-add regardless of whether the row is new or reused: removeWidget() is
+        // a no-op bookkeeping call for a widget not currently in the layout, and
+        // this guarantees row order always matches all_series order (which can
+        // shift — addStreamData() re-sorts by job submission index as parallel
+        // streams complete out of order) without destroying/recreating widgets.
+        m_legend_rows->removeWidget(row.widget);
+        m_legend_rows->addWidget(row.widget);
+        next_row_by_id.insert(s.id, row);
+
+        const QSize row_hint = row.widget->sizeHint();
         content_w = qMax(content_w, row_hint.width());
         content_h += row_hint.height();
         if (shown > 0)
@@ -920,6 +947,15 @@ void PlotWidget::rebuildLegend()
         }
         ++shown;
     }
+
+    // Rows left in m_legend_row_by_id belong to series that are no longer shown
+    // (hidden, reprocessed away, or axis-view switched) — remove them.
+    for (const LegendRow& row : std::as_const(m_legend_row_by_id))
+    {
+        m_legend_rows->removeWidget(row.widget);
+        row.widget->deleteLater();
+    }
+    m_legend_row_by_id = std::move(next_row_by_id);
 
     if (shown == 0)
     {
