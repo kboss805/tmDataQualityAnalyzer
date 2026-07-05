@@ -46,6 +46,11 @@ constexpr int kColWidthMode    = 175;
 constexpr int kColWidthSetup   = 64;
 constexpr int kColWidthReady   = 64;
 constexpr int kRowHeight       = 52;
+// Reuses the sub-dialogs' "small gap between related controls" unit so the two
+// boxed cells (Channel, Mode) read as adjacent-but-distinct instead of merging
+// into one continuous box. Applied identically to the header and data rows so
+// the columns stay aligned.
+constexpr int kColumnGap       = DialogLayout::kControlGap;
 // The Channel cell now has a combo-box-style border + inset padding (see the
 // channelNameCell QSS rule), so its available text width is narrower than the
 // column: border (~2px) + the QSS's own left/right padding (8px each). A little
@@ -130,6 +135,7 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
         };
         makeHdr("Process",   kColWidthProcess);
         makeHdr("Channel",   kColWidthChannel);
+        hl->addSpacing(kColumnGap);
         makeHdr("Mode",      kColWidthMode);
         makeHdr("Configure", kColWidthSetup);
         makeHdr("Ready",     kColWidthReady);
@@ -257,7 +263,13 @@ void StreamConfigDialog::buildTable()
                 cfg.label, Qt::ElideLeft, kColWidthChannel - kCellTextPadding));
             lbl->setToolTip(cfg.label);
             lbl->setAutoFillBackground(false);
+            // Read-only: the label just mimics a combo box's look for visual
+            // pairing with Mode. Disabled so it reads that way too (the QSS
+            // ":disabled" rule matches every other input control's dimmed
+            // treatment) instead of looking editable.
+            lbl->setEnabled(false);
             hl->addWidget(lbl, 0, Qt::AlignVCenter);
+            hl->addSpacing(kColumnGap);
         }
 
         // Mode combo. Made editable-but-readonly so the CLOSED box's current-value

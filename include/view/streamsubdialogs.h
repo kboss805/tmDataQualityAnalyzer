@@ -279,6 +279,11 @@ FrameSyncWidgets buildFrameSyncRow(QGridLayout* grid, QWidget* parent,
     w.dataRate->setValue(cfg.sync.dataRateMbps);
     w.dataRate->setMinimumWidth(130);
     w.dataRate->setToolTip("Telemetry data rate in Mbps. Set to 0 (TMATS) to derive the rate from the file metadata.");
+    // QDoubleSpinBox's natural sizeHint runs taller than QLineEdit's (its up/down
+    // buttons need more room than the shared padding alone provides), while the
+    // combo beside it is explicitly matched to w.syncPattern below — match here
+    // too so Data Rate and Average Period render at the same height.
+    matchControlHeight(w.dataRate, w.syncPattern);
     grid->addWidget(new QLabel("Data Rate (Mbps)"), 3, 0, Qt::AlignLeft | Qt::AlignVCenter);
     grid->addWidget(w.dataRate,                     4, 0, Qt::AlignLeft | Qt::AlignVCenter);
 

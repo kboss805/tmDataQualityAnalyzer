@@ -61,6 +61,16 @@ QLabel#channelNameCell
     color: #1B1B1B;
 }
 
+/* The cell is read-only (Configure Streams sets it disabled) but still looks
+   like an editable combo box in its resting state unless it also picks up
+   the same disabled treatment every other input control uses. */
+QLabel#channelNameCell:disabled
+{
+    background-color: #F5F5F5;
+    color: rgba(27, 27, 27, 0.36);
+    border: 1px solid #E5E5E5;
+}
+
 
 /*-----QMenuBar-----*/
 QMenuBar
