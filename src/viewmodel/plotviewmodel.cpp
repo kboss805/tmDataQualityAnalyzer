@@ -415,24 +415,8 @@ bool PlotViewModel::exportCsv(const QString& filepath) const
     {
         qint64 ms = it.key();
         double elapsed = ms / 1000.0;
-        
-        // Format time
-        double total_sec = (m_base_day * 86400.0) + m_base_time_offset + elapsed;
-        int d = static_cast<int>(total_sec / 86400);
-        double rem = total_sec - (d * 86400);
-        int h = static_cast<int>(rem / 3600);
-        rem -= h * 3600;
-        int m = static_cast<int>(rem / 60);
-        rem -= m * 60;
-        int s = static_cast<int>(rem);
-        int msec = static_cast<int>((rem - s) * 1000.0 + 0.5);
 
-        out << QString("%1:%2:%3:%4.%5")
-            .arg(d, 3, 10, QChar('0'))
-            .arg(h, 2, 10, QChar('0'))
-            .arg(m, 2, 10, QChar('0'))
-            .arg(s, 2, 10, QChar('0'))
-            .arg(msec, 3, 10, QChar('0'));
+        out << formatTime(elapsed, /*includeMilliseconds=*/true);
 
         const auto& vals = it.value();
         for (int i = 0; i < m_series.size(); ++i)
@@ -509,6 +493,14 @@ void PlotViewModel::renameSeries(int index, const QString& name)
 
 void PlotViewModel::commitAppearanceChanges()
 {
+    // Mirrors the per-call Y-range recompute that setSeriesVisible() does — a
+    // batched setSeriesVisibleQuiet() edit skips that per-call, so it must happen
+    // once here before views react to the appearance/visibility signal.
+    if (m_y_auto_scale)
+    {
+        computeYRange();
+        emit axisRangeChanged();
+    }
     emit seriesAppearanceChanged();
 }
 
@@ -615,6 +607,15 @@ void PlotViewModel::setSeriesVisible(int index, bool visible)
         computeYRange();
         emit axisRangeChanged();
     }
+}
+
+void PlotViewModel::setSeriesVisibleQuiet(int index, bool visible)
+{
+    if (index < 0 || index >= m_series.size())
+    {
+        return;
+    }
+    m_series[index].visible = visible;
 }
 
 void PlotViewModel::setPlotTitle(const QString& title)
@@ -895,7 +896,7 @@ void PlotViewModel::setLockAxisView(LockAxisView view)
     emit lockAxisViewChanged();
 }
 
-QString PlotViewModel::formatTime(double elapsed) const
+QString PlotViewModel::formatTime(double elapsed, bool includeMilliseconds) const
 {
     double total = m_base_time_offset + elapsed;
 
@@ -912,11 +913,21 @@ QString PlotViewModel::formatTime(double elapsed) const
     int seconds = static_cast<int>(total) % UIConstants::kSecondsPerMinute;
 
     constexpr int kBase10 = 10;
-    return QString("%1:%2:%3:%4")
+    QString result = QString("%1:%2:%3:%4")
         .arg(day, 3, kBase10, QChar('0'))
         .arg(hours, 2, kBase10, QChar('0'))
         .arg(minutes, 2, kBase10, QChar('0'))
         .arg(seconds, 2, kBase10, QChar('0'));
+
+    if (includeMilliseconds)
+    {
+        // total's fractional part (below one second) survived the day/hour/minute/
+        // second extraction above untouched, so it can be pulled out independently
+        // without disturbing that (tested) integer-field logic.
+        const int msec = static_cast<int>((total - qFloor(total)) * 1000.0 + 0.5);
+        result += QString(".%1").arg(msec, 3, kBase10, QChar('0'));
+    }
+    return result;
 }
 
 double PlotViewModel::parseTime(const QString& text) const

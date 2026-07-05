@@ -80,8 +80,9 @@ public:
 
     int baseDay() const;                           ///< @return DOY of the first sample.
     double baseTimeOffset() const;                 ///< @return Seconds-since-midnight of first sample.
-    /// Converts elapsed seconds to "DDD:HH:MM:SS" using the file's base time.
-    QString formatTime(double elapsed) const;
+    /// Converts elapsed seconds to "DDD:HH:MM:SS" (or "DDD:HH:MM:SS.mmm" if
+    /// includeMilliseconds) using the file's base time.
+    QString formatTime(double elapsed, bool includeMilliseconds = false) const;
     /// Inverse of formatTime: parses "DDD:HH:MM:SS" to elapsed seconds against the
     /// file's base time. Returns 0.0 when the text is not in that 4-field format.
     double parseTime(const QString& text) const;
@@ -90,6 +91,12 @@ public:
     /// @name Mutators
     /// @{
     void setSeriesVisible(int index, bool visible);
+    /// Same as setSeriesVisible() but does not emit seriesVisibilityChanged() or
+    /// recompute the Y range — for batched edits (e.g. the Customize Plot Series
+    /// dialog toggling many checkboxes before OK) where the caller calls
+    /// commitAppearanceChanges() once after every change is applied, instead of
+    /// paying for a full legend/graph refresh per checkbox.
+    void setSeriesVisibleQuiet(int index, bool visible);
     void setPlotTitle(const QString& title);
     void setYManualRange(double min, double max);
     void setYAutoScale(bool enabled);
@@ -100,9 +107,10 @@ public:
     void setRightYMaxOverride(double max);  ///< User-set right (SNR) axis maximum; resets on resetYRange().
     /// Switches the left-axis metric and flips visibility of lock/missed frames series.
     void setLockAxisView(LockAxisView view);
-    /// Notifies views that series colors/names changed. Call once after a batch of
-    /// renameSeries()/recolorSeries() edits (e.g. from the Customize Plot dialog);
-    /// renameSeries()/recolorSeries() are pure setters and do not signal on their own.
+    /// Notifies views that series colors/names/visibility changed. Call once after
+    /// a batch of renameSeries()/recolorSeries()/setSeriesVisibleQuiet() edits (e.g.
+    /// from the Customize Plot dialog) — those are pure setters and do not signal
+    /// on their own. Recomputes the Y range (if auto-scaled) before signaling.
     void commitAppearanceChanges();
     /// @}
 

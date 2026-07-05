@@ -205,18 +205,23 @@ void PlotCustomizationDialog::populateData()
         rowLayout->addWidget(nameEdit, 1);
         m_lockListLayout->addWidget(row);
 
-        m_lockCheckboxes.append(cb);
-        m_lockCheckboxToSeriesIndices.insert(cb, it.value());
-        m_lockNameEdits.insert(cb, nameEdit);
-        m_lockSwatches.insert(cb, swatch);
-        m_lockColors.insert(cb, color0);
+        LockRow lockRow;
+        lockRow.checkbox = cb;
+        lockRow.seriesIndices = it.value();
+        lockRow.nameEdit = nameEdit;
+        lockRow.swatch = swatch;
+        lockRow.color = color0;
+        m_lockRows.append(lockRow);
+        // Captured by index (not pointer/reference into m_lockRows) so a later
+        // append's reallocation can't leave this lambda holding a dangling row.
+        const int rowIndex = m_lockRows.size() - 1;
 
-        connect(swatch, &QPushButton::clicked, this, [this, cb, swatch]() {
-            const QColor picked = QColorDialog::getColor(m_lockColors.value(cb), this,
+        connect(swatch, &QPushButton::clicked, this, [this, rowIndex, swatch]() {
+            const QColor picked = QColorDialog::getColor(m_lockRows[rowIndex].color, this,
                                                          tr("Choose Series Color"));
             if (!picked.isValid())
                 return;
-            m_lockColors[cb] = picked;
+            m_lockRows[rowIndex].color = picked;
             swatch->setStyleSheet(swatchStyle(picked));
         });
     }
@@ -451,15 +456,17 @@ void PlotCustomizationDialog::applyChanges()
     // AccumulatedMissedFrames series for a stream, but only the metric matching the
     // active lock axis view should ever be made visible — the other metric's values
     // are on a different scale and would otherwise be drawn against the wrong axis range.
+    // Quiet setter: this can touch dozens of series across the two loops below, and
+    // commitAppearanceChanges() at the end applies one batched refresh instead of a
+    // full legend rebuild + replot per checkbox.
     const bool showMissedFrames = m_viewModel->lockAxisView() == PlotViewModel::LockAxisView::MissedFrames;
-    for (auto* cb : m_lockCheckboxes) {
-        bool checked = cb->isChecked();
-        const auto& indices = m_lockCheckboxToSeriesIndices.value(cb);
-        for (int idx : indices) {
+    for (const LockRow& row : m_lockRows) {
+        bool checked = row.checkbox->isChecked();
+        for (int idx : row.seriesIndices) {
             const auto& s = m_viewModel->seriesAt(idx);
             bool isActiveMetric = (s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
                 == showMissedFrames;
-            m_viewModel->setSeriesVisible(idx, checked && isActiveMetric);
+            m_viewModel->setSeriesVisibleQuiet(idx, checked && isActiveMetric);
         }
     }
 
@@ -471,7 +478,7 @@ void PlotCustomizationDialog::applyChanges()
                 for (int c = 0; c < rcvrItem->childCount(); c++) {
                     QTreeWidgetItem* chItem = rcvrItem->child(c);
                     int idx = chItem->data(0, Qt::UserRole).toInt();
-                    m_viewModel->setSeriesVisible(idx, chItem->checkState(0) == Qt::Checked);
+                    m_viewModel->setSeriesVisibleQuiet(idx, chItem->checkState(0) == Qt::Checked);
                 }
             }
         }
@@ -479,15 +486,12 @@ void PlotCustomizationDialog::applyChanges()
 
     // Apply per-stream color/name edits (Lock tab). renameSeries/recolorSeries are
     // pure setters that propagate to the lock/missed sibling by stream label.
-    for (auto* cb : m_lockCheckboxes) {
-        const auto& indices = m_lockCheckboxToSeriesIndices.value(cb);
-        if (indices.isEmpty())
+    for (const LockRow& row : m_lockRows) {
+        if (row.seriesIndices.isEmpty())
             continue;
-        const int firstIdx = indices.first();
-        if (m_lockNameEdits.contains(cb))
-            m_viewModel->renameSeries(firstIdx, m_lockNameEdits.value(cb)->text());
-        if (m_lockColors.contains(cb))
-            m_viewModel->recolorSeries(firstIdx, m_lockColors.value(cb));
+        const int firstIdx = row.seriesIndices.first();
+        m_viewModel->renameSeries(firstIdx, row.nameEdit->text());
+        m_viewModel->recolorSeries(firstIdx, row.color);
     }
 
     // Apply per-channel color/name edits (SNR tab), taken from the pending item roles.
@@ -515,15 +519,15 @@ void PlotCustomizationDialog::applyChanges()
 
 void PlotCustomizationDialog::selectAllLock()
 {
-    for (auto* cb : m_lockCheckboxes) {
-        cb->setChecked(true);
+    for (const LockRow& row : m_lockRows) {
+        row.checkbox->setChecked(true);
     }
 }
 
 void PlotCustomizationDialog::selectNoneLock()
 {
-    for (auto* cb : m_lockCheckboxes) {
-        cb->setChecked(false);
+    for (const LockRow& row : m_lockRows) {
+        row.checkbox->setChecked(false);
     }
 }
 

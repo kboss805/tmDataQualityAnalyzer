@@ -81,9 +81,9 @@ void TestPlotCustomizationDialog::lockTabOneCheckboxPerStream()
 
     // Two lock streams -> two checkboxes; the default LockPercent view shows the
     // lock series, so both start checked.
-    QCOMPARE(dlg.m_lockCheckboxes.size(), 2);
-    for (QCheckBox* cb : dlg.m_lockCheckboxes)
-        QVERIFY(cb->isChecked());
+    QCOMPARE(dlg.m_lockRows.size(), 2);
+    for (const auto& row : dlg.m_lockRows)
+        QVERIFY(row.checkbox->isChecked());
 }
 
 void TestPlotCustomizationDialog::selectAllNoneLock()
@@ -93,12 +93,12 @@ void TestPlotCustomizationDialog::selectAllNoneLock()
     PlotCustomizationDialog dlg(&vm);
 
     dlg.selectNoneLock();
-    for (QCheckBox* cb : dlg.m_lockCheckboxes)
-        QVERIFY(!cb->isChecked());
+    for (const auto& row : dlg.m_lockRows)
+        QVERIFY(!row.checkbox->isChecked());
 
     dlg.selectAllLock();
-    for (QCheckBox* cb : dlg.m_lockCheckboxes)
-        QVERIFY(cb->isChecked());
+    for (const auto& row : dlg.m_lockRows)
+        QVERIFY(row.checkbox->isChecked());
 }
 
 void TestPlotCustomizationDialog::applyChangesLockVisibility()
@@ -108,17 +108,17 @@ void TestPlotCustomizationDialog::applyChangesLockVisibility()
     PlotCustomizationDialog dlg(&vm);
 
     // Uncheck the first lock stream's box, leave the second checked, apply.
-    dlg.m_lockCheckboxes[0]->setChecked(false);
+    dlg.m_lockRows[0].checkbox->setChecked(false);
     dlg.applyChanges();
 
     // Box 0's series (both lock and missed) must be hidden.
-    for (int idx : dlg.m_lockCheckboxToSeriesIndices.value(dlg.m_lockCheckboxes[0]))
+    for (int idx : dlg.m_lockRows[0].seriesIndices)
         QVERIFY(!vm.seriesAt(idx).visible);
 
     // Box 1 is checked with the LockPercent view active: its FrameSyncLock series
     // is visible, but its AccumulatedMissedFrames sibling stays hidden (it belongs
     // to the other axis view).
-    for (int idx : dlg.m_lockCheckboxToSeriesIndices.value(dlg.m_lockCheckboxes[1]))
+    for (int idx : dlg.m_lockRows[1].seriesIndices)
     {
         const PlotSeriesData& s = vm.seriesAt(idx);
         if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock)
@@ -254,12 +254,11 @@ void TestPlotCustomizationDialog::lockRenameAppliesToViewModel()
     populateVm(vm);
     PlotCustomizationDialog dlg(&vm);
 
-    QCheckBox* cb = dlg.m_lockCheckboxes.at(0);
-    dlg.m_lockNameEdits.value(cb)->setText("Renamed Stream");
+    dlg.m_lockRows[0].nameEdit->setText("Renamed Stream");
     dlg.applyChanges();
 
     // Applies to every series in the stream (the lock + missed-frames siblings).
-    const QVector<int> indices = dlg.m_lockCheckboxToSeriesIndices.value(cb);
+    const QVector<int> indices = dlg.m_lockRows[0].seriesIndices;
     QVERIFY(!indices.isEmpty());
     for (int idx : indices)
         QCOMPARE(vm.seriesAt(idx).name, QString("Renamed Stream"));
@@ -271,11 +270,10 @@ void TestPlotCustomizationDialog::lockRecolorAppliesToViewModel()
     populateVm(vm);
     PlotCustomizationDialog dlg(&vm);
 
-    QCheckBox* cb = dlg.m_lockCheckboxes.at(0);
-    dlg.m_lockColors[cb] = QColor(Qt::magenta); // simulate a swatch color pick
+    dlg.m_lockRows[0].color = QColor(Qt::magenta); // simulate a swatch color pick
     dlg.applyChanges();
 
-    const QVector<int> indices = dlg.m_lockCheckboxToSeriesIndices.value(cb);
+    const QVector<int> indices = dlg.m_lockRows[0].seriesIndices;
     QVERIFY(!indices.isEmpty());
     for (int idx : indices)
         QCOMPARE(vm.seriesAt(idx).color, QColor(Qt::magenta));

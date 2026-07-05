@@ -279,6 +279,11 @@ FrameSyncWidgets buildFrameSyncRow(QGridLayout* grid, QWidget* parent,
     w.dataRate->setValue(cfg.sync.dataRateMbps);
     w.dataRate->setMinimumWidth(130);
     w.dataRate->setToolTip("Telemetry data rate in Mbps. Set to 0 (TMATS) to derive the rate from the file metadata.");
+    // QDoubleSpinBox's natural sizeHint runs taller than QLineEdit's (its up/down
+    // buttons need more room than the shared padding alone provides), while the
+    // combo beside it is explicitly matched to w.syncPattern below — match here
+    // too so Data Rate and Average Period render at the same height.
+    matchControlHeight(w.dataRate, w.syncPattern);
     grid->addWidget(new QLabel("Data Rate (Mbps)"), 3, 0, Qt::AlignLeft | Qt::AlignVCenter);
     grid->addWidget(w.dataRate,                     4, 0, Qt::AlignLeft | Qt::AlignVCenter);
 
@@ -393,14 +398,9 @@ public:
         auto* grid = new QGridLayout;
         configureFormGrid(grid);
 
-        FrameSyncWidgets fs = buildFrameSyncRow(grid, this, cfg,
+        m_fs = buildFrameSyncRow(grid, this, cfg,
             "e.g. A345CA5C",
             "Hex frame synchronization word (e.g. A345CA5C). Used to detect frame boundaries in the PCM stream.");
-        m_syncPattern  = fs.syncPattern;
-        m_syncMask     = fs.syncMask;
-        m_bitsPerFrame = fs.bitsPerFrame;
-        m_dataRate     = fs.dataRate;
-        m_sampleRate   = fs.sampleRate;
 
         auto* loadBtn = new QPushButton(this);
         loadBtn->setIcon(QIcon(":/resources/folder-open.svg"));
@@ -420,8 +420,8 @@ public:
                 settingsSubdir(m_app_root, UIConstants::kFramesyncPatternsDirName, m_toml_dir),
                 tr("TOML Files (*.toml);;All Files (*.*)"));
             if (!filename.isEmpty())
-                loadFrameSyncFromToml(filename, m_syncPattern, m_syncMask,
-                                      m_bitsPerFrame, m_toml_dir, m_inverted);
+                loadFrameSyncFromToml(filename, m_fs.syncPattern, m_fs.syncMask,
+                                      m_fs.bitsPerFrame, m_toml_dir, m_inverted);
         });
         connect(saveBtn, &QPushButton::clicked, this, [this]() {
             QString filename = QFileDialog::getSaveFileName(
@@ -430,9 +430,9 @@ public:
             if (filename.isEmpty()) return;
             if (QFileInfo(filename).suffix().isEmpty()) filename += ".toml";
             saveFrameSyncToToml(filename,
-                                m_syncPattern->text().trimmed().toUpper(),
-                                m_syncMask->text().trimmed().toUpper(),
-                                m_bitsPerFrame->value(),
+                                m_fs.syncPattern->text().trimmed().toUpper(),
+                                m_fs.syncMask->text().trimmed().toUpper(),
+                                m_fs.bitsPerFrame->value(),
                                 m_inverted->isChecked(),
                                 m_toml_dir);
         });
@@ -457,7 +457,7 @@ public:
 
         DialogButtons btns = makeDialogButtons(this, tr("OK"));
         connect(btns.primary, &QPushButton::clicked, this, [this]() {
-            if (m_syncPattern->text().trimmed().isEmpty())
+            if (m_fs.syncPattern->text().trimmed().isEmpty())
             {
                 QMessageBox::warning(this, tr("Missing Frame Sync"),
                     tr("A frame sync pattern is required (e.g. FE6B2840)."));
@@ -474,24 +474,20 @@ public:
         adjustSize();
     }
 
-    QString frameSyncPattern() const { return m_syncPattern->text().trimmed().toUpper(); }
-    QString frameSyncMask()    const { return m_syncMask->text().trimmed().toUpper(); }
-    int     bitsPerFrame()     const { return m_bitsPerFrame->value(); }
+    QString frameSyncPattern() const { return m_fs.syncPattern->text().trimmed().toUpper(); }
+    QString frameSyncMask()    const { return m_fs.syncMask->text().trimmed().toUpper(); }
+    int     bitsPerFrame()     const { return m_fs.bitsPerFrame->value(); }
     bool    randomized()        const { return m_randomized->isChecked(); }
     bool    inverted()          const { return m_inverted->isChecked(); }
-    int     samplePeriodIndex() const { return m_sampleRate->currentIndex(); }
-    double  dataRateMbps()      const { return m_dataRate->value(); }
+    int     samplePeriodIndex() const { return m_fs.sampleRate->currentIndex(); }
+    double  dataRateMbps()      const { return m_fs.dataRate->value(); }
     QString lastTomlDir()       const { return m_toml_dir; }
     bool    applyToAll()        const { return m_applyToAll->isChecked(); }
 
 private:
-    QLineEdit*      m_syncPattern  = nullptr;
-    QLineEdit*      m_syncMask     = nullptr;
-    QSpinBox*       m_bitsPerFrame = nullptr;
+    FrameSyncWidgets m_fs; ///< Frame Sync / Mask / Bits Per Frame / Data Rate / Average Period.
     QCheckBox*      m_randomized   = nullptr;
     QCheckBox*      m_inverted     = nullptr;
-    QDoubleSpinBox* m_dataRate     = nullptr;
-    QComboBox*      m_sampleRate   = nullptr;
     QCheckBox*      m_applyToAll   = nullptr;
     QString         m_toml_dir;
     QString         m_app_root;
@@ -867,14 +863,9 @@ public:
             configureFormGrid(grid);
 
             // Frame Sync / Mask / Bits + Data Rate / Average Period (rows 0-4).
-            FrameSyncWidgets fs = buildFrameSyncRow(grid, this, cfg,
+            m_fs = buildFrameSyncRow(grid, this, cfg,
                 "e.g. FE6B2840",
                 "Hex frame synchronization word (e.g. FE6B2840). Used to detect frame boundaries in the receiver PCM stream.");
-            m_syncPattern  = fs.syncPattern;
-            m_syncMask     = fs.syncMask;
-            m_bitsPerFrame = fs.bitsPerFrame;
-            m_dataRate     = fs.dataRate;
-            m_sampleRate   = fs.sampleRate;
 
             auto* loadBtn1 = new QPushButton(this);
             loadBtn1->setIcon(QIcon(":/resources/folder-open.svg"));
@@ -892,8 +883,8 @@ public:
                     settingsSubdir(m_app_root, UIConstants::kFramesyncPatternsDirName, m_toml_dir),
                     tr("TOML Files (*.toml);;All Files (*.*)"));
                 if (!filename.isEmpty())
-                    loadFrameSyncFromToml(filename, m_syncPattern, m_syncMask,
-                                         m_bitsPerFrame, m_toml_dir, m_inverted);
+                    loadFrameSyncFromToml(filename, m_fs.syncPattern, m_fs.syncMask,
+                                         m_fs.bitsPerFrame, m_toml_dir, m_inverted);
             });
             connect(saveBtn1, &QPushButton::clicked, this, [this]() {
                 QString filename = QFileDialog::getSaveFileName(
@@ -902,9 +893,9 @@ public:
                 if (filename.isEmpty()) return;
                 if (QFileInfo(filename).suffix().isEmpty()) filename += ".toml";
                 saveFrameSyncToToml(filename,
-                                    m_syncPattern->text().trimmed().toUpper(),
-                                    m_syncMask->text().trimmed().toUpper(),
-                                    m_bitsPerFrame->value(),
+                                    m_fs.syncPattern->text().trimmed().toUpper(),
+                                    m_fs.syncMask->text().trimmed().toUpper(),
+                                    m_fs.bitsPerFrame->value(),
                                     m_inverted->isChecked(),
                                     m_toml_dir);
             });
@@ -946,7 +937,7 @@ public:
             m_polarity->addItem("Negative");
             m_polarity->setCurrentIndex(cfg.polarityIndex);
             m_polarity->setToolTip("ADC output polarity. Positive = high voltage maps to highest dB; Negative = inverted.");
-            matchControlHeight(m_polarity, m_syncPattern);
+            matchControlHeight(m_polarity, m_fs.syncPattern);
             grid->addWidget(m_polarity, 1, 0, kFieldAlign);
 
             m_slope = new QComboBox(this);
@@ -956,7 +947,7 @@ public:
             m_slope->addItem("0–5 V");
             m_slope->setCurrentIndex(cfg.slopeIndex);
             m_slope->setToolTip("ADC voltage range. Select the range that matches your receiver's analog output voltage span.");
-            matchControlHeight(m_slope, m_syncPattern);
+            matchControlHeight(m_slope, m_fs.syncPattern);
             grid->addWidget(m_slope, 1, 1, kFieldAlign);
 
             m_scale = new QDoubleSpinBox(this);
@@ -1067,7 +1058,7 @@ public:
 
         DialogButtons btns = makeDialogButtons(this, tr("OK"));
         connect(btns.primary, &QPushButton::clicked, this, [this]() {
-            if (m_syncPattern->text().trimmed().isEmpty())
+            if (m_fs.syncPattern->text().trimmed().isEmpty())
             {
                 QMessageBox::warning(this, tr("Missing Frame Sync"),
                     tr("A frame sync pattern is required (e.g. FE6B2840)."));
@@ -1084,13 +1075,13 @@ public:
         adjustSize();
     }
 
-    QString frameSyncPattern()   const { return m_syncPattern->text().trimmed().toUpper(); }
-    QString frameSyncMask()      const { return m_syncMask->text().trimmed().toUpper(); }
-    int     bitsPerFrame()       const { return m_bitsPerFrame->value(); }
+    QString frameSyncPattern()   const { return m_fs.syncPattern->text().trimmed().toUpper(); }
+    QString frameSyncMask()      const { return m_fs.syncMask->text().trimmed().toUpper(); }
+    int     bitsPerFrame()       const { return m_fs.bitsPerFrame->value(); }
     bool    randomized()         const { return m_randomized->isChecked(); }
     bool    inverted()           const { return m_inverted->isChecked(); }
-    int     samplePeriodIndex()    const { return m_sampleRate->currentIndex(); }
-    double  dataRateMbps()       const { return m_dataRate->value(); }
+    int     samplePeriodIndex()    const { return m_fs.sampleRate->currentIndex(); }
+    double  dataRateMbps()       const { return m_fs.dataRate->value(); }
     /// The acquisition fields as a bundle (for building a CalibrationExtractor::Request).
     FrameSyncParams frameSyncParams() const {
         return { frameSyncPattern(), frameSyncMask(), bitsPerFrame(),
@@ -1153,13 +1144,9 @@ private:
                 .arg(m_calibrationByWord.size()));
     }
 
-    QLineEdit*      m_syncPattern      = nullptr;
-    QLineEdit*      m_syncMask         = nullptr;
-    QSpinBox*       m_bitsPerFrame     = nullptr;
+    FrameSyncWidgets m_fs; ///< Frame Sync / Mask / Bits Per Frame / Data Rate / Average Period.
     QCheckBox*      m_randomized       = nullptr;
     QCheckBox*      m_inverted         = nullptr;
-    QDoubleSpinBox* m_dataRate         = nullptr;
-    QComboBox*      m_sampleRate       = nullptr;
     QComboBox*      m_polarity         = nullptr;
     QComboBox*      m_slope            = nullptr;
     QDoubleSpinBox* m_scale            = nullptr;

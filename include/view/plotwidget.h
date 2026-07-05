@@ -190,6 +190,20 @@ private:
     bool         m_legend_user_moved = false;  ///< True once dragged; suppresses the top-right auto-anchor.
     QPoint       m_drag_start_global;          ///< Global cursor position captured at drag start.
     QPoint       m_legend_start_pos;           ///< Legend top-left (in m_plot coords) at drag start.
+
+    /// One legend row's widgets, kept together so rebuildLegend() can update an
+    /// existing row's swatch color/label text in place instead of destroying and
+    /// recreating it every time a stream completes.
+    struct LegendRow
+    {
+        QWidget* widget = nullptr;
+        QLabel*  swatch = nullptr;
+        QLabel*  label  = nullptr;
+    };
+    /// Series id → its legend row, for incremental reconcile across appends —
+    /// mirrors m_graph_by_id so a run with many streams doesn't rebuild every
+    /// row's widgets from scratch on each stream's completion.
+    QHash<int, LegendRow> m_legend_row_by_id;
     /// @}
 
     QLabel* m_loading_label = nullptr; ///< Overlay label shown while CSV is parsing.

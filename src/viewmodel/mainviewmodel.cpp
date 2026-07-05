@@ -511,7 +511,10 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
         return true;
     }
 
-    auto frame_setup = std::make_shared<FrameSetup>(nullptr);
+    // Built directly into out_job.frameSetup (not a local shared_ptr moved in at
+    // the end) — that avoids a live-but-moved-from local sitting in scope after
+    // its "last" use, which a future edit could silently dereference as null.
+    out_job.frameSetup = std::make_shared<FrameSetup>(nullptr);
     if (cfg.receiverParamsToml.isEmpty())
     {
         // No Receiver Parameters TOML provided: fall back to the shipped default
@@ -519,7 +522,7 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
         const QString default_rcvr_params = m_app_root + "/" + UIConstants::kSettingsDirName +
             "/" + UIConstants::kReceiverParamsDirName + "/" + UIConstants::kDefaultTomlFilename;
         if (QFileInfo::exists(default_rcvr_params) &&
-            frame_setup->tryLoadingFile(default_rcvr_params, words_in_minor_frame))
+            out_job.frameSetup->tryLoadingFile(default_rcvr_params, words_in_minor_frame))
         {
             // Loaded successfully from the default file.
         }
@@ -528,8 +531,8 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
             // Default file missing or unusable: build the default word map
             // (sequential words for NumReceivers x ReceiverChannels parameters).
             QString map_error;
-            if (!frame_setup->buildDefaultReceiverMap(cfg.numReceivers, cfg.receiverChannels,
-                                                      words_in_minor_frame, map_error))
+            if (!out_job.frameSetup->buildDefaultReceiverMap(cfg.numReceivers, cfg.receiverChannels,
+                                                             words_in_minor_frame, map_error))
             {
                 error = stream_desc + ": " + map_error;
                 return false;
@@ -542,13 +545,13 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
                 QFileInfo(cfg.receiverParamsToml).fileName() + "' was not found.";
         return false;
     }
-    else if (!frame_setup->tryLoadingFile(cfg.receiverParamsToml, words_in_minor_frame))
+    else if (!out_job.frameSetup->tryLoadingFile(cfg.receiverParamsToml, words_in_minor_frame))
     {
         error = stream_desc + ": Failed to load Receiver Parameters from '" +
                 QFileInfo(cfg.receiverParamsToml).fileName() + "'. Check the word map.";
         return false;
     }
-    if (frame_setup->length() == 0)
+    if (out_job.frameSetup->length() == 0)
     {
         error = stream_desc + ": Receiver Parameters file contains no parameters.";
         return false;
@@ -572,12 +575,12 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
 
     // The linear voltage→dB math lives in the Model (FrameSetup) so it is
     // single-sourced and unit-testable rather than inline in the ViewModel.
-    frame_setup->applyLinearCalibration(polarity_idx, slope_idx, scale_dB_per_V);
+    out_job.frameSetup->applyLinearCalibration(polarity_idx, slope_idx, scale_dB_per_V);
 
     // Attach non-linear step-calibration profiles (US3.2) by word index (Model side).
     if (!cfg.calibrationByWord.isEmpty())
     {
-        const int attached = frame_setup->attachCalibrationProfiles(cfg.calibrationByWord);
+        const int attached = out_job.frameSetup->attachCalibrationProfiles(cfg.calibrationByWord);
         // Surface whether profiles actually reached the word map: provided > 0 but
         // attached == 0 means a word-index mismatch and a silent fall back to linear.
         emit logMessageReceived("  " + stream_desc + ": non-linear calibration — provided "
@@ -590,6 +593,5 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
             + ": no non-linear calibration profiles configured — using linear calibration.");
     }
 
-    out_job.frameSetup = std::move(frame_setup);
     return true;
 }

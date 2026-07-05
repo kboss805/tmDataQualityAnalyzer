@@ -110,9 +110,13 @@ bool ProcessingCoordinator::startProcessing(QVector<StreamJob> jobs)
         connect(w.thread, &QThread::finished, processor, &QObject::deleteLater);
 
         ProcessingParams params = m_jobs[i].params; // includes resolvedAttrs + queue
-        FrameSetup* setup = m_jobs[i].frameSetup.get(); // worker borrows; coordinator retains ownership
+        // Captured by shared_ptr (not .get()) so the lambda itself keeps FrameSetup
+        // alive for as long as this queued connection exists — enforced by the type
+        // system rather than by relying on teardownAll() always running (and joining
+        // every worker thread) before m_jobs is ever cleared/reassigned.
+        std::shared_ptr<FrameSetup> setup = m_jobs[i].frameSetup;
         connect(w.thread, &QThread::started, processor, [processor, params, setup]() {
-            processor->process(params, setup);
+            processor->process(params, setup.get());
         });
 
         m_workers.push_back(w);

@@ -59,17 +59,23 @@ private:
     // Lock Tab UI
     QWidget* m_lockTab;
     QVBoxLayout* m_lockListLayout;
-    QVector<QCheckBox*> m_lockCheckboxes;
 
-    // Maps a lock checkbox to the list of series indices it controls
-    // (typically both the FrameSyncLock and AccumulatedMissedFrames series for that stream)
-    QMap<QCheckBox*, QVector<int>> m_lockCheckboxToSeriesIndices;
-
-    // Per-stream appearance editors on the Lock tab (name edit + color swatch), and
-    // the pending color chosen from the swatch. Applied to the ViewModel on OK.
-    QMap<QCheckBox*, QLineEdit*>   m_lockNameEdits;
-    QMap<QCheckBox*, QPushButton*> m_lockSwatches;
-    QMap<QCheckBox*, QColor>       m_lockColors;
+    /// One Lock-tab row's widgets and pending edits, kept together so they can't
+    /// drift out of sync the way five parallel QMaps keyed by the same checkbox
+    /// could (a row's checkbox, series indices, name edit, swatch, and pending
+    /// color are all set together in populateData() and read together in
+    /// applyChanges() — there was never a reason for them to live apart).
+    struct LockRow
+    {
+        QCheckBox* checkbox = nullptr;
+        /// Series this row's checkbox controls — typically both the
+        /// FrameSyncLock and AccumulatedMissedFrames series for the stream.
+        QVector<int> seriesIndices;
+        QLineEdit* nameEdit = nullptr;
+        QPushButton* swatch = nullptr;
+        QColor color; ///< Pending color chosen from the swatch; applied to the ViewModel on OK.
+    };
+    QVector<LockRow> m_lockRows;
 
     // SNR Tab UI
     QWidget* m_snrTab;
