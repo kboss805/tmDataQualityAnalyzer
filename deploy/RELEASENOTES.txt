@@ -8,6 +8,20 @@ tmDataQualityAnalyzer v2.6.0 - What's New
     Accumulated Missed Frames, and Receiver SNR series are restored to the correct
     axis and color automatically.
 
+  - New: The plot legend now floats over the chart and can be dragged anywhere
+    you like, so you can move it out of the way of the data you're looking at.
+    It has a translucent background, remembers where you leave it for the
+    session, and scrolls if you have a lot of series visible at once (for
+    example, a Receiver SNR file with 48+ channels). It's included when you
+    export a plot image.
+
+  - Improved: The Configure Streams dialog has a cleaner layout: the Channel
+    column shows the most identifying part of a long channel name instead of
+    getting cut off at the start, and the Frame Sync Lock, Calibration, and
+    Receiver SNR setup dialogs now look and behave more consistently with each
+    other. The progress bar moved into its own window while a file is
+    processing.
+
   - Improved: The Recent Files list now remembers imported CSV files alongside
     Chapter 10 files and reopens each in the right way. File > Open remains for
     Chapter 10 files; use Import for CSV.
@@ -19,6 +33,11 @@ tmDataQualityAnalyzer v2.6.0 - What's New
     (or has no readable data rows), it is rejected with a clear message in the log
     instead of drawing meaningless data. Any malformed rows in a valid file are
     skipped and reported.
+
+  - Fixed: If two configured streams happened to share the same channel name,
+    renaming, recoloring, or reprocessing one of them could also change the
+    other's data on the plot. Each stream is now tracked independently, even
+    when the names match.
 
 
 tmDataQualityAnalyzer v2.5.2 - What's New

@@ -280,7 +280,9 @@ This file provides context and guidelines for AI assistants working on the tmDat
 
 ## Version History
 
-### v2.6.0 — Import Exported CSV Files (US7.0)
+### v2.6.0 — CSV Import, Movable Legend, Configure Streams Redesign, Stability Fixes
+
+**CSV Import (US7.0)**
 - New: the application can open a CSV it previously exported and load it straight
   into the plot, so old data sets can be visualized without re-processing the
   source `.ch10` file (US7.0).
@@ -294,11 +296,6 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - A successful async import is finalized off a dedicated
   `PlotViewModel::loadSucceeded()` signal (not `dataChanged()`), so recent-files /
   title / success-log side effects only run after the parse actually succeeds.
-- Toolbar Export/Import icons use Microsoft's actual Fluent System Icons glyphs
-  (`ArrowExport` / `ArrowImport`, MIT licensed) recolored to the app's existing
-  green/orange convention, with per-theme variants (`export-{dark,light}.svg`,
-  `import-{dark,light}.svg`) swapped by `MainView::applyToolbarIconsForTheme()`
-  on startup and theme toggle.
 - Import reuses the existing Model/ViewModel path (`CsvSeriesParser::parse` +
   `PlotViewModel::loadCsvFileAsync`), so Frame Sync Lock, Accumulated Missed
   Frames, and Receiver SNR columns are recognized by header and routed to the
@@ -310,6 +307,50 @@ This file provides context and guidelines for AI assistants working on the tmDat
   skipped and the skipped count is surfaced as a log warning. On success the
   imported file is added to Recent Files and the plot title is set to its base
   name.
+
+**Movable plot legend (US6.0)**
+- The on-plot legend is now a translucent, draggable overlay floating inside the
+  chart (not a fixed panel below it), so it can be repositioned to avoid
+  obscuring data of interest. Defaults to the top-right corner and resets there
+  each session; height is capped with a vertical scrollbar for dense plots
+  (e.g. 48+ Receiver SNR series), with a permanent gutter so the scrollbar never
+  overlaps row text.
+- Receiver SNR legend rows show a short `CH<id> <L/R/C>_RCVR<n>` label instead
+  of the full TMATS-derived stream title; the full name is still used for CSV
+  headers, renaming, and hover tooltips.
+- Composited into exported PNG and SVG images at its placed position. Per-series
+  color and name editing moved from the (now read-only) legend into the
+  Customize Plot Series dialog.
+
+**Configure Streams dialog redesign**
+- Progress bar and Cancel button moved out of the main window into a modal
+  `ProcessingProgressDialog`; primary-action/Cancel button order corrected to
+  match WinUI 3 convention (primary left of Cancel) across `StreamConfigDialog`
+  and its three sub-dialogs.
+- Channel column narrowed, right-justified with left-side elision (so the
+  distinguishing tail of a long TMATS name — band, rate, code — stays visible
+  instead of the common prefix), and styled to match the Mode combo box's
+  border/fill. Mode combo's closed-box text is right-justified so it no longer
+  crowds the Channel column.
+- The three per-stream sub-dialogs (Frame Sync Lock, Calibration, Receiver SNR)
+  now share one layout vocabulary (spacing, grid geometry, icon-button sizing,
+  a consistent text-left/buttons-centered alignment rule) so their
+  look-and-feel stays consistent instead of drifting per dialog.
+- Toolbar Export/Import icons switched to Microsoft's actual Fluent System Icons
+  glyphs (`ArrowExport` / `ArrowImport`, MIT licensed), recolored to the app's
+  existing green/orange convention.
+
+**Fixed**
+- Two configured streams sharing a TMATS-derived channel name could silently
+  cross-contaminate each other's plot series — renaming, recoloring, or
+  reprocessing one stream could affect the other's Frame Sync Lock / Accumulated
+  Missed Frames series. Stream identity is now matched by channel name **and**
+  PCM channel id together, not name alone.
+- Assorted correctness/robustness hardening from a pre-release code review:
+  plot series lookups by stable id instead of position (so a stream finishing
+  processing in the background can't recolor/hide the wrong curve while the
+  Customize Plot dialog is open), and a few internal lifetime/ownership
+  tightenings with no user-visible behavior change.
 
 ### v2.5.2 — Stream Config Dialog Polish
 - Configure Streams dialog table background changed from near-black (#202020) to match the dialog background (#2C2C2C) in the dark theme QSS, removing the black-background appearance behind table row controls.
@@ -791,7 +832,7 @@ source/header files are listed in `tests/tests.pro`.
 - **TestFrameProcessor** (`tst_frameprocessor`) — constructor defaults, abort flag, `derandomizeBitstream` (identity/short and changed/long), invalid time-channel/PCM-channel/file handling, and processing real Ch10 data (receiver-data accumulation, lock-only mode has no channels, monotonic frame-sync errors, slope affects values, shorter period → more samples, calibration round-trip clean steps, off-phase sync after lock-loss not extracted)
 - **TestMainViewModelHelpers** (`tst_mainviewmodel_helpers`) — ViewModel helper methods (`channelPrefix` and `parameterName` over known/unknown/boundary indices)
 - **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration
-- **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, Y auto/manual range, X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), and the left-axis view toggle preserving per-stream selection
+- **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, Y auto/manual range, X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), the left-axis view toggle preserving per-stream selection, and stream-identity regression coverage: two streams sharing a TMATS-derived `streamLabel` but different `streamOrder` must stay independent through reprocess-replace and `renameSeries()`/`recolorSeries()` sibling-sync (pinned after a pre-v2.6.0 cross-contamination bug)
 - **TestProcessingCoordinator** (`tst_processingcoordinator`) — constructor defaults, `reset()` clears state, cancel-with-no-run no-op, `startProcessing()` empty-returns-false and processing-state emission, plus single-vs-multi-stream throughput benchmarks
 - **TestMainView** (`tst_mainview`) — Main window construction, widget wiring, log routing, dock visibility behavior
 - **TestPlotWidget** (`tst_plotwidget`) — Plot widget construction, null/valid ViewModel connection, dark/light theme application, the movable legend overlay populating from data (hidden until data loads, then one row per visible active-metric series), a shown/resized-window regression case asserting the overlay sizes correctly (not a collapsed frame-only box) after a second rebuild adds more rows — a QScrollArea `widgetResizable` sizeHint staleness bug reproduced and fixed post-review — the SNR legend row showing the short "CH\<id\> \<ch.name\>" form instead of the full TMATS stream title, the legend row layout reserving a right-side gutter matching the style's scrollbar extent, and each legend row carrying an objectName the overlay stylesheet can target to override the app's global `QWidget { background-color: ... }` theme rule (otherwise every row painted as an opaque chip)
