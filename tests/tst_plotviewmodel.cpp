@@ -991,6 +991,100 @@ void TestPlotViewModel::frameSyncErrorMaxReflectsData()
 }
 
 // ---------------------------------------------------------------------------
+// Stream identity: streamLabel + streamOrder (pre-v2.6.0 regression coverage)
+// ---------------------------------------------------------------------------
+
+namespace {
+/// @return the index of the series matching @p order and @p metric, or -1.
+int findSeriesIndex(const PlotViewModel& vm, int order, PlotSeriesData::MetricType metric)
+{
+    for (int i = 0; i < vm.seriesCount(); i++)
+    {
+        const PlotSeriesData& s = vm.seriesAt(i);
+        if (s.streamOrder == order && s.metricType == metric)
+            return i;
+    }
+    return -1;
+}
+} // namespace
+
+void TestPlotViewModel::reprocessOnlySameStreamOrderReplaced()
+{
+    // Two streams share a TMATS-derived label ("Ch 01") but are distinct PCM
+    // channels. Before the fix, addStreamData's reprocess-replace matched on
+    // streamLabel alone, so reprocessing one would silently erase the other's
+    // series too.
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch 01", 5, {0.0, 1.0}, {90.0, 95.0}, {0.0, 1.0}));
+    vm.addStreamData(makeLockAndErrorStream("Ch 01", 6, {0.0, 1.0}, {50.0, 55.0}, {0.0, 2.0}));
+    QCOMPARE(vm.seriesCount(), 4); // 2 streams x (lock + missed-frames)
+
+    // Reprocess only stream 5, with different values.
+    vm.addStreamData(makeLockAndErrorStream("Ch 01", 5, {0.0, 1.0, 2.0}, {10.0, 20.0, 30.0}, {0.0, 0.0, 5.0}));
+
+    QCOMPARE(vm.seriesCount(), 4); // still 4 — stream 6's pair must survive untouched
+    const int lock5 = findSeriesIndex(vm, 5, PlotSeriesData::MetricType::FrameSyncLock);
+    const int lock6 = findSeriesIndex(vm, 6, PlotSeriesData::MetricType::FrameSyncLock);
+    QVERIFY(lock5 >= 0);
+    QVERIFY(lock6 >= 0);
+    QCOMPARE(vm.seriesAt(lock5).yValues, QVector<double>({10.0, 20.0, 30.0})); // reprocessed
+    QCOMPARE(vm.seriesAt(lock6).yValues, QVector<double>({50.0, 55.0}));      // untouched
+}
+
+void TestPlotViewModel::renameSeriesOnlySameStreamOrderSiblingRenamed()
+{
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch 01", 5, {0.0, 1.0}, {90.0, 95.0}, {0.0, 1.0}));
+    vm.addStreamData(makeLockAndErrorStream("Ch 01", 6, {0.0, 1.0}, {50.0, 55.0}, {0.0, 2.0}));
+
+    const int lock5   = findSeriesIndex(vm, 5, PlotSeriesData::MetricType::FrameSyncLock);
+    const int missed5 = findSeriesIndex(vm, 5, PlotSeriesData::MetricType::AccumulatedMissedFrames);
+    const int lock6   = findSeriesIndex(vm, 6, PlotSeriesData::MetricType::FrameSyncLock);
+    const int missed6 = findSeriesIndex(vm, 6, PlotSeriesData::MetricType::AccumulatedMissedFrames);
+    // Guard indices before use: a regression here (e.g. reprocess-replace erasing
+    // stream 6 while adding stream 5) must fail this QVERIFY cleanly rather than
+    // crash the whole test binary on an out-of-range seriesAt().
+    QVERIFY(lock5 >= 0);
+    QVERIFY(missed5 >= 0);
+    QVERIFY(lock6 >= 0);
+    QVERIFY(missed6 >= 0);
+
+    vm.renameSeries(lock5, "Renamed Stream 5");
+
+    // Stream 5's own lock/missed-frames pair renamed together...
+    QCOMPARE(vm.seriesAt(lock5).name, QString("Renamed Stream 5"));
+    QCOMPARE(vm.seriesAt(missed5).name, QString("Renamed Stream 5"));
+    // ...but stream 6 shares the same original label and must NOT be touched.
+    QCOMPARE(vm.seriesAt(lock6).name, QString("Ch 01"));
+    QCOMPARE(vm.seriesAt(missed6).name, QString("Ch 01"));
+}
+
+void TestPlotViewModel::recolorSeriesOnlySameStreamOrderSiblingRecolored()
+{
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch 01", 5, {0.0, 1.0}, {90.0, 95.0}, {0.0, 1.0}));
+    vm.addStreamData(makeLockAndErrorStream("Ch 01", 6, {0.0, 1.0}, {50.0, 55.0}, {0.0, 2.0}));
+
+    const int lock5   = findSeriesIndex(vm, 5, PlotSeriesData::MetricType::FrameSyncLock);
+    const int missed5 = findSeriesIndex(vm, 5, PlotSeriesData::MetricType::AccumulatedMissedFrames);
+    const int lock6   = findSeriesIndex(vm, 6, PlotSeriesData::MetricType::FrameSyncLock);
+    const int missed6 = findSeriesIndex(vm, 6, PlotSeriesData::MetricType::AccumulatedMissedFrames);
+    QVERIFY(lock5 >= 0);
+    QVERIFY(missed5 >= 0);
+    QVERIFY(lock6 >= 0);
+    QVERIFY(missed6 >= 0);
+    const QColor original6Color = vm.seriesAt(lock6).color;
+
+    vm.recolorSeries(lock5, QColor(Qt::magenta));
+
+    QCOMPARE(vm.seriesAt(lock5).color, QColor(Qt::magenta));
+    QCOMPARE(vm.seriesAt(missed5).color, QColor(Qt::magenta));
+    // Stream 6 shares the same original label and must keep its own color.
+    QCOMPARE(vm.seriesAt(lock6).color, original6Color);
+    QCOMPARE(vm.seriesAt(missed6).color, original6Color);
+}
+
+// ---------------------------------------------------------------------------
 // exportCsv tests
 // ---------------------------------------------------------------------------
 
