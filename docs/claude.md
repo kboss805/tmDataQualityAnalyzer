@@ -364,9 +364,13 @@ The stories below follow the workflow a first-time user takes through the applic
   PCM channel id together, not name alone.
 - Assorted correctness/robustness hardening from a pre-release code review:
   plot series lookups by stable id instead of position (so a stream finishing
-  processing in the background can't recolor/hide the wrong curve while the
-  Customize Plot dialog is open), and a few internal lifetime/ownership
-  tightenings with no user-visible behavior change.
+  processing in the background can't recolor/hide the wrong curve), and a few
+  internal lifetime/ownership tightenings with no user-visible behavior change.
+- The Customize Plot Series dialog now resolves its edits by stable series id
+  (`PlotViewModel::indexOfSeriesId`) rather than the raw positional indices it
+  captured when opened, so a series-list change while the dialog is open (an
+  async CSV import replacing the data, or an in-flight reprocess) can no longer
+  apply an edit to the wrong series or read past the end of the series list.
 
 ### v2.5.2 — Stream Config Dialog Polish
 - Configure Streams dialog table background changed from near-black (#202020) to match the dialog background (#2C2C2C) in the dark theme QSS, removing the black-background appearance behind table row controls.
