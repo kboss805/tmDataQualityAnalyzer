@@ -461,6 +461,16 @@ const PlotSeriesData& PlotViewModel::seriesAt(int index) const
     return m_series.at(index);
 }
 
+int PlotViewModel::indexOfSeriesId(int id) const
+{
+    for (int i = 0; i < m_series.size(); ++i)
+    {
+        if (m_series.at(i).id == id)
+            return i;
+    }
+    return -1;
+}
+
 const QVector<PlotSeriesData>& PlotViewModel::allSeries() const
 {
     return m_series;

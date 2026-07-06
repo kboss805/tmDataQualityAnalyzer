@@ -112,14 +112,20 @@ void TestPlotCustomizationDialog::applyChangesLockVisibility()
     dlg.applyChanges();
 
     // Box 0's series (both lock and missed) must be hidden.
-    for (int idx : dlg.m_lockRows[0].seriesIndices)
+    for (int id : dlg.m_lockRows[0].seriesIds)
+    {
+        const int idx = vm.indexOfSeriesId(id);
+        QVERIFY(idx >= 0);
         QVERIFY(!vm.seriesAt(idx).visible);
+    }
 
     // Box 1 is checked with the LockPercent view active: its FrameSyncLock series
     // is visible, but its AccumulatedMissedFrames sibling stays hidden (it belongs
     // to the other axis view).
-    for (int idx : dlg.m_lockRows[1].seriesIndices)
+    for (int id : dlg.m_lockRows[1].seriesIds)
     {
+        const int idx = vm.indexOfSeriesId(id);
+        QVERIFY(idx >= 0);
         const PlotSeriesData& s = vm.seriesAt(idx);
         if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock)
             QVERIFY(s.visible);
@@ -219,8 +225,10 @@ void TestPlotCustomizationDialog::applyChangesSnrVisibility()
     QTreeWidget* tree = dlg.m_snrStreamTrees.value(40).first();
     QTreeWidgetItem* firstChannel  = tree->topLevelItem(0)->child(0);
     QTreeWidgetItem* secondChannel = tree->topLevelItem(0)->child(1);
-    const int hiddenIdx = firstChannel->data(0, Qt::UserRole).toInt();
-    const int shownIdx  = secondChannel->data(0, Qt::UserRole).toInt();
+    const int hiddenIdx = vm.indexOfSeriesId(firstChannel->data(0, Qt::UserRole).toInt());
+    const int shownIdx  = vm.indexOfSeriesId(secondChannel->data(0, Qt::UserRole).toInt());
+    QVERIFY(hiddenIdx >= 0);
+    QVERIFY(shownIdx >= 0);
 
     firstChannel->setCheckState(0, Qt::Unchecked);
     dlg.applyChanges();
@@ -258,10 +266,14 @@ void TestPlotCustomizationDialog::lockRenameAppliesToViewModel()
     dlg.applyChanges();
 
     // Applies to every series in the stream (the lock + missed-frames siblings).
-    const QVector<int> indices = dlg.m_lockRows[0].seriesIndices;
-    QVERIFY(!indices.isEmpty());
-    for (int idx : indices)
+    const QVector<int> ids = dlg.m_lockRows[0].seriesIds;
+    QVERIFY(!ids.isEmpty());
+    for (int id : ids)
+    {
+        const int idx = vm.indexOfSeriesId(id);
+        QVERIFY(idx >= 0);
         QCOMPARE(vm.seriesAt(idx).name, QString("Renamed Stream"));
+    }
 }
 
 void TestPlotCustomizationDialog::lockRecolorAppliesToViewModel()
@@ -273,10 +285,14 @@ void TestPlotCustomizationDialog::lockRecolorAppliesToViewModel()
     dlg.m_lockRows[0].color = QColor(Qt::magenta); // simulate a swatch color pick
     dlg.applyChanges();
 
-    const QVector<int> indices = dlg.m_lockRows[0].seriesIndices;
-    QVERIFY(!indices.isEmpty());
-    for (int idx : indices)
+    const QVector<int> ids = dlg.m_lockRows[0].seriesIds;
+    QVERIFY(!ids.isEmpty());
+    for (int id : ids)
+    {
+        const int idx = vm.indexOfSeriesId(id);
+        QVERIFY(idx >= 0);
         QCOMPARE(vm.seriesAt(idx).color, QColor(Qt::magenta));
+    }
 }
 
 void TestPlotCustomizationDialog::snrRenameRecolorAppliesToViewModel()
@@ -287,7 +303,8 @@ void TestPlotCustomizationDialog::snrRenameRecolorAppliesToViewModel()
 
     QTreeWidget* tree = dlg.m_snrStreamTrees.value(40).first();
     QTreeWidgetItem* leaf = tree->topLevelItem(0)->child(0);
-    const int idx = leaf->data(0, Qt::UserRole).toInt();
+    const int idx = vm.indexOfSeriesId(leaf->data(0, Qt::UserRole).toInt());
+    QVERIFY(idx >= 0);
 
     // The channel context menu stores pending edits in these item roles
     // (UserRole+1 name, UserRole+2 color); applyChanges() pushes them to the VM.
@@ -308,4 +325,39 @@ void TestPlotCustomizationDialog::applyChangesEmitsAppearanceSignal()
     QSignalSpy spy(&vm, &PlotViewModel::seriesAppearanceChanged);
     dlg.applyChanges();
     QCOMPARE(spy.count(), 1); // batched: exactly one refresh notification per apply
+}
+
+void TestPlotCustomizationDialog::applyChangesRobustToSeriesListChange()
+{
+    PlotViewModel vm;
+    populateVm(vm);
+    PlotCustomizationDialog dlg(&vm);
+
+    // Stage edits: rename CH 33's stream (lock row 1) and hide CH 32 (lock row 0).
+    dlg.m_lockRows[1].nameEdit->setText("CH33 Renamed");
+    dlg.m_lockRows[0].checkbox->setChecked(false);
+
+    // Replace the entire series list while the modal dialog is "open" — the way a
+    // completed async CSV import does (commitParseResult moves a whole new vector
+    // into m_series). Every captured id is now gone and the positions differ, so a
+    // dialog holding raw indices would edit whichever fresh series moved into the
+    // old slots. Five fresh series keep a stale positional index in range (so it
+    // would corrupt the wrong series) rather than tripping a bounds-guarded no-op.
+    // clearData() does not reset the id counter, so the fresh ids can't alias the
+    // captured ones.
+    vm.clearData();
+    vm.addStreamData(makeSnrStream("Fresh", 99, 0,
+                                   { "L_RCVR1", "R_RCVR1", "L_RCVR2", "R_RCVR2", "L_RCVR3" }));
+    const int freshCount = vm.seriesCount();
+    QVERIFY(freshCount >= 5);
+
+    dlg.applyChanges(); // every captured id resolves to -1 and is skipped
+
+    // The stale rename/hide must not have landed on any freshly loaded series.
+    QCOMPARE(vm.seriesCount(), freshCount);
+    for (int i = 0; i < vm.seriesCount(); ++i)
+    {
+        QVERIFY(vm.seriesAt(i).name != QString("CH33 Renamed"));
+        QVERIFY(vm.seriesAt(i).visible);
+    }
 }

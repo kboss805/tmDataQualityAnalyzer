@@ -54,6 +54,12 @@ public:
     bool isLoading() const;                        ///< @return True if an async parse is in progress.
     int seriesCount() const;                       ///< @return Number of loaded series.
     const PlotSeriesData& seriesAt(int index) const; ///< @return Series at the given index.
+    /// @return Index of the series with stable @p id, or -1 if no series has that id
+    /// (e.g. it was removed/replaced since the id was captured). Lets long-lived UI
+    /// such as the modal Customize Plot Series dialog hold stable ids and resolve them
+    /// to a current index at apply time, instead of raw positional indices that go
+    /// stale if the series list changes (async reprocess/import) while it is open.
+    int indexOfSeriesId(int id) const;
     const QVector<PlotSeriesData>& allSeries() const; ///< @return All series data.
     void renameSeries(int index, const QString& name);   ///< Overrides the display name of a series.
     void recolorSeries(int index, const QColor& color);  ///< Overrides the color of a series.
