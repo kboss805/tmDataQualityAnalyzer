@@ -73,7 +73,7 @@ stop endorsing the change until it moves.
 - **Frame-sync Load/Save round-trips ONLY** frame sync pattern, sync mask, and words/frame.
   `Randomized`, `Data Rate`, and `Sample Rate` are per-session operator inputs and are intentionally
   excluded (the separator line in the setup dialog = this boundary). Do not widen
-  `loadFrameSyncToml`/`saveFrameSyncToml` past it. See US5.0 scope in `docs/CLAUDE.md`.
+  `loadFrameSyncToml`/`saveFrameSyncToml` past it. See US1.0 scope in `docs/CLAUDE.md`.
 - Calibration profiles are **session-only** and never serialized to disk.
 
 ### Threading / lifecycle (`processingcoordinator.cpp`, `ch10packetreader.cpp`, `packetqueue.h`)

@@ -1,7 +1,7 @@
 /**
  * @file tst_streamconfigdialog.h
  * @brief Unit tests for StreamConfigDialog — construction, configs() roundtrip,
- *        and the frame-sync TOML save/load contract (US4.0, US5.0, US8.0).
+ *        and the frame-sync TOML save/load contract (US5.0, US1.0, US7.0).
  */
 
 #ifndef TST_STREAMCONFIGDIALOG_H
@@ -25,7 +25,7 @@ private slots:
     void configsRoundtripProcessFlag();
 
 
-    // Frame-sync TOML scope boundary (US4.0 / US5.0):
+    // Frame-sync TOML scope boundary (US5.0 / US1.0):
     // Save writes exactly FrameSync, FrameSyncMask, WordsInMinorFrame under [Frame].
     // Load reads back those same three keys.
     void tomlFrameSyncSaveRoundtrip();
@@ -33,7 +33,7 @@ private slots:
     void tomlFrameSyncSaveDoesNotWriteRandomized();
     void tomlFrameSyncSaveDoesNotWriteDataRate();
 
-    // validateAndAccept rejects a checked stream with no frame sync pattern (US8.0)
+    // validateAndAccept rejects a checked stream with no frame sync pattern (US7.0)
     void validateRejectsCheckedStreamWithEmptyFrameSync();
 
     // Data type validation and limits
@@ -42,7 +42,7 @@ private slots:
     void testDataRateLimits();
     void testDefaultSampleRate();
 
-    // "Apply to all" fan-out (US2.5)
+    // "Apply to all" fan-out (US2.2)
     void applyToAllCopiesSettingsToSameModeStreams();
     void applyToAllLeavesDifferentModeStreamsUnchanged();
     void applyToAllUncheckedDoesNotAffectOtherStreams();

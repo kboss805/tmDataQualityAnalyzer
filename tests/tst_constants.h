@@ -49,7 +49,7 @@ private slots:
     // v3.2 additions
     void pcmFrameSyncHexPattern();
 
-    // v3.3 additions (US1.1 / US2.1 — frame sync mask)
+    // v3.3 additions (US2.1 / US2.0 — frame sync mask)
     void pcmFrameSyncMaskConstants();
     void pcmFrameLengthBoundsConstants();
 

@@ -210,7 +210,7 @@ void TestConstants::pcmFrameSyncHexPattern()
     QCOMPARE(QString(PCMConstants::kFrameSyncHexPattern), QString("^[0-9A-Fa-f]+$"));
 }
 
-// v3.3 additions (US1.1 / US2.1 — frame sync mask)
+// v3.3 additions (US2.1 / US2.0 — frame sync mask)
 
 void TestConstants::pcmFrameSyncMaskConstants()
 {
@@ -246,7 +246,7 @@ void TestConstants::uiMaxSlopeIndex()
 
 void TestConstants::uiSlopeVoltageBounds()
 {
-    // Voltage bounds for each slope index (US1.1 — voltage range options).
+    // Voltage bounds for each slope index (US2.1 — voltage range options).
     QCOMPARE(UIConstants::kSlopeVoltageLower[0], -10.0);
     QCOMPARE(UIConstants::kSlopeVoltageLower[1],  -5.0);
     QCOMPARE(UIConstants::kSlopeVoltageLower[2],   0.0);
@@ -260,6 +260,6 @@ void TestConstants::uiSlopeVoltageBounds()
 
 void TestConstants::plotFrameSyncLockColor()
 {
-    // Distinctive purple used to render framesync lock series (US6.0).
+    // Distinctive purple used to render framesync lock series (US4.0).
     QCOMPARE(PlotConstants::kFrameSyncLockColor, QColor(106, 13, 173));
 }

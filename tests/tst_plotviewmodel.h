@@ -49,7 +49,7 @@ private slots:
     void addStreamDataMultipleStreamsAccumulate();
     void addStreamDataEmptyDataNoOp();
 
-    // Frame sync error accumulation (US2.1) tests
+    // Frame sync error accumulation (US3.1) tests
     void addStreamDataErrorSeriesCreated();
     void errorSeriesSharesLockColor();
     void setLockAxisViewTogglesVisibility();

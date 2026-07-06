@@ -28,7 +28,7 @@ struct ParameterInfo
     double scale = 0.0;         ///< Calibration offset applied before slope.
     bool is_enabled = false;    ///< Whether this parameter is included in output.
     double sample_sum = 0.0;    ///< Running sum of RAW counts in the window; calibration is applied once to the windowed average.
-    CalibrationProfile profile; ///< Optional non-linear step calibration (US3.2); linear math used when invalid.
+    CalibrationProfile profile; ///< Optional non-linear step calibration (US5.3); linear math used when invalid.
 };
 
 /**
@@ -94,7 +94,7 @@ public:
     /// conversion is single-sourced and unit-testable, not embedded in the ViewModel.
     void applyLinearCalibration(int polarity_index, int slope_index, double scale_dB_per_V);
 
-    /// Attaches non-linear step-calibration profiles (US3.2) by word index; only
+    /// Attaches non-linear step-calibration profiles (US5.3) by word index; only
     /// profiles flagged valid are attached, others keep their linear slope/scale.
     /// @return how many profiles were attached.
     int attachCalibrationProfiles(const QHash<int, CalibrationProfile>& by_word);

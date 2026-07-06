@@ -1,6 +1,6 @@
 /**
  * @file tst_calibrationextractor.cpp
- * @brief Unit tests for CalibrationExtractor pipeline orchestration (US3.2).
+ * @brief Unit tests for CalibrationExtractor pipeline orchestration (US5.3).
  *
  * StepDetector's pure logic is covered by TestStepDetector; this suite drives the
  * async extraction end to end (reader + FrameProcessor on worker threads, then

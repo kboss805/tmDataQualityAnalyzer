@@ -18,7 +18,7 @@ private slots:
     void menuBarExists();
     void toolBarExists();
 
-    // US7.0 — CSV import / file routing
+    // US6.3 — CSV import / file routing
     void supportedFileDetection();
     void openPathImportsCsv();
     void importValidCsvPopulatesPlot();

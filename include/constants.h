@@ -59,7 +59,7 @@ namespace PCMConstants {
     /// Regex pattern for validating hexadecimal input strings (e.g., frame sync).
     inline constexpr const char* kFrameSyncHexPattern = "^[0-9A-Fa-f]+$";
 
-    /// @name Frame length and sync bounds (US1.1, US8.0)
+    /// @name Frame length and sync bounds (US2.1, US7.0)
     /// @{
     inline constexpr int kMaxSyncPatternBits  = 64;    ///< Maximum frame sync pattern length in bits (16 hex chars).
     inline constexpr int kMinFrameLengthBits  = 64;    ///< Minimum total frame length in bits.
@@ -174,7 +174,7 @@ namespace UIConstants {
     /// @}
 }
 
-/// @brief Constants for non-linear step calibration extraction (US3.2).
+/// @brief Constants for non-linear step calibration extraction (US5.3).
 namespace CalibrationConstants {
     /// Fine output sample period (seconds) used when extracting raw calibration
     /// data, so dwell plateaus are resolved with many samples each. This is the

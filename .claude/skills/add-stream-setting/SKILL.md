@@ -38,9 +38,9 @@ which is composed into `StreamConfig`.
 Surface the control in the Frame Sync Lock setup or Receiver SNR setup sub-dialog (whichever matches
 the mode). Add the widget, a tooltip (every field has one), wire it to read/write the `StreamConfig`
 field, and respect the wireframe separator: persistent config fields go above it, per-session inputs
-below. Validate input at entry (US9.0) — e.g. hex-only for patterns, range checks for counts.
+below. Validate input at entry (US7.0) — e.g. hex-only for patterns, range checks for counts.
 
-### 3. Apply-to-all fan-out (US2.5) — `src/view/streamconfigdialog.cpp`
+### 3. Apply-to-all fan-out (US2.2) — `src/view/streamconfigdialog.cpp`
 If the setting should propagate when the user checks "Apply to all <mode> streams", add it to the
 field-copy lambda that the gear dialog uses (the same dialog→row copy path as every other fanned-out
 field). If it's intentionally per-stream-only, note that in the field's comment so a future reader
@@ -55,9 +55,9 @@ snake_case fields). If it affects the **word map or calibration table**, also th
 If and only if the field is meant to be saved/recalled, add it to the matching load/save helper —
 keeping load and save **symmetric**. Respect the boundaries:
 - **Frame-sync TOML round-trips ONLY** sync pattern, sync mask, words/frame. `Randomized`,
-  `Data Rate`, `Sample Rate` are per-session and excluded by design (US5.0). Do not widen
+  `Data Rate`, `Sample Rate` are per-session and excluded by design (US1.0). Do not widen
   `loadFrameSyncToml`/`saveFrameSyncToml`.
-- Receiver-parameter TOML covers the word map + linear calibration (US3.0). Calibration *profiles*
+- Receiver-parameter TOML covers the word map + linear calibration (US5.1). Calibration *profiles*
   are session-only and never serialized.
 If the field is a per-session operator input, skip this step entirely — that's the correct behavior,
 not an omission.

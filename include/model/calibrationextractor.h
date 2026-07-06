@@ -1,7 +1,7 @@
 /**
  * @file calibrationextractor.h
  * @brief Drives a single-stream raw extraction over a calibration Chapter 10
- *        file and builds per-channel non-linear calibration profiles (US3.2).
+ *        file and builds per-channel non-linear calibration profiles (US5.3).
  *
  * Reuses the production pipeline (Ch10PacketReader + FrameProcessor) on its own
  * worker threads, but configures the word map with unit slope / zero offset so
