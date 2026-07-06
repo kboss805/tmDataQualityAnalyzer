@@ -20,6 +20,11 @@ private slots:
     void lockRecolorAppliesToViewModel();
     void snrRenameRecolorAppliesToViewModel();
     void applyChangesEmitsAppearanceSignal();
+
+    // Regression: the dialog captures stable series ids, so applyChanges() stays
+    // correct (and never reads out of range) if the series list is reordered or a
+    // captured series is removed while the modal dialog is open (async reprocess).
+    void applyChangesRobustToSeriesListChange();
 };
 
 #endif // TST_PLOTCUSTOMIZATIONDIALOG_H

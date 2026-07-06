@@ -68,9 +68,14 @@ private:
     struct LockRow
     {
         QCheckBox* checkbox = nullptr;
-        /// Series this row's checkbox controls — typically both the
-        /// FrameSyncLock and AccumulatedMissedFrames series for the stream.
-        QVector<int> seriesIndices;
+        /// Stable ids (PlotSeriesData::id) of the series this row's checkbox
+        /// controls — typically both the FrameSyncLock and AccumulatedMissedFrames
+        /// series for the stream. Stored as ids, not raw indices: applyChanges()
+        /// resolves them via PlotViewModel::indexOfSeriesId() so an async
+        /// reprocess/import that reorders the series list while this modal dialog
+        /// is open can't make the edits land on the wrong series (or read out of
+        /// range in seriesAt()).
+        QVector<int> seriesIds;
         QLineEdit* nameEdit = nullptr;
         QPushButton* swatch = nullptr;
         QColor color; ///< Pending color chosen from the swatch; applied to the ViewModel on OK.

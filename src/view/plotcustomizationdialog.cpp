@@ -205,9 +205,16 @@ void PlotCustomizationDialog::populateData()
         rowLayout->addWidget(nameEdit, 1);
         m_lockListLayout->addWidget(row);
 
+        // Capture stable series ids (not the raw construction-time indices) so the
+        // edits survive a series-list change while this modal dialog is open.
+        QVector<int> ids;
+        ids.reserve(it.value().size());
+        for (int idx : it.value())
+            ids.append(series.at(idx).id);
+
         LockRow lockRow;
         lockRow.checkbox = cb;
-        lockRow.seriesIndices = it.value();
+        lockRow.seriesIds = ids;
         lockRow.nameEdit = nameEdit;
         lockRow.swatch = swatch;
         lockRow.color = color0;
@@ -304,7 +311,9 @@ QTreeWidget* PlotCustomizationDialog::buildSnrTree(const QVector<int>& receiverI
             chItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
             chItem->setCheckState(0, s.visible ? Qt::Checked : Qt::Unchecked);
             chItem->setForeground(0, s.color);
-            chItem->setData(0, Qt::UserRole, idx);
+            // Store the stable series id (resolved back to an index at apply time),
+            // not the raw construction-time index which could go stale.
+            chItem->setData(0, Qt::UserRole, s.id);
             if (s.visible) checkedCount++;
         }
 
@@ -325,7 +334,10 @@ QTreeWidget* PlotCustomizationDialog::buildSnrTree(const QVector<int>& receiverI
         QTreeWidgetItem* item = tree->itemAt(pos);
         if (item == nullptr || item->parent() == nullptr)
             return; // channel leaves only, not RCVR groups
-        const int idx = item->data(0, Qt::UserRole).toInt();
+        const int seriesId = item->data(0, Qt::UserRole).toInt();
+        const int idx = m_viewModel->indexOfSeriesId(seriesId);
+        if (idx < 0)
+            return; // series was removed/replaced since the dialog opened
 
         QMenu menu;
         QAction* renameAct = menu.addAction(tr("Rename series…"));
@@ -462,7 +474,10 @@ void PlotCustomizationDialog::applyChanges()
     const bool showMissedFrames = m_viewModel->lockAxisView() == PlotViewModel::LockAxisView::MissedFrames;
     for (const LockRow& row : m_lockRows) {
         bool checked = row.checkbox->isChecked();
-        for (int idx : row.seriesIndices) {
+        for (int seriesId : row.seriesIds) {
+            const int idx = m_viewModel->indexOfSeriesId(seriesId);
+            if (idx < 0)
+                continue; // series gone (list changed while dialog open)
             const auto& s = m_viewModel->seriesAt(idx);
             bool isActiveMetric = (s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
                 == showMissedFrames;
@@ -477,7 +492,9 @@ void PlotCustomizationDialog::applyChanges()
                 QTreeWidgetItem* rcvrItem = tree->topLevelItem(r);
                 for (int c = 0; c < rcvrItem->childCount(); c++) {
                     QTreeWidgetItem* chItem = rcvrItem->child(c);
-                    int idx = chItem->data(0, Qt::UserRole).toInt();
+                    const int idx = m_viewModel->indexOfSeriesId(chItem->data(0, Qt::UserRole).toInt());
+                    if (idx < 0)
+                        continue;
                     m_viewModel->setSeriesVisibleQuiet(idx, chItem->checkState(0) == Qt::Checked);
                 }
             }
@@ -487,9 +504,11 @@ void PlotCustomizationDialog::applyChanges()
     // Apply per-stream color/name edits (Lock tab). renameSeries/recolorSeries are
     // pure setters that propagate to the lock/missed sibling by stream label.
     for (const LockRow& row : m_lockRows) {
-        if (row.seriesIndices.isEmpty())
+        if (row.seriesIds.isEmpty())
             continue;
-        const int firstIdx = row.seriesIndices.first();
+        const int firstIdx = m_viewModel->indexOfSeriesId(row.seriesIds.first());
+        if (firstIdx < 0)
+            continue; // series gone (list changed while dialog open)
         m_viewModel->renameSeries(firstIdx, row.nameEdit->text());
         m_viewModel->recolorSeries(firstIdx, row.color);
     }
@@ -501,7 +520,9 @@ void PlotCustomizationDialog::applyChanges()
                 QTreeWidgetItem* rcvrItem = tree->topLevelItem(r);
                 for (int c = 0; c < rcvrItem->childCount(); c++) {
                     QTreeWidgetItem* chItem = rcvrItem->child(c);
-                    const int idx = chItem->data(0, Qt::UserRole).toInt();
+                    const int idx = m_viewModel->indexOfSeriesId(chItem->data(0, Qt::UserRole).toInt());
+                    if (idx < 0)
+                        continue;
                     if (chItem->data(0, kRolePendingName).isValid())
                         m_viewModel->renameSeries(idx, chItem->data(0, kRolePendingName).toString());
                     if (chItem->data(0, kRolePendingColor).isValid())
