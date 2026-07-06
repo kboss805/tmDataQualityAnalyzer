@@ -1,7 +1,7 @@
 /**
  * @file stepdetector.h
  * @brief Detects calibration step plateaus in a raw-count series and builds a
- *        per-channel non-linear CalibrationProfile (US3.2).
+ *        per-channel non-linear CalibrationProfile (US5.3).
  *
  * Pure logic with no Qt UI dependencies, so it is unit-testable in isolation.
  * Detection uses derivative/edge detection: large sample-to-sample changes mark

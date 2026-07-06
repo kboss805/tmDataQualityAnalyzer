@@ -11,189 +11,12 @@ This file provides context and guidelines for AI assistants working on the tmDat
 
 ## User Stories
 
-### US1.0: View SNR signal data from IRIG 106 formatted PCM telemetry streams contained in .ch10 files
+The stories below follow the workflow a first-time user takes through the application: open a file and choose what to process (US1), define the per-stream parameters (US2), view the resulting data-quality metrics (US3), customize the plot (US4), manage configuration files and calibration (US5), export and re-import results (US6), and the cross-cutting concerns of input validation (US7), installation (US8), and theming (US9).
+
+### US1.0: Open a Ch10 file and configure which streams to process
 **As a** telemetry engineer or data analyst
-**I want to** to view SNR signal data (in dB) derived from telemetry receiver AGC samples (raw integer energy values from 0 to 65,535) included in PCM data streams within IRIG 106 formatted .ch10 files
-**So that** I can view the SNR signal data for one or more receiver channels versus time.
-
-**Acceptance Criteria:**
-- [x] The user can view the SNR signal data (right hand y-axis) versus time (x-axis) in a plot window.
-- [x] The user can select which receiver/channels SNR signal data to view in the plot window.
-- [x] The user can select the time window to view the SNR signal data in the plot window.
-- [x] The user can select one of the following time periods to average SNR signal data over: 100 Hz, 10 Hz, 1 Hz.
-- [x] Samples are converted from raw integer energy values to Volts (V) using the voltage range and polarity.
-- [x] Volts are then converted to decimal dB values using the scale (dB/V).
-- [x] A progress bar updates as the application is processing the SNR signal data.
-
-### US1.1: Define the key parameters required to process the receiver AGC sample data
-**As a** telemetry engineer or data analyst
-**I want to** define the rules and key parameters (frame sync pattern, frame length, framesync mask, PCM code format, etc.) required to decommutate and process telemetry streams containing receiver AGC sample data
-**So that** these parameters can be applied per-stream in the processing dialog window (defined in US5.0) and saved/loaded from configuration files (defined in US3.x).
-
-**Acceptance Criteria:**
-- [x] The user can define the frame sync pattern and frame length for the telemetry stream of interest.
-- [x] The application accepts frame sync pattern sizes up to 64 bits in length.
-- [x] The application accepts frame sync masks up to 64 bits in length.
-- [x] The application accepts frame lengths up to 65,536 bits in length.
-- [x] The user can select from one of the following PCM code formats: NRZ-L, RNRZ-L.
-- [x] The user can define the number of receivers and the number of channels per receiver in the telemetry stream of interest.
-- [x] The user can define the scale of the receiver AGC sample data in dB/V.
-- [x] The user can define the voltage range of the receiver AGC sample from one of the following values: 0-5V, 0-10V, +/-5V, +/-10V.
-- [x] The user can define the polarity of the receiver AGC sample data: positive or negative.
-
-### US1.2: Export user specified SNR signal data with timestamps to a file
-**As an** As a telemetry engineer or data analyst
-**I want to** to export SNR signal data of interest to a CSV file.
-**So that** I can import the file into 3rd party applications such as Excel and Matlab for further analysis (the export settings and file location are configured via the export dialog window defined in US8.0).
-
-**Acceptance Criteria:**
-- [x] The current SNR signal data displayed in the plot window is exported to a CSV file.
-- [x] The CSV file includes at least the following columns: time stamps, receiver/channel identifiers, and SNR signal data.
-- [x] The CSV file includes headers describing the content of each column.
-
-### US1.3: Export user specified SNR signal data to an image file
-**As an** As a telemetry engineer or data analyst
-**I want to** to export SNR signal data to an image file (e.g. png, pdf, etc.) from the plot window.
-**So that** I can import the image file into 3rd party applications such as PowerPoint to create presentations (the export format and location are configured via the export dialog window defined in US8.0).
-
-**Acceptance Criteria:**
-- [x] The current SNR signal data displayed in the plot window is exported to an image file.
-- [x] Images are exported to one of the following file formats as selected by the user: svg, png, pdf.
-
-### US2.0: View the framesync lock statistics for IRIG 106 formatted PCM telemetry streams contained in .ch10 files
-**As a** telemetry engineer or data analyst
-**I want to** to view the framesync lock statistics (percentage of time the telemetry stream is in sync) for PCM data streams in IRIG 106 formatted .ch10 files
-**So that** I can view the framesync lock statistics for one or more telemetry streams versus time.
-
-**Acceptance Criteria:**
-- [x] The user can view the framesync lock statistics (left hand y-axis) versus time (x-axis) in a plot window.
-- [x] The user can select which telemetry stream(s) framesync lock statistics to view in the plot window.
-- [x] The user can select the time window to view the framesync lock statistics in the plot window.
-- [x] The user can select framesync lock statistics for the following sample windows: 10ms, 100ms, and 1s.
-- [x] A progress bar updates as the application is processing the framesync lock statistics.
-
-### US2.1: View Accumulated Missed Frames Over Time
-**As a** telemetry data analyst
-**I want to** quantify and plot the accumulated missed frames over time for my PCM streams
-**So that** I can quantitatively evaluate how frame sync errors are accumulating over time
-
-**Acceptance Criteria:**
-- [x] The user can view the accumulated missed frames (left hand y-axis) versus time (x-axis) in a plot window.
-- [x] The user can switch the left-axis view between framesync lock (%) and accumulated missed frames modes.
-- [x] The user can select which telemetry stream's accumulated missed frames to view in the plot window.
-- [x] Missed frames are accumulated per telemetry stream against that stream's own frame parameters.
-
-  - **Scope:** A "missed frame" is a discrete loss-of-lock event — while in lock, the stream ran past the expected minor-frame boundary (`bits_in_frame`) without a sync match. The metric is a cumulative count of these events per stream, counted only within the selected `[start, stop]` processing window, and only ever increases. It is NOT a bit-level (Hamming/BER) error count. The user-facing label is "Accumulated Missed Frames" (`PlotConstants::kMissedFramesAxisLabel`); this is the canonical term across the UI, release notes, and code.
-
-### US2.2: Define the key parameters required to process the framesync lock statistics and frame sync error accumulation
-**As a** telemetry engineer or data analyst
-**I want to** define the rules and key parameters (frame sync pattern, frame length, framesync mask, PCM code format, etc.) required to properly decommutate and calculate frame lock statistics and frame sync error accumulation for telemetry streams
-**So that** these parameters can be applied per-stream in the processing dialog window (defined in US5.0) and saved/loaded from configuration files (defined in US4.0).
-
-**Acceptance Criteria:**
-- [x] The user can define the frame sync pattern and frame length for each telemetry stream of interest.
-- [x] The application accepts frame sync pattern sizes up to 64 bits in length.
-- [x] The application accepts frame sync masks up to 64 bits in length.
-- [x] The application accepts frame lengths up to 65,536 bits in length.
-- [x] The user can select from one of the following PCM code formats: NRZ-L, RNRZ-L.
-- [x] The user can calculate frame sync lock statistics for up to 8 telemetry streams from the .ch10 file.
-
-### US2.3: Export user specified framesync lock statistics and accumulated missed frames with timestamps to a file
-**As an** As a telemetry engineer or data analyst
-**I want to** to export framesync lock statistics and accumulated missed frames of interest to a CSV file.
-**So that** I can import the file into 3rd party applications such as Excel and Matlab for further analysis (the export settings and file location are configured via the export dialog window defined in US8.0).
-
-**Acceptance Criteria:**
-- [x] The current framesync lock statistics and accumulated missed frames displayed in the plot window are exported to a CSV file.
-- [x] The CSV file includes at least the following columns: time stamps, stream identifier, framesync lock statistics and accumulated missed frames.
-- [x] The CSV file includes headers describing the content of each column.
-
-### US2.4: Export user specified framesync lock statistics and accumulated missed frames to an image file
-**As an** As a telemetry engineer or data analyst
-**I want to** to export framesync lock statistics and accumulated missed frames to an image file (e.g. png, pdf, etc.) from the plot window.
-**So that** I can import the image file into 3rd party applications such as PowerPoint to create presentations (the export format and location are configured via the export dialog window defined in US8.0).
-
-**Acceptance Criteria:**
-- [x] The current framesync lock statistics and accumulated missed frames displayed in the plot window are exported to an image file.
-- [x] Images are exported to one of the following file formats as selected by the user: svg, png, pdf.
-
-### US2.5: Apply one stream's configuration to all matching streams
-**As a** telemetry engineer or data analyst
-**I want to** configure one telemetry stream in the per-stream setup dialog and apply those settings to every other selected stream of the same mode in a single action
-**So that** I don't have to re-enter identical parameters across many streams when a file contains several streams with the same format.
-
-**Acceptance Criteria:**
-- [x] The Frame Sync Lock and Receiver SNR setup dialogs each provide an "Apply to all <mode> streams" toggle next to the OK/Cancel buttons.
-- [x] When enabled and the user clicks OK, the entered settings are copied to every stream that is selected for processing and shares the same mode.
-- [x] Streams of a different mode are left unchanged.
-- [x] Each affected stream is marked configured/ready and its readiness indicator updates.
-
-  - **Scope:** Orthogonal to US2.1 (frame sync error accumulation); split out as its own story. Fan-out copies the same fields written by the gear dialog today (see `openGearDialog` in `streamconfigdialog.cpp`); it does not widen the Frame Sync Load/Save TOML boundary defined in US5.0.
-
-### US3.0: Recall/store the default SNR signal data parameters from/to configuration files
-**As an** As a telemetry engineer or data analyst
-**I want to** to recall/store the parameters used to process SNR data in a configuration file
-**So that** I don't have to re-enter the parameters every time I open the application.
-
-**Acceptance Criteria:**
-- [x] Configuration files include the default parameters used to process SNR data.
-- [x] User is able to save default parameters to a configuration file.
-- [x] User is able to recall default parameters from a configuration file.
-- [x] The configuration file is stored in a user specified location.
-- [x] The configuration file is stored in TOML format.
-
-### US3.1: Edit default SNR signal data parameters in configuration files via a dialog window
-**As an** As a telemetry engineer or data analyst 
-**I want to** to be able to edit the default key parameters used to process SNR signal data streams via a dialog window
-**So that** I can update the default key parameters to meet the requirements of different telemetry streams formats.
-
-**Acceptance Criteria:**
-- [x] The dialog window includes the following default parameters used to process SNR signal data streams: 
-	- number of receivers
-	- number of channels per receiver
-	- scale
-	- voltage range
-	- slope
-- [x] The dialog window includes a "Reset" button to reset the key parameters to their default values.
-- [x] The dialog window includes a "Save" button to save the key parameters to the configuration file.
-- [x] The dialog window includes a "Cancel" button to cancel the operation.
-
-### US3.2: Non-Linear Receiver SNR Step Calibration
-**As a** telemetry engineer or data analyst
-**I want to** apply a non-linear step calibration to Receiver SNR streams using a Calibration CH10 file and a TOML step configuration
-**So that** I can accurately groom out receiver non-linearities and plot true SNR values instead of relying on a simple linear slope/offset.
-
-**Acceptance Criteria:**
-- [x] The user can enable non-linear step calibration for a specific Receiver SNR stream in the per-stream setup dialog (via the "Extract Calibration…" action).
-- [x] The user can load a TOML file defining the expected step values (in dB).
-- [x] The user can load a Calibration CH10 file containing the recorded step data.
-- [x] The Apply Cal dialog provides optional Clip Start and Clip End controls to trim leading or trailing seconds from the calibration recording before step detection.
-- [x] The application automatically extracts "ideal" steps from the CAL file.
-- [x] The application evaluates step extraction success independently for each receiver channel (up to 48).
-- [x] Channels that successfully map the expected number of steps are assigned a non-linear calibration profile for the session.
-- [x] Channels that fail step extraction (e.g., due to noise or no data) fall back to the standard linear (slope/offset) calibration.
-- [x] A summary message box informs the user which channels succeeded and which fell back.
-- [x] During main data processing, the application applies the non-linear calibration profile using piece-wise linear interpolation between steps.
-- [x] Raw values outside the calibrated range clamp to the nearest end-step dB instead of extrapolating, so a receiver driven past the calibrated range reads the ceiling or floor value.
-
-  - **Status (v2.2.5): COMPLETE.** Step selection is polarity-agnostic and robust to real recordings: it takes the first maximal monotonic plateau run and keeps its last `expected` plateaus, which excludes a signal-generator turn-on transient (leading) and the optional operator down-ramp (trailing) for both normal and inverted-polarity receivers — fixing the calibrated-staircase time skew. The extraction sample period is frame-rate-adaptive (100 ms floor) for fast frames, and the Apply Cal dialog adds optional **Clip Start / Clip End** controls so operators can trim leading/trailing seconds before detection. Out-of-range raw values clamp (not extrapolate) to the nearest end-step dB.
-
-### US4.0: Recall/store framesync pattern and frame length parameters from/to configuration files
-**As an** As a telemetry engineer or data analyst
-**I want to** to recall/store the parameters used to process framesync pattern and frame length in a configuration file
-**So that** I don't have to re-enter the parameters every time I open the application.
-
-**Acceptance Criteria:**
-- [x] Configuration files include the framesync pattern and frame length.
-- [x] User is able to save the framesync pattern and frame length to a configuration file.
-- [x] User is able to recall the framesync pattern and frame length from a configuration file.
-- [x] The configuration file is stored in a user specified location.
-- [x] The configuration file is stored in TOML format.
-
-### US5.0: Determine which streams are processed and the parameters to use for each stream
-**As an** As a telemetry engineer or data analyst 
 **I want to** select streams to process and configure their parameters in a single configuration/processing dialog window upon opening a Ch10 file
-**So that** I can apply the specific parameters defined in US1.1 and US2.1 to each individual telemetry stream before starting the decommutation process.
+**So that** I can apply the specific parameters defined in US2.0 and US2.1 to each individual telemetry stream before starting the decommutation process.
 
 **Acceptance Criteria:**
 - [x] A dialog window is presented when the user opens a new ch10 file.
@@ -212,10 +35,91 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - [x] Progress is shown in a modal dialog, separate from the main window, while streams are processing.
 - [x] Once processing has started, the user can cancel it via a Cancel action that stops every stream currently being decommutated.
 
-### US6.0: Configure plot window navigation and information
-**As an** As a telemetry engineer or data analyst 
-**I want to** Configure how the processed framesync lock statistics and SNR sample data is displayed in a plot window 
-**So that** I can quickly analyze data in the plot window
+### US2.0: Define the key parameters required to process the framesync lock statistics and frame sync error accumulation
+**As a** telemetry engineer or data analyst
+**I want to** define the rules and key parameters (frame sync pattern, frame length, framesync mask, PCM code format, etc.) required to properly decommutate and calculate frame lock statistics and frame sync error accumulation for telemetry streams
+**So that** these parameters can be applied per-stream in the processing dialog window (defined in US1.0) and saved/loaded from configuration files (defined in US5.0).
+
+**Acceptance Criteria:**
+- [x] The user can define the frame sync pattern and frame length for each telemetry stream of interest.
+- [x] The application accepts frame sync pattern sizes up to 64 bits in length.
+- [x] The application accepts frame sync masks up to 64 bits in length.
+- [x] The application accepts frame lengths up to 65,536 bits in length.
+- [x] The user can select from one of the following PCM code formats: NRZ-L, RNRZ-L.
+- [x] The user can calculate frame sync lock statistics for up to 8 telemetry streams from the .ch10 file.
+
+### US2.1: Define the key parameters required to process the receiver AGC sample data
+**As a** telemetry engineer or data analyst
+**I want to** define the rules and key parameters (frame sync pattern, frame length, framesync mask, PCM code format, etc.) required to decommutate and process telemetry streams containing receiver AGC sample data
+**So that** these parameters can be applied per-stream in the processing dialog window (defined in US1.0) and saved/loaded from configuration files (defined in US5.1).
+
+**Acceptance Criteria:**
+- [x] The user can define the frame sync pattern and frame length for the telemetry stream of interest.
+- [x] The application accepts frame sync pattern sizes up to 64 bits in length.
+- [x] The application accepts frame sync masks up to 64 bits in length.
+- [x] The application accepts frame lengths up to 65,536 bits in length.
+- [x] The user can select from one of the following PCM code formats: NRZ-L, RNRZ-L.
+- [x] The user can define the number of receivers and the number of channels per receiver in the telemetry stream of interest.
+- [x] The user can define the scale of the receiver AGC sample data in dB/V.
+- [x] The user can define the voltage range of the receiver AGC sample from one of the following values: 0-5V, 0-10V, +/-5V, +/-10V.
+- [x] The user can define the polarity of the receiver AGC sample data: positive or negative.
+
+### US2.2: Apply one stream's configuration to all matching streams
+**As a** telemetry engineer or data analyst
+**I want to** configure one telemetry stream in the per-stream setup dialog and apply those settings to every other selected stream of the same mode in a single action
+**So that** I don't have to re-enter identical parameters across many streams when a file contains several streams with the same format.
+
+**Acceptance Criteria:**
+- [x] The Frame Sync Lock and Receiver SNR setup dialogs each provide an "Apply to all <mode> streams" toggle next to the OK/Cancel buttons.
+- [x] When enabled and the user clicks OK, the entered settings are copied to every stream that is selected for processing and shares the same mode.
+- [x] Streams of a different mode are left unchanged.
+- [x] Each affected stream is marked configured/ready and its readiness indicator updates.
+
+  - **Scope:** Orthogonal to US3.1 (frame sync error accumulation); split out as its own story. Fan-out copies the same fields written by the gear dialog today (see `openGearDialog` in `streamconfigdialog.cpp`); it does not widen the Frame Sync Load/Save TOML boundary defined in US1.0.
+
+### US3.0: View the framesync lock statistics for IRIG 106 formatted PCM telemetry streams contained in .ch10 files
+**As a** telemetry engineer or data analyst
+**I want to** view the framesync lock statistics (percentage of time the telemetry stream is in sync) for PCM data streams in IRIG 106 formatted .ch10 files
+**So that** I can view the framesync lock statistics for one or more telemetry streams versus time.
+
+**Acceptance Criteria:**
+- [x] The user can view the framesync lock statistics (left hand y-axis) versus time (x-axis) in a plot window.
+- [x] The user can select which telemetry stream(s) framesync lock statistics to view in the plot window.
+- [x] The user can select the time window to view the framesync lock statistics in the plot window.
+- [x] The user can select framesync lock statistics for the following sample windows: 10ms, 100ms, and 1s.
+- [x] A progress bar updates as the application is processing the framesync lock statistics.
+
+### US3.1: View Accumulated Missed Frames Over Time
+**As a** telemetry data analyst
+**I want to** quantify and plot the accumulated missed frames over time for my PCM streams
+**So that** I can quantitatively evaluate how frame sync errors are accumulating over time.
+
+**Acceptance Criteria:**
+- [x] The user can view the accumulated missed frames (left hand y-axis) versus time (x-axis) in a plot window.
+- [x] The user can switch the left-axis view between framesync lock (%) and accumulated missed frames modes.
+- [x] The user can select which telemetry stream's accumulated missed frames to view in the plot window.
+- [x] Missed frames are accumulated per telemetry stream against that stream's own frame parameters.
+
+  - **Scope:** A "missed frame" is a discrete loss-of-lock event — while in lock, the stream ran past the expected minor-frame boundary (`bits_in_frame`) without a sync match. The metric is a cumulative count of these events per stream, counted only within the selected `[start, stop]` processing window, and only ever increases. It is NOT a bit-level (Hamming/BER) error count. The user-facing label is "Accumulated Missed Frames" (`PlotConstants::kMissedFramesAxisLabel`); this is the canonical term across the UI, release notes, and code.
+
+### US3.2: View SNR signal data from IRIG 106 formatted PCM telemetry streams contained in .ch10 files
+**As a** telemetry engineer or data analyst
+**I want to** view SNR signal data (in dB) derived from telemetry receiver AGC samples (raw integer energy values from 0 to 65,535) included in PCM data streams within IRIG 106 formatted .ch10 files
+**So that** I can view the SNR signal data for one or more receiver channels versus time.
+
+**Acceptance Criteria:**
+- [x] The user can view the SNR signal data (right hand y-axis) versus time (x-axis) in a plot window.
+- [x] The user can select which receiver/channels SNR signal data to view in the plot window.
+- [x] The user can select the time window to view the SNR signal data in the plot window.
+- [x] The user can select one of the following time periods to average SNR signal data over: 100 Hz, 10 Hz, 1 Hz.
+- [x] Samples are converted from raw integer energy values to Volts (V) using the voltage range and polarity.
+- [x] Volts are then converted to decimal dB values using the scale (dB/V).
+- [x] A progress bar updates as the application is processing the SNR signal data.
+
+### US4.0: Configure plot window navigation and information
+**As a** telemetry engineer or data analyst
+**I want to** configure how the processed framesync lock statistics and SNR sample data is displayed in a plot window
+**So that** I can quickly analyze data in the plot window.
 
 **Acceptance Criteria:**
 - [x] The plot window docks within the main application window.
@@ -243,9 +147,101 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - [x] Additional streams, receivers, and channels beyond the primaries use progressively lighter shades of their primary color so related series stay visually grouped.
 - [x] Frame Sync Lock curves are drawn with a visually highlighted style, while Receiver SNR curves are not.
 
-### US7.0: Import a previously exported CSV file to visualize historical data
+### US5.0: Recall/store framesync pattern and frame length parameters from/to configuration files
 **As a** telemetry engineer or data analyst
-**I want to** open a CSV file that this application exported in the past (US1.2 / US2.3) and load it directly into the plot window
+**I want to** recall/store the parameters used to process framesync pattern and frame length in a configuration file
+**So that** I don't have to re-enter the parameters every time I open the application.
+
+**Acceptance Criteria:**
+- [x] Configuration files include the framesync pattern and frame length.
+- [x] User is able to save the framesync pattern and frame length to a configuration file.
+- [x] User is able to recall the framesync pattern and frame length from a configuration file.
+- [x] The configuration file is stored in a user specified location.
+- [x] The configuration file is stored in TOML format.
+
+### US5.1: Recall/store the default SNR signal data parameters from/to configuration files
+**As a** telemetry engineer or data analyst
+**I want to** recall/store the parameters used to process SNR data in a configuration file
+**So that** I don't have to re-enter the parameters every time I open the application.
+
+**Acceptance Criteria:**
+- [x] Configuration files include the default parameters used to process SNR data.
+- [x] User is able to save default parameters to a configuration file.
+- [x] User is able to recall default parameters from a configuration file.
+- [x] The configuration file is stored in a user specified location.
+- [x] The configuration file is stored in TOML format.
+
+### US5.2: Edit default SNR signal data parameters in configuration files via a dialog window
+**As a** telemetry engineer or data analyst
+**I want to** edit the default key parameters used to process SNR signal data streams via a dialog window
+**So that** I can update the default key parameters to meet the requirements of different telemetry streams formats.
+
+**Acceptance Criteria:**
+- [x] The dialog window includes the following default parameters used to process SNR signal data streams:
+	- number of receivers
+	- number of channels per receiver
+	- scale
+	- voltage range
+	- slope
+- [x] The dialog window includes a "Reset" button to reset the key parameters to their default values.
+- [x] The dialog window includes a "Save" button to save the key parameters to the configuration file.
+- [x] The dialog window includes a "Cancel" button to cancel the operation.
+
+### US5.3: Non-Linear Receiver SNR Step Calibration
+**As a** telemetry engineer or data analyst
+**I want to** apply a non-linear step calibration to Receiver SNR streams using a Calibration CH10 file and a TOML step configuration
+**So that** I can accurately groom out receiver non-linearities and plot true SNR values instead of relying on a simple linear slope/offset.
+
+**Acceptance Criteria:**
+- [x] The user can enable non-linear step calibration for a specific Receiver SNR stream in the per-stream setup dialog (via the "Extract Calibration…" action).
+- [x] The user can load a TOML file defining the expected step values (in dB).
+- [x] The user can load a Calibration CH10 file containing the recorded step data.
+- [x] The Apply Cal dialog provides optional Clip Start and Clip End controls to trim leading or trailing seconds from the calibration recording before step detection.
+- [x] The application automatically extracts "ideal" steps from the CAL file.
+- [x] The application evaluates step extraction success independently for each receiver channel (up to 48).
+- [x] Channels that successfully map the expected number of steps are assigned a non-linear calibration profile for the session.
+- [x] Channels that fail step extraction (e.g., due to noise or no data) fall back to the standard linear (slope/offset) calibration.
+- [x] A summary message box informs the user which channels succeeded and which fell back.
+- [x] During main data processing, the application applies the non-linear calibration profile using piece-wise linear interpolation between steps.
+- [x] Raw values outside the calibrated range clamp to the nearest end-step dB instead of extrapolating, so a receiver driven past the calibrated range reads the ceiling or floor value.
+
+  - **Status (v2.2.5): COMPLETE.** Step selection is polarity-agnostic and robust to real recordings: it takes the first maximal monotonic plateau run and keeps its last `expected` plateaus, which excludes a signal-generator turn-on transient (leading) and the optional operator down-ramp (trailing) for both normal and inverted-polarity receivers — fixing the calibrated-staircase time skew. The extraction sample period is frame-rate-adaptive (100 ms floor) for fast frames, and the Apply Cal dialog adds optional **Clip Start / Clip End** controls so operators can trim leading/trailing seconds before detection. Out-of-range raw values clamp (not extrapolate) to the nearest end-step dB.
+
+### US6.0: Export the plot as an image file
+**As a** telemetry engineer or data analyst
+**I want to** export the current plot to an image file (e.g. png, pdf, etc.)
+**So that** I can drop it into third-party applications such as PowerPoint to build reports and presentations without re-processing the source data.
+
+**Acceptance Criteria:**
+- [x] The current plot is exported as a single image containing every visible Frame Sync Lock, Accumulated Missed Frames, and Receiver SNR series.
+- [x] The user selects the image format from one of the following: svg, png, pdf.
+- [x] The user specifies the image filename and location via the export dialog.
+- [x] The movable legend is rendered into the exported image at its on-plot position.
+- [x] A single export dialog lets the user select any combination of image, data, and log exports and run them in one action.
+
+### US6.1: Export the plotted data to a CSV file
+**As a** telemetry engineer or data analyst
+**I want to** export the plotted data (framesync lock statistics, accumulated missed frames, and SNR signal data) to a CSV file
+**So that** I can import the file into third-party applications such as Excel and MATLAB for further analysis.
+
+**Acceptance Criteria:**
+- [x] The current plot data is exported to a single CSV file covering every visible Frame Sync Lock, Accumulated Missed Frames, and Receiver SNR series.
+- [x] The CSV file includes a timestamp column and one data column per series.
+- [x] Each column header identifies its stream and receiver/channel so the exported data is self-describing.
+- [x] The user specifies the CSV filename and location via the export dialog.
+
+### US6.2: Export the log window contents to a text file
+**As a** telemetry engineer or data analyst
+**I want to** export the contents of the log window to a text file
+**So that** I can keep a record of processing messages, warnings, and calibration results for later review.
+
+**Acceptance Criteria:**
+- [x] The current log window contents are exported to a plain-text file.
+- [x] The user specifies the log filename and location via the export dialog.
+
+### US6.3: Import a previously exported CSV file to visualize historical data
+**As a** telemetry engineer or data analyst
+**I want to** open a CSV file that this application exported in the past (US6.1) and load it directly into the plot window
 **So that** I can review and visualize old data sets without re-processing the original .ch10 file.
 
 **Acceptance Criteria:**
@@ -262,22 +258,10 @@ This file provides context and guidelines for AI assistants working on the tmDat
 
   - **Scope:** Reuses the existing Model/ViewModel import path (`CsvSeriesParser::parse` + `PlotViewModel::loadCsvFile` / `loadCsvFileAsync`), which is the matched partner of `exportCsv`; this story is primarily the View-layer wiring (menu/drag-drop entry, format routing on file open) plus user-facing error reporting. It does not add a CSV import dialog with column mapping, and it does not attempt to import arbitrary third-party CSVs — only files this application produced.
 
-### US8.0: Export file settings
-**As an** As a telemetry engineer or data analyst 
-**I want to** configure export preferences via a unified export dialog window
-**So that** I can specify the export types (CSV and/or images), file names, and directories for the data exports requested in US1.2, US1.3, US2.2, and US2.3 in a single action.
-
-**Acceptance Criteria:**
-- [x] A dialog window is presented to the user when the user clicks the export button.
-- [x] The dialog window allows the user to determine what data is exported: SNR sample data and framesync lock statistic data, plot images, or the log window contents.
-- [x] The dialog window allows the user to specify the filename and location for the exported data files.
-- [x] The dialog window allows the user to specify the filename and location for the exported plot images.
-- [x] The dialog window allows the user to export the log window contents to a text file, with its own filename and location.
-
-### US9.0: Error Checking
-**As an** As a telemetry engineer or data analyst 
+### US7.0: Error Checking
+**As a** telemetry engineer or data analyst
 **I want to** ensure the values I enter into the application are valid
-**So that** I can avoid errors and ensure the data I export is accurate
+**So that** I can avoid errors and ensure the data I export is accurate.
 
 **Acceptance Criteria:**
 - [x] Ensure all input fields are validated.
@@ -285,10 +269,10 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - [x] Application ensures frame sync pattern only contains hexadecimal values.
 - [x] Application ensures frame sync pattern is no larger than the user specified frame length.
 
-### US10.0: Application Installer
+### US8.0: Application Installer
 **As a** developer
 **I want to** create an application installer
-**So that** I can quickly deploy the software/updates to users with all the necessary folders and settings files
+**So that** I can quickly deploy the software/updates to users with all the necessary folders and settings files.
 
 **Acceptance Criteria:**
 - [x] The installer produces a code-signed application executable.
@@ -299,10 +283,10 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - [x] If the shipped default TOML has new fields the user's file lacks, the installer saves the new version as "new_x.toml" instead of overwriting the user's file.
 - [x] The installer carries over as many parameter values as possible from the user's old TOML file into the new "new_x.toml" file.
 
-### US11.0: Switch between light and dark theme
+### US9.0: Switch between light and dark theme
 **As a** telemetry engineer or data analyst
 **I want to** switch the application's visual theme between light and dark
-**So that** I can use the application comfortably in different lighting conditions or to match my system preference
+**So that** I can use the application comfortably in different lighting conditions or to match my system preference.
 
 **Acceptance Criteria:**
 - [x] The user can toggle between light and dark theme via a menu action.
@@ -314,10 +298,10 @@ This file provides context and guidelines for AI assistants working on the tmDat
 
 ### v2.6.0 — CSV Import, Movable Legend, Configure Streams Redesign, Stability Fixes
 
-**CSV Import (US7.0)**
+**CSV Import (US6.3)**
 - New: the application can open a CSV it previously exported and load it straight
   into the plot, so old data sets can be visualized without re-processing the
-  source `.ch10` file (US7.0).
+  source `.ch10` file (US6.3).
 - A dedicated toolbar **Import** button (orange icon, left of Export) opens a
   CSV-only dialog; it is enabled like Open and disabled while processing. CSV
   files are imported through `importCsv()` and bypass the Configure Streams dialog
@@ -340,7 +324,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
   imported file is added to Recent Files and the plot title is set to its base
   name.
 
-**Movable plot legend (US6.0)**
+**Movable plot legend (US4.0)**
 - The on-plot legend is now a translucent, draggable overlay floating inside the
   chart (not a fixed panel below it), so it can be repositioned to avoid
   obscuring data of interest. Defaults to the top-right corner and resets there
@@ -415,7 +399,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - Full test suite green (212 passing).
 
 ### v2.2.5 — Receiver SNR Step Calibration Complete
-- US3.2 (Non-Linear Receiver SNR Step Calibration) is **complete and field-validated**.
+- US5.3 (Non-Linear Receiver SNR Step Calibration) is **complete and field-validated**.
 - Robust, polarity-agnostic plateau selection in `StepDetector`: the calibration
   sweep is the first maximal monotonic plateau run, of which the last `expected`
   plateaus are kept. This excludes a leading signal-generator turn-on transient and
@@ -438,7 +422,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
   regression cases; full suite green (212 passing).
 
 ### v2.2.0 — Non-Linear Calibration, On-Plot Legend, Log Export, and Single-Source Versioning
-- Non-linear step calibration for Receiver SNR (US3.2): an "Extract Calibration…"
+- Non-linear step calibration for Receiver SNR (US5.3): an "Extract Calibration…"
   action in the Receiver SNR setup dialog builds a per-channel raw→dB profile from
   a calibration Chapter 10 file and a `[[Step]]` TOML, applied via piecewise-linear
   interpolation/extrapolation during processing; channels that fail fall back to
@@ -448,12 +432,12 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - New on-plot legend panel below the chart: a fixed-height, vertically
   scrolling 4-column grid of color swatch + series-name pairs that lists every
   visible series and updates as series are toggled or the left-axis view
-  changes (US6.0)
+  changes (US4.0)
 - PNG export now composites the legend panel beneath the chart into a single
-  image (US2.4); SVG/PDF export the chart as before
+  image (US6.0); SVG/PDF export the chart as before
 - Export dialog gains an "Export Log (Text)" option that writes the log window
   contents to a `.txt` file; the dialog now lists Image first and defaults to
-  Image export (US8.0)
+  Image export (US6.0)
 - Switching the left-axis view between Framesync Lock (%) and Accumulated Missed
   Frames now preserves each stream's per-stream visibility selection instead of
   re-showing every stream
@@ -466,7 +450,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 
 ### v2.1.0 — Accumulated Missed Frames
 - New plot view: the left axis can toggle between "Framesync Lock (%)" and
-  "Accumulated Missed Frames" via a toolbar button (US2.1)
+  "Accumulated Missed Frames" via a toolbar button (US3.1)
 - Missed frames are accumulated per telemetry stream against that stream's
   own frame parameters — a monotonic count of loss-of-lock events within the
   selected processing window (not a bit-level/BER metric)
@@ -479,8 +463,9 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - Redesigned "Customize Plot Series" dialog with per-stream Frame Sync Lock
   toggles and a collapsible receiver/channel tree on the Receiver SNR tab; new
   purple/blue/green (lock) and red/orange/yellow (SNR) primary color scheme
-- US2.5 (apply one stream's configuration to all matching streams) tracked as a
-  separate story; US2.2–2.4 terminology standardized on "missed frames"
+- US2.2 (apply one stream's configuration to all matching streams) tracked as a
+  separate story; the frame-sync and missed-frames stories' terminology
+  standardized on "missed frames"
 
 ### v1.0.5 — Legend Layout, Toolbar Export, and Stream Config UI Polish
 - Fixed a SIGSEGV crash on file open caused by a double-free during legend
@@ -508,7 +493,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - Added framesync_PRN11.toml and framesync_PRN15.toml to installer/portable packages
 
 ### v1.0.0 — Initial Public Release
-- User stories US1.0–US10.0 complete
+- User stories US1.0–US9.0 complete
 - Frame Sync Lock analysis with off-phase rejection and bit-span lock percentage
 - Receiver SNR / AGC analysis with voltage-to-dB calibration
 - Multi-stream concurrent processing with single-pass I/O (one reader + per-stream queues)
@@ -519,7 +504,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - Automated unit tests (Qt Test framework)
 
 ### v0.8.0 — Internal Milestone
-- User stories US1.0–US6.0 complete
+- Core user stories complete
 - Initial automated unit test suite
 
 ## Tech Stack
@@ -573,7 +558,7 @@ the plot as each stream finishes. There is **no batch / multi-file mode**.
    - Errors/warnings shown inline in the log (`QTextBrowser`, clickable links, persistent, auto-scroll); QMessageBox reserved for About and the calibration summary
    - Status bar shows the file metadata summary (filename, size, channel counts, time range)
    - Recent Files submenu under File menu with QSettings persistence
-   - Drag-and-drop and File > Open of a single `.ch10` file (launches the StreamConfigDialog) or a previously exported `.csv` file (US7.0: routed by `openPath()`/`importCsv()` straight into the plot via `PlotViewModel::loadCsvFileAsync`, bypassing the dialog and processing pipeline)
+   - Drag-and-drop and File > Open of a single `.ch10` file (launches the StreamConfigDialog) or a previously exported `.csv` file (US6.3: routed by `openPath()`/`importCsv()` straight into the plot via `PlotViewModel::loadCsvFileAsync`, bypassing the dialog and processing pipeline)
    - Cancel toolbar button visible only during processing
    - Log window in a bottom QDockWidget; plot in a right QDockWidget (PlotWidget); View menu toggles each
 
@@ -581,7 +566,7 @@ the plot as each stream finishes. There is **no batch / multi-file mode**.
    - Modal "Configure Streams" dialog listing one row per PCM channel in the file
    - Five columns: Process, Channel, Mode, Configure (gear), Ready (status icon); a Time Channel combo at top
    - The gear opens a per-stream sub-dialog — Frame Sync Lock setup or Receiver SNR setup — keyed to the row's Mode
-   - Sub-dialogs Load/Save frame-sync and receiver-parameter TOML files (US4.0/US3.0) and host the "Extract Calibration…" action (US3.2) and the "Apply to all <mode> streams" fan-out (US2.5)
+   - Sub-dialogs Load/Save frame-sync and receiver-parameter TOML files (US5.0/US5.1) and host the "Extract Calibration…" action (US5.3) and the "Apply to all <mode> streams" fan-out (US2.2)
    - The three sub-dialogs (Frame Lock, Calibration, Receiver SNR) live in the private header `include/view/streamsubdialogs.h` and share one layout vocabulary so their look-and-feel stays consistent: a `DialogLayout` constants block (outer spacing, section/control gaps, grid spacing, icon-button size) plus helpers `configureFormGrid`, `addLoadSaveButtons` (owns the frame-sync grid's gap column + Load/Save cell offsets — no caller hard-codes them), `addCheckboxRow`, `addBottomBar`, `matchControlHeight`, `buildFrameSyncRow`, and `makeDialogButtons`. Convention: text inputs (line edits, combos, spin boxes) are left-aligned; buttons and status icons (gear, Load/Save, ✓/✗) are centered. Table-header/separator colors come from the theme QSS (`QLabel#streamHeaderLabel`, `QFrame#streamHeaderSeparator`), not inline stylesheets, so they read on both light and dark themes
    - Returns the configured `QVector<StreamConfig>` via `configs()` and the time channel via `timeChannelIndex()`
 
@@ -636,9 +621,9 @@ the plot as each stream finishes. There is **no batch / multi-file mode**.
 
 14. **ChannelData** (`src/model/channeldata.cpp`, `include/model/channeldata.h`) — channel metadata value object
 
-15. **StepDetector** (`src/model/stepdetector.cpp`, `include/model/stepdetector.h`) — *US3.2*; pure (UI-free) logic that parses the `[[Step]]` step-config TOML and detects step plateaus in a raw-count series via derivative/edge detection, building a per-channel `CalibrationProfile`
+15. **StepDetector** (`src/model/stepdetector.cpp`, `include/model/stepdetector.h`) — *US5.3*; pure (UI-free) logic that parses the `[[Step]]` step-config TOML and detects step plateaus in a raw-count series via derivative/edge detection, building a per-channel `CalibrationProfile`
 
-16. **CalibrationExtractor** (`src/model/calibrationextractor.cpp`, `include/model/calibrationextractor.h`) — *US3.2*; drives a raw extraction over a calibration Ch10 file (reusing the Ch10PacketReader + FrameProcessor pipeline with unit slope / zero offset) and runs StepDetector per channel to build session-only profiles
+16. **CalibrationExtractor** (`src/model/calibrationextractor.cpp`, `include/model/calibrationextractor.h`) — *US5.3*; drives a raw extraction over a calibration Ch10 file (reusing the Ch10PacketReader + FrameProcessor pipeline with unit slope / zero offset) and runs StepDetector per channel to build session-only profiles
 
 17. **TomlConfigHelper** (`src/model/tomlconfighelper.cpp`, `include/model/tomlconfighelper.h`) — registers a custom QSettings TOML format and provides the frame-sync / receiver-parameter load/save helpers
 
@@ -832,7 +817,7 @@ Tasks are defined in `.vscode/tasks.json`:
 ### Adding a New Per-Stream Setting
 1. Add the field to the `StreamConfig` struct in `include/dto/streamconfig.h` (with a default in `constants.h` if appropriate)
 2. Surface it in the relevant gear sub-dialog in `StreamConfigDialog` (Frame Sync Lock or Receiver SNR setup), and include it in the "Apply to all" fan-out if it should propagate
-3. If it must round-trip to a TOML file, add it to the matching `TomlConfigHelper` load/save helper (respecting the US3.0/US5.0 boundaries)
+3. If it must round-trip to a TOML file, add it to the matching `TomlConfigHelper` load/save helper (respecting the US5.1/US1.0 boundaries)
 4. Carry it into `ProcessingParams` (and `FrameSetup` if it affects the word map) where `MainViewModel` builds each `StreamJob`
 5. Consume it in `FrameProcessor::process()`
 
@@ -871,8 +856,8 @@ source/header files are listed in `tests/tests.pro`.
 - **TestPlotCustomizationDialog** (`tst_plotcustomizationdialog`) — Customize Plot Series dialog: one Frame Sync Lock checkbox per stream, Select All/None, apply → per-stream lock/missed visibility round-trip to the ViewModel; Receiver SNR tree build (receiver grouping), tri-state group cascade, Select All/None, apply → per-channel SNR visibility round-trip, and the Expand/Collapse All button toggle; plus per-stream rename/recolor (lock tab) and per-channel rename/recolor via pending item roles (SNR tab) applied to the ViewModel on OK, and the single batched `seriesAppearanceChanged` emission (reaches private widgets/slots via a friend declaration, same pattern as TestFrameProcessor)
 - **TestStreamConfigDialog** (`tst_streamconfigdialog`) — Per-stream Configure Streams dialog: stream rows, mode selection, gear setup dialogs, TOML load/save round-trips, "Apply to all" fan-out, the Channel column label (short names shown in full, long TMATS-derived names elided on the left with "..." so the distinguishing tail stays visible, right-justified, styled via `channelNameCell` to mimic the Mode combo box's border/fill, and the full name always available via tooltip), the Mode combo's right-justified closed-box text (via an editable-but-readonly internal line edit) while selection still tracks correctly, and the table header/separator using theme-QSS object names (`streamHeaderLabel` / `streamHeaderSeparator`) rather than hard-coded inline colors
 - **TestExportDialog** (`tst_exportdialog`) — Export dialog checkbox-to-field enable logic, export-button validation, and the log-export row defaults/accessors and log-only validation
-- **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US3.2): `[[Step]]` TOML parsing (valid / empty-fails), plateau detection (clean, too-few-fails, extra-plateaus uses last of monotonic run, short-blip doesn't steal a pairing slot, long leading transient doesn't shift pairing, inverted-polarity sweep not reversed, non-monotonic pairing rejected, noisy, settling-at-plateau-start excluded, round-trip exact), and `interpolateCalibration()` (midpoint, below/above clamping, coincident-raw guard)
-- **TestCalibrationExtractor** (`tst_calibrationextractor`) — US3.2 pipeline orchestration (complements TestStepDetector's pure logic): drives the async extraction end to end (reader + FrameProcessor workers → per-channel StepDetector). A bad file (with non-empty steps, so it clears the empty-steps guard) finishes unsuccessfully with a recorded error and no partial state; over `rnrz-l_testfile.ch10`, exactly words 6/7/8 (RCVR3 L/R/C, the only real stepped SNR sweep) build valid non-linear profiles while every other receiver word falls back to linear
+- **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US5.3): `[[Step]]` TOML parsing (valid / empty-fails), plateau detection (clean, too-few-fails, extra-plateaus uses last of monotonic run, short-blip doesn't steal a pairing slot, long leading transient doesn't shift pairing, inverted-polarity sweep not reversed, non-monotonic pairing rejected, noisy, settling-at-plateau-start excluded, round-trip exact), and `interpolateCalibration()` (midpoint, below/above clamping, coincident-raw guard)
+- **TestCalibrationExtractor** (`tst_calibrationextractor`) — US5.3 pipeline orchestration (complements TestStepDetector's pure logic): drives the async extraction end to end (reader + FrameProcessor workers → per-channel StepDetector). A bad file (with non-empty steps, so it clears the empty-steps guard) finishes unsuccessfully with a recorded error and no partial state; over `rnrz-l_testfile.ch10`, exactly words 6/7/8 (RCVR3 L/R/C, the only real stepped SNR sweep) build valid non-linear profiles while every other receiver word falls back to linear
 
 ### Running Tests
 ```bash

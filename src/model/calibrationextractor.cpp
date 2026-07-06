@@ -1,6 +1,6 @@
 /**
  * @file calibrationextractor.cpp
- * @brief Implementation of CalibrationExtractor (US3.2).
+ * @brief Implementation of CalibrationExtractor (US5.3).
  */
 
 #include "calibrationextractor.h"

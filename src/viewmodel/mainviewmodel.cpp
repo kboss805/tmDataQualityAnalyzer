@@ -577,7 +577,7 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
     // single-sourced and unit-testable rather than inline in the ViewModel.
     out_job.frameSetup->applyLinearCalibration(polarity_idx, slope_idx, scale_dB_per_V);
 
-    // Attach non-linear step-calibration profiles (US3.2) by word index (Model side).
+    // Attach non-linear step-calibration profiles (US5.3) by word index (Model side).
     if (!cfg.calibrationByWord.isEmpty())
     {
         const int attached = out_job.frameSetup->attachCalibrationProfiles(cfg.calibrationByWord);

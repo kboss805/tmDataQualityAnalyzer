@@ -538,7 +538,7 @@ void TestPlotViewModel::importExportRoundTrip()
     // Integration: import a CSV (lock + missed + two SNR channels), re-export it,
     // and import the result. The two loaded states must be equivalent — names,
     // metric types, per-stream grouping/colors, visibility, and values — proving
-    // exportCsv() and the parser are faithful inverses for US7.0.
+    // exportCsv() and the parser are faithful inverses for US6.3.
     QString csv =
         "Time (DOY:HH:MM:SS.mmm),"
         "S1 Lock (%),S1 Accumulated Missed Frames,"
@@ -817,7 +817,7 @@ void TestPlotViewModel::addStreamDataEmptyDataNoOp()
 }
 
 // ---------------------------------------------------------------------------
-// Frame sync error accumulation (US2.1) tests
+// Frame sync error accumulation (US3.1) tests
 // ---------------------------------------------------------------------------
 
 /// Builds a lock-only stream with parallel lock % and cumulative error vectors.

@@ -430,7 +430,7 @@ void TestFrameProcessor::processShortPeriodMoreSamples()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-//                  REAL-FILE CALIBRATION ROUND TRIP (US3.2)                  //
+//                  REAL-FILE CALIBRATION ROUND TRIP (US5.3)                  //
 ////////////////////////////////////////////////////////////////////////////////
 
 /// End-to-end check on real decoded data (not synthetic, unlike

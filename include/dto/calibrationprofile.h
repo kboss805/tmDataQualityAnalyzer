@@ -1,6 +1,6 @@
 /**
  * @file calibrationprofile.h
- * @brief Non-linear step-calibration data types (US3.2).
+ * @brief Non-linear step-calibration data types (US5.3).
  *
  * A CalibrationProfile is an optional, session-only per-channel correction that
  * replaces the linear (raw * slope + offset) SNR model with piecewise-linear

@@ -7,9 +7,9 @@ from a PCM telemetry stream into calibrated SNR values in dB, per receiver
 channel, averaged over a user-selected time window. Two calibration models are
 supported:
 
-- **Linear** (default, US1.0/US3.0/US3.1): a slope/offset model derived from the
+- **Linear** (default, US3.2/US5.1/US5.2): a slope/offset model derived from the
   receiver's voltage range, polarity, and dB/V scale.
-- **Non-linear step calibration** (optional, US3.2): a per-channel piecewise-linear
+- **Non-linear step calibration** (optional, US5.3): a per-channel piecewise-linear
   raw→dB profile extracted from a dedicated calibration Chapter 10 file. Grooms
   out receiver non-linearities the linear model cannot capture.
 
@@ -109,7 +109,7 @@ never a divide-by-zero or NaN.
 
 ---
 
-## 4. Non-Linear Step Calibration (US3.2)
+## 4. Non-Linear Step Calibration (US5.3)
 
 A non-linear `CalibrationProfile` is an optional, **session-only** per-channel
 correction. It is never written to disk; it lives only for the run in which it

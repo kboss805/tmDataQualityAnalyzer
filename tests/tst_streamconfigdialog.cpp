@@ -126,7 +126,7 @@ void TestStreamConfigDialog::configsRoundtripProcessFlag()
 
 
 // ---------------------------------------------------------------------------
-// Frame-sync TOML scope boundary (US4.0 / US5.0)
+// Frame-sync TOML scope boundary (US5.0 / US1.0)
 //
 // These tests exercise the key contract between saveFrameSyncToml and
 // loadFrameSyncToml without going through QFileDialog (which can't be driven
@@ -218,7 +218,7 @@ void TestStreamConfigDialog::tomlFrameSyncSaveDoesNotWriteDataRate()
 }
 
 // ---------------------------------------------------------------------------
-// Validation (US8.0)
+// Validation (US7.0)
 // ---------------------------------------------------------------------------
 
 void TestStreamConfigDialog::validateRejectsCheckedStreamWithEmptyFrameSync()
@@ -401,7 +401,7 @@ void TestStreamConfigDialog::testDefaultSampleRate()
 }
 
 // ---------------------------------------------------------------------------
-// "Apply to all" fan-out (US2.5)
+// "Apply to all" fan-out (US2.2)
 // ---------------------------------------------------------------------------
 
 void TestStreamConfigDialog::applyToAllCopiesSettingsToSameModeStreams()

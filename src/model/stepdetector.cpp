@@ -1,7 +1,7 @@
 /**
  * @file stepdetector.cpp
  * @brief Implementation of StepDetector — edge-based plateau detection and
- *        step-config TOML parsing for non-linear calibration (US3.2).
+ *        step-config TOML parsing for non-linear calibration (US5.3).
  */
 
 #include "stepdetector.h"
@@ -241,7 +241,7 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
     //    consecutive level change to exceed that same threshold and keep the
     //    same sign across the whole run.
     //
-    //    This is robust to the messy reality of recorded cal files (US3.2): it
+    //    This is robust to the messy reality of recorded cal files (US5.3): it
     //    skips leading pre-roll/no-signal plateaus, ignores trailing post-roll,
     //    and takes the FIRST of several back-to-back repeats. Crucially it also
     //    rejects flat/inactive channels — their plateau averages only jitter

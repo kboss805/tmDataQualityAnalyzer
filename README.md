@@ -151,9 +151,9 @@ tmDataQualityAnalyzer/
 │   ├── ch10packetreader.h      # Single-reader thread that routes packets to per-stream queues
 │   ├── packetqueue.h           # Bounded per-stream packet queue
 │   ├── frameprocessor.h
-│   ├── stepdetector.h          # Non-linear calibration plateau detection (US3.2)
-│   ├── calibrationextractor.h  # Calibration .ch10 extraction driver (US3.2)
-│   ├── calibrationprofile.h    # Session-only step-calibration data types (US3.2)
+│   ├── stepdetector.h          # Non-linear calibration plateau detection (US5.3)
+│   ├── calibrationextractor.h  # Calibration .ch10 extraction driver (US5.3)
+│   ├── calibrationprofile.h    # Session-only step-calibration data types (US5.3)
 │   ├── framesetup.h
 │   ├── channeldata.h
 │   ├── processingcoordinator.h # Reader + per-stream worker thread lifecycle
@@ -200,8 +200,8 @@ tmDataQualityAnalyzer/
 │   ├── chapter10reader.cpp    # Chapter 10 file metadata (Model)
 │   ├── ch10packetreader.cpp   # Single-reader thread; routes packets to per-stream queues (Model)
 │   ├── frameprocessor.cpp     # Per-stream PCM frame extraction → in-memory result (Model)
-│   ├── stepdetector.cpp       # Non-linear calibration plateau detection (Model, US3.2)
-│   ├── calibrationextractor.cpp # Calibration .ch10 extraction driver (Model, US3.2)
+│   ├── stepdetector.cpp       # Non-linear calibration plateau detection (Model, US5.3)
+│   ├── calibrationextractor.cpp # Calibration .ch10 extraction driver (Model, US5.3)
 │   ├── framesetup.cpp         # Frame configuration parameters (Model)
 │   ├── channeldata.cpp        # Channel metadata (Model)
 │   ├── processingcoordinator.cpp # Reader + per-stream worker thread lifecycle (ViewModel)

@@ -494,7 +494,7 @@ private:
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-//                      CALIBRATION SETUP DIALOG (US3.2)                       //
+//                      CALIBRATION SETUP DIALOG (US5.3)                       //
 ////////////////////////////////////////////////////////////////////////////////
 
 /// Collects the two files needed for non-linear calibration extraction — the
@@ -1034,7 +1034,7 @@ public:
 
         outer->addSpacing(DialogLayout::kControlGap);
 
-        // ---- Group 3: Non-linear step calibration (US3.2) -------------------
+        // ---- Group 3: Non-linear step calibration (US5.3) -------------------
         {
             auto* row = new QHBoxLayout;
             auto* extractBtn = new QPushButton("Apply Cal", this);
@@ -1115,7 +1115,7 @@ private:
 
     /// Opens the calibration setup dialog. The dialog processes the calibration
     /// file in full as soon as both inputs are loaded and exposes the resulting
-    /// per-channel profiles; here we simply adopt them on accept (US3.2).
+    /// per-channel profiles; here we simply adopt them on accept (US5.3).
     void onExtractCalibration()
     {
         if (m_timeChannelId < 0)
@@ -1157,7 +1157,7 @@ private:
     QString         m_toml_dir;
     QString         m_app_root;
 
-    // Non-linear step calibration (US3.2)
+    // Non-linear step calibration (US5.3)
     int             m_timeChannelId = -1;     ///< Time channel ID inherited from the parent dialog.
     int             m_pcmChannelId  = -1;     ///< PCM channel ID of the stream being calibrated.
     QHash<int, CalibrationProfile> m_calibrationByWord; ///< Extracted profiles, keyed by word index.

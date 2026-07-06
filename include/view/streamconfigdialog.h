@@ -39,7 +39,7 @@ public:
      * @param[in] time_channels      List of available time channel display strings.
      * @param[in] time_channel_index Currently selected time channel index (1-based, 0 = none).
      * @param[in] time_channel_id    Resolved channel ID of the selected time channel (-1 = none),
-     *                               inherited by the Receiver SNR calibration extraction (US3.2).
+     *                               inherited by the Receiver SNR calibration extraction (US5.3).
      * @param[in] app_root           Application root directory, used to locate the
      *                               settings/receiver_params, settings/rcvr_cals, and
      *                               settings/framesync_patterns directories so the relevant
@@ -86,7 +86,7 @@ private:
         int     numReceivers     = PCMConstants::kDefaultNumReceivers;
         int     receiverChannels = PCMConstants::kDefaultReceiverChannels;
         QString    receiverParamsToml;
-        QHash<int, CalibrationProfile> calibrationByWord; ///< Non-linear step calibration profiles (US3.2).
+        QHash<int, CalibrationProfile> calibrationByWord; ///< Non-linear step calibration profiles (US5.3).
         StreamMode lastConfiguredMode = StreamMode::FrameSyncLockStats; ///< Mode whose values are currently stored.
         bool       gearConfirmed      = false; ///< True only after the user has opened and accepted the gear dialog.
     };
@@ -111,7 +111,7 @@ private:
     QComboBox*            m_time_channel_combo = nullptr;
     QPushButton*          m_ok_btn             = nullptr;
     QCheckBox*            m_all_toggle         = nullptr;
-    int                   m_time_channel_id    = -1; ///< Resolved time channel ID for calibration extraction (US3.2).
+    int                   m_time_channel_id    = -1; ///< Resolved time channel ID for calibration extraction (US5.3).
 };
 
 #endif // STREAMCONFIGDIALOG_H
