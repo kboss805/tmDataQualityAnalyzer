@@ -39,6 +39,11 @@ tmDataQualityAnalyzer v2.6.0 - What's New
     other's data on the plot. Each stream is now tracked independently, even
     when the names match.
 
+  - Fixed: Opening the Customize Plot Series dialog while a CSV import was
+    still loading could, in rare cases, apply a rename, recolor, or show/hide
+    to the wrong series. The dialog now always applies changes to the series
+    you selected.
+
 
 tmDataQualityAnalyzer v2.5.2 - What's New
 =================================
