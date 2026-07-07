@@ -61,8 +61,10 @@ public:
     /// stale if the series list changes (async reprocess/import) while it is open.
     int indexOfSeriesId(int id) const;
     const QVector<PlotSeriesData>& allSeries() const; ///< @return All series data.
-    void renameSeries(int index, const QString& name);   ///< Overrides the display name of a series.
-    void recolorSeries(int index, const QColor& color);  ///< Overrides the color of a series.
+    /// @return Pointer to the series with stable @p id, or nullptr if none currently
+    /// has it — the id-based companion to seriesAt(), a safe read for callers that
+    /// hold an id across a possible series-list change.
+    const PlotSeriesData* seriesById(int id) const;
 
     QString plotTitle() const;                     ///< @return Current plot title.
     double xMin() const;                           ///< @return Data X minimum (elapsed seconds).
@@ -96,13 +98,19 @@ public:
 
     /// @name Mutators
     /// @{
-    void setSeriesVisible(int index, bool visible);
-    /// Same as setSeriesVisible() but does not emit seriesVisibilityChanged() or
-    /// recompute the Y range — for batched edits (e.g. the Customize Plot Series
-    /// dialog toggling many checkboxes before OK) where the caller calls
-    /// commitAppearanceChanges() once after every change is applied, instead of
-    /// paying for a full legend/graph refresh per checkbox.
-    void setSeriesVisibleQuiet(int index, bool visible);
+    /// Series appearance edits — identify the target by its stable
+    /// PlotSeriesData::id, never a positional index. A long-lived caller (e.g. the
+    /// modal Customize Plot Series dialog) can hold an id safely across a series-list
+    /// change (async reprocess/import); a captured index would go stale and edit the
+    /// wrong series or read out of range. Each is a no-op if no series has @p id.
+    void renameSeriesById(int id, const QString& name);
+    void recolorSeriesById(int id, const QColor& color);
+    void setSeriesVisibleById(int id, bool visible);
+    /// Batched variant of setSeriesVisibleById(): does not emit
+    /// seriesVisibilityChanged() or recompute the Y range — for the Customize Plot
+    /// Series dialog toggling many checkboxes before OK, which calls
+    /// commitAppearanceChanges() once after the whole batch.
+    void setSeriesVisibleQuietById(int id, bool visible);
     void setPlotTitle(const QString& title);
     void setYManualRange(double min, double max);
     void setYAutoScale(bool enabled);
@@ -114,9 +122,9 @@ public:
     /// Switches the left-axis metric and flips visibility of lock/missed frames series.
     void setLockAxisView(LockAxisView view);
     /// Notifies views that series colors/names/visibility changed. Call once after
-    /// a batch of renameSeries()/recolorSeries()/setSeriesVisibleQuiet() edits (e.g.
-    /// from the Customize Plot dialog) — those are pure setters and do not signal
-    /// on their own. Recomputes the Y range (if auto-scaled) before signaling.
+    /// a batch of renameSeriesById()/recolorSeriesById()/setSeriesVisibleQuietById()
+    /// edits (e.g. from the Customize Plot dialog) — those are pure setters and do not
+    /// signal on their own. Recomputes the Y range (if auto-scaled) before signaling.
     void commitAppearanceChanges();
     /// @}
 
@@ -156,6 +164,15 @@ private:
     void computeYRange();
     /// Commits a CsvParseResult into member state and emits dataChanged().
     void commitParseResult(CsvParseResult&& result);
+
+    /// Positional (index-based) appearance edits — the private implementation the
+    /// id-based public methods delegate to after resolving indexOfSeriesId(). Kept
+    /// off the public API deliberately: an index captured by a caller goes stale when
+    /// the series list changes. Each is bounds-guarded (out-of-range index = no-op).
+    void renameSeries(int index, const QString& name);
+    void recolorSeries(int index, const QColor& color);
+    void setSeriesVisible(int index, bool visible);
+    void setSeriesVisibleQuiet(int index, bool visible);
 
     QVector<PlotSeriesData> m_series;              ///< All loaded series data.
     int m_next_series_id = 1;                      ///< Monotonic source of stable per-series ids (PlotSeriesData::id).

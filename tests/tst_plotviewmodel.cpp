@@ -223,14 +223,14 @@ void TestPlotViewModel::seriesVisibility()
     QVERIFY(vm.seriesAt(1).visible);
 
     // Hide first series
-    vm.setSeriesVisible(0, false);
+    vm.setSeriesVisibleById(vm.seriesAt(0).id, false);
     QVERIFY(!vm.seriesAt(0).visible);
     QCOMPARE(spy.count(), 1);
     QCOMPARE(spy.at(0).at(0).toInt(), 0);
 
-    // Out-of-bounds is a no-op
-    vm.setSeriesVisible(-1, false);
-    vm.setSeriesVisible(99, false);
+    // An unknown id is a no-op
+    vm.setSeriesVisibleById(-1, false);
+    vm.setSeriesVisibleById(999999, false);
     QCOMPARE(spy.count(), 1);
 
     QFile::remove(path);
@@ -950,7 +950,7 @@ void TestPlotViewModel::setLockAxisViewPreservesStreamSelection()
         }
     }
     QVERIFY(deselected_lock_index >= 0);
-    vm.setSeriesVisible(deselected_lock_index, false);
+    vm.setSeriesVisibleById(vm.seriesAt(deselected_lock_index).id, false);
 
     // Switch to MissedFrames: stream 32 must stay hidden, stream 33 visible.
     vm.setLockAxisView(PlotViewModel::LockAxisView::MissedFrames);
@@ -1049,7 +1049,7 @@ void TestPlotViewModel::renameSeriesOnlySameStreamOrderSiblingRenamed()
     QVERIFY(lock6 >= 0);
     QVERIFY(missed6 >= 0);
 
-    vm.renameSeries(lock5, "Renamed Stream 5");
+    vm.renameSeriesById(vm.seriesAt(lock5).id, "Renamed Stream 5");
 
     // Stream 5's own lock/missed-frames pair renamed together...
     QCOMPARE(vm.seriesAt(lock5).name, QString("Renamed Stream 5"));
@@ -1075,7 +1075,7 @@ void TestPlotViewModel::recolorSeriesOnlySameStreamOrderSiblingRecolored()
     QVERIFY(missed6 >= 0);
     const QColor original6Color = vm.seriesAt(lock6).color;
 
-    vm.recolorSeries(lock5, QColor(Qt::magenta));
+    vm.recolorSeriesById(vm.seriesAt(lock5).id, QColor(Qt::magenta));
 
     QCOMPARE(vm.seriesAt(lock5).color, QColor(Qt::magenta));
     QCOMPARE(vm.seriesAt(missed5).color, QColor(Qt::magenta));
