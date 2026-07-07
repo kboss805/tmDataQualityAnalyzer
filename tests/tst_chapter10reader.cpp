@@ -4,6 +4,7 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QFileInfo>
 
 #include "chapter10reader.h"
 #include "constants.h"
@@ -19,6 +20,21 @@ static QString testDataPath(const QString& filename)
         dir.cdUp();
     }
     return dir.filePath("data/" + filename);
+}
+
+void TestChapter10Reader::init()
+{
+    // Every test in this suite loads a real .ch10 fixture. Those files are
+    // gitignored (hundreds of MB each) so they aren't present on a fresh
+    // checkout (e.g. CI). Skip each test cleanly rather than hard-failing;
+    // they run in full locally where the fixtures live.
+    //
+    // This MUST be a per-test skip (init(), run before every test) — a
+    // suite-level QSKIP in initTestCase() poisons the custom multi-qExec harness
+    // in main.cpp and silently stops every suite that runs after this one.
+    if (!QFileInfo::exists(testDataPath("nrz-l_testfile.ch10")))
+        QSKIP("Chapter 10 test fixture (nrz-l_testfile.ch10) not present — "
+              "large .ch10 fixtures are gitignored; this suite runs locally only");
 }
 
 void TestChapter10Reader::loadChannelsReturnsTrueForValidFile()
