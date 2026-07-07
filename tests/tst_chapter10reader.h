@@ -8,6 +8,10 @@ class TestChapter10Reader : public QObject
     Q_OBJECT
 
 private slots:
+    // Skips the whole suite when the (gitignored, large) .ch10 fixture is absent —
+    // e.g. on CI, where these files aren't checked out. Runs normally locally.
+    void initTestCase();
+
     void loadChannelsReturnsTrueForValidFile();
     void loadChannelsPopulatesTimeChannels();
     void loadChannelsPopulatesPcmChannels();

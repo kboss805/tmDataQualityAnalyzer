@@ -4,6 +4,7 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QFileInfo>
 
 #include "chapter10reader.h"
 #include "constants.h"
@@ -19,6 +20,17 @@ static QString testDataPath(const QString& filename)
         dir.cdUp();
     }
     return dir.filePath("data/" + filename);
+}
+
+void TestChapter10Reader::initTestCase()
+{
+    // Every test in this suite loads a real .ch10 fixture. Those files are
+    // gitignored (hundreds of MB each) so they aren't present on a fresh
+    // checkout (e.g. CI). Skip the suite cleanly rather than hard-failing;
+    // it runs in full locally where the fixtures live.
+    if (!QFileInfo::exists(testDataPath("nrz-l_testfile.ch10")))
+        QSKIP("Chapter 10 test fixture (nrz-l_testfile.ch10) not present — "
+              "large .ch10 fixtures are gitignored; this suite runs locally only");
 }
 
 void TestChapter10Reader::loadChannelsReturnsTrueForValidFile()
