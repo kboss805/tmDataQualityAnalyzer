@@ -245,6 +245,16 @@ fixture), dominating iteration cost.
   suite-level filter.
 - CI (Phase 2) and pre-release always run the **full** suite; fast-mode is a
   local convenience only.
+- **Committable CI fixtures (follow-on from Phase 2):** the real `.ch10`
+  fixtures are gitignored and ~1.8 GB, so CI can't run the fixture-dependent
+  integration/domain suites (FrameProcessor, CalibrationExtractor,
+  ProcessingCoordinator, Chapter10Reader) — they skip, and CI covers only the
+  ~234 logic/widget tests. Those skipped suites are exactly the domain-invariant
+  coverage (SNR calibration, frame-sync, missed-frames) most worth guarding on
+  every PR. Build **small synthetic `.ch10` fixtures** (KB-sized, committed) —
+  or trim a real capture to a handful of frames — so a meaningful integration
+  subset runs in CI too. The `write-qt-test` skill already sketches synthetic
+  step-cal fixtures; this generalizes that to the reader/processor paths.
 
 **Risks:** low — fast-mode must never be the gate for a release or CI.
 
