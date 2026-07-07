@@ -19,6 +19,10 @@ win32 {
     QMAKE_CXXFLAGS += -Wa,-mbig-obj  # Required for QCustomPlot large object file on MinGW
 }
 
+# Compile the vendored third-party libs (lib/irig106, lib/qcustomplot) without the
+# app's -Wall -Wextra so their pre-existing warnings don't bury real app warnings.
+include($$PWD/../thirdparty.pri)
+
 # Application sources (exclude main.cpp to avoid duplicate main), grouped by layer.
 SOURCES += \
     $$PWD/../src/model/channeldata.cpp \
