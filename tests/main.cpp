@@ -88,17 +88,28 @@ int main(int argc, char* argv[])
     // Clear the log file
     QFile(log_path).remove();
 
+    // Fast mode skips the heavy real-Ch10 integration suites for quick local
+    // iteration — enabled by the --fast flag or the TMDQ_FAST_TESTS env var. It is
+    // a LOCAL convenience only: CI and the release gate must run the full suite.
+    bool fast_mode = qEnvironmentVariableIsSet("TMDQ_FAST_TESTS");
+    for (int i = 1; i < argc; ++i)
+    {
+        if (QString::fromLocal8Bit(argv[i]) == "--fast")
+        {
+            fast_mode = true;
+        }
+    }
+
     int status = 0;
 
+    // Fast suites — pure logic plus widget/dialog construction; no large .ch10
+    // fixture, all sub-second. These always run (and are the set CI runs, where the
+    // .ch10 fixtures are absent).
     status |= runSuite<TestChannelData>(log_path);
-    status |= runSuite<TestChapter10Reader>(log_path);
     status |= runSuite<TestConstants>(log_path);
-    status |= runSuite<TestFrameProcessor>(log_path);
     status |= runSuite<TestMainViewModelHelpers>(log_path);
     status |= runSuite<TestFrameSetup>(log_path);
     status |= runSuite<TestPlotViewModel>(log_path);
-
-    status |= runSuite<TestProcessingCoordinator>(log_path);
     status |= runSuite<TestMainView>(log_path);
     status |= runSuite<TestPlotWidget>(log_path);
     status |= runSuite<TestPlotCustomizationDialog>(log_path);
@@ -106,7 +117,24 @@ int main(int argc, char* argv[])
     status |= runSuite<TestExportDialog>(log_path);
     status |= runSuite<TestStepDetector>(log_path);
     status |= runSuite<TestSeriesColumnSchema>(log_path);
-    status |= runSuite<TestCalibrationExtractor>(log_path);
+
+    // Heavy suites — integration over a real .ch10 fixture; TestFrameProcessor alone
+    // is ~74 s and dominates the ~85 s run. Skipped in fast mode for quick iteration;
+    // CI and the release gate always run them.
+    if (!fast_mode)
+    {
+        status |= runSuite<TestChapter10Reader>(log_path);
+        status |= runSuite<TestFrameProcessor>(log_path);
+        status |= runSuite<TestProcessingCoordinator>(log_path);
+        status |= runSuite<TestCalibrationExtractor>(log_path);
+    }
+    else
+    {
+        QTextStream(stdout)
+            << "FAST MODE: skipped the real-Ch10 integration suites (TestChapter10Reader, "
+               "TestFrameProcessor, TestProcessingCoordinator, TestCalibrationExtractor). "
+               "Run without --fast / TMDQ_FAST_TESTS for the full suite.\n";
+    }
 
     return status;
 }

@@ -74,21 +74,26 @@ mingw32-make -f Makefile.Debug -j$env:NUMBER_OF_PROCESSORS
 
 - Results are written to `tests\output\results.txt` (gitignored) AND printed to the console. A
   non-zero process exit code means at least one suite failed.
-- Green baseline as of this writing: **213 passed / 0 failed / 0 skipped** across 13 suites.
+- Green baseline as of this writing: **267 passed / 0 failed / 0 skipped** across 16 suites (full run).
 - A convenience wrapper exists: `powershell -ExecutionPolicy Bypass -File scripts\build_ide.ps1`
   builds the tests (Debug) using `QTDIR`/`MINGW_DIR` from the environment. It builds but does not run.
 
-### Timing and the no-single-suite-filter reality
+### Fast mode and the no-single-suite-filter reality
 
-A full run is **~85 s**, and `TestFrameProcessor` alone is **~74 s** because it processes a real
-Chapter 10 fixture. The custom harness in `tests/main.cpp` runs **all 13 suites unconditionally** and
-only honors `-o <file>` — it does **not** forward a `ClassName::testCase` filter, so you cannot
-narrow the run from the command line.
+The full run is dominated by the real-Ch10 integration suites — `TestFrameProcessor` and
+`TestProcessingCoordinator` process a real Chapter 10 fixture and take a few minutes between them.
+For quick local iteration, pass **`--fast`** (or set **`TMDQ_FAST_TESTS=1`**):
 
-When you are iterating on one suite and want fast feedback, temporarily comment out the other
-`runSuite<...>()` lines in `tests/main.cpp`, rebuild, and run — then restore the full list before you
-finish. Always do a final full-suite run before declaring tests green. Never commit a trimmed
-`main.cpp`.
+```powershell
+.\debug\tmDataQualityAnalyzer_tests.exe --fast   # ~1 s: skips the 4 .ch10 integration suites
+```
+
+Fast mode runs the 12 pure-logic + widget/dialog suites (the same set CI runs, where the `.ch10`
+fixtures are absent) and skips `TestChapter10Reader`, `TestFrameProcessor`, `TestProcessingCoordinator`,
+and `TestCalibrationExtractor`. It is a **local convenience only** — always do a final **full** run
+(no `--fast`) before declaring tests green, and never rely on it for CI or a release gate. This is the
+built-in replacement for hand-trimming `main.cpp` (which must never be committed). The harness still
+does not honor a `ClassName::testCase` single-suite filter.
 
 ## When a build breaks for non-code reasons
 
