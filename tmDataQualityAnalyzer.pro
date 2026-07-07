@@ -74,6 +74,7 @@ SOURCES += \
     src/model/stepdetector.cpp \
     src/model/calibrationextractor.cpp \
     src/model/csvseriesparser.cpp \
+    src/model/seriescolumnschema.cpp \
     src/model/tomlconfighelper.cpp
 
 # ViewModel: presentation state + processing orchestration
@@ -124,6 +125,7 @@ HEADERS += \
     include/model/stepdetector.h \
     include/model/calibrationextractor.h \
     include/model/csvseriesparser.h \
+    include/model/seriescolumnschema.h \
     include/model/tomlconfighelper.h
 
 # DTOs: plain data carried across layers

@@ -22,6 +22,7 @@
 #include "tst_streamconfigdialog.h"
 
 #include "tst_exportdialog.h"
+#include "tst_seriescolumnschema.h"
 
 /// Runs a single test suite and appends results to the shared log file.
 template<typename T>
@@ -104,6 +105,7 @@ int main(int argc, char* argv[])
     status |= runSuite<TestStreamConfigDialog>(log_path);
     status |= runSuite<TestExportDialog>(log_path);
     status |= runSuite<TestStepDetector>(log_path);
+    status |= runSuite<TestSeriesColumnSchema>(log_path);
     status |= runSuite<TestCalibrationExtractor>(log_path);
 
     return status;

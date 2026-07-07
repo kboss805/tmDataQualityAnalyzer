@@ -14,6 +14,7 @@
 #include <QtMath>
 
 #include "constants.h"
+#include "seriescolumnschema.h"
 
 CsvParseResult CsvSeriesParser::parse(const QString& filepath)
 {
@@ -58,80 +59,25 @@ CsvParseResult CsvSeriesParser::parse(const QString& filepath)
     // indices across the whole file.
     QMap<int, QMap<int, int>> stream_receiver_channel_count;
 
-    const QString lock_suffix   = QLatin1String(PlotConstants::kCsvLockSuffix);
-    const QString missed_suffix = QLatin1String(PlotConstants::kCsvMissedFramesSuffix);
-
-    // SNR columns always start with "<pcmChannelId> - " (see the NOTE in
-    // PlotViewModel::addStreamData()); Lock/MissedFrames columns never do. Checked
-    // before the suffix match below so a header that happens to match both shapes
-    // (not reachable via this app's own export, but possible from a hand-crafted or
-    // third-party CSV) resolves as SNR rather than being silently misrouted to
-    // Lock/MissedFrames.
-    auto hasSnrIdPrefix = [](const QString& h) {
-        int digits = 0;
-        while (digits < h.size() && h.at(digits).isDigit()) digits++;
-        return digits > 0 && QStringView(h).mid(digits).startsWith(QLatin1String(" - "));
-    };
-
     for (int i = 0; i < param_count; i++)
     {
         PlotSeriesData& s = series[i];
-        const QString header = columns[i + 1].trimmed();
-        const bool looks_like_snr = hasSnrIdPrefix(header);
+        // Column identity (metric type, name, stream label/order, receiver) comes
+        // from the shared schema — the exact inverse of the column headers written
+        // by PlotViewModel::exportCsv().
+        const SeriesColumnSchema::ParsedColumn col =
+            SeriesColumnSchema::parseColumnHeader(columns[i + 1].trimmed());
+        s.name          = col.name;
+        s.streamLabel   = col.streamLabel;
+        s.metricType    = col.metricType;
+        s.streamOrder   = col.streamOrder;
+        s.receiverIndex = col.receiverIndex;
 
-        if (!looks_like_snr && header.endsWith(lock_suffix))
+        // channelIndex is a per-(stream, receiver) running count assigned here as
+        // columns are walked left to right (SNR series only), so multiple SNR streams
+        // that reuse receiver numbers don't accumulate indices across the whole file.
+        if (s.metricType == PlotSeriesData::MetricType::SNR)
         {
-            // Strip the metric suffix to recover the bare series name the legend
-            // shows; keep it as streamLabel too so the lock/missed-frames pair is
-            // re-linked (renameSeries keeps paired siblings in sync by streamLabel).
-            s.name = header.left(header.size() - lock_suffix.size());
-            s.streamLabel = s.name;
-            s.metricType = PlotSeriesData::MetricType::FrameSyncLock;
-            s.receiverIndex = 0;
-            s.channelIndex  = 0;
-        }
-        else if (!looks_like_snr && header.endsWith(missed_suffix))
-        {
-            s.name = header.left(header.size() - missed_suffix.size());
-            s.streamLabel = s.name;
-            s.metricType = PlotSeriesData::MetricType::AccumulatedMissedFrames;
-            s.receiverIndex = 0;
-            s.channelIndex  = 0;
-        }
-        else
-        {
-            s.name = header;
-            s.metricType = PlotSeriesData::MetricType::SNR;
-
-            // SNR export names carry "<pcmChannelId> - <streamLabel> <chName>"
-            // (produced by PlotViewModel::addStreamData) so multiple receiver-SNR
-            // streams stay distinct. Recover the stream id and label so the Customize
-            // Plot Series dialog can group/label SNR channels per stream (it keys on
-            // streamOrder + streamLabel); without this every SNR channel collapses
-            // into one unnamed "CH 0" group on import. Keep in lockstep with the
-            // name format in addStreamData.
-            int dash = static_cast<int>(header.indexOf(QLatin1String(" - ")));
-            if (dash > 0)
-            {
-                bool id_ok = false;
-                int id = header.left(dash).toInt(&id_ok);
-                if (id_ok)
-                {
-                    s.streamOrder = id;
-                }
-                const QString rest = header.mid(dash + 3);  // "<streamLabel> <chName>"
-                int last_space = static_cast<int>(rest.lastIndexOf(QChar(' ')));
-                s.streamLabel = (last_space > 0) ? rest.left(last_space) : rest;
-            }
-
-            // Extract receiver index from "_RCVR<N>" suffix.
-            int rcvr_pos = static_cast<int>(s.name.lastIndexOf("_RCVR"));
-            if (rcvr_pos >= 0)
-            {
-                bool ok = false;
-                int rcvr_num = s.name.mid(rcvr_pos + 5).toInt(&ok);
-                s.receiverIndex = ok ? rcvr_num : 0;
-            }
             QMap<int, int>& receiver_channel_count =
                 stream_receiver_channel_count[s.streamOrder];
             s.channelIndex = receiver_channel_count.value(s.receiverIndex, 0);
