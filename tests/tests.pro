@@ -33,6 +33,7 @@ SOURCES += \
     $$PWD/../src/model/stepdetector.cpp \
     $$PWD/../src/model/calibrationextractor.cpp \
     $$PWD/../src/model/csvseriesparser.cpp \
+    $$PWD/../src/model/seriescolumnschema.cpp \
     $$PWD/../src/model/tomlconfighelper.cpp \
     $$PWD/../src/viewmodel/mainviewmodel.cpp \
     $$PWD/../src/viewmodel/processingcoordinator.cpp \
@@ -57,6 +58,7 @@ HEADERS += \
     $$PWD/../include/model/stepdetector.h \
     $$PWD/../include/model/calibrationextractor.h \
     $$PWD/../include/model/csvseriesparser.h \
+    $$PWD/../include/model/seriescolumnschema.h \
     $$PWD/../include/model/tomlconfighelper.h \
     $$PWD/../include/dto/streamconfig.h \
     $$PWD/../include/dto/framesyncparams.h \
@@ -128,6 +130,7 @@ SOURCES += \
     tst_processingcoordinator.cpp \
     tst_streamconfigdialog.cpp \
     tst_exportdialog.cpp \
+    tst_seriescolumnschema.cpp \
     tst_stepdetector.cpp \
     tst_calibrationextractor.cpp
 
@@ -146,5 +149,6 @@ HEADERS += \
     tst_processingcoordinator.h \
     tst_streamconfigdialog.h \
     tst_exportdialog.h \
+    tst_seriescolumnschema.h \
     tst_stepdetector.h \
     tst_calibrationextractor.h

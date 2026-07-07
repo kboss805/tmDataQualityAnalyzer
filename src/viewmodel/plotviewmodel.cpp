@@ -17,6 +17,7 @@
 
 #include "constants.h"
 #include "csvseriesparser.h"
+#include "seriescolumnschema.h"
 
 PlotViewModel::PlotViewModel(QObject* parent)
     : QObject(parent)
@@ -274,15 +275,12 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
     for (const auto& ch : data.channels)
     {
         PlotSeriesData s;
-        // Receiver SNR series keep the TMATS channel number as a prefix: a file
-        // can carry multiple receiver SNR streams whose per-receiver channel
-        // names (e.g. L_RCVR1) would otherwise collide in the legend. The
-        // Configure Streams dialog and Frame Sync Lock series intentionally drop
-        // this number (streamLabel is now the bare channel name).
-        // NOTE: this "<pcmChannelId> - <streamLabel> <ch.name>" format is parsed
-        // back by CsvSeriesParser on CSV import to recover streamOrder/streamLabel;
-        // keep the two in lockstep if this format changes.
-        s.name = QString::number(data.pcmChannelId) + " - " + data.streamLabel + " " + ch.name;
+        // Receiver SNR series keep the TMATS channel number as a prefix so multiple
+        // receiver SNR streams (whose per-receiver channel names like L_RCVR1 would
+        // otherwise collide in the legend) stay distinct; the Configure Streams dialog
+        // and Frame Sync Lock series intentionally drop it. The exact name format —
+        // and its inverse for CSV import — is owned by SeriesColumnSchema.
+        s.name = SeriesColumnSchema::snrSeriesName(data.pcmChannelId, data.streamLabel, ch.name);
         s.streamLabel = data.streamLabel;
         s.metricType = PlotSeriesData::MetricType::SNR;
         int rcvr_pos = static_cast<int>(ch.name.lastIndexOf("_RCVR"));
@@ -376,24 +374,14 @@ bool PlotViewModel::exportCsv(const QString& filepath) const
     QTextStream out(&file);
 
     // Write header. Frame-sync series names are stored bare (no metric suffix) for
-    // the plot legend; qualify them HERE so the CSV columns are self-describing —
-    // a stream's lock and missed-frames series share the same bare name and would
-    // otherwise export as two identical, indistinguishable headers.
-    auto headerLabel = [](const PlotSeriesData& s) -> QString {
-        switch (s.metricType)
-        {
-        case PlotSeriesData::MetricType::FrameSyncLock:
-            return s.name + PlotConstants::kCsvLockSuffix;
-        case PlotSeriesData::MetricType::AccumulatedMissedFrames:
-            return s.name + PlotConstants::kCsvMissedFramesSuffix;
-        default: // SNR series names already carry the channel and are unique
-            return s.name;
-        }
-    };
+    // the plot legend; SeriesColumnSchema::columnHeader() qualifies them so the CSV
+    // columns are self-describing (a stream's lock and missed-frames series share the
+    // same bare name and would otherwise export as two identical headers) and stays
+    // the inverse of the import parser.
     out << PlotConstants::kCsvTimeHeader;
     for (const auto& s : m_series)
     {
-        out << "," << headerLabel(s);
+        out << "," << SeriesColumnSchema::columnHeader(s);
     }
     out << "\n";
 
