@@ -68,21 +68,19 @@ jobs:
           mingw32-make -f Makefile.Debug -j $env:NUMBER_OF_PROCESSORS 2>&1 | Tee-Object -FilePath app_build.log
           if ($LASTEXITCODE -ne 0) { throw "App build failed ($LASTEXITCODE)" }
 
-      - name: Zero-warning gate (app code)
+      - name: Zero-warning gate
         shell: pwsh
         run: |
-          # Fail on any compiler warning from app code. Third-party libs
-          # (lib/irig106, lib/qcustomplot) are deny-listed and carry their own
-          # pre-existing warnings — excluded here until Phase 3 silences them at
-          # the build level, after which this exclusion can be dropped.
-          $warns = Select-String -Path build\app_build.log -Pattern 'warning:' |
-                   Where-Object { $_.Line -notmatch 'lib[\\/](irig106|qcustomplot)' }
+          # The whole build must be warning-free. The vendored third-party libs
+          # (lib/irig106, lib/qcustomplot) are compiled without -Wall -Wextra via
+          # thirdparty.pri, so any 'warning:' remaining is real app code and fails CI.
+          $warns = Select-String -Path build\app_build.log -Pattern 'warning:'
           if ($warns) {
-            Write-Host "App-code warnings found:"
+            Write-Host "Compiler warnings found:"
             $warns | ForEach-Object { Write-Host $_.Line }
             throw "Build is not warning-clean"
           }
-          Write-Host "No app-code warnings."
+          Write-Host "No warnings."
 
       - name: Build tests (Debug, in-source)
         shell: pwsh
