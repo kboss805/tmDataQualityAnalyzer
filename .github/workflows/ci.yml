@@ -96,6 +96,9 @@ jobs:
         shell: pwsh
         run: |
           Set-Location tests
+          # The harness writes results to tests/output/ (gitignored, so absent on a
+          # fresh checkout); create it or the exe bails before running any test.
+          New-Item -ItemType Directory -Force -Path output | Out-Null
           .\debug\tmDataQualityAnalyzer_tests.exe
           $code = $LASTEXITCODE
           if (Test-Path output\results.txt) {
