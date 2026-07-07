@@ -471,6 +471,35 @@ int PlotViewModel::indexOfSeriesId(int id) const
     return -1;
 }
 
+const PlotSeriesData* PlotViewModel::seriesById(int id) const
+{
+    const int index = indexOfSeriesId(id);
+    return index < 0 ? nullptr : &m_series.at(index);
+}
+
+// Id-based appearance edits — the public API. Each resolves the stable id to a
+// current index and delegates to the (private, bounds-guarded) index-based method,
+// which no-ops on the -1 returned for a missing id.
+void PlotViewModel::renameSeriesById(int id, const QString& name)
+{
+    renameSeries(indexOfSeriesId(id), name);
+}
+
+void PlotViewModel::recolorSeriesById(int id, const QColor& color)
+{
+    recolorSeries(indexOfSeriesId(id), color);
+}
+
+void PlotViewModel::setSeriesVisibleById(int id, bool visible)
+{
+    setSeriesVisible(indexOfSeriesId(id), visible);
+}
+
+void PlotViewModel::setSeriesVisibleQuietById(int id, bool visible)
+{
+    setSeriesVisibleQuiet(indexOfSeriesId(id), visible);
+}
+
 const QVector<PlotSeriesData>& PlotViewModel::allSeries() const
 {
     return m_series;
