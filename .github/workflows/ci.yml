@@ -1,0 +1,112 @@
+name: CI
+
+# Build the app and run the full Qt Test suite on every push to main and every PR.
+# Mirrors the local build-and-test workflow: Qt 6.10.2 + MinGW, qmake + mingw32-make,
+# app built under build/, tests built in-source under tests/ (the exe must sit one
+# level below tests/ or the data-file fixtures don't resolve).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref (e.g. rapid pushes to a PR branch).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt 6.10.2 (MinGW) + toolchain
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.10.2'
+          host: windows
+          target: desktop
+          arch: win64_mingw
+          modules: qtsvg
+          tools: tools_mingw1310
+          cache: true
+
+      - name: Put MinGW on PATH
+        shell: pwsh
+        run: |
+          # install-qt-action installs the MinGW tool under $IQTA_TOOLS. Expose its
+          # bin so g++ / mingw32-make resolve, and so the test exe finds the MinGW
+          # runtime DLLs at run time (Qt's own bin is already on PATH via the action).
+          $mingwBin = Join-Path $env:IQTA_TOOLS 'mingw1310_64\bin'
+          if (-not (Test-Path $mingwBin)) {
+            Write-Host "Expected MinGW bin not found at $mingwBin; contents of IQTA_TOOLS:"
+            Get-ChildItem $env:IQTA_TOOLS -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
+            throw "MinGW toolchain not found"
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $mingwBin
+          Write-Host "Added to PATH: $mingwBin"
+
+      - name: Toolchain versions
+        shell: pwsh
+        run: |
+          qmake --version
+          g++ --version
+          mingw32-make --version | Select-Object -First 1
+
+      - name: Build app (Debug)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build | Out-Null
+          Set-Location build
+          qmake ..\tmDataQualityAnalyzer.pro -spec win32-g++ 'CONFIG+=debug'
+          mingw32-make -f Makefile.Debug -j $env:NUMBER_OF_PROCESSORS 2>&1 | Tee-Object -FilePath app_build.log
+          if ($LASTEXITCODE -ne 0) { throw "App build failed ($LASTEXITCODE)" }
+
+      - name: Zero-warning gate (app code)
+        shell: pwsh
+        run: |
+          # Fail on any compiler warning from app code. Third-party libs
+          # (lib/irig106, lib/qcustomplot) are deny-listed and carry their own
+          # pre-existing warnings — excluded here until Phase 3 silences them at
+          # the build level, after which this exclusion can be dropped.
+          $warns = Select-String -Path build\app_build.log -Pattern 'warning:' |
+                   Where-Object { $_.Line -notmatch 'lib[\\/](irig106|qcustomplot)' }
+          if ($warns) {
+            Write-Host "App-code warnings found:"
+            $warns | ForEach-Object { Write-Host $_.Line }
+            throw "Build is not warning-clean"
+          }
+          Write-Host "No app-code warnings."
+
+      - name: Build tests (Debug, in-source)
+        shell: pwsh
+        run: |
+          Set-Location tests
+          qmake tests.pro -spec win32-g++ 'CONFIG+=debug'
+          mingw32-make -f Makefile.Debug -j $env:NUMBER_OF_PROCESSORS
+          if ($LASTEXITCODE -ne 0) { throw "Test build failed ($LASTEXITCODE)" }
+
+      - name: Run full test suite
+        shell: pwsh
+        run: |
+          Set-Location tests
+          .\debug\tmDataQualityAnalyzer_tests.exe
+          $code = $LASTEXITCODE
+          if (Test-Path output\results.txt) {
+            $pass = (Select-String -Path output\results.txt -Pattern '^PASS' -AllMatches).Count
+            $fail = (Select-String -Path output\results.txt -Pattern '^FAIL' -AllMatches).Count
+            Write-Host "Results: $pass passed, $fail failed"
+          }
+          if ($code -ne 0) { throw "Test suite failed (exit $code)" }
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: tests/output/results.txt
+          if-no-files-found: ignore
