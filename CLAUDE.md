@@ -17,9 +17,11 @@ Toolchains are **not on PATH** — prepend them first via `. .\scripts\env.ps1` 
   `mingw32-make -f Makefile.Debug`. Re-run qmake after `.pro`/version/`Q_OBJECT` changes. **Zero
   warnings required.**
 - **Tests:** build **in-source inside `tests/`** (the exe must sit one level under `tests/` or the
-  data-file tests fail), then `.\debug\tmDataQualityAnalyzer_tests.exe`. Full run ~85 s
-  (FrameProcessor alone ~74 s). The harness runs **all 15 suites** — no CLI single-suite filter.
-  Green baseline: 267 passed / 0 failed / 0 skipped.
+  data-file tests fail), then `.\debug\tmDataQualityAnalyzer_tests.exe`. The full run (all **16
+  suites**) is dominated by the real-Ch10 integration suites (a few minutes); add `--fast` (or
+  `TMDQ_FAST_TESTS=1`) to skip those four `.ch10` suites for ~1 s local iteration — **local only; CI
+  and releases run the full suite**. No CLI single-suite filter.
+  Green baseline: 267 passed / 0 failed / 0 skipped (full run).
 
 The **`build-and-test`** skill encodes all of this; prefer it.
 
