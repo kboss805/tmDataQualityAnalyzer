@@ -101,12 +101,23 @@ jobs:
           New-Item -ItemType Directory -Force -Path output | Out-Null
           .\debug\tmDataQualityAnalyzer_tests.exe
           $code = $LASTEXITCODE
+          $pass = 0; $fail = 0; $skip = 0
           if (Test-Path output\results.txt) {
-            $pass = (Select-String -Path output\results.txt -Pattern '^PASS' -AllMatches).Count
-            $fail = (Select-String -Path output\results.txt -Pattern '^FAIL' -AllMatches).Count
-            Write-Host "Results: $pass passed, $fail failed"
+            $pass = (Select-String -Path output\results.txt -Pattern '^PASS').Count
+            $fail = (Select-String -Path output\results.txt -Pattern '^FAIL').Count
+            $skip = (Select-String -Path output\results.txt -Pattern '^SKIP').Count
           }
-          if ($code -ne 0) { throw "Test suite failed (exit $code)" }
+          Write-Host "Results: $pass passed, $fail failed, $skip skipped (exit $code)"
+          if ($code -ne 0) { throw "Test suite exited non-zero ($code)" }
+          if ($fail -gt 0)  { throw "$fail test(s) failed" }
+          # Guard against a silently aborted / poisoned harness reporting success
+          # with almost nothing run. The fixture-dependent integration suites skip
+          # on CI (the large .ch10 files are gitignored), leaving ~230+ tests; a
+          # count far below that means the run didn't actually execute the suite.
+          $minExpected = 200
+          if ($pass -lt $minExpected) {
+            throw "Only $pass tests passed (expected >= $minExpected) — the suite aborted or the harness was poisoned"
+          }
 
       - name: Upload test results
         if: always()
