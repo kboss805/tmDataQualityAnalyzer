@@ -17,6 +17,10 @@ the refactors, do the internal refactors while the surface area is small, and
 save the two large user-facing features (multi-file input, session save/load)
 for last — Phase 6 builds directly on Phase 1's multi-source model.
 
+**Phase 8 (performance spike) is optional and slots in any time after Phase 3** —
+it's a measurement exercise whose results decide whether any compiler/optimization
+work is worth doing at all.
+
 ---
 
 ## Phase 1 — Multi-file input (SNR file + separate frame-sync file)
@@ -245,6 +249,54 @@ fixture), dominating iteration cost.
 **Risks:** low — fast-mode must never be the gate for a release or CI.
 
 **Effort:** **S–M.**
+
+---
+
+## Phase 8 — Performance spike: measure before optimizing (optional)
+
+**Goal:** get real numbers on the *release-build* hot path so any optimization —
+or a compiler change (MinGW-GCC → MSVC) — is a data-driven decision, not a guess.
+
+**Why:** the felt slowness (the ~74 s `TestFrameProcessor` run) is a **debug**
+build — unoptimized regardless of compiler. The shipped release build is plain
+`-O2` with **no LTO, no `-O3`, no `-march`** (the `.pro` only adds `-lws2_32` and
+`-Wa,-mbig-obj`), so there's untapped headroom on the *current* toolchain before
+a compiler swap is even the right lever. And for multi-GB recordings the wall is
+often I/O, not codegen. Measure first.
+
+**On MinGW-GCC vs MSVC specifically:** expect a *lateral* move (~±10%,
+workload-dependent), not a step change — both are mature optimizers. MSVC's real
+draw is tooling (VS debugger, ETW/WPA profiling, PGO ergonomics), not raw speed,
+and switching costs are real: `-Wa,-mbig-obj` → `/bigobj`, VC++ runtime
+deployment instead of the MinGW runtime DLLs, GCC-isms in `lib/irig106`, and an
+MSVC branch in CI. So GCC tuning + profiling comes first; MSVC is only a
+*separate* head-to-head spike if the profile points at codegen and GCC tuning is
+exhausted.
+
+**Approach:**
+1. **Benchmark harness** — process a representative fixture `.ch10` through the
+   real `FrameProcessor` pipeline (reuse the `runWithReader` path) N times in a
+   **release** build, report median wall-clock. Keep it out of the normal suite
+   (separate target or a `--bench` flag) so it never inflates CI.
+2. **Baseline** the current `-O2` release.
+3. **Cheap GCC wins, one at a time, recording deltas:** `-flto` (usually the
+   biggest easy win), `-O3` on the processing TUs, `-march=x86-64-v2/v3` or
+   `-mavx2` if a CPU baseline is acceptable. Optionally GCC PGO
+   (`-fprofile-generate/use`) for the last few percent.
+4. **Profile the baseline** (sampling profiler / Very Sleepy / WPA) to confirm
+   where time actually goes — I/O vs bit-scan vs calibration. This also tells you
+   whether the large-file *downsampling* backlog item is warranted.
+5. **Only then**, if justified, an MSVC head-to-head spike on the same fixture.
+
+**Deliverable:** a short findings note (baseline + per-flag deltas + profile
+hotspots) and a recommendation — which flags to adopt in the `.pro` /
+`build_release.ps1`, and whether a compiler change is worth it.
+
+**Risks:** benchmark noise — pin to median-of-N on a quiet machine; keep the
+bench target out of the release artifact and the default test run.
+
+**Effort:** **S–M** for the harness + GCC-flag experiments; the MSVC head-to-head
+is a separate **M** only if pursued.
 
 ---
 
