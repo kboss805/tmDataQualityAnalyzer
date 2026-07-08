@@ -178,14 +178,17 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
     // earlier mode (e.g. Frame Sync Lock) lingers on the plot indefinitely
     // alongside the new one, since addStreamData() only ever accumulates and
     // the plot is only cleared when a new file is opened, not on reprocess.
-    // Matched on streamLabel AND pcmChannelId together: label alone isn't a
-    // unique stream key (two configured streams can share a TMATS-derived
-    // name), and pcmChannelId alone isn't either (it defaults to 0 for streams
-    // without a real channel id, e.g. synthetic/test data) — requiring both
-    // only erases the stream actually being reprocessed.
+    // Matched on sourceId, streamLabel, AND pcmChannelId together: label alone
+    // isn't a unique stream key (two configured streams can share a
+    // TMATS-derived name), pcmChannelId alone isn't either (it defaults to 0
+    // for streams without a real channel id, e.g. synthetic/test data), and in
+    // a multi-file session two different .ch10 sources can legitimately reuse
+    // the same channel id/label — requiring sourceId too ensures reprocessing
+    // one source's stream never erases another source's identically-keyed one.
     m_series.erase(std::remove_if(m_series.begin(), m_series.end(),
                                    [&](const PlotSeriesData& s) {
-                                       return s.streamLabel == data.streamLabel &&
+                                       return s.sourceId == data.sourceId &&
+                                              s.streamLabel == data.streamLabel &&
                                               s.streamOrder == data.pcmChannelId;
                                    }),
                    m_series.end());
@@ -242,6 +245,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         lock.channelIndex = 0;
         lock.streamOrder = data.pcmChannelId;
         lock.streamSequence = data.jobIndex;
+        lock.sourceId = data.sourceId;
         lock.id = m_next_series_id++;
         lock.xValues = elapsed;
         lock.yValues = data.lockPercent;
@@ -262,6 +266,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         errors.channelIndex = 0;
         errors.streamOrder = data.pcmChannelId;
         errors.streamSequence = data.jobIndex;
+        errors.sourceId = data.sourceId;
         errors.id = m_next_series_id++;
         errors.xValues = elapsed;
         errors.yValues = data.accumulatedMissedFrames;
@@ -294,6 +299,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         receiver_channel_count[s.receiverIndex]++;
         s.streamOrder = data.pcmChannelId;
         s.streamSequence = data.jobIndex;
+        s.sourceId = data.sourceId;
         s.id = m_next_series_id++;
         s.xValues = elapsed;
         s.yValues = ch.values;
@@ -506,11 +512,12 @@ void PlotViewModel::renameSeries(int index, const QString& name)
     // xValues/yValues can be large) before the loop mutates m_series.
     const QString renamed_label = m_series[index].streamLabel;
     const int renamed_order = m_series[index].streamOrder;
+    const int renamed_source = m_series[index].sourceId;
     if (isLeftAxisMetric(m_series[index].metricType))
     {
         for (PlotSeriesData& s : m_series)
         {
-            if (isFrameSyncSibling(renamed_label, renamed_order, s))
+            if (isFrameSyncSibling(renamed_label, renamed_order, renamed_source, s))
             {
                 s.name = name;
             }
@@ -543,11 +550,12 @@ void PlotViewModel::recolorSeries(int index, const QColor& color)
     // mirrors renameSeries(). Capture just the identity fields, not a full copy.
     const QString recolored_label = m_series[index].streamLabel;
     const int recolored_order = m_series[index].streamOrder;
+    const int recolored_source = m_series[index].sourceId;
     if (isLeftAxisMetric(m_series[index].metricType))
     {
         for (PlotSeriesData& s : m_series)
         {
-            if (isFrameSyncSibling(recolored_label, recolored_order, s))
+            if (isFrameSyncSibling(recolored_label, recolored_order, recolored_source, s))
             {
                 s.color = color;
             }
@@ -790,11 +798,12 @@ bool PlotViewModel::isLeftAxisMetric(PlotSeriesData::MetricType type)
 }
 
 bool PlotViewModel::isFrameSyncSibling(const QString& streamLabel, int streamOrder,
-                                       const PlotSeriesData& candidate)
+                                       int sourceId, const PlotSeriesData& candidate)
 {
     return isLeftAxisMetric(candidate.metricType) &&
            candidate.streamLabel == streamLabel &&
-           candidate.streamOrder == streamOrder;
+           candidate.streamOrder == streamOrder &&
+           candidate.sourceId == sourceId;
 }
 
 void PlotViewModel::computeYRange()
