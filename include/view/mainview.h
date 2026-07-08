@@ -60,10 +60,16 @@ private slots:
     void inputFileButtonPressed();
     /// Opens a CSV-filtered file dialog and imports the selected exported CSV.
     void importFileButtonPressed();
+    /// Opens a .ch10-filtered file dialog and adds the selected file as another
+    /// source in the current session (accumulating, not replacing, the plot).
+    void addSourceButtonPressed();
     /// Toggles between light and dark themes.
     void onToggleTheme();
-    /// Opens the StreamConfigDialog after a file has loaded.
+    /// Opens the StreamConfigDialog after a file has loaded (a fresh session).
     void onFileReadyForStreamConfig();
+    /// Opens the StreamConfigDialog after addSource() has loaded a second/later
+    /// file's metadata (accumulating into the existing session/plot).
+    void onSourceReadyForStreamConfig();
     /// @}
 
     /// @name ViewModel-driven update slots
@@ -99,6 +105,10 @@ private:
     /// @{
     void startProcessingFromDialog();                    ///< Starts background processing.
     void setAllControlsEnabled(bool enabled);          ///< Enables or disables all interactive controls.
+    /// Shows the Configure Streams dialog for the file MainViewModel just loaded
+    /// metadata for, then starts processing on Accept. @p clearPlotFirst is true
+    /// for a fresh Open (new session) and false for Add Source (accumulate).
+    void showStreamConfigDialogForPendingSource(bool clearPlotFirst);
     void saveLastCh10Dir();                              ///< Persists m_last_ch10_dir to QSettings.
     /// Routes a path to the .ch10 processing pipeline or the CSV importer by extension.
     void openPath(const QString& path);
@@ -121,6 +131,7 @@ private:
     PlotViewModel* m_plot_view_model;        ///< Plot ViewModel owning series data.
     QAction* m_theme_action;                 ///< File > Toggle theme action.
     QAction* m_open_action;                  ///< File > Open... action.
+    QAction* m_add_source_action;            ///< File > Add Source... action (multi-file input).
 
     QToolBar* m_toolbar;                     ///< Main toolbar.
     QAction* m_toolbar_open_action;          ///< Toolbar open action.

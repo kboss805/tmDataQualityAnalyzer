@@ -67,6 +67,7 @@ HEADERS += \
     $$PWD/../include/dto/plotseriesdata.h \
     $$PWD/../include/dto/calibrationprofile.h \
     $$PWD/../include/dto/timefields.h \
+    $$PWD/../include/dto/source.h \
     $$PWD/../include/viewmodel/mainviewmodel.h \
     $$PWD/../include/viewmodel/processingcoordinator.h \
     $$PWD/../include/viewmodel/plotviewmodel.h \

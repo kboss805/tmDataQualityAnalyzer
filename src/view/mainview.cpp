@@ -133,6 +133,14 @@ void MainView::setUpMenuBar()
 
     m_open_action = file_menu->addAction("Open...");
     m_open_action->setShortcut(QKeySequence::Open);
+
+    // Add Source: appends a second/later .ch10 file to the current session
+    // instead of replacing it (multi-file input). Only meaningful once a file
+    // is already loaded/configured, so it starts disabled.
+    m_add_source_action = file_menu->addAction("Add Source...");
+    m_add_source_action->setEnabled(false);
+    connect(m_add_source_action, &QAction::triggered, this, &MainView::addSourceButtonPressed);
+
     m_recent_menu = file_menu->addMenu("Recent Files");
     updateRecentFilesMenu();
     file_menu->addSeparator();
@@ -211,7 +219,15 @@ void MainView::setUpConnections()
     connect(m_view_model, &MainViewModel::processingChanged, this, &MainView::onProcessingChanged);
     connect(m_view_model, &MainViewModel::fileReadyForStreamConfig,
             this, &MainView::onFileReadyForStreamConfig);
+    connect(m_view_model, &MainViewModel::sourceReadyForStreamConfig,
+            this, &MainView::onSourceReadyForStreamConfig);
     connect(m_view_model, &MainViewModel::streamProcessed, this, &MainView::onStreamProcessed);
+
+    // Add Source is only meaningful once a file is loaded/configured, and never
+    // while processing (setAllControlsEnabled already covers the latter).
+    connect(m_view_model, &MainViewModel::fileLoadedChanged, this, [this]() {
+        m_add_source_action->setEnabled(m_view_model->fileLoaded());
+    });
 
     connect(m_view_model, &MainViewModel::errorOccurred, this, &MainView::displayErrorMessage);
     connect(m_view_model, &MainViewModel::processingFinished, this, &MainView::onProcessingFinished);
@@ -391,6 +407,23 @@ void MainView::importFileButtonPressed()
     openPath(filename);
 }
 
+void MainView::addSourceButtonPressed()
+{
+    // .ch10-only, like Open -- Add Source appends another processed file to the
+    // session; it is not a route for CSV import (that stays its own path).
+    QString filename = QFileDialog::getOpenFileName(this, tr("Add Source (Chapter 10 File)"),
+                                                    m_last_ch10_dir,
+                                                    tr("Chapter 10 Files (*.ch10)"));
+    if (filename.isEmpty())
+    {
+        return;
+    }
+
+    m_last_ch10_dir = QFileInfo(filename).absolutePath();
+    saveLastCh10Dir();
+    m_view_model->addSource(filename);
+}
+
 bool MainView::isSupportedFile(const QString& path)
 {
     return path.endsWith(".ch10", Qt::CaseInsensitive)
@@ -433,7 +466,21 @@ void MainView::importCsv(const QString& path)
 void MainView::onFileReadyForStreamConfig()
 {
     // A fresh file starts a fresh plot; processing accumulates into it.
-    m_plot_view_model->clearData();
+    showStreamConfigDialogForPendingSource(/*clearPlotFirst=*/true);
+}
+
+void MainView::onSourceReadyForStreamConfig()
+{
+    // Add Source: keep the existing plot/session, accumulate this source into it.
+    showStreamConfigDialogForPendingSource(/*clearPlotFirst=*/false);
+}
+
+void MainView::showStreamConfigDialogForPendingSource(bool clearPlotFirst)
+{
+    if (clearPlotFirst)
+    {
+        m_plot_view_model->clearData();
+    }
 
     StreamConfigDialog dialog(m_view_model->buildDefaultStreamConfigs(),
                               m_view_model->lastIniDir(),
@@ -558,6 +605,8 @@ void MainView::setAllControlsEnabled(bool enabled)
     m_open_action->setEnabled(enabled);
     m_recent_menu->setEnabled(enabled);
     m_import_action->setEnabled(enabled);
+    // Add Source additionally requires a file to already be loaded/configured.
+    m_add_source_action->setEnabled(enabled && m_view_model->fileLoaded());
 }
 
 void MainView::logError(const QString& message)

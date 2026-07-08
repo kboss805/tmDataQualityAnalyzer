@@ -259,6 +259,7 @@ void ProcessingCoordinator::onWorkerFinished(FrameProcessor* processor, bool suc
     {
         ProcessedStreamData data = processor->takeResult();
         data.jobIndex = job_index;
+        data.sourceId = m_jobs[job_index].params.sourceId;
         m_any_success = true;
         emit streamProcessed(data);
     }
