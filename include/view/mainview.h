@@ -63,6 +63,9 @@ private slots:
     /// Opens a .ch10-filtered file dialog and adds the selected file as another
     /// source in the current session (accumulating, not replacing, the plot).
     void addSourceButtonPressed();
+    /// Shows a picker of currently loaded sources and removes the selected one
+    /// (drops its Source record and its plot series).
+    void removeSourceButtonPressed();
     /// Toggles between light and dark themes.
     void onToggleTheme();
     /// Opens the StreamConfigDialog after a file has loaded (a fresh session).
@@ -132,6 +135,7 @@ private:
     QAction* m_theme_action;                 ///< File > Toggle theme action.
     QAction* m_open_action;                  ///< File > Open... action.
     QAction* m_add_source_action;            ///< File > Add Source... action (multi-file input).
+    QAction* m_remove_source_action;         ///< File > Remove Source... action (multi-file input).
 
     QToolBar* m_toolbar;                     ///< Main toolbar.
     QAction* m_toolbar_open_action;          ///< Toolbar open action.

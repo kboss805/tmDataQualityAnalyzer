@@ -193,6 +193,31 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
                                    }),
                    m_series.end());
 
+    // Detect a source whose recording doesn't overlap the data already loaded
+    // (e.g. two .ch10 files recorded on different days) -- informational only,
+    // since the re-basing below keeps elapsed correct regardless (multi-file
+    // input, docs/multi-file-input-design.md §3). Checked once, on the first
+    // stream we see from this source in THIS add, using the range already at
+    // hand (no extra file access): existing = [m_base_abs_seconds, m_base_abs_seconds
+    // + m_x_max], since m_x_min is always 0.
+    if (!m_series.isEmpty())
+    {
+        const bool source_already_present = std::any_of(m_series.cbegin(), m_series.cend(),
+            [&](const PlotSeriesData& s) { return s.sourceId == data.sourceId; });
+        if (!source_already_present)
+        {
+            const double existing_min_abs = m_base_abs_seconds;
+            const double existing_max_abs = m_base_abs_seconds + m_x_max;
+            const double new_min_abs = data.timesSec.first();
+            const double new_max_abs = data.timesSec.last();
+            const bool overlaps = new_min_abs <= existing_max_abs && existing_min_abs <= new_max_abs;
+            if (!overlaps)
+            {
+                emit nonOverlappingSourceWarning(data.sourceId);
+            }
+        }
+    }
+
     // Establish/maintain the shared time base so every source's samples line up
     // on the same elapsed-seconds X axis (multi-file input,
     // docs/multi-file-input-design.md §3). The base must be the EARLIEST
@@ -323,6 +348,91 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
 
     // Recompute global X range and refresh the viewport to show all data.
     m_x_min = 0.0;
+    for (const auto& s : m_series)
+    {
+        if (!s.xValues.isEmpty())
+        {
+            m_x_max = qMax(m_x_max, s.xValues.last());
+        }
+    }
+    m_x_view_min = m_x_min;
+    m_x_view_max = m_x_max;
+
+    m_has_lock_series = false;
+    m_has_missed_frames_series = false;
+    for (const auto& s : m_series)
+    {
+        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock)
+        {
+            m_has_lock_series = true;
+        }
+        else if (s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
+        {
+            m_has_missed_frames_series = true;
+        }
+    }
+
+    assignColors();
+    computeYRange();
+
+    emit dataChanged();
+}
+
+void PlotViewModel::removeSource(int sourceId)
+{
+    const bool had_match = std::any_of(m_series.cbegin(), m_series.cend(),
+        [sourceId](const PlotSeriesData& s) { return s.sourceId == sourceId; });
+    if (!had_match)
+    {
+        return;
+    }
+
+    m_series.erase(std::remove_if(m_series.begin(), m_series.end(),
+                                   [sourceId](const PlotSeriesData& s) {
+                                       return s.sourceId == sourceId;
+                                   }),
+                   m_series.end());
+
+    if (m_series.isEmpty())
+    {
+        clearData();
+        return;
+    }
+
+    // Mirror of the add-time re-base in addStreamData() (§3): if the removed
+    // source held the earliest sample, the base must move forward to the new
+    // earliest among what remains, shifting every remaining series LEFT so
+    // elapsed stays correct relative to the new (later) base. Each series'
+    // first sample is at elapsed xValues.first() against the OLD base, so its
+    // absolute time is m_base_abs_seconds + xValues.first(); the new base is
+    // the minimum of those across all remaining series.
+    double new_base_abs = m_base_abs_seconds + m_series.first().xValues.first();
+    for (const PlotSeriesData& s : m_series)
+    {
+        if (!s.xValues.isEmpty())
+        {
+            new_base_abs = qMin(new_base_abs, m_base_abs_seconds + s.xValues.first());
+        }
+    }
+    const double delta = new_base_abs - m_base_abs_seconds; // >= 0
+    if (delta > 0.0)
+    {
+        for (PlotSeriesData& s : m_series)
+        {
+            for (double& x : s.xValues)
+            {
+                x -= delta;
+            }
+        }
+        m_base_abs_seconds = new_base_abs;
+        recomputeBaseDayAndOffset();
+    }
+
+    // Recompute global X range/viewport, lock/missed-frames flags, and colors
+    // from scratch (unlike addStreamData()'s incremental qMax, m_x_max must be
+    // able to SHRINK here since data was removed, not just added).
+    m_x_min = 0.0;
+    m_x_max = 0.0;
     for (const auto& s : m_series)
     {
         if (!s.xValues.isEmpty())

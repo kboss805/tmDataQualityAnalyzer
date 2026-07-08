@@ -1250,6 +1250,120 @@ void TestPlotViewModel::addStreamDataRebasesTwiceForSuccessivelyEarlierSources()
     QCOMPARE(vm.seriesAt(lockC).xValues, QVector<double>({0.0}));
 }
 
+void TestPlotViewModel::nonOverlappingSourceEmitsWarning()
+{
+    PlotViewModel vm;
+    QSignalSpy spy(&vm, &PlotViewModel::nonOverlappingSourceWarning);
+
+    vm.addStreamData(makeLockAndErrorStream("Ch A", 1, {2000000.0, 2000001.0}, {90.0}, {0.0}, /*source_id=*/0));
+    QCOMPARE(spy.count(), 0); // the first source has nothing to compare against yet
+
+    // Source 1's recording is nowhere near source 0's -- a disjoint range.
+    vm.addStreamData(makeLockAndErrorStream("Ch B", 2, {5000000.0, 5000001.0}, {50.0}, {0.0}, /*source_id=*/1));
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).toInt(), 1); // sourceId of the newly added (non-overlapping) source
+
+    // A second stream from the SAME source must not re-trigger the warning.
+    vm.addStreamData(makeLockAndErrorStream("Ch B2", 2, {5000000.5}, {55.0}, {0.0}, /*source_id=*/1));
+    QCOMPARE(spy.count(), 1);
+}
+
+void TestPlotViewModel::overlappingSourceDoesNotEmitWarning()
+{
+    PlotViewModel vm;
+    QSignalSpy spy(&vm, &PlotViewModel::nonOverlappingSourceWarning);
+
+    vm.addStreamData(makeLockAndErrorStream("Ch A", 1, {2000000.0, 2000001.0}, {90.0}, {0.0}, /*source_id=*/0));
+    // Source 1 overlaps source 0's [2000000, 2000001] range.
+    vm.addStreamData(makeLockAndErrorStream("Ch B", 2, {2000000.5, 2000002.0}, {50.0}, {0.0}, /*source_id=*/1));
+
+    QCOMPARE(spy.count(), 0);
+}
+
+void TestPlotViewModel::removeSourceDropsOnlyThatSourcesSeries()
+{
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch A", 1, {1000000.0}, {90.0}, {0.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch B", 2, {1000000.0}, {50.0}, {0.0}, /*source_id=*/1));
+    QCOMPARE(vm.seriesCount(), 4); // 2 sources x (lock + missed-frames)
+
+    vm.removeSource(1);
+
+    QCOMPARE(vm.seriesCount(), 2);
+    QVERIFY(findSeriesIndexInSource(vm, 1, PlotSeriesData::MetricType::FrameSyncLock, 0) >= 0);
+    QCOMPARE(findSeriesIndexInSource(vm, 2, PlotSeriesData::MetricType::FrameSyncLock, 1), -1);
+}
+
+void TestPlotViewModel::removeSourceRebasesLeftWhenRemovedSourceWasEarliest()
+{
+    // Same three-source chain as addStreamDataRebasesTwiceForSuccessivelyEarlierSources:
+    // after all three adds, base=1,000,000; A(source0)=[2000000.0], B(source1)=[1000000.0],
+    // C(source2)=[0.0] (C holds the earliest absolute sample).
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch A", 1, {3000000.0}, {90.0}, {0.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch B", 2, {2000000.0}, {50.0}, {0.0}, /*source_id=*/1));
+    vm.addStreamData(makeLockAndErrorStream("Ch C", 3, {1000000.0}, {10.0}, {0.0}, /*source_id=*/2));
+
+    // Remove C (source 2) -- the current earliest. The base must move forward to
+    // B's absolute time (2,000,000), shifting both remaining series LEFT by the
+    // resulting 1,000,000 s delta.
+    vm.removeSource(2);
+
+    QCOMPARE(vm.seriesCount(), 4); // A and B's (lock + missed) pairs remain
+    const int lockA = findSeriesIndexInSource(vm, 1, PlotSeriesData::MetricType::FrameSyncLock, 0);
+    const int lockB = findSeriesIndexInSource(vm, 2, PlotSeriesData::MetricType::FrameSyncLock, 1);
+    QVERIFY(lockA >= 0);
+    QVERIFY(lockB >= 0);
+    QCOMPARE(vm.seriesAt(lockA).xValues, QVector<double>({1000000.0})); // was 2,000,000
+    QCOMPARE(vm.seriesAt(lockB).xValues, QVector<double>({0.0}));       // was 1,000,000 -- now the base
+    QCOMPARE(vm.xMax(), 1000000.0);
+}
+
+void TestPlotViewModel::removeSourceNoRebaseWhenRemovedSourceWasNotEarliest()
+{
+    // Same three-source chain; this time remove A (source 0), which was NOT the
+    // earliest (C is) -- the base must stay exactly where it is.
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch A", 1, {3000000.0}, {90.0}, {0.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch B", 2, {2000000.0}, {50.0}, {0.0}, /*source_id=*/1));
+    vm.addStreamData(makeLockAndErrorStream("Ch C", 3, {1000000.0}, {10.0}, {0.0}, /*source_id=*/2));
+
+    vm.removeSource(0);
+
+    QCOMPARE(vm.seriesCount(), 4); // B and C's (lock + missed) pairs remain
+    const int lockB = findSeriesIndexInSource(vm, 2, PlotSeriesData::MetricType::FrameSyncLock, 1);
+    const int lockC = findSeriesIndexInSource(vm, 3, PlotSeriesData::MetricType::FrameSyncLock, 2);
+    QVERIFY(lockB >= 0);
+    QVERIFY(lockC >= 0);
+    QCOMPARE(vm.seriesAt(lockB).xValues, QVector<double>({1000000.0})); // unchanged
+    QCOMPARE(vm.seriesAt(lockC).xValues, QVector<double>({0.0}));       // unchanged
+}
+
+void TestPlotViewModel::removeLastSourceClearsAllData()
+{
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch A", 1, {1000000.0}, {90.0}, {0.0}, /*source_id=*/0));
+    QVERIFY(vm.hasData());
+
+    vm.removeSource(0);
+
+    QVERIFY(!vm.hasData());
+    QCOMPARE(vm.seriesCount(), 0);
+}
+
+void TestPlotViewModel::removeUnknownSourceIsNoOp()
+{
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch A", 1, {1000000.0}, {90.0}, {0.0}, /*source_id=*/0));
+    QCOMPARE(vm.seriesCount(), 2);
+
+    QSignalSpy spy(&vm, &PlotViewModel::dataChanged);
+    vm.removeSource(999); // no series has this sourceId
+
+    QCOMPARE(vm.seriesCount(), 2);
+    QCOMPARE(spy.count(), 0); // a true no-op: doesn't even signal
+}
+
 // ---------------------------------------------------------------------------
 // exportCsv tests
 // ---------------------------------------------------------------------------

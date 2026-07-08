@@ -9,6 +9,8 @@
 
 #include "mainviewmodel.h"
 
+#include <algorithm>
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
@@ -172,6 +174,18 @@ const QVector<StreamConfig>& MainViewModel::streamConfigs() const
 const QVector<Source>& MainViewModel::sources() const
 {
     return m_sources;
+}
+
+void MainViewModel::removeSource(int sourceId)
+{
+    const int before = static_cast<int>(m_sources.size());
+    m_sources.erase(std::remove_if(m_sources.begin(), m_sources.end(),
+                                   [sourceId](const Source& s) { return s.sourceId == sourceId; }),
+                   m_sources.end());
+    if (static_cast<int>(m_sources.size()) != before)
+    {
+        emit sourcesChanged();
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -373,6 +387,7 @@ void MainViewModel::onCoordinatorProcessingFinished(bool success)
         src.timeChannelIndex = m_time_channel_index;
         src.streamConfigs = m_stream_configs;
         m_sources.push_back(src);
+        emit sourcesChanged();
     }
     emit processingFinished(success);
 }
@@ -440,11 +455,16 @@ void MainViewModel::clearState()
     m_time_channel_index = 0;
     m_pcm_channel_index = 0;
     m_stream_configs.clear();
+    const bool had_sources = !m_sources.isEmpty();
     m_sources.clear();
     m_next_source_id = 0;
     m_pending_source_id = 0;
     m_coordinator->reset();
     m_reader->clearSettings();
+    if (had_sources)
+    {
+        emit sourcesChanged();
+    }
 
     emit inputFilenameChanged();
     emit channelListsChanged();
