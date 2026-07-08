@@ -549,7 +549,23 @@ core is a **single-reader / parallel-worker** pipeline: opening a Ch10 file show
 per-stream **Configure Streams** dialog, and pressing Process reads the file exactly
 once while each selected stream is processed concurrently on its own worker thread.
 Results are accumulated **in memory** (no CSV-on-disk intermediate) and appended to
-the plot as each stream finishes. There is **no batch / multi-file mode**.
+the plot as each stream finishes.
+
+**Multi-file input:** a session can span more than one `.ch10` file (e.g. Receiver
+SNR from one recorder, Frame Sync Lock from another). **File > Open** starts a fresh
+session (one source); **File > Add Source…** loads a second/later file's metadata
+and appends its processed streams into the *same* plot without clearing it. Every
+source gets a stable `sourceId` (`include/dto/source.h`) that travels with its
+`ProcessedStreamData`/`PlotSeriesData`, so two sources that happen to reuse the same
+PCM channel id never cross-contaminate. All sources share one elapsed-seconds X
+axis: `PlotViewModel` re-bases to the **earliest absolute sample across every
+source**, shifting existing series if a later-added source started earlier (and the
+mirror shift on **File > Remove Source…**). See `docs/multi-file-input-design.md`
+for the full design (time alignment, non-overlap detection, source-qualified CSV
+export). There is still only ever **one active processing run at a time** — the
+single-reader/parallel-worker core itself is unchanged; multi-file input is N
+sequential runs into one accumulating `PlotViewModel`, not concurrent multi-file
+reads.
 
 ### Core Components
 
@@ -563,6 +579,7 @@ the plot as each stream finishes. There is **no batch / multi-file mode**.
    - Status bar shows the file metadata summary (filename, size, channel counts, time range)
    - Recent Files submenu under File menu with QSettings persistence
    - Drag-and-drop and File > Open of a single `.ch10` file (launches the StreamConfigDialog) or a previously exported `.csv` file (US6.3: routed by `openPath()`/`importCsv()` straight into the plot via `PlotViewModel::loadCsvFileAsync`, bypassing the dialog and processing pipeline)
+   - File > Add Source… (multi-file input) opens a second/later `.ch10` file's Configure Streams dialog and processes it into the *existing* plot instead of clearing it; enabled once a file is loaded, disabled while processing. File > Remove Source… picks one of `MainViewModel::sources()` (by filename) to drop from both the session and the plot
    - Cancel toolbar button visible only during processing
    - Log window in a bottom QDockWidget; plot in a right QDockWidget (PlotWidget); View menu toggles each
 
@@ -590,9 +607,10 @@ the plot as each stream finishes. There is **no batch / multi-file mode**.
 6. **MainViewModel** (`src/viewmodel/mainviewmodel.cpp`, `include/viewmodel/mainviewmodel.h`)
    - Owns application state, validation, and the per-stream `StreamConfig` captured by StreamConfigDialog
    - Exposes Q_PROPERTYs (`inputFilename`, channel lists/indices, `fileLoaded`, `progressPercent`, `processing`) for the View to bind to
-   - `openFile()` loads metadata via Chapter10Reader and logs channel/time/frame info
-   - Builds a list of `StreamJob` objects (validated `ProcessingParams` + an owned `FrameSetup`) and hands them to ProcessingCoordinator
-   - Receives each `ProcessedStreamData` and forwards it to PlotViewModel; manages recent files
+   - `openFile()` loads metadata via Chapter10Reader and logs channel/time/frame info; `clearState()` first, so it always starts a fresh session (`sources()` reset, source-id counter reset to 0)
+   - `addSource()` (multi-file input) loads a second/later file's metadata the same way but *without* `clearState()` — the file being configured is tracked the same either way (`m_input_filename`/`m_stream_configs`/`m_reader` all refer to whichever file is currently being configured), shared via the `loadFileMetadata()` helper both call
+   - Builds a list of `StreamJob` objects (validated `ProcessingParams`, now stamped with the pending file's `sourceId`, + an owned `FrameSetup`) and hands them to ProcessingCoordinator
+   - Receives each `ProcessedStreamData` and forwards it to PlotViewModel; on a successful run, `onCoordinatorProcessingFinished()` appends a `Source` record (`include/dto/source.h`) to `sources()` — a failed/cancelled run leaves no phantom entry; `removeSource()` drops one. Manages recent files
 
 7. **ProcessingCoordinator** (`src/viewmodel/processingcoordinator.cpp`, `include/viewmodel/processingcoordinator.h`)
    - Owns the reader + worker thread lifecycle for multi-stream processing
@@ -601,10 +619,11 @@ the plot as each stream finishes. There is **no batch / multi-file mode**.
    - Emits `progressChanged(int)`, `processingStateChanged(bool)`, `streamProcessed(ProcessedStreamData)`, `processingFinished(bool)`, `logMessageReceived(QString)`, `errorOccurred(QString)`
 
 8. **PlotViewModel** (`src/viewmodel/plotviewmodel.cpp`, `include/viewmodel/plotviewmodel.h`)
-   - Converts each `ProcessedStreamData` into in-memory `PlotSeriesData` vectors (name, receiver/channel indices, x/y values, cached Y min/max, color)
-   - Converts absolute IRIG seconds to elapsed seconds; assigns the purple/blue/green (lock) and red/orange/yellow (SNR) palette
+   - Converts each `ProcessedStreamData` into in-memory `PlotSeriesData` vectors (name, receiver/channel indices, x/y values, cached Y min/max, color), carrying its `sourceId` through so cross-source identity checks (reprocess-replace, rename/recolor sibling-sync) never cross a source boundary
+   - Converts absolute IRIG seconds to elapsed seconds against a shared base that tracks the **earliest absolute sample across every source** (not just the first-added one): `addStreamData()` re-bases — shifting every existing series right — when a later-added source started earlier; `removeSource()` is the mirror, shifting left only if the removed source held the earliest sample. Emits `nonOverlappingSourceWarning(sourceId)` (informational) the first time a newly added source's absolute range doesn't intersect what's already loaded
+   - Assigns the purple/blue/green (lock) and red/orange/yellow (SNR) palette
    - Manages axis ranges (auto Y with margin, manual Y override, X time window), the left-axis view toggle (lock % vs accumulated missed frames), and per-series visibility
-   - Signals `dataChanged()`, `axisRangeChanged()`, `seriesVisibilityChanged()`; `computeYRange()` uses per-series cached min/max
+   - Signals `dataChanged()`, `axisRangeChanged()`, `seriesVisibilityChanged()`, `nonOverlappingSourceWarning(int)`; `computeYRange()` uses per-series cached min/max
 
 #### Model
 
@@ -633,7 +652,7 @@ the plot as each stream finishes. There is **no batch / multi-file mode**.
 
 18. **CsvSeriesParser** (`src/model/csvseriesparser.cpp`, `include/model/csvseriesparser.h`) — pure (UI-free) static parser that turns a FrameProcessor `Day,Time,param…` CSV into `PlotSeriesData` (returned as a `CsvParseResult`). Extracted out of PlotViewModel so file parsing lives in the Model layer; thread-safe, so PlotViewModel runs `parse()` on a worker thread via `loadCsvFileAsync()`
 
-19. **SeriesColumnSchema** (`src/model/seriescolumnschema.cpp`, `include/model/seriescolumnschema.h`) — single source of truth for the CSV column-header format: builds each series' column header and the SNR series name, and parses a header back to its identity fields (metric type, name, stream label/order, receiver). Shared by `PlotViewModel::exportCsv`/`addStreamData` and `CsvSeriesParser` so export and import stay inverses (pinned by `tst_seriescolumnschema`'s round-trip)
+19. **SeriesColumnSchema** (`src/model/seriescolumnschema.cpp`, `include/model/seriescolumnschema.h`) — single source of truth for the CSV column-header format: builds each series' column header and the SNR series name, and parses a header back to its identity fields (metric type, name, stream label/order, receiver, source id). Shared by `PlotViewModel::exportCsv`/`addStreamData` and `CsvSeriesParser` so export and import stay inverses (pinned by `tst_seriescolumnschema`'s round-trip). Multi-file input: a series from source 0 exports with the unqualified, byte-identical-since-v2.6 header format; source 1+ gets a leading `"S<n>| "` qualifier that `parseColumnHeader()` strips back off before recovering identity
 
 20. **IRIG 106 Library** (`lib/irig106/`) — third-party C library for the Chapter 10 file format (see Protected Files)
 
@@ -645,10 +664,11 @@ the plot as each stream finishes. There is **no batch / multi-file mode**.
 - **`PlotConstants`** namespace (`include/constants.h`) — plot dock dimensions, axis margin factor, default title, axis labels (`kSnrAxisLabel`, `kMissedFramesAxisLabel`), zoom factor, color palette
 - **`CalibrationConstants`** namespace (`include/constants.h`) — non-linear calibration tuning (e.g. `kStepConfirmSeconds`)
 - **`StreamConfig`** struct + **`StreamMode`** enum (`include/dto/streamconfig.h`) — per-stream configuration captured by StreamConfigDialog (frame params, SNR calibration fields, optional `calibrationByWord` profiles)
+- **`Source`** struct (`include/dto/source.h`) — multi-file input (docs/multi-file-input-design.md): one loaded/processed `.ch10` file's `filepath`, stable `sourceId`, `timeChannelIndex`, and `streamConfigs`. `MainViewModel::sources()` holds one per successfully-processed file this session; also the model Phase 6 (session save/load) serializes
 - **`StreamJob`** struct (`include/viewmodel/processingcoordinator.h`) — one unit of work: a `ProcessingParams` plus an owned `FrameSetup`
-- **`ProcessingParams`** struct (`include/dto/processingparams.h`) — all inputs for processing one stream (filename, channel IDs, frame sync, time range, sample period, calibration, randomization)
-- **`ProcessedStreamData`** + **`ProcessedChannelSeries`** structs (`include/dto/processedstreamdata.h`) — in-memory per-stream result (parallel `timesSec` / `lockPercent` / `accumulatedMissedFrames` vectors plus SNR channel series)
-- **`PlotSeriesData`** struct (`include/dto/plotseriesdata.h`) — per-series plot data (name, receiver/channel indices, x/y vectors, visibility, color, cached Y min/max)
+- **`ProcessingParams`** struct (`include/dto/processingparams.h`) — all inputs for processing one stream (filename, `sourceId`, channel IDs, frame sync, time range, sample period, calibration, randomization)
+- **`ProcessedStreamData`** + **`ProcessedChannelSeries`** structs (`include/dto/processedstreamdata.h`) — in-memory per-stream result (parallel `timesSec` / `lockPercent` / `accumulatedMissedFrames` vectors plus SNR channel series; `sourceId` identifies which loaded file this stream came from)
+- **`PlotSeriesData`** struct (`include/dto/plotseriesdata.h`) — per-series plot data (name, receiver/channel indices, `sourceId`, x/y vectors, visibility, color, cached Y min/max)
 - **`CsvParseResult`** struct (`include/model/csvseriesparser.h`) — output of `CsvSeriesParser::parse()`: success flag, parsed `PlotSeriesData` vector, base day/time offset, and xMax; carried across the worker-thread boundary by PlotViewModel's `QFutureWatcher`
 - **`CalibrationProfile`**, **`StepDefinition`**, **`CalibrationPoint`** (`include/dto/calibrationprofile.h`) — non-linear step-calibration data types (session-only); `interpolateCalibration()` does the piecewise-linear lookup
 - **`TimeFields`** struct (`include/dto/timefields.h`) — groups DOY/HMS fields for start/stop times
@@ -658,10 +678,11 @@ the plot as each stream finishes. There is **no batch / multi-file mode**.
 
 ```
 User opens .ch10 ─► MainView ─► MainViewModel ─► Chapter10Reader (metadata)
-                                      │
+     (or Add Source)                  │           [assigns/reuses sourceId]
                             StreamConfigDialog (per-stream config)
                                       │
                       MainViewModel builds QVector<StreamJob>
+                              [ProcessingParams.sourceId stamped]
                                       │
                              ProcessingCoordinator
                           ┌───────────┴───────────┐
@@ -669,9 +690,12 @@ User opens .ch10 ─► MainView ─► MainViewModel ─► Chapter10Reader (me
                           │  routes packets        │
                      PacketQueue ─► FrameProcessor (one worker per stream, parallel)
                                               │
-                                   ProcessedStreamData (in memory)
+                                   ProcessedStreamData (in memory, carries sourceId)
                                               │
                                    PlotViewModel ─► PlotWidget (QCustomPlot)
+                          [re-bases shared elapsed axis to the earliest
+                           sample across all loaded sources; identity
+                           checks key on (sourceId, streamLabel, order)]
 ```
 
 ## Qt-Specific Considerations
@@ -855,7 +879,7 @@ source/header files are listed in `tests/tests.pro`.
 - **TestFrameProcessor** (`tst_frameprocessor`) — constructor defaults, abort flag, `derandomizeBitstream` (identity/short and changed/long), invalid time-channel/PCM-channel/file handling, and processing real Ch10 data (receiver-data accumulation, lock-only mode has no channels, monotonic frame-sync errors, slope affects values, shorter period → more samples, calibration round-trip clean steps, off-phase sync after lock-loss not extracted)
 - **TestMainViewModelHelpers** (`tst_mainviewmodel_helpers`) — ViewModel helper methods (`channelPrefix` and `parameterName` over known/unknown/boundary indices)
 - **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration
-- **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, Y auto/manual range, X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), the left-axis view toggle preserving per-stream selection, and stream-identity regression coverage: two streams sharing a TMATS-derived `streamLabel` but different `streamOrder` must stay independent through reprocess-replace and `renameSeries()`/`recolorSeries()` sibling-sync (pinned after a pre-v2.6.0 cross-contamination bug)
+- **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, Y auto/manual range, X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), the left-axis view toggle preserving per-stream selection, and stream-identity regression coverage: two streams sharing a TMATS-derived `streamLabel` but different `streamOrder` must stay independent through reprocess-replace and `renameSeries()`/`recolorSeries()` sibling-sync (pinned after a pre-v2.6.0 cross-contamination bug). Multi-file input: cross-source identity (two different `sourceId`s reusing the same `streamLabel`/`streamOrder` stay independent through reprocess-replace/rename/recolor), time-base re-basing (a later-added source starting earlier shifts existing series right; three successively-earlier sources compound correctly; a later source starting after triggers no shift), the non-overlap warning signal (fires once per newly-arriving non-overlapping source, not for an overlapping range), and `removeSource()` (drops only the target source, re-bases left only when the removed source held the earliest sample, clears all data when the last source is removed, no-ops for an unknown id)
 - **TestProcessingCoordinator** (`tst_processingcoordinator`) — constructor defaults, `reset()` clears state, cancel-with-no-run no-op, `startProcessing()` empty-returns-false and processing-state emission, plus single-vs-multi-stream throughput benchmarks
 - **TestMainView** (`tst_mainview`) — Main window construction, widget wiring, log routing, dock visibility behavior
 - **TestPlotWidget** (`tst_plotwidget`) — Plot widget construction, null/valid ViewModel connection, dark/light theme application, the movable legend overlay populating from data (hidden until data loads, then one row per visible active-metric series), a shown/resized-window regression case asserting the overlay sizes correctly (not a collapsed frame-only box) after a second rebuild adds more rows — a QScrollArea `widgetResizable` sizeHint staleness bug reproduced and fixed post-review — the SNR legend row showing the short "CH\<id\> \<ch.name\>" form instead of the full TMATS stream title, the legend row layout reserving a right-side gutter matching the style's scrollbar extent, and each legend row carrying an objectName the overlay stylesheet can target to override the app's global `QWidget { background-color: ... }` theme rule (otherwise every row painted as an opaque chip)
@@ -863,7 +887,7 @@ source/header files are listed in `tests/tests.pro`.
 - **TestStreamConfigDialog** (`tst_streamconfigdialog`) — Per-stream Configure Streams dialog: stream rows, mode selection, gear setup dialogs, TOML load/save round-trips, "Apply to all" fan-out, the Channel column label (short names shown in full, long TMATS-derived names elided on the left with "..." so the distinguishing tail stays visible, right-justified, styled via `channelNameCell` to mimic the Mode combo box's border/fill, and the full name always available via tooltip), the Mode combo's right-justified closed-box text (via an editable-but-readonly internal line edit) while selection still tracks correctly, and the table header/separator using theme-QSS object names (`streamHeaderLabel` / `streamHeaderSeparator`) rather than hard-coded inline colors
 - **TestExportDialog** (`tst_exportdialog`) — Export dialog checkbox-to-field enable logic, export-button validation, and the log-export row defaults/accessors and log-only validation
 - **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US5.3): `[[Step]]` TOML parsing (valid / empty-fails), plateau detection (clean, too-few-fails, extra-plateaus uses last of monotonic run, short-blip doesn't steal a pairing slot, long leading transient doesn't shift pairing, inverted-polarity sweep not reversed, non-monotonic pairing rejected, noisy, settling-at-plateau-start excluded, round-trip exact), and `interpolateCalibration()` (midpoint, below/above clamping, coincident-raw guard)
-- **TestSeriesColumnSchema** (`tst_seriescolumnschema`) — the CSV column-header schema (`SeriesColumnSchema`): SNR name and `columnHeader()` formatting, `parseColumnHeader()` classification (lock/missed suffix vs. SNR `"<id> - "` prefix, multi-word stream labels split at the last space, SNR-shape-wins-over-suffix), the unknown→SNR fallback, and the format→parse round trip that keeps `exportCsv` and `CsvSeriesParser` inverses
+- **TestSeriesColumnSchema** (`tst_seriescolumnschema`) — the CSV column-header schema (`SeriesColumnSchema`): SNR name and `columnHeader()` formatting, `parseColumnHeader()` classification (lock/missed suffix vs. SNR `"<id> - "` prefix, multi-word stream labels split at the last space, SNR-shape-wins-over-suffix), the unknown→SNR fallback, and the format→parse round trip that keeps `exportCsv` and `CsvSeriesParser` inverses. Multi-file input: source 0 stays unqualified (byte-identical), source 1+ gets a leading `"S<n>| "` qualifier that round-trips through parse for both SNR and Lock/Missed shapes, an unqualified header still defaults to source 0, and a header merely starting with the letter `'S'` isn't misparsed as a qualifier
 - **TestCalibrationExtractor** (`tst_calibrationextractor`) — US5.3 pipeline orchestration (complements TestStepDetector's pure logic): drives the async extraction end to end (reader + FrameProcessor workers → per-channel StepDetector). A bad file (with non-empty steps, so it clears the empty-steps guard) finishes unsuccessfully with a recorded error and no partial state; over `rnrz-l_testfile.ch10`, exactly words 6/7/8 (RCVR3 L/R/C, the only real stepped SNR sweep) build valid non-linear profiles while every other receiver word falls back to linear
 
 ### Running Tests
