@@ -37,6 +37,7 @@ struct ResolvedPcmAttrs {
 /// @brief Validated parameters bundle passed to the worker thread.
 struct ProcessingParams {
     QString filename;              ///< Path to the .ch10 input file.
+    int sourceId = 0;             ///< Id of the .ch10 file (multi-file session) this job belongs to; 0 for the first/only source. Carried into the completed ProcessedStreamData by ProcessingCoordinator (mirrors jobIndex).
     int timeChannelId = -1;       ///< Resolved time channel ID.
     int pcmChannelId = -1;        ///< Resolved PCM channel ID.
     uint64_t frameSync = 0;       ///< Frame sync pattern as a numeric value.
