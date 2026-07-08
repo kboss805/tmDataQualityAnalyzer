@@ -995,6 +995,11 @@ bool PlotViewModel::hasLockSeries() const { return m_has_lock_series; }
 bool PlotViewModel::hasMissedFramesSeries() const { return m_has_missed_frames_series; }
 PlotViewModel::LockAxisView PlotViewModel::lockAxisView() const { return m_lock_axis_view; }
 
+bool PlotViewModel::hasLeftYMaxOverride() const { return m_left_y_max_user_set; }
+double PlotViewModel::leftYMaxOverrideValue() const { return m_left_y_max_user; }
+bool PlotViewModel::hasRightYMaxOverride() const { return m_right_y_max_user_set; }
+double PlotViewModel::rightYMaxOverrideValue() const { return m_right_y_max_user; }
+
 double PlotViewModel::leftYMax() const
 {
     if (m_left_y_max_user_set)

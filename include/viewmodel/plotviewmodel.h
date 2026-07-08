@@ -87,6 +87,13 @@ public:
     bool hasLockSeries() const;                    ///< @return True if any FrameSyncLock series are loaded.
 
     LockAxisView lockAxisView() const;             ///< @return Active left-axis metric (lock % vs missed frames).
+    /// @name Session view-state save (Phase 6)
+    /// @{
+    bool hasLeftYMaxOverride() const;              ///< @return True if the user has overridden the left axis max.
+    double leftYMaxOverrideValue() const;          ///< @return The user-set left axis max (only meaningful if hasLeftYMaxOverride()).
+    bool hasRightYMaxOverride() const;             ///< @return True if the user has overridden the right (SNR) axis max.
+    double rightYMaxOverrideValue() const;         ///< @return The user-set right axis max (only meaningful if hasRightYMaxOverride()).
+    /// @}
     bool hasMissedFramesSeries() const;            ///< @return True if any AccumulatedMissedFrames series are loaded.
     double missedFramesMax() const;                ///< @return Max value across visible AccumulatedMissedFrames series (>= 1).
 
