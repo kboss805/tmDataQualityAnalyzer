@@ -123,10 +123,18 @@ private:
     /// (no dialog) and starts processing -- the session-load counterpart of
     /// showStreamConfigDialogForPendingSource().
     void applyPendingSessionSourceConfig();
-    /// Starts the next not-yet-processed source in m_pending_session, skipping
-    /// (and logging) any whose resolved file no longer exists; calls
-    /// finishSessionLoad() once every source has been attempted.
+    /// Starts the next not-yet-processed source in m_pending_session. A source
+    /// whose resolved file no longer exists prompts the user via
+    /// promptMissingSessionSource() (docs/session-save-load-design.md §5) rather
+    /// than failing the whole load; calls finishSessionLoad() once every source
+    /// has been attempted, or aborts immediately on Cancel.
     void advanceSessionLoad();
+
+    /// User's choice when a session-load source's file can't be found (§5).
+    enum class MissingSourceAction { Skip, Locate, Cancel };
+    /// Shows the "file not found" prompt for @p missingPath and returns the
+    /// user's choice.
+    MissingSourceAction promptMissingSessionSource(const QString& missingPath);
     /// Applies m_pending_session's saved view state to the plot and clears
     /// m_loading_session -- the last step of an Open Session replay.
     void finishSessionLoad();

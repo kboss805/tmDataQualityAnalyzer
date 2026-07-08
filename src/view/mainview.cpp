@@ -14,6 +14,7 @@
 #include <QJsonParseError>
 #include <QMessageBox>
 #include <QPixmap>
+#include <QPushButton>
 #include <QSettings>
 #include <QSignalBlocker>
 #include <QStatusBar>
@@ -710,15 +711,67 @@ void MainView::applyPendingSessionSourceConfig()
     m_view_model->startProcessing();
 }
 
+MainView::MissingSourceAction MainView::promptMissingSessionSource(const QString& missingPath)
+{
+    QMessageBox box(this);
+    box.setWindowTitle(tr("Session Source Not Found"));
+    box.setIcon(QMessageBox::Warning);
+    box.setText(tr("This session references a file that could not be found:\n\n%1")
+                    .arg(missingPath));
+
+    QPushButton* skip_btn   = box.addButton(tr("Skip This Source"), QMessageBox::DestructiveRole);
+    QPushButton* locate_btn = box.addButton(tr("Locate..."), QMessageBox::ActionRole);
+    box.addButton(QMessageBox::Cancel);
+    box.setDefaultButton(locate_btn);
+
+    box.exec();
+
+    if (box.clickedButton() == locate_btn)
+        return MissingSourceAction::Locate;
+    if (box.clickedButton() == skip_btn)
+        return MissingSourceAction::Skip;
+    return MissingSourceAction::Cancel;
+}
+
 void MainView::advanceSessionLoad()
 {
     while (m_pending_session_index < m_pending_session.sources.size())
     {
         const Source& src = m_pending_session.sources.at(m_pending_session_index);
-        const QString resolved = SessionSchema::resolveSessionPath(src.filepath, m_pending_session_dir);
-        if (!QFileInfo::exists(resolved))
+        QString resolved = SessionSchema::resolveSessionPath(src.filepath, m_pending_session_dir);
+
+        // A session that loads 3 of 4 sources is more useful than an
+        // all-or-nothing failure (§5) -- offer Skip/Locate/Cancel rather than
+        // silently dropping or aborting the whole load.
+        while (!QFileInfo::exists(resolved))
         {
-            logWarning("Session source file not found, skipping: " + resolved);
+            const MissingSourceAction action = promptMissingSessionSource(resolved);
+            if (action == MissingSourceAction::Cancel)
+            {
+                logWarning(QString("Session load cancelled -- %1 source(s) not loaded.")
+                               .arg(m_pending_session.sources.size() - m_pending_session_index));
+                m_loading_session = false;
+                return;
+            }
+            if (action == MissingSourceAction::Skip)
+            {
+                logWarning("Skipped missing session source: " + resolved);
+                resolved.clear();
+                break;
+            }
+
+            // Locate: re-prompt with the same missing path if the user backs out
+            // of the file dialog without picking anything.
+            const QString located = QFileDialog::getOpenFileName(this, tr("Locate Session Source"),
+                m_last_ch10_dir, tr("Chapter 10 Files (*.ch10)"));
+            if (!located.isEmpty())
+            {
+                resolved = located;
+            }
+        }
+
+        if (resolved.isEmpty())
+        {
             m_pending_session_index++;
             continue;
         }
