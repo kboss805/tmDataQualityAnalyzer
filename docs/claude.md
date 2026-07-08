@@ -567,6 +567,25 @@ single-reader/parallel-worker core itself is unchanged; multi-file input is N
 sequential runs into one accumulating `PlotViewModel`, not concurrent multi-file
 reads.
 
+**Session save/load** (docs/session-save-load-design.md) persists a whole
+multi-source configuration and replays it in one action. A session stores *config
+to reproduce*, not processed data — **File > Save Session As…** writes
+`MainViewModel::sources()` plus the plot's coarse view state (title, lock-axis
+view, axis-max overrides) to a JSON file (`SessionSchema::toJson`, wrapping each
+`StreamConfig` via `StreamConfigSchema::toJson`); **File > Open Session…** parses
+it back, clears current state, then replays each saved source through
+`addSource()` in order — identical to "Open file 0, then Add Source for 1..N,"
+just driven from the file. Each source's `.ch10` path is stored relative to the
+session file when possible (`SessionSchema::sessionRelativePath`/
+`resolveSessionPath`), else absolute; a source whose file can't be found at load
+prompts **[Skip This Source] [Locate…] [Cancel]** rather than failing the whole
+load. `calibrationByWord` (extracted, non-linear calibration profiles) is never
+serialized — only the calibration *input references* (`calCh10Path`,
+`stepTomlPath`, `clipStartSec`, `clipEndSec`, new `StreamConfig` fields) are, so
+turning on auto re-extraction on load is a documented, additive follow-up; v1
+loads calibrated streams as linear. `schemaVersion` gates the format so a
+newer/unrecognized session is rejected rather than silently mis-read.
+
 ### Core Components
 
 #### View
@@ -580,6 +599,7 @@ reads.
    - Recent Files submenu under File menu with QSettings persistence
    - Drag-and-drop and File > Open of a single `.ch10` file (launches the StreamConfigDialog) or a previously exported `.csv` file (US6.3: routed by `openPath()`/`importCsv()` straight into the plot via `PlotViewModel::loadCsvFileAsync`, bypassing the dialog and processing pipeline)
    - File > Add Source… (multi-file input) opens a second/later `.ch10` file's Configure Streams dialog and processes it into the *existing* plot instead of clearing it; enabled once a file is loaded, disabled while processing. File > Remove Source… picks one of `MainViewModel::sources()` (by filename) to drop from both the session and the plot
+   - File > Save Session As… (enabled once at least one source has processed) writes `sources()` + coarse plot view state to a JSON session file. File > Open Session… clears state and replays each saved source through `addSource()`, prompting Skip/Locate/Cancel for any source file it can't find, then applies the saved view state
    - Cancel toolbar button visible only during processing
    - Log window in a bottom QDockWidget; plot in a right QDockWidget (PlotWidget); View menu toggles each
 
@@ -624,6 +644,7 @@ reads.
    - Assigns the purple/blue/green (lock) and red/orange/yellow (SNR) palette
    - Manages axis ranges (auto Y with margin, manual Y override, X time window), the left-axis view toggle (lock % vs accumulated missed frames), and per-series visibility
    - Signals `dataChanged()`, `axisRangeChanged()`, `seriesVisibilityChanged()`, `nonOverlappingSourceWarning(int)`; `computeYRange()` uses per-series cached min/max
+   - Session save/load: `hasLeftYMaxOverride()`/`leftYMaxOverrideValue()` and the right-axis counterparts expose whether/what the user overrode, for `MainView::saveSessionButtonPressed()` to read back into a `SessionViewState`
 
 #### Model
 
@@ -654,7 +675,9 @@ reads.
 
 19. **SeriesColumnSchema** (`src/model/seriescolumnschema.cpp`, `include/model/seriescolumnschema.h`) — single source of truth for the CSV column-header format: builds each series' column header and the SNR series name, and parses a header back to its identity fields (metric type, name, stream label/order, receiver, source id). Shared by `PlotViewModel::exportCsv`/`addStreamData` and `CsvSeriesParser` so export and import stay inverses (pinned by `tst_seriescolumnschema`'s round-trip). Multi-file input: a series from source 0 exports with the unqualified, byte-identical-since-v2.6 header format; source 1+ gets a leading `"S<n>| "` qualifier that `parseColumnHeader()` strips back off before recovering identity
 
-20. **IRIG 106 Library** (`lib/irig106/`) — third-party C library for the Chapter 10 file format (see Protected Files)
+20. **StreamConfigSchema** (`src/model/streamconfigschema.cpp`, `include/model/streamconfigschema.h`) — *session save/load*; single source of truth for `StreamConfig`'s JSON representation (`toJson()`/`fromJson()`), used by the session writer/reader so no field list is hand-mapped twice. Excludes `calibrationByWord` (extracted profiles are session-only, never serialized) but includes the calibration *input references* (`calCh10Path`, `stepTomlPath`, `clipStartSec`, `clipEndSec`) so an additive future pass can re-run extraction on load
+21. **SessionSchema** (`src/model/sessionschema.cpp`, `include/model/sessionschema.h`) — *session save/load*; serializes/parses the top-level `Session` document (`schemaVersion`, `appVersion`, the source list via `StreamConfigSchema`, and `SessionViewState`). `sessionRelativePath()`/`resolveSessionPath()` are pure, disk-free helpers for storing each source's `.ch10` path relative to the session file when possible (else absolute) and resolving it back at load; a `schemaVersion` newer than `kCurrentSchemaVersion` is rejected rather than silently mis-read
+22. **IRIG 106 Library** (`lib/irig106/`) — third-party C library for the Chapter 10 file format (see Protected Files)
 
 ### Constants and Data Structures
 
@@ -663,8 +686,10 @@ reads.
 - **`UIConstants`** namespace (`include/constants.h`) — UI configuration (QSettings keys, theme identifiers, legend grid layout, sample-period/polarity/slope defaults, time validation limits, deployment/portable constants)
 - **`PlotConstants`** namespace (`include/constants.h`) — plot dock dimensions, axis margin factor, default title, axis labels (`kSnrAxisLabel`, `kMissedFramesAxisLabel`), zoom factor, color palette
 - **`CalibrationConstants`** namespace (`include/constants.h`) — non-linear calibration tuning (e.g. `kStepConfirmSeconds`)
-- **`StreamConfig`** struct + **`StreamMode`** enum (`include/dto/streamconfig.h`) — per-stream configuration captured by StreamConfigDialog (frame params, SNR calibration fields, optional `calibrationByWord` profiles)
-- **`Source`** struct (`include/dto/source.h`) — multi-file input (docs/multi-file-input-design.md): one loaded/processed `.ch10` file's `filepath`, stable `sourceId`, `timeChannelIndex`, and `streamConfigs`. `MainViewModel::sources()` holds one per successfully-processed file this session; also the model Phase 6 (session save/load) serializes
+- **`StreamConfig`** struct + **`StreamMode`** enum (`include/dto/streamconfig.h`) — per-stream configuration captured by StreamConfigDialog (frame params, SNR calibration fields, optional session-only `calibrationByWord` profiles, and the serialized calibration input references `calCh10Path`/`stepTomlPath`/`clipStartSec`/`clipEndSec` captured from `CalibrationSetupDialog` on extraction)
+- **`Source`** struct (`include/dto/source.h`) — multi-file input (docs/multi-file-input-design.md): one loaded/processed `.ch10` file's `filepath`, stable `sourceId`, `timeChannelIndex`, and `streamConfigs`. `MainViewModel::sources()` holds one per successfully-processed file this session; also what Phase 6 (session save/load) serializes (`sourceId` itself is not persisted — reassigned fresh at load)
+- **`Session`** struct (`include/dto/session.h`) — session save/load: `schemaVersion`, informational `appVersion`, the `QVector<Source>` to replay, and a `SessionViewState`
+- **`SessionViewState`** struct (`include/dto/sessionviewstate.h`) — the coarse, series-independent plot view state a session saves/restores: plot title, lock-axis view, and the two axis-max overrides (each with a has-override flag). Deliberately decoupled from `PlotViewModel`'s own enum/flag representation; `MainView` maps between them
 - **`StreamJob`** struct (`include/viewmodel/processingcoordinator.h`) — one unit of work: a `ProcessingParams` plus an owned `FrameSetup`
 - **`ProcessingParams`** struct (`include/dto/processingparams.h`) — all inputs for processing one stream (filename, `sourceId`, channel IDs, frame sync, time range, sample period, calibration, randomization)
 - **`ProcessedStreamData`** + **`ProcessedChannelSeries`** structs (`include/dto/processedstreamdata.h`) — in-memory per-stream result (parallel `timesSec` / `lockPercent` / `accumulatedMissedFrames` vectors plus SNR channel series; `sourceId` identifies which loaded file this stream came from)
@@ -889,6 +914,8 @@ source/header files are listed in `tests/tests.pro`.
 - **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US5.3): `[[Step]]` TOML parsing (valid / empty-fails), plateau detection (clean, too-few-fails, extra-plateaus uses last of monotonic run, short-blip doesn't steal a pairing slot, long leading transient doesn't shift pairing, inverted-polarity sweep not reversed, non-monotonic pairing rejected, noisy, settling-at-plateau-start excluded, round-trip exact), and `interpolateCalibration()` (midpoint, below/above clamping, coincident-raw guard)
 - **TestSeriesColumnSchema** (`tst_seriescolumnschema`) — the CSV column-header schema (`SeriesColumnSchema`): SNR name and `columnHeader()` formatting, `parseColumnHeader()` classification (lock/missed suffix vs. SNR `"<id> - "` prefix, multi-word stream labels split at the last space, SNR-shape-wins-over-suffix), the unknown→SNR fallback, and the format→parse round trip that keeps `exportCsv` and `CsvSeriesParser` inverses. Multi-file input: source 0 stays unqualified (byte-identical), source 1+ gets a leading `"S<n>| "` qualifier that round-trips through parse for both SNR and Lock/Missed shapes, an unqualified header still defaults to source 0, and a header merely starting with the letter `'S'` isn't misparsed as a qualifier
 - **TestCalibrationExtractor** (`tst_calibrationextractor`) — US5.3 pipeline orchestration (complements TestStepDetector's pure logic): drives the async extraction end to end (reader + FrameProcessor workers → per-channel StepDetector). A bad file (with non-empty steps, so it clears the empty-steps guard) finishes unsuccessfully with a recorded error and no partial state; over `rnrz-l_testfile.ch10`, exactly words 6/7/8 (RCVR3 L/R/C, the only real stepped SNR sweep) build valid non-linear profiles while every other receiver word falls back to linear
+- **TestStreamConfigSchema** (`tst_streamconfigschema`) — session save/load: `StreamConfigSchema` round trip for both `StreamMode` variants and the calibration input references (`calCh10Path`/`stepTomlPath`/`clipStartSec`/`clipEndSec`), confirms `calibrationByWord` itself never appears in the serialized JSON (and the `calibration` block is omitted entirely when no non-linear calibration was ever extracted), and `fromJson()` rejecting an object missing required fields while leaving in-class defaults for anything else omitted
+- **TestSessionSchema** (`tst_sessionschema`) — session save/load: `SessionSchema` round trip for a two-source, mixed-`StreamMode` session and for view-state axis overrides (both set and left unset), `schemaVersion` accept/reject (missing, current, newer-than-current) and malformed-document rejection, and the pure, disk-free `sessionRelativePath()`/`resolveSessionPath()` path helpers (same-drive relativization, the cross-drive case that must stay absolute, and relativize-then-resolve round-tripping back to the original path) — no `.ch10` fixture, runs in CI
 
 ### Running Tests
 ```bash
