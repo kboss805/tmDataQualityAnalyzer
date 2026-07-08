@@ -81,6 +81,21 @@ private slots:
     void addStreamDataNoRebaseWhenLaterSourceStartsAfter();
     void addStreamDataRebasesTwiceForSuccessivelyEarlierSources();
 
+    // Non-overlapping source detection (Phase 1 multi-file input, §3):
+    // informational-only signal when a newly added source's absolute time
+    // range doesn't overlap the data already loaded.
+    void nonOverlappingSourceEmitsWarning();
+    void overlappingSourceDoesNotEmitWarning();
+
+    // Source removal (Phase 1 multi-file input, §5): drops only the target
+    // source's series, and re-bases (mirroring the add-time re-base) only when
+    // the removed source held the earliest sample.
+    void removeSourceDropsOnlyThatSourcesSeries();
+    void removeSourceRebasesLeftWhenRemovedSourceWasEarliest();
+    void removeSourceNoRebaseWhenRemovedSourceWasNotEarliest();
+    void removeLastSourceClearsAllData();
+    void removeUnknownSourceIsNoOp();
+
     // exportCsv tests
     void exportCsvCreatesFile();
     void exportCsvHeaderAndData();

@@ -8,6 +8,7 @@
 #include <QApplication>
 #include <QDesktopServices>
 #include <QFrame>
+#include <QInputDialog>
 #include <QMessageBox>
 #include <QPixmap>
 #include <QSettings>
@@ -23,6 +24,7 @@
 #include "plotwidget.h"
 #include "processedstreamdata.h"
 #include "processingprogressdialog.h"
+#include "source.h"
 #include "streamconfigdialog.h"
 #include "timefields.h"
 
@@ -141,6 +143,12 @@ void MainView::setUpMenuBar()
     m_add_source_action->setEnabled(false);
     connect(m_add_source_action, &QAction::triggered, this, &MainView::addSourceButtonPressed);
 
+    // Remove Source: only meaningful once at least one source has finished
+    // processing successfully, so it starts disabled too.
+    m_remove_source_action = file_menu->addAction("Remove Source...");
+    m_remove_source_action->setEnabled(false);
+    connect(m_remove_source_action, &QAction::triggered, this, &MainView::removeSourceButtonPressed);
+
     m_recent_menu = file_menu->addMenu("Recent Files");
     updateRecentFilesMenu();
     file_menu->addSeparator();
@@ -227,6 +235,21 @@ void MainView::setUpConnections()
     // while processing (setAllControlsEnabled already covers the latter).
     connect(m_view_model, &MainViewModel::fileLoadedChanged, this, [this]() {
         m_add_source_action->setEnabled(m_view_model->fileLoaded());
+    });
+    // Remove Source is only meaningful once at least one source has finished
+    // processing successfully.
+    connect(m_view_model, &MainViewModel::sourcesChanged, this, [this]() {
+        m_remove_source_action->setEnabled(!m_view_model->sources().isEmpty());
+    });
+
+    // Informational: a newly added source's recording doesn't overlap what's
+    // already loaded (still correct on the shared elapsed axis; just a large gap).
+    connect(m_plot_view_model, &PlotViewModel::nonOverlappingSourceWarning, this, [this](int sourceId) {
+        Q_UNUSED(sourceId);
+        logWarning("The most recently added source's recording time ('"
+                   + QFileInfo(m_view_model->inputFilename()).fileName()
+                   + "') does not overlap the data already loaded. They will share "
+                     "one time axis with a large gap between them.");
     });
 
     connect(m_view_model, &MainViewModel::errorOccurred, this, &MainView::displayErrorMessage);
@@ -424,6 +447,41 @@ void MainView::addSourceButtonPressed()
     m_view_model->addSource(filename);
 }
 
+void MainView::removeSourceButtonPressed()
+{
+    const QVector<Source>& sources = m_view_model->sources();
+    if (sources.isEmpty())
+    {
+        return;
+    }
+
+    QStringList labels;
+    labels.reserve(sources.size());
+    for (const Source& s : sources)
+    {
+        labels.append(QFileInfo(s.filepath).fileName() + QString(" (source %1)").arg(s.sourceId));
+    }
+
+    bool ok = false;
+    const QString chosen = QInputDialog::getItem(this, tr("Remove Source"),
+        tr("Select a source to remove from the plot:"), labels, 0, /*editable=*/false, &ok);
+    if (!ok)
+    {
+        return;
+    }
+
+    const int index = labels.indexOf(chosen);
+    if (index < 0)
+    {
+        return;
+    }
+    const int sourceId = sources.at(index).sourceId;
+
+    m_view_model->removeSource(sourceId);
+    m_plot_view_model->removeSource(sourceId);
+    logSuccess("Removed source: " + labels.at(index));
+}
+
 bool MainView::isSupportedFile(const QString& path)
 {
     return path.endsWith(".ch10", Qt::CaseInsensitive)
@@ -607,6 +665,8 @@ void MainView::setAllControlsEnabled(bool enabled)
     m_import_action->setEnabled(enabled);
     // Add Source additionally requires a file to already be loaded/configured.
     m_add_source_action->setEnabled(enabled && m_view_model->fileLoaded());
+    // Remove Source additionally requires at least one finalized source.
+    m_remove_source_action->setEnabled(enabled && !m_view_model->sources().isEmpty());
 }
 
 void MainView::logError(const QString& message)

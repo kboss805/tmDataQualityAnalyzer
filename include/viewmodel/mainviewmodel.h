@@ -94,6 +94,11 @@ public:
     /// sourceReadyForStreamConfig() on success so the View can configure and process
     /// it, appending its streams to the existing plot instead of replacing it.
     void addSource(const QString& filename);
+    /// Removes a source's Source record from sources() (the View is responsible for
+    /// also removing its plot series via PlotViewModel::removeSource(), since this
+    /// ViewModel does not own the plot). A no-op if no source has @p sourceId; emits
+    /// sourcesChanged() otherwise.
+    void removeSource(int sourceId);
     /// @}
 
     /// @name Helpers
@@ -162,6 +167,9 @@ signals:
     /// show StreamConfigDialog for it. Unlike fileReadyForStreamConfig(), the View must
     /// NOT clear the plot -- this source's streams are meant to accumulate into it.
     void sourceReadyForStreamConfig();
+    /// Emitted when sources() changes: a source finalized after a successful
+    /// processing run, or removed via removeSource(), or reset by clearState().
+    void sourcesChanged();
 
     /// Emitted when the recent files list changes.
     void recentFilesChanged();

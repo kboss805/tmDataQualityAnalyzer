@@ -42,6 +42,13 @@ public:
     void loadCsvFileAsync(const QString& filepath);
     /// Appends one processed stream's in-memory series to the plot (accumulating). Emits dataChanged().
     void addStreamData(const ProcessedStreamData& data);
+    /// Removes every series belonging to @p sourceId (multi-file input Phase 1
+    /// source removal, docs/multi-file-input-design.md §5). Re-bases the
+    /// remaining series if the removed source held the earliest sample (shifts
+    /// them left so the new, later base still yields elapsed >= 0); if it
+    /// wasn't the earliest, the base is unchanged. Equivalent to clearData() if
+    /// no series remain. Emits dataChanged(); a no-op if no series has @p sourceId.
+    void removeSource(int sourceId);
     /// Resets all data to empty state.
     void clearData();
     /// Exports current data to a CSV file.
@@ -139,6 +146,10 @@ signals:
     void seriesAppearanceChanged();                 ///< Emitted after a batch of color/name edits so views can refresh.
     void plotTitleChanged();                        ///< Emitted when the plot title changes.
     void axisRangeChanged();                        ///< Emitted when X or Y axis ranges change.
+    /// Emitted (once, on that source's first-added stream) when a newly added
+    /// source's absolute time range doesn't overlap the data already loaded.
+    /// Informational only -- re-basing already keeps elapsed correct regardless.
+    void nonOverlappingSourceWarning(int sourceId);
 
 private slots:
     void onParseFinished();                         ///< Receives result from background parse thread.
