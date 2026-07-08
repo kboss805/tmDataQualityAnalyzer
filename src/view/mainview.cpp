@@ -7,8 +7,11 @@
 
 #include <QApplication>
 #include <QDesktopServices>
+#include <QFile>
 #include <QFrame>
 #include <QInputDialog>
+#include <QJsonDocument>
+#include <QJsonParseError>
 #include <QMessageBox>
 #include <QPixmap>
 #include <QSettings>
@@ -24,6 +27,8 @@
 #include "plotwidget.h"
 #include "processedstreamdata.h"
 #include "processingprogressdialog.h"
+#include "session.h"
+#include "sessionschema.h"
 #include "source.h"
 #include "streamconfigdialog.h"
 #include "timefields.h"
@@ -149,6 +154,18 @@ void MainView::setUpMenuBar()
     m_remove_source_action->setEnabled(false);
     connect(m_remove_source_action, &QAction::triggered, this, &MainView::removeSourceButtonPressed);
 
+    file_menu->addSeparator();
+
+    // Save/Open Session (Phase 6): persist and replay a whole multi-source
+    // configuration. Save starts disabled -- nothing to save until a source has
+    // finished processing.
+    m_save_session_action = file_menu->addAction("Save Session As...");
+    m_save_session_action->setEnabled(false);
+    connect(m_save_session_action, &QAction::triggered, this, &MainView::saveSessionButtonPressed);
+
+    m_open_session_action = file_menu->addAction("Open Session...");
+    connect(m_open_session_action, &QAction::triggered, this, &MainView::openSessionButtonPressed);
+
     m_recent_menu = file_menu->addMenu("Recent Files");
     updateRecentFilesMenu();
     file_menu->addSeparator();
@@ -236,10 +253,11 @@ void MainView::setUpConnections()
     connect(m_view_model, &MainViewModel::fileLoadedChanged, this, [this]() {
         m_add_source_action->setEnabled(m_view_model->fileLoaded());
     });
-    // Remove Source is only meaningful once at least one source has finished
-    // processing successfully.
+    // Remove Source / Save Session are only meaningful once at least one source
+    // has finished processing successfully.
     connect(m_view_model, &MainViewModel::sourcesChanged, this, [this]() {
         m_remove_source_action->setEnabled(!m_view_model->sources().isEmpty());
+        m_save_session_action->setEnabled(!m_view_model->sources().isEmpty());
     });
 
     // Informational: a newly added source's recording doesn't overlap what's
@@ -353,7 +371,23 @@ void MainView::onProcessingFinished(bool success)
     if (success)
     {
         logSuccess("Processing complete — results plotted from memory.");
-        m_plot_view_model->setPlotTitle(QFileInfo(m_view_model->inputFilename()).baseName());
+        // A session replay applies its own saved plot title once every source
+        // has finished (finishSessionLoad()) -- don't overwrite it per-source.
+        if (!m_loading_session)
+        {
+            m_plot_view_model->setPlotTitle(QFileInfo(m_view_model->inputFilename()).baseName());
+        }
+    }
+    else if (m_loading_session)
+    {
+        logError("Failed to process session source: "
+                 + QFileInfo(m_view_model->inputFilename()).fileName());
+    }
+
+    if (m_loading_session)
+    {
+        m_pending_session_index++;
+        advanceSessionLoad();
     }
 }
 
@@ -482,6 +516,108 @@ void MainView::removeSourceButtonPressed()
     logSuccess("Removed source: " + labels.at(index));
 }
 
+void MainView::saveSessionButtonPressed()
+{
+    if (m_view_model->sources().isEmpty())
+    {
+        logWarning("Nothing to save -- no sources have finished processing yet.");
+        return;
+    }
+
+    const QString path = QFileDialog::getSaveFileName(this, tr("Save Session As"),
+        m_last_ch10_dir, tr("Session Files (*.json)"));
+    if (path.isEmpty())
+    {
+        return;
+    }
+
+    Session session;
+    session.appVersion = AppVersion::toString();
+    session.sources     = m_view_model->sources();
+    session.viewState.plotTitle    = m_plot_view_model->plotTitle();
+    session.viewState.lockAxisView =
+        (m_plot_view_model->lockAxisView() == PlotViewModel::LockAxisView::MissedFrames)
+            ? "MissedFrames" : "LockPercent";
+    session.viewState.hasLeftYMaxOverride  = m_plot_view_model->hasLeftYMaxOverride();
+    session.viewState.leftYMaxOverride     = m_plot_view_model->leftYMaxOverrideValue();
+    session.viewState.hasRightYMaxOverride = m_plot_view_model->hasRightYMaxOverride();
+    session.viewState.rightYMaxOverride    = m_plot_view_model->rightYMaxOverrideValue();
+
+    const QJsonDocument doc = SessionSchema::toJson(session, QFileInfo(path).absolutePath());
+
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        logError("Could not write session file: " + path);
+        return;
+    }
+    file.write(doc.toJson(QJsonDocument::Indented));
+    file.close();
+
+    m_last_ch10_dir = QFileInfo(path).absolutePath();
+    saveLastCh10Dir();
+    logSuccess("Session saved: " + QFileInfo(path).fileName());
+}
+
+void MainView::openSessionButtonPressed()
+{
+    if (m_view_model->processing() || m_loading_session)
+    {
+        return;
+    }
+
+    const QString path = QFileDialog::getOpenFileName(this, tr("Open Session"),
+        m_last_ch10_dir, tr("Session Files (*.json)"));
+    if (path.isEmpty())
+    {
+        return;
+    }
+
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        logError("Could not open session file: " + path);
+        return;
+    }
+    const QByteArray bytes = file.readAll();
+    file.close();
+
+    QJsonParseError parse_error;
+    const QJsonDocument doc = QJsonDocument::fromJson(bytes, &parse_error);
+    if (parse_error.error != QJsonParseError::NoError)
+    {
+        logError("Session file is not valid JSON: " + parse_error.errorString());
+        return;
+    }
+
+    Session session;
+    const SessionSchema::LoadStatus status = SessionSchema::fromJson(doc, session);
+    if (status == SessionSchema::LoadStatus::UnsupportedSchemaVersion)
+    {
+        logError("Session file uses an unsupported schema version.");
+        return;
+    }
+    if (status == SessionSchema::LoadStatus::InvalidFormat)
+    {
+        logError("Session file is not a valid session (unrecognized format).");
+        return;
+    }
+
+    m_last_ch10_dir = QFileInfo(path).absolutePath();
+    saveLastCh10Dir();
+
+    m_view_model->clearState();
+    m_plot_view_model->clearData();
+
+    m_pending_session       = session;
+    m_pending_session_dir   = QFileInfo(path).absolutePath();
+    m_pending_session_index = 0;
+    m_loading_session       = true;
+
+    logSuccess("Loading session: " + QFileInfo(path).fileName());
+    advanceSessionLoad();
+}
+
 bool MainView::isSupportedFile(const QString& path)
 {
     return path.endsWith(".ch10", Qt::CaseInsensitive)
@@ -529,6 +665,16 @@ void MainView::onFileReadyForStreamConfig()
 
 void MainView::onSourceReadyForStreamConfig()
 {
+    if (m_loading_session)
+    {
+        // Session replay uses addSource() for every source (including the
+        // first) -- see openSessionButtonPressed(), which already cleared
+        // state/plot up front -- so this always lands here, never in
+        // onFileReadyForStreamConfig().
+        applyPendingSessionSourceConfig();
+        return;
+    }
+
     // Add Source: keep the existing plot/session, accumulate this source into it.
     showStreamConfigDialogForPendingSource(/*clearPlotFirst=*/false);
 }
@@ -554,6 +700,55 @@ void MainView::showStreamConfigDialogForPendingSource(bool clearPlotFirst)
 
         startProcessingFromDialog();
     }
+}
+
+void MainView::applyPendingSessionSourceConfig()
+{
+    const Source& src = m_pending_session.sources.at(m_pending_session_index);
+    m_view_model->setTimeChannelIndex(src.timeChannelIndex);
+    m_view_model->setStreamConfigs(src.streamConfigs);
+    m_view_model->startProcessing();
+}
+
+void MainView::advanceSessionLoad()
+{
+    while (m_pending_session_index < m_pending_session.sources.size())
+    {
+        const Source& src = m_pending_session.sources.at(m_pending_session_index);
+        const QString resolved = SessionSchema::resolveSessionPath(src.filepath, m_pending_session_dir);
+        if (!QFileInfo::exists(resolved))
+        {
+            logWarning("Session source file not found, skipping: " + resolved);
+            m_pending_session_index++;
+            continue;
+        }
+
+        m_view_model->addSource(resolved);
+        return; // wait for sourceReadyForStreamConfig()
+    }
+
+    finishSessionLoad();
+}
+
+void MainView::finishSessionLoad()
+{
+    m_loading_session = false;
+
+    m_plot_view_model->setPlotTitle(m_pending_session.viewState.plotTitle);
+    m_plot_view_model->setLockAxisView(
+        m_pending_session.viewState.lockAxisView == "MissedFrames"
+            ? PlotViewModel::LockAxisView::MissedFrames
+            : PlotViewModel::LockAxisView::LockPercent);
+    if (m_pending_session.viewState.hasLeftYMaxOverride)
+    {
+        m_plot_view_model->setLeftYMaxOverride(m_pending_session.viewState.leftYMaxOverride);
+    }
+    if (m_pending_session.viewState.hasRightYMaxOverride)
+    {
+        m_plot_view_model->setRightYMaxOverride(m_pending_session.viewState.rightYMaxOverride);
+    }
+
+    logSuccess("Session loaded.");
 }
 
 void MainView::onToggleTheme()
@@ -665,8 +860,10 @@ void MainView::setAllControlsEnabled(bool enabled)
     m_import_action->setEnabled(enabled);
     // Add Source additionally requires a file to already be loaded/configured.
     m_add_source_action->setEnabled(enabled && m_view_model->fileLoaded());
-    // Remove Source additionally requires at least one finalized source.
+    // Remove Source / Save Session additionally require at least one finalized source.
     m_remove_source_action->setEnabled(enabled && !m_view_model->sources().isEmpty());
+    m_save_session_action->setEnabled(enabled && !m_view_model->sources().isEmpty());
+    m_open_session_action->setEnabled(enabled);
 }
 
 void MainView::logError(const QString& message)

@@ -23,6 +23,7 @@
 #include <QToolBar>
 #include <QVBoxLayout>
 
+#include "session.h"
 #include "timefields.h"
 
 class MainViewModel;
@@ -66,6 +67,12 @@ private slots:
     /// Shows a picker of currently loaded sources and removes the selected one
     /// (drops its Source record and its plot series).
     void removeSourceButtonPressed();
+    /// Writes the current sources + coarse plot view state to a session JSON file.
+    void saveSessionButtonPressed();
+    /// Opens a session JSON file and replays it over the Phase 1 pipeline: clears
+    /// current state, then adds each source in order (skipping any whose file no
+    /// longer exists), applying its saved view state once all sources finish.
+    void openSessionButtonPressed();
     /// Toggles between light and dark themes.
     void onToggleTheme();
     /// Opens the StreamConfigDialog after a file has loaded (a fresh session).
@@ -112,6 +119,17 @@ private:
     /// metadata for, then starts processing on Accept. @p clearPlotFirst is true
     /// for a fresh Open (new session) and false for Add Source (accumulate).
     void showStreamConfigDialogForPendingSource(bool clearPlotFirst);
+    /// Applies the pending session source's saved timeChannelIndex/streamConfigs
+    /// (no dialog) and starts processing -- the session-load counterpart of
+    /// showStreamConfigDialogForPendingSource().
+    void applyPendingSessionSourceConfig();
+    /// Starts the next not-yet-processed source in m_pending_session, skipping
+    /// (and logging) any whose resolved file no longer exists; calls
+    /// finishSessionLoad() once every source has been attempted.
+    void advanceSessionLoad();
+    /// Applies m_pending_session's saved view state to the plot and clears
+    /// m_loading_session -- the last step of an Open Session replay.
+    void finishSessionLoad();
     void saveLastCh10Dir();                              ///< Persists m_last_ch10_dir to QSettings.
     /// Routes a path to the .ch10 processing pipeline or the CSV importer by extension.
     void openPath(const QString& path);
@@ -136,6 +154,8 @@ private:
     QAction* m_open_action;                  ///< File > Open... action.
     QAction* m_add_source_action;            ///< File > Add Source... action (multi-file input).
     QAction* m_remove_source_action;         ///< File > Remove Source... action (multi-file input).
+    QAction* m_save_session_action;          ///< File > Save Session As... action (session save/load).
+    QAction* m_open_session_action;          ///< File > Open Session... action (session save/load).
 
     QToolBar* m_toolbar;                     ///< Main toolbar.
     QAction* m_toolbar_open_action;          ///< Toolbar open action.
@@ -148,5 +168,13 @@ private:
 
     QString m_last_ch10_dir;                 ///< Last directory used in the Open file dialog (.ch10/.csv).
     QString m_pending_csv_path;              ///< CSV import in flight; finalized on the plot's load result.
+
+    /// @name Session load replay state (Phase 6)
+    /// @{
+    bool m_loading_session = false;          ///< True while replaying an opened session's sources.
+    Session m_pending_session;               ///< The session being replayed.
+    QString m_pending_session_dir;           ///< Directory of the session file (for relative path resolution).
+    int m_pending_session_index = 0;         ///< Index into m_pending_session.sources of the source in flight.
+    /// @}
 };
 #endif // MAINVIEW_H
