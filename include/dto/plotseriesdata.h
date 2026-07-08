@@ -38,6 +38,7 @@ struct PlotSeriesData
     int channelIndex  = 0;    ///< 0-based within receiver, for color shade.
     int streamOrder    = 0;   ///< Source PCM channel ID, for ordering series within a legend group.
     int streamSequence = 0;   ///< 0-based job index; used to sort legend entries in submission order regardless of parallel completion order.
+    int sourceId       = 0;   ///< Id of the .ch10 file (multi-file session) this series came from; 0 for the first/only source. Included in cross-series identity checks (reprocess-replace, rename/recolor sibling-sync) so two sources reusing the same streamOrder/streamLabel never cross-contaminate.
     int id = 0;               ///< Unique, stable per-series identity assigned by PlotViewModel. A given id's
                                ///< data is immutable (reprocessing yields new ids), letting the View reconcile
                                ///< graphs across appends without re-copying unchanged series data.

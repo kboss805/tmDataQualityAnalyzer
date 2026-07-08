@@ -821,15 +821,19 @@ void TestPlotViewModel::addStreamDataEmptyDataNoOp()
 // ---------------------------------------------------------------------------
 
 /// Builds a lock-only stream with parallel lock % and cumulative error vectors.
+/// @p source_id defaults to 0 (the single/first source) so existing call sites
+/// are unaffected; multi-source tests pass a distinct id explicitly.
 static ProcessedStreamData makeLockAndErrorStream(const QString& label,
                                                   int pcm_channel_id,
                                                   const QVector<double>& times,
                                                   const QVector<double>& lock,
-                                                  const QVector<double>& errors)
+                                                  const QVector<double>& errors,
+                                                  int source_id = 0)
 {
     ProcessedStreamData d;
     d.streamLabel = label;
     d.pcmChannelId = pcm_channel_id;
+    d.sourceId = source_id;
     d.mode = StreamMode::FrameSyncLockStats;
     d.timesSec = times;
     d.lockPercent = lock;
@@ -1006,6 +1010,21 @@ int findSeriesIndex(const PlotViewModel& vm, int order, PlotSeriesData::MetricTy
     }
     return -1;
 }
+
+/// @return the index of the series matching @p order, @p metric, AND @p sourceId,
+/// or -1. Needed once two sources can share the same streamOrder — findSeriesIndex()
+/// alone can't disambiguate which source's series it found.
+int findSeriesIndexInSource(const PlotViewModel& vm, int order, PlotSeriesData::MetricType metric,
+                            int sourceId)
+{
+    for (int i = 0; i < vm.seriesCount(); i++)
+    {
+        const PlotSeriesData& s = vm.seriesAt(i);
+        if (s.streamOrder == order && s.metricType == metric && s.sourceId == sourceId)
+            return i;
+    }
+    return -1;
+}
 } // namespace
 
 void TestPlotViewModel::reprocessOnlySameStreamOrderReplaced()
@@ -1082,6 +1101,80 @@ void TestPlotViewModel::recolorSeriesOnlySameStreamOrderSiblingRecolored()
     // Stream 6 shares the same original label and must keep its own color.
     QCOMPARE(vm.seriesAt(lock6).color, original6Color);
     QCOMPARE(vm.seriesAt(missed6).color, original6Color);
+}
+
+void TestPlotViewModel::crossSourceReprocessDoesNotEraseOtherSource()
+{
+    // Two DIFFERENT sources (e.g. two .ch10 files in a multi-file session) both
+    // have a stream labeled "Ch 05" at PCM channel id 5 — a plausible collision
+    // since two independently-configured files can reuse the same TMATS channel
+    // numbering. Before sourceId was part of identity, adding source 1's stream
+    // would erase source 0's identically-keyed one.
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0, 1.0}, {90.0, 95.0}, {0.0, 1.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0, 1.0}, {10.0, 20.0}, {0.0, 2.0}, /*source_id=*/1));
+    QCOMPARE(vm.seriesCount(), 4); // 2 sources x (lock + missed-frames) — NOT collapsed to 2
+
+    // Reprocess only source 0's stream, with different values.
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0, 1.0, 2.0}, {50.0, 60.0, 70.0}, {0.0, 0.0, 3.0}, /*source_id=*/0));
+
+    QCOMPARE(vm.seriesCount(), 4); // still 4 — source 1's pair must survive untouched
+    const int lock0 = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::FrameSyncLock, 0);
+    const int lock1 = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::FrameSyncLock, 1);
+    QVERIFY(lock0 >= 0);
+    QVERIFY(lock1 >= 0);
+    QCOMPARE(vm.seriesAt(lock0).yValues, QVector<double>({50.0, 60.0, 70.0})); // reprocessed
+    QCOMPARE(vm.seriesAt(lock1).yValues, QVector<double>({10.0, 20.0}));       // untouched
+}
+
+void TestPlotViewModel::crossSourceRenameDoesNotAffectOtherSource()
+{
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0, 1.0}, {90.0, 95.0}, {0.0, 1.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0, 1.0}, {10.0, 20.0}, {0.0, 2.0}, /*source_id=*/1));
+
+    const int lock0   = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::FrameSyncLock, 0);
+    const int missed0 = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::AccumulatedMissedFrames, 0);
+    const int lock1   = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::FrameSyncLock, 1);
+    const int missed1 = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::AccumulatedMissedFrames, 1);
+    QVERIFY(lock0 >= 0);
+    QVERIFY(missed0 >= 0);
+    QVERIFY(lock1 >= 0);
+    QVERIFY(missed1 >= 0);
+
+    vm.renameSeriesById(vm.seriesAt(lock0).id, "Renamed Source 0 Stream");
+
+    // Source 0's own lock/missed-frames pair renamed together...
+    QCOMPARE(vm.seriesAt(lock0).name, QString("Renamed Source 0 Stream"));
+    QCOMPARE(vm.seriesAt(missed0).name, QString("Renamed Source 0 Stream"));
+    // ...but source 1's identically-labeled-and-ordered stream must NOT be touched.
+    QCOMPARE(vm.seriesAt(lock1).name, QString("Ch 05"));
+    QCOMPARE(vm.seriesAt(missed1).name, QString("Ch 05"));
+}
+
+void TestPlotViewModel::crossSourceRecolorDoesNotAffectOtherSource()
+{
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0, 1.0}, {90.0, 95.0}, {0.0, 1.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0, 1.0}, {10.0, 20.0}, {0.0, 2.0}, /*source_id=*/1));
+
+    const int lock0   = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::FrameSyncLock, 0);
+    const int missed0 = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::AccumulatedMissedFrames, 0);
+    const int lock1   = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::FrameSyncLock, 1);
+    const int missed1 = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::AccumulatedMissedFrames, 1);
+    QVERIFY(lock0 >= 0);
+    QVERIFY(missed0 >= 0);
+    QVERIFY(lock1 >= 0);
+    QVERIFY(missed1 >= 0);
+    const QColor original1Color = vm.seriesAt(lock1).color;
+
+    vm.recolorSeriesById(vm.seriesAt(lock0).id, QColor(Qt::magenta));
+
+    QCOMPARE(vm.seriesAt(lock0).color, QColor(Qt::magenta));
+    QCOMPARE(vm.seriesAt(missed0).color, QColor(Qt::magenta));
+    // Source 1's identically-labeled-and-ordered stream must keep its own color.
+    QCOMPARE(vm.seriesAt(lock1).color, original1Color);
+    QCOMPARE(vm.seriesAt(missed1).color, original1Color);
 }
 
 // ---------------------------------------------------------------------------

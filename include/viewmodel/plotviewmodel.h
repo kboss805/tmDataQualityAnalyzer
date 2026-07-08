@@ -153,13 +153,14 @@ private:
     /// AccumulatedMissedFrames) that share the axis and a stream's color/name.
     static bool isLeftAxisMetric(PlotSeriesData::MetricType type);
     /// @return True if `candidate` is the left-axis sibling of the stream identified
-    /// by (streamLabel, streamOrder): the same stream's other left-axis metric (e.g.
-    /// a Lock series' Missed-Frames counterpart). Matches on streamLabel AND
-    /// streamOrder (source PCM channel id) together — streamLabel alone is not
-    /// unique (two streams can share a TMATS-derived name), so a rename/recolor
-    /// edit must not cross-apply to an unrelated same-labeled stream.
+    /// by (streamLabel, streamOrder, sourceId): the same stream's other left-axis
+    /// metric (e.g. a Lock series' Missed-Frames counterpart). Matches all three
+    /// together — streamLabel alone is not unique (two streams can share a
+    /// TMATS-derived name), streamOrder alone is not unique across a multi-file
+    /// session (two sources can reuse the same PCM channel id) — so a rename/recolor
+    /// edit must not cross-apply to an unrelated same-labeled/ordered stream.
     static bool isFrameSyncSibling(const QString& streamLabel, int streamOrder,
-                                   const PlotSeriesData& candidate);
+                                   int sourceId, const PlotSeriesData& candidate);
     /// Computes Y axis range from visible series data with margin.
     void computeYRange();
     /// Commits a CsvParseResult into member state and emits dataChanged().

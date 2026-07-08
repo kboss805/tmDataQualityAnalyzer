@@ -64,6 +64,15 @@ private slots:
     void renameSeriesOnlySameStreamOrderSiblingRenamed();
     void recolorSeriesOnlySameStreamOrderSiblingRecolored();
 
+    // Cross-source stream identity (Phase 1 multi-file input): two DIFFERENT
+    // sources can legitimately reuse the same (streamLabel, streamOrder) — e.g.
+    // two .ch10 files whose TMATS channel ids collide. sourceId must be part of
+    // identity so reprocess-replace and rename/recolor sibling-sync never cross
+    // a source boundary.
+    void crossSourceReprocessDoesNotEraseOtherSource();
+    void crossSourceRenameDoesNotAffectOtherSource();
+    void crossSourceRecolorDoesNotAffectOtherSource();
+
     // exportCsv tests
     void exportCsvCreatesFile();
     void exportCsvHeaderAndData();
