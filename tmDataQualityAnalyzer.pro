@@ -75,6 +75,7 @@ SOURCES += \
     src/model/calibrationextractor.cpp \
     src/model/csvseriesparser.cpp \
     src/model/seriescolumnschema.cpp \
+    src/model/streamconfigschema.cpp \
     src/model/tomlconfighelper.cpp
 
 # ViewModel: presentation state + processing orchestration
@@ -126,6 +127,7 @@ HEADERS += \
     include/model/calibrationextractor.h \
     include/model/csvseriesparser.h \
     include/model/seriescolumnschema.h \
+    include/model/streamconfigschema.h \
     include/model/tomlconfighelper.h
 
 # DTOs: plain data carried across layers
