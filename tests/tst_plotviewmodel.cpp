@@ -1177,6 +1177,79 @@ void TestPlotViewModel::crossSourceRecolorDoesNotAffectOtherSource()
     QCOMPARE(vm.seriesAt(missed1).color, original1Color);
 }
 
+void TestPlotViewModel::addStreamDataRebasesWhenLaterSourceStartsEarlier()
+{
+    // Source 0's recording starts at absolute IRIG second 2,000,000.
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch A", 1, {2000000.0, 2000001.0}, {90.0, 95.0}, {0.0, 1.0}, /*source_id=*/0));
+
+    const int lockA = findSeriesIndexInSource(vm, 1, PlotSeriesData::MetricType::FrameSyncLock, 0);
+    QVERIFY(lockA >= 0);
+    QCOMPARE(vm.seriesAt(lockA).xValues, QVector<double>({0.0, 1.0}));
+
+    // Source 1's recording started 1,000,000 seconds EARLIER — predates
+    // everything currently loaded. Must re-base (shift source 0 right) rather
+    // than give source 1 negative elapsed values.
+    vm.addStreamData(makeLockAndErrorStream("Ch B", 2, {1000000.0, 1000002.0}, {50.0, 55.0}, {0.0, 2.0}, /*source_id=*/1));
+
+    const int lockB = findSeriesIndexInSource(vm, 2, PlotSeriesData::MetricType::FrameSyncLock, 1);
+    QVERIFY(lockB >= 0);
+    // Source 1's own elapsed starts at 0 against the NEW (earlier) base.
+    QCOMPARE(vm.seriesAt(lockB).xValues, QVector<double>({0.0, 2.0}));
+
+    // Source 0's existing series shifted right by the 1,000,000 s delta, so its
+    // absolute-time correlation with source 1 is preserved (elapsed >= 0 throughout).
+    const int lockA2 = findSeriesIndexInSource(vm, 1, PlotSeriesData::MetricType::FrameSyncLock, 0);
+    QCOMPARE(vm.seriesAt(lockA2).xValues, QVector<double>({1000000.0, 1000001.0}));
+
+    // X range recomputed from the (shifted) data; base always reports elapsed>=0.
+    // Max comes from A's shifted last sample (1,000,001.0), which exceeds B's own
+    // last elapsed (2.0) -- confirming the shift, not just B's arrival, drives xMax().
+    QCOMPARE(vm.xMin(), 0.0);
+    QCOMPARE(vm.xMax(), 1000001.0);
+}
+
+void TestPlotViewModel::addStreamDataNoRebaseWhenLaterSourceStartsAfter()
+{
+    // A later-added source that starts AFTER the current base must not trigger
+    // any shift — existing (pre-Phase-1.2) accumulation behavior is preserved.
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch A", 1, {1000000.0}, {90.0}, {0.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch B", 2, {1000005.0}, {50.0}, {0.0}, /*source_id=*/1));
+
+    const int lockA = findSeriesIndexInSource(vm, 1, PlotSeriesData::MetricType::FrameSyncLock, 0);
+    const int lockB = findSeriesIndexInSource(vm, 2, PlotSeriesData::MetricType::FrameSyncLock, 1);
+    QVERIFY(lockA >= 0);
+    QVERIFY(lockB >= 0);
+    QCOMPARE(vm.seriesAt(lockA).xValues, QVector<double>({0.0})); // base source untouched
+    QCOMPARE(vm.seriesAt(lockB).xValues, QVector<double>({5.0})); // correctly offset by +5s
+}
+
+void TestPlotViewModel::addStreamDataRebasesTwiceForSuccessivelyEarlierSources()
+{
+    // Three sources added in successively-earlier order: each add re-bases
+    // again, and shifts must compound correctly rather than double-count or
+    // reset a prior source's already-applied shift.
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch A", 1, {3000000.0}, {90.0}, {0.0}, /*source_id=*/0)); // base=3,000,000
+    vm.addStreamData(makeLockAndErrorStream("Ch B", 2, {2000000.0}, {50.0}, {0.0}, /*source_id=*/1)); // rebase: delta=1,000,000, base=2,000,000
+    vm.addStreamData(makeLockAndErrorStream("Ch C", 3, {1000000.0}, {10.0}, {0.0}, /*source_id=*/2)); // rebase: delta=1,000,000, base=1,000,000
+
+    const int lockA = findSeriesIndexInSource(vm, 1, PlotSeriesData::MetricType::FrameSyncLock, 0);
+    const int lockB = findSeriesIndexInSource(vm, 2, PlotSeriesData::MetricType::FrameSyncLock, 1);
+    const int lockC = findSeriesIndexInSource(vm, 3, PlotSeriesData::MetricType::FrameSyncLock, 2);
+    QVERIFY(lockA >= 0);
+    QVERIFY(lockB >= 0);
+    QVERIFY(lockC >= 0);
+
+    // A shifted by both re-bases: total delta = 2,000,000 (3,000,000 -> 1,000,000 final base).
+    QCOMPARE(vm.seriesAt(lockA).xValues, QVector<double>({2000000.0}));
+    // B shifted only by the second re-base's 1,000,000 delta.
+    QCOMPARE(vm.seriesAt(lockB).xValues, QVector<double>({1000000.0}));
+    // C establishes the final (earliest) base, so its own elapsed is 0.
+    QCOMPARE(vm.seriesAt(lockC).xValues, QVector<double>({0.0}));
+}
+
 // ---------------------------------------------------------------------------
 // exportCsv tests
 // ---------------------------------------------------------------------------
