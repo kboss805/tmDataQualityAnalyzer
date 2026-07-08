@@ -73,6 +73,14 @@ private slots:
     void crossSourceRenameDoesNotAffectOtherSource();
     void crossSourceRecolorDoesNotAffectOtherSource();
 
+    // Multi-source time-base re-basing (Phase 1 multi-file input, §3): the
+    // shared elapsed-seconds base must track the EARLIEST absolute sample
+    // across every source, re-basing (shifting existing series right) when a
+    // later-added source's recording started earlier than everything loaded.
+    void addStreamDataRebasesWhenLaterSourceStartsEarlier();
+    void addStreamDataNoRebaseWhenLaterSourceStartsAfter();
+    void addStreamDataRebasesTwiceForSuccessivelyEarlierSources();
+
     // exportCsv tests
     void exportCsvCreatesFile();
     void exportCsvHeaderAndData();

@@ -163,6 +163,10 @@ private:
                                    int sourceId, const PlotSeriesData& candidate);
     /// Computes Y axis range from visible series data with margin.
     void computeYRange();
+    /// Recomputes m_base_day/m_base_time_offset from the current m_base_abs_seconds
+    /// via a reentrant gmtime conversion. Shared by the first-stream case and the
+    /// re-base path in addStreamData() (multi-file input, docs/multi-file-input-design.md §3).
+    void recomputeBaseDayAndOffset();
     /// Commits a CsvParseResult into member state and emits dataChanged().
     void commitParseResult(CsvParseResult&& result);
 

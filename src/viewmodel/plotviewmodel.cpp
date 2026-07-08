@@ -193,28 +193,35 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
                                    }),
                    m_series.end());
 
-    // Establish the shared time base from the first accumulated sample so that
-    // streams added later line up on the same elapsed-seconds X axis.
+    // Establish/maintain the shared time base so every source's samples line up
+    // on the same elapsed-seconds X axis (multi-file input,
+    // docs/multi-file-input-design.md §3). The base must be the EARLIEST
+    // absolute sample across every source ever added, not just the first-added
+    // one -- a later-added source (e.g. a second .ch10 file) can easily start
+    // earlier than the first.
     if (m_series.isEmpty())
     {
         m_base_abs_seconds = data.timesSec.first();
-        // Use a reentrant gmtime variant — plain gmtime() returns a pointer to a
-        // shared static tm and is not thread-safe.
-        std::time_t epoch = static_cast<std::time_t>(m_base_abs_seconds);
-        std::tm tm_buf{};
-#if defined(_WIN32)
-        const bool ok = (gmtime_s(&tm_buf, &epoch) == 0);
-#else
-        const bool ok = (gmtime_r(&epoch, &tm_buf) != nullptr);
-#endif
-        if (ok)
+        recomputeBaseDayAndOffset();
+    }
+    else if (data.timesSec.first() < m_base_abs_seconds)
+    {
+        // This source's earliest sample precedes everything already loaded.
+        // Re-base: shift every existing series' elapsed seconds right by the
+        // delta so elapsed stays >= 0 (all existing X-axis/formatTime() code
+        // keeps working unchanged) while every sample's absolute-time
+        // correlation across sources is preserved. O(total samples), a
+        // one-time cost per add that starts a new earliest source.
+        const double delta = m_base_abs_seconds - data.timesSec.first();
+        for (PlotSeriesData& s : m_series)
         {
-            m_base_day = tm_buf.tm_yday + 1;
-            m_base_time_offset = (tm_buf.tm_hour * UIConstants::kSecondsPerHour)
-                               + (tm_buf.tm_min * UIConstants::kSecondsPerMinute)
-                               + tm_buf.tm_sec
-                               + (m_base_abs_seconds - static_cast<double>(epoch));
+            for (double& x : s.xValues)
+            {
+                x += delta;
+            }
         }
+        m_base_abs_seconds = data.timesSec.first();
+        recomputeBaseDayAndOffset();
     }
 
     const int sample_count = static_cast<int>(data.timesSec.size());
@@ -804,6 +811,27 @@ bool PlotViewModel::isFrameSyncSibling(const QString& streamLabel, int streamOrd
            candidate.streamLabel == streamLabel &&
            candidate.streamOrder == streamOrder &&
            candidate.sourceId == sourceId;
+}
+
+void PlotViewModel::recomputeBaseDayAndOffset()
+{
+    // Use a reentrant gmtime variant — plain gmtime() returns a pointer to a
+    // shared static tm and is not thread-safe.
+    std::time_t epoch = static_cast<std::time_t>(m_base_abs_seconds);
+    std::tm tm_buf{};
+#if defined(_WIN32)
+    const bool ok = (gmtime_s(&tm_buf, &epoch) == 0);
+#else
+    const bool ok = (gmtime_r(&epoch, &tm_buf) != nullptr);
+#endif
+    if (ok)
+    {
+        m_base_day = tm_buf.tm_yday + 1;
+        m_base_time_offset = (tm_buf.tm_hour * UIConstants::kSecondsPerHour)
+                           + (tm_buf.tm_min * UIConstants::kSecondsPerMinute)
+                           + tm_buf.tm_sec
+                           + (m_base_abs_seconds - static_cast<double>(epoch));
+    }
 }
 
 void PlotViewModel::computeYRange()
