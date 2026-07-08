@@ -24,6 +24,17 @@ private slots:
     void parseSnrShapeWinsOverSuffix();
     void parseUnknownFallsBackToSnr();
     void roundTripLockMissedSnr();
+
+    // Source qualifier (Phase 1 multi-file input, §7): source 0 stays byte-identical
+    // to the pre-multi-file format; sources 1+ get a leading "S<n>| " qualifier that
+    // parseColumnHeader() strips back off before recovering identity.
+    void columnHeaderSourceZeroIsUnqualified();
+    void columnHeaderNonZeroSourceAddsQualifier();
+    void parseSourceQualifiedSnrHeader();
+    void parseSourceQualifiedLockHeader();
+    void parseUnqualifiedHeaderDefaultsToSourceZero();
+    void headerStartingWithLetterSButNotAQualifierIsUnaffected();
+    void roundTripPreservesSourceId();
 };
 
 #endif // TST_SERIESCOLUMNSCHEMA_H
