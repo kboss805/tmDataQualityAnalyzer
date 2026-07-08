@@ -35,6 +35,7 @@ SOURCES += \
     $$PWD/../src/model/csvseriesparser.cpp \
     $$PWD/../src/model/seriescolumnschema.cpp \
     $$PWD/../src/model/streamconfigschema.cpp \
+    $$PWD/../src/model/sessionschema.cpp \
     $$PWD/../src/model/tomlconfighelper.cpp \
     $$PWD/../src/viewmodel/mainviewmodel.cpp \
     $$PWD/../src/viewmodel/processingcoordinator.cpp \
@@ -61,6 +62,7 @@ HEADERS += \
     $$PWD/../include/model/csvseriesparser.h \
     $$PWD/../include/model/seriescolumnschema.h \
     $$PWD/../include/model/streamconfigschema.h \
+    $$PWD/../include/model/sessionschema.h \
     $$PWD/../include/model/tomlconfighelper.h \
     $$PWD/../include/dto/streamconfig.h \
     $$PWD/../include/dto/framesyncparams.h \
@@ -70,6 +72,8 @@ HEADERS += \
     $$PWD/../include/dto/calibrationprofile.h \
     $$PWD/../include/dto/timefields.h \
     $$PWD/../include/dto/source.h \
+    $$PWD/../include/dto/session.h \
+    $$PWD/../include/dto/sessionviewstate.h \
     $$PWD/../include/viewmodel/mainviewmodel.h \
     $$PWD/../include/viewmodel/processingcoordinator.h \
     $$PWD/../include/viewmodel/plotviewmodel.h \
@@ -135,6 +139,7 @@ SOURCES += \
     tst_exportdialog.cpp \
     tst_seriescolumnschema.cpp \
     tst_streamconfigschema.cpp \
+    tst_sessionschema.cpp \
     tst_stepdetector.cpp \
     tst_calibrationextractor.cpp
 
@@ -155,5 +160,6 @@ HEADERS += \
     tst_exportdialog.h \
     tst_seriescolumnschema.h \
     tst_streamconfigschema.h \
+    tst_sessionschema.h \
     tst_stepdetector.h \
     tst_calibrationextractor.h

@@ -76,6 +76,7 @@ SOURCES += \
     src/model/csvseriesparser.cpp \
     src/model/seriescolumnschema.cpp \
     src/model/streamconfigschema.cpp \
+    src/model/sessionschema.cpp \
     src/model/tomlconfighelper.cpp
 
 # ViewModel: presentation state + processing orchestration
@@ -128,6 +129,7 @@ HEADERS += \
     include/model/csvseriesparser.h \
     include/model/seriescolumnschema.h \
     include/model/streamconfigschema.h \
+    include/model/sessionschema.h \
     include/model/tomlconfighelper.h
 
 # DTOs: plain data carried across layers
@@ -139,7 +141,9 @@ HEADERS += \
     include/dto/plotseriesdata.h \
     include/dto/calibrationprofile.h \
     include/dto/timefields.h \
-    include/dto/source.h
+    include/dto/source.h \
+    include/dto/session.h \
+    include/dto/sessionviewstate.h
 
 # ViewModel: presentation state + processing orchestration
 HEADERS += \
