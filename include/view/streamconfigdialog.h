@@ -87,6 +87,10 @@ private:
         int     receiverChannels = PCMConstants::kDefaultReceiverChannels;
         QString    receiverParamsToml;
         QHash<int, CalibrationProfile> calibrationByWord; ///< Non-linear step calibration profiles (US5.3).
+        QString calCh10Path;    ///< Calibration input reference (session save/load, Phase 6).
+        QString stepTomlPath;   ///< Calibration input reference (session save/load, Phase 6).
+        double  clipStartSec = 0.0; ///< Calibration input reference (session save/load, Phase 6).
+        double  clipEndSec   = 0.0; ///< Calibration input reference (session save/load, Phase 6).
         StreamMode lastConfiguredMode = StreamMode::FrameSyncLockStats; ///< Mode whose values are currently stored.
         bool       gearConfirmed      = false; ///< True only after the user has opened and accepted the gear dialog.
     };

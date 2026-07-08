@@ -58,6 +58,16 @@ struct StreamConfig
     /// word index within the minor frame (matches ParameterInfo::word). Session-only;
     /// never serialized. Empty = linear math for every channel.
     QHash<int, CalibrationProfile> calibrationByWord;
+
+    // --- Calibration input references (session save/load, Phase 6) ---
+    // The extracted calibrationByWord profiles above are never serialized, but a
+    // session still stores what produced them so re-extraction can be re-run after
+    // load (v1 loads linear-only; auto re-extraction is a documented future
+    // follow-up). Empty calCh10Path means no non-linear calibration was extracted.
+    QString calCh10Path;    ///< Path to the calibration Chapter 10 recording used for extraction.
+    QString stepTomlPath;   ///< Path to the step-config TOML used for extraction.
+    double  clipStartSec = 0.0; ///< Seconds clipped from the start before step detection.
+    double  clipEndSec   = 0.0; ///< Seconds clipped from the end before step detection.
 };
 
 #endif // STREAMCONFIG_H

@@ -413,6 +413,10 @@ void StreamConfigDialog::openGearDialog(int row)
     temp.receiverChannels   = w.receiverChannels;
     temp.receiverParamsToml = w.receiverParamsToml;
     temp.calibrationByWord  = w.calibrationByWord;
+    temp.calCh10Path        = w.calCh10Path;
+    temp.stepTomlPath       = w.stepTomlPath;
+    temp.clipStartSec       = w.clipStartSec;
+    temp.clipEndSec         = w.clipEndSec;
 
     // If the user changed modes since last configure, reset frame sync fields to
     // this mode's defaults so the sub-dialog pre-fills with sensible values.
@@ -493,6 +497,10 @@ void StreamConfigDialog::openGearDialog(int row)
                 rw.receiverChannels   = dlg.receiverChannels();
                 rw.receiverParamsToml = dlg.receiverParamsToml();
                 rw.calibrationByWord  = dlg.calibrationByWord();
+                rw.calCh10Path        = dlg.calCh10Path();
+                rw.stepTomlPath       = dlg.stepTomlPath();
+                rw.clipStartSec       = dlg.clipStartSec();
+                rw.clipEndSec         = dlg.clipEndSec();
                 rw.lastConfiguredMode = StreamMode::ReceiverChannelInfo;
                 rw.gearConfirmed      = true;
             };
@@ -576,6 +584,10 @@ QVector<StreamConfig> StreamConfigDialog::configs() const
         result[row].receiverChannels  = w.receiverChannels;
         result[row].receiverParamsToml = w.receiverParamsToml;
         result[row].calibrationByWord = w.calibrationByWord;
+        result[row].calCh10Path       = w.calCh10Path;
+        result[row].stepTomlPath      = w.stepTomlPath;
+        result[row].clipStartSec      = w.clipStartSec;
+        result[row].clipEndSec        = w.clipEndSec;
     }
     return result;
 }
