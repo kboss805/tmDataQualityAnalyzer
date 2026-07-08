@@ -14,11 +14,12 @@
 using MetricType = PlotSeriesData::MetricType;
 
 namespace {
-PlotSeriesData makeSeries(MetricType type, const QString& name)
+PlotSeriesData makeSeries(MetricType type, const QString& name, int sourceId = 0)
 {
     PlotSeriesData s;
     s.metricType = type;
     s.name       = name;
+    s.sourceId   = sourceId;
     return s;
 }
 } // namespace
@@ -124,4 +125,85 @@ void TestSeriesColumnSchema::roundTripLockMissedSnr()
     QCOMPARE(snr.streamOrder, 40);
     QCOMPARE(snr.streamLabel, QString("RCVR Data"));
     QCOMPARE(snr.receiverIndex, 2);
+}
+
+void TestSeriesColumnSchema::columnHeaderSourceZeroIsUnqualified()
+{
+    // Source 0 (the first/only source) must produce EXACTLY the pre-multi-file
+    // format -- a single-source export stays byte-identical across releases.
+    const QString name = "40 - RCVR Data L_RCVR1";
+    QCOMPARE(SeriesColumnSchema::columnHeader(makeSeries(MetricType::SNR, name, /*sourceId=*/0)), name);
+    QCOMPARE(SeriesColumnSchema::columnHeader(makeSeries(MetricType::FrameSyncLock, "Ch 05", /*sourceId=*/0)),
+             QString("Ch 05") + PlotConstants::kCsvLockSuffix);
+}
+
+void TestSeriesColumnSchema::columnHeaderNonZeroSourceAddsQualifier()
+{
+    const QString name = "40 - RCVR Data L_RCVR1";
+    QCOMPARE(SeriesColumnSchema::columnHeader(makeSeries(MetricType::SNR, name, /*sourceId=*/1)),
+             QString("S1| ") + name);
+    QCOMPARE(SeriesColumnSchema::columnHeader(makeSeries(MetricType::FrameSyncLock, "Ch 05", /*sourceId=*/2)),
+             QString("S2| Ch 05") + PlotConstants::kCsvLockSuffix);
+}
+
+void TestSeriesColumnSchema::parseSourceQualifiedSnrHeader()
+{
+    const auto col = SeriesColumnSchema::parseColumnHeader("S1| 40 - RCVR Data L_RCVR1");
+    QVERIFY(col.metricType == MetricType::SNR);
+    QCOMPARE(col.sourceId, 1);
+    QCOMPARE(col.streamOrder, 40);
+    QCOMPARE(col.streamLabel, QString("RCVR Data"));
+    QCOMPARE(col.receiverIndex, 1);
+    // The recovered name matches what source 0 would produce -- the qualifier is
+    // metadata, not part of the series' own name.
+    QCOMPARE(col.name, QString("40 - RCVR Data L_RCVR1"));
+}
+
+void TestSeriesColumnSchema::parseSourceQualifiedLockHeader()
+{
+    const auto col = SeriesColumnSchema::parseColumnHeader(
+        QString("S2| Ch 05") + PlotConstants::kCsvLockSuffix);
+    QVERIFY(col.metricType == MetricType::FrameSyncLock);
+    QCOMPARE(col.sourceId, 2);
+    QCOMPARE(col.name, QString("Ch 05"));
+    QCOMPARE(col.streamLabel, QString("Ch 05"));
+}
+
+void TestSeriesColumnSchema::parseUnqualifiedHeaderDefaultsToSourceZero()
+{
+    QCOMPARE(SeriesColumnSchema::parseColumnHeader("40 - RCVR Data L_RCVR1").sourceId, 0);
+    QCOMPARE(SeriesColumnSchema::parseColumnHeader(
+                 QString("Ch 05") + PlotConstants::kCsvLockSuffix).sourceId, 0);
+}
+
+void TestSeriesColumnSchema::headerStartingWithLetterSButNotAQualifierIsUnaffected()
+{
+    // "Something" starts with 'S' but has no digit-then-"| " qualifier shape --
+    // must NOT be misparsed as a source-qualified header.
+    const auto col = SeriesColumnSchema::parseColumnHeader("Something");
+    QCOMPARE(col.sourceId, 0);
+    QCOMPARE(col.name, QString("Something"));
+
+    // "S7Percent" -- digits follow 'S' but aren't followed by "| ", so this must
+    // also be left alone (falls back to the SNR/unknown default, not stripped).
+    const auto col2 = SeriesColumnSchema::parseColumnHeader("S7Percent");
+    QCOMPARE(col2.sourceId, 0);
+    QCOMPARE(col2.name, QString("S7Percent"));
+}
+
+void TestSeriesColumnSchema::roundTripPreservesSourceId()
+{
+    const QVector<PlotSeriesData> inputs = {
+        makeSeries(MetricType::FrameSyncLock, "Ch 12", /*sourceId=*/3),
+        makeSeries(MetricType::AccumulatedMissedFrames, "Ch 12", /*sourceId=*/3),
+        makeSeries(MetricType::SNR, SeriesColumnSchema::snrSeriesName(40, "RCVR Data", "C_RCVR2"),
+                   /*sourceId=*/5),
+    };
+    for (const PlotSeriesData& in : inputs)
+    {
+        const auto col = SeriesColumnSchema::parseColumnHeader(SeriesColumnSchema::columnHeader(in));
+        QVERIFY(col.metricType == in.metricType);
+        QCOMPARE(col.name, in.name);        // qualifier never leaks into the name
+        QCOMPARE(col.sourceId, in.sourceId);
+    }
 }

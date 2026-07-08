@@ -55,14 +55,17 @@ void PlotViewModel::commitParseResult(CsvParseResult&& result)
     // column name by the parser); reuse it for a stream's lock/missed siblings so
     // both tabs of the Customize Plot Series dialog show the same "CH <id>" group.
     // Lock-only streams have no SNR counterpart, so allocate fresh ids above any
-    // SNR id to avoid collisions.
-    QMap<QString, int> label_to_stream_order;
+    // SNR id to avoid collisions. Keyed [sourceId][streamLabel]: a multi-source
+    // export (Phase 1 multi-file input) can have two different sources' Lock-only
+    // streams share a label, so sourceId must be part of the key or they'd
+    // incorrectly link up as the same stream on import.
+    QMap<int, QMap<QString, int>> label_to_stream_order;
     int next_stream_order = 0;
     for (const auto& s : m_series)
     {
         if (s.metricType == PlotSeriesData::MetricType::SNR && !s.streamLabel.isEmpty())
         {
-            label_to_stream_order.insert(s.streamLabel, s.streamOrder);
+            label_to_stream_order[s.sourceId].insert(s.streamLabel, s.streamOrder);
         }
         next_stream_order = qMax(next_stream_order, s.streamOrder + 1);
     }
@@ -75,10 +78,11 @@ void PlotViewModel::commitParseResult(CsvParseResult&& result)
         case PlotSeriesData::MetricType::FrameSyncLock:
         case PlotSeriesData::MetricType::AccumulatedMissedFrames:
         {
-            auto it = label_to_stream_order.find(s.streamLabel);
-            if (it == label_to_stream_order.end())
+            QMap<QString, int>& source_stream_order = label_to_stream_order[s.sourceId];
+            auto it = source_stream_order.find(s.streamLabel);
+            if (it == source_stream_order.end())
             {
-                it = label_to_stream_order.insert(s.streamLabel, next_stream_order++);
+                it = source_stream_order.insert(s.streamLabel, next_stream_order++);
             }
             s.streamOrder = it.value();
             const bool is_lock = (s.metricType == PlotSeriesData::MetricType::FrameSyncLock);

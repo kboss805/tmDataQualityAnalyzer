@@ -57,14 +57,18 @@ CsvParseResult CsvSeriesParser::parse(const QString& filepath)
     // (SNR series only) — mirrors the per-stream counting in addStreamData so
     // multiple SNR streams that reuse receiver numbers don't accumulate channel
     // indices across the whole file.
-    QMap<int, QMap<int, int>> stream_receiver_channel_count;
+    // Keyed [sourceId][streamOrder][receiverIndex]: a multi-source export (Phase 1
+    // multi-file input) can have two different sources reuse the same streamOrder,
+    // so sourceId must be part of the key or their channel indices would
+    // incorrectly accumulate together on import.
+    QMap<int, QMap<int, QMap<int, int>>> stream_receiver_channel_count;
 
     for (int i = 0; i < param_count; i++)
     {
         PlotSeriesData& s = series[i];
-        // Column identity (metric type, name, stream label/order, receiver) comes
-        // from the shared schema — the exact inverse of the column headers written
-        // by PlotViewModel::exportCsv().
+        // Column identity (metric type, name, stream label/order, source, receiver)
+        // comes from the shared schema — the exact inverse of the column headers
+        // written by PlotViewModel::exportCsv().
         const SeriesColumnSchema::ParsedColumn col =
             SeriesColumnSchema::parseColumnHeader(columns[i + 1].trimmed());
         s.name          = col.name;
@@ -72,14 +76,16 @@ CsvParseResult CsvSeriesParser::parse(const QString& filepath)
         s.metricType    = col.metricType;
         s.streamOrder   = col.streamOrder;
         s.receiverIndex = col.receiverIndex;
+        s.sourceId      = col.sourceId;
 
-        // channelIndex is a per-(stream, receiver) running count assigned here as
-        // columns are walked left to right (SNR series only), so multiple SNR streams
-        // that reuse receiver numbers don't accumulate indices across the whole file.
+        // channelIndex is a per-(source, stream, receiver) running count assigned
+        // here as columns are walked left to right (SNR series only), so multiple
+        // SNR streams that reuse receiver numbers don't accumulate indices across
+        // the whole file (or across sources).
         if (s.metricType == PlotSeriesData::MetricType::SNR)
         {
             QMap<int, int>& receiver_channel_count =
-                stream_receiver_channel_count[s.streamOrder];
+                stream_receiver_channel_count[s.sourceId][s.streamOrder];
             s.channelIndex = receiver_channel_count.value(s.receiverIndex, 0);
             receiver_channel_count[s.receiverIndex]++;
         }
