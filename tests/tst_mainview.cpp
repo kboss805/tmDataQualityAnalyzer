@@ -5,6 +5,7 @@
 
 #include "tst_mainview.h"
 
+#include <QColor>
 #include <QFile>
 #include <QMenuBar>
 #include <QSignalSpy>
@@ -16,7 +17,12 @@
 #include "constants.h"
 #include "mainview.h"
 #include "mainviewmodel.h"
+#include "plotseriesdata.h"
 #include "plotviewmodel.h"
+#include "processedstreamdata.h"
+#include "processingtemplate.h"
+#include "source.h"
+#include "streamconfig.h"
 
 namespace {
 /// Writes @p contents to @p path; fails the calling test if the write fails.
@@ -133,4 +139,110 @@ void TestMainView::importInvalidCsvIsRejected()
     // dataChanged() fired the success path before the parse failed).
     QVERIFY(!view.m_view_model->recentFiles().contains(path));
     QVERIFY(!view.m_log_preview->toPlainText().contains("Imported CSV"));
+}
+
+void TestMainView::batchReapplyAppearanceRenamesMatchingSeries()
+{
+    // Batch apply's appearance-reuse step: after a file finishes, the template's
+    // captured name/color for each stream must be re-applied onto that file's
+    // freshly-created series, matched by (channel id, metric, receiver, channel).
+    // Driving the full addSource/processing loop needs a real .ch10 fixture, so
+    // this exercises the reapply step directly against synthetic plot data.
+    MainView view;
+
+    ProcessedStreamData d;
+    d.streamLabel = "Ch 5";
+    d.pcmChannelId = 5;
+    d.sourceId = 0;
+    d.mode = StreamMode::FrameSyncLockStats;
+    d.timesSec                = { 0.0, 1.0, 2.0 };
+    d.lockPercent             = { 90.0, 95.0, 100.0 };
+    d.accumulatedMissedFrames = { 0.0, 1.0, 1.0 };
+    view.m_plot_view_model->addStreamData(d);
+
+    // Template with a custom appearance for channel 5's lock series.
+    ProcessingTemplate tmpl;
+    TemplateStreamEntry entry;
+    entry.config.pcmChannelId = 5;
+    SeriesAppearance appearance;
+    appearance.metricType    = PlotSeriesData::MetricType::FrameSyncLock;
+    appearance.receiverIndex = 0;
+    appearance.channelIndex  = 0;
+    appearance.name          = "Custom Lock";
+    appearance.color         = QColor("#123456");
+    entry.appearance.append(appearance);
+    tmpl.entries.append(entry);
+
+    view.m_batch_template = tmpl;
+    view.reapplyTemplateAppearance(/*sourceId=*/0);
+
+    bool found = false;
+    for (const PlotSeriesData& s : view.m_plot_view_model->allSeries())
+    {
+        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock && s.streamOrder == 5)
+        {
+            QCOMPARE(s.name, QString("Custom Lock"));
+            QCOMPARE(s.color, QColor("#123456"));
+            found = true;
+        }
+    }
+    QVERIFY(found);
+}
+
+void TestMainView::batchBuildTemplateCapturesConfigsAndAppearance()
+{
+    // Save-as-Template capture: buildTemplateFromSource() must carry the source's
+    // stream configs + time channel, and snapshot each stream's current series
+    // appearance (name/color) keyed by metric/receiver/channel.
+    MainView view;
+
+    ProcessedStreamData d;
+    d.streamLabel = "Ch 5";
+    d.pcmChannelId = 5;
+    d.sourceId = 0;
+    d.mode = StreamMode::FrameSyncLockStats;
+    d.timesSec                = { 0.0, 1.0, 2.0 };
+    d.lockPercent             = { 90.0, 95.0, 100.0 };
+    d.accumulatedMissedFrames = { 0.0, 1.0, 1.0 };
+    view.m_plot_view_model->addStreamData(d);
+
+    // Customize the lock series so the capture has something non-default to grab.
+    int lock_id = -1;
+    for (const PlotSeriesData& s : view.m_plot_view_model->allSeries())
+    {
+        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock)
+            lock_id = s.id;
+    }
+    QVERIFY(lock_id >= 0);
+    view.m_plot_view_model->renameSeriesById(lock_id, "MyLock");
+    view.m_plot_view_model->recolorSeriesById(lock_id, QColor("#abcdef"));
+    view.m_plot_view_model->commitAppearanceChanges();
+
+    Source src;
+    src.sourceId = 0;
+    src.timeChannelIndex = 2;
+    StreamConfig cfg;
+    cfg.pcmChannelId = 5;
+    cfg.label = "Ch 5";
+    cfg.process = true;
+    cfg.mode = StreamMode::FrameSyncLockStats;
+    src.streamConfigs.append(cfg);
+
+    const ProcessingTemplate tmpl = view.buildTemplateFromSource(src);
+
+    QCOMPARE(tmpl.timeChannelIndex, 2);
+    QCOMPARE(tmpl.entries.size(), 1);
+    QCOMPARE(tmpl.entries[0].config.pcmChannelId, 5);
+
+    bool found_lock_appearance = false;
+    for (const SeriesAppearance& a : tmpl.entries[0].appearance)
+    {
+        if (a.metricType == PlotSeriesData::MetricType::FrameSyncLock)
+        {
+            QCOMPARE(a.name, QString("MyLock"));
+            QCOMPARE(a.color, QColor("#abcdef"));
+            found_lock_appearance = true;
+        }
+    }
+    QVERIFY(found_lock_appearance);
 }

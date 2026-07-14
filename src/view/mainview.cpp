@@ -7,6 +7,7 @@
 
 #include <QApplication>
 #include <QDesktopServices>
+#include <QDir>
 #include <QFile>
 #include <QFrame>
 #include <QInputDialog>
@@ -21,6 +22,7 @@
 #include <QTime>
 #include <QUrl>
 
+#include "batchapplydialog.h"
 #include "chapter10reader.h"
 #include "constants.h"
 #include "mainviewmodel.h"
@@ -28,10 +30,11 @@
 #include "plotwidget.h"
 #include "processedstreamdata.h"
 #include "processingprogressdialog.h"
-#include "session.h"
-#include "sessionschema.h"
+#include "processingtemplate.h"
+#include "processingtemplateschema.h"
 #include "source.h"
 #include "streamconfigdialog.h"
+#include "templatematcher.h"
 #include "timefields.h"
 
 
@@ -142,6 +145,11 @@ void MainView::setUpMenuBar()
     m_open_action = file_menu->addAction("Open...");
     m_open_action->setShortcut(QKeySequence::Open);
 
+    // Open Multiple Files: the direct batch path -- pick a set of .ch10 files that
+    // share channel IDs, configure once, and process them all.
+    m_open_multiple_action = file_menu->addAction("Open Multiple Files...");
+    connect(m_open_multiple_action, &QAction::triggered, this, &MainView::openMultipleButtonPressed);
+
     // Add Source: appends a second/later .ch10 file to the current session
     // instead of replacing it (multi-file input). Only meaningful once a file
     // is already loaded/configured, so it starts disabled.
@@ -157,15 +165,17 @@ void MainView::setUpMenuBar()
 
     file_menu->addSeparator();
 
-    // Save/Open Session (Phase 6): persist and replay a whole multi-source
-    // configuration. Save starts disabled -- nothing to save until a source has
-    // finished processing.
-    m_save_session_action = file_menu->addAction("Save Session As...");
-    m_save_session_action->setEnabled(false);
-    connect(m_save_session_action, &QAction::triggered, this, &MainView::saveSessionButtonPressed);
+    // Save as Template: capture the current per-stream settings as a reusable,
+    // file-path-independent template for Batch Apply. It needs at least one
+    // finished source, so it starts disabled.
+    m_save_template_action = file_menu->addAction("Save as Template...");
+    m_save_template_action->setEnabled(false);
+    connect(m_save_template_action, &QAction::triggered, this, &MainView::saveTemplateButtonPressed);
 
-    m_open_session_action = file_menu->addAction("Open Session...");
-    connect(m_open_session_action, &QAction::triggered, this, &MainView::openSessionButtonPressed);
+    // Apply Template to Files: always available -- it opens its own file pickers
+    // rather than acting on the current session.
+    m_apply_template_action = file_menu->addAction("Apply Template to Files...");
+    connect(m_apply_template_action, &QAction::triggered, this, &MainView::applyTemplateButtonPressed);
 
     m_recent_menu = file_menu->addMenu("Recent Files");
     updateRecentFilesMenu();
@@ -254,11 +264,11 @@ void MainView::setUpConnections()
     connect(m_view_model, &MainViewModel::fileLoadedChanged, this, [this]() {
         m_add_source_action->setEnabled(m_view_model->fileLoaded());
     });
-    // Remove Source / Save Session are only meaningful once at least one source
+    // Remove Source / Save as Template are only meaningful once at least one source
     // has finished processing successfully.
     connect(m_view_model, &MainViewModel::sourcesChanged, this, [this]() {
         m_remove_source_action->setEnabled(!m_view_model->sources().isEmpty());
-        m_save_session_action->setEnabled(!m_view_model->sources().isEmpty());
+        m_save_template_action->setEnabled(!m_view_model->sources().isEmpty());
     });
 
     // Informational: a newly added source's recording doesn't overlap what's
@@ -369,26 +379,16 @@ void MainView::onStreamProcessed(const ProcessedStreamData& data)
 
 void MainView::onProcessingFinished(bool success)
 {
+    if (m_batch_active)
+    {
+        onBatchProcessingFinished(success);
+        return;
+    }
+
     if (success)
     {
         logSuccess("Processing complete — results plotted from memory.");
-        // A session replay applies its own saved plot title once every source
-        // has finished (finishSessionLoad()) -- don't overwrite it per-source.
-        if (!m_loading_session)
-        {
-            m_plot_view_model->setPlotTitle(QFileInfo(m_view_model->inputFilename()).baseName());
-        }
-    }
-    else if (m_loading_session)
-    {
-        logError("Failed to process session source: "
-                 + QFileInfo(m_view_model->inputFilename()).fileName());
-    }
-
-    if (m_loading_session)
-    {
-        m_pending_session_index++;
-        advanceSessionLoad();
+        m_plot_view_model->setPlotTitle(QFileInfo(m_view_model->inputFilename()).baseName());
     }
 }
 
@@ -517,39 +517,82 @@ void MainView::removeSourceButtonPressed()
     logSuccess("Removed source: " + labels.at(index));
 }
 
-void MainView::saveSessionButtonPressed()
+ProcessingTemplate MainView::buildTemplateFromSource(const Source& src) const
 {
-    if (m_view_model->sources().isEmpty())
+    ProcessingTemplate tmpl;
+    tmpl.appVersion       = AppVersion::toString();
+    tmpl.name             = QFileInfo(src.filepath).baseName();
+    tmpl.timeChannelIndex = src.timeChannelIndex;
+
+    for (const StreamConfig& cfg : src.streamConfigs)
     {
-        logWarning("Nothing to save -- no sources have finished processing yet.");
+        TemplateStreamEntry entry;
+        entry.config = cfg;
+
+        // Capture the current appearance of every plot series this stream produced,
+        // keyed (within the entry) by metric/receiver/channel. Only series from this
+        // source and this stream's channel id are this entry's; a non-processed
+        // stream produces none, leaving the appearance list empty.
+        for (const PlotSeriesData& series : m_plot_view_model->allSeries())
+        {
+            if (series.sourceId != src.sourceId || series.streamOrder != cfg.pcmChannelId)
+                continue;
+
+            SeriesAppearance appearance;
+            appearance.metricType    = series.metricType;
+            appearance.receiverIndex = series.receiverIndex;
+            appearance.channelIndex  = series.channelIndex;
+            appearance.name          = series.name;
+            appearance.color         = series.color;
+            entry.appearance.append(appearance);
+        }
+
+        tmpl.entries.append(entry);
+    }
+    return tmpl;
+}
+
+void MainView::saveTemplateButtonPressed()
+{
+    const QVector<Source>& sources = m_view_model->sources();
+    if (sources.isEmpty())
+    {
+        logWarning("Nothing to save as a template -- no sources have finished processing yet.");
         return;
     }
 
-    const QString path = QFileDialog::getSaveFileName(this, tr("Save Session As"),
-        m_last_ch10_dir, tr("Session Files (*.json)"));
+    // A template captures ONE source's stream configuration. With several loaded,
+    // let the user pick which (same picker style as Remove Source).
+    int source_index = 0;
+    if (sources.size() > 1)
+    {
+        QStringList labels;
+        labels.reserve(sources.size());
+        for (const Source& s : sources)
+            labels.append(QFileInfo(s.filepath).fileName() + QString(" (source %1)").arg(s.sourceId));
+
+        bool ok = false;
+        const QString chosen = QInputDialog::getItem(this, tr("Save as Template"),
+            tr("Capture the per-stream settings from which source?"), labels, 0, /*editable=*/false, &ok);
+        if (!ok)
+            return;
+        source_index = labels.indexOf(chosen);
+        if (source_index < 0)
+            return;
+    }
+
+    const QString path = QFileDialog::getSaveFileName(this, tr("Save as Template"),
+        m_last_ch10_dir, tr("Template Files (*.json)"));
     if (path.isEmpty())
-    {
         return;
-    }
 
-    Session session;
-    session.appVersion = AppVersion::toString();
-    session.sources     = m_view_model->sources();
-    session.viewState.plotTitle    = m_plot_view_model->plotTitle();
-    session.viewState.lockAxisView =
-        (m_plot_view_model->lockAxisView() == PlotViewModel::LockAxisView::MissedFrames)
-            ? "MissedFrames" : "LockPercent";
-    session.viewState.hasLeftYMaxOverride  = m_plot_view_model->hasLeftYMaxOverride();
-    session.viewState.leftYMaxOverride     = m_plot_view_model->leftYMaxOverrideValue();
-    session.viewState.hasRightYMaxOverride = m_plot_view_model->hasRightYMaxOverride();
-    session.viewState.rightYMaxOverride    = m_plot_view_model->rightYMaxOverrideValue();
-
-    const QJsonDocument doc = SessionSchema::toJson(session, QFileInfo(path).absolutePath());
+    const ProcessingTemplate tmpl = buildTemplateFromSource(sources.at(source_index));
+    const QJsonDocument doc = ProcessingTemplateSchema::toJson(tmpl);
 
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
     {
-        logError("Could not write session file: " + path);
+        logError("Could not write template file: " + path);
         return;
     }
     file.write(doc.toJson(QJsonDocument::Indented));
@@ -557,66 +600,7 @@ void MainView::saveSessionButtonPressed()
 
     m_last_ch10_dir = QFileInfo(path).absolutePath();
     saveLastCh10Dir();
-    logSuccess("Session saved: " + QFileInfo(path).fileName());
-}
-
-void MainView::openSessionButtonPressed()
-{
-    if (m_view_model->processing() || m_loading_session)
-    {
-        return;
-    }
-
-    const QString path = QFileDialog::getOpenFileName(this, tr("Open Session"),
-        m_last_ch10_dir, tr("Session Files (*.json)"));
-    if (path.isEmpty())
-    {
-        return;
-    }
-
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-    {
-        logError("Could not open session file: " + path);
-        return;
-    }
-    const QByteArray bytes = file.readAll();
-    file.close();
-
-    QJsonParseError parse_error;
-    const QJsonDocument doc = QJsonDocument::fromJson(bytes, &parse_error);
-    if (parse_error.error != QJsonParseError::NoError)
-    {
-        logError("Session file is not valid JSON: " + parse_error.errorString());
-        return;
-    }
-
-    Session session;
-    const SessionSchema::LoadStatus status = SessionSchema::fromJson(doc, session);
-    if (status == SessionSchema::LoadStatus::UnsupportedSchemaVersion)
-    {
-        logError("Session file uses an unsupported schema version.");
-        return;
-    }
-    if (status == SessionSchema::LoadStatus::InvalidFormat)
-    {
-        logError("Session file is not a valid session (unrecognized format).");
-        return;
-    }
-
-    m_last_ch10_dir = QFileInfo(path).absolutePath();
-    saveLastCh10Dir();
-
-    m_view_model->clearState();
-    m_plot_view_model->clearData();
-
-    m_pending_session       = session;
-    m_pending_session_dir   = QFileInfo(path).absolutePath();
-    m_pending_session_index = 0;
-    m_loading_session       = true;
-
-    logSuccess("Loading session: " + QFileInfo(path).fileName());
-    advanceSessionLoad();
+    logSuccess("Template saved: " + QFileInfo(path).fileName());
 }
 
 bool MainView::isSupportedFile(const QString& path)
@@ -660,19 +644,25 @@ void MainView::importCsv(const QString& path)
 
 void MainView::onFileReadyForStreamConfig()
 {
+    if (m_configuring_multi)
+    {
+        // Open Multiple Files: this is the first file, loaded only to drive one
+        // Configure Streams dialog whose config is then applied to the whole batch.
+        configureMultiThenBatch();
+        return;
+    }
+
     // A fresh file starts a fresh plot; processing accumulates into it.
     showStreamConfigDialogForPendingSource(/*clearPlotFirst=*/true);
 }
 
 void MainView::onSourceReadyForStreamConfig()
 {
-    if (m_loading_session)
+    if (m_batch_active)
     {
-        // Session replay uses addSource() for every source (including the
-        // first) -- see openSessionButtonPressed(), which already cleared
-        // state/plot up front -- so this always lands here, never in
-        // onFileReadyForStreamConfig().
-        applyPendingSessionSourceConfig();
+        // Batch apply drives addSource() for every file and applies the template's
+        // configs without a dialog (no per-file Configure Streams step).
+        applyBatchSourceConfig();
         return;
     }
 
@@ -703,105 +693,352 @@ void MainView::showStreamConfigDialogForPendingSource(bool clearPlotFirst)
     }
 }
 
-void MainView::applyPendingSessionSourceConfig()
+namespace
 {
-    const Source& src = m_pending_session.sources.at(m_pending_session_index);
-    m_view_model->setTimeChannelIndex(src.timeChannelIndex);
-    m_view_model->setStreamConfigs(src.streamConfigs);
-    m_view_model->startProcessing();
-}
-
-MainView::MissingSourceAction MainView::promptMissingSessionSource(const QString& missingPath)
-{
-    QMessageBox box(this);
-    box.setWindowTitle(tr("Session Source Not Found"));
-    box.setIcon(QMessageBox::Warning);
-    box.setText(tr("This session references a file that could not be found:\n\n%1")
-                    .arg(missingPath));
-
-    QPushButton* skip_btn   = box.addButton(tr("Skip This Source"), QMessageBox::DestructiveRole);
-    QPushButton* locate_btn = box.addButton(tr("Locate..."), QMessageBox::ActionRole);
-    box.addButton(QMessageBox::Cancel);
-    box.setDefaultButton(locate_btn);
-
-    box.exec();
-
-    if (box.clickedButton() == locate_btn)
-        return MissingSourceAction::Locate;
-    if (box.clickedButton() == skip_btn)
-        return MissingSourceAction::Skip;
-    return MissingSourceAction::Cancel;
-}
-
-void MainView::advanceSessionLoad()
-{
-    while (m_pending_session_index < m_pending_session.sources.size())
+    /// Human-readable reason a file's channel set didn't match a template.
+    QString describeMismatch(const TemplateMatcher::MatchResult& match)
     {
-        const Source& src = m_pending_session.sources.at(m_pending_session_index);
-        QString resolved = SessionSchema::resolveSessionPath(src.filepath, m_pending_session_dir);
-
-        // A session that loads 3 of 4 sources is more useful than an
-        // all-or-nothing failure (§5) -- offer Skip/Locate/Cancel rather than
-        // silently dropping or aborting the whole load.
-        while (!QFileInfo::exists(resolved))
+        QStringList parts;
+        if (!match.missing.isEmpty())
         {
-            const MissingSourceAction action = promptMissingSessionSource(resolved);
-            if (action == MissingSourceAction::Cancel)
-            {
-                logWarning(QString("Session load cancelled -- %1 source(s) not loaded.")
-                               .arg(m_pending_session.sources.size() - m_pending_session_index));
-                m_loading_session = false;
-                return;
-            }
-            if (action == MissingSourceAction::Skip)
-            {
-                logWarning("Skipped missing session source: " + resolved);
-                resolved.clear();
-                break;
-            }
-
-            // Locate: re-prompt with the same missing path if the user backs out
-            // of the file dialog without picking anything.
-            const QString located = QFileDialog::getOpenFileName(this, tr("Locate Session Source"),
-                m_last_ch10_dir, tr("Chapter 10 Files (*.ch10)"));
-            if (!located.isEmpty())
-            {
-                resolved = located;
-            }
+            QStringList ids;
+            for (int id : match.missing)
+                ids << QString::number(id);
+            parts << QObject::tr("missing channel(s) %1").arg(ids.join(", "));
         }
-
-        if (resolved.isEmpty())
+        if (!match.extra.isEmpty())
         {
-            m_pending_session_index++;
+            QStringList ids;
+            for (int id : match.extra)
+                ids << QString::number(id);
+            parts << QObject::tr("extra channel(s) %1").arg(ids.join(", "));
+        }
+        return parts.join("; ");
+    }
+}
+
+void MainView::applyTemplateButtonPressed()
+{
+    if (m_view_model->processing() || m_batch_active)
+    {
+        return;
+    }
+
+    // 1. Pick + parse the template.
+    const QString template_path = QFileDialog::getOpenFileName(this, tr("Apply Template to Files"),
+        m_last_ch10_dir, tr("Template Files (*.json)"));
+    if (template_path.isEmpty())
+    {
+        return;
+    }
+
+    QFile file(template_path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        logError("Could not open template file: " + template_path);
+        return;
+    }
+    const QByteArray bytes = file.readAll();
+    file.close();
+
+    QJsonParseError parse_error;
+    const QJsonDocument doc = QJsonDocument::fromJson(bytes, &parse_error);
+    if (parse_error.error != QJsonParseError::NoError)
+    {
+        logError("Template file is not valid JSON: " + parse_error.errorString());
+        return;
+    }
+
+    ProcessingTemplate tmpl;
+    const ProcessingTemplateSchema::LoadStatus status = ProcessingTemplateSchema::fromJson(doc, tmpl);
+    if (status == ProcessingTemplateSchema::LoadStatus::UnsupportedSchemaVersion)
+    {
+        logError("Template file uses an unsupported schema version.");
+        return;
+    }
+    if (status == ProcessingTemplateSchema::LoadStatus::InvalidFormat)
+    {
+        logError("Template file is not a valid template (unrecognized format).");
+        return;
+    }
+    if (tmpl.entries.isEmpty())
+    {
+        logError("Template has no stream entries.");
+        return;
+    }
+
+    m_last_ch10_dir = QFileInfo(template_path).absolutePath();
+    saveLastCh10Dir();
+
+    // 2. Pick the .ch10 files to run, then hand off to the shared batch kickoff
+    //    (validate against the template, confirm output options, run).
+    const QStringList picked = QFileDialog::getOpenFileNames(this, tr("Select Chapter 10 Files"),
+        m_last_ch10_dir, tr("Chapter 10 Files (*.ch10)"));
+    if (picked.isEmpty())
+    {
+        return;
+    }
+
+    startBatchFromTemplate(tmpl, picked, /*showReuseAppearance=*/true);
+}
+
+void MainView::openMultipleButtonPressed()
+{
+    if (m_view_model->processing() || m_batch_active || m_configuring_multi)
+    {
+        return;
+    }
+
+    const QStringList picked = QFileDialog::getOpenFileNames(this, tr("Open Multiple Files"),
+        m_last_ch10_dir, tr("Chapter 10 Files (*.ch10)"));
+    if (picked.isEmpty())
+    {
+        return;
+    }
+
+    m_last_ch10_dir = QFileInfo(picked.first()).absolutePath();
+    saveLastCh10Dir();
+
+    // Load the first file's metadata so onFileReadyForStreamConfig() can show the
+    // Configure Streams dialog against it. openFile() is synchronous, so the guard
+    // below runs after the dialog flow completes -- resetting the flag only if the
+    // first file's metadata failed to load (no fileReadyForStreamConfig emitted).
+    m_multi_pending_files = picked;
+    m_configuring_multi   = true;
+    m_view_model->openFile(picked.first());
+    m_configuring_multi   = false;
+}
+
+void MainView::configureMultiThenBatch()
+{
+    m_configuring_multi = false; // consumed
+
+    StreamConfigDialog dialog(m_view_model->buildDefaultStreamConfigs(),
+                              m_view_model->lastIniDir(),
+                              m_view_model->timeChannelList(),
+                              m_view_model->timeChannelIndex(),
+                              m_view_model->reader()->getCurrentTimeChannelID(),
+                              m_view_model->appRoot(),
+                              this);
+    if (dialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    // Build an in-memory template from the one-time configuration (no series
+    // appearance -- nothing has been processed yet). The full channel set becomes
+    // the exact-match key, so only files with the same channel IDs will run.
+    ProcessingTemplate tmpl;
+    tmpl.appVersion       = AppVersion::toString();
+    tmpl.timeChannelIndex = dialog.timeChannelIndex();
+    for (const StreamConfig& cfg : dialog.configs())
+    {
+        TemplateStreamEntry entry;
+        entry.config = cfg;
+        tmpl.entries.append(entry);
+    }
+
+    startBatchFromTemplate(tmpl, m_multi_pending_files, /*showReuseAppearance=*/false);
+}
+
+void MainView::startBatchFromTemplate(const ProcessingTemplate& tmpl, const QStringList& files,
+                                      bool showReuseAppearance)
+{
+    // Validate each file's channel set against the template, up front, so the
+    // dialog can show which files will run and which are rejected (and why).
+    QList<BatchApplyDialog::FileEntry> entries;
+    entries.reserve(files.size());
+    for (const QString& file_path : files)
+    {
+        BatchApplyDialog::FileEntry entry;
+        entry.filepath = file_path;
+
+        Chapter10Reader reader;
+        if (!reader.loadChannels(file_path))
+        {
+            entry.ok = false;
+            entry.reason = tr("could not read channels");
+        }
+        else
+        {
+            const TemplateMatcher::MatchResult match =
+                TemplateMatcher::matchFile(tmpl, reader.getPCMChannelList());
+            entry.ok = match.ok;
+            if (!match.ok)
+                entry.reason = describeMismatch(match);
+        }
+        entries.append(entry);
+    }
+
+    // Confirm output options (merged vs separate, appearance reuse, output dir).
+    BatchApplyDialog dialog(entries, m_last_ch10_dir, showReuseAppearance, this);
+    if (dialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    // Kick off the batch over the matched files only.
+    m_batch_files.clear();
+    for (const BatchApplyDialog::FileEntry& e : entries)
+    {
+        if (e.ok)
+            m_batch_files.append(e.filepath);
+    }
+    if (m_batch_files.isEmpty())
+    {
+        return;
+    }
+
+    m_batch_template         = tmpl;
+    m_batch_merged           = dialog.mergedMode();
+    m_batch_reuse_appearance = dialog.reuseAppearance();
+    m_batch_output_dir       = dialog.outputDir();
+    m_batch_index            = 0;
+    m_batch_processed        = 0;
+    m_batch_skipped          = 0;
+    m_batch_active           = true;
+
+    // A batch always starts a fresh session/plot.
+    m_view_model->clearState();
+    m_plot_view_model->clearData();
+
+    logSuccess(tr("Processing %1 file(s)...").arg(m_batch_files.size()));
+    advanceBatch();
+}
+
+void MainView::advanceBatch()
+{
+    while (m_batch_index < m_batch_files.size())
+    {
+        const QString path = m_batch_files.at(m_batch_index);
+
+        if (!QFileInfo::exists(path))
+        {
+            logWarning("Skipped missing batch file: " + path);
+            ++m_batch_skipped;
+            ++m_batch_index;
             continue;
         }
 
-        m_view_model->addSource(resolved);
-        return; // wait for sourceReadyForStreamConfig()
+        // Separate mode: each file gets its own fresh plot; merged mode accumulates
+        // every file onto the shared time axis (like repeated Add Source).
+        if (!m_batch_merged)
+            m_plot_view_model->clearData();
+
+        m_view_model->addSource(path);
+        return; // wait for onSourceReadyForStreamConfig()
     }
 
-    finishSessionLoad();
+    finishBatch();
 }
 
-void MainView::finishSessionLoad()
+void MainView::applyBatchSourceConfig()
 {
-    m_loading_session = false;
-
-    m_plot_view_model->setPlotTitle(m_pending_session.viewState.plotTitle);
-    m_plot_view_model->setLockAxisView(
-        m_pending_session.viewState.lockAxisView == "MissedFrames"
-            ? PlotViewModel::LockAxisView::MissedFrames
-            : PlotViewModel::LockAxisView::LockPercent);
-    if (m_pending_session.viewState.hasLeftYMaxOverride)
+    // Belt-and-suspenders re-check against the freshly loaded file (the up-front
+    // validation could be stale if the file changed on disk since it was picked).
+    const TemplateMatcher::MatchResult match =
+        TemplateMatcher::matchFile(m_batch_template, m_view_model->reader()->getPCMChannelList());
+    if (!match.ok)
     {
-        m_plot_view_model->setLeftYMaxOverride(m_pending_session.viewState.leftYMaxOverride);
-    }
-    if (m_pending_session.viewState.hasRightYMaxOverride)
-    {
-        m_plot_view_model->setRightYMaxOverride(m_pending_session.viewState.rightYMaxOverride);
+        logWarning("Skipped (channels no longer match template): "
+                   + QFileInfo(m_view_model->inputFilename()).fileName());
+        ++m_batch_skipped;
+        ++m_batch_index;
+        advanceBatch();
+        return;
     }
 
-    logSuccess("Session loaded.");
+    // Files match exactly, so the template's stored pcmChannelIds are correct for
+    // this file -- feed its configs straight through to processing.
+    QVector<StreamConfig> configs;
+    configs.reserve(m_batch_template.entries.size());
+    for (const TemplateStreamEntry& entry : m_batch_template.entries)
+        configs.append(entry.config);
+
+    m_view_model->setTimeChannelIndex(m_batch_template.timeChannelIndex);
+    m_view_model->setStreamConfigs(configs);
+    m_view_model->startProcessing();
+}
+
+void MainView::onBatchProcessingFinished(bool success)
+{
+    const QString base = QFileInfo(m_view_model->inputFilename()).baseName();
+
+    if (success)
+    {
+        ++m_batch_processed;
+
+        // The just-finished run was appended as the newest source before this
+        // signal (MainViewModel::onCoordinatorProcessingFinished).
+        const int sourceId = m_view_model->sources().isEmpty()
+            ? 0 : m_view_model->sources().last().sourceId;
+
+        if (m_batch_reuse_appearance)
+            reapplyTemplateAppearance(sourceId);
+
+        if (!m_batch_merged)
+        {
+            m_plot_view_model->setPlotTitle(base);
+            const QString csv_path = QDir(m_batch_output_dir).filePath(base + ".csv");
+            const QString img_path = QDir(m_batch_output_dir).filePath(base + ".png");
+            if (m_plot_view_model->exportCsv(csv_path))
+                logSuccess("Exported: " + csv_path);
+            else
+                logError("Failed to export CSV: " + csv_path);
+            m_plot_widget->exportImage(img_path); // logs its own success/failure
+        }
+    }
+    else
+    {
+        ++m_batch_skipped;
+        logError("Batch file failed to process: " + base);
+    }
+
+    ++m_batch_index;
+    advanceBatch();
+}
+
+void MainView::reapplyTemplateAppearance(int sourceId)
+{
+    for (const TemplateStreamEntry& entry : m_batch_template.entries)
+    {
+        for (const SeriesAppearance& appearance : entry.appearance)
+        {
+            for (const PlotSeriesData& series : m_plot_view_model->allSeries())
+            {
+                if (series.sourceId != sourceId
+                    || series.streamOrder != entry.config.pcmChannelId
+                    || series.metricType != appearance.metricType
+                    || series.receiverIndex != appearance.receiverIndex
+                    || series.channelIndex != appearance.channelIndex)
+                {
+                    continue;
+                }
+                m_plot_view_model->renameSeriesById(series.id, appearance.name);
+                m_plot_view_model->recolorSeriesById(series.id, appearance.color);
+                break;
+            }
+        }
+    }
+    // renameSeriesById/recolorSeriesById are pure setters; one commit refreshes views.
+    m_plot_view_model->commitAppearanceChanges();
+}
+
+void MainView::finishBatch()
+{
+    m_batch_active = false;
+
+    if (m_batch_merged)
+    {
+        m_plot_view_model->setPlotTitle(tr("Batch (%1 files)").arg(m_batch_processed));
+        logSuccess(tr("Batch complete: %1 processed, %2 skipped.")
+                       .arg(m_batch_processed).arg(m_batch_skipped));
+    }
+    else
+    {
+        logSuccess(tr("Batch complete: %1 processed, %2 skipped. Output written to %3")
+                       .arg(m_batch_processed).arg(m_batch_skipped).arg(m_batch_output_dir));
+    }
 }
 
 void MainView::onToggleTheme()
@@ -909,14 +1146,16 @@ void MainView::setAllControlsEnabled(bool enabled)
 {
     m_toolbar_open_action->setEnabled(enabled);
     m_open_action->setEnabled(enabled);
+    m_open_multiple_action->setEnabled(enabled);
     m_recent_menu->setEnabled(enabled);
     m_import_action->setEnabled(enabled);
     // Add Source additionally requires a file to already be loaded/configured.
     m_add_source_action->setEnabled(enabled && m_view_model->fileLoaded());
-    // Remove Source / Save Session additionally require at least one finalized source.
+    // Remove Source / Save as Template additionally require at least one finalized
+    // source.
     m_remove_source_action->setEnabled(enabled && !m_view_model->sources().isEmpty());
-    m_save_session_action->setEnabled(enabled && !m_view_model->sources().isEmpty());
-    m_open_session_action->setEnabled(enabled);
+    m_save_template_action->setEnabled(enabled && !m_view_model->sources().isEmpty());
+    m_apply_template_action->setEnabled(enabled);
 }
 
 void MainView::logError(const QString& message)

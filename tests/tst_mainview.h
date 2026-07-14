@@ -23,6 +23,8 @@ private slots:
     void openPathImportsCsv();
     void importValidCsvPopulatesPlot();
     void importInvalidCsvIsRejected();
+    void batchReapplyAppearanceRenamesMatchingSeries();
+    void batchBuildTemplateCapturesConfigsAndAppearance();
 };
 
 #endif // TST_MAINVIEW_H

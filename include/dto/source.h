@@ -3,8 +3,8 @@
  * @brief One .ch10 file's configuration within a (possibly multi-file) session.
  *
  * See docs/multi-file-input-design.md §2. MainViewModel holds a QVector<Source>
- * for every successfully-processed file in the current session; this is also
- * the model Phase 6 (session save/load) serializes.
+ * for every successfully-processed file in the current session; a processing
+ * template captures one Source's stream configs for reuse across other files.
  */
 
 #ifndef SOURCE_H

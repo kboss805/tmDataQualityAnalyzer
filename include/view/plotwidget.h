@@ -75,7 +75,11 @@ public:
     /// Applies theme colors (dark/light) to the chart.
     void applyTheme(bool dark);
 
-
+    /// Renders the current plot (chart + composited legend) to an image file,
+    /// choosing PNG/SVG/PDF from @p path's suffix (unrecognized → PDF). Emits a
+    /// success/failure logMessage() and returns whether the write succeeded.
+    /// Headless — no dialog — so both onExportPlot() and batch export can call it.
+    bool exportImage(const QString& path);
 
 public slots:
     /// Rebuilds all chart series from the ViewModel data (no legend rebuild).

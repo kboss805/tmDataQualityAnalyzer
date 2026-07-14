@@ -1,7 +1,7 @@
 /**
  * @file tst_streamconfigschema.h
  * @brief Unit tests for StreamConfigSchema -- the StreamConfig JSON format and
- *        its inverse parser, pinned as a round-trip (session save/load, Phase 6).
+ *        its inverse parser, pinned as a round-trip (used by processing templates).
  */
 
 #ifndef TST_STREAMCONFIGSCHEMA_H

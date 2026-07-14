@@ -55,15 +55,15 @@ struct StreamConfig
     QString    receiverParamsToml;  ///< Path to the Receiver Parameters TOML (word map, required for ReceiverChannelInfo mode).
 
     /// Optional non-linear step calibration profiles (US5.3), keyed by zero-based
-    /// word index within the minor frame (matches ParameterInfo::word). Session-only;
+    /// word index within the minor frame (matches ParameterInfo::word). Runtime-only;
     /// never serialized. Empty = linear math for every channel.
     QHash<int, CalibrationProfile> calibrationByWord;
 
-    // --- Calibration input references (session save/load, Phase 6) ---
+    // --- Calibration input references (serialized by StreamConfigSchema) ---
     // The extracted calibrationByWord profiles above are never serialized, but a
-    // session still stores what produced them so re-extraction can be re-run after
-    // load (v1 loads linear-only; auto re-extraction is a documented future
-    // follow-up). Empty calCh10Path means no non-linear calibration was extracted.
+    // processing template still stores what produced them so re-extraction can be
+    // re-run when the template is applied. Empty calCh10Path means no non-linear
+    // calibration was extracted.
     QString calCh10Path;    ///< Path to the calibration Chapter 10 recording used for extraction.
     QString stepTomlPath;   ///< Path to the step-config TOML used for extraction.
     double  clipStartSec = 0.0; ///< Seconds clipped from the start before step detection.

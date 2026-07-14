@@ -10,12 +10,11 @@ Effort key: **S** ≈ ½–1 day · **M** ≈ 2–4 days · **L** ≈ 1–2 week
 The phases are numbered by topic, not execution order. Actual build order:
 
 > **2 (CI) → 3 (warning-clean) → 4 (id-based API) → 5 (CSV schema) →
-> 7 (fast tests) → 1 (multi-file) → 6 (sessions).**
+> 7 (fast tests) → 1 (multi-file).**
 
 Rationale: land the low-risk infra (CI + warning-clean build) first so it guards
 the refactors, do the internal refactors while the surface area is small, and
-save the two large user-facing features (multi-file input, session save/load)
-for last — Phase 6 builds directly on Phase 1's multi-source model.
+save the large user-facing feature (multi-file input) for last.
 
 **Phase 8 (performance spike) is optional and slots in any time after Phase 3** —
 it's a measurement exercise whose results decide whether any compiler/optimization
@@ -192,38 +191,6 @@ backward-compat with already-exported CSVs. Pin with the existing
 CSV.
 
 **Effort:** **M.**
-
----
-
-## Phase 6 — Save / load an analysis session
-
-**Goal:** persist a whole multi-stream (multi-source) configuration and reload it
-in one action.
-
-**Why:** users re-configure every stream on every open. A saved session removes
-repetitive setup for recurring analyses — and it's the natural container for the
-Phase-1 multi-source model.
-
-**Approach:**
-- A session file (TOML, via the existing `TomlConfigHelper` patterns) capturing
-  `sources: [{ filepath, stream-configs: [{ mode, frame-sync params, SNR params,
-  calibration ref }] }]`.
-- File > **Save Session** / **Open Session**; opening replays the sources and
-  their configs, then processes.
-- Respect existing scope boundaries: the per-file frame-sync TOML still
-  round-trips only its 3 fields; the *session* file is a new, broader artifact
-  (session-scoped, like calibration profiles) and may carry the per-session
-  fields the frame-sync TOML deliberately excludes.
-- Store file paths relative to the session file where possible; warn on missing
-  sources at load.
-
-**Risks:** path portability across machines; version the session schema from day
-one. Depends on Phase 1's multi-source model to be worth doing.
-
-**Testing:** round-trip a session (save → load → identical `m_stream_configs`
-and source list); missing-file-at-load path.
-
-**Effort:** **L.**
 
 ---
 

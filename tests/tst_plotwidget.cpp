@@ -6,10 +6,12 @@
 #include "tst_plotwidget.h"
 
 #include <QApplication>
+#include <QFileInfo>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QStyle>
+#include <QTemporaryDir>
 #include <QVBoxLayout>
 #include <QtTest>
 
@@ -208,4 +210,69 @@ void TestPlotWidget::legendRowsOverrideGlobalWidgetBackground()
     const QString stylesheet = widget.m_legend_overlay->styleSheet();
     QVERIFY(stylesheet.contains("QWidget#legendRow"));
     QVERIFY(stylesheet.contains("background: transparent"));
+}
+
+// Helper: a PlotWidget with one lock stream loaded, ready to export.
+static void loadOneLockStream(PlotViewModel& vm)
+{
+    ProcessedStreamData d;
+    d.streamLabel  = "Ch 5";
+    d.pcmChannelId = 5;
+    d.mode         = StreamMode::FrameSyncLockStats;
+    d.timesSec                = { 0.0, 1.0, 2.0 };
+    d.lockPercent             = { 90.0, 95.0, 100.0 };
+    d.accumulatedMissedFrames = { 0.0, 1.0, 1.0 };
+    vm.addStreamData(d);
+}
+
+void TestPlotWidget::exportImageWritesPngHeadlessly()
+{
+    // exportImage() is the headless entry point extracted from onExportPlot(): given
+    // a path, it renders the chart (+legend) and writes the file with no dialog. This
+    // is what the batch-export flow calls per file.
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    loadOneLockStream(vm);
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath("plot.png");
+
+    QVERIFY(widget.exportImage(path));
+    QVERIFY(QFileInfo::exists(path));
+    QVERIFY(QFileInfo(path).size() > 0);
+}
+
+void TestPlotWidget::exportImageWritesSvgHeadlessly()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    loadOneLockStream(vm);
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath("plot.svg");
+
+    QVERIFY(widget.exportImage(path));
+    QVERIFY(QFileInfo::exists(path));
+    QVERIFY(QFileInfo(path).size() > 0);
+}
+
+void TestPlotWidget::exportImageDefaultsUnknownSuffixToPdf()
+{
+    // An unrecognized suffix falls through to PDF, appending ".pdf" to the path.
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    loadOneLockStream(vm);
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath("plot.bogus");
+
+    QVERIFY(widget.exportImage(path));
+    QVERIFY(QFileInfo::exists(path + ".pdf"));
+    QVERIFY(QFileInfo(path + ".pdf").size() > 0);
 }

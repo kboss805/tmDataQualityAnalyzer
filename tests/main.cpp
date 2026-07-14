@@ -24,7 +24,8 @@
 #include "tst_exportdialog.h"
 #include "tst_seriescolumnschema.h"
 #include "tst_streamconfigschema.h"
-#include "tst_sessionschema.h"
+#include "tst_processingtemplateschema.h"
+#include "tst_templatematcher.h"
 
 /// Runs a single test suite and appends results to the shared log file.
 template<typename T>
@@ -120,7 +121,8 @@ int main(int argc, char* argv[])
     status |= runSuite<TestStepDetector>(log_path);
     status |= runSuite<TestSeriesColumnSchema>(log_path);
     status |= runSuite<TestStreamConfigSchema>(log_path);
-    status |= runSuite<TestSessionSchema>(log_path);
+    status |= runSuite<TestProcessingTemplateSchema>(log_path);
+    status |= runSuite<TestTemplateMatcher>(log_path);
 
     // Heavy suites — integration over a real .ch10 fixture; TestFrameProcessor alone
     // is ~74 s and dominates the ~85 s run. Skipped in fast mode for quick iteration;

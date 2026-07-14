@@ -31,7 +31,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **AGC Processing**: Extract calibrated receiver-channel AGC/SNR values with V-to-dB conversion
 - **Calibration**: Configurable polarity, voltage slope/range, scale (dB/V), receiver count, and channels per receiver
 - **Receiver Parameters TOML**: Word map and calibration loaded from a TOML configuration file
-- **Non-Linear Step Calibration**: Build a per-channel raw→dB calibration profile from a calibration .ch10 file plus a `[[Step]]` step-config TOML ("Extract Calibration…" in the Receiver SNR setup); applied during processing via piecewise-linear interpolation between steps, clamping to the nearest end-step dB for values past the calibrated range (so out-of-cal receivers read the ceiling/floor instead of diverging), and falling back to linear slope/offset for channels that don't calibrate. Plateau detection is polarity-agnostic and automatically excludes a signal-generator turn-on transient and any operator down-ramp; optional **Clip Start / Clip End** controls let you trim leading/trailing seconds before detection. Session-only; not saved to disk.
+- **Non-Linear Step Calibration**: Build a per-channel raw→dB calibration profile from a calibration .ch10 file plus a `[[Step]]` step-config TOML ("Extract Calibration…" in the Receiver SNR setup); applied during processing via piecewise-linear interpolation between steps, clamping to the nearest end-step dB for values past the calibrated range (so out-of-cal receivers read the ceiling/floor instead of diverging), and falling back to linear slope/offset for channels that don't calibrate. Plateau detection is polarity-agnostic and automatically excludes a signal-generator turn-on transient and any operator down-ramp; optional **Clip Start / Clip End** controls let you trim leading/trailing seconds before detection. Runtime-only; the extracted profile is not saved to disk.
 
 ### Multi-Stream Processing
 - **Per-Stream Configuration**: One row per PCM channel in the Configure Streams dialog, each independently set to Frame Sync Lock or Receiver SNR mode with its own setup
@@ -153,7 +153,7 @@ tmDataQualityAnalyzer/
 │   ├── frameprocessor.h
 │   ├── stepdetector.h          # Non-linear calibration plateau detection (US5.3)
 │   ├── calibrationextractor.h  # Calibration .ch10 extraction driver (US5.3)
-│   ├── calibrationprofile.h    # Session-only step-calibration data types (US5.3)
+│   ├── calibrationprofile.h    # Runtime-only step-calibration data types (US5.3)
 │   ├── framesetup.h
 │   ├── channeldata.h
 │   ├── processingcoordinator.h # Reader + per-stream worker thread lifecycle
