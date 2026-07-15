@@ -15,7 +15,6 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
-#include <QRadioButton>
 #include <QVBoxLayout>
 
 BatchApplyDialog::BatchApplyDialog(const QList<FileEntry>& files, const QString& defaultOutputDir,
@@ -28,7 +27,7 @@ BatchApplyDialog::BatchApplyDialog(const QList<FileEntry>& files, const QString&
     if (!showReuseAppearance)
         m_reuse_appearance_checkbox->setChecked(false);
     m_output_dir_edit->setText(defaultOutputDir);
-    onModeChanged();
+    onExportToggled();
     validateInput();
 }
 
@@ -68,24 +67,23 @@ void BatchApplyDialog::setUpLayout(const QList<FileEntry>& files)
     }
     layout->addWidget(list);
 
-    // Output mode: one merged plot, or a separate CSV+image per file.
-    auto* mode_group = new QGroupBox(tr("Output"), this);
-    auto* mode_layout = new QVBoxLayout(mode_group);
-    m_merged_radio = new QRadioButton(tr("One merged plot (all files on a shared time axis)"), mode_group);
-    m_separate_radio = new QRadioButton(tr("Separate CSV + image per file"), mode_group);
-    m_merged_radio->setChecked(true);
-    mode_layout->addWidget(m_merged_radio);
-    mode_layout->addWidget(m_separate_radio);
+    // Every processed file is kept in memory and browsable via the plot toolbar's
+    // file selector. Optionally also write a CSV+image per file to disk.
+    auto* out_group = new QGroupBox(tr("Output"), this);
+    auto* out_layout = new QVBoxLayout(out_group);
+    m_export_checkbox = new QCheckBox(
+        tr("Also export a CSV + plot images (Frame Sync Lock and Missed Frames) per file"), out_group);
+    out_layout->addWidget(m_export_checkbox);
 
     auto* dir_row = new QHBoxLayout();
-    dir_row->addWidget(new QLabel(tr("Output folder:"), mode_group));
-    m_output_dir_edit = new QLineEdit(mode_group);
-    m_output_dir_btn = new QPushButton(tr("Browse..."), mode_group);
+    dir_row->addWidget(new QLabel(tr("Output folder:"), out_group));
+    m_output_dir_edit = new QLineEdit(out_group);
+    m_output_dir_btn = new QPushButton(tr("Browse..."), out_group);
     dir_row->addWidget(m_output_dir_edit, 1);
     dir_row->addWidget(m_output_dir_btn);
-    mode_layout->addLayout(dir_row);
+    out_layout->addLayout(dir_row);
 
-    layout->addWidget(mode_group);
+    layout->addWidget(out_group);
 
     m_reuse_appearance_checkbox =
         new QCheckBox(tr("Reuse the template's saved series names and colors"), this);
@@ -98,19 +96,19 @@ void BatchApplyDialog::setUpLayout(const QList<FileEntry>& files)
     m_cancel_btn = buttons->addButton(QDialogButtonBox::Cancel);
     layout->addWidget(buttons);
 
-    connect(m_merged_radio, &QRadioButton::toggled, this, &BatchApplyDialog::onModeChanged);
+    connect(m_export_checkbox, &QCheckBox::toggled, this, &BatchApplyDialog::onExportToggled);
     connect(m_output_dir_edit, &QLineEdit::textChanged, this, &BatchApplyDialog::validateInput);
     connect(m_output_dir_btn, &QPushButton::clicked, this, &BatchApplyDialog::browseOutputDir);
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 }
 
-void BatchApplyDialog::onModeChanged()
+void BatchApplyDialog::onExportToggled()
 {
-    // The output folder only matters for separate-per-file exports.
-    const bool separate = m_separate_radio->isChecked();
-    m_output_dir_edit->setEnabled(separate);
-    m_output_dir_btn->setEnabled(separate);
+    // The output folder only matters when per-file export is on.
+    const bool exporting = m_export_checkbox->isChecked();
+    m_output_dir_edit->setEnabled(exporting);
+    m_output_dir_btn->setEnabled(exporting);
     validateInput();
 }
 
@@ -124,16 +122,16 @@ void BatchApplyDialog::browseOutputDir()
 
 void BatchApplyDialog::validateInput()
 {
-    // Need at least one matching file, and (separate mode) an output folder.
+    // Need at least one matching file, and (per-file export on) an output folder.
     bool valid = m_ok_count > 0;
-    if (m_separate_radio->isChecked() && m_output_dir_edit->text().trimmed().isEmpty())
+    if (m_export_checkbox->isChecked() && m_output_dir_edit->text().trimmed().isEmpty())
         valid = false;
     m_apply_btn->setEnabled(valid);
 }
 
-bool BatchApplyDialog::mergedMode() const
+bool BatchApplyDialog::exportPerFile() const
 {
-    return m_merged_radio->isChecked();
+    return m_export_checkbox->isChecked();
 }
 
 bool BatchApplyDialog::reuseAppearance() const

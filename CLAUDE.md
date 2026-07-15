@@ -21,7 +21,7 @@ Toolchains are **not on PATH** — prepend them first via `. .\scripts\env.ps1` 
   suites**) is dominated by the real-Ch10 integration suites (a few minutes); add `--fast` (or
   `TMDQ_FAST_TESTS=1`) to skip those four `.ch10` suites for ~1 s local iteration — **local only; CI
   and releases run the full suite**. No CLI single-suite filter.
-  Green baseline: 299 passed / 0 failed / 0 skipped (full run).
+  Green baseline: 301 passed / 0 failed / 0 skipped (full run).
 
 The **`build-and-test`** skill encodes all of this; prefer it.
 

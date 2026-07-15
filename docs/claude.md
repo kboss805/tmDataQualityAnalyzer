@@ -39,24 +39,24 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### US1.1: Batch-process multiple Ch10 files that share the same channel layout
 
-> **DRAFT — skeleton for review.** Statement and criteria below are a first pass;
-> refine the wording/scope, then we align the implementation to it.
-
 **As a** telemetry engineer or data analyst
 **I want to** select several Chapter 10 files that share the same PCM channel IDs, configure the per-stream processing once, and process them all in a single action
 **So that** I don't have to open and re-configure every file individually when running the same analysis across many recordings.
 
-**Acceptance Criteria (draft):**
-- [ ] The user can select multiple `.ch10` files to process in one action (e.g. File > **Open Multiple Files…**).
-- [ ] The user configures the per-stream parameters **once** (in the Configure Streams dialog), and that configuration is applied to every selected file.
-- [ ] Files are matched to the configuration by PCM channel ID; a file whose channel-ID set differs is skipped and the user is told which channels are missing/extra.
-- [ ] The user chooses, per run, whether to combine all files onto one plot (shared time axis) or produce separate output (CSV + image) per file.
-- [ ] Separate-per-file output is written to a user-selected folder, auto-named from each source file.
-- [ ] Progress is shown while the batch runs, and a summary reports how many files were processed vs. skipped.
-- [ ] The user can save a per-stream configuration as a reusable template and apply it to a set of files in a later session without re-entering it.
-- [ ] Saving/applying a template round-trips the same per-stream settings the Configure Streams dialog captures (frame-sync, SNR, calibration references), and — optionally — per-series names/colors.
+**Acceptance Criteria:**
+- [x] The user can batch-process multiple `.ch10` files in one action by applying a saved template (File > **Apply Template to Files…**): pick a template, then multi-select the files.
+- [x] The per-stream processing is configured **once** when the template is created (**Open** a file → configure in the Configure Streams dialog → **Save as Template…**); that configuration is applied to every selected file.
+- [x] Files are matched to the template by PCM channel ID; a file whose channel-ID set differs is skipped and the user is told which channels are missing/extra.
+- [x] All processed files are retained in memory; the user can optionally also export a CSV + Frame Sync Lock and Missed Frames images per file to a chosen folder, auto-named from each source file.
+- [x] Progress is shown while the batch runs, and a summary reports how many files were processed vs. skipped.
+- [x] A saved template round-trips the same per-stream settings the Configure Streams dialog captures (frame-sync, SNR, calibration references), and — optionally — per-series names/colors.
+- [x] After a multi-file run, the user can select which processed file's plot to view in the main plot window via the **Plot File** dropdown in the plot toolbar (top row, far left). The dropdown is disabled when only one file is loaded, and offers an "All files (overlaid)" entry for comparison.
 
-  - **Scope (draft):** Matching is **exact channel-ID set** (a file must have the same PCM channel IDs as the configuration, no more/fewer) — decided for simplicity; revisit if a looser "subset" match is ever needed. This story is orthogonal to US2.2 (apply-to-all *within* one file). Templates carry **no file paths** — they are settings only, applied to whatever files the user picks.
+  - **Scope:** Matching is **exact channel-ID set** (a file must have the same PCM channel IDs as the template, no more/fewer) — decided for simplicity; revisit if a looser "subset" match is ever needed. This story is orthogonal to US2.2 (apply-to-all *within* one file). Templates carry **no file paths** — settings only, applied to whatever files the user picks. The only batch entry point is **Apply Template** (there is no direct multi-file open, and no Add/Remove Source); templates are the sole way to configure a batch.
+  - **Config application:** each file's run feeds the template's `StreamConfig`s through unchanged (`applyBatchSourceConfig`); the reader dispatches each stream by `pcmChannelId`, which is safe precisely because of the exact-set match. **Non-linear calibration:** a template stores only the calibration *input references* (not the extracted profile), so **all batch files process with the linear slope/offset fallback**. Non-linear step calibration is available for single-file processing only; re-extraction on template apply is a possible future add.
+  - **Custom names/colors:** captured only when **saving a template** from an already-processed, customized plot (`buildTemplateFromSource`), and reapplied per file after each run (`reapplyTemplateAppearance`, matched by channel id + metric/receiver/channel). Every file's copy of a channel intentionally shares the same name/color (they are the same channel across recordings); use the **Plot File** selector to view one file at a time when per-file distinction matters.
+  - **Retain-all + file selector:** a batch always keeps every processed file in memory; the plot toolbar's **Plot File** dropdown (`PlotWidget::m_source_combo`) chooses which file to view, defaulting to the first, with "All files (overlaid)" for comparison. The filter is a `PlotViewModel` source gate (`setVisibleSource`/`effectiveVisible`) orthogonal to per-series visibility and the **View Mode** (lock %/accumulation) selector. Optional per-file export runs as a post-pass (`finishBatch` isolates each source, then `exportCsv(path, sourceId)` + a `_framesync_lock.png` and `_missed_frames.png` via `exportImage`).
+  - **Status: implemented** (Save/Apply Template, one `startBatchFromTemplate` batch loop, retain-all + Plot File selector). Schema/matcher/appearance/headless-export/source-view are unit-tested; the full sequential run is app-verified (needs real multi-file `.ch10` recordings). See `docs/processing-template-design.md`.
 
 ### US2.0: Define the key parameters required to process the framesync lock statistics and frame sync error accumulation
 
@@ -605,46 +605,44 @@ once while each selected stream is processed concurrently on its own worker thre
 Results are accumulated **in memory** (no CSV-on-disk intermediate) and appended to
 the plot as each stream finishes.
 
-**Multi-file input:** a session can span more than one `.ch10` file (e.g. Receiver
-SNR from one recorder, Frame Sync Lock from another). **File > Open** starts a fresh
-session (one source); **File > Add Source…** loads a second/later file's metadata
-and appends its processed streams into the *same* plot without clearing it. Every
-source gets a stable `sourceId` (`include/dto/source.h`) that travels with its
+**Multi-source model:** the plot can hold more than one `.ch10` file's streams at
+once. This is now driven **only** by the Apply Template batch loop (there is no
+Add/Remove Source UI, and no direct multi-file open). Every source gets a stable
+`sourceId` (`include/dto/source.h`) that travels with its
 `ProcessedStreamData`/`PlotSeriesData`, so two sources that happen to reuse the same
 PCM channel id never cross-contaminate. All sources share one elapsed-seconds X
 axis: `PlotViewModel` re-bases to the **earliest absolute sample across every
-source**, shifting existing series if a later-added source started earlier (and the
-mirror shift on **File > Remove Source…**). See `docs/multi-file-input-design.md`
-for the full design (time alignment, non-overlap detection, source-qualified CSV
-export). There is still only ever **one active processing run at a time** — the
-single-reader/parallel-worker core itself is unchanged; multi-file input is N
-sequential runs into one accumulating `PlotViewModel`, not concurrent multi-file
-reads.
+source**. See `docs/multi-file-input-design.md` for the underlying design (time
+alignment, non-overlap detection, source-qualified CSV export). There is only ever
+**one active processing run at a time** — a batch is N sequential runs into one
+accumulating `PlotViewModel`, not concurrent reads. (`MainViewModel::addSource()`
+and `removeSource()` remain the model's add/remove primitives; only `addSource` has
+a caller now — the batch loop.)
 
-**Processing templates / batch apply** (docs/processing-template-design.md) lets a
-user process many `.ch10` files that share the same PCM channel IDs in one action.
-Two entry points, both converging on the same sequential batch loop
-(`MainView::startBatchFromTemplate()`): **File > Open Multiple Files…** multi-selects
-files, shows the Configure Streams dialog **once** (against the first file), and
-processes every matching file with that config — no template file needed. **Save as
-Template… / Apply Template to Files…** persist that per-stream *config* (with **no
-file paths**) to a reusable `.json` and re-apply it later. **File > Save as Template…**
-captures a processed source's `streamConfigs` + `timeChannelIndex` + each stream's
-series appearance (name/color) via `ProcessingTemplateSchema` (which reuses
-`StreamConfigSchema` per entry, so no field list is duplicated;
-`calibrationByWord` is never serialized — only the calibration *input references*
-`calCh10Path`/`stepTomlPath`/`clipStartSec`/`clipEndSec`). **File > Apply Template
-to Files…** picks a template + N files, validates each file's PCM channel-ID set
-against the template (`TemplateMatcher`, **exact-set match** — a file with any
-missing/extra channel is rejected with a reason), then processes every matching
-file in one batch. Output is either **one merged plot** (all files on the shared
-time axis, like repeated Add Source) or **separate CSV + image per file**
-(auto-named), chosen in `BatchApplyDialog`. The batch loop is a sequential
-one-run-at-a-time state machine (`advanceBatch()` ↔ `onProcessingFinished()`) that
-can re-apply the template's saved series names/colors onto each file's
-freshly-created series. Exact-set matching is what makes it safe to feed the
-template's stored `pcmChannelId`s straight to `setStreamConfigs()`. `schemaVersion`
-gates the template format so a newer/unrecognized file is rejected, not mis-read.
+**Processing templates / batch apply** (docs/processing-template-design.md) is the
+sole way to process many `.ch10` files that share the same PCM channel IDs.
+**File > Save as Template…** captures a processed source's `streamConfigs` +
+`timeChannelIndex` + each stream's series appearance (name/color) via
+`ProcessingTemplateSchema` (which reuses `StreamConfigSchema` per entry, so no field
+list is duplicated; `calibrationByWord` is never serialized — only the calibration
+*input references* `calCh10Path`/`stepTomlPath`/`clipStartSec`/`clipEndSec`, so batch
+runs use the **linear** calibration fallback). **File > Apply Template to Files…**
+picks a template + N files, validates each file's PCM channel-ID set against the
+template (`TemplateMatcher`, **exact-set match** — a file with any missing/extra
+channel is rejected with a reason), then processes every matching file in one batch
+(`MainView::startBatchFromTemplate()`). Every processed file is **retained in
+memory**; the plot toolbar's **Plot File** dropdown (`PlotWidget::m_source_combo`)
+chooses which one to view (or "All files (overlaid)"), driven by
+`PlotViewModel::setVisibleSource` / `effectiveVisible` (a source gate orthogonal to
+per-series visibility and the **View Mode** lock%/accumulation selector). A batch
+can **also** export a CSV + a Frame Sync Lock and a Missed Frames image per file
+(optional checkbox → a post-pass in `finishBatch` that isolates each source). The
+batch loop is a sequential one-run-at-a-time state machine (`advanceBatch()` ↔
+`onProcessingFinished()`) that can re-apply the template's saved series names/colors
+onto each file's freshly-created series. Exact-set matching is what makes it safe to
+feed the template's stored `pcmChannelId`s straight to `setStreamConfigs()`.
+`schemaVersion` gates the template format so a newer/unrecognized file is rejected,
+not mis-read.
 
 ### Core Components
 
@@ -658,8 +656,7 @@ gates the template format so a newer/unrecognized file is rejected, not mis-read
    - Status bar shows the file metadata summary (filename, size, channel counts, time range)
    - Recent Files submenu under File menu with QSettings persistence
    - Drag-and-drop and File > Open of a single `.ch10` file (launches the StreamConfigDialog) or a previously exported `.csv` file (US6.3: routed by `openPath()`/`importCsv()` straight into the plot via `PlotViewModel::loadCsvFileAsync`, bypassing the dialog and processing pipeline)
-   - File > Add Source… (multi-file input) opens a second/later `.ch10` file's Configure Streams dialog and processes it into the *existing* plot instead of clearing it; enabled once a file is loaded, disabled while processing. File > Remove Source… picks one of `MainViewModel::sources()` (by filename) to drop from both the session and the plot
-   - File > Open Multiple Files… (always enabled) multi-selects `.ch10` files, shows the Configure Streams dialog once (against the first file), and batch-processes every file with the same channel IDs — no template file needed. File > Save as Template… (enabled once a source has processed) captures a source's per-stream settings + series appearance to a template JSON; File > Apply Template to Files… re-applies a saved template to N files. All three converge on `startBatchFromTemplate()` → the batch loop (merged plot or separate per-file output) — see the processing-templates section above and `docs/processing-template-design.md`
+   - File > Save as Template… (enabled once a source has processed) captures a source's per-stream settings + series appearance to a template JSON; File > Apply Template to Files… (always enabled) picks a template + N `.ch10` files and batch-processes every file with the same channel IDs via `startBatchFromTemplate()` → the batch loop (retain-all + Plot File selector; optional per-file CSV+image export). This is the only batch entry point — there is no Add/Remove Source or direct multi-file open. See the processing-templates section above and `docs/processing-template-design.md`
    - Cancel toolbar button visible only during processing
    - Log window in a bottom QDockWidget; plot in a right QDockWidget (PlotWidget); View menu toggles each
 
@@ -983,7 +980,7 @@ source/header files are listed in `tests/tests.pro`.
 - **TestFrameProcessor** (`tst_frameprocessor`) — constructor defaults, abort flag, `derandomizeBitstream` (identity/short and changed/long), invalid time-channel/PCM-channel/file handling, and processing real Ch10 data (receiver-data accumulation, lock-only mode has no channels, monotonic frame-sync errors, slope affects values, shorter period → more samples, calibration round-trip clean steps, off-phase sync after lock-loss not extracted)
 - **TestMainViewModelHelpers** (`tst_mainviewmodel_helpers`) — ViewModel helper methods (`channelPrefix` and `parameterName` over known/unknown/boundary indices)
 - **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration
-- **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, Y auto/manual range, X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), the left-axis view toggle preserving per-stream selection, and stream-identity regression coverage: two streams sharing a TMATS-derived `streamLabel` but different `streamOrder` must stay independent through reprocess-replace and `renameSeries()`/`recolorSeries()` sibling-sync (pinned after a pre-v2.6.0 cross-contamination bug). Multi-file input: cross-source identity (two different `sourceId`s reusing the same `streamLabel`/`streamOrder` stay independent through reprocess-replace/rename/recolor), time-base re-basing (a later-added source starting earlier shifts existing series right; three successively-earlier sources compound correctly; a later source starting after triggers no shift), the non-overlap warning signal (fires once per newly-arriving non-overlapping source, not for an overlapping range), and `removeSource()` (drops only the target source, re-bases left only when the removed source held the earliest sample, clears all data when the last source is removed, no-ops for an unknown id)
+- **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, Y auto/manual range, X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), the left-axis view toggle preserving per-stream selection, and stream-identity regression coverage: two streams sharing a TMATS-derived `streamLabel` but different `streamOrder` must stay independent through reprocess-replace and `renameSeries()`/`recolorSeries()` sibling-sync (pinned after a pre-v2.6.0 cross-contamination bug). Multi-file input: cross-source identity (two different `sourceId`s reusing the same `streamLabel`/`streamOrder` stay independent through reprocess-replace/rename/recolor), time-base re-basing (a later-added source starting earlier shifts existing series right; three successively-earlier sources compound correctly; a later source starting after triggers no shift), the non-overlap warning signal (fires once per newly-arriving non-overlapping source, not for an overlapping range), and `removeSource()` (drops only the target source, re-bases left only when the removed source held the earliest sample, clears all data when the last source is removed, no-ops for an unknown id). US1.1 source view: `setVisibleSource()` isolates a source via `effectiveVisible()` without mutating per-series `visible`, `sourceList()` lists distinct labeled sources, and `exportCsv(path, sourceId)` writes only that source's columns
 - **TestProcessingCoordinator** (`tst_processingcoordinator`) — constructor defaults, `reset()` clears state, cancel-with-no-run no-op, `startProcessing()` empty-returns-false and processing-state emission, plus single-vs-multi-stream throughput benchmarks
 - **TestMainView** (`tst_mainview`) — Main window construction, widget wiring, log routing, dock visibility behavior, the CSV import routing (`openPath`/`importCsv`, valid/invalid), and batch apply's CI-safe helpers: `reapplyTemplateAppearance()` maps the template's saved names/colors onto the right series, and `buildTemplateFromSource()` captures configs + `timeChannelIndex` + series appearance (the full `advanceBatch()` orchestration needs a real `.ch10` fixture, so it is app-verified not unit-tested)
 - **TestPlotWidget** (`tst_plotwidget`) — Plot widget construction, null/valid ViewModel connection, dark/light theme application, the movable legend overlay populating from data (hidden until data loads, then one row per visible active-metric series), a shown/resized-window regression case asserting the overlay sizes correctly (not a collapsed frame-only box) after a second rebuild adds more rows — a QScrollArea `widgetResizable` sizeHint staleness bug reproduced and fixed post-review — the SNR legend row showing the short "CH\<id\> \<ch.name\>" form instead of the full TMATS stream title, the legend row layout reserving a right-side gutter matching the style's scrollbar extent, and each legend row carrying an objectName the overlay stylesheet can target to override the app's global `QWidget { background-color: ... }` theme rule (otherwise every row painted as an opaque chip); plus `exportImage()` writing a PNG/SVG/PDF headlessly (the parameterized image-export entry point extracted for batch apply)

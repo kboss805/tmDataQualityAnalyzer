@@ -20,7 +20,6 @@
 #include <QMenuBar>
 #include <QScrollBar>
 #include <QStringList>
-#include <QToolBar>
 #include <QVBoxLayout>
 
 #include "processingtemplate.h"
@@ -62,29 +61,19 @@ private slots:
     void inputFileButtonPressed();
     /// Opens a CSV-filtered file dialog and imports the selected exported CSV.
     void importFileButtonPressed();
-    /// Opens a .ch10-filtered file dialog and adds the selected file as another
-    /// source in the current session (accumulating, not replacing, the plot).
-    void addSourceButtonPressed();
-    /// Shows a picker of currently loaded sources and removes the selected one
-    /// (drops its Source record and its plot series).
-    void removeSourceButtonPressed();
     /// Captures one processed source's per-stream settings (+ series appearance)
     /// as a reusable, file-path-independent processing template (Batch Apply).
     void saveTemplateButtonPressed();
     /// Picks a template + a set of .ch10 files, validates each file's channel set
-    /// against the template, and (on confirm) processes every matching file in
-    /// one batch -- either into one merged plot or as separate per-file output.
+    /// against the template, and (on confirm) batch-processes every matching file
+    /// (retaining all in memory; optional per-file CSV+image export).
     void applyTemplateButtonPressed();
-    /// Multi-selects .ch10 files that share the same channel IDs, shows the
-    /// Configure Streams dialog once (against the first file), then batch-processes
-    /// every matching file with that config -- no template file needed.
-    void openMultipleButtonPressed();
     /// Toggles between light and dark themes.
     void onToggleTheme();
     /// Opens the StreamConfigDialog after a file has loaded (a fresh session).
     void onFileReadyForStreamConfig();
-    /// Opens the StreamConfigDialog after addSource() has loaded a second/later
-    /// file's metadata (accumulating into the existing session/plot).
+    /// Applies the batch template's config after the Apply Template loop's
+    /// addSource() has loaded the next file's metadata (no dialog).
     void onSourceReadyForStreamConfig();
     /// @}
 
@@ -113,8 +102,8 @@ private:
     void setUpMenuBar();                     ///< Creates the menu bar.
     void setUpMainLayout();                  ///< Creates the top-level layout.
     void setUpConnections();                 ///< Connects all ViewModel signals to View slots.
-    /// Sets toolbar action icons (export/import) to the dark or light theme variant.
-    void applyToolbarIconsForTheme(bool dark);
+    /// Sets the Import/Export menu-action icons to the dark or light theme variant.
+    void applyActionIconsForTheme(bool dark);
     /// @}
 
     /// @name Bulk state helpers
@@ -134,15 +123,12 @@ private:
     /// and Open Multiple Files.
     void startBatchFromTemplate(const ProcessingTemplate& tmpl, const QStringList& files,
                                 bool showReuseAppearance);
-    /// After the first Open-Multiple file's metadata loads: shows Configure Streams
-    /// once, builds an in-memory template from it, and batch-processes m_multi_pending_files.
-    void configureMultiThenBatch();
 
     /// @name Batch apply state machine (one sequential run per matched file)
     /// @{
-    /// Starts the next not-yet-processed batch file: (separate mode) clears the
-    /// plot first, then addSource() and waits for onSourceReadyForStreamConfig();
-    /// calls finishBatch() once every file has been attempted.
+    /// Starts the next not-yet-processed batch file: addSource() and waits for
+    /// onSourceReadyForStreamConfig(); calls finishBatch() once every file has been
+    /// attempted.
     void advanceBatch();
     /// Applies the batch template's stream configs to the just-loaded file (after
     /// re-validating its channel set) and starts processing -- the batch
@@ -180,16 +166,11 @@ private:
     PlotViewModel* m_plot_view_model;        ///< Plot ViewModel owning series data.
     QAction* m_theme_action;                 ///< File > Toggle theme action.
     QAction* m_open_action;                  ///< File > Open... action.
-    QAction* m_add_source_action;            ///< File > Add Source... action (multi-file input).
-    QAction* m_remove_source_action;         ///< File > Remove Source... action (multi-file input).
-    QAction* m_open_multiple_action;         ///< File > Open Multiple Files... action (direct batch).
     QAction* m_save_template_action;         ///< File > Save as Template... action (Batch Apply).
     QAction* m_apply_template_action;        ///< File > Apply Template to Files... action (Batch Apply).
 
-    QToolBar* m_toolbar;                     ///< Main toolbar.
-    QAction* m_toolbar_open_action;          ///< Toolbar open action.
-    QAction* m_import_action;                ///< Toolbar import-CSV action (left of export).
-    QAction* m_export_action;                ///< Toolbar export plot action.
+    QAction* m_import_action;                ///< File > Import CSV... action.
+    QAction* m_export_action;                ///< File > Export... action.
 
     QTextBrowser* m_log_preview;             ///< Compact log preview in the controls panel.
     ProcessingProgressDialog* m_progress_dialog; ///< Modal progress/cancel dialog shown while processing runs.
@@ -198,21 +179,15 @@ private:
     QString m_last_ch10_dir;                 ///< Last directory used in the Open file dialog (.ch10/.csv).
     QString m_pending_csv_path;              ///< CSV import in flight; finalized on the plot's load result.
 
-    /// @name Open Multiple Files state (direct batch)
-    /// @{
-    bool m_configuring_multi = false;        ///< True between openMultiple's file pick and its Configure Streams dialog.
-    QStringList m_multi_pending_files;       ///< Files picked for an Open Multiple Files run.
-    /// @}
-
     /// @name Batch apply state (Batch Apply)
     /// @{
     bool m_batch_active = false;             ///< True while a batch-apply run is in flight.
     ProcessingTemplate m_batch_template;     ///< The template being applied to every batch file.
     QStringList m_batch_files;               ///< The matched files to process, in order.
     int  m_batch_index = 0;                  ///< Index into m_batch_files of the file in flight.
-    bool m_batch_merged = true;              ///< True = one merged plot; false = separate per-file output.
+    bool m_batch_export_per_file = false;    ///< True = also write a CSV+image per file (post-pass) to m_batch_output_dir.
     bool m_batch_reuse_appearance = true;    ///< True = reapply the template's saved series names/colors.
-    QString m_batch_output_dir;              ///< Output folder for separate-mode CSV/image exports.
+    QString m_batch_output_dir;              ///< Output folder for per-file CSV/image exports.
     int  m_batch_processed = 0;              ///< Count of files successfully processed this batch.
     int  m_batch_skipped = 0;                ///< Count of files skipped/failed this batch.
     /// @}

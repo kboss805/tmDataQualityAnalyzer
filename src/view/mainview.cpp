@@ -101,7 +101,7 @@ void MainView::setUpMainLayout()
     bool dark = plot_settings.value(UIConstants::kSettingsKeyTheme, UIConstants::kThemeDark).toString()
                 == UIConstants::kThemeDark;
     m_plot_widget->applyTheme(dark);
-    applyToolbarIconsForTheme(dark);
+    applyActionIconsForTheme(dark);
 
     // The Customize Plot button replaces the old legend and is initialized disabled.
 
@@ -139,62 +139,66 @@ void MainView::setUpMainLayout()
 
 void MainView::setUpMenuBar()
 {
-    QMenuBar* menu_bar = menuBar();
-    QMenu* file_menu = menu_bar->addMenu("&File");
+    // A single hamburger menu holds everything, grouped into sections (addSection
+    // renders the muted headers). Flat rather than nested submenus because the
+    // whole menu is small and scannable in one glance.
+    QMenu* menu = menuBar()->addMenu(QStringLiteral("☰"));
+    menu->menuAction()->setToolTip(tr("Menu"));
 
-    m_open_action = file_menu->addAction("Open...");
+    // --- Process ---
+    menu->addSection(tr("Process"));
+
+    m_open_action = menu->addAction("Open...");
     m_open_action->setShortcut(QKeySequence::Open);
+    connect(m_open_action, &QAction::triggered, this, &MainView::inputFileButtonPressed);
 
-    // Open Multiple Files: the direct batch path -- pick a set of .ch10 files that
-    // share channel IDs, configure once, and process them all.
-    m_open_multiple_action = file_menu->addAction("Open Multiple Files...");
-    connect(m_open_multiple_action, &QAction::triggered, this, &MainView::openMultipleButtonPressed);
-
-    // Add Source: appends a second/later .ch10 file to the current session
-    // instead of replacing it (multi-file input). Only meaningful once a file
-    // is already loaded/configured, so it starts disabled.
-    m_add_source_action = file_menu->addAction("Add Source...");
-    m_add_source_action->setEnabled(false);
-    connect(m_add_source_action, &QAction::triggered, this, &MainView::addSourceButtonPressed);
-
-    // Remove Source: only meaningful once at least one source has finished
-    // processing successfully, so it starts disabled too.
-    m_remove_source_action = file_menu->addAction("Remove Source...");
-    m_remove_source_action->setEnabled(false);
-    connect(m_remove_source_action, &QAction::triggered, this, &MainView::removeSourceButtonPressed);
-
-    file_menu->addSeparator();
+    // Recent Files sits directly under Open -- both are "get a file onto the plot".
+    m_recent_menu = menu->addMenu("Recent Files");
+    updateRecentFilesMenu();
 
     // Save as Template: capture the current per-stream settings as a reusable,
     // file-path-independent template for Batch Apply. It needs at least one
     // finished source, so it starts disabled.
-    m_save_template_action = file_menu->addAction("Save as Template...");
+    m_save_template_action = menu->addAction("Save as Template...");
     m_save_template_action->setEnabled(false);
     connect(m_save_template_action, &QAction::triggered, this, &MainView::saveTemplateButtonPressed);
 
-    // Apply Template to Files: always available -- it opens its own file pickers
-    // rather than acting on the current session.
-    m_apply_template_action = file_menu->addAction("Apply Template to Files...");
+    // Apply Template to Files: always available -- it opens its own file pickers.
+    m_apply_template_action = menu->addAction("Apply Template to Files...");
     connect(m_apply_template_action, &QAction::triggered, this, &MainView::applyTemplateButtonPressed);
 
-    m_recent_menu = file_menu->addMenu("Recent Files");
-    updateRecentFilesMenu();
-    file_menu->addSeparator();
+    menu->addSeparator();
+
+    QAction* exit_action = menu->addAction("Exit");
+    connect(exit_action, &QAction::triggered, this, &QMainWindow::close);
+
+    // --- Import/Export ---
+    menu->addSection(tr("Import/Export"));
+
+    // Import a previously exported CSV straight into the plot (US6.3).
+    m_import_action = menu->addAction("Import CSV...");
+    m_import_action->setToolTip("Import a previously exported CSV file");
+    connect(m_import_action, &QAction::triggered, this, &MainView::importFileButtonPressed);
+
+    // Export the current plot's data / image / log. Disabled until data loads;
+    // wired to PlotWidget::onExportPlot in setUpConnections().
+    m_export_action = menu->addAction("Export...");
+    m_export_action->setToolTip("Export plot data and images");
+    m_export_action->setEnabled(false);
+
+    // --- Settings ---
+    menu->addSection(tr("Settings"));
 
     QSettings app_settings;
     QString current_theme = app_settings.value(UIConstants::kSettingsKeyTheme, UIConstants::kThemeDark).toString();
-    m_theme_action = file_menu->addAction(
+    m_theme_action = menu->addAction(
         (current_theme == UIConstants::kThemeDark) ? "Switch to Light Theme" : "Switch to Dark Theme");
-    file_menu->addSeparator();
-
-    QAction* exit_action = file_menu->addAction("Exit");
-
-    connect(m_open_action, &QAction::triggered, this, &MainView::inputFileButtonPressed);
     connect(m_theme_action, &QAction::triggered, this, &MainView::onToggleTheme);
-    connect(exit_action, &QAction::triggered, this, &QMainWindow::close);
 
-    QMenu* help_menu = menu_bar->addMenu("&Help");
-    QAction* about_action = help_menu->addAction("About...");
+    // --- Help ---
+    menu->addSection(tr("Help"));
+
+    QAction* about_action = menu->addAction("About...");
     connect(about_action, &QAction::triggered, this, [this]() {
         QMessageBox about_box(this);
         about_box.setWindowTitle("About");
@@ -208,37 +212,6 @@ void MainView::setUpMenuBar()
             "IRIG 106 Chapter 10 PCM recordings and plots the results over time.</p>");
         about_box.exec();
     });
-
-    // Toolbar
-    m_toolbar = addToolBar("Main");
-    m_toolbar->setMovable(false);
-    m_toolbar->setFloatable(false);
-    m_toolbar->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    m_toolbar->setIconSize(QSize(UIConstants::kToolbarIconSize, UIConstants::kToolbarIconSize));
-
-    m_toolbar_open_action = m_toolbar->addAction(
-        QIcon(":/resources/folder-open.svg"), "Open Ch10 File");
-    m_toolbar_open_action->setToolTip("Open Chapter 10 File (Ctrl+O)");
-    connect(m_toolbar_open_action, &QAction::triggered,
-            this, &MainView::inputFileButtonPressed);
-
-    m_toolbar->addSeparator();
-
-    // Import sits just left of Export. Icon (orange) is theme-dependent; set by
-    // applyToolbarIconsForTheme().
-    m_import_action = m_toolbar->addAction("Import");
-    m_import_action->setToolTip("Import a previously exported CSV file");
-    connect(m_import_action, &QAction::triggered,
-            this, &MainView::importFileButtonPressed);
-
-    // Icon (green) is theme-dependent; set by applyToolbarIconsForTheme().
-    m_export_action = m_toolbar->addAction("Export");
-    m_export_action->setToolTip("Export plot data and images");
-    m_export_action->setEnabled(false);
-
-    QWidget* toolbar_spacer = new QWidget;
-    toolbar_spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    m_toolbar->addWidget(toolbar_spacer);
 }
 
 
@@ -259,15 +232,9 @@ void MainView::setUpConnections()
             this, &MainView::onSourceReadyForStreamConfig);
     connect(m_view_model, &MainViewModel::streamProcessed, this, &MainView::onStreamProcessed);
 
-    // Add Source is only meaningful once a file is loaded/configured, and never
-    // while processing (setAllControlsEnabled already covers the latter).
-    connect(m_view_model, &MainViewModel::fileLoadedChanged, this, [this]() {
-        m_add_source_action->setEnabled(m_view_model->fileLoaded());
-    });
-    // Remove Source / Save as Template are only meaningful once at least one source
-    // has finished processing successfully.
+    // Save as Template is only meaningful once at least one source has finished
+    // processing successfully.
     connect(m_view_model, &MainViewModel::sourcesChanged, this, [this]() {
-        m_remove_source_action->setEnabled(!m_view_model->sources().isEmpty());
         m_save_template_action->setEnabled(!m_view_model->sources().isEmpty());
     });
 
@@ -389,6 +356,12 @@ void MainView::onProcessingFinished(bool success)
     {
         logSuccess("Processing complete — results plotted from memory.");
         m_plot_view_model->setPlotTitle(QFileInfo(m_view_model->inputFilename()).baseName());
+        // Label this source for the plot toolbar's file selector (multi-file via Add Source).
+        if (!m_view_model->sources().isEmpty())
+        {
+            const Source& src = m_view_model->sources().last();
+            m_plot_view_model->setSourceLabel(src.sourceId, QFileInfo(src.filepath).baseName());
+        }
     }
 }
 
@@ -463,58 +436,6 @@ void MainView::importFileButtonPressed()
     }
 
     openPath(filename);
-}
-
-void MainView::addSourceButtonPressed()
-{
-    // .ch10-only, like Open -- Add Source appends another processed file to the
-    // session; it is not a route for CSV import (that stays its own path).
-    QString filename = QFileDialog::getOpenFileName(this, tr("Add Source (Chapter 10 File)"),
-                                                    m_last_ch10_dir,
-                                                    tr("Chapter 10 Files (*.ch10)"));
-    if (filename.isEmpty())
-    {
-        return;
-    }
-
-    m_last_ch10_dir = QFileInfo(filename).absolutePath();
-    saveLastCh10Dir();
-    m_view_model->addSource(filename);
-}
-
-void MainView::removeSourceButtonPressed()
-{
-    const QVector<Source>& sources = m_view_model->sources();
-    if (sources.isEmpty())
-    {
-        return;
-    }
-
-    QStringList labels;
-    labels.reserve(sources.size());
-    for (const Source& s : sources)
-    {
-        labels.append(QFileInfo(s.filepath).fileName() + QString(" (source %1)").arg(s.sourceId));
-    }
-
-    bool ok = false;
-    const QString chosen = QInputDialog::getItem(this, tr("Remove Source"),
-        tr("Select a source to remove from the plot:"), labels, 0, /*editable=*/false, &ok);
-    if (!ok)
-    {
-        return;
-    }
-
-    const int index = labels.indexOf(chosen);
-    if (index < 0)
-    {
-        return;
-    }
-    const int sourceId = sources.at(index).sourceId;
-
-    m_view_model->removeSource(sourceId);
-    m_plot_view_model->removeSource(sourceId);
-    logSuccess("Removed source: " + labels.at(index));
 }
 
 ProcessingTemplate MainView::buildTemplateFromSource(const Source& src) const
@@ -644,30 +565,18 @@ void MainView::importCsv(const QString& path)
 
 void MainView::onFileReadyForStreamConfig()
 {
-    if (m_configuring_multi)
-    {
-        // Open Multiple Files: this is the first file, loaded only to drive one
-        // Configure Streams dialog whose config is then applied to the whole batch.
-        configureMultiThenBatch();
-        return;
-    }
-
     // A fresh file starts a fresh plot; processing accumulates into it.
     showStreamConfigDialogForPendingSource(/*clearPlotFirst=*/true);
 }
 
 void MainView::onSourceReadyForStreamConfig()
 {
+    // addSource() is now driven only by the Apply Template batch loop, which applies
+    // the template's configs to each file without a per-file Configure Streams step.
     if (m_batch_active)
     {
-        // Batch apply drives addSource() for every file and applies the template's
-        // configs without a dialog (no per-file Configure Streams step).
         applyBatchSourceConfig();
-        return;
     }
-
-    // Add Source: keep the existing plot/session, accumulate this source into it.
-    showStreamConfigDialogForPendingSource(/*clearPlotFirst=*/false);
 }
 
 void MainView::showStreamConfigDialogForPendingSource(bool clearPlotFirst)
@@ -782,65 +691,6 @@ void MainView::applyTemplateButtonPressed()
     startBatchFromTemplate(tmpl, picked, /*showReuseAppearance=*/true);
 }
 
-void MainView::openMultipleButtonPressed()
-{
-    if (m_view_model->processing() || m_batch_active || m_configuring_multi)
-    {
-        return;
-    }
-
-    const QStringList picked = QFileDialog::getOpenFileNames(this, tr("Open Multiple Files"),
-        m_last_ch10_dir, tr("Chapter 10 Files (*.ch10)"));
-    if (picked.isEmpty())
-    {
-        return;
-    }
-
-    m_last_ch10_dir = QFileInfo(picked.first()).absolutePath();
-    saveLastCh10Dir();
-
-    // Load the first file's metadata so onFileReadyForStreamConfig() can show the
-    // Configure Streams dialog against it. openFile() is synchronous, so the guard
-    // below runs after the dialog flow completes -- resetting the flag only if the
-    // first file's metadata failed to load (no fileReadyForStreamConfig emitted).
-    m_multi_pending_files = picked;
-    m_configuring_multi   = true;
-    m_view_model->openFile(picked.first());
-    m_configuring_multi   = false;
-}
-
-void MainView::configureMultiThenBatch()
-{
-    m_configuring_multi = false; // consumed
-
-    StreamConfigDialog dialog(m_view_model->buildDefaultStreamConfigs(),
-                              m_view_model->lastIniDir(),
-                              m_view_model->timeChannelList(),
-                              m_view_model->timeChannelIndex(),
-                              m_view_model->reader()->getCurrentTimeChannelID(),
-                              m_view_model->appRoot(),
-                              this);
-    if (dialog.exec() != QDialog::Accepted)
-    {
-        return;
-    }
-
-    // Build an in-memory template from the one-time configuration (no series
-    // appearance -- nothing has been processed yet). The full channel set becomes
-    // the exact-match key, so only files with the same channel IDs will run.
-    ProcessingTemplate tmpl;
-    tmpl.appVersion       = AppVersion::toString();
-    tmpl.timeChannelIndex = dialog.timeChannelIndex();
-    for (const StreamConfig& cfg : dialog.configs())
-    {
-        TemplateStreamEntry entry;
-        entry.config = cfg;
-        tmpl.entries.append(entry);
-    }
-
-    startBatchFromTemplate(tmpl, m_multi_pending_files, /*showReuseAppearance=*/false);
-}
-
 void MainView::startBatchFromTemplate(const ProcessingTemplate& tmpl, const QStringList& files,
                                       bool showReuseAppearance)
 {
@@ -890,7 +740,7 @@ void MainView::startBatchFromTemplate(const ProcessingTemplate& tmpl, const QStr
     }
 
     m_batch_template         = tmpl;
-    m_batch_merged           = dialog.mergedMode();
+    m_batch_export_per_file  = dialog.exportPerFile();
     m_batch_reuse_appearance = dialog.reuseAppearance();
     m_batch_output_dir       = dialog.outputDir();
     m_batch_index            = 0;
@@ -920,11 +770,9 @@ void MainView::advanceBatch()
             continue;
         }
 
-        // Separate mode: each file gets its own fresh plot; merged mode accumulates
-        // every file onto the shared time axis (like repeated Add Source).
-        if (!m_batch_merged)
-            m_plot_view_model->clearData();
-
+        // Every file is retained in memory (accumulated onto the shared axis) so the
+        // user can browse them via the plot toolbar's file selector; per-file export,
+        // if requested, runs as a post-pass in finishBatch().
         m_view_model->addSource(path);
         return; // wait for onSourceReadyForStreamConfig()
     }
@@ -973,20 +821,11 @@ void MainView::onBatchProcessingFinished(bool success)
         const int sourceId = m_view_model->sources().isEmpty()
             ? 0 : m_view_model->sources().last().sourceId;
 
+        // Label the source for the plot toolbar's file selector, and reapply the
+        // template's saved names/colors onto this file's fresh series.
+        m_plot_view_model->setSourceLabel(sourceId, base);
         if (m_batch_reuse_appearance)
             reapplyTemplateAppearance(sourceId);
-
-        if (!m_batch_merged)
-        {
-            m_plot_view_model->setPlotTitle(base);
-            const QString csv_path = QDir(m_batch_output_dir).filePath(base + ".csv");
-            const QString img_path = QDir(m_batch_output_dir).filePath(base + ".png");
-            if (m_plot_view_model->exportCsv(csv_path))
-                logSuccess("Exported: " + csv_path);
-            else
-                logError("Failed to export CSV: " + csv_path);
-            m_plot_widget->exportImage(img_path); // logs its own success/failure
-        }
     }
     else
     {
@@ -1028,17 +867,64 @@ void MainView::finishBatch()
 {
     m_batch_active = false;
 
-    if (m_batch_merged)
+    const QVector<Source>& sources = m_view_model->sources();
+
+    // Optional per-file export post-pass: isolate each source in turn (so the CSV
+    // and the rendered images both cover just that file), then export. Runs over the
+    // fully-retained plot after all files are processed.
+    if (m_batch_export_per_file)
     {
-        m_plot_view_model->setPlotTitle(tr("Batch (%1 files)").arg(m_batch_processed));
-        logSuccess(tr("Batch complete: %1 processed, %2 skipped.")
-                       .arg(m_batch_processed).arg(m_batch_skipped));
+        // One CSV per file (carries every metric's columns), plus, when the batch has
+        // frame-sync data, a separate image for each left-axis metric: Frame Sync
+        // Lock % and Accumulated Missed Frames. Restore the user's view afterward.
+        const PlotViewModel::LockAxisView original_view = m_plot_view_model->lockAxisView();
+        const bool has_frame_sync = m_plot_view_model->hasLockSeries()
+                                    || m_plot_view_model->hasMissedFramesSeries();
+
+        for (const Source& src : sources)
+        {
+            const QString base = QFileInfo(src.filepath).baseName();
+            m_plot_view_model->setVisibleSource(src.sourceId); // rebuilds chart to this file
+
+            const QString csv_path = QDir(m_batch_output_dir).filePath(base + ".csv");
+            if (m_plot_view_model->exportCsv(csv_path, src.sourceId))
+                logSuccess("Exported: " + csv_path);
+            else
+                logError("Failed to export CSV: " + csv_path);
+
+            if (has_frame_sync)
+            {
+                m_plot_view_model->setLockAxisView(PlotViewModel::LockAxisView::LockPercent);
+                m_plot_widget->exportImage(QDir(m_batch_output_dir).filePath(base + "_framesync_lock.png"));
+                m_plot_view_model->setLockAxisView(PlotViewModel::LockAxisView::MissedFrames);
+                m_plot_widget->exportImage(QDir(m_batch_output_dir).filePath(base + "_missed_frames.png"));
+            }
+            else
+            {
+                m_plot_widget->exportImage(QDir(m_batch_output_dir).filePath(base + ".png"));
+            }
+        }
+
+        m_plot_view_model->setLockAxisView(original_view);
     }
-    else
+
+    // Default the plot to the first processed file (browse intent); a single file
+    // leaves the selector disabled and shows everything. "All files (overlaid)" is
+    // available from the dropdown.
+    if (sources.size() > 1)
     {
-        logSuccess(tr("Batch complete: %1 processed, %2 skipped. Output written to %3")
-                       .arg(m_batch_processed).arg(m_batch_skipped).arg(m_batch_output_dir));
+        m_plot_view_model->setVisibleSource(sources.first().sourceId);
+        m_plot_view_model->setPlotTitle(QFileInfo(sources.first().filepath).baseName());
     }
+    else if (sources.size() == 1)
+    {
+        m_plot_view_model->setPlotTitle(QFileInfo(sources.first().filepath).baseName());
+    }
+
+    logSuccess(tr("Batch complete: %1 processed, %2 skipped.%3")
+                   .arg(m_batch_processed).arg(m_batch_skipped)
+                   .arg(m_batch_export_per_file ? tr(" Output written to %1.").arg(m_batch_output_dir)
+                                                : QString()));
 }
 
 void MainView::onToggleTheme()
@@ -1065,13 +951,13 @@ void MainView::onToggleTheme()
         (new_theme == UIConstants::kThemeDark) ? "Switch to Light Theme" : "Switch to Dark Theme");
 
     m_plot_widget->applyTheme(new_theme == UIConstants::kThemeDark);
-    applyToolbarIconsForTheme(new_theme == UIConstants::kThemeDark);
+    applyActionIconsForTheme(new_theme == UIConstants::kThemeDark);
 }
 
-void MainView::applyToolbarIconsForTheme(bool dark)
+void MainView::applyActionIconsForTheme(bool dark)
 {
-    // Green (export) / orange (import) icons have brighter dark-theme variants and
-    // deeper light-theme variants so they read against both toolbar backgrounds.
+    // Green (export) / orange (import) menu-item icons have brighter dark-theme
+    // variants and deeper light-theme variants so they read against both themes.
     const QString suffix = dark ? "-dark" : "-light";
     m_export_action->setIcon(QIcon(":/resources/export" + suffix + ".svg"));
     m_import_action->setIcon(QIcon(":/resources/import" + suffix + ".svg"));
@@ -1144,16 +1030,10 @@ void MainView::dropEvent(QDropEvent* event)
 
 void MainView::setAllControlsEnabled(bool enabled)
 {
-    m_toolbar_open_action->setEnabled(enabled);
     m_open_action->setEnabled(enabled);
-    m_open_multiple_action->setEnabled(enabled);
     m_recent_menu->setEnabled(enabled);
     m_import_action->setEnabled(enabled);
-    // Add Source additionally requires a file to already be loaded/configured.
-    m_add_source_action->setEnabled(enabled && m_view_model->fileLoaded());
-    // Remove Source / Save as Template additionally require at least one finalized
-    // source.
-    m_remove_source_action->setEnabled(enabled && !m_view_model->sources().isEmpty());
+    // Save as Template additionally requires at least one finalized source.
     m_save_template_action->setEnabled(enabled && !m_view_model->sources().isEmpty());
     m_apply_template_action->setEnabled(enabled);
 }

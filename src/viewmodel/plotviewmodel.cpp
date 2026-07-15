@@ -13,6 +13,7 @@
 
 #include <QFile>
 #include <QMap>
+#include <QSet>
 #include <QTextStream>
 
 #include "constants.h"
@@ -485,12 +486,28 @@ void PlotViewModel::clearData()
     m_base_time_offset = 0.0;
     m_base_abs_seconds = 0.0;
     m_plot_title = PlotConstants::kDefaultPlotTitle;
+    m_source_labels.clear();
+    m_visible_source = -1;
     emit dataChanged();
+    emit sourcesChanged();
 }
 
-bool PlotViewModel::exportCsv(const QString& filepath) const
+bool PlotViewModel::exportCsv(const QString& filepath, int sourceId) const
 {
     if (m_series.isEmpty()) return false;
+
+    // sourceId < 0 exports every series; otherwise only the given source's columns
+    // (per-file batch export from a retain-all run).
+    auto included = [sourceId](const PlotSeriesData& s) {
+        return sourceId < 0 || s.sourceId == sourceId;
+    };
+
+    bool any_included = false;
+    for (const auto& s : m_series)
+    {
+        if (included(s)) { any_included = true; break; }
+    }
+    if (!any_included) return false;
 
     QFile file(filepath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
@@ -508,7 +525,8 @@ bool PlotViewModel::exportCsv(const QString& filepath) const
     out << PlotConstants::kCsvTimeHeader;
     for (const auto& s : m_series)
     {
-        out << "," << SeriesColumnSchema::columnHeader(s);
+        if (included(s))
+            out << "," << SeriesColumnSchema::columnHeader(s);
     }
     out << "\n";
 
@@ -517,6 +535,7 @@ bool PlotViewModel::exportCsv(const QString& filepath) const
 
     for (int i = 0; i < m_series.size(); ++i)
     {
+        if (!included(m_series[i])) continue;
         const auto& s = m_series[i];
         for (int j = 0; j < s.xValues.size(); ++j)
         {
@@ -536,6 +555,7 @@ bool PlotViewModel::exportCsv(const QString& filepath) const
         const auto& vals = it.value();
         for (int i = 0; i < m_series.size(); ++i)
         {
+            if (!included(m_series[i])) continue;
             if (vals.contains(i))
             {
                 out << "," << QString::number(vals[i], 'f', 6);
@@ -550,6 +570,66 @@ bool PlotViewModel::exportCsv(const QString& filepath) const
 
     file.close();
     return true;
+}
+
+bool PlotViewModel::effectiveVisible(const PlotSeriesData& s) const
+{
+    return s.visible && (m_visible_source < 0 || s.sourceId == m_visible_source);
+}
+
+void PlotViewModel::setSourceLabel(int sourceId, const QString& label)
+{
+    if (m_source_labels.value(sourceId) == label)
+        return;
+    m_source_labels.insert(sourceId, label);
+    emit sourcesChanged();
+}
+
+QVector<QPair<int, QString>> PlotViewModel::sourceList() const
+{
+    QVector<QPair<int, QString>> list;
+    QSet<int> seen;
+    for (const PlotSeriesData& s : m_series)
+    {
+        if (seen.contains(s.sourceId))
+            continue;
+        seen.insert(s.sourceId);
+        const QString label = m_source_labels.value(s.sourceId,
+                                                    QStringLiteral("Source %1").arg(s.sourceId));
+        list.append({ s.sourceId, label });
+    }
+    return list;
+}
+
+int PlotViewModel::visibleSource() const
+{
+    return m_visible_source;
+}
+
+void PlotViewModel::setVisibleSource(int sourceId)
+{
+    m_visible_source = sourceId;
+
+    // Zoom the X viewport to the shown source's span (all sources when -1), so
+    // browsing a single file fills the plot instead of sitting on the whole-batch axis.
+    double lo = std::numeric_limits<double>::max();
+    double hi = std::numeric_limits<double>::lowest();
+    for (const PlotSeriesData& s : m_series)
+    {
+        if (!effectiveVisible(s) || s.xValues.isEmpty())
+            continue;
+        lo = std::min(lo, s.xValues.first());
+        hi = std::max(hi, s.xValues.last());
+    }
+    if (lo <= hi)
+    {
+        m_x_view_min = lo;
+        m_x_view_max = hi;
+    }
+
+    computeYRange();
+    emit sourcesChanged();
+    emit dataChanged();
 }
 
 // ---------------------------------------------------------------------------
@@ -956,7 +1036,7 @@ void PlotViewModel::computeYRange()
 
     for (const auto& s : m_series)
     {
-        if (!s.visible || s.yValues.isEmpty())
+        if (!effectiveVisible(s) || s.yValues.isEmpty())
         {
             continue;
         }
@@ -1014,7 +1094,7 @@ double PlotViewModel::missedFramesMax() const
     double max_val = 0.0;
     for (const auto& s : m_series)
     {
-        if (s.metricType != PlotSeriesData::MetricType::AccumulatedMissedFrames || !s.visible)
+        if (s.metricType != PlotSeriesData::MetricType::AccumulatedMissedFrames || !effectiveVisible(s))
         {
             continue;
         }

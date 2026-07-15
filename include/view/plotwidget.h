@@ -6,6 +6,7 @@
 #ifndef PLOTWIDGET_H
 #define PLOTWIDGET_H
 
+#include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QFrame>
 #include <QHash>
@@ -111,8 +112,6 @@ private slots:
     void onResetAxes();
     /// Shows a tooltip with the nearest data point value under the cursor.
     void onPlotMouseMove(QMouseEvent* event);
-    /// Toggles the left axis between Framesync Lock (%) and Missed Frames.
-    void onAxisViewToggleClicked();
 
 signals:
     /// Emitted when a log message should be displayed.
@@ -126,10 +125,14 @@ private:
     void setUpLayout();
     void setUpConnections();
 
-    /// Syncs the left-axis toggle button's text/enabled state to the ViewModel.
-    void updateAxisViewButton();
+    /// Syncs the View Mode dropdown's selection/enabled state (and the left
+    /// spinbox range) to the ViewModel's active left-axis metric.
+    void updateAxisViewCombo();
     /// Rebuilds the floating legend's rows from current ViewModel series visibility.
     void rebuildLegend();
+    /// Repopulates the file-selector dropdown from the ViewModel's source list and
+    /// syncs its enabled state (disabled for <=1 source) and current selection.
+    void populateSourceCombo();
     /// Sizes the legend overlay to fit @p content (height/width capped) and
     /// positions/clamps it in view. @p content is the natural, unconstrained size
     /// of the legend rows, computed by the caller (rebuildLegend()) directly from
@@ -164,7 +167,8 @@ private:
     /// @name Top toolbar controls
     /// @{
     QLineEdit* m_title_edit = nullptr;
-    QPushButton* m_axis_view_btn = nullptr; ///< Toggles left axis: Lock (%) vs Missed Frames.
+    QComboBox* m_axis_view_combo = nullptr; ///< View Mode: left axis Lock % vs Accumulation (missed frames).
+    QComboBox* m_source_combo = nullptr;    ///< Plot File: selects which processed file to view (US1.1); disabled for <=1 source.
     /// @}
 
     /// @name Bottom controls

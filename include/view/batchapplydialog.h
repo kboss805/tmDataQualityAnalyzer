@@ -5,8 +5,9 @@
  *
  * Matching is automatic (exact channel-ID set), so there is no per-file mapping
  * to adjust -- the dialog just shows each file's OK/rejected verdict, then lets
- * the user pick merged-vs-separate output, whether to reuse the template's saved
- * series appearance, and (separate mode) an output directory.
+ * the user optionally also export a CSV+image per file (to a chosen folder) and,
+ * for a saved template, reuse its per-series names/colors. Every processed file is
+ * retained in memory regardless, browsable via the plot toolbar's file selector.
  */
 
 #ifndef BATCHAPPLYDIALOG_H
@@ -19,7 +20,6 @@
 class QCheckBox;
 class QLineEdit;
 class QPushButton;
-class QRadioButton;
 
 class BatchApplyDialog : public QDialog
 {
@@ -40,12 +40,12 @@ public:
     BatchApplyDialog(const QList<FileEntry>& files, const QString& defaultOutputDir,
                      bool showReuseAppearance, QWidget* parent = nullptr);
 
-    bool    mergedMode() const;      ///< True = one merged plot; false = separate output per file.
+    bool    exportPerFile() const;   ///< True = also write a CSV+image per file to outputDir().
     bool    reuseAppearance() const; ///< True = reapply the template's saved series names/colors.
-    QString outputDir() const;       ///< Directory for separate-mode CSV/image exports.
+    QString outputDir() const;       ///< Directory for per-file CSV/image exports (when exportPerFile()).
 
 private slots:
-    void onModeChanged();
+    void onExportToggled();
     void browseOutputDir();
     void validateInput();
 
@@ -54,8 +54,7 @@ private:
 
     int m_ok_count = 0;
 
-    QRadioButton* m_merged_radio;
-    QRadioButton* m_separate_radio;
+    QCheckBox*    m_export_checkbox;
     QCheckBox*    m_reuse_appearance_checkbox;
     QLineEdit*    m_output_dir_edit;
     QPushButton*  m_output_dir_btn;

@@ -11,7 +11,6 @@
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTextStream>
-#include <QToolBar>
 #include <QtTest>
 
 #include "constants.h"
@@ -55,13 +54,6 @@ void TestMainView::menuBarExists()
     MainView view;
     QVERIFY2(view.menuBar() != nullptr, "MainView must have a menu bar");
     QVERIFY2(!view.menuBar()->actions().isEmpty(), "Menu bar must have at least one menu");
-}
-
-void TestMainView::toolBarExists()
-{
-    MainView view;
-    QList<QToolBar*> toolbars = view.findChildren<QToolBar*>();
-    QVERIFY2(!toolbars.isEmpty(), "MainView must have at least one toolbar");
 }
 
 void TestMainView::supportedFileDetection()

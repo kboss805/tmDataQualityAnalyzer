@@ -16,7 +16,6 @@ private slots:
     void constructsAndDestroysWithoutCrash();
     void windowTitleIsNonEmpty();
     void menuBarExists();
-    void toolBarExists();
 
     // US6.3 — CSV import / file routing
     void supportedFileDetection();

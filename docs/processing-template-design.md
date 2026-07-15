@@ -50,43 +50,49 @@ Picks a source (prompts if several), then
 walking `PlotViewModel::allSeries()` for `(sourceId, streamOrder ==
 pcmChannelId)`. This is the only place series names/colors get persisted.
 
-## 5. Running a batch — two entry points, one loop
+## 5. Running a batch — one entry point, one loop
 
-Two ways in, both ending at `startBatchFromTemplate(template, files, showReuseAppearance)`:
+The only entry point is **Apply Template** (`applyTemplateButtonPressed()`): pick +
+parse a saved template `.json`, then multi-select the files, and hand off to
+`startBatchFromTemplate(template, files, showReuseAppearance = true)`. (There is no
+direct "open multiple files" path and no Add/Remove Source — a template is the sole
+way to configure a batch.)
 
-- **Open Multiple Files** (`openMultipleButtonPressed()`) — the direct path for
-  "process a string of same-channel-ID files." Multi-selects files, loads the
-  first for metadata, shows the **Configure Streams dialog once**
-  (`configureMultiThenBatch()`), and builds an **in-memory** `ProcessingTemplate`
-  from that config (no saved `.json`, no series appearance). `showReuseAppearance =
-  false`.
-- **Apply Template** (`applyTemplateButtonPressed()`) — pick+parse a saved template
-  `.json`, then pick the files. `showReuseAppearance = true`.
-
-`startBatchFromTemplate()` then **validates each file up front** (cheap TMATS-only
+`startBatchFromTemplate()` **validates each file up front** (cheap TMATS-only
 `Chapter10Reader::loadChannels` + `TemplateMatcher`) → `BatchApplyDialog` shows each
-file OK/rejected(reason), a merged-vs-separate toggle, a reuse-appearance checkbox
-(hidden for Open Multiple), and (separate) an output folder → starts the run.
+file OK/rejected(reason), an optional "also export a CSV + plot images per file"
+checkbox (+ output folder), and a reuse-appearance checkbox → starts the run.
 
 The run is a sequential one-run-at-a-time state machine (`advanceBatch()` ↔
-`onProcessingFinished()`):
+`onProcessingFinished()`). **Every file is retained in memory** (accumulated onto the
+shared axis) so the user can browse them afterward — there is no merged-vs-separate
+mode:
 
-- `advanceBatch()` — separate mode `clearData()` per file (fresh plot each);
-  merged mode accumulates. `addSource(file)`, then wait.
+- `advanceBatch()` — `addSource(file)`, then wait. Never clears between files.
 - `onSourceReadyForStreamConfig()` gains an `m_batch_active` branch →
   `applyBatchSourceConfig()`: re-validate the loaded file (belt-and-suspenders),
   then `setStreamConfigs(template configs)` + `setTimeChannelIndex` +
   `startProcessing()` — no dialog.
 - `onProcessingFinished()` gains an `m_batch_active` branch →
-  `onBatchProcessingFinished()`: reapply appearance (if enabled), and in separate
-  mode export CSV (`PlotViewModel::exportCsv`) + image (`PlotWidget::exportImage`,
-  extracted headless in Phase A) auto-named from the file's base name; then
-  advance.
-- `finishBatch()` — merged: one accumulated plot + combined title; separate:
-  a summary log (`N processed, M skipped, output → dir`).
+  `onBatchProcessingFinished()`: label the source (`setSourceLabel`) for the file
+  selector, and reapply appearance (if enabled); then advance.
+- `finishBatch()` — if per-file export was requested, a **post-pass** isolates each
+  source (`setVisibleSource`) and writes `exportCsv(path, sourceId)` plus, per file,
+  a `_framesync_lock.png` and a `_missed_frames.png` (flipping `setLockAxisView`
+  between the two left-axis metrics before each headless `exportImage`). Then
+  defaults the view to the first file and logs a summary (`N processed, M skipped[,
+  output → dir]`).
 
-Merged mode inherits the multi-source shared-time-axis re-basing for free via
-`addSource()`/`PlotViewModel::addStreamData()` — no new time-axis logic.
+**Plot File selector (US1.1 browsing):** the plot toolbar's far-left **Plot File**
+dropdown (`PlotWidget::m_source_combo`) picks which retained file to view, or "All
+files (overlaid)". It drives `PlotViewModel::setVisibleSource` (−1 = all), which sets
+`m_visible_source` and zooms the X viewport to that file.
+`effectiveVisible(s) = s.visible && sourceMatches` is the single gate the chart,
+legend, and Y-ranging consult — so the source filter never clobbers per-series
+visibility or the **View Mode** (lock%/accumulation) selector. The dropdown disables
+for ≤1 source.
+Retaining every file inherits the multi-source shared-time-axis re-basing for free
+via `addSource()`/`PlotViewModel::addStreamData()` — no new time-axis logic.
 
 ## 6. Appearance reapply
 
