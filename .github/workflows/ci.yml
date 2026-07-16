@@ -1,9 +1,12 @@
 name: CI
 
 # Build the app and run the full Qt Test suite on every push to main and every PR.
-# Mirrors the local build-and-test workflow: Qt (see QT_VERSION below) + MSVC,
-# qmake + nmake, app built under build/, tests built in-source under tests/ (the
-# exe must sit one level below tests/ or the data-file fixtures don't resolve).
+# Runs on a SELF-HOSTED Windows runner (label: tmdqa) that already has the MSVC
+# 2022 toolchain + Qt msvc2022_64 kit installed and the large .ch10 fixtures on
+# disk — so there is no per-run Qt download and the integration suites actually
+# run. The toolchain is set up by dot-sourcing scripts/env.ps1 (vcvars + Qt on
+# PATH); app built under build/, tests built in-source under tests/ (the exe must
+# sit one level below tests/ or the data-file fixtures don't resolve).
 
 on:
   push:
@@ -16,48 +19,60 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Single source of truth for the CI Qt version — bump here (keep in sync with
-# QT_VERSION in scripts/env.ps1, which is the local-machine source of truth).
+# Qt version for this workflow. env.ps1 respects an existing QT_VERSION, so this
+# stays the single knob; it must match the Qt kit installed on the runner.
 env:
   QT_VERSION: '6.10.3'
 
 jobs:
   build-and-test:
-    runs-on: windows-latest
+    runs-on: [self-hosted, windows, tmdqa]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install Qt ${{ env.QT_VERSION }} (MSVC)
-        uses: jurplel/install-qt-action@v4
         with:
-          version: ${{ env.QT_VERSION }}
-          host: windows
-          target: desktop
-          arch: win64_msvc2022_64
-          # Qt SVG (Qt6Svg) ships in the base package in Qt 6, so it is NOT a
-          # selectable --modules entry (aqt rejects it). printsupport, widgets,
-          # and concurrent are likewise part of qtbase.
-          cache: true
+          # Do NOT let checkout run `git clean -ffdx`: it would delete the
+          # gitignored build artifacts we clean ourselves below AND could follow
+          # the tests\data fixtures junction. We reset the workspace explicitly.
+          clean: false
 
-      - name: Set up MSVC (cl / nmake)
-        # Imports the Visual Studio 2022 x64 developer environment (cl, nmake,
-        # INCLUDE/LIB) into the job so qmake's win32-msvc spec and the build steps
-        # can find the compiler. windows-latest ships VS 2022.
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
+      - name: Prepare workspace (clean artifacts + link fixtures)
+        shell: pwsh
+        run: |
+          # Persistent-runner hygiene: remove stale build outputs (NOT tests\data)
+          # so a leftover .qmake.stash or prior-run object files can't break the
+          # build (QMAKE_MSC_VER / C1041). tests\data is handled as a junction below.
+          foreach ($p in 'build', 'tests\debug', 'tests\release', 'tests\output') {
+            if (Test-Path $p) { Remove-Item $p -Recurse -Force }
+          }
+          Get-ChildItem -Recurse -Force -Include '.qmake.stash' -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+
+          # The large .ch10 fixtures are gitignored, so absent from the checkout.
+          # Junction tests\data to the machine-local copy (path in the runner's
+          # .env as TMDQA_CH10_DATA) so the four integration suites run the full
+          # 325 instead of skipping. Delete only the junction link (not its target)
+          # before re-creating it.
+          if (Test-Path tests\data) { (Get-Item tests\data -Force).Delete() }
+          if ($env:TMDQA_CH10_DATA -and (Test-Path $env:TMDQA_CH10_DATA)) {
+            New-Item -ItemType Junction -Path tests\data -Target $env:TMDQA_CH10_DATA | Out-Null
+            Write-Host "Linked tests\data -> $env:TMDQA_CH10_DATA"
+          } else {
+            Write-Host "::warning::TMDQA_CH10_DATA not set/found on the runner — integration suites will skip."
+          }
 
       - name: Toolchain versions
         shell: pwsh
         run: |
+          . .\scripts\env.ps1
           qmake --version
           cl 2>&1 | Select-Object -First 1
 
       - name: Build app (Debug)
         shell: pwsh
         run: |
+          . .\scripts\env.ps1
           New-Item -ItemType Directory -Force -Path build | Out-Null
           Set-Location build
           qmake ..\tmDataQualityAnalyzer.pro -spec win32-msvc 'CONFIG+=debug'
@@ -69,8 +84,7 @@ jobs:
         run: |
           # The whole build must be warning-free. The vendored third-party libs
           # (lib/irig106, lib/qcustomplot) are compiled without warnings via
-          # thirdparty.pri, so any remaining 'warning C####' is real app code and
-          # fails CI. (MSVC emits 'file(line): warning C4996: ...'.)
+          # thirdparty.pri, so any remaining 'warning C####' is real app code.
           $warns = Select-String -Path build\app_build.log -Pattern 'warning [A-Z]\d+'
           if ($warns) {
             Write-Host "Compiler warnings found:"
@@ -82,6 +96,7 @@ jobs:
       - name: Build tests (Debug, in-source)
         shell: pwsh
         run: |
+          . .\scripts\env.ps1
           Set-Location tests
           qmake tests.pro -spec win32-msvc 'CONFIG+=debug'
           nmake -f Makefile.Debug
@@ -91,8 +106,8 @@ jobs:
         shell: pwsh
         run: |
           Set-Location tests
-          # The harness writes results to tests/output/ (gitignored, so absent on a
-          # fresh checkout); create it or the exe bails before running any test.
+          # The harness writes results to tests/output/ (gitignored); create it or
+          # the exe bails before running any test.
           New-Item -ItemType Directory -Force -Path output | Out-Null
           .\debug\tmDataQualityAnalyzer_tests.exe
           $code = $LASTEXITCODE
@@ -105,13 +120,12 @@ jobs:
           Write-Host "Results: $pass passed, $fail failed, $skip skipped (exit $code)"
           if ($code -ne 0) { throw "Test suite exited non-zero ($code)" }
           if ($fail -gt 0)  { throw "$fail test(s) failed" }
-          # Guard against a silently aborted / poisoned harness reporting success
-          # with almost nothing run. The fixture-dependent integration suites skip
-          # on CI (the large .ch10 files are gitignored), leaving ~230+ tests; a
-          # count far below that means the run didn't actually execute the suite.
-          $minExpected = 200
+          # Fixtures are linked on this runner, so the .ch10 integration suites run
+          # (full green baseline is 325). A count far below that means the fixtures
+          # junction failed and the integration suites silently skipped — fail loudly.
+          $minExpected = 320
           if ($pass -lt $minExpected) {
-            throw "Only $pass tests passed (expected >= $minExpected) — the suite aborted or the harness was poisoned"
+            throw "Only $pass tests passed (expected >= $minExpected) — the fixtures didn't link or the suite aborted"
           }
 
       - name: Upload test results
