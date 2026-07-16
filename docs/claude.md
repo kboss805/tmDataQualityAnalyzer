@@ -6,8 +6,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 
 - **Qt Version**: 6.10.3 (minimum: Qt 6.0.0)
 - **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, `cl` / `nmake`), Qt `msvc2022_64` kit.
-  The legacy MinGW 13.1.0 toolchain still builds (`$env:TMDQ_TOOLCHAIN='mingw'`) because the
-  `.pro`/`.pri` compiler flags are scoped per toolchain, but MSVC is the default and what CI uses.
+  This is the only supported toolchain (and what CI uses).
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
 - **Project Version**: 2.7.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
 
@@ -924,8 +923,6 @@ Order includes in each `.cpp` / `.h` file as follows, with a blank line between 
 - **Debug**: `nmake -f Makefile.Debug` → `debug/tmDataQualityAnalyzer.exe`
 - **Release**: `nmake -f Makefile.Release` → `release/tmDataQualityAnalyzer.exe`
 
-(MinGW builds use `mingw32-make` instead of `nmake` — same Makefile targets.)
-
 ### VS Code Integration
 
 Tasks are defined in `.vscode/tasks.json`:
@@ -1017,8 +1014,9 @@ Tasks are defined in `.vscode/tasks.json`:
      `msvc2022_64` kit bin on PATH
    - Check paths in `.vscode/tasks.json` match your Qt installation
 2. **qmake fails: "QMAKE_MSC_VER isn't set"**
-   - A stale `.qmake.stash` (cached from a MinGW build, shared up the directory tree) is masking
-     MSVC detection. Delete `.qmake.stash` (and any in parent dirs) and build in a clean dir.
+   - A stale `.qmake.stash` (qmake caches the compiler's version detection and shares it up the
+     directory tree) is masking MSVC detection — e.g. a leftover from a pre-switch MinGW build.
+     Delete `.qmake.stash` (and any in parent dirs) and build in a clean dir.
 
 3. **MOC errors**
    - Ensure Q_OBJECT macro is present in classes with signals/slots

@@ -56,12 +56,12 @@ Set-Location $ProjectDir
 Write-Host "[1/7] Running qmake..."
 New-Item -ItemType Directory -Force -Path "$ProjectDir\build" | Out-Null
 Set-Location "$ProjectDir\build"
-& qmake ../tmDataQualityAnalyzer.pro -spec win32-g++ 'CONFIG+=release'
+& qmake ../tmDataQualityAnalyzer.pro -spec win32-msvc 'CONFIG+=release'
 if ($LASTEXITCODE -ne 0) { throw "qmake failed" }
 
 Write-Host "[2/7] Building release..."
-& mingw32-make -f Makefile.Release clean
-& mingw32-make -f Makefile.Release "-j$env:NUMBER_OF_PROCESSORS"
+& nmake -f Makefile.Release clean
+& nmake -f Makefile.Release
 if ($LASTEXITCODE -ne 0) { throw "Build failed" }
 
 # --- Step 2: Prepare staging directories ---
@@ -94,7 +94,9 @@ New-Item -ItemType Directory -Force -Path "$PortableRoot\settings\framesync_patt
 # --- Step 3: Copy exe and run windeployqt for installer layout ---
 Write-Host "[4/7] Running windeployqt (installer layout)..."
 Copy-Item "$ProjectDir\build\release\tmDataQualityAnalyzer.exe" "$InstallerStage\bin\"
-& windeployqt --release --no-translations --no-opengl-sw --no-system-d3d-compiler "$InstallerStage\bin\tmDataQualityAnalyzer.exe"
+# --compiler-runtime stages the VC++ runtime DLLs (MSVC build) alongside the Qt
+# DLLs so the installed/portable app runs on a machine without Visual Studio.
+& windeployqt --release --compiler-runtime --no-translations --no-opengl-sw --no-system-d3d-compiler "$InstallerStage\bin\tmDataQualityAnalyzer.exe"
 if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
 
 foreach ($dir in @('receiver_params', 'rcvr_cals', 'framesync_patterns')) {

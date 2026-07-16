@@ -35,13 +35,6 @@ each command (or chain the build into the same call with `;`). Verify with `qmak
 `cl` if a build fails with "command not found". A harmless `'vswhere.exe' is not recognized` line may
 print (emitted from inside vcvars) — ignore it as long as `cl` resolves.
 
-**Legacy MinGW:** to build with the old GCC toolchain instead, set `$env:TMDQ_TOOLCHAIN='mingw'`
-before dot-sourcing. The `.pro`/`.pri` flags are compiler-scoped so both toolchains build; the
-commands below then use `-spec win32-g++` and `mingw32-make`. **When switching toolchains, delete any
-stale `.qmake.stash` and use a clean build dir** — qmake caches the first compiler's detection and
-shares it up the directory tree, so a leftover MinGW stash makes an MSVC qmake fail with
-"QMAKE_MSC_VER isn't set".
-
 ## Building the application
 
 ```powershell
@@ -105,20 +98,18 @@ does not honor a `ClassName::testCase` single-suite filter.
 ## When a build breaks for non-code reasons
 
 - **"qmake/nmake/cl is not recognized"** → you skipped Step 0 in this shell.
-- **qmake: "msvc-version.conf loaded but QMAKE_MSC_VER isn't set"** → a stale `.qmake.stash` (cached
-  from a MinGW build, shared up the directory tree) is masking MSVC detection. Delete `.qmake.stash`
-  (and any in parent dirs) and build in a clean dir.
-- **`C1041 ... cannot open program database`** → stale cross-compiler artifacts in the build dir
-  (e.g. a prior MinGW `tests/debug`). Clean the dir (`Remove-Item debug -Recurse -Force` + delete the
-  `Makefile*`) and re-`qmake`.
+- **qmake: "msvc-version.conf loaded but QMAKE_MSC_VER isn't set"** → a stale `.qmake.stash` (qmake
+  caches compiler detection and shares it up the directory tree) is masking MSVC detection. Delete
+  `.qmake.stash` (and any in parent dirs) and build in a clean dir.
+- **`C1041 ... cannot open program database`** → stale artifacts in the build dir. Clean it
+  (`Remove-Item debug -Recurse -Force` + delete the `Makefile*`) and re-`qmake`.
 - **`LNK2019` unresolved Win32 symbol** → a Win32 API (e.g. user32's `GetWindowRect`) needs its import
-  lib linked explicitly under MSVC (MinGW auto-links them). Add it to the `win32` `LIBS` in the `.pro`.
+  lib linked explicitly. Add it to the `win32` `LIBS` in the `.pro`.
 - **Data-file tests fail/skip but logic looks fine** → the test exe is not one level under `tests/`;
   rebuild in-source in `tests/`.
 - **MOC / "unresolved external symbol ... vtable/metaObject"** → a `Q_OBJECT` class changed; re-run
   `qmake` then rebuild.
-- **`/bigobj` / `-Wa,-mbig-obj`** → QCustomPlot's TU needs the large-object switch; it's already
-  scoped per compiler in the `.pro`/`tests.pro`. Don't add it to clangd flags (`.clangd` strips it).
+- **`/bigobj`** → QCustomPlot's TU needs the large-object switch; it's already in the `.pro`/`tests.pro`.
 
 ## Guardrails
 

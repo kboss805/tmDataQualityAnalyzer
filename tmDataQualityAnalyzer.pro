@@ -54,19 +54,13 @@ INCLUDEPATH += \
 
 win32 {
     LIBS += -lws2_32 # Windows sockets, specifically WSASocketW()
-    # MainView::nativeEvent (frameless window) calls GetWindowRect / ScreenToClient /
-    # IsZoomed / GetSystemMetrics. MinGW auto-links the Win32 API import libraries;
-    # MSVC does not, so user32 must be linked explicitly.
+    # user32: MainView::nativeEvent (frameless window) calls GetWindowRect /
+    # ScreenToClient / IsZoomed / GetSystemMetrics, which live in user32.lib.
     LIBS += -luser32
+    # /bigobj: QCustomPlot compiles to one very large translation unit that overflows
+    # the default object-file section limit (fatal error C1128) without it.
+    QMAKE_CXXFLAGS += /bigobj
 }
-
-# QCustomPlot compiles to a single, very large translation unit that overflows the
-# default object-file section limit; each toolchain needs its own "large object"
-# switch or qcustomplot.cpp fails to compile (GNU assembler: too many sections;
-# MSVC: fatal error C1128). Scoped by compiler so the build works under both MinGW
-# (win32-g++) and MSVC (win32-msvc).
-win32-g++:  QMAKE_CXXFLAGS += -Wa,-mbig-obj
-win32-msvc: QMAKE_CXXFLAGS += /bigobj
 
 # Compile the vendored third-party libs (lib/irig106, lib/qcustomplot) without the
 # app's -Wall -Wextra so their pre-existing warnings don't bury real app warnings.

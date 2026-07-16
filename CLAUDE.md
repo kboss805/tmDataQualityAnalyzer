@@ -12,14 +12,11 @@ time. MVVM, single-reader / parallel-worker processing core. **Current version: 
 
 Toolchain is **not on PATH** — set it up first by dot-sourcing `. .\scripts\env.ps1`, which imports
 the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on PATH. Use the
-**PowerShell** tool. (Legacy MinGW is still supported for a build: `$env:TMDQ_TOOLCHAIN='mingw'`
-before dot-sourcing; the `.pro`/`.pri` flags are compiler-scoped so both toolchains build.)
+**PowerShell** tool.
 
 - **App:** from `build/`, `qmake ..\tmDataQualityAnalyzer.pro -spec win32-msvc CONFIG+=debug` then
   `nmake -f Makefile.Debug`. Re-run qmake after `.pro`/version/`Q_OBJECT` changes. **Zero warnings
-  required.** Switching toolchains? Delete the stale `.qmake.stash` (qmake caches the *first*
-  compiler's detection and shares it up the tree) and do a clean build dir, or qmake fails with
-  "QMAKE_MSC_VER isn't set".
+  required.**
 - **Tests:** build **in-source inside `tests/`** (the exe must sit one level under `tests/` or the
   data-file tests fail), then `.\debug\tmDataQualityAnalyzer_tests.exe`. The full run (all **19
   suites**) is dominated by the real-Ch10 integration suites (a few minutes); add `--fast` (or

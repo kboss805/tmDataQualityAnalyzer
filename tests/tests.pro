@@ -17,16 +17,12 @@ INCLUDEPATH += \
 win32 {
     LIBS += -lws2_32
     # user32: TestMainView links mainview.cpp, whose nativeEvent() calls Win32
-    # user32 APIs. MinGW auto-links it; MSVC needs it explicit (see the app .pro).
+    # user32 APIs (see the app .pro).
     LIBS += -luser32
+    # /bigobj: QCustomPlot's large translation unit overflows the default section
+    # limit without it. Kept in sync with tmDataQualityAnalyzer.pro.
+    QMAKE_CXXFLAGS += /bigobj
 }
-
-# QCustomPlot's large translation unit needs each toolchain's "large object" switch
-# (GNU assembler -Wa,-mbig-obj / MSVC /bigobj) or qcustomplot.cpp fails to compile.
-# Kept in sync with tmDataQualityAnalyzer.pro; scoped so both win32-g++ and
-# win32-msvc builds work.
-win32-g++:  QMAKE_CXXFLAGS += -Wa,-mbig-obj
-win32-msvc: QMAKE_CXXFLAGS += /bigobj
 
 # Compile the vendored third-party libs (lib/irig106, lib/qcustomplot) without the
 # app's -Wall -Wextra so their pre-existing warnings don't bury real app warnings.
