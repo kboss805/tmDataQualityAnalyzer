@@ -7,7 +7,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Qt Version**: 6.10.2 (minimum: Qt 6.0.0)
 - **MinGW Version**: 13.1.0 (minimum: GCC/MinGW 7.0)
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
-- **Project Version**: 2.6.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
+- **Project Version**: 2.7.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
 
 ## User Stories
 
@@ -336,6 +336,55 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The menu and title-bar icons swap to theme-appropriate variants when the theme changes.
 
 ## Version History
+
+### v2.7.0 — Processing Templates & Batch Apply, Hamburger Menu, Frameless Title Bar, User Manual
+
+**Processing templates & batch apply (US1.1)**
+- New: **Save as Template…** captures one processed source's per-stream settings
+  (`StreamConfig`s + time channel) and each series' name/color (`SeriesAppearance`)
+  as a file-path-independent JSON template (`ProcessingTemplate` DTO,
+  `ProcessingTemplateSchema` with `schemaVersion` gating; delegates per-entry
+  serialization to `StreamConfigSchema`).
+- New: **Apply Template to Files…** batch-processes N `.ch10` files with one
+  template. `TemplateMatcher` enforces exact channel-ID-set equality per file
+  (`MatchResult` reports missing/extra ids); non-matching files are flagged in
+  `BatchApplyDialog` and skipped — never silently mis-applied. The batch loop is a
+  sequential state machine (`advanceBatch()` ↔ `onBatchProcessingFinished()`)
+  mirroring the old session-load turn-taking.
+- All processed files are retained in memory; `PlotViewModel` gained per-source
+  labels/filtering (`setVisibleSource`, `sourceList`, `effectiveVisible`) and the
+  plot toolbar a **Plot File** selector ("All files (overlaid)" or any single file).
+- Optional per-file export post-pass writes a CSV plus two images per file
+  (`…_framesync_lock.png`, `…_missed_frames.png`) via the new headless
+  `PlotWidget::exportImage()` (extracted from `onExportPlot()`).
+- Removed: Save/Open Session (Phase 6), Open Multiple Files, Add/Remove Source —
+  Apply Template is the sole batch entry point.
+
+**Single hamburger menu + frameless title bar**
+- The menu bar and icon toolbar collapsed into one ☰ menu with flat
+  `addSection` groups (Process / Import/Export / Settings / Help); Import/Export
+  became menu actions; Recent Files sits under Open in the Process section.
+- Frameless window: a custom title bar (`setMenuWidget`) hosts the hamburger,
+  the sidebar toggle, and min/maximize/close. `MainView::nativeEvent()` handles
+  `WM_NCCALCSIZE`/`WM_NCHITTEST` so native move/resize/snap/double-click-maximize
+  survive; hit-testing converts through `ScreenToClient` and reports any
+  `QToolButton` under the cursor as client so title-bar buttons receive clicks.
+- New sidebar (log) show/hide: title-bar toggle + Ctrl+B, persisted in QSettings
+  (`SidebarVisible`); `m_controls_dock`/`kControlsDockMinWidth` renamed to
+  `m_sidebar_dock`/`kSidebarMinWidth`. Hamburger/sidebar glyphs are QPainter-drawn
+  and re-render per theme in `applyActionIconsForTheme()`.
+
+**User manual**
+- New: **Help > User Manual…** opens an HTML manual (embedded resource
+  `resources/usermanual.html`, copied to the temp dir and opened in the default
+  browser).
+
+**Tests**
+- New suites: `TestProcessingTemplateSchema`, `TestTemplateMatcher`; extended
+  `TestPlotWidget` (headless `exportImage`), `TestPlotViewModel` (source
+  filtering/labels/CSV source filter), `TestMainView` (batch appearance reapply,
+  template capture, `titleBarExists`). Full-run green baseline: 325/0/0 across
+  19 suites (with `.ch10` fixtures present).
 
 ### v2.6.0 — CSV Import, Movable Legend, Configure Streams Redesign, Stability Fixes
 

@@ -14,7 +14,7 @@
 /// @brief Application version information.
 struct AppVersion {
     static constexpr int kMajor = 2;   ///< Major version number.
-    static constexpr int kMinor = 6;   ///< Minor version number.
+    static constexpr int kMinor = 7;   ///< Minor version number.
     static constexpr int kPatch = 0;   ///< Patch version number.
 
     /// @return Version string in "major.minor.patch" format.
