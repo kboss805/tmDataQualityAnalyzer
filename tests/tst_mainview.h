@@ -15,7 +15,7 @@ class TestMainView : public QObject
 private slots:
     void constructsAndDestroysWithoutCrash();
     void windowTitleIsNonEmpty();
-    void menuBarExists();
+    void titleBarExists();
 
     // US6.3 — CSV import / file routing
     void supportedFileDetection();

@@ -10,16 +10,20 @@
 #include <QDir>
 #include <QFile>
 #include <QFrame>
+#include <QIcon>
 #include <QInputDialog>
 #include <QJsonDocument>
 #include <QJsonParseError>
+#include <QKeySequence>
 #include <QMessageBox>
+#include <QPainter>
 #include <QPixmap>
 #include <QPushButton>
 #include <QSettings>
 #include <QSignalBlocker>
 #include <QStatusBar>
 #include <QTime>
+#include <QToolButton>
 #include <QUrl>
 
 #include "batchapplydialog.h"
@@ -36,6 +40,70 @@
 #include "streamconfigdialog.h"
 #include "templatematcher.h"
 #include "timefields.h"
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <windowsx.h>
+#endif
+
+namespace
+{
+    constexpr int kTitleBarHeight = 40;  ///< Custom title-bar height (logical px).
+
+    /// Title-bar glyph foreground for the active theme.
+    QColor titleGlyphColor(bool dark)
+    {
+        return dark ? QColor(0xC8, 0xC8, 0xC8) : QColor(0x3C, 0x3C, 0x3C);
+    }
+
+    /// Paints a thin three-line "hamburger" menu glyph (Claude Code style). Drawn in
+    /// code so it adapts to the theme without shipping separate dark/light assets.
+    QIcon makeMenuIcon(bool dark)
+    {
+        QPixmap pm(32, 32);
+        pm.fill(Qt::transparent);
+        QPainter p(&pm);
+        p.setRenderHint(QPainter::Antialiasing);
+        QPen pen(titleGlyphColor(dark), 2.0);
+        pen.setCapStyle(Qt::RoundCap);
+        p.setPen(pen);
+        const qreal x0 = 7.5, x1 = 24.5;
+        p.drawLine(QPointF(x0, 11), QPointF(x1, 11));
+        p.drawLine(QPointF(x0, 16), QPointF(x1, 16));
+        p.drawLine(QPointF(x0, 21), QPointF(x1, 21));
+        p.end();
+        return QIcon(pm);
+    }
+
+    /// Paints a thin "toggle sidebar" glyph (Claude Code style): a rounded window
+    /// outline with a divider ~1/3 in and the left panel lightly filled.
+    QIcon makeSidebarIcon(bool dark)
+    {
+        QPixmap pm(32, 32);
+        pm.fill(Qt::transparent);
+        QPainter p(&pm);
+        p.setRenderHint(QPainter::Antialiasing);
+        const QColor c = titleGlyphColor(dark);
+        QPen pen(c, 1.9);
+        pen.setJoinStyle(Qt::RoundJoin);
+        p.setPen(pen);
+        p.setBrush(Qt::NoBrush);
+        const QRectF r(6, 8, 20, 16);
+        p.drawRoundedRect(r, 3, 3);
+        const qreal x = r.left() + r.width() * 0.36;
+        p.fillRect(QRectF(r.left() + 1.0, r.top() + 1.0, x - r.left() - 1.0, r.height() - 2.0),
+                   QColor(c.red(), c.green(), c.blue(), 70));
+        p.drawLine(QPointF(x, r.top() + 0.5), QPointF(x, r.bottom() - 0.5));
+        p.end();
+        return QIcon(pm);
+    }
+}
 
 
 MainView::MainView(QWidget *parent)
@@ -73,9 +141,9 @@ void MainView::saveLastCh10Dir()
 
 void MainView::setUpMainLayout()
 {
-    m_controls_layout = new QVBoxLayout;
-    m_controls_layout->setSpacing(0);
-    m_controls_layout->setContentsMargins(2, UIConstants::kLayoutSpacingSmall, UIConstants::kLayoutSpacingSmall, UIConstants::kLayoutSpacingSmall);
+    m_sidebar_layout = new QVBoxLayout;
+    m_sidebar_layout->setSpacing(0);
+    m_sidebar_layout->setContentsMargins(2, UIConstants::kLayoutSpacingSmall, UIConstants::kLayoutSpacingSmall, UIConstants::kLayoutSpacingSmall);
 
     // set up constituent parts
     setUpMenuBar();
@@ -87,11 +155,11 @@ void MainView::setUpMainLayout()
     m_log_preview->setOpenLinks(false);
     m_log_preview->setMinimumHeight(UIConstants::kLogPreviewHeight);
 
-    // Log preview fills the controls panel; progress/cancel now live in
+    // Log preview fills the sidebar; progress/cancel now live in
     // ProcessingProgressDialog, shown only while processing is active.
-    m_controls_layout->addWidget(m_log_preview, 1);
+    m_sidebar_layout->addWidget(m_log_preview, 1);
 
-    // PlotWidget as central widget — fills all space right of the controls dock
+    // PlotWidget as central widget — fills all space right of the sidebar dock
     m_plot_view_model = new PlotViewModel(this);
     m_plot_widget = new PlotWidget;
     m_plot_widget->setViewModel(m_plot_view_model);
@@ -112,17 +180,29 @@ void MainView::setUpMainLayout()
     // the total visual gap becomes exactly 16px.
     setCentralWidget(m_plot_widget);
 
-    // Controls in a left dock widget
-    QWidget* controls_widget = new QWidget;
-    controls_widget->setLayout(m_controls_layout);
-    controls_widget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    // Sidebar in a left dock widget (holds the log); shown/hidden from the title bar.
+    QWidget* sidebar_widget = new QWidget;
+    sidebar_widget->setLayout(m_sidebar_layout);
+    sidebar_widget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
 
-    m_controls_dock = new QDockWidget(this);
-    m_controls_dock->setTitleBarWidget(new QWidget);
-    m_controls_dock->setWidget(controls_widget);
-    m_controls_dock->setFeatures(QDockWidget::NoDockWidgetFeatures);
-    m_controls_dock->setMinimumWidth(UIConstants::kControlsDockMinWidth);
-    addDockWidget(Qt::LeftDockWidgetArea, m_controls_dock);
+    m_sidebar_dock = new QDockWidget(this);
+    m_sidebar_dock->setTitleBarWidget(new QWidget);
+    m_sidebar_dock->setWidget(sidebar_widget);
+    m_sidebar_dock->setFeatures(QDockWidget::NoDockWidgetFeatures);
+    m_sidebar_dock->setMinimumWidth(UIConstants::kSidebarMinWidth);
+    addDockWidget(Qt::LeftDockWidgetArea, m_sidebar_dock);
+
+    // Restore the sidebar's last shown/hidden state (default shown) and sync the
+    // title-bar toggle. Done here, once the dock exists, since setUpMenuBar() (which
+    // builds the toggle) runs before the dock is created.
+    const bool sidebar_shown =
+        QSettings().value(UIConstants::kSettingsKeySidebarVisible, true).toBool();
+    m_sidebar_dock->setVisible(sidebar_shown);
+    if (m_sidebar_toggle != nullptr)
+    {
+        QSignalBlocker block(m_sidebar_toggle);
+        m_sidebar_toggle->setChecked(sidebar_shown);
+    }
 
     // Intercept drag events from every widget in the window by filtering at
     // the application level — simpler and more complete than listing individual
@@ -141,9 +221,10 @@ void MainView::setUpMenuBar()
 {
     // A single hamburger menu holds everything, grouped into sections (addSection
     // renders the muted headers). Flat rather than nested submenus because the
-    // whole menu is small and scannable in one glance.
-    QMenu* menu = menuBar()->addMenu(QStringLiteral("☰"));
-    menu->menuAction()->setToolTip(tr("Menu"));
+    // whole menu is small and scannable in one glance. The menu hangs off the
+    // hamburger button in the custom title bar (built at the end of this method).
+    QMenu* menu = new QMenu(this);
+    menu->setToolTipsVisible(true);
 
     // --- Process ---
     menu->addSection(tr("Process"));
@@ -198,6 +279,28 @@ void MainView::setUpMenuBar()
     // --- Help ---
     menu->addSection(tr("Help"));
 
+    // The manual ships embedded as a Qt resource; a browser can't read qrc:/ URLs,
+    // so it is copied out to the temp dir on first use and opened from there.
+    QAction* manual_action = menu->addAction("User Manual...");
+    connect(manual_action, &QAction::triggered, this, [this]() {
+        const QString target = QDir::temp().filePath("tmDataQualityAnalyzer_manual.html");
+        if (QFile::exists(target) && !QFile::remove(target))
+        {
+            displayErrorMessage(tr("Could not open the user manual (temp file is locked)."));
+            return;
+        }
+        if (!QFile::copy(":/resources/usermanual.html", target))
+        {
+            displayErrorMessage(tr("Could not open the user manual."));
+            return;
+        }
+        // Resource copies inherit read-only permissions; make the temp copy
+        // writable so the remove() above succeeds on the next open.
+        QFile(target).setPermissions(QFile::ReadOwner | QFile::WriteOwner |
+                                     QFile::ReadUser  | QFile::WriteUser);
+        QDesktopServices::openUrl(QUrl::fromLocalFile(target));
+    });
+
     QAction* about_action = menu->addAction("About...");
     connect(about_action, &QAction::triggered, this, [this]() {
         QMessageBox about_box(this);
@@ -212,6 +315,194 @@ void MainView::setUpMenuBar()
             "IRIG 106 Chapter 10 PCM recordings and plots the results over time.</p>");
         about_box.exec();
     });
+
+    // --- Custom title bar (frameless window) ---
+    // Replaces the native Windows title bar: the hamburger on the left opens the
+    // menu above; the window's min/maximize/close buttons live on the right. The
+    // empty strip between them is reported as the drag caption in nativeEvent().
+    auto* title_bar = new QWidget(this);
+    title_bar->setObjectName("titleBar");
+    title_bar->setFixedHeight(kTitleBarHeight);
+    title_bar->setStyleSheet(
+        "#titleBar QToolButton{border:none;background:transparent;min-width:44px;min-height:40px;font-size:15px;}"
+        "#titleBar QToolButton:hover{background:rgba(128,128,128,0.22);}"
+        "#titleBar QToolButton#winClose:hover{background:#c42b1c;color:#ffffff;}"
+        "#titleBar QToolButton#menuBtn::menu-indicator{image:none;}"
+        // menuBtn and sidebarBtn get a fixed size + AlignVCenter in code, so their
+        // hover boxes stay inset from the bar edges (QSS margin isn't honored for
+        // QToolButton) and read as compact pills like Claude Code's title bar.
+        "#titleBar QToolButton#menuBtn{min-width:0;border-radius:5px;}"
+        "#titleBar QToolButton#sidebarBtn{min-width:0;border-radius:5px;}");
+
+    auto* bar_layout = new QHBoxLayout(title_bar);
+    bar_layout->setContentsMargins(2, 0, 0, 0);
+    bar_layout->setSpacing(0);
+
+    m_menu_button = new QToolButton(title_bar);
+    m_menu_button->setObjectName("menuBtn");
+    m_menu_button->setToolTip(tr("Menu"));
+    m_menu_button->setPopupMode(QToolButton::InstantPopup);
+    m_menu_button->setMenu(menu);
+    // Thin drawn glyph + fixed centered size, matching the sidebar toggle (icon set
+    // per theme in applyActionIconsForTheme).
+    m_menu_button->setFixedSize(44, 32);
+    m_menu_button->setIconSize(QSize(24, 24));
+    bar_layout->addWidget(m_menu_button, 0, Qt::AlignVCenter);
+
+    // Show/hide the left sidebar (log). Checked = shown; the icon is set per theme
+    // in applyActionIconsForTheme(). Wired to the dock's visibility below, once the
+    // dock exists (setUpMainLayout).
+    m_sidebar_toggle = new QToolButton(title_bar);
+    m_sidebar_toggle->setObjectName("sidebarBtn");
+    m_sidebar_toggle->setCheckable(true);
+    m_sidebar_toggle->setToolTip(tr("Toggle sidebar (Ctrl+B)"));
+    m_sidebar_toggle->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_B));
+    // Fixed, smaller-than-the-bar size + AlignVCenter guarantees the hover box has
+    // clearance from the bar's top/bottom edges (see the sidebarBtn stylesheet note).
+    m_sidebar_toggle->setFixedSize(44, 32);
+    m_sidebar_toggle->setIconSize(QSize(24, 24));
+    connect(m_sidebar_toggle, &QToolButton::toggled, this, [this](bool shown) {
+        if (m_sidebar_dock != nullptr)
+            m_sidebar_dock->setVisible(shown);
+        QSettings().setValue(UIConstants::kSettingsKeySidebarVisible, shown);
+    });
+    bar_layout->addWidget(m_sidebar_toggle, 0, Qt::AlignVCenter);
+
+    bar_layout->addStretch(1);
+
+    auto* min_button = new QToolButton(title_bar);
+    min_button->setText(QStringLiteral("−"));   // −
+    min_button->setToolTip(tr("Minimize"));
+    connect(min_button, &QToolButton::clicked, this, &QWidget::showMinimized);
+    bar_layout->addWidget(min_button);
+
+    m_max_button = new QToolButton(title_bar);
+    m_max_button->setToolTip(tr("Maximize"));
+    connect(m_max_button, &QToolButton::clicked, this, [this]() {
+        setWindowState(isMaximized() ? (windowState() & ~Qt::WindowMaximized)
+                                     : (windowState() |  Qt::WindowMaximized));
+    });
+    bar_layout->addWidget(m_max_button);
+
+    auto* close_button = new QToolButton(title_bar);
+    close_button->setObjectName("winClose");
+    close_button->setText(QStringLiteral("✕"));  // ✕
+    close_button->setToolTip(tr("Close"));
+    connect(close_button, &QToolButton::clicked, this, &QWidget::close);
+    bar_layout->addWidget(close_button);
+
+    setMenuWidget(title_bar);
+    updateMaximizeButton();
+}
+
+void MainView::updateMaximizeButton()
+{
+    if (m_max_button == nullptr)
+        return;
+    const bool maximized = isMaximized();
+    m_max_button->setText(maximized ? QStringLiteral("❐") : QStringLiteral("□"));
+    m_max_button->setToolTip(maximized ? tr("Restore") : tr("Maximize"));
+}
+
+void MainView::changeEvent(QEvent* event)
+{
+    if (event->type() == QEvent::WindowStateChange)
+        updateMaximizeButton();
+    QMainWindow::changeEvent(event);
+}
+
+bool MainView::nativeEvent(const QByteArray& eventType, void* message, qintptr* result)
+{
+#ifdef _WIN32
+    if (eventType == "windows_generic_MSG" && message != nullptr)
+    {
+        MSG* msg = static_cast<MSG*>(message);
+        switch (msg->message)
+        {
+        case WM_NCCALCSIZE:
+            // Strip the native title bar: the client area becomes the whole window.
+            if (msg->wParam == TRUE)
+            {
+                // When maximized, inset by the frame thickness so the client doesn't
+                // spill off-screen or cover the taskbar.
+                if (::IsZoomed(msg->hwnd))
+                {
+                    auto* params = reinterpret_cast<NCCALCSIZE_PARAMS*>(msg->lParam);
+                    const int fx = ::GetSystemMetrics(SM_CXFRAME) + ::GetSystemMetrics(SM_CXPADDEDBORDER);
+                    const int fy = ::GetSystemMetrics(SM_CYFRAME) + ::GetSystemMetrics(SM_CXPADDEDBORDER);
+                    params->rgrc[0].left   += fx;
+                    params->rgrc[0].right  -= fx;
+                    params->rgrc[0].top    += fy;
+                    params->rgrc[0].bottom -= fy;
+                }
+                *result = 0;
+                return true;
+            }
+            break;
+
+        case WM_NCHITTEST:
+        {
+            // Report resize borders + the draggable caption so Windows still does
+            // move/resize/snap/double-click-maximize natively.
+            RECT rc;
+            ::GetWindowRect(msg->hwnd, &rc);
+            const long gx = GET_X_LPARAM(msg->lParam);
+            const long gy = GET_Y_LPARAM(msg->lParam);
+            const long lx = gx - rc.left;
+            const long ly = gy - rc.top;
+            const long w  = rc.right - rc.left;
+            const long h  = rc.bottom - rc.top;
+
+            const double dpr     = devicePixelRatioF();
+            const long   border  = static_cast<long>(8 * dpr);
+            const long   titleH  = static_cast<long>(kTitleBarHeight * dpr);
+
+            if (!::IsZoomed(msg->hwnd))
+            {
+                const bool onL = lx < border, onR = lx >= w - border;
+                const bool onT = ly < border, onB = ly >= h - border;
+                if (onT && onL) { *result = HTTOPLEFT;     return true; }
+                if (onT && onR) { *result = HTTOPRIGHT;    return true; }
+                if (onB && onL) { *result = HTBOTTOMLEFT;  return true; }
+                if (onB && onR) { *result = HTBOTTOMRIGHT; return true; }
+                if (onL)        { *result = HTLEFT;   return true; }
+                if (onR)        { *result = HTRIGHT;  return true; }
+                if (onT)        { *result = HTTOP;    return true; }
+                if (onB)        { *result = HTBOTTOM; return true; }
+            }
+
+            // Client-relative coordinates (not window-relative): when maximized,
+            // WM_NCCALCSIZE insets the client by the frame thickness, so lx/ly would
+            // be offset by that inset for the strip check and childAt() below.
+            POINT client_pt{ gx, gy };
+            ::ScreenToClient(msg->hwnd, &client_pt);
+
+            if (client_pt.y >= 0 && client_pt.y < titleH)
+            {
+                // Any actual button on the strip (hamburger, sidebar toggle, window
+                // controls) must receive clicks; the empty space between them is the
+                // draggable caption. Detecting the child widget under the cursor keeps
+                // this correct no matter how many buttons the title bar grows.
+                const QPoint local(static_cast<int>(client_pt.x / dpr),
+                                   static_cast<int>(client_pt.y / dpr));
+                const bool on_button = qobject_cast<QToolButton*>(childAt(local)) != nullptr;
+                *result = on_button ? HTCLIENT : HTCAPTION;
+                return true;
+            }
+
+            *result = HTCLIENT;
+            return true;
+        }
+        default:
+            break;
+        }
+    }
+#else
+    Q_UNUSED(eventType);
+    Q_UNUSED(message);
+    Q_UNUSED(result);
+#endif
+    return QMainWindow::nativeEvent(eventType, message, result);
 }
 
 
@@ -961,6 +1252,13 @@ void MainView::applyActionIconsForTheme(bool dark)
     const QString suffix = dark ? "-dark" : "-light";
     m_export_action->setIcon(QIcon(":/resources/export" + suffix + ".svg"));
     m_import_action->setIcon(QIcon(":/resources/import" + suffix + ".svg"));
+
+    // The hamburger + sidebar-toggle glyphs are drawn in code (no icon font shipped)
+    // so they track the title-bar foreground color for the active theme.
+    if (m_menu_button != nullptr)
+        m_menu_button->setIcon(makeMenuIcon(dark));
+    if (m_sidebar_toggle != nullptr)
+        m_sidebar_toggle->setIcon(makeSidebarIcon(dark));
 }
 
 void MainView::startProcessingFromDialog()

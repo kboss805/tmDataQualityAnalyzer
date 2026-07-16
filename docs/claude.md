@@ -283,9 +283,9 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** I can review and visualize old data sets without re-processing the original .ch10 file.
 
 **Acceptance Criteria:**
-- [x] The user can open a previously exported CSV file via the toolbar **Import** button, drag-and-drop of a `.csv` file, or the Recent Files list.
-- [x] The toolbar Import button sits left of Export, opens a CSV-only file dialog, and is disabled while processing.
-- [x] File > Open and the toolbar Open button remain Chapter-10-only; Import is the dedicated CSV entry point.
+- [x] The user can open a previously exported CSV file via the menu's **Import CSV…** entry (Import/Export section), drag-and-drop of a `.csv` file, or the Recent Files list.
+- [x] Import CSV… opens a CSV-only file dialog and is disabled while processing.
+- [x] **Open…** remains Chapter-10-only; Import CSV… is the dedicated CSV entry point.
 - [x] Importing a CSV bypasses the Configure Streams dialog and processing pipeline, parsing the file straight into the plot.
 - [x] The importer accepts the application's own export format: a `Time (DOY:HH:MM:SS.mmm)` first column followed by one column per series.
 - [x] Frame Sync Lock (`Lock (%)` suffix), Accumulated Missed Frames (`Accumulated Missed Frames` suffix), and Receiver SNR (`_RCVR<N>`) series are recognized by their column headers and routed to the correct axis, metric type, and color.
@@ -333,7 +333,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The user can toggle between light and dark theme via a menu action.
 - [x] The selected theme persists across application restarts.
 - [x] All windows, dialogs, and the plot update to match the selected theme immediately.
-- [x] The toolbar icons swap to theme-appropriate variants when the theme changes.
+- [x] The menu and title-bar icons swap to theme-appropriate variants when the theme changes.
 
 ## Version History
 
@@ -649,16 +649,19 @@ not mis-read.
 #### View
 
 1. **MainView** (`src/view/mainview.cpp`, `include/view/mainview.h`)
-   - Thin GUI layer; creates and lays out all Qt widgets and the toolbar/menus
+   - Thin GUI layer; creates and lays out all Qt widgets, the hamburger menu, and the custom title bar
+   - Frameless window: a custom title bar (set via `setMenuWidget`) hosts the hamburger (≡) menu button, the sidebar toggle, and min/maximize/close buttons; `nativeEvent()` handles `WM_NCCALCSIZE`/`WM_NCHITTEST` so Windows still provides native move/resize/snap/double-click-maximize. The hamburger + sidebar glyphs are QPainter-drawn per theme
+   - All commands live in the single hamburger menu, grouped into flat sections via `addSection`: Process (Open…, Recent Files, Save as Template…, Apply Template to Files…, Exit), Import/Export (Import CSV…, Export…), Settings (theme toggle), Help (User Manual…, About…)
    - Binds to MainViewModel Q_PROPERTYs and connects signals/slots; contains no business logic
    - `logError()` / `logWarning()` / `logSuccess()` append colored HTML entries (red / #DAA520 / green) to the log window
    - Errors/warnings shown inline in the log (`QTextBrowser`, clickable links, persistent, auto-scroll); QMessageBox reserved for About and the calibration summary
    - Status bar shows the file metadata summary (filename, size, channel counts, time range)
-   - Recent Files submenu under File menu with QSettings persistence
-   - Drag-and-drop and File > Open of a single `.ch10` file (launches the StreamConfigDialog) or a previously exported `.csv` file (US6.3: routed by `openPath()`/`importCsv()` straight into the plot via `PlotViewModel::loadCsvFileAsync`, bypassing the dialog and processing pipeline)
-   - File > Save as Template… (enabled once a source has processed) captures a source's per-stream settings + series appearance to a template JSON; File > Apply Template to Files… (always enabled) picks a template + N `.ch10` files and batch-processes every file with the same channel IDs via `startBatchFromTemplate()` → the batch loop (retain-all + Plot File selector; optional per-file CSV+image export). This is the only batch entry point — there is no Add/Remove Source or direct multi-file open. See the processing-templates section above and `docs/processing-template-design.md`
-   - Cancel toolbar button visible only during processing
-   - Log window in a bottom QDockWidget; plot in a right QDockWidget (PlotWidget); View menu toggles each
+   - Recent Files submenu (Process section) with QSettings persistence
+   - Drag-and-drop and Open… of a single `.ch10` file (launches the StreamConfigDialog) or a previously exported `.csv` file (US6.3: routed by `openPath()`/`importCsv()` straight into the plot via `PlotViewModel::loadCsvFileAsync`, bypassing the dialog and processing pipeline)
+   - Save as Template… (enabled once a source has processed) captures a source's per-stream settings + series appearance to a template JSON; Apply Template to Files… (always enabled) picks a template + N `.ch10` files and batch-processes every file with the same channel IDs via `startBatchFromTemplate()` → the batch loop (retain-all + Plot File selector; optional per-file CSV+image export). This is the only batch entry point — there is no Add/Remove Source or direct multi-file open. See the processing-templates section above and `docs/processing-template-design.md`
+   - Progress/Cancel live in the modal ProcessingProgressDialog, shown only while processing runs
+   - Log window fills the left sidebar dock (`m_sidebar_dock`); the title-bar sidebar button or Ctrl+B toggles it, with the shown/hidden state persisted in QSettings (`SidebarVisible`). The plot (PlotWidget) is the central widget
+   - Help > User Manual… copies the embedded `resources/usermanual.html` to the temp dir and opens it in the default browser
 
 2. **StreamConfigDialog** (`src/view/streamconfigdialog.cpp`, `include/view/streamconfigdialog.h`)
    - Modal "Configure Streams" dialog listing one row per PCM channel in the file

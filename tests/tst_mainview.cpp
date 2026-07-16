@@ -7,10 +7,10 @@
 
 #include <QColor>
 #include <QFile>
-#include <QMenuBar>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTextStream>
+#include <QToolButton>
 #include <QtTest>
 
 #include "constants.h"
@@ -49,11 +49,15 @@ void TestMainView::windowTitleIsNonEmpty()
     QVERIFY2(!view.windowTitle().isEmpty(), "Window title must be set after construction");
 }
 
-void TestMainView::menuBarExists()
+void TestMainView::titleBarExists()
 {
     MainView view;
-    QVERIFY2(view.menuBar() != nullptr, "MainView must have a menu bar");
-    QVERIFY2(!view.menuBar()->actions().isEmpty(), "Menu bar must have at least one menu");
+    // The window uses a custom title bar (set via setMenuWidget) rather than a
+    // native menu bar; it must exist and host the hamburger + window buttons.
+    QWidget* title_bar = view.menuWidget();
+    QVERIFY2(title_bar != nullptr, "MainView must have a custom title-bar menu widget");
+    QVERIFY2(!title_bar->findChildren<QToolButton*>().isEmpty(),
+             "Title bar must have buttons (hamburger + window controls)");
 }
 
 void TestMainView::supportedFileDetection()

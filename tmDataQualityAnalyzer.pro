@@ -208,7 +208,8 @@ RESOURCES += \
     resources/toggle-on-dark.svg \
     resources/toggle-off-dark.svg \
     resources/toggle-on-light.svg \
-    resources/toggle-off-light.svg
+    resources/toggle-off-light.svg \
+    resources/usermanual.html
 
 RC_FILE = resources/tmDataQualityAnalyzer_resource.rc
 

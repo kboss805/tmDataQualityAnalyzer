@@ -29,6 +29,7 @@ class MainViewModel;
 class PlotViewModel;
 class PlotWidget;
 class ProcessingProgressDialog;
+class QToolButton;
 struct ProcessedStreamData;
 struct Source;
 
@@ -95,15 +96,23 @@ protected:
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dropEvent(QDropEvent* event) override;
     bool eventFilter(QObject* obj, QEvent* event) override;
+    /// Frameless window: intercepts WM_NCCALCSIZE (strip the native title bar) and
+    /// WM_NCHITTEST (report the drag caption + resize borders so Windows still
+    /// handles move/resize/snap/double-click-maximize natively).
+    bool nativeEvent(const QByteArray& eventType, void* message, qintptr* result) override;
+    /// Keeps the maximize/restore button glyph in sync with the window state.
+    void changeEvent(QEvent* event) override;
 
 private:
     /// @name Widget setup helpers
     /// @{
-    void setUpMenuBar();                     ///< Creates the menu bar.
+    void setUpMenuBar();                     ///< Builds the custom title bar (hamburger menu + window buttons).
     void setUpMainLayout();                  ///< Creates the top-level layout.
     void setUpConnections();                 ///< Connects all ViewModel signals to View slots.
     /// Sets the Import/Export menu-action icons to the dark or light theme variant.
     void applyActionIconsForTheme(bool dark);
+    /// Updates the maximize/restore button glyph + tooltip from the window state.
+    void updateMaximizeButton();
     /// @}
 
     /// @name Bulk state helpers
@@ -160,19 +169,22 @@ private:
 
     MainViewModel* m_view_model;             ///< Owning ViewModel instance.
 
-    QVBoxLayout* m_controls_layout;          ///< Left-side vertical controls layout.
-    QDockWidget* m_controls_dock;            ///< Fixed left dock for controls panel.
+    QVBoxLayout* m_sidebar_layout;           ///< Left-side vertical sidebar layout.
+    QDockWidget* m_sidebar_dock;             ///< Left sidebar dock (holds the log); toggled from the title bar.
+    QToolButton* m_menu_button = nullptr;    ///< Title-bar hamburger button (opens the main menu).
+    QToolButton* m_sidebar_toggle = nullptr; ///< Title-bar show/hide-sidebar button (checked = shown).
     PlotWidget* m_plot_widget;               ///< Plot view widget (central widget).
     PlotViewModel* m_plot_view_model;        ///< Plot ViewModel owning series data.
-    QAction* m_theme_action;                 ///< File > Toggle theme action.
-    QAction* m_open_action;                  ///< File > Open... action.
+    QToolButton* m_max_button = nullptr;     ///< Title-bar maximize/restore button (glyph tracks window state).
+    QAction* m_theme_action;                 ///< Toggle theme action (Settings section).
+    QAction* m_open_action;                  ///< Open... action (Process section).
     QAction* m_save_template_action;         ///< File > Save as Template... action (Batch Apply).
     QAction* m_apply_template_action;        ///< File > Apply Template to Files... action (Batch Apply).
 
     QAction* m_import_action;                ///< File > Import CSV... action.
     QAction* m_export_action;                ///< File > Export... action.
 
-    QTextBrowser* m_log_preview;             ///< Compact log preview in the controls panel.
+    QTextBrowser* m_log_preview;             ///< Compact log preview in the sidebar.
     ProcessingProgressDialog* m_progress_dialog; ///< Modal progress/cancel dialog shown while processing runs.
     QMenu* m_recent_menu;                    ///< File > Recent Files submenu.
 
