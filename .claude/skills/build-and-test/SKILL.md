@@ -13,7 +13,7 @@ description: >-
 
 # Build and Test — tmDataQualityAnalyzer
 
-This project is Qt 6.10.2 / C++17 built with qmake + MinGW (GCC 13.1.0) on Windows. The toolchains
+This project is Qt 6.10.3 / C++17 built with qmake + MinGW (GCC 13.1.0) on Windows. The toolchains
 are **not on PATH**, so every build session must prepend them first. There are two separate qmake
 projects: the app (`tmDataQualityAnalyzer.pro` at the root) and the tests (`tests/tests.pro`).
 
@@ -31,7 +31,7 @@ it sets `QTDIR`, `MINGW_DIR` and prepends both `bin` dirs to PATH:
 If for some reason that file is unavailable, the equivalent is:
 
 ```powershell
-$env:PATH = "C:\Qt\6.10.2\mingw_64\bin;C:\Qt\Tools\mingw1310_64\bin;" + $env:PATH
+$env:PATH = "C:\Qt\6.10.3\mingw_64\bin;C:\Qt\Tools\mingw1310_64\bin;" + $env:PATH
 ```
 
 Shell state does not persist between PowerShell tool calls, so either dot-source `env.ps1` at the

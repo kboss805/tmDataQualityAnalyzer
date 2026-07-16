@@ -81,7 +81,7 @@ suite only ever runs locally by hand. This repo has a documented
 
 **Approach:**
 - `windows-latest` GitHub Actions runner.
-- Install Qt 6.10.2 + MinGW via `jurplel/install-qt-action` (aqtinstall), also
+- Install Qt 6.10.3 + MinGW via `jurplel/install-qt-action` (aqtinstall), also
   pulling the `tools_mingw` package to match the local toolchain; cache the Qt
   install.
 - Steps mirror the `build-and-test` skill: put toolchain on PATH → qmake +

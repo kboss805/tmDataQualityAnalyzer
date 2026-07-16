@@ -13,7 +13,7 @@ $ScriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectDir = Split-Path -Parent $ScriptDir
 
 # Use environment variables if already set; otherwise fall back to defaults
-if (-not $env:QTDIR)     { $env:QTDIR     = 'C:\Qt\6.10.2\mingw_64' }
+if (-not $env:QTDIR)     { $env:QTDIR     = 'C:\Qt\6.10.3\mingw_64' }
 if (-not $env:MINGW_DIR) { $env:MINGW_DIR = 'C:\Qt\Tools\mingw1310_64' }
 
 $env:PATH = "$env:QTDIR\bin;$env:MINGW_DIR\bin;$env:PATH"

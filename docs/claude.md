@@ -4,7 +4,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 
 ## Version Information
 
-- **Qt Version**: 6.10.2 (minimum: Qt 6.0.0)
+- **Qt Version**: 6.10.3 (minimum: Qt 6.0.0)
 - **MinGW Version**: 13.1.0 (minimum: GCC/MinGW 7.0)
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
 - **Project Version**: 2.7.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
@@ -13,7 +13,9 @@ This file provides context and guidelines for AI assistants working on the tmDat
 
 The stories below follow the workflow a first-time user takes through the application: open a file and choose what to process (US1), define the per-stream parameters (US2), view the resulting data-quality metrics (US3), customize the plot (US4), manage configuration files and calibration (US5), export and re-import results (US6), and the cross-cutting concerns of input validation (US7), installation (US8), and theming (US9).
 
-### US1.0: Open a Ch10 file and configure which streams to process
+**Status: all user stories are Complete** — implemented, tested, and shipped as of v2.7.0. Every acceptance criterion below is delivered functionality (`[x]`), and each story carries a **Complete** marker in its heading. This section is no longer a draft backlog; new work is tracked as new stories appended after US9.0.
+
+### US1.0: Open a Ch10 file and configure which streams to process — Complete
 
 **As a** telemetry engineer or data analyst
 **I want to** select streams to process and configure their parameters in a single configuration/processing dialog window upon opening a Ch10 file
@@ -37,7 +39,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Progress is shown in a modal dialog, separate from the main window, while streams are processing.
 - [x] Once processing has started, the user can cancel it via a Cancel action that stops every stream currently being decommutated.
 
-### US1.1: Batch-process multiple Ch10 files that share the same channel layout
+### US1.1: Batch-process multiple Ch10 files that share the same channel layout — Complete
 
 **As a** telemetry engineer or data analyst
 **I want to** select several Chapter 10 files that share the same PCM channel IDs, configure the per-stream processing once, and process them all in a single action
@@ -50,15 +52,15 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] All processed files are retained in memory; the user can optionally also export a CSV + Frame Sync Lock and Missed Frames images per file to a chosen folder, auto-named from each source file.
 - [x] Progress is shown while the batch runs, and a summary reports how many files were processed vs. skipped.
 - [x] A saved template round-trips the same per-stream settings the Configure Streams dialog captures (frame-sync, SNR, calibration references), and — optionally — per-series names/colors.
-- [x] After a multi-file run, the user can select which processed file's plot to view in the main plot window via the **Plot File** dropdown in the plot toolbar (top row, far left). The dropdown is disabled when only one file is loaded, and offers an "All files (overlaid)" entry for comparison.
+- [x] After a multi-file run, the user can select which processed file's plot to view in the main plot window via the **Plot File** dropdown in the plot's top control row (far left). The dropdown is disabled when only one file is loaded, and offers an "All files (overlaid)" entry for comparison.
 
   - **Scope:** Matching is **exact channel-ID set** (a file must have the same PCM channel IDs as the template, no more/fewer) — decided for simplicity; revisit if a looser "subset" match is ever needed. This story is orthogonal to US2.2 (apply-to-all *within* one file). Templates carry **no file paths** — settings only, applied to whatever files the user picks. The only batch entry point is **Apply Template** (there is no direct multi-file open, and no Add/Remove Source); templates are the sole way to configure a batch.
   - **Config application:** each file's run feeds the template's `StreamConfig`s through unchanged (`applyBatchSourceConfig`); the reader dispatches each stream by `pcmChannelId`, which is safe precisely because of the exact-set match. **Non-linear calibration:** a template stores only the calibration *input references* (not the extracted profile), so **all batch files process with the linear slope/offset fallback**. Non-linear step calibration is available for single-file processing only; re-extraction on template apply is a possible future add.
   - **Custom names/colors:** captured only when **saving a template** from an already-processed, customized plot (`buildTemplateFromSource`), and reapplied per file after each run (`reapplyTemplateAppearance`, matched by channel id + metric/receiver/channel). Every file's copy of a channel intentionally shares the same name/color (they are the same channel across recordings); use the **Plot File** selector to view one file at a time when per-file distinction matters.
-  - **Retain-all + file selector:** a batch always keeps every processed file in memory; the plot toolbar's **Plot File** dropdown (`PlotWidget::m_source_combo`) chooses which file to view, defaulting to the first, with "All files (overlaid)" for comparison. The filter is a `PlotViewModel` source gate (`setVisibleSource`/`effectiveVisible`) orthogonal to per-series visibility and the **View Mode** (lock %/accumulation) selector. Optional per-file export runs as a post-pass (`finishBatch` isolates each source, then `exportCsv(path, sourceId)` + a `_framesync_lock.png` and `_missed_frames.png` via `exportImage`).
+  - **Retain-all + file selector:** a batch always keeps every processed file in memory; the plot's top-control-row **Plot File** dropdown (`PlotWidget::m_source_combo`) chooses which file to view, defaulting to the first, with "All files (overlaid)" for comparison. The filter is a `PlotViewModel` source gate (`setVisibleSource`/`effectiveVisible`) orthogonal to per-series visibility and the **View Mode** (lock %/accumulation) selector. Optional per-file export runs as a post-pass (`finishBatch` isolates each source, then `exportCsv(path, sourceId)` + a `_framesync_lock.png` and `_missed_frames.png` via `exportImage`).
   - **Status: implemented** (Save/Apply Template, one `startBatchFromTemplate` batch loop, retain-all + Plot File selector). Schema/matcher/appearance/headless-export/source-view are unit-tested; the full sequential run is app-verified (needs real multi-file `.ch10` recordings). See `docs/processing-template-design.md`.
 
-### US2.0: Define the key parameters required to process the framesync lock statistics and frame sync error accumulation
+### US2.0: Define the key parameters required to process the framesync lock statistics and frame sync error accumulation — Complete
 
 **As a** telemetry engineer or data analyst
 **I want to** define the rules and key parameters (frame sync pattern, frame length, framesync mask, PCM code format, etc.) required to properly decommutate and calculate frame lock statistics and frame sync error accumulation for telemetry streams
@@ -70,9 +72,9 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The application accepts frame sync masks up to 64 bits in length.
 - [x] The application accepts frame lengths up to 65,536 bits in length.
 - [x] The user can select from one of the following PCM code formats: NRZ-L, RNRZ-L.
-- [x] The user can calculate frame sync lock statistics for up to 8 telemetry streams from the .ch10 file.
+- [x] The user can calculate frame sync lock statistics for the telemetry streams present in the .ch10 file (one or more PCM channels; no fixed stream-count cap is enforced).
 
-### US2.1: Define the key parameters required to process the receiver AGC sample data
+### US2.1: Define the key parameters required to process the receiver AGC sample data — Complete
 
 **As a** telemetry engineer or data analyst
 **I want to** define the rules and key parameters (frame sync pattern, frame length, framesync mask, PCM code format, etc.) required to decommutate and process telemetry streams containing receiver AGC sample data
@@ -89,7 +91,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The user can define the voltage range of the receiver AGC sample from one of the following values: 0-5V, 0-10V, +/-5V, +/-10V.
 - [x] The user can define the polarity of the receiver AGC sample data: positive or negative.
 
-### US2.2: Apply one stream's configuration to all matching streams
+### US2.2: Apply one stream's configuration to all matching streams — Complete
 
 **As a** telemetry engineer or data analyst
 **I want to** configure one telemetry stream in the per-stream setup dialog and apply those settings to every other selected stream of the same mode in a single action
@@ -103,7 +105,7 @@ The stories below follow the workflow a first-time user takes through the applic
 
   - **Scope:** Orthogonal to US3.1 (frame sync error accumulation); split out as its own story. Fan-out copies the same fields written by the gear dialog today (see `openGearDialog` in `streamconfigdialog.cpp`); it does not widen the Frame Sync Load/Save TOML boundary defined in US1.0.
 
-### US3.0: View the framesync lock statistics for IRIG 106 formatted PCM telemetry streams contained in .ch10 files
+### US3.0: View the framesync lock statistics for IRIG 106 formatted PCM telemetry streams contained in .ch10 files — Complete
 
 **As a** telemetry engineer or data analyst
 **I want to** view the framesync lock statistics (percentage of time the telemetry stream is in sync) for PCM data streams in IRIG 106 formatted .ch10 files
@@ -116,7 +118,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The user can select framesync lock statistics for the following sample windows: 10ms, 100ms, and 1s.
 - [x] A progress bar updates as the application is processing the framesync lock statistics.
 
-### US3.1: View Accumulated Missed Frames Over Time
+### US3.1: View Accumulated Missed Frames Over Time — Complete
 
 **As a** telemetry data analyst
 **I want to** quantify and plot the accumulated missed frames over time for my PCM streams
@@ -130,7 +132,7 @@ The stories below follow the workflow a first-time user takes through the applic
 
   - **Scope:** A "missed frame" is a discrete loss-of-lock event — while in lock, the stream ran past the expected minor-frame boundary (`bits_in_frame`) without a sync match. The metric is a cumulative count of these events per stream, counted only within the selected `[start, stop]` processing window, and only ever increases. It is NOT a bit-level (Hamming/BER) error count. The user-facing label is "Accumulated Missed Frames" (`PlotConstants::kMissedFramesAxisLabel`); this is the canonical term across the UI, release notes, and code.
 
-### US3.2: View SNR signal data from IRIG 106 formatted PCM telemetry streams contained in .ch10 files
+### US3.2: View SNR signal data from IRIG 106 formatted PCM telemetry streams contained in .ch10 files — Complete
 
 **As a** telemetry engineer or data analyst
 **I want to** view SNR signal data (in dB) derived from telemetry receiver AGC samples (raw integer energy values from 0 to 65,535) included in PCM data streams within IRIG 106 formatted .ch10 files
@@ -145,18 +147,18 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Volts are then converted to decimal dB values using the scale (dB/V).
 - [x] A progress bar updates as the application is processing the SNR signal data.
 
-### US4.0: Configure plot window navigation and information
+### US4.0: Configure plot window navigation and information — Complete
 
 **As a** telemetry engineer or data analyst
 **I want to** configure how the processed framesync lock statistics and SNR sample data is displayed in a plot window
 **So that** I can quickly analyze data in the plot window.
 
 **Acceptance Criteria:**
-- [x] The plot window docks within the main application window.
+- [x] The plot fills the central area of the main application window (it is the window's central widget; the log occupies a toggleable left sidebar).
 - [x] The user can specify a custom title for the plot.
 - [x] The left Y axis is labeled with its unit of measure, average framesync lock percent.
 - [x] The right Y axis is labeled with its unit of measure, SNR in decibels.
-- [x] The bottom X axis is labeled with its unit of measure, time in seconds.
+- [x] The bottom X axis is labeled with elapsed file time (DDD:HH:MM:SS), not raw seconds.
 - [x] The Y axis automatically scales to the data's min/max values.
 - [x] The X axis automatically scales to the full time span of the loaded data.
 - [x] The user can set a time window to zoom and pan the X axis to just that range.
@@ -177,7 +179,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Additional streams, receivers, and channels beyond the primaries use progressively lighter shades of their primary color so related series stay visually grouped.
 - [x] Frame Sync Lock curves are drawn with a visually highlighted style, while Receiver SNR curves are not.
 
-### US5.0: Recall/store framesync pattern and frame length parameters from/to configuration files
+### US5.0: Recall/store framesync pattern and frame length parameters from/to configuration files — Complete
 
 **As a** telemetry engineer or data analyst
 **I want to** recall/store the parameters used to process framesync pattern and frame length in a configuration file
@@ -190,7 +192,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The configuration file is stored in a user specified location.
 - [x] The configuration file is stored in TOML format.
 
-### US5.1: Recall/store the default SNR signal data parameters from/to configuration files
+### US5.1: Recall/store the default SNR signal data parameters from/to configuration files — Complete
 
 **As a** telemetry engineer or data analyst
 **I want to** recall/store the parameters used to process SNR data in a configuration file
@@ -203,7 +205,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The configuration file is stored in a user specified location.
 - [x] The configuration file is stored in TOML format.
 
-### US5.2: Edit default SNR signal data parameters in configuration files via a dialog window
+### US5.2: Edit default SNR signal data parameters in configuration files via a dialog window — Complete
 
 **As a** telemetry engineer or data analyst
 **I want to** edit the default key parameters used to process SNR signal data streams via a dialog window
@@ -220,7 +222,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The dialog window includes a "Save" button to save the key parameters to the configuration file.
 - [x] The dialog window includes a "Cancel" button to cancel the operation.
 
-### US5.3: Non-Linear Receiver SNR Step Calibration
+### US5.3: Non-Linear Receiver SNR Step Calibration — Complete
 
 **As a** telemetry engineer or data analyst
 **I want to** apply a non-linear step calibration to Receiver SNR streams using a Calibration CH10 file and a TOML step configuration
@@ -241,7 +243,7 @@ The stories below follow the workflow a first-time user takes through the applic
 
   - **Status (v2.2.5): COMPLETE.** Step selection is polarity-agnostic and robust to real recordings: it takes the first maximal monotonic plateau run and keeps its last `expected` plateaus, which excludes a signal-generator turn-on transient (leading) and the optional operator down-ramp (trailing) for both normal and inverted-polarity receivers — fixing the calibrated-staircase time skew. The extraction sample period is frame-rate-adaptive (100 ms floor) for fast frames, and the Apply Cal dialog adds optional **Clip Start / Clip End** controls so operators can trim leading/trailing seconds before detection. Out-of-range raw values clamp (not extrapolate) to the nearest end-step dB.
 
-### US6.0: Export the plot as an image file
+### US6.0: Export the plot as an image file — Complete
 
 **As a** telemetry engineer or data analyst
 **I want to** export the current plot to an image file (e.g. png, pdf, etc.)
@@ -254,7 +256,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The movable legend is rendered into the exported image at its on-plot position.
 - [x] A single export dialog lets the user select any combination of image, data, and log exports and run them in one action.
 
-### US6.1: Export the plotted data to a CSV file
+### US6.1: Export the plotted data to a CSV file — Complete
 
 **As a** telemetry engineer or data analyst
 **I want to** export the plotted data (framesync lock statistics, accumulated missed frames, and SNR signal data) to a CSV file
@@ -266,7 +268,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Each column header identifies its stream and receiver/channel so the exported data is self-describing.
 - [x] The user specifies the CSV filename and location via the export dialog.
 
-### US6.2: Export the log window contents to a text file
+### US6.2: Export the log window contents to a text file — Complete
 
 **As a** telemetry engineer or data analyst
 **I want to** export the contents of the log window to a text file
@@ -276,7 +278,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The current log window contents are exported to a plain-text file.
 - [x] The user specifies the log filename and location via the export dialog.
 
-### US6.3: Import a previously exported CSV file to visualize historical data
+### US6.3: Import a previously exported CSV file to visualize historical data — Complete
 
 **As a** telemetry engineer or data analyst
 **I want to** open a CSV file that this application exported in the past (US6.1) and load it directly into the plot window
@@ -296,7 +298,7 @@ The stories below follow the workflow a first-time user takes through the applic
 
   - **Scope:** Reuses the existing Model/ViewModel import path (`CsvSeriesParser::parse` + `PlotViewModel::loadCsvFile` / `loadCsvFileAsync`), which is the matched partner of `exportCsv`; this story is primarily the View-layer wiring (menu/drag-drop entry, format routing on file open) plus user-facing error reporting. It does not add a CSV import dialog with column mapping, and it does not attempt to import arbitrary third-party CSVs — only files this application produced.
 
-### US7.0: Error Checking
+### US7.0: Error Checking — Complete
 
 **As a** telemetry engineer or data analyst
 **I want to** ensure the values I enter into the application are valid
@@ -308,7 +310,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Application ensures frame sync pattern only contains hexadecimal values.
 - [x] Application ensures frame sync pattern is no larger than the user specified frame length.
 
-### US8.0: Application Installer
+### US8.0: Application Installer — Complete
 
 **As a** developer
 **I want to** create an application installer
@@ -323,7 +325,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] If the shipped default TOML has new fields the user's file lacks, the installer saves the new version as "new_x.toml" instead of overwriting the user's file.
 - [x] The installer carries over as many parameter values as possible from the user's old TOML file into the new "new_x.toml" file.
 
-### US9.0: Switch between light and dark theme
+### US9.0: Switch between light and dark theme — Complete
 
 **As a** telemetry engineer or data analyst
 **I want to** switch the application's visual theme between light and dark
@@ -680,7 +682,7 @@ picks a template + N files, validates each file's PCM channel-ID set against the
 template (`TemplateMatcher`, **exact-set match** — a file with any missing/extra
 channel is rejected with a reason), then processes every matching file in one batch
 (`MainView::startBatchFromTemplate()`). Every processed file is **retained in
-memory**; the plot toolbar's **Plot File** dropdown (`PlotWidget::m_source_combo`)
+memory**; the plot's top-control-row **Plot File** dropdown (`PlotWidget::m_source_combo`)
 chooses which one to view (or "All files (overlaid)"), driven by
 `PlotViewModel::setVisibleSource` / `effectiveVisible` (a source gate orthogonal to
 per-series visibility and the **View Mode** lock%/accumulation selector). A batch
@@ -837,7 +839,7 @@ User opens .ch10 ─► MainView ─► MainViewModel ─► Chapter10Reader (me
 
 ### Qt Version Compatibility
 
-- **Target**: Qt 6.10.2
+- **Target**: Qt 6.10.3
 - **Important**: Qt 6 made significant changes to container classes
   - `QStringList` methods differ from Qt 5
   - Prefer range-based for loops when iterating over Qt containers

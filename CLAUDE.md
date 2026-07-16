@@ -1,6 +1,6 @@
 # tmDataQualityAnalyzer — Claude Code guide
 
-Qt 6.10.2 / C++17 desktop app (qmake + MinGW 13.1.0, Windows) for analyzing data quality of IRIG 106
+Qt 6.10.3 / C++17 desktop app (qmake + MinGW 13.1.0, Windows) for analyzing data quality of IRIG 106
 Chapter 10 PCM telemetry: per-stream **Frame Sync Lock** stats and **Receiver AGC/SNR**, plotted vs.
 time. MVVM, single-reader / parallel-worker processing core. **Current version: 2.7.0.**
 
@@ -11,7 +11,7 @@ time. MVVM, single-reader / parallel-worker processing core. **Current version: 
 ## Build & test
 
 Toolchains are **not on PATH** — prepend them first via `. .\scripts\env.ps1` (or
-`C:\Qt\6.10.2\mingw_64\bin` + `C:\Qt\Tools\mingw1310_64\bin`). Use the **PowerShell** tool.
+`C:\Qt\6.10.3\mingw_64\bin` + `C:\Qt\Tools\mingw1310_64\bin`). Use the **PowerShell** tool.
 
 - **App:** from `build/`, `qmake ..\tmDataQualityAnalyzer.pro -spec win32-g++ CONFIG+=debug` then
   `mingw32-make -f Makefile.Debug`. Re-run qmake after `.pro`/version/`Q_OBJECT` changes. **Zero

@@ -14,13 +14,13 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\setup-env.ps1
 #
 # To override the defaults, set the variables before running:
-#   $env:QTDIR     = "D:\Qt\6.10.2\mingw_64"
+#   $env:QTDIR     = "D:\Qt\6.10.3\mingw_64"
 #   $env:MINGW_DIR = "D:\Qt\Tools\mingw1310_64"
 #   powershell -ExecutionPolicy Bypass -File scripts\setup-env.ps1
 # =============================================================================
 
 param (
-    [string]$QtDir    = "C:\Qt\6.10.2\mingw_64",
+    [string]$QtDir    = "C:\Qt\6.10.3\mingw_64",
     [string]$MingwDir = "C:\Qt\Tools\mingw1310_64"
 )
 
