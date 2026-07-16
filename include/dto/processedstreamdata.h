@@ -39,6 +39,7 @@ struct ProcessedStreamData
     QString    streamLabel;         ///< Display label of the source stream, e.g. "Ch 32".
     int        pcmChannelId = -1;   ///< Source PCM channel ID.
     int        jobIndex     = 0;    ///< 0-based position of this stream in the original job list; used to preserve legend order regardless of parallel completion order.
+    int        sourceId     = 0;    ///< Id of the .ch10 file (multi-file session) this stream came from; 0 for the first/only source. Two sources can legitimately reuse the same pcmChannelId, so identity checks that key on pcmChannelId must also key on sourceId to avoid cross-source collisions.
     StreamMode mode = StreamMode::ReceiverChannelInfo; ///< Mode used to produce this data.
 
     QVector<double> timesSec;       ///< Absolute IRIG seconds per output sample.

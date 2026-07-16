@@ -138,6 +138,8 @@ void PlotWidget::setViewModel(PlotViewModel* vm)
     connect(vm, &PlotViewModel::axisRangeChanged, this, &PlotWidget::updateAxes);
     connect(vm, &PlotViewModel::plotTitleChanged, this, &PlotWidget::updateTitle);
     connect(vm, &PlotViewModel::lockAxisViewChanged, this, &PlotWidget::onLockAxisViewChanged);
+    connect(vm, &PlotViewModel::sourcesChanged, this, &PlotWidget::populateSourceCombo);
+    populateSourceCombo();
 }
 
 void PlotWidget::setLogTextProvider(std::function<QString()> provider)
@@ -225,7 +227,7 @@ void PlotWidget::rebuildChart()
         // Color and visibility can change on append (the re-sort recolors left-axis
         // series) or on a metric toggle, so refresh them on every reconcile.
         graph->setPen(QPen(s.color, PlotConstants::kGraphPenWidth));
-        graph->setVisible(s.visible);
+        graph->setVisible(m_view_model->effectiveVisible(s));
         next_by_id.insert(s.id, graph);
         ordered.append(graph);
     }
@@ -249,7 +251,7 @@ void PlotWidget::rebuildChart()
     // Update title and axes without triggering extra replots
     updateTitle();
     updateAxes();
-    updateAxisViewButton();
+    updateAxisViewCombo();
 
     // Enable all controls when data is loaded
     bool has_data = m_view_model->hasData();
@@ -278,6 +280,44 @@ void PlotWidget::onDataChanged()
 {
     rebuildChart();
     rebuildLegend();
+    populateSourceCombo();
+}
+
+void PlotWidget::populateSourceCombo()
+{
+    if (m_source_combo == nullptr || m_view_model == nullptr)
+    {
+        return;
+    }
+
+    const QVector<QPair<int, QString>> sources = m_view_model->sourceList();
+
+    // Signals blocked so rebuilding the items doesn't fire activated() and stomp
+    // the ViewModel's current filter.
+    QSignalBlocker blocker(m_source_combo);
+    m_source_combo->clear();
+
+    // Only meaningful with more than one source (US1.1): a single file has nothing
+    // to switch between.
+    if (sources.size() <= 1)
+    {
+        if (sources.size() == 1)
+            m_source_combo->addItem(sources.first().second, sources.first().first);
+        m_source_combo->setEnabled(false);
+        return;
+    }
+
+    m_source_combo->addItem(QStringLiteral("All files (overlaid)"), -1);
+    for (const QPair<int, QString>& src : sources)
+        m_source_combo->addItem(src.second, src.first);
+
+    // Full label as a per-item tooltip so a name too long for the box is still readable.
+    for (int i = 0; i < m_source_combo->count(); ++i)
+        m_source_combo->setItemData(i, m_source_combo->itemText(i), Qt::ToolTipRole);
+
+    const int idx = m_source_combo->findData(m_view_model->visibleSource());
+    m_source_combo->setCurrentIndex(idx >= 0 ? idx : 0);
+    m_source_combo->setEnabled(true);
 }
 
 void PlotWidget::onSeriesVisibilityToggled(int index)
@@ -291,7 +331,7 @@ void PlotWidget::onSeriesVisibilityToggled(int index)
         return;
     }
 
-    m_graphs[index]->setVisible(m_view_model->seriesAt(index).visible);
+    m_graphs[index]->setVisible(m_view_model->effectiveVisible(m_view_model->seriesAt(index)));
     m_plot->replot(QCustomPlot::rpQueuedReplot);
     rebuildLegend();
 }
@@ -316,7 +356,7 @@ void PlotWidget::onSeriesAppearanceChanged()
         if (graph != nullptr)
         {
             graph->setPen(QPen(s.color, PlotConstants::kGraphPenWidth));
-            graph->setVisible(s.visible);
+            graph->setVisible(m_view_model->effectiveVisible(s));
         }
     }
     rebuildLegend();
@@ -346,7 +386,7 @@ void PlotWidget::onLockAxisViewChanged()
             // lock/missed sibling in the ViewModel, and that sibling first becomes
             // visible here, so its pen must be refreshed from the (updated) series color.
             graph->setPen(QPen(s.color, PlotConstants::kGraphPenWidth));
-            graph->setVisible(s.visible);
+            graph->setVisible(m_view_model->effectiveVisible(s));
         }
     }
 
@@ -355,7 +395,7 @@ void PlotWidget::onLockAxisViewChanged()
             ? PlotConstants::kMissedFramesAxisLabel
             : PlotConstants::kYAxisLabel);
 
-    updateAxisViewButton();
+    updateAxisViewCombo();
     rebuildLegend();
     m_plot->replot(QCustomPlot::rpQueuedReplot);
 }
@@ -532,70 +572,7 @@ void PlotWidget::onExportPlot()
 
         if (dialog.exportImage())
         {
-            QString filename = dialog.imagePath();
-            QString suffix = QFileInfo(filename).suffix().toLower();
-            bool success = false;
-            QString formatStr;
-
-            if (suffix == "png")
-            {
-                // The legend floats over the chart as a child widget, so render it
-                // onto the plot pixmap at its on-screen position (WYSIWYG — if the
-                // legend is scrolled, the exported view matches).
-                QPixmap px = m_plot->toPixmap(m_plot->width(), m_plot->height());
-                if (m_legend_overlay != nullptr && m_legend_overlay->isVisible())
-                {
-                    QPainter painter(&px);
-                    m_legend_overlay->render(&painter, m_legend_overlay->pos());
-                    painter.end();
-                }
-                success = px.save(filename, "PNG");
-                formatStr = "PNG";
-            }
-            else if (suffix == "svg")
-            {
-                QSvgGenerator generator;
-                generator.setFileName(filename);
-                generator.setSize(m_plot->size());
-                generator.setViewBox(QRect(0, 0, m_plot->width(), m_plot->height()));
-                generator.setTitle(m_view_model->plotTitle());
-                generator.setDescription("Generated by tmDataQualityAnalyzer");
-
-                QCPPainter painter;
-                success = painter.begin(&generator);
-                if (success)
-                {
-                    m_plot->toPainter(&painter);
-                    if (m_legend_overlay != nullptr && m_legend_overlay->isVisible())
-                    {
-                        m_legend_overlay->render(&painter, m_legend_overlay->pos());
-                    }
-                    painter.end();
-                }
-                formatStr = "SVG";
-            }
-            else
-            {
-                // Default to PDF
-                if (!filename.endsWith(".pdf", Qt::CaseInsensitive))
-                {
-                    filename += ".pdf";
-                }
-                success = m_plot->savePdf(filename);
-                formatStr = "PDF";
-            }
-
-            if (success)
-            {
-                emit logMessage(QString("<span style='color:green;'>Plot exported as %1 to <a href='file:///%2'>%2</a></span>")
-                                .arg(formatStr)
-                                .arg(filename));
-            }
-            else
-            {
-                emit logMessage(QString("<span style='color:red;'>Error: Failed to export plot to %1</span>")
-                                .arg(filename));
-            }
+            exportImage(dialog.imagePath());
         }
 
         if (dialog.exportLog())
@@ -623,6 +600,80 @@ void PlotWidget::onExportPlot()
             }
         }
     }
+}
+
+bool PlotWidget::exportImage(const QString& path)
+{
+    if (m_view_model == nullptr)
+    {
+        return false;
+    }
+
+    QString filename = path;
+    QString suffix = QFileInfo(filename).suffix().toLower();
+    bool success = false;
+    QString formatStr;
+
+    if (suffix == "png")
+    {
+        // The legend floats over the chart as a child widget, so render it
+        // onto the plot pixmap at its on-screen position (WYSIWYG — if the
+        // legend is scrolled, the exported view matches).
+        QPixmap px = m_plot->toPixmap(m_plot->width(), m_plot->height());
+        if (m_legend_overlay != nullptr && m_legend_overlay->isVisible())
+        {
+            QPainter painter(&px);
+            m_legend_overlay->render(&painter, m_legend_overlay->pos());
+            painter.end();
+        }
+        success = px.save(filename, "PNG");
+        formatStr = "PNG";
+    }
+    else if (suffix == "svg")
+    {
+        QSvgGenerator generator;
+        generator.setFileName(filename);
+        generator.setSize(m_plot->size());
+        generator.setViewBox(QRect(0, 0, m_plot->width(), m_plot->height()));
+        generator.setTitle(m_view_model->plotTitle());
+        generator.setDescription("Generated by tmDataQualityAnalyzer");
+
+        QCPPainter painter;
+        success = painter.begin(&generator);
+        if (success)
+        {
+            m_plot->toPainter(&painter);
+            if (m_legend_overlay != nullptr && m_legend_overlay->isVisible())
+            {
+                m_legend_overlay->render(&painter, m_legend_overlay->pos());
+            }
+            painter.end();
+        }
+        formatStr = "SVG";
+    }
+    else
+    {
+        // Default to PDF
+        if (!filename.endsWith(".pdf", Qt::CaseInsensitive))
+        {
+            filename += ".pdf";
+        }
+        success = m_plot->savePdf(filename);
+        formatStr = "PDF";
+    }
+
+    if (success)
+    {
+        emit logMessage(QString("<span style='color:green;'>Plot exported as %1 to <a href='file:///%2'>%2</a></span>")
+                        .arg(formatStr)
+                        .arg(filename));
+    }
+    else
+    {
+        emit logMessage(QString("<span style='color:red;'>Error: Failed to export plot to %1</span>")
+                        .arg(filename));
+    }
+    return success;
 }
 
 void PlotWidget::handlePlotXRangeChanged(double lower, double upper)
@@ -655,22 +706,45 @@ void PlotWidget::setUpLayout()
     main_layout->setContentsMargins(4, 8, 4, 4);
     main_layout->setSpacing(0);
 
-    // --- Title row ---
+    // --- Title row (Plot File | Plot Title | View Mode) ---
     auto* title_bar = new QHBoxLayout;
-    title_bar->addWidget(new QLabel("Title:"));
+    title_bar->setSpacing(6);
+
+    // Plot File (US1.1): which processed file to view after a multi-file batch.
+    // Disabled unless more than one source is loaded.
+    title_bar->addWidget(new QLabel(QStringLiteral("Plot File:")));
+    m_source_combo = new QComboBox;
+    m_source_combo->setToolTip(QStringLiteral("Select which processed file to view"));
+    m_source_combo->setEnabled(false);
+    m_source_combo->setMinimumWidth(160);
+    m_source_combo->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    title_bar->addWidget(m_source_combo);
+
+    title_bar->addSpacing(20);
+
+    title_bar->addWidget(new QLabel(QStringLiteral("Plot Title:")));
     m_title_edit = new QLineEdit;
     m_title_edit->setPlaceholderText(PlotConstants::kDefaultPlotTitle);
     m_title_edit->setToolTip("Plot title");
     m_title_edit->setEnabled(false);
-    title_bar->addWidget(m_title_edit, 1);
+    m_title_edit->setMinimumWidth(260);
+    title_bar->addWidget(m_title_edit);
 
-    // Left-axis mode toggle button: switches between the Lock % metric and the
-    // accumulated Missed Frames metric (both share the left axis).
-    m_axis_view_btn = new QPushButton(QStringLiteral("Frame lock percentage"));
-    m_axis_view_btn->setToolTip(QStringLiteral("Toggle left axis between Frame lock percentage "
-                                "and Missed frames"));
-    m_axis_view_btn->setEnabled(false);
-    title_bar->addWidget(m_axis_view_btn);
+    // Empty space between the title and the right-aligned View Mode selector.
+    title_bar->addStretch(1);
+
+    // View Mode: the left axis metric — Lock % or Accumulation (missed frames).
+    title_bar->addWidget(new QLabel(QStringLiteral("View Mode")));
+    m_axis_view_combo = new QComboBox;
+    m_axis_view_combo->setToolTip(QStringLiteral("Left axis metric: Frame Sync Lock % or "
+                                                 "Accumulated Missed Frames"));
+    m_axis_view_combo->addItem(QStringLiteral("Lock %"),
+                               static_cast<int>(PlotViewModel::LockAxisView::LockPercent));
+    m_axis_view_combo->addItem(QStringLiteral("Accumulation"),
+                               static_cast<int>(PlotViewModel::LockAxisView::MissedFrames));
+    m_axis_view_combo->setEnabled(false);
+    m_axis_view_combo->setMinimumWidth(140);
+    title_bar->addWidget(m_axis_view_combo);
 
     main_layout->addLayout(title_bar);
     main_layout->addSpacing(8);
@@ -840,7 +914,17 @@ void PlotWidget::setUpConnections()
                 if (!m_updating_from_vm && m_view_model != nullptr)
                     m_view_model->setRightYMaxOverride(value);
             });
-    connect(m_axis_view_btn, &QPushButton::clicked, this, &PlotWidget::onAxisViewToggleClicked);
+    // View Mode: user picks the left-axis metric (data = LockAxisView).
+    connect(m_axis_view_combo, QOverload<int>::of(&QComboBox::activated), this, [this](int) {
+        if (m_view_model != nullptr)
+            m_view_model->setLockAxisView(
+                static_cast<PlotViewModel::LockAxisView>(m_axis_view_combo->currentData().toInt()));
+    });
+    // Plot File: user picks which processed file to view (data = sourceId; -1 = all).
+    connect(m_source_combo, QOverload<int>::of(&QComboBox::activated), this, [this](int) {
+        if (m_view_model != nullptr)
+            m_view_model->setVisibleSource(m_source_combo->currentData().toInt());
+    });
     connect(m_plot, &QCustomPlot::mouseMove, this, &PlotWidget::onPlotMouseMove);
 
     connect(m_plot->xAxis, QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
@@ -890,8 +974,8 @@ void PlotWidget::rebuildLegend()
     for (const PlotSeriesData& s : all_series)
     {
         // Only show visible series; skip whichever lock metric is not active so the
-        // legend matches exactly what is drawn.
-        if (!s.visible)
+        // legend matches exactly what is drawn (and honor the active source filter).
+        if (!m_view_model->effectiveVisible(s))
         {
             continue;
         }
@@ -1082,7 +1166,7 @@ void PlotWidget::onPlotMouseMove(QMouseEvent* event)
     const auto& all_series = m_view_model->allSeries();
     for (int i = 0; i < m_graphs.size() && i < static_cast<int>(all_series.size()); i++)
     {
-        if (!all_series[i].visible)
+        if (!m_view_model->effectiveVisible(all_series[i]))
         {
             continue;
         }
@@ -1147,40 +1231,30 @@ void PlotWidget::onPlotMouseMove(QMouseEvent* event)
     }
 }
 
-void PlotWidget::onAxisViewToggleClicked()
+void PlotWidget::updateAxisViewCombo()
 {
-    if (m_view_model == nullptr)
-    {
-        return;
-    }
-    const PlotViewModel::LockAxisView new_view =
-        (m_view_model->lockAxisView() == PlotViewModel::LockAxisView::LockPercent)
-            ? PlotViewModel::LockAxisView::MissedFrames
-            : PlotViewModel::LockAxisView::LockPercent;
-
-    m_view_model->setLockAxisView(new_view);
-}
-
-void PlotWidget::updateAxisViewButton()
-{
-    if (m_axis_view_btn == nullptr || m_view_model == nullptr)
+    if (m_axis_view_combo == nullptr || m_view_model == nullptr)
     {
         return;
     }
 
-    // The button is only meaningful when both metrics are available; it shows the
-    // view it will switch *to*.
+    // The View Mode selector is only meaningful when both left-axis metrics exist
+    // (a frame-sync stream produces both); SNR-only data leaves it disabled.
     const bool enabled = m_view_model->hasLockSeries() && m_view_model->hasMissedFramesSeries();
-    m_axis_view_btn->setEnabled(enabled);
+    m_axis_view_combo->setEnabled(enabled);
+
+    // Sync the selection to the ViewModel's active view without firing activated().
+    {
+        QSignalBlocker blocker(m_axis_view_combo);
+        const int idx = m_axis_view_combo->findData(static_cast<int>(m_view_model->lockAxisView()));
+        if (idx >= 0)
+            m_axis_view_combo->setCurrentIndex(idx);
+    }
 
     if (enabled)
     {
+        // Adjust the left spinbox range and step to match the active axis metric.
         const bool is_lock_pct = (m_view_model->lockAxisView() == PlotViewModel::LockAxisView::LockPercent);
-        m_axis_view_btn->setText(is_lock_pct
-            ? QStringLiteral("Frame lock percentage")
-            : QStringLiteral("Missed frames"));
-
-        // Adjust left spinbox range and step to match the active axis mode
         m_updating_from_vm = true;
         if (is_lock_pct)
         {

@@ -75,6 +75,9 @@ SOURCES += \
     src/model/calibrationextractor.cpp \
     src/model/csvseriesparser.cpp \
     src/model/seriescolumnschema.cpp \
+    src/model/streamconfigschema.cpp \
+    src/model/processingtemplateschema.cpp \
+    src/model/templatematcher.cpp \
     src/model/tomlconfighelper.cpp
 
 # ViewModel: presentation state + processing orchestration
@@ -88,6 +91,7 @@ SOURCES += \
     src/view/mainview.cpp \
     src/view/streamconfigdialog.cpp \
     src/view/exportdialog.cpp \
+    src/view/batchapplydialog.cpp \
     src/view/plotcustomizationdialog.cpp \
     src/view/processingprogressdialog.cpp \
     src/view/plotwidget.cpp
@@ -126,6 +130,9 @@ HEADERS += \
     include/model/calibrationextractor.h \
     include/model/csvseriesparser.h \
     include/model/seriescolumnschema.h \
+    include/model/streamconfigschema.h \
+    include/model/processingtemplateschema.h \
+    include/model/templatematcher.h \
     include/model/tomlconfighelper.h
 
 # DTOs: plain data carried across layers
@@ -136,7 +143,10 @@ HEADERS += \
     include/dto/processedstreamdata.h \
     include/dto/plotseriesdata.h \
     include/dto/calibrationprofile.h \
-    include/dto/timefields.h
+    include/dto/timefields.h \
+    include/dto/source.h \
+    include/dto/seriesappearance.h \
+    include/dto/processingtemplate.h
 
 # ViewModel: presentation state + processing orchestration
 HEADERS += \
@@ -150,6 +160,7 @@ HEADERS += \
     include/view/streamconfigdialog.h \
     include/view/streamsubdialogs.h \
     include/view/exportdialog.h \
+    include/view/batchapplydialog.h \
     include/view/plotcustomizationdialog.h \
     include/view/processingprogressdialog.h \
     include/view/plotwidget.h
@@ -197,7 +208,8 @@ RESOURCES += \
     resources/toggle-on-dark.svg \
     resources/toggle-off-dark.svg \
     resources/toggle-on-light.svg \
-    resources/toggle-off-light.svg
+    resources/toggle-off-light.svg \
+    resources/usermanual.html
 
 RC_FILE = resources/tmDataQualityAnalyzer_resource.rc
 

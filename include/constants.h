@@ -14,7 +14,7 @@
 /// @brief Application version information.
 struct AppVersion {
     static constexpr int kMajor = 2;   ///< Major version number.
-    static constexpr int kMinor = 6;   ///< Minor version number.
+    static constexpr int kMinor = 7;   ///< Minor version number.
     static constexpr int kPatch = 0;   ///< Patch version number.
 
     /// @return Version string in "major.minor.patch" format.
@@ -89,6 +89,7 @@ namespace UIConstants {
     inline constexpr const char* kThemeDark         = "dark";         ///< Dark theme identifier.
     inline constexpr const char* kThemeLight        = "light";        ///< Light theme identifier.
     inline constexpr const char* kSettingsKeyRecentFiles = "RecentFiles"; ///< QSettings key for recent files list.
+    inline constexpr const char* kSettingsKeySidebarVisible = "SidebarVisible"; ///< QSettings key for sidebar (log) visibility.
     inline constexpr int kMaxRecentFiles            = 5;              ///< Maximum number of recent files to remember.
     /// @}
 
@@ -150,7 +151,7 @@ namespace UIConstants {
     inline constexpr int kTimeInputMaxWidth               = 100;                          ///< Maximum width for time input fields (px).
     inline constexpr int kChannelComboFixedWidth           = 400;                          ///< Fixed width for Time/PCM channel combo boxes (px).
     inline constexpr int kFileNameColumnMinWidth           = 600;                          ///< Minimum width for the file name column in the file list tree (px).
-    inline constexpr int kControlsDockMinWidth            = 400;                          ///< Minimum width for the controls dock panel (file name column + margins).
+    inline constexpr int kSidebarMinWidth                 = 400;                          ///< Minimum width for the sidebar panel (file name column + margins).
     inline constexpr int kInitialWindowWidth              = 1920;                         ///< Initial main window width at launch (px).
     inline constexpr int kInitialWindowHeight             = 1080;                         ///< Initial main window height at launch (px).
     inline constexpr int kDecimalBase                    = 10;                           ///< Decimal (base-10) radix for QString::arg formatting.

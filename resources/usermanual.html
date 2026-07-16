@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TM Data Quality Analyzer — User Manual</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #24292f; --muted: #57606a; --line: #d0d7de;
+    --accent: #0969da; --code-bg: #f6f8fa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1e1e1e; --fg: #d4d4d4; --muted: #9d9d9d; --line: #3c3c3c;
+      --accent: #4fa3ff; --code-bg: #2a2a2a;
+    }
+  }
+  body {
+    margin: 0 auto; max-width: 860px; padding: 2rem 1.5rem 4rem;
+    background: var(--bg); color: var(--fg);
+    font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.55;
+  }
+  h1 { font-size: 1.9rem; border-bottom: 1px solid var(--line); padding-bottom: .4rem; }
+  h2 { font-size: 1.35rem; margin-top: 2.2rem; border-bottom: 1px solid var(--line); padding-bottom: .25rem; }
+  h3 { font-size: 1.05rem; margin-top: 1.4rem; }
+  p.subtitle { color: var(--muted); margin-top: -0.5rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, kbd {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 0 .35em; font-family: Consolas, monospace; font-size: .92em;
+  }
+  table { border-collapse: collapse; width: 100%; margin: .8rem 0; }
+  th, td { border: 1px solid var(--line); padding: .45rem .6rem; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); }
+  ul, ol { padding-left: 1.4rem; }
+  li { margin: .25rem 0; }
+  .note {
+    border-left: 4px solid var(--accent); background: var(--code-bg);
+    padding: .6rem .9rem; margin: 1rem 0; border-radius: 0 6px 6px 0;
+  }
+  nav ul { list-style: none; padding-left: 0; columns: 2; }
+  nav li { margin: .15rem 0; }
+</style>
+</head>
+<body>
+
+<h1>TM Data Quality Analyzer</h1>
+<p class="subtitle">User Manual — Version 2.7.0</p>
+
+<p>TM Data Quality Analyzer examines IRIG&nbsp;106 Chapter&nbsp;10 PCM telemetry recordings and
+plots two data-quality metrics over time, per stream:</p>
+<ul>
+  <li><strong>Frame Sync Lock</strong> — the percentage of each time window the decommutator held
+      frame lock, plus a running count of missed frames.</li>
+  <li><strong>Receiver AGC/SNR</strong> — receiver signal metrics embedded in the PCM frame,
+      optionally converted to dB through a calibration profile.</li>
+</ul>
+
+<nav>
+<h2>Contents</h2>
+<ul>
+  <li><a href="#getting-started">1. Getting started</a></li>
+  <li><a href="#configure">2. Configuring streams</a></li>
+  <li><a href="#plot">3. Working with the plot</a></li>
+  <li><a href="#metrics">4. Understanding the metrics</a></li>
+  <li><a href="#templates">5. Templates &amp; batch processing</a></li>
+  <li><a href="#import-export">6. Import &amp; export</a></li>
+  <li><a href="#interface">7. Interface &amp; settings</a></li>
+  <li><a href="#shortcuts">8. Keyboard shortcuts</a></li>
+</ul>
+</nav>
+
+<h2 id="getting-started">1. Getting started</h2>
+<ol>
+  <li>Open the application menu with the <strong>≡</strong> button at the top left.</li>
+  <li>Choose <strong>Open…</strong> (or press <kbd>Ctrl+O</kbd>) and select a <code>.ch10</code>
+      file — or simply drag and drop the file anywhere onto the window. Recently opened files are
+      listed under <strong>Recent Files</strong>.</li>
+  <li>The <strong>Configure Streams</strong> dialog appears, listing every PCM channel found in the
+      recording. Configure the streams you want (see <a href="#configure">section&nbsp;2</a>) and
+      press <strong>Process</strong>.</li>
+  <li>Processing runs in the background with a progress dialog; results appear on the plot as each
+      stream finishes.</li>
+</ol>
+
+<h2 id="configure">2. Configuring streams</h2>
+<p>Each PCM channel row in the Configure Streams dialog has:</p>
+<ul>
+  <li><strong>Process</strong> — include or exclude the stream from this run.</li>
+  <li><strong>Mode</strong> — <em>Frame Sync Lock Stats</em> or <em>Receiver AGC/SNR</em>.</li>
+  <li><strong>Settings (gear)</strong> — the per-stream setup dialog:
+    <ul>
+      <li><em>Frame sync</em>: sync pattern, sync mask, and words per frame. These three fields can
+          be saved to / loaded from a TOML file for reuse. Below the separator, <em>Randomized</em>,
+          <em>Data Rate</em>, and <em>Sample Rate</em> are per-session inputs and are not saved.</li>
+      <li><em>SNR setup</em> (SNR mode): word layout of the receiver channels within the frame, plus
+          inversion/randomization flags.</li>
+      <li><em>Calibration</em> (SNR mode): extract a calibration profile from a calibration run so
+          raw counts convert to dB. Profiles apply to the current session only — they are never
+          written to disk.</li>
+    </ul>
+  </li>
+</ul>
+<p>The dialog also selects the <strong>time channel</strong> used to timestamp all streams, and an
+optional start/stop time range to restrict processing.</p>
+
+<h2 id="plot">3. Working with the plot</h2>
+<ul>
+  <li><strong>Plot File</strong> — after a batch run with several files, selects which file's series
+      are shown, or <em>All files (overlaid)</em>. Disabled when only one file is loaded.</li>
+  <li><strong>Plot Title</strong> — free-text title shown above the chart and used in exports.</li>
+  <li><strong>View Mode</strong> — for Frame Sync Lock data, switches the Y axis between
+      <em>Lock&nbsp;%</em> and <em>Accumulation</em> (running missed-frame count).</li>
+  <li><strong>Zoom &amp; pan</strong> — scroll to zoom, drag to pan; right-click offers reset and
+      axis options.</li>
+  <li><strong>Legend</strong> — click entries to show/hide individual series.</li>
+  <li><strong>Customize Plot</strong> — rename series and change their colors.</li>
+</ul>
+
+<h2 id="metrics">4. Understanding the metrics</h2>
+<h3>Frame Sync Lock</h3>
+<p>Lock&nbsp;% is computed from bits actually observed: within each averaging window it is the
+share of bits that belonged to frames in lock. Missed frames count loss-of-lock events — the
+accumulation view shows their running total. A clean recording plots at a flat 100% with a flat
+accumulation line.</p>
+<h3>Receiver AGC/SNR</h3>
+<p>Receiver words embedded in each frame are averaged per window as raw counts, then converted once
+per window through the calibration profile (if attached). Readings outside the calibrated range clamp
+to the nearest calibrated step rather than extrapolating.</p>
+
+<h2 id="templates">5. Templates &amp; batch processing</h2>
+<p>A <strong>processing template</strong> captures one configured file's complete per-stream setup —
+modes, frame-sync settings, SNR layout, plus each series' custom name and color — independent of any
+file path.</p>
+<h3>Save as Template…</h3>
+<p>After processing a file, choose <strong>Save as Template…</strong> from the menu to write the
+template as a <code>.json</code> file.</p>
+<h3>Apply Template to Files…</h3>
+<ol>
+  <li>Pick a template file, then select any number of <code>.ch10</code> files.</li>
+  <li>Each file is validated up front: its PCM channel-ID set must exactly match the template's.
+      Non-matching files are flagged with the missing/extra channels and skipped.</li>
+  <li>In the batch dialog, optionally enable <strong>per-file export</strong> — for every processed
+      file this writes a CSV plus two plot images (<code>…_framesync_lock.png</code> and
+      <code>…_missed_frames.png</code>) to a folder you choose.</li>
+  <li>All processed files stay loaded; use the <strong>Plot File</strong> selector to review each
+      one or overlay them all.</li>
+</ol>
+<div class="note">Files must contain the same PCM channel IDs as the template. A file with even one
+extra or missing channel is rejected — this guarantees settings are never silently applied to the
+wrong physical channel.</div>
+
+<h2 id="import-export">6. Import &amp; export</h2>
+<ul>
+  <li><strong>Export…</strong> — writes the current plot's data to CSV and/or the chart to an image
+      (PNG, SVG, or PDF), and can save the log.</li>
+  <li><strong>Import CSV…</strong> — loads a previously exported CSV straight onto the plot, with no
+      reprocessing. Dropping a <code>.csv</code> onto the window does the same.</li>
+</ul>
+
+<h2 id="interface">7. Interface &amp; settings</h2>
+<ul>
+  <li><strong>Menu (≡)</strong> — every command lives in the single top-left menu, grouped into
+      Process, Import/Export, Settings, and Help sections.</li>
+  <li><strong>Sidebar</strong> — the panel on the left shows the processing log. Toggle it with the
+      sidebar button next to the menu, or <kbd>Ctrl+B</kbd>. Its state is remembered between
+      sessions.</li>
+  <li><strong>Theme</strong> — switch between dark and light themes from the Settings section.</li>
+  <li><strong>Status bar</strong> — shows the loaded file and processing status.</li>
+</ul>
+
+<h2 id="shortcuts">8. Keyboard shortcuts</h2>
+<table>
+  <tr><th>Shortcut</th><th>Action</th></tr>
+  <tr><td><kbd>Ctrl+O</kbd></td><td>Open a Chapter 10 or CSV file</td></tr>
+  <tr><td><kbd>Ctrl+B</kbd></td><td>Show / hide the sidebar (log)</td></tr>
+</table>
+
+<hr style="border:none;border-top:1px solid var(--line);margin-top:2.5rem">
+<p style="color:var(--muted);font-size:.9em">TM Data Quality Analyzer · This manual describes
+version 2.7.0. Open it any time from <strong>≡ → Help → User Manual…</strong></p>
+
+</body>
+</html>

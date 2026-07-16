@@ -13,6 +13,7 @@
 
 #include <QFile>
 #include <QMap>
+#include <QSet>
 #include <QTextStream>
 
 #include "constants.h"
@@ -55,14 +56,17 @@ void PlotViewModel::commitParseResult(CsvParseResult&& result)
     // column name by the parser); reuse it for a stream's lock/missed siblings so
     // both tabs of the Customize Plot Series dialog show the same "CH <id>" group.
     // Lock-only streams have no SNR counterpart, so allocate fresh ids above any
-    // SNR id to avoid collisions.
-    QMap<QString, int> label_to_stream_order;
+    // SNR id to avoid collisions. Keyed [sourceId][streamLabel]: a multi-source
+    // export (Phase 1 multi-file input) can have two different sources' Lock-only
+    // streams share a label, so sourceId must be part of the key or they'd
+    // incorrectly link up as the same stream on import.
+    QMap<int, QMap<QString, int>> label_to_stream_order;
     int next_stream_order = 0;
     for (const auto& s : m_series)
     {
         if (s.metricType == PlotSeriesData::MetricType::SNR && !s.streamLabel.isEmpty())
         {
-            label_to_stream_order.insert(s.streamLabel, s.streamOrder);
+            label_to_stream_order[s.sourceId].insert(s.streamLabel, s.streamOrder);
         }
         next_stream_order = qMax(next_stream_order, s.streamOrder + 1);
     }
@@ -75,10 +79,11 @@ void PlotViewModel::commitParseResult(CsvParseResult&& result)
         case PlotSeriesData::MetricType::FrameSyncLock:
         case PlotSeriesData::MetricType::AccumulatedMissedFrames:
         {
-            auto it = label_to_stream_order.find(s.streamLabel);
-            if (it == label_to_stream_order.end())
+            QMap<QString, int>& source_stream_order = label_to_stream_order[s.sourceId];
+            auto it = source_stream_order.find(s.streamLabel);
+            if (it == source_stream_order.end())
             {
-                it = label_to_stream_order.insert(s.streamLabel, next_stream_order++);
+                it = source_stream_order.insert(s.streamLabel, next_stream_order++);
             }
             s.streamOrder = it.value();
             const bool is_lock = (s.metricType == PlotSeriesData::MetricType::FrameSyncLock);
@@ -178,40 +183,75 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
     // earlier mode (e.g. Frame Sync Lock) lingers on the plot indefinitely
     // alongside the new one, since addStreamData() only ever accumulates and
     // the plot is only cleared when a new file is opened, not on reprocess.
-    // Matched on streamLabel AND pcmChannelId together: label alone isn't a
-    // unique stream key (two configured streams can share a TMATS-derived
-    // name), and pcmChannelId alone isn't either (it defaults to 0 for streams
-    // without a real channel id, e.g. synthetic/test data) — requiring both
-    // only erases the stream actually being reprocessed.
+    // Matched on sourceId, streamLabel, AND pcmChannelId together: label alone
+    // isn't a unique stream key (two configured streams can share a
+    // TMATS-derived name), pcmChannelId alone isn't either (it defaults to 0
+    // for streams without a real channel id, e.g. synthetic/test data), and in
+    // a multi-file session two different .ch10 sources can legitimately reuse
+    // the same channel id/label — requiring sourceId too ensures reprocessing
+    // one source's stream never erases another source's identically-keyed one.
     m_series.erase(std::remove_if(m_series.begin(), m_series.end(),
                                    [&](const PlotSeriesData& s) {
-                                       return s.streamLabel == data.streamLabel &&
+                                       return s.sourceId == data.sourceId &&
+                                              s.streamLabel == data.streamLabel &&
                                               s.streamOrder == data.pcmChannelId;
                                    }),
                    m_series.end());
 
-    // Establish the shared time base from the first accumulated sample so that
-    // streams added later line up on the same elapsed-seconds X axis.
+    // Detect a source whose recording doesn't overlap the data already loaded
+    // (e.g. two .ch10 files recorded on different days) -- informational only,
+    // since the re-basing below keeps elapsed correct regardless (multi-file
+    // input, docs/multi-file-input-design.md §3). Checked once, on the first
+    // stream we see from this source in THIS add, using the range already at
+    // hand (no extra file access): existing = [m_base_abs_seconds, m_base_abs_seconds
+    // + m_x_max], since m_x_min is always 0.
+    if (!m_series.isEmpty())
+    {
+        const bool source_already_present = std::any_of(m_series.cbegin(), m_series.cend(),
+            [&](const PlotSeriesData& s) { return s.sourceId == data.sourceId; });
+        if (!source_already_present)
+        {
+            const double existing_min_abs = m_base_abs_seconds;
+            const double existing_max_abs = m_base_abs_seconds + m_x_max;
+            const double new_min_abs = data.timesSec.first();
+            const double new_max_abs = data.timesSec.last();
+            const bool overlaps = new_min_abs <= existing_max_abs && existing_min_abs <= new_max_abs;
+            if (!overlaps)
+            {
+                emit nonOverlappingSourceWarning(data.sourceId);
+            }
+        }
+    }
+
+    // Establish/maintain the shared time base so every source's samples line up
+    // on the same elapsed-seconds X axis (multi-file input,
+    // docs/multi-file-input-design.md §3). The base must be the EARLIEST
+    // absolute sample across every source ever added, not just the first-added
+    // one -- a later-added source (e.g. a second .ch10 file) can easily start
+    // earlier than the first.
     if (m_series.isEmpty())
     {
         m_base_abs_seconds = data.timesSec.first();
-        // Use a reentrant gmtime variant — plain gmtime() returns a pointer to a
-        // shared static tm and is not thread-safe.
-        std::time_t epoch = static_cast<std::time_t>(m_base_abs_seconds);
-        std::tm tm_buf{};
-#if defined(_WIN32)
-        const bool ok = (gmtime_s(&tm_buf, &epoch) == 0);
-#else
-        const bool ok = (gmtime_r(&epoch, &tm_buf) != nullptr);
-#endif
-        if (ok)
+        recomputeBaseDayAndOffset();
+    }
+    else if (data.timesSec.first() < m_base_abs_seconds)
+    {
+        // This source's earliest sample precedes everything already loaded.
+        // Re-base: shift every existing series' elapsed seconds right by the
+        // delta so elapsed stays >= 0 (all existing X-axis/formatTime() code
+        // keeps working unchanged) while every sample's absolute-time
+        // correlation across sources is preserved. O(total samples), a
+        // one-time cost per add that starts a new earliest source.
+        const double delta = m_base_abs_seconds - data.timesSec.first();
+        for (PlotSeriesData& s : m_series)
         {
-            m_base_day = tm_buf.tm_yday + 1;
-            m_base_time_offset = (tm_buf.tm_hour * UIConstants::kSecondsPerHour)
-                               + (tm_buf.tm_min * UIConstants::kSecondsPerMinute)
-                               + tm_buf.tm_sec
-                               + (m_base_abs_seconds - static_cast<double>(epoch));
+            for (double& x : s.xValues)
+            {
+                x += delta;
+            }
         }
+        m_base_abs_seconds = data.timesSec.first();
+        recomputeBaseDayAndOffset();
     }
 
     const int sample_count = static_cast<int>(data.timesSec.size());
@@ -242,6 +282,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         lock.channelIndex = 0;
         lock.streamOrder = data.pcmChannelId;
         lock.streamSequence = data.jobIndex;
+        lock.sourceId = data.sourceId;
         lock.id = m_next_series_id++;
         lock.xValues = elapsed;
         lock.yValues = data.lockPercent;
@@ -262,6 +303,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         errors.channelIndex = 0;
         errors.streamOrder = data.pcmChannelId;
         errors.streamSequence = data.jobIndex;
+        errors.sourceId = data.sourceId;
         errors.id = m_next_series_id++;
         errors.xValues = elapsed;
         errors.yValues = data.accumulatedMissedFrames;
@@ -294,6 +336,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         receiver_channel_count[s.receiverIndex]++;
         s.streamOrder = data.pcmChannelId;
         s.streamSequence = data.jobIndex;
+        s.sourceId = data.sourceId;
         s.id = m_next_series_id++;
         s.xValues = elapsed;
         s.yValues = ch.values;
@@ -310,6 +353,91 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
 
     // Recompute global X range and refresh the viewport to show all data.
     m_x_min = 0.0;
+    for (const auto& s : m_series)
+    {
+        if (!s.xValues.isEmpty())
+        {
+            m_x_max = qMax(m_x_max, s.xValues.last());
+        }
+    }
+    m_x_view_min = m_x_min;
+    m_x_view_max = m_x_max;
+
+    m_has_lock_series = false;
+    m_has_missed_frames_series = false;
+    for (const auto& s : m_series)
+    {
+        if (s.metricType == PlotSeriesData::MetricType::FrameSyncLock)
+        {
+            m_has_lock_series = true;
+        }
+        else if (s.metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
+        {
+            m_has_missed_frames_series = true;
+        }
+    }
+
+    assignColors();
+    computeYRange();
+
+    emit dataChanged();
+}
+
+void PlotViewModel::removeSource(int sourceId)
+{
+    const bool had_match = std::any_of(m_series.cbegin(), m_series.cend(),
+        [sourceId](const PlotSeriesData& s) { return s.sourceId == sourceId; });
+    if (!had_match)
+    {
+        return;
+    }
+
+    m_series.erase(std::remove_if(m_series.begin(), m_series.end(),
+                                   [sourceId](const PlotSeriesData& s) {
+                                       return s.sourceId == sourceId;
+                                   }),
+                   m_series.end());
+
+    if (m_series.isEmpty())
+    {
+        clearData();
+        return;
+    }
+
+    // Mirror of the add-time re-base in addStreamData() (§3): if the removed
+    // source held the earliest sample, the base must move forward to the new
+    // earliest among what remains, shifting every remaining series LEFT so
+    // elapsed stays correct relative to the new (later) base. Each series'
+    // first sample is at elapsed xValues.first() against the OLD base, so its
+    // absolute time is m_base_abs_seconds + xValues.first(); the new base is
+    // the minimum of those across all remaining series.
+    double new_base_abs = m_base_abs_seconds + m_series.first().xValues.first();
+    for (const PlotSeriesData& s : m_series)
+    {
+        if (!s.xValues.isEmpty())
+        {
+            new_base_abs = qMin(new_base_abs, m_base_abs_seconds + s.xValues.first());
+        }
+    }
+    const double delta = new_base_abs - m_base_abs_seconds; // >= 0
+    if (delta > 0.0)
+    {
+        for (PlotSeriesData& s : m_series)
+        {
+            for (double& x : s.xValues)
+            {
+                x -= delta;
+            }
+        }
+        m_base_abs_seconds = new_base_abs;
+        recomputeBaseDayAndOffset();
+    }
+
+    // Recompute global X range/viewport, lock/missed-frames flags, and colors
+    // from scratch (unlike addStreamData()'s incremental qMax, m_x_max must be
+    // able to SHRINK here since data was removed, not just added).
+    m_x_min = 0.0;
+    m_x_max = 0.0;
     for (const auto& s : m_series)
     {
         if (!s.xValues.isEmpty())
@@ -358,12 +486,28 @@ void PlotViewModel::clearData()
     m_base_time_offset = 0.0;
     m_base_abs_seconds = 0.0;
     m_plot_title = PlotConstants::kDefaultPlotTitle;
+    m_source_labels.clear();
+    m_visible_source = -1;
     emit dataChanged();
+    emit sourcesChanged();
 }
 
-bool PlotViewModel::exportCsv(const QString& filepath) const
+bool PlotViewModel::exportCsv(const QString& filepath, int sourceId) const
 {
     if (m_series.isEmpty()) return false;
+
+    // sourceId < 0 exports every series; otherwise only the given source's columns
+    // (per-file batch export from a retain-all run).
+    auto included = [sourceId](const PlotSeriesData& s) {
+        return sourceId < 0 || s.sourceId == sourceId;
+    };
+
+    bool any_included = false;
+    for (const auto& s : m_series)
+    {
+        if (included(s)) { any_included = true; break; }
+    }
+    if (!any_included) return false;
 
     QFile file(filepath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
@@ -381,7 +525,8 @@ bool PlotViewModel::exportCsv(const QString& filepath) const
     out << PlotConstants::kCsvTimeHeader;
     for (const auto& s : m_series)
     {
-        out << "," << SeriesColumnSchema::columnHeader(s);
+        if (included(s))
+            out << "," << SeriesColumnSchema::columnHeader(s);
     }
     out << "\n";
 
@@ -390,6 +535,7 @@ bool PlotViewModel::exportCsv(const QString& filepath) const
 
     for (int i = 0; i < m_series.size(); ++i)
     {
+        if (!included(m_series[i])) continue;
         const auto& s = m_series[i];
         for (int j = 0; j < s.xValues.size(); ++j)
         {
@@ -409,6 +555,7 @@ bool PlotViewModel::exportCsv(const QString& filepath) const
         const auto& vals = it.value();
         for (int i = 0; i < m_series.size(); ++i)
         {
+            if (!included(m_series[i])) continue;
             if (vals.contains(i))
             {
                 out << "," << QString::number(vals[i], 'f', 6);
@@ -423,6 +570,66 @@ bool PlotViewModel::exportCsv(const QString& filepath) const
 
     file.close();
     return true;
+}
+
+bool PlotViewModel::effectiveVisible(const PlotSeriesData& s) const
+{
+    return s.visible && (m_visible_source < 0 || s.sourceId == m_visible_source);
+}
+
+void PlotViewModel::setSourceLabel(int sourceId, const QString& label)
+{
+    if (m_source_labels.value(sourceId) == label)
+        return;
+    m_source_labels.insert(sourceId, label);
+    emit sourcesChanged();
+}
+
+QVector<QPair<int, QString>> PlotViewModel::sourceList() const
+{
+    QVector<QPair<int, QString>> list;
+    QSet<int> seen;
+    for (const PlotSeriesData& s : m_series)
+    {
+        if (seen.contains(s.sourceId))
+            continue;
+        seen.insert(s.sourceId);
+        const QString label = m_source_labels.value(s.sourceId,
+                                                    QStringLiteral("Source %1").arg(s.sourceId));
+        list.append({ s.sourceId, label });
+    }
+    return list;
+}
+
+int PlotViewModel::visibleSource() const
+{
+    return m_visible_source;
+}
+
+void PlotViewModel::setVisibleSource(int sourceId)
+{
+    m_visible_source = sourceId;
+
+    // Zoom the X viewport to the shown source's span (all sources when -1), so
+    // browsing a single file fills the plot instead of sitting on the whole-batch axis.
+    double lo = std::numeric_limits<double>::max();
+    double hi = std::numeric_limits<double>::lowest();
+    for (const PlotSeriesData& s : m_series)
+    {
+        if (!effectiveVisible(s) || s.xValues.isEmpty())
+            continue;
+        lo = std::min(lo, s.xValues.first());
+        hi = std::max(hi, s.xValues.last());
+    }
+    if (lo <= hi)
+    {
+        m_x_view_min = lo;
+        m_x_view_max = hi;
+    }
+
+    computeYRange();
+    emit sourcesChanged();
+    emit dataChanged();
 }
 
 // ---------------------------------------------------------------------------
@@ -506,11 +713,12 @@ void PlotViewModel::renameSeries(int index, const QString& name)
     // xValues/yValues can be large) before the loop mutates m_series.
     const QString renamed_label = m_series[index].streamLabel;
     const int renamed_order = m_series[index].streamOrder;
+    const int renamed_source = m_series[index].sourceId;
     if (isLeftAxisMetric(m_series[index].metricType))
     {
         for (PlotSeriesData& s : m_series)
         {
-            if (isFrameSyncSibling(renamed_label, renamed_order, s))
+            if (isFrameSyncSibling(renamed_label, renamed_order, renamed_source, s))
             {
                 s.name = name;
             }
@@ -543,11 +751,12 @@ void PlotViewModel::recolorSeries(int index, const QColor& color)
     // mirrors renameSeries(). Capture just the identity fields, not a full copy.
     const QString recolored_label = m_series[index].streamLabel;
     const int recolored_order = m_series[index].streamOrder;
+    const int recolored_source = m_series[index].sourceId;
     if (isLeftAxisMetric(m_series[index].metricType))
     {
         for (PlotSeriesData& s : m_series)
         {
-            if (isFrameSyncSibling(recolored_label, recolored_order, s))
+            if (isFrameSyncSibling(recolored_label, recolored_order, recolored_source, s))
             {
                 s.color = color;
             }
@@ -790,11 +999,33 @@ bool PlotViewModel::isLeftAxisMetric(PlotSeriesData::MetricType type)
 }
 
 bool PlotViewModel::isFrameSyncSibling(const QString& streamLabel, int streamOrder,
-                                       const PlotSeriesData& candidate)
+                                       int sourceId, const PlotSeriesData& candidate)
 {
     return isLeftAxisMetric(candidate.metricType) &&
            candidate.streamLabel == streamLabel &&
-           candidate.streamOrder == streamOrder;
+           candidate.streamOrder == streamOrder &&
+           candidate.sourceId == sourceId;
+}
+
+void PlotViewModel::recomputeBaseDayAndOffset()
+{
+    // Use a reentrant gmtime variant — plain gmtime() returns a pointer to a
+    // shared static tm and is not thread-safe.
+    std::time_t epoch = static_cast<std::time_t>(m_base_abs_seconds);
+    std::tm tm_buf{};
+#if defined(_WIN32)
+    const bool ok = (gmtime_s(&tm_buf, &epoch) == 0);
+#else
+    const bool ok = (gmtime_r(&epoch, &tm_buf) != nullptr);
+#endif
+    if (ok)
+    {
+        m_base_day = tm_buf.tm_yday + 1;
+        m_base_time_offset = (tm_buf.tm_hour * UIConstants::kSecondsPerHour)
+                           + (tm_buf.tm_min * UIConstants::kSecondsPerMinute)
+                           + tm_buf.tm_sec
+                           + (m_base_abs_seconds - static_cast<double>(epoch));
+    }
 }
 
 void PlotViewModel::computeYRange()
@@ -805,7 +1036,7 @@ void PlotViewModel::computeYRange()
 
     for (const auto& s : m_series)
     {
-        if (!s.visible || s.yValues.isEmpty())
+        if (!effectiveVisible(s) || s.yValues.isEmpty())
         {
             continue;
         }
@@ -844,6 +1075,11 @@ bool PlotViewModel::hasLockSeries() const { return m_has_lock_series; }
 bool PlotViewModel::hasMissedFramesSeries() const { return m_has_missed_frames_series; }
 PlotViewModel::LockAxisView PlotViewModel::lockAxisView() const { return m_lock_axis_view; }
 
+bool PlotViewModel::hasLeftYMaxOverride() const { return m_left_y_max_user_set; }
+double PlotViewModel::leftYMaxOverrideValue() const { return m_left_y_max_user; }
+bool PlotViewModel::hasRightYMaxOverride() const { return m_right_y_max_user_set; }
+double PlotViewModel::rightYMaxOverrideValue() const { return m_right_y_max_user; }
+
 double PlotViewModel::leftYMax() const
 {
     if (m_left_y_max_user_set)
@@ -858,7 +1094,7 @@ double PlotViewModel::missedFramesMax() const
     double max_val = 0.0;
     for (const auto& s : m_series)
     {
-        if (s.metricType != PlotSeriesData::MetricType::AccumulatedMissedFrames || !s.visible)
+        if (s.metricType != PlotSeriesData::MetricType::AccumulatedMissedFrames || !effectiveVisible(s))
         {
             continue;
         }

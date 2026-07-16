@@ -1,3 +1,47 @@
+tmDataQualityAnalyzer v2.7.0 - What's New
+=================================
+
+  - New: Processing templates for batch runs. After configuring and processing
+    one Chapter 10 file, save the whole setup — every stream's settings plus
+    your custom series names and colors — as a template with "Save as
+    Template...". Then "Apply Template to Files..." runs that same setup
+    against any number of Chapter 10 files in one action. Each file is checked
+    up front: it must contain exactly the same channels as the template, and
+    any file that doesn't match is clearly flagged and skipped, never processed
+    with the wrong settings.
+
+  - New: After a batch run, every processed file stays loaded. A "Plot File"
+    dropdown in the plot toolbar lets you view any single file's results or
+    overlay all files together for comparison.
+
+  - New: Optional per-file export during a batch run. Tick one box and every
+    processed file automatically gets a CSV plus two plot images — Frame Sync
+    Lock and Missed Frames Accumulation — written to a folder you choose.
+
+  - New: A built-in user manual. Open it any time from the menu under
+    Help > User Manual...; it covers everything from opening a file to batch
+    processing, and opens in your web browser.
+
+  - Improved: A cleaner, modern window. The old menu bar and icon toolbar have
+    been replaced by a single menu button (three-line icon) in the window's
+    title bar, with everything grouped into Process, Import/Export, Settings,
+    and Help sections. The window itself is now frameless with its own
+    minimize/maximize/close buttons, while keeping normal Windows behavior for
+    dragging, resizing, snapping, and double-click maximize.
+
+  - New: Show or hide the log sidebar with the sidebar button next to the menu
+    (or press Ctrl+B) to give the plot the full window. The app remembers your
+    choice between sessions.
+
+  - New: Switch between Lock % and Accumulation with the View Mode dropdown in
+    the plot toolbar (replaces the old toggle button).
+
+  - Changed: The Save Session / Open Session feature has been removed in favor
+    of templates, which do the same job without being tied to exact file
+    locations. Import CSV and Export now live in the menu's Import/Export
+    section.
+
+
 tmDataQualityAnalyzer v2.6.0 - What's New
 =================================
 

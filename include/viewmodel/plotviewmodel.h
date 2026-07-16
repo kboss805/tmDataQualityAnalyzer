@@ -8,7 +8,9 @@
 
 #include <QColor>
 #include <QFutureWatcher>
+#include <QHash>
 #include <QObject>
+#include <QPair>
 #include <QString>
 #include <QVector>
 
@@ -42,10 +44,38 @@ public:
     void loadCsvFileAsync(const QString& filepath);
     /// Appends one processed stream's in-memory series to the plot (accumulating). Emits dataChanged().
     void addStreamData(const ProcessedStreamData& data);
+    /// Removes every series belonging to @p sourceId (multi-file input Phase 1
+    /// source removal, docs/multi-file-input-design.md §5). Re-bases the
+    /// remaining series if the removed source held the earliest sample (shifts
+    /// them left so the new, later base still yields elapsed >= 0); if it
+    /// wasn't the earliest, the base is unchanged. Equivalent to clearData() if
+    /// no series remain. Emits dataChanged(); a no-op if no series has @p sourceId.
+    void removeSource(int sourceId);
     /// Resets all data to empty state.
     void clearData();
-    /// Exports current data to a CSV file.
-    bool exportCsv(const QString& filepath) const;
+    /// Exports current data to a CSV file. @p sourceId < 0 exports every series;
+    /// otherwise only series belonging to that source (per-file batch export).
+    bool exportCsv(const QString& filepath, int sourceId = -1) const;
+    /// @}
+
+    /// @name Multi-file source view (US1.1 batch browsing)
+    /// @{
+    /// Records a human-readable label (file base name) for @p sourceId, shown in
+    /// the plot toolbar's file-selector dropdown.
+    void setSourceLabel(int sourceId, const QString& label);
+    /// The distinct sources currently present, each (sourceId, label), in first-seen
+    /// order. Drives the file-selector dropdown; size <= 1 means it should disable.
+    QVector<QPair<int, QString>> sourceList() const;
+    /// Filters which source is shown in the plot. @p sourceId < 0 shows all sources
+    /// (overlaid); otherwise only that source's series. Orthogonal to per-series
+    /// visibility (see effectiveVisible()); zooms the X viewport to the shown source.
+    /// Emits sourcesChanged() + dataChanged().
+    void setVisibleSource(int sourceId);
+    int visibleSource() const;                     ///< Active source filter (-1 = all).
+    /// @return Whether @p s should actually be drawn: its own visibility AND the
+    /// current source filter. The single gate the View/ranging use so the source
+    /// filter never clobbers per-series visibility or the lock/missed toggle.
+    bool effectiveVisible(const PlotSeriesData& s) const;
     /// @}
 
     /// @name Accessors
@@ -80,6 +110,13 @@ public:
     bool hasLockSeries() const;                    ///< @return True if any FrameSyncLock series are loaded.
 
     LockAxisView lockAxisView() const;             ///< @return Active left-axis metric (lock % vs missed frames).
+    /// @name Axis-max override state
+    /// @{
+    bool hasLeftYMaxOverride() const;              ///< @return True if the user has overridden the left axis max.
+    double leftYMaxOverrideValue() const;          ///< @return The user-set left axis max (only meaningful if hasLeftYMaxOverride()).
+    bool hasRightYMaxOverride() const;             ///< @return True if the user has overridden the right (SNR) axis max.
+    double rightYMaxOverrideValue() const;         ///< @return The user-set right axis max (only meaningful if hasRightYMaxOverride()).
+    /// @}
     bool hasMissedFramesSeries() const;            ///< @return True if any AccumulatedMissedFrames series are loaded.
     double missedFramesMax() const;                ///< @return Max value across visible AccumulatedMissedFrames series (>= 1).
 
@@ -137,8 +174,13 @@ signals:
     void loadWarning(const QString& message);       ///< Emitted after a load that succeeded but skipped malformed rows.
     void seriesVisibilityChanged(int index);        ///< Emitted when a series visibility toggles.
     void seriesAppearanceChanged();                 ///< Emitted after a batch of color/name edits so views can refresh.
+    void sourcesChanged();                          ///< Emitted when the source list or active source filter changes.
     void plotTitleChanged();                        ///< Emitted when the plot title changes.
     void axisRangeChanged();                        ///< Emitted when X or Y axis ranges change.
+    /// Emitted (once, on that source's first-added stream) when a newly added
+    /// source's absolute time range doesn't overlap the data already loaded.
+    /// Informational only -- re-basing already keeps elapsed correct regardless.
+    void nonOverlappingSourceWarning(int sourceId);
 
 private slots:
     void onParseFinished();                         ///< Receives result from background parse thread.
@@ -153,15 +195,20 @@ private:
     /// AccumulatedMissedFrames) that share the axis and a stream's color/name.
     static bool isLeftAxisMetric(PlotSeriesData::MetricType type);
     /// @return True if `candidate` is the left-axis sibling of the stream identified
-    /// by (streamLabel, streamOrder): the same stream's other left-axis metric (e.g.
-    /// a Lock series' Missed-Frames counterpart). Matches on streamLabel AND
-    /// streamOrder (source PCM channel id) together — streamLabel alone is not
-    /// unique (two streams can share a TMATS-derived name), so a rename/recolor
-    /// edit must not cross-apply to an unrelated same-labeled stream.
+    /// by (streamLabel, streamOrder, sourceId): the same stream's other left-axis
+    /// metric (e.g. a Lock series' Missed-Frames counterpart). Matches all three
+    /// together — streamLabel alone is not unique (two streams can share a
+    /// TMATS-derived name), streamOrder alone is not unique across a multi-file
+    /// session (two sources can reuse the same PCM channel id) — so a rename/recolor
+    /// edit must not cross-apply to an unrelated same-labeled/ordered stream.
     static bool isFrameSyncSibling(const QString& streamLabel, int streamOrder,
-                                   const PlotSeriesData& candidate);
+                                   int sourceId, const PlotSeriesData& candidate);
     /// Computes Y axis range from visible series data with margin.
     void computeYRange();
+    /// Recomputes m_base_day/m_base_time_offset from the current m_base_abs_seconds
+    /// via a reentrant gmtime conversion. Shared by the first-stream case and the
+    /// re-base path in addStreamData() (multi-file input, docs/multi-file-input-design.md §3).
+    void recomputeBaseDayAndOffset();
     /// Commits a CsvParseResult into member state and emits dataChanged().
     void commitParseResult(CsvParseResult&& result);
 
@@ -177,6 +224,8 @@ private:
     QVector<PlotSeriesData> m_series;              ///< All loaded series data.
     int m_next_series_id = 1;                      ///< Monotonic source of stable per-series ids (PlotSeriesData::id).
     QString m_plot_title;                          ///< User-defined plot title.
+    QHash<int, QString> m_source_labels;           ///< sourceId -> display label (file base name) for the selector dropdown.
+    int m_visible_source = -1;                     ///< Active source filter (-1 = show all sources overlaid).
 
     double m_x_min = 0.0;                          ///< Data X range minimum.
     double m_x_max = 0.0;                          ///< Data X range maximum.

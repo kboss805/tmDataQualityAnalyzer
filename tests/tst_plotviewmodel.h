@@ -64,6 +64,43 @@ private slots:
     void renameSeriesOnlySameStreamOrderSiblingRenamed();
     void recolorSeriesOnlySameStreamOrderSiblingRecolored();
 
+    // Cross-source stream identity (Phase 1 multi-file input): two DIFFERENT
+    // sources can legitimately reuse the same (streamLabel, streamOrder) — e.g.
+    // two .ch10 files whose TMATS channel ids collide. sourceId must be part of
+    // identity so reprocess-replace and rename/recolor sibling-sync never cross
+    // a source boundary.
+    void crossSourceReprocessDoesNotEraseOtherSource();
+    void crossSourceRenameDoesNotAffectOtherSource();
+    void crossSourceRecolorDoesNotAffectOtherSource();
+
+    // Multi-source time-base re-basing (Phase 1 multi-file input, §3): the
+    // shared elapsed-seconds base must track the EARLIEST absolute sample
+    // across every source, re-basing (shifting existing series right) when a
+    // later-added source's recording started earlier than everything loaded.
+    void addStreamDataRebasesWhenLaterSourceStartsEarlier();
+    void addStreamDataNoRebaseWhenLaterSourceStartsAfter();
+    void addStreamDataRebasesTwiceForSuccessivelyEarlierSources();
+
+    // Non-overlapping source detection (Phase 1 multi-file input, §3):
+    // informational-only signal when a newly added source's absolute time
+    // range doesn't overlap the data already loaded.
+    void nonOverlappingSourceEmitsWarning();
+    void overlappingSourceDoesNotEmitWarning();
+
+    // Source removal (Phase 1 multi-file input, §5): drops only the target
+    // source's series, and re-bases (mirroring the add-time re-base) only when
+    // the removed source held the earliest sample.
+    void removeSourceDropsOnlyThatSourcesSeries();
+    void removeSourceRebasesLeftWhenRemovedSourceWasEarliest();
+    void removeSourceNoRebaseWhenRemovedSourceWasNotEarliest();
+    void removeLastSourceClearsAllData();
+    void removeUnknownSourceIsNoOp();
+
+    // Multi-file source view (US1.1 batch browsing)
+    void setVisibleSourceIsolatesSource();
+    void sourceListListsDistinctLabeledSources();
+    void exportCsvSourceFilterWritesOnlyThatSource();
+
     // exportCsv tests
     void exportCsvCreatesFile();
     void exportCsvHeaderAndData();

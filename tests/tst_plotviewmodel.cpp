@@ -821,15 +821,19 @@ void TestPlotViewModel::addStreamDataEmptyDataNoOp()
 // ---------------------------------------------------------------------------
 
 /// Builds a lock-only stream with parallel lock % and cumulative error vectors.
+/// @p source_id defaults to 0 (the single/first source) so existing call sites
+/// are unaffected; multi-source tests pass a distinct id explicitly.
 static ProcessedStreamData makeLockAndErrorStream(const QString& label,
                                                   int pcm_channel_id,
                                                   const QVector<double>& times,
                                                   const QVector<double>& lock,
-                                                  const QVector<double>& errors)
+                                                  const QVector<double>& errors,
+                                                  int source_id = 0)
 {
     ProcessedStreamData d;
     d.streamLabel = label;
     d.pcmChannelId = pcm_channel_id;
+    d.sourceId = source_id;
     d.mode = StreamMode::FrameSyncLockStats;
     d.timesSec = times;
     d.lockPercent = lock;
@@ -1006,6 +1010,21 @@ int findSeriesIndex(const PlotViewModel& vm, int order, PlotSeriesData::MetricTy
     }
     return -1;
 }
+
+/// @return the index of the series matching @p order, @p metric, AND @p sourceId,
+/// or -1. Needed once two sources can share the same streamOrder — findSeriesIndex()
+/// alone can't disambiguate which source's series it found.
+int findSeriesIndexInSource(const PlotViewModel& vm, int order, PlotSeriesData::MetricType metric,
+                            int sourceId)
+{
+    for (int i = 0; i < vm.seriesCount(); i++)
+    {
+        const PlotSeriesData& s = vm.seriesAt(i);
+        if (s.streamOrder == order && s.metricType == metric && s.sourceId == sourceId)
+            return i;
+    }
+    return -1;
+}
 } // namespace
 
 void TestPlotViewModel::reprocessOnlySameStreamOrderReplaced()
@@ -1082,6 +1101,348 @@ void TestPlotViewModel::recolorSeriesOnlySameStreamOrderSiblingRecolored()
     // Stream 6 shares the same original label and must keep its own color.
     QCOMPARE(vm.seriesAt(lock6).color, original6Color);
     QCOMPARE(vm.seriesAt(missed6).color, original6Color);
+}
+
+void TestPlotViewModel::crossSourceReprocessDoesNotEraseOtherSource()
+{
+    // Two DIFFERENT sources (e.g. two .ch10 files in a multi-file session) both
+    // have a stream labeled "Ch 05" at PCM channel id 5 — a plausible collision
+    // since two independently-configured files can reuse the same TMATS channel
+    // numbering. Before sourceId was part of identity, adding source 1's stream
+    // would erase source 0's identically-keyed one.
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0, 1.0}, {90.0, 95.0}, {0.0, 1.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0, 1.0}, {10.0, 20.0}, {0.0, 2.0}, /*source_id=*/1));
+    QCOMPARE(vm.seriesCount(), 4); // 2 sources x (lock + missed-frames) — NOT collapsed to 2
+
+    // Reprocess only source 0's stream, with different values.
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0, 1.0, 2.0}, {50.0, 60.0, 70.0}, {0.0, 0.0, 3.0}, /*source_id=*/0));
+
+    QCOMPARE(vm.seriesCount(), 4); // still 4 — source 1's pair must survive untouched
+    const int lock0 = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::FrameSyncLock, 0);
+    const int lock1 = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::FrameSyncLock, 1);
+    QVERIFY(lock0 >= 0);
+    QVERIFY(lock1 >= 0);
+    QCOMPARE(vm.seriesAt(lock0).yValues, QVector<double>({50.0, 60.0, 70.0})); // reprocessed
+    QCOMPARE(vm.seriesAt(lock1).yValues, QVector<double>({10.0, 20.0}));       // untouched
+}
+
+void TestPlotViewModel::crossSourceRenameDoesNotAffectOtherSource()
+{
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0, 1.0}, {90.0, 95.0}, {0.0, 1.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0, 1.0}, {10.0, 20.0}, {0.0, 2.0}, /*source_id=*/1));
+
+    const int lock0   = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::FrameSyncLock, 0);
+    const int missed0 = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::AccumulatedMissedFrames, 0);
+    const int lock1   = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::FrameSyncLock, 1);
+    const int missed1 = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::AccumulatedMissedFrames, 1);
+    QVERIFY(lock0 >= 0);
+    QVERIFY(missed0 >= 0);
+    QVERIFY(lock1 >= 0);
+    QVERIFY(missed1 >= 0);
+
+    vm.renameSeriesById(vm.seriesAt(lock0).id, "Renamed Source 0 Stream");
+
+    // Source 0's own lock/missed-frames pair renamed together...
+    QCOMPARE(vm.seriesAt(lock0).name, QString("Renamed Source 0 Stream"));
+    QCOMPARE(vm.seriesAt(missed0).name, QString("Renamed Source 0 Stream"));
+    // ...but source 1's identically-labeled-and-ordered stream must NOT be touched.
+    QCOMPARE(vm.seriesAt(lock1).name, QString("Ch 05"));
+    QCOMPARE(vm.seriesAt(missed1).name, QString("Ch 05"));
+}
+
+void TestPlotViewModel::crossSourceRecolorDoesNotAffectOtherSource()
+{
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0, 1.0}, {90.0, 95.0}, {0.0, 1.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0, 1.0}, {10.0, 20.0}, {0.0, 2.0}, /*source_id=*/1));
+
+    const int lock0   = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::FrameSyncLock, 0);
+    const int missed0 = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::AccumulatedMissedFrames, 0);
+    const int lock1   = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::FrameSyncLock, 1);
+    const int missed1 = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::AccumulatedMissedFrames, 1);
+    QVERIFY(lock0 >= 0);
+    QVERIFY(missed0 >= 0);
+    QVERIFY(lock1 >= 0);
+    QVERIFY(missed1 >= 0);
+    const QColor original1Color = vm.seriesAt(lock1).color;
+
+    vm.recolorSeriesById(vm.seriesAt(lock0).id, QColor(Qt::magenta));
+
+    QCOMPARE(vm.seriesAt(lock0).color, QColor(Qt::magenta));
+    QCOMPARE(vm.seriesAt(missed0).color, QColor(Qt::magenta));
+    // Source 1's identically-labeled-and-ordered stream must keep its own color.
+    QCOMPARE(vm.seriesAt(lock1).color, original1Color);
+    QCOMPARE(vm.seriesAt(missed1).color, original1Color);
+}
+
+void TestPlotViewModel::addStreamDataRebasesWhenLaterSourceStartsEarlier()
+{
+    // Source 0's recording starts at absolute IRIG second 2,000,000.
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch A", 1, {2000000.0, 2000001.0}, {90.0, 95.0}, {0.0, 1.0}, /*source_id=*/0));
+
+    const int lockA = findSeriesIndexInSource(vm, 1, PlotSeriesData::MetricType::FrameSyncLock, 0);
+    QVERIFY(lockA >= 0);
+    QCOMPARE(vm.seriesAt(lockA).xValues, QVector<double>({0.0, 1.0}));
+
+    // Source 1's recording started 1,000,000 seconds EARLIER — predates
+    // everything currently loaded. Must re-base (shift source 0 right) rather
+    // than give source 1 negative elapsed values.
+    vm.addStreamData(makeLockAndErrorStream("Ch B", 2, {1000000.0, 1000002.0}, {50.0, 55.0}, {0.0, 2.0}, /*source_id=*/1));
+
+    const int lockB = findSeriesIndexInSource(vm, 2, PlotSeriesData::MetricType::FrameSyncLock, 1);
+    QVERIFY(lockB >= 0);
+    // Source 1's own elapsed starts at 0 against the NEW (earlier) base.
+    QCOMPARE(vm.seriesAt(lockB).xValues, QVector<double>({0.0, 2.0}));
+
+    // Source 0's existing series shifted right by the 1,000,000 s delta, so its
+    // absolute-time correlation with source 1 is preserved (elapsed >= 0 throughout).
+    const int lockA2 = findSeriesIndexInSource(vm, 1, PlotSeriesData::MetricType::FrameSyncLock, 0);
+    QCOMPARE(vm.seriesAt(lockA2).xValues, QVector<double>({1000000.0, 1000001.0}));
+
+    // X range recomputed from the (shifted) data; base always reports elapsed>=0.
+    // Max comes from A's shifted last sample (1,000,001.0), which exceeds B's own
+    // last elapsed (2.0) -- confirming the shift, not just B's arrival, drives xMax().
+    QCOMPARE(vm.xMin(), 0.0);
+    QCOMPARE(vm.xMax(), 1000001.0);
+}
+
+void TestPlotViewModel::addStreamDataNoRebaseWhenLaterSourceStartsAfter()
+{
+    // A later-added source that starts AFTER the current base must not trigger
+    // any shift — existing (pre-Phase-1.2) accumulation behavior is preserved.
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch A", 1, {1000000.0}, {90.0}, {0.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch B", 2, {1000005.0}, {50.0}, {0.0}, /*source_id=*/1));
+
+    const int lockA = findSeriesIndexInSource(vm, 1, PlotSeriesData::MetricType::FrameSyncLock, 0);
+    const int lockB = findSeriesIndexInSource(vm, 2, PlotSeriesData::MetricType::FrameSyncLock, 1);
+    QVERIFY(lockA >= 0);
+    QVERIFY(lockB >= 0);
+    QCOMPARE(vm.seriesAt(lockA).xValues, QVector<double>({0.0})); // base source untouched
+    QCOMPARE(vm.seriesAt(lockB).xValues, QVector<double>({5.0})); // correctly offset by +5s
+}
+
+void TestPlotViewModel::addStreamDataRebasesTwiceForSuccessivelyEarlierSources()
+{
+    // Three sources added in successively-earlier order: each add re-bases
+    // again, and shifts must compound correctly rather than double-count or
+    // reset a prior source's already-applied shift.
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch A", 1, {3000000.0}, {90.0}, {0.0}, /*source_id=*/0)); // base=3,000,000
+    vm.addStreamData(makeLockAndErrorStream("Ch B", 2, {2000000.0}, {50.0}, {0.0}, /*source_id=*/1)); // rebase: delta=1,000,000, base=2,000,000
+    vm.addStreamData(makeLockAndErrorStream("Ch C", 3, {1000000.0}, {10.0}, {0.0}, /*source_id=*/2)); // rebase: delta=1,000,000, base=1,000,000
+
+    const int lockA = findSeriesIndexInSource(vm, 1, PlotSeriesData::MetricType::FrameSyncLock, 0);
+    const int lockB = findSeriesIndexInSource(vm, 2, PlotSeriesData::MetricType::FrameSyncLock, 1);
+    const int lockC = findSeriesIndexInSource(vm, 3, PlotSeriesData::MetricType::FrameSyncLock, 2);
+    QVERIFY(lockA >= 0);
+    QVERIFY(lockB >= 0);
+    QVERIFY(lockC >= 0);
+
+    // A shifted by both re-bases: total delta = 2,000,000 (3,000,000 -> 1,000,000 final base).
+    QCOMPARE(vm.seriesAt(lockA).xValues, QVector<double>({2000000.0}));
+    // B shifted only by the second re-base's 1,000,000 delta.
+    QCOMPARE(vm.seriesAt(lockB).xValues, QVector<double>({1000000.0}));
+    // C establishes the final (earliest) base, so its own elapsed is 0.
+    QCOMPARE(vm.seriesAt(lockC).xValues, QVector<double>({0.0}));
+}
+
+void TestPlotViewModel::nonOverlappingSourceEmitsWarning()
+{
+    PlotViewModel vm;
+    QSignalSpy spy(&vm, &PlotViewModel::nonOverlappingSourceWarning);
+
+    vm.addStreamData(makeLockAndErrorStream("Ch A", 1, {2000000.0, 2000001.0}, {90.0}, {0.0}, /*source_id=*/0));
+    QCOMPARE(spy.count(), 0); // the first source has nothing to compare against yet
+
+    // Source 1's recording is nowhere near source 0's -- a disjoint range.
+    vm.addStreamData(makeLockAndErrorStream("Ch B", 2, {5000000.0, 5000001.0}, {50.0}, {0.0}, /*source_id=*/1));
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).toInt(), 1); // sourceId of the newly added (non-overlapping) source
+
+    // A second stream from the SAME source must not re-trigger the warning.
+    vm.addStreamData(makeLockAndErrorStream("Ch B2", 2, {5000000.5}, {55.0}, {0.0}, /*source_id=*/1));
+    QCOMPARE(spy.count(), 1);
+}
+
+void TestPlotViewModel::overlappingSourceDoesNotEmitWarning()
+{
+    PlotViewModel vm;
+    QSignalSpy spy(&vm, &PlotViewModel::nonOverlappingSourceWarning);
+
+    vm.addStreamData(makeLockAndErrorStream("Ch A", 1, {2000000.0, 2000001.0}, {90.0}, {0.0}, /*source_id=*/0));
+    // Source 1 overlaps source 0's [2000000, 2000001] range.
+    vm.addStreamData(makeLockAndErrorStream("Ch B", 2, {2000000.5, 2000002.0}, {50.0}, {0.0}, /*source_id=*/1));
+
+    QCOMPARE(spy.count(), 0);
+}
+
+void TestPlotViewModel::removeSourceDropsOnlyThatSourcesSeries()
+{
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch A", 1, {1000000.0}, {90.0}, {0.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch B", 2, {1000000.0}, {50.0}, {0.0}, /*source_id=*/1));
+    QCOMPARE(vm.seriesCount(), 4); // 2 sources x (lock + missed-frames)
+
+    vm.removeSource(1);
+
+    QCOMPARE(vm.seriesCount(), 2);
+    QVERIFY(findSeriesIndexInSource(vm, 1, PlotSeriesData::MetricType::FrameSyncLock, 0) >= 0);
+    QCOMPARE(findSeriesIndexInSource(vm, 2, PlotSeriesData::MetricType::FrameSyncLock, 1), -1);
+}
+
+void TestPlotViewModel::removeSourceRebasesLeftWhenRemovedSourceWasEarliest()
+{
+    // Same three-source chain as addStreamDataRebasesTwiceForSuccessivelyEarlierSources:
+    // after all three adds, base=1,000,000; A(source0)=[2000000.0], B(source1)=[1000000.0],
+    // C(source2)=[0.0] (C holds the earliest absolute sample).
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch A", 1, {3000000.0}, {90.0}, {0.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch B", 2, {2000000.0}, {50.0}, {0.0}, /*source_id=*/1));
+    vm.addStreamData(makeLockAndErrorStream("Ch C", 3, {1000000.0}, {10.0}, {0.0}, /*source_id=*/2));
+
+    // Remove C (source 2) -- the current earliest. The base must move forward to
+    // B's absolute time (2,000,000), shifting both remaining series LEFT by the
+    // resulting 1,000,000 s delta.
+    vm.removeSource(2);
+
+    QCOMPARE(vm.seriesCount(), 4); // A and B's (lock + missed) pairs remain
+    const int lockA = findSeriesIndexInSource(vm, 1, PlotSeriesData::MetricType::FrameSyncLock, 0);
+    const int lockB = findSeriesIndexInSource(vm, 2, PlotSeriesData::MetricType::FrameSyncLock, 1);
+    QVERIFY(lockA >= 0);
+    QVERIFY(lockB >= 0);
+    QCOMPARE(vm.seriesAt(lockA).xValues, QVector<double>({1000000.0})); // was 2,000,000
+    QCOMPARE(vm.seriesAt(lockB).xValues, QVector<double>({0.0}));       // was 1,000,000 -- now the base
+    QCOMPARE(vm.xMax(), 1000000.0);
+}
+
+void TestPlotViewModel::removeSourceNoRebaseWhenRemovedSourceWasNotEarliest()
+{
+    // Same three-source chain; this time remove A (source 0), which was NOT the
+    // earliest (C is) -- the base must stay exactly where it is.
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch A", 1, {3000000.0}, {90.0}, {0.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch B", 2, {2000000.0}, {50.0}, {0.0}, /*source_id=*/1));
+    vm.addStreamData(makeLockAndErrorStream("Ch C", 3, {1000000.0}, {10.0}, {0.0}, /*source_id=*/2));
+
+    vm.removeSource(0);
+
+    QCOMPARE(vm.seriesCount(), 4); // B and C's (lock + missed) pairs remain
+    const int lockB = findSeriesIndexInSource(vm, 2, PlotSeriesData::MetricType::FrameSyncLock, 1);
+    const int lockC = findSeriesIndexInSource(vm, 3, PlotSeriesData::MetricType::FrameSyncLock, 2);
+    QVERIFY(lockB >= 0);
+    QVERIFY(lockC >= 0);
+    QCOMPARE(vm.seriesAt(lockB).xValues, QVector<double>({1000000.0})); // unchanged
+    QCOMPARE(vm.seriesAt(lockC).xValues, QVector<double>({0.0}));       // unchanged
+}
+
+void TestPlotViewModel::removeLastSourceClearsAllData()
+{
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch A", 1, {1000000.0}, {90.0}, {0.0}, /*source_id=*/0));
+    QVERIFY(vm.hasData());
+
+    vm.removeSource(0);
+
+    QVERIFY(!vm.hasData());
+    QCOMPARE(vm.seriesCount(), 0);
+}
+
+void TestPlotViewModel::removeUnknownSourceIsNoOp()
+{
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch A", 1, {1000000.0}, {90.0}, {0.0}, /*source_id=*/0));
+    QCOMPARE(vm.seriesCount(), 2);
+
+    QSignalSpy spy(&vm, &PlotViewModel::dataChanged);
+    vm.removeSource(999); // no series has this sourceId
+
+    QCOMPARE(vm.seriesCount(), 2);
+    QCOMPARE(spy.count(), 0); // a true no-op: doesn't even signal
+}
+
+// ---------------------------------------------------------------------------
+// Multi-file source view (US1.1 batch browsing)
+// ---------------------------------------------------------------------------
+
+void TestPlotViewModel::setVisibleSourceIsolatesSource()
+{
+    // Two sources' series both loaded (retain-all batch). setVisibleSource filters
+    // which one is drawn via effectiveVisible(), without mutating per-series visible.
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0, 1.0}, {90.0, 95.0}, {0.0, 1.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0, 1.0}, {10.0, 20.0}, {0.0, 2.0}, /*source_id=*/1));
+
+    const int lock0 = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::FrameSyncLock, 0);
+    const int lock1 = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::FrameSyncLock, 1);
+    QVERIFY(lock0 >= 0);
+    QVERIFY(lock1 >= 0);
+
+    // Default (-1): both sources drawn.
+    QVERIFY(vm.effectiveVisible(vm.seriesAt(lock0)));
+    QVERIFY(vm.effectiveVisible(vm.seriesAt(lock1)));
+
+    // Isolate source 1: only its series are effectively visible.
+    vm.setVisibleSource(1);
+    QCOMPARE(vm.visibleSource(), 1);
+    QVERIFY(!vm.effectiveVisible(vm.seriesAt(lock0)));
+    QVERIFY(vm.effectiveVisible(vm.seriesAt(lock1)));
+    // The underlying per-series visibility is untouched (source filter is orthogonal).
+    QVERIFY(vm.seriesAt(lock0).visible);
+
+    // Back to all.
+    vm.setVisibleSource(-1);
+    QVERIFY(vm.effectiveVisible(vm.seriesAt(lock0)));
+    QVERIFY(vm.effectiveVisible(vm.seriesAt(lock1)));
+}
+
+void TestPlotViewModel::sourceListListsDistinctLabeledSources()
+{
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0}, {90.0}, {0.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0}, {10.0}, {0.0}, /*source_id=*/1));
+    vm.setSourceLabel(0, "fileA");
+    vm.setSourceLabel(1, "fileB");
+
+    const QVector<QPair<int, QString>> list = vm.sourceList();
+    QCOMPARE(list.size(), 2);
+    QCOMPARE(list[0].first, 0);
+    QCOMPARE(list[0].second, QString("fileA"));
+    QCOMPARE(list[1].first, 1);
+    QCOMPARE(list[1].second, QString("fileB"));
+}
+
+void TestPlotViewModel::exportCsvSourceFilterWritesOnlyThatSource()
+{
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0, 1.0}, {90.0, 95.0}, {0.0, 1.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch 07", 7, {0.0, 1.0}, {10.0, 20.0}, {0.0, 2.0}, /*source_id=*/1));
+
+    const QString all_path = QDir::tempPath() + "/tst_export_all.csv";
+    const QString one_path = QDir::tempPath() + "/tst_export_src0.csv";
+    QFile::remove(all_path);
+    QFile::remove(one_path);
+
+    QVERIFY(vm.exportCsv(all_path, -1));       // every source
+    QVERIFY(vm.exportCsv(one_path, 0));         // only source 0
+
+    auto headerColumns = [](const QString& path) -> int {
+        QFile f(path);
+        if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+            return -1;
+        return static_cast<int>(QString::fromUtf8(f.readLine()).trimmed().count(','));
+    };
+
+    // Both sources: 4 data columns (2 sources x lock+missed) after the time column.
+    QCOMPARE(headerColumns(all_path), 4);
+    // Source 0 only: 2 data columns.
+    QCOMPARE(headerColumns(one_path), 2);
+
+    QFile::remove(all_path);
+    QFile::remove(one_path);
 }
 
 // ---------------------------------------------------------------------------

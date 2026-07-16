@@ -618,6 +618,13 @@ public:
     QHash<int, CalibrationProfile> calibrationByWord() const { return m_calibrationByWord; }
     QString lastTomlDir() const { return m_tomlDir; }
 
+    // Input references: what produced the profiles above, so a processing template
+    // can store them for a later re-extraction pass.
+    QString calFilePath()  const { return m_calPath; }
+    QString stepFilePath() const { return m_stepPath; }
+    double  clipStartSec() const { return m_clipStart ? m_clipStart->value() : 0.0; }
+    double  clipEndSec()   const { return m_clipEnd   ? m_clipEnd->value()   : 0.0; }
+
 private:
     enum StatusKind { Pending, Ok, Fail };
 
@@ -850,6 +857,10 @@ public:
         , m_timeChannelId(time_channel_id)
         , m_pcmChannelId(cfg.pcmChannelId)
         , m_calibrationByWord(cfg.calibrationByWord)
+        , m_calCh10Path(cfg.calCh10Path)
+        , m_stepTomlPath(cfg.stepTomlPath)
+        , m_clipStartSec(cfg.clipStartSec)
+        , m_clipEndSec(cfg.clipEndSec)
     {
         setWindowTitle("Configure Receiver SNR — " + cfg.label);
         setModal(true);
@@ -1042,7 +1053,7 @@ public:
                 "Build a non-linear calibration profile from a calibration "
                 "Chapter 10 file and a step-config TOML. Uses the word map, "
                 "frame sync, and polarity above plus the time channel from the "
-                "main dialog. Session-only; not saved to disk.");
+                "main dialog. Runtime-only; the profile itself is not saved to disk.");
             connect(extractBtn, &QPushButton::clicked, this,
                     [this]() { onExtractCalibration(); });
             row->addWidget(extractBtn);
@@ -1097,6 +1108,13 @@ public:
     bool    applyToAll()         const { return m_applyToAll->isChecked(); }
     QHash<int, CalibrationProfile> calibrationByWord() const { return m_calibrationByWord; }
 
+    // Input references: captured from the setup sub-dialog on extraction so a
+    // processing template can store them alongside the config.
+    QString calCh10Path()  const { return m_calCh10Path; }
+    QString stepTomlPath() const { return m_stepTomlPath; }
+    double  clipStartSec() const { return m_clipStartSec; }
+    double  clipEndSec()   const { return m_clipEndSec; }
+
 private:
     void updateCalibrationLabel()
     {
@@ -1138,6 +1156,10 @@ private:
         m_toml_dir = setup.lastTomlDir();
 
         m_calibrationByWord = setup.calibrationByWord();
+        m_calCh10Path  = setup.calFilePath();
+        m_stepTomlPath = setup.stepFilePath();
+        m_clipStartSec = setup.clipStartSec();
+        m_clipEndSec   = setup.clipEndSec();
         updateCalibrationLabel();
         QMessageBox::information(this, tr("Calibration Extracted"),
             tr("Applied non-linear calibration to %1 channel(s).")
@@ -1161,6 +1183,10 @@ private:
     int             m_timeChannelId = -1;     ///< Time channel ID inherited from the parent dialog.
     int             m_pcmChannelId  = -1;     ///< PCM channel ID of the stream being calibrated.
     QHash<int, CalibrationProfile> m_calibrationByWord; ///< Extracted profiles, keyed by word index.
+    QString         m_calCh10Path;   ///< Calibration input reference (serialized in a template).
+    QString         m_stepTomlPath;  ///< Calibration input reference (serialized in a template).
+    double          m_clipStartSec = 0.0; ///< Calibration input reference (serialized in a template).
+    double          m_clipEndSec   = 0.0; ///< Calibration input reference (serialized in a template).
     QLabel*         m_calibrationLabel = nullptr; ///< Status text for the calibration section.
 };
 

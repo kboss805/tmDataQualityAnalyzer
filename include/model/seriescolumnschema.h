@@ -25,10 +25,12 @@ namespace SeriesColumnSchema
     struct ParsedColumn
     {
         PlotSeriesData::MetricType metricType = PlotSeriesData::MetricType::SNR;
-        QString name;            ///< Presentation name (metric suffix stripped).
+        QString name;            ///< Presentation name (metric suffix AND source qualifier stripped).
         QString streamLabel;     ///< Owning stream's label.
         int     streamOrder   = 0; ///< Source PCM channel id (SNR only; 0 otherwise).
         int     receiverIndex = 0; ///< 1-based receiver from "_RCVR<N>" (SNR only; 0 otherwise).
+        int     sourceId      = 0; ///< Multi-file session source id recovered from a leading "S<n>| "
+                                    ///< qualifier (see columnHeader()); 0 if the header carries none.
     };
 
     /// The in-memory display name for one Receiver-SNR channel series:
@@ -42,11 +44,22 @@ namespace SeriesColumnSchema
     /// left-axis metrics (Frame Sync Lock / Accumulated Missed Frames) whose bare
     /// stream names would otherwise export as identical columns. SNR names already
     /// carry the channel and are unique, so they pass through unchanged.
+    ///
+    /// Multi-file input (docs/multi-file-input-design.md §7): a series from source
+    /// 0 (the first/only source) exports with EXACTLY this format, unchanged --
+    /// a single-source export stays byte-identical to every prior release, and
+    /// every previously exported CSV still imports. A series from source 1+ gets a
+    /// leading "S<n>| " qualifier (e.g. "S1| 40 - RCVR Data L_RCVR1") so two
+    /// sources sharing a channel id/label never export as identical, ambiguous
+    /// columns; parseColumnHeader() strips it back off before recovering identity.
+    ///
     /// Used by PlotViewModel::exportCsv().
     QString columnHeader(const PlotSeriesData& series);
 
     /// Inverse of columnHeader(): classify a data-column header and recover its
-    /// identity fields. An SNR-shaped header ("<digits> - …") always resolves as
+    /// identity fields, including sourceId from a leading "S<n>| " qualifier if
+    /// present (stripped before the shape detection below, so it composes with
+    /// every other case). An SNR-shaped header ("<digits> - …") always resolves as
     /// SNR; otherwise a recognized metric suffix picks Lock/MissedFrames; anything
     /// else resolves as SNR with a bare name. Used by CsvSeriesParser::parse().
     ParsedColumn parseColumnHeader(const QString& header);

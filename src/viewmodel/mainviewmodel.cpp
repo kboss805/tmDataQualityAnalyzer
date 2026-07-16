@@ -9,6 +9,8 @@
 
 #include "mainviewmodel.h"
 
+#include <algorithm>
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
@@ -70,7 +72,7 @@ MainViewModel::MainViewModel(QObject* parent)
     connect(m_coordinator, &ProcessingCoordinator::streamProcessed,
             this, &MainViewModel::streamProcessed);
     connect(m_coordinator, &ProcessingCoordinator::processingFinished,
-            this, &MainViewModel::processingFinished);
+            this, &MainViewModel::onCoordinatorProcessingFinished);
     connect(m_coordinator, &ProcessingCoordinator::logMessageReceived,
             this, &MainViewModel::logMessageReceived);
     connect(m_coordinator, &ProcessingCoordinator::errorOccurred,
@@ -167,6 +169,23 @@ void MainViewModel::setStreamConfigs(const QVector<StreamConfig>& configs)
 const QVector<StreamConfig>& MainViewModel::streamConfigs() const
 {
     return m_stream_configs;
+}
+
+const QVector<Source>& MainViewModel::sources() const
+{
+    return m_sources;
+}
+
+void MainViewModel::removeSource(int sourceId)
+{
+    const int before = static_cast<int>(m_sources.size());
+    m_sources.erase(std::remove_if(m_sources.begin(), m_sources.end(),
+                                   [sourceId](const Source& s) { return s.sourceId == sourceId; }),
+                   m_sources.end());
+    if (static_cast<int>(m_sources.size()) != before)
+    {
+        emit sourcesChanged();
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -269,15 +288,8 @@ void MainViewModel::logStartupInfo()
     emit logMessageReceived("Load a Chapter 10 file to configure per-stream processing.");
 }
 
-void MainViewModel::openFile(const QString& filename)
+bool MainViewModel::loadFileMetadata(const QString& filename)
 {
-    if (m_coordinator->processing())
-    {
-        return;
-    }
-
-    clearState();
-
     m_input_filename = filename;
     QFileInfo file_info(filename);
     emit logMessageReceived("Opening: " + file_info.fileName());
@@ -295,7 +307,7 @@ void MainViewModel::openFile(const QString& filename)
         // m_reader (and whatever file it has loaded, if any) untouched.
         delete reader;
         m_input_filename.clear();
-        return;
+        return false;
     }
 
     // Success: the new reader becomes the active one.
@@ -321,7 +333,63 @@ void MainViewModel::openFile(const QString& filename)
     emit inputFilenameChanged();
     emit channelListsChanged();
     emit fileLoadedChanged();
+    return true;
+}
+
+void MainViewModel::openFile(const QString& filename)
+{
+    if (m_coordinator->processing())
+    {
+        return;
+    }
+
+    // A fresh Open always starts a new session -- reset any prior sources.
+    clearState();
+
+    if (!loadFileMetadata(filename))
+    {
+        return;
+    }
+
+    m_pending_source_id = m_next_source_id++;
     emit fileReadyForStreamConfig();
+}
+
+void MainViewModel::addSource(const QString& filename)
+{
+    if (m_coordinator->processing())
+    {
+        return;
+    }
+
+    // Unlike openFile(): no clearState() -- this file's streams are meant to
+    // accumulate into the existing plot/session, not replace it.
+    if (!loadFileMetadata(filename))
+    {
+        return;
+    }
+
+    m_pending_source_id = m_next_source_id++;
+    emit sourceReadyForStreamConfig();
+}
+
+void MainViewModel::onCoordinatorProcessingFinished(bool success)
+{
+    // Only a run that actually produced data becomes a permanent part of the
+    // session -- a failed/fully-cancelled run leaves no plot series behind
+    // either, so registering it as a "source" would be a phantom bookkeeping
+    // entry with no data to show for it.
+    if (success)
+    {
+        Source src;
+        src.filepath = m_input_filename;
+        src.sourceId = m_pending_source_id;
+        src.timeChannelIndex = m_time_channel_index;
+        src.streamConfigs = m_stream_configs;
+        m_sources.push_back(src);
+        emit sourcesChanged();
+    }
+    emit processingFinished(success);
 }
 
 void MainViewModel::startProcessing()
@@ -387,8 +455,16 @@ void MainViewModel::clearState()
     m_time_channel_index = 0;
     m_pcm_channel_index = 0;
     m_stream_configs.clear();
+    const bool had_sources = !m_sources.isEmpty();
+    m_sources.clear();
+    m_next_source_id = 0;
+    m_pending_source_id = 0;
     m_coordinator->reset();
     m_reader->clearSettings();
+    if (had_sources)
+    {
+        emit sourcesChanged();
+    }
 
     emit inputFilenameChanged();
     emit channelListsChanged();
@@ -412,6 +488,7 @@ void MainViewModel::cancelProcessing()
 bool MainViewModel::buildBaseParams(ProcessingParams& out, QString& error)
 {
     out.filename = m_input_filename;
+    out.sourceId = m_pending_source_id;
 
     out.timeChannelId = m_reader->getCurrentTimeChannelID();
     if (out.timeChannelId < 0)
