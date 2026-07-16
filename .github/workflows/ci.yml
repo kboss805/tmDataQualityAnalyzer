@@ -105,6 +105,9 @@ jobs:
       - name: Run full test suite
         shell: pwsh
         run: |
+          # env.ps1 puts the Qt msvc kit's bin on PATH so the test exe can load
+          # Qt6*.dll at runtime (each step is a fresh shell — PATH doesn't carry over).
+          . .\scripts\env.ps1
           Set-Location tests
           # The harness writes results to tests/output/ (gitignored); create it or
           # the exe bails before running any test.
