@@ -1,6 +1,6 @@
 # tmDataQualityAnalyzer — Claude Code guide
 
-Qt 6.10.3 / C++17 desktop app (qmake + MinGW 13.1.0, Windows) for analyzing data quality of IRIG 106
+Qt 6.10.3 / C++17 desktop app (qmake + MSVC 2022, Windows) for analyzing data quality of IRIG 106
 Chapter 10 PCM telemetry: per-stream **Frame Sync Lock** stats and **Receiver AGC/SNR**, plotted vs.
 time. MVVM, single-reader / parallel-worker processing core. **Current version: 2.7.0.**
 
@@ -10,12 +10,16 @@ time. MVVM, single-reader / parallel-worker processing core. **Current version: 
 
 ## Build & test
 
-Toolchains are **not on PATH** — prepend them first via `. .\scripts\env.ps1` (or
-`C:\Qt\6.10.3\mingw_64\bin` + `C:\Qt\Tools\mingw1310_64\bin`). Use the **PowerShell** tool.
+Toolchain is **not on PATH** — set it up first by dot-sourcing `. .\scripts\env.ps1`, which imports
+the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on PATH. Use the
+**PowerShell** tool. (Legacy MinGW is still supported for a build: `$env:TMDQ_TOOLCHAIN='mingw'`
+before dot-sourcing; the `.pro`/`.pri` flags are compiler-scoped so both toolchains build.)
 
-- **App:** from `build/`, `qmake ..\tmDataQualityAnalyzer.pro -spec win32-g++ CONFIG+=debug` then
-  `mingw32-make -f Makefile.Debug`. Re-run qmake after `.pro`/version/`Q_OBJECT` changes. **Zero
-  warnings required.**
+- **App:** from `build/`, `qmake ..\tmDataQualityAnalyzer.pro -spec win32-msvc CONFIG+=debug` then
+  `nmake -f Makefile.Debug`. Re-run qmake after `.pro`/version/`Q_OBJECT` changes. **Zero warnings
+  required.** Switching toolchains? Delete the stale `.qmake.stash` (qmake caches the *first*
+  compiler's detection and shares it up the tree) and do a clean build dir, or qmake fails with
+  "QMAKE_MSC_VER isn't set".
 - **Tests:** build **in-source inside `tests/`** (the exe must sit one level under `tests/` or the
   data-file tests fail), then `.\debug\tmDataQualityAnalyzer_tests.exe`. The full run (all **19
   suites**) is dominated by the real-Ch10 integration suites (a few minutes); add `--fast` (or

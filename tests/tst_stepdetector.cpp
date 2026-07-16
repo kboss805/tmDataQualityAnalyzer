@@ -21,7 +21,8 @@ void appendRun(QVector<double>& series, double level, int count)
 QString writeTempToml(QTemporaryFile& file, const QString& content)
 {
     file.setFileTemplate(QDir::tempPath() + "/stepcfg_XXXXXX.toml");
-    file.open();
+    if (!file.open())
+        qWarning("writeTempToml: could not open temporary TOML file");
     file.write(content.toUtf8());
     file.flush();
     return file.fileName();

@@ -14,6 +14,18 @@ source files or changing build flags:
 
 clangd still applies the Remove/Add rules in .clangd on top of these entries,
 so MinGW-only flags it can't parse are stripped there, not here.
+
+NOTE (toolchain): this scraper targets the **MinGW** build — it drives
+`mingw32-make` and parses `g++ -c` recipe lines, and clangd's IntelliSense is
+GCC-flavored. Since the project's default build toolchain moved to MSVC, run
+this with the MinGW toolchain selected:
+
+    $env:TMDQ_TOOLCHAIN = 'mingw'; . .\scripts\env.ps1; py scripts/gen_compile_commands.py
+
+Regenerating this database from the MSVC build (parsing `cl` recipes from an
+nmake dry run, clangd `--driver-mode=cl`) is a separate follow-up; the clangd
+IntelliSense setup here is still MinGW-based and independent of how the app,
+tests, and CI are actually built.
 """
 
 from __future__ import annotations

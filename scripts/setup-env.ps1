@@ -43,8 +43,12 @@ Write-Host "============================================"
 Write-Host ""
 Write-Host "Registering user environment variables..."
 
-Set-UserEnvVar "QTDIR"     $QtDir
-Set-UserEnvVar "MINGW_DIR" $MingwDir
+Set-UserEnvVar "QTDIR" $QtDir
+# MINGW_DIR is only meaningful for the legacy MinGW toolchain. In the default MSVC
+# toolchain the compiler comes from vcvars (see env.ps1), so skip it there.
+if ($env:TMDQ_TOOLCHAIN -eq 'mingw') {
+    Set-UserEnvVar "MINGW_DIR" $MingwDir
+}
 
 Write-Host ""
 Write-Host "Done. Restart VS Code (and any open terminals) for the changes to take effect."

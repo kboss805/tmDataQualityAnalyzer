@@ -12,9 +12,21 @@
 $ScriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectDir = Split-Path -Parent $ScriptDir
 
-# env.ps1 is the single source of truth for QTDIR/MINGW_DIR/QT_VERSION and PATH
+# env.ps1 is the single source of truth for the toolchain, QTDIR/MINGW_DIR/
+# QT_VERSION and PATH (defaults to MSVC; set $env:TMDQ_TOOLCHAIN='mingw' to override).
 . (Join-Path $ScriptDir 'env.ps1')
 
 Set-Location (Join-Path $ProjectDir 'tests')
-& "$env:MINGW_DIR\bin\mingw32-make.exe" -f Makefile.Debug
+
+# Pick the make tool for the active toolchain. MSVC has no parallel nmake, so use
+# jom if it is on PATH, else nmake; MinGW uses mingw32-make.
+if ($env:TMDQ_TOOLCHAIN -eq 'mingw') {
+    & "$env:MINGW_DIR\bin\mingw32-make.exe" -f Makefile.Debug
+}
+elseif (Get-Command jom -ErrorAction SilentlyContinue) {
+    & jom -f Makefile.Debug
+}
+else {
+    & nmake -f Makefile.Debug
+}
 Write-Host "Tests exit code: $LASTEXITCODE"

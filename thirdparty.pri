@@ -13,9 +13,11 @@
 
 # irig106 is the ONLY C in the project — every app source is C++ — so clearing
 # the C warning flags silences the vendored C sources (irig106ch10.c and friends)
-# with zero effect on application code.
+# with zero effect on application code. Scoped per compiler: -w (GCC) / /w (MSVC).
 QMAKE_CFLAGS_WARN_ON =
-QMAKE_CFLAGS        += -w
+win32-g++:  QMAKE_CFLAGS += -w
+win32-msvc: QMAKE_CFLAGS += /w
+unix:       QMAKE_CFLAGS += -w
 
 # qcustomplot.cpp is the only third-party C++ translation unit. Its warnings are
 # all Qt-API deprecations (QDateTime::toTimeSpec / QDate::startOfDay /
@@ -30,4 +32,10 @@ QMAKE_CFLAGS        += -w
 # the single-.pro build that build_release.ps1 and CI depend on. If preserving
 # app-code deprecation warnings ever matters, that static-lib split is the
 # follow-up; for now the trade is a good one.)
-QMAKE_CXXFLAGS += -Wno-deprecated-declarations
+#
+# MSVC equivalent: C4996 is the deprecation warning. If a real MSVC build surfaces
+# additional vendored-only qcustomplot warning classes under /W3, add their /wd####
+# codes here (vendored code we can't touch), NOT by lowering the app's warning level.
+win32-g++:  QMAKE_CXXFLAGS += -Wno-deprecated-declarations
+win32-msvc: QMAKE_CXXFLAGS += /wd4996
+unix:       QMAKE_CXXFLAGS += -Wno-deprecated-declarations
