@@ -171,11 +171,12 @@ elseif (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")            {
 if ($IsccPath) {
     # When signing, hand iscc a SignTool definition so it signs BOTH the setup
     # executable and the embedded uninstaller (SignedUninstaller=yes in the .iss,
-    # gated by /DSIGN). 'signtool' is referenced by bare name: env.ps1 puts the
-    # WDK signtool directory on PATH and iscc inherits that PATH when it spawns the
-    # tool. A bare name has no spaces and no embedded quotes, so it survives
-    # PowerShell native-argument passing - a fully-qualified, quoted signtool path
-    # gets mis-split by PowerShell and makes iscc reject the command line.
+    # gated by /DSIGN). 'signtool' is referenced by bare name: env.ps1 imports the
+    # MSVC/Windows SDK environment (vcvars), which puts the SDK's signtool directory
+    # on PATH, and iscc inherits that PATH when it spawns the tool. A bare name has
+    # no spaces and no embedded quotes, so it survives PowerShell native-argument
+    # passing - a fully-qualified, quoted signtool path gets mis-split by PowerShell
+    # and makes iscc reject the command line.
     $isccArgs = @("/DMyAppVersion=$version")
     if ($SignCertSha1) {
         $signCmd = "signtool sign /sha1 $SignCertSha1 /tr $SignTimestamp /td sha256 /fd sha256 `$f"

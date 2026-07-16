@@ -191,7 +191,8 @@ tmDataQualityAnalyzer/
 ├── scripts/                    # Developer helper scripts (the signed release build is deploy/build_release.ps1)
 │   ├── env.ps1                # MSVC + Qt environment setup — dot-source before building
 │   ├── build_ide.ps1          # IDE/VS Code test build helper
-│   └── setup-env.ps1          # One-time Windows user environment variable registration
+│   ├── setup-env.ps1          # One-time Windows user environment variable registration
+│   └── gen_compile_flags.py   # Generate compile_flags.txt for clangd/clang-tidy IntelliSense
 ├── tmDataQualityAnalyzer.pro   # Qt project file (parses the version from constants.h)
 └── README.md                   # This file
 ```

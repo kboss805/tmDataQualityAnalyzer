@@ -11,8 +11,10 @@
 # style, magic-number literals in bit math, trailing return types, identifier
 # length, etc.) are disabled to keep signal high.
 #
-# How to run (needs a compile_commands.json compilation database pointed at by -p):
-#   clang-tidy -p <dir-with-compile_commands.json> src/model/frameprocessor.cpp
+# How to run (generate the compile DB first, then run from the repo root — both
+# clang-tidy and clangd auto-discover compile_flags.txt by walking up the tree):
+#   py scripts/gen_compile_flags.py      # writes compile_flags.txt at the repo root
+#   clang-tidy src/model/frameprocessor.cpp
 # Analysis only — WarningsAsErrors is empty so it never breaks the build. Never
 # run --fix on lib/irig106/ or lib/qcustomplot/ (protected third-party code).
 
