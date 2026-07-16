@@ -8,7 +8,9 @@
 
 #include <QColor>
 #include <QFutureWatcher>
+#include <QHash>
 #include <QObject>
+#include <QPair>
 #include <QString>
 #include <QVector>
 
@@ -51,8 +53,29 @@ public:
     void removeSource(int sourceId);
     /// Resets all data to empty state.
     void clearData();
-    /// Exports current data to a CSV file.
-    bool exportCsv(const QString& filepath) const;
+    /// Exports current data to a CSV file. @p sourceId < 0 exports every series;
+    /// otherwise only series belonging to that source (per-file batch export).
+    bool exportCsv(const QString& filepath, int sourceId = -1) const;
+    /// @}
+
+    /// @name Multi-file source view (US1.1 batch browsing)
+    /// @{
+    /// Records a human-readable label (file base name) for @p sourceId, shown in
+    /// the plot toolbar's file-selector dropdown.
+    void setSourceLabel(int sourceId, const QString& label);
+    /// The distinct sources currently present, each (sourceId, label), in first-seen
+    /// order. Drives the file-selector dropdown; size <= 1 means it should disable.
+    QVector<QPair<int, QString>> sourceList() const;
+    /// Filters which source is shown in the plot. @p sourceId < 0 shows all sources
+    /// (overlaid); otherwise only that source's series. Orthogonal to per-series
+    /// visibility (see effectiveVisible()); zooms the X viewport to the shown source.
+    /// Emits sourcesChanged() + dataChanged().
+    void setVisibleSource(int sourceId);
+    int visibleSource() const;                     ///< Active source filter (-1 = all).
+    /// @return Whether @p s should actually be drawn: its own visibility AND the
+    /// current source filter. The single gate the View/ranging use so the source
+    /// filter never clobbers per-series visibility or the lock/missed toggle.
+    bool effectiveVisible(const PlotSeriesData& s) const;
     /// @}
 
     /// @name Accessors
@@ -87,7 +110,7 @@ public:
     bool hasLockSeries() const;                    ///< @return True if any FrameSyncLock series are loaded.
 
     LockAxisView lockAxisView() const;             ///< @return Active left-axis metric (lock % vs missed frames).
-    /// @name Session view-state save (Phase 6)
+    /// @name Axis-max override state
     /// @{
     bool hasLeftYMaxOverride() const;              ///< @return True if the user has overridden the left axis max.
     double leftYMaxOverrideValue() const;          ///< @return The user-set left axis max (only meaningful if hasLeftYMaxOverride()).
@@ -151,6 +174,7 @@ signals:
     void loadWarning(const QString& message);       ///< Emitted after a load that succeeded but skipped malformed rows.
     void seriesVisibilityChanged(int index);        ///< Emitted when a series visibility toggles.
     void seriesAppearanceChanged();                 ///< Emitted after a batch of color/name edits so views can refresh.
+    void sourcesChanged();                          ///< Emitted when the source list or active source filter changes.
     void plotTitleChanged();                        ///< Emitted when the plot title changes.
     void axisRangeChanged();                        ///< Emitted when X or Y axis ranges change.
     /// Emitted (once, on that source's first-added stream) when a newly added
@@ -200,6 +224,8 @@ private:
     QVector<PlotSeriesData> m_series;              ///< All loaded series data.
     int m_next_series_id = 1;                      ///< Monotonic source of stable per-series ids (PlotSeriesData::id).
     QString m_plot_title;                          ///< User-defined plot title.
+    QHash<int, QString> m_source_labels;           ///< sourceId -> display label (file base name) for the selector dropdown.
+    int m_visible_source = -1;                     ///< Active source filter (-1 = show all sources overlaid).
 
     double m_x_min = 0.0;                          ///< Data X range minimum.
     double m_x_max = 0.0;                          ///< Data X range maximum.

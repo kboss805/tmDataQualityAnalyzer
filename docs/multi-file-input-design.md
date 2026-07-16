@@ -52,8 +52,8 @@ Source {
 
 `MainViewModel` holds `QVector<Source> m_sources` instead of a single filename +
 configs. **Open** starts a fresh session (clear + source 0). **Add source…**
-appends a source and processes it *without* clearing. This same container is what
-Phase 6 (session save/load) will serialize.
+appends a source and processes it *without* clearing. A processing template
+captures one of these `Source`s' stream configs for reuse across other files.
 
 ---
 
@@ -239,8 +239,7 @@ ViewModel + schema tests.
   the single-shared-base model. Post-v1.
 - **Reconstructing the N-source structure from an imported CSV** — a multi-source
   export re-imports as one dataset (series keep their `sourceId` for grouping, but
-  the `MainViewModel` source *list* isn't rebuilt). Lossless multi-source
-  persistence is **Phase 6 (session save/load)**, which builds on §2's `Source`.
+  the `MainViewModel` source *list* isn't rebuilt). Not currently persisted.
 
 **Docs:** update `docs/CLAUDE.md` — the "no batch / multi-file mode" architecture
 statement and the data-flow section — once this lands.

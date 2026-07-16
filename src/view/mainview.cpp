@@ -7,20 +7,26 @@
 
 #include <QApplication>
 #include <QDesktopServices>
+#include <QDir>
 #include <QFile>
 #include <QFrame>
+#include <QIcon>
 #include <QInputDialog>
 #include <QJsonDocument>
 #include <QJsonParseError>
+#include <QKeySequence>
 #include <QMessageBox>
+#include <QPainter>
 #include <QPixmap>
 #include <QPushButton>
 #include <QSettings>
 #include <QSignalBlocker>
 #include <QStatusBar>
 #include <QTime>
+#include <QToolButton>
 #include <QUrl>
 
+#include "batchapplydialog.h"
 #include "chapter10reader.h"
 #include "constants.h"
 #include "mainviewmodel.h"
@@ -28,11 +34,76 @@
 #include "plotwidget.h"
 #include "processedstreamdata.h"
 #include "processingprogressdialog.h"
-#include "session.h"
-#include "sessionschema.h"
+#include "processingtemplate.h"
+#include "processingtemplateschema.h"
 #include "source.h"
 #include "streamconfigdialog.h"
+#include "templatematcher.h"
 #include "timefields.h"
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <windowsx.h>
+#endif
+
+namespace
+{
+    constexpr int kTitleBarHeight = 40;  ///< Custom title-bar height (logical px).
+
+    /// Title-bar glyph foreground for the active theme.
+    QColor titleGlyphColor(bool dark)
+    {
+        return dark ? QColor(0xC8, 0xC8, 0xC8) : QColor(0x3C, 0x3C, 0x3C);
+    }
+
+    /// Paints a thin three-line "hamburger" menu glyph (Claude Code style). Drawn in
+    /// code so it adapts to the theme without shipping separate dark/light assets.
+    QIcon makeMenuIcon(bool dark)
+    {
+        QPixmap pm(32, 32);
+        pm.fill(Qt::transparent);
+        QPainter p(&pm);
+        p.setRenderHint(QPainter::Antialiasing);
+        QPen pen(titleGlyphColor(dark), 2.0);
+        pen.setCapStyle(Qt::RoundCap);
+        p.setPen(pen);
+        const qreal x0 = 7.5, x1 = 24.5;
+        p.drawLine(QPointF(x0, 11), QPointF(x1, 11));
+        p.drawLine(QPointF(x0, 16), QPointF(x1, 16));
+        p.drawLine(QPointF(x0, 21), QPointF(x1, 21));
+        p.end();
+        return QIcon(pm);
+    }
+
+    /// Paints a thin "toggle sidebar" glyph (Claude Code style): a rounded window
+    /// outline with a divider ~1/3 in and the left panel lightly filled.
+    QIcon makeSidebarIcon(bool dark)
+    {
+        QPixmap pm(32, 32);
+        pm.fill(Qt::transparent);
+        QPainter p(&pm);
+        p.setRenderHint(QPainter::Antialiasing);
+        const QColor c = titleGlyphColor(dark);
+        QPen pen(c, 1.9);
+        pen.setJoinStyle(Qt::RoundJoin);
+        p.setPen(pen);
+        p.setBrush(Qt::NoBrush);
+        const QRectF r(6, 8, 20, 16);
+        p.drawRoundedRect(r, 3, 3);
+        const qreal x = r.left() + r.width() * 0.36;
+        p.fillRect(QRectF(r.left() + 1.0, r.top() + 1.0, x - r.left() - 1.0, r.height() - 2.0),
+                   QColor(c.red(), c.green(), c.blue(), 70));
+        p.drawLine(QPointF(x, r.top() + 0.5), QPointF(x, r.bottom() - 0.5));
+        p.end();
+        return QIcon(pm);
+    }
+}
 
 
 MainView::MainView(QWidget *parent)
@@ -70,9 +141,9 @@ void MainView::saveLastCh10Dir()
 
 void MainView::setUpMainLayout()
 {
-    m_controls_layout = new QVBoxLayout;
-    m_controls_layout->setSpacing(0);
-    m_controls_layout->setContentsMargins(2, UIConstants::kLayoutSpacingSmall, UIConstants::kLayoutSpacingSmall, UIConstants::kLayoutSpacingSmall);
+    m_sidebar_layout = new QVBoxLayout;
+    m_sidebar_layout->setSpacing(0);
+    m_sidebar_layout->setContentsMargins(2, UIConstants::kLayoutSpacingSmall, UIConstants::kLayoutSpacingSmall, UIConstants::kLayoutSpacingSmall);
 
     // set up constituent parts
     setUpMenuBar();
@@ -84,11 +155,11 @@ void MainView::setUpMainLayout()
     m_log_preview->setOpenLinks(false);
     m_log_preview->setMinimumHeight(UIConstants::kLogPreviewHeight);
 
-    // Log preview fills the controls panel; progress/cancel now live in
+    // Log preview fills the sidebar; progress/cancel now live in
     // ProcessingProgressDialog, shown only while processing is active.
-    m_controls_layout->addWidget(m_log_preview, 1);
+    m_sidebar_layout->addWidget(m_log_preview, 1);
 
-    // PlotWidget as central widget — fills all space right of the controls dock
+    // PlotWidget as central widget — fills all space right of the sidebar dock
     m_plot_view_model = new PlotViewModel(this);
     m_plot_widget = new PlotWidget;
     m_plot_widget->setViewModel(m_plot_view_model);
@@ -98,7 +169,7 @@ void MainView::setUpMainLayout()
     bool dark = plot_settings.value(UIConstants::kSettingsKeyTheme, UIConstants::kThemeDark).toString()
                 == UIConstants::kThemeDark;
     m_plot_widget->applyTheme(dark);
-    applyToolbarIconsForTheme(dark);
+    applyActionIconsForTheme(dark);
 
     // The Customize Plot button replaces the old legend and is initialized disabled.
 
@@ -109,17 +180,29 @@ void MainView::setUpMainLayout()
     // the total visual gap becomes exactly 16px.
     setCentralWidget(m_plot_widget);
 
-    // Controls in a left dock widget
-    QWidget* controls_widget = new QWidget;
-    controls_widget->setLayout(m_controls_layout);
-    controls_widget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    // Sidebar in a left dock widget (holds the log); shown/hidden from the title bar.
+    QWidget* sidebar_widget = new QWidget;
+    sidebar_widget->setLayout(m_sidebar_layout);
+    sidebar_widget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
 
-    m_controls_dock = new QDockWidget(this);
-    m_controls_dock->setTitleBarWidget(new QWidget);
-    m_controls_dock->setWidget(controls_widget);
-    m_controls_dock->setFeatures(QDockWidget::NoDockWidgetFeatures);
-    m_controls_dock->setMinimumWidth(UIConstants::kControlsDockMinWidth);
-    addDockWidget(Qt::LeftDockWidgetArea, m_controls_dock);
+    m_sidebar_dock = new QDockWidget(this);
+    m_sidebar_dock->setTitleBarWidget(new QWidget);
+    m_sidebar_dock->setWidget(sidebar_widget);
+    m_sidebar_dock->setFeatures(QDockWidget::NoDockWidgetFeatures);
+    m_sidebar_dock->setMinimumWidth(UIConstants::kSidebarMinWidth);
+    addDockWidget(Qt::LeftDockWidgetArea, m_sidebar_dock);
+
+    // Restore the sidebar's last shown/hidden state (default shown) and sync the
+    // title-bar toggle. Done here, once the dock exists, since setUpMenuBar() (which
+    // builds the toggle) runs before the dock is created.
+    const bool sidebar_shown =
+        QSettings().value(UIConstants::kSettingsKeySidebarVisible, true).toBool();
+    m_sidebar_dock->setVisible(sidebar_shown);
+    if (m_sidebar_toggle != nullptr)
+    {
+        QSignalBlocker block(m_sidebar_toggle);
+        m_sidebar_toggle->setChecked(sidebar_shown);
+    }
 
     // Intercept drag events from every widget in the window by filtering at
     // the application level — simpler and more complete than listing individual
@@ -136,55 +219,89 @@ void MainView::setUpMainLayout()
 
 void MainView::setUpMenuBar()
 {
-    QMenuBar* menu_bar = menuBar();
-    QMenu* file_menu = menu_bar->addMenu("&File");
+    // A single hamburger menu holds everything, grouped into sections (addSection
+    // renders the muted headers). Flat rather than nested submenus because the
+    // whole menu is small and scannable in one glance. The menu hangs off the
+    // hamburger button in the custom title bar (built at the end of this method).
+    QMenu* menu = new QMenu(this);
+    menu->setToolTipsVisible(true);
 
-    m_open_action = file_menu->addAction("Open...");
+    // --- Process ---
+    menu->addSection(tr("Process"));
+
+    m_open_action = menu->addAction("Open...");
     m_open_action->setShortcut(QKeySequence::Open);
+    connect(m_open_action, &QAction::triggered, this, &MainView::inputFileButtonPressed);
 
-    // Add Source: appends a second/later .ch10 file to the current session
-    // instead of replacing it (multi-file input). Only meaningful once a file
-    // is already loaded/configured, so it starts disabled.
-    m_add_source_action = file_menu->addAction("Add Source...");
-    m_add_source_action->setEnabled(false);
-    connect(m_add_source_action, &QAction::triggered, this, &MainView::addSourceButtonPressed);
-
-    // Remove Source: only meaningful once at least one source has finished
-    // processing successfully, so it starts disabled too.
-    m_remove_source_action = file_menu->addAction("Remove Source...");
-    m_remove_source_action->setEnabled(false);
-    connect(m_remove_source_action, &QAction::triggered, this, &MainView::removeSourceButtonPressed);
-
-    file_menu->addSeparator();
-
-    // Save/Open Session (Phase 6): persist and replay a whole multi-source
-    // configuration. Save starts disabled -- nothing to save until a source has
-    // finished processing.
-    m_save_session_action = file_menu->addAction("Save Session As...");
-    m_save_session_action->setEnabled(false);
-    connect(m_save_session_action, &QAction::triggered, this, &MainView::saveSessionButtonPressed);
-
-    m_open_session_action = file_menu->addAction("Open Session...");
-    connect(m_open_session_action, &QAction::triggered, this, &MainView::openSessionButtonPressed);
-
-    m_recent_menu = file_menu->addMenu("Recent Files");
+    // Recent Files sits directly under Open -- both are "get a file onto the plot".
+    m_recent_menu = menu->addMenu("Recent Files");
     updateRecentFilesMenu();
-    file_menu->addSeparator();
+
+    // Save as Template: capture the current per-stream settings as a reusable,
+    // file-path-independent template for Batch Apply. It needs at least one
+    // finished source, so it starts disabled.
+    m_save_template_action = menu->addAction("Save as Template...");
+    m_save_template_action->setEnabled(false);
+    connect(m_save_template_action, &QAction::triggered, this, &MainView::saveTemplateButtonPressed);
+
+    // Apply Template to Files: always available -- it opens its own file pickers.
+    m_apply_template_action = menu->addAction("Apply Template to Files...");
+    connect(m_apply_template_action, &QAction::triggered, this, &MainView::applyTemplateButtonPressed);
+
+    menu->addSeparator();
+
+    QAction* exit_action = menu->addAction("Exit");
+    connect(exit_action, &QAction::triggered, this, &QMainWindow::close);
+
+    // --- Import/Export ---
+    menu->addSection(tr("Import/Export"));
+
+    // Import a previously exported CSV straight into the plot (US6.3).
+    m_import_action = menu->addAction("Import CSV...");
+    m_import_action->setToolTip("Import a previously exported CSV file");
+    connect(m_import_action, &QAction::triggered, this, &MainView::importFileButtonPressed);
+
+    // Export the current plot's data / image / log. Disabled until data loads;
+    // wired to PlotWidget::onExportPlot in setUpConnections().
+    m_export_action = menu->addAction("Export...");
+    m_export_action->setToolTip("Export plot data and images");
+    m_export_action->setEnabled(false);
+
+    // --- Settings ---
+    menu->addSection(tr("Settings"));
 
     QSettings app_settings;
     QString current_theme = app_settings.value(UIConstants::kSettingsKeyTheme, UIConstants::kThemeDark).toString();
-    m_theme_action = file_menu->addAction(
+    m_theme_action = menu->addAction(
         (current_theme == UIConstants::kThemeDark) ? "Switch to Light Theme" : "Switch to Dark Theme");
-    file_menu->addSeparator();
-
-    QAction* exit_action = file_menu->addAction("Exit");
-
-    connect(m_open_action, &QAction::triggered, this, &MainView::inputFileButtonPressed);
     connect(m_theme_action, &QAction::triggered, this, &MainView::onToggleTheme);
-    connect(exit_action, &QAction::triggered, this, &QMainWindow::close);
 
-    QMenu* help_menu = menu_bar->addMenu("&Help");
-    QAction* about_action = help_menu->addAction("About...");
+    // --- Help ---
+    menu->addSection(tr("Help"));
+
+    // The manual ships embedded as a Qt resource; a browser can't read qrc:/ URLs,
+    // so it is copied out to the temp dir on first use and opened from there.
+    QAction* manual_action = menu->addAction("User Manual...");
+    connect(manual_action, &QAction::triggered, this, [this]() {
+        const QString target = QDir::temp().filePath("tmDataQualityAnalyzer_manual.html");
+        if (QFile::exists(target) && !QFile::remove(target))
+        {
+            displayErrorMessage(tr("Could not open the user manual (temp file is locked)."));
+            return;
+        }
+        if (!QFile::copy(":/resources/usermanual.html", target))
+        {
+            displayErrorMessage(tr("Could not open the user manual."));
+            return;
+        }
+        // Resource copies inherit read-only permissions; make the temp copy
+        // writable so the remove() above succeeds on the next open.
+        QFile(target).setPermissions(QFile::ReadOwner | QFile::WriteOwner |
+                                     QFile::ReadUser  | QFile::WriteUser);
+        QDesktopServices::openUrl(QUrl::fromLocalFile(target));
+    });
+
+    QAction* about_action = menu->addAction("About...");
     connect(about_action, &QAction::triggered, this, [this]() {
         QMessageBox about_box(this);
         about_box.setWindowTitle("About");
@@ -199,36 +316,193 @@ void MainView::setUpMenuBar()
         about_box.exec();
     });
 
-    // Toolbar
-    m_toolbar = addToolBar("Main");
-    m_toolbar->setMovable(false);
-    m_toolbar->setFloatable(false);
-    m_toolbar->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    m_toolbar->setIconSize(QSize(UIConstants::kToolbarIconSize, UIConstants::kToolbarIconSize));
+    // --- Custom title bar (frameless window) ---
+    // Replaces the native Windows title bar: the hamburger on the left opens the
+    // menu above; the window's min/maximize/close buttons live on the right. The
+    // empty strip between them is reported as the drag caption in nativeEvent().
+    auto* title_bar = new QWidget(this);
+    title_bar->setObjectName("titleBar");
+    title_bar->setFixedHeight(kTitleBarHeight);
+    title_bar->setStyleSheet(
+        "#titleBar QToolButton{border:none;background:transparent;min-width:44px;min-height:40px;font-size:15px;}"
+        "#titleBar QToolButton:hover{background:rgba(128,128,128,0.22);}"
+        "#titleBar QToolButton#winClose:hover{background:#c42b1c;color:#ffffff;}"
+        "#titleBar QToolButton#menuBtn::menu-indicator{image:none;}"
+        // menuBtn and sidebarBtn get a fixed size + AlignVCenter in code, so their
+        // hover boxes stay inset from the bar edges (QSS margin isn't honored for
+        // QToolButton) and read as compact pills like Claude Code's title bar.
+        "#titleBar QToolButton#menuBtn{min-width:0;border-radius:5px;}"
+        "#titleBar QToolButton#sidebarBtn{min-width:0;border-radius:5px;}");
 
-    m_toolbar_open_action = m_toolbar->addAction(
-        QIcon(":/resources/folder-open.svg"), "Open Ch10 File");
-    m_toolbar_open_action->setToolTip("Open Chapter 10 File (Ctrl+O)");
-    connect(m_toolbar_open_action, &QAction::triggered,
-            this, &MainView::inputFileButtonPressed);
+    auto* bar_layout = new QHBoxLayout(title_bar);
+    bar_layout->setContentsMargins(2, 0, 0, 0);
+    bar_layout->setSpacing(0);
 
-    m_toolbar->addSeparator();
+    m_menu_button = new QToolButton(title_bar);
+    m_menu_button->setObjectName("menuBtn");
+    m_menu_button->setToolTip(tr("Menu"));
+    m_menu_button->setPopupMode(QToolButton::InstantPopup);
+    m_menu_button->setMenu(menu);
+    // Thin drawn glyph + fixed centered size, matching the sidebar toggle (icon set
+    // per theme in applyActionIconsForTheme).
+    m_menu_button->setFixedSize(44, 32);
+    m_menu_button->setIconSize(QSize(24, 24));
+    bar_layout->addWidget(m_menu_button, 0, Qt::AlignVCenter);
 
-    // Import sits just left of Export. Icon (orange) is theme-dependent; set by
-    // applyToolbarIconsForTheme().
-    m_import_action = m_toolbar->addAction("Import");
-    m_import_action->setToolTip("Import a previously exported CSV file");
-    connect(m_import_action, &QAction::triggered,
-            this, &MainView::importFileButtonPressed);
+    // Show/hide the left sidebar (log). Checked = shown; the icon is set per theme
+    // in applyActionIconsForTheme(). Wired to the dock's visibility below, once the
+    // dock exists (setUpMainLayout).
+    m_sidebar_toggle = new QToolButton(title_bar);
+    m_sidebar_toggle->setObjectName("sidebarBtn");
+    m_sidebar_toggle->setCheckable(true);
+    m_sidebar_toggle->setToolTip(tr("Toggle sidebar (Ctrl+B)"));
+    m_sidebar_toggle->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_B));
+    // Fixed, smaller-than-the-bar size + AlignVCenter guarantees the hover box has
+    // clearance from the bar's top/bottom edges (see the sidebarBtn stylesheet note).
+    m_sidebar_toggle->setFixedSize(44, 32);
+    m_sidebar_toggle->setIconSize(QSize(24, 24));
+    connect(m_sidebar_toggle, &QToolButton::toggled, this, [this](bool shown) {
+        if (m_sidebar_dock != nullptr)
+            m_sidebar_dock->setVisible(shown);
+        QSettings().setValue(UIConstants::kSettingsKeySidebarVisible, shown);
+    });
+    bar_layout->addWidget(m_sidebar_toggle, 0, Qt::AlignVCenter);
 
-    // Icon (green) is theme-dependent; set by applyToolbarIconsForTheme().
-    m_export_action = m_toolbar->addAction("Export");
-    m_export_action->setToolTip("Export plot data and images");
-    m_export_action->setEnabled(false);
+    bar_layout->addStretch(1);
 
-    QWidget* toolbar_spacer = new QWidget;
-    toolbar_spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    m_toolbar->addWidget(toolbar_spacer);
+    auto* min_button = new QToolButton(title_bar);
+    min_button->setText(QStringLiteral("−"));   // −
+    min_button->setToolTip(tr("Minimize"));
+    connect(min_button, &QToolButton::clicked, this, &QWidget::showMinimized);
+    bar_layout->addWidget(min_button);
+
+    m_max_button = new QToolButton(title_bar);
+    m_max_button->setToolTip(tr("Maximize"));
+    connect(m_max_button, &QToolButton::clicked, this, [this]() {
+        setWindowState(isMaximized() ? (windowState() & ~Qt::WindowMaximized)
+                                     : (windowState() |  Qt::WindowMaximized));
+    });
+    bar_layout->addWidget(m_max_button);
+
+    auto* close_button = new QToolButton(title_bar);
+    close_button->setObjectName("winClose");
+    close_button->setText(QStringLiteral("✕"));  // ✕
+    close_button->setToolTip(tr("Close"));
+    connect(close_button, &QToolButton::clicked, this, &QWidget::close);
+    bar_layout->addWidget(close_button);
+
+    setMenuWidget(title_bar);
+    updateMaximizeButton();
+}
+
+void MainView::updateMaximizeButton()
+{
+    if (m_max_button == nullptr)
+        return;
+    const bool maximized = isMaximized();
+    m_max_button->setText(maximized ? QStringLiteral("❐") : QStringLiteral("□"));
+    m_max_button->setToolTip(maximized ? tr("Restore") : tr("Maximize"));
+}
+
+void MainView::changeEvent(QEvent* event)
+{
+    if (event->type() == QEvent::WindowStateChange)
+        updateMaximizeButton();
+    QMainWindow::changeEvent(event);
+}
+
+bool MainView::nativeEvent(const QByteArray& eventType, void* message, qintptr* result)
+{
+#ifdef _WIN32
+    if (eventType == "windows_generic_MSG" && message != nullptr)
+    {
+        MSG* msg = static_cast<MSG*>(message);
+        switch (msg->message)
+        {
+        case WM_NCCALCSIZE:
+            // Strip the native title bar: the client area becomes the whole window.
+            if (msg->wParam == TRUE)
+            {
+                // When maximized, inset by the frame thickness so the client doesn't
+                // spill off-screen or cover the taskbar.
+                if (::IsZoomed(msg->hwnd))
+                {
+                    auto* params = reinterpret_cast<NCCALCSIZE_PARAMS*>(msg->lParam);
+                    const int fx = ::GetSystemMetrics(SM_CXFRAME) + ::GetSystemMetrics(SM_CXPADDEDBORDER);
+                    const int fy = ::GetSystemMetrics(SM_CYFRAME) + ::GetSystemMetrics(SM_CXPADDEDBORDER);
+                    params->rgrc[0].left   += fx;
+                    params->rgrc[0].right  -= fx;
+                    params->rgrc[0].top    += fy;
+                    params->rgrc[0].bottom -= fy;
+                }
+                *result = 0;
+                return true;
+            }
+            break;
+
+        case WM_NCHITTEST:
+        {
+            // Report resize borders + the draggable caption so Windows still does
+            // move/resize/snap/double-click-maximize natively.
+            RECT rc;
+            ::GetWindowRect(msg->hwnd, &rc);
+            const long gx = GET_X_LPARAM(msg->lParam);
+            const long gy = GET_Y_LPARAM(msg->lParam);
+            const long lx = gx - rc.left;
+            const long ly = gy - rc.top;
+            const long w  = rc.right - rc.left;
+            const long h  = rc.bottom - rc.top;
+
+            const double dpr     = devicePixelRatioF();
+            const long   border  = static_cast<long>(8 * dpr);
+            const long   titleH  = static_cast<long>(kTitleBarHeight * dpr);
+
+            if (!::IsZoomed(msg->hwnd))
+            {
+                const bool onL = lx < border, onR = lx >= w - border;
+                const bool onT = ly < border, onB = ly >= h - border;
+                if (onT && onL) { *result = HTTOPLEFT;     return true; }
+                if (onT && onR) { *result = HTTOPRIGHT;    return true; }
+                if (onB && onL) { *result = HTBOTTOMLEFT;  return true; }
+                if (onB && onR) { *result = HTBOTTOMRIGHT; return true; }
+                if (onL)        { *result = HTLEFT;   return true; }
+                if (onR)        { *result = HTRIGHT;  return true; }
+                if (onT)        { *result = HTTOP;    return true; }
+                if (onB)        { *result = HTBOTTOM; return true; }
+            }
+
+            // Client-relative coordinates (not window-relative): when maximized,
+            // WM_NCCALCSIZE insets the client by the frame thickness, so lx/ly would
+            // be offset by that inset for the strip check and childAt() below.
+            POINT client_pt{ gx, gy };
+            ::ScreenToClient(msg->hwnd, &client_pt);
+
+            if (client_pt.y >= 0 && client_pt.y < titleH)
+            {
+                // Any actual button on the strip (hamburger, sidebar toggle, window
+                // controls) must receive clicks; the empty space between them is the
+                // draggable caption. Detecting the child widget under the cursor keeps
+                // this correct no matter how many buttons the title bar grows.
+                const QPoint local(static_cast<int>(client_pt.x / dpr),
+                                   static_cast<int>(client_pt.y / dpr));
+                const bool on_button = qobject_cast<QToolButton*>(childAt(local)) != nullptr;
+                *result = on_button ? HTCLIENT : HTCAPTION;
+                return true;
+            }
+
+            *result = HTCLIENT;
+            return true;
+        }
+        default:
+            break;
+        }
+    }
+#else
+    Q_UNUSED(eventType);
+    Q_UNUSED(message);
+    Q_UNUSED(result);
+#endif
+    return QMainWindow::nativeEvent(eventType, message, result);
 }
 
 
@@ -249,16 +523,10 @@ void MainView::setUpConnections()
             this, &MainView::onSourceReadyForStreamConfig);
     connect(m_view_model, &MainViewModel::streamProcessed, this, &MainView::onStreamProcessed);
 
-    // Add Source is only meaningful once a file is loaded/configured, and never
-    // while processing (setAllControlsEnabled already covers the latter).
-    connect(m_view_model, &MainViewModel::fileLoadedChanged, this, [this]() {
-        m_add_source_action->setEnabled(m_view_model->fileLoaded());
-    });
-    // Remove Source / Save Session are only meaningful once at least one source
-    // has finished processing successfully.
+    // Save as Template is only meaningful once at least one source has finished
+    // processing successfully.
     connect(m_view_model, &MainViewModel::sourcesChanged, this, [this]() {
-        m_remove_source_action->setEnabled(!m_view_model->sources().isEmpty());
-        m_save_session_action->setEnabled(!m_view_model->sources().isEmpty());
+        m_save_template_action->setEnabled(!m_view_model->sources().isEmpty());
     });
 
     // Informational: a newly added source's recording doesn't overlap what's
@@ -369,26 +637,22 @@ void MainView::onStreamProcessed(const ProcessedStreamData& data)
 
 void MainView::onProcessingFinished(bool success)
 {
+    if (m_batch_active)
+    {
+        onBatchProcessingFinished(success);
+        return;
+    }
+
     if (success)
     {
         logSuccess("Processing complete — results plotted from memory.");
-        // A session replay applies its own saved plot title once every source
-        // has finished (finishSessionLoad()) -- don't overwrite it per-source.
-        if (!m_loading_session)
+        m_plot_view_model->setPlotTitle(QFileInfo(m_view_model->inputFilename()).baseName());
+        // Label this source for the plot toolbar's file selector (multi-file via Add Source).
+        if (!m_view_model->sources().isEmpty())
         {
-            m_plot_view_model->setPlotTitle(QFileInfo(m_view_model->inputFilename()).baseName());
+            const Source& src = m_view_model->sources().last();
+            m_plot_view_model->setSourceLabel(src.sourceId, QFileInfo(src.filepath).baseName());
         }
-    }
-    else if (m_loading_session)
-    {
-        logError("Failed to process session source: "
-                 + QFileInfo(m_view_model->inputFilename()).fileName());
-    }
-
-    if (m_loading_session)
-    {
-        m_pending_session_index++;
-        advanceSessionLoad();
     }
 }
 
@@ -465,91 +729,82 @@ void MainView::importFileButtonPressed()
     openPath(filename);
 }
 
-void MainView::addSourceButtonPressed()
+ProcessingTemplate MainView::buildTemplateFromSource(const Source& src) const
 {
-    // .ch10-only, like Open -- Add Source appends another processed file to the
-    // session; it is not a route for CSV import (that stays its own path).
-    QString filename = QFileDialog::getOpenFileName(this, tr("Add Source (Chapter 10 File)"),
-                                                    m_last_ch10_dir,
-                                                    tr("Chapter 10 Files (*.ch10)"));
-    if (filename.isEmpty())
-    {
-        return;
-    }
+    ProcessingTemplate tmpl;
+    tmpl.appVersion       = AppVersion::toString();
+    tmpl.name             = QFileInfo(src.filepath).baseName();
+    tmpl.timeChannelIndex = src.timeChannelIndex;
 
-    m_last_ch10_dir = QFileInfo(filename).absolutePath();
-    saveLastCh10Dir();
-    m_view_model->addSource(filename);
+    for (const StreamConfig& cfg : src.streamConfigs)
+    {
+        TemplateStreamEntry entry;
+        entry.config = cfg;
+
+        // Capture the current appearance of every plot series this stream produced,
+        // keyed (within the entry) by metric/receiver/channel. Only series from this
+        // source and this stream's channel id are this entry's; a non-processed
+        // stream produces none, leaving the appearance list empty.
+        for (const PlotSeriesData& series : m_plot_view_model->allSeries())
+        {
+            if (series.sourceId != src.sourceId || series.streamOrder != cfg.pcmChannelId)
+                continue;
+
+            SeriesAppearance appearance;
+            appearance.metricType    = series.metricType;
+            appearance.receiverIndex = series.receiverIndex;
+            appearance.channelIndex  = series.channelIndex;
+            appearance.name          = series.name;
+            appearance.color         = series.color;
+            entry.appearance.append(appearance);
+        }
+
+        tmpl.entries.append(entry);
+    }
+    return tmpl;
 }
 
-void MainView::removeSourceButtonPressed()
+void MainView::saveTemplateButtonPressed()
 {
     const QVector<Source>& sources = m_view_model->sources();
     if (sources.isEmpty())
     {
+        logWarning("Nothing to save as a template -- no sources have finished processing yet.");
         return;
     }
 
-    QStringList labels;
-    labels.reserve(sources.size());
-    for (const Source& s : sources)
+    // A template captures ONE source's stream configuration. With several loaded,
+    // let the user pick which (same picker style as Remove Source).
+    int source_index = 0;
+    if (sources.size() > 1)
     {
-        labels.append(QFileInfo(s.filepath).fileName() + QString(" (source %1)").arg(s.sourceId));
+        QStringList labels;
+        labels.reserve(sources.size());
+        for (const Source& s : sources)
+            labels.append(QFileInfo(s.filepath).fileName() + QString(" (source %1)").arg(s.sourceId));
+
+        bool ok = false;
+        const QString chosen = QInputDialog::getItem(this, tr("Save as Template"),
+            tr("Capture the per-stream settings from which source?"), labels, 0, /*editable=*/false, &ok);
+        if (!ok)
+            return;
+        source_index = labels.indexOf(chosen);
+        if (source_index < 0)
+            return;
     }
 
-    bool ok = false;
-    const QString chosen = QInputDialog::getItem(this, tr("Remove Source"),
-        tr("Select a source to remove from the plot:"), labels, 0, /*editable=*/false, &ok);
-    if (!ok)
-    {
-        return;
-    }
-
-    const int index = labels.indexOf(chosen);
-    if (index < 0)
-    {
-        return;
-    }
-    const int sourceId = sources.at(index).sourceId;
-
-    m_view_model->removeSource(sourceId);
-    m_plot_view_model->removeSource(sourceId);
-    logSuccess("Removed source: " + labels.at(index));
-}
-
-void MainView::saveSessionButtonPressed()
-{
-    if (m_view_model->sources().isEmpty())
-    {
-        logWarning("Nothing to save -- no sources have finished processing yet.");
-        return;
-    }
-
-    const QString path = QFileDialog::getSaveFileName(this, tr("Save Session As"),
-        m_last_ch10_dir, tr("Session Files (*.json)"));
+    const QString path = QFileDialog::getSaveFileName(this, tr("Save as Template"),
+        m_last_ch10_dir, tr("Template Files (*.json)"));
     if (path.isEmpty())
-    {
         return;
-    }
 
-    Session session;
-    session.appVersion = AppVersion::toString();
-    session.sources     = m_view_model->sources();
-    session.viewState.plotTitle    = m_plot_view_model->plotTitle();
-    session.viewState.lockAxisView =
-        (m_plot_view_model->lockAxisView() == PlotViewModel::LockAxisView::MissedFrames)
-            ? "MissedFrames" : "LockPercent";
-    session.viewState.hasLeftYMaxOverride  = m_plot_view_model->hasLeftYMaxOverride();
-    session.viewState.leftYMaxOverride     = m_plot_view_model->leftYMaxOverrideValue();
-    session.viewState.hasRightYMaxOverride = m_plot_view_model->hasRightYMaxOverride();
-    session.viewState.rightYMaxOverride    = m_plot_view_model->rightYMaxOverrideValue();
-
-    const QJsonDocument doc = SessionSchema::toJson(session, QFileInfo(path).absolutePath());
+    const ProcessingTemplate tmpl = buildTemplateFromSource(sources.at(source_index));
+    const QJsonDocument doc = ProcessingTemplateSchema::toJson(tmpl);
 
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
     {
-        logError("Could not write session file: " + path);
+        logError("Could not write template file: " + path);
         return;
     }
     file.write(doc.toJson(QJsonDocument::Indented));
@@ -557,66 +812,7 @@ void MainView::saveSessionButtonPressed()
 
     m_last_ch10_dir = QFileInfo(path).absolutePath();
     saveLastCh10Dir();
-    logSuccess("Session saved: " + QFileInfo(path).fileName());
-}
-
-void MainView::openSessionButtonPressed()
-{
-    if (m_view_model->processing() || m_loading_session)
-    {
-        return;
-    }
-
-    const QString path = QFileDialog::getOpenFileName(this, tr("Open Session"),
-        m_last_ch10_dir, tr("Session Files (*.json)"));
-    if (path.isEmpty())
-    {
-        return;
-    }
-
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-    {
-        logError("Could not open session file: " + path);
-        return;
-    }
-    const QByteArray bytes = file.readAll();
-    file.close();
-
-    QJsonParseError parse_error;
-    const QJsonDocument doc = QJsonDocument::fromJson(bytes, &parse_error);
-    if (parse_error.error != QJsonParseError::NoError)
-    {
-        logError("Session file is not valid JSON: " + parse_error.errorString());
-        return;
-    }
-
-    Session session;
-    const SessionSchema::LoadStatus status = SessionSchema::fromJson(doc, session);
-    if (status == SessionSchema::LoadStatus::UnsupportedSchemaVersion)
-    {
-        logError("Session file uses an unsupported schema version.");
-        return;
-    }
-    if (status == SessionSchema::LoadStatus::InvalidFormat)
-    {
-        logError("Session file is not a valid session (unrecognized format).");
-        return;
-    }
-
-    m_last_ch10_dir = QFileInfo(path).absolutePath();
-    saveLastCh10Dir();
-
-    m_view_model->clearState();
-    m_plot_view_model->clearData();
-
-    m_pending_session       = session;
-    m_pending_session_dir   = QFileInfo(path).absolutePath();
-    m_pending_session_index = 0;
-    m_loading_session       = true;
-
-    logSuccess("Loading session: " + QFileInfo(path).fileName());
-    advanceSessionLoad();
+    logSuccess("Template saved: " + QFileInfo(path).fileName());
 }
 
 bool MainView::isSupportedFile(const QString& path)
@@ -666,18 +862,12 @@ void MainView::onFileReadyForStreamConfig()
 
 void MainView::onSourceReadyForStreamConfig()
 {
-    if (m_loading_session)
+    // addSource() is now driven only by the Apply Template batch loop, which applies
+    // the template's configs to each file without a per-file Configure Streams step.
+    if (m_batch_active)
     {
-        // Session replay uses addSource() for every source (including the
-        // first) -- see openSessionButtonPressed(), which already cleared
-        // state/plot up front -- so this always lands here, never in
-        // onFileReadyForStreamConfig().
-        applyPendingSessionSourceConfig();
-        return;
+        applyBatchSourceConfig();
     }
-
-    // Add Source: keep the existing plot/session, accumulate this source into it.
-    showStreamConfigDialogForPendingSource(/*clearPlotFirst=*/false);
 }
 
 void MainView::showStreamConfigDialogForPendingSource(bool clearPlotFirst)
@@ -703,105 +893,329 @@ void MainView::showStreamConfigDialogForPendingSource(bool clearPlotFirst)
     }
 }
 
-void MainView::applyPendingSessionSourceConfig()
+namespace
 {
-    const Source& src = m_pending_session.sources.at(m_pending_session_index);
-    m_view_model->setTimeChannelIndex(src.timeChannelIndex);
-    m_view_model->setStreamConfigs(src.streamConfigs);
-    m_view_model->startProcessing();
-}
-
-MainView::MissingSourceAction MainView::promptMissingSessionSource(const QString& missingPath)
-{
-    QMessageBox box(this);
-    box.setWindowTitle(tr("Session Source Not Found"));
-    box.setIcon(QMessageBox::Warning);
-    box.setText(tr("This session references a file that could not be found:\n\n%1")
-                    .arg(missingPath));
-
-    QPushButton* skip_btn   = box.addButton(tr("Skip This Source"), QMessageBox::DestructiveRole);
-    QPushButton* locate_btn = box.addButton(tr("Locate..."), QMessageBox::ActionRole);
-    box.addButton(QMessageBox::Cancel);
-    box.setDefaultButton(locate_btn);
-
-    box.exec();
-
-    if (box.clickedButton() == locate_btn)
-        return MissingSourceAction::Locate;
-    if (box.clickedButton() == skip_btn)
-        return MissingSourceAction::Skip;
-    return MissingSourceAction::Cancel;
-}
-
-void MainView::advanceSessionLoad()
-{
-    while (m_pending_session_index < m_pending_session.sources.size())
+    /// Human-readable reason a file's channel set didn't match a template.
+    QString describeMismatch(const TemplateMatcher::MatchResult& match)
     {
-        const Source& src = m_pending_session.sources.at(m_pending_session_index);
-        QString resolved = SessionSchema::resolveSessionPath(src.filepath, m_pending_session_dir);
-
-        // A session that loads 3 of 4 sources is more useful than an
-        // all-or-nothing failure (§5) -- offer Skip/Locate/Cancel rather than
-        // silently dropping or aborting the whole load.
-        while (!QFileInfo::exists(resolved))
+        QStringList parts;
+        if (!match.missing.isEmpty())
         {
-            const MissingSourceAction action = promptMissingSessionSource(resolved);
-            if (action == MissingSourceAction::Cancel)
-            {
-                logWarning(QString("Session load cancelled -- %1 source(s) not loaded.")
-                               .arg(m_pending_session.sources.size() - m_pending_session_index));
-                m_loading_session = false;
-                return;
-            }
-            if (action == MissingSourceAction::Skip)
-            {
-                logWarning("Skipped missing session source: " + resolved);
-                resolved.clear();
-                break;
-            }
-
-            // Locate: re-prompt with the same missing path if the user backs out
-            // of the file dialog without picking anything.
-            const QString located = QFileDialog::getOpenFileName(this, tr("Locate Session Source"),
-                m_last_ch10_dir, tr("Chapter 10 Files (*.ch10)"));
-            if (!located.isEmpty())
-            {
-                resolved = located;
-            }
+            QStringList ids;
+            for (int id : match.missing)
+                ids << QString::number(id);
+            parts << QObject::tr("missing channel(s) %1").arg(ids.join(", "));
         }
-
-        if (resolved.isEmpty())
+        if (!match.extra.isEmpty())
         {
-            m_pending_session_index++;
+            QStringList ids;
+            for (int id : match.extra)
+                ids << QString::number(id);
+            parts << QObject::tr("extra channel(s) %1").arg(ids.join(", "));
+        }
+        return parts.join("; ");
+    }
+}
+
+void MainView::applyTemplateButtonPressed()
+{
+    if (m_view_model->processing() || m_batch_active)
+    {
+        return;
+    }
+
+    // 1. Pick + parse the template.
+    const QString template_path = QFileDialog::getOpenFileName(this, tr("Apply Template to Files"),
+        m_last_ch10_dir, tr("Template Files (*.json)"));
+    if (template_path.isEmpty())
+    {
+        return;
+    }
+
+    QFile file(template_path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        logError("Could not open template file: " + template_path);
+        return;
+    }
+    const QByteArray bytes = file.readAll();
+    file.close();
+
+    QJsonParseError parse_error;
+    const QJsonDocument doc = QJsonDocument::fromJson(bytes, &parse_error);
+    if (parse_error.error != QJsonParseError::NoError)
+    {
+        logError("Template file is not valid JSON: " + parse_error.errorString());
+        return;
+    }
+
+    ProcessingTemplate tmpl;
+    const ProcessingTemplateSchema::LoadStatus status = ProcessingTemplateSchema::fromJson(doc, tmpl);
+    if (status == ProcessingTemplateSchema::LoadStatus::UnsupportedSchemaVersion)
+    {
+        logError("Template file uses an unsupported schema version.");
+        return;
+    }
+    if (status == ProcessingTemplateSchema::LoadStatus::InvalidFormat)
+    {
+        logError("Template file is not a valid template (unrecognized format).");
+        return;
+    }
+    if (tmpl.entries.isEmpty())
+    {
+        logError("Template has no stream entries.");
+        return;
+    }
+
+    m_last_ch10_dir = QFileInfo(template_path).absolutePath();
+    saveLastCh10Dir();
+
+    // 2. Pick the .ch10 files to run, then hand off to the shared batch kickoff
+    //    (validate against the template, confirm output options, run).
+    const QStringList picked = QFileDialog::getOpenFileNames(this, tr("Select Chapter 10 Files"),
+        m_last_ch10_dir, tr("Chapter 10 Files (*.ch10)"));
+    if (picked.isEmpty())
+    {
+        return;
+    }
+
+    startBatchFromTemplate(tmpl, picked, /*showReuseAppearance=*/true);
+}
+
+void MainView::startBatchFromTemplate(const ProcessingTemplate& tmpl, const QStringList& files,
+                                      bool showReuseAppearance)
+{
+    // Validate each file's channel set against the template, up front, so the
+    // dialog can show which files will run and which are rejected (and why).
+    QList<BatchApplyDialog::FileEntry> entries;
+    entries.reserve(files.size());
+    for (const QString& file_path : files)
+    {
+        BatchApplyDialog::FileEntry entry;
+        entry.filepath = file_path;
+
+        Chapter10Reader reader;
+        if (!reader.loadChannels(file_path))
+        {
+            entry.ok = false;
+            entry.reason = tr("could not read channels");
+        }
+        else
+        {
+            const TemplateMatcher::MatchResult match =
+                TemplateMatcher::matchFile(tmpl, reader.getPCMChannelList());
+            entry.ok = match.ok;
+            if (!match.ok)
+                entry.reason = describeMismatch(match);
+        }
+        entries.append(entry);
+    }
+
+    // Confirm output options (merged vs separate, appearance reuse, output dir).
+    BatchApplyDialog dialog(entries, m_last_ch10_dir, showReuseAppearance, this);
+    if (dialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    // Kick off the batch over the matched files only.
+    m_batch_files.clear();
+    for (const BatchApplyDialog::FileEntry& e : entries)
+    {
+        if (e.ok)
+            m_batch_files.append(e.filepath);
+    }
+    if (m_batch_files.isEmpty())
+    {
+        return;
+    }
+
+    m_batch_template         = tmpl;
+    m_batch_export_per_file  = dialog.exportPerFile();
+    m_batch_reuse_appearance = dialog.reuseAppearance();
+    m_batch_output_dir       = dialog.outputDir();
+    m_batch_index            = 0;
+    m_batch_processed        = 0;
+    m_batch_skipped          = 0;
+    m_batch_active           = true;
+
+    // A batch always starts a fresh session/plot.
+    m_view_model->clearState();
+    m_plot_view_model->clearData();
+
+    logSuccess(tr("Processing %1 file(s)...").arg(m_batch_files.size()));
+    advanceBatch();
+}
+
+void MainView::advanceBatch()
+{
+    while (m_batch_index < m_batch_files.size())
+    {
+        const QString path = m_batch_files.at(m_batch_index);
+
+        if (!QFileInfo::exists(path))
+        {
+            logWarning("Skipped missing batch file: " + path);
+            ++m_batch_skipped;
+            ++m_batch_index;
             continue;
         }
 
-        m_view_model->addSource(resolved);
-        return; // wait for sourceReadyForStreamConfig()
+        // Every file is retained in memory (accumulated onto the shared axis) so the
+        // user can browse them via the plot toolbar's file selector; per-file export,
+        // if requested, runs as a post-pass in finishBatch().
+        m_view_model->addSource(path);
+        return; // wait for onSourceReadyForStreamConfig()
     }
 
-    finishSessionLoad();
+    finishBatch();
 }
 
-void MainView::finishSessionLoad()
+void MainView::applyBatchSourceConfig()
 {
-    m_loading_session = false;
-
-    m_plot_view_model->setPlotTitle(m_pending_session.viewState.plotTitle);
-    m_plot_view_model->setLockAxisView(
-        m_pending_session.viewState.lockAxisView == "MissedFrames"
-            ? PlotViewModel::LockAxisView::MissedFrames
-            : PlotViewModel::LockAxisView::LockPercent);
-    if (m_pending_session.viewState.hasLeftYMaxOverride)
+    // Belt-and-suspenders re-check against the freshly loaded file (the up-front
+    // validation could be stale if the file changed on disk since it was picked).
+    const TemplateMatcher::MatchResult match =
+        TemplateMatcher::matchFile(m_batch_template, m_view_model->reader()->getPCMChannelList());
+    if (!match.ok)
     {
-        m_plot_view_model->setLeftYMaxOverride(m_pending_session.viewState.leftYMaxOverride);
-    }
-    if (m_pending_session.viewState.hasRightYMaxOverride)
-    {
-        m_plot_view_model->setRightYMaxOverride(m_pending_session.viewState.rightYMaxOverride);
+        logWarning("Skipped (channels no longer match template): "
+                   + QFileInfo(m_view_model->inputFilename()).fileName());
+        ++m_batch_skipped;
+        ++m_batch_index;
+        advanceBatch();
+        return;
     }
 
-    logSuccess("Session loaded.");
+    // Files match exactly, so the template's stored pcmChannelIds are correct for
+    // this file -- feed its configs straight through to processing.
+    QVector<StreamConfig> configs;
+    configs.reserve(m_batch_template.entries.size());
+    for (const TemplateStreamEntry& entry : m_batch_template.entries)
+        configs.append(entry.config);
+
+    m_view_model->setTimeChannelIndex(m_batch_template.timeChannelIndex);
+    m_view_model->setStreamConfigs(configs);
+    m_view_model->startProcessing();
+}
+
+void MainView::onBatchProcessingFinished(bool success)
+{
+    const QString base = QFileInfo(m_view_model->inputFilename()).baseName();
+
+    if (success)
+    {
+        ++m_batch_processed;
+
+        // The just-finished run was appended as the newest source before this
+        // signal (MainViewModel::onCoordinatorProcessingFinished).
+        const int sourceId = m_view_model->sources().isEmpty()
+            ? 0 : m_view_model->sources().last().sourceId;
+
+        // Label the source for the plot toolbar's file selector, and reapply the
+        // template's saved names/colors onto this file's fresh series.
+        m_plot_view_model->setSourceLabel(sourceId, base);
+        if (m_batch_reuse_appearance)
+            reapplyTemplateAppearance(sourceId);
+    }
+    else
+    {
+        ++m_batch_skipped;
+        logError("Batch file failed to process: " + base);
+    }
+
+    ++m_batch_index;
+    advanceBatch();
+}
+
+void MainView::reapplyTemplateAppearance(int sourceId)
+{
+    for (const TemplateStreamEntry& entry : m_batch_template.entries)
+    {
+        for (const SeriesAppearance& appearance : entry.appearance)
+        {
+            for (const PlotSeriesData& series : m_plot_view_model->allSeries())
+            {
+                if (series.sourceId != sourceId
+                    || series.streamOrder != entry.config.pcmChannelId
+                    || series.metricType != appearance.metricType
+                    || series.receiverIndex != appearance.receiverIndex
+                    || series.channelIndex != appearance.channelIndex)
+                {
+                    continue;
+                }
+                m_plot_view_model->renameSeriesById(series.id, appearance.name);
+                m_plot_view_model->recolorSeriesById(series.id, appearance.color);
+                break;
+            }
+        }
+    }
+    // renameSeriesById/recolorSeriesById are pure setters; one commit refreshes views.
+    m_plot_view_model->commitAppearanceChanges();
+}
+
+void MainView::finishBatch()
+{
+    m_batch_active = false;
+
+    const QVector<Source>& sources = m_view_model->sources();
+
+    // Optional per-file export post-pass: isolate each source in turn (so the CSV
+    // and the rendered images both cover just that file), then export. Runs over the
+    // fully-retained plot after all files are processed.
+    if (m_batch_export_per_file)
+    {
+        // One CSV per file (carries every metric's columns), plus, when the batch has
+        // frame-sync data, a separate image for each left-axis metric: Frame Sync
+        // Lock % and Accumulated Missed Frames. Restore the user's view afterward.
+        const PlotViewModel::LockAxisView original_view = m_plot_view_model->lockAxisView();
+        const bool has_frame_sync = m_plot_view_model->hasLockSeries()
+                                    || m_plot_view_model->hasMissedFramesSeries();
+
+        for (const Source& src : sources)
+        {
+            const QString base = QFileInfo(src.filepath).baseName();
+            m_plot_view_model->setVisibleSource(src.sourceId); // rebuilds chart to this file
+
+            const QString csv_path = QDir(m_batch_output_dir).filePath(base + ".csv");
+            if (m_plot_view_model->exportCsv(csv_path, src.sourceId))
+                logSuccess("Exported: " + csv_path);
+            else
+                logError("Failed to export CSV: " + csv_path);
+
+            if (has_frame_sync)
+            {
+                m_plot_view_model->setLockAxisView(PlotViewModel::LockAxisView::LockPercent);
+                m_plot_widget->exportImage(QDir(m_batch_output_dir).filePath(base + "_framesync_lock.png"));
+                m_plot_view_model->setLockAxisView(PlotViewModel::LockAxisView::MissedFrames);
+                m_plot_widget->exportImage(QDir(m_batch_output_dir).filePath(base + "_missed_frames.png"));
+            }
+            else
+            {
+                m_plot_widget->exportImage(QDir(m_batch_output_dir).filePath(base + ".png"));
+            }
+        }
+
+        m_plot_view_model->setLockAxisView(original_view);
+    }
+
+    // Default the plot to the first processed file (browse intent); a single file
+    // leaves the selector disabled and shows everything. "All files (overlaid)" is
+    // available from the dropdown.
+    if (sources.size() > 1)
+    {
+        m_plot_view_model->setVisibleSource(sources.first().sourceId);
+        m_plot_view_model->setPlotTitle(QFileInfo(sources.first().filepath).baseName());
+    }
+    else if (sources.size() == 1)
+    {
+        m_plot_view_model->setPlotTitle(QFileInfo(sources.first().filepath).baseName());
+    }
+
+    logSuccess(tr("Batch complete: %1 processed, %2 skipped.%3")
+                   .arg(m_batch_processed).arg(m_batch_skipped)
+                   .arg(m_batch_export_per_file ? tr(" Output written to %1.").arg(m_batch_output_dir)
+                                                : QString()));
 }
 
 void MainView::onToggleTheme()
@@ -828,16 +1242,23 @@ void MainView::onToggleTheme()
         (new_theme == UIConstants::kThemeDark) ? "Switch to Light Theme" : "Switch to Dark Theme");
 
     m_plot_widget->applyTheme(new_theme == UIConstants::kThemeDark);
-    applyToolbarIconsForTheme(new_theme == UIConstants::kThemeDark);
+    applyActionIconsForTheme(new_theme == UIConstants::kThemeDark);
 }
 
-void MainView::applyToolbarIconsForTheme(bool dark)
+void MainView::applyActionIconsForTheme(bool dark)
 {
-    // Green (export) / orange (import) icons have brighter dark-theme variants and
-    // deeper light-theme variants so they read against both toolbar backgrounds.
+    // Green (export) / orange (import) menu-item icons have brighter dark-theme
+    // variants and deeper light-theme variants so they read against both themes.
     const QString suffix = dark ? "-dark" : "-light";
     m_export_action->setIcon(QIcon(":/resources/export" + suffix + ".svg"));
     m_import_action->setIcon(QIcon(":/resources/import" + suffix + ".svg"));
+
+    // The hamburger + sidebar-toggle glyphs are drawn in code (no icon font shipped)
+    // so they track the title-bar foreground color for the active theme.
+    if (m_menu_button != nullptr)
+        m_menu_button->setIcon(makeMenuIcon(dark));
+    if (m_sidebar_toggle != nullptr)
+        m_sidebar_toggle->setIcon(makeSidebarIcon(dark));
 }
 
 void MainView::startProcessingFromDialog()
@@ -907,16 +1328,12 @@ void MainView::dropEvent(QDropEvent* event)
 
 void MainView::setAllControlsEnabled(bool enabled)
 {
-    m_toolbar_open_action->setEnabled(enabled);
     m_open_action->setEnabled(enabled);
     m_recent_menu->setEnabled(enabled);
     m_import_action->setEnabled(enabled);
-    // Add Source additionally requires a file to already be loaded/configured.
-    m_add_source_action->setEnabled(enabled && m_view_model->fileLoaded());
-    // Remove Source / Save Session additionally require at least one finalized source.
-    m_remove_source_action->setEnabled(enabled && !m_view_model->sources().isEmpty());
-    m_save_session_action->setEnabled(enabled && !m_view_model->sources().isEmpty());
-    m_open_session_action->setEnabled(enabled);
+    // Save as Template additionally requires at least one finalized source.
+    m_save_template_action->setEnabled(enabled && !m_view_model->sources().isEmpty());
+    m_apply_template_action->setEnabled(enabled);
 }
 
 void MainView::logError(const QString& message)

@@ -618,8 +618,8 @@ public:
     QHash<int, CalibrationProfile> calibrationByWord() const { return m_calibrationByWord; }
     QString lastTomlDir() const { return m_tomlDir; }
 
-    // Input references (session save/load, Phase 6): what produced the profiles
-    // above, so a session can store them for a later re-extraction pass.
+    // Input references: what produced the profiles above, so a processing template
+    // can store them for a later re-extraction pass.
     QString calFilePath()  const { return m_calPath; }
     QString stepFilePath() const { return m_stepPath; }
     double  clipStartSec() const { return m_clipStart ? m_clipStart->value() : 0.0; }
@@ -1053,7 +1053,7 @@ public:
                 "Build a non-linear calibration profile from a calibration "
                 "Chapter 10 file and a step-config TOML. Uses the word map, "
                 "frame sync, and polarity above plus the time channel from the "
-                "main dialog. Session-only; not saved to disk.");
+                "main dialog. Runtime-only; the profile itself is not saved to disk.");
             connect(extractBtn, &QPushButton::clicked, this,
                     [this]() { onExtractCalibration(); });
             row->addWidget(extractBtn);
@@ -1108,8 +1108,8 @@ public:
     bool    applyToAll()         const { return m_applyToAll->isChecked(); }
     QHash<int, CalibrationProfile> calibrationByWord() const { return m_calibrationByWord; }
 
-    // Input references (session save/load, Phase 6): captured from the setup
-    // sub-dialog on extraction so a session can store them alongside the config.
+    // Input references: captured from the setup sub-dialog on extraction so a
+    // processing template can store them alongside the config.
     QString calCh10Path()  const { return m_calCh10Path; }
     QString stepTomlPath() const { return m_stepTomlPath; }
     double  clipStartSec() const { return m_clipStartSec; }
@@ -1183,10 +1183,10 @@ private:
     int             m_timeChannelId = -1;     ///< Time channel ID inherited from the parent dialog.
     int             m_pcmChannelId  = -1;     ///< PCM channel ID of the stream being calibrated.
     QHash<int, CalibrationProfile> m_calibrationByWord; ///< Extracted profiles, keyed by word index.
-    QString         m_calCh10Path;   ///< Calibration input reference (session save/load, Phase 6).
-    QString         m_stepTomlPath;  ///< Calibration input reference (session save/load, Phase 6).
-    double          m_clipStartSec = 0.0; ///< Calibration input reference (session save/load, Phase 6).
-    double          m_clipEndSec   = 0.0; ///< Calibration input reference (session save/load, Phase 6).
+    QString         m_calCh10Path;   ///< Calibration input reference (serialized in a template).
+    QString         m_stepTomlPath;  ///< Calibration input reference (serialized in a template).
+    double          m_clipStartSec = 0.0; ///< Calibration input reference (serialized in a template).
+    double          m_clipEndSec   = 0.0; ///< Calibration input reference (serialized in a template).
     QLabel*         m_calibrationLabel = nullptr; ///< Status text for the calibration section.
 };
 

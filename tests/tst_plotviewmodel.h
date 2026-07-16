@@ -96,6 +96,11 @@ private slots:
     void removeLastSourceClearsAllData();
     void removeUnknownSourceIsNoOp();
 
+    // Multi-file source view (US1.1 batch browsing)
+    void setVisibleSourceIsolatesSource();
+    void sourceListListsDistinctLabeledSources();
+    void exportCsvSourceFilterWritesOnlyThatSource();
+
     // exportCsv tests
     void exportCsvCreatesFile();
     void exportCsvHeaderAndData();

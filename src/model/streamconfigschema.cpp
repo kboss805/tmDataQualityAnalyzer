@@ -54,7 +54,7 @@ QJsonObject StreamConfigSchema::toJson(const StreamConfig& config)
     obj["receiverParamsToml"] = config.receiverParamsToml;
 
     // Calibration input references only -- never the extracted profiles
-    // (calibrationByWord is session-only; see StreamConfig's own doc comment).
+    // (calibrationByWord is runtime-only; see StreamConfig's own doc comment).
     if (!config.calCh10Path.isEmpty())
     {
         QJsonObject calibration;

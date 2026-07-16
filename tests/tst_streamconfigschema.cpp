@@ -1,6 +1,6 @@
 /**
  * @file tst_streamconfigschema.cpp
- * @brief Tests for StreamConfigSchema (session save/load, Phase 6, build order §12.1).
+ * @brief Tests for StreamConfigSchema (used by processing templates / batch apply).
  */
 
 #include "tst_streamconfigschema.h"

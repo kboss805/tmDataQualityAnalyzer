@@ -23,6 +23,9 @@ private slots:
     void legendUsesShortNameForSnrSeries();
     void legendReservesScrollbarGutter();
     void legendRowsOverrideGlobalWidgetBackground();
+    void exportImageWritesPngHeadlessly();
+    void exportImageWritesSvgHeadlessly();
+    void exportImageDefaultsUnknownSuffixToPdf();
 };
 
 #endif // TST_PLOTWIDGET_H

@@ -1,13 +1,13 @@
 /**
  * @file streamconfigschema.h
- * @brief Single source of truth for StreamConfig's JSON representation (session
- *        save/load, Phase 6).
+ * @brief Single source of truth for StreamConfig's JSON representation.
  *
- * The session writer and (eventual) reader must share one field list rather than
- * hand-mapping fields in two places -- the same lesson as SeriesColumnSchema for
- * CSV columns. `calibrationByWord` (the extracted, non-linear calibration
- * profiles) is intentionally never serialized here; only the calibration INPUT
- * references (calCh10Path/stepTomlPath/clipStartSec/clipEndSec) are, so a future
+ * Used by ProcessingTemplateSchema (processing templates / batch apply) so a
+ * template's writer and reader share one field list rather than hand-mapping
+ * fields in two places -- the same lesson as SeriesColumnSchema for CSV columns.
+ * `calibrationByWord` (the extracted, non-linear calibration profiles) is
+ * intentionally never serialized here; only the calibration INPUT references
+ * (calCh10Path/stepTomlPath/clipStartSec/clipEndSec) are, so a future
  * re-extraction pass has what it needs without persisting derived data.
  */
 

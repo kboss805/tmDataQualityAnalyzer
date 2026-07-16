@@ -2,7 +2,7 @@
 
 Qt 6.10.2 / C++17 desktop app (qmake + MinGW 13.1.0, Windows) for analyzing data quality of IRIG 106
 Chapter 10 PCM telemetry: per-stream **Frame Sync Lock** stats and **Receiver AGC/SNR**, plotted vs.
-time. MVVM, single-reader / parallel-worker processing core. **Current version: 2.6.0.**
+time. MVVM, single-reader / parallel-worker processing core. **Current version: 2.7.0.**
 
 > **Full reference:** `docs/CLAUDE.md` is the canonical, detailed guide (user stories, architecture,
 > conventions, test catalog). Read it when you need depth. This file is the quick orientation that
@@ -17,11 +17,12 @@ Toolchains are **not on PATH** — prepend them first via `. .\scripts\env.ps1` 
   `mingw32-make -f Makefile.Debug`. Re-run qmake after `.pro`/version/`Q_OBJECT` changes. **Zero
   warnings required.**
 - **Tests:** build **in-source inside `tests/`** (the exe must sit one level under `tests/` or the
-  data-file tests fail), then `.\debug\tmDataQualityAnalyzer_tests.exe`. The full run (all **16
+  data-file tests fail), then `.\debug\tmDataQualityAnalyzer_tests.exe`. The full run (all **19
   suites**) is dominated by the real-Ch10 integration suites (a few minutes); add `--fast` (or
   `TMDQ_FAST_TESTS=1`) to skip those four `.ch10` suites for ~1 s local iteration — **local only; CI
   and releases run the full suite**. No CLI single-suite filter.
-  Green baseline: 267 passed / 0 failed / 0 skipped (full run).
+  Green baseline: 325 passed / 0 failed / 0 skipped (full run with the `.ch10` fixtures present —
+  in a worktree, junction `tests/data` to the main checkout's or the fixture tests skip).
 
 The **`build-and-test`** skill encodes all of this; prefer it.
 

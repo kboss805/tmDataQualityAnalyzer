@@ -1365,6 +1365,87 @@ void TestPlotViewModel::removeUnknownSourceIsNoOp()
 }
 
 // ---------------------------------------------------------------------------
+// Multi-file source view (US1.1 batch browsing)
+// ---------------------------------------------------------------------------
+
+void TestPlotViewModel::setVisibleSourceIsolatesSource()
+{
+    // Two sources' series both loaded (retain-all batch). setVisibleSource filters
+    // which one is drawn via effectiveVisible(), without mutating per-series visible.
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0, 1.0}, {90.0, 95.0}, {0.0, 1.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0, 1.0}, {10.0, 20.0}, {0.0, 2.0}, /*source_id=*/1));
+
+    const int lock0 = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::FrameSyncLock, 0);
+    const int lock1 = findSeriesIndexInSource(vm, 5, PlotSeriesData::MetricType::FrameSyncLock, 1);
+    QVERIFY(lock0 >= 0);
+    QVERIFY(lock1 >= 0);
+
+    // Default (-1): both sources drawn.
+    QVERIFY(vm.effectiveVisible(vm.seriesAt(lock0)));
+    QVERIFY(vm.effectiveVisible(vm.seriesAt(lock1)));
+
+    // Isolate source 1: only its series are effectively visible.
+    vm.setVisibleSource(1);
+    QCOMPARE(vm.visibleSource(), 1);
+    QVERIFY(!vm.effectiveVisible(vm.seriesAt(lock0)));
+    QVERIFY(vm.effectiveVisible(vm.seriesAt(lock1)));
+    // The underlying per-series visibility is untouched (source filter is orthogonal).
+    QVERIFY(vm.seriesAt(lock0).visible);
+
+    // Back to all.
+    vm.setVisibleSource(-1);
+    QVERIFY(vm.effectiveVisible(vm.seriesAt(lock0)));
+    QVERIFY(vm.effectiveVisible(vm.seriesAt(lock1)));
+}
+
+void TestPlotViewModel::sourceListListsDistinctLabeledSources()
+{
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0}, {90.0}, {0.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0}, {10.0}, {0.0}, /*source_id=*/1));
+    vm.setSourceLabel(0, "fileA");
+    vm.setSourceLabel(1, "fileB");
+
+    const QVector<QPair<int, QString>> list = vm.sourceList();
+    QCOMPARE(list.size(), 2);
+    QCOMPARE(list[0].first, 0);
+    QCOMPARE(list[0].second, QString("fileA"));
+    QCOMPARE(list[1].first, 1);
+    QCOMPARE(list[1].second, QString("fileB"));
+}
+
+void TestPlotViewModel::exportCsvSourceFilterWritesOnlyThatSource()
+{
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch 05", 5, {0.0, 1.0}, {90.0, 95.0}, {0.0, 1.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch 07", 7, {0.0, 1.0}, {10.0, 20.0}, {0.0, 2.0}, /*source_id=*/1));
+
+    const QString all_path = QDir::tempPath() + "/tst_export_all.csv";
+    const QString one_path = QDir::tempPath() + "/tst_export_src0.csv";
+    QFile::remove(all_path);
+    QFile::remove(one_path);
+
+    QVERIFY(vm.exportCsv(all_path, -1));       // every source
+    QVERIFY(vm.exportCsv(one_path, 0));         // only source 0
+
+    auto headerColumns = [](const QString& path) -> int {
+        QFile f(path);
+        if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+            return -1;
+        return static_cast<int>(QString::fromUtf8(f.readLine()).trimmed().count(','));
+    };
+
+    // Both sources: 4 data columns (2 sources x lock+missed) after the time column.
+    QCOMPARE(headerColumns(all_path), 4);
+    // Source 0 only: 2 data columns.
+    QCOMPARE(headerColumns(one_path), 2);
+
+    QFile::remove(all_path);
+    QFile::remove(one_path);
+}
+
+// ---------------------------------------------------------------------------
 // exportCsv tests
 // ---------------------------------------------------------------------------
 

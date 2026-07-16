@@ -15,14 +15,15 @@ class TestMainView : public QObject
 private slots:
     void constructsAndDestroysWithoutCrash();
     void windowTitleIsNonEmpty();
-    void menuBarExists();
-    void toolBarExists();
+    void titleBarExists();
 
     // US6.3 — CSV import / file routing
     void supportedFileDetection();
     void openPathImportsCsv();
     void importValidCsvPopulatesPlot();
     void importInvalidCsvIsRejected();
+    void batchReapplyAppearanceRenamesMatchingSeries();
+    void batchBuildTemplateCapturesConfigsAndAppearance();
 };
 
 #endif // TST_MAINVIEW_H
