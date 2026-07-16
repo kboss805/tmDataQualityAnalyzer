@@ -94,10 +94,18 @@ New-Item -ItemType Directory -Force -Path "$PortableRoot\settings\framesync_patt
 # --- Step 3: Copy exe and run windeployqt for installer layout ---
 Write-Host "[4/7] Running windeployqt (installer layout)..."
 Copy-Item "$ProjectDir\build\release\tmDataQualityAnalyzer.exe" "$InstallerStage\bin\"
-# --compiler-runtime stages the VC++ runtime DLLs (MSVC build) alongside the Qt
-# DLLs so the installed/portable app runs on a machine without Visual Studio.
-& windeployqt --release --compiler-runtime --no-translations --no-opengl-sw --no-system-d3d-compiler "$InstallerStage\bin\tmDataQualityAnalyzer.exe"
+& windeployqt --release --no-translations --no-opengl-sw --no-system-d3d-compiler "$InstallerStage\bin\tmDataQualityAnalyzer.exe"
 if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
+
+# App-local Visual C++ runtime: copy the CRT redist DLLs next to the exe so the
+# installed AND portable app launch on a machine without the VC++ redistributable.
+# (The MSVC build links the dynamic CRT. windeployqt --compiler-runtime only stages
+# the vc_redist *installer*, which the portable build can't use and the .iss doesn't
+# run, so deploy the DLLs directly. MinGW previously shipped its own runtime DLLs.)
+$crtDir = Get-ChildItem (Join-Path $env:VCToolsRedistDir 'x64') -Directory -Filter 'Microsoft.VC*.CRT' -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $crtDir) { throw "VC++ CRT redist not found under '$env:VCToolsRedistDir\x64' - is the MSVC toolchain env loaded?" }
+Copy-Item "$($crtDir.FullName)\*.dll" "$InstallerStage\bin\"
+Write-Host "  Bundled app-local VC++ runtime from $($crtDir.Name)"
 
 foreach ($dir in @('receiver_params', 'rcvr_cals', 'framesync_patterns')) {
     if (Test-Path "$ProjectDir\settings\$dir\*.toml") {
