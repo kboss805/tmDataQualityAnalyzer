@@ -56,12 +56,12 @@ Set-Location $ProjectDir
 Write-Host "[1/7] Running qmake..."
 New-Item -ItemType Directory -Force -Path "$ProjectDir\build" | Out-Null
 Set-Location "$ProjectDir\build"
-& qmake ../tmDataQualityAnalyzer.pro -spec win32-g++ 'CONFIG+=release'
+& qmake ../tmDataQualityAnalyzer.pro -spec win32-msvc 'CONFIG+=release'
 if ($LASTEXITCODE -ne 0) { throw "qmake failed" }
 
 Write-Host "[2/7] Building release..."
-& mingw32-make -f Makefile.Release clean
-& mingw32-make -f Makefile.Release "-j$env:NUMBER_OF_PROCESSORS"
+& nmake -f Makefile.Release clean
+& nmake -f Makefile.Release
 if ($LASTEXITCODE -ne 0) { throw "Build failed" }
 
 # --- Step 2: Prepare staging directories ---
@@ -96,6 +96,16 @@ Write-Host "[4/7] Running windeployqt (installer layout)..."
 Copy-Item "$ProjectDir\build\release\tmDataQualityAnalyzer.exe" "$InstallerStage\bin\"
 & windeployqt --release --no-translations --no-opengl-sw --no-system-d3d-compiler "$InstallerStage\bin\tmDataQualityAnalyzer.exe"
 if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
+
+# App-local Visual C++ runtime: copy the CRT redist DLLs next to the exe so the
+# installed AND portable app launch on a machine without the VC++ redistributable.
+# (The MSVC build links the dynamic CRT. windeployqt --compiler-runtime only stages
+# the vc_redist *installer*, which the portable build can't use and the .iss doesn't
+# run, so deploy the DLLs directly. MinGW previously shipped its own runtime DLLs.)
+$crtDir = Get-ChildItem (Join-Path $env:VCToolsRedistDir 'x64') -Directory -Filter 'Microsoft.VC*.CRT' -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $crtDir) { throw "VC++ CRT redist not found under '$env:VCToolsRedistDir\x64' - is the MSVC toolchain env loaded?" }
+Copy-Item "$($crtDir.FullName)\*.dll" "$InstallerStage\bin\"
+Write-Host "  Bundled app-local VC++ runtime from $($crtDir.Name)"
 
 foreach ($dir in @('receiver_params', 'rcvr_cals', 'framesync_patterns')) {
     if (Test-Path "$ProjectDir\settings\$dir\*.toml") {
@@ -161,11 +171,12 @@ elseif (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")            {
 if ($IsccPath) {
     # When signing, hand iscc a SignTool definition so it signs BOTH the setup
     # executable and the embedded uninstaller (SignedUninstaller=yes in the .iss,
-    # gated by /DSIGN). 'signtool' is referenced by bare name: env.ps1 puts the
-    # WDK signtool directory on PATH and iscc inherits that PATH when it spawns the
-    # tool. A bare name has no spaces and no embedded quotes, so it survives
-    # PowerShell native-argument passing - a fully-qualified, quoted signtool path
-    # gets mis-split by PowerShell and makes iscc reject the command line.
+    # gated by /DSIGN). 'signtool' is referenced by bare name: env.ps1 imports the
+    # MSVC/Windows SDK environment (vcvars), which puts the SDK's signtool directory
+    # on PATH, and iscc inherits that PATH when it spawns the tool. A bare name has
+    # no spaces and no embedded quotes, so it survives PowerShell native-argument
+    # passing - a fully-qualified, quoted signtool path gets mis-split by PowerShell
+    # and makes iscc reject the command line.
     $isccArgs = @("/DMyAppVersion=$version")
     if ($SignCertSha1) {
         $signCmd = "signtool sign /sha1 $SignCertSha1 /tr $SignTimestamp /td sha256 /fd sha256 `$f"

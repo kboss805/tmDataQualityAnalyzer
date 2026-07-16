@@ -43,6 +43,11 @@ version_autogen.h
 *.creator.user*
 *.suo
 *.user
+
+# clangd / clang-tidy IntelliSense DB — generated per-machine (absolute Qt/repo
+# paths) by scripts/gen_compile_flags.py; never committed.
+compile_flags.txt
+compile_commands.json
 *.ncb
 *.sdf
 *.opensdf

@@ -16,7 +16,12 @@ INCLUDEPATH += \
 
 win32 {
     LIBS += -lws2_32
-    QMAKE_CXXFLAGS += -Wa,-mbig-obj  # Required for QCustomPlot large object file on MinGW
+    # user32: TestMainView links mainview.cpp, whose nativeEvent() calls Win32
+    # user32 APIs (see the app .pro).
+    LIBS += -luser32
+    # /bigobj: QCustomPlot's large translation unit overflows the default section
+    # limit without it. Kept in sync with tmDataQualityAnalyzer.pro.
+    QMAKE_CXXFLAGS += /bigobj
 }
 
 # Compile the vendored third-party libs (lib/irig106, lib/qcustomplot) without the

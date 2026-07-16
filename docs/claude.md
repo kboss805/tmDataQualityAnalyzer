@@ -5,7 +5,8 @@ This file provides context and guidelines for AI assistants working on the tmDat
 ## Version Information
 
 - **Qt Version**: 6.10.3 (minimum: Qt 6.0.0)
-- **MinGW Version**: 13.1.0 (minimum: GCC/MinGW 7.0)
+- **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, `cl` / `nmake`), Qt `msvc2022_64` kit.
+  This is the only supported toolchain (and what CI uses).
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
 - **Project Version**: 2.7.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
 
@@ -919,8 +920,8 @@ Order includes in each `.cpp` / `.h` file as follows, with a blank line between 
 
 ### Build Targets
 
-- **Debug**: `mingw32-make -f Makefile.Debug` → `debug/tmDataQualityAnalyzer.exe`
-- **Release**: `mingw32-make -f Makefile.Release` → `release/tmDataQualityAnalyzer.exe`
+- **Debug**: `nmake -f Makefile.Debug` → `debug/tmDataQualityAnalyzer.exe`
+- **Release**: `nmake -f Makefile.Release` → `release/tmDataQualityAnalyzer.exe`
 
 ### VS Code Integration
 
@@ -993,8 +994,8 @@ Tasks are defined in `.vscode/tasks.json`:
 ### Modifying Build Configuration
 
 1. Edit `tmDataQualityAnalyzer.pro`
-2. Re-run qmake from the project root: `qmake tmDataQualityAnalyzer.pro -spec win32-g++ CONFIG+=debug`
-3. Rebuild: `mingw32-make -f Makefile.Debug`
+2. Re-run qmake from the project root: `qmake tmDataQualityAnalyzer.pro -spec win32-msvc CONFIG+=debug`
+3. Rebuild: `nmake -f Makefile.Debug`
 
 ### Adding a New Per-Stream Setting
 
@@ -1009,10 +1010,15 @@ Tasks are defined in `.vscode/tasks.json`:
 ### Common Issues
 
 1. **Build fails with PATH errors**
-   - Ensure Qt bin and MinGW bin are in PATH
+   - Dot-source `scripts\env.ps1` first — it imports the MSVC environment and puts the Qt
+     `msvc2022_64` kit bin on PATH
    - Check paths in `.vscode/tasks.json` match your Qt installation
+2. **qmake fails: "QMAKE_MSC_VER isn't set"**
+   - A stale `.qmake.stash` (qmake caches the compiler's version detection and shares it up the
+     directory tree) is masking MSVC detection — e.g. a leftover from a pre-switch MinGW build.
+     Delete `.qmake.stash` (and any in parent dirs) and build in a clean dir.
 
-2. **MOC errors**
+3. **MOC errors**
    - Ensure Q_OBJECT macro is present in classes with signals/slots
    - Re-run qmake if header structure changed
 
@@ -1049,11 +1055,12 @@ source/header files are listed in `tests/tests.pro`.
 - **TestTemplateMatcher** (`tst_templatematcher`) — batch apply channel-ID matching: `templateChannelIds()` collection and `matchFile()` exact-set comparison (pass regardless of order; reject with the right `missing`/`extra` sets on a missing channel, an extra channel, and both) — pure logic, runs in CI
 
 ### Running Tests
-```bash
+```powershell
+. .\scripts\env.ps1   # imports MSVC + puts the Qt msvc kit on PATH
 cd tests
-qmake tests.pro -spec win32-g++
-mingw32-make -f Makefile.Debug
-./debug/tmDataQualityAnalyzer_tests.exe -o results.txt,txt
+qmake tests.pro -spec win32-msvc
+nmake -f Makefile.Debug
+.\debug\tmDataQualityAnalyzer_tests.exe -o results.txt,txt
 ```
 
 ### Adding a New Test

@@ -84,36 +84,40 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 ## System Requirements
 
 ### Software
-- **Qt**: Version 6.0.0 or later (developed on 6.10.3)
-- **Compiler**: GCC/MinGW 7.0+ (developed on MinGW 13.1.0 64-bit)
+- **Qt**: Version 6.0.0 or later (developed on 6.10.3), `msvc2022_64` kit
+- **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools — workload
+  "Desktop development with C++", giving `cl` / `nmake` + the Windows SDK)
 - **C++ Standard**: C++17 required
-- **Operating System**: Windows (primary), Linux/macOS (may require adjustments)
+- **Operating System**: Windows
 
 ### Build Tools
 - qmake (Qt build system)
-- MinGW or compatible GCC toolchain
+- MSVC 2022 toolchain (`cl` / `nmake`)
 
 ## Building the Project
 
 ### Using Qt Creator
 1. Open `tmDataQualityAnalyzer.pro` in Qt Creator
-2. Configure the project with your Qt kit
+2. Configure the project with your Qt MSVC 2022 kit
 3. Build and run (Ctrl+R)
 
-### Using Command Line (Windows with MinGW)
-```bash
+### Using Command Line (Windows)
+```powershell
+# Set up the MSVC toolchain + Qt (imports vcvars, puts the Qt msvc kit on PATH)
+. .\scripts\env.ps1
+
 # Create and enter the build directory
 mkdir build
 cd build
 
 # Configure the project (run from the build directory)
-qmake ../tmDataQualityAnalyzer.pro -spec win32-g++
+qmake ../tmDataQualityAnalyzer.pro -spec win32-msvc
 
 # Build debug version
-mingw32-make -f Makefile.Debug
+nmake -f Makefile.Debug
 
 # Build release version
-mingw32-make -f Makefile.Release
+nmake -f Makefile.Release
 
 # Run the application
 debug\tmDataQualityAnalyzer.exe
@@ -185,9 +189,10 @@ tmDataQualityAnalyzer/
 │   ├── tmDataQualityAnalyzer_resource.rc      # Windows resource file
 │   └── icon.ico               # Application icon
 ├── scripts/                    # Developer helper scripts (the signed release build is deploy/build_release.ps1)
-│   ├── env.ps1                # Toolchain PATH setup (QTDIR/MINGW_DIR) — source before building
-│   ├── build_ide.ps1          # IDE/VS Code test build helper (reads QTDIR/MINGW_DIR from env)
-│   └── setup-env.ps1          # One-time Windows user environment variable registration
+│   ├── env.ps1                # MSVC + Qt environment setup — dot-source before building
+│   ├── build_ide.ps1          # IDE/VS Code test build helper
+│   ├── setup-env.ps1          # One-time Windows user environment variable registration
+│   └── gen_compile_flags.py   # Generate compile_flags.txt for clangd/clang-tidy IntelliSense
 ├── tmDataQualityAnalyzer.pro   # Qt project file (parses the version from constants.h)
 └── README.md                   # This file
 ```

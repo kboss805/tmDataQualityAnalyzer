@@ -11,9 +11,10 @@
 # style, magic-number literals in bit math, trailing return types, identifier
 # length, etc.) are disabled to keep signal high.
 #
-# How to run (needs a compile DB — generate via scripts/gen_compile_commands.py
-# or use .vscode/compile_commands.json):
-#   clang-tidy -p .vscode src/model/frameprocessor.cpp
+# How to run (generate the compile DB first, then run from the repo root — both
+# clang-tidy and clangd auto-discover compile_flags.txt by walking up the tree):
+#   py scripts/gen_compile_flags.py      # writes compile_flags.txt at the repo root
+#   clang-tidy src/model/frameprocessor.cpp
 # Analysis only — WarningsAsErrors is empty so it never breaks the build. Never
 # run --fix on lib/irig106/ or lib/qcustomplot/ (protected third-party code).
 
@@ -43,7 +44,7 @@ Checks: >
 
 # Only analyze THIS project's own headers. The regex is anchored on the project
 # folder name on purpose: a bare "(include|src)" also matches Qt's own
-# .../mingw_64/include/QtCore/... path and floods the report with thousands of
+# .../msvc2022_64/include/QtCore/... path and floods the report with thousands of
 # warnings from third-party headers. Keep it anchored to tmDataQualityAnalyzer/.
 HeaderFilterRegex: 'tmDataQualityAnalyzer[/\\](include|src)[/\\].*\.h$'
 

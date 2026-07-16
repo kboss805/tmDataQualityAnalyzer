@@ -8,7 +8,7 @@
     ],
     "allow": [
       "Bash(qmake:*)",
-      "Bash(mingw32-make:*)",
+      "Bash(nmake:*)",
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",

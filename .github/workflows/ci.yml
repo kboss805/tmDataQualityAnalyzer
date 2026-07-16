@@ -1,9 +1,9 @@
 name: CI
 
 # Build the app and run the full Qt Test suite on every push to main and every PR.
-# Mirrors the local build-and-test workflow: Qt (see QT_VERSION below) + MinGW, qmake + mingw32-make,
-# app built under build/, tests built in-source under tests/ (the exe must sit one
-# level below tests/ or the data-file fixtures don't resolve).
+# Mirrors the local build-and-test workflow: Qt (see QT_VERSION below) + MSVC,
+# qmake + nmake, app built under build/, tests built in-source under tests/ (the
+# exe must sit one level below tests/ or the data-file fixtures don't resolve).
 
 on:
   push:
@@ -29,57 +29,49 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Qt ${{ env.QT_VERSION }} (MinGW) + toolchain
+      - name: Install Qt ${{ env.QT_VERSION }} (MSVC)
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
           host: windows
           target: desktop
-          arch: win64_mingw
-          # Qt SVG (Qt6Svg) ships in the base win64_mingw package in Qt 6, so it is
-          # NOT a selectable --modules entry (aqt rejects it). printsupport,
-          # widgets, and concurrent are likewise part of qtbase.
-          tools: tools_mingw1310
+          arch: win64_msvc2022_64
+          # Qt SVG (Qt6Svg) ships in the base package in Qt 6, so it is NOT a
+          # selectable --modules entry (aqt rejects it). printsupport, widgets,
+          # and concurrent are likewise part of qtbase.
           cache: true
 
-      - name: Put MinGW on PATH
-        shell: pwsh
-        run: |
-          # install-qt-action installs the MinGW tool under $IQTA_TOOLS. Expose its
-          # bin so g++ / mingw32-make resolve, and so the test exe finds the MinGW
-          # runtime DLLs at run time (Qt's own bin is already on PATH via the action).
-          $mingwBin = Join-Path $env:IQTA_TOOLS 'mingw1310_64\bin'
-          if (-not (Test-Path $mingwBin)) {
-            Write-Host "Expected MinGW bin not found at $mingwBin; contents of IQTA_TOOLS:"
-            Get-ChildItem $env:IQTA_TOOLS -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
-            throw "MinGW toolchain not found"
-          }
-          Add-Content -Path $env:GITHUB_PATH -Value $mingwBin
-          Write-Host "Added to PATH: $mingwBin"
+      - name: Set up MSVC (cl / nmake)
+        # Imports the Visual Studio 2022 x64 developer environment (cl, nmake,
+        # INCLUDE/LIB) into the job so qmake's win32-msvc spec and the build steps
+        # can find the compiler. windows-latest ships VS 2022.
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
 
       - name: Toolchain versions
         shell: pwsh
         run: |
           qmake --version
-          g++ --version
-          mingw32-make --version | Select-Object -First 1
+          cl 2>&1 | Select-Object -First 1
 
       - name: Build app (Debug)
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path build | Out-Null
           Set-Location build
-          qmake ..\tmDataQualityAnalyzer.pro -spec win32-g++ 'CONFIG+=debug'
-          mingw32-make -f Makefile.Debug -j $env:NUMBER_OF_PROCESSORS 2>&1 | Tee-Object -FilePath app_build.log
+          qmake ..\tmDataQualityAnalyzer.pro -spec win32-msvc 'CONFIG+=debug'
+          nmake -f Makefile.Debug 2>&1 | Tee-Object -FilePath app_build.log
           if ($LASTEXITCODE -ne 0) { throw "App build failed ($LASTEXITCODE)" }
 
       - name: Zero-warning gate
         shell: pwsh
         run: |
           # The whole build must be warning-free. The vendored third-party libs
-          # (lib/irig106, lib/qcustomplot) are compiled without -Wall -Wextra via
-          # thirdparty.pri, so any 'warning:' remaining is real app code and fails CI.
-          $warns = Select-String -Path build\app_build.log -Pattern 'warning:'
+          # (lib/irig106, lib/qcustomplot) are compiled without warnings via
+          # thirdparty.pri, so any remaining 'warning C####' is real app code and
+          # fails CI. (MSVC emits 'file(line): warning C4996: ...'.)
+          $warns = Select-String -Path build\app_build.log -Pattern 'warning [A-Z]\d+'
           if ($warns) {
             Write-Host "Compiler warnings found:"
             $warns | ForEach-Object { Write-Host $_.Line }
@@ -91,8 +83,8 @@ jobs:
         shell: pwsh
         run: |
           Set-Location tests
-          qmake tests.pro -spec win32-g++ 'CONFIG+=debug'
-          mingw32-make -f Makefile.Debug -j $env:NUMBER_OF_PROCESSORS
+          qmake tests.pro -spec win32-msvc 'CONFIG+=debug'
+          nmake -f Makefile.Debug
           if ($LASTEXITCODE -ne 0) { throw "Test build failed ($LASTEXITCODE)" }
 
       - name: Run full test suite
