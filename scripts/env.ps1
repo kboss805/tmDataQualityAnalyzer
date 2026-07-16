@@ -1,6 +1,9 @@
 ﻿# =============================================================================
 # env.ps1  —  Shared environment configuration for tmDataQualityAnalyzer build scripts.
-# QTDIR and MINGW_DIR are the single source of truth for all tool paths.
+# QT_VERSION is the single source of truth for the installed Qt version — bump
+# it here and QTDIR (and every script/doc that dot-sources or reads this file)
+# picks it up. QTDIR and MINGW_DIR are, in turn, the single source of truth for
+# all tool paths.
 #
 # These same variable names are used in:
 #   .vscode\launch.json           (${env:QTDIR}, ${env:MINGW_DIR})
@@ -14,11 +17,13 @@
 #   . "$PSScriptRoot\env.ps1"
 #
 # Each variable can be overridden by setting it before dot-sourcing:
-#   $env:QTDIR = "D:\Qt\6.10.3\mingw_64"
+#   $env:QT_VERSION = "6.11.0"
 #   . "$PSScriptRoot\env.ps1"
 # =============================================================================
 
-if (-not $env:QTDIR)      { $env:QTDIR      = 'C:\Qt\6.10.3\mingw_64' }
+if (-not $env:QT_VERSION) { $env:QT_VERSION = '6.10.3' }
+
+if (-not $env:QTDIR)      { $env:QTDIR      = "C:\Qt\$env:QT_VERSION\mingw_64" }
 if (-not $env:MINGW_DIR)  { $env:MINGW_DIR  = 'C:\Qt\Tools\mingw1310_64' }
 if (-not $env:WINSDK_BIN) { $env:WINSDK_BIN = 'C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64' }
 

@@ -20,14 +20,26 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 
+
+def _default_qtdir() -> str:
+    """Fall back to the QT_VERSION default in scripts/env.ps1 (the single
+    source of truth) when QTDIR isn't already set in the environment."""
+    env_ps1 = REPO / "scripts" / "env.ps1"
+    match = re.search(r"QT_VERSION\s*=\s*'([^']+)'", env_ps1.read_text())
+    if not match:
+        raise RuntimeError(f"could not find QT_VERSION default in {env_ps1}")
+    return f"C:/Qt/{match.group(1)}/mingw_64"
+
+
 # Toolchain locations. Match tasks.json / .clangd; override via env if needed.
-QTDIR = Path(os.environ.get("QTDIR", r"C:/Qt/6.10.2/mingw_64"))
+QTDIR = Path(os.environ.get("QTDIR") or _default_qtdir())
 MINGW_DIR = Path(os.environ.get("MINGW_DIR", r"C:/Qt/Tools/mingw1310_64"))
 QMAKE = QTDIR / "bin" / "qmake.exe"
 MAKE = MINGW_DIR / "bin" / "mingw32-make.exe"

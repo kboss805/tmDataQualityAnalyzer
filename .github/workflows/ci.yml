@@ -1,7 +1,7 @@
 name: CI
 
 # Build the app and run the full Qt Test suite on every push to main and every PR.
-# Mirrors the local build-and-test workflow: Qt 6.10.2 + MinGW, qmake + mingw32-make,
+# Mirrors the local build-and-test workflow: Qt (see QT_VERSION below) + MinGW, qmake + mingw32-make,
 # app built under build/, tests built in-source under tests/ (the exe must sit one
 # level below tests/ or the data-file fixtures don't resolve).
 
@@ -16,6 +16,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Single source of truth for the CI Qt version — bump here (keep in sync with
+# QT_VERSION in scripts/env.ps1, which is the local-machine source of truth).
+env:
+  QT_VERSION: '6.10.3'
+
 jobs:
   build-and-test:
     runs-on: windows-latest
@@ -24,10 +29,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Qt 6.10.2 (MinGW) + toolchain
+      - name: Install Qt ${{ env.QT_VERSION }} (MinGW) + toolchain
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.10.2'
+          version: ${{ env.QT_VERSION }}
           host: windows
           target: desktop
           arch: win64_mingw
