@@ -4,10 +4,12 @@ name: CI
 #
 # Runner selection with fallback:
 #   - Preferred: a SELF-HOSTED Windows runner (label: tmdqa) that has the MSVC 2022
-#     toolchain + Qt msvc2022_64 kit and the large .ch10 fixtures on disk, so there
-#     is no per-run Qt download and the integration suites run (full 325).
+#     toolchain + Qt msvc2022_64 kit and the FULL-SIZE .ch10 recordings on disk, so
+#     there is no per-run Qt download and every suite runs (full 325).
 #   - Fallback: the GitHub-hosted windows-latest runner (provisions Qt + MSVC per
-#     run; the .ch10 fixtures are absent so the four integration suites skip, ~230).
+#     run). The small .ch10 fixtures are committed to the repo, so the integration
+#     suites run here too (~324 — only the heavy PRN throughput benchmark skips,
+#     since it needs the full recording that lives on the self-hosted runner).
 #
 # The pick-runner job routes to self-hosted only when that runner is actually
 # ONLINE — otherwise (runner offline, or a contributor without the runner) it falls
@@ -63,32 +65,24 @@ jobs:
     runs-on: [self-hosted, windows, tmdqa]
     steps:
       - name: Checkout
+        # Default clean:true restores the committed sample fixtures and removes
+        # stale gitignored build outputs (build/, tests\debug, .qmake.stash) each
+        # run — persistent-runner hygiene, handled for us.
         uses: actions/checkout@v4
-        with:
-          # Don't let checkout run `git clean -ffdx`: it would remove the gitignored
-          # artifacts we clean ourselves below AND could follow the tests\data
-          # fixtures junction. We reset the workspace explicitly.
-          clean: false
 
-      - name: Prepare workspace (clean artifacts + link fixtures)
+      - name: Overlay full-size PRN fixture
         shell: pwsh
         run: |
-          # Persistent-runner hygiene: remove stale build outputs (NOT tests\data)
-          # so a leftover .qmake.stash / prior-run objects can't break the build.
-          foreach ($p in 'build', 'tests\debug', 'tests\release', 'tests\output') {
-            if (Test-Path $p) { Remove-Item $p -Recurse -Force }
-          }
-          Get-ChildItem -Recurse -Force -Include '.qmake.stash' -ErrorAction SilentlyContinue |
-            Remove-Item -Force -ErrorAction SilentlyContinue
-          # Junction tests\data to the machine-local .ch10 fixtures (path in the
-          # runner's .env as TMDQA_CH10_DATA) so the integration suites run the full
-          # 325. Delete only the junction link (not its target) before re-creating.
-          if (Test-Path tests\data) { (Get-Item tests\data -Force).Delete() }
-          if ($env:TMDQA_CH10_DATA -and (Test-Path $env:TMDQA_CH10_DATA)) {
-            New-Item -ItemType Junction -Path tests\data -Target $env:TMDQA_CH10_DATA | Out-Null
-            Write-Host "Linked tests\data -> $env:TMDQA_CH10_DATA"
+          # The small PRN sample is committed (used by the hosted CI). On this
+          # runner, overlay the full-size recording so the heavy throughput
+          # benchmark runs the complete data. TMDQA_CH10_FULL is set in the runner's
+          # .env; it lives OUTSIDE the checkout, so the copy only reads it. If unset,
+          # the committed sample stays (that one benchmark just skips).
+          if ($env:TMDQA_CH10_FULL -and (Test-Path $env:TMDQA_CH10_FULL)) {
+            Copy-Item $env:TMDQA_CH10_FULL 'tests\data\prn_testfile.ch10' -Force
+            Write-Host "Overlaid full PRN from $env:TMDQA_CH10_FULL"
           } else {
-            Write-Host "::warning::TMDQA_CH10_DATA not set/found — integration suites will skip."
+            Write-Host "::warning::TMDQA_CH10_FULL not set/found — using the committed sample PRN (heavy benchmark will skip)."
           }
 
       - name: Toolchain versions
@@ -146,9 +140,9 @@ jobs:
           Write-Host "Results: $pass passed, $fail failed, $skip skipped (exit $code)"
           if ($code -ne 0) { throw "Test suite exited non-zero ($code)" }
           if ($fail -gt 0)  { throw "$fail test(s) failed" }
-          # Fixtures are linked, so the integration suites run — expect the full 325.
-          # A low count means the fixtures didn't link and they silently skipped.
-          if ($pass -lt 320) { throw "Only $pass tests passed (expected >= 320) — fixtures didn't link or the suite aborted" }
+          # The full PRN is overlaid, so every integration suite runs — expect 325.
+          # A low count means fixtures are missing and the suites silently skipped.
+          if ($pass -lt 320) { throw "Only $pass tests passed (expected >= 320) — fixtures missing or the suite aborted" }
 
       - name: Upload test results
         if: always()
@@ -158,7 +152,7 @@ jobs:
           path: tests/output/results.txt
           if-no-files-found: ignore
 
-  # --- Fallback: GitHub-hosted (provisions toolchain; integration suites skip)
+  # --- Fallback: GitHub-hosted (provisions toolchain; runs committed fixtures) ---
   build-hosted:
     needs: pick-runner
     if: needs.pick-runner.outputs.target == 'hosted'
@@ -230,10 +224,10 @@ jobs:
           Write-Host "Results: $pass passed, $fail failed, $skip skipped (exit $code)"
           if ($code -ne 0) { throw "Test suite exited non-zero ($code)" }
           if ($fail -gt 0)  { throw "$fail test(s) failed" }
-          # The .ch10 fixtures are gitignored (absent here), so the four integration
-          # suites skip, leaving ~230+ tests. A count far below that means the suite
-          # aborted or the harness was poisoned.
-          if ($pass -lt 200) { throw "Only $pass tests passed (expected >= 200) — the suite aborted" }
+          # The small .ch10 fixtures are committed, so the integration suites run
+          # here too (~324 — the heavy PRN throughput benchmark skips on the sample
+          # clip; it needs the full recording, which only the self-hosted runner has).
+          if ($pass -lt 320) { throw "Only $pass tests passed (expected >= 320) — fixtures missing or the suite aborted" }
 
       - name: Upload test results
         if: always()

@@ -224,7 +224,7 @@ void TestFrameProcessor::processInvalidFile()
 
 void TestFrameProcessor::processAccumulatesReceiverData()
 {
-    const QString filepath = testDataPath("rnrz-l_testfile.ch10");
+    const QString filepath = testDataPath("agc_rnrz-l_trc_testfile.ch10");
     if (!QFileInfo::exists(filepath))
         QSKIP("RNRZ-L test file not available");
 
@@ -277,7 +277,7 @@ void TestFrameProcessor::processAccumulatesReceiverData()
 
 void TestFrameProcessor::processLockOnlyModeHasNoChannels()
 {
-    const QString filepath = testDataPath("rnrz-l_testfile.ch10");
+    const QString filepath = testDataPath("agc_rnrz-l_trc_testfile.ch10");
     if (!QFileInfo::exists(filepath))
         QSKIP("RNRZ-L test file not available");
 
@@ -312,7 +312,7 @@ void TestFrameProcessor::processLockOnlyModeHasNoChannels()
 
 void TestFrameProcessor::processFrameSyncErrorsMonotonic()
 {
-    const QString filepath = testDataPath("rnrz-l_testfile.ch10");
+    const QString filepath = testDataPath("agc_rnrz-l_trc_testfile.ch10");
     if (!QFileInfo::exists(filepath))
         QSKIP("RNRZ-L test file not available");
 
@@ -352,7 +352,7 @@ void TestFrameProcessor::processFrameSyncErrorsMonotonic()
 
 void TestFrameProcessor::processSlopeAffectsValues()
 {
-    const QString filepath = testDataPath("rnrz-l_testfile.ch10");
+    const QString filepath = testDataPath("agc_rnrz-l_trc_testfile.ch10");
     if (!QFileInfo::exists(filepath))
         QSKIP("RNRZ-L test file not available");
 
@@ -392,7 +392,7 @@ void TestFrameProcessor::processSlopeAffectsValues()
 
 void TestFrameProcessor::processShortPeriodMoreSamples()
 {
-    const QString filepath = testDataPath("rnrz-l_testfile.ch10");
+    const QString filepath = testDataPath("agc_rnrz-l_trc_testfile.ch10");
     if (!QFileInfo::exists(filepath))
         QSKIP("RNRZ-L test file not available");
 
@@ -434,7 +434,7 @@ void TestFrameProcessor::processShortPeriodMoreSamples()
 ////////////////////////////////////////////////////////////////////////////////
 
 /// End-to-end check on real decoded data (not synthetic, unlike
-/// TestStepDetector::roundTripSameDataIsExact): use rnrz-l_testfile.ch10 as BOTH
+/// TestStepDetector::roundTripSameDataIsExact): use agc_rnrz-l_trc_testfile.ch10 as BOTH
 /// the calibration file and the "main" file being measured. Since they are the
 /// same recording, the resulting calibration should reproduce the exact step
 /// values (0, 6, 12, ... 60 dB) when re-applied — this is the full real
@@ -443,7 +443,7 @@ void TestFrameProcessor::processShortPeriodMoreSamples()
 /// RNRZ-L data, rather than hand-built raw series.
 void TestFrameProcessor::calibrationRoundTripOnRealFileProducesCleanSteps()
 {
-    const QString filepath = testDataPath("rnrz-l_testfile.ch10");
+    const QString filepath = testDataPath("agc_rnrz-l_trc_testfile.ch10");
     if (!QFileInfo::exists(filepath))
         QSKIP("RNRZ-L test file not available");
 
