@@ -1,9 +1,22 @@
 name: CI
 
-# Build the app and run the full Qt Test suite on every push to main and every PR.
-# Mirrors the local build-and-test workflow: Qt (see QT_VERSION below) + MSVC,
-# qmake + nmake, app built under build/, tests built in-source under tests/ (the
-# exe must sit one level below tests/ or the data-file fixtures don't resolve).
+# Build the app and run the Qt Test suite on every push to main and every PR.
+#
+# Runner selection with fallback:
+#   - Preferred: a SELF-HOSTED Windows runner (label: tmdqa) that has the MSVC 2022
+#     toolchain + Qt msvc2022_64 kit and the FULL-SIZE .ch10 recordings on disk, so
+#     there is no per-run Qt download and every suite runs (full 325).
+#   - Fallback: the GitHub-hosted windows-latest runner (provisions Qt + MSVC per
+#     run). The small .ch10 fixtures are committed to the repo, so the integration
+#     suites run here too (~324 — only the heavy PRN throughput benchmark skips,
+#     since it needs the full recording that lives on the self-hosted runner).
+#
+# The pick-runner job routes to self-hosted only when that runner is actually
+# ONLINE — otherwise (runner offline, or a contributor without the runner) it falls
+# back to hosted. Detecting the runner's status needs an admin token, which the
+# default GITHUB_TOKEN lacks, so it uses an OPTIONAL secret RUNNER_ADMIN_TOKEN
+# (fine-grained PAT, repository "Administration: read"). Without that secret CI
+# always uses the hosted fallback — safe, zero-config, works for every contributor.
 
 on:
   push:
@@ -11,20 +24,139 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Cancel superseded runs on the same ref (e.g. rapid pushes to a PR branch).
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Single source of truth for the CI Qt version — bump here (keep in sync with
-# QT_VERSION in scripts/env.ps1, which is the local-machine source of truth).
+# Qt version. env.ps1 (self-hosted) and install-qt-action (hosted) both read it, so
+# it stays the single knob; it must match the Qt kit installed on the self-hosted runner.
 env:
   QT_VERSION: '6.10.3'
 
 jobs:
-  build-and-test:
-    runs-on: windows-latest
+  # --- Decide which runner to use -------------------------------------------
+  pick-runner:
+    runs-on: ubuntu-latest
+    outputs:
+      target: ${{ steps.pick.outputs.target }}
+    steps:
+      - id: pick
+        env:
+          # Optional: a fine-grained PAT with repo "Administration: read" enables
+          # routing to the self-hosted runner when it is online. Absent → hosted.
+          RUNNER_ADMIN_TOKEN: ${{ secrets.RUNNER_ADMIN_TOKEN }}
+        run: |
+          target=hosted
+          if [ -n "$RUNNER_ADMIN_TOKEN" ]; then
+            online=$(curl -sf \
+              -H "Authorization: Bearer $RUNNER_ADMIN_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/runners" \
+              | jq '[.runners[]? | select(.status == "online") | select(any(.labels[].name; . == "tmdqa"))] | length' 2>/dev/null) || online=0
+            if [ "${online:-0}" -ge 1 ]; then target=self-hosted; fi
+          fi
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "Selected CI runner: $target"
 
+  # --- Preferred: self-hosted (local toolchain + fixtures, full 325) --------
+  build-self-hosted:
+    needs: pick-runner
+    if: needs.pick-runner.outputs.target == 'self-hosted'
+    runs-on: [self-hosted, windows, tmdqa]
+    steps:
+      - name: Checkout
+        # Default clean:true restores the committed sample fixtures and removes
+        # stale gitignored build outputs (build/, tests\debug, .qmake.stash) each
+        # run — persistent-runner hygiene, handled for us.
+        uses: actions/checkout@v4
+
+      - name: Overlay full-size PRN fixture
+        shell: pwsh
+        run: |
+          # The small PRN sample is committed (used by the hosted CI). On this
+          # runner, overlay the full-size recording so the heavy throughput
+          # benchmark runs the complete data. TMDQA_CH10_FULL is set in the runner's
+          # .env; it lives OUTSIDE the checkout, so the copy only reads it. If unset,
+          # the committed sample stays (that one benchmark just skips).
+          if ($env:TMDQA_CH10_FULL -and (Test-Path $env:TMDQA_CH10_FULL)) {
+            Copy-Item $env:TMDQA_CH10_FULL 'tests\data\prn_testfile.ch10' -Force
+            Write-Host "Overlaid full PRN from $env:TMDQA_CH10_FULL"
+          } else {
+            Write-Host "::warning::TMDQA_CH10_FULL not set/found — using the committed sample PRN (heavy benchmark will skip)."
+          }
+
+      - name: Toolchain versions
+        shell: pwsh
+        run: |
+          . .\scripts\env.ps1
+          qmake --version
+          cl 2>&1 | Select-Object -First 1
+
+      - name: Build app (Debug)
+        shell: pwsh
+        run: |
+          . .\scripts\env.ps1
+          New-Item -ItemType Directory -Force -Path build | Out-Null
+          Set-Location build
+          qmake ..\tmDataQualityAnalyzer.pro -spec win32-msvc 'CONFIG+=debug'
+          nmake -f Makefile.Debug 2>&1 | Tee-Object -FilePath app_build.log
+          if ($LASTEXITCODE -ne 0) { throw "App build failed ($LASTEXITCODE)" }
+
+      - name: Zero-warning gate
+        shell: pwsh
+        run: |
+          $warns = Select-String -Path build\app_build.log -Pattern 'warning [A-Z]\d+'
+          if ($warns) {
+            Write-Host "Compiler warnings found:"; $warns | ForEach-Object { Write-Host $_.Line }
+            throw "Build is not warning-clean"
+          }
+          Write-Host "No warnings."
+
+      - name: Build tests (Debug, in-source)
+        shell: pwsh
+        run: |
+          . .\scripts\env.ps1
+          Set-Location tests
+          qmake tests.pro -spec win32-msvc 'CONFIG+=debug'
+          nmake -f Makefile.Debug
+          if ($LASTEXITCODE -ne 0) { throw "Test build failed ($LASTEXITCODE)" }
+
+      - name: Run full test suite
+        shell: pwsh
+        run: |
+          # env.ps1 puts the Qt msvc kit's bin on PATH so the test exe loads Qt6*.dll
+          # (each step is a fresh shell — PATH doesn't carry over).
+          . .\scripts\env.ps1
+          Set-Location tests
+          New-Item -ItemType Directory -Force -Path output | Out-Null
+          .\debug\tmDataQualityAnalyzer_tests.exe
+          $code = $LASTEXITCODE
+          $pass = 0; $fail = 0; $skip = 0
+          if (Test-Path output\results.txt) {
+            $pass = (Select-String -Path output\results.txt -Pattern '^PASS').Count
+            $fail = (Select-String -Path output\results.txt -Pattern '^FAIL').Count
+            $skip = (Select-String -Path output\results.txt -Pattern '^SKIP').Count
+          }
+          Write-Host "Results: $pass passed, $fail failed, $skip skipped (exit $code)"
+          if ($code -ne 0) { throw "Test suite exited non-zero ($code)" }
+          if ($fail -gt 0)  { throw "$fail test(s) failed" }
+          # The full PRN is overlaid, so every integration suite runs — expect 325.
+          # A low count means fixtures are missing and the suites silently skipped.
+          if ($pass -lt 320) { throw "Only $pass tests passed (expected >= 320) — fixtures missing or the suite aborted" }
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-self-hosted
+          path: tests/output/results.txt
+          if-no-files-found: ignore
+
+  # --- Fallback: GitHub-hosted (provisions toolchain; runs committed fixtures) ---
+  build-hosted:
+    needs: pick-runner
+    if: needs.pick-runner.outputs.target == 'hosted'
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,15 +168,9 @@ jobs:
           host: windows
           target: desktop
           arch: win64_msvc2022_64
-          # Qt SVG (Qt6Svg) ships in the base package in Qt 6, so it is NOT a
-          # selectable --modules entry (aqt rejects it). printsupport, widgets,
-          # and concurrent are likewise part of qtbase.
           cache: true
 
       - name: Set up MSVC (cl / nmake)
-        # Imports the Visual Studio 2022 x64 developer environment (cl, nmake,
-        # INCLUDE/LIB) into the job so qmake's win32-msvc spec and the build steps
-        # can find the compiler. windows-latest ships VS 2022.
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
@@ -67,14 +193,9 @@ jobs:
       - name: Zero-warning gate
         shell: pwsh
         run: |
-          # The whole build must be warning-free. The vendored third-party libs
-          # (lib/irig106, lib/qcustomplot) are compiled without warnings via
-          # thirdparty.pri, so any remaining 'warning C####' is real app code and
-          # fails CI. (MSVC emits 'file(line): warning C4996: ...'.)
           $warns = Select-String -Path build\app_build.log -Pattern 'warning [A-Z]\d+'
           if ($warns) {
-            Write-Host "Compiler warnings found:"
-            $warns | ForEach-Object { Write-Host $_.Line }
+            Write-Host "Compiler warnings found:"; $warns | ForEach-Object { Write-Host $_.Line }
             throw "Build is not warning-clean"
           }
           Write-Host "No warnings."
@@ -87,12 +208,10 @@ jobs:
           nmake -f Makefile.Debug
           if ($LASTEXITCODE -ne 0) { throw "Test build failed ($LASTEXITCODE)" }
 
-      - name: Run full test suite
+      - name: Run test suite
         shell: pwsh
         run: |
           Set-Location tests
-          # The harness writes results to tests/output/ (gitignored, so absent on a
-          # fresh checkout); create it or the exe bails before running any test.
           New-Item -ItemType Directory -Force -Path output | Out-Null
           .\debug\tmDataQualityAnalyzer_tests.exe
           $code = $LASTEXITCODE
@@ -105,19 +224,30 @@ jobs:
           Write-Host "Results: $pass passed, $fail failed, $skip skipped (exit $code)"
           if ($code -ne 0) { throw "Test suite exited non-zero ($code)" }
           if ($fail -gt 0)  { throw "$fail test(s) failed" }
-          # Guard against a silently aborted / poisoned harness reporting success
-          # with almost nothing run. The fixture-dependent integration suites skip
-          # on CI (the large .ch10 files are gitignored), leaving ~230+ tests; a
-          # count far below that means the run didn't actually execute the suite.
-          $minExpected = 200
-          if ($pass -lt $minExpected) {
-            throw "Only $pass tests passed (expected >= $minExpected) — the suite aborted or the harness was poisoned"
-          }
+          # The small .ch10 fixtures are committed, so the integration suites run
+          # here too (~324 — the heavy PRN throughput benchmark skips on the sample
+          # clip; it needs the full recording, which only the self-hosted runner has).
+          if ($pass -lt 320) { throw "Only $pass tests passed (expected >= 320) — fixtures missing or the suite aborted" }
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
+          name: test-results-hosted
           path: tests/output/results.txt
           if-no-files-found: ignore
+
+  # --- Single stable status: passes iff the selected build job passed --------
+  ci:
+    needs: [pick-runner, build-self-hosted, build-hosted]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          sh='${{ needs.build-self-hosted.result }}'
+          ho='${{ needs.build-hosted.result }}'
+          echo "target=${{ needs.pick-runner.outputs.target }}  self-hosted=$sh  hosted=$ho"
+          if [ "$sh" = "success" ] || [ "$ho" = "success" ]; then
+            echo "CI passed"; exit 0
+          fi
+          echo "CI failed — the selected build job did not succeed"; exit 1

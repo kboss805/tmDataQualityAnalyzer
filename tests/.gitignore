@@ -4,7 +4,14 @@ scratch_tst.cpp
 -
 run_tests.ps1
 nul
-data/
+# The .ch10 fixtures are large and mostly gitignored, EXCEPT the small
+# (<100 MB) committed CI fixtures below, which the hosted CI needs. The full-size
+# variants (e.g. the full PRN recording) stay local-only and are overlaid on the
+# self-hosted runner. Ignore data/ contents, then re-include the committed set.
+data/*
+!data/agc_nzl_rasa_testfile.ch10
+!data/agc_rnrz-l_trc_testfile.ch10
+!data/prn_testfile.ch10
 output/
 !output/.gitkeep
 

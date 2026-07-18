@@ -185,7 +185,7 @@ void TestProcessingCoordinator::startProcessingEmitsProcessingState()
 /// for same-channel streams.
 void TestProcessingCoordinator::benchmarkSingleVsMultiStreamThroughput()
 {
-    const QString filepath = testDataPath("rnrz-l_testfile.ch10");
+    const QString filepath = testDataPath("agc_rnrz-l_trc_testfile.ch10");
     if (!QFileInfo::exists(filepath))
         QSKIP("RNRZ-L test file not available");
 
@@ -217,7 +217,7 @@ void TestProcessingCoordinator::benchmarkSingleVsMultiStreamThroughput()
         .arg(single_ms > 0 ? double(multi_ms) / double(single_ms) : 0.0, 0, 'f', 2);
 }
 
-/// Diagnostic benchmark using PRN_TEST_FILE0001.ch10: four heterogeneous channels
+/// Diagnostic benchmark using prn_testfile.ch10: four heterogeneous channels
 /// (PRN11 at 1 M and 5 M bps, PRN15 at 5 M and 20 M bps). Times each channel
 /// solo, then all four concurrently.
 /// Validated result: 4-stream parallel ≈ slowest-solo time (1.02x) and 33%
@@ -225,7 +225,7 @@ void TestProcessingCoordinator::benchmarkSingleVsMultiStreamThroughput()
 /// streams with very different data rates.
 void TestProcessingCoordinator::benchmarkHeavyWorkloadSingleVsMultiStream()
 {
-    const QString filepath = testDataPath("PRN_TEST_FILE0001.ch10");
+    const QString filepath = testDataPath("prn_testfile.ch10");
     if (!QFileInfo::exists(filepath))
         QSKIP("PRN test file not available");
 
@@ -239,7 +239,7 @@ void TestProcessingCoordinator::benchmarkHeavyWorkloadSingleVsMultiStream()
     if (pcm_channels.size() < 4)
         QSKIP("PRN test file does not have 4 PCM channels");
 
-    constexpr int kTimeoutMs = 300000; // 5 min — PRN_TEST_FILE0001 is 671 MB
+    constexpr int kTimeoutMs = 300000; // 5 min — prn_testfile.ch10 is up to 671 MB (full, local)
 
     // Assign channels by matching each PCM channel against both PRN specs.
     // This handles any channel ordering the file may use and is self-documenting
