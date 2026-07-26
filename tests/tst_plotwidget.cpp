@@ -329,6 +329,11 @@ void TestPlotWidget::contextMenuListsExpectedTopLevelItems()
     QScopedPointer<QMenu> menu(widget.buildContextMenu());
     QVERIFY(!menu.isNull());
 
+    // Set Plot Title leads the menu (the most-used entry when preparing a plot
+    // for a report), so its position is pinned.
+    QVERIFY(!menu->actions().isEmpty());
+    QVERIFY(menu->actions().first()->text().startsWith("Set Plot Title"));
+
     // Every control that used to live in the external rows must have a home here.
     QVERIFY(findAction(menu.data(), "Plot File") != nullptr);
     QVERIFY(findAction(menu.data(), "View Mode") != nullptr);

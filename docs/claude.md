@@ -183,6 +183,29 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Additional streams, receivers, and channels beyond the primaries use progressively lighter shades of their primary color so related series stay visually grouped.
 - [x] Frame Sync Lock curves are drawn with a visually highlighted style, while Receiver SNR curves are not.
 
+### US4.1: Distraction-free plot window — controls on the plot, not around it — In Progress
+
+**As a** telemetry engineer or data analyst
+**I want to** see nothing but the plot itself, with every control reached by right-clicking the plot or from a small overlay on it
+**So that** the maximum amount of screen space shows data, and the interface stays uncluttered while I analyze.
+
+> **Skeleton story.** The first change (context menu + legend toggle) is
+> implemented; the remaining criteria are placeholders for the follow-on
+> simplifications still being defined. See
+> `docs/future_plans/plotwindow_simplification.md` for the working plan.
+
+**Acceptance Criteria:**
+- [x] The plot window has no external control rows: the chart fills the entire plot area.
+- [x] Every plot control is reached from a right-click context menu on the chart, or from a control overlaid on the chart itself.
+- [x] The context menu leads with **Set Plot Title…**, then **Plot File**, **View Mode**, **Customize View…**, **Show Legend**, **X Axis**, **Y Axes**, and **Export…**; entries are disabled until data is loaded.
+- [x] The legend can be shown or hidden from a toggle overlaid on the chart, and the choice persists across sessions.
+- [x] Mouse-wheel zoom and click-drag pan of the X axis are retained as the primary navigation.
+- [x] The log/console occupies a left sidebar that the user can toggle on and off, and which is open by default.
+- [ ] _(placeholder)_ Any further plot controls the user identifies are relocated to the context menu or an on-chart overlay rather than added as external widgets.
+- [ ] _(placeholder)_ Keyboard shortcuts for the most-used context-menu actions — **undecided**, may be dropped.
+
+  - **Scope:** This story governs the *placement* of plot controls, not what they do — the underlying behaviors are specified by US4.0 (navigation/appearance), US3.1 (view mode), and US1.1 (Plot File selector). It is deliberately additive to those stories: US4.0's criteria were reworded for the new location, not replaced. New controls must land on the plot (overlay) or in the context menu; the structural test `TestPlotWidget::noExternalControlWidgetsRemain()` enforces this mechanically by failing if any interactive widget lives outside the chart.
+
 ### US5.0: Recall/store framesync pattern and frame length parameters from/to configuration files — Complete
 
 **As a** telemetry engineer or data analyst

@@ -183,7 +183,7 @@ void TestConstants::plotConstants()
     QCOMPARE(QString(PlotConstants::kYAxisLabel),  QString("Framesync Lock (%)"));
     QCOMPARE(QString(PlotConstants::kMissedFramesAxisLabel), QString("Accumulated Missed Frames"));
     QCOMPARE(QString(PlotConstants::kSnrAxisLabel), QString("Receiver SNR (dB)"));
-    QCOMPARE(QString(PlotConstants::kXAxisLabel), QString("Elapsed Time (DDD:HH:MM:SS)"));
+    QCOMPARE(QString(PlotConstants::kXAxisLabel), QString("Time (DDD:HH:MM:SS)"));
     QCOMPARE(PlotConstants::kZoomFactor, 0.1);
     QCOMPARE(PlotConstants::kNumSnrPrimaryColors, 3);
 

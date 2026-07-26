@@ -453,6 +453,14 @@ QMenu* PlotWidget::buildContextMenu()
 
     QMenu& menu = *(new QMenu(this));
 
+    // Set Plot Title leads the menu: it is the most frequently used entry when
+    // preparing a plot for a report.
+    QAction* title_act = menu.addAction(QStringLiteral("Set Plot Title..."));
+    title_act->setEnabled(has_data);
+    connect(title_act, &QAction::triggered, this, &PlotWidget::onSetPlotTitle);
+
+    menu.addSeparator();
+
     // --- Plot File: which processed file to view (US1.1) ------------------
     QMenu* file_menu = menu.addMenu(QStringLiteral("Plot File"));
     const QVector<QPair<int, QString>> sources = m_view_model->sourceList();
@@ -518,10 +526,6 @@ QMenu* PlotWidget::buildContextMenu()
     QAction* customize_act = menu.addAction(QStringLiteral("Customize View..."));
     customize_act->setEnabled(has_data);
     connect(customize_act, &QAction::triggered, this, &PlotWidget::onCustomizePlotClicked);
-
-    QAction* title_act = menu.addAction(QStringLiteral("Set Plot Title..."));
-    title_act->setEnabled(has_data);
-    connect(title_act, &QAction::triggered, this, &PlotWidget::onSetPlotTitle);
 
     // Mirrors the on-chart legend toggle. The button is the primary affordance;
     // this entry makes the control discoverable and keeps both in sync.
