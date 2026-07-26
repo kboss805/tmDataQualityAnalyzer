@@ -13,6 +13,7 @@
 #include <QPoint>
 #include <QResizeEvent>
 #include <QScrollArea>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -164,6 +165,14 @@ private:
     void clampLegendIntoView();
     /// Applies the translucent background, border, and text colors for the theme.
     void styleLegendOverlay(bool dark);
+    /// Applies the on-chart legend toggle's theme-appropriate glyph and styling.
+    void styleLegendToggle(bool dark);
+    /// Anchors the legend toggle button at the chart's top-left (the legend itself
+    /// defaults to the top-right, so they never collide) and keeps it on top.
+    void positionLegendToggle();
+    /// Shows/hides the legend per @p visible, persists the choice, and refreshes
+    /// the toggle's checked state. Does nothing if the state is already @p visible.
+    void setLegendVisible(bool visible);
     /// Shows or hides the centered "Loading..." overlay over the chart.
     void showLoadingIndicator(bool visible);
     void resizeEvent(QResizeEvent* event) override;
@@ -212,6 +221,15 @@ private:
     /// mirrors m_graph_by_id so a run with many streams doesn't rebuild every
     /// row's widgets from scratch on each stream's completion.
     QHash<int, LegendRow> m_legend_row_by_id;
+    /// On-chart show/hide control for the legend (a small translucent button
+    /// floating at the chart's top-left). Deliberately an overlay rather than an
+    /// external control, and never composited into exported images — only
+    /// m_legend_overlay is rendered into exports.
+    QToolButton* m_legend_toggle = nullptr;
+    /// Whether the user wants the legend shown; persisted across sessions
+    /// (UIConstants::kSettingsKeyLegendVisible). When false the overlay stays
+    /// hidden even with data loaded, and is excluded from exports.
+    bool m_legend_visible = true;
     /// @}
 
     QLabel* m_loading_label = nullptr; ///< Overlay label shown while CSV is parsing.

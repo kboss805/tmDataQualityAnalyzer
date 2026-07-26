@@ -34,6 +34,9 @@ private slots:
     void contextMenuSetTitleAppliesToViewModel();
     void wheelZoomAndDragPanRemainEnabled();
     void noExternalControlWidgetsRemain();
+    void legendToggleShowsAndHidesLegend();
+    void legendToggleAppearsOnlyWithData();
+    void contextMenuShowLegendMirrorsToggle();
 };
 
 #endif // TST_PLOTWIDGET_H

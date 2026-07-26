@@ -9,6 +9,7 @@
 #include <QFileInfo>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QAbstractButton>
 #include <QAction>
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -513,9 +514,101 @@ void TestPlotWidget::noExternalControlWidgetsRemain()
     // QLabels, which is why only interactive control types are asserted on.)
     // Dialogs spawned by menu actions are separate top-level windows, so they are
     // not children of this widget and don't trip this check.
-    QVERIFY(widget.findChildren<QComboBox*>().isEmpty());
-    QVERIFY(widget.findChildren<QDoubleSpinBox*>().isEmpty());
-    QVERIFY(widget.findChildren<QSpinBox*>().isEmpty());
-    QVERIFY(widget.findChildren<QLineEdit*>().isEmpty());
-    QVERIFY(widget.findChildren<QPushButton*>().isEmpty());
+    // Interactive controls are allowed ON the chart (overlays like the legend
+    // toggle) but never outside it, so each hit must be a descendant of m_plot.
+    auto isChartOverlay = [&widget](QWidget* w) {
+        for (QWidget* a = w->parentWidget(); a != nullptr; a = a->parentWidget())
+        {
+            if (a == widget.m_plot)
+                return true;
+        }
+        return false;
+    };
+
+    QList<QWidget*> controls;
+    for (QWidget* w : widget.findChildren<QComboBox*>())       controls << w;
+    for (QWidget* w : widget.findChildren<QDoubleSpinBox*>())   controls << w;
+    for (QWidget* w : widget.findChildren<QSpinBox*>())         controls << w;
+    for (QWidget* w : widget.findChildren<QLineEdit*>())        controls << w;
+    for (QWidget* w : widget.findChildren<QAbstractButton*>())  controls << w;
+
+    for (QWidget* w : controls)
+    {
+        QVERIFY2(isChartOverlay(w),
+                 qPrintable(QString("Control '%1' (%2) lives outside the chart; every control "
+                                    "must be an on-chart overlay or a context-menu item.")
+                                .arg(w->objectName(), QString::fromLatin1(w->metaObject()->className()))));
+    }
+}
+
+void TestPlotWidget::legendToggleShowsAndHidesLegend()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    widget.setLegendVisible(true);   // known starting state (the pref is persisted)
+    addLockStream(vm, "Ch 5", 5);
+
+    QVERIFY(!widget.m_legend_overlay->isHidden());
+
+    // Hiding via the on-chart toggle takes the legend off the chart - and with it
+    // out of exported images, since exportImage only composites a visible overlay.
+    widget.setLegendVisible(false);
+    QVERIFY(widget.m_legend_overlay->isHidden());
+    QVERIFY(!widget.m_legend_toggle->isChecked());
+
+    // A rebuild (e.g. another stream finishing) must not resurrect it.
+    addLockStream(vm, "Ch 6", 6);
+    QVERIFY(widget.m_legend_overlay->isHidden());
+
+    widget.setLegendVisible(true);
+    QVERIFY(!widget.m_legend_overlay->isHidden());
+    QVERIFY(widget.m_legend_toggle->isChecked());
+}
+
+void TestPlotWidget::legendToggleAppearsOnlyWithData()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+
+    // Nothing plotted yet: the toggle stays off the chart entirely.
+    QVERIFY(widget.m_legend_toggle->isHidden());
+
+    addLockStream(vm, "Ch 5", 5);
+    QVERIFY(!widget.m_legend_toggle->isHidden());
+
+    // It is an overlay on the chart, not an external control.
+    QCOMPARE(widget.m_legend_toggle->parentWidget(), static_cast<QWidget*>(widget.m_plot));
+}
+
+void TestPlotWidget::contextMenuShowLegendMirrorsToggle()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    widget.setLegendVisible(true);
+    addLockStream(vm, "Ch 5", 5);
+
+    // The menu entry reflects the current state...
+    {
+        QScopedPointer<QMenu> menu(widget.buildContextMenu());
+        QAction* act = findAction(menu.data(), "Show Legend");
+        QVERIFY(act != nullptr);
+        QVERIFY(act->isCheckable());
+        QVERIFY(act->isChecked());
+
+        // ...and toggling it drives the same path as the on-chart button.
+        // trigger() on a checkable action flips the state itself and emits
+        // triggered(newState), so it must NOT be pre-set here.
+        act->trigger();
+    }
+    QVERIFY(widget.m_legend_overlay->isHidden());
+    QVERIFY(!widget.m_legend_toggle->isChecked());
+
+    // Reopening the menu shows the updated state (it is rebuilt per request).
+    QScopedPointer<QMenu> menu2(widget.buildContextMenu());
+    QVERIFY(!findAction(menu2.data(), "Show Legend")->isChecked());
+
+    widget.setLegendVisible(true);   // leave the persisted pref as we found it
 }

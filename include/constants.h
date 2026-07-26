@@ -90,6 +90,7 @@ namespace UIConstants {
     inline constexpr const char* kThemeLight        = "light";        ///< Light theme identifier.
     inline constexpr const char* kSettingsKeyRecentFiles = "RecentFiles"; ///< QSettings key for recent files list.
     inline constexpr const char* kSettingsKeySidebarVisible = "SidebarVisible"; ///< QSettings key for sidebar (log) visibility.
+    inline constexpr const char* kSettingsKeyLegendVisible  = "LegendVisible";  ///< QSettings key for plot legend visibility.
     inline constexpr int kMaxRecentFiles            = 5;              ///< Maximum number of recent files to remember.
     /// @}
 
@@ -297,6 +298,7 @@ namespace PlotConstants {
     inline constexpr int    kLegendBgAlpha       = 185;  ///< Alpha of the translucent legend background (0-255).
     inline constexpr double kLegendMaxHeightFrac = 0.60; ///< Cap the legend height to this fraction of the chart.
     inline constexpr double kLegendMaxWidthFrac  = 0.45; ///< Cap the legend width to this fraction of the chart.
+    inline constexpr int    kLegendToggleSizePx  = 26;   ///< Edge length of the on-chart legend show/hide button (px).
     /// @}
 
     /// @brief Primary colors for SNR receiver series (red, orange, yellow), one per receiver.

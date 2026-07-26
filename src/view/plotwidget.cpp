@@ -192,6 +192,7 @@ void PlotWidget::applyTheme(bool dark)
 
     m_dark_theme = dark;
     styleLegendOverlay(dark);
+    styleLegendToggle(dark);
 
     m_plot->replot(QCustomPlot::rpQueuedReplot);
 }
@@ -264,6 +265,16 @@ void PlotWidget::rebuildChart()
     m_plot->setInteractions(has_data
         ? QCP::iRangeDrag | QCP::iRangeZoom
         : QCP::Interactions());
+
+    // The on-chart legend toggle only makes sense once something is plotted.
+    if (m_legend_toggle != nullptr)
+    {
+        m_legend_toggle->setVisible(has_data);
+        if (has_data)
+        {
+            positionLegendToggle();
+        }
+    }
 
     m_plot->replot(QCustomPlot::rpQueuedReplot);
     m_updating_from_vm = false;
@@ -511,6 +522,15 @@ QMenu* PlotWidget::buildContextMenu()
     QAction* title_act = menu.addAction(QStringLiteral("Set Plot Title..."));
     title_act->setEnabled(has_data);
     connect(title_act, &QAction::triggered, this, &PlotWidget::onSetPlotTitle);
+
+    // Mirrors the on-chart legend toggle. The button is the primary affordance;
+    // this entry makes the control discoverable and keeps both in sync.
+    QAction* legend_act = menu.addAction(QStringLiteral("Show Legend"));
+    legend_act->setCheckable(true);
+    legend_act->setChecked(m_legend_visible);
+    legend_act->setEnabled(has_data);
+    connect(legend_act, &QAction::triggered, this,
+            [this](bool checked) { setLegendVisible(checked); });
 
     menu.addSeparator();
 
@@ -932,6 +952,22 @@ void PlotWidget::setUpLayout()
     m_plot->installEventFilter(this);
     m_legend_overlay->hide();
 
+    // On-chart legend show/hide control. An overlay (child of m_plot) rather than
+    // an external control, matching the rest of the plot UI. Anchored top-left so
+    // it never collides with the legend's default top-right corner. Hidden until
+    // there is data, and never rendered into exports (exportImage composites only
+    // m_legend_overlay).
+    m_legend_visible = QSettings().value(UIConstants::kSettingsKeyLegendVisible, true).toBool();
+    m_legend_toggle = new QToolButton(m_plot);
+    m_legend_toggle->setObjectName("legendToggle");
+    m_legend_toggle->setCheckable(true);
+    m_legend_toggle->setChecked(m_legend_visible);
+    m_legend_toggle->setCursor(Qt::PointingHandCursor);
+    m_legend_toggle->setFixedSize(PlotConstants::kLegendToggleSizePx,
+                                  PlotConstants::kLegendToggleSizePx);
+    m_legend_toggle->setToolTip(QStringLiteral("Show/hide the legend"));
+    m_legend_toggle->hide();
+
     // Loading overlay (child of m_plot so it floats over the chart)
     m_loading_label = new QLabel("Loading...", m_plot);
     m_loading_label->setAlignment(Qt::AlignCenter);
@@ -949,6 +985,9 @@ void PlotWidget::setUpConnections()
             this, &PlotWidget::showPlotContextMenu);
 
     connect(m_plot, &QCustomPlot::mouseMove, this, &PlotWidget::onPlotMouseMove);
+
+    connect(m_legend_toggle, &QToolButton::clicked, this,
+            [this](bool checked) { setLegendVisible(checked); });
 
     connect(m_plot->xAxis, QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
             this, [this](const QCPRange& range) { handlePlotXRangeChanged(range.lower, range.upper); });
@@ -1080,8 +1119,88 @@ void PlotWidget::rebuildLegend()
     const int scrollbar_gutter = QApplication::style()->pixelMetric(QStyle::PM_ScrollBarExtent);
     styleLegendOverlay(m_dark_theme);
     layoutLegendOverlay(QSize(content_w + scrollbar_gutter, content_h));
-    m_legend_overlay->show();
-    m_legend_overlay->raise();
+    // The user's show/hide choice wins over "there are rows to draw": keep the
+    // overlay hidden (and out of exports) until they turn it back on.
+    m_legend_overlay->setVisible(m_legend_visible);
+    if (m_legend_visible)
+    {
+        m_legend_overlay->raise();
+    }
+}
+
+void PlotWidget::setLegendVisible(bool visible)
+{
+    if (m_legend_visible == visible)
+    {
+        return;
+    }
+    m_legend_visible = visible;
+    QSettings().setValue(UIConstants::kSettingsKeyLegendVisible, visible);
+
+    if (m_legend_toggle != nullptr)
+    {
+        QSignalBlocker blocker(m_legend_toggle);
+        m_legend_toggle->setChecked(visible);
+    }
+    // rebuildLegend() re-evaluates rows and applies the new visibility (it also
+    // keeps the overlay hidden when there is nothing to show).
+    rebuildLegend();
+}
+
+void PlotWidget::styleLegendToggle(bool dark)
+{
+    if (m_legend_toggle == nullptr)
+    {
+        return;
+    }
+
+    // Glyph drawn rather than shipped as a resource, matching the title-bar
+    // glyphs in MainView: three short "legend rows" (swatch + line).
+    const int size = PlotConstants::kLegendToggleSizePx;
+    QPixmap pm(size, size);
+    pm.fill(Qt::transparent);
+    {
+        QPainter p(&pm);
+        p.setRenderHint(QPainter::Antialiasing);
+        const QColor fg = dark ? PlotConstants::kDarkForeground : PlotConstants::kLightForeground;
+        p.setPen(QPen(fg, 1.5));
+        const double x0 = size * 0.26;
+        const double x1 = size * 0.76;
+        for (int i = 0; i < 3; ++i)
+        {
+            const double y = size * (0.32 + 0.18 * i);
+            p.drawLine(QPointF(x0, y), QPointF(x1, y));
+            p.setBrush(fg);
+            p.drawEllipse(QPointF(size * 0.20, y), 1.6, 1.6);
+        }
+    }
+    m_legend_toggle->setIcon(QIcon(pm));
+    m_legend_toggle->setIconSize(QSize(size, size));
+
+    // Translucent chip so it reads over chart data, same visual language as the
+    // legend overlay itself.
+    const QColor bg = dark ? PlotConstants::kDarkBackground : PlotConstants::kLightBackground;
+    const QColor border = dark ? PlotConstants::kDarkGridColor : PlotConstants::kLightGridColor;
+    m_legend_toggle->setStyleSheet(QString(
+        "QToolButton#legendToggle { background-color: rgba(%1,%2,%3,%4);"
+        " border: 1px solid %5; border-radius: %6px; }"
+        "QToolButton#legendToggle:checked { border: 1px solid %7; }")
+        .arg(bg.red()).arg(bg.green()).arg(bg.blue())
+        .arg(PlotConstants::kLegendBgAlpha)
+        .arg(border.name())
+        .arg(PlotConstants::kLegendCornerRadius)
+        .arg(m_title_color.isValid() ? m_title_color.name() : border.name()));
+}
+
+void PlotWidget::positionLegendToggle()
+{
+    if (m_legend_toggle == nullptr || m_plot == nullptr)
+    {
+        return;
+    }
+    const int m = PlotConstants::kLegendMarginPx;
+    m_legend_toggle->move(m, m);
+    m_legend_toggle->raise();
 }
 
 void PlotWidget::layoutLegendOverlay(const QSize& content)
@@ -1274,6 +1393,11 @@ void PlotWidget::resizeEvent(QResizeEvent* event)
     if (m_loading_label != nullptr && m_loading_label->isVisible())
     {
         showLoadingIndicator(true);  // re-centre on resize
+    }
+    // Keep the on-chart legend toggle anchored to the (new) top-left corner.
+    if (m_legend_toggle != nullptr && m_legend_toggle->isVisible())
+    {
+        positionLegendToggle();
     }
 }
 
