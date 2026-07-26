@@ -26,6 +26,14 @@ private slots:
     void exportImageWritesPngHeadlessly();
     void exportImageWritesSvgHeadlessly();
     void exportImageDefaultsUnknownSuffixToPdf();
+    void contextMenuListsExpectedTopLevelItems();
+    void contextMenuItemsDisabledUntilDataLoads();
+    void contextMenuPlotFileSubmenuTracksSources();
+    void contextMenuViewModeReflectsAndSetsMode();
+    void contextMenuResetActionsClearAxisOverrides();
+    void contextMenuSetTitleAppliesToViewModel();
+    void wheelZoomAndDragPanRemainEnabled();
+    void noExternalControlWidgetsRemain();
 };
 
 #endif // TST_PLOTWIDGET_H

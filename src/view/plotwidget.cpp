@@ -7,13 +7,19 @@
 
 #include <algorithm>
 
+#include <QActionGroup>
 #include <QApplication>
 #include <QClipboard>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QFile>
 #include <QFileDialog>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QInputDialog>
+#include <QLineEdit>
+#include <QMenu>
 #include <QPainter>
 #include <QScrollArea>
 #include <QStyle>
@@ -138,8 +144,8 @@ void PlotWidget::setViewModel(PlotViewModel* vm)
     connect(vm, &PlotViewModel::axisRangeChanged, this, &PlotWidget::updateAxes);
     connect(vm, &PlotViewModel::plotTitleChanged, this, &PlotWidget::updateTitle);
     connect(vm, &PlotViewModel::lockAxisViewChanged, this, &PlotWidget::onLockAxisViewChanged);
-    connect(vm, &PlotViewModel::sourcesChanged, this, &PlotWidget::populateSourceCombo);
-    populateSourceCombo();
+    // No sourcesChanged handler needed: the Plot File submenu is built from
+    // sourceList() each time the context menu opens, so it is never stale.
 }
 
 void PlotWidget::setLogTextProvider(std::function<QString()> provider)
@@ -251,26 +257,13 @@ void PlotWidget::rebuildChart()
     // Update title and axes without triggering extra replots
     updateTitle();
     updateAxes();
-    updateAxisViewCombo();
 
-    // Enable all controls when data is loaded
-    bool has_data = m_view_model->hasData();
-    m_title_edit->setEnabled(has_data);
-    m_x_start_edit->setEnabled(has_data);
-    m_x_stop_edit->setEnabled(has_data);
-    m_reset_btn->setEnabled(has_data);
-    m_customize_btn->setEnabled(has_data);
-    m_left_y_max_spin->setEnabled(has_data);
-    m_right_y_max_spin->setEnabled(has_data);
+    // Mouse pan/zoom only once there is data. The context menu gates its own
+    // actions on hasData() when it is built.
+    const bool has_data = m_view_model->hasData();
     m_plot->setInteractions(has_data
         ? QCP::iRangeDrag | QCP::iRangeZoom
         : QCP::Interactions());
-
-    if (has_data)
-    {
-        m_x_start_edit->setText(m_view_model->formatTime(m_view_model->xViewMin()));
-        m_x_stop_edit->setText(m_view_model->formatTime(m_view_model->xViewMax()));
-    }
 
     m_plot->replot(QCustomPlot::rpQueuedReplot);
     m_updating_from_vm = false;
@@ -280,44 +273,6 @@ void PlotWidget::onDataChanged()
 {
     rebuildChart();
     rebuildLegend();
-    populateSourceCombo();
-}
-
-void PlotWidget::populateSourceCombo()
-{
-    if (m_source_combo == nullptr || m_view_model == nullptr)
-    {
-        return;
-    }
-
-    const QVector<QPair<int, QString>> sources = m_view_model->sourceList();
-
-    // Signals blocked so rebuilding the items doesn't fire activated() and stomp
-    // the ViewModel's current filter.
-    QSignalBlocker blocker(m_source_combo);
-    m_source_combo->clear();
-
-    // Only meaningful with more than one source (US1.1): a single file has nothing
-    // to switch between.
-    if (sources.size() <= 1)
-    {
-        if (sources.size() == 1)
-            m_source_combo->addItem(sources.first().second, sources.first().first);
-        m_source_combo->setEnabled(false);
-        return;
-    }
-
-    m_source_combo->addItem(QStringLiteral("All files (overlaid)"), -1);
-    for (const QPair<int, QString>& src : sources)
-        m_source_combo->addItem(src.second, src.first);
-
-    // Full label as a per-item tooltip so a name too long for the box is still readable.
-    for (int i = 0; i < m_source_combo->count(); ++i)
-        m_source_combo->setItemData(i, m_source_combo->itemText(i), Qt::ToolTipRole);
-
-    const int idx = m_source_combo->findData(m_view_model->visibleSource());
-    m_source_combo->setCurrentIndex(idx >= 0 ? idx : 0);
-    m_source_combo->setEnabled(true);
 }
 
 void PlotWidget::onSeriesVisibilityToggled(int index)
@@ -395,7 +350,6 @@ void PlotWidget::onLockAxisViewChanged()
             ? PlotConstants::kMissedFramesAxisLabel
             : PlotConstants::kYAxisLabel);
 
-    updateAxisViewCombo();
     rebuildLegend();
     m_plot->replot(QCustomPlot::rpQueuedReplot);
 }
@@ -418,15 +372,6 @@ void PlotWidget::updateAxes()
     // Right axis (yAxis2) auto-scales to SNR data limits, or manual/user-override limits
     m_plot->yAxis2->setRange(m_view_model->yMin(), m_view_model->yMax());
 
-    // Sync spinboxes without triggering their valueChanged -> vm override cycle
-    m_updating_from_vm = true;
-    m_left_y_max_spin->setValue(left_max);
-    m_right_y_max_spin->setValue(m_view_model->yMax());
-    m_updating_from_vm = false;
-
-    m_x_start_edit->setText(m_view_model->formatTime(m_view_model->xViewMin()));
-    m_x_stop_edit->setText(m_view_model->formatTime(m_view_model->xViewMax()));
-
     m_plot->replot(QCustomPlot::rpQueuedReplot);
     m_updating_from_vm = false;
 }
@@ -439,7 +384,6 @@ void PlotWidget::updateTitle()
     }
 
     m_updating_from_vm = true;
-    m_title_edit->setText(m_view_model->plotTitle());
 
     // Show title on chart using a QCPTextElement if one exists, else create one
     if (m_plot->plotLayout()->elementCount() > 1)
@@ -474,9 +418,254 @@ void PlotWidget::onCustomizePlotClicked()
     dialog.exec();
 }
 
-void PlotWidget::onXRangeChanged()
+void PlotWidget::showPlotContextMenu(const QPoint& pos)
 {
-    if (m_updating_from_vm || m_view_model == nullptr)
+    QMenu* menu = buildContextMenu();
+    if (menu == nullptr)
+    {
+        return;
+    }
+    menu->exec(m_plot->mapToGlobal(pos));
+    delete menu;
+}
+
+QMenu* PlotWidget::buildContextMenu()
+{
+    if (m_view_model == nullptr)
+    {
+        return nullptr;
+    }
+
+    // Rebuilt on every request so the source list, active view mode and override
+    // state are always current. Nothing here is cached.
+    const bool has_data = m_view_model->hasData();
+
+    QMenu& menu = *(new QMenu(this));
+
+    // --- Plot File: which processed file to view (US1.1) ------------------
+    QMenu* file_menu = menu.addMenu(QStringLiteral("Plot File"));
+    const QVector<QPair<int, QString>> sources = m_view_model->sourceList();
+    // Only meaningful with more than one source: a single file has nothing to
+    // switch between.
+    file_menu->setEnabled(has_data && sources.size() > 1);
+    if (sources.size() > 1)
+    {
+        auto* file_group = new QActionGroup(file_menu);
+        file_group->setExclusive(true);
+        const int visible = m_view_model->visibleSource();
+
+        QAction* all_act = file_menu->addAction(QStringLiteral("All files (overlaid)"));
+        all_act->setCheckable(true);
+        all_act->setChecked(visible < 0);
+        all_act->setActionGroup(file_group);
+        connect(all_act, &QAction::triggered, this,
+                [this]() { m_view_model->setVisibleSource(-1); });
+
+        file_menu->addSeparator();
+        for (const QPair<int, QString>& src : sources)
+        {
+            QAction* act = file_menu->addAction(src.second);
+            act->setCheckable(true);
+            act->setChecked(visible == src.first);
+            act->setActionGroup(file_group);
+            const int source_id = src.first;
+            connect(act, &QAction::triggered, this,
+                    [this, source_id]() { m_view_model->setVisibleSource(source_id); });
+        }
+    }
+
+    // --- View Mode: the left-axis metric ----------------------------------
+    QMenu* view_menu = menu.addMenu(QStringLiteral("View Mode"));
+    // Only meaningful when both left-axis metrics exist (a frame-sync stream
+    // produces both); SNR-only data leaves it disabled.
+    const bool both_metrics = m_view_model->hasLockSeries() && m_view_model->hasMissedFramesSeries();
+    view_menu->setEnabled(has_data && both_metrics);
+    {
+        auto* view_group = new QActionGroup(view_menu);
+        view_group->setExclusive(true);
+        const PlotViewModel::LockAxisView current = m_view_model->lockAxisView();
+
+        struct ModeEntry { const char* text; PlotViewModel::LockAxisView mode; };
+        const ModeEntry modes[] = {
+            { "Lock Percentage", PlotViewModel::LockAxisView::LockPercent },
+            { "Accumulation",    PlotViewModel::LockAxisView::MissedFrames },
+        };
+        for (const ModeEntry& entry : modes)
+        {
+            QAction* act = view_menu->addAction(QString::fromLatin1(entry.text));
+            act->setCheckable(true);
+            act->setChecked(current == entry.mode);
+            act->setActionGroup(view_group);
+            const PlotViewModel::LockAxisView mode = entry.mode;
+            connect(act, &QAction::triggered, this,
+                    [this, mode]() { m_view_model->setLockAxisView(mode); });
+        }
+    }
+
+    menu.addSeparator();
+
+    QAction* customize_act = menu.addAction(QStringLiteral("Customize View..."));
+    customize_act->setEnabled(has_data);
+    connect(customize_act, &QAction::triggered, this, &PlotWidget::onCustomizePlotClicked);
+
+    QAction* title_act = menu.addAction(QStringLiteral("Set Plot Title..."));
+    title_act->setEnabled(has_data);
+    connect(title_act, &QAction::triggered, this, &PlotWidget::onSetPlotTitle);
+
+    menu.addSeparator();
+
+    // --- X axis -----------------------------------------------------------
+    QMenu* x_menu = menu.addMenu(QStringLiteral("X Axis"));
+    x_menu->setEnabled(has_data);
+    QAction* window_act = x_menu->addAction(QStringLiteral("Set Time Window..."));
+    connect(window_act, &QAction::triggered, this, &PlotWidget::onSetTimeWindow);
+    QAction* reset_x_act = x_menu->addAction(QStringLiteral("Reset Span"));
+    connect(reset_x_act, &QAction::triggered, this, &PlotWidget::onResetXAxis);
+
+    // --- Y axes -----------------------------------------------------------
+    QMenu* y_menu = menu.addMenu(QStringLiteral("Y Axes"));
+    y_menu->setEnabled(has_data);
+    QAction* left_act = y_menu->addAction(QStringLiteral("Set Left Max..."));
+    connect(left_act, &QAction::triggered, this, &PlotWidget::onSetLeftYMax);
+    QAction* right_act = y_menu->addAction(QStringLiteral("Set Right Max..."));
+    connect(right_act, &QAction::triggered, this, &PlotWidget::onSetRightYMax);
+    y_menu->addSeparator();
+    QAction* reset_y_act = y_menu->addAction(QStringLiteral("Reset"));
+    connect(reset_y_act, &QAction::triggered, this, &PlotWidget::onResetYAxes);
+
+    menu.addSeparator();
+
+    QAction* export_act = menu.addAction(QStringLiteral("Export..."));
+    export_act->setEnabled(has_data);
+    connect(export_act, &QAction::triggered, this, &PlotWidget::onExportPlot);
+
+    return &menu;
+}
+
+void PlotWidget::onSetPlotTitle()
+{
+    if (m_view_model == nullptr || !m_view_model->hasData())
+    {
+        return;
+    }
+
+    bool ok = false;
+    const QString title = QInputDialog::getText(
+        this, QStringLiteral("Set Plot Title"), QStringLiteral("Plot title:"),
+        QLineEdit::Normal, m_view_model->plotTitle(), &ok);
+    if (ok)
+    {
+        m_view_model->setPlotTitle(title);
+    }
+}
+
+void PlotWidget::onSetTimeWindow()
+{
+    if (m_view_model == nullptr || !m_view_model->hasData())
+    {
+        return;
+    }
+
+    // Two fields in one dialog, seeded with the current window. The text format is
+    // PlotViewModel::formatTime()/parseTime() (DDD:HH:MM:SS), so entered values mean
+    // exactly what they did in the old Start/Stop fields.
+    QDialog dialog(this);
+    dialog.setWindowTitle(QStringLiteral("Set Time Window"));
+
+    auto* start_edit = new QLineEdit(m_view_model->formatTime(m_view_model->xViewMin()), &dialog);
+    auto* stop_edit  = new QLineEdit(m_view_model->formatTime(m_view_model->xViewMax()), &dialog);
+    start_edit->setPlaceholderText(QStringLiteral("DDD:HH:MM:SS"));
+    stop_edit->setPlaceholderText(QStringLiteral("DDD:HH:MM:SS"));
+
+    auto* form = new QGridLayout;
+    form->addWidget(new QLabel(QStringLiteral("Start:"), &dialog), 0, 0);
+    form->addWidget(start_edit, 0, 1);
+    form->addWidget(new QLabel(QStringLiteral("Stop:"), &dialog), 1, 0);
+    form->addWidget(stop_edit, 1, 1);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->addLayout(form);
+    layout->addWidget(buttons);
+
+    if (dialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    const QString entered_start = start_edit->text();
+    const QString entered_stop  = stop_edit->text();
+    applyTimeWindow(m_view_model->parseTime(entered_start),
+                    m_view_model->parseTime(entered_stop),
+                    entered_start, entered_stop);
+}
+
+void PlotWidget::onResetXAxis()
+{
+    if (m_view_model != nullptr)
+    {
+        m_view_model->resetXRange();
+    }
+}
+
+void PlotWidget::onSetLeftYMax()
+{
+    if (m_view_model == nullptr || !m_view_model->hasData())
+    {
+        return;
+    }
+
+    // Lock % is a 0-100 quantity; accumulated missed frames is unbounded, so the
+    // accepted range follows the active left-axis metric (as the old spinbox did).
+    const bool is_lock_pct =
+        (m_view_model->lockAxisView() == PlotViewModel::LockAxisView::LockPercent);
+    const double max_allowed = is_lock_pct ? 100.0 : 10000000.0;
+
+    bool ok = false;
+    const double value = QInputDialog::getDouble(
+        this, QStringLiteral("Set Left Y-Axis Maximum"),
+        is_lock_pct ? QStringLiteral("Maximum lock %:")
+                    : QStringLiteral("Maximum accumulated missed frames:"),
+        m_view_model->leftYMax(), 1.0, max_allowed, 0, &ok);
+    if (ok)
+    {
+        m_view_model->setLeftYMaxOverride(value);
+    }
+}
+
+void PlotWidget::onSetRightYMax()
+{
+    if (m_view_model == nullptr || !m_view_model->hasData())
+    {
+        return;
+    }
+
+    bool ok = false;
+    const double value = QInputDialog::getDouble(
+        this, QStringLiteral("Set Right Y-Axis Maximum"),
+        QStringLiteral("Maximum SNR (dB):"),
+        m_view_model->yMax(), 1.0, 10000.0, 1, &ok);
+    if (ok)
+    {
+        m_view_model->setRightYMaxOverride(value);
+    }
+}
+
+void PlotWidget::onResetYAxes()
+{
+    if (m_view_model != nullptr)
+    {
+        m_view_model->resetYRange();
+    }
+}
+
+void PlotWidget::applyTimeWindow(double raw_start, double raw_stop,
+                                 const QString& entered_start, const QString& entered_stop)
+{
+    if (m_view_model == nullptr)
     {
         return;
     }
@@ -484,60 +673,33 @@ void PlotWidget::onXRangeChanged()
     const double data_min = m_view_model->xMin();
     const double data_max = m_view_model->xMax();
 
-    const QString entered_start = m_x_start_edit->text();
-    const QString entered_stop  = m_x_stop_edit->text();
-
-    double raw_start = m_view_model->parseTime(entered_start);
-    double raw_stop  = m_view_model->parseTime(entered_stop);
-
     double start = qBound(data_min, raw_start, data_max);
     double stop  = qBound(data_min, raw_stop,  data_max);
 
     // Warn if either value was clamped to the file bounds
     if (!qFuzzyCompare(start, raw_start))
     {
-        emit logMessage(QString("<span style='color:#DAA520;'>Start \"%1\" is outside the file time range — clamped to file bounds.</span>")
+        emit logMessage(QString("<span style='color:#DAA520;'>Start \"%1\" is outside the file time range - clamped to file bounds.</span>")
                         .arg(entered_start));
     }
     if (!qFuzzyCompare(stop, raw_stop))
     {
-        emit logMessage(QString("<span style='color:#DAA520;'>Stop \"%1\" is outside the file time range — clamped to file bounds.</span>")
+        emit logMessage(QString("<span style='color:#DAA520;'>Stop \"%1\" is outside the file time range - clamped to file bounds.</span>")
                         .arg(entered_stop));
     }
 
-    // Enforce start <= stop; clamp whichever field was just edited
+    // Enforce start <= stop. Both values arrive together from the dialog, so
+    // (unlike the old two-field form, which clamped whichever field had focus)
+    // the stop is pulled up to the start.
     if (start > stop)
     {
-        if (m_x_start_edit == focusWidget() || m_x_start_edit->hasFocus())
-        {
-            emit logMessage("<span style='color:#DAA520;'>Start time is after Stop — clamped to stop time.</span>");
-            start = stop;
-        }
-        else
-        {
-            emit logMessage("<span style='color:#DAA520;'>Stop time is before Start — clamped to start time.</span>");
-            stop = start;
-        }
+        emit logMessage("<span style='color:#DAA520;'>Stop time is before Start - clamped to start time.</span>");
+        stop = start;
     }
-
-    // Write clamped values back so the user sees what was applied
-    m_updating_from_vm = true;
-    m_x_start_edit->setText(m_view_model->formatTime(start));
-    m_x_stop_edit->setText(m_view_model->formatTime(stop));
-    m_updating_from_vm = false;
 
     m_view_model->setXViewRange(start, stop);
 }
 
-void PlotWidget::onResetAxes()
-{
-    if (m_view_model == nullptr)
-    {
-        return;
-    }
-    m_view_model->resetXRange();
-    m_view_model->resetYRange();
-}
 
 void PlotWidget::onExportPlot()
 {
@@ -703,57 +865,18 @@ void PlotWidget::handlePlotXRangeChanged(double lower, double upper)
 void PlotWidget::setUpLayout()
 {
     auto* main_layout = new QVBoxLayout(this);
-    main_layout->setContentsMargins(4, 8, 4, 4);
+    main_layout->setContentsMargins(4, 4, 4, 4);
     main_layout->setSpacing(0);
 
-    // --- Title row (Plot File | Plot Title | View Mode) ---
-    auto* title_bar = new QHBoxLayout;
-    title_bar->setSpacing(6);
-
-    // Plot File (US1.1): which processed file to view after a multi-file batch.
-    // Disabled unless more than one source is loaded.
-    title_bar->addWidget(new QLabel(QStringLiteral("Plot File:")));
-    m_source_combo = new QComboBox;
-    m_source_combo->setToolTip(QStringLiteral("Select which processed file to view"));
-    m_source_combo->setEnabled(false);
-    m_source_combo->setMinimumWidth(160);
-    m_source_combo->setSizeAdjustPolicy(QComboBox::AdjustToContents);
-    title_bar->addWidget(m_source_combo);
-
-    title_bar->addSpacing(20);
-
-    title_bar->addWidget(new QLabel(QStringLiteral("Plot Title:")));
-    m_title_edit = new QLineEdit;
-    m_title_edit->setPlaceholderText(PlotConstants::kDefaultPlotTitle);
-    m_title_edit->setToolTip("Plot title");
-    m_title_edit->setEnabled(false);
-    m_title_edit->setMinimumWidth(260);
-    title_bar->addWidget(m_title_edit);
-
-    // Empty space between the title and the right-aligned View Mode selector.
-    title_bar->addStretch(1);
-
-    // View Mode: the left axis metric — Lock % or Accumulation (missed frames).
-    title_bar->addWidget(new QLabel(QStringLiteral("View Mode")));
-    m_axis_view_combo = new QComboBox;
-    m_axis_view_combo->setToolTip(QStringLiteral("Left axis metric: Frame Sync Lock % or "
-                                                 "Accumulated Missed Frames"));
-    m_axis_view_combo->addItem(QStringLiteral("Lock %"),
-                               static_cast<int>(PlotViewModel::LockAxisView::LockPercent));
-    m_axis_view_combo->addItem(QStringLiteral("Accumulation"),
-                               static_cast<int>(PlotViewModel::LockAxisView::MissedFrames));
-    m_axis_view_combo->setEnabled(false);
-    m_axis_view_combo->setMinimumWidth(140);
-    title_bar->addWidget(m_axis_view_combo);
-
-    main_layout->addLayout(title_bar);
-    main_layout->addSpacing(8);
-
-    // --- QCustomPlot chart ---
+    // --- QCustomPlot chart (fills the widget; all controls live in the
+    // right-click context menu, see showPlotContextMenu) ---
     m_plot = new QCustomPlot(this);
     m_plot->setInteractions(QCP::Interactions());
     m_plot->axisRect()->setRangeDrag(Qt::Horizontal);
     m_plot->axisRect()->setRangeZoom(Qt::Horizontal);
+    // Right-click opens the control menu. QCustomPlot binds pan to left-drag and
+    // zoom to the wheel, so the right button is otherwise unused.
+    m_plot->setContextMenuPolicy(Qt::CustomContextMenu);
     m_plot->xAxis->setLabel(PlotConstants::kXAxisLabel);
     m_plot->yAxis->setLabel(PlotConstants::kYAxisLabel);
     m_plot->yAxis->setRange(0, 100);
@@ -816,115 +939,15 @@ void PlotWidget::setUpLayout()
     m_loading_label->adjustSize();
     m_loading_label->hide();
 
-    // --- Bottom bar: [axis controls] [16px] [legend panel] [stretch] [Export PDF] ---
-    auto* bottom_bar = new QHBoxLayout;
-    bottom_bar->setContentsMargins(0, 0, 0, 0);
-    bottom_bar->setSpacing(0);
-
-    // Axis controls grid (Start/Stop + Reset + Y-max spinboxes), top-aligned in the bar
-    auto* axis_grid = new QGridLayout;
-    axis_grid->setContentsMargins(0, 0, 0, 0);
-    axis_grid->setHorizontalSpacing(4);
-    axis_grid->setVerticalSpacing(4);
-    // Col 2 is a dedicated 8px spacer between the first control and second label pair
-    axis_grid->setColumnMinimumWidth(2, 8);
-
-    axis_grid->addWidget(new QLabel("Start:"), 0, 0);
-    m_x_start_edit = new QLineEdit;
-    m_x_start_edit->setPlaceholderText("DDD:HH:MM:SS");
-    m_x_start_edit->setToolTip("Start time (DDD:HH:MM:SS)");
-    m_x_start_edit->setEnabled(false);
-    axis_grid->addWidget(m_x_start_edit, 0, 1);
-
-    axis_grid->addWidget(new QLabel("Stop:"), 0, 3);
-    m_x_stop_edit = new QLineEdit;
-    m_x_stop_edit->setPlaceholderText("DDD:HH:MM:SS");
-    m_x_stop_edit->setToolTip("Stop time (DDD:HH:MM:SS)");
-    m_x_stop_edit->setEnabled(false);
-    axis_grid->addWidget(m_x_stop_edit, 0, 4);
-
-    m_reset_btn = new QPushButton("Reset");
-    m_reset_btn->setFlat(true);
-    m_reset_btn->setMinimumWidth(UIConstants::kFlatButtonMinWidth);
-    m_reset_btn->setToolTip("Reset axes to auto range");
-    m_reset_btn->setEnabled(false);
-    axis_grid->addWidget(m_reset_btn, 0, 5);
-
-    // Row 1: Left and right y-axis maximum overrides
-    axis_grid->setColumnMinimumWidth(7, 8);
-
-    axis_grid->addWidget(new QLabel("L Max:"), 1, 0);
-    m_left_y_max_spin = new QDoubleSpinBox;
-    m_left_y_max_spin->setRange(1.0, 10'000'000.0);
-    m_left_y_max_spin->setDecimals(0);
-    m_left_y_max_spin->setSingleStep(5.0);
-    m_left_y_max_spin->setValue(100.0);
-    m_left_y_max_spin->setToolTip("Maximum value for the left y-axis (lock % or missed frames). Use the arrows or type a value.");
-    m_left_y_max_spin->setEnabled(false);
-    axis_grid->addWidget(m_left_y_max_spin, 1, 1);
-
-    axis_grid->addWidget(new QLabel("R Max:"), 1, 3);
-    m_right_y_max_spin = new QDoubleSpinBox;
-    m_right_y_max_spin->setRange(1.0, 10'000.0);
-    m_right_y_max_spin->setDecimals(1);
-    m_right_y_max_spin->setSingleStep(5.0);
-    m_right_y_max_spin->setValue(100.0);
-    m_right_y_max_spin->setToolTip("Maximum value for the right y-axis (SNR in dB). Use the arrows or type a value.");
-    m_right_y_max_spin->setEnabled(false);
-    axis_grid->addWidget(m_right_y_max_spin, 1, 4);
-
-    QWidget* axis_widget = new QWidget;
-    axis_widget->setLayout(axis_grid);
-    axis_widget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
-    bottom_bar->addWidget(axis_widget, 0, Qt::AlignTop);
-
-    bottom_bar->addStretch(1);
-
-    m_customize_btn = new QPushButton("Customize Plot...");
-    m_customize_btn->setEnabled(false);
-    bottom_bar->addWidget(m_customize_btn, 0, Qt::AlignTop);
-
-    main_layout->addLayout(bottom_bar);
 }
 
 void PlotWidget::setUpConnections()
 {
-    connect(m_title_edit, &QLineEdit::editingFinished, this, [this]() {
-        if (!m_updating_from_vm && m_view_model != nullptr)
-        {
-            m_view_model->setPlotTitle(m_title_edit->text());
-        }
-    });
+    // Every control lives in the plot's right-click menu; it is rebuilt on each
+    // request so it always reflects the current sources/mode/overrides.
+    connect(m_plot, &QWidget::customContextMenuRequested,
+            this, &PlotWidget::showPlotContextMenu);
 
-
-
-    connect(m_x_start_edit, &QLineEdit::editingFinished, this, &PlotWidget::onXRangeChanged);
-    connect(m_x_stop_edit, &QLineEdit::editingFinished, this, &PlotWidget::onXRangeChanged);
-
-    connect(m_reset_btn, &QPushButton::clicked, this, &PlotWidget::onResetAxes);
-    connect(m_customize_btn, &QPushButton::clicked, this, &PlotWidget::onCustomizePlotClicked);
-
-    connect(m_left_y_max_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, [this](double value) {
-                if (!m_updating_from_vm && m_view_model != nullptr)
-                    m_view_model->setLeftYMaxOverride(value);
-            });
-    connect(m_right_y_max_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, [this](double value) {
-                if (!m_updating_from_vm && m_view_model != nullptr)
-                    m_view_model->setRightYMaxOverride(value);
-            });
-    // View Mode: user picks the left-axis metric (data = LockAxisView).
-    connect(m_axis_view_combo, QOverload<int>::of(&QComboBox::activated), this, [this](int) {
-        if (m_view_model != nullptr)
-            m_view_model->setLockAxisView(
-                static_cast<PlotViewModel::LockAxisView>(m_axis_view_combo->currentData().toInt()));
-    });
-    // Plot File: user picks which processed file to view (data = sourceId; -1 = all).
-    connect(m_source_combo, QOverload<int>::of(&QComboBox::activated), this, [this](int) {
-        if (m_view_model != nullptr)
-            m_view_model->setVisibleSource(m_source_combo->currentData().toInt());
-    });
     connect(m_plot, &QCustomPlot::mouseMove, this, &PlotWidget::onPlotMouseMove);
 
     connect(m_plot->xAxis, QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
@@ -1228,46 +1251,6 @@ void PlotWidget::onPlotMouseMove(QMouseEvent* event)
     else
     {
         QToolTip::hideText();
-    }
-}
-
-void PlotWidget::updateAxisViewCombo()
-{
-    if (m_axis_view_combo == nullptr || m_view_model == nullptr)
-    {
-        return;
-    }
-
-    // The View Mode selector is only meaningful when both left-axis metrics exist
-    // (a frame-sync stream produces both); SNR-only data leaves it disabled.
-    const bool enabled = m_view_model->hasLockSeries() && m_view_model->hasMissedFramesSeries();
-    m_axis_view_combo->setEnabled(enabled);
-
-    // Sync the selection to the ViewModel's active view without firing activated().
-    {
-        QSignalBlocker blocker(m_axis_view_combo);
-        const int idx = m_axis_view_combo->findData(static_cast<int>(m_view_model->lockAxisView()));
-        if (idx >= 0)
-            m_axis_view_combo->setCurrentIndex(idx);
-    }
-
-    if (enabled)
-    {
-        // Adjust the left spinbox range and step to match the active axis metric.
-        const bool is_lock_pct = (m_view_model->lockAxisView() == PlotViewModel::LockAxisView::LockPercent);
-        m_updating_from_vm = true;
-        if (is_lock_pct)
-        {
-            m_left_y_max_spin->setRange(1.0, 100.0);
-            m_left_y_max_spin->setSingleStep(5.0);
-        }
-        else
-        {
-            m_left_y_max_spin->setRange(1.0, 10'000'000.0);
-            m_left_y_max_spin->setSingleStep(100.0);
-        }
-        m_left_y_max_spin->setValue(m_view_model->leftYMax());
-        m_updating_from_vm = false;
     }
 }
 

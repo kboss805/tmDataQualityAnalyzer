@@ -6,19 +6,17 @@
 #ifndef PLOTWIDGET_H
 #define PLOTWIDGET_H
 
-#include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QFrame>
 #include <QHash>
 #include <QLabel>
-#include <QLineEdit>
 #include <QMouseEvent>
-#include <QPushButton>
+#include <QPoint>
 #include <QResizeEvent>
 #include <QScrollArea>
-#include <QTreeWidget>
 #include <QVBoxLayout>
 #include <QWidget>
+
+class QMenu;
 
 #include <functional>
 
@@ -53,10 +51,16 @@ private:
 };
 
 /**
- * @brief Self-contained plot widget: QCustomPlot chart + toolbar controls + legend.
+ * @brief Self-contained plot widget: QCustomPlot chart + movable legend.
  *
  * Owns its own QCustomPlot instance. Connects to a PlotViewModel for data.
  * Placed inside a QDockWidget by MainView.
+ *
+ * The chart fills the whole widget: there are no external control rows. Every
+ * control (Plot File, View Mode, Customize View, plot title, X/Y axis ranges,
+ * Export) lives in the plot's **right-click context menu** — see
+ * showPlotContextMenu(). Mouse-wheel zoom and click-drag pan on the X axis are
+ * unaffected; right-click is otherwise unused by QCustomPlot.
  */
 class PlotWidget : public QWidget
 {
@@ -106,10 +110,24 @@ private slots:
     void updateTitle();
     /// Handles opening the Customize Plot dialog.
     void onCustomizePlotClicked();
-    /// Handles user editing X range spinboxes.
-    void onXRangeChanged();
-    /// Resets all axes to auto/full range.
-    void onResetAxes();
+    /// Builds and shows the plot's right-click context menu at @p pos (chart coords).
+    void showPlotContextMenu(const QPoint& pos);
+    /// Builds the context menu without showing it, so its actions can be inspected
+    /// (and unit-tested) without entering QMenu::exec()'s modal event loop.
+    /// Caller takes ownership. Returns nullptr when no ViewModel is attached.
+    QMenu* buildContextMenu();
+    /// Prompts for a custom plot title.
+    void onSetPlotTitle();
+    /// Prompts for a start/stop time window (DDD:HH:MM:SS) and applies it.
+    void onSetTimeWindow();
+    /// Resets the X axis to the full data span.
+    void onResetXAxis();
+    /// Prompts for the left y-axis maximum override.
+    void onSetLeftYMax();
+    /// Prompts for the right y-axis maximum override.
+    void onSetRightYMax();
+    /// Clears both y-axis maximum overrides (back to auto).
+    void onResetYAxes();
     /// Shows a tooltip with the nearest data point value under the cursor.
     void onPlotMouseMove(QMouseEvent* event);
 
@@ -125,14 +143,14 @@ private:
     void setUpLayout();
     void setUpConnections();
 
-    /// Syncs the View Mode dropdown's selection/enabled state (and the left
-    /// spinbox range) to the ViewModel's active left-axis metric.
-    void updateAxisViewCombo();
+    /// Clamps @p start / @p stop to the data bounds (warning to the log if a value
+    /// was clamped), enforces start <= stop, and applies the window to the ViewModel.
+    /// Shared by the Set Time Window dialog so entered values behave exactly as the
+    /// old start/stop fields did.
+    void applyTimeWindow(double start, double stop,
+                         const QString& entered_start, const QString& entered_stop);
     /// Rebuilds the floating legend's rows from current ViewModel series visibility.
     void rebuildLegend();
-    /// Repopulates the file-selector dropdown from the ViewModel's source list and
-    /// syncs its enabled state (disabled for <=1 source) and current selection.
-    void populateSourceCombo();
     /// Sizes the legend overlay to fit @p content (height/width capped) and
     /// positions/clamps it in view. @p content is the natural, unconstrained size
     /// of the legend rows, computed by the caller (rebuildLegend()) directly from
@@ -164,29 +182,11 @@ private:
     QCustomPlot* m_plot = nullptr;
     /// @}
 
-    /// @name Top toolbar controls
-    /// @{
-    QLineEdit* m_title_edit = nullptr;
-    QComboBox* m_axis_view_combo = nullptr; ///< View Mode: left axis Lock % vs Accumulation (missed frames).
-    QComboBox* m_source_combo = nullptr;    ///< Plot File: selects which processed file to view (US1.1); disabled for <=1 source.
-    /// @}
-
-    /// @name Bottom controls
-    /// @{
-    QLineEdit* m_x_start_edit = nullptr;
-    QLineEdit* m_x_stop_edit = nullptr;
-    QPushButton* m_reset_btn = nullptr;
-    QDoubleSpinBox* m_left_y_max_spin = nullptr;  ///< User-adjustable max for the left (lock/missed-frames) axis.
-    QDoubleSpinBox* m_right_y_max_spin = nullptr; ///< User-adjustable max for the right (SNR) axis.
-    /// @}
-
     /// @name Graph tracking
     /// @{
     QVector<QCPGraph*> m_graphs;          ///< Series index → QCPGraph, aligned to PlotViewModel::allSeries().
     QHash<int, QCPGraph*> m_graph_by_id;  ///< Series id → QCPGraph, for incremental reconcile across appends.
     /// @}
-
-    QPushButton* m_customize_btn = nullptr;
 
     /// @name Legend overlay (movable box floating over the chart, child of m_plot)
     /// @{

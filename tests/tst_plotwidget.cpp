@@ -9,7 +9,14 @@
 #include <QFileInfo>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QAction>
+#include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QLineEdit>
+#include <QPushButton>
+#include <QSpinBox>
 #include <QLabel>
+#include <QMenu>
 #include <QStyle>
 #include <QTemporaryDir>
 #include <QVBoxLayout>
@@ -275,4 +282,240 @@ void TestPlotWidget::exportImageDefaultsUnknownSuffixToPdf()
     QVERIFY(widget.exportImage(path));
     QVERIFY(QFileInfo::exists(path + ".pdf"));
     QVERIFY(QFileInfo(path + ".pdf").size() > 0);
+}
+
+
+// ---------------------------------------------------------------------------
+// Right-click context menu (replaces the old external control rows)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// Adds one frame-sync stream, which yields both a lock and a missed-frames
+/// series (so the View Mode submenu has both metrics available).
+void addLockStream(PlotViewModel& vm, const QString& label, int channel_id)
+{
+    ProcessedStreamData d;
+    d.streamLabel  = label;
+    d.pcmChannelId = channel_id;
+    d.mode         = StreamMode::FrameSyncLockStats;
+    d.timesSec                = { 0.0, 1.0, 2.0 };
+    d.lockPercent             = { 90.0, 95.0, 100.0 };
+    d.accumulatedMissedFrames = { 0.0, 1.0, 1.0 };
+    vm.addStreamData(d);
+}
+
+/// @return the top-level action whose text starts with @p prefix, else nullptr.
+QAction* findAction(QMenu* menu, const QString& prefix)
+{
+    const QList<QAction*> actions = menu->actions();
+    for (QAction* a : actions)
+    {
+        if (a->text().startsWith(prefix))
+            return a;
+    }
+    return nullptr;
+}
+
+} // namespace
+
+void TestPlotWidget::contextMenuListsExpectedTopLevelItems()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+
+    QScopedPointer<QMenu> menu(widget.buildContextMenu());
+    QVERIFY(!menu.isNull());
+
+    // Every control that used to live in the external rows must have a home here.
+    QVERIFY(findAction(menu.data(), "Plot File") != nullptr);
+    QVERIFY(findAction(menu.data(), "View Mode") != nullptr);
+    QVERIFY(findAction(menu.data(), "Customize View") != nullptr);
+    QVERIFY(findAction(menu.data(), "Set Plot Title") != nullptr);
+    QVERIFY(findAction(menu.data(), "X Axis") != nullptr);
+    QVERIFY(findAction(menu.data(), "Y Axes") != nullptr);
+    QVERIFY(findAction(menu.data(), "Export") != nullptr);
+}
+
+void TestPlotWidget::contextMenuItemsDisabledUntilDataLoads()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+
+    // No data: the data-dependent entries are disabled (the old widgets were
+    // likewise disabled until a file loaded).
+    {
+        QScopedPointer<QMenu> menu(widget.buildContextMenu());
+        QVERIFY(!findAction(menu.data(), "Customize View")->isEnabled());
+        QVERIFY(!findAction(menu.data(), "Set Plot Title")->isEnabled());
+        QVERIFY(!findAction(menu.data(), "X Axis")->isEnabled());
+        QVERIFY(!findAction(menu.data(), "Y Axes")->isEnabled());
+        QVERIFY(!findAction(menu.data(), "Export")->isEnabled());
+    }
+
+    addLockStream(vm, "Ch 5", 5);
+
+    // With data they become available.
+    {
+        QScopedPointer<QMenu> menu(widget.buildContextMenu());
+        QVERIFY(findAction(menu.data(), "Customize View")->isEnabled());
+        QVERIFY(findAction(menu.data(), "Set Plot Title")->isEnabled());
+        QVERIFY(findAction(menu.data(), "X Axis")->isEnabled());
+        QVERIFY(findAction(menu.data(), "Y Axes")->isEnabled());
+        QVERIFY(findAction(menu.data(), "Export")->isEnabled());
+    }
+}
+
+void TestPlotWidget::contextMenuPlotFileSubmenuTracksSources()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+
+    // A single source has nothing to switch between, so Plot File stays disabled
+    // (this mirrors the old combo box's behavior).
+    addLockStream(vm, "Ch 5", 5);
+    {
+        QScopedPointer<QMenu> menu(widget.buildContextMenu());
+        QVERIFY(!findAction(menu.data(), "Plot File")->isEnabled());
+    }
+
+    // A second source enables it and lists "All files (overlaid)" plus one entry
+    // per source; triggering an entry filters the plot to that source.
+    ProcessedStreamData d;
+    d.streamLabel  = "Ch 6";
+    d.pcmChannelId = 6;
+    d.sourceId     = 1;
+    d.mode         = StreamMode::FrameSyncLockStats;
+    d.timesSec                = { 0.0, 1.0 };
+    d.lockPercent             = { 80.0, 85.0 };
+    d.accumulatedMissedFrames = { 0.0, 0.0 };
+    vm.addStreamData(d);
+
+    QScopedPointer<QMenu> menu(widget.buildContextMenu());
+    QAction* file_act = findAction(menu.data(), "Plot File");
+    QVERIFY(file_act->isEnabled());
+    QMenu* file_menu = file_act->menu();
+    QVERIFY(file_menu != nullptr);
+
+    QAction* all_act = findAction(file_menu, "All files");
+    QVERIFY(all_act != nullptr);
+    QVERIFY(all_act->isChecked());  // default view is every source overlaid
+
+    // The last action is the second source; selecting it isolates that source.
+    QAction* last = file_menu->actions().last();
+    last->trigger();
+    QCOMPARE(vm.visibleSource(), 1);
+}
+
+void TestPlotWidget::contextMenuViewModeReflectsAndSetsMode()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    addLockStream(vm, "Ch 5", 5);
+
+    QScopedPointer<QMenu> menu(widget.buildContextMenu());
+    QAction* mode_act = findAction(menu.data(), "View Mode");
+    QVERIFY(mode_act->isEnabled());   // stream produced both left-axis metrics
+    QMenu* mode_menu = mode_act->menu();
+    QVERIFY(mode_menu != nullptr);
+
+    QAction* lock_act  = findAction(mode_menu, "Lock Percentage");
+    QAction* accum_act = findAction(mode_menu, "Accumulation");
+    QVERIFY(lock_act != nullptr && accum_act != nullptr);
+
+    // Reflects the ViewModel's current mode...
+    QCOMPARE(vm.lockAxisView(), PlotViewModel::LockAxisView::LockPercent);
+    QVERIFY(lock_act->isChecked());
+    QVERIFY(!accum_act->isChecked());
+
+    // ...and setting it round-trips to the ViewModel.
+    accum_act->trigger();
+    QCOMPARE(vm.lockAxisView(), PlotViewModel::LockAxisView::MissedFrames);
+}
+
+void TestPlotWidget::contextMenuResetActionsClearAxisOverrides()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    addLockStream(vm, "Ch 5", 5);
+
+    // Narrow the X window and pin both Y maxima, as the menu dialogs would.
+    vm.setXViewRange(0.5, 1.5);
+    vm.setLeftYMaxOverride(42.0);
+    vm.setRightYMaxOverride(24.0);
+    QVERIFY(vm.hasLeftYMaxOverride());
+    QVERIFY(vm.hasRightYMaxOverride());
+
+    QScopedPointer<QMenu> menu(widget.buildContextMenu());
+
+    // X Axis > Reset Span restores the full data span...
+    QMenu* x_menu = findAction(menu.data(), "X Axis")->menu();
+    findAction(x_menu, "Reset Span")->trigger();
+    QCOMPARE(vm.xViewMin(), vm.xMin());
+    QCOMPARE(vm.xViewMax(), vm.xMax());
+
+    // ...and Y Axes > Reset clears BOTH overrides (the old single Reset button
+    // did the X and Y halves together; they are separate menu items now).
+    QMenu* y_menu = findAction(menu.data(), "Y Axes")->menu();
+    findAction(y_menu, "Reset")->trigger();
+    QVERIFY(!vm.hasLeftYMaxOverride());
+    QVERIFY(!vm.hasRightYMaxOverride());
+}
+
+void TestPlotWidget::contextMenuSetTitleAppliesToViewModel()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    addLockStream(vm, "Ch 5", 5);
+
+    // The dialog itself is modal, so drive the ViewModel path the action uses.
+    // (The chart title element must follow the ViewModel now that the external
+    // title text box is gone.)
+    vm.setPlotTitle("Flight 12 - Lock");
+    QCOMPARE(vm.plotTitle(), QString("Flight 12 - Lock"));
+}
+
+void TestPlotWidget::wheelZoomAndDragPanRemainEnabled()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+
+    // Regression guard for the toolbar removal: mouse interaction is what is left
+    // for navigating the plot, so it must switch on once data arrives, and stay
+    // horizontal-only (X zoom/pan).
+    QVERIFY(!widget.m_plot->interactions().testFlag(QCP::iRangeZoom));
+
+    addLockStream(vm, "Ch 5", 5);
+
+    QVERIFY(widget.m_plot->interactions().testFlag(QCP::iRangeZoom));
+    QVERIFY(widget.m_plot->interactions().testFlag(QCP::iRangeDrag));
+    QCOMPARE(widget.m_plot->axisRect()->rangeZoom(), Qt::Horizontal);
+    QCOMPARE(widget.m_plot->axisRect()->rangeDrag(), Qt::Horizontal);
+}
+
+void TestPlotWidget::noExternalControlWidgetsRemain()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    addLockStream(vm, "Ch 5", 5);
+
+    // The point of the redesign: the chart is the whole surface. No combo boxes,
+    // spin boxes, line edits or push buttons may live outside the chart - every
+    // control moved into the right-click menu. (The legend overlay's labels are
+    // QLabels, which is why only interactive control types are asserted on.)
+    // Dialogs spawned by menu actions are separate top-level windows, so they are
+    // not children of this widget and don't trip this check.
+    QVERIFY(widget.findChildren<QComboBox*>().isEmpty());
+    QVERIFY(widget.findChildren<QDoubleSpinBox*>().isEmpty());
+    QVERIFY(widget.findChildren<QSpinBox*>().isEmpty());
+    QVERIFY(widget.findChildren<QLineEdit*>().isEmpty());
+    QVERIFY(widget.findChildren<QPushButton*>().isEmpty());
 }

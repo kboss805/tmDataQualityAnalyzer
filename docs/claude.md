@@ -53,12 +53,12 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] All processed files are retained in memory; the user can optionally also export a CSV + Frame Sync Lock and Missed Frames images per file to a chosen folder, auto-named from each source file.
 - [x] Progress is shown while the batch runs, and a summary reports how many files were processed vs. skipped.
 - [x] A saved template round-trips the same per-stream settings the Configure Streams dialog captures (frame-sync, SNR, calibration references), and — optionally — per-series names/colors.
-- [x] After a multi-file run, the user can select which processed file's plot to view in the main plot window via the **Plot File** dropdown in the plot's top control row (far left). The dropdown is disabled when only one file is loaded, and offers an "All files (overlaid)" entry for comparison.
+- [x] After a multi-file run, the user can select which processed file's plot to view in the main plot window via the **Plot File** submenu of the plot's right-click context menu. The submenu is disabled when only one file is loaded, and offers an "All files (overlaid)" entry for comparison.
 
   - **Scope:** Matching is **exact channel-ID set** (a file must have the same PCM channel IDs as the template, no more/fewer) — decided for simplicity; revisit if a looser "subset" match is ever needed. This story is orthogonal to US2.2 (apply-to-all *within* one file). Templates carry **no file paths** — settings only, applied to whatever files the user picks. The only batch entry point is **Apply Template** (there is no direct multi-file open, and no Add/Remove Source); templates are the sole way to configure a batch.
   - **Config application:** each file's run feeds the template's `StreamConfig`s through unchanged (`applyBatchSourceConfig`); the reader dispatches each stream by `pcmChannelId`, which is safe precisely because of the exact-set match. **Non-linear calibration:** a template stores only the calibration *input references* (not the extracted profile), so **all batch files process with the linear slope/offset fallback**. Non-linear step calibration is available for single-file processing only; re-extraction on template apply is a possible future add.
   - **Custom names/colors:** captured only when **saving a template** from an already-processed, customized plot (`buildTemplateFromSource`), and reapplied per file after each run (`reapplyTemplateAppearance`, matched by channel id + metric/receiver/channel). Every file's copy of a channel intentionally shares the same name/color (they are the same channel across recordings); use the **Plot File** selector to view one file at a time when per-file distinction matters.
-  - **Retain-all + file selector:** a batch always keeps every processed file in memory; the plot's top-control-row **Plot File** dropdown (`PlotWidget::m_source_combo`) chooses which file to view, defaulting to the first, with "All files (overlaid)" for comparison. The filter is a `PlotViewModel` source gate (`setVisibleSource`/`effectiveVisible`) orthogonal to per-series visibility and the **View Mode** (lock %/accumulation) selector. Optional per-file export runs as a post-pass (`finishBatch` isolates each source, then `exportCsv(path, sourceId)` + a `_framesync_lock.png` and `_missed_frames.png` via `exportImage`).
+  - **Retain-all + file selector:** a batch always keeps every processed file in memory; the plot's right-click **Plot File** submenu chooses which file to view, defaulting to every source overlaid, with "All files (overlaid)" for comparison. The filter is a `PlotViewModel` source gate (`setVisibleSource`/`effectiveVisible`) orthogonal to per-series visibility and the **View Mode** (lock %/accumulation) selector. Optional per-file export runs as a post-pass (`finishBatch` isolates each source, then `exportCsv(path, sourceId)` + a `_framesync_lock.png` and `_missed_frames.png` via `exportImage`).
   - **Status: implemented** (Save/Apply Template, one `startBatchFromTemplate` batch loop, retain-all + Plot File selector). Schema/matcher/appearance/headless-export/source-view are unit-tested; the full sequential run is app-verified (needs real multi-file `.ch10` recordings). See `docs/processing-template-design.md`.
 
 ### US2.0: Define the key parameters required to process the framesync lock statistics and frame sync error accumulation — Complete
@@ -127,7 +127,7 @@ The stories below follow the workflow a first-time user takes through the applic
 
 **Acceptance Criteria:**
 - [x] The user can view the accumulated missed frames (left hand y-axis) versus time (x-axis) in a plot window.
-- [x] The user can switch the left-axis view between framesync lock (%) and accumulated missed frames modes.
+- [x] The user can switch the left-axis view between framesync lock (%) and accumulated missed frames modes (context menu > View Mode).
 - [x] The user can select which telemetry stream's accumulated missed frames to view in the plot window.
 - [x] Missed frames are accumulated per telemetry stream against that stream's own frame parameters.
 
@@ -156,14 +156,16 @@ The stories below follow the workflow a first-time user takes through the applic
 
 **Acceptance Criteria:**
 - [x] The plot fills the central area of the main application window (it is the window's central widget; the log occupies a toggleable left sidebar).
-- [x] The user can specify a custom title for the plot.
+- [x] The chart occupies the entire plot area: there are no external control rows. Every plot control is reached from a **right-click context menu** on the chart, whose items are disabled until data is loaded.
+- [x] The context menu provides: **Plot File** (which processed file to view), **View Mode** (Lock Percentage / Accumulation), **Customize View…**, **Set Plot Title…**, **X Axis** (Set Time Window… / Reset Span), **Y Axes** (Set Left Max… / Set Right Max… / Reset), and **Export…**.
+- [x] The user can specify a custom title for the plot (context menu > Set Plot Title…).
 - [x] The left Y axis is labeled with its unit of measure, average framesync lock percent.
 - [x] The right Y axis is labeled with its unit of measure, SNR in decibels.
 - [x] The bottom X axis is labeled with elapsed file time (DDD:HH:MM:SS), not raw seconds.
 - [x] The Y axis automatically scales to the data's min/max values.
 - [x] The X axis automatically scales to the full time span of the loaded data.
-- [x] The user can set a time window to zoom and pan the X axis to just that range.
-- [x] The user can manually override the Y axis minimum and maximum values.
+- [x] The user can set a time window to zoom and pan the X axis to just that range (context menu > X Axis > Set Time Window…, entered as DDD:HH:MM:SS; values outside the file range are clamped with a warning in the log). **X Axis > Reset Span** restores the full span.
+- [x] The user can manually override the Y axis maximum values (context menu > Y Axes > Set Left/Right Max…); minima remain automatic. **Y Axes > Reset** clears both overrides.
 - [x] The mouse wheel zooms the X axis.
 - [x] A mouse click and hold pans the X axis.
 - [x] The user can show or hide individual Frame Sync Lock and Receiver SNR series.
@@ -339,6 +341,32 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The menu and title-bar icons swap to theme-appropriate variants when the theme changes.
 
 ## Version History
+
+### Unreleased — Plot Window Simplification
+
+**Plot controls moved into a right-click context menu (US4.0)**
+- The plot window's external control rows are **gone**: the chart now fills the
+  entire plot area. The plot title field, Plot File selector, View Mode selector,
+  X start/stop fields, Reset button, left/right Y-max spin boxes and the
+  "Customize Plot…" button were all removed.
+- Everything is reached from a **right-click menu on the chart**
+  (`PlotWidget::showPlotContextMenu()`, built by `buildContextMenu()`): **Plot
+  File** (radio list of processed sources + "All files (overlaid)"; disabled for a
+  single source), **View Mode** (Lock Percentage / Accumulation; disabled unless
+  both left-axis metrics exist), **Customize View…**, **Set Plot Title…**,
+  **X Axis** (Set Time Window… / Reset Span), **Y Axes** (Set Left Max… / Set
+  Right Max… / Reset), and **Export…**. The menu is rebuilt on every request, so
+  it can never show a stale source list or mode.
+- The single Reset button became **two** items — `X Axis > Reset Span` and
+  `Y Axes > Reset` — which together do what the old button did.
+- **Export…** is now also on the plot (it remains in the hamburger menu too).
+- Unchanged: mouse-wheel X zoom, click-drag X pan, and the draggable legend
+  overlay. Y-axis minima remain automatic (only maxima are user-settable).
+- Time-window entry keeps the exact `formatTime`/`parseTime` (DDD:HH:MM:SS)
+  round-trip the old Start/Stop fields used, including clamping to the file range
+  with a log warning; the dialog supplies both values at once, so an inverted
+  range now pulls Stop up to Start (the old form clamped whichever field had focus).
+- No ViewModel changes: every menu item drives the existing `PlotViewModel` API.
 
 ### v2.7.0 — Processing Templates & Batch Apply, Hamburger Menu, Frameless Title Bar, User Manual
 
@@ -683,7 +711,7 @@ picks a template + N files, validates each file's PCM channel-ID set against the
 template (`TemplateMatcher`, **exact-set match** — a file with any missing/extra
 channel is rejected with a reason), then processes every matching file in one batch
 (`MainView::startBatchFromTemplate()`). Every processed file is **retained in
-memory**; the plot's top-control-row **Plot File** dropdown (`PlotWidget::m_source_combo`)
+memory**; the plot's right-click **Plot File** submenu
 chooses which one to view (or "All files (overlaid)"), driven by
 `PlotViewModel::setVisibleSource` / `effectiveVisible` (a source gate orthogonal to
 per-series visibility and the **View Mode** lock%/accumulation selector). A batch
@@ -730,7 +758,7 @@ not mis-read.
    - Unified export dialog: any combination of CSV data, a plot image (PNG/SVG/PDF), and the log text, each with its own filename/location; checkbox-to-field enable logic and export-button validation
 
 5. **PlotWidget** (`src/view/plotwidget.cpp`, `include/view/plotwidget.h`)
-   - Self-contained QCustomPlot chart with title field, axis-control spinboxes, and a movable legend overlay (a translucent, draggable frame parented to the chart; single-column line-swatch + label rows with a vertical scrollbar for dense plots; composited into PNG/SVG exports)
+   - Self-contained QCustomPlot chart filling the whole widget - no external control rows; every control (Plot File, View Mode, Customize View, plot title, X/Y axis ranges, Export) lives in the right-click context menu built by `buildContextMenu()`/`showPlotContextMenu()` - plus a movable legend overlay (a translucent, draggable frame parented to the chart; single-column line-swatch + label rows with a vertical scrollbar for dense plots; composited into PNG/SVG exports)
    - Mouse wheel zoom and click-drag pan; `onSeriesVisibilityToggled()` toggles a graph without a full rebuild
    - All replots use `rpQueuedReplot`; controls disabled until data loads; `applyTheme(bool dark)` syncs colors with the app theme
 
@@ -1043,7 +1071,7 @@ source/header files are listed in `tests/tests.pro`.
 - **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, Y auto/manual range, X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), the left-axis view toggle preserving per-stream selection, and stream-identity regression coverage: two streams sharing a TMATS-derived `streamLabel` but different `streamOrder` must stay independent through reprocess-replace and `renameSeries()`/`recolorSeries()` sibling-sync (pinned after a pre-v2.6.0 cross-contamination bug). Multi-file input: cross-source identity (two different `sourceId`s reusing the same `streamLabel`/`streamOrder` stay independent through reprocess-replace/rename/recolor), time-base re-basing (a later-added source starting earlier shifts existing series right; three successively-earlier sources compound correctly; a later source starting after triggers no shift), the non-overlap warning signal (fires once per newly-arriving non-overlapping source, not for an overlapping range), and `removeSource()` (drops only the target source, re-bases left only when the removed source held the earliest sample, clears all data when the last source is removed, no-ops for an unknown id). US1.1 source view: `setVisibleSource()` isolates a source via `effectiveVisible()` without mutating per-series `visible`, `sourceList()` lists distinct labeled sources, and `exportCsv(path, sourceId)` writes only that source's columns
 - **TestProcessingCoordinator** (`tst_processingcoordinator`) — constructor defaults, `reset()` clears state, cancel-with-no-run no-op, `startProcessing()` empty-returns-false and processing-state emission, plus single-vs-multi-stream throughput benchmarks
 - **TestMainView** (`tst_mainview`) — Main window construction, widget wiring, log routing, dock visibility behavior, the CSV import routing (`openPath`/`importCsv`, valid/invalid), and batch apply's CI-safe helpers: `reapplyTemplateAppearance()` maps the template's saved names/colors onto the right series, and `buildTemplateFromSource()` captures configs + `timeChannelIndex` + series appearance (the full `advanceBatch()` orchestration needs a real `.ch10` fixture, so it is app-verified not unit-tested)
-- **TestPlotWidget** (`tst_plotwidget`) — Plot widget construction, null/valid ViewModel connection, dark/light theme application, the movable legend overlay populating from data (hidden until data loads, then one row per visible active-metric series), a shown/resized-window regression case asserting the overlay sizes correctly (not a collapsed frame-only box) after a second rebuild adds more rows — a QScrollArea `widgetResizable` sizeHint staleness bug reproduced and fixed post-review — the SNR legend row showing the short "CH\<id\> \<ch.name\>" form instead of the full TMATS stream title, the legend row layout reserving a right-side gutter matching the style's scrollbar extent, and each legend row carrying an objectName the overlay stylesheet can target to override the app's global `QWidget { background-color: ... }` theme rule (otherwise every row painted as an opaque chip); plus `exportImage()` writing a PNG/SVG/PDF headlessly (the parameterized image-export entry point extracted for batch apply)
+- **TestPlotWidget** (`tst_plotwidget`) — Plot widget construction, null/valid ViewModel connection, dark/light theme application, the movable legend overlay populating from data (hidden until data loads, then one row per visible active-metric series), a shown/resized-window regression case asserting the overlay sizes correctly (not a collapsed frame-only box) after a second rebuild adds more rows — a QScrollArea `widgetResizable` sizeHint staleness bug reproduced and fixed post-review — the SNR legend row showing the short "CH\<id\> \<ch.name\>" form instead of the full TMATS stream title, the legend row layout reserving a right-side gutter matching the style's scrollbar extent, and each legend row carrying an objectName the overlay stylesheet can target to override the app's global `QWidget { background-color: ... }` theme rule (otherwise every row painted as an opaque chip); plus `exportImage()` writing a PNG/SVG/PDF headlessly (the parameterized image-export entry point extracted for batch apply); and the right-click context menu that replaced the external control rows: it lists every expected top-level item, its data-dependent entries are disabled until data loads, the Plot File submenu is disabled for a single source and switches `visibleSource` for a multi-source run, View Mode reflects and sets the active left-axis metric, `X Axis > Reset Span` / `Y Axes > Reset` clear the X window and both Y overrides, plus two structural guards - wheel-zoom/drag-pan stay enabled (horizontal-only) once data arrives, and **no QComboBox / QSpinBox / QLineEdit / QPushButton remains anywhere outside the chart** (the machine-checkable form of "no external controls")
 - **TestPlotCustomizationDialog** (`tst_plotcustomizationdialog`) — Customize Plot Series dialog: one Frame Sync Lock checkbox per stream, Select All/None, apply → per-stream lock/missed visibility round-trip to the ViewModel; Receiver SNR tree build (receiver grouping), tri-state group cascade, Select All/None, apply → per-channel SNR visibility round-trip, and the Expand/Collapse All button toggle; plus per-stream rename/recolor (lock tab) and per-channel rename/recolor via pending item roles (SNR tab) applied to the ViewModel on OK, and the single batched `seriesAppearanceChanged` emission (reaches private widgets/slots via a friend declaration, same pattern as TestFrameProcessor)
 - **TestStreamConfigDialog** (`tst_streamconfigdialog`) — Per-stream Configure Streams dialog: stream rows, mode selection, gear setup dialogs, TOML load/save round-trips, "Apply to all" fan-out, the Channel column label (short names shown in full, long TMATS-derived names elided on the left with "..." so the distinguishing tail stays visible, right-justified, styled via `channelNameCell` to mimic the Mode combo box's border/fill, and the full name always available via tooltip), the Mode combo's right-justified closed-box text (via an editable-but-readonly internal line edit) while selection still tracks correctly, and the table header/separator using theme-QSS object names (`streamHeaderLabel` / `streamHeaderSeparator`) rather than hard-coded inline colors
 - **TestExportDialog** (`tst_exportdialog`) — Export dialog checkbox-to-field enable logic, export-button validation, and the log-export row defaults/accessors and log-only validation
