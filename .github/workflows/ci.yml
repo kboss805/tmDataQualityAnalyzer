@@ -87,6 +87,9 @@ jobs:
       - name: Overlay full-size PRN fixture
         shell: powershell
         run: |
+          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError
+          # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
+          $ErrorActionPreference = 'Continue'
           # The small PRN sample is committed (used by the hosted CI). On this
           # runner, overlay the full-size recording so the heavy throughput
           # benchmark runs the complete data. TMDQA_CH10_FULL is set in the runner's
@@ -102,13 +105,23 @@ jobs:
       - name: Toolchain versions
         shell: powershell
         run: |
+          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError
+          # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
+          $ErrorActionPreference = 'Continue'
           . .\scripts\env.ps1
           qmake --version
-          cl 2>&1 | Select-Object -First 1
+          cmd /c "cl 2>&1" | Select-Object -First 1
+          # cl exits non-zero when given no input file, and GitHub appends
+          # "exit $LASTEXITCODE" to powershell steps - this step is informational,
+          # so end it explicitly successful.
+          exit 0
 
       - name: Build app (Debug)
         shell: powershell
         run: |
+          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError
+          # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
+          $ErrorActionPreference = 'Continue'
           . .\scripts\env.ps1
           New-Item -ItemType Directory -Force -Path build | Out-Null
           Set-Location build
@@ -119,6 +132,9 @@ jobs:
       - name: Zero-warning gate
         shell: powershell
         run: |
+          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError
+          # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
+          $ErrorActionPreference = 'Continue'
           $warns = Select-String -Path build\app_build.log -Pattern 'warning [A-Z]\d+'
           if ($warns) {
             Write-Host "Compiler warnings found:"; $warns | ForEach-Object { Write-Host $_.Line }
@@ -129,6 +145,9 @@ jobs:
       - name: Build tests (Debug, in-source)
         shell: powershell
         run: |
+          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError
+          # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
+          $ErrorActionPreference = 'Continue'
           . .\scripts\env.ps1
           Set-Location tests
           qmake tests.pro -spec win32-msvc 'CONFIG+=debug'
@@ -138,6 +157,9 @@ jobs:
       - name: Run full test suite
         shell: powershell
         run: |
+          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError
+          # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
+          $ErrorActionPreference = 'Continue'
           # env.ps1 puts the Qt msvc kit's bin on PATH so the test exe loads Qt6*.dll
           # (each step is a fresh shell - PATH doesn't carry over).
           . .\scripts\env.ps1
@@ -192,12 +214,22 @@ jobs:
       - name: Toolchain versions
         shell: powershell
         run: |
+          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError
+          # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
+          $ErrorActionPreference = 'Continue'
           qmake --version
-          cl 2>&1 | Select-Object -First 1
+          cmd /c "cl 2>&1" | Select-Object -First 1
+          # cl exits non-zero when given no input file, and GitHub appends
+          # "exit $LASTEXITCODE" to powershell steps - this step is informational,
+          # so end it explicitly successful.
+          exit 0
 
       - name: Build app (Debug)
         shell: powershell
         run: |
+          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError
+          # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
+          $ErrorActionPreference = 'Continue'
           New-Item -ItemType Directory -Force -Path build | Out-Null
           Set-Location build
           qmake ..\tmDataQualityAnalyzer.pro -spec win32-msvc 'CONFIG+=debug'
@@ -207,6 +239,9 @@ jobs:
       - name: Zero-warning gate
         shell: powershell
         run: |
+          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError
+          # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
+          $ErrorActionPreference = 'Continue'
           $warns = Select-String -Path build\app_build.log -Pattern 'warning [A-Z]\d+'
           if ($warns) {
             Write-Host "Compiler warnings found:"; $warns | ForEach-Object { Write-Host $_.Line }
@@ -217,6 +252,9 @@ jobs:
       - name: Build tests (Debug, in-source)
         shell: powershell
         run: |
+          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError
+          # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
+          $ErrorActionPreference = 'Continue'
           Set-Location tests
           qmake tests.pro -spec win32-msvc 'CONFIG+=debug'
           nmake -f Makefile.Debug
@@ -225,6 +263,9 @@ jobs:
       - name: Run test suite
         shell: powershell
         run: |
+          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError
+          # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
+          $ErrorActionPreference = 'Continue'
           Set-Location tests
           New-Item -ItemType Directory -Force -Path output | Out-Null
           .\debug\tmDataQualityAnalyzer_tests.exe
