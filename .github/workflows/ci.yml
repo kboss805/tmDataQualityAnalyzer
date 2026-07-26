@@ -11,6 +11,15 @@ name: CI
 #     suites run here too (~324 — only the heavy PRN throughput benchmark skips,
 #     since it needs the full recording that lives on the self-hosted runner).
 #
+# Windows steps use `shell: powershell` (Windows PowerShell 5.1), NOT `pwsh`.
+# The self-hosted runner runs as a Windows service under NT AUTHORITY\NETWORK
+# SERVICE, and PowerShell 7 is installed here as a per-user MSIX/Store package
+# (C:\Program Files\WindowsApps\...) that a service account cannot launch — `pwsh`
+# fails with "command not found". Windows PowerShell 5.1 lives in System32 and is
+# available to every account, and is present on GitHub-hosted runners too, so both
+# CI paths use the same shell. Don't switch these back to pwsh unless PowerShell 7
+# is installed machine-wide (MSI, C:\Program Files\PowerShell\7) on the runner.
+#
 # The pick-runner job routes to self-hosted only when that runner is actually
 # ONLINE — otherwise (runner offline, or a contributor without the runner) it falls
 # back to hosted. Detecting the runner's status needs an admin token, which the
@@ -71,7 +80,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Overlay full-size PRN fixture
-        shell: pwsh
+        shell: powershell
         run: |
           # The small PRN sample is committed (used by the hosted CI). On this
           # runner, overlay the full-size recording so the heavy throughput
@@ -86,14 +95,14 @@ jobs:
           }
 
       - name: Toolchain versions
-        shell: pwsh
+        shell: powershell
         run: |
           . .\scripts\env.ps1
           qmake --version
           cl 2>&1 | Select-Object -First 1
 
       - name: Build app (Debug)
-        shell: pwsh
+        shell: powershell
         run: |
           . .\scripts\env.ps1
           New-Item -ItemType Directory -Force -Path build | Out-Null
@@ -103,7 +112,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "App build failed ($LASTEXITCODE)" }
 
       - name: Zero-warning gate
-        shell: pwsh
+        shell: powershell
         run: |
           $warns = Select-String -Path build\app_build.log -Pattern 'warning [A-Z]\d+'
           if ($warns) {
@@ -113,7 +122,7 @@ jobs:
           Write-Host "No warnings."
 
       - name: Build tests (Debug, in-source)
-        shell: pwsh
+        shell: powershell
         run: |
           . .\scripts\env.ps1
           Set-Location tests
@@ -122,7 +131,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Test build failed ($LASTEXITCODE)" }
 
       - name: Run full test suite
-        shell: pwsh
+        shell: powershell
         run: |
           # env.ps1 puts the Qt msvc kit's bin on PATH so the test exe loads Qt6*.dll
           # (each step is a fresh shell — PATH doesn't carry over).
@@ -176,13 +185,13 @@ jobs:
           arch: x64
 
       - name: Toolchain versions
-        shell: pwsh
+        shell: powershell
         run: |
           qmake --version
           cl 2>&1 | Select-Object -First 1
 
       - name: Build app (Debug)
-        shell: pwsh
+        shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path build | Out-Null
           Set-Location build
@@ -191,7 +200,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "App build failed ($LASTEXITCODE)" }
 
       - name: Zero-warning gate
-        shell: pwsh
+        shell: powershell
         run: |
           $warns = Select-String -Path build\app_build.log -Pattern 'warning [A-Z]\d+'
           if ($warns) {
@@ -201,7 +210,7 @@ jobs:
           Write-Host "No warnings."
 
       - name: Build tests (Debug, in-source)
-        shell: pwsh
+        shell: powershell
         run: |
           Set-Location tests
           qmake tests.pro -spec win32-msvc 'CONFIG+=debug'
@@ -209,7 +218,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Test build failed ($LASTEXITCODE)" }
 
       - name: Run test suite
-        shell: pwsh
+        shell: powershell
         run: |
           Set-Location tests
           New-Item -ItemType Directory -Force -Path output | Out-Null
