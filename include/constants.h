@@ -25,8 +25,6 @@ struct AppVersion {
 namespace PCMConstants {
     inline constexpr int kCommonWordLen        = 16;    ///< Bits per word.
     inline constexpr int kSecondsPerMinute     = 60;    ///< Seconds in a minute.
-    inline constexpr int kMinutesPerHour       = 60;    ///< Minutes in an hour.
-    inline constexpr int kHoursPerDay          = 24;    ///< Hours in a day.
     inline constexpr int kNumMinorFrames       = 1;     ///< Minor frames per major frame.
     inline constexpr int kMaxChannelCount      = 0x10000; ///< Maximum channel ID range.
     inline constexpr const char* kDefaultFrameSyncMask          = "FFFFFFFF"; ///< Default frame sync mask (all bits active).
@@ -142,20 +140,11 @@ namespace UIConstants {
     /// @{
     inline constexpr int kProgressBarMax                 = 100;  ///< Maximum value for the progress bar.
     inline constexpr int kFileListMinHeight              = 180;  ///< Minimum height for the file list tree widget (px).
-    inline constexpr int kTreeIndentation                = 12;                           ///< Indentation width for tree widgets (px).
     inline constexpr int kLayoutSpacingSmall             = 8;                            ///< Small layout spacing (px).
-    inline constexpr int kLayoutSpacingLarge             = 16;                           ///< Large layout spacing (px).
-    inline constexpr int kToolbarIconSize                = 24;                           ///< Toolbar icon size (px).
     inline constexpr int kAboutIconSize                  = 64;                           ///< About dialog icon size (px).
-    inline constexpr int kLogDialogWidth                 = 600;                          ///< Default log dialog width (px).
-    inline constexpr int kLogDialogHeight                = 400;                          ///< Default log dialog height (px).
-    inline constexpr int kTimeInputMaxWidth               = 100;                          ///< Maximum width for time input fields (px).
-    inline constexpr int kChannelComboFixedWidth           = 400;                          ///< Fixed width for Time/PCM channel combo boxes (px).
-    inline constexpr int kFileNameColumnMinWidth           = 600;                          ///< Minimum width for the file name column in the file list tree (px).
     inline constexpr int kSidebarMinWidth                 = 400;                          ///< Minimum width for the sidebar panel (file name column + margins).
     inline constexpr int kInitialWindowWidth              = 1920;                         ///< Initial main window width at launch (px).
     inline constexpr int kInitialWindowHeight             = 1080;                         ///< Initial main window height at launch (px).
-    inline constexpr int kDecimalBase                    = 10;                           ///< Decimal (base-10) radix for QString::arg formatting.
     inline constexpr int kHexBase                        = 16;                           ///< Hexadecimal (base-16) radix for string parsing.
     inline constexpr int kBytesPerKB                     = 1024;                         ///< Bytes per kilobyte.
     inline constexpr int kBytesPerMB                     = 1048576;                      ///< Bytes per megabyte.

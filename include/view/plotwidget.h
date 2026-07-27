@@ -170,6 +170,10 @@ private:
     /// Anchors the legend toggle button at the chart's top-left (the legend itself
     /// defaults to the top-right, so they never collide) and keeps it on top.
     void positionLegendToggle();
+    /// Sets the chart's resting cursor: an open hand once data is loaded (the plot
+    /// can be click-dragged to pan), a plain arrow before that. Pressing swaps in a
+    /// closed hand; releasing calls back here.
+    void updatePlotCursor();
     /// Shows/hides the legend per @p visible, persists the choice, and refreshes
     /// the toggle's checked state. Does nothing if the state is already @p visible.
     void setLegendVisible(bool visible);

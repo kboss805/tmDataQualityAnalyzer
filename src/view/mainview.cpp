@@ -62,6 +62,24 @@ namespace
         return dark ? QColor(0xC8, 0xC8, 0xC8) : QColor(0x3C, 0x3C, 0x3C);
     }
 
+    /// @name Caption-button glyphs from the Windows icon font
+    /// Segoe Fluent Icons (Windows 11), falling back to Segoe MDL2 Assets — the
+    /// same glyphs Windows draws for its own window buttons, so minimize,
+    /// maximize/restore and close share one set of metrics. Ordinary Unicode
+    /// look-alikes (U+2212, U+25A1, U+2715) do NOT: the UI font draws them at
+    /// noticeably different optical sizes, which is what made these buttons look
+    /// mismatched.
+    ///
+    /// Written as codepoints rather than literal characters on purpose: they live
+    /// in the Unicode private use area, so a literal in the source is fragile —
+    /// editors and tooling can silently drop it, leaving a blank button.
+    /// @{
+    constexpr char16_t kGlyphMinimize = 0xE921; ///< ChromeMinimize
+    constexpr char16_t kGlyphMaximize = 0xE922; ///< ChromeMaximize
+    constexpr char16_t kGlyphRestore  = 0xE923; ///< ChromeRestore
+    constexpr char16_t kGlyphClose    = 0xE8BB; ///< ChromeClose
+    /// @}
+
     /// Paints a thin three-line "hamburger" menu glyph (Claude Code style). Drawn in
     /// code so it adapts to the theme without shipping separate dark/light assets.
     QIcon makeMenuIcon(bool dark)
@@ -326,6 +344,11 @@ void MainView::setUpMenuBar()
     title_bar->setStyleSheet(
         "#titleBar QToolButton{border:none;background:transparent;min-width:44px;min-height:40px;font-size:15px;}"
         "#titleBar QToolButton:hover{background:rgba(128,128,128,0.22);}"
+        // The caption buttons use the Windows icon font so minimize/maximize/close
+        // are drawn at identical metrics (10px is the size Windows itself uses for
+        // these glyphs). MDL2 Assets is the Windows 10 fallback.
+        "#titleBar QToolButton#winBtn,#titleBar QToolButton#winClose"
+        "{font-family:'Segoe Fluent Icons','Segoe MDL2 Assets';font-size:10px;}"
         "#titleBar QToolButton#winClose:hover{background:#c42b1c;color:#ffffff;}"
         "#titleBar QToolButton#menuBtn::menu-indicator{image:none;}"
         // menuBtn and sidebarBtn get a fixed size + AlignVCenter in code, so their
@@ -370,13 +393,22 @@ void MainView::setUpMenuBar()
 
     bar_layout->addStretch(1);
 
+    // Caption glyphs come from the Windows icon font (see the winBtn stylesheet
+    // rule): mixing ordinary Unicode characters here made the buttons look
+    // mismatched, because U+2212/U+25A1/U+2715 are drawn at quite different
+    // optical sizes by the UI font. The ChromeMinimize/Maximize/Restore/Close
+    // glyphs are a set designed to the same metrics, which is also exactly what
+    // Windows itself uses. They stay *text* (not QIcons) so the close button's
+    // white-on-red hover rule can still recolor the glyph.
     auto* min_button = new QToolButton(title_bar);
-    min_button->setText(QStringLiteral("−"));   // −
+    min_button->setObjectName("winBtn");
+    min_button->setText(QChar(kGlyphMinimize));
     min_button->setToolTip(tr("Minimize"));
     connect(min_button, &QToolButton::clicked, this, &QWidget::showMinimized);
     bar_layout->addWidget(min_button);
 
     m_max_button = new QToolButton(title_bar);
+    m_max_button->setObjectName("winBtn");
     m_max_button->setToolTip(tr("Maximize"));
     connect(m_max_button, &QToolButton::clicked, this, [this]() {
         setWindowState(isMaximized() ? (windowState() & ~Qt::WindowMaximized)
@@ -386,7 +418,7 @@ void MainView::setUpMenuBar()
 
     auto* close_button = new QToolButton(title_bar);
     close_button->setObjectName("winClose");
-    close_button->setText(QStringLiteral("✕"));  // ✕
+    close_button->setText(QChar(kGlyphClose));
     close_button->setToolTip(tr("Close"));
     connect(close_button, &QToolButton::clicked, this, &QWidget::close);
     bar_layout->addWidget(close_button);
@@ -400,7 +432,8 @@ void MainView::updateMaximizeButton()
     if (m_max_button == nullptr)
         return;
     const bool maximized = isMaximized();
-    m_max_button->setText(maximized ? QStringLiteral("❐") : QStringLiteral("□"));
+    // ChromeRestore / ChromeMaximize from the Windows icon font (see setUpTitleBar).
+    m_max_button->setText(QChar(maximized ? kGlyphRestore : kGlyphMaximize));
     m_max_button->setToolTip(maximized ? tr("Restore") : tr("Maximize"));
 }
 

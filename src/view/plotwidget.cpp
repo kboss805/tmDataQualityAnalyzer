@@ -276,6 +276,8 @@ void PlotWidget::rebuildChart()
         }
     }
 
+    updatePlotCursor();
+
     m_plot->replot(QCustomPlot::rpQueuedReplot);
     m_updating_from_vm = false;
 }
@@ -990,6 +992,23 @@ void PlotWidget::setUpConnections()
 
     connect(m_plot, &QCustomPlot::mouseMove, this, &PlotWidget::onPlotMouseMove);
 
+    // Grab-cursor feedback for click-and-drag panning: an open hand over the chart
+    // says "this can be dragged", and pressing closes it. Shown whenever data is
+    // loaded, regardless of zoom level - when the full span is in view a drag
+    // simply has nowhere to go, which is the same behaviour the cursor implies.
+    // The legend overlay and its viewport set their own cursors, so dragging the
+    // legend is unaffected.
+    connect(m_plot, &QCustomPlot::mousePress, this, [this](QMouseEvent* event) {
+        if (event->button() == Qt::LeftButton && m_view_model != nullptr
+            && m_view_model->hasData())
+        {
+            m_plot->setCursor(Qt::ClosedHandCursor);
+        }
+    });
+    connect(m_plot, &QCustomPlot::mouseRelease, this, [this](QMouseEvent*) {
+        updatePlotCursor();
+    });
+
     connect(m_legend_toggle, &QToolButton::clicked, this,
             [this](bool checked) { setLegendVisible(checked); });
 
@@ -1194,6 +1213,18 @@ void PlotWidget::styleLegendToggle(bool dark)
         .arg(border.name())
         .arg(PlotConstants::kLegendCornerRadius)
         .arg(m_title_color.isValid() ? m_title_color.name() : border.name()));
+}
+
+void PlotWidget::updatePlotCursor()
+{
+    if (m_plot == nullptr)
+    {
+        return;
+    }
+    // Open hand = "drag me to pan". Plain arrow before any data is loaded, where
+    // dragging would be meaningless.
+    const bool pannable = (m_view_model != nullptr && m_view_model->hasData());
+    m_plot->setCursor(pannable ? Qt::OpenHandCursor : Qt::ArrowCursor);
 }
 
 void PlotWidget::positionLegendToggle()

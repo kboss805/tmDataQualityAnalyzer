@@ -106,16 +106,47 @@ plots two data-quality metrics over time, per stream:</p>
 optional start/stop time range to restrict processing.</p>
 
 <h2 id="plot">3. Working with the plot</h2>
+<p>The chart fills the whole plot area — there are no control rows around it. Everything is either
+<strong>right-click on the plot</strong> or a small control overlaid on the chart, so the maximum
+amount of space shows data.</p>
+
+<h3>The right-click menu</h3>
+<p>Right-click anywhere on the chart. Entries stay disabled until a file has been processed.</p>
 <ul>
-  <li><strong>Plot File</strong> — after a batch run with several files, selects which file's series
-      are shown, or <em>All files (overlaid)</em>. Disabled when only one file is loaded.</li>
-  <li><strong>Plot Title</strong> — free-text title shown above the chart and used in exports.</li>
-  <li><strong>View Mode</strong> — for Frame Sync Lock data, switches the Y axis between
-      <em>Lock&nbsp;%</em> and <em>Accumulation</em> (running missed-frame count).</li>
-  <li><strong>Zoom &amp; pan</strong> — scroll to zoom, drag to pan; right-click offers reset and
-      axis options.</li>
-  <li><strong>Legend</strong> — click entries to show/hide individual series.</li>
-  <li><strong>Customize Plot</strong> — rename series and change their colors.</li>
+  <li><strong>Set Plot Title…</strong> — the title shown above the chart and carried into exports.</li>
+  <li><strong>Plot File</strong> — after a batch run, picks which file's series are shown, or
+      <em>All files (overlaid)</em>. Disabled when only one file is loaded.</li>
+  <li><strong>View Mode</strong> — for Frame Sync Lock data, switches the left axis between
+      <em>Lock Percentage</em> and <em>Accumulation</em> (running missed-frame count). Disabled
+      unless the data contains both.</li>
+  <li><strong>Customize View…</strong> — rename series, change their colors, and show or hide
+      individual series.</li>
+  <li><strong>Show Legend</strong> — same toggle as the on-chart button below.</li>
+  <li><strong>X Axis → Set Time Window…</strong> — type a start and stop time as
+      <code>DDD:HH:MM:SS</code> to zoom to an exact span. Values outside the file's range are
+      clamped to it and a note appears in the log. <strong>Reset Span</strong> returns to the full
+      time range.</li>
+  <li><strong>Y Axes → Set Left Max… / Set Right Max…</strong> — pin the top of the left
+      (lock&nbsp;% or missed frames) or right (SNR&nbsp;dB) axis. Minimums always scale
+      automatically. <strong>Reset</strong> clears both back to automatic.</li>
+  <li><strong>Export…</strong> — the same export dialog as the main menu (see
+      <a href="#import-export">Import &amp; export</a>).</li>
+</ul>
+
+<h3>On-chart controls</h3>
+<ul>
+  <li><strong>Legend button</strong> — the small button at the chart's top-left shows or hides the
+      legend. Your choice is remembered between sessions, and a hidden legend is also left out of
+      exported images.</li>
+  <li><strong>Legend</strong> — drag it anywhere inside the chart to keep it clear of the data. It
+      starts in the top-right corner and lists one row per visible series.</li>
+</ul>
+
+<h3>Navigating</h3>
+<ul>
+  <li><strong>Zoom</strong> — scroll the mouse wheel over the chart to zoom the time axis.</li>
+  <li><strong>Pan</strong> — click and drag left/right to move through time.</li>
+  <li>To return to the full view, use <strong>X Axis → Reset Span</strong>.</li>
 </ul>
 
 <h2 id="metrics">4. Understanding the metrics</h2>
@@ -154,7 +185,8 @@ wrong physical channel.</div>
 <h2 id="import-export">6. Import &amp; export</h2>
 <ul>
   <li><strong>Export…</strong> — writes the current plot's data to CSV and/or the chart to an image
-      (PNG, SVG, or PDF), and can save the log.</li>
+      (PNG, SVG, or PDF), and can save the log. Available from the menu and from the plot's
+      right-click menu. A legend you have hidden is left out of exported images.</li>
   <li><strong>Import CSV…</strong> — loads a previously exported CSV straight onto the plot, with no
       reprocessing. Dropping a <code>.csv</code> onto the window does the same.</li>
 </ul>
@@ -163,9 +195,12 @@ wrong physical channel.</div>
 <ul>
   <li><strong>Menu (≡)</strong> — every command lives in the single top-left menu, grouped into
       Process, Import/Export, Settings, and Help sections.</li>
-  <li><strong>Sidebar</strong> — the panel on the left shows the processing log. Toggle it with the
-      sidebar button next to the menu, or <kbd>Ctrl+B</kbd>. Its state is remembered between
-      sessions.</li>
+  <li><strong>Sidebar</strong> — the panel on the left shows the processing log. It is shown by
+      default; toggle it with the sidebar button next to the menu, or <kbd>Ctrl+B</kbd>. Its state
+      is remembered between sessions.</li>
+  <li><strong>Plot controls</strong> — the plot itself has no surrounding toolbars: right-click the
+      chart for its menu, and use the on-chart legend button. See
+      <a href="#plot">Working with the plot</a>.</li>
   <li><strong>Theme</strong> — switch between dark and light themes from the Settings section.</li>
   <li><strong>Status bar</strong> — shows the loaded file and processing status.</li>
 </ul>
@@ -179,7 +214,7 @@ wrong physical channel.</div>
 
 <hr style="border:none;border-top:1px solid var(--line);margin-top:2.5rem">
 <p style="color:var(--muted);font-size:.9em">TM Data Quality Analyzer · This manual describes
-version 2.7.0. Open it any time from <strong>≡ → Help → User Manual…</strong></p>
+version 2.7.0 (plus unreleased plot-window changes). Open it any time from <strong>≡ → Help → User Manual…</strong></p>
 
 </body>
 </html>
