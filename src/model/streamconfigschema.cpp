@@ -8,6 +8,7 @@
 #include <QJsonObject>
 #include <QLatin1String>
 
+#include "constants.h"
 #include "streamconfig.h"
 
 namespace
@@ -89,10 +90,18 @@ bool StreamConfigSchema::fromJson(const QJsonObject& json, StreamConfig& out)
         out.sync.dataRateMbps     = sync["dataRateMbps"].toDouble(out.sync.dataRateMbps);
     }
 
-    out.samplePeriodIndex  = json["samplePeriodIndex"].toInt(out.samplePeriodIndex);
+    // Combo-box indices are clamped to their documented range on the way in. A
+    // template written by a newer version, or hand-edited, could otherwise carry
+    // an index this build doesn't know: samplePeriodIndex feeds a switch whose
+    // default silently substitutes 100 ms, and slopeIndex indexes the voltage
+    // bound tables. Clamping keeps a bad value from quietly changing the sample
+    // rate or the volts-to-dB conversion.
+    out.samplePeriodIndex  = qBound(0, json["samplePeriodIndex"].toInt(out.samplePeriodIndex),
+                                    UIConstants::kMaxSamplePeriodIndex);
     out.tmatsDataRateMbps  = json["tmatsDataRateMbps"].toDouble(out.tmatsDataRateMbps);
     out.polarityIndex      = json["polarityIndex"].toInt(out.polarityIndex);
-    out.slopeIndex         = json["slopeIndex"].toInt(out.slopeIndex);
+    out.slopeIndex         = qBound(0, json["slopeIndex"].toInt(out.slopeIndex),
+                                    UIConstants::kMaxSlopeIndex);
     out.scaleDdBPerV       = json["scaleDdBPerV"].toDouble(out.scaleDdBPerV);
     out.numReceivers       = json["numReceivers"].toInt(out.numReceivers);
     out.receiverChannels   = json["receiverChannels"].toInt(out.receiverChannels);

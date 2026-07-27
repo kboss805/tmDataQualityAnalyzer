@@ -184,6 +184,13 @@ void TestConstants::plotConstants()
     QCOMPARE(QString(PlotConstants::kMissedFramesAxisLabel), QString("Accumulated Missed Frames"));
     QCOMPARE(QString(PlotConstants::kSnrAxisLabel), QString("Receiver SNR (dB)"));
     QCOMPARE(QString(PlotConstants::kXAxisLabel), QString("Time (DDD:HH:MM:SS)"));
+
+    // The sync-pattern field's length limit is derived from the bit limit, not
+    // spelled out separately - raising kMaxSyncPatternBits must widen the field.
+    QCOMPARE(PCMConstants::kBitsPerHexDigit, 4);
+    QCOMPARE(PCMConstants::kMaxSyncPatternHexChars,
+             PCMConstants::kMaxSyncPatternBits / PCMConstants::kBitsPerHexDigit);
+    QCOMPARE(PCMConstants::kMaxSyncPatternHexChars, 16);
     QCOMPARE(PlotConstants::kZoomFactor, 0.1);
     QCOMPARE(PlotConstants::kNumSnrPrimaryColors, 3);
 

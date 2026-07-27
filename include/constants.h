@@ -60,6 +60,10 @@ namespace PCMConstants {
     /// @name Frame length and sync bounds (US2.1, US7.0)
     /// @{
     inline constexpr int kMaxSyncPatternBits  = 64;    ///< Maximum frame sync pattern length in bits (16 hex chars).
+    inline constexpr int kBitsPerHexDigit     = 4;     ///< Bits encoded by one hex character.
+    /// Maximum hex characters accepted in a sync pattern/mask field, derived from
+    /// the bit limit above so the input validator can't drift from it (US2.0/US7.0).
+    inline constexpr int kMaxSyncPatternHexChars = kMaxSyncPatternBits / kBitsPerHexDigit;
     inline constexpr int kMinFrameLengthBits  = 64;    ///< Minimum total frame length in bits.
     inline constexpr int kMaxFrameLengthBits  = 65536; ///< Maximum total frame length in bits.
     inline constexpr int kDefaultFrameSyncLockBits   = 2047; ///< Default Frame Sync Lock frame length in bits (PRN11).
