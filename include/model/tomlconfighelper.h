@@ -16,8 +16,6 @@
 #define TOMLCONFIGHELPER_H
 
 #include <QSettings>
-#include <QString>
-
 /**
  * @brief Provides a QSettings-compatible TOML format for use throughout the application.
  *

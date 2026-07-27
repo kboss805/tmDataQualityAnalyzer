@@ -5,7 +5,6 @@
 #include <QFile>
 #include <QSettings>
 #include <QTemporaryFile>
-#include <QTextStream>
 #include <QtTest>
 
 #include "framesetup.h"

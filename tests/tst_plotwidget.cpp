@@ -7,20 +7,16 @@
 
 #include <QApplication>
 #include <QFileInfo>
-#include <QFrame>
-#include <QHBoxLayout>
 #include <QAbstractButton>
 #include <QAction>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QLineEdit>
-#include <QPushButton>
 #include <QSpinBox>
 #include <QLabel>
 #include <QMenu>
 #include <QStyle>
 #include <QTemporaryDir>
-#include <QVBoxLayout>
 #include <QtTest>
 
 #include "constants.h"

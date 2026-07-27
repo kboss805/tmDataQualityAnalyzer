@@ -5,20 +5,10 @@
 
 #ifndef MAINVIEW_H
 #define MAINVIEW_H
-
-#include <QComboBox>
-#include <QCoreApplication>
 #include <QDockWidget>
 #include <QDragEnterEvent>
-#include <QFileDialog>
-#include <QFileInfo>
-#include <QHBoxLayout>
-#include <QLabel>
 #include <QMainWindow>
-#include <QMimeData>
 #include <QTextBrowser>
-#include <QMenuBar>
-#include <QScrollBar>
 #include <QStringList>
 #include <QVBoxLayout>
 

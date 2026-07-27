@@ -9,7 +9,6 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QFile>
-#include <QFrame>
 #include <QIcon>
 #include <QInputDialog>
 #include <QJsonDocument>
@@ -18,10 +17,8 @@
 #include <QMessageBox>
 #include <QPainter>
 #include <QPixmap>
-#include <QPushButton>
 #include <QSettings>
 #include <QSignalBlocker>
-#include <QStatusBar>
 #include <QTime>
 #include <QToolButton>
 #include <QUrl>

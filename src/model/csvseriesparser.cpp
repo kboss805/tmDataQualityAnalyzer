@@ -8,7 +8,6 @@
 
 #include <QFile>
 #include <QMap>
-#include <QStringTokenizer>
 #include <QTextStream>
 #include <QVarLengthArray>
 #include <QtMath>
