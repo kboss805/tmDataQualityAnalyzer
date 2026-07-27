@@ -266,17 +266,11 @@ void PlotWidget::rebuildChart()
         ? QCP::iRangeDrag | QCP::iRangeZoom
         : QCP::Interactions());
 
-    // The on-chart legend toggle only makes sense once something is plotted.
-    if (m_legend_toggle != nullptr)
-    {
-        m_legend_toggle->setVisible(has_data);
-        if (has_data)
-        {
-            positionLegendToggle();
-        }
-    }
+    // The overlay chips only make sense once something is plotted.
+    updateOverlayChips();
 
     updatePlotCursor();
+    updateOverlayChips();
 
     m_plot->replot(QCustomPlot::rpQueuedReplot);
     m_updating_from_vm = false;
@@ -384,6 +378,8 @@ void PlotWidget::updateAxes()
 
     // Right axis (yAxis2) auto-scales to SNR data limits, or manual/user-override limits
     m_plot->yAxis2->setRange(m_view_model->yMin(), m_view_model->yMax());
+
+    updateOverlayChips();
 
     m_plot->replot(QCustomPlot::rpQueuedReplot);
     m_updating_from_vm = false;
@@ -964,7 +960,18 @@ void PlotWidget::setUpLayout()
     // there is data, and never rendered into exports (exportImage composites only
     // m_legend_overlay).
     m_legend_visible = QSettings().value(UIConstants::kSettingsKeyLegendVisible, true).toBool();
-    m_legend_toggle = new QToolButton(m_plot);
+
+    // A single chip bar keeps every persistent on-chart control in one place
+    // instead of scattering buttons around the plot. Chips inside it show and
+    // hide independently, so the bar shrinks to only what is currently useful.
+    m_overlay_bar = new QWidget(m_plot);
+    m_overlay_bar->setObjectName("overlayBar");
+    m_overlay_bar->setAttribute(Qt::WA_TranslucentBackground);
+    auto* chip_row = new QHBoxLayout(m_overlay_bar);
+    chip_row->setContentsMargins(0, 0, 0, 0);
+    chip_row->setSpacing(PlotConstants::kOverlayChipSpacingPx);
+
+    m_legend_toggle = new QToolButton(m_overlay_bar);
     m_legend_toggle->setObjectName("legendToggle");
     m_legend_toggle->setCheckable(true);
     m_legend_toggle->setChecked(m_legend_visible);
@@ -972,7 +979,42 @@ void PlotWidget::setUpLayout()
     m_legend_toggle->setFixedSize(PlotConstants::kLegendToggleSizePx,
                                   PlotConstants::kLegendToggleSizePx);
     m_legend_toggle->setToolTip(QStringLiteral("Show/hide the legend"));
-    m_legend_toggle->hide();
+    chip_row->addWidget(m_legend_toggle);
+
+    // One click to flip the left axis between its two metrics - the same choice as
+    // the View Mode submenu, for the case where the user flips back and forth.
+    m_view_mode_chip = new QToolButton(m_overlay_bar);
+    m_view_mode_chip->setObjectName("overlayChip");
+    m_view_mode_chip->setCursor(Qt::PointingHandCursor);
+    m_view_mode_chip->setFixedHeight(PlotConstants::kLegendToggleSizePx);
+    m_view_mode_chip->hide();
+    chip_row->addWidget(m_view_mode_chip);
+
+    // Self-hiding: only appears once the view is actually zoomed or an axis max is
+    // pinned, so at rest it costs nothing.
+    m_reset_chip = new QToolButton(m_overlay_bar);
+    m_reset_chip->setObjectName("overlayChip");
+    m_reset_chip->setCursor(Qt::PointingHandCursor);
+    m_reset_chip->setFixedHeight(PlotConstants::kLegendToggleSizePx);
+    m_reset_chip->setText(QStringLiteral("Reset view"));
+    m_reset_chip->setToolTip(QStringLiteral("Restore the full time span and automatic axis scaling"
+                                            " (or double-click the chart)"));
+    m_reset_chip->hide();
+    chip_row->addWidget(m_reset_chip);
+
+    m_overlay_bar->hide();
+
+    // Crosshair: a vertical time line that tracks the cursor so values can be read
+    // off several series at the same instant. A chart item, not a widget, so it
+    // adds no chrome and disappears with the cursor.
+    m_crosshair = new QCPItemStraightLine(m_plot);
+    m_crosshair->setVisible(false);
+    m_crosshair->setSelectable(false);
+
+    // Rubber band drawn while dragging out a zoom range.
+    m_zoom_band = new QCPItemRect(m_plot);
+    m_zoom_band->setVisible(false);
+    m_zoom_band->setSelectable(false);
 
     // Loading overlay (child of m_plot so it floats over the chart)
     m_loading_label = new QLabel("Loading...", m_plot);
@@ -999,18 +1041,70 @@ void PlotWidget::setUpConnections()
     // The legend overlay and its viewport set their own cursors, so dragging the
     // legend is unaffected.
     connect(m_plot, &QCustomPlot::mousePress, this, [this](QMouseEvent* event) {
-        if (event->button() == Qt::LeftButton && m_view_model != nullptr
-            && m_view_model->hasData())
+        if (m_view_model == nullptr || !m_view_model->hasData())
+        {
+            return;
+        }
+        // Drag out a time range to zoom into it. Bound to Ctrl+left-drag and
+        // middle-drag: plain left-drag stays panning, and the right button is
+        // taken by the context menu, so neither can be reused here.
+        const bool band = (event->button() == Qt::MiddleButton)
+                       || (event->button() == Qt::LeftButton
+                           && (event->modifiers() & Qt::ControlModifier));
+        if (band)
+        {
+            m_band_zooming = true;
+            m_band_start_x = m_plot->xAxis->pixelToCoord(event->pos().x());
+            m_plot->setCursor(Qt::CrossCursor);
+            return;
+        }
+        if (event->button() == Qt::LeftButton)
         {
             m_plot->setCursor(Qt::ClosedHandCursor);
         }
     });
-    connect(m_plot, &QCustomPlot::mouseRelease, this, [this](QMouseEvent*) {
+    connect(m_plot, &QCustomPlot::mouseRelease, this, [this](QMouseEvent* event) {
+        if (m_band_zooming)
+        {
+            m_band_zooming = false;
+            m_zoom_band->setVisible(false);
+            applyBandZoom(m_band_start_x, m_plot->xAxis->pixelToCoord(event->pos().x()));
+        }
         updatePlotCursor();
     });
 
     connect(m_legend_toggle, &QToolButton::clicked, this,
             [this](bool checked) { setLegendVisible(checked); });
+
+    // View Mode chip: flip to the other left-axis metric.
+    connect(m_view_mode_chip, &QToolButton::clicked, this, [this]() {
+        if (m_view_model == nullptr)
+        {
+            return;
+        }
+        const bool is_lock =
+            (m_view_model->lockAxisView() == PlotViewModel::LockAxisView::LockPercent);
+        m_view_model->setLockAxisView(is_lock ? PlotViewModel::LockAxisView::MissedFrames
+                                              : PlotViewModel::LockAxisView::LockPercent);
+    });
+
+    // Reset chip: full span + automatic axis scaling.
+    connect(m_reset_chip, &QToolButton::clicked, this, [this]() {
+        if (m_view_model != nullptr)
+        {
+            m_view_model->resetXRange();
+            m_view_model->resetYRange();
+        }
+    });
+
+    // Double-click anywhere on the chart restores the full time span - the same
+    // gesture most plotting tools use, and a shortcut for the Reset chip.
+    connect(m_plot, &QCustomPlot::mouseDoubleClick, this, [this](QMouseEvent*) {
+        if (m_view_model != nullptr && m_view_model->hasData())
+        {
+            m_view_model->resetXRange();
+        }
+    });
 
     connect(m_plot->xAxis, QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
             this, [this](const QCPRange& range) { handlePlotXRangeChanged(range.lower, range.upper); });
@@ -1200,19 +1294,124 @@ void PlotWidget::styleLegendToggle(bool dark)
     m_legend_toggle->setIcon(QIcon(pm));
     m_legend_toggle->setIconSize(QSize(size, size));
 
-    // Translucent chip so it reads over chart data, same visual language as the
-    // legend overlay itself.
+    // Translucent chips so they read over chart data, same visual language as the
+    // legend overlay itself. One stylesheet on the bar covers every chip.
     const QColor bg = dark ? PlotConstants::kDarkBackground : PlotConstants::kLightBackground;
     const QColor border = dark ? PlotConstants::kDarkGridColor : PlotConstants::kLightGridColor;
-    m_legend_toggle->setStyleSheet(QString(
-        "QToolButton#legendToggle { background-color: rgba(%1,%2,%3,%4);"
-        " border: 1px solid %5; border-radius: %6px; }"
-        "QToolButton#legendToggle:checked { border: 1px solid %7; }")
-        .arg(bg.red()).arg(bg.green()).arg(bg.blue())
-        .arg(PlotConstants::kLegendBgAlpha)
-        .arg(border.name())
-        .arg(PlotConstants::kLegendCornerRadius)
-        .arg(m_title_color.isValid() ? m_title_color.name() : border.name()));
+    const QColor fg = dark ? PlotConstants::kDarkForeground : PlotConstants::kLightForeground;
+    const QString accent = m_title_color.isValid() ? m_title_color.name() : border.name();
+
+    if (m_overlay_bar != nullptr)
+    {
+        m_overlay_bar->setStyleSheet(QString(
+            "QToolButton#legendToggle, QToolButton#overlayChip {"
+            " background-color: rgba(%1,%2,%3,%4); border: 1px solid %5;"
+            " border-radius: %6px; color: %7; padding: 0 8px; }"
+            "QToolButton#legendToggle:hover, QToolButton#overlayChip:hover {"
+            " border: 1px solid %8; }"
+            "QToolButton#legendToggle:checked { border: 1px solid %8; }")
+            .arg(bg.red()).arg(bg.green()).arg(bg.blue())
+            .arg(PlotConstants::kLegendBgAlpha)
+            .arg(border.name())
+            .arg(PlotConstants::kLegendCornerRadius)
+            .arg(fg.name())
+            .arg(accent));
+    }
+
+    // Chart-item overlays follow the theme too.
+    if (m_crosshair != nullptr)
+    {
+        QColor cross = fg;
+        cross.setAlpha(PlotConstants::kCrosshairAlpha);
+        m_crosshair->setPen(QPen(cross, 1.0, Qt::DashLine));
+    }
+    if (m_zoom_band != nullptr)
+    {
+        QColor fill = m_title_color.isValid() ? m_title_color : fg;
+        fill.setAlpha(PlotConstants::kZoomBandAlpha);
+        m_zoom_band->setBrush(QBrush(fill));
+        QColor edge = m_title_color.isValid() ? m_title_color : fg;
+        m_zoom_band->setPen(QPen(edge, 1.0));
+    }
+}
+
+void PlotWidget::updateOverlayChips()
+{
+    if (m_overlay_bar == nullptr || m_view_model == nullptr)
+    {
+        return;
+    }
+
+    const bool has_data = m_view_model->hasData();
+
+    // View Mode chip: same availability rule as the context-menu submenu - both
+    // left-axis metrics must exist. Its label names the metric it switches TO, so
+    // the click's outcome is obvious without reading the current axis.
+    const bool both_metrics =
+        m_view_model->hasLockSeries() && m_view_model->hasMissedFramesSeries();
+    m_view_mode_chip->setVisible(has_data && both_metrics);
+    if (has_data && both_metrics)
+    {
+        const bool is_lock =
+            (m_view_model->lockAxisView() == PlotViewModel::LockAxisView::LockPercent);
+        m_view_mode_chip->setText(is_lock ? QStringLiteral("Accumulation")
+                                          : QStringLiteral("Lock %"));
+        m_view_mode_chip->setToolTip(is_lock
+            ? QStringLiteral("Switch the left axis to Accumulated Missed Frames")
+            : QStringLiteral("Switch the left axis to Frame Sync Lock %"));
+    }
+
+    // Reset chip: only meaningful once something has actually been changed away
+    // from the default view, so it stays hidden the rest of the time.
+    const bool zoomed = has_data
+        && (!qFuzzyCompare(m_view_model->xViewMin(), m_view_model->xMin())
+            || !qFuzzyCompare(m_view_model->xViewMax(), m_view_model->xMax()));
+    const bool pinned = has_data
+        && (m_view_model->hasLeftYMaxOverride() || m_view_model->hasRightYMaxOverride());
+    m_reset_chip->setVisible(zoomed || pinned);
+
+    m_overlay_bar->setVisible(has_data);
+    m_overlay_bar->adjustSize();
+    positionLegendToggle();
+}
+
+void PlotWidget::updateCrosshair(double x, bool visible)
+{
+    if (m_crosshair == nullptr)
+    {
+        return;
+    }
+    if (visible)
+    {
+        // Two points with the same x define the vertical line; the y values only
+        // set its direction, so the line spans the whole axis rect at any zoom.
+        m_crosshair->point1->setCoords(x, 0.0);
+        m_crosshair->point2->setCoords(x, 1.0);
+    }
+    if (m_crosshair->visible() != visible)
+    {
+        m_crosshair->setVisible(visible);
+    }
+    m_plot->replot(QCustomPlot::rpQueuedReplot);
+}
+
+void PlotWidget::applyBandZoom(double lower, double upper)
+{
+    if (m_view_model == nullptr || !m_view_model->hasData())
+    {
+        return;
+    }
+    if (lower > upper)
+    {
+        std::swap(lower, upper);
+    }
+    // A click (or a stray micro-drag) must not collapse the view to nothing.
+    if (upper - lower < PlotConstants::kMinBandZoomSpanSec)
+    {
+        return;
+    }
+    applyTimeWindow(lower, upper,
+                    m_view_model->formatTime(lower), m_view_model->formatTime(upper));
 }
 
 void PlotWidget::updatePlotCursor()
@@ -1229,13 +1428,13 @@ void PlotWidget::updatePlotCursor()
 
 void PlotWidget::positionLegendToggle()
 {
-    if (m_legend_toggle == nullptr || m_plot == nullptr)
+    if (m_overlay_bar == nullptr || m_plot == nullptr)
     {
         return;
     }
     const int m = PlotConstants::kLegendMarginPx;
-    m_legend_toggle->move(m, m);
-    m_legend_toggle->raise();
+    m_overlay_bar->move(m, m);
+    m_overlay_bar->raise();
 }
 
 void PlotWidget::layoutLegendOverlay(const QSize& content)
@@ -1333,6 +1532,22 @@ void PlotWidget::onPlotMouseMove(QMouseEvent* event)
 
     const double x_coord = m_plot->xAxis->pixelToCoord(event->pos().x());
 
+    // Drag-to-zoom in progress: stretch the rubber band across the full height of
+    // the axis rect between the drag origin and the cursor. The crosshair would
+    // just be noise underneath it, so it is suppressed until the drag ends.
+    if (m_band_zooming)
+    {
+        m_zoom_band->topLeft->setCoords(m_band_start_x, m_plot->yAxis->range().upper);
+        m_zoom_band->bottomRight->setCoords(x_coord, m_plot->yAxis->range().lower);
+        m_zoom_band->setVisible(true);
+        updateCrosshair(x_coord, false);
+        return;
+    }
+
+    // Vertical time line under the cursor, so values on several series can be read
+    // off at the same instant. The tooltip below supplies the value readout.
+    updateCrosshair(x_coord, true);
+
     // Find the nearest visible data point across all graphs
     double best_dist = std::numeric_limits<double>::max();
     double best_x = 0.0;
@@ -1429,8 +1644,8 @@ void PlotWidget::resizeEvent(QResizeEvent* event)
     {
         showLoadingIndicator(true);  // re-centre on resize
     }
-    // Keep the on-chart legend toggle anchored to the (new) top-left corner.
-    if (m_legend_toggle != nullptr && m_legend_toggle->isVisible())
+    // Keep the on-chart overlay bar anchored to the (new) top-left corner.
+    if (m_overlay_bar != nullptr && m_overlay_bar->isVisible())
     {
         positionLegendToggle();
     }

@@ -165,11 +165,21 @@ private:
     void clampLegendIntoView();
     /// Applies the translucent background, border, and text colors for the theme.
     void styleLegendOverlay(bool dark);
-    /// Applies the on-chart legend toggle's theme-appropriate glyph and styling.
+    /// Applies the overlay chips' theme-appropriate glyphs and styling.
     void styleLegendToggle(bool dark);
-    /// Anchors the legend toggle button at the chart's top-left (the legend itself
+    /// Anchors the overlay chip bar at the chart's top-left (the legend itself
     /// defaults to the top-right, so they never collide) and keeps it on top.
     void positionLegendToggle();
+    /// Shows/hides and relabels the overlay chips for the current state: the View
+    /// Mode chip only when both left-axis metrics exist, the Reset chip only when
+    /// the view is actually zoomed or an axis maximum is pinned.
+    void updateOverlayChips();
+    /// Moves the crosshair to @p x (plot coords) and shows it, or hides it when
+    /// @p visible is false. Replots.
+    void updateCrosshair(double x, bool visible);
+    /// Applies @p lower..@p upper as the X window (ordered, ignored if degenerate)
+    /// after a band-zoom drag.
+    void applyBandZoom(double lower, double upper);
     /// Sets the chart's resting cursor: an open hand once data is loaded (the plot
     /// can be click-dragged to pan), a plain arrow before that. Pressing swaps in a
     /// closed hand; releasing calls back here.
@@ -225,11 +235,28 @@ private:
     /// mirrors m_graph_by_id so a run with many streams doesn't rebuild every
     /// row's widgets from scratch on each stream's completion.
     QHash<int, LegendRow> m_legend_row_by_id;
-    /// On-chart show/hide control for the legend (a small translucent button
-    /// floating at the chart's top-left). Deliberately an overlay rather than an
-    /// external control, and never composited into exported images — only
+    /// Overlay chip bar floating at the chart's top-left: the only persistent
+    /// on-chart chrome. Holds the legend toggle, the View Mode chip and the
+    /// self-hiding Reset chip. Deliberately an overlay rather than an external
+    /// control row, and never composited into exported images — only
     /// m_legend_overlay is rendered into exports.
+    QWidget* m_overlay_bar = nullptr;
+    /// On-chart show/hide control for the legend.
     QToolButton* m_legend_toggle = nullptr;
+    /// One-click switch between the two left-axis metrics; hidden unless the data
+    /// provides both (same rule as the View Mode submenu).
+    QToolButton* m_view_mode_chip = nullptr;
+    /// Restores the full time span and clears axis-max overrides. Hidden while the
+    /// view is already at full span with no overrides, so it adds no idle clutter.
+    QToolButton* m_reset_chip = nullptr;
+
+    /// @name Chart-item overlays (no persistent chrome)
+    /// @{
+    QCPItemStraightLine* m_crosshair = nullptr; ///< Vertical time line following the cursor.
+    QCPItemRect* m_zoom_band = nullptr;         ///< Rubber band drawn during a drag-to-zoom.
+    bool   m_band_zooming = false;              ///< True while a band-zoom drag is in progress.
+    double m_band_start_x = 0.0;                ///< Plot-coordinate X where the band drag began.
+    /// @}
     /// Whether the user wants the legend shown; persisted across sessions
     /// (UIConstants::kSettingsKeyLegendVisible). When false the overlay stays
     /// hidden even with data loaded, and is excluded from exports.

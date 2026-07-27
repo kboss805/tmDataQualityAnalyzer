@@ -577,14 +577,19 @@ void TestPlotWidget::legendToggleAppearsOnlyWithData()
     PlotWidget widget;
     widget.setViewModel(&vm);
 
-    // Nothing plotted yet: the toggle stays off the chart entirely.
-    QVERIFY(widget.m_legend_toggle->isHidden());
+    // Nothing plotted yet: the chip bar carrying the toggle is hidden, so the
+    // toggle is off the chart. Asserted on the bar's own hidden flag because that
+    // is the widget the code shows/hides - and isVisible() would be false here
+    // regardless, since this test never show()s the top-level widget.
+    QVERIFY(widget.m_overlay_bar->isHidden());
 
     addLockStream(vm, "Ch 5", 5);
-    QVERIFY(!widget.m_legend_toggle->isHidden());
+    QVERIFY(!widget.m_overlay_bar->isHidden());
+    QVERIFY(!widget.m_legend_toggle->isHidden());  // not hidden in its own right
 
-    // It is an overlay on the chart, not an external control.
-    QCOMPARE(widget.m_legend_toggle->parentWidget(), static_cast<QWidget*>(widget.m_plot));
+    // It is an overlay on the chart (inside the chip bar), not an external control.
+    QCOMPARE(widget.m_legend_toggle->parentWidget(), widget.m_overlay_bar);
+    QCOMPARE(widget.m_overlay_bar->parentWidget(), static_cast<QWidget*>(widget.m_plot));
 }
 
 void TestPlotWidget::contextMenuShowLegendMirrorsToggle()
@@ -616,4 +621,116 @@ void TestPlotWidget::contextMenuShowLegendMirrorsToggle()
     QVERIFY(!findAction(menu2.data(), "Show Legend")->isChecked());
 
     widget.setLegendVisible(true);   // leave the persisted pref as we found it
+}
+
+void TestPlotWidget::overlayBarHoldsChipsAndIsChartParented()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+
+    // All persistent on-chart controls live in ONE bar rather than being scattered
+    // around the chart, and the bar is parented to the chart itself.
+    QVERIFY(widget.m_overlay_bar != nullptr);
+    QCOMPARE(widget.m_overlay_bar->parentWidget(), static_cast<QWidget*>(widget.m_plot));
+    QCOMPARE(widget.m_legend_toggle->parentWidget(),  widget.m_overlay_bar);
+    QCOMPARE(widget.m_view_mode_chip->parentWidget(), widget.m_overlay_bar);
+    QCOMPARE(widget.m_reset_chip->parentWidget(),     widget.m_overlay_bar);
+
+    // Nothing shows before there is data to interact with.
+    QVERIFY(widget.m_overlay_bar->isHidden());
+
+    addLockStream(vm, "Ch 5", 5);
+    QVERIFY(!widget.m_overlay_bar->isHidden());
+}
+
+void TestPlotWidget::viewModeChipSwitchesLeftAxisMetric()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    addLockStream(vm, "Ch 5", 5);   // yields both left-axis metrics
+
+    QVERIFY(!widget.m_view_mode_chip->isHidden());
+    // The chip names the metric it switches TO, so the outcome is readable.
+    QCOMPARE(vm.lockAxisView(), PlotViewModel::LockAxisView::LockPercent);
+    QCOMPARE(widget.m_view_mode_chip->text(), QString("Accumulation"));
+
+    widget.m_view_mode_chip->click();
+    QCOMPARE(vm.lockAxisView(), PlotViewModel::LockAxisView::MissedFrames);
+    QCOMPARE(widget.m_view_mode_chip->text(), QString("Lock %"));
+
+    widget.m_view_mode_chip->click();
+    QCOMPARE(vm.lockAxisView(), PlotViewModel::LockAxisView::LockPercent);
+}
+
+void TestPlotWidget::resetChipAppearsOnlyWhenViewChanged()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    addLockStream(vm, "Ch 5", 5);
+
+    // At the default full-span view with automatic axes the chip adds nothing, so
+    // it stays hidden - that is what keeps the overlay uncluttered at rest.
+    QVERIFY(widget.m_reset_chip->isHidden());
+
+    vm.setXViewRange(0.5, 1.5);
+    QVERIFY(!widget.m_reset_chip->isHidden());
+
+    widget.m_reset_chip->click();
+    QCOMPARE(vm.xViewMin(), vm.xMin());
+    QCOMPARE(vm.xViewMax(), vm.xMax());
+    QVERIFY(widget.m_reset_chip->isHidden());
+
+    // A pinned axis maximum also counts as "changed from default".
+    vm.setLeftYMaxOverride(42.0);
+    QVERIFY(!widget.m_reset_chip->isHidden());
+    widget.m_reset_chip->click();
+    QVERIFY(!vm.hasLeftYMaxOverride());
+    QVERIFY(widget.m_reset_chip->isHidden());
+}
+
+void TestPlotWidget::bandZoomAppliesDraggedRange()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    addLockStream(vm, "Ch 5", 5);   // spans 0..2 s
+
+    // A dragged range zooms to exactly that span, in either drag direction.
+    widget.applyBandZoom(0.5, 1.5);
+    QCOMPARE(vm.xViewMin(), 0.5);
+    QCOMPARE(vm.xViewMax(), 1.5);
+
+    vm.resetXRange();
+    widget.applyBandZoom(1.5, 0.5);          // dragged right-to-left
+    QCOMPARE(vm.xViewMin(), 0.5);
+    QCOMPARE(vm.xViewMax(), 1.5);
+
+    // A click (zero-width drag) must not collapse the view to nothing.
+    vm.resetXRange();
+    widget.applyBandZoom(1.0, 1.0);
+    QCOMPARE(vm.xViewMin(), vm.xMin());
+    QCOMPARE(vm.xViewMax(), vm.xMax());
+}
+
+void TestPlotWidget::doubleClickResetsSpanViaViewModel()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    addLockStream(vm, "Ch 5", 5);
+
+    vm.setXViewRange(0.5, 1.5);
+    QVERIFY(!qFuzzyCompare(vm.xViewMin(), vm.xMin()));
+
+    // The chart's double-click handler restores the full span (same result the
+    // Reset chip and X Axis > Reset Span produce).
+    QMouseEvent dbl(QEvent::MouseButtonDblClick, QPointF(10, 10), QPointF(10, 10),
+                    Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    emit widget.m_plot->mouseDoubleClick(&dbl);
+
+    QCOMPARE(vm.xViewMin(), vm.xMin());
+    QCOMPARE(vm.xViewMax(), vm.xMax());
 }

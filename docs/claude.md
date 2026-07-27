@@ -199,6 +199,8 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Every plot control is reached from a right-click context menu on the chart, or from a control overlaid on the chart itself.
 - [x] The context menu leads with **Set Plot Title…**, then **Plot File**, **View Mode**, **Customize View…**, **Show Legend**, **X Axis**, **Y Axes**, and **Export…**; entries are disabled until data is loaded.
 - [x] The legend can be shown or hidden from a toggle overlaid on the chart, and the choice persists across sessions.
+- [x] The persistent on-chart controls are gathered into a single chip bar at the chart's top-left (legend toggle, View Mode chip, Reset view chip) rather than scattered around the plot; each chip hides itself when it would be meaningless, so the bar is empty-by-default clutter-free.
+- [x] Frequent actions have chrome-free gestures: Ctrl+drag / middle-drag rubber-bands a time range to zoom, double-click restores the full span, and a crosshair follows the cursor for reading several series at one instant.
 - [x] Mouse-wheel zoom and click-drag pan of the X axis are retained as the primary navigation.
 - [x] The log/console occupies a left sidebar that the user can toggle on and off, and which is open by default.
 - [ ] _(placeholder)_ Any further plot controls the user identifies are relocated to the context menu or an on-chart overlay rather than added as external widgets.
@@ -396,6 +398,16 @@ The stories below follow the workflow a first-time user takes through the applic
   preference persists via QSettings (`LegendVisible`), survives legend rebuilds,
   and a hidden legend is omitted from exported PNG/SVG images (export composites
   only a visible overlay). The button itself is never rendered into exports.
+- New: an on-chart **chip bar** (top-left) collecting the persistent overlay
+  controls - the legend toggle, a one-click **View Mode** chip (labelled with the
+  metric it switches *to*, hidden unless the data has both), and a **Reset view**
+  chip that appears only once the view is zoomed or an axis max is pinned.
+- New chrome-free gestures: **Ctrl+drag / middle-drag** rubber-bands a time range
+  and zooms to it on release (the right button is taken by the context menu and
+  plain left-drag stays panning, so neither could be reused); **double-click**
+  restores the full span; a dashed **crosshair** follows the cursor so several
+  series can be read at the same instant. The crosshair and rubber band are
+  QCustomPlot items, not widgets, so they add no chrome and are absent from exports.
 - No ViewModel changes: every menu item drives the existing `PlotViewModel` API.
 
 ### v2.7.0 — Processing Templates & Batch Apply, Hamburger Menu, Frameless Title Bar, User Manual

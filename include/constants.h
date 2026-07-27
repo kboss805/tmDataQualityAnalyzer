@@ -288,6 +288,10 @@ namespace PlotConstants {
     inline constexpr double kLegendMaxHeightFrac = 0.60; ///< Cap the legend height to this fraction of the chart.
     inline constexpr double kLegendMaxWidthFrac  = 0.45; ///< Cap the legend width to this fraction of the chart.
     inline constexpr int    kLegendToggleSizePx  = 26;   ///< Edge length of the on-chart legend show/hide button (px).
+    inline constexpr int    kOverlayChipSpacingPx = 4;   ///< Gap between chips in the on-chart overlay bar (px).
+    inline constexpr int    kCrosshairAlpha      = 140;  ///< Alpha of the cursor-following crosshair line (0-255).
+    inline constexpr int    kZoomBandAlpha       = 45;   ///< Alpha of the drag-to-zoom rubber band fill (0-255).
+    inline constexpr double kMinBandZoomSpanSec  = 1e-6; ///< Ignore band-zoom drags narrower than this (a click, not a drag).
     /// @}
 
     /// @brief Primary colors for SNR receiver series (red, orange, yellow), one per receiver.
