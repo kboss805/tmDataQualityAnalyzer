@@ -667,7 +667,7 @@ void PlotWidget::onSetRightYMax()
     const double value = QInputDialog::getDouble(
         this, QStringLiteral("Set Right Y-Axis Maximum"),
         QStringLiteral("Maximum SNR (dB):"),
-        m_view_model->yMax(), 1.0, 10000.0, 1, &ok);
+        m_view_model->yMax(), 1.0, PlotConstants::kYSpinBoxMax, 1, &ok);
     if (ok)
     {
         m_view_model->setRightYMaxOverride(value);

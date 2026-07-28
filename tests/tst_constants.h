@@ -12,7 +12,6 @@ private slots:
     void pcmDefaultFrameSync();
     void pcmCommonWordLen();
     void pcmNumMinorFrames();
-    void pcmTimeRoundingOffset();
     void pcmChannelTypeIdentifiers();
     void uiDefaultSlopeIndex();
     void uiSamplePeriods();

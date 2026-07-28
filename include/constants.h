@@ -33,9 +33,6 @@ namespace PCMConstants {
     // kDefaultFrameSync kept as an alias so existing call sites compile unchanged.
     inline constexpr const char* kDefaultFrameSync              = kDefaultFrameSyncLockPattern;
 
-    /// Time rounding offset (0.5 ms) for PCM timestamp alignment.
-    inline constexpr double kTimeRoundingOffset = 0.0005;
-
     /// Maximum raw 16-bit sample value for calibration math.
     inline constexpr uint16_t kMaxRawSampleValue = 0xFFFF;
 
@@ -250,7 +247,6 @@ namespace PlotConstants {
         QColor(67, 97, 238),    ///< Blue
         QColor(46, 184, 92),    ///< Green
     };
-    inline constexpr double kZoomFactor      = 0.1;   ///< Wheel zoom step (10% per notch).
 
     /// @name Theme colors
     /// @{
@@ -267,7 +263,6 @@ namespace PlotConstants {
     inline constexpr int kTickCount          = 10;               ///< Number of major tick marks on X axis.
     inline constexpr double kGraphPenWidth   = 1.5;              ///< Width of series graph pen.
     inline constexpr int kTitleFontSize      = 10;               ///< Plot title font size in points.
-    inline constexpr double kSpinBoxMaxRange = 1e9;              ///< Maximum range for X axis spinboxes.
     inline constexpr double kYSpinBoxMax     = 999.0;            ///< Maximum range for Y axis spinboxes.
     /// @}
 

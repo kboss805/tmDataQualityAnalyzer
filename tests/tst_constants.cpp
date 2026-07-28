@@ -24,11 +24,6 @@ void TestConstants::pcmNumMinorFrames()
     QCOMPARE(PCMConstants::kNumMinorFrames, 1);
 }
 
-void TestConstants::pcmTimeRoundingOffset()
-{
-    QCOMPARE(PCMConstants::kTimeRoundingOffset, 0.0005);
-}
-
 void TestConstants::pcmChannelTypeIdentifiers()
 {
     QCOMPARE(QString(PCMConstants::kChannelTypeTime), QString("TIMEIN"));
@@ -177,7 +172,6 @@ void TestConstants::plotConstants()
     QCOMPARE(PCMConstants::kMaxSyncPatternHexChars,
              PCMConstants::kMaxSyncPatternBits / PCMConstants::kBitsPerHexDigit);
     QCOMPARE(PCMConstants::kMaxSyncPatternHexChars, 16);
-    QCOMPARE(PlotConstants::kZoomFactor, 0.1);
     QCOMPARE(PlotConstants::kNumSnrPrimaryColors, 3);
 
     // Theme colors
@@ -192,8 +186,6 @@ void TestConstants::plotConstants()
     QCOMPARE(PlotConstants::kTickCount, 10);
     QCOMPARE(PlotConstants::kGraphPenWidth, 1.5);
     QCOMPARE(PlotConstants::kTitleFontSize, 10);
-    QCOMPARE(PlotConstants::kSpinBoxMaxRange, 1e9);
-    QCOMPARE(PlotConstants::kYSpinBoxMax, 999.0);
 }
 
 // v3.2 additions

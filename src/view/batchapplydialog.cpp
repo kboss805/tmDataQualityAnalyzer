@@ -17,6 +17,8 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
+#include "constants.h"
+
 BatchApplyDialog::BatchApplyDialog(const QList<FileEntry>& files, const QString& defaultOutputDir,
                                    bool showReuseAppearance, QWidget* parent)
     : QDialog(parent)
@@ -50,6 +52,7 @@ void BatchApplyDialog::setUpLayout(const QList<FileEntry>& files)
 
     // The file list: OK rows enabled, rejected rows disabled with the reason.
     auto* list = new QListWidget(this);
+    list->setMinimumHeight(UIConstants::kFileListMinHeight);
     for (const FileEntry& f : files)
     {
         const QString name = QFileInfo(f.filepath).fileName();
