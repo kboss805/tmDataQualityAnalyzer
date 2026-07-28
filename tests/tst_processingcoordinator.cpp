@@ -261,6 +261,15 @@ void TestProcessingCoordinator::benchmarkSingleVsMultiStreamThroughput()
 /// streams with very different data rates.
 void TestProcessingCoordinator::benchmarkHeavyWorkloadSingleVsMultiStream()
 {
+    // Opt-in. This walks a 640 MB recording nine times (four channel probes, four
+    // solo runs, one parallel run) and takes minutes. It measures throughput and
+    // asserts nothing about correctness, but on a loaded machine it can exceed its
+    // timeout - and it was the sole source of CI instability, where a slow run
+    // could take the whole suite down with it. Run it deliberately when you want
+    // throughput numbers:  set TMDQA_RUN_HEAVY_BENCH=1
+    if (!qEnvironmentVariableIsSet("TMDQA_RUN_HEAVY_BENCH"))
+        QSKIP("Heavy PRN throughput benchmark is opt-in (set TMDQA_RUN_HEAVY_BENCH=1)");
+
     const QString filepath = testDataPath("prn_testfile.ch10");
     if (!QFileInfo::exists(filepath))
         QSKIP("PRN test file not available");
