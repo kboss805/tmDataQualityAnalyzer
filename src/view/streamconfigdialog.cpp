@@ -7,25 +7,12 @@
 
 #include <QCheckBox>
 #include <QComboBox>
-#include <QDialogButtonBox>
-#include <QDir>
-#include <QDoubleSpinBox>
-#include <QEventLoop>
-#include <QFileDialog>
-#include <QFileInfo>
 #include <QFontMetrics>
 #include <QFrame>
-#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QLineEdit>
 #include <QMessageBox>
-#include <QProgressDialog>
 #include <QPushButton>
-#include <QRegularExpression>
-#include <QRegularExpressionValidator>
-#include <QSettings>
-#include <QSpinBox>
 #include <QScrollArea>
 #include <QVBoxLayout>
 

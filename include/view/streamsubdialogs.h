@@ -14,7 +14,6 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
-#include <QDialogButtonBox>
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QEventLoop>
@@ -59,7 +58,23 @@ namespace DialogLayout {
     constexpr int kCheckboxLabelGap = 6;   ///< Gap between a checkbox and its text label.
 }
 
-const QRegularExpression kHexRegex("^[0-9A-Fa-f]{1,16}$");
+/// Validator for the frame sync pattern / mask fields: hex characters only, no
+/// longer than the documented maximum sync length (US2.0/US7.0).
+///
+/// Built from the constants rather than spelled out, so the field can't drift
+/// from them: the character class comes from PCMConstants::kFrameSyncHexPattern
+/// ("^[0-9A-Fa-f]+$") with its "+" quantifier swapped for the bound derived from
+/// kMaxSyncPatternBits. Raising the bit limit widens this field automatically.
+inline QRegularExpression makeSyncPatternValidatorRegex()
+{
+    const QString bounded =
+        QString::fromLatin1(PCMConstants::kFrameSyncHexPattern)
+            .replace(QStringLiteral("+$"),
+                     QStringLiteral("{1,%1}$").arg(PCMConstants::kMaxSyncPatternHexChars));
+    return QRegularExpression(bounded);
+}
+
+const QRegularExpression kHexRegex = makeSyncPatternValidatorRegex();
 
 QString periodText(double sec)
 {

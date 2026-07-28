@@ -12,7 +12,6 @@
 #include <array>
 
 #include <QByteArray>
-#include <QDateTime>
 #include <QMap>
 #include <QObject>
 #include <QString>

@@ -7,13 +7,17 @@
 
 #include <algorithm>
 
+#include <QActionGroup>
 #include <QApplication>
-#include <QClipboard>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QFile>
-#include <QFileDialog>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QInputDialog>
+#include <QLineEdit>
+#include <QMenu>
 #include <QPainter>
 #include <QScrollArea>
 #include <QStyle>
@@ -138,8 +142,8 @@ void PlotWidget::setViewModel(PlotViewModel* vm)
     connect(vm, &PlotViewModel::axisRangeChanged, this, &PlotWidget::updateAxes);
     connect(vm, &PlotViewModel::plotTitleChanged, this, &PlotWidget::updateTitle);
     connect(vm, &PlotViewModel::lockAxisViewChanged, this, &PlotWidget::onLockAxisViewChanged);
-    connect(vm, &PlotViewModel::sourcesChanged, this, &PlotWidget::populateSourceCombo);
-    populateSourceCombo();
+    // No sourcesChanged handler needed: the Plot File submenu is built from
+    // sourceList() each time the context menu opens, so it is never stale.
 }
 
 void PlotWidget::setLogTextProvider(std::function<QString()> provider)
@@ -186,6 +190,7 @@ void PlotWidget::applyTheme(bool dark)
 
     m_dark_theme = dark;
     styleLegendOverlay(dark);
+    styleLegendToggle(dark);
 
     m_plot->replot(QCustomPlot::rpQueuedReplot);
 }
@@ -251,26 +256,19 @@ void PlotWidget::rebuildChart()
     // Update title and axes without triggering extra replots
     updateTitle();
     updateAxes();
-    updateAxisViewCombo();
 
-    // Enable all controls when data is loaded
-    bool has_data = m_view_model->hasData();
-    m_title_edit->setEnabled(has_data);
-    m_x_start_edit->setEnabled(has_data);
-    m_x_stop_edit->setEnabled(has_data);
-    m_reset_btn->setEnabled(has_data);
-    m_customize_btn->setEnabled(has_data);
-    m_left_y_max_spin->setEnabled(has_data);
-    m_right_y_max_spin->setEnabled(has_data);
+    // Mouse pan/zoom only once there is data. The context menu gates its own
+    // actions on hasData() when it is built.
+    const bool has_data = m_view_model->hasData();
     m_plot->setInteractions(has_data
         ? QCP::iRangeDrag | QCP::iRangeZoom
         : QCP::Interactions());
 
-    if (has_data)
-    {
-        m_x_start_edit->setText(m_view_model->formatTime(m_view_model->xViewMin()));
-        m_x_stop_edit->setText(m_view_model->formatTime(m_view_model->xViewMax()));
-    }
+    // The overlay chips only make sense once something is plotted.
+    updateOverlayChips();
+
+    updatePlotCursor();
+    updateOverlayChips();
 
     m_plot->replot(QCustomPlot::rpQueuedReplot);
     m_updating_from_vm = false;
@@ -280,44 +278,6 @@ void PlotWidget::onDataChanged()
 {
     rebuildChart();
     rebuildLegend();
-    populateSourceCombo();
-}
-
-void PlotWidget::populateSourceCombo()
-{
-    if (m_source_combo == nullptr || m_view_model == nullptr)
-    {
-        return;
-    }
-
-    const QVector<QPair<int, QString>> sources = m_view_model->sourceList();
-
-    // Signals blocked so rebuilding the items doesn't fire activated() and stomp
-    // the ViewModel's current filter.
-    QSignalBlocker blocker(m_source_combo);
-    m_source_combo->clear();
-
-    // Only meaningful with more than one source (US1.1): a single file has nothing
-    // to switch between.
-    if (sources.size() <= 1)
-    {
-        if (sources.size() == 1)
-            m_source_combo->addItem(sources.first().second, sources.first().first);
-        m_source_combo->setEnabled(false);
-        return;
-    }
-
-    m_source_combo->addItem(QStringLiteral("All files (overlaid)"), -1);
-    for (const QPair<int, QString>& src : sources)
-        m_source_combo->addItem(src.second, src.first);
-
-    // Full label as a per-item tooltip so a name too long for the box is still readable.
-    for (int i = 0; i < m_source_combo->count(); ++i)
-        m_source_combo->setItemData(i, m_source_combo->itemText(i), Qt::ToolTipRole);
-
-    const int idx = m_source_combo->findData(m_view_model->visibleSource());
-    m_source_combo->setCurrentIndex(idx >= 0 ? idx : 0);
-    m_source_combo->setEnabled(true);
 }
 
 void PlotWidget::onSeriesVisibilityToggled(int index)
@@ -395,7 +355,6 @@ void PlotWidget::onLockAxisViewChanged()
             ? PlotConstants::kMissedFramesAxisLabel
             : PlotConstants::kYAxisLabel);
 
-    updateAxisViewCombo();
     rebuildLegend();
     m_plot->replot(QCustomPlot::rpQueuedReplot);
 }
@@ -418,14 +377,7 @@ void PlotWidget::updateAxes()
     // Right axis (yAxis2) auto-scales to SNR data limits, or manual/user-override limits
     m_plot->yAxis2->setRange(m_view_model->yMin(), m_view_model->yMax());
 
-    // Sync spinboxes without triggering their valueChanged -> vm override cycle
-    m_updating_from_vm = true;
-    m_left_y_max_spin->setValue(left_max);
-    m_right_y_max_spin->setValue(m_view_model->yMax());
-    m_updating_from_vm = false;
-
-    m_x_start_edit->setText(m_view_model->formatTime(m_view_model->xViewMin()));
-    m_x_stop_edit->setText(m_view_model->formatTime(m_view_model->xViewMax()));
+    updateOverlayChips();
 
     m_plot->replot(QCustomPlot::rpQueuedReplot);
     m_updating_from_vm = false;
@@ -439,7 +391,6 @@ void PlotWidget::updateTitle()
     }
 
     m_updating_from_vm = true;
-    m_title_edit->setText(m_view_model->plotTitle());
 
     // Show title on chart using a QCPTextElement if one exists, else create one
     if (m_plot->plotLayout()->elementCount() > 1)
@@ -474,9 +425,317 @@ void PlotWidget::onCustomizePlotClicked()
     dialog.exec();
 }
 
-void PlotWidget::onXRangeChanged()
+void PlotWidget::showPlotContextMenu(const QPoint& pos)
 {
-    if (m_updating_from_vm || m_view_model == nullptr)
+    QMenu* menu = buildContextMenu();
+    if (menu == nullptr)
+    {
+        return;
+    }
+    menu->exec(m_plot->mapToGlobal(pos));
+    delete menu;
+}
+
+QMenu* PlotWidget::buildContextMenu()
+{
+    if (m_view_model == nullptr)
+    {
+        return nullptr;
+    }
+
+    // Rebuilt on every request so the source list, active view mode and override
+    // state are always current. Nothing here is cached.
+    const bool has_data = m_view_model->hasData();
+
+    QMenu& menu = *(new QMenu(this));
+
+    // Set Plot Title leads the menu: it is the most frequently used entry when
+    // preparing a plot for a report.
+    QAction* title_act = menu.addAction(QStringLiteral("Set Plot Title..."));
+    title_act->setEnabled(has_data);
+    connect(title_act, &QAction::triggered, this, &PlotWidget::onSetPlotTitle);
+
+    menu.addSeparator();
+
+    // --- Plot File: which processed file to view (US1.1) ------------------
+    QMenu* file_menu = menu.addMenu(QStringLiteral("Plot File"));
+    const QVector<QPair<int, QString>> sources = m_view_model->sourceList();
+    // Only meaningful with more than one source: a single file has nothing to
+    // switch between.
+    file_menu->setEnabled(has_data && sources.size() > 1);
+    if (sources.size() > 1)
+    {
+        auto* file_group = new QActionGroup(file_menu);
+        file_group->setExclusive(true);
+        const int visible = m_view_model->visibleSource();
+
+        QAction* all_act = file_menu->addAction(QStringLiteral("All files (overlaid)"));
+        all_act->setCheckable(true);
+        all_act->setChecked(visible < 0);
+        all_act->setActionGroup(file_group);
+        connect(all_act, &QAction::triggered, this,
+                [this]() { m_view_model->setVisibleSource(-1); });
+
+        file_menu->addSeparator();
+        for (const QPair<int, QString>& src : sources)
+        {
+            QAction* act = file_menu->addAction(src.second);
+            act->setCheckable(true);
+            act->setChecked(visible == src.first);
+            act->setActionGroup(file_group);
+            const int source_id = src.first;
+            connect(act, &QAction::triggered, this,
+                    [this, source_id]() { m_view_model->setVisibleSource(source_id); });
+        }
+    }
+
+    // --- View Mode: the left-axis metric ----------------------------------
+    QMenu* view_menu = menu.addMenu(QStringLiteral("View Mode"));
+    // Only meaningful when both left-axis metrics exist (a frame-sync stream
+    // produces both); SNR-only data leaves it disabled.
+    const bool both_metrics = m_view_model->hasLockSeries() && m_view_model->hasMissedFramesSeries();
+    view_menu->setEnabled(has_data && both_metrics);
+    {
+        auto* view_group = new QActionGroup(view_menu);
+        view_group->setExclusive(true);
+        const PlotViewModel::LockAxisView current = m_view_model->lockAxisView();
+
+        struct ModeEntry { const char* text; PlotViewModel::LockAxisView mode; };
+        const ModeEntry modes[] = {
+            { "Lock Percentage", PlotViewModel::LockAxisView::LockPercent },
+            { "Accumulation",    PlotViewModel::LockAxisView::MissedFrames },
+        };
+        for (const ModeEntry& entry : modes)
+        {
+            QAction* act = view_menu->addAction(QString::fromLatin1(entry.text));
+            act->setCheckable(true);
+            act->setChecked(current == entry.mode);
+            act->setActionGroup(view_group);
+            const PlotViewModel::LockAxisView mode = entry.mode;
+            connect(act, &QAction::triggered, this,
+                    [this, mode]() { m_view_model->setLockAxisView(mode); });
+        }
+    }
+
+    menu.addSeparator();
+
+    QAction* customize_act = menu.addAction(QStringLiteral("Customize View..."));
+    customize_act->setEnabled(has_data);
+    connect(customize_act, &QAction::triggered, this, &PlotWidget::onCustomizePlotClicked);
+
+    // Mirrors the on-chart legend toggle. The button is the primary affordance;
+    // this entry makes the control discoverable and keeps both in sync.
+    QAction* legend_act = menu.addAction(QStringLiteral("Show Legend"));
+    legend_act->setCheckable(true);
+    legend_act->setChecked(m_legend_visible);
+    legend_act->setEnabled(has_data);
+    connect(legend_act, &QAction::triggered, this,
+            [this](bool checked) { setLegendVisible(checked); });
+
+    // --- Readout: which series the hover value comes from ------------------
+    // Default is whatever lies nearest the cursor, which is ambiguous where
+    // series overlap; pinning one makes the readout follow that series only.
+    QMenu* readout_menu = menu.addMenu(QStringLiteral("Readout"));
+    readout_menu->setEnabled(has_data);
+    if (has_data)
+    {
+        // Drop a pin whose series is gone (reprocessed - which mints new ids - or
+        // hidden), so the menu doesn't come up with nothing selected. The readout
+        // itself already falls back to nearest in that case.
+        if (m_readout_series_id != kReadoutNearest)
+        {
+            const int idx = m_view_model->indexOfSeriesId(m_readout_series_id);
+            if (idx < 0 || !m_view_model->effectiveVisible(m_view_model->allSeries()[idx]))
+            {
+                m_readout_series_id = kReadoutNearest;
+            }
+        }
+
+        auto* readout_group = new QActionGroup(readout_menu);
+        readout_group->setExclusive(true);
+
+        QAction* nearest_act = readout_menu->addAction(QStringLiteral("Nearest series (automatic)"));
+        nearest_act->setCheckable(true);
+        nearest_act->setChecked(m_readout_series_id == kReadoutNearest);
+        nearest_act->setActionGroup(readout_group);
+        connect(nearest_act, &QAction::triggered, this,
+                [this]() { m_readout_series_id = kReadoutNearest; });
+
+        readout_menu->addSeparator();
+
+        // Only series actually on screen: pinning to a hidden one would read as
+        // a broken readout.
+        const auto& all_series = m_view_model->allSeries();
+        for (const PlotSeriesData& s : all_series)
+        {
+            if (!m_view_model->effectiveVisible(s))
+            {
+                continue;
+            }
+            QAction* act = readout_menu->addAction(s.name);
+            act->setCheckable(true);
+            act->setChecked(m_readout_series_id == s.id);
+            act->setActionGroup(readout_group);
+            const int series_id = s.id;
+            connect(act, &QAction::triggered, this,
+                    [this, series_id]() { m_readout_series_id = series_id; });
+        }
+    }
+
+    menu.addSeparator();
+
+    // --- X axis -----------------------------------------------------------
+    QMenu* x_menu = menu.addMenu(QStringLiteral("X Axis"));
+    x_menu->setEnabled(has_data);
+    QAction* window_act = x_menu->addAction(QStringLiteral("Set Time Window..."));
+    connect(window_act, &QAction::triggered, this, &PlotWidget::onSetTimeWindow);
+    QAction* reset_x_act = x_menu->addAction(QStringLiteral("Reset Span"));
+    connect(reset_x_act, &QAction::triggered, this, &PlotWidget::onResetXAxis);
+
+    // --- Y axes -----------------------------------------------------------
+    QMenu* y_menu = menu.addMenu(QStringLiteral("Y Axes"));
+    y_menu->setEnabled(has_data);
+    QAction* left_act = y_menu->addAction(QStringLiteral("Set Left Max..."));
+    connect(left_act, &QAction::triggered, this, &PlotWidget::onSetLeftYMax);
+    QAction* right_act = y_menu->addAction(QStringLiteral("Set Right Max..."));
+    connect(right_act, &QAction::triggered, this, &PlotWidget::onSetRightYMax);
+    y_menu->addSeparator();
+    QAction* reset_y_act = y_menu->addAction(QStringLiteral("Reset"));
+    connect(reset_y_act, &QAction::triggered, this, &PlotWidget::onResetYAxes);
+
+    menu.addSeparator();
+
+    QAction* export_act = menu.addAction(QStringLiteral("Export..."));
+    export_act->setEnabled(has_data);
+    connect(export_act, &QAction::triggered, this, &PlotWidget::onExportPlot);
+
+    return &menu;
+}
+
+void PlotWidget::onSetPlotTitle()
+{
+    if (m_view_model == nullptr || !m_view_model->hasData())
+    {
+        return;
+    }
+
+    bool ok = false;
+    const QString title = QInputDialog::getText(
+        this, QStringLiteral("Set Plot Title"), QStringLiteral("Plot title:"),
+        QLineEdit::Normal, m_view_model->plotTitle(), &ok);
+    if (ok)
+    {
+        m_view_model->setPlotTitle(title);
+    }
+}
+
+void PlotWidget::onSetTimeWindow()
+{
+    if (m_view_model == nullptr || !m_view_model->hasData())
+    {
+        return;
+    }
+
+    // Two fields in one dialog, seeded with the current window. The text format is
+    // PlotViewModel::formatTime()/parseTime() (DDD:HH:MM:SS), so entered values mean
+    // exactly what they did in the old Start/Stop fields.
+    QDialog dialog(this);
+    dialog.setWindowTitle(QStringLiteral("Set Time Window"));
+
+    auto* start_edit = new QLineEdit(m_view_model->formatTime(m_view_model->xViewMin()), &dialog);
+    auto* stop_edit  = new QLineEdit(m_view_model->formatTime(m_view_model->xViewMax()), &dialog);
+    start_edit->setPlaceholderText(QStringLiteral("DDD:HH:MM:SS"));
+    stop_edit->setPlaceholderText(QStringLiteral("DDD:HH:MM:SS"));
+
+    auto* form = new QGridLayout;
+    form->addWidget(new QLabel(QStringLiteral("Start:"), &dialog), 0, 0);
+    form->addWidget(start_edit, 0, 1);
+    form->addWidget(new QLabel(QStringLiteral("Stop:"), &dialog), 1, 0);
+    form->addWidget(stop_edit, 1, 1);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->addLayout(form);
+    layout->addWidget(buttons);
+
+    if (dialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    const QString entered_start = start_edit->text();
+    const QString entered_stop  = stop_edit->text();
+    applyTimeWindow(m_view_model->parseTime(entered_start),
+                    m_view_model->parseTime(entered_stop),
+                    entered_start, entered_stop);
+}
+
+void PlotWidget::onResetXAxis()
+{
+    if (m_view_model != nullptr)
+    {
+        m_view_model->resetXRange();
+    }
+}
+
+void PlotWidget::onSetLeftYMax()
+{
+    if (m_view_model == nullptr || !m_view_model->hasData())
+    {
+        return;
+    }
+
+    // Lock % is a 0-100 quantity; accumulated missed frames is unbounded, so the
+    // accepted range follows the active left-axis metric (as the old spinbox did).
+    const bool is_lock_pct =
+        (m_view_model->lockAxisView() == PlotViewModel::LockAxisView::LockPercent);
+    const double max_allowed = is_lock_pct ? 100.0 : 10000000.0;
+
+    bool ok = false;
+    const double value = QInputDialog::getDouble(
+        this, QStringLiteral("Set Left Y-Axis Maximum"),
+        is_lock_pct ? QStringLiteral("Maximum lock %:")
+                    : QStringLiteral("Maximum accumulated missed frames:"),
+        m_view_model->leftYMax(), 1.0, max_allowed, 0, &ok);
+    if (ok)
+    {
+        m_view_model->setLeftYMaxOverride(value);
+    }
+}
+
+void PlotWidget::onSetRightYMax()
+{
+    if (m_view_model == nullptr || !m_view_model->hasData())
+    {
+        return;
+    }
+
+    bool ok = false;
+    const double value = QInputDialog::getDouble(
+        this, QStringLiteral("Set Right Y-Axis Maximum"),
+        QStringLiteral("Maximum SNR (dB):"),
+        m_view_model->yMax(), 1.0, PlotConstants::kYSpinBoxMax, 1, &ok);
+    if (ok)
+    {
+        m_view_model->setRightYMaxOverride(value);
+    }
+}
+
+void PlotWidget::onResetYAxes()
+{
+    if (m_view_model != nullptr)
+    {
+        m_view_model->resetYRange();
+    }
+}
+
+void PlotWidget::applyTimeWindow(double raw_start, double raw_stop,
+                                 const QString& entered_start, const QString& entered_stop)
+{
+    if (m_view_model == nullptr)
     {
         return;
     }
@@ -484,60 +743,33 @@ void PlotWidget::onXRangeChanged()
     const double data_min = m_view_model->xMin();
     const double data_max = m_view_model->xMax();
 
-    const QString entered_start = m_x_start_edit->text();
-    const QString entered_stop  = m_x_stop_edit->text();
-
-    double raw_start = m_view_model->parseTime(entered_start);
-    double raw_stop  = m_view_model->parseTime(entered_stop);
-
     double start = qBound(data_min, raw_start, data_max);
     double stop  = qBound(data_min, raw_stop,  data_max);
 
     // Warn if either value was clamped to the file bounds
     if (!qFuzzyCompare(start, raw_start))
     {
-        emit logMessage(QString("<span style='color:#DAA520;'>Start \"%1\" is outside the file time range — clamped to file bounds.</span>")
+        emit logMessage(QString("<span style='color:#DAA520;'>Start \"%1\" is outside the file time range - clamped to file bounds.</span>")
                         .arg(entered_start));
     }
     if (!qFuzzyCompare(stop, raw_stop))
     {
-        emit logMessage(QString("<span style='color:#DAA520;'>Stop \"%1\" is outside the file time range — clamped to file bounds.</span>")
+        emit logMessage(QString("<span style='color:#DAA520;'>Stop \"%1\" is outside the file time range - clamped to file bounds.</span>")
                         .arg(entered_stop));
     }
 
-    // Enforce start <= stop; clamp whichever field was just edited
+    // Enforce start <= stop. Both values arrive together from the dialog, so
+    // (unlike the old two-field form, which clamped whichever field had focus)
+    // the stop is pulled up to the start.
     if (start > stop)
     {
-        if (m_x_start_edit == focusWidget() || m_x_start_edit->hasFocus())
-        {
-            emit logMessage("<span style='color:#DAA520;'>Start time is after Stop — clamped to stop time.</span>");
-            start = stop;
-        }
-        else
-        {
-            emit logMessage("<span style='color:#DAA520;'>Stop time is before Start — clamped to start time.</span>");
-            stop = start;
-        }
+        emit logMessage("<span style='color:#DAA520;'>Stop time is before Start - clamped to start time.</span>");
+        stop = start;
     }
-
-    // Write clamped values back so the user sees what was applied
-    m_updating_from_vm = true;
-    m_x_start_edit->setText(m_view_model->formatTime(start));
-    m_x_stop_edit->setText(m_view_model->formatTime(stop));
-    m_updating_from_vm = false;
 
     m_view_model->setXViewRange(start, stop);
 }
 
-void PlotWidget::onResetAxes()
-{
-    if (m_view_model == nullptr)
-    {
-        return;
-    }
-    m_view_model->resetXRange();
-    m_view_model->resetYRange();
-}
 
 void PlotWidget::onExportPlot()
 {
@@ -703,57 +935,18 @@ void PlotWidget::handlePlotXRangeChanged(double lower, double upper)
 void PlotWidget::setUpLayout()
 {
     auto* main_layout = new QVBoxLayout(this);
-    main_layout->setContentsMargins(4, 8, 4, 4);
+    main_layout->setContentsMargins(4, 4, 4, 4);
     main_layout->setSpacing(0);
 
-    // --- Title row (Plot File | Plot Title | View Mode) ---
-    auto* title_bar = new QHBoxLayout;
-    title_bar->setSpacing(6);
-
-    // Plot File (US1.1): which processed file to view after a multi-file batch.
-    // Disabled unless more than one source is loaded.
-    title_bar->addWidget(new QLabel(QStringLiteral("Plot File:")));
-    m_source_combo = new QComboBox;
-    m_source_combo->setToolTip(QStringLiteral("Select which processed file to view"));
-    m_source_combo->setEnabled(false);
-    m_source_combo->setMinimumWidth(160);
-    m_source_combo->setSizeAdjustPolicy(QComboBox::AdjustToContents);
-    title_bar->addWidget(m_source_combo);
-
-    title_bar->addSpacing(20);
-
-    title_bar->addWidget(new QLabel(QStringLiteral("Plot Title:")));
-    m_title_edit = new QLineEdit;
-    m_title_edit->setPlaceholderText(PlotConstants::kDefaultPlotTitle);
-    m_title_edit->setToolTip("Plot title");
-    m_title_edit->setEnabled(false);
-    m_title_edit->setMinimumWidth(260);
-    title_bar->addWidget(m_title_edit);
-
-    // Empty space between the title and the right-aligned View Mode selector.
-    title_bar->addStretch(1);
-
-    // View Mode: the left axis metric — Lock % or Accumulation (missed frames).
-    title_bar->addWidget(new QLabel(QStringLiteral("View Mode")));
-    m_axis_view_combo = new QComboBox;
-    m_axis_view_combo->setToolTip(QStringLiteral("Left axis metric: Frame Sync Lock % or "
-                                                 "Accumulated Missed Frames"));
-    m_axis_view_combo->addItem(QStringLiteral("Lock %"),
-                               static_cast<int>(PlotViewModel::LockAxisView::LockPercent));
-    m_axis_view_combo->addItem(QStringLiteral("Accumulation"),
-                               static_cast<int>(PlotViewModel::LockAxisView::MissedFrames));
-    m_axis_view_combo->setEnabled(false);
-    m_axis_view_combo->setMinimumWidth(140);
-    title_bar->addWidget(m_axis_view_combo);
-
-    main_layout->addLayout(title_bar);
-    main_layout->addSpacing(8);
-
-    // --- QCustomPlot chart ---
+    // --- QCustomPlot chart (fills the widget; all controls live in the
+    // right-click context menu, see showPlotContextMenu) ---
     m_plot = new QCustomPlot(this);
     m_plot->setInteractions(QCP::Interactions());
     m_plot->axisRect()->setRangeDrag(Qt::Horizontal);
     m_plot->axisRect()->setRangeZoom(Qt::Horizontal);
+    // Right-click opens the control menu. QCustomPlot binds pan to left-drag and
+    // zoom to the wheel, so the right button is otherwise unused.
+    m_plot->setContextMenuPolicy(Qt::CustomContextMenu);
     m_plot->xAxis->setLabel(PlotConstants::kXAxisLabel);
     m_plot->yAxis->setLabel(PlotConstants::kYAxisLabel);
     m_plot->yAxis->setRange(0, 100);
@@ -809,6 +1002,78 @@ void PlotWidget::setUpLayout()
     m_plot->installEventFilter(this);
     m_legend_overlay->hide();
 
+    // On-chart legend show/hide control. An overlay (child of m_plot) rather than
+    // an external control, matching the rest of the plot UI. Anchored top-left so
+    // it never collides with the legend's default top-right corner. Hidden until
+    // there is data, and never rendered into exports (exportImage composites only
+    // m_legend_overlay).
+    m_legend_visible = QSettings().value(UIConstants::kSettingsKeyLegendVisible, true).toBool();
+
+    // A single chip bar keeps every persistent on-chart control in one place
+    // instead of scattering buttons around the plot. Chips inside it show and
+    // hide independently, so the bar shrinks to only what is currently useful.
+    m_overlay_bar = new QWidget(m_plot);
+    m_overlay_bar->setObjectName("overlayBar");
+    m_overlay_bar->setAttribute(Qt::WA_TranslucentBackground);
+    auto* chip_row = new QHBoxLayout(m_overlay_bar);
+    chip_row->setContentsMargins(0, 0, 0, 0);
+    chip_row->setSpacing(PlotConstants::kOverlayChipSpacingPx);
+
+    m_legend_toggle = new QToolButton(m_overlay_bar);
+    m_legend_toggle->setObjectName("legendToggle");
+    m_legend_toggle->setCheckable(true);
+    m_legend_toggle->setChecked(m_legend_visible);
+    m_legend_toggle->setCursor(Qt::PointingHandCursor);
+    // Text only, like the chips beside it: a bare glyph gave no indication of what
+    // the button did, and text + glyph took more of the chart than the label alone.
+    m_legend_toggle->setText(QStringLiteral("Toggle Legend"));
+    m_legend_toggle->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    m_legend_toggle->setFixedHeight(PlotConstants::kOverlayChipHeightPx);
+    chip_row->addWidget(m_legend_toggle);
+
+    // One click to flip the left axis between its two metrics - the same choice as
+    // the View Mode submenu, for the case where the user flips back and forth.
+    m_view_mode_chip = new QToolButton(m_overlay_bar);
+    m_view_mode_chip->setObjectName("overlayChip");
+    m_view_mode_chip->setCursor(Qt::PointingHandCursor);
+    m_view_mode_chip->setFixedHeight(PlotConstants::kOverlayChipHeightPx);
+    m_view_mode_chip->hide();
+    chip_row->addWidget(m_view_mode_chip);
+
+    // Self-hiding: only appears once the view is actually zoomed or an axis max is
+    // pinned, so at rest it costs nothing.
+    m_reset_chip = new QToolButton(m_overlay_bar);
+    m_reset_chip->setObjectName("overlayChip");
+    m_reset_chip->setCursor(Qt::PointingHandCursor);
+    m_reset_chip->setFixedHeight(PlotConstants::kOverlayChipHeightPx);
+    m_reset_chip->setText(QStringLiteral("Reset view"));
+    m_reset_chip->setToolTip(QStringLiteral("Restore the full time span and automatic axis scaling"
+                                            " (or double-click the chart)"));
+    m_reset_chip->hide();
+    chip_row->addWidget(m_reset_chip);
+
+    // Entering a chip must clear the chart's data readout first (see eventFilter),
+    // otherwise Qt keeps that tooltip - owned by m_plot, which contains the chips -
+    // and the chip's own tooltip never appears.
+    m_overlay_bar->installEventFilter(this);
+    m_legend_toggle->installEventFilter(this);
+    m_view_mode_chip->installEventFilter(this);
+    m_reset_chip->installEventFilter(this);
+
+    m_overlay_bar->hide();
+
+    // Crosshair: a vertical time line that tracks the cursor so values can be read
+    // off several series at the same instant. A chart item, not a widget, so it
+    // adds no chrome and disappears with the cursor.
+    m_crosshair = new QCPItemStraightLine(m_plot);
+    m_crosshair->setVisible(false);
+    m_crosshair->setSelectable(false);
+
+    // Rubber band drawn while dragging out a zoom range.
+    m_zoom_band = new QCPItemRect(m_plot);
+    m_zoom_band->setVisible(false);
+    m_zoom_band->setSelectable(false);
+
     // Loading overlay (child of m_plot so it floats over the chart)
     m_loading_label = new QLabel("Loading...", m_plot);
     m_loading_label->setAlignment(Qt::AlignCenter);
@@ -816,116 +1081,88 @@ void PlotWidget::setUpLayout()
     m_loading_label->adjustSize();
     m_loading_label->hide();
 
-    // --- Bottom bar: [axis controls] [16px] [legend panel] [stretch] [Export PDF] ---
-    auto* bottom_bar = new QHBoxLayout;
-    bottom_bar->setContentsMargins(0, 0, 0, 0);
-    bottom_bar->setSpacing(0);
-
-    // Axis controls grid (Start/Stop + Reset + Y-max spinboxes), top-aligned in the bar
-    auto* axis_grid = new QGridLayout;
-    axis_grid->setContentsMargins(0, 0, 0, 0);
-    axis_grid->setHorizontalSpacing(4);
-    axis_grid->setVerticalSpacing(4);
-    // Col 2 is a dedicated 8px spacer between the first control and second label pair
-    axis_grid->setColumnMinimumWidth(2, 8);
-
-    axis_grid->addWidget(new QLabel("Start:"), 0, 0);
-    m_x_start_edit = new QLineEdit;
-    m_x_start_edit->setPlaceholderText("DDD:HH:MM:SS");
-    m_x_start_edit->setToolTip("Start time (DDD:HH:MM:SS)");
-    m_x_start_edit->setEnabled(false);
-    axis_grid->addWidget(m_x_start_edit, 0, 1);
-
-    axis_grid->addWidget(new QLabel("Stop:"), 0, 3);
-    m_x_stop_edit = new QLineEdit;
-    m_x_stop_edit->setPlaceholderText("DDD:HH:MM:SS");
-    m_x_stop_edit->setToolTip("Stop time (DDD:HH:MM:SS)");
-    m_x_stop_edit->setEnabled(false);
-    axis_grid->addWidget(m_x_stop_edit, 0, 4);
-
-    m_reset_btn = new QPushButton("Reset");
-    m_reset_btn->setFlat(true);
-    m_reset_btn->setMinimumWidth(UIConstants::kFlatButtonMinWidth);
-    m_reset_btn->setToolTip("Reset axes to auto range");
-    m_reset_btn->setEnabled(false);
-    axis_grid->addWidget(m_reset_btn, 0, 5);
-
-    // Row 1: Left and right y-axis maximum overrides
-    axis_grid->setColumnMinimumWidth(7, 8);
-
-    axis_grid->addWidget(new QLabel("L Max:"), 1, 0);
-    m_left_y_max_spin = new QDoubleSpinBox;
-    m_left_y_max_spin->setRange(1.0, 10'000'000.0);
-    m_left_y_max_spin->setDecimals(0);
-    m_left_y_max_spin->setSingleStep(5.0);
-    m_left_y_max_spin->setValue(100.0);
-    m_left_y_max_spin->setToolTip("Maximum value for the left y-axis (lock % or missed frames). Use the arrows or type a value.");
-    m_left_y_max_spin->setEnabled(false);
-    axis_grid->addWidget(m_left_y_max_spin, 1, 1);
-
-    axis_grid->addWidget(new QLabel("R Max:"), 1, 3);
-    m_right_y_max_spin = new QDoubleSpinBox;
-    m_right_y_max_spin->setRange(1.0, 10'000.0);
-    m_right_y_max_spin->setDecimals(1);
-    m_right_y_max_spin->setSingleStep(5.0);
-    m_right_y_max_spin->setValue(100.0);
-    m_right_y_max_spin->setToolTip("Maximum value for the right y-axis (SNR in dB). Use the arrows or type a value.");
-    m_right_y_max_spin->setEnabled(false);
-    axis_grid->addWidget(m_right_y_max_spin, 1, 4);
-
-    QWidget* axis_widget = new QWidget;
-    axis_widget->setLayout(axis_grid);
-    axis_widget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
-    bottom_bar->addWidget(axis_widget, 0, Qt::AlignTop);
-
-    bottom_bar->addStretch(1);
-
-    m_customize_btn = new QPushButton("Customize Plot...");
-    m_customize_btn->setEnabled(false);
-    bottom_bar->addWidget(m_customize_btn, 0, Qt::AlignTop);
-
-    main_layout->addLayout(bottom_bar);
 }
 
 void PlotWidget::setUpConnections()
 {
-    connect(m_title_edit, &QLineEdit::editingFinished, this, [this]() {
-        if (!m_updating_from_vm && m_view_model != nullptr)
+    // Every control lives in the plot's right-click menu; it is rebuilt on each
+    // request so it always reflects the current sources/mode/overrides.
+    connect(m_plot, &QWidget::customContextMenuRequested,
+            this, &PlotWidget::showPlotContextMenu);
+
+    connect(m_plot, &QCustomPlot::mouseMove, this, &PlotWidget::onPlotMouseMove);
+
+    // Grab-cursor feedback for click-and-drag panning: an open hand over the chart
+    // says "this can be dragged", and pressing closes it. Shown whenever data is
+    // loaded, regardless of zoom level - when the full span is in view a drag
+    // simply has nowhere to go, which is the same behaviour the cursor implies.
+    // The legend overlay and its viewport set their own cursors, so dragging the
+    // legend is unaffected.
+    connect(m_plot, &QCustomPlot::mousePress, this, [this](QMouseEvent* event) {
+        if (m_view_model == nullptr || !m_view_model->hasData())
         {
-            m_view_model->setPlotTitle(m_title_edit->text());
+            return;
+        }
+        // Drag out a time range to zoom into it. Bound to Ctrl+left-drag and
+        // middle-drag: plain left-drag stays panning, and the right button is
+        // taken by the context menu, so neither can be reused here.
+        const bool band = (event->button() == Qt::MiddleButton)
+                       || (event->button() == Qt::LeftButton
+                           && (event->modifiers() & Qt::ControlModifier));
+        if (band)
+        {
+            m_band_zooming = true;
+            m_band_start_x = m_plot->xAxis->pixelToCoord(event->pos().x());
+            m_plot->setCursor(Qt::CrossCursor);
+            return;
+        }
+        if (event->button() == Qt::LeftButton)
+        {
+            m_plot->setCursor(Qt::ClosedHandCursor);
+        }
+    });
+    connect(m_plot, &QCustomPlot::mouseRelease, this, [this](QMouseEvent* event) {
+        if (m_band_zooming)
+        {
+            m_band_zooming = false;
+            m_zoom_band->setVisible(false);
+            applyBandZoom(m_band_start_x, m_plot->xAxis->pixelToCoord(event->pos().x()));
+        }
+        updatePlotCursor();
+    });
+
+    connect(m_legend_toggle, &QToolButton::clicked, this,
+            [this](bool checked) { setLegendVisible(checked); });
+
+    // View Mode chip: flip to the other left-axis metric.
+    connect(m_view_mode_chip, &QToolButton::clicked, this, [this]() {
+        if (m_view_model == nullptr)
+        {
+            return;
+        }
+        const bool is_lock =
+            (m_view_model->lockAxisView() == PlotViewModel::LockAxisView::LockPercent);
+        m_view_model->setLockAxisView(is_lock ? PlotViewModel::LockAxisView::MissedFrames
+                                              : PlotViewModel::LockAxisView::LockPercent);
+    });
+
+    // Reset chip: full span + automatic axis scaling.
+    connect(m_reset_chip, &QToolButton::clicked, this, [this]() {
+        if (m_view_model != nullptr)
+        {
+            m_view_model->resetXRange();
+            m_view_model->resetYRange();
         }
     });
 
-
-
-    connect(m_x_start_edit, &QLineEdit::editingFinished, this, &PlotWidget::onXRangeChanged);
-    connect(m_x_stop_edit, &QLineEdit::editingFinished, this, &PlotWidget::onXRangeChanged);
-
-    connect(m_reset_btn, &QPushButton::clicked, this, &PlotWidget::onResetAxes);
-    connect(m_customize_btn, &QPushButton::clicked, this, &PlotWidget::onCustomizePlotClicked);
-
-    connect(m_left_y_max_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, [this](double value) {
-                if (!m_updating_from_vm && m_view_model != nullptr)
-                    m_view_model->setLeftYMaxOverride(value);
-            });
-    connect(m_right_y_max_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, [this](double value) {
-                if (!m_updating_from_vm && m_view_model != nullptr)
-                    m_view_model->setRightYMaxOverride(value);
-            });
-    // View Mode: user picks the left-axis metric (data = LockAxisView).
-    connect(m_axis_view_combo, QOverload<int>::of(&QComboBox::activated), this, [this](int) {
-        if (m_view_model != nullptr)
-            m_view_model->setLockAxisView(
-                static_cast<PlotViewModel::LockAxisView>(m_axis_view_combo->currentData().toInt()));
+    // Double-click anywhere on the chart restores the full time span - the same
+    // gesture most plotting tools use, and a shortcut for the Reset chip.
+    connect(m_plot, &QCustomPlot::mouseDoubleClick, this, [this](QMouseEvent*) {
+        if (m_view_model != nullptr && m_view_model->hasData())
+        {
+            m_view_model->resetXRange();
+        }
     });
-    // Plot File: user picks which processed file to view (data = sourceId; -1 = all).
-    connect(m_source_combo, QOverload<int>::of(&QComboBox::activated), this, [this](int) {
-        if (m_view_model != nullptr)
-            m_view_model->setVisibleSource(m_source_combo->currentData().toInt());
-    });
-    connect(m_plot, &QCustomPlot::mouseMove, this, &PlotWidget::onPlotMouseMove);
 
     connect(m_plot->xAxis, QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
             this, [this](const QCPRange& range) { handlePlotXRangeChanged(range.lower, range.upper); });
@@ -1057,8 +1294,195 @@ void PlotWidget::rebuildLegend()
     const int scrollbar_gutter = QApplication::style()->pixelMetric(QStyle::PM_ScrollBarExtent);
     styleLegendOverlay(m_dark_theme);
     layoutLegendOverlay(QSize(content_w + scrollbar_gutter, content_h));
-    m_legend_overlay->show();
-    m_legend_overlay->raise();
+    // The user's show/hide choice wins over "there are rows to draw": keep the
+    // overlay hidden (and out of exports) until they turn it back on.
+    m_legend_overlay->setVisible(m_legend_visible);
+    if (m_legend_visible)
+    {
+        m_legend_overlay->raise();
+    }
+}
+
+void PlotWidget::setLegendVisible(bool visible)
+{
+    if (m_legend_visible == visible)
+    {
+        return;
+    }
+    m_legend_visible = visible;
+    QSettings().setValue(UIConstants::kSettingsKeyLegendVisible, visible);
+
+    if (m_legend_toggle != nullptr)
+    {
+        QSignalBlocker blocker(m_legend_toggle);
+        m_legend_toggle->setChecked(visible);
+        // Refresh the tooltip here rather than only in the chip-update pass:
+        // toggling the legend doesn't run that pass, so the hint would otherwise
+        // keep offering the action the user just took.
+        m_legend_toggle->setToolTip(visible
+            ? QStringLiteral("Hide the legend (also in the right-click menu)")
+            : QStringLiteral("Show the legend (also in the right-click menu)"));
+    }
+    // rebuildLegend() re-evaluates rows and applies the new visibility (it also
+    // keeps the overlay hidden when there is nothing to show).
+    rebuildLegend();
+}
+
+void PlotWidget::styleLegendToggle(bool dark)
+{
+    if (m_legend_toggle == nullptr)
+    {
+        return;
+    }
+
+    // Translucent chips so they read over chart data, same visual language as the
+    // legend overlay itself. One stylesheet on the bar covers every chip.
+    const QColor bg = dark ? PlotConstants::kDarkBackground : PlotConstants::kLightBackground;
+    const QColor border = dark ? PlotConstants::kDarkGridColor : PlotConstants::kLightGridColor;
+    const QColor fg = dark ? PlotConstants::kDarkForeground : PlotConstants::kLightForeground;
+    const QString accent = m_title_color.isValid() ? m_title_color.name() : border.name();
+
+    if (m_overlay_bar != nullptr)
+    {
+        m_overlay_bar->setStyleSheet(QString(
+            "QToolButton#legendToggle, QToolButton#overlayChip {"
+            " background-color: rgba(%1,%2,%3,%4); border: 1px solid %5;"
+            " border-radius: %6px; color: %7; padding: 0 8px; }"
+            "QToolButton#legendToggle:hover, QToolButton#overlayChip:hover {"
+            " border: 1px solid %8; }"
+            "QToolButton#legendToggle:checked { border: 1px solid %8; }")
+            .arg(bg.red()).arg(bg.green()).arg(bg.blue())
+            .arg(PlotConstants::kLegendBgAlpha)
+            .arg(border.name())
+            .arg(PlotConstants::kLegendCornerRadius)
+            .arg(fg.name())
+            .arg(accent));
+    }
+
+    // Chart-item overlays follow the theme too.
+    if (m_crosshair != nullptr)
+    {
+        QColor cross = fg;
+        cross.setAlpha(PlotConstants::kCrosshairAlpha);
+        m_crosshair->setPen(QPen(cross, 1.0, Qt::DashLine));
+    }
+    if (m_zoom_band != nullptr)
+    {
+        QColor fill = m_title_color.isValid() ? m_title_color : fg;
+        fill.setAlpha(PlotConstants::kZoomBandAlpha);
+        m_zoom_band->setBrush(QBrush(fill));
+        QColor edge = m_title_color.isValid() ? m_title_color : fg;
+        m_zoom_band->setPen(QPen(edge, 1.0));
+    }
+}
+
+void PlotWidget::updateOverlayChips()
+{
+    if (m_overlay_bar == nullptr || m_view_model == nullptr)
+    {
+        return;
+    }
+
+    const bool has_data = m_view_model->hasData();
+
+    // View Mode chip: same availability rule as the context-menu submenu - both
+    // left-axis metrics must exist. Its label names the metric it switches TO, so
+    // the click's outcome is obvious without reading the current axis.
+    const bool both_metrics =
+        m_view_model->hasLockSeries() && m_view_model->hasMissedFramesSeries();
+    m_view_mode_chip->setVisible(has_data && both_metrics);
+    if (has_data && both_metrics)
+    {
+        const bool is_lock =
+            (m_view_model->lockAxisView() == PlotViewModel::LockAxisView::LockPercent);
+        m_view_mode_chip->setText(is_lock ? QStringLiteral("Show Accumulation")
+                                          : QStringLiteral("Show Lock %"));
+        m_view_mode_chip->setToolTip(is_lock
+            ? QStringLiteral("Switch the left axis to Accumulated Missed Frames")
+            : QStringLiteral("Switch the left axis to Frame Sync Lock %"));
+    }
+
+    if (m_legend_toggle != nullptr)
+    {
+        m_legend_toggle->setToolTip(m_legend_visible
+            ? QStringLiteral("Hide the legend (also in the right-click menu)")
+            : QStringLiteral("Show the legend (also in the right-click menu)"));
+    }
+
+    // Reset chip: only meaningful once something has actually been changed away
+    // from the default view, so it stays hidden the rest of the time.
+    const bool zoomed = has_data
+        && (!qFuzzyCompare(m_view_model->xViewMin(), m_view_model->xMin())
+            || !qFuzzyCompare(m_view_model->xViewMax(), m_view_model->xMax()));
+    const bool pinned = has_data
+        && (m_view_model->hasLeftYMaxOverride() || m_view_model->hasRightYMaxOverride());
+    m_reset_chip->setVisible(zoomed || pinned);
+
+    m_overlay_bar->setVisible(has_data);
+    m_overlay_bar->adjustSize();
+    positionLegendToggle();
+}
+
+void PlotWidget::updateCrosshair(double x, bool visible)
+{
+    if (m_crosshair == nullptr)
+    {
+        return;
+    }
+    if (visible)
+    {
+        // Two points with the same x define the vertical line; the y values only
+        // set its direction, so the line spans the whole axis rect at any zoom.
+        m_crosshair->point1->setCoords(x, 0.0);
+        m_crosshair->point2->setCoords(x, 1.0);
+    }
+    if (m_crosshair->visible() != visible)
+    {
+        m_crosshair->setVisible(visible);
+    }
+    m_plot->replot(QCustomPlot::rpQueuedReplot);
+}
+
+void PlotWidget::applyBandZoom(double lower, double upper)
+{
+    if (m_view_model == nullptr || !m_view_model->hasData())
+    {
+        return;
+    }
+    if (lower > upper)
+    {
+        std::swap(lower, upper);
+    }
+    // A click (or a stray micro-drag) must not collapse the view to nothing.
+    if (upper - lower < PlotConstants::kMinBandZoomSpanSec)
+    {
+        return;
+    }
+    applyTimeWindow(lower, upper,
+                    m_view_model->formatTime(lower), m_view_model->formatTime(upper));
+}
+
+void PlotWidget::updatePlotCursor()
+{
+    if (m_plot == nullptr)
+    {
+        return;
+    }
+    // Open hand = "drag me to pan". Plain arrow before any data is loaded, where
+    // dragging would be meaningless.
+    const bool pannable = (m_view_model != nullptr && m_view_model->hasData());
+    m_plot->setCursor(pannable ? Qt::OpenHandCursor : Qt::ArrowCursor);
+}
+
+void PlotWidget::positionLegendToggle()
+{
+    if (m_overlay_bar == nullptr || m_plot == nullptr)
+    {
+        return;
+    }
+    const int m = PlotConstants::kLegendMarginPx;
+    m_overlay_bar->move(m, m);
+    m_overlay_bar->raise();
 }
 
 void PlotWidget::layoutLegendOverlay(const QSize& content)
@@ -1156,6 +1580,22 @@ void PlotWidget::onPlotMouseMove(QMouseEvent* event)
 
     const double x_coord = m_plot->xAxis->pixelToCoord(event->pos().x());
 
+    // Drag-to-zoom in progress: stretch the rubber band across the full height of
+    // the axis rect between the drag origin and the cursor. The crosshair would
+    // just be noise underneath it, so it is suppressed until the drag ends.
+    if (m_band_zooming)
+    {
+        m_zoom_band->topLeft->setCoords(m_band_start_x, m_plot->yAxis->range().upper);
+        m_zoom_band->bottomRight->setCoords(x_coord, m_plot->yAxis->range().lower);
+        m_zoom_band->setVisible(true);
+        updateCrosshair(x_coord, false);
+        return;
+    }
+
+    // Vertical time line under the cursor, so values on several series can be read
+    // off at the same instant. The tooltip below supplies the value readout.
+    updateCrosshair(x_coord, true);
+
     // Find the nearest visible data point across all graphs
     double best_dist = std::numeric_limits<double>::max();
     double best_x = 0.0;
@@ -1163,9 +1603,20 @@ void PlotWidget::onPlotMouseMove(QMouseEvent* event)
     QString best_name;
     int best_series_index = -1;
 
+    // When the readout is pinned to one series, search only that series - and skip
+    // the proximity gate below, so it always reports a value at the cursor's time
+    // rather than going blank whenever another curve happens to be closer.
+    const int pinned_index = (m_readout_series_id == kReadoutNearest)
+        ? -1 : m_view_model->indexOfSeriesId(m_readout_series_id);
+    const bool pinned = (pinned_index >= 0);
+
     const auto& all_series = m_view_model->allSeries();
     for (int i = 0; i < m_graphs.size() && i < static_cast<int>(all_series.size()); i++)
     {
+        if (pinned && i != pinned_index)
+        {
+            continue;
+        }
         if (!m_view_model->effectiveVisible(all_series[i]))
         {
             continue;
@@ -1206,9 +1657,11 @@ void PlotWidget::onPlotMouseMove(QMouseEvent* event)
         }
     }
 
-    // Only show tooltip if the nearest point is within 10 pixels
+    // Unpinned, the readout only appears when the cursor is actually near a point
+    // (10 px), so it doesn't shout values at you from across the chart. A pinned
+    // series is exempt: the user asked for that one specifically.
     const double pixel_dist = qAbs(m_plot->xAxis->coordToPixel(best_x) - event->pos().x());
-    if (pixel_dist <= 10.0 && !best_name.isEmpty() && best_series_index >= 0)
+    if ((pinned || pixel_dist <= 10.0) && !best_name.isEmpty() && best_series_index >= 0)
     {
         const PlotSeriesData::MetricType metric = all_series[best_series_index].metricType;
         QString unit;
@@ -1218,56 +1671,17 @@ void PlotWidget::onPlotMouseMove(QMouseEvent* event)
             case PlotSeriesData::MetricType::AccumulatedMissedFrames: unit = " frames"; break;
             case PlotSeriesData::MetricType::SNR:                   unit = " dB";      break;
         }
-        QString tip = QString("%1\n%2\n%3%4")
+        QString tip = QString("%1%5\n%2\n%3%4")
             .arg(best_name)
             .arg(m_view_model->formatTime(best_x))
             .arg(QString::number(best_y, 'f', 2))
-            .arg(unit);
+            .arg(unit)
+            .arg(pinned ? QStringLiteral("  (pinned)") : QString());
         QToolTip::showText(event->globalPosition().toPoint(), tip, m_plot);
     }
     else
     {
         QToolTip::hideText();
-    }
-}
-
-void PlotWidget::updateAxisViewCombo()
-{
-    if (m_axis_view_combo == nullptr || m_view_model == nullptr)
-    {
-        return;
-    }
-
-    // The View Mode selector is only meaningful when both left-axis metrics exist
-    // (a frame-sync stream produces both); SNR-only data leaves it disabled.
-    const bool enabled = m_view_model->hasLockSeries() && m_view_model->hasMissedFramesSeries();
-    m_axis_view_combo->setEnabled(enabled);
-
-    // Sync the selection to the ViewModel's active view without firing activated().
-    {
-        QSignalBlocker blocker(m_axis_view_combo);
-        const int idx = m_axis_view_combo->findData(static_cast<int>(m_view_model->lockAxisView()));
-        if (idx >= 0)
-            m_axis_view_combo->setCurrentIndex(idx);
-    }
-
-    if (enabled)
-    {
-        // Adjust the left spinbox range and step to match the active axis metric.
-        const bool is_lock_pct = (m_view_model->lockAxisView() == PlotViewModel::LockAxisView::LockPercent);
-        m_updating_from_vm = true;
-        if (is_lock_pct)
-        {
-            m_left_y_max_spin->setRange(1.0, 100.0);
-            m_left_y_max_spin->setSingleStep(5.0);
-        }
-        else
-        {
-            m_left_y_max_spin->setRange(1.0, 10'000'000.0);
-            m_left_y_max_spin->setSingleStep(100.0);
-        }
-        m_left_y_max_spin->setValue(m_view_model->leftYMax());
-        m_updating_from_vm = false;
     }
 }
 
@@ -1292,10 +1706,25 @@ void PlotWidget::resizeEvent(QResizeEvent* event)
     {
         showLoadingIndicator(true);  // re-centre on resize
     }
+    // Keep the on-chart overlay bar anchored to the (new) top-left corner.
+    if (m_overlay_bar != nullptr && m_overlay_bar->isVisible())
+    {
+        positionLegendToggle();
+    }
 }
 
 bool PlotWidget::eventFilter(QObject* watched, QEvent* event)
 {
+    // Dismiss the chart's data readout as soon as the cursor lands on a chip.
+    // That tooltip is shown with m_plot as its owning widget, and the chips live
+    // *inside* m_plot, so Qt considers it still current and won't replace it with
+    // the chip's own tooltip - leaving the chips looking like they have none.
+    if (event->type() == QEvent::Enter && m_overlay_bar != nullptr
+        && (watched == m_overlay_bar || watched->parent() == m_overlay_bar))
+    {
+        QToolTip::hideText();
+    }
+
     // Keep the legend inside the chart when the chart itself resizes.
     if (watched == m_plot && event->type() == QEvent::Resize
         && m_legend_overlay != nullptr && m_legend_overlay->isVisible())

@@ -24,11 +24,6 @@ void TestConstants::pcmNumMinorFrames()
     QCOMPARE(PCMConstants::kNumMinorFrames, 1);
 }
 
-void TestConstants::pcmTimeRoundingOffset()
-{
-    QCOMPARE(PCMConstants::kTimeRoundingOffset, 0.0005);
-}
-
 void TestConstants::pcmChannelTypeIdentifiers()
 {
     QCOMPARE(QString(PCMConstants::kChannelTypeTime), QString("TIMEIN"));
@@ -38,20 +33,6 @@ void TestConstants::pcmChannelTypeIdentifiers()
 void TestConstants::uiDefaultSlopeIndex()
 {
     QCOMPARE(UIConstants::kDefaultSlopeIndex, 3);
-}
-
-void TestConstants::uiDefaultScale()
-{
-    QCOMPARE(QString(UIConstants::kDefaultScale), QString("20"));
-}
-
-void TestConstants::uiTimeValidationLimits()
-{
-    QCOMPARE(UIConstants::kMinDayOfYear, 1);
-    QCOMPARE(UIConstants::kMaxDayOfYear, 366);
-    QCOMPARE(UIConstants::kMaxHour, 23);
-    QCOMPARE(UIConstants::kMaxMinute, 59);
-    QCOMPARE(UIConstants::kMaxSecond, 59);
 }
 
 void TestConstants::uiSamplePeriods()
@@ -183,8 +164,14 @@ void TestConstants::plotConstants()
     QCOMPARE(QString(PlotConstants::kYAxisLabel),  QString("Framesync Lock (%)"));
     QCOMPARE(QString(PlotConstants::kMissedFramesAxisLabel), QString("Accumulated Missed Frames"));
     QCOMPARE(QString(PlotConstants::kSnrAxisLabel), QString("Receiver SNR (dB)"));
-    QCOMPARE(QString(PlotConstants::kXAxisLabel), QString("Elapsed Time (DDD:HH:MM:SS)"));
-    QCOMPARE(PlotConstants::kZoomFactor, 0.1);
+    QCOMPARE(QString(PlotConstants::kXAxisLabel), QString("Time (DDD:HH:MM:SS)"));
+
+    // The sync-pattern field's length limit is derived from the bit limit, not
+    // spelled out separately - raising kMaxSyncPatternBits must widen the field.
+    QCOMPARE(PCMConstants::kBitsPerHexDigit, 4);
+    QCOMPARE(PCMConstants::kMaxSyncPatternHexChars,
+             PCMConstants::kMaxSyncPatternBits / PCMConstants::kBitsPerHexDigit);
+    QCOMPARE(PCMConstants::kMaxSyncPatternHexChars, 16);
     QCOMPARE(PlotConstants::kNumSnrPrimaryColors, 3);
 
     // Theme colors
@@ -199,8 +186,6 @@ void TestConstants::plotConstants()
     QCOMPARE(PlotConstants::kTickCount, 10);
     QCOMPARE(PlotConstants::kGraphPenWidth, 1.5);
     QCOMPARE(PlotConstants::kTitleFontSize, 10);
-    QCOMPARE(PlotConstants::kSpinBoxMaxRange, 1e9);
-    QCOMPARE(PlotConstants::kYSpinBoxMax, 999.0);
 }
 
 // v3.2 additions

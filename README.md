@@ -52,14 +52,17 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **Per-File-Type Directory Persistence**: Independently remembers the last used directory for Ch10 and TOML file dialogs between sessions
 
 ### Plot & Visualization
-- **Interactive Plot Window**: Plot showing frame sync lock (%) and/or receiver AGC (dB) series with mouse wheel zoom, click-drag pan, auto-scale axes, per-series visibility toggles, and an auto-assigned color palette
+- **Interactive Plot Window**: Plot showing frame sync lock (%) and/or receiver AGC (dB) series with mouse wheel zoom, click-drag pan (open/closed-hand grab cursor), auto-scale axes, per-series visibility toggles, and an auto-assigned color palette
 - **Color Coding**: Frame Sync Lock series use purple/blue/green primaries (one per stream) and Receiver SNR series use red/orange/yellow primaries (one per receiver); additional streams, receivers, and channels are derived as progressively lighter shades so related series stay grouped
 - **Customize Plot Series Dialog**: A tabbed dialog selects which series are visible — a Frame Sync Lock tab (one toggle per stream) and a Receiver SNR tab that presents each stream as a collapsible tree of receivers with L/R/C channel checkboxes, tri-state group toggles, and Expand/Collapse All; streams with many receivers split across two columns
-- **View Mode Selector**: A dropdown in the plot's top control row switches the left axis between Frame Sync Lock (%) and Accumulated Missed Frames; the per-stream visibility selection is preserved across the switch
-- **Plot File Selector**: After a batch run, a **Plot File** dropdown in the plot's top control row selects which processed file to view, or overlays them all (disabled when only one file is loaded)
-- **Movable On-Plot Legend**: A translucent legend floats inside the chart (defaulting to the top-right, reset each session) and can be dragged clear of the data; it scrolls for dense plots (e.g. 48+ SNR channels) and is composited into exported images at its placed position
+- **Distraction-Free Plot**: The chart fills the entire plot area - there are no control rows around it. Every control lives in a **right-click context menu** on the chart (Set Plot Title, Plot File, View Mode, Customize View, Show Legend, X Axis, Y Axes, Export) or in a single on-chart chip bar
+- **On-Chart Chip Bar**: A compact overlay at the chart's top-left holding the legend toggle, a one-click **View Mode** chip (labelled with the view it switches to), and a **Reset view** chip that appears only once the view is zoomed or an axis maximum is pinned - so nothing sits there unused
+- **Quick Plot Gestures**: Ctrl+drag or middle-drag rubber-bands a time range to zoom into it, double-click restores the full span, and a dashed crosshair follows the cursor for comparing series at the same instant
+- **View Mode**: The context menu switches the left axis between Frame Sync Lock (%) and Accumulated Missed Frames; the per-stream visibility selection is preserved across the switch
+- **Plot File Selector**: After a batch run, the context menu's **Plot File** submenu selects which processed file to view, or overlays them all (disabled when only one file is loaded)
+- **Movable On-Plot Legend**: A translucent legend floats inside the chart (defaulting to the top-right, reset each session) and can be dragged clear of the data; it scrolls for dense plots (e.g. 48+ SNR channels) and is composited into exported images at its placed position. A small on-chart button (top-left) shows/hides it, and the choice persists between sessions
 - **X-Axis Time Display**: Actual file time (DDD:HH:MM:SS) on the X axis instead of elapsed seconds
-- **Export**: Export the current plot and its data from the ☰ menu (**Export…**) — choose any combination of CSV data, a plot image (PNG/SVG/PDF), and the log window contents (text); the image includes the legend
+- **Export**: Export the current plot and its data from the ☰ menu or the plot's right-click menu (**Export…**) — choose any combination of CSV data, a plot image (PNG/SVG/PDF), and the log window contents (text); the image includes the legend
 - **Hover Tooltip**: Shows series name, time (DDD:HH:MM:SS), and value (lock % or dB) on mouse hover
 
 ### Logging & Feedback
@@ -158,7 +161,7 @@ tmDataQualityAnalyzer/
 │   ├── dto/                    # Plain value types passed between layers
 │   │   ├── streamconfig.h · source.h · processingparams.h · processedstreamdata.h
 │   │   ├── plotseriesdata.h · seriesappearance.h · processingtemplate.h
-│   │   └── framesyncparams.h · timefields.h · calibrationprofile.h (US5.3, runtime-only)
+│   │   └── framesyncparams.h · calibrationprofile.h (US5.3, runtime-only)
 │   ├── model/                 # File I/O, decommutation, schemas (no Qt UI)
 │   │   ├── chapter10reader.h · ch10packetreader.h · packetqueue.h · frameprocessor.h
 │   │   ├── stepdetector.h · calibrationextractor.h        # Non-linear step calibration (US5.3)
@@ -167,7 +170,7 @@ tmDataQualityAnalyzer/
 │   │   └── streamconfigschema.h · processingtemplateschema.h · templatematcher.h  # Templates (US1.1)
 │   ├── view/                  # Qt widgets and dialogs
 │   │   ├── mainview.h          # Main window: hamburger menu + frameless title bar + log sidebar
-│   │   ├── plotwidget.h        # QCustomPlot chart + on-plot legend + top control row
+│   │   ├── plotwidget.h        # QCustomPlot chart + on-plot legend + right-click context menu
 │   │   ├── streamconfigdialog.h · streamsubdialogs.h · plotcustomizationdialog.h
 │   │   └── exportdialog.h · batchapplydialog.h · processingprogressdialog.h
 │   ├── viewmodel/             # Application logic bound to the views

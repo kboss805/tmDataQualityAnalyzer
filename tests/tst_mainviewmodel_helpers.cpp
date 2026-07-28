@@ -1,6 +1,4 @@
 #include "tst_mainviewmodel_helpers.h"
-
-#include <QRegularExpression>
 #include <QtTest>
 
 #include "mainviewmodel.h"

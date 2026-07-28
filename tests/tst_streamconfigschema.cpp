@@ -156,3 +156,37 @@ void TestStreamConfigSchema::fromJsonLeavesDefaultsWhenOptionalFieldsMissing()
     QCOMPARE(out.scaleDdBPerV, default_scale);
     QVERIFY(out.calCh10Path.isEmpty());
 }
+
+void TestStreamConfigSchema::fromJsonClampsOutOfRangeComboIndices()
+{
+    // A template written by a newer build - or hand-edited - can carry combo
+    // indices this build doesn't know. They must be clamped to the documented
+    // range rather than flowing through: samplePeriodIndex drives a switch whose
+    // default silently substitutes 100 ms, and slopeIndex indexes the voltage
+    // bound tables.
+    QJsonObject obj;
+    obj["pcmChannelId"]     = 5;
+    obj["label"]            = "Ch 5";   // required by fromJson
+    obj["mode"]             = "ReceiverChannelInfo";
+    obj["samplePeriodIndex"] = 99;   // far past the last real option
+    obj["slopeIndex"]        = 99;
+
+    StreamConfig out;
+    QVERIFY(StreamConfigSchema::fromJson(obj, out));
+    QCOMPARE(out.samplePeriodIndex, UIConstants::kMaxSamplePeriodIndex);
+    QCOMPARE(out.slopeIndex,        UIConstants::kMaxSlopeIndex);
+
+    // Negative indices clamp to the first option.
+    obj["samplePeriodIndex"] = -3;
+    obj["slopeIndex"]        = -3;
+    QVERIFY(StreamConfigSchema::fromJson(obj, out));
+    QCOMPARE(out.samplePeriodIndex, 0);
+    QCOMPARE(out.slopeIndex,        0);
+
+    // An in-range value is untouched.
+    obj["samplePeriodIndex"] = 1;
+    obj["slopeIndex"]        = 1;
+    QVERIFY(StreamConfigSchema::fromJson(obj, out));
+    QCOMPARE(out.samplePeriodIndex, 1);
+    QCOMPARE(out.slopeIndex,        1);
+}

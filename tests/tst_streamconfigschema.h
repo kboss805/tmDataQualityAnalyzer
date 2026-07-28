@@ -14,6 +14,7 @@ class TestStreamConfigSchema : public QObject
     Q_OBJECT
 
 private slots:
+    void fromJsonClampsOutOfRangeComboIndices();
     void roundTripFrameSyncLockConfig();
     void roundTripReceiverChannelInfoConfig();
     void roundTripPreservesCalibrationInputReferences();

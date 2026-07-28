@@ -6,19 +6,18 @@
 #ifndef PLOTWIDGET_H
 #define PLOTWIDGET_H
 
-#include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QFrame>
 #include <QHash>
 #include <QLabel>
-#include <QLineEdit>
 #include <QMouseEvent>
-#include <QPushButton>
+#include <QPoint>
 #include <QResizeEvent>
 #include <QScrollArea>
-#include <QTreeWidget>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <QWidget>
+
+class QMenu;
 
 #include <functional>
 
@@ -53,10 +52,16 @@ private:
 };
 
 /**
- * @brief Self-contained plot widget: QCustomPlot chart + toolbar controls + legend.
+ * @brief Self-contained plot widget: QCustomPlot chart + movable legend.
  *
  * Owns its own QCustomPlot instance. Connects to a PlotViewModel for data.
  * Placed inside a QDockWidget by MainView.
+ *
+ * The chart fills the whole widget: there are no external control rows. Every
+ * control (Plot File, View Mode, Customize View, plot title, X/Y axis ranges,
+ * Export) lives in the plot's **right-click context menu** — see
+ * showPlotContextMenu(). Mouse-wheel zoom and click-drag pan on the X axis are
+ * unaffected; right-click is otherwise unused by QCustomPlot.
  */
 class PlotWidget : public QWidget
 {
@@ -106,10 +111,24 @@ private slots:
     void updateTitle();
     /// Handles opening the Customize Plot dialog.
     void onCustomizePlotClicked();
-    /// Handles user editing X range spinboxes.
-    void onXRangeChanged();
-    /// Resets all axes to auto/full range.
-    void onResetAxes();
+    /// Builds and shows the plot's right-click context menu at @p pos (chart coords).
+    void showPlotContextMenu(const QPoint& pos);
+    /// Builds the context menu without showing it, so its actions can be inspected
+    /// (and unit-tested) without entering QMenu::exec()'s modal event loop.
+    /// Caller takes ownership. Returns nullptr when no ViewModel is attached.
+    QMenu* buildContextMenu();
+    /// Prompts for a custom plot title.
+    void onSetPlotTitle();
+    /// Prompts for a start/stop time window (DDD:HH:MM:SS) and applies it.
+    void onSetTimeWindow();
+    /// Resets the X axis to the full data span.
+    void onResetXAxis();
+    /// Prompts for the left y-axis maximum override.
+    void onSetLeftYMax();
+    /// Prompts for the right y-axis maximum override.
+    void onSetRightYMax();
+    /// Clears both y-axis maximum overrides (back to auto).
+    void onResetYAxes();
     /// Shows a tooltip with the nearest data point value under the cursor.
     void onPlotMouseMove(QMouseEvent* event);
 
@@ -125,14 +144,14 @@ private:
     void setUpLayout();
     void setUpConnections();
 
-    /// Syncs the View Mode dropdown's selection/enabled state (and the left
-    /// spinbox range) to the ViewModel's active left-axis metric.
-    void updateAxisViewCombo();
+    /// Clamps @p start / @p stop to the data bounds (warning to the log if a value
+    /// was clamped), enforces start <= stop, and applies the window to the ViewModel.
+    /// Shared by the Set Time Window dialog so entered values behave exactly as the
+    /// old start/stop fields did.
+    void applyTimeWindow(double start, double stop,
+                         const QString& entered_start, const QString& entered_stop);
     /// Rebuilds the floating legend's rows from current ViewModel series visibility.
     void rebuildLegend();
-    /// Repopulates the file-selector dropdown from the ViewModel's source list and
-    /// syncs its enabled state (disabled for <=1 source) and current selection.
-    void populateSourceCombo();
     /// Sizes the legend overlay to fit @p content (height/width capped) and
     /// positions/clamps it in view. @p content is the natural, unconstrained size
     /// of the legend rows, computed by the caller (rebuildLegend()) directly from
@@ -146,6 +165,28 @@ private:
     void clampLegendIntoView();
     /// Applies the translucent background, border, and text colors for the theme.
     void styleLegendOverlay(bool dark);
+    /// Applies the overlay chips' theme-appropriate glyphs and styling.
+    void styleLegendToggle(bool dark);
+    /// Anchors the overlay chip bar at the chart's top-left (the legend itself
+    /// defaults to the top-right, so they never collide) and keeps it on top.
+    void positionLegendToggle();
+    /// Shows/hides and relabels the overlay chips for the current state: the View
+    /// Mode chip only when both left-axis metrics exist, the Reset chip only when
+    /// the view is actually zoomed or an axis maximum is pinned.
+    void updateOverlayChips();
+    /// Moves the crosshair to @p x (plot coords) and shows it, or hides it when
+    /// @p visible is false. Replots.
+    void updateCrosshair(double x, bool visible);
+    /// Applies @p lower..@p upper as the X window (ordered, ignored if degenerate)
+    /// after a band-zoom drag.
+    void applyBandZoom(double lower, double upper);
+    /// Sets the chart's resting cursor: an open hand once data is loaded (the plot
+    /// can be click-dragged to pan), a plain arrow before that. Pressing swaps in a
+    /// closed hand; releasing calls back here.
+    void updatePlotCursor();
+    /// Shows/hides the legend per @p visible, persists the choice, and refreshes
+    /// the toggle's checked state. Does nothing if the state is already @p visible.
+    void setLegendVisible(bool visible);
     /// Shows or hides the centered "Loading..." overlay over the chart.
     void showLoadingIndicator(bool visible);
     void resizeEvent(QResizeEvent* event) override;
@@ -164,29 +205,11 @@ private:
     QCustomPlot* m_plot = nullptr;
     /// @}
 
-    /// @name Top toolbar controls
-    /// @{
-    QLineEdit* m_title_edit = nullptr;
-    QComboBox* m_axis_view_combo = nullptr; ///< View Mode: left axis Lock % vs Accumulation (missed frames).
-    QComboBox* m_source_combo = nullptr;    ///< Plot File: selects which processed file to view (US1.1); disabled for <=1 source.
-    /// @}
-
-    /// @name Bottom controls
-    /// @{
-    QLineEdit* m_x_start_edit = nullptr;
-    QLineEdit* m_x_stop_edit = nullptr;
-    QPushButton* m_reset_btn = nullptr;
-    QDoubleSpinBox* m_left_y_max_spin = nullptr;  ///< User-adjustable max for the left (lock/missed-frames) axis.
-    QDoubleSpinBox* m_right_y_max_spin = nullptr; ///< User-adjustable max for the right (SNR) axis.
-    /// @}
-
     /// @name Graph tracking
     /// @{
     QVector<QCPGraph*> m_graphs;          ///< Series index → QCPGraph, aligned to PlotViewModel::allSeries().
     QHash<int, QCPGraph*> m_graph_by_id;  ///< Series id → QCPGraph, for incremental reconcile across appends.
     /// @}
-
-    QPushButton* m_customize_btn = nullptr;
 
     /// @name Legend overlay (movable box floating over the chart, child of m_plot)
     /// @{
@@ -212,6 +235,39 @@ private:
     /// mirrors m_graph_by_id so a run with many streams doesn't rebuild every
     /// row's widgets from scratch on each stream's completion.
     QHash<int, LegendRow> m_legend_row_by_id;
+    /// Overlay chip bar floating at the chart's top-left: the only persistent
+    /// on-chart chrome. Holds the legend toggle, the View Mode chip and the
+    /// self-hiding Reset chip. Deliberately an overlay rather than an external
+    /// control row, and never composited into exported images — only
+    /// m_legend_overlay is rendered into exports.
+    QWidget* m_overlay_bar = nullptr;
+    /// On-chart show/hide control for the legend.
+    QToolButton* m_legend_toggle = nullptr;
+    /// One-click switch between the two left-axis metrics; hidden unless the data
+    /// provides both (same rule as the View Mode submenu).
+    QToolButton* m_view_mode_chip = nullptr;
+    /// Restores the full time span and clears axis-max overrides. Hidden while the
+    /// view is already at full span with no overrides, so it adds no idle clutter.
+    QToolButton* m_reset_chip = nullptr;
+
+    /// @name Chart-item overlays (no persistent chrome)
+    /// @{
+    QCPItemStraightLine* m_crosshair = nullptr; ///< Vertical time line following the cursor.
+    QCPItemRect* m_zoom_band = nullptr;         ///< Rubber band drawn during a drag-to-zoom.
+    bool   m_band_zooming = false;              ///< True while a band-zoom drag is in progress.
+    double m_band_start_x = 0.0;                ///< Plot-coordinate X where the band drag began.
+    /// @}
+    /// Series the hover readout is pinned to, by stable series id, or
+    /// kReadoutNearest for the default "whatever is nearest the cursor" behaviour.
+    /// Pinned by id (not index) so a reprocess, which renumbers indices, can't
+    /// silently retarget the readout at a different stream.
+    static constexpr int kReadoutNearest = -1;
+    int m_readout_series_id = kReadoutNearest;
+
+    /// Whether the user wants the legend shown; persisted across sessions
+    /// (UIConstants::kSettingsKeyLegendVisible). When false the overlay stays
+    /// hidden even with data loaded, and is excluded from exports.
+    bool m_legend_visible = true;
     /// @}
 
     QLabel* m_loading_label = nullptr; ///< Overlay label shown while CSV is parsing.

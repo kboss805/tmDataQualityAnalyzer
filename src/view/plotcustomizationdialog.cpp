@@ -92,6 +92,9 @@ void PlotCustomizationDialog::setupUi()
 
     auto* snrBtnLayout = new QHBoxLayout();
     m_snrExpandBtn = new QPushButton(tr("Expand All"), m_snrTab);
+    // Its label toggles between "Expand All" and "Collapse All"; a floor wide
+    // enough for the longer text keeps the button from resizing as it flips.
+    m_snrExpandBtn->setMinimumWidth(UIConstants::kFlatButtonMinWidth);
     auto* snrSelectAllBtn = new QPushButton(tr("Select All"), m_snrTab);
     auto* snrSelectNoneBtn = new QPushButton(tr("Select None"), m_snrTab);
     snrBtnLayout->addWidget(m_snrExpandBtn);

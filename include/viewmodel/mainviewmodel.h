@@ -15,7 +15,6 @@
 #include "processingparams.h"
 #include "source.h"
 #include "streamconfig.h"
-#include "timefields.h"
 
 class Chapter10Reader;
 class FrameSetup;

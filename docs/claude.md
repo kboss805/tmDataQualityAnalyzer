@@ -23,6 +23,7 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** I can apply the specific parameters defined in US2.0 and US2.1 to each individual telemetry stream before starting the decommutation process.
 
 **Acceptance Criteria:**
+
 - [x] A dialog window is presented when the user opens a new ch10 file.
 - [x] The dialog window lists all streams identified in the ch10 file.
 - [x] The dialog window allows the user to select the streams to process for SNR data and/or framesync lock statistics.
@@ -47,18 +48,18 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** I don't have to open and re-configure every file individually when running the same analysis across many recordings.
 
 **Acceptance Criteria:**
+
 - [x] The user can batch-process multiple `.ch10` files in one action by applying a saved template (File > **Apply Template to Files…**): pick a template, then multi-select the files.
 - [x] The per-stream processing is configured **once** when the template is created (**Open** a file → configure in the Configure Streams dialog → **Save as Template…**); that configuration is applied to every selected file.
 - [x] Files are matched to the template by PCM channel ID; a file whose channel-ID set differs is skipped and the user is told which channels are missing/extra.
 - [x] All processed files are retained in memory; the user can optionally also export a CSV + Frame Sync Lock and Missed Frames images per file to a chosen folder, auto-named from each source file.
 - [x] Progress is shown while the batch runs, and a summary reports how many files were processed vs. skipped.
 - [x] A saved template round-trips the same per-stream settings the Configure Streams dialog captures (frame-sync, SNR, calibration references), and — optionally — per-series names/colors.
-- [x] After a multi-file run, the user can select which processed file's plot to view in the main plot window via the **Plot File** dropdown in the plot's top control row (far left). The dropdown is disabled when only one file is loaded, and offers an "All files (overlaid)" entry for comparison.
 
   - **Scope:** Matching is **exact channel-ID set** (a file must have the same PCM channel IDs as the template, no more/fewer) — decided for simplicity; revisit if a looser "subset" match is ever needed. This story is orthogonal to US2.2 (apply-to-all *within* one file). Templates carry **no file paths** — settings only, applied to whatever files the user picks. The only batch entry point is **Apply Template** (there is no direct multi-file open, and no Add/Remove Source); templates are the sole way to configure a batch.
   - **Config application:** each file's run feeds the template's `StreamConfig`s through unchanged (`applyBatchSourceConfig`); the reader dispatches each stream by `pcmChannelId`, which is safe precisely because of the exact-set match. **Non-linear calibration:** a template stores only the calibration *input references* (not the extracted profile), so **all batch files process with the linear slope/offset fallback**. Non-linear step calibration is available for single-file processing only; re-extraction on template apply is a possible future add.
   - **Custom names/colors:** captured only when **saving a template** from an already-processed, customized plot (`buildTemplateFromSource`), and reapplied per file after each run (`reapplyTemplateAppearance`, matched by channel id + metric/receiver/channel). Every file's copy of a channel intentionally shares the same name/color (they are the same channel across recordings); use the **Plot File** selector to view one file at a time when per-file distinction matters.
-  - **Retain-all + file selector:** a batch always keeps every processed file in memory; the plot's top-control-row **Plot File** dropdown (`PlotWidget::m_source_combo`) chooses which file to view, defaulting to the first, with "All files (overlaid)" for comparison. The filter is a `PlotViewModel` source gate (`setVisibleSource`/`effectiveVisible`) orthogonal to per-series visibility and the **View Mode** (lock %/accumulation) selector. Optional per-file export runs as a post-pass (`finishBatch` isolates each source, then `exportCsv(path, sourceId)` + a `_framesync_lock.png` and `_missed_frames.png` via `exportImage`).
+  - **Retain-all + file selector:** a batch always keeps every processed file in memory; the plot's right-click **Plot File** submenu chooses which file to view, defaulting to every source overlaid, with "All files (overlaid)" for comparison. The filter is a `PlotViewModel` source gate (`setVisibleSource`/`effectiveVisible`) orthogonal to per-series visibility and the **View Mode** (lock %/accumulation) selector. Optional per-file export runs as a post-pass (`finishBatch` isolates each source, then `exportCsv(path, sourceId)` + a `_framesync_lock.png` and `_missed_frames.png` via `exportImage`).
   - **Status: implemented** (Save/Apply Template, one `startBatchFromTemplate` batch loop, retain-all + Plot File selector). Schema/matcher/appearance/headless-export/source-view are unit-tested; the full sequential run is app-verified (needs real multi-file `.ch10` recordings). See `docs/processing-template-design.md`.
 
 ### US2.0: Define the key parameters required to process the framesync lock statistics and frame sync error accumulation — Complete
@@ -68,6 +69,7 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** these parameters can be applied per-stream in the processing dialog window (defined in US1.0) and saved/loaded from configuration files (defined in US5.0).
 
 **Acceptance Criteria:**
+
 - [x] The user can define the frame sync pattern and frame length for each telemetry stream of interest.
 - [x] The application accepts frame sync pattern sizes up to 64 bits in length.
 - [x] The application accepts frame sync masks up to 64 bits in length.
@@ -82,6 +84,7 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** these parameters can be applied per-stream in the processing dialog window (defined in US1.0) and saved/loaded from configuration files (defined in US5.1).
 
 **Acceptance Criteria:**
+
 - [x] The user can define the frame sync pattern and frame length for the telemetry stream of interest.
 - [x] The application accepts frame sync pattern sizes up to 64 bits in length.
 - [x] The application accepts frame sync masks up to 64 bits in length.
@@ -99,7 +102,8 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** I don't have to re-enter identical parameters across many streams when a file contains several streams with the same format.
 
 **Acceptance Criteria:**
-- [x] The Frame Sync Lock and Receiver SNR setup dialogs each provide an "Apply to all <mode> streams" toggle next to the OK/Cancel buttons.
+
+- [x] The Frame Sync Lock and Receiver SNR setup dialogs each provide an "Apply to all `<mode>` streams" toggle next to the OK/Cancel buttons.
 - [x] When enabled and the user clicks OK, the entered settings are copied to every stream that is selected for processing and shares the same mode.
 - [x] Streams of a different mode are left unchanged.
 - [x] Each affected stream is marked configured/ready and its readiness indicator updates.
@@ -113,6 +117,7 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** I can view the framesync lock statistics for one or more telemetry streams versus time.
 
 **Acceptance Criteria:**
+
 - [x] The user can view the framesync lock statistics (left hand y-axis) versus time (x-axis) in a plot window.
 - [x] The user can select which telemetry stream(s) framesync lock statistics to view in the plot window.
 - [x] The user can select the time window to view the framesync lock statistics in the plot window.
@@ -126,8 +131,9 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** I can quantitatively evaluate how frame sync errors are accumulating over time.
 
 **Acceptance Criteria:**
+
 - [x] The user can view the accumulated missed frames (left hand y-axis) versus time (x-axis) in a plot window.
-- [x] The user can switch the left-axis view between framesync lock (%) and accumulated missed frames modes.
+- [x] The user can switch the left-axis view between framesync lock (%) and accumulated missed frames modes (context menu > View Mode).
 - [x] The user can select which telemetry stream's accumulated missed frames to view in the plot window.
 - [x] Missed frames are accumulated per telemetry stream against that stream's own frame parameters.
 
@@ -140,6 +146,7 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** I can view the SNR signal data for one or more receiver channels versus time.
 
 **Acceptance Criteria:**
+
 - [x] The user can view the SNR signal data (right hand y-axis) versus time (x-axis) in a plot window.
 - [x] The user can select which receiver/channels SNR signal data to view in the plot window.
 - [x] The user can select the time window to view the SNR signal data in the plot window.
@@ -155,21 +162,25 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** I can quickly analyze data in the plot window.
 
 **Acceptance Criteria:**
+
 - [x] The plot fills the central area of the main application window (it is the window's central widget; the log occupies a toggleable left sidebar).
-- [x] The user can specify a custom title for the plot.
+- [x] The chart occupies the entire plot area: there are no external control rows. Every plot control is reached from a **right-click context menu** on the chart, whose items are disabled until data is loaded.
+- [x] The context menu provides: **Plot File** (which processed file to view), **View Mode** (Lock Percentage / Accumulation), **Customize View…**, **Set Plot Title…**, **Show Legend** (checkable), **X Axis** (Set Time Window… / Reset Span), **Y Axes** (Set Left Max… / Set Right Max… / Reset), and **Export…**.
+- [x] The user can specify a custom title for the plot (context menu > Set Plot Title…).
 - [x] The left Y axis is labeled with its unit of measure, average framesync lock percent.
 - [x] The right Y axis is labeled with its unit of measure, SNR in decibels.
 - [x] The bottom X axis is labeled with elapsed file time (DDD:HH:MM:SS), not raw seconds.
 - [x] The Y axis automatically scales to the data's min/max values.
 - [x] The X axis automatically scales to the full time span of the loaded data.
-- [x] The user can set a time window to zoom and pan the X axis to just that range.
-- [x] The user can manually override the Y axis minimum and maximum values.
+- [x] The user can set a time window to zoom and pan the X axis to just that range (context menu > X Axis > Set Time Window…, entered as DDD:HH:MM:SS; values outside the file range are clamped with a warning in the log). **X Axis > Reset Span** restores the full span.
+- [x] The user can manually override the Y axis maximum values (context menu > Y Axes > Set Left/Right Max…); minima remain automatic. **Y Axes > Reset** clears both overrides.
 - [x] The mouse wheel zooms the X axis.
 - [x] A mouse click and hold pans the X axis.
 - [x] The user can show or hide individual Frame Sync Lock and Receiver SNR series.
 - [x] A movable legend overlay floats inside the chart instead of sitting in a separate panel below it, showing a line-swatch and label for each visible series.
 - [x] The user can click-drag the legend anywhere inside the plot area to keep it clear of data of interest.
 - [x] The legend defaults to the top-right corner and resets there each new session.
+- [x] The user can show or hide the legend from a small toggle button overlaid on the chart's top-left corner (mirrored by the context menu's **Show Legend** item). The choice persists across sessions, and a hidden legend is excluded from exported images.
 - [x] The legend background is translucent so plot data behind it stays visible.
 - [x] The legend's height is capped with a vertical scrollbar for dense plots, such as a Receiver SNR file with 48+ channels.
 - [x] Receiver SNR legend rows show a short label (channel id plus receiver/channel code) instead of the full TMATS-derived stream title, though the full name remains available via tooltip and in CSV export headers.
@@ -180,6 +191,27 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Additional streams, receivers, and channels beyond the primaries use progressively lighter shades of their primary color so related series stay visually grouped.
 - [x] Frame Sync Lock curves are drawn with a visually highlighted style, while Receiver SNR curves are not.
 
+### US4.1: Distraction-free plot window — controls on the plot, not around it — In Progress
+
+**As a** telemetry engineer or data analyst
+**I want to** see nothing but the plot itself, with every control reached by right-clicking the plot or from a small overlay on it
+**So that** the maximum amount of screen space shows data, and the interface stays uncluttered while I analyze.
+
+**Acceptance Criteria:**
+
+- [x] The plot window has no external control rows: the chart fills the entire plot area.
+- [x] Every plot control is reached from a right-click context menu on the chart, or from a control overlaid on the chart itself.
+- [x] The context menu leads with **Set Plot Title…**, then **Plot File**, **View Mode**, **Customize View…**, **Show Legend**, **X Axis**, **Y Axes**, and **Export…**; entries are disabled until data is loaded.
+- [x] The legend can be shown or hidden from a toggle overlaid on the chart, and the choice persists across sessions.
+- [x] The persistent on-chart controls are gathered into a single chip bar at the chart's top-left (legend toggle, View Mode chip, Reset view chip) rather than scattered around the plot; each chip hides itself when it would be meaningless, so the bar is empty-by-default clutter-free.
+- [x] Frequent actions have chrome-free gestures: Ctrl+drag / middle-drag rubber-bands a time range to zoom, double-click restores the full span, and a crosshair follows the cursor for reading several series at one instant.
+- [x] Mouse-wheel zoom and click-drag pan of the X axis are retained as the primary navigation.
+- [x] The log/console occupies a left sidebar that the user can toggle on and off, and which is open by default.
+- [ ] *(placeholder)* Any further plot controls the user identifies are relocated to the context menu or an on-chart overlay rather than added as external widgets.
+- [ ] *(placeholder)* Keyboard shortcuts for the most-used context-menu actions — **undecided**, may be dropped.
+
+  - **Scope:** This story governs the *placement* of plot controls, not what they do — the underlying behaviors are specified by US4.0 (navigation/appearance), US3.1 (view mode), and US1.1 (Plot File selector). It is deliberately additive to those stories: US4.0's criteria were reworded for the new location, not replaced.
+
 ### US5.0: Recall/store framesync pattern and frame length parameters from/to configuration files — Complete
 
 **As a** telemetry engineer or data analyst
@@ -187,6 +219,7 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** I don't have to re-enter the parameters every time I open the application.
 
 **Acceptance Criteria:**
+
 - [x] Configuration files include the framesync pattern and frame length.
 - [x] User is able to save the framesync pattern and frame length to a configuration file.
 - [x] User is able to recall the framesync pattern and frame length from a configuration file.
@@ -200,6 +233,7 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** I don't have to re-enter the parameters every time I open the application.
 
 **Acceptance Criteria:**
+
 - [x] Configuration files include the default parameters used to process SNR data.
 - [x] User is able to save default parameters to a configuration file.
 - [x] User is able to recall default parameters from a configuration file.
@@ -213,6 +247,7 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** I can update the default key parameters to meet the requirements of different telemetry streams formats.
 
 **Acceptance Criteria:**
+
 - [x] The dialog window includes the following default parameters used to process SNR signal data streams:
   - number of receivers
   - number of channels per receiver
@@ -230,6 +265,7 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** I can accurately groom out receiver non-linearities and plot true SNR values instead of relying on a simple linear slope/offset.
 
 **Acceptance Criteria:**
+
 - [x] The user can enable non-linear step calibration for a specific Receiver SNR stream in the per-stream setup dialog (via the "Extract Calibration…" action).
 - [x] The user can load a TOML file defining the expected step values (in dB).
 - [x] The user can load a Calibration CH10 file containing the recorded step data.
@@ -251,6 +287,7 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** I can drop it into third-party applications such as PowerPoint to build reports and presentations without re-processing the source data.
 
 **Acceptance Criteria:**
+
 - [x] The current plot is exported as a single image containing every visible Frame Sync Lock, Accumulated Missed Frames, and Receiver SNR series.
 - [x] The user selects the image format from one of the following: svg, png, pdf.
 - [x] The user specifies the image filename and location via the export dialog.
@@ -264,6 +301,7 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** I can import the file into third-party applications such as Excel and MATLAB for further analysis.
 
 **Acceptance Criteria:**
+
 - [x] The current plot data is exported to a single CSV file covering every visible Frame Sync Lock, Accumulated Missed Frames, and Receiver SNR series.
 - [x] The CSV file includes a timestamp column and one data column per series.
 - [x] Each column header identifies its stream and receiver/channel so the exported data is self-describing.
@@ -276,6 +314,7 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** I can keep a record of processing messages, warnings, and calibration results for later review.
 
 **Acceptance Criteria:**
+
 - [x] The current log window contents are exported to a plain-text file.
 - [x] The user specifies the log filename and location via the export dialog.
 
@@ -286,6 +325,7 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** I can review and visualize old data sets without re-processing the original .ch10 file.
 
 **Acceptance Criteria:**
+
 - [x] The user can open a previously exported CSV file via the menu's **Import CSV…** entry (Import/Export section), drag-and-drop of a `.csv` file, or the Recent Files list.
 - [x] Import CSV… opens a CSV-only file dialog and is disabled while processing.
 - [x] **Open…** remains Chapter-10-only; Import CSV… is the dedicated CSV entry point.
@@ -306,6 +346,7 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** I can avoid errors and ensure the data I export is accurate.
 
 **Acceptance Criteria:**
+
 - [x] Ensure all input fields are validated.
 - [x] Error messages are displayed to the user when invalid values are entered.
 - [x] Application ensures frame sync pattern only contains hexadecimal values.
@@ -318,6 +359,7 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** I can quickly deploy the software/updates to users with all the necessary folders and settings files.
 
 **Acceptance Criteria:**
+
 - [x] The installer produces a code-signed application executable.
 - [x] The installer can install to "Program Files" for admin users.
 - [x] The installer can install to a user-selected directory for users without admin privileges.
@@ -333,6 +375,7 @@ The stories below follow the workflow a first-time user takes through the applic
 **So that** I can use the application comfortably in different lighting conditions or to match my system preference.
 
 **Acceptance Criteria:**
+
 - [x] The user can toggle between light and dark theme via a menu action.
 - [x] The selected theme persists across application restarts.
 - [x] All windows, dialogs, and the plot update to match the selected theme immediately.
@@ -340,9 +383,79 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ## Version History
 
+### Unreleased — Plot Window Simplification
+
+#### Plot controls moved into a right-click context menu (US4.0)
+
+- The plot window's external control rows are **gone**: the chart now fills the
+  entire plot area. The plot title field, Plot File selector, View Mode selector,
+  X start/stop fields, Reset button, left/right Y-max spin boxes and the
+  "Customize Plot…" button were all removed.
+- Everything is reached from a **right-click menu on the chart**
+  (`PlotWidget::showPlotContextMenu()`, built by `buildContextMenu()`): **Plot
+  File** (radio list of processed sources + "All files (overlaid)"; disabled for a
+  single source), **View Mode** (Lock Percentage / Accumulation; disabled unless
+  both left-axis metrics exist), **Customize View…**, **Set Plot Title…**,
+  **X Axis** (Set Time Window… / Reset Span), **Y Axes** (Set Left Max… / Set
+  Right Max… / Reset), and **Export…**. The menu is rebuilt on every request, so
+  it can never show a stale source list or mode.
+- The single Reset button became **two** items — `X Axis > Reset Span` and
+  `Y Axes > Reset` — which together do what the old button did.
+- **Export…** is now also on the plot (it remains in the hamburger menu too).
+- Unchanged: mouse-wheel X zoom, click-drag X pan, and the draggable legend
+  overlay. Y-axis minima remain automatic (only maxima are user-settable).
+- Time-window entry keeps the exact `formatTime`/`parseTime` (DDD:HH:MM:SS)
+  round-trip the old Start/Stop fields used, including clamping to the file range
+  with a log warning; the dialog supplies both values at once, so an inverted
+  range now pulls Stop up to Start (the old form clamped whichever field had focus).
+- New: an on-chart **legend show/hide toggle** - a small translucent button
+  overlaid at the chart's top-left (the legend defaults to the top-right, so they
+  never collide), mirrored by a checkable **Show Legend** context-menu item. The
+  preference persists via QSettings (`LegendVisible`), survives legend rebuilds,
+  and a hidden legend is omitted from exported PNG/SVG images (export composites
+  only a visible overlay). The button itself is never rendered into exports.
+- New: an on-chart **chip bar** (top-left) collecting the persistent overlay
+  controls - the legend toggle, a one-click **View Mode** chip (labelled with the
+  metric it switches *to*, hidden unless the data has both), and a **Reset view**
+  chip that appears only once the view is zoomed or an axis max is pinned.
+- New chrome-free gestures: **Ctrl+drag / middle-drag** rubber-bands a time range
+  and zooms to it on release (the right button is taken by the context menu and
+  plain left-drag stays panning, so neither could be reused); **double-click**
+  restores the full span; a dashed **crosshair** follows the cursor so several
+  series can be read at the same instant. The crosshair and rubber band are
+  QCustomPlot items, not widgets, so they add no chrome and are absent from exports.
+- New: **grab-cursor panning** - the chart shows an open hand once data is loaded
+  and a closed hand while the left button is held, so the drag-to-pan gesture is
+  discoverable now that no toolbar hints at it. Shown regardless of zoom level;
+  a plain arrow before any data loads.
+- No ViewModel changes: every menu item drives the existing `PlotViewModel` API.
+
+#### Title bar
+
+- Minimize / maximize / close now draw their glyphs from the Windows icon font
+  (Segoe Fluent Icons, falling back to Segoe MDL2 Assets), the same set Windows
+  uses for its own caption buttons, so all three share one set of metrics. The
+  previous mix of ordinary Unicode look-alikes (U+2212 / U+25A1 / U+2715) rendered
+  at visibly different sizes. They stay *text* rather than icons so the close
+  button's white-on-red hover still recolors the glyph, and the codepoints are
+  named constants - a private-use-area literal in the source is fragile and can be
+  dropped silently, leaving a blank button.
+
+#### Maintenance
+
+- Validation limits that existed only as constants are now enforced where they
+  matter: the sync pattern/mask field derives its length bound from
+  `kMaxSyncPatternBits` instead of repeating `{1,16}`, and `StreamConfigSchema`
+  clamps `samplePeriodIndex` / `slopeIndex` on load so a template from a newer
+  build can't silently change a stream's sample rate or volts-to-dB conversion.
+- Dead weight removed: 37 unused Qt includes, ~20 unreferenced constants, and the
+  vestigial `TimeFields` type (nothing constructed it; processing carries its
+  window as IRIG seconds).
+
 ### v2.7.0 — Processing Templates & Batch Apply, Hamburger Menu, Frameless Title Bar, User Manual
 
-**Processing templates & batch apply (US1.1)**
+#### Processing templates & batch apply (US1.1)
+
 - New: **Save as Template…** captures one processed source's per-stream settings
   (`StreamConfig`s + time channel) and each series' name/color (`SeriesAppearance`)
   as a file-path-independent JSON template (`ProcessingTemplate` DTO,
@@ -363,7 +476,8 @@ The stories below follow the workflow a first-time user takes through the applic
 - Removed: Save/Open Session (Phase 6), Open Multiple Files, Add/Remove Source —
   Apply Template is the sole batch entry point.
 
-**Single hamburger menu + frameless title bar**
+#### Single hamburger menu + frameless title bar
+
 - The menu bar and icon toolbar collapsed into one ☰ menu with flat
   `addSection` groups (Process / Import/Export / Settings / Help); Import/Export
   became menu actions; Recent Files sits under Open in the Process section.
@@ -377,12 +491,14 @@ The stories below follow the workflow a first-time user takes through the applic
   `m_sidebar_dock`/`kSidebarMinWidth`. Hamburger/sidebar glyphs are QPainter-drawn
   and re-render per theme in `applyActionIconsForTheme()`.
 
-**User manual**
+#### User manual
+
 - New: **Help > User Manual…** opens an HTML manual (embedded resource
   `resources/usermanual.html`, copied to the temp dir and opened in the default
   browser).
 
-**Tests**
+#### Tests
+
 - New suites: `TestProcessingTemplateSchema`, `TestTemplateMatcher`; extended
   `TestPlotWidget` (headless `exportImage`), `TestPlotViewModel` (source
   filtering/labels/CSV source filter), `TestMainView` (batch appearance reapply,
@@ -391,7 +507,8 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### v2.6.0 — CSV Import, Movable Legend, Configure Streams Redesign, Stability Fixes
 
-**CSV Import (US6.3)**
+#### CSV Import (US6.3)
+
 - New: the application can open a CSV it previously exported and load it straight
   into the plot, so old data sets can be visualized without re-processing the
   source `.ch10` file (US6.3).
@@ -417,7 +534,8 @@ The stories below follow the workflow a first-time user takes through the applic
   imported file is added to Recent Files and the plot title is set to its base
   name.
 
-**Movable plot legend (US4.0)**
+#### Movable plot legend (US4.0)
+
 - The on-plot legend is now a translucent, draggable overlay floating inside the
   chart (not a fixed panel below it), so it can be repositioned to avoid
   obscuring data of interest. Defaults to the top-right corner and resets there
@@ -431,7 +549,8 @@ The stories below follow the workflow a first-time user takes through the applic
   color and name editing moved from the (now read-only) legend into the
   Customize Plot Series dialog.
 
-**Configure Streams dialog redesign**
+#### Configure Streams dialog redesign
+
 - Progress bar and Cancel button moved out of the main window into a modal
   `ProcessingProgressDialog`; primary-action/Cancel button order corrected to
   match WinUI 3 convention (primary left of Cancel) across `StreamConfigDialog`
@@ -449,7 +568,8 @@ The stories below follow the workflow a first-time user takes through the applic
   glyphs (`ArrowExport` / `ArrowImport`, MIT licensed), recolored to the app's
   existing green/orange convention.
 
-**Fixed**
+#### Fixed
+
 - Two configured streams sharing a TMATS-derived channel name could silently
   cross-contaminate each other's plot series — renaming, recoloring, or
   reprocessing one stream could affect the other's Frame Sync Lock / Accumulated
@@ -479,7 +599,7 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### v2.5.0 — Cleaner Stream Names, Plot Axis Overrides, Dialog Polish
 
-- Stream labels carry the **bare channel name** (no `<id> - ` TMATS prefix): drives
+- Stream labels carry the **bare channel name** (no `<id>-` TMATS prefix): drives
   the Configure Streams dialog and Frame Sync Lock plot series. Receiver SNR plot
   series re-add the channel number (`PlotViewModel::addStreamData`) so multiple SNR
   streams in one file stay distinguishable; `getPCMChannelList()` now returns the
@@ -642,6 +762,7 @@ The following files are third-party library code and **MUST NOT be modified** un
 **File Patterns to Exclude**: Any file containing `i106` or `irig106` in its name; any file in `lib/qcustomplot/`
 
 **Reason**: These files are from external libraries ([irig106utils](https://github.com/atac/irig106utils), [QCustomPlot](https://www.qcustomplot.com/)) and are maintained separately. Modifications would:
+
 - Break compatibility with the upstream library
 - Make future updates difficult
 - Potentially introduce bugs in tested code
@@ -683,7 +804,7 @@ picks a template + N files, validates each file's PCM channel-ID set against the
 template (`TemplateMatcher`, **exact-set match** — a file with any missing/extra
 channel is rejected with a reason), then processes every matching file in one batch
 (`MainView::startBatchFromTemplate()`). Every processed file is **retained in
-memory**; the plot's top-control-row **Plot File** dropdown (`PlotWidget::m_source_combo`)
+memory**; the plot's right-click **Plot File** submenu
 chooses which one to view (or "All files (overlaid)"), driven by
 `PlotViewModel::setVisibleSource` / `effectiveVisible` (a source gate orthogonal to
 per-series visibility and the **View Mode** lock%/accumulation selector). A batch
@@ -719,7 +840,7 @@ not mis-read.
    - Modal "Configure Streams" dialog listing one row per PCM channel in the file
    - Five columns: Process, Channel, Mode, Configure (gear), Ready (status icon); a Time Channel combo at top
    - The gear opens a per-stream sub-dialog — Frame Sync Lock setup or Receiver SNR setup — keyed to the row's Mode
-   - Sub-dialogs Load/Save frame-sync and receiver-parameter TOML files (US5.0/US5.1) and host the "Extract Calibration…" action (US5.3) and the "Apply to all <mode> streams" fan-out (US2.2)
+   - Sub-dialogs Load/Save frame-sync and receiver-parameter TOML files (US5.0/US5.1) and host the "Extract Calibration…" action (US5.3) and the "Apply to all `<mode>` streams" fan-out (US2.2)
    - The three sub-dialogs (Frame Lock, Calibration, Receiver SNR) live in the private header `include/view/streamsubdialogs.h` and share one layout vocabulary so their look-and-feel stays consistent: a `DialogLayout` constants block (outer spacing, section/control gaps, grid spacing, icon-button size) plus helpers `configureFormGrid`, `addLoadSaveButtons` (owns the frame-sync grid's gap column + Load/Save cell offsets — no caller hard-codes them), `addCheckboxRow`, `addBottomBar`, `matchControlHeight`, `buildFrameSyncRow`, and `makeDialogButtons`. Convention: text inputs (line edits, combos, spin boxes) are left-aligned; buttons and status icons (gear, Load/Save, ✓/✗) are centered. Table-header/separator colors come from the theme QSS (`QLabel#streamHeaderLabel`, `QFrame#streamHeaderSeparator`), not inline stylesheets, so they read on both light and dark themes
    - Returns the configured `QVector<StreamConfig>` via `configs()` and the time channel via `timeChannelIndex()`
 
@@ -730,13 +851,13 @@ not mis-read.
    - Unified export dialog: any combination of CSV data, a plot image (PNG/SVG/PDF), and the log text, each with its own filename/location; checkbox-to-field enable logic and export-button validation
 
 5. **PlotWidget** (`src/view/plotwidget.cpp`, `include/view/plotwidget.h`)
-   - Self-contained QCustomPlot chart with title field, axis-control spinboxes, and a movable legend overlay (a translucent, draggable frame parented to the chart; single-column line-swatch + label rows with a vertical scrollbar for dense plots; composited into PNG/SVG exports)
+   - Self-contained QCustomPlot chart filling the whole widget - no external control rows; every control (Plot File, View Mode, Customize View, plot title, X/Y axis ranges, Export) lives in the right-click context menu built by `buildContextMenu()`/`showPlotContextMenu()` - plus a movable legend overlay (a translucent, draggable frame parented to the chart; single-column line-swatch + label rows with a vertical scrollbar for dense plots; composited into PNG/SVG exports)
    - Mouse wheel zoom and click-drag pan; `onSeriesVisibilityToggled()` toggles a graph without a full rebuild
    - All replots use `rpQueuedReplot`; controls disabled until data loads; `applyTheme(bool dark)` syncs colors with the app theme
 
 #### ViewModel
 
-6. **MainViewModel** (`src/viewmodel/mainviewmodel.cpp`, `include/viewmodel/mainviewmodel.h`)
+1. **MainViewModel** (`src/viewmodel/mainviewmodel.cpp`, `include/viewmodel/mainviewmodel.h`)
    - Owns application state, validation, and the per-stream `StreamConfig` captured by StreamConfigDialog
    - Exposes Q_PROPERTYs (`inputFilename`, channel lists/indices, `fileLoaded`, `progressPercent`, `processing`) for the View to bind to
    - `openFile()` loads metadata via Chapter10Reader and logs channel/time/frame info; `clearState()` first, so it always starts a fresh session (`sources()` reset, source-id counter reset to 0)
@@ -744,13 +865,13 @@ not mis-read.
    - Builds a list of `StreamJob` objects (validated `ProcessingParams`, now stamped with the pending file's `sourceId`, + an owned `FrameSetup`) and hands them to ProcessingCoordinator
    - Receives each `ProcessedStreamData` and forwards it to PlotViewModel; on a successful run, `onCoordinatorProcessingFinished()` appends a `Source` record (`include/dto/source.h`) to `sources()` — a failed/cancelled run leaves no phantom entry; `removeSource()` drops one. Manages recent files
 
-7. **ProcessingCoordinator** (`src/viewmodel/processingcoordinator.cpp`, `include/viewmodel/processingcoordinator.h`)
+2. **ProcessingCoordinator** (`src/viewmodel/processingcoordinator.cpp`, `include/viewmodel/processingcoordinator.h`)
    - Owns the reader + worker thread lifecycle for multi-stream processing
    - `startProcessing(QVector<StreamJob>)` takes ownership of each job's FrameSetup, spins up one `Ch10PacketReader` thread plus one `FrameProcessor` worker thread (and a `PacketQueue`) per stream
    - `cancelProcessing()` requests a cooperative abort of all workers and the reader; `reset()` clears transient state
    - Emits `progressChanged(int)`, `processingStateChanged(bool)`, `streamProcessed(ProcessedStreamData)`, `processingFinished(bool)`, `logMessageReceived(QString)`, `errorOccurred(QString)`
 
-8. **PlotViewModel** (`src/viewmodel/plotviewmodel.cpp`, `include/viewmodel/plotviewmodel.h`)
+3. **PlotViewModel** (`src/viewmodel/plotviewmodel.cpp`, `include/viewmodel/plotviewmodel.h`)
    - Converts each `ProcessedStreamData` into in-memory `PlotSeriesData` vectors (name, receiver/channel indices, x/y values, cached Y min/max, color), carrying its `sourceId` through so cross-source identity checks (reprocess-replace, rename/recolor sibling-sync) never cross a source boundary
    - Converts absolute IRIG seconds to elapsed seconds against a shared base that tracks the **earliest absolute sample across every source** (not just the first-added one): `addStreamData()` re-bases — shifting every existing series right — when a later-added source started earlier; `removeSource()` is the mirror, shifting left only if the removed source held the earliest sample. Emits `nonOverlappingSourceWarning(sourceId)` (informational) the first time a newly added source's absolute range doesn't intersect what's already loaded
    - Assigns the purple/blue/green (lock) and red/orange/yellow (SNR) palette
@@ -760,61 +881,41 @@ not mis-read.
 
 #### Model
 
-9. **Chapter10Reader** (`src/model/chapter10reader.cpp`, `include/model/chapter10reader.h`)
+1. **Chapter10Reader** (`src/model/chapter10reader.cpp`, `include/model/chapter10reader.h`)
    - Reads Ch10 file **metadata** up front: scans TMATS to catalog time and PCM channels, provides channel lists, time accessors, and channel ID resolution. Wraps the irig106utils C library.
 
-10. **Ch10PacketReader** (`src/model/ch10packetreader.cpp`, `include/model/ch10packetreader.h`)
+2. **Ch10PacketReader** (`src/model/ch10packetreader.cpp`, `include/model/ch10packetreader.h`)
     - The single-pass reader. `prepare()` opens the file, parses TMATS, resolves each stream's PCM attributes, and builds the channel-ID → `PacketQueue` routing; `run()` (on its own QThread) reads the file once, tracks IRIG time, and dispatches each PCM packet's payload to the matching queues, then posts end-of-stream sentinels
     - Owns the `SuChanInfo` per-channel bookkeeping table
 
-11. **PacketQueue** (`include/model/packetqueue.h`) — bounded, thread-safe per-stream packet queue connecting the reader to one worker (header-only)
+3. **PacketQueue** (`include/model/packetqueue.h`) — bounded, thread-safe per-stream packet queue connecting the reader to one worker (header-only)
 
-12. **FrameProcessor** (`src/model/frameprocessor.cpp`, `include/model/frameprocessor.h`)
+4. **FrameProcessor** (`src/model/frameprocessor.cpp`, `include/model/frameprocessor.h`)
     - Per-stream worker: drains its PacketQueue, runs the bit-serial frame-sync scanner (acquire/lock, off-phase rejection, bit-span lock %), accumulates lock %, missed frames, and (SNR mode) calibrated channel values into a `ProcessedStreamData`
     - Private helpers include `derandomizeBitstream()` and `hasSyncPattern()`; applies linear slope/offset or a non-linear `CalibrationProfile` per channel
 
-13. **FrameSetup** (`src/model/framesetup.cpp`, `include/model/framesetup.h`) — frame configuration / word-map + calibration table built per job
+5. **FrameSetup** (`src/model/framesetup.cpp`, `include/model/framesetup.h`) — frame configuration / word-map + calibration table built per job
 
-14. **ChannelData** (`src/model/channeldata.cpp`, `include/model/channeldata.h`) — channel metadata value object
+6. **ChannelData** (`src/model/channeldata.cpp`, `include/model/channeldata.h`) — channel metadata value object
 
-15. **StepDetector** (`src/model/stepdetector.cpp`, `include/model/stepdetector.h`) — *US5.3*; pure (UI-free) logic that parses the `[[Step]]` step-config TOML and detects step plateaus in a raw-count series via derivative/edge detection, building a per-channel `CalibrationProfile`
+7. **StepDetector** (`src/model/stepdetector.cpp`, `include/model/stepdetector.h`) — *US5.3*; pure (UI-free) logic that parses the `[[Step]]` step-config TOML and detects step plateaus in a raw-count series via derivative/edge detection, building a per-channel `CalibrationProfile`
 
-16. **CalibrationExtractor** (`src/model/calibrationextractor.cpp`, `include/model/calibrationextractor.h`) — *US5.3*; drives a raw extraction over a calibration Ch10 file (reusing the Ch10PacketReader + FrameProcessor pipeline with unit slope / zero offset) and runs StepDetector per channel to build session-only profiles
+8. **CalibrationExtractor** (`src/model/calibrationextractor.cpp`, `include/model/calibrationextractor.h`) — *US5.3*; drives a raw extraction over a calibration Ch10 file (reusing the Ch10PacketReader + FrameProcessor pipeline with unit slope / zero offset) and runs StepDetector per channel to build session-only profiles
 
-17. **TomlConfigHelper** (`src/model/tomlconfighelper.cpp`, `include/model/tomlconfighelper.h`) — registers a custom QSettings TOML format and provides the frame-sync / receiver-parameter load/save helpers
+9. **TomlConfigHelper** (`src/model/tomlconfighelper.cpp`, `include/model/tomlconfighelper.h`) — registers a custom QSettings TOML format and provides the frame-sync / receiver-parameter load/save helpers
 
-18. **CsvSeriesParser** (`src/model/csvseriesparser.cpp`, `include/model/csvseriesparser.h`) — pure (UI-free) static parser that turns a FrameProcessor `Day,Time,param…` CSV into `PlotSeriesData` (returned as a `CsvParseResult`). Extracted out of PlotViewModel so file parsing lives in the Model layer; thread-safe, so PlotViewModel runs `parse()` on a worker thread via `loadCsvFileAsync()`
+10. **CsvSeriesParser** (`src/model/csvseriesparser.cpp`, `include/model/csvseriesparser.h`) — pure (UI-free) static parser that turns a FrameProcessor `Day,Time,param…` CSV into `PlotSeriesData` (returned as a `CsvParseResult`). Extracted out of PlotViewModel so file parsing lives in the Model layer; thread-safe, so PlotViewModel runs `parse()` on a worker thread via `loadCsvFileAsync()`
 
-19. **SeriesColumnSchema** (`src/model/seriescolumnschema.cpp`, `include/model/seriescolumnschema.h`) — single source of truth for the CSV column-header format: builds each series' column header and the SNR series name, and parses a header back to its identity fields (metric type, name, stream label/order, receiver, source id). Shared by `PlotViewModel::exportCsv`/`addStreamData` and `CsvSeriesParser` so export and import stay inverses (pinned by `tst_seriescolumnschema`'s round-trip). Multi-file input: a series from source 0 exports with the unqualified, byte-identical-since-v2.6 header format; source 1+ gets a leading `"S<n>| "` qualifier that `parseColumnHeader()` strips back off before recovering identity
+11. **SeriesColumnSchema** (`src/model/seriescolumnschema.cpp`, `include/model/seriescolumnschema.h`) — single source of truth for the CSV column-header format: builds each series' column header and the SNR series name, and parses a header back to its identity fields (metric type, name, stream label/order, receiver, source id). Shared by `PlotViewModel::exportCsv`/`addStreamData` and `CsvSeriesParser` so export and import stay inverses (pinned by `tst_seriescolumnschema`'s round-trip). Multi-file input: a series from source 0 exports with the unqualified, byte-identical-since-v2.6 header format; source 1+ gets a leading `"S<n>| "` qualifier that `parseColumnHeader()` strips back off before recovering identity
 
-20. **StreamConfigSchema** (`src/model/streamconfigschema.cpp`, `include/model/streamconfigschema.h`) — single source of truth for `StreamConfig`'s JSON representation (`toJson()`/`fromJson()`), so no field list is hand-mapped twice. Excludes `calibrationByWord` (extracted profiles are session-only, never serialized) but includes the calibration *input references* (`calCh10Path`, `stepTomlPath`, `clipStartSec`, `clipEndSec`). Used by `ProcessingTemplateSchema`
-21. **ProcessingTemplateSchema** (`src/model/processingtemplateschema.cpp`, `include/model/processingtemplateschema.h`) — *processing templates / batch apply*; serializes/parses a `ProcessingTemplate` (`schemaVersion`, `appVersion`, `name`, `timeChannelIndex`, and a list of `TemplateStreamEntry`). Delegates each entry's config to `StreamConfigSchema` and adds the per-entry `SeriesAppearance` array; no file paths (a template is location-independent); a `schemaVersion` newer than `kCurrentSchemaVersion` is rejected
-22. **TemplateMatcher** (`src/model/templatematcher.cpp`, `include/model/templatematcher.h`) — *processing templates / batch apply*; pure, disk-free validator that a target file's PCM channel-ID set matches a template's **exactly** (`matchFile()` → `MatchResult{ok, missing, extra}`). Exact-set matching is what lets the batch loop feed the template's stored `pcmChannelId`s straight to processing
-23. **IRIG 106 Library** (`lib/irig106/`) — third-party C library for the Chapter 10 file format (see Protected Files)
-
-### Constants and Data Structures
-
-- **`AppVersion`** struct (`include/constants.h`) — version with `kMajor`, `kMinor`, `kPatch` and `toString()`
-- **`PCMConstants`** namespace (`include/constants.h`) — PCM frame parameters (defaults for sync pattern/mask, bits per frame, scale, receiver counts, max raw sample value, buffer size, progress interval)
-- **`UIConstants`** namespace (`include/constants.h`) — UI configuration (QSettings keys, theme identifiers, legend grid layout, sample-period/polarity/slope defaults, time validation limits, deployment/portable constants)
-- **`PlotConstants`** namespace (`include/constants.h`) — plot dock dimensions, axis margin factor, default title, axis labels (`kSnrAxisLabel`, `kMissedFramesAxisLabel`), zoom factor, color palette
-- **`CalibrationConstants`** namespace (`include/constants.h`) — non-linear calibration tuning (e.g. `kStepConfirmSeconds`)
-- **`StreamConfig`** struct + **`StreamMode`** enum (`include/dto/streamconfig.h`) — per-stream configuration captured by StreamConfigDialog (frame params, SNR calibration fields, optional session-only `calibrationByWord` profiles, and the serialized calibration input references `calCh10Path`/`stepTomlPath`/`clipStartSec`/`clipEndSec` captured from `CalibrationSetupDialog` on extraction)
-- **`Source`** struct (`include/dto/source.h`) — multi-file input (docs/multi-file-input-design.md): one loaded/processed `.ch10` file's `filepath`, stable `sourceId`, `timeChannelIndex`, and `streamConfigs`. `MainViewModel::sources()` holds one per successfully-processed file this session
-- **`ProcessingTemplate`** + **`TemplateStreamEntry`** structs (`include/dto/processingtemplate.h`) — processing templates / batch apply (docs/processing-template-design.md): a file-path-independent, reusable set of per-stream settings. `schemaVersion`, `appVersion`, `name`, `timeChannelIndex`, and an ordered list of `TemplateStreamEntry` (each a `StreamConfig` + optional `SeriesAppearance` list). Serialized by `ProcessingTemplateSchema` (reuses `StreamConfigSchema` per entry; never serializes `calibrationByWord`); validated against a file by `TemplateMatcher` (exact channel-ID set). Stores settings, not file paths
-- **`SeriesAppearance`** struct (`include/dto/seriesappearance.h`) — one series' captured name + color, keyed within a template entry by `(metricType, receiverIndex, channelIndex)`; reapplied onto each batch file's freshly-created series by `MainView::reapplyTemplateAppearance()` via the id-based `renameSeriesById`/`recolorSeriesById`
-- **`StreamJob`** struct (`include/viewmodel/processingcoordinator.h`) — one unit of work: a `ProcessingParams` plus an owned `FrameSetup`
-- **`ProcessingParams`** struct (`include/dto/processingparams.h`) — all inputs for processing one stream (filename, `sourceId`, channel IDs, frame sync, time range, sample period, calibration, randomization)
-- **`ProcessedStreamData`** + **`ProcessedChannelSeries`** structs (`include/dto/processedstreamdata.h`) — in-memory per-stream result (parallel `timesSec` / `lockPercent` / `accumulatedMissedFrames` vectors plus SNR channel series; `sourceId` identifies which loaded file this stream came from)
-- **`PlotSeriesData`** struct (`include/dto/plotseriesdata.h`) — per-series plot data (name, receiver/channel indices, `sourceId`, x/y vectors, visibility, color, cached Y min/max)
-- **`CsvParseResult`** struct (`include/model/csvseriesparser.h`) — output of `CsvSeriesParser::parse()`: success flag, parsed `PlotSeriesData` vector, base day/time offset, and xMax; carried across the worker-thread boundary by PlotViewModel's `QFutureWatcher`
-- **`CalibrationProfile`**, **`StepDefinition`**, **`CalibrationPoint`** (`include/dto/calibrationprofile.h`) — non-linear step-calibration data types (session-only); `interpolateCalibration()` does the piecewise-linear lookup
-- **`TimeFields`** struct (`include/dto/timefields.h`) — groups DOY/HMS fields for start/stop times
-- **`SuChanInfo`** typedef (`include/model/ch10packetreader.h`) — per-channel bookkeeping for the irig106 C helper layer
+12. **StreamConfigSchema** (`src/model/streamconfigschema.cpp`, `include/model/streamconfigschema.h`) — single source of truth for `StreamConfig`'s JSON representation (`toJson()`/`fromJson()`), so no field list is hand-mapped twice. Excludes `calibrationByWord` (extracted profiles are session-only, never serialized) but includes the calibration *input references* (`calCh10Path`, `stepTomlPath`, `clipStartSec`, `clipEndSec`). Used by `ProcessingTemplateSchema`
+13. **ProcessingTemplateSchema** (`src/model/processingtemplateschema.cpp`, `include/model/processingtemplateschema.h`) — *processing templates / batch apply*; serializes/parses a `ProcessingTemplate` (`schemaVersion`, `appVersion`, `name`, `timeChannelIndex`, and a list of `TemplateStreamEntry`). Delegates each entry's config to `StreamConfigSchema` and adds the per-entry `SeriesAppearance` array; no file paths (a template is location-independent); a `schemaVersion` newer than `kCurrentSchemaVersion` is rejected
+14. **TemplateMatcher** (`src/model/templatematcher.cpp`, `include/model/templatematcher.h`) — *processing templates / batch apply*; pure, disk-free validator that a target file's PCM channel-ID set matches a template's **exactly** (`matchFile()` → `MatchResult{ok, missing, extra}`). Exact-set matching is what lets the batch loop feed the template's stored `pcmChannelId`s straight to processing
+15. **IRIG 106 Library** (`lib/irig106/`) — third-party C library for the Chapter 10 file format (see Protected Files)
 
 ### Data Flow
 
-```
+```text
 User opens .ch10 ─► MainView ─► MainViewModel ─► Chapter10Reader (metadata)
      (or Add Source)                  │           [assigns/reuses sourceId]
                             StreamConfigDialog (per-stream config)
@@ -848,6 +949,7 @@ User opens .ch10 ─► MainView ─► MainViewModel ─► Chapter10Reader (me
 ### Container Iteration Pattern
 
 **Preferred** (range-based for loop):
+
 ```cpp
 QStringList items = getItems();
 for (const QString& item : items)
@@ -855,6 +957,7 @@ for (const QString& item : items)
 ```
 
 **Avoid** (index-based with .length()):
+
 ```cpp
 // This may not compile in Qt 6!
 for (int i = 0; i < items.length(); i++)
@@ -864,6 +967,7 @@ for (int i = 0; i < items.length(); i++)
 ### Required Includes
 
 When using Qt classes, ensure proper headers are included:
+
 - `QStringList` requires `#include <QStringList>`
 - `QString` requires `#include <QString>`
 - Composite widgets require their specific headers
@@ -881,7 +985,7 @@ When using Qt classes, ensure proper headers are included:
 
 - **Classes**: PascalCase (e.g., `MainView`, `MainViewModel`, `Chapter10Reader`, `FrameProcessor`)
 - **Constants**: kPascalCase in namespaces (e.g., `PCMConstants::kWordsInMinorFrame`, `UIConstants::kDefaultScaleIndex`)
-- **Member variables**: m_ prefix with snake_case (e.g., `m_frame_setup`, `m_reader`); widget members drop type suffixes when the declared type is clear (e.g., `m_input_file` not `m_input_file_lineedit`); buttons use `_btn` suffix (e.g., `m_process_btn`); settings members use `m_settings_` prefix (e.g., `m_settings_frame_sync`)
+- **Member variables**: `m_` prefix with snake_case (e.g., `m_frame_setup`, `m_reader`); widget members drop type suffixes when the declared type is clear (e.g., `m_input_file` not `m_input_file_lineedit`); buttons use `_btn` suffix (e.g., `m_process_btn`); settings members use `m_settings_` prefix (e.g., `m_settings_frame_sync`)
 - **Methods**: camelCase (e.g., `process()`, `getTimeChannelComboBoxList()`)
 - **Slots**: camelCase with descriptive names (e.g., `inputFileButtonPressed()`)
 - **Struct fields**: `ProcessingParams` uses snake_case; the newer value types (`StreamConfig`, `StreamJob`, `ProcessedStreamData`, `CalibrationProfile`) use camelCase (Qt property style)
@@ -896,6 +1000,7 @@ When using Qt classes, ensure proper headers are included:
 ### Include Ordering (Google C++ Style)
 
 Order includes in each `.cpp` / `.h` file as follows, with a blank line between groups:
+
 1. Related header (e.g., `#include "mainview.h"` in `mainview.cpp`)
 2. C system headers (e.g., `<time.h>`)
 3. C++ standard library headers (e.g., `<fstream>`, `<string>`)
@@ -926,6 +1031,7 @@ Order includes in each `.cpp` / `.h` file as follows, with a blank line between 
 ### VS Code Integration
 
 Tasks are defined in `.vscode/tasks.json`:
+
 - "qmake: Configure" - Runs qmake to generate Makefiles
 - "Build (Debug)" - Compiles debug build
 - "Build (Release)" - Compiles release build
@@ -1034,6 +1140,7 @@ Automated unit tests use the **Qt Test** framework. Test sources are in the `tes
 
 The suites below are registered (and run, in this order) in `tests/main.cpp`; the
 source/header files are listed in `tests/tests.pro`.
+
 - **TestChannelData** (`tst_channeldata`) — ChannelData model object tests
 - **TestChapter10Reader** (`tst_chapter10reader`) — Chapter 10 metadata reader: channel discovery, time/PCM channel lists, channel ID resolution against real Ch10 test data
 - **TestConstants** (`tst_constants`) — Verifies all PCMConstants, UIConstants, PlotConstants, AppVersion, and recent files constants (including kMaxPacketBufferSize, kFrameSyncHexPattern)
@@ -1043,7 +1150,7 @@ source/header files are listed in `tests/tests.pro`.
 - **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, Y auto/manual range, X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), the left-axis view toggle preserving per-stream selection, and stream-identity regression coverage: two streams sharing a TMATS-derived `streamLabel` but different `streamOrder` must stay independent through reprocess-replace and `renameSeries()`/`recolorSeries()` sibling-sync (pinned after a pre-v2.6.0 cross-contamination bug). Multi-file input: cross-source identity (two different `sourceId`s reusing the same `streamLabel`/`streamOrder` stay independent through reprocess-replace/rename/recolor), time-base re-basing (a later-added source starting earlier shifts existing series right; three successively-earlier sources compound correctly; a later source starting after triggers no shift), the non-overlap warning signal (fires once per newly-arriving non-overlapping source, not for an overlapping range), and `removeSource()` (drops only the target source, re-bases left only when the removed source held the earliest sample, clears all data when the last source is removed, no-ops for an unknown id). US1.1 source view: `setVisibleSource()` isolates a source via `effectiveVisible()` without mutating per-series `visible`, `sourceList()` lists distinct labeled sources, and `exportCsv(path, sourceId)` writes only that source's columns
 - **TestProcessingCoordinator** (`tst_processingcoordinator`) — constructor defaults, `reset()` clears state, cancel-with-no-run no-op, `startProcessing()` empty-returns-false and processing-state emission, plus single-vs-multi-stream throughput benchmarks
 - **TestMainView** (`tst_mainview`) — Main window construction, widget wiring, log routing, dock visibility behavior, the CSV import routing (`openPath`/`importCsv`, valid/invalid), and batch apply's CI-safe helpers: `reapplyTemplateAppearance()` maps the template's saved names/colors onto the right series, and `buildTemplateFromSource()` captures configs + `timeChannelIndex` + series appearance (the full `advanceBatch()` orchestration needs a real `.ch10` fixture, so it is app-verified not unit-tested)
-- **TestPlotWidget** (`tst_plotwidget`) — Plot widget construction, null/valid ViewModel connection, dark/light theme application, the movable legend overlay populating from data (hidden until data loads, then one row per visible active-metric series), a shown/resized-window regression case asserting the overlay sizes correctly (not a collapsed frame-only box) after a second rebuild adds more rows — a QScrollArea `widgetResizable` sizeHint staleness bug reproduced and fixed post-review — the SNR legend row showing the short "CH\<id\> \<ch.name\>" form instead of the full TMATS stream title, the legend row layout reserving a right-side gutter matching the style's scrollbar extent, and each legend row carrying an objectName the overlay stylesheet can target to override the app's global `QWidget { background-color: ... }` theme rule (otherwise every row painted as an opaque chip); plus `exportImage()` writing a PNG/SVG/PDF headlessly (the parameterized image-export entry point extracted for batch apply)
+- **TestPlotWidget** (`tst_plotwidget`) — Plot widget construction, null/valid ViewModel connection, dark/light theme application, the movable legend overlay populating from data (hidden until data loads, then one row per visible active-metric series), a shown/resized-window regression case asserting the overlay sizes correctly (not a collapsed frame-only box) after a second rebuild adds more rows — a QScrollArea `widgetResizable` sizeHint staleness bug reproduced and fixed post-review — the SNR legend row showing the short `"CH<id> <ch.name>"` form instead of the full TMATS stream title, the legend row layout reserving a right-side gutter matching the style's scrollbar extent, and each legend row carrying an objectName the overlay stylesheet can target to override the app's global `QWidget { background-color: ... }` theme rule (otherwise every row painted as an opaque chip); plus `exportImage()` writing a PNG/SVG/PDF headlessly (the parameterized image-export entry point extracted for batch apply); and the right-click context menu that replaced the external control rows: it lists every expected top-level item, its data-dependent entries are disabled until data loads, the Plot File submenu is disabled for a single source and switches `visibleSource` for a multi-source run, View Mode reflects and sets the active left-axis metric, `X Axis > Reset Span` / `Y Axes > Reset` clear the X window and both Y overrides, plus two structural guards - wheel-zoom/drag-pan stay enabled (horizontal-only) once data arrives, and **no QComboBox / QSpinBox / QLineEdit / QAbstractButton lives outside the chart** - on-chart overlays are allowed, external control rows are not (the machine-checkable form of "no external controls"); plus the legend toggle (shows/hides the overlay and survives a rebuild, appears only once data is loaded, is parented to the chart, and stays in sync with the context menu's checkable Show Legend item)
 - **TestPlotCustomizationDialog** (`tst_plotcustomizationdialog`) — Customize Plot Series dialog: one Frame Sync Lock checkbox per stream, Select All/None, apply → per-stream lock/missed visibility round-trip to the ViewModel; Receiver SNR tree build (receiver grouping), tri-state group cascade, Select All/None, apply → per-channel SNR visibility round-trip, and the Expand/Collapse All button toggle; plus per-stream rename/recolor (lock tab) and per-channel rename/recolor via pending item roles (SNR tab) applied to the ViewModel on OK, and the single batched `seriesAppearanceChanged` emission (reaches private widgets/slots via a friend declaration, same pattern as TestFrameProcessor)
 - **TestStreamConfigDialog** (`tst_streamconfigdialog`) — Per-stream Configure Streams dialog: stream rows, mode selection, gear setup dialogs, TOML load/save round-trips, "Apply to all" fan-out, the Channel column label (short names shown in full, long TMATS-derived names elided on the left with "..." so the distinguishing tail stays visible, right-justified, styled via `channelNameCell` to mimic the Mode combo box's border/fill, and the full name always available via tooltip), the Mode combo's right-justified closed-box text (via an editable-but-readonly internal line edit) while selection still tracks correctly, and the table header/separator using theme-QSS object names (`streamHeaderLabel` / `streamHeaderSeparator`) rather than hard-coded inline colors
 - **TestExportDialog** (`tst_exportdialog`) — Export dialog checkbox-to-field enable logic, export-button validation, and the log-export row defaults/accessors and log-only validation
@@ -1055,6 +1162,7 @@ source/header files are listed in `tests/tests.pro`.
 - **TestTemplateMatcher** (`tst_templatematcher`) — batch apply channel-ID matching: `templateChannelIds()` collection and `matchFile()` exact-set comparison (pass regardless of order; reject with the right `missing`/`extra` sets on a missing channel, an extra channel, and both) — pure logic, runs in CI
 
 ### Running Tests
+
 ```powershell
 . .\scripts\env.ps1   # imports MSVC + puts the Qt msvc kit on PATH
 cd tests

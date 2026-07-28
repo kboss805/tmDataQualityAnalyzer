@@ -26,6 +26,25 @@ private slots:
     void exportImageWritesPngHeadlessly();
     void exportImageWritesSvgHeadlessly();
     void exportImageDefaultsUnknownSuffixToPdf();
+    void contextMenuListsExpectedTopLevelItems();
+    void contextMenuItemsDisabledUntilDataLoads();
+    void contextMenuPlotFileSubmenuTracksSources();
+    void contextMenuViewModeReflectsAndSetsMode();
+    void contextMenuResetActionsClearAxisOverrides();
+    void contextMenuSetTitleAppliesToViewModel();
+    void wheelZoomAndDragPanRemainEnabled();
+    void noExternalControlWidgetsRemain();
+    void legendToggleShowsAndHidesLegend();
+    void legendToggleAppearsOnlyWithData();
+    void legendChipIsLabelledAndDescribed();
+    void contextMenuShowLegendMirrorsToggle();
+    void overlayBarHoldsChipsAndIsChartParented();
+    void viewModeChipSwitchesLeftAxisMetric();
+    void resetChipAppearsOnlyWhenViewChanged();
+    void bandZoomAppliesDraggedRange();
+    void doubleClickResetsSpanViaViewModel();
+    void readoutMenuListsVisibleSeriesAndPins();
+    void readoutPinDropsWhenSeriesGoesAway();
 };
 
 #endif // TST_PLOTWIDGET_H

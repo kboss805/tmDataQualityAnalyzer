@@ -25,8 +25,6 @@ struct AppVersion {
 namespace PCMConstants {
     inline constexpr int kCommonWordLen        = 16;    ///< Bits per word.
     inline constexpr int kSecondsPerMinute     = 60;    ///< Seconds in a minute.
-    inline constexpr int kMinutesPerHour       = 60;    ///< Minutes in an hour.
-    inline constexpr int kHoursPerDay          = 24;    ///< Hours in a day.
     inline constexpr int kNumMinorFrames       = 1;     ///< Minor frames per major frame.
     inline constexpr int kMaxChannelCount      = 0x10000; ///< Maximum channel ID range.
     inline constexpr const char* kDefaultFrameSyncMask          = "FFFFFFFF"; ///< Default frame sync mask (all bits active).
@@ -34,9 +32,6 @@ namespace PCMConstants {
     inline constexpr const char* kDefaultReceiverSNRPattern     = "FE6B2840"; ///< Default Receiver SNR frame sync pattern.
     // kDefaultFrameSync kept as an alias so existing call sites compile unchanged.
     inline constexpr const char* kDefaultFrameSync              = kDefaultFrameSyncLockPattern;
-
-    /// Time rounding offset (0.5 ms) for PCM timestamp alignment.
-    inline constexpr double kTimeRoundingOffset = 0.0005;
 
     /// Maximum raw 16-bit sample value for calibration math.
     inline constexpr uint16_t kMaxRawSampleValue = 0xFFFF;
@@ -62,6 +57,10 @@ namespace PCMConstants {
     /// @name Frame length and sync bounds (US2.1, US7.0)
     /// @{
     inline constexpr int kMaxSyncPatternBits  = 64;    ///< Maximum frame sync pattern length in bits (16 hex chars).
+    inline constexpr int kBitsPerHexDigit     = 4;     ///< Bits encoded by one hex character.
+    /// Maximum hex characters accepted in a sync pattern/mask field, derived from
+    /// the bit limit above so the input validator can't drift from it (US2.0/US7.0).
+    inline constexpr int kMaxSyncPatternHexChars = kMaxSyncPatternBits / kBitsPerHexDigit;
     inline constexpr int kMinFrameLengthBits  = 64;    ///< Minimum total frame length in bits.
     inline constexpr int kMaxFrameLengthBits  = 65536; ///< Maximum total frame length in bits.
     inline constexpr int kDefaultFrameSyncLockBits   = 2047; ///< Default Frame Sync Lock frame length in bits (PRN11).
@@ -90,6 +89,7 @@ namespace UIConstants {
     inline constexpr const char* kThemeLight        = "light";        ///< Light theme identifier.
     inline constexpr const char* kSettingsKeyRecentFiles = "RecentFiles"; ///< QSettings key for recent files list.
     inline constexpr const char* kSettingsKeySidebarVisible = "SidebarVisible"; ///< QSettings key for sidebar (log) visibility.
+    inline constexpr const char* kSettingsKeyLegendVisible  = "LegendVisible";  ///< QSettings key for plot legend visibility.
     inline constexpr int kMaxRecentFiles            = 5;              ///< Maximum number of recent files to remember.
     /// @}
 
@@ -108,18 +108,9 @@ namespace UIConstants {
     inline constexpr int kDefaultSlopeIndex           = 3;     ///< Default voltage slope index (0-5V range).
     inline constexpr int kMaxSlopeIndex               = 3;     ///< Maximum valid voltage slope index.
     inline constexpr int kMaxSamplePeriodIndex          = 2;     ///< Maximum valid sample period combo index.
-    inline constexpr const char* kDefaultScale        = "20";  ///< Default calibration scale in dB per volt.
     inline constexpr std::array<const char*, 3> kChannelPrefixes = {"L", "R", "C"}; ///< Channel prefix labels (L/R/C).
     inline constexpr int kNumKnownPrefixes            = 3;     ///< Number of known channel prefixes.
 
-    /// @name Time validation limits
-    /// @{
-    inline constexpr int kMinDayOfYear = 1;   ///< Minimum valid day-of-year.
-    inline constexpr int kMaxDayOfYear = 366;  ///< Maximum valid day-of-year.
-    inline constexpr int kMaxHour      = 23;   ///< Maximum valid hour.
-    inline constexpr int kMaxMinute    = 59;   ///< Maximum valid minute.
-    inline constexpr int kMaxSecond    = 59;   ///< Maximum valid second.
-    /// @}
 
     /// @name Sample period options (seconds)
     /// @{
@@ -141,20 +132,11 @@ namespace UIConstants {
     /// @{
     inline constexpr int kProgressBarMax                 = 100;  ///< Maximum value for the progress bar.
     inline constexpr int kFileListMinHeight              = 180;  ///< Minimum height for the file list tree widget (px).
-    inline constexpr int kTreeIndentation                = 12;                           ///< Indentation width for tree widgets (px).
     inline constexpr int kLayoutSpacingSmall             = 8;                            ///< Small layout spacing (px).
-    inline constexpr int kLayoutSpacingLarge             = 16;                           ///< Large layout spacing (px).
-    inline constexpr int kToolbarIconSize                = 24;                           ///< Toolbar icon size (px).
     inline constexpr int kAboutIconSize                  = 64;                           ///< About dialog icon size (px).
-    inline constexpr int kLogDialogWidth                 = 600;                          ///< Default log dialog width (px).
-    inline constexpr int kLogDialogHeight                = 400;                          ///< Default log dialog height (px).
-    inline constexpr int kTimeInputMaxWidth               = 100;                          ///< Maximum width for time input fields (px).
-    inline constexpr int kChannelComboFixedWidth           = 400;                          ///< Fixed width for Time/PCM channel combo boxes (px).
-    inline constexpr int kFileNameColumnMinWidth           = 600;                          ///< Minimum width for the file name column in the file list tree (px).
     inline constexpr int kSidebarMinWidth                 = 400;                          ///< Minimum width for the sidebar panel (file name column + margins).
     inline constexpr int kInitialWindowWidth              = 1920;                         ///< Initial main window width at launch (px).
     inline constexpr int kInitialWindowHeight             = 1080;                         ///< Initial main window height at launch (px).
-    inline constexpr int kDecimalBase                    = 10;                           ///< Decimal (base-10) radix for QString::arg formatting.
     inline constexpr int kHexBase                        = 16;                           ///< Hexadecimal (base-16) radix for string parsing.
     inline constexpr int kBytesPerKB                     = 1024;                         ///< Bytes per kilobyte.
     inline constexpr int kBytesPerMB                     = 1048576;                      ///< Bytes per megabyte.
@@ -238,7 +220,7 @@ namespace PlotConstants {
     inline constexpr int kPlotMinChartHeight = 250;   ///< Minimum height for the chart area (QCustomPlot) within the plot widget.
     inline constexpr double kAxisMarginFactor = 0.05; ///< Y-axis padding as fraction of data range.
     inline constexpr double kMinAxisSpan      = 1.0;  ///< Minimum span enforced so a user max override can't invert/collapse an axis.
-    inline constexpr const char* kXAxisLabel        = "Elapsed Time (DDD:HH:MM:SS)"; ///< X axis label.
+    inline constexpr const char* kXAxisLabel        = "Time (DDD:HH:MM:SS)"; ///< X axis label.
     inline constexpr const char* kYAxisLabel        = "Framesync Lock (%)"; ///< Left Y axis label (lock-% mode).
     inline constexpr const char* kMissedFramesAxisLabel = "Accumulated Missed Frames"; ///< Left Y axis label (missed frames mode).
     inline constexpr const char* kSnrAxisLabel      = "Receiver SNR (dB)"; ///< Right Y axis label.
@@ -265,7 +247,6 @@ namespace PlotConstants {
         QColor(67, 97, 238),    ///< Blue
         QColor(46, 184, 92),    ///< Green
     };
-    inline constexpr double kZoomFactor      = 0.1;   ///< Wheel zoom step (10% per notch).
 
     /// @name Theme colors
     /// @{
@@ -282,7 +263,6 @@ namespace PlotConstants {
     inline constexpr int kTickCount          = 10;               ///< Number of major tick marks on X axis.
     inline constexpr double kGraphPenWidth   = 1.5;              ///< Width of series graph pen.
     inline constexpr int kTitleFontSize      = 10;               ///< Plot title font size in points.
-    inline constexpr double kSpinBoxMaxRange = 1e9;              ///< Maximum range for X axis spinboxes.
     inline constexpr double kYSpinBoxMax     = 999.0;            ///< Maximum range for Y axis spinboxes.
     /// @}
 
@@ -297,6 +277,11 @@ namespace PlotConstants {
     inline constexpr int    kLegendBgAlpha       = 185;  ///< Alpha of the translucent legend background (0-255).
     inline constexpr double kLegendMaxHeightFrac = 0.60; ///< Cap the legend height to this fraction of the chart.
     inline constexpr double kLegendMaxWidthFrac  = 0.45; ///< Cap the legend width to this fraction of the chart.
+    inline constexpr int    kOverlayChipHeightPx = 26;   ///< Height of every chip in the on-chart chip bar (px).
+    inline constexpr int    kOverlayChipSpacingPx = 4;   ///< Gap between chips in the on-chart overlay bar (px).
+    inline constexpr int    kCrosshairAlpha      = 140;  ///< Alpha of the cursor-following crosshair line (0-255).
+    inline constexpr int    kZoomBandAlpha       = 45;   ///< Alpha of the drag-to-zoom rubber band fill (0-255).
+    inline constexpr double kMinBandZoomSpanSec  = 1e-6; ///< Ignore band-zoom drags narrower than this (a click, not a drag).
     /// @}
 
     /// @brief Primary colors for SNR receiver series (red, orange, yellow), one per receiver.
