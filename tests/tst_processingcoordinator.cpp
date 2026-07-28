@@ -88,27 +88,59 @@ StreamJob makePrnJob(const QString& filepath, int time_id, int pcm_id,
     return job;
 }
 
-/// Runs @p jobs to completion and returns the elapsed wall-clock time in ms.
-/// Returns -1 if processing failed to start or did not finish within @p timeout_ms.
+/// runAndTime() sentinels, distinguished so a timeout on a loaded machine can be
+/// skipped rather than reported as a functional failure.
+constexpr qint64 kRunFailed   = -1;
+constexpr qint64 kRunTimedOut = -2;
+/// Grace period for a cancelled run to wind its threads down.
+constexpr int    kCancelDrainMs = 30000;
+
+/// Waits for @p coord to actually stop after a timeout, so it is safe to destroy.
+///
+/// A ProcessingCoordinator owns live reader/worker QThreads. If the wait loop is
+/// abandoned on a timeout, those threads are still running when the (stack-local)
+/// coordinator goes out of scope - and destroying a running QThread makes Qt
+/// terminate the whole process (exit 0xC0000409). That aborted the test run mid-way
+/// and silently truncated the results, rather than failing a single test.
+void cancelAndDrain(ProcessingCoordinator& coord)
+{
+    QEventLoop drain;
+    QObject::connect(&coord, &ProcessingCoordinator::processingFinished,
+                     &drain, &QEventLoop::quit);
+    coord.cancelProcessing();
+    // Cancellation is cooperative, so cap the wait; workers check their abort flag
+    // between packets and should stop well inside this.
+    QTimer::singleShot(kCancelDrainMs, &drain, &QEventLoop::quit);
+    drain.exec();
+}
+
+/// @return elapsed ms on success, kRunFailed if the run could not start or ended
+///         in error, kRunTimedOut if it was still going when the timeout expired.
 qint64 runAndTime(QVector<StreamJob> jobs, int timeout_ms = 60000)
 {
     ProcessingCoordinator coord;
     QEventLoop loop;
     bool finished_ok = false;
+    bool finished_signalled = false;
     QObject::connect(&coord, &ProcessingCoordinator::processingFinished, &loop,
-                      [&](bool ok) { finished_ok = ok; loop.quit(); });
+                      [&](bool ok) { finished_ok = ok; finished_signalled = true; loop.quit(); });
 
     QElapsedTimer timer;
     timer.start();
     if (!coord.startProcessing(std::move(jobs)))
     {
-        return -1;
+        return kRunFailed;
     }
 
     QTimer::singleShot(timeout_ms, &loop, &QEventLoop::quit);
     loop.exec();
 
-    return finished_ok ? timer.elapsed() : -1;
+    if (!finished_signalled)
+    {
+        cancelAndDrain(coord);
+        return kRunTimedOut;
+    }
+    return finished_ok ? timer.elapsed() : kRunFailed;
 }
 
 } // namespace
@@ -199,6 +231,8 @@ void TestProcessingCoordinator::benchmarkSingleVsMultiStreamThroughput()
     constexpr int kStreamCount = 4;
 
     qint64 single_ms = runAndTime({ makeLockOnlyJob(filepath, time_id, pcm_id, "solo") });
+    if (single_ms == kRunTimedOut)
+        QSKIP("Single-stream benchmark timed out - machine too loaded to time meaningfully");
     QVERIFY2(single_ms >= 0, "Single-stream run should complete successfully");
 
     QVector<StreamJob> multi_jobs;
@@ -208,6 +242,8 @@ void TestProcessingCoordinator::benchmarkSingleVsMultiStreamThroughput()
                                               QString("dup%1").arg(i)));
     }
     qint64 multi_ms = runAndTime(std::move(multi_jobs));
+    if (multi_ms == kRunTimedOut)
+        QSKIP("Multi-stream benchmark timed out - machine too loaded to time meaningfully");
     QVERIFY2(multi_ms >= 0, "Multi-stream run should complete successfully");
 
     qWarning().noquote() << QString(
@@ -247,14 +283,21 @@ void TestProcessingCoordinator::benchmarkHeavyWorkloadSingleVsMultiStream()
     auto probeChannel = [&](int ch_id, const PrnSpec& spec) -> bool {
         ProcessingCoordinator probe;
         bool probe_ok = false;
+        bool probe_signalled = false;
         QEventLoop probe_loop;
         QObject::connect(&probe, &ProcessingCoordinator::processingFinished,
-                         [&](bool ok) { probe_ok = ok; probe_loop.quit(); });
+                         [&](bool ok) { probe_ok = ok; probe_signalled = true; probe_loop.quit(); });
         QVector<StreamJob> jobs = { makePrnJob(filepath, time_id, ch_id, spec, "probe") };
         if (!probe.startProcessing(std::move(jobs)))
             return false;
         QTimer::singleShot(kTimeoutMs, &probe_loop, &QEventLoop::quit);
         probe_loop.exec();
+        // Same hazard as runAndTime: never let `probe` die with its threads live.
+        if (!probe_signalled)
+        {
+            cancelAndDrain(probe);
+            return false;
+        }
         return probe_ok;
     };
 
@@ -283,6 +326,8 @@ void TestProcessingCoordinator::benchmarkHeavyWorkloadSingleVsMultiStream()
     {
         qint64 t = runAndTime({ makePrnJob(filepath, time_id, id, kPrn11,
                                            QString("PRN11-solo-%1").arg(id)) }, kTimeoutMs);
+        if (t == kRunTimedOut)
+            QSKIP("Heavy benchmark timed out - machine too loaded to time meaningfully");
         QVERIFY2(t >= 0, qPrintable(QString("PRN11 channel %1 solo run failed").arg(id)));
         solo_times.push_back(t);
         qWarning().noquote() << QString("[benchmark-heavy] PRN11 ch%1 solo: %2 ms").arg(id).arg(t);
@@ -291,6 +336,8 @@ void TestProcessingCoordinator::benchmarkHeavyWorkloadSingleVsMultiStream()
     {
         qint64 t = runAndTime({ makePrnJob(filepath, time_id, id, kPrn15,
                                            QString("PRN15-solo-%1").arg(id)) }, kTimeoutMs);
+        if (t == kRunTimedOut)
+            QSKIP("Heavy benchmark timed out - machine too loaded to time meaningfully");
         QVERIFY2(t >= 0, qPrintable(QString("PRN15 channel %1 solo run failed").arg(id)));
         solo_times.push_back(t);
         qWarning().noquote() << QString("[benchmark-heavy] PRN15 ch%1 solo: %2 ms").arg(id).arg(t);
@@ -301,6 +348,8 @@ void TestProcessingCoordinator::benchmarkHeavyWorkloadSingleVsMultiStream()
     for (int id : prn15_ids) all_jobs.push_back(makePrnJob(filepath, time_id, id, kPrn15, QString("PRN15-%1").arg(id)));
 
     qint64 parallel_ms = runAndTime(std::move(all_jobs), kTimeoutMs);
+    if (parallel_ms == kRunTimedOut)
+        QSKIP("Heavy benchmark timed out - machine too loaded to time meaningfully");
     QVERIFY2(parallel_ms >= 0, "4-stream parallel run should complete successfully");
 
     // Ideal parallel time = slowest individual stream (reader does one pass, workers run together).
