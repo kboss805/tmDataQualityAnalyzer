@@ -161,7 +161,7 @@ tmDataQualityAnalyzer/
 │   ├── dto/                    # Plain value types passed between layers
 │   │   ├── streamconfig.h · source.h · processingparams.h · processedstreamdata.h
 │   │   ├── plotseriesdata.h · seriesappearance.h · processingtemplate.h
-│   │   └── framesyncparams.h · timefields.h · calibrationprofile.h (US5.3, runtime-only)
+│   │   └── framesyncparams.h · calibrationprofile.h (US5.3, runtime-only)
 │   ├── model/                 # File I/O, decommutation, schemas (no Qt UI)
 │   │   ├── chapter10reader.h · ch10packetreader.h · packetqueue.h · frameprocessor.h
 │   │   ├── stepdetector.h · calibrationextractor.h        # Non-linear step calibration (US5.3)

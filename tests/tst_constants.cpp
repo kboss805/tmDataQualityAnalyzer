@@ -40,20 +40,6 @@ void TestConstants::uiDefaultSlopeIndex()
     QCOMPARE(UIConstants::kDefaultSlopeIndex, 3);
 }
 
-void TestConstants::uiDefaultScale()
-{
-    QCOMPARE(QString(UIConstants::kDefaultScale), QString("20"));
-}
-
-void TestConstants::uiTimeValidationLimits()
-{
-    QCOMPARE(UIConstants::kMinDayOfYear, 1);
-    QCOMPARE(UIConstants::kMaxDayOfYear, 366);
-    QCOMPARE(UIConstants::kMaxHour, 23);
-    QCOMPARE(UIConstants::kMaxMinute, 59);
-    QCOMPARE(UIConstants::kMaxSecond, 59);
-}
-
 void TestConstants::uiSamplePeriods()
 {
     QCOMPARE(UIConstants::kSamplePeriod1s,    1.0);

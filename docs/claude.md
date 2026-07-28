@@ -879,7 +879,6 @@ not mis-read.
 - **`PlotSeriesData`** struct (`include/dto/plotseriesdata.h`) — per-series plot data (name, receiver/channel indices, `sourceId`, x/y vectors, visibility, color, cached Y min/max)
 - **`CsvParseResult`** struct (`include/model/csvseriesparser.h`) — output of `CsvSeriesParser::parse()`: success flag, parsed `PlotSeriesData` vector, base day/time offset, and xMax; carried across the worker-thread boundary by PlotViewModel's `QFutureWatcher`
 - **`CalibrationProfile`**, **`StepDefinition`**, **`CalibrationPoint`** (`include/dto/calibrationprofile.h`) — non-linear step-calibration data types (session-only); `interpolateCalibration()` does the piecewise-linear lookup
-- **`TimeFields`** struct (`include/dto/timefields.h`) — groups DOY/HMS fields for start/stop times
 - **`SuChanInfo`** typedef (`include/model/ch10packetreader.h`) — per-channel bookkeeping for the irig106 C helper layer
 
 ### Data Flow

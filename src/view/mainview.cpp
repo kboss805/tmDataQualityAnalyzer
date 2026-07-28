@@ -36,7 +36,6 @@
 #include "source.h"
 #include "streamconfigdialog.h"
 #include "templatematcher.h"
-#include "timefields.h"
 
 #ifdef _WIN32
 #ifndef NOMINMAX

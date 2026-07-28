@@ -111,18 +111,9 @@ namespace UIConstants {
     inline constexpr int kDefaultSlopeIndex           = 3;     ///< Default voltage slope index (0-5V range).
     inline constexpr int kMaxSlopeIndex               = 3;     ///< Maximum valid voltage slope index.
     inline constexpr int kMaxSamplePeriodIndex          = 2;     ///< Maximum valid sample period combo index.
-    inline constexpr const char* kDefaultScale        = "20";  ///< Default calibration scale in dB per volt.
     inline constexpr std::array<const char*, 3> kChannelPrefixes = {"L", "R", "C"}; ///< Channel prefix labels (L/R/C).
     inline constexpr int kNumKnownPrefixes            = 3;     ///< Number of known channel prefixes.
 
-    /// @name Time validation limits
-    /// @{
-    inline constexpr int kMinDayOfYear = 1;   ///< Minimum valid day-of-year.
-    inline constexpr int kMaxDayOfYear = 366;  ///< Maximum valid day-of-year.
-    inline constexpr int kMaxHour      = 23;   ///< Maximum valid hour.
-    inline constexpr int kMaxMinute    = 59;   ///< Maximum valid minute.
-    inline constexpr int kMaxSecond    = 59;   ///< Maximum valid second.
-    /// @}
 
     /// @name Sample period options (seconds)
     /// @{

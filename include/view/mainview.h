@@ -13,7 +13,6 @@
 #include <QVBoxLayout>
 
 #include "processingtemplate.h"
-#include "timefields.h"
 
 class MainViewModel;
 class PlotViewModel;

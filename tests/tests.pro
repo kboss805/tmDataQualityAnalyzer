@@ -78,7 +78,6 @@ HEADERS += \
     $$PWD/../include/dto/processedstreamdata.h \
     $$PWD/../include/dto/plotseriesdata.h \
     $$PWD/../include/dto/calibrationprofile.h \
-    $$PWD/../include/dto/timefields.h \
     $$PWD/../include/dto/source.h \
     $$PWD/../include/dto/seriesappearance.h \
     $$PWD/../include/dto/processingtemplate.h \

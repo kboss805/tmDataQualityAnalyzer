@@ -148,7 +148,6 @@ HEADERS += \
     include/dto/processedstreamdata.h \
     include/dto/plotseriesdata.h \
     include/dto/calibrationprofile.h \
-    include/dto/timefields.h \
     include/dto/source.h \
     include/dto/seriesappearance.h \
     include/dto/processingtemplate.h

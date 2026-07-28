@@ -15,8 +15,6 @@ private slots:
     void pcmTimeRoundingOffset();
     void pcmChannelTypeIdentifiers();
     void uiDefaultSlopeIndex();
-    void uiDefaultScale();
-    void uiTimeValidationLimits();
     void uiSamplePeriods();
     void uiMaxSamplePeriodIndex();
     void uiChannelPrefixes();
