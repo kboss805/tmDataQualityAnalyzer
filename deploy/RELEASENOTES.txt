@@ -1,3 +1,67 @@
+tmDataQualityAnalyzer v2.8.0 - What's New
+=================================
+
+  This release is about the plot window. Every control that used to sit in a row
+  around the chart is gone, and the chart now fills the whole area. Nothing was
+  taken away - it all moved onto the plot itself, where you right-click to reach
+  it.
+
+  - New: The plot has no control rows. Right-click anywhere on the chart for the
+    full menu: Set Plot Title, Plot File, View Mode, Customize View, Show Legend,
+    X Axis, Y Axes, and Export. Items stay greyed out until data is loaded, so the
+    menu always reflects what you can actually do right now.
+
+  - New: A small chip bar in the chart's top-left corner holds the things you
+    reach for most - Toggle Legend, a one-click View Mode switch labelled with the
+    view it takes you to, and a Reset view chip. Each chip hides itself when it
+    would be meaningless (the Reset chip appears only once you have actually
+    zoomed or pinned an axis), so the bar stays out of your way.
+
+  - New: Faster ways to move around the plot without opening a menu. Hold Ctrl
+    (or the middle mouse button) and drag to draw a box over a time range, then
+    release to zoom straight to it. Double-click anywhere to snap back to the full
+    time span. A crosshair follows your cursor so you can read several channels at
+    the same instant. The mouse wheel still zooms the time axis.
+
+  - New: Click and hold anywhere in the plot to drag the time axis left or right.
+    The cursor becomes an open hand once data is loaded, and closes while you drag.
+
+  - New: The crosshair readout can be locked to one channel. Right-click >
+    Readout and pick a series, and the readout reports that channel at your
+    cursor's time no matter where the cursor sits - useful for tracing one
+    receiver through a busy plot. Leave it on "Nearest series" for the previous
+    behavior.
+
+  - New: Show or hide the legend from the chart itself. Your choice is remembered
+    between sessions, and a hidden legend is left out of exported images.
+
+  - New: Export is now on the plot's right-click menu as well as in the main menu.
+
+  - Improved: The time axis is labelled "Time", and the plot's whole time window
+    is set in one dialog (right-click > X Axis > Set Time Window) instead of
+    separate start and stop fields. Values outside the file's range are still
+    clamped and noted in the log.
+
+  - Improved: Reset is now two separate actions - X Axis > Reset Span and
+    Y Axes > Reset - so you can undo a time zoom without losing your axis limits,
+    or the reverse.
+
+  - Improved: The log sidebar is open by default, and can still be toggled from
+    the title bar or with Ctrl+B.
+
+  - Improved: The user manual has been rewritten for the new plot window - the
+    right-click menu, the chip bar, the mouse gestures, and readout pinning.
+
+  - Fixed: The minimize and maximize buttons in the title bar looked smaller than
+    the close button. All three now use the same Windows icon font that Windows
+    uses for its own window buttons, so they match.
+
+  - Fixed: Some values that were meant to be range-checked were not being
+    enforced. The frame sync pattern and mask fields now limit their length
+    correctly, and a template saved by a newer build can no longer silently change
+    a stream's sample rate or its volts-to-dB conversion.
+
+
 tmDataQualityAnalyzer v2.7.0 - What's New
 =================================
 

@@ -8,13 +8,13 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, `cl` / `nmake`), Qt `msvc2022_64` kit.
   This is the only supported toolchain (and what CI uses).
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
-- **Project Version**: 2.7.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
+- **Project Version**: 2.8.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
 
 ## User Stories
 
 The stories below follow the workflow a first-time user takes through the application: open a file and choose what to process (US1), define the per-stream parameters (US2), view the resulting data-quality metrics (US3), customize the plot (US4), manage configuration files and calibration (US5), export and re-import results (US6), and the cross-cutting concerns of input validation (US7), installation (US8), and theming (US9).
 
-**Status: all user stories are Complete** — implemented, tested, and shipped as of v2.7.0. Every acceptance criterion below is delivered functionality (`[x]`), and each story carries a **Complete** marker in its heading. This section is no longer a draft backlog; new work is tracked as new stories appended after US9.0.
+**Status: all user stories are Complete** — implemented, tested, and shipped as of v2.8.0. Every acceptance criterion below is delivered functionality (`[x]`), and each story carries a **Complete** marker in its heading. This section is no longer a draft backlog; new work is tracked as new stories appended after US9.0.
 
 ### US1.0: Open a Ch10 file and configure which streams to process — Complete
 
@@ -191,7 +191,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Additional streams, receivers, and channels beyond the primaries use progressively lighter shades of their primary color so related series stay visually grouped.
 - [x] Frame Sync Lock curves are drawn with a visually highlighted style, while Receiver SNR curves are not.
 
-### US4.1: Distraction-free plot window — controls on the plot, not around it — In Progress
+### US4.1: Distraction-free plot window — controls on the plot, not around it — Complete
 
 **As a** telemetry engineer or data analyst
 **I want to** see nothing but the plot itself, with every control reached by right-clicking the plot or from a small overlay on it
@@ -207,9 +207,16 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Frequent actions have chrome-free gestures: Ctrl+drag / middle-drag rubber-bands a time range to zoom, double-click restores the full span, and a crosshair follows the cursor for reading several series at one instant.
 - [x] Mouse-wheel zoom and click-drag pan of the X axis are retained as the primary navigation.
 - [x] The log/console occupies a left sidebar that the user can toggle on and off, and which is open by default.
-- [ ] *(placeholder)* Any further plot controls the user identifies are relocated to the context menu or an on-chart overlay rather than added as external widgets.
-- [ ] *(placeholder)* Keyboard shortcuts for the most-used context-menu actions — **undecided**, may be dropped.
+- [x] Each on-chart chip is labelled and carries a tooltip naming the action it performs, so no control on the chart is an unexplained glyph.
+- [x] The crosshair readout can be pinned to a chosen series (context menu > **Readout**) instead of always following whichever curve is nearest the cursor.
 
+  - **Deferred:** keyboard shortcuts for the most-used context-menu actions remain
+    **undecided** and may be dropped — a context menu plus the chip bar may already
+    be enough. Tracked in `docs/future_plans/README.md`, not as an open criterion
+    here. Any *further* plot control that gets identified goes to the context menu
+    or an on-chart overlay, never back to an external widget; that's the standing
+    rule this story sets, and `TestPlotWidget` enforces it (no QComboBox /
+    QSpinBox / QLineEdit / QAbstractButton may live outside the chart).
   - **Scope:** This story governs the *placement* of plot controls, not what they do — the underlying behaviors are specified by US4.0 (navigation/appearance), US3.1 (view mode), and US1.1 (Plot File selector). It is deliberately additive to those stories: US4.0's criteria were reworded for the new location, not replaced.
 
 ### US5.0: Recall/store framesync pattern and frame length parameters from/to configuration files — Complete
@@ -383,7 +390,7 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ## Version History
 
-### Unreleased — Plot Window Simplification
+### v2.8.0 — Plot Window Simplification
 
 #### Plot controls moved into a right-click context menu (US4.0)
 
@@ -428,6 +435,26 @@ The stories below follow the workflow a first-time user takes through the applic
   and a closed hand while the left button is held, so the drag-to-pan gesture is
   discoverable now that no toolbar hints at it. Shown regardless of zoom level;
   a plain arrow before any data loads.
+- New: **Readout series selection.** The crosshair readout previously always
+  described whichever series was nearest the cursor, which on a dense plot meant
+  it kept flipping between curves. The context menu gains a **Readout** submenu:
+  *Nearest series* (the default, unchanged behavior) or any single series pinned
+  by name. A pinned series is read at the cursor's time regardless of how far the
+  cursor is from the curve, so the 10-pixel proximity gate is bypassed while
+  pinned. Selection is held as a **stable series id**
+  (`PlotViewModel::indexOfSeriesId`), not a positional index, so a reprocess or an
+  async CSV import that reorders the series list can't silently re-point the
+  readout at a different curve; a pinned series that disappears falls back to
+  nearest.
+- The chip bar's buttons are labelled and described: each chip carries a tooltip
+  naming the action it performs (the legend chip's text updates with its state, so
+  it never offers the action just taken), and the legend chip is **text-only**
+  ("Toggle Legend") to match the View Mode chip beside it - a bare glyph gave no
+  indication of what it did, and glyph-plus-text cost more of the chart than the
+  label alone. `PlotConstants::kLegendToggleSizePx` was renamed
+  `kOverlayChipHeightPx` to match what it actually sizes (all three chips).
+- Tooltips are suppressed while the cursor is over the chip bar, so a chip's own
+  tooltip can't collide with the crosshair readout's.
 - No ViewModel changes: every menu item drives the existing `PlotViewModel` API.
 
 #### Title bar
@@ -451,6 +478,27 @@ The stories below follow the workflow a first-time user takes through the applic
 - Dead weight removed: 37 unused Qt includes, ~20 unreferenced constants, and the
   vestigial `TimeFields` type (nothing constructed it; processing carries its
   window as IRIG seconds).
+
+#### Build, CI, and tooling
+
+- **The Windows toolchain is now MSVC 2022 only** (Qt `msvc2022_64` kit, `cl` /
+  `nmake`); the MinGW/GCC build and every artifact that supported it are gone.
+  `scripts/env.ps1` imports the MSVC environment via `vcvars64.bat` and is the
+  single source of truth for a local build; `deploy/build_release.ps1` packages
+  with `win32-msvc` and copies the app-local CRT from `$env:VCToolsRedistDir`.
+- **CI runs on a self-hosted Windows runner** with the toolchain and the
+  full-size `.ch10` recordings on disk, falling back to GitHub-hosted
+  `windows-latest` when that runner is offline or a contributor lacks access
+  (a `pick-runner` job routes between them). Small `.ch10` fixtures are now
+  committed, so the four integration suites run on **both** paths rather than
+  being skipped. Machine setup and recovery: `docs/ci_runner.md`.
+- The heavy PRN throughput benchmark is **opt-in** (`TMDQA_RUN_HEAVY_BENCH=1`).
+  It walks a 640 MB recording nine times, and a timeout left the stack-local
+  `ProcessingCoordinator` destroying live reader/worker `QThread`s, which makes Qt
+  fail-fast (`0xC0000409`) and truncate the whole run's results rather than fail
+  one test. `runAndTime`/`probeChannel` now cancel and drain before returning, and
+  the benchmark itself no longer runs unless asked for. Green baseline is
+  **341 passed / 0 failed / 1 skipped** (the skip is that benchmark).
 
 ### v2.7.0 — Processing Templates & Batch Apply, Hamburger Menu, Frameless Title Bar, User Manual
 
