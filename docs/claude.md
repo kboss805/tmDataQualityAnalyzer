@@ -1136,6 +1136,17 @@ Tasks are defined in `.vscode/tasks.json`:
 
 Automated unit tests use the **Qt Test** framework. Test sources are in the `tests/` directory with a separate `tests/tests.pro` project file.
 
+### Continuous Integration
+
+`.github/workflows/ci.yml` builds the app and runs the full suite on every push to
+`main` and every PR. It prefers a **self-hosted Windows runner** (local toolchain and
+the full-size `.ch10` recordings on disk) and falls back to GitHub-hosted
+`windows-latest` when that runner is offline or a contributor lacks access — both
+paths run the same suite. The workflow's own constraints (ASCII-only, Windows
+PowerShell 5.1, `QT_QPA_PLATFORM=offscreen`) are documented in its header comment;
+the runner machine's setup and recovery procedure is in
+[`docs/ci_runner.md`](ci_runner.md).
+
 ### Test Suites
 
 The suites below are registered (and run, in this order) in `tests/main.cpp`; the
