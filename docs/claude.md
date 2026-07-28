@@ -408,7 +408,31 @@ The stories below follow the workflow a first-time user takes through the applic
   restores the full span; a dashed **crosshair** follows the cursor so several
   series can be read at the same instant. The crosshair and rubber band are
   QCustomPlot items, not widgets, so they add no chrome and are absent from exports.
+- New: **grab-cursor panning** - the chart shows an open hand once data is loaded
+  and a closed hand while the left button is held, so the drag-to-pan gesture is
+  discoverable now that no toolbar hints at it. Shown regardless of zoom level;
+  a plain arrow before any data loads.
 - No ViewModel changes: every menu item drives the existing `PlotViewModel` API.
+
+**Title bar**
+- Minimize / maximize / close now draw their glyphs from the Windows icon font
+  (Segoe Fluent Icons, falling back to Segoe MDL2 Assets), the same set Windows
+  uses for its own caption buttons, so all three share one set of metrics. The
+  previous mix of ordinary Unicode look-alikes (U+2212 / U+25A1 / U+2715) rendered
+  at visibly different sizes. They stay *text* rather than icons so the close
+  button's white-on-red hover still recolors the glyph, and the codepoints are
+  named constants - a private-use-area literal in the source is fragile and can be
+  dropped silently, leaving a blank button.
+
+**Maintenance**
+- Validation limits that existed only as constants are now enforced where they
+  matter: the sync pattern/mask field derives its length bound from
+  `kMaxSyncPatternBits` instead of repeating `{1,16}`, and `StreamConfigSchema`
+  clamps `samplePeriodIndex` / `slopeIndex` on load so a template from a newer
+  build can't silently change a stream's sample rate or volts-to-dB conversion.
+- Dead weight removed: 37 unused Qt includes, ~20 unreferenced constants, and the
+  vestigial `TimeFields` type (nothing constructed it; processing carries its
+  window as IRIG seconds).
 
 ### v2.7.0 — Processing Templates & Batch Apply, Hamburger Menu, Frameless Title Bar, User Manual
 

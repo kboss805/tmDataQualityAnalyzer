@@ -73,8 +73,9 @@ nmake -f Makefile.Debug
 
 - Results are written to `tests\output\results.txt` (gitignored) AND printed to the console. A
   non-zero process exit code means at least one suite failed.
-- Green baseline: **325 passed / 0 failed / 0 skipped** across 19 suites (full run with the `.ch10`
-  fixtures present).
+- Green baseline across 19 suites: **339 / 0 / 0** with the full-size PRN fixture, or **338 / 0 / 1**
+  with the committed sample alone — the one skip is the PRN throughput benchmark, which needs the
+  full recording.
 - A convenience wrapper exists: `powershell -ExecutionPolicy Bypass -File scripts\build_ide.ps1`
   builds the tests (Debug) using the active toolchain from `env.ps1`. It builds but does not run.
 
