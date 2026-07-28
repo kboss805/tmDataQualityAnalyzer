@@ -1024,11 +1024,11 @@ void PlotWidget::setUpLayout()
     m_legend_toggle->setCheckable(true);
     m_legend_toggle->setChecked(m_legend_visible);
     m_legend_toggle->setCursor(Qt::PointingHandCursor);
-    // Labelled, not icon-only: a bare glyph gave no indication of what the button
-    // did. The glyph stays alongside the text as a visual anchor.
+    // Text only, like the chips beside it: a bare glyph gave no indication of what
+    // the button did, and text + glyph took more of the chart than the label alone.
     m_legend_toggle->setText(QStringLiteral("Toggle Legend"));
-    m_legend_toggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    m_legend_toggle->setFixedHeight(PlotConstants::kLegendToggleSizePx);
+    m_legend_toggle->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    m_legend_toggle->setFixedHeight(PlotConstants::kOverlayChipHeightPx);
     chip_row->addWidget(m_legend_toggle);
 
     // One click to flip the left axis between its two metrics - the same choice as
@@ -1036,7 +1036,7 @@ void PlotWidget::setUpLayout()
     m_view_mode_chip = new QToolButton(m_overlay_bar);
     m_view_mode_chip->setObjectName("overlayChip");
     m_view_mode_chip->setCursor(Qt::PointingHandCursor);
-    m_view_mode_chip->setFixedHeight(PlotConstants::kLegendToggleSizePx);
+    m_view_mode_chip->setFixedHeight(PlotConstants::kOverlayChipHeightPx);
     m_view_mode_chip->hide();
     chip_row->addWidget(m_view_mode_chip);
 
@@ -1045,7 +1045,7 @@ void PlotWidget::setUpLayout()
     m_reset_chip = new QToolButton(m_overlay_bar);
     m_reset_chip->setObjectName("overlayChip");
     m_reset_chip->setCursor(Qt::PointingHandCursor);
-    m_reset_chip->setFixedHeight(PlotConstants::kLegendToggleSizePx);
+    m_reset_chip->setFixedHeight(PlotConstants::kOverlayChipHeightPx);
     m_reset_chip->setText(QStringLiteral("Reset view"));
     m_reset_chip->setToolTip(QStringLiteral("Restore the full time span and automatic axis scaling"
                                             " (or double-click the chart)"));
@@ -1334,29 +1334,6 @@ void PlotWidget::styleLegendToggle(bool dark)
     {
         return;
     }
-
-    // Glyph drawn rather than shipped as a resource, matching the title-bar
-    // glyphs in MainView: three short "legend rows" (swatch + line).
-    const int size = PlotConstants::kLegendToggleSizePx;
-    QPixmap pm(size, size);
-    pm.fill(Qt::transparent);
-    {
-        QPainter p(&pm);
-        p.setRenderHint(QPainter::Antialiasing);
-        const QColor fg = dark ? PlotConstants::kDarkForeground : PlotConstants::kLightForeground;
-        p.setPen(QPen(fg, 1.5));
-        const double x0 = size * 0.26;
-        const double x1 = size * 0.76;
-        for (int i = 0; i < 3; ++i)
-        {
-            const double y = size * (0.32 + 0.18 * i);
-            p.drawLine(QPointF(x0, y), QPointF(x1, y));
-            p.setBrush(fg);
-            p.drawEllipse(QPointF(size * 0.20, y), 1.6, 1.6);
-        }
-    }
-    m_legend_toggle->setIcon(QIcon(pm));
-    m_legend_toggle->setIconSize(QSize(size, size));
 
     // Translucent chips so they read over chart data, same visual language as the
     // legend overlay itself. One stylesheet on the bar covers every chip.
