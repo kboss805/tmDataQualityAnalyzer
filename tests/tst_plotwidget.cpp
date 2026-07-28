@@ -567,6 +567,25 @@ void TestPlotWidget::legendToggleShowsAndHidesLegend()
     QVERIFY(widget.m_legend_toggle->isChecked());
 }
 
+void TestPlotWidget::legendChipIsLabelledAndDescribed()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    widget.setLegendVisible(true);
+    addLockStream(vm, "Ch 5", 5);
+
+    // The chip carries visible text - an unlabelled glyph gave no clue what it
+    // did - and a tooltip that states which way the click will go.
+    QCOMPARE(widget.m_legend_toggle->text(), QString("Toggle Legend"));
+    QVERIFY(widget.m_legend_toggle->toolTip().contains("Hide", Qt::CaseInsensitive));
+
+    widget.setLegendVisible(false);
+    QVERIFY(widget.m_legend_toggle->toolTip().contains("Show", Qt::CaseInsensitive));
+
+    widget.setLegendVisible(true);   // leave the persisted pref as we found it
+}
+
 void TestPlotWidget::legendToggleAppearsOnlyWithData()
 {
     PlotViewModel vm;
@@ -648,13 +667,14 @@ void TestPlotWidget::viewModeChipSwitchesLeftAxisMetric()
     addLockStream(vm, "Ch 5", 5);   // yields both left-axis metrics
 
     QVERIFY(!widget.m_view_mode_chip->isHidden());
-    // The chip names the metric it switches TO, so the outcome is readable.
+    // The chip is phrased as the action it performs ("Show <the other metric>"),
+    // so it reads as a button rather than a status label.
     QCOMPARE(vm.lockAxisView(), PlotViewModel::LockAxisView::LockPercent);
-    QCOMPARE(widget.m_view_mode_chip->text(), QString("Accumulation"));
+    QCOMPARE(widget.m_view_mode_chip->text(), QString("Show Accumulation"));
 
     widget.m_view_mode_chip->click();
     QCOMPARE(vm.lockAxisView(), PlotViewModel::LockAxisView::MissedFrames);
-    QCOMPARE(widget.m_view_mode_chip->text(), QString("Lock %"));
+    QCOMPARE(widget.m_view_mode_chip->text(), QString("Show Lock %"));
 
     widget.m_view_mode_chip->click();
     QCOMPARE(vm.lockAxisView(), PlotViewModel::LockAxisView::LockPercent);
@@ -729,4 +749,63 @@ void TestPlotWidget::doubleClickResetsSpanViaViewModel()
 
     QCOMPARE(vm.xViewMin(), vm.xMin());
     QCOMPARE(vm.xViewMax(), vm.xMax());
+}
+
+void TestPlotWidget::readoutMenuListsVisibleSeriesAndPins()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    addLockStream(vm, "Ch 5", 5);
+
+    QScopedPointer<QMenu> menu(widget.buildContextMenu());
+    QAction* readout_act = findAction(menu.data(), "Readout");
+    QVERIFY(readout_act != nullptr);
+    QVERIFY(readout_act->isEnabled());
+    QMenu* readout_menu = readout_act->menu();
+    QVERIFY(readout_menu != nullptr);
+
+    // Defaults to the nearest-series behaviour the plot has always had.
+    QAction* nearest = findAction(readout_menu, "Nearest series");
+    QVERIFY(nearest != nullptr);
+    QVERIFY(nearest->isChecked());
+    QCOMPARE(widget.m_readout_series_id, PlotWidget::kReadoutNearest);
+
+    // One entry per visible series; picking one pins the readout to it by id.
+    QAction* last = readout_menu->actions().last();
+    QVERIFY(last->isCheckable());
+    last->trigger();
+    QVERIFY(widget.m_readout_series_id != PlotWidget::kReadoutNearest);
+
+    const int pinned = widget.m_readout_series_id;
+    QVERIFY(vm.indexOfSeriesId(pinned) >= 0);   // resolves to a real series
+
+    // Reopening reflects the pin, and switching back to automatic clears it.
+    QScopedPointer<QMenu> menu2(widget.buildContextMenu());
+    QMenu* readout2 = findAction(menu2.data(), "Readout")->menu();
+    QVERIFY(!findAction(readout2, "Nearest series")->isChecked());
+    findAction(readout2, "Nearest series")->trigger();
+    QCOMPARE(widget.m_readout_series_id, PlotWidget::kReadoutNearest);
+}
+
+void TestPlotWidget::readoutPinDropsWhenSeriesGoesAway()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    addLockStream(vm, "Ch 5", 5);
+
+    // Pin to a real series...
+    QScopedPointer<QMenu> menu(widget.buildContextMenu());
+    QMenu* readout_menu = findAction(menu.data(), "Readout")->menu();
+    readout_menu->actions().last()->trigger();
+    const int pinned = widget.m_readout_series_id;
+    QVERIFY(pinned != PlotWidget::kReadoutNearest);
+
+    // ...then hide it. A pin pointing at something the user can no longer see
+    // would leave the menu with nothing selected, so it reverts to automatic.
+    vm.setSeriesVisibleById(pinned, false);
+    QScopedPointer<QMenu> menu2(widget.buildContextMenu());
+    QVERIFY(findAction(findAction(menu2.data(), "Readout")->menu(), "Nearest series")->isChecked());
+    QCOMPARE(widget.m_readout_series_id, PlotWidget::kReadoutNearest);
 }

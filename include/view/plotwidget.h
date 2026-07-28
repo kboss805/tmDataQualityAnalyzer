@@ -257,6 +257,13 @@ private:
     bool   m_band_zooming = false;              ///< True while a band-zoom drag is in progress.
     double m_band_start_x = 0.0;                ///< Plot-coordinate X where the band drag began.
     /// @}
+    /// Series the hover readout is pinned to, by stable series id, or
+    /// kReadoutNearest for the default "whatever is nearest the cursor" behaviour.
+    /// Pinned by id (not index) so a reprocess, which renumbers indices, can't
+    /// silently retarget the readout at a different stream.
+    static constexpr int kReadoutNearest = -1;
+    int m_readout_series_id = kReadoutNearest;
+
     /// Whether the user wants the legend shown; persisted across sessions
     /// (UIConstants::kSettingsKeyLegendVisible). When false the overlay stays
     /// hidden even with data loaded, and is excluded from exports.

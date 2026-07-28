@@ -122,6 +122,13 @@ amount of space shows data.</p>
   <li><strong>Customize View…</strong> — rename series, change their colors, and show or hide
       individual series.</li>
   <li><strong>Show Legend</strong> — same toggle as the on-chart button below.</li>
+  <li><strong>Readout</strong> — chooses which series the hover value comes from.
+      <em>Nearest series (automatic)</em> is the default: whichever curve lies closest to the
+      pointer reports its value, which is ambiguous where several series overlap. Pick a series
+      instead to <strong>pin</strong> the readout to it — from then on the value shown is always
+      that series' value at the cursor's time (marked <em>(pinned)</em>), no matter which curve
+      is nearer. Only series currently on the plot are listed; if a pinned series is hidden or
+      re-processed, the readout reverts to automatic.</li>
   <li><strong>X Axis → Set Time Window…</strong> — type a start and stop time as
       <code>DDD:HH:MM:SS</code> to zoom to an exact span. Values outside the file's range are
       clamped to it and a note appears in the log. <strong>Reset Span</strong> returns to the full
@@ -146,6 +153,15 @@ appear and disappear with the state of the plot, so nothing sits there unused.</
       maximum; clicking it restores the full time span and automatic scaling.</li>
   <li><strong>Legend</strong> — drag it anywhere inside the chart to keep it clear of the data. It
       starts in the top-right corner and lists one row per visible series.</li>
+</ul>
+
+<h3>Reading values off the plot</h3>
+<ul>
+  <li>A dashed <strong>crosshair</strong> follows the pointer so several series can be compared at
+      the same instant.</li>
+  <li>Hovering near a data point shows its <strong>series name, time and value</strong>. By default
+      that is the nearest curve; use <strong>Readout</strong> in the right-click menu to pin it to
+      one series — useful when curves overlap and you always want the same one.</li>
 </ul>
 
 <h3>Navigating</h3>

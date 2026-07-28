@@ -36,12 +36,15 @@ private slots:
     void noExternalControlWidgetsRemain();
     void legendToggleShowsAndHidesLegend();
     void legendToggleAppearsOnlyWithData();
+    void legendChipIsLabelledAndDescribed();
     void contextMenuShowLegendMirrorsToggle();
     void overlayBarHoldsChipsAndIsChartParented();
     void viewModeChipSwitchesLeftAxisMetric();
     void resetChipAppearsOnlyWhenViewChanged();
     void bandZoomAppliesDraggedRange();
     void doubleClickResetsSpanViaViewModel();
+    void readoutMenuListsVisibleSeriesAndPins();
+    void readoutPinDropsWhenSeriesGoesAway();
 };
 
 #endif // TST_PLOTWIDGET_H

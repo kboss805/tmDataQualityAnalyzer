@@ -532,6 +532,56 @@ QMenu* PlotWidget::buildContextMenu()
     connect(legend_act, &QAction::triggered, this,
             [this](bool checked) { setLegendVisible(checked); });
 
+    // --- Readout: which series the hover value comes from ------------------
+    // Default is whatever lies nearest the cursor, which is ambiguous where
+    // series overlap; pinning one makes the readout follow that series only.
+    QMenu* readout_menu = menu.addMenu(QStringLiteral("Readout"));
+    readout_menu->setEnabled(has_data);
+    if (has_data)
+    {
+        // Drop a pin whose series is gone (reprocessed - which mints new ids - or
+        // hidden), so the menu doesn't come up with nothing selected. The readout
+        // itself already falls back to nearest in that case.
+        if (m_readout_series_id != kReadoutNearest)
+        {
+            const int idx = m_view_model->indexOfSeriesId(m_readout_series_id);
+            if (idx < 0 || !m_view_model->effectiveVisible(m_view_model->allSeries()[idx]))
+            {
+                m_readout_series_id = kReadoutNearest;
+            }
+        }
+
+        auto* readout_group = new QActionGroup(readout_menu);
+        readout_group->setExclusive(true);
+
+        QAction* nearest_act = readout_menu->addAction(QStringLiteral("Nearest series (automatic)"));
+        nearest_act->setCheckable(true);
+        nearest_act->setChecked(m_readout_series_id == kReadoutNearest);
+        nearest_act->setActionGroup(readout_group);
+        connect(nearest_act, &QAction::triggered, this,
+                [this]() { m_readout_series_id = kReadoutNearest; });
+
+        readout_menu->addSeparator();
+
+        // Only series actually on screen: pinning to a hidden one would read as
+        // a broken readout.
+        const auto& all_series = m_view_model->allSeries();
+        for (const PlotSeriesData& s : all_series)
+        {
+            if (!m_view_model->effectiveVisible(s))
+            {
+                continue;
+            }
+            QAction* act = readout_menu->addAction(s.name);
+            act->setCheckable(true);
+            act->setChecked(m_readout_series_id == s.id);
+            act->setActionGroup(readout_group);
+            const int series_id = s.id;
+            connect(act, &QAction::triggered, this,
+                    [this, series_id]() { m_readout_series_id = series_id; });
+        }
+    }
+
     menu.addSeparator();
 
     // --- X axis -----------------------------------------------------------
@@ -974,9 +1024,11 @@ void PlotWidget::setUpLayout()
     m_legend_toggle->setCheckable(true);
     m_legend_toggle->setChecked(m_legend_visible);
     m_legend_toggle->setCursor(Qt::PointingHandCursor);
-    m_legend_toggle->setFixedSize(PlotConstants::kLegendToggleSizePx,
-                                  PlotConstants::kLegendToggleSizePx);
-    m_legend_toggle->setToolTip(QStringLiteral("Show/hide the legend"));
+    // Labelled, not icon-only: a bare glyph gave no indication of what the button
+    // did. The glyph stays alongside the text as a visual anchor.
+    m_legend_toggle->setText(QStringLiteral("Toggle Legend"));
+    m_legend_toggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_legend_toggle->setFixedHeight(PlotConstants::kLegendToggleSizePx);
     chip_row->addWidget(m_legend_toggle);
 
     // One click to flip the left axis between its two metrics - the same choice as
@@ -999,6 +1051,14 @@ void PlotWidget::setUpLayout()
                                             " (or double-click the chart)"));
     m_reset_chip->hide();
     chip_row->addWidget(m_reset_chip);
+
+    // Entering a chip must clear the chart's data readout first (see eventFilter),
+    // otherwise Qt keeps that tooltip - owned by m_plot, which contains the chips -
+    // and the chip's own tooltip never appears.
+    m_overlay_bar->installEventFilter(this);
+    m_legend_toggle->installEventFilter(this);
+    m_view_mode_chip->installEventFilter(this);
+    m_reset_chip->installEventFilter(this);
 
     m_overlay_bar->hide();
 
@@ -1256,6 +1316,12 @@ void PlotWidget::setLegendVisible(bool visible)
     {
         QSignalBlocker blocker(m_legend_toggle);
         m_legend_toggle->setChecked(visible);
+        // Refresh the tooltip here rather than only in the chip-update pass:
+        // toggling the legend doesn't run that pass, so the hint would otherwise
+        // keep offering the action the user just took.
+        m_legend_toggle->setToolTip(visible
+            ? QStringLiteral("Hide the legend (also in the right-click menu)")
+            : QStringLiteral("Show the legend (also in the right-click menu)"));
     }
     // rebuildLegend() re-evaluates rows and applies the new visibility (it also
     // keeps the overlay hidden when there is nothing to show).
@@ -1352,11 +1418,18 @@ void PlotWidget::updateOverlayChips()
     {
         const bool is_lock =
             (m_view_model->lockAxisView() == PlotViewModel::LockAxisView::LockPercent);
-        m_view_mode_chip->setText(is_lock ? QStringLiteral("Accumulation")
-                                          : QStringLiteral("Lock %"));
+        m_view_mode_chip->setText(is_lock ? QStringLiteral("Show Accumulation")
+                                          : QStringLiteral("Show Lock %"));
         m_view_mode_chip->setToolTip(is_lock
             ? QStringLiteral("Switch the left axis to Accumulated Missed Frames")
             : QStringLiteral("Switch the left axis to Frame Sync Lock %"));
+    }
+
+    if (m_legend_toggle != nullptr)
+    {
+        m_legend_toggle->setToolTip(m_legend_visible
+            ? QStringLiteral("Hide the legend (also in the right-click menu)")
+            : QStringLiteral("Show the legend (also in the right-click menu)"));
     }
 
     // Reset chip: only meaningful once something has actually been changed away
@@ -1553,9 +1626,20 @@ void PlotWidget::onPlotMouseMove(QMouseEvent* event)
     QString best_name;
     int best_series_index = -1;
 
+    // When the readout is pinned to one series, search only that series - and skip
+    // the proximity gate below, so it always reports a value at the cursor's time
+    // rather than going blank whenever another curve happens to be closer.
+    const int pinned_index = (m_readout_series_id == kReadoutNearest)
+        ? -1 : m_view_model->indexOfSeriesId(m_readout_series_id);
+    const bool pinned = (pinned_index >= 0);
+
     const auto& all_series = m_view_model->allSeries();
     for (int i = 0; i < m_graphs.size() && i < static_cast<int>(all_series.size()); i++)
     {
+        if (pinned && i != pinned_index)
+        {
+            continue;
+        }
         if (!m_view_model->effectiveVisible(all_series[i]))
         {
             continue;
@@ -1596,9 +1680,11 @@ void PlotWidget::onPlotMouseMove(QMouseEvent* event)
         }
     }
 
-    // Only show tooltip if the nearest point is within 10 pixels
+    // Unpinned, the readout only appears when the cursor is actually near a point
+    // (10 px), so it doesn't shout values at you from across the chart. A pinned
+    // series is exempt: the user asked for that one specifically.
     const double pixel_dist = qAbs(m_plot->xAxis->coordToPixel(best_x) - event->pos().x());
-    if (pixel_dist <= 10.0 && !best_name.isEmpty() && best_series_index >= 0)
+    if ((pinned || pixel_dist <= 10.0) && !best_name.isEmpty() && best_series_index >= 0)
     {
         const PlotSeriesData::MetricType metric = all_series[best_series_index].metricType;
         QString unit;
@@ -1608,11 +1694,12 @@ void PlotWidget::onPlotMouseMove(QMouseEvent* event)
             case PlotSeriesData::MetricType::AccumulatedMissedFrames: unit = " frames"; break;
             case PlotSeriesData::MetricType::SNR:                   unit = " dB";      break;
         }
-        QString tip = QString("%1\n%2\n%3%4")
+        QString tip = QString("%1%5\n%2\n%3%4")
             .arg(best_name)
             .arg(m_view_model->formatTime(best_x))
             .arg(QString::number(best_y, 'f', 2))
-            .arg(unit);
+            .arg(unit)
+            .arg(pinned ? QStringLiteral("  (pinned)") : QString());
         QToolTip::showText(event->globalPosition().toPoint(), tip, m_plot);
     }
     else
@@ -1651,6 +1738,16 @@ void PlotWidget::resizeEvent(QResizeEvent* event)
 
 bool PlotWidget::eventFilter(QObject* watched, QEvent* event)
 {
+    // Dismiss the chart's data readout as soon as the cursor lands on a chip.
+    // That tooltip is shown with m_plot as its owning widget, and the chips live
+    // *inside* m_plot, so Qt considers it still current and won't replace it with
+    // the chip's own tooltip - leaving the chips looking like they have none.
+    if (event->type() == QEvent::Enter && m_overlay_bar != nullptr
+        && (watched == m_overlay_bar || watched->parent() == m_overlay_bar))
+    {
+        QToolTip::hideText();
+    }
+
     // Keep the legend inside the chart when the chart itself resizes.
     if (watched == m_plot && event->type() == QEvent::Resize
         && m_legend_overlay != nullptr && m_legend_overlay->isVisible())
