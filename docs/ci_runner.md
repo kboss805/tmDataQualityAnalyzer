@@ -41,6 +41,15 @@ on `main` or require approval for all outside-collaborator workflow runs.
    that runs a Qt or MSVC binary dot-sources `. .\scripts\env.ps1` — each step is a
    fresh shell, so PATH set in one step does **not** carry into the next. A step that
    skips it fails in about a second with a missing-DLL error.
+1. **`jom`, optionally** — the parallel drop-in for `nmake`, which has no `-j` and so
+   builds on a single core. `env.ps1` probes two locations,
+   `<Qt>\Tools\jom\jom.exe` and `<Qt>\Tools\QtCreator\bin\jom\jom.exe`, honours
+   `TMDQ_JOM` as an explicit override, and exports **`TMDQ_MAKE`** as either `jom` or
+   `nmake`. Every build invokes `$env:TMDQ_MAKE`, so this is purely an accelerator — a
+   box without `jom` builds identically, just slower. It is worth installing here,
+   because most of a CI run is compiling. Since the runner is a **service running as
+   NETWORK SERVICE**, `jom` must live somewhere that account can read: the `C:\Qt`
+   tree is fine, a user profile is not.
 2. **The full-size PRN recording.** `C:\actions-runner\.env` sets:
 
    ```

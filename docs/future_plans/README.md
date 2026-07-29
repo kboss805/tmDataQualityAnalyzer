@@ -39,14 +39,28 @@ Two things make the compile slower than the hardware requires:
   and it is what restores the committed `.ch10` fixtures each run — so the fix is to
   make the cold build *faster*, not to make it warm.
 
-**The work:** install `jom` on the self-hosted runner, then switch the two build steps
-to prefer it and fall back to `nmake` when it's absent (the hosted fallback runner
-won't have it). Keep the zero-warning gate working — it parses build output, so
-confirm interleaved parallel output doesn't break the pattern match, and that a
-compile error still fails the step rather than being lost in the interleaving.
+**Plumbing is DONE** (`env.ps1` exports `TMDQ_MAKE`, all four CI build sites and
+`run_release.ps1` invoke it, `nmake` fallback intact for the hosted runner). Until
+`jom` is actually installed this is a no-op and CI still uses `nmake`.
 
-Worth measuring before and after rather than assuming: `/bigobj` translation units
-like QCustomPlot's may dominate regardless of job count.
+**What's left:**
+
+1. Install `jom` on the self-hosted runner, somewhere `NETWORK SERVICE` can read —
+   `env.ps1` probes `<Qt>\Tools\jom\jom.exe` and
+   `<Qt>\Tools\QtCreator\bin\jom\jom.exe`, or set `TMDQ_JOM`. See
+   [`../ci_runner.md`](../ci_runner.md).
+2. **Confirm the zero-warning gate still holds.** It greps `build\app_build.log` for
+   `warning [A-Z]\d+`. Parallel jobs interleave output, so verify a warning is still
+   matched on its own line and that a compile error still fails the step rather than
+   being lost in the interleaving. Worth deliberately introducing a warning once to
+   prove the gate still fires.
+3. **Measure.** The box has 28 cores, but `/bigobj` translation units like
+   QCustomPlot's may dominate regardless of job count, so the real gain is unknown
+   until timed. Compare against the 195 s / 107 s baseline above.
+
+Note the gate only ever covered the **app** build — the test build's output isn't
+teed to a log — so a warning introduced in test code has never been gated. Worth
+deciding whether that's intentional while in here.
 
 ### Keyboard shortcuts for the plot
 

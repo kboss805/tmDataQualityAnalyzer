@@ -65,3 +65,28 @@ if (-not $env:TMDQ_VCVARS_DONE) {
 
 # Put the Qt msvc kit's bin ahead of everything for qmake / Qt DLLs.
 $env:PATH = "$env:QTDIR\bin;$env:PATH"
+
+# --- Parallel make (optional) ------------------------------------------------
+# nmake has no -j and builds on a single core. jom is Qt's drop-in parallel
+# replacement (same -f syntax, defaults to one job per core). Everything that builds
+# should invoke $env:TMDQ_MAKE rather than naming a tool, so a machine without jom -
+# notably the GitHub-hosted CI runner - transparently falls back to nmake instead of
+# failing. Set TMDQ_JOM to point at a jom.exe in a non-standard location.
+if (-not $env:TMDQ_JOM) {
+    $qtTools = Join-Path (Split-Path -Parent $env:QT_ROOT) 'Tools'
+    foreach ($candidate in @(
+        (Join-Path $qtTools 'jom\jom.exe'),
+        (Join-Path $qtTools 'QtCreator\bin\jom\jom.exe')
+    )) {
+        if (Test-Path $candidate) { $env:TMDQ_JOM = $candidate; break }
+    }
+}
+
+if ($env:TMDQ_JOM -and (Test-Path $env:TMDQ_JOM)) {
+    $env:PATH = "$(Split-Path -Parent $env:TMDQ_JOM);$env:PATH"
+    $env:TMDQ_MAKE = 'jom'
+} elseif (Get-Command jom -ErrorAction SilentlyContinue) {
+    $env:TMDQ_MAKE = 'jom'
+} else {
+    $env:TMDQ_MAKE = 'nmake'
+}

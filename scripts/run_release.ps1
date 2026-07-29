@@ -17,11 +17,9 @@ Write-Host "Building Release..."
 & qmake ..\tmDataQualityAnalyzer.pro -spec win32-msvc CONFIG+=release
 if ($LASTEXITCODE -ne 0) { throw "qmake failed" }
 
-if (Get-Command jom -ErrorAction SilentlyContinue) {
-    & jom -f Makefile.Release
-} else {
-    & nmake -f Makefile.Release
-}
+# env.ps1 sets TMDQ_MAKE to jom when it's available, else nmake.
+Write-Host "Building with $env:TMDQ_MAKE..."
+& $env:TMDQ_MAKE -f Makefile.Release
 if ($LASTEXITCODE -ne 0) { throw "Build failed" }
 
 Write-Host "Launching tmDataQualityAnalyzer Release..."
