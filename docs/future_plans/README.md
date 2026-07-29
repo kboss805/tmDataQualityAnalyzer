@@ -14,6 +14,40 @@ what was built is worse than no plan at all.
 
 ## Open items
 
+### Speed up CI with a parallel build (`jom`)
+
+A CI run is about **6 minutes**, and roughly **84% of it is compiling**. Measured on
+run 30381725647 (self-hosted, v2.8.0):
+
+| Step | Time |
+| --- | --- |
+| Build tests (Debug, in-source) | 195 s |
+| Build app (Debug) | 107 s |
+| Run full test suite | 36 s |
+| Checkout, toolchain, warning gate, upload | ~12 s |
+
+Two things make the compile slower than the hardware requires:
+
+- **`nmake` is serial.** It has no `-j`, so it uses one core no matter what the box
+  has. `jom` is Qt's drop-in parallel replacement — `scripts/run_release.ps1` already
+  prefers it when present (`if (Get-Command jom …)`), and `.claude/skills/build-and-test`
+  documents it for local use. `.github/workflows/ci.yml` still calls `nmake` in both
+  build steps.
+- **Every run is a cold rebuild.** `actions/checkout` defaults to `clean: true`, which
+  wipes `build/` and `tests/debug/`, so nothing is reused between runs. That is
+  deliberate — stale objects masking a failure is a worse problem than a slow build,
+  and it is what restores the committed `.ch10` fixtures each run — so the fix is to
+  make the cold build *faster*, not to make it warm.
+
+**The work:** install `jom` on the self-hosted runner, then switch the two build steps
+to prefer it and fall back to `nmake` when it's absent (the hosted fallback runner
+won't have it). Keep the zero-warning gate working — it parses build output, so
+confirm interleaved parallel output doesn't break the pattern match, and that a
+compile error still fails the step rather than being lost in the interleaving.
+
+Worth measuring before and after rather than assuming: `/bigobj` translation units
+like QCustomPlot's may dominate regardless of job count.
+
 ### Keyboard shortcuts for the plot
 
 Plot controls now live in a right-click context menu and an on-chart chip bar. The
