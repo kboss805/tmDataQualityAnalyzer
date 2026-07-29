@@ -30,6 +30,48 @@ $ErrorActionPreference = 'Stop'
 $ProjectDir = Split-Path -Parent $PSScriptRoot
 . "$ProjectDir\scripts\env.ps1"
 
+# Steps that are non-fatal on their own (signing, the Inno compile) record their
+# failure here instead of aborting, so the run still produces whatever it can. The
+# summary reports them and the script exits non-zero - previously these printed a
+# warning that scrolled past and the script exited 0, announcing a "complete" build
+# that had shipped an unsigned exe and no installer at all.
+$Failures = New-Object System.Collections.Generic.List[string]
+
+# Artifacts are named by version, so a re-run of the same version finds the previous
+# run's files already in place. Anything not written after this moment was left behind
+# by an earlier run and must not be credited to this one - without this check a failed
+# Inno compile still "produced" a signed installer, because last week's was still there.
+$RunStart = Get-Date
+
+# Verifies an artifact was actually produced and, when signing was requested, that it
+# actually carries a valid signature. Signing happens BEFORE the ZIP and the installer
+# compile, so a failed signature silently propagates into everything downstream.
+function Test-Artifact {
+    param(
+        [string]$Path,
+        [string]$Label,
+        [switch]$RequireSignature
+    )
+    if (-not (Test-Path $Path)) {
+        $script:Failures.Add("$Label was not produced ($Path)")
+        return $false
+    }
+    $written = (Get-Item $Path).LastWriteTime
+    if ($written -lt $script:RunStart) {
+        $script:Failures.Add("$Label is STALE - left over from an earlier run at $written, not produced by this one ($Path)")
+        return $false
+    }
+    if (-not $RequireSignature) { return $true }
+
+    $sig = Get-AuthenticodeSignature $Path
+    if ($sig.Status -ne 'Valid') {
+        $script:Failures.Add("$Label is NOT signed (status: $($sig.Status)) - $Path")
+        return $false
+    }
+    Write-Host "  Verified signature: $Label"
+    return $true
+}
+
 # --- Extract version from constants.h (single source of truth) ---
 $constants = Get-Content "$ProjectDir\include\constants.h" -Raw
 $major   = [regex]::Match($constants, 'kMajor\s*=\s*(\d+)').Groups[1].Value
@@ -117,15 +159,32 @@ foreach ($dir in @('receiver_params', 'rcvr_cals', 'framesync_patterns')) {
 Write-Host "[5/8] Code signing..."
 if ($SignCertSha1) {
     & $SigntoolExe sign /sha1 $SignCertSha1 /tr $SignTimestamp /td sha256 /fd sha256 "$InstallerStage\bin\tmDataQualityAnalyzer.exe"
-    if ($LASTEXITCODE -ne 0) { Write-Warning "Code signing failed - continuing without signature" }
+    if ($LASTEXITCODE -ne 0) {
+        # The usual cause is a token-backed certificate whose token is locked: the
+        # cert still shows up in CurrentUser\My with HasPrivateKey = True, so its
+        # presence proves nothing. signtool reports either "No certificates were
+        # found that met all the given criteria" or simply hangs waiting on the PIN.
+        Write-Warning "Code signing FAILED - the app exe is unsigned"
+        Write-Warning "  If this cert is token-backed (SimplySign), log in to the token and re-run."
+        $Failures.Add("Code signing failed for the app exe")
+    }
+    # Verify rather than trust signtool's exit code - this exe is the source for both
+    # the portable layout and the installer payload, so an unsigned one contaminates
+    # every artifact downstream.
+    Test-Artifact "$InstallerStage\bin\tmDataQualityAnalyzer.exe" 'app exe (installer payload)' -RequireSignature | Out-Null
 } else {
-    Write-Host "  Skipping - pass -SignCertSha1 to enable signing."
+    Write-Host "  Skipping - built UNSIGNED (-SignCertSha1 '')."
 }
 
 # --- Step 5: Create portable layout ---
 Write-Host "[6/8] Creating portable layout..."
+# Copied from the (signed) installer payload, so it inherits that signature - which is
+# exactly why an unsigned payload silently becomes an unsigned portable build.
 Copy-Item "$InstallerStage\bin\tmDataQualityAnalyzer.exe" "$PortableRoot\"
 Get-ChildItem "$InstallerStage\bin\*.dll" | Copy-Item -Destination "$PortableRoot\"
+if ($SignCertSha1) {
+    Test-Artifact "$PortableRoot\tmDataQualityAnalyzer.exe" 'app exe (portable layout)' -RequireSignature | Out-Null
+}
 
 foreach ($dir in @('platforms', 'styles', 'imageformats', 'tls', 'networkinformation')) {
     $src = "$InstallerStage\bin\$dir"
@@ -185,20 +244,73 @@ if ($IsccPath) {
     }
     $isccArgs += "$ProjectDir\deploy\tmDataQualityAnalyzer.iss"
     & $IsccPath @isccArgs
-    if ($LASTEXITCODE -ne 0) { Write-Warning "Inno Setup compilation or installer signing failed" }
+    if ($LASTEXITCODE -ne 0) {
+        # iscc aborts the whole compile when its SignTool step fails, so this usually
+        # means NO installer was produced at all - not merely an unsigned one.
+        Write-Warning "Inno Setup compilation or installer signing FAILED"
+        $Failures.Add("Inno Setup compile/signing failed")
+    }
 } else {
     Write-Host "  Skipping - Inno Setup not found. Install from https://jrsoftware.org/isinfo.php"
+    $Failures.Add("Inno Setup not found - no installer was produced (install Inno Setup 6)")
 }
+$isccFound = [bool]$IsccPath
 
 $InstallerExe = "$ProjectDir\deploy\tmDataQualityAnalyzer-v${version}_setup.exe"
 
+# --- Step 8: Verify what was actually produced -------------------------------
+# Report only artifacts that exist, and only call them signed once verified. The
+# summary used to print both paths unconditionally, so a run in which signing failed
+# and iscc aborted still announced an installer that was never written.
+Write-Host ""
+Write-Host "Verifying artifacts..."
+$zipOk = Test-Artifact $ZipPath 'portable ZIP'
+# When iscc was missing that is already recorded; re-checking would report the same
+# missing installer twice.
+$installerOk = if ($isccFound) {
+    Test-Artifact $InstallerExe 'installer EXE' -RequireSignature:([bool]$SignCertSha1)
+} else {
+    $false
+}
+
+function Format-Artifact {
+    param([bool]$Ok, [string]$Path)
+    if (-not $Ok) { return 'NOT PRODUCED' }
+    $mb = [math]::Round((Get-Item $Path).Length / 1MB, 1)
+    return "$Path  (${mb} MB)"
+}
+
+$signState = if (-not $SignCertSha1)      { 'UNSIGNED (requested)' }
+             elseif ($Failures.Count -eq 0) { 'signed and verified' }
+             else                           { 'SEE FAILURES BELOW' }
+
 Write-Host ""
 Write-Host "============================================"
-Write-Host " Build and packaging complete!"
+if ($Failures.Count -eq 0) {
+    Write-Host " Build and packaging complete!"
+} else {
+    Write-Host " BUILD INCOMPLETE - $($Failures.Count) step(s) failed"
+}
 Write-Host "============================================"
 Write-Host ""
+Write-Host " Version:           $version"
+Write-Host " Signing:           $signState"
 Write-Host " Installer staging: $InstallerStage"
 Write-Host " Portable staging:  $PortableRoot"
-Write-Host " Portable ZIP:      $ZipPath"
-Write-Host " Installer EXE:     $InstallerExe"
+Write-Host " Portable ZIP:      $(Format-Artifact $zipOk $ZipPath)"
+Write-Host " Installer EXE:     $(Format-Artifact $installerOk $InstallerExe)"
+
+if ($Failures.Count -gt 0) {
+    Write-Host ""
+    Write-Host " FAILURES:"
+    foreach ($f in $Failures) { Write-Host "   - $f" }
+    Write-Host ""
+    Write-Host " Do NOT ship these artifacts. A failed signing step still leaves a"
+    Write-Host " portable ZIP behind - containing an UNSIGNED exe - so the ZIP existing"
+    Write-Host " is not evidence the release is good."
+    Write-Host "============================================"
+    exit 1
+}
+
 Write-Host "============================================"
+exit 0
