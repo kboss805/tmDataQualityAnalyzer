@@ -126,7 +126,12 @@ jobs:
           New-Item -ItemType Directory -Force -Path build | Out-Null
           Set-Location build
           qmake ..\tmDataQualityAnalyzer.pro -spec win32-msvc 'CONFIG+=debug'
-          nmake -f Makefile.Debug 2>&1 | Tee-Object -FilePath app_build.log
+          # jom is nmake's parallel drop-in (same -f syntax, one job per core).
+          # env.ps1 selects it on the self-hosted runner; the hosted runner has no
+          # jom, so fall back to nmake there rather than failing the job.
+          $make = if ($env:TMDQ_MAKE) { $env:TMDQ_MAKE } elseif (Get-Command jom -ErrorAction SilentlyContinue) { 'jom' } else { 'nmake' }
+          Write-Host "Building with $make"
+          & $make -f Makefile.Debug 2>&1 | Tee-Object -FilePath app_build.log
           if ($LASTEXITCODE -ne 0) { throw "App build failed ($LASTEXITCODE)" }
 
       - name: Zero-warning gate
@@ -151,7 +156,9 @@ jobs:
           . .\scripts\env.ps1
           Set-Location tests
           qmake tests.pro -spec win32-msvc 'CONFIG+=debug'
-          nmake -f Makefile.Debug
+          $make = if ($env:TMDQ_MAKE) { $env:TMDQ_MAKE } elseif (Get-Command jom -ErrorAction SilentlyContinue) { 'jom' } else { 'nmake' }
+          Write-Host "Building with $make"
+          & $make -f Makefile.Debug
           if ($LASTEXITCODE -ne 0) { throw "Test build failed ($LASTEXITCODE)" }
 
       - name: Run full test suite
@@ -240,7 +247,12 @@ jobs:
           New-Item -ItemType Directory -Force -Path build | Out-Null
           Set-Location build
           qmake ..\tmDataQualityAnalyzer.pro -spec win32-msvc 'CONFIG+=debug'
-          nmake -f Makefile.Debug 2>&1 | Tee-Object -FilePath app_build.log
+          # jom is nmake's parallel drop-in (same -f syntax, one job per core).
+          # env.ps1 selects it on the self-hosted runner; the hosted runner has no
+          # jom, so fall back to nmake there rather than failing the job.
+          $make = if ($env:TMDQ_MAKE) { $env:TMDQ_MAKE } elseif (Get-Command jom -ErrorAction SilentlyContinue) { 'jom' } else { 'nmake' }
+          Write-Host "Building with $make"
+          & $make -f Makefile.Debug 2>&1 | Tee-Object -FilePath app_build.log
           if ($LASTEXITCODE -ne 0) { throw "App build failed ($LASTEXITCODE)" }
 
       - name: Zero-warning gate
@@ -264,7 +276,9 @@ jobs:
           $ErrorActionPreference = 'Continue'
           Set-Location tests
           qmake tests.pro -spec win32-msvc 'CONFIG+=debug'
-          nmake -f Makefile.Debug
+          $make = if ($env:TMDQ_MAKE) { $env:TMDQ_MAKE } elseif (Get-Command jom -ErrorAction SilentlyContinue) { 'jom' } else { 'nmake' }
+          Write-Host "Building with $make"
+          & $make -f Makefile.Debug
           if ($LASTEXITCODE -ne 0) { throw "Test build failed ($LASTEXITCODE)" }
 
       - name: Run test suite
