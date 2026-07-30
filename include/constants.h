@@ -282,6 +282,8 @@ namespace PlotConstants {
     inline constexpr int    kCrosshairAlpha      = 140;  ///< Alpha of the cursor-following crosshair line (0-255).
     inline constexpr int    kZoomBandAlpha       = 45;   ///< Alpha of the drag-to-zoom rubber band fill (0-255).
     inline constexpr double kMinBandZoomSpanSec  = 1e-6; ///< Ignore band-zoom drags narrower than this (a click, not a drag).
+    inline constexpr double kKeyPanFraction      = 0.10; ///< Left/Right arrow slides the X window by this fraction of the visible span.
+    inline constexpr double kKeyZoomFactor       = 0.80; ///< '+' scales the X window by this ('-' by its reciprocal).
     /// @}
 
     /// @brief Primary colors for SNR receiver series (red, orange, yellow), one per receiver.

@@ -45,6 +45,9 @@ private slots:
     void doubleClickResetsSpanViaViewModel();
     void readoutMenuListsVisibleSeriesAndPins();
     void readoutPinDropsWhenSeriesGoesAway();
+    void keyboardShortcutsDriveTheView();
+    void keyboardShortcutsIgnoredWithoutData();
+    void keyboardShortcutsAreWidgetScopedNotApplicationWide();
 };
 
 #endif // TST_PLOTWIDGET_H

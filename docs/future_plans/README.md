@@ -14,30 +14,6 @@ what was built is worse than no plan at all.
 
 ## Open items
 
-### Keyboard shortcuts for the plot
-
-Plot controls now live in a right-click context menu and an on-chart chip bar. The
-frequent actions — toggle legend, reset the view, cycle view mode, step the time
-window — have no keyboard path, which is the natural next reduction in clicks for an
-analyst working through a long recording. Needs a shortcut map that doesn't collide
-with the main window's, and a decision on whether shortcuts are global or active only
-while the plot has focus.
-
-Tracked as a placeholder criterion in **US4.1** (`docs/CLAUDE.md`), marked *undecided,
-may be dropped* — a context menu plus chips may already be enough.
-
-### Time-axis slider
-
-A horizontal scrub/range control under the plot for moving the time window through a
-long recording, as an alternative to the context menu's numeric time-window entry and
-to wheel-zoom.
-
-Deliberately **not** built during the plot simplification: the point of that work was
-removing external chrome, so re-adding a persistent control below the chart needs a
-real argument that scrubbing beats the gestures already there (wheel zoom, drag pan,
-Ctrl+drag band zoom, double-click reset). Revisit once the context-menu workflow has
-some mileage.
-
 ### Replace QCustomPlot with a first-party plotting implementation
 
 QCustomPlot (`lib/qcustomplot/`, ~1.6 MB vendored) is third-party and protected — it
@@ -83,6 +59,7 @@ documentation lives.
 | Move CI to a self-hosted runner | PR #41, #42 | [`docs/ci_runner.md`](../ci_runner.md), `.github/workflows/ci.yml` |
 | Ship sample `.ch10` files for CI | PR #41 | as above — self-hosting delivered it; small fixtures are committed, the full-size recording lives on the runner |
 | Upgrade to Qt 6.11.1 | PR #53 | `scripts/env.ps1` + `.github/workflows/ci.yml` (`QT_VERSION`). Clean: 0 warnings, 341/0/1. NOTE the shipped v2.8.0 binaries were built on 6.10.3, so the next release needs a NEW version number - do not repackage 2.8.0 |
+| Keyboard shortcuts for the plot | PR #54 | `docs/CLAUDE.md` (US4.1), `resources/usermanual.html` section 8. Widget-scoped in `PlotWidget::keyPressEvent`, not application-wide |
 | Gate warnings in test code too | PR #50 | `.github/workflows/ci.yml` - one gate over both build logs |
 | MSVC-flavored clangd config | PR #40 (found already done) | `docs/CLAUDE.md` -> clangd / IntelliSense; `scripts/gen_compile_flags.py`. Verified with `clangd --check` across QCustomPlot / Win32 / irig106 / test TUs: 0 errors |
 | Speed up CI with a parallel build (`jom`) | PR #48 | `scripts/env.ps1` (`TMDQ_MAKE`), [`../ci_runner.md`](../ci_runner.md) - CI run 286s -> 93s |

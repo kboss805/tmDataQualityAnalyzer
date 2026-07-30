@@ -209,11 +209,15 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The log/console occupies a left sidebar that the user can toggle on and off, and which is open by default.
 - [x] Each on-chart chip is labelled and carries a tooltip naming the action it performs, so no control on the chart is an unexplained glyph.
 - [x] The crosshair readout can be pinned to a chosen series (context menu > **Readout**) instead of always following whichever curve is nearest the cursor.
+- [x] The most-used view actions have single-key shortcuts while the chart has focus - arrows step the time window, `+`/`-` zoom, `Home` restores the full span, `R` resets both axes, `V` switches metric, `L` toggles the legend - and the context menu advertises each key so they are discoverable rather than hidden.
 
-  - **Deferred:** keyboard shortcuts for the most-used context-menu actions remain
-    **undecided** and may be dropped — a context menu plus the chip bar may already
-    be enough. Tracked in `docs/future_plans/README.md`, not as an open criterion
-    here. Any *further* plot control that gets identified goes to the context menu
+  - **Delivered:** keyboard shortcuts now exist (criterion above). They live in
+    `PlotWidget::keyPressEvent` and are deliberately **widget-scoped**, not
+    application-wide: a bare-letter application shortcut is dispatched ahead of the
+    focus widget, so it would swallow that character everywhere the user types (the
+    plot-title dialog, the time-window fields, any config dialog). A click on the
+    chart focuses it, which is what makes them reachable.
+    Any *further* plot control that gets identified goes to the context menu
     or an on-chart overlay, never back to an external widget; that's the standing
     rule this story sets, and `TestPlotWidget` enforces it (no QComboBox /
     QSpinBox / QLineEdit / QAbstractButton may live outside the chart).
@@ -498,7 +502,7 @@ The stories below follow the workflow a first-time user takes through the applic
   fail-fast (`0xC0000409`) and truncate the whole run's results rather than fail
   one test. `runAndTime`/`probeChannel` now cancel and drain before returning, and
   the benchmark itself no longer runs unless asked for. Green baseline is
-  **341 passed / 0 failed / 1 skipped** (the skip is that benchmark).
+  **344 passed / 0 failed / 1 skipped** (the skip is that benchmark).
 
 ### v2.7.0 — Processing Templates & Batch Apply, Hamburger Menu, Frameless Title Bar, User Manual
 
