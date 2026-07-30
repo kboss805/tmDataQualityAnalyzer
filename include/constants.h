@@ -217,7 +217,7 @@ namespace CalibrationConstants {
 /// @brief Constants for the AGC signal plot window.
 namespace PlotConstants {
     inline constexpr int kPlotDockMinWidth    = 1024;  ///< Minimum plot dock width in pixels.
-    inline constexpr int kPlotMinChartHeight = 250;   ///< Minimum height for the chart area (QCustomPlot) within the plot widget.
+    inline constexpr int kPlotMinChartHeight = 250;   ///< Minimum height for the chart area within the plot widget.
     inline constexpr double kAxisMarginFactor = 0.05; ///< Y-axis padding as fraction of data range.
     inline constexpr double kMinAxisSpan      = 1.0;  ///< Minimum span enforced so a user max override can't invert/collapse an axis.
     inline constexpr const char* kXAxisLabel        = "Time (DDD:HH:MM:SS)"; ///< X axis label.

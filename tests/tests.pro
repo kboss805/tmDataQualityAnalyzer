@@ -11,20 +11,16 @@ INCLUDEPATH += \
     $$PWD/../include/model \
     $$PWD/../include/viewmodel \
     $$PWD/../include/view \
-    $$PWD/../lib/irig106/include \
-    $$PWD/../lib/qcustomplot
+    $$PWD/../lib/irig106/include
 
 win32 {
     LIBS += -lws2_32
     # user32: TestMainView links mainview.cpp, whose nativeEvent() calls Win32
     # user32 APIs (see the app .pro).
     LIBS += -luser32
-    # /bigobj: QCustomPlot's large translation unit overflows the default section
-    # limit without it. Kept in sync with tmDataQualityAnalyzer.pro.
-    QMAKE_CXXFLAGS += /bigobj
 }
 
-# Compile the vendored third-party libs (lib/irig106, lib/qcustomplot) without the
+# Compile the vendored third-party lib (lib/irig106) without the
 # app's -Wall -Wextra so their pre-existing warnings don't bury real app warnings.
 include($$PWD/../thirdparty.pri)
 
@@ -53,8 +49,7 @@ SOURCES += \
     $$PWD/../src/view/plotcustomizationdialog.cpp \
     $$PWD/../src/view/exportdialog.cpp \
     $$PWD/../src/view/batchapplydialog.cpp \
-    $$PWD/../src/view/processingprogressdialog.cpp \
-    $$PWD/../lib/qcustomplot/qcustomplot.cpp
+    $$PWD/../src/view/processingprogressdialog.cpp
 
 # Application headers, grouped by layer.
 HEADERS += \
@@ -93,8 +88,7 @@ HEADERS += \
     $$PWD/../include/view/plotcustomizationdialog.h \
     $$PWD/../include/view/exportdialog.h \
     $$PWD/../include/view/batchapplydialog.h \
-    $$PWD/../include/view/processingprogressdialog.h \
-    $$PWD/../lib/qcustomplot/qcustomplot.h
+    $$PWD/../include/view/processingprogressdialog.h
 
 # irig106 library sources
 SOURCES += \

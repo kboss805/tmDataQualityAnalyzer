@@ -45,8 +45,7 @@ INCLUDEPATH += \
     $$PWD/include/model/ \
     $$PWD/include/viewmodel/ \
     $$PWD/include/view/ \
-    $$PWD/lib/irig106/include/ \
-    $$PWD/lib/qcustomplot/
+    $$PWD/lib/irig106/include/
 
 # You can make your code fail to compile if it uses deprecated APIs.
 # In order to do so, uncomment the following line.
@@ -57,12 +56,9 @@ win32 {
     # user32: MainView::nativeEvent (frameless window) calls GetWindowRect /
     # ScreenToClient / IsZoomed / GetSystemMetrics, which live in user32.lib.
     LIBS += -luser32
-    # /bigobj: QCustomPlot compiles to one very large translation unit that overflows
-    # the default object-file section limit (fatal error C1128) without it.
-    QMAKE_CXXFLAGS += /bigobj
 }
 
-# Compile the vendored third-party libs (lib/irig106, lib/qcustomplot) without the
+# Compile the vendored third-party lib (lib/irig106) without the
 # app's -Wall -Wextra so their pre-existing warnings don't bury real app warnings.
 include($$PWD/thirdparty.pri)
 
@@ -117,7 +113,6 @@ SOURCES += \
     lib/irig106/src/i106_decode_tmats_c.c \
     lib/irig106/src/i106_decode_tmats_d.c \
     lib/irig106/src/i106_decode_pcmf1.c \
-    lib/qcustomplot/qcustomplot.cpp
 
 # Application headers, grouped by MVVM layer.
 # Shared / cross-cutting
@@ -189,7 +184,6 @@ HEADERS += \
     lib/irig106/include/i106_decode_tmats_d.h \
     lib/irig106/include/i106_decode_tmats_common.h \
     lib/irig106/include/i106_decode_pcmf1.h \
-    lib/qcustomplot/qcustomplot.h
 
 RESOURCES += \
     resources/win11-dark.qss \

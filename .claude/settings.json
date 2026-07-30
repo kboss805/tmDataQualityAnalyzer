@@ -2,9 +2,7 @@
   "permissions": {
     "deny": [
       "Edit(lib/irig106/**)",
-      "Edit(lib/qcustomplot/**)",
-      "Write(lib/irig106/**)",
-      "Write(lib/qcustomplot/**)"
+      "Write(lib/irig106/**)"
     ],
     "allow": [
       "Bash(qmake:*)",

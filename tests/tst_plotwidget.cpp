@@ -28,7 +28,7 @@
 
 void TestPlotWidget::constructsWithoutCrash()
 {
-    // Construction exercises QCustomPlot setup, axis ticker registration,
+    // Construction exercises chart setup, time-formatter registration,
     // legend panel, toolbar spinboxes, and signal connections.
     PlotWidget* widget = new PlotWidget();
     QVERIFY(widget != nullptr);

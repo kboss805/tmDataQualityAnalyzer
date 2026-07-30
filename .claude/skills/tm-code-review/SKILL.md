@@ -32,7 +32,7 @@ bugs hide and where a generic reviewer is blind.
 
 ## Protected files — a hard stop
 
-`lib/irig106/**` and `lib/qcustomplot/**` are third-party and MUST NOT be modified. If the diff
+`lib/irig106/**` is third-party and MUST NOT be modified. If the diff
 touches them, that is a Critical finding on its own: the fix belongs in the wrapping app code
 (`chapter10reader.cpp`, `ch10packetreader.cpp`, `frameprocessor.cpp`, `plotwidget.cpp`). Flag it and
 stop endorsing the change until it moves.

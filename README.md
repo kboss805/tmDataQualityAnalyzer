@@ -170,7 +170,8 @@ tmDataQualityAnalyzer/
 │   │   └── streamconfigschema.h · processingtemplateschema.h · templatematcher.h  # Templates (US1.1)
 │   ├── view/                  # Qt widgets and dialogs
 │   │   ├── mainview.h          # Main window: hamburger menu + frameless title bar + log sidebar
-│   │   ├── plotwidget.h        # QCustomPlot chart + on-plot legend + right-click context menu
+│   │   ├── plotwidget.h        # chart host + on-plot legend + right-click context menu
+│   │   ├── tmchart.h           # first-party 2D line chart (axes, series, gestures, export)
 │   │   ├── streamconfigdialog.h · streamsubdialogs.h · plotcustomizationdialog.h
 │   │   └── exportdialog.h · batchapplydialog.h · processingprogressdialog.h
 │   ├── viewmodel/             # Application logic bound to the views
@@ -180,7 +181,6 @@ tmDataQualityAnalyzer/
 ├── lib/irig106/                # Third-party IRIG 106 library — do NOT edit (adapt in app code)
 │   ├── src/                   # irig106utils C source files
 │   └── include/               # irig106utils C header files
-├── lib/qcustomplot/            # Third-party QCustomPlot 2.1.1 charting library — do NOT edit
 ├── tests/                      # Qt Test framework unit tests (19 suites)
 ├── settings/                   # Default and user TOML settings files
 ├── resources/                  # Stylesheets, icons, embedded manual, Windows .rc
@@ -202,7 +202,7 @@ tmDataQualityAnalyzer/
 
 ## Credits
 
-This project incorporates code from the [irig106utils](https://github.com/atac/irig106utils) library for IRIG 106 Chapter 10 file handling and [QCustomPlot](https://www.qcustomplot.com/) 2.1.1 for interactive charting.
+This project incorporates code from the [irig106utils](https://github.com/atac/irig106utils) library for IRIG 106 Chapter 10 file handling. Charting is first-party (`TmChart`); the previously vendored QCustomPlot library has been removed.
 
 ## License
 

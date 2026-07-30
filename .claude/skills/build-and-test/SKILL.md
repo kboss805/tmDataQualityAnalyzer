@@ -114,12 +114,11 @@ does not honor a `ClassName::testCase` single-suite filter.
   rebuild in-source in `tests/`.
 - **MOC / "unresolved external symbol ... vtable/metaObject"** → a `Q_OBJECT` class changed; re-run
   `qmake` then rebuild.
-- **`/bigobj`** → QCustomPlot's TU needs the large-object switch; it's already in the `.pro`/`tests.pro`.
 
 ## Guardrails
 
-- Never edit files under `lib/irig106/` or `lib/qcustomplot/` to make a build pass — they are
-  third-party and protected. Adapt in application code instead.
+- Never edit files under `lib/irig106/` to make a build pass — it is third-party and protected.
+  Adapt in application code instead.
 - The generated `version_autogen.h`, `Makefile*`, and `build/` artifacts are not authored by hand.
 - Report build/test outcomes faithfully: if a suite fails, show the failing assertion from
   `tests\output\results.txt`; if you trimmed `main.cpp` to iterate, say so and confirm you restored it.
