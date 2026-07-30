@@ -2,7 +2,6 @@
 # Edit-protection is enforced by the deny rules in .claude/settings.json; the library
 # HEADERS are intentionally left readable so wrapper code can reference their APIs.
 lib/irig106/src/*.c
-lib/qcustomplot/qcustomplot.cpp
 
 # Build artifacts and generated files
 build/

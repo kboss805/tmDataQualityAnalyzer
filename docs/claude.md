@@ -434,7 +434,7 @@ The stories below follow the workflow a first-time user takes through the applic
   plain left-drag stays panning, so neither could be reused); **double-click**
   restores the full span; a dashed **crosshair** follows the cursor so several
   series can be read at the same instant. The crosshair and rubber band are
-  QCustomPlot items, not widgets, so they add no chrome and are absent from exports.
+  painted by the chart itself rather than widgets, so they add no chrome and are absent from exports.
 - New: **grab-cursor panning** - the chart shows an open hand once data is loaded
   and a closed hand while the left button is held, so the drag-to-pan gesture is
   discoverable now that no toolbar hints at it. Shown regardless of zoom level;
@@ -792,7 +792,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - **Framework**: Qt
 - **Build System**: qmake
 - **Platform**: Windows (primary target)
-- **External Libraries**: irig106utils (embedded C library), QCustomPlot (embedded charting library, `lib/qcustomplot/`)
+- **External Libraries**: irig106utils (embedded C library). Charting is first-party (`TmChart`, `src/view/tmchart.cpp`) - the vendored QCustomPlot was removed once it was replaced.
 
 ## ⚠️ CRITICAL: Protected Files — DO NOT MODIFY
 
@@ -802,18 +802,16 @@ The following files are third-party library code and **MUST NOT be modified** un
 
 - `lib/irig106/src/irig106*.c` - All IRIG 106 C source files
 - `lib/irig106/src/i106_*.c` - All i106 prefixed C source files
-- `lib/qcustomplot/qcustomplot.cpp` - QCustomPlot charting library
 
 ### Protected Header Files
 
 - `lib/irig106/include/irig106*.h` - All IRIG 106 header files
 - `lib/irig106/include/i106_*.h` - All i106 prefixed header files
 - `lib/irig106/include/config.h` - IRIG 106 configuration
-- `lib/qcustomplot/qcustomplot.h` - QCustomPlot charting library header
 
-**File Patterns to Exclude**: Any file containing `i106` or `irig106` in its name; any file in `lib/qcustomplot/`
+**File Patterns to Exclude**: Any file containing `i106` or `irig106` in its name
 
-**Reason**: These files are from external libraries ([irig106utils](https://github.com/atac/irig106utils), [QCustomPlot](https://www.qcustomplot.com/)) and are maintained separately. Modifications would:
+**Reason**: These files are from an external library ([irig106utils](https://github.com/atac/irig106utils)) and are maintained separately. Modifications would:
 
 - Break compatibility with the upstream library
 - Make future updates difficult
@@ -903,7 +901,7 @@ not mis-read.
    - Unified export dialog: any combination of CSV data, a plot image (PNG/SVG/PDF), and the log text, each with its own filename/location; checkbox-to-field enable logic and export-button validation
 
 5. **PlotWidget** (`src/view/plotwidget.cpp`, `include/view/plotwidget.h`)
-   - Self-contained QCustomPlot chart filling the whole widget - no external control rows; every control (Plot File, View Mode, Customize View, plot title, X/Y axis ranges, Export) lives in the right-click context menu built by `buildContextMenu()`/`showPlotContextMenu()` - plus a movable legend overlay (a translucent, draggable frame parented to the chart; single-column line-swatch + label rows with a vertical scrollbar for dense plots; composited into PNG/SVG exports)
+   - Self-contained `TmChart` chart filling the whole widget - no external control rows; every control (Plot File, View Mode, Customize View, plot title, X/Y axis ranges, Export) lives in the right-click context menu built by `buildContextMenu()`/`showPlotContextMenu()` - plus a movable legend overlay (a translucent, draggable frame parented to the chart; single-column line-swatch + label rows with a vertical scrollbar for dense plots; composited into PNG/SVG exports)
    - Mouse wheel zoom and click-drag pan; `onSeriesVisibilityToggled()` toggles a graph without a full rebuild
    - All replots use `rpQueuedReplot`; controls disabled until data loads; `applyTheme(bool dark)` syncs colors with the app theme
 
@@ -983,7 +981,7 @@ User opens .ch10 ─► MainView ─► MainViewModel ─► Chapter10Reader (me
                                               │
                                    ProcessedStreamData (in memory, carries sourceId)
                                               │
-                                   PlotViewModel ─► PlotWidget (QCustomPlot)
+                                   PlotViewModel ─► PlotWidget (TmChart)
                           [re-bases shared elapsed axis to the earliest
                            sample across all loaded sources; identity
                            checks key on (sourceId, streamLabel, order)]

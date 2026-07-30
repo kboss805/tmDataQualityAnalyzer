@@ -49,7 +49,6 @@ PROJECT_INCLUDES = [
     "include/viewmodel",
     "include/view",
     "lib/irig106/include",
-    "lib/qcustomplot",
 ]
 
 # Qt modules the project links (QT += ... in the .pro, plus testlib for tests/).

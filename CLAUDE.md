@@ -43,7 +43,7 @@ Invoke explicitly (`/build-and-test`) or let them trigger by intent.
 
 ## Hard rules
 
-- **Never edit** `lib/irig106/**` or `lib/qcustomplot/**` (third-party; deny-listed in
+- **Never edit** `lib/irig106/**` (third-party; deny-listed in
   `.claude/settings.json`). Adapt in app code (`ch10packetreader.cpp`, `frameprocessor.cpp`,
   `plotwidget.cpp`, …) instead.
 - **Version is single-sourced** in `AppVersion` (`include/constants.h`); never hand-edit

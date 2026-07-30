@@ -19,7 +19,9 @@
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QMenu>
+#include <QPageSize>
 #include <QPainter>
+#include <QPdfWriter>
 #include <QScrollArea>
 #include <QStyle>
 #include <QToolTip>
@@ -30,7 +32,6 @@
 #include <QRegularExpression>
 #include <QTextStream>
 
-#include "qcustomplot.h"
 
 #include "constants.h"
 #include "plotviewmodel.h"
@@ -825,9 +826,8 @@ bool PlotWidget::exportImage(const QString& path)
         {
             filename += ".pdf";
         }
-        // Previously QCustomPlot::savePdf(), which was a third rendering path and
-        // silently dropped the legend - PDF exports lost it while PNG and SVG kept
-        // it. Now the same renderTo() as the other two, so all three agree.
+        // The same renderTo() as PNG and SVG, so all three agree. The previous
+        // PDF path rendered only the chart and silently dropped the legend.
         QPdfWriter writer(filename);
         writer.setPageSize(QPageSize(m_plot->size(), QPageSize::Point));
         writer.setPageMargins(QMarginsF(0, 0, 0, 0));
@@ -1787,7 +1787,7 @@ bool PlotWidget::eventFilter(QObject* watched, QEvent* event)
         {
             positionLegendTopRight();
         }
-        return false; // let QCustomPlot handle its own resize too
+        return false; // let the chart handle its own resize too
     }
 
     // Drag the legend: content rows are click-through, so presses arrive on the
