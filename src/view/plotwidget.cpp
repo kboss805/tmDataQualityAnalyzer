@@ -1,6 +1,6 @@
 /**
  * @file plotwidget.cpp
- * @brief Implementation of PlotWidget — QCustomPlot chart with controls.
+ * @brief Implementation of PlotWidget - TmChart chart with controls.
  */
 
 #include "plotwidget.h"
@@ -68,43 +68,6 @@ namespace {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// TimeHackTicker
-////////////////////////////////////////////////////////////////////////////////
-
-QString TimeHackTicker::getTickLabel(double tick, const QLocale& /*locale*/,
-                                     QChar /*formatChar*/, int /*precision*/)
-{
-    if (m_vm != nullptr)
-    {
-        return m_vm->formatTime(tick);
-    }
-    return QString::number(tick, 'f', 1);
-}
-
-double TimeHackTicker::getTickStep(const QCPRange& range)
-{
-    const int count = qMax(mTickCount, 2);
-    return range.size() / (count - 1);
-}
-
-int TimeHackTicker::getSubTickCount(double /*tickStep*/)
-{
-    return 0;
-}
-
-QVector<double> TimeHackTicker::createTickVector(double tickStep, const QCPRange& range)
-{
-    const int count = qMax(mTickCount, 2);
-    QVector<double> ticks;
-    ticks.reserve(count);
-    for (int i = 0; i < count; i++)
-    {
-        ticks.append(range.lower + i * tickStep);
-    }
-    return ticks;
-}
-
-////////////////////////////////////////////////////////////////////////////////
 // PlotWidget
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -128,11 +91,11 @@ void PlotWidget::setViewModel(PlotViewModel* vm)
         return;
     }
 
-    // Configure custom time ticker for X axis
-    QSharedPointer<TimeHackTicker> ticker(new TimeHackTicker);
-    ticker->setViewModel(vm);
-    ticker->setTickCount(PlotConstants::kTickCount);
-    m_plot->xAxis->setTicker(ticker);
+    // X tick labels are elapsed file time (DDD:HH:MM:SS), which only the ViewModel
+    // can format. Previously an QCPAxisTicker subclass existed solely to override
+    // three virtuals for this; a formatter callback replaces the whole class.
+    m_plot->setTimeFormatter([vm](double value) { return vm->formatTime(value); });
+    m_plot->setXTickCount(PlotConstants::kTickCount);
 
     connect(vm, &PlotViewModel::dataChanged,  this, &PlotWidget::onDataChanged);
     connect(vm, &PlotViewModel::dataChanged,  this, [this]() { showLoadingIndicator(false); });
@@ -159,41 +122,15 @@ void PlotWidget::applyTheme(bool dark)
     QColor grid = dark ? PlotConstants::kDarkGridColor : PlotConstants::kLightGridColor;
     m_title_color = dark ? QColor("#60CDFF") : QColor("#005FB8");
 
-    m_plot->setBackground(QBrush(bg));
-    m_plot->xAxis->setBasePen(QPen(fg));
-    m_plot->yAxis->setBasePen(QPen(fg));
-    m_plot->xAxis->setTickPen(QPen(fg));
-    m_plot->yAxis->setTickPen(QPen(fg));
-    m_plot->xAxis->setSubTickPen(QPen(fg));
-    m_plot->yAxis->setSubTickPen(QPen(fg));
-    m_plot->xAxis->setTickLabelColor(fg);
-    m_plot->yAxis->setTickLabelColor(fg);
-    m_plot->xAxis->setLabelColor(fg);
-    m_plot->yAxis->setLabelColor(fg);
-    m_plot->xAxis->grid()->setPen(QPen(grid, 0, Qt::DotLine));
-    m_plot->yAxis->grid()->setPen(QPen(grid, 0, Qt::DotLine));
-
-    m_plot->yAxis2->setBasePen(QPen(fg));
-    m_plot->yAxis2->setTickPen(QPen(fg));
-    m_plot->yAxis2->setSubTickPen(QPen(fg));
-    m_plot->yAxis2->setTickLabelColor(fg);
-    m_plot->yAxis2->setLabelColor(fg);
-
-    // Update existing title element color
-    if (m_plot->plotLayout()->elementCount() > 1)
-    {
-        QCPTextElement* title = qobject_cast<QCPTextElement*>(m_plot->plotLayout()->element(0, 0));
-        if (title != nullptr)
-        {
-            title->setTextColor(m_title_color);
-        }
-    }
+    // One call rather than a dozen per-axis setters: a theme switch cannot leave
+    // some elements painted in the old palette.
+    m_plot->setThemeColors(bg, fg, grid, m_title_color);
 
     m_dark_theme = dark;
     styleLegendOverlay(dark);
     styleLegendToggle(dark);
 
-    m_plot->replot(QCustomPlot::rpQueuedReplot);
+    m_plot->update();
 }
 
 
@@ -209,47 +146,32 @@ void PlotWidget::rebuildChart()
 
     const auto& all_series = m_view_model->allSeries();
 
-    // Reconcile graphs against the series list by stable series id: a stream
-    // appended mid-run reuses every existing graph (no re-setData of unchanged
-    // data) instead of clearing and recopying the whole chart. A given id's data
-    // is immutable — reprocessing a stream yields new ids — so a reused graph never
-    // needs its data re-copied; only color/visibility (cheap) are refreshed.
-    QHash<int, QCPGraph*> next_by_id;
-    next_by_id.reserve(static_cast<int>(all_series.size()));
-    QVector<QCPGraph*> ordered;
-    ordered.reserve(all_series.size());
+    // Rebuild the chart's series from the series list, keyed by stable series id.
+    //
+    // Rebuilt wholesale rather than reconciled in place because TmChart identifies
+    // series by index and removeSeries() shifts later indices down - a cached index
+    // would quietly start addressing a different curve. That is affordable here:
+    // QVector is implicitly shared, so handing the same samples back is a refcount
+    // bump, not a copy of the data.
+    m_plot->clearSeries();
+    m_series_index_by_id.clear();
+    m_series_index_by_id.reserve(static_cast<int>(all_series.size()));
 
     for (const PlotSeriesData& s : all_series)
     {
-        QCPGraph* graph = m_graph_by_id.take(s.id); // reuse this id's graph if one exists
-        if (graph == nullptr)
-        {
-            QCPAxis* value_axis = isLeftAxisMetric(s.metricType)
-                ? m_plot->yAxis : m_plot->yAxis2;
-            graph = m_plot->addGraph(m_plot->xAxis, value_axis);
-            graph->setName(s.name);
-            graph->setData(s.xValues, s.yValues, true);
-        }
-        // Color and visibility can change on append (the re-sort recolors left-axis
-        // series) or on a metric toggle, so refresh them on every reconcile.
-        graph->setPen(QPen(s.color, PlotConstants::kGraphPenWidth));
-        graph->setVisible(m_view_model->effectiveVisible(s));
-        next_by_id.insert(s.id, graph);
-        ordered.append(graph);
+        const int idx = m_plot->addSeries(isLeftAxisMetric(s.metricType)
+                                              ? TmChart::Axis::Left
+                                              : TmChart::Axis::Right);
+        m_plot->setSeriesName(idx, s.name);
+        m_plot->setSeriesData(idx, s.xValues, s.yValues);
+        m_plot->setSeriesPen(idx, QPen(s.color, PlotConstants::kGraphPenWidth));
+        m_plot->setSeriesVisible(idx, m_view_model->effectiveVisible(s));
+        m_series_index_by_id.insert(s.id, idx);
     }
-
-    // Graphs left in m_graph_by_id belong to series that are gone (reprocess
-    // replaced them, or the data was cleared) — remove them from the chart.
-    for (auto it = m_graph_by_id.cbegin(); it != m_graph_by_id.cend(); ++it)
-    {
-        m_plot->removeGraph(it.value());
-    }
-    m_graph_by_id = std::move(next_by_id);
-    m_graphs = std::move(ordered);
 
     // Set axis labels. The left axis label tracks the active left-axis view.
-    m_plot->xAxis->setLabel(PlotConstants::kXAxisLabel);
-    m_plot->yAxis->setLabel(
+    m_plot->setXLabel(PlotConstants::kXAxisLabel);
+    m_plot->setLeftLabel(
         m_view_model->lockAxisView() == PlotViewModel::LockAxisView::MissedFrames
             ? PlotConstants::kMissedFramesAxisLabel
             : PlotConstants::kYAxisLabel);
@@ -261,9 +183,7 @@ void PlotWidget::rebuildChart()
     // Mouse pan/zoom only once there is data. The context menu gates its own
     // actions on hasData() when it is built.
     const bool has_data = m_view_model->hasData();
-    m_plot->setInteractions(has_data
-        ? QCP::iRangeDrag | QCP::iRangeZoom
-        : QCP::Interactions());
+    m_plot->setInteractionsEnabled(has_data);
 
     // The overlay chips only make sense once something is plotted.
     updateOverlayChips();
@@ -271,7 +191,7 @@ void PlotWidget::rebuildChart()
     updatePlotCursor();
     updateOverlayChips();
 
-    m_plot->replot(QCustomPlot::rpQueuedReplot);
+    m_plot->update();
     m_updating_from_vm = false;
 }
 
@@ -287,13 +207,21 @@ void PlotWidget::onSeriesVisibilityToggled(int index)
     {
         return;
     }
-    if (index < 0 || index >= m_graphs.size())
+    const auto& series = m_view_model->allSeries();
+    if (index < 0 || index >= static_cast<int>(series.size()))
     {
         return;
     }
-
-    m_graphs[index]->setVisible(m_view_model->effectiveVisible(m_view_model->seriesAt(index)));
-    m_plot->replot(QCustomPlot::rpQueuedReplot);
+    // Resolve through the id map: the chart's index order matches the series list
+    // as built, but going via the id keeps this correct if they ever diverge.
+    const int chart_index = m_series_index_by_id.value(series[index].id, -1);
+    if (chart_index < 0)
+    {
+        return;
+    }
+    m_plot->setSeriesVisible(chart_index,
+                             m_view_model->effectiveVisible(m_view_model->seriesAt(index)));
+    m_plot->update();
     rebuildLegend();
 }
 
@@ -308,20 +236,20 @@ void PlotWidget::onSeriesAppearanceChanged()
     // rebuildChart. Visibility is included here because PlotCustomizationDialog
     // batches its checkbox edits through setSeriesVisibleQuiet() + this one signal
     // instead of one seriesVisibilityChanged() per checkbox. Looked up by stable
-    // series id via m_graph_by_id (not by position in m_graphs) so this stays
+    // series id via m_series_index_by_id (not by position) so this stays
     // correct even if a background streamProcessed()/addStreamData() added or
     // reordered series while this dialog-driven signal was in flight.
     for (const PlotSeriesData& s : m_view_model->allSeries())
     {
-        QCPGraph* graph = m_graph_by_id.value(s.id, nullptr);
-        if (graph != nullptr)
+        const int idx = m_series_index_by_id.value(s.id, -1);
+        if (idx >= 0)
         {
-            graph->setPen(QPen(s.color, PlotConstants::kGraphPenWidth));
-            graph->setVisible(m_view_model->effectiveVisible(s));
+            m_plot->setSeriesPen(idx, QPen(s.color, PlotConstants::kGraphPenWidth));
+            m_plot->setSeriesVisible(idx, m_view_model->effectiveVisible(s));
         }
     }
     rebuildLegend();
-    m_plot->replot(QCustomPlot::rpQueuedReplot);
+    m_plot->update();
 }
 
 void PlotWidget::onLockAxisViewChanged()
@@ -333,31 +261,31 @@ void PlotWidget::onLockAxisViewChanged()
 
     // The metric toggle only flips per-series visibility and the left-axis label;
     // the graphs and their data are unchanged, so sync visibility in place instead
-    // of tearing down and rebuilding every QCPGraph. Axis ranges arrive separately
+    // of rebuilding every series. Axis ranges arrive separately
     // via axisRangeChanged -> updateAxes(). Looked up by stable series id via
-    // m_graph_by_id (not by position in m_graphs) so this stays correct even if a
+    // m_series_index_by_id (not by position) so this stays correct even if a
     // background streamProcessed()/addStreamData() added or reordered series while
     // this signal was in flight.
     for (const PlotSeriesData& s : m_view_model->allSeries())
     {
-        QCPGraph* graph = m_graph_by_id.value(s.id, nullptr);
-        if (graph != nullptr)
+        const int idx = m_series_index_by_id.value(s.id, -1);
+        if (idx >= 0)
         {
             // Re-apply color as well as visibility: a custom recolor propagates to the
             // lock/missed sibling in the ViewModel, and that sibling first becomes
             // visible here, so its pen must be refreshed from the (updated) series color.
-            graph->setPen(QPen(s.color, PlotConstants::kGraphPenWidth));
-            graph->setVisible(m_view_model->effectiveVisible(s));
+            m_plot->setSeriesPen(idx, QPen(s.color, PlotConstants::kGraphPenWidth));
+            m_plot->setSeriesVisible(idx, m_view_model->effectiveVisible(s));
         }
     }
 
-    m_plot->yAxis->setLabel(
+    m_plot->setLeftLabel(
         m_view_model->lockAxisView() == PlotViewModel::LockAxisView::MissedFrames
             ? PlotConstants::kMissedFramesAxisLabel
             : PlotConstants::kYAxisLabel);
 
     rebuildLegend();
-    m_plot->replot(QCustomPlot::rpQueuedReplot);
+    m_plot->update();
 }
 
 void PlotWidget::updateAxes()
@@ -369,18 +297,18 @@ void PlotWidget::updateAxes()
 
     m_updating_from_vm = true;
 
-    m_plot->xAxis->setRange(m_view_model->xViewMin(), m_view_model->xViewMax());
+    m_plot->setXRange(m_view_model->xViewMin(), m_view_model->xViewMax());
 
     // Left axis (yAxis): uses user override if set, else 100 for Lock % or auto for Missed Frames.
     const double left_max = m_view_model->leftYMax();
-    m_plot->yAxis->setRange(0.0, left_max);
+    m_plot->setLeftRange(0.0, left_max);
 
     // Right axis (yAxis2) auto-scales to SNR data limits, or manual/user-override limits
-    m_plot->yAxis2->setRange(m_view_model->yMin(), m_view_model->yMax());
+    m_plot->setRightRange(m_view_model->yMin(), m_view_model->yMax());
 
     updateOverlayChips();
 
-    m_plot->replot(QCustomPlot::rpQueuedReplot);
+    m_plot->update();
     m_updating_from_vm = false;
 }
 
@@ -393,25 +321,11 @@ void PlotWidget::updateTitle()
 
     m_updating_from_vm = true;
 
-    // Show title on chart using a QCPTextElement if one exists, else create one
-    if (m_plot->plotLayout()->elementCount() > 1)
-    {
-        QCPTextElement* title = qobject_cast<QCPTextElement*>(m_plot->plotLayout()->element(0, 0));
-        if (title != nullptr)
-        {
-            title->setText(m_view_model->plotTitle());
-            title->setTextColor(m_title_color);
-        }
-    }
-    else
-    {
-        QCPTextElement* title = new QCPTextElement(m_plot, m_view_model->plotTitle());
-        title->setFont(QFont("sans", PlotConstants::kTitleFontSize, QFont::Bold));
-        title->setTextColor(m_title_color);
-        m_plot->plotLayout()->insertRow(0);
-        m_plot->plotLayout()->addElement(0, 0, title);
-    }
-    m_plot->replot(QCustomPlot::rpQueuedReplot);
+    // TmChart draws the title itself, so setting the text is the whole job - the
+    // previous implementation had to find-or-create a layout element and insert a
+    // row for it.
+    m_plot->setTitle(m_view_model->plotTitle());
+    m_plot->update();
     m_updating_from_vm = false;
 }
 
@@ -867,16 +781,18 @@ bool PlotWidget::exportImage(const QString& path)
 
     if (suffix == "png")
     {
-        // The legend floats over the chart as a child widget, so render it
-        // onto the plot pixmap at its on-screen position (WYSIWYG — if the
-        // legend is scrolled, the exported view matches).
-        QPixmap px = m_plot->toPixmap(m_plot->width(), m_plot->height());
+        // The legend floats over the chart as a child widget, so render it onto
+        // the image at its on-screen position (WYSIWYG - if the legend is
+        // scrolled, the exported view matches).
+        QPixmap px(m_plot->size());
+        px.fill(Qt::transparent);
+        QPainter painter(&px);
+        m_plot->renderTo(painter, m_plot->size());
         if (m_legend_overlay != nullptr && m_legend_overlay->isVisible())
         {
-            QPainter painter(&px);
             m_legend_overlay->render(&painter, m_legend_overlay->pos());
-            painter.end();
         }
+        painter.end();
         success = px.save(filename, "PNG");
         formatStr = "PNG";
     }
@@ -889,11 +805,11 @@ bool PlotWidget::exportImage(const QString& path)
         generator.setTitle(m_view_model->plotTitle());
         generator.setDescription("Generated by tmDataQualityAnalyzer");
 
-        QCPPainter painter;
+        QPainter painter;
         success = painter.begin(&generator);
         if (success)
         {
-            m_plot->toPainter(&painter);
+            m_plot->renderTo(painter, m_plot->size());
             if (m_legend_overlay != nullptr && m_legend_overlay->isVisible())
             {
                 m_legend_overlay->render(&painter, m_legend_overlay->pos());
@@ -909,7 +825,28 @@ bool PlotWidget::exportImage(const QString& path)
         {
             filename += ".pdf";
         }
-        success = m_plot->savePdf(filename);
+        // Previously QCustomPlot::savePdf(), which was a third rendering path and
+        // silently dropped the legend - PDF exports lost it while PNG and SVG kept
+        // it. Now the same renderTo() as the other two, so all three agree.
+        QPdfWriter writer(filename);
+        writer.setPageSize(QPageSize(m_plot->size(), QPageSize::Point));
+        writer.setPageMargins(QMarginsF(0, 0, 0, 0));
+        QPainter painter;
+        success = painter.begin(&writer);
+        if (success)
+        {
+            // The PDF device has its own (much finer) resolution, so scale the
+            // logical widget geometry onto the page rather than painting 1:1.
+            const double sx = writer.width()  / static_cast<double>(m_plot->width());
+            const double sy = writer.height() / static_cast<double>(m_plot->height());
+            painter.scale(sx, sy);
+            m_plot->renderTo(painter, m_plot->size());
+            if (m_legend_overlay != nullptr && m_legend_overlay->isVisible())
+            {
+                m_legend_overlay->render(&painter, m_legend_overlay->pos());
+            }
+            painter.end();
+        }
         formatStr = "PDF";
     }
 
@@ -961,20 +898,20 @@ void PlotWidget::setUpLayout()
     main_layout->setContentsMargins(4, 4, 4, 4);
     main_layout->setSpacing(0);
 
-    // --- QCustomPlot chart (fills the widget; all controls live in the
+    // --- TmChart chart (fills the widget; all controls live in the
     // right-click context menu, see showPlotContextMenu) ---
-    m_plot = new QCustomPlot(this);
-    m_plot->setInteractions(QCP::Interactions());
-    m_plot->axisRect()->setRangeDrag(Qt::Horizontal);
-    m_plot->axisRect()->setRangeZoom(Qt::Horizontal);
-    // Right-click opens the control menu. QCustomPlot binds pan to left-drag and
-    // zoom to the wheel, so the right button is otherwise unused.
+    m_plot = new TmChart(this);
+    // Horizontal-only pan and zoom are inherent to TmChart - it has no Y gestures
+    // to switch off, which is what the two axisRect() calls here used to do.
+    m_plot->setInteractionsEnabled(false);
+    // Right-click opens the control menu. Pan is bound to left-drag and zoom to
+    // the wheel, so the right button is otherwise unused.
     m_plot->setContextMenuPolicy(Qt::CustomContextMenu);
-    m_plot->xAxis->setLabel(PlotConstants::kXAxisLabel);
-    m_plot->yAxis->setLabel(PlotConstants::kYAxisLabel);
-    m_plot->yAxis->setRange(0, 100);
-    m_plot->yAxis2->setVisible(true);
-    m_plot->yAxis2->setLabel(PlotConstants::kSnrAxisLabel);
+    m_plot->setXLabel(PlotConstants::kXAxisLabel);
+    m_plot->setLeftLabel(PlotConstants::kYAxisLabel);
+    m_plot->setLeftRange(0, 100);
+    m_plot->setRightAxisVisible(true);
+    m_plot->setRightLabel(PlotConstants::kSnrAxisLabel);
     m_plot->setMinimumHeight(PlotConstants::kPlotMinChartHeight);
     main_layout->addWidget(m_plot, 1);
     main_layout->addSpacing(4);
@@ -1085,17 +1022,9 @@ void PlotWidget::setUpLayout()
 
     m_overlay_bar->hide();
 
-    // Crosshair: a vertical time line that tracks the cursor so values can be read
-    // off several series at the same instant. A chart item, not a widget, so it
-    // adds no chrome and disappears with the cursor.
-    m_crosshair = new QCPItemStraightLine(m_plot);
-    m_crosshair->setVisible(false);
-    m_crosshair->setSelectable(false);
-
-    // Rubber band drawn while dragging out a zoom range.
-    m_zoom_band = new QCPItemRect(m_plot);
-    m_zoom_band->setVisible(false);
-    m_zoom_band->setSelectable(false);
+    // The crosshair and zoom band are painted by TmChart itself rather than being
+    // items it owns, so there is nothing to construct here - see setCrosshair() and
+    // setZoomBand(). They stay out of exports by construction.
 
     // Loading overlay (child of m_plot so it floats over the chart)
     m_loading_label = new QLabel("Loading...", m_plot);
@@ -1113,7 +1042,7 @@ void PlotWidget::setUpConnections()
     connect(m_plot, &QWidget::customContextMenuRequested,
             this, &PlotWidget::showPlotContextMenu);
 
-    connect(m_plot, &QCustomPlot::mouseMove, this, &PlotWidget::onPlotMouseMove);
+    connect(m_plot, &TmChart::mouseMoved, this, &PlotWidget::onPlotMouseMove);
 
     // Grab-cursor feedback for click-and-drag panning: an open hand over the chart
     // says "this can be dragged", and pressing closes it. Shown whenever data is
@@ -1121,7 +1050,7 @@ void PlotWidget::setUpConnections()
     // simply has nowhere to go, which is the same behaviour the cursor implies.
     // The legend overlay and its viewport set their own cursors, so dragging the
     // legend is unaffected.
-    connect(m_plot, &QCustomPlot::mousePress, this, [this](QMouseEvent* event) {
+    connect(m_plot, &TmChart::mousePressed, this, [this](QMouseEvent* event) {
         // Clicking the chart focuses the plot, which is what makes the keyboard
         // shortcuts (L/V/R/Home/arrows/+/-) reachable: they are widget-scoped, so
         // they only fire while this widget has focus. Done before the has-data
@@ -1140,7 +1069,7 @@ void PlotWidget::setUpConnections()
         if (band)
         {
             m_band_zooming = true;
-            m_band_start_x = m_plot->xAxis->pixelToCoord(event->pos().x());
+            m_band_start_x = m_plot->pixelToX(event->pos().x());
             m_plot->setCursor(Qt::CrossCursor);
             return;
         }
@@ -1149,12 +1078,12 @@ void PlotWidget::setUpConnections()
             m_plot->setCursor(Qt::ClosedHandCursor);
         }
     });
-    connect(m_plot, &QCustomPlot::mouseRelease, this, [this](QMouseEvent* event) {
+    connect(m_plot, &TmChart::mouseReleased, this, [this](QMouseEvent* event) {
         if (m_band_zooming)
         {
             m_band_zooming = false;
-            m_zoom_band->setVisible(false);
-            applyBandZoom(m_band_start_x, m_plot->xAxis->pixelToCoord(event->pos().x()));
+            m_plot->setZoomBand(0.0, 0.0, false);
+            applyBandZoom(m_band_start_x, m_plot->pixelToX(event->pos().x()));
         }
         updatePlotCursor();
     });
@@ -1185,15 +1114,19 @@ void PlotWidget::setUpConnections()
 
     // Double-click anywhere on the chart restores the full time span - the same
     // gesture most plotting tools use, and a shortcut for the Reset chip.
-    connect(m_plot, &QCustomPlot::mouseDoubleClick, this, [this](QMouseEvent*) {
+    connect(m_plot, &TmChart::mouseDoubleClicked, this, [this](QMouseEvent*) {
         if (m_view_model != nullptr && m_view_model->hasData())
         {
             m_view_model->resetXRange();
         }
     });
 
-    connect(m_plot->xAxis, QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
-            this, [this](const QCPRange& range) { handlePlotXRangeChanged(range.lower, range.upper); });
+    // TmChart emits this ONLY for user gestures (wheel zoom, drag pan), never from
+    // setXRange(). The previous signal fired on programmatic range changes too,
+    // which is why the m_updating_from_vm guard exists; it is kept because
+    // updateAxes() still sets ranges while handling ViewModel signals.
+    connect(m_plot, &TmChart::xRangeChangedByUser,
+            this, [this](double lower, double upper) { handlePlotXRangeChanged(lower, upper); });
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1388,20 +1321,6 @@ void PlotWidget::styleLegendToggle(bool dark)
     }
 
     // Chart-item overlays follow the theme too.
-    if (m_crosshair != nullptr)
-    {
-        QColor cross = fg;
-        cross.setAlpha(PlotConstants::kCrosshairAlpha);
-        m_crosshair->setPen(QPen(cross, 1.0, Qt::DashLine));
-    }
-    if (m_zoom_band != nullptr)
-    {
-        QColor fill = m_title_color.isValid() ? m_title_color : fg;
-        fill.setAlpha(PlotConstants::kZoomBandAlpha);
-        m_zoom_band->setBrush(QBrush(fill));
-        QColor edge = m_title_color.isValid() ? m_title_color : fg;
-        m_zoom_band->setPen(QPen(edge, 1.0));
-    }
 }
 
 void PlotWidget::updateOverlayChips()
@@ -1453,22 +1372,13 @@ void PlotWidget::updateOverlayChips()
 
 void PlotWidget::updateCrosshair(double x, bool visible)
 {
-    if (m_crosshair == nullptr)
+    if (m_plot == nullptr)
     {
         return;
     }
-    if (visible)
-    {
-        // Two points with the same x define the vertical line; the y values only
-        // set its direction, so the line spans the whole axis rect at any zoom.
-        m_crosshair->point1->setCoords(x, 0.0);
-        m_crosshair->point2->setCoords(x, 1.0);
-    }
-    if (m_crosshair->visible() != visible)
-    {
-        m_crosshair->setVisible(visible);
-    }
-    m_plot->replot(QCustomPlot::rpQueuedReplot);
+    // The chart spans the line across the plot area itself, so only the time
+    // coordinate is needed here.
+    m_plot->setCrosshair(x, visible);
 }
 
 void PlotWidget::applyBandZoom(double lower, double upper)
@@ -1713,21 +1623,21 @@ void PlotWidget::styleLegendOverlay(bool dark)
 
 void PlotWidget::onPlotMouseMove(QMouseEvent* event)
 {
-    if (m_view_model == nullptr || !m_view_model->hasData() || m_graphs.isEmpty())
+    if (m_view_model == nullptr || !m_view_model->hasData()
+        || m_view_model->allSeries().empty())
     {
         return;
     }
 
-    const double x_coord = m_plot->xAxis->pixelToCoord(event->pos().x());
+    const double x_coord = m_plot->pixelToX(event->pos().x());
 
     // Drag-to-zoom in progress: stretch the rubber band across the full height of
     // the axis rect between the drag origin and the cursor. The crosshair would
     // just be noise underneath it, so it is suppressed until the drag ends.
     if (m_band_zooming)
     {
-        m_zoom_band->topLeft->setCoords(m_band_start_x, m_plot->yAxis->range().upper);
-        m_zoom_band->bottomRight->setCoords(x_coord, m_plot->yAxis->range().lower);
-        m_zoom_band->setVisible(true);
+        // Only the X extent matters: the band always spans the full plot height.
+        m_plot->setZoomBand(m_band_start_x, x_coord, true);
         updateCrosshair(x_coord, false);
         return;
     }
@@ -1751,7 +1661,7 @@ void PlotWidget::onPlotMouseMove(QMouseEvent* event)
     const bool pinned = (pinned_index >= 0);
 
     const auto& all_series = m_view_model->allSeries();
-    for (int i = 0; i < m_graphs.size() && i < static_cast<int>(all_series.size()); i++)
+    for (int i = 0; i < static_cast<int>(all_series.size()); i++)
     {
         if (pinned && i != pinned_index)
         {
@@ -1800,7 +1710,7 @@ void PlotWidget::onPlotMouseMove(QMouseEvent* event)
     // Unpinned, the readout only appears when the cursor is actually near a point
     // (10 px), so it doesn't shout values at you from across the chart. A pinned
     // series is exempt: the user asked for that one specifically.
-    const double pixel_dist = qAbs(m_plot->xAxis->coordToPixel(best_x) - event->pos().x());
+    const double pixel_dist = qAbs(m_plot->xToPixel(best_x) - event->pos().x());
     if ((pinned || pixel_dist <= 10.0) && !best_name.isEmpty() && best_series_index >= 0)
     {
         const PlotSeriesData::MetricType metric = all_series[best_series_index].metricType;
