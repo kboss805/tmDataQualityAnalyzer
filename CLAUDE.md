@@ -15,8 +15,9 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
 **PowerShell** tool.
 
 - **App:** from `build/`, `qmake ..\tmDataQualityAnalyzer.pro -spec win32-msvc CONFIG+=debug` then
-  `nmake -f Makefile.Debug`. Re-run qmake after `.pro`/version/`Q_OBJECT` changes. **Zero warnings
-  required.**
+  `& $env:TMDQ_MAKE -f Makefile.Debug` (`env.ps1` sets `TMDQ_MAKE` to the parallel `jom` when
+  present, else serial `nmake` — ~3.5x faster, so prefer it). Re-run qmake after
+  `.pro`/version/`Q_OBJECT` changes. **Zero warnings required.**
 - **Tests:** build **in-source inside `tests/`** (the exe must sit one level under `tests/` or the
   data-file tests fail), then `.\debug\tmDataQualityAnalyzer_tests.exe`. The full run (all **19
   suites**) is dominated by the real-Ch10 integration suites (a few minutes); add `--fast` (or

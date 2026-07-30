@@ -47,8 +47,12 @@ nmake -f Makefile.Debug
 
 - Debug output: `build\debug\tmDataQualityAnalyzer.exe`. For release, swap `CONFIG+=release` /
   `Makefile.Release` (output under `build\release\`).
-- `nmake` is serial (no `-j`); for a faster parallel build install `jom` and use `jom -f
-  Makefile.Debug` instead.
+- **Prefer `$env:TMDQ_MAKE` over naming a tool.** `env.ps1` sets it to `jom` when that's
+  available (it is, at `C:\Qt\Tools\jom\jom.exe`) and `nmake` otherwise. `nmake` is
+  serial with no `-j`; `jom` is the parallel drop-in and takes the same `-f` argument.
+  On this box it cuts the app build from ~88 s to ~25 s and the test build from ~157 s
+  to ~23 s, so use it — `& $env:TMDQ_MAKE -f Makefile.Debug`. Plain `nmake` still works
+  and is what a machine without `jom` falls back to.
 - Re-run `qmake` whenever you add/remove a source/header in the `.pro`, change `constants.h`'s
   version, or change a class's `Q_OBJECT` wiring (MOC). For ordinary edits to existing `.cpp` files,
   `nmake` alone is enough.
