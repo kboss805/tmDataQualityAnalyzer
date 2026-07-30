@@ -49,6 +49,7 @@ SOURCES += \
     $$PWD/../src/view/mainview.cpp \
     $$PWD/../src/view/streamconfigdialog.cpp \
     $$PWD/../src/view/plotwidget.cpp \
+    $$PWD/../src/view/tmchart.cpp \
     $$PWD/../src/view/plotcustomizationdialog.cpp \
     $$PWD/../src/view/exportdialog.cpp \
     $$PWD/../src/view/batchapplydialog.cpp \
@@ -88,6 +89,7 @@ HEADERS += \
     $$PWD/../include/view/streamconfigdialog.h \
     $$PWD/../include/view/streamsubdialogs.h \
     $$PWD/../include/view/plotwidget.h \
+    $$PWD/../include/view/tmchart.h \
     $$PWD/../include/view/plotcustomizationdialog.h \
     $$PWD/../include/view/exportdialog.h \
     $$PWD/../include/view/batchapplydialog.h \
@@ -140,6 +142,7 @@ SOURCES += \
     tst_framesetup.cpp \
     tst_plotviewmodel.cpp \
     tst_plotwidget.cpp \
+    tst_tmchart.cpp \
     tst_plotcustomizationdialog.cpp \
     tst_frameprocessor.cpp \
     tst_processingcoordinator.cpp \
@@ -162,6 +165,7 @@ HEADERS += \
     tst_framesetup.h \
     tst_plotviewmodel.h \
     tst_plotwidget.h \
+    tst_tmchart.h \
     tst_plotcustomizationdialog.h \
     tst_frameprocessor.h \
     tst_processingcoordinator.h \

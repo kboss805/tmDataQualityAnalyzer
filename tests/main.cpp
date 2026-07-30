@@ -15,6 +15,7 @@
 #include "tst_mainviewmodel_helpers.h"
 #include "tst_plotviewmodel.h"
 #include "tst_plotwidget.h"
+#include "tst_tmchart.h"
 #include "tst_plotcustomizationdialog.h"
 #include "tst_processingcoordinator.h"
 #include "tst_stepdetector.h"
@@ -115,6 +116,7 @@ int main(int argc, char* argv[])
     status |= runSuite<TestPlotViewModel>(log_path);
     status |= runSuite<TestMainView>(log_path);
     status |= runSuite<TestPlotWidget>(log_path);
+    status |= runSuite<TestTmChart>(log_path);
     status |= runSuite<TestPlotCustomizationDialog>(log_path);
     status |= runSuite<TestStreamConfigDialog>(log_path);
     status |= runSuite<TestExportDialog>(log_path);

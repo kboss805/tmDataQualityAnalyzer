@@ -99,7 +99,8 @@ SOURCES += \
     src/view/batchapplydialog.cpp \
     src/view/plotcustomizationdialog.cpp \
     src/view/processingprogressdialog.cpp \
-    src/view/plotwidget.cpp
+    src/view/plotwidget.cpp \
+    src/view/tmchart.cpp
 
 # Third-party libraries
 SOURCES += \
@@ -167,7 +168,8 @@ HEADERS += \
     include/view/batchapplydialog.h \
     include/view/plotcustomizationdialog.h \
     include/view/processingprogressdialog.h \
-    include/view/plotwidget.h
+    include/view/plotwidget.h \
+    include/view/tmchart.h
 
 # Third-party libraries
 HEADERS += \
