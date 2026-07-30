@@ -4,6 +4,13 @@ A phased roadmap for the next round of work. Ordered as agreed. Each phase is
 independently shippable (own branch → PR → merge), so the list can be paused or
 reprioritized at any point.
 
+> **STATUS: Phases 1-7 have all shipped.** This document is kept for the rationale
+> behind those decisions, not as a live plan - the *mechanics* it describes are in
+> places superseded and should not be followed literally. Notably the toolchain is
+> now MSVC (`mingw32-make` and `-Wa,-mbig-obj` no longer apply), and QCustomPlot has
+> been replaced by the first-party `TmChart` and deleted, so `lib/qcustomplot` no
+> longer exists. Only the **Backlog** section at the end is still forward-looking.
+
 Effort key: **S** ≈ ½–1 day · **M** ≈ 2–4 days · **L** ≈ 1–2 weeks.
 
 **Execution order (decided): infrastructure and refactors first, features last.**
@@ -280,7 +287,9 @@ is a separate **M** only if pursued.
 ## Backlog (revisit if it becomes a pain point)
 
 - **Large-file display downsampling.** `PlotViewModel` holds full
-  `xValues/yValues` in memory and QCustomPlot draws every point. For very long
+  `xValues/yValues` in memory and `TmChart` draws every point. For very long
   recordings, adaptive sampling for *draw* (keeping full data for export) would
-  cut memory/latency. QCustomPlot supports adaptive sampling. **Effort M–L**,
+  cut memory/latency. This is now ours to implement rather than a library feature
+  to enable - `TmChart::drawSeries()` is the single place a decimation pass would
+  go, and it is already the only consumer of the sample vectors. **Effort M–L**,
   only if long recordings start to hurt.
