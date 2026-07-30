@@ -261,6 +261,7 @@ namespace PlotConstants {
     /// @name Plot widget parameters
     /// @{
     inline constexpr int kTickCount          = 10;               ///< Number of major tick marks on X axis.
+    inline constexpr int kYTickCount         = 6;                ///< Number of major tick marks on each Y axis.
     inline constexpr double kGraphPenWidth   = 1.5;              ///< Width of series graph pen.
     inline constexpr int kTitleFontSize      = 10;               ///< Plot title font size in points.
     inline constexpr double kYSpinBoxMax     = 999.0;            ///< Maximum range for Y axis spinboxes.

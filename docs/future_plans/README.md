@@ -16,35 +16,52 @@ what was built is worse than no plan at all.
 
 ### Replace QCustomPlot with a first-party plotting implementation
 
-QCustomPlot (`lib/qcustomplot/`, ~1.6 MB vendored) is third-party and protected — it
-can never be edited, so every rendering behaviour we want has to be adapted around it in
-app code. Replacing it with our own Qt-native plotting would remove that constraint and
-the vendored dependency.
+**Goal (decided): remove the protected third-party dependency, keeping behaviour
+identical.** No user-visible change is intended - this is a swap, not a redesign, so
+every existing US4.0/US4.1 criterion must still hold afterwards.
 
-**Scope is smaller than it looks.** Only four files touch QCustomPlot or `QCP*` types:
+Landing incrementally so each step is revertible, rather than as one unreviewable
+diff.
 
-| File | Role |
-| --- | --- |
-| `src/view/plotwidget.cpp` | all chart construction, axes, gestures, overlays, export |
-| `include/view/plotwidget.h` | member declarations |
-| `src/viewmodel/plotviewmodel.cpp` | incidental (colors/ranges), not rendering |
-| `tests/tst_plotwidget.cpp` | asserts against widget/graph state |
+#### Step 1 - the chart engine (DONE, PR #55)
 
-Everything else already goes through `PlotViewModel`, which is rendering-agnostic — the
-MVVM split means the ViewModel and every other suite are unaffected.
+`TmChart` (`include/view/tmchart.h`, `src/view/tmchart.cpp`) is a self-contained
+QWidget line chart covering exactly the QCustomPlot surface this app used, which an
+inventory showed to be small: series data/pen/visibility/name, three axis ranges plus
+labels, pixel<->coordinate transforms, an N-evenly-spaced-tick time axis, a crosshair
+and a zoom band, four mouse signals, and render-to-painter.
 
-**What makes this genuinely hard** is not drawing lines, it's matching what QCustomPlot
-gives us for free and US4.0/US4.1 now depend on: dual Y axes with independent
-auto/manual ranging, wheel zoom and drag pan on one axis only, the draggable translucent
-legend overlay composited into PNG/SVG/PDF exports at its placed position, the crosshair
-and rubber-band items that deliberately are not widgets so they stay out of exports, and
-`rpQueuedReplot` performance with 48+ SNR series over long recordings. Export in three
-formats is the part most likely to be underestimated.
+Notably **simpler** than what it replaces in two places: the crosshair and zoom band
+are painted rather than being scene items, and one `renderTo()` serves screen, PNG,
+SVG and PDF alike - so "what you see" and "what you export" cannot drift apart.
 
-Worth deciding first whether the goal is removing a *protected* dependency or gaining
-*capability* — if it's the former, note the vendored library is stable and has cost us
-nothing but the no-edit rule, so the honest comparison is a large rewrite against a
-constraint we have so far always been able to work around.
+Not yet wired in: `PlotWidget` still uses QCustomPlot, so this step changed no
+behaviour. Covered by `TestTmChart` (11 cases).
+
+#### Step 2 - swap `PlotWidget` over (NEXT)
+
+Replace the `QCustomPlot* m_plot` member and its ~40 call sites with `TmChart`. The
+pieces needing care, in rough order of risk:
+
+1. **Export.** Three formats, and the draggable legend overlay is composited in at its
+   placed position. The legend is already a plain child QWidget, so it is unaffected -
+   only the chart-rendering half changes, and `renderTo()` is a direct substitute for
+   `toPixmap`/`toPainter`/`savePdf`.
+2. **Range round-trip.** QCustomPlot's `rangeChanged` currently feeds
+   `handlePlotXRangeChanged`, guarded by `m_updating_from_vm` against feedback loops.
+   `TmChart::xRangeChangedByUser` is emitted *only* for user gestures, so that guard
+   may become unnecessary - verify rather than assume.
+3. **The graph<->series mapping.** `removeSeries()` shifts later indices down, so the
+   `PlotSeriesData -> chart index` map must be rebuilt on removal, not cached.
+4. **`tst_plotwidget`** asserts against QCP graph state in places; those assertions
+   move to the equivalent `TmChart` queries. This is the part where the safety net is
+   itself under change, so port assertion-by-assertion rather than rewriting wholesale.
+
+#### Step 3 - delete the dependency
+
+Remove `lib/qcustomplot/`, its `.pro` entries, the `/bigobj` flag it needed, and the
+protected-file rules naming it in `CLAUDE.md`, `docs/CLAUDE.md` and the
+`build-and-test` skill.
 
 ---
 
