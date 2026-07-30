@@ -14,54 +14,6 @@ what was built is worse than no plan at all.
 
 ## Open items
 
-### Speed up CI with a parallel build (`jom`)
-
-A CI run is about **6 minutes**, and roughly **84% of it is compiling**. Measured on
-run 30381725647 (self-hosted, v2.8.0):
-
-| Step | Time |
-| --- | --- |
-| Build tests (Debug, in-source) | 195 s |
-| Build app (Debug) | 107 s |
-| Run full test suite | 36 s |
-| Checkout, toolchain, warning gate, upload | ~12 s |
-
-Two things make the compile slower than the hardware requires:
-
-- **`nmake` is serial.** It has no `-j`, so it uses one core no matter what the box
-  has. `jom` is Qt's drop-in parallel replacement — `scripts/run_release.ps1` already
-  prefers it when present (`if (Get-Command jom …)`), and `.claude/skills/build-and-test`
-  documents it for local use. `.github/workflows/ci.yml` still calls `nmake` in both
-  build steps.
-- **Every run is a cold rebuild.** `actions/checkout` defaults to `clean: true`, which
-  wipes `build/` and `tests/debug/`, so nothing is reused between runs. That is
-  deliberate — stale objects masking a failure is a worse problem than a slow build,
-  and it is what restores the committed `.ch10` fixtures each run — so the fix is to
-  make the cold build *faster*, not to make it warm.
-
-**Plumbing is DONE** (`env.ps1` exports `TMDQ_MAKE`, all four CI build sites and
-`run_release.ps1` invoke it, `nmake` fallback intact for the hosted runner). Until
-`jom` is actually installed this is a no-op and CI still uses `nmake`.
-
-**What's left:**
-
-1. Install `jom` on the self-hosted runner, somewhere `NETWORK SERVICE` can read —
-   `env.ps1` probes `<Qt>\Tools\jom\jom.exe` and
-   `<Qt>\Tools\QtCreator\bin\jom\jom.exe`, or set `TMDQ_JOM`. See
-   [`../ci_runner.md`](../ci_runner.md).
-2. **Confirm the zero-warning gate still holds.** It greps `build\app_build.log` for
-   `warning [A-Z]\d+`. Parallel jobs interleave output, so verify a warning is still
-   matched on its own line and that a compile error still fails the step rather than
-   being lost in the interleaving. Worth deliberately introducing a warning once to
-   prove the gate still fires.
-3. **Measure.** The box has 28 cores, but `/bigobj` translation units like
-   QCustomPlot's may dominate regardless of job count, so the real gain is unknown
-   until timed. Compare against the 195 s / 107 s baseline above.
-
-Note the gate only ever covered the **app** build — the test build's output isn't
-teed to a log — so a warning introduced in test code has never been gated. Worth
-deciding whether that's intentional while in here.
-
 ### Keyboard shortcuts for the plot
 
 Plot controls now live in a right-click context menu and an on-chart chip bar. The
@@ -86,6 +38,18 @@ real argument that scrubbing beats the gestures already there (wheel zoom, drag 
 Ctrl+drag band zoom, double-click reset). Revisit once the context-menu workflow has
 some mileage.
 
+### The zero-warning gate only covers the app build
+
+`ci.yml`'s gate greps `build\app_build.log`, which only the **app** build step writes.
+The test build's output isn't teed to a log, so a warning introduced in `tests/` code
+has never been gated in CI — despite the zero-warning policy applying to it. Verified
+to still fire correctly for app-code warnings under parallel `jom` builds (a deliberate
+`C4189` was matched), so this is a coverage gap, not a broken gate.
+
+Fixing it is a two-line change (tee the test build, extend the gate to both logs), but
+it may turn the next PR that touches test code red, so it's a deliberate decision
+rather than a drive-by.
+
 ### `compile_commands.json` for MSVC (clangd IntelliSense)
 
 clangd works against a compilation database that was generated for the old MinGW
@@ -106,4 +70,5 @@ documentation lives.
 | Switch the toolchain from MinGW to MSVC | PR #40 | `CLAUDE.md`, `docs/CLAUDE.md`, `scripts/env.ps1`, `deploy/build_release.ps1` |
 | Move CI to a self-hosted runner | PR #41, #42 | [`docs/ci_runner.md`](../ci_runner.md), `.github/workflows/ci.yml` |
 | Ship sample `.ch10` files for CI | PR #41 | as above — self-hosting delivered it; small fixtures are committed, the full-size recording lives on the runner |
+| Speed up CI with a parallel build (`jom`) | PR #48 | `scripts/env.ps1` (`TMDQ_MAKE`), [`../ci_runner.md`](../ci_runner.md) - CI run 286s -> 93s |
 | Simplify the plot window | PR #43 | `docs/CLAUDE.md` (US4.0 / US4.1), `resources/usermanual.html` §3 |
