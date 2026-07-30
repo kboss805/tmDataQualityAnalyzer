@@ -16,6 +16,7 @@
 #include <QLabel>
 #include <QMenu>
 #include <QStyle>
+#include <QVBoxLayout>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -808,4 +809,98 @@ void TestPlotWidget::readoutPinDropsWhenSeriesGoesAway()
     QScopedPointer<QMenu> menu2(widget.buildContextMenu());
     QVERIFY(findAction(findAction(menu2.data(), "Readout")->menu(), "Nearest series")->isChecked());
     QCOMPARE(widget.m_readout_series_id, PlotWidget::kReadoutNearest);
+}
+
+void TestPlotWidget::keyboardShortcutsDriveTheView()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    addLockStream(vm, "Ch 5", 5);   // yields both left-axis metrics
+
+    // L toggles the legend, and stays in sync with the chip/menu state.
+    const bool legend_before = widget.m_legend_visible;
+    QTest::keyClick(&widget, Qt::Key_L);
+    QCOMPARE(widget.m_legend_visible, !legend_before);
+    QTest::keyClick(&widget, Qt::Key_L);
+    QCOMPARE(widget.m_legend_visible, legend_before);
+
+    // V cycles the left-axis metric, same as the View Mode chip.
+    QCOMPARE(vm.lockAxisView(), PlotViewModel::LockAxisView::LockPercent);
+    QTest::keyClick(&widget, Qt::Key_V);
+    QCOMPARE(vm.lockAxisView(), PlotViewModel::LockAxisView::MissedFrames);
+    QTest::keyClick(&widget, Qt::Key_V);
+    QCOMPARE(vm.lockAxisView(), PlotViewModel::LockAxisView::LockPercent);
+
+    // Arrows slide the window without changing its width.
+    vm.setXViewRange(0.4, 0.6);
+    const double span_before = vm.xViewMax() - vm.xViewMin();
+    const double lower_before = vm.xViewMin();
+    QTest::keyClick(&widget, Qt::Key_Right);
+    QVERIFY(vm.xViewMin() > lower_before);
+    QVERIFY(qFuzzyCompare(vm.xViewMax() - vm.xViewMin(), span_before));
+    QTest::keyClick(&widget, Qt::Key_Left);
+    QVERIFY(qFuzzyCompare(vm.xViewMin(), lower_before));
+
+    // '+' narrows the window, '-' widens it, both about the centre.
+    const double centre_before = (vm.xViewMin() + vm.xViewMax()) / 2.0;
+    QTest::keyClick(&widget, Qt::Key_Plus);
+    QVERIFY(vm.xViewMax() - vm.xViewMin() < span_before);
+    QVERIFY(qFuzzyCompare((vm.xViewMin() + vm.xViewMax()) / 2.0, centre_before));
+    QTest::keyClick(&widget, Qt::Key_Minus);
+    QVERIFY(qFuzzyCompare(vm.xViewMax() - vm.xViewMin(), span_before));
+
+    // Home restores the full span but deliberately leaves a pinned Y max alone.
+    vm.setXViewRange(0.4, 0.6);
+    vm.setLeftYMaxOverride(42.0);
+    QTest::keyClick(&widget, Qt::Key_Home);
+    QCOMPARE(vm.xViewMin(), vm.xMin());
+    QCOMPARE(vm.xViewMax(), vm.xMax());
+    QVERIFY(vm.hasLeftYMaxOverride());
+
+    // R resets both: full span AND the Y overrides dropped.
+    vm.setXViewRange(0.4, 0.6);
+    QTest::keyClick(&widget, Qt::Key_R);
+    QCOMPARE(vm.xViewMin(), vm.xMin());
+    QVERIFY(!vm.hasLeftYMaxOverride());
+}
+
+void TestPlotWidget::keyboardShortcutsIgnoredWithoutData()
+{
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    // No data loaded: every shortcut acts on a plotted view, so all of them must be
+    // inert rather than reaching into an empty ViewModel.
+    const bool legend_before = widget.m_legend_visible;
+    for (int key : { Qt::Key_L, Qt::Key_V, Qt::Key_R, Qt::Key_Home,
+                     Qt::Key_Left, Qt::Key_Right, Qt::Key_Plus, Qt::Key_Minus })
+    {
+        QTest::keyClick(&widget, static_cast<Qt::Key>(key));
+    }
+    QCOMPARE(widget.m_legend_visible, legend_before);
+    QVERIFY(!vm.hasData());
+}
+
+void TestPlotWidget::keyboardShortcutsAreWidgetScopedNotApplicationWide()
+{
+    // Regression guard for the reason these are handled in keyPressEvent instead of
+    // as QAction shortcuts: bare letters registered application-wide are dispatched
+    // ahead of the focus widget, so typing "Lock test" into any field would toggle
+    // the legend on the 'L'. A QLineEdit sharing the window must keep its keystrokes.
+    QWidget host;
+    auto* layout = new QVBoxLayout(&host);
+    PlotViewModel vm;
+    auto* widget = new PlotWidget(&host);
+    widget->setViewModel(&vm);
+    auto* edit = new QLineEdit(&host);
+    layout->addWidget(widget);
+    layout->addWidget(edit);
+    addLockStream(vm, "Ch 5", 5);
+
+    const bool legend_before = widget->m_legend_visible;
+    edit->setFocus();
+    QTest::keyClicks(edit, QStringLiteral("Lock"));
+    QCOMPARE(edit->text(), QString("Lock"));
+    QCOMPARE(widget->m_legend_visible, legend_before);   // plot untouched
 }

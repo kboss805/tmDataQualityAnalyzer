@@ -193,6 +193,28 @@ private:
     /// Intercepts mouse events on the legend (and its viewport) to drag it.
     bool eventFilter(QObject* watched, QEvent* event) override;
 
+    /// Keyboard equivalents for the most-used context-menu and chip actions.
+    ///
+    /// Deliberately **widget-scoped** rather than application-wide: these are bare
+    /// letters, and an application shortcut on a bare letter is dispatched ahead of
+    /// the focus widget's key handling, so it would swallow that character
+    /// everywhere the user types (the plot-title dialog, the time-window fields,
+    /// any config dialog). Handling them here means they only fire while the plot
+    /// itself has focus, which a click already gives it (see the panning gesture).
+    void keyPressEvent(QKeyEvent* event) override;
+    /// Slides the X window by @p fraction of the visible span; negative moves
+    /// earlier. Clamped to the data range by applyTimeWindow(), and a no-op when
+    /// already showing everything.
+    void panTimeWindow(double fraction);
+    /// Scales the X window about its centre. @p factor < 1 zooms in, > 1 zooms out.
+    void zoomTimeWindow(double factor);
+    /// Switches the left axis to the other metric. No-op unless the data has both
+    /// (an SNR-only file has nothing to switch to), matching the View Mode chip.
+    void cycleViewMode();
+    /// Restores the full X span and drops both Y maximum overrides - the keyboard
+    /// equivalent of the "Reset view" chip.
+    void resetView();
+
 
 
     PlotViewModel* m_view_model = nullptr;

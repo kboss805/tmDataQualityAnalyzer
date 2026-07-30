@@ -16,6 +16,7 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QInputDialog>
+#include <QKeyEvent>
 #include <QLineEdit>
 #include <QMenu>
 #include <QPainter>
@@ -448,6 +449,10 @@ QMenu* PlotWidget::buildContextMenu()
     const bool has_data = m_view_model->hasData();
 
     QMenu& menu = *(new QMenu(this));
+    // Qt suppresses action tooltips in menus unless asked; the View Mode submenu
+    // uses one to advertise its 'V' shortcut (a cycling key has no single entry to
+    // hang a QKeySequence on).
+    menu.setToolTipsVisible(true);
 
     // Set Plot Title leads the menu: it is the most frequently used entry when
     // preparing a plot for a report.
@@ -491,6 +496,9 @@ QMenu* PlotWidget::buildContextMenu()
 
     // --- View Mode: the left-axis metric ----------------------------------
     QMenu* view_menu = menu.addMenu(QStringLiteral("View Mode"));
+    // 'V' cycles between the two modes; shown on the submenu since the key toggles
+    // rather than selecting one specific entry.
+    view_menu->setToolTip(QStringLiteral("V - switch metric"));
     // Only meaningful when both left-axis metrics exist (a frame-sync stream
     // produces both); SNR-only data leaves it disabled.
     const bool both_metrics = m_view_model->hasLockSeries() && m_view_model->hasMissedFramesSeries();
@@ -529,6 +537,12 @@ QMenu* PlotWidget::buildContextMenu()
     legend_act->setCheckable(true);
     legend_act->setChecked(m_legend_visible);
     legend_act->setEnabled(has_data);
+    // Shortcut text only - the key itself is handled in keyPressEvent (widget-scoped,
+    // so a bare letter can't swallow typing elsewhere). Setting it here is what makes
+    // the shortcut discoverable instead of hidden; setShortcutVisibleInContextMenu is
+    // required because Qt hides shortcut text in context menus by default.
+    legend_act->setShortcut(QKeySequence(Qt::Key_L));
+    legend_act->setShortcutVisibleInContextMenu(true);
     connect(legend_act, &QAction::triggered, this,
             [this](bool checked) { setLegendVisible(checked); });
 
@@ -590,6 +604,8 @@ QMenu* PlotWidget::buildContextMenu()
     QAction* window_act = x_menu->addAction(QStringLiteral("Set Time Window..."));
     connect(window_act, &QAction::triggered, this, &PlotWidget::onSetTimeWindow);
     QAction* reset_x_act = x_menu->addAction(QStringLiteral("Reset Span"));
+    reset_x_act->setShortcut(QKeySequence(Qt::Key_Home));
+    reset_x_act->setShortcutVisibleInContextMenu(true);
     connect(reset_x_act, &QAction::triggered, this, &PlotWidget::onResetXAxis);
 
     // --- Y axes -----------------------------------------------------------
@@ -601,6 +617,9 @@ QMenu* PlotWidget::buildContextMenu()
     connect(right_act, &QAction::triggered, this, &PlotWidget::onSetRightYMax);
     y_menu->addSeparator();
     QAction* reset_y_act = y_menu->addAction(QStringLiteral("Reset"));
+    // 'R' resets BOTH axes, so it is advertised here rather than implying it only
+    // clears the Y overrides.
+    reset_y_act->setToolTip(QStringLiteral("R - reset both axes"));
     connect(reset_y_act, &QAction::triggered, this, &PlotWidget::onResetYAxes);
 
     menu.addSeparator();
@@ -934,6 +953,10 @@ void PlotWidget::handlePlotXRangeChanged(double lower, double upper)
 
 void PlotWidget::setUpLayout()
 {
+    // Needed for the keyboard shortcuts in keyPressEvent: without a focus policy
+    // this widget can never hold focus, so it would never see a key press.
+    setFocusPolicy(Qt::StrongFocus);
+
     auto* main_layout = new QVBoxLayout(this);
     main_layout->setContentsMargins(4, 4, 4, 4);
     main_layout->setSpacing(0);
@@ -1099,6 +1122,11 @@ void PlotWidget::setUpConnections()
     // The legend overlay and its viewport set their own cursors, so dragging the
     // legend is unaffected.
     connect(m_plot, &QCustomPlot::mousePress, this, [this](QMouseEvent* event) {
+        // Clicking the chart focuses the plot, which is what makes the keyboard
+        // shortcuts (L/V/R/Home/arrows/+/-) reachable: they are widget-scoped, so
+        // they only fire while this widget has focus. Done before the has-data
+        // guard so focus follows the click either way.
+        setFocus(Qt::MouseFocusReason);
         if (m_view_model == nullptr || !m_view_model->hasData())
         {
             return;
@@ -1460,6 +1488,118 @@ void PlotWidget::applyBandZoom(double lower, double upper)
     }
     applyTimeWindow(lower, upper,
                     m_view_model->formatTime(lower), m_view_model->formatTime(upper));
+}
+
+void PlotWidget::keyPressEvent(QKeyEvent* event)
+{
+    // Every shortcut here acts on loaded data; with nothing plotted they would all
+    // be no-ops, so fall through to the base class and let the key propagate.
+    if (m_view_model == nullptr || !m_view_model->hasData())
+    {
+        QWidget::keyPressEvent(event);
+        return;
+    }
+
+    switch (event->key())
+    {
+    case Qt::Key_L:
+        setLegendVisible(!m_legend_visible);
+        break;
+    case Qt::Key_V:
+        cycleViewMode();
+        break;
+    case Qt::Key_R:
+        resetView();
+        break;
+    case Qt::Key_Home:
+        // Narrower than R on purpose: restore the full time span but keep any
+        // Y maximum the user pinned, which is often the thing they want held
+        // steady while ranging over the recording.
+        onResetXAxis();
+        break;
+    case Qt::Key_Left:
+        panTimeWindow(-PlotConstants::kKeyPanFraction);
+        break;
+    case Qt::Key_Right:
+        panTimeWindow(PlotConstants::kKeyPanFraction);
+        break;
+    case Qt::Key_Plus:
+    case Qt::Key_Equal:   // unshifted '+' on a US layout
+        zoomTimeWindow(PlotConstants::kKeyZoomFactor);
+        break;
+    case Qt::Key_Minus:
+        zoomTimeWindow(1.0 / PlotConstants::kKeyZoomFactor);
+        break;
+    default:
+        QWidget::keyPressEvent(event);
+        return;
+    }
+    event->accept();
+}
+
+void PlotWidget::panTimeWindow(double fraction)
+{
+    const double lower = m_view_model->xViewMin();
+    const double upper = m_view_model->xViewMax();
+    const double span  = upper - lower;
+    if (span <= 0.0)
+    {
+        return;
+    }
+    // Already showing the whole recording: there is nowhere to pan to, and
+    // applyTimeWindow would just clamp back to the same window.
+    if (lower <= m_view_model->xMin() && upper >= m_view_model->xMax())
+    {
+        return;
+    }
+    const double shift = span * fraction;
+    applyTimeWindow(lower + shift, upper + shift,
+                    m_view_model->formatTime(lower + shift),
+                    m_view_model->formatTime(upper + shift));
+}
+
+void PlotWidget::zoomTimeWindow(double factor)
+{
+    const double lower = m_view_model->xViewMin();
+    const double upper = m_view_model->xViewMax();
+    const double span  = upper - lower;
+    if (span <= 0.0)
+    {
+        return;
+    }
+    const double centre    = lower + span / 2.0;
+    const double new_span  = span * factor;
+    // Same floor the band-zoom drag uses, so a long press of '+' cannot collapse
+    // the view to a degenerate window.
+    if (new_span < PlotConstants::kMinBandZoomSpanSec)
+    {
+        return;
+    }
+    const double new_lower = centre - new_span / 2.0;
+    const double new_upper = centre + new_span / 2.0;
+    applyTimeWindow(new_lower, new_upper,
+                    m_view_model->formatTime(new_lower),
+                    m_view_model->formatTime(new_upper));
+}
+
+void PlotWidget::cycleViewMode()
+{
+    // Guard matches the View Mode chip and menu: with only one left-axis metric
+    // present there is no other mode to switch to.
+    if (!m_view_model->hasLockSeries() || !m_view_model->hasMissedFramesSeries())
+    {
+        return;
+    }
+    const bool showing_lock =
+        (m_view_model->lockAxisView() == PlotViewModel::LockAxisView::LockPercent);
+    m_view_model->setLockAxisView(showing_lock ? PlotViewModel::LockAxisView::MissedFrames
+                                              : PlotViewModel::LockAxisView::LockPercent);
+}
+
+void PlotWidget::resetView()
+{
+    onResetXAxis();
+    onResetYAxes();
 }
 
 void PlotWidget::updatePlotCursor()

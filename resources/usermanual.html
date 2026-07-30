@@ -175,6 +175,10 @@ appear and disappear with the state of the plot, so nothing sits there unused.</
       across several series at the same instant; the tooltip shows the nearest reading.</li>
   <li><strong>Back to full view</strong> — double-click the chart, click the <em>Reset view</em>
       chip, or use <strong>X Axis → Reset Span</strong>.</li>
+  <li><strong>Keyboard</strong> — click the chart once to focus it, then single keys drive the
+      view: <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to step through time, <kbd>+</kbd>
+      <kbd>&minus;</kbd> to zoom, <kbd>R</kbd> to reset. See
+      <a href="#shortcuts">Keyboard shortcuts</a> for the full list.</li>
 </ul>
 
 <h2 id="metrics">4. Understanding the metrics</h2>
@@ -234,10 +238,31 @@ wrong physical channel.</div>
 </ul>
 
 <h2 id="shortcuts">8. Keyboard shortcuts</h2>
+<h3>Anywhere in the application</h3>
 <table>
   <tr><th>Shortcut</th><th>Action</th></tr>
   <tr><td><kbd>Ctrl+O</kbd></td><td>Open a Chapter 10 or CSV file</td></tr>
   <tr><td><kbd>Ctrl+B</kbd></td><td>Show / hide the sidebar (log)</td></tr>
+</table>
+
+<h3>While the chart has focus</h3>
+<p>Click the chart once to focus it. These are single keys, so they act only on the chart —
+they never interfere with typing in a dialog or a configuration field. The right-click menu
+shows the key next to each command as a reminder.</p>
+<table>
+  <tr><th>Shortcut</th><th>Action</th></tr>
+  <tr><td><kbd>&larr;</kbd> <kbd>&rarr;</kbd></td>
+      <td>Step the visible time window earlier / later, keeping its width</td></tr>
+  <tr><td><kbd>+</kbd> <kbd>&minus;</kbd></td>
+      <td>Zoom the time axis in / out about the centre of the view</td></tr>
+  <tr><td><kbd>Home</kbd></td>
+      <td>Back to the full time span, keeping any Y&nbsp;axis maximum you set</td></tr>
+  <tr><td><kbd>R</kbd></td>
+      <td>Reset the view — full time span <em>and</em> automatic Y&nbsp;axes</td></tr>
+  <tr><td><kbd>V</kbd></td>
+      <td>Switch the left axis between Lock&nbsp;% and Accumulation</td></tr>
+  <tr><td><kbd>L</kbd></td>
+      <td>Show or hide the legend</td></tr>
 </table>
 
 <hr style="border:none;border-top:1px solid var(--line);margin-top:2.5rem">

@@ -77,7 +77,7 @@ nmake -f Makefile.Debug
 
 - Results are written to `tests\output\results.txt` (gitignored) AND printed to the console. A
   non-zero process exit code means at least one suite failed.
-- Green baseline across 19 suites: **341 / 0 / 1**, in about 35 s. The one skip is the heavy PRN
+- Green baseline across 19 suites: **344 / 0 / 1**, in about 35 s. The one skip is the heavy PRN
   throughput benchmark: it walks a 640 MB recording nine times and takes minutes, so it is opt-in —
   run it deliberately with `$env:TMDQA_RUN_HEAVY_BENCH=1` when you want throughput numbers.
 - A convenience wrapper exists: `powershell -ExecutionPolicy Bypass -File scripts\build_ide.ps1`
