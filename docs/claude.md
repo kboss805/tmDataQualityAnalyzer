@@ -1086,6 +1086,42 @@ Tasks are defined in `.vscode/tasks.json`:
 - "Clean" - Cleans build artifacts
 - "Rebuild" - Clean + Build
 
+### clangd / IntelliSense (`compile_flags.txt`)
+
+clangd and clang-tidy read a single project-root `compile_flags.txt` — one flag per
+line, applied to every translation unit, which is sufficient here because every TU
+shares the same includes and defines. It is **generated, not committed** (the Qt include
+paths are machine-specific and absolute), and it is **gitignored**, so a fresh clone has
+no IntelliSense until you run:
+
+```powershell
+py scripts/gen_compile_flags.py
+```
+
+Re-run it after a Qt version bump, or after changing `INCLUDEPATH` / `DEFINES` /
+`QT +=` in the `.pro` — the generator mirrors those by hand (`PROJECT_INCLUDES`,
+`QT_MODULES`, `DEFINES` in the script), so a `.pro` change silently leaves clangd stale
+until it's regenerated on both sides.
+
+It targets MSVC (`--target=x86_64-pc-windows-msvc`, `-fms-compatibility`), and clangd
+then locates the MSVC and Windows SDK system headers itself — those paths are
+deliberately **not** in the file. Verify with:
+
+```powershell
+clangd --check=src/view/plotwidget.cpp
+```
+
+which should end in `All checks completed, 0 errors`.
+
+**Worktree trap.** The paths in `compile_flags.txt` are absolute into the checkout that
+generated it, and `.claude/worktrees/<name>/` sits *inside* the main checkout — so
+clangd walking up from a worktree source file finds the **main** tree's
+`compile_flags.txt` and resolves every project header from the **main** tree. It still
+reports `0 errors`, so nothing looks wrong while go-to-definition, diagnostics, and
+completion all describe code you are not editing. **Run the generator inside each
+worktree** (it writes relative to its own repo root), same as the `tests/data` junction
+that worktrees also need.
+
 ### Deployment & Packaging
 
 - **Build automation**: `deploy/build_release.ps1` — builds release, runs `windeployqt`, stages installer and portable layouts, signs exe, creates ZIP, compiles Inno Setup installer
