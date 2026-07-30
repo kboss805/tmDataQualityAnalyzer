@@ -38,13 +38,60 @@ real argument that scrubbing beats the gestures already there (wheel zoom, drag 
 Ctrl+drag band zoom, double-click reset). Revisit once the context-menu workflow has
 some mileage.
 
-### `compile_commands.json` for MSVC (clangd IntelliSense)
+### Replace QCustomPlot with a first-party plotting implementation
 
-clangd works against a compilation database that was generated for the old MinGW
-build. Now that the toolchain is MSVC-only, a generator emitting MSVC-flavored entries
-— or a `.clangd` config mapping the qmake/nmake command line — would restore accurate
-cross-file IntelliSense. It doesn't affect the build, but it affects every editor
-session.
+QCustomPlot (`lib/qcustomplot/`, ~1.6 MB vendored) is third-party and protected — it
+can never be edited, so every rendering behaviour we want has to be adapted around it in
+app code. Replacing it with our own Qt-native plotting would remove that constraint and
+the vendored dependency.
+
+**Scope is smaller than it looks.** Only four files touch QCustomPlot or `QCP*` types:
+
+| File | Role |
+| --- | --- |
+| `src/view/plotwidget.cpp` | all chart construction, axes, gestures, overlays, export |
+| `include/view/plotwidget.h` | member declarations |
+| `src/viewmodel/plotviewmodel.cpp` | incidental (colors/ranges), not rendering |
+| `tests/tst_plotwidget.cpp` | asserts against widget/graph state |
+
+Everything else already goes through `PlotViewModel`, which is rendering-agnostic — the
+MVVM split means the ViewModel and every other suite are unaffected.
+
+**What makes this genuinely hard** is not drawing lines, it's matching what QCustomPlot
+gives us for free and US4.0/US4.1 now depend on: dual Y axes with independent
+auto/manual ranging, wheel zoom and drag pan on one axis only, the draggable translucent
+legend overlay composited into PNG/SVG/PDF exports at its placed position, the crosshair
+and rubber-band items that deliberately are not widgets so they stay out of exports, and
+`rpQueuedReplot` performance with 48+ SNR series over long recordings. Export in three
+formats is the part most likely to be underestimated.
+
+Worth deciding first whether the goal is removing a *protected* dependency or gaining
+*capability* — if it's the former, note the vendored library is stable and has cost us
+nothing but the no-edit rule, so the honest comparison is a large rewrite against a
+constraint we have so far always been able to work around.
+
+### Upgrade to Qt 6.11.x
+
+Currently pinned to **6.10.3**, single-sourced in `scripts/env.ps1` (`QT_VERSION`) and
+mirrored by `QT_VERSION` in `.github/workflows/ci.yml`, which must match the kit
+installed on the self-hosted runner.
+
+**Prerequisite: 6.11.x is not installed yet.** As of 2026-07-30 the only kit on this
+machine is `C:\Qt\6.10.3\msvc2022_64` (the sole `Qt6Core.dll` reports 6.10.3.0, and
+`MaintenanceTool.dat` has no 6.11 references — the recent Maintenance Tool run installed
+`jom`). Install `6.11.x msvc2022_64` before starting.
+
+**The work:** bump `QT_VERSION` in `env.ps1`, match it in `ci.yml`, re-run
+`py scripts/gen_compile_flags.py` (its Qt paths are version-pinned and absolute), then
+rebuild clean and confirm the suite and the **zero-warning gate** still pass — a minor Qt
+bump commonly introduces new deprecation warnings, which is now a CI failure for both app
+and test code. Also re-run `deploy/build_release.ps1`, since `windeployqt` comes from the
+kit and the packaged Qt DLLs change.
+
+Keep both runners in step: CI routes to the self-hosted runner whenever it is online, so
+bumping `ci.yml` before the runner's kit is upgraded breaks the self-hosted path while
+the hosted fallback (which provisions Qt per run) still passes — an asymmetry that is
+easy to misread.
 
 ---
 
@@ -59,5 +106,6 @@ documentation lives.
 | Move CI to a self-hosted runner | PR #41, #42 | [`docs/ci_runner.md`](../ci_runner.md), `.github/workflows/ci.yml` |
 | Ship sample `.ch10` files for CI | PR #41 | as above — self-hosting delivered it; small fixtures are committed, the full-size recording lives on the runner |
 | Gate warnings in test code too | PR #50 | `.github/workflows/ci.yml` - one gate over both build logs |
+| MSVC-flavored clangd config | PR #40 (found already done) | `docs/CLAUDE.md` -> clangd / IntelliSense; `scripts/gen_compile_flags.py`. Verified with `clangd --check` across QCustomPlot / Win32 / irig106 / test TUs: 0 errors |
 | Speed up CI with a parallel build (`jom`) | PR #48 | `scripts/env.ps1` (`TMDQ_MAKE`), [`../ci_runner.md`](../ci_runner.md) - CI run 286s -> 93s |
 | Simplify the plot window | PR #43 | `docs/CLAUDE.md` (US4.0 / US4.1), `resources/usermanual.html` §3 |

@@ -30,6 +30,12 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
 
 The **`build-and-test`** skill encodes all of this; prefer it.
 
+**IntelliSense:** clangd reads a generated, gitignored `compile_flags.txt` — run
+`py scripts/gen_compile_flags.py` after a fresh clone, a Qt bump, or a `.pro`
+include/define change. **Run it inside each worktree too**: the paths are absolute, and a
+worktree otherwise silently resolves headers from the main checkout while still reporting
+zero errors (see `docs/CLAUDE.md` → clangd / IntelliSense).
+
 ## Project skills (`.claude/skills/`)
 
 `build-and-test` · `tm-code-review` · `write-qt-test` · `add-stream-setting` · `cut-release`.
