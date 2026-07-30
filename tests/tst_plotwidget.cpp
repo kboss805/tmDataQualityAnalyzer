@@ -492,15 +492,25 @@ void TestPlotWidget::wheelZoomAndDragPanRemainEnabled()
 
     // Regression guard for the toolbar removal: mouse interaction is what is left
     // for navigating the plot, so it must switch on once data arrives, and stay
-    // horizontal-only (X zoom/pan).
-    QVERIFY(!widget.m_plot->interactions().testFlag(QCP::iRangeZoom));
+    // horizontal-only.
+    QVERIFY(!widget.m_plot->interactionsEnabled());
 
     addLockStream(vm, "Ch 5", 5);
+    QVERIFY(widget.m_plot->interactionsEnabled());
 
-    QVERIFY(widget.m_plot->interactions().testFlag(QCP::iRangeZoom));
-    QVERIFY(widget.m_plot->interactions().testFlag(QCP::iRangeDrag));
-    QCOMPARE(widget.m_plot->axisRect()->rangeZoom(), Qt::Horizontal);
-    QCOMPARE(widget.m_plot->axisRect()->rangeDrag(), Qt::Horizontal);
+    // Horizontal-only used to be two QCustomPlot flags; TmChart has no vertical
+    // gestures at all, so assert the behaviour rather than the (now absent) flags:
+    // a wheel zoom must move the X range and leave the Y range untouched.
+    widget.m_plot->resize(400, 300);
+    const double y_before = widget.m_plot->plotArea().height();
+    const double x_span_before = widget.m_plot->xUpper() - widget.m_plot->xLower();
+    const QPointF pos(widget.m_plot->plotArea().center());
+    QWheelEvent wheel(pos, widget.m_plot->mapToGlobal(pos.toPoint()), QPoint(0, 0),
+                      QPoint(0, 120), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+    QApplication::sendEvent(widget.m_plot, &wheel);
+
+    QVERIFY(widget.m_plot->xUpper() - widget.m_plot->xLower() < x_span_before);
+    QCOMPARE(widget.m_plot->plotArea().height(), y_before);   // no vertical zoom
 }
 
 void TestPlotWidget::noExternalControlWidgetsRemain()
@@ -746,7 +756,7 @@ void TestPlotWidget::doubleClickResetsSpanViaViewModel()
     // Reset chip and X Axis > Reset Span produce).
     QMouseEvent dbl(QEvent::MouseButtonDblClick, QPointF(10, 10), QPointF(10, 10),
                     Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
-    emit widget.m_plot->mouseDoubleClick(&dbl);
+    emit widget.m_plot->mouseDoubleClicked(&dbl);
 
     QCOMPARE(vm.xViewMin(), vm.xMin());
     QCOMPARE(vm.xViewMax(), vm.xMax());

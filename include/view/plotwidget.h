@@ -1,6 +1,6 @@
 /**
  * @file plotwidget.h
- * @brief View widget for AGC signal plot — QCustomPlot chart with controls.
+ * @brief View widget for AGC signal plot - TmChart chart with controls.
  */
 
 #ifndef PLOTWIDGET_H
@@ -21,7 +21,7 @@ class QMenu;
 
 #include <functional>
 
-#include "qcustomplot.h"
+#include "tmchart.h"
 
 class PlotViewModel;
 
@@ -30,38 +30,18 @@ class PlotViewModel;
  *
  * Delegates label formatting to PlotViewModel::formatTime().
  */
-class TimeHackTicker : public QCPAxisTicker
-{
-public:
-    /// Sets the PlotViewModel used for time formatting.
-    void setViewModel(PlotViewModel* vm) { m_vm = vm; }
-
-protected:
-    /// Overrides the default numeric label with DDD:HH:MM:SS format.
-    QString getTickLabel(double tick, const QLocale& locale,
-                         QChar formatChar, int precision) override;
-    /// Forces an even step so createTickVector() yields exactly tickCount() ticks.
-    double getTickStep(const QCPRange& range) override;
-    /// No sub-ticks — keeps the time axis from getting more cluttered.
-    int getSubTickCount(double tickStep) override;
-    /// Generates exactly tickCount() ticks evenly spaced across the range.
-    QVector<double> createTickVector(double tickStep, const QCPRange& range) override;
-
-private:
-    PlotViewModel* m_vm = nullptr;
-};
 
 /**
- * @brief Self-contained plot widget: QCustomPlot chart + movable legend.
+ * @brief Self-contained plot widget: TmChart chart + movable legend.
  *
- * Owns its own QCustomPlot instance. Connects to a PlotViewModel for data.
+ * Owns its own TmChart instance. Connects to a PlotViewModel for data.
  * Placed inside a QDockWidget by MainView.
  *
  * The chart fills the whole widget: there are no external control rows. Every
  * control (Plot File, View Mode, Customize View, plot title, X/Y axis ranges,
  * Export) lives in the plot's **right-click context menu** — see
  * showPlotContextMenu(). Mouse-wheel zoom and click-drag pan on the X axis are
- * unaffected; right-click is otherwise unused by QCustomPlot.
+ * unaffected; right-click is otherwise unused by the chart.
  */
 class PlotWidget : public QWidget
 {
@@ -105,7 +85,7 @@ private slots:
     /// Switches the left-axis metric (lock % vs missed frames) by syncing graph
     /// visibility and the axis label in place — no chart rebuild.
     void onLockAxisViewChanged();
-    /// Syncs axis ranges from ViewModel to the QCustomPlot axes.
+    /// Syncs axis ranges from ViewModel to the chart axes.
     void updateAxes();
     /// Updates chart title from ViewModel.
     void updateTitle();
@@ -137,9 +117,9 @@ signals:
     void logMessage(const QString& message);
 
 private:
-    /// Handles QCustomPlot axis range change from mouse interaction.
+    /// Handles a chart X range change from mouse interaction.
     void handlePlotXRangeChanged(double lower, double upper);
-    /// Handles QCustomPlot Y axis range change from mouse interaction.
+    /// Handles a chart Y range change from mouse interaction.
     void handlePlotYRangeChanged(double lower, double upper);
     void setUpLayout();
     void setUpConnections();
@@ -224,13 +204,15 @@ private:
 
     /// @name Chart
     /// @{
-    QCustomPlot* m_plot = nullptr;
+    TmChart* m_plot = nullptr;
     /// @}
 
     /// @name Graph tracking
     /// @{
-    QVector<QCPGraph*> m_graphs;          ///< Series index → QCPGraph, aligned to PlotViewModel::allSeries().
-    QHash<int, QCPGraph*> m_graph_by_id;  ///< Series id → QCPGraph, for incremental reconcile across appends.
+    QHash<int, int> m_series_index_by_id; ///< Series id -> TmChart series index. Rebuilt whenever
+                                          ///< series are added or removed: TmChart::removeSeries()
+                                          ///< shifts later indices down, so a cached index would
+                                          ///< silently start pointing at a different curve.
     /// @}
 
     /// @name Legend overlay (movable box floating over the chart, child of m_plot)
@@ -254,7 +236,7 @@ private:
         QLabel*  label  = nullptr;
     };
     /// Series id → its legend row, for incremental reconcile across appends —
-    /// mirrors m_graph_by_id so a run with many streams doesn't rebuild every
+    /// mirrors m_series_index_by_id so a run with many streams doesn't rebuild every
     /// row's widgets from scratch on each stream's completion.
     QHash<int, LegendRow> m_legend_row_by_id;
     /// Overlay chip bar floating at the chart's top-left: the only persistent
@@ -274,8 +256,6 @@ private:
 
     /// @name Chart-item overlays (no persistent chrome)
     /// @{
-    QCPItemStraightLine* m_crosshair = nullptr; ///< Vertical time line following the cursor.
-    QCPItemRect* m_zoom_band = nullptr;         ///< Rubber band drawn during a drag-to-zoom.
     bool   m_band_zooming = false;              ///< True while a band-zoom drag is in progress.
     double m_band_start_x = 0.0;                ///< Plot-coordinate X where the band drag began.
     /// @}

@@ -21,6 +21,8 @@ constexpr int kOuterMargin   = 10;
 constexpr int kAxisLabelGap  = 6;
 /// Tick mark length, in pixels, drawn outward from the axis line.
 constexpr int kTickLength    = 4;
+/// Minimum clear space between adjacent X tick labels before one is dropped.
+constexpr int kTickLabelGapPx = 12;
 /// Wheel notch -> zoom factor. Matches the feel of the previous implementation:
 /// one notch changes the visible span by ~15%.
 constexpr double kWheelZoomStep = 0.85;
@@ -72,11 +74,22 @@ void TmChart::setSeriesData(int index, const QVector<double>& xs, const QVector<
     {
         return;
     }
-    // Mismatched lengths would read past the end of the shorter vector while
-    // drawing; keep only the paired prefix.
-    const int n = std::min(xs.size(), ys.size());
-    m_series[index].xs = xs.mid(0, n);
-    m_series[index].ys = ys.mid(0, n);
+    if (xs.size() == ys.size())
+    {
+        // Equal lengths is the normal case, and QVector is implicitly shared, so
+        // assigning is a refcount bump rather than copying the samples. That keeps
+        // a full rebuild cheap even with 48 series over a long recording.
+        m_series[index].xs = xs;
+        m_series[index].ys = ys;
+    }
+    else
+    {
+        // Mismatched lengths would read past the end of the shorter vector while
+        // drawing; keep only the paired prefix.
+        const int n = std::min(xs.size(), ys.size());
+        m_series[index].xs = xs.mid(0, n);
+        m_series[index].ys = ys.mid(0, n);
+    }
     update();
 }
 
@@ -509,15 +522,38 @@ void TmChart::drawAxes(QPainter& painter) const
     }
 
     // --- X ticks and labels ---
-    for (double t : tickValues(m_x_lower, m_x_upper, m_x_tick_count))
+    //
+    // Tick marks are always drawn, but labels are decluttered: elapsed-time labels
+    // are wide (DDD:HH:MM:SS) and at the default tick count they overlap into an
+    // unreadable smear on a normal-width window. Draw a label only when it clears
+    // the previous one, and always keep the last tick's label so the range end
+    // stays readable.
+    const QVector<double> x_ticks = tickValues(m_x_lower, m_x_upper, m_x_tick_count);
+    double last_label_right = -1e9;
+    for (int i = 0; i < x_ticks.size(); ++i)
     {
-        const double px = xToPixel(t);
+        const double px = xToPixel(x_ticks[i]);
         painter.drawLine(QPointF(px, m_plot_area.bottom()),
                          QPointF(px, m_plot_area.bottom() + kTickLength));
-        const QString label = formatX(t);
-        const int w = fm.horizontalAdvance(label) + 8;
-        painter.drawText(QRectF(px - w / 2.0, m_plot_area.bottom() + kTickLength, w, text_h),
+
+        const QString label = formatX(x_ticks[i]);
+        const double w      = fm.horizontalAdvance(label) + kTickLabelGapPx;
+        const double left   = px - w / 2.0;
+        const bool is_last  = (i == x_ticks.size() - 1);
+        if (left < last_label_right && !is_last)
+        {
+            continue;
+        }
+        // The last label is pulled inside the plot edge rather than overflowing the
+        // widget, and may displace the one before it - hence the clearance check.
+        const double draw_left = is_last ? std::min(left, m_plot_area.right() - w) : left;
+        if (is_last && draw_left < last_label_right)
+        {
+            // No room for both; the end of the range wins.
+        }
+        painter.drawText(QRectF(draw_left, m_plot_area.bottom() + kTickLength, w, text_h),
                          Qt::AlignHCenter | Qt::AlignTop, label);
+        last_label_right = draw_left + w;
     }
 
     // --- Left ticks and labels ---
