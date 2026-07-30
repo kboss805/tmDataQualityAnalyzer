@@ -76,17 +76,29 @@ Currently pinned to **6.10.3**, single-sourced in `scripts/env.ps1` (`QT_VERSION
 mirrored by `QT_VERSION` in `.github/workflows/ci.yml`, which must match the kit
 installed on the self-hosted runner.
 
-**Prerequisite: 6.11.x is not installed yet.** As of 2026-07-30 the only kit on this
-machine is `C:\Qt\6.10.3\msvc2022_64` (the sole `Qt6Core.dll` reports 6.10.3.0, and
-`MaintenanceTool.dat` has no 6.11 references — the recent Maintenance Tool run installed
-`jom`). Install `6.11.x msvc2022_64` before starting.
+**6.11.1 is installed and pre-validated.** `C:\Qt\6.11.1\msvc2022_64` is present
+(`Qt6Core.dll` 6.11.1.0), alongside mingw/android/wasm kits the project doesn't use.
+
+A trial build against it on 2026-07-30, driven purely by `QT_VERSION=6.11.1` in the
+environment with no source changes, came out **completely clean**:
+
+| | Result |
+| --- | --- |
+| App build (shadow dir, so 6.10.3 tree untouched) | 0 warnings, 0 errors |
+| Test build | 0 warnings |
+| Full suite | **341 passed / 0 failed / 1 skipped** |
+
+That retires the main risk. A minor Qt bump usually brings new deprecation warnings, and
+since PR #50 those fail CI for app *and* test code — here there are none. Because
+`env.ps1` derives `QTDIR` from `QT_VERSION`, the whole trial needed no edits, which is
+also the rollback story: revert one constant.
 
 **The work:** bump `QT_VERSION` in `env.ps1`, match it in `ci.yml`, re-run
-`py scripts/gen_compile_flags.py` (its Qt paths are version-pinned and absolute), then
-rebuild clean and confirm the suite and the **zero-warning gate** still pass — a minor Qt
-bump commonly introduces new deprecation warnings, which is now a CI failure for both app
-and test code. Also re-run `deploy/build_release.ps1`, since `windeployqt` comes from the
-kit and the packaged Qt DLLs change.
+`py scripts/gen_compile_flags.py` (its Qt paths are version-pinned and absolute, so
+clangd otherwise keeps resolving 6.10.3 headers). Then rebuild clean and confirm the suite
+and the zero-warning gate. Also re-run `deploy/build_release.ps1` and re-verify
+signatures: `windeployqt` comes from the kit, so the packaged Qt DLLs all change — this is
+effectively a re-release of the binary, not a config tweak.
 
 Keep both runners in step: CI routes to the self-hosted runner whenever it is online, so
 bumping `ci.yml` before the runner's kit is upgraded breaks the self-hosted path while
