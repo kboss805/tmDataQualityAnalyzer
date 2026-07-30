@@ -38,18 +38,6 @@ real argument that scrubbing beats the gestures already there (wheel zoom, drag 
 Ctrl+drag band zoom, double-click reset). Revisit once the context-menu workflow has
 some mileage.
 
-### The zero-warning gate only covers the app build
-
-`ci.yml`'s gate greps `build\app_build.log`, which only the **app** build step writes.
-The test build's output isn't teed to a log, so a warning introduced in `tests/` code
-has never been gated in CI — despite the zero-warning policy applying to it. Verified
-to still fire correctly for app-code warnings under parallel `jom` builds (a deliberate
-`C4189` was matched), so this is a coverage gap, not a broken gate.
-
-Fixing it is a two-line change (tee the test build, extend the gate to both logs), but
-it may turn the next PR that touches test code red, so it's a deliberate decision
-rather than a drive-by.
-
 ### `compile_commands.json` for MSVC (clangd IntelliSense)
 
 clangd works against a compilation database that was generated for the old MinGW
@@ -70,5 +58,6 @@ documentation lives.
 | Switch the toolchain from MinGW to MSVC | PR #40 | `CLAUDE.md`, `docs/CLAUDE.md`, `scripts/env.ps1`, `deploy/build_release.ps1` |
 | Move CI to a self-hosted runner | PR #41, #42 | [`docs/ci_runner.md`](../ci_runner.md), `.github/workflows/ci.yml` |
 | Ship sample `.ch10` files for CI | PR #41 | as above — self-hosting delivered it; small fixtures are committed, the full-size recording lives on the runner |
+| Gate warnings in test code too | PR #50 | `.github/workflows/ci.yml` - one gate over both build logs |
 | Speed up CI with a parallel build (`jom`) | PR #48 | `scripts/env.ps1` (`TMDQ_MAKE`), [`../ci_runner.md`](../ci_runner.md) - CI run 286s -> 93s |
 | Simplify the plot window | PR #43 | `docs/CLAUDE.md` (US4.0 / US4.1), `resources/usermanual.html` §3 |

@@ -134,19 +134,6 @@ jobs:
           & $make -f Makefile.Debug 2>&1 | Tee-Object -FilePath app_build.log
           if ($LASTEXITCODE -ne 0) { throw "App build failed ($LASTEXITCODE)" }
 
-      - name: Zero-warning gate
-        shell: powershell
-        run: |
-          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError
-          # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
-          $ErrorActionPreference = 'Continue'
-          $warns = Select-String -Path build\app_build.log -Pattern 'warning [A-Z]\d+'
-          if ($warns) {
-            Write-Host "Compiler warnings found:"; $warns | ForEach-Object { Write-Host $_.Line }
-            throw "Build is not warning-clean"
-          }
-          Write-Host "No warnings."
-
       - name: Build tests (Debug, in-source)
         shell: powershell
         run: |
@@ -158,8 +145,34 @@ jobs:
           qmake tests.pro -spec win32-msvc 'CONFIG+=debug'
           $make = if ($env:TMDQ_MAKE) { $env:TMDQ_MAKE } elseif (Get-Command jom -ErrorAction SilentlyContinue) { 'jom' } else { 'nmake' }
           Write-Host "Building with $make"
-          & $make -f Makefile.Debug
+          & $make -f Makefile.Debug 2>&1 | Tee-Object -FilePath tests_build.log
           if ($LASTEXITCODE -ne 0) { throw "Test build failed ($LASTEXITCODE)" }
+
+      - name: Zero-warning gate (app + tests)
+        shell: powershell
+        run: |
+          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError
+          # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
+          $ErrorActionPreference = 'Continue'
+          # Runs after BOTH builds so one report lists every warning to fix. The gate
+          # used to check only the app log, so warnings in tests/ code were never
+          # gated even though the zero-warning policy covers them.
+          $logs = @('build\app_build.log', 'tests\tests_build.log')
+          # A missing log means the gate would scan nothing and "pass" - fail instead,
+          # or a renamed tee target silently disables the whole gate.
+          $missing = $logs | Where-Object { -not (Test-Path $_) }
+          if ($missing) { throw "Cannot verify: build log(s) missing - $($missing -join ', ')" }
+          $dirty = $false
+          foreach ($log in $logs) {
+            $warns = Select-String -Path $log -Pattern 'warning [A-Z]\d+'
+            if ($warns) {
+              $dirty = $true
+              Write-Host "Compiler warnings in ${log}:"
+              $warns | ForEach-Object { Write-Host "  $($_.Line)" }
+            }
+          }
+          if ($dirty) { throw "Build is not warning-clean" }
+          Write-Host "No warnings (app + tests)."
 
       - name: Run full test suite
         env:
@@ -255,19 +268,6 @@ jobs:
           & $make -f Makefile.Debug 2>&1 | Tee-Object -FilePath app_build.log
           if ($LASTEXITCODE -ne 0) { throw "App build failed ($LASTEXITCODE)" }
 
-      - name: Zero-warning gate
-        shell: powershell
-        run: |
-          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError
-          # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
-          $ErrorActionPreference = 'Continue'
-          $warns = Select-String -Path build\app_build.log -Pattern 'warning [A-Z]\d+'
-          if ($warns) {
-            Write-Host "Compiler warnings found:"; $warns | ForEach-Object { Write-Host $_.Line }
-            throw "Build is not warning-clean"
-          }
-          Write-Host "No warnings."
-
       - name: Build tests (Debug, in-source)
         shell: powershell
         run: |
@@ -278,8 +278,34 @@ jobs:
           qmake tests.pro -spec win32-msvc 'CONFIG+=debug'
           $make = if ($env:TMDQ_MAKE) { $env:TMDQ_MAKE } elseif (Get-Command jom -ErrorAction SilentlyContinue) { 'jom' } else { 'nmake' }
           Write-Host "Building with $make"
-          & $make -f Makefile.Debug
+          & $make -f Makefile.Debug 2>&1 | Tee-Object -FilePath tests_build.log
           if ($LASTEXITCODE -ne 0) { throw "Test build failed ($LASTEXITCODE)" }
+
+      - name: Zero-warning gate (app + tests)
+        shell: powershell
+        run: |
+          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError
+          # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
+          $ErrorActionPreference = 'Continue'
+          # Runs after BOTH builds so one report lists every warning to fix. The gate
+          # used to check only the app log, so warnings in tests/ code were never
+          # gated even though the zero-warning policy covers them.
+          $logs = @('build\app_build.log', 'tests\tests_build.log')
+          # A missing log means the gate would scan nothing and "pass" - fail instead,
+          # or a renamed tee target silently disables the whole gate.
+          $missing = $logs | Where-Object { -not (Test-Path $_) }
+          if ($missing) { throw "Cannot verify: build log(s) missing - $($missing -join ', ')" }
+          $dirty = $false
+          foreach ($log in $logs) {
+            $warns = Select-String -Path $log -Pattern 'warning [A-Z]\d+'
+            if ($warns) {
+              $dirty = $true
+              Write-Host "Compiler warnings in ${log}:"
+              $warns | ForEach-Object { Write-Host "  $($_.Line)" }
+            }
+          }
+          if ($dirty) { throw "Build is not warning-clean" }
+          Write-Host "No warnings (app + tests)."
 
       - name: Run test suite
         env:
