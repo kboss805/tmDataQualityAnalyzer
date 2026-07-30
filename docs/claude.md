@@ -4,7 +4,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 
 ## Version Information
 
-- **Qt Version**: 6.10.3 (minimum: Qt 6.0.0)
+- **Qt Version**: 6.11.1 (minimum: Qt 6.0.0)
 - **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, `cl` / `nmake`), Qt `msvc2022_64` kit.
   This is the only supported toolchain (and what CI uses).
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
@@ -989,7 +989,7 @@ User opens .ch10 ─► MainView ─► MainViewModel ─► Chapter10Reader (me
 
 ### Qt Version Compatibility
 
-- **Target**: Qt 6.10.3
+- **Target**: Qt 6.11.1
 - **Important**: Qt 6 made significant changes to container classes
   - `QStringList` methods differ from Qt 5
   - Prefer range-based for loops when iterating over Qt containers

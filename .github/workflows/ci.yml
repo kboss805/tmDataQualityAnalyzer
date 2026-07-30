@@ -45,7 +45,7 @@ concurrency:
 # Qt version. env.ps1 (self-hosted) and install-qt-action (hosted) both read it, so
 # it stays the single knob; it must match the Qt kit installed on the self-hosted runner.
 env:
-  QT_VERSION: '6.10.3'
+  QT_VERSION: '6.11.1'
 
 jobs:
   # --- Decide which runner to use -------------------------------------------

@@ -70,41 +70,6 @@ Worth deciding first whether the goal is removing a *protected* dependency or ga
 nothing but the no-edit rule, so the honest comparison is a large rewrite against a
 constraint we have so far always been able to work around.
 
-### Upgrade to Qt 6.11.x
-
-Currently pinned to **6.10.3**, single-sourced in `scripts/env.ps1` (`QT_VERSION`) and
-mirrored by `QT_VERSION` in `.github/workflows/ci.yml`, which must match the kit
-installed on the self-hosted runner.
-
-**6.11.1 is installed and pre-validated.** `C:\Qt\6.11.1\msvc2022_64` is present
-(`Qt6Core.dll` 6.11.1.0), alongside mingw/android/wasm kits the project doesn't use.
-
-A trial build against it on 2026-07-30, driven purely by `QT_VERSION=6.11.1` in the
-environment with no source changes, came out **completely clean**:
-
-| | Result |
-| --- | --- |
-| App build (shadow dir, so 6.10.3 tree untouched) | 0 warnings, 0 errors |
-| Test build | 0 warnings |
-| Full suite | **341 passed / 0 failed / 1 skipped** |
-
-That retires the main risk. A minor Qt bump usually brings new deprecation warnings, and
-since PR #50 those fail CI for app *and* test code — here there are none. Because
-`env.ps1` derives `QTDIR` from `QT_VERSION`, the whole trial needed no edits, which is
-also the rollback story: revert one constant.
-
-**The work:** bump `QT_VERSION` in `env.ps1`, match it in `ci.yml`, re-run
-`py scripts/gen_compile_flags.py` (its Qt paths are version-pinned and absolute, so
-clangd otherwise keeps resolving 6.10.3 headers). Then rebuild clean and confirm the suite
-and the zero-warning gate. Also re-run `deploy/build_release.ps1` and re-verify
-signatures: `windeployqt` comes from the kit, so the packaged Qt DLLs all change — this is
-effectively a re-release of the binary, not a config tweak.
-
-Keep both runners in step: CI routes to the self-hosted runner whenever it is online, so
-bumping `ci.yml` before the runner's kit is upgraded breaks the self-hosted path while
-the hosted fallback (which provisions Qt per run) still passes — an asymmetry that is
-easy to misread.
-
 ---
 
 ## Shipped
@@ -117,6 +82,7 @@ documentation lives.
 | Switch the toolchain from MinGW to MSVC | PR #40 | `CLAUDE.md`, `docs/CLAUDE.md`, `scripts/env.ps1`, `deploy/build_release.ps1` |
 | Move CI to a self-hosted runner | PR #41, #42 | [`docs/ci_runner.md`](../ci_runner.md), `.github/workflows/ci.yml` |
 | Ship sample `.ch10` files for CI | PR #41 | as above — self-hosting delivered it; small fixtures are committed, the full-size recording lives on the runner |
+| Upgrade to Qt 6.11.1 | PR #53 | `scripts/env.ps1` + `.github/workflows/ci.yml` (`QT_VERSION`). Clean: 0 warnings, 341/0/1. NOTE the shipped v2.8.0 binaries were built on 6.10.3, so the next release needs a NEW version number - do not repackage 2.8.0 |
 | Gate warnings in test code too | PR #50 | `.github/workflows/ci.yml` - one gate over both build logs |
 | MSVC-flavored clangd config | PR #40 (found already done) | `docs/CLAUDE.md` -> clangd / IntelliSense; `scripts/gen_compile_flags.py`. Verified with `clangd --check` across QCustomPlot / Win32 / irig106 / test TUs: 0 errors |
 | Speed up CI with a parallel build (`jom`) | PR #48 | `scripts/env.ps1` (`TMDQ_MAKE`), [`../ci_runner.md`](../ci_runner.md) - CI run 286s -> 93s |
