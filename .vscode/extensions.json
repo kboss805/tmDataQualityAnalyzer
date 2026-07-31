@@ -1,0 +1,10 @@
+{
+    "recommendations": [
+        "Qt.qt-official-extension-vscode",
+        "eclipse-cdt.cdt-gdb-vscode",
+        "llvm-vs-code-extensions.vscode-clangd",
+        "mohsen1.prettify-json",
+        "AyushSaini.json-crack",
+        "remcohaszing.vscode-schemastore"
+    ]
+}

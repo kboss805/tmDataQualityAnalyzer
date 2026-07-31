@@ -1,0 +1,78 @@
+{
+  // Two IDEs, two debug adapters - pick the entry that names YOUR editor.
+  //
+  //   VS Code      has ms-vscode.cpptools  -> use the "MSVC debugger" entries.
+  //                It does NOT have CodeLLDB, so the LLDB entries fail there.
+  //   Antigravity  has vadimcn.vscode-lldb -> use the "CodeLLDB" entries.
+  //                cpptools is Microsoft-licensed and is not available in the
+  //                fork, so "cppvsdbg" fails there with
+  //                "Configured debug type 'cppvsdbg' is not supported".
+  //
+  // Both adapters read the MSVC PDBs (CodeLLDB ships msdia140.dll for this), so
+  // breakpoints and source stepping work either way. Debug the *Debug* build;
+  // the Release build is compiled without full debug info, so use it to run
+  // rather than to step through. To just build+launch Release with no debugger
+  // at all - which works identically in both IDEs - run the task
+  // "Build and Launch (Release)" instead of pressing F5.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "App (Debug) - VS Code / MSVC debugger",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/debug/tmDataQualityAnalyzer.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "preLaunchTask": "Build (Debug)"
+    },
+    {
+      "name": "App (Debug) - Antigravity / CodeLLDB",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/debug/tmDataQualityAnalyzer.exe",
+      "cwd": "${workspaceFolder}",
+      "terminal": "integrated",
+      "preLaunchTask": "Build (Debug)"
+    },
+    {
+      "name": "App (Release) - VS Code / MSVC debugger",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/release/tmDataQualityAnalyzer.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "preLaunchTask": "Build (Release)"
+    },
+    {
+      "name": "App (Release) - Antigravity / CodeLLDB",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/release/tmDataQualityAnalyzer.exe",
+      "cwd": "${workspaceFolder}",
+      "terminal": "integrated",
+      "preLaunchTask": "Build (Release)"
+    },
+    {
+      "name": "Tests (Debug) - VS Code / MSVC debugger",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/tests/debug/tmDataQualityAnalyzer_tests.exe",
+      "cwd": "${workspaceFolder}/tests",
+      "environment": [
+        { "name": "QT_QPA_PLATFORM", "value": "offscreen" }
+      ],
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Tests (Debug) - Antigravity / CodeLLDB",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/tests/debug/tmDataQualityAnalyzer_tests.exe",
+      "cwd": "${workspaceFolder}/tests",
+      "env": {
+        "QT_QPA_PLATFORM": "offscreen"
+      },
+      "terminal": "integrated"
+    }
+  ]
+}

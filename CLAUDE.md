@@ -30,6 +30,14 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
 
 The **`build-and-test`** skill encodes all of this; prefer it.
 
+**Running a built exe (IDE or by hand):** `py`-free one-liner
+`powershell -File scripts\deploy_qt_local.ps1 -Config debug [-Tests]` copies the Qt
+runtime next to the exe, so launching needs **no Qt on PATH**. Prefer this to adding Qt
+to PATH in an IDE config: a hard-coded Qt path silently rots on the next `QT_VERSION`
+bump (that is what caused a `0xC0000135` DLL-not-found after the 6.11.1 upgrade). The
+script also copies the **offscreen** platform plugin, which `windeployqt` omits and
+headless runs (`QT_QPA_PLATFORM=offscreen`) need.
+
 **IntelliSense:** clangd reads a generated, gitignored `compile_flags.txt` — run
 `py scripts/gen_compile_flags.py` after a fresh clone, a Qt bump, or a `.pro`
 include/define change. **Run it inside each worktree too**: the paths are absolute, and a
