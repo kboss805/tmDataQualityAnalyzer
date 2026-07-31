@@ -1,3 +1,40 @@
+tmDataQualityAnalyzer v2.9.0 - What's New
+=================================
+
+  - New: Keyboard shortcuts for the plot. Click the chart once to focus it, then:
+
+        Left / Right    step the visible time window earlier or later
+        + / -           zoom the time axis in or out
+        Home            back to the full time span (keeps any Y axis maximum you set)
+        R               reset the view - full span and automatic Y axes
+        V               switch between Lock % and Accumulation
+        L               show or hide the legend
+
+    These act only on the chart, so they never interfere with typing in a dialog or
+    a settings field. The right-click menu shows each key as a reminder.
+
+  - Improved: The time labels along the bottom of the plot no longer overlap each
+    other on a narrow window. Labels are spaced out automatically while the tick
+    marks stay put, so the axis stays readable at any window size.
+
+  - Improved: The buttons overlaid on the plot (Toggle Legend, view mode, reset) no
+    longer sit on top of the axis and its numbers - the chart leaves room for them.
+
+  - Improved: The title bar buttons highlight in a compact box around the icon
+    instead of a large block filling the bar, which is easier to read at a glance.
+
+  - Fixed: Exporting the plot as a PDF now includes the legend. Previously the
+    legend appeared when exporting to PNG or SVG but was silently missing from PDF.
+
+  - Changed: Charts are now drawn by the application itself rather than by a
+    third-party charting library. This is intentionally invisible: the plot looks and
+    behaves exactly as before. It removes an external dependency and lets future plot
+    improvements be made directly.
+
+  - Under the hood: updated to Qt 6.11.1, and the build and test pipeline is about
+    three times faster, so fixes reach you sooner.
+
+
 tmDataQualityAnalyzer v2.8.0 - What's New
 =================================
 

@@ -8,13 +8,13 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, `cl` / `nmake`), Qt `msvc2022_64` kit.
   This is the only supported toolchain (and what CI uses).
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
-- **Project Version**: 2.8.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
+- **Project Version**: 2.9.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
 
 ## User Stories
 
 The stories below follow the workflow a first-time user takes through the application: open a file and choose what to process (US1), define the per-stream parameters (US2), view the resulting data-quality metrics (US3), customize the plot (US4), manage configuration files and calibration (US5), export and re-import results (US6), and the cross-cutting concerns of input validation (US7), installation (US8), and theming (US9).
 
-**Status: all user stories are Complete** — implemented, tested, and shipped as of v2.8.0. Every acceptance criterion below is delivered functionality (`[x]`), and each story carries a **Complete** marker in its heading. This section is no longer a draft backlog; new work is tracked as new stories appended after US9.0.
+**Status: all user stories are Complete** — implemented, tested, and shipped as of v2.9.0. Every acceptance criterion below is delivered functionality (`[x]`), and each story carries a **Complete** marker in its heading. This section is no longer a draft backlog; new work is tracked as new stories appended after US9.0.
 
 ### US1.0: Open a Ch10 file and configure which streams to process — Complete
 
@@ -393,6 +393,85 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The menu and title-bar icons swap to theme-appropriate variants when the theme changes.
 
 ## Version History
+
+### v2.9.0 — First-Party Charting, Plot Shortcuts, Qt 6.11.1
+
+#### QCustomPlot replaced by first-party charting
+
+- The vendored QCustomPlot library (44,700 lines / 1.7 MB) is **gone**. Plotting is
+  now `TmChart` (`include/view/tmchart.h`, `src/view/tmchart.cpp`), a ~700-line
+  QWidget that paints in `paintEvent()` — no retained scene graph, no `replot()`.
+- **Behaviour-preserving by design.** Every US4.0/US4.1 criterion still holds: dual Y
+  axes with independent auto/manual ranging, horizontal-only wheel zoom and drag pan,
+  the draggable translucent legend composited into exports at its placed position, the
+  crosshair and rubber band, and the DDD:HH:MM:SS time axis.
+- Landed in three revertible steps: engine + `TestTmChart` inert (#55), `PlotWidget`
+  swapped over (#56), dependency deleted (#57).
+- **Fixes a latent export bug:** `savePdf()` was a third rendering path that rendered
+  only the chart, so PDF exports silently dropped the legend that PNG and SVG both
+  composited in. One `renderTo()` now serves screen, PNG, SVG and PDF, so they cannot
+  drift.
+- `TmChart` is deliberately simpler where it can be: the crosshair and zoom band are
+  painted rather than owned items (no widgets, excluded from exports by construction),
+  and a `setTimeFormatter()` callback replaces an entire `QCPAxisTicker` subclass.
+- X tick labels are now decluttered — `DDD:HH:MM:SS` labels are far wider than numeric
+  ones and collided at the default tick count; a label is drawn only when it clears the
+  previous one, with the last always kept. Tick marks are unaffected.
+- Removing the library also removed its build accommodations: `/bigobj` (needed only
+  for its oversized translation unit) and, importantly, `thirdparty.pri`'s `/wd4996`,
+  which had been suppressing Qt **deprecation warnings for application code too**.
+  Those are visible and gated again.
+
+#### Plot keyboard shortcuts (US4.1)
+
+- Single keys while the chart has focus: arrows step the time window keeping its width,
+  `+`/`-` zoom about the centre, `Home` restores the full span (keeping a pinned Y max),
+  `R` resets both axes, `V` switches the left-axis metric, `L` toggles the legend.
+- Handled in `PlotWidget::keyPressEvent` and deliberately **widget-scoped**: a
+  bare-letter shortcut registered application-wide is dispatched ahead of the focus
+  widget, so it would swallow that character in every text field. A click on the chart
+  focuses it. `TestPlotWidget` pins this — a sibling `QLineEdit` keeps its keystrokes.
+- The context menu advertises each key, so they are discoverable rather than hidden.
+
+#### Toolchain and CI
+
+- **Qt 6.11.1** (from 6.10.3). `QT_VERSION` in `scripts/env.ps1` remains the single
+  knob; `compile_flags.txt` must be regenerated on any bump, since its Qt paths are
+  absolute and version-pinned.
+- **CI is ~3x faster**: 286 s → 93 s. Builds go through `$env:TMDQ_MAKE`, which
+  `env.ps1` sets to the parallel `jom` when present and `nmake` otherwise, so the
+  GitHub-hosted fallback runner is unaffected.
+- The zero-warning gate now covers **test** code too. It previously grepped only
+  `app_build.log`, so warnings in `tests/` were never gated. A missing log is now a
+  hard failure rather than a silent pass.
+
+#### Fixed
+
+- `deploy/build_release.ps1` announced "Build and packaging complete!" and listed an
+  installer path that was never written, when signing had failed for every artifact and
+  Inno Setup had aborted. It now verifies each artifact with
+  `Get-AuthenticodeSignature`, reports `NOT PRODUCED`, flags artifacts left over from an
+  earlier run as STALE, and exits non-zero.
+- Launching a locally built exe no longer depends on Qt being on `PATH`:
+  `scripts/deploy_qt_local.ps1` copies the runtime beside the exe (including the
+  **offscreen** platform plugin, which `windeployqt` omits and headless runs need).
+  Fixes a `0xC0000135` DLL-not-found after the Qt bump, caused by a hard-coded Qt path
+  in a gitignored IDE config plus a stale user-level `QTDIR` pointing at a removed
+  MinGW kit. The shared `.vscode` configs are now tracked so a toolchain change has to
+  confront them.
+
+#### Cosmetic
+
+- Every title-bar button (hamburger, sidebar toggle, minimize/maximize/close) is now
+  30x26 with a rounded hover box that hugs its glyph, instead of filling a full-height
+  cell. Note this departs from the Windows convention where close spans the top-right
+  corner.
+- The plot reserves 12 px of headroom (`TmChart::setTopInset()`) so the on-chart chip
+  bar no longer sits on the top axis line and the topmost Y tick label.
+
+#### Tests
+
+- New suite `TestTmChart` (11 cases). Green baseline: **357 / 0 / 1** across 20 suites.
 
 ### v2.8.0 — Plot Window Simplification
 
