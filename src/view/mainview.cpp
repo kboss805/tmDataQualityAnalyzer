@@ -57,21 +57,29 @@ namespace
 {
     constexpr int kTitleBarHeight = 40;  ///< Custom title-bar height (logical px).
 
-    /// @name Hamburger / sidebar button metrics
-    /// These two carry a small drawn glyph, so their hover highlight is sized to hug
-    /// it rather than filling a caption-button-sized cell. At the caption metrics
-    /// (44x32) the highlight was roughly three times the glyph's visual area and read
-    /// as a large floating block; a compact, rounded box matches how editors
-    /// (VS Code, Antigravity) highlight their own title-bar controls.
+    /// @name Title-bar button metrics
+    /// EVERY title-bar button uses these: the hamburger, the sidebar toggle, and the
+    /// minimize/maximize/close captions. Each carries a small glyph, so the hover
+    /// highlight is sized to hug it rather than filling a full-height cell. At the
+    /// original metrics the highlight was several times the glyph's visual area and
+    /// read as a large block floating in the bar; a compact, rounded box matches how
+    /// editors (VS Code, Antigravity) highlight their own title-bar controls.
     ///
     /// Kept >= 24 px in both axes: that is the usual minimum comfortable pointer
-    /// target, so tightening the box does not make the buttons fiddly to hit. The
-    /// CAPTION buttons deliberately keep the wider Windows metrics - those match the
-    /// OS and users expect the close button to span the corner.
+    /// target, so tightening the box does not make the buttons fiddly to hit.
+    ///
+    /// Note this is a deliberate departure from the Windows caption convention, where
+    /// close spans the top-right corner (making it a Fitts's-law "infinite" target at
+    /// a maximized window's edge). Consistency across the whole bar was preferred; the
+    /// corner is now draggable caption instead.
     /// @{
     constexpr int kToolGlyphButtonW = 30;
     constexpr int kToolGlyphButtonH = 26;
     constexpr int kToolGlyphIconPx  = 24;
+    /// Gap between the last caption button and the window edge. The compact
+    /// buttons no longer span the corner, so without this their rounded hover
+    /// box would sit flush against the frame.
+    constexpr int kTitleBarEdgeGap  = 6;
     /// @}
 
     /// Title-bar glyph foreground for the active theme.
@@ -360,23 +368,28 @@ void MainView::setUpMenuBar()
     title_bar->setObjectName("titleBar");
     title_bar->setFixedHeight(kTitleBarHeight);
     title_bar->setStyleSheet(
-        "#titleBar QToolButton{border:none;background:transparent;min-width:44px;min-height:40px;font-size:15px;}"
+        // NO min-width/min-height here. Every title-bar button calls setFixedSize(),
+        // and a QSS min-* declaration REPLACES the widget minimum that setFixedSize
+        // installed - leaving max intact, so the button collapses to its sizeHint
+        // (a caption glyph is only ~13px tall). Size these in code, not in QSS.
+        "#titleBar QToolButton{border:none;background:transparent;font-size:15px;}"
         "#titleBar QToolButton:hover{background:rgba(128,128,128,0.22);}"
         // The caption buttons use the Windows icon font so minimize/maximize/close
         // are drawn at identical metrics (10px is the size Windows itself uses for
         // these glyphs). MDL2 Assets is the Windows 10 fallback.
         "#titleBar QToolButton#winBtn,#titleBar QToolButton#winClose"
-        "{font-family:'Segoe Fluent Icons','Segoe MDL2 Assets';font-size:10px;}"
+        "{font-family:'Segoe Fluent Icons','Segoe MDL2 Assets';font-size:10px;"
+        "border-radius:5px;}"
         "#titleBar QToolButton#winClose:hover{background:#c42b1c;color:#ffffff;}"
         "#titleBar QToolButton#menuBtn::menu-indicator{image:none;}"
         // menuBtn and sidebarBtn get a fixed size + AlignVCenter in code, so their
         // hover boxes stay inset from the bar edges (QSS margin isn't honored for
         // QToolButton) and read as compact pills like Claude Code's title bar.
-        "#titleBar QToolButton#menuBtn{min-width:0;min-height:0;border-radius:5px;}"
-        "#titleBar QToolButton#sidebarBtn{min-width:0;min-height:0;border-radius:5px;}");
+        "#titleBar QToolButton#menuBtn{border-radius:5px;}"
+        "#titleBar QToolButton#sidebarBtn{border-radius:5px;}");
 
     auto* bar_layout = new QHBoxLayout(title_bar);
-    bar_layout->setContentsMargins(2, 0, 0, 0);
+    bar_layout->setContentsMargins(2, 0, kTitleBarEdgeGap, 0);
     bar_layout->setSpacing(0);
 
     m_menu_button = new QToolButton(title_bar);
@@ -424,7 +437,8 @@ void MainView::setUpMenuBar()
     min_button->setText(QChar(kGlyphMinimize));
     min_button->setToolTip(tr("Minimize"));
     connect(min_button, &QToolButton::clicked, this, &QWidget::showMinimized);
-    bar_layout->addWidget(min_button);
+    min_button->setFixedSize(kToolGlyphButtonW, kToolGlyphButtonH);
+    bar_layout->addWidget(min_button, 0, Qt::AlignVCenter);
 
     m_max_button = new QToolButton(title_bar);
     m_max_button->setObjectName("winBtn");
@@ -433,14 +447,16 @@ void MainView::setUpMenuBar()
         setWindowState(isMaximized() ? (windowState() & ~Qt::WindowMaximized)
                                      : (windowState() |  Qt::WindowMaximized));
     });
-    bar_layout->addWidget(m_max_button);
+    m_max_button->setFixedSize(kToolGlyphButtonW, kToolGlyphButtonH);
+    bar_layout->addWidget(m_max_button, 0, Qt::AlignVCenter);
 
     auto* close_button = new QToolButton(title_bar);
     close_button->setObjectName("winClose");
     close_button->setText(QChar(kGlyphClose));
     close_button->setToolTip(tr("Close"));
     connect(close_button, &QToolButton::clicked, this, &QWidget::close);
-    bar_layout->addWidget(close_button);
+    close_button->setFixedSize(kToolGlyphButtonW, kToolGlyphButtonH);
+    bar_layout->addWidget(close_button, 0, Qt::AlignVCenter);
 
     setMenuWidget(title_bar);
     updateMaximizeButton();
