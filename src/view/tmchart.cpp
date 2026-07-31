@@ -210,6 +210,18 @@ void TmChart::setRightAxisVisible(bool visible)
     update();
 }
 
+void TmChart::setTopInset(int px)
+{
+    const int clamped = std::max(0, px);
+    if (m_top_inset == clamped)
+    {
+        return;
+    }
+    m_top_inset = clamped;
+    recalcPlotArea();
+    update();
+}
+
 void TmChart::setXTickCount(int count)
 {
     m_x_tick_count = std::max(2, count);
@@ -336,7 +348,7 @@ void TmChart::recalcPlotArea() const
         }
     }
 
-    int top = kOuterMargin;
+    int top = kOuterMargin + m_top_inset;
     if (!m_title.isEmpty())
     {
         top += text_h + kAxisLabelGap;

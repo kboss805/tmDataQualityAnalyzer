@@ -279,6 +279,14 @@ namespace PlotConstants {
     inline constexpr double kLegendMaxHeightFrac = 0.60; ///< Cap the legend height to this fraction of the chart.
     inline constexpr double kLegendMaxWidthFrac  = 0.45; ///< Cap the legend width to this fraction of the chart.
     inline constexpr int    kOverlayChipHeightPx = 26;   ///< Height of every chip in the on-chart chip bar (px).
+    /// Extra headroom reserved at the top of the plot area for the on-chart chip bar.
+    ///
+    /// The chips are overlaid at the chart's top-left, so without this the plot area
+    /// starts at the outer margin and they sit directly on the axis line and the top
+    /// Y tick label. This does not fully clear the bar (that would need roughly
+    /// kLegendMarginPx + kOverlayChipHeightPx); it is a tuned visual gap so the chips
+    /// stop touching the axis while keeping the wasted headroom small.
+    inline constexpr int    kOverlayHeadroomPx   = 12;
     inline constexpr int    kOverlayChipSpacingPx = 4;   ///< Gap between chips in the on-chart overlay bar (px).
     inline constexpr int    kCrosshairAlpha      = 140;  ///< Alpha of the cursor-following crosshair line (0-255).
     inline constexpr int    kZoomBandAlpha       = 45;   ///< Alpha of the drag-to-zoom rubber band fill (0-255).
