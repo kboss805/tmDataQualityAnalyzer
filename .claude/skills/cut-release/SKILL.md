@@ -50,12 +50,50 @@ New / Improved / Fixed. No class names or file paths — describe what the user 
 (The portable `deploy/README_portable.txt` rarely changes per release; update it only if install/run
 instructions changed.)
 
+### Also check every other artifact that SHIPS
+
+These reach users but nothing in CI exercises them, so they rot silently:
+
+- **`UserGuide.txt`** — copied into BOTH the installer and the portable ZIP. It sat eighteen months
+  out of date describing a toolbar that no longer existed, shipping alongside an accurate in-app
+  manual that said something different.
+- **`resources/usermanual.html`** — Help > User Manual. Its subtitle carries a version string; it
+  read "Version 2.7.0" at v2.9.0. Refresh screenshots with
+  `powershell -File scriptsuild_manual.ps1` if the UI changed.
+- **`README.md`** — the "developed on Qt x.y.z" line and the repo tree.
+- **`CLAUDE.md`** — the "Current version" line in the opening paragraph. It sat at 2.7.0
+  through two releases, because nothing points at it.
+
+Grep for the OLD version string before packaging; anything still naming it is a place the release
+did not reach:
+
+```powershell
+git grep -n "2\.8\.0"   # substitute the version you are replacing
+```
+
 ## Step 5 — Verify before building
 With the **build-and-test** skill: build the app clean (0 warnings) and run the **full** test suite
 (all green, 0 failed/0 skipped). Do not package a release over a red or warning-laden build. Confirm
 `git status` is clean except for the intended version/notes changes.
 
-## Step 6 — Build, sign, and package
+## Step 6 — Smoke-test signing BEFORE packaging
+
+Packaging takes ~10 minutes and signs at the very end. **Prove the certificate can actually sign
+first** — this costs 45 seconds and saved a whole cycle the one time it was skipped:
+
+```powershell
+$t = 'C:\path	ony.exe'   # copy a built exe to scratch first
+$p = Start-Process signtool -ArgumentList @('sign','/sha1',$env:SIGN_CERT_SHA1,
+     '/tr','http://timestamp.digicert.com','/td','sha256','/fd','sha256',$t) -NoNewWindow -PassThru
+if ($p.WaitForExit(45000)) { "exit $($p.ExitCode)" } else { $p.Kill(); "HUNG - token locked" }
+```
+
+**The certificate being present in the store proves nothing.** It is token-backed (Certum
+SimplySign): with the token locked it still shows as valid with `HasPrivateKey = True`. The failure
+looks like either `SignTool Error: No certificates were found...` or signtool **hanging** on the PIN
+prompt. If it hangs, the user must log in to SimplySign — you cannot.
+
+## Step 7 — Build, sign, and package
 Run the release script from the project root in **PowerShell**:
 
 ```powershell
@@ -74,16 +112,33 @@ portable layout → portable ZIP → Inno Setup installer (also signed). It read
 - Antivirus can briefly lock freshly-built exes; the ZIP step already retries — don't panic on a
   transient "file in use".
 
-## Step 7 — Confirm the artifacts
+## Step 8 — Confirm the artifacts
 The script prints the final paths. Expect, in `deploy/`:
 - `tmDataQualityAnalyzer-vX.Y.Z_portable.zip`
 - `tmDataQualityAnalyzer-vX.Y.Z_setup.exe`
 
-Verify both exist and carry the new version in their names, and that the exe version resource matches
-(right-click → Properties → Details, or trust the single-source derivation). Report the paths and
-sizes back to the user.
+**Verify by hand — do NOT trust the script's summary.** It once printed "Build and packaging
+complete!" and listed an installer path that was never written, exiting 0, while signing had failed
+for everything. It reports honestly now, but its trustworthiness is exactly what was broken, so
+check independently:
 
-## Step 8 — Commit / tag (only if asked)
+```powershell
+foreach ($t in @('deploy\staging\installerin	mDataQualityAnalyzer.exe',
+                 "deploy\staging\portable	mDataQualityAnalyzer-v$v`_portable	mDataQualityAnalyzer.exe",
+                 "deploy	mDataQualityAnalyzer-v$v`_setup.exe")) {
+  '{0,-8} {1}' -f (Get-AuthenticodeSignature $t).Status, (Get-Item $t).VersionInfo.FileVersion
+}
+```
+
+Then **extract the exe from the portable ZIP and check that too**. Signing runs BEFORE the ZIP and
+the installer compile, so a failed signing still produces a ZIP — containing an unsigned exe — while
+no installer exists at all. **The ZIP existing is not evidence the release is good**; that asymmetry
+is how v2.8.0 nearly shipped unsigned.
+
+Expect `Status = Valid` and the new version on every one. Report the paths, sizes and signature
+status back to the user.
+
+## Step 9 — Commit / tag (only if asked)
 Don't commit, tag, or push unless the user asks. When they do: commit the `constants.h` + notes
 changes together with a `feat: release vX.Y.Z` style message, and tag `vX.Y.Z` to match the existing
 tag convention. The release artifacts in `deploy/` are build outputs — follow the repo's existing

@@ -7,9 +7,10 @@ The manual is a Qt resource: it gets copied to a temp directory and opened in th
 default browser, so relative image paths would not resolve. Every figure is
 therefore a base64 data URI, keeping the manual one self-contained file.
 
-NOT idempotent on its own: it inserts figures at text anchors, so run it against
-the COMMITTED manual (git checkout resources/usermanual.html first) or the images
-are embedded twice. build_manual.ps1 is the supported entry point.
+Idempotent: it strips any figures and figure CSS already present before inserting
+fresh ones, so it can run repeatedly against the manual in place. That matters
+because the COMMITTED manual already contains embedded figures - regenerating from
+it must not double them - and because prose edits between runs must survive.
 """
 import io, base64, os
 
@@ -23,6 +24,14 @@ def fig(fname, caption, alt):
             '  <figcaption>%s</figcaption>\n</figure>\n' % (alt, b64, caption))
 
 s = io.open(MAN, encoding='utf-8').read()
+
+# --- strip previously embedded figures so this is idempotent ---------------
+import re
+before = s.count('<figure>')
+s = re.sub(r'\n?<figure>.*?</figure>\n', '', s, flags=re.S)
+s = re.sub(r'  figure \{.*?font-style: italic; \}\n', '', s, flags=re.S)
+if before:
+    print('stripped %d existing figure(s)' % before)
 
 # --- styling --------------------------------------------------------------
 old = "  nav ul { list-style: none; padding-left: 0; columns: 2; }"

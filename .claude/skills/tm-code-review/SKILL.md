@@ -32,6 +32,10 @@ bugs hide and where a generic reviewer is blind.
 
 ## Protected files — a hard stop
 
+**Visual/layout changes need more than a read-through.** If the diff touches widget geometry,
+sizing, stylesheets or plot rendering, the test suite asserts essentially nothing about it — use the
+**verify-ui-change** skill (render it AND measure the widgets) rather than reasoning from the code.
+
 `lib/irig106/**` is third-party and MUST NOT be modified. If the diff
 touches them, that is a Critical finding on its own: the fix belongs in the wrapping app code
 (`chapter10reader.cpp`, `ch10packetreader.cpp`, `frameprocessor.cpp`, `plotwidget.cpp`). Flag it and
