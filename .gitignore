@@ -104,3 +104,8 @@ status.txt
 warnings.txt
 # Local build/sign launcher — contains cert thumbprint, not for version control
 build_and_sign.ps1
+
+# Manual screenshots: the ORIGINALS in docs/manual_images/ are tracked so the
+# manual can be regenerated, but the cropped/downscaled copies are derived output
+# of scripts/build_manual.ps1.
+docs/manual_images/processed/
