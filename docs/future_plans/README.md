@@ -14,8 +14,41 @@ what was built is worse than no plan at all.
 
 ## Open items
 
-_None._ Everything raised so far has shipped; the table below records where
-each landed.
+### Hide an axis when nothing is plotted against it
+
+Both Y axes are always drawn. `PlotWidget` calls `setRightAxisVisible(true)`
+unconditionally, and the left axis has no equivalent switch at all, so every plot
+advertises an axis it may not be using:
+
+| Data | Left axis | Right axis |
+| --- | --- | --- |
+| Frame-sync only (PRN) | in use | **"Receiver SNR (dB)", auto-ranged to 0.0-1.0, no series** |
+| SNR only (AGC) | **"Framesync Lock (%)" 0-100, no series** | in use |
+
+The empty axis auto-ranges to a meaningless span and keeps its label, which reads as
+"there is SNR data here and it is near zero" when there is none. Hiding it would also
+give the margin back to the chart.
+
+This is **pre-existing**, not a regression from the TmChart migration - the old code
+also showed both unconditionally. Note `TmChart::setRightAxisVisible()` is *documented*
+as "drawn only when SNR series exist", which is not what the caller does; whichever way
+this is resolved, the doc and the behaviour need to agree.
+
+Should key on **visible** series, not merely loaded ones, so hiding the last SNR series
+in Customize View also reclaims the axis.
+
+### Make the remaining plot shortcuts visible in the context menu
+
+Only `L` is shown inline (next to Show Legend). `Home` is one level down under X Axis;
+`V` and `R` are tooltips only, so they discover nothing - Qt will not render a
+`QKeySequence` on a submenu, which is why they ended up as tooltips.
+
+Two changes would fix it: put `(V)` in the **View Mode** submenu title, and add a
+top-level **Reset View** item carrying `R`. The latter also closes a real gap - the
+on-chart *Reset view* chip resets both axes in one click, but the menu splits that
+across `X Axis > Reset Span` and `Y Axes > Reset`, with no single equivalent.
+
+Low priority - deliberately deferred; the current behaviour is known and accepted.
 
 ---
 
