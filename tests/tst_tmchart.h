@@ -24,6 +24,7 @@ private slots:
     void tickValuesSpanRangeInclusive();
     void wheelZoomAnchorsUnderCursorAndReportsRange();
     void interactionsDisabledIgnoresWheel();
+    void hiddenAxisReclaimsItsMargin();
     void renderToPaintsData();
     void exportOmitsCursorOverlays();
 };

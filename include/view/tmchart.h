@@ -68,8 +68,21 @@ public:
     void setXLabel(const QString& label);
     void setLeftLabel(const QString& label);
     void setRightLabel(const QString& label);
-    /// The right axis is drawn only when SNR series exist.
+    /// @name Y axis visibility
+    /// A chart showing only frame-sync data has nothing on the right axis, and one
+    /// showing only SNR has nothing on the left. Drawing the unused axis anyway
+    /// leaves it auto-ranged to a meaningless span (0..1) under a label naming data
+    /// that is not there, which reads as a real measurement near zero. Hiding it
+    /// also gives its margin back to the chart.
+    ///
+    /// The caller decides from the data - see PlotWidget, which recomputes both
+    /// whenever the series or their visibility change. Both default to visible.
+    /// @{
+    void setLeftAxisVisible(bool visible);
     void setRightAxisVisible(bool visible);
+    bool leftAxisVisible() const { return m_left_visible; }
+    bool rightAxisVisible() const { return m_right_visible; }
+    /// @}
     /// Extra headroom reserved above the plot area, in pixels.
     ///
     /// The host overlays controls on the chart's top-left corner; without this the
@@ -183,6 +196,7 @@ private:
     QString m_x_label;
     QString m_left_label;
     QString m_right_label;
+    bool    m_left_visible  = true;
     bool    m_right_visible = false;
     int     m_x_tick_count  = PlotConstants::kTickCount;
     int     m_top_inset     = 0;   ///< Extra reserved headroom; see setTopInset().

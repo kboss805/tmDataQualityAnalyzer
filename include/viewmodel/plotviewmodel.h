@@ -109,6 +109,16 @@ public:
     double leftYMax() const;                       ///< @return Left axis max: user override, or 100 (lock %) / auto (missed frames).
     bool hasLockSeries() const;                    ///< @return True if any FrameSyncLock series are loaded.
 
+    /// @name Axis occupancy
+    /// Whether each Y axis currently has anything drawn against it, so the View can
+    /// hide an axis nobody is using. Keyed on effectiveVisible() - the same predicate
+    /// that decides whether a series is drawn - so hiding the last SNR channel in
+    /// Customize View, or filtering to a source with no SNR, reclaims the axis too.
+    /// @{
+    bool hasVisibleLeftAxisSeries() const;
+    bool hasVisibleRightAxisSeries() const;
+    /// @}
+
     LockAxisView lockAxisView() const;             ///< @return Active left-axis metric (lock % vs missed frames).
     /// @name Axis-max override state
     /// @{

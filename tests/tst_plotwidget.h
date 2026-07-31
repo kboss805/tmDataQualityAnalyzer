@@ -35,6 +35,12 @@ private slots:
     void wheelZoomAndDragPanRemainEnabled();
     void noExternalControlWidgetsRemain();
     void legendToggleShowsAndHidesLegend();
+
+    // Y axis occupancy: an axis with nothing plotted against it is hidden.
+    void emptyChartKeepsLeftAxis();
+    void lockOnlyDataHidesRightAxis();
+    void snrOnlyDataHidesLeftAxis();
+    void hidingLastSnrSeriesReclaimsRightAxis();
     void legendToggleAppearsOnlyWithData();
     void legendChipIsLabelledAndDescribed();
     void contextMenuShowLegendMirrorsToggle();

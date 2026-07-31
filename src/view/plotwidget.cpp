@@ -179,6 +179,7 @@ void PlotWidget::rebuildChart()
 
     // Update title and axes without triggering extra replots
     updateTitle();
+    updateAxisVisibility();
     updateAxes();
 
     // Mouse pan/zoom only once there is data. The context menu gates its own
@@ -222,6 +223,7 @@ void PlotWidget::onSeriesVisibilityToggled(int index)
     }
     m_plot->setSeriesVisible(chart_index,
                              m_view_model->effectiveVisible(m_view_model->seriesAt(index)));
+    updateAxisVisibility();   // hiding the last SNR series reclaims the right axis
     m_plot->update();
     rebuildLegend();
 }
@@ -249,6 +251,7 @@ void PlotWidget::onSeriesAppearanceChanged()
             m_plot->setSeriesVisible(idx, m_view_model->effectiveVisible(s));
         }
     }
+    updateAxisVisibility();
     rebuildLegend();
     m_plot->update();
 }
@@ -285,8 +288,30 @@ void PlotWidget::onLockAxisViewChanged()
             ? PlotConstants::kMissedFramesAxisLabel
             : PlotConstants::kYAxisLabel);
 
+    updateAxisVisibility();
     rebuildLegend();
     m_plot->update();
+}
+
+void PlotWidget::updateAxisVisibility()
+{
+    if (m_view_model == nullptr)
+    {
+        return;
+    }
+    const bool left  = m_view_model->hasVisibleLeftAxisSeries();
+    const bool right = m_view_model->hasVisibleRightAxisSeries();
+
+    // A frame-sync-only file has nothing on the right axis and an SNR-only file
+    // nothing on the left. Drawing the unused one anyway leaves it auto-ranged to a
+    // meaningless 0..1 under a label naming data that is not there, which reads as a
+    // real measurement pinned near zero.
+    //
+    // With nothing plotted at all - before a file is opened, or with every series
+    // hidden - the left axis is kept so the chart still reads as a chart rather than
+    // a bare box. An empty axis only misleads once something else IS plotted.
+    m_plot->setLeftAxisVisible(left || !right);
+    m_plot->setRightAxisVisible(right);
 }
 
 void PlotWidget::updateAxes()
@@ -910,7 +935,8 @@ void PlotWidget::setUpLayout()
     m_plot->setXLabel(PlotConstants::kXAxisLabel);
     m_plot->setLeftLabel(PlotConstants::kYAxisLabel);
     m_plot->setLeftRange(0, 100);
-    m_plot->setRightAxisVisible(true);
+    // Axis visibility is data-driven from here on (updateAxisVisibility); TmChart
+    // starts left-only, which is what an empty chart should show.
     // Keep the axes clear of the overlay chip bar (see kOverlayHeadroomPx).
     m_plot->setTopInset(PlotConstants::kOverlayHeadroomPx);
     m_plot->setRightLabel(PlotConstants::kSnrAxisLabel);

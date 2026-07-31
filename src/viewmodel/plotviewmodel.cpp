@@ -1072,6 +1072,30 @@ double PlotViewModel::baseTimeOffset() const { return m_base_time_offset; }
 double PlotViewModel::lockYMin() const { return m_lock_y_min; }
 double PlotViewModel::lockYMax() const { return m_lock_y_max; }
 bool PlotViewModel::hasLockSeries() const { return m_has_lock_series; }
+
+bool PlotViewModel::hasVisibleLeftAxisSeries() const
+{
+    for (const PlotSeriesData& s : m_series)
+    {
+        if (isLeftAxisMetric(s.metricType) && effectiveVisible(s))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool PlotViewModel::hasVisibleRightAxisSeries() const
+{
+    for (const PlotSeriesData& s : m_series)
+    {
+        if (!isLeftAxisMetric(s.metricType) && effectiveVisible(s))
+        {
+            return true;
+        }
+    }
+    return false;
+}
 bool PlotViewModel::hasMissedFramesSeries() const { return m_has_missed_frames_series; }
 PlotViewModel::LockAxisView PlotViewModel::lockAxisView() const { return m_lock_axis_view; }
 

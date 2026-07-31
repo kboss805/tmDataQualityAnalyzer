@@ -86,6 +86,10 @@ private slots:
     /// visibility and the axis label in place — no chart rebuild.
     void onLockAxisViewChanged();
     /// Syncs axis ranges from ViewModel to the chart axes.
+    /// Shows or hides each Y axis according to whether anything is drawn against
+    /// it. Called wherever series visibility is established, not just on rebuild,
+    /// so hiding the last SNR series also reclaims the right axis.
+    void updateAxisVisibility();
     void updateAxes();
     /// Updates chart title from ViewModel.
     void updateTitle();

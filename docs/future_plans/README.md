@@ -14,29 +14,6 @@ what was built is worse than no plan at all.
 
 ## Open items
 
-### Hide an axis when nothing is plotted against it
-
-Both Y axes are always drawn. `PlotWidget` calls `setRightAxisVisible(true)`
-unconditionally, and the left axis has no equivalent switch at all, so every plot
-advertises an axis it may not be using:
-
-| Data | Left axis | Right axis |
-| --- | --- | --- |
-| Frame-sync only (PRN) | in use | **"Receiver SNR (dB)", auto-ranged to 0.0-1.0, no series** |
-| SNR only (AGC) | **"Framesync Lock (%)" 0-100, no series** | in use |
-
-The empty axis auto-ranges to a meaningless span and keeps its label, which reads as
-"there is SNR data here and it is near zero" when there is none. Hiding it would also
-give the margin back to the chart.
-
-This is **pre-existing**, not a regression from the TmChart migration - the old code
-also showed both unconditionally. Note `TmChart::setRightAxisVisible()` is *documented*
-as "drawn only when SNR series exist", which is not what the caller does; whichever way
-this is resolved, the doc and the behaviour need to agree.
-
-Should key on **visible** series, not merely loaded ones, so hiding the last SNR series
-in Customize View also reclaims the axis.
-
 ### Make the remaining plot shortcuts visible in the context menu
 
 Only `L` is shown inline (next to Show Legend). `Home` is one level down under X Axis;
@@ -69,3 +46,4 @@ documentation lives.
 | MSVC-flavored clangd config | PR #40 (found already done) | `docs/CLAUDE.md` -> clangd / IntelliSense; `scripts/gen_compile_flags.py`. Verified with `clangd --check` across QCustomPlot / Win32 / irig106 / test TUs: 0 errors |
 | Speed up CI with a parallel build (`jom`) | PR #48 | `scripts/env.ps1` (`TMDQ_MAKE`), [`../ci_runner.md`](../ci_runner.md) - CI run 286s -> 93s |
 | Simplify the plot window | PR #43 | `docs/CLAUDE.md` (US4.0 / US4.1), `resources/usermanual.html` §3 |
+| Hide a Y axis when nothing is plotted against it | PR #68 | `include/view/tmchart.h` (`setLeftAxisVisible`/`setRightAxisVisible`), `PlotViewModel::hasVisibleLeftAxisSeries`/`hasVisibleRightAxisSeries`, `PlotWidget::updateAxisVisibility`. Keys on **visible** series. Rendering the reclaimed layout also caught the first X tick label clipping off the left edge |
