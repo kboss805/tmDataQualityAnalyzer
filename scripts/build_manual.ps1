@@ -13,8 +13,9 @@
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\build_manual.ps1
 #
-# It works from the COMMITTED manual (git checkout first) so it is idempotent -
-# running it twice does not embed the images twice.
+# Safe to run repeatedly: the embed step strips any figures already present before
+# inserting fresh ones, so running twice does not double them - and prose edits to
+# the manual between runs are preserved.
 # =============================================================================
 
 $ErrorActionPreference = 'Stop'

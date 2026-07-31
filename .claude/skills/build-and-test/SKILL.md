@@ -100,6 +100,33 @@ and `TestCalibrationExtractor`. It is a **local convenience only** — always do
 built-in replacement for hand-trimming `main.cpp` (which must never be committed). The harness still
 does not honor a `ClassName::testCase` single-suite filter.
 
+## Running the app or the test exe
+
+Launching needs Qt's DLLs findable. **Do not put Qt on PATH by hand and never hard-code a Qt path**
+in an IDE config — that rots at the next `QT_VERSION` bump. Deploy the runtime beside the exe:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\deploy_qt_local.ps1 -Config debug [-Tests]
+```
+
+The `.vscode` build tasks already call it, so F5 handles it. Failure codes:
+
+- **`0xC0000135`** — no Qt DLLs found at all.
+- **`0xC0000139`** — Qt DLLs found but the WRONG VERSION (e.g. an old kit still on PATH).
+- **exit `3` with no output** — `abort()`, almost always "no Qt platform plugin could be
+  initialized" (the offscreen plugin is missing; `deploy_qt_local.ps1` copies it deliberately).
+
+If `env.ps1` warns that the persistent user `QTDIR` has drifted, fix it with
+`scripts\setup-env.ps1` — tools that never source `env.ps1` (cpptools, Qt Creator) read that value.
+
+## Waiting on CI
+
+GitHub creates the `pull_request` run with a **multi-minute lag** (~3.5 min measured). `gh pr checks`
+immediately after opening a PR reports "no checks reported" — **that is not a missing gate**, and
+reporting it as a CI failure is wrong. Wait, or dispatch on the branch
+(`gh workflow run ci.yml --ref <branch>`) and confirm the run's `headSha` matches the PR head before
+trusting it.
+
 ## When a build breaks for non-code reasons
 
 - **"qmake/nmake/cl is not recognized"** → you skipped Step 0 in this shell.
