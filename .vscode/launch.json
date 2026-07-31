@@ -58,6 +58,9 @@
       "request": "launch",
       "program": "${workspaceFolder}/tests/debug/tmDataQualityAnalyzer_tests.exe",
       "cwd": "${workspaceFolder}/tests",
+      // cppvsdbg takes "environment" (an ARRAY of {name,value}); "env" (an object)
+      // is CodeLLDB's spelling and is silently ignored here - which would leave
+      // QT_QPA_PLATFORM unset and let the widget tests open real windows.
       "environment": [
         { "name": "QT_QPA_PLATFORM", "value": "offscreen" }
       ],

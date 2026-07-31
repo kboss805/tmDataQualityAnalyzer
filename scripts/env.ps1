@@ -26,7 +26,8 @@ $persistentQtDir = [Environment]::GetEnvironmentVariable('QTDIR', 'User')
 if ($persistentQtDir -and $persistentQtDir -ne $env:QTDIR) {
     Write-Warning ("Persistent user QTDIR is '$persistentQtDir' but this Qt is '$env:QTDIR'. " +
                    "Builds here are unaffected, but tools reading QTDIR (cpptools, Qt Creator) " +
-                   "will use the stale one - update it in System Properties > Environment Variables.")
+                   "will use the stale one. Fix with:  " +
+                   "powershell -ExecutionPolicy Bypass -File scripts\setup-env.ps1")
 }
 
 # Import the MSVC + Windows SDK environment from vcvars64.bat, once per shell.
