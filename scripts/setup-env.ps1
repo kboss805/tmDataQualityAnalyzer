@@ -1,17 +1,23 @@
 # =============================================================================
-# setup-env.ps1  —  One-time developer environment setup
+# setup-env.ps1  —  Developer environment setup (QTDIR registration)
 #
-# Run this once on each machine to register QTDIR as a permanent Windows user
-# environment variable. After running, VS Code will expand ${env:QTDIR} in its
-# config files automatically. (The MSVC compiler comes from vcvars — imported by
-# env.ps1 at build time — so no compiler path is registered here.)
+# Registers QTDIR as a permanent Windows user environment variable, so VS Code can
+# expand ${env:QTDIR} in its config files. (The MSVC compiler comes from vcvars —
+# imported by env.ps1 at build time — so no compiler path is registered here.)
+#
+# RUN THIS AGAIN AFTER EVERY Qt VERSION BUMP. The value is a snapshot, and it is read
+# by tools that never source env.ps1: cpptools resolves ${env:QTDIR} in
+# .vscode/c_cpp_properties.json, as do Qt Creator and the Qt VS Tools. A stale one
+# survives a QT_VERSION change and points them at a kit that may no longer exist —
+# which is what caused a 0xC0000135 DLL-not-found after the 6.11.1 upgrade. env.ps1
+# warns when the persistent value has drifted, and points back here.
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File scripts\setup-env.ps1
 #
 # To override the default, pass -QtDir, or set QT_VERSION / QT_ROOT before running
 # (see scripts\env.ps1, the single source of truth for these defaults):
-#   $env:QT_VERSION = "6.11.0"
+#   $env:QT_VERSION = "6.12.0"
 #   powershell -ExecutionPolicy Bypass -File scripts\setup-env.ps1
 # =============================================================================
 

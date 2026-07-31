@@ -628,7 +628,7 @@ The stories below follow the workflow a first-time user takes through the applic
   `resources/usermanual.html`, copied to the temp dir and opened in the default
   browser).
 
-#### Tests
+#### Test Suite Updates
 
 - New suites: `TestProcessingTemplateSchema`, `TestTemplateMatcher`; extended
   `TestPlotWidget` (headless `exportImage`), `TestPlotViewModel` (source
@@ -699,7 +699,7 @@ The stories below follow the workflow a first-time user takes through the applic
   glyphs (`ArrowExport` / `ArrowImport`, MIT licensed), recolored to the app's
   existing green/orange convention.
 
-#### Fixed
+#### Bug Fixes & Stability
 
 - Two configured streams sharing a TMATS-derived channel name could silently
   cross-contaminate each other's plot series — renaming, recoloring, or

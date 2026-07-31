@@ -11,92 +11,114 @@ TABLE OF CONTENTS
 4. Stream Configuration
    - Frame Sync Lock Mode
    - Receiver SNR Mode
-5. Analyzing Data
+   - Non-Linear Step Calibration
+5. Working with the Plot
+   - The right-click menu
+   - On-chart buttons
+   - Mouse and keyboard
+   - Reading values off the plot
 6. Exporting Results
+7. Processing Many Files at Once (Templates)
+8. Reopening Earlier Results (CSV Import)
+9. Keyboard Shortcuts
+
+A fuller, illustrated version of this guide is available inside the application
+from the menu: Help > User Manual...
 
 ================================================================================
 1. INTRODUCTION
 ================================================================================
-tmDataQualityAnalyzer is an advanced desktop application designed for analyzing
-telemetry data quality from IRIG 106 Chapter 10 (.ch10) data files. By processing
-Pulse Code Modulation (PCM) streams, the tool allows test engineers and analysts 
-to visualize critical data metrics like Framesync Lock Percentages, Accumulated 
-Missed Frames, and Receiver Signal-to-Noise Ratios (SNR) over time to easily 
-identify dropouts, disconnects, or signal degradation.
+tmDataQualityAnalyzer is a desktop application for analyzing telemetry data
+quality from IRIG 106 Chapter 10 (.ch10) files. By processing Pulse Code
+Modulation (PCM) streams, it lets test engineers and analysts visualize critical
+data metrics - Framesync Lock percentage, Accumulated Missed Frames, and Receiver
+Signal-to-Noise Ratio (SNR) - over time, to identify dropouts, disconnects, or
+signal degradation.
 
 ================================================================================
 2. QUICK START
 ================================================================================
-1. Load a File: Use the File menu or the open icon in the toolbar to load a
-   .ch10 file. The Configure Streams dialog opens automatically, listing one row
-   per PCM channel found in the file.
-2. Select the Time Channel: Choose the Time Channel from the dropdown at the top
-   of the Configure Streams dialog.
-3. Configure Streams: For each PCM channel you want to analyze, check Process,
-   choose its Mode (Frame Sync Lock or Receiver SNR), and click the gear icon to
-   set its sync/calibration parameters and averaging window.
-4. Process: Click "Process" to read the .ch10 file and generate the data quality
-   plots. Each stream is added to the plot as it completes.
-5. Export: Click "Export" to save your plots as an image or extract the
-   underlying data to a CSV.
+1. Open a file: click the menu button (the three-line icon at the far left of the
+   title bar) and choose "Open...". You can also drag a .ch10 file onto the
+   window. The Configure Streams dialog opens automatically, listing one row per
+   PCM channel found in the file.
+
+2. Select the Time Channel: choose it from the dropdown at the top of the
+   Configure Streams dialog.
+
+3. Configure the streams you care about: switch on "Process" for each channel,
+   choose its Mode (Frame Sync Lock or Receiver SNR), then click the gear icon to
+   set that stream's sync or calibration parameters and its averaging window.
+   The "Ready" column shows a green check once a stream is fully configured, and
+   a red X if something is still missing. The "All" switch at the bottom left
+   turns every channel's Process flag on or off at once.
+
+4. Process: click "Process". The file is read once and every selected stream is
+   processed at the same time; each appears on the plot as it finishes. A
+   progress dialog shows how far along the run is and can cancel it.
+
+5. Export: right-click the plot and choose "Export...", or use the menu's
+   Import/Export section, to save the plot as an image, the data as a CSV, or the
+   message log as text.
 
 ================================================================================
 3. PROCESSING SCOPE & AVERAGING WINDOW
 ================================================================================
 The application processes the entire .ch10 file in a single pass. You control the
-resolution of the output per stream via the Averaging Window in that stream's gear
-dialog:
+resolution of the output per stream via the Averaging Window in that stream's
+gear dialog:
 
-- Averaging Window: Choose 1 s, 100 ms, or 10 ms. The lock percentage and SNR
-  values are averaged over this period to produce one plotted point per window.
-  Smaller windows reveal finer detail (brief dropouts) at the cost of more points.
+- Averaging Window: choose 1 s, 100 ms, or 10 ms. Lock percentage and SNR values
+  are averaged over this period to produce one plotted point per window. Smaller
+  windows reveal finer detail (brief dropouts) at the cost of more points.
 
-To focus on a specific time span after processing, use the plot's X-axis zoom/pan
-and the time-window controls rather than restricting the input.
+To focus on a specific time span after processing, zoom and pan the plot (see
+section 5) rather than restricting the input.
 
 ================================================================================
 4. STREAM CONFIGURATION
 ================================================================================
-While the application will parse the TMATS (Telemetry Attributes Transfer 
-Standard) header to provide initial guesses for channel setups, TMATS should 
-only be used as a guide. All parameters used for processing are strictly driven 
-by the Stream Configuration dialog.
+The application parses the TMATS (Telemetry Attributes Transfer Standard) header
+to provide initial guesses for channel setups, but TMATS should only be used as a
+guide. All parameters actually used for processing come from the Configure
+Streams dialog.
 
-When you click "Configure Streams", you can selectively enable or disable 
-individual sub-streams. For each active stream, you must define its operation 
-mode:
+For each active stream you must choose an operating mode.
 
 --- Frame Sync Lock Mode ---
 Use this mode to evaluate the structural integrity of the PCM stream.
-- Frame Sync Pattern: The expected synchronization bit pattern.
-- Frame Sync Mask: The mask applied to the sync pattern.
-- Bits in Frame / Words in Frame: The structural dimensions of your minor frames.
+- Frame Sync Pattern: the expected synchronization bit pattern.
+- Frame Sync Mask: the mask applied to the sync pattern.
+- Bits in Frame / Words in Frame: the structural dimensions of your minor frames.
 
-Tip (Apply to All Streams): If you have multiple streams using the same sync
-parameters, check the "Apply to all Frame Sync Lock streams" box at the bottom
-of the dialog. This will instantly copy the current stream's sync settings to
-all other active streams configured in Frame Sync Lock mode.
+You can save these settings to a TOML file and load them again later using the
+Load/Save buttons in the setup dialog. Note that only the sync pattern, sync mask
+and words-per-frame are stored - the Derandomize, Data Rate and Sample Rate
+fields are per-session settings and are deliberately not saved.
+
+Tip (Apply to All Streams): if several streams use the same sync parameters,
+switch on "Apply to all Frame Sync Lock streams" at the bottom of the dialog.
+This copies the current stream's settings to every other active stream in Frame
+Sync Lock mode.
 
 --- Receiver SNR Mode ---
 Use this mode to evaluate raw signal strength.
-- Configure the calibration slope and scale offsets specific to your receiver
-  equipment.
+- Configure the calibration slope and scale offsets for your receiver equipment.
 - Load a Receiver Parameters TOML to define the word map (which minor-frame words
   map to which receiver/channel) and the linear calibration.
 
-Tip (Apply to All Streams): Similar to Frame Sync mode, check the "Apply to all
-Receiver SNR streams" box to broadcast your calibration settings to all other
-active Receiver SNR streams.
+Tip (Apply to All Streams): as above, switch on "Apply to all Receiver SNR
+streams" to broadcast your calibration settings to the other active SNR streams.
 
-Non-Linear Step Calibration (Apply Calibration):
+--- Non-Linear Step Calibration ---
 For receivers whose response is non-linear, or that are out of calibration, you
 can build a per-channel raw-to-dB calibration profile from a known step-cal
 recording instead of relying on the linear slope/scale alone.
 
 1. Click "Extract Calibration..." in the Receiver SNR setup dialog.
-2. Step Cal File: Load the step-config TOML that lists the expected dB step
-   levels that were injected (for example 0, 3, 6, 12, 18, 24, 30, 36 dB).
-3. Calibration Ch10: Load the .ch10 file that recorded the step-cal sweep.
+2. Step Cal File: load the step-config TOML listing the expected dB step levels
+   that were injected (for example 0, 3, 6, 12, 18, 24, 30, 36 dB).
+3. Calibration Ch10: load the .ch10 file that recorded the step-cal sweep.
 4. The application detects the step plateaus on each receiver channel and builds
    a calibration profile for every channel that cleanly resolves the expected
    number of steps. A summary reports which channels calibrated and which fell
@@ -108,9 +130,9 @@ recording instead of relying on the linear slope/scale alone.
    transient at the start of the recording, and an optional operator down-ramp at
    the end, are excluded automatically.
 
-5. Clip Start / Clip End (optional): If the start or end of your recording
+5. Clip Start / Clip End (optional): if the start or end of your recording
    contains extra transients that confuse detection, enter the number of seconds
-   to ignore at the start and/or end before step detection runs. Defaults are 0.
+   to ignore at each end before step detection runs. Defaults are 0.
 
 Notes:
 - The calibration profile is session-only; it is not saved to disk. Re-extract it
@@ -122,34 +144,143 @@ Notes:
   exaggerated value.
 
 ================================================================================
-5. ANALYZING DATA
+5. WORKING WITH THE PLOT
 ================================================================================
-Once processing completes, the plot area will populate with your stream data.
+Once processing completes, the plot fills the main window. What you are looking
+at:
 
-- Framesync Lock (%): Displays the percentage of successful syncs within the 
-  time window. Drops in this graph indicate noisy data or signal loss.
-- Missed Frames: Displays an accumulating sum of dropped minor frames. Look for 
-  steep upward slopes to identify prolonged physical disconnects or massive 
-  dropouts.
-- Receiver SNR: Plots the calibrated signal-to-noise ratio.
+- Framesync Lock (%): the share of the stream that was in sync during each
+  averaging window, on the left axis. Drops indicate noisy data or signal loss.
+- Accumulated Missed Frames: a running total of loss-of-lock events, also on the
+  left axis. Steep upward slopes indicate prolonged dropouts or disconnects.
+  Switch the left axis between these two views (see below).
+- Receiver SNR (dB): the calibrated signal-to-noise ratio, on the right axis.
 
-Interactive Controls:
-- Use the Customize Plot Series dialog (toolbar) to toggle the visibility of
-  specific streams, receivers, or individual L/R/C channels. Switch the left
-  axis between Framesync Lock (%) and Accumulated Missed Frames with the
-  left-axis view toggle.
-- Zoom / Pan: Click and drag the plot to pan, or use your scroll wheel to zoom 
-  into specific anomalies.
+--- The right-click menu ---
+The chart has no surrounding toolbar: every control lives in the menu you get by
+right-clicking anywhere on the plot.
+
+  Set Plot Title...   Give the plot a title (it appears in exported images).
+  Plot File           When several files are loaded, choose which one to view,
+                      or overlay them all.
+  View Mode           Switch the left axis between Lock Percentage and
+                      Accumulation.
+  Customize View...   Show/hide individual streams, receivers or L/R/C channels,
+                      and rename or recolor any series.
+  Show Legend         Show or hide the floating legend.
+  Readout             Choose which series the hover readout follows (see below).
+  X Axis              Set an exact time window, or reset to the full span.
+  Y Axes              Set a maximum for either axis, or reset to automatic.
+  Export...           Save an image, the data, or the log.
+
+Entries stay greyed out until data is loaded.
+
+--- On-chart buttons ---
+A small row of buttons sits at the top-left of the chart:
+
+  Toggle Legend       Show or hide the legend.
+  (view mode)         One click switches the left axis to the other metric. It is
+                      labelled with the view it will switch to, and only appears
+                      when the data has both metrics.
+  Reset view          Appears only once you have zoomed or pinned an axis; puts
+                      everything back to automatic.
+
+--- Mouse and keyboard ---
+- Zoom: scroll the mouse wheel over the chart to zoom the time axis. The point
+  under the cursor stays put.
+- Pan: click and drag left or right to move through time. The cursor becomes an
+  open hand over the chart and closes while you drag.
+- Zoom to a range: hold Ctrl and drag (or drag with the middle mouse button) to
+  rubber-band a time span; releasing zooms to exactly that span.
+- Back to the full view: double-click the chart, click the "Reset view" button,
+  or use X Axis > Reset Span.
+- Keyboard: click the chart once to focus it, then use the single-key shortcuts
+  in section 9.
+
+--- Reading values off the plot ---
+A dashed vertical line follows your cursor so you can compare several series at
+the same instant, and a tooltip shows the reading nearest the cursor.
+
+On a busy plot the readout can jump between curves. To lock it to one series,
+right-click > Readout and pick that series by name: the readout then reports that
+series at your cursor's time, wherever the cursor is. Choose "Nearest series" to
+go back to the automatic behaviour.
+
+The legend floats over the chart and can be dragged anywhere inside it to keep it
+clear of the data you are studying. With many channels it scrolls.
 
 ================================================================================
 6. EXPORTING RESULTS
 ================================================================================
-To share your findings or process the data in external tools (like MATLAB or 
-Excel), use the Export feature.
+To share findings or process the data in external tools (such as MATLAB or
+Excel), use Export - from the plot's right-click menu or the main menu's
+Import/Export section. One dialog handles all three, and you can produce any
+combination in a single action.
 
-- Export to Image: Saves the current visual state of the plot (including your
-  current zoom/pan window) to a PNG, SVG, or PDF file. (PNG includes the legend
-  panel beneath the chart.)
-- Export to CSV: Writes the plotted data points into a comma-separated text file,
-  organized by timestamp and stream.
-- Export Log: Optionally saves the contents of the log window to a text file.
+- Image: saves the current visual state of the plot, including your current zoom
+  and pan window, as PNG, SVG or PDF. The legend is included, positioned exactly
+  where you left it. A hidden legend is left out.
+- CSV: writes the plotted data points to a comma-separated file with a timestamp
+  column and one column per series, each header identifying its stream and
+  receiver/channel.
+- Log: saves the contents of the message log to a text file.
+
+================================================================================
+7. PROCESSING MANY FILES AT ONCE (TEMPLATES)
+================================================================================
+When you have several recordings that share the same channel layout, you can
+configure the processing once and apply it to all of them.
+
+1. Open one file and configure it as usual.
+2. After it has processed, choose "Save as Template..." from the menu. This
+   captures every stream's settings, plus any custom series names and colors.
+   Templates contain no file paths, so they can be applied to any recording.
+3. Choose "Apply Template to Files..." from the menu, pick the template, then
+   select any number of .ch10 files.
+
+Each file is checked against the template first: it must contain exactly the same
+PCM channel IDs. Any file that does not match is listed and skipped rather than
+processed with the wrong settings. A summary reports how many files were
+processed and how many were skipped.
+
+All processed files stay loaded. Use the plot's "Plot File" menu to view one at a
+time, or overlay them all for comparison. You can also tick the export option
+before the run to have a CSV and two images written automatically for each file.
+
+Note: templates store the calibration input files, not an extracted calibration
+profile, so batch runs use the linear slope/offset calibration. Non-linear step
+calibration is available for single-file processing.
+
+================================================================================
+8. REOPENING EARLIER RESULTS (CSV IMPORT)
+================================================================================
+A CSV previously exported by this application can be loaded straight back into
+the plot, so you can review an old data set without re-processing the original
+.ch10 file. Choose "Import CSV..." from the menu, or drag a .csv file onto the
+window.
+
+Imported series behave exactly like processed ones - they appear in the legend
+and the Customize View dialog, and can be re-exported. Only this application's
+own export format is supported; another CSV layout is rejected with an
+explanation in the message log rather than being mis-read.
+
+================================================================================
+9. KEYBOARD SHORTCUTS
+================================================================================
+Anywhere in the application:
+
+  Ctrl+O        Open a Chapter 10 or CSV file
+  Ctrl+B        Show / hide the sidebar (message log)
+
+While the chart has focus (click it once):
+
+  Left / Right  Step the visible time window earlier or later, keeping its width
+  + / -         Zoom the time axis in or out
+  Home          Back to the full time span, keeping any Y axis maximum you set
+  R             Reset the view - full span and automatic Y axes
+  V             Switch the left axis between Lock % and Accumulation
+  L             Show or hide the legend
+
+These are single keys, so they act only on the chart and never interfere with
+typing in a dialog or a settings field. The right-click menu shows each key next
+to its command as a reminder.
