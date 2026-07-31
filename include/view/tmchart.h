@@ -70,6 +70,13 @@ public:
     void setRightLabel(const QString& label);
     /// The right axis is drawn only when SNR series exist.
     void setRightAxisVisible(bool visible);
+    /// Extra headroom reserved above the plot area, in pixels.
+    ///
+    /// The host overlays controls on the chart's top-left corner; without this the
+    /// plot area starts at the outer margin and those controls sit directly on the
+    /// axis line and the topmost Y tick label. Reserving space pushes the axes down
+    /// instead of drawing chrome over them.
+    void setTopInset(int px);
     /// Number of X ticks drawn, evenly spaced across the visible range.
     void setXTickCount(int count);
     /// Formats an X value for its tick label (elapsed seconds -> DDD:HH:MM:SS).
@@ -178,6 +185,7 @@ private:
     QString m_right_label;
     bool    m_right_visible = false;
     int     m_x_tick_count  = PlotConstants::kTickCount;
+    int     m_top_inset     = 0;   ///< Extra reserved headroom; see setTopInset().
     std::function<QString(double)> m_formatter;
 
     QColor m_background{Qt::black};

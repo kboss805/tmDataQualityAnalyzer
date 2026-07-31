@@ -911,6 +911,8 @@ void PlotWidget::setUpLayout()
     m_plot->setLeftLabel(PlotConstants::kYAxisLabel);
     m_plot->setLeftRange(0, 100);
     m_plot->setRightAxisVisible(true);
+    // Keep the axes clear of the overlay chip bar (see kOverlayHeadroomPx).
+    m_plot->setTopInset(PlotConstants::kOverlayHeadroomPx);
     m_plot->setRightLabel(PlotConstants::kSnrAxisLabel);
     m_plot->setMinimumHeight(PlotConstants::kPlotMinChartHeight);
     main_layout->addWidget(m_plot, 1);
