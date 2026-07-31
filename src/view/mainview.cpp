@@ -57,6 +57,23 @@ namespace
 {
     constexpr int kTitleBarHeight = 40;  ///< Custom title-bar height (logical px).
 
+    /// @name Hamburger / sidebar button metrics
+    /// These two carry a small drawn glyph, so their hover highlight is sized to hug
+    /// it rather than filling a caption-button-sized cell. At the caption metrics
+    /// (44x32) the highlight was roughly three times the glyph's visual area and read
+    /// as a large floating block; a compact, rounded box matches how editors
+    /// (VS Code, Antigravity) highlight their own title-bar controls.
+    ///
+    /// Kept >= 24 px in both axes: that is the usual minimum comfortable pointer
+    /// target, so tightening the box does not make the buttons fiddly to hit. The
+    /// CAPTION buttons deliberately keep the wider Windows metrics - those match the
+    /// OS and users expect the close button to span the corner.
+    /// @{
+    constexpr int kToolGlyphButtonW = 30;
+    constexpr int kToolGlyphButtonH = 26;
+    constexpr int kToolGlyphIconPx  = 24;
+    /// @}
+
     /// Title-bar glyph foreground for the active theme.
     QColor titleGlyphColor(bool dark)
     {
@@ -355,8 +372,8 @@ void MainView::setUpMenuBar()
         // menuBtn and sidebarBtn get a fixed size + AlignVCenter in code, so their
         // hover boxes stay inset from the bar edges (QSS margin isn't honored for
         // QToolButton) and read as compact pills like Claude Code's title bar.
-        "#titleBar QToolButton#menuBtn{min-width:0;border-radius:5px;}"
-        "#titleBar QToolButton#sidebarBtn{min-width:0;border-radius:5px;}");
+        "#titleBar QToolButton#menuBtn{min-width:0;min-height:0;border-radius:5px;}"
+        "#titleBar QToolButton#sidebarBtn{min-width:0;min-height:0;border-radius:5px;}");
 
     auto* bar_layout = new QHBoxLayout(title_bar);
     bar_layout->setContentsMargins(2, 0, 0, 0);
@@ -368,9 +385,10 @@ void MainView::setUpMenuBar()
     m_menu_button->setPopupMode(QToolButton::InstantPopup);
     m_menu_button->setMenu(menu);
     // Thin drawn glyph + fixed centered size, matching the sidebar toggle (icon set
-    // per theme in applyActionIconsForTheme).
-    m_menu_button->setFixedSize(44, 32);
-    m_menu_button->setIconSize(QSize(24, 24));
+    // per theme in applyActionIconsForTheme). Sized to hug the glyph - see the
+    // kToolGlyphButton note.
+    m_menu_button->setFixedSize(kToolGlyphButtonW, kToolGlyphButtonH);
+    m_menu_button->setIconSize(QSize(kToolGlyphIconPx, kToolGlyphIconPx));
     bar_layout->addWidget(m_menu_button, 0, Qt::AlignVCenter);
 
     // Show/hide the left sidebar (log). Checked = shown; the icon is set per theme
@@ -383,8 +401,8 @@ void MainView::setUpMenuBar()
     m_sidebar_toggle->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_B));
     // Fixed, smaller-than-the-bar size + AlignVCenter guarantees the hover box has
     // clearance from the bar's top/bottom edges (see the sidebarBtn stylesheet note).
-    m_sidebar_toggle->setFixedSize(44, 32);
-    m_sidebar_toggle->setIconSize(QSize(24, 24));
+    m_sidebar_toggle->setFixedSize(kToolGlyphButtonW, kToolGlyphButtonH);
+    m_sidebar_toggle->setIconSize(QSize(kToolGlyphIconPx, kToolGlyphIconPx));
     connect(m_sidebar_toggle, &QToolButton::toggled, this, [this](bool shown) {
         if (m_sidebar_dock != nullptr)
             m_sidebar_dock->setVisible(shown);
