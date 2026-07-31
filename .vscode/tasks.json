@@ -1,0 +1,114 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "qmake: Configure",
+            "type": "shell",
+            "command": "powershell.exe",
+            "args": [
+                "-ExecutionPolicy", "Bypass",
+                "-Command",
+                ". ./scripts/env.ps1; New-Item -ItemType Directory -Force -Path build | Out-Null; Set-Location build; qmake ../tmDataQualityAnalyzer.pro -spec win32-msvc CONFIG+=debug"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": []
+        },
+        {
+            "label": "Build App (Debug)",
+            "type": "shell",
+            "command": "powershell.exe",
+            "args": [
+                "-ExecutionPolicy", "Bypass",
+                "-Command",
+                ". ./scripts/env.ps1; New-Item -ItemType Directory -Force -Path build | Out-Null; Set-Location build; qmake ../tmDataQualityAnalyzer.pro -spec win32-msvc CONFIG+=debug; nmake -f Makefile.Debug"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Build (Debug)",
+            "type": "shell",
+            "command": "powershell.exe",
+            "args": [
+                "-ExecutionPolicy", "Bypass",
+                "-Command",
+                ". ./scripts/env.ps1; New-Item -ItemType Directory -Force -Path build | Out-Null; Set-Location build; qmake ../tmDataQualityAnalyzer.pro -spec win32-msvc CONFIG+=debug; & $env:TMDQ_MAKE -f Makefile.Debug; Set-Location ../tests; qmake tests.pro -spec win32-msvc CONFIG+=debug; & $env:TMDQ_MAKE -f Makefile.Debug; Set-Location ..; ./scripts/deploy_qt_local.ps1 -Config debug; ./scripts/deploy_qt_local.ps1 -Config debug -Tests"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Build (Release)",
+            "type": "shell",
+            "command": "powershell.exe",
+            "args": [
+                "-ExecutionPolicy", "Bypass",
+                "-Command",
+                ". ./scripts/env.ps1; New-Item -ItemType Directory -Force -Path build | Out-Null; Set-Location build; qmake ../tmDataQualityAnalyzer.pro -spec win32-msvc CONFIG+=release; & $env:TMDQ_MAKE -f Makefile.Release; Set-Location ..; ./scripts/deploy_qt_local.ps1 -Config release"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Build and Launch (Release)",
+            "type": "shell",
+            "command": "powershell.exe",
+            "args": [
+                "-ExecutionPolicy", "Bypass",
+                "-File", "scripts/run_release.ps1"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": []
+        },
+        {
+            "label": "Clean",
+            "type": "shell",
+            "command": "powershell.exe",
+            "args": [
+                "-ExecutionPolicy", "Bypass",
+                "-Command",
+                ". ./scripts/env.ps1; Set-Location build; if (Test-Path Makefile) { nmake -f Makefile clean }"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": []
+        },
+        {
+            "label": "Force Build (Debug)",
+            "type": "shell",
+            "command": "powershell.exe",
+            "args": [
+                "-ExecutionPolicy", "Bypass",
+                "-Command",
+                ". ./scripts/env.ps1; New-Item -ItemType Directory -Force -Path build | Out-Null; Set-Location build; qmake ../tmDataQualityAnalyzer.pro -spec win32-msvc CONFIG+=debug; Set-Location ${workspaceFolder}; Get-ChildItem src,include -Recurse -Include *.cpp,*.h | ForEach-Object { $_.LastWriteTime = Get-Date }; Set-Location build; nmake -f Makefile.Debug"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Rebuild",
+            "dependsOn": ["Clean", "Build (Debug)"],
+            "dependsOrder": "sequence",
+            "problemMatcher": []
+        },
+        {
+            "label": "Gen compile_flags.txt (clangd)",
+            "type": "shell",
+            "command": "powershell.exe",
+            "args": [
+                "-ExecutionPolicy", "Bypass",
+                "-Command",
+                ". ./scripts/env.ps1; py scripts/gen_compile_flags.py"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "detail": "Generate compile_flags.txt for clangd/clang-tidy IntelliSense (reads QTDIR). Re-run after a Qt bump or include/define changes.",
+            "problemMatcher": []
+        }
+    ]
+}

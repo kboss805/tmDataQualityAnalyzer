@@ -38,7 +38,16 @@ version_autogen.h
 # External libraries — tracked for reproducible builds
 
 # IDE and editor settings
-.vscode/
+# .vscode: track the shared IDE setup, ignore per-machine/generated files.
+# These were fully ignored until 2026-07-30, which is how launch.json kept a
+# hard-coded Qt path through the 6.11.1 bump and broke F5 with 0xC0000135 - an
+# untracked config never shows up in the diff that should have updated it.
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/c_cpp_properties.json
 .vs/
 *.creator.user*
 *.suo

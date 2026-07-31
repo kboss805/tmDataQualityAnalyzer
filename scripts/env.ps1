@@ -16,6 +16,19 @@ if (-not $env:QT_ROOT)    { $env:QT_ROOT    = "C:\Qt\$env:QT_VERSION" }
 
 $env:QTDIR = "$env:QT_ROOT\msvc2022_64"
 
+# Tripwire for a stale PERSISTENT QTDIR. This script owns QTDIR for the current
+# shell, so builds are always right - but a user-level QTDIR set in Windows is
+# read by tools that never source this script (cpptools resolves ${env:QTDIR} in
+# .vscode/c_cpp_properties.json, as do Qt Creator and the Qt VS Tools). One left
+# pointing at a removed MinGW kit is what produced a 0xC0000135 DLL-not-found
+# after the 6.11.1 upgrade, so say something rather than let it rot again.
+$persistentQtDir = [Environment]::GetEnvironmentVariable('QTDIR', 'User')
+if ($persistentQtDir -and $persistentQtDir -ne $env:QTDIR) {
+    Write-Warning ("Persistent user QTDIR is '$persistentQtDir' but this Qt is '$env:QTDIR'. " +
+                   "Builds here are unaffected, but tools reading QTDIR (cpptools, Qt Creator) " +
+                   "will use the stale one - update it in System Properties > Environment Variables.")
+}
+
 # Import the MSVC + Windows SDK environment from vcvars64.bat, once per shell.
 # Guard on our OWN marker: a Developer-shell profile can set VSCMD_VER while leaving
 # the env incomplete (no INCLUDE/LIB), which makes qmake fail with
