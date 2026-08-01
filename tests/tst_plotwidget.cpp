@@ -25,6 +25,7 @@
 #include "plotwidget.h"
 #include "processedstreamdata.h"
 #include "streamconfig.h"
+#include "tmchart.h"
 
 void TestPlotWidget::constructsWithoutCrash()
 {
@@ -913,4 +914,115 @@ void TestPlotWidget::keyboardShortcutsAreWidgetScopedNotApplicationWide()
     QTest::keyClicks(edit, QStringLiteral("Lock"));
     QCOMPARE(edit->text(), QString("Lock"));
     QCOMPARE(widget->m_legend_visible, legend_before);   // plot untouched
+}
+
+namespace
+{
+/// Frame-sync data: yields a lock series and a missed-frames series (left axis).
+ProcessedStreamData lockStream()
+{
+    ProcessedStreamData d;
+    d.streamLabel  = "CH-01 PRN 15 5M";
+    d.pcmChannelId = 1;
+    d.mode         = StreamMode::FrameSyncLockStats;
+    d.timesSec                = { 0.0, 1.0, 2.0 };
+    d.lockPercent             = { 99.0, 100.0, 98.0 };
+    d.accumulatedMissedFrames = { 0.0, 0.0, 2.0 };
+    return d;
+}
+
+/// Receiver AGC data: yields one SNR series (right axis).
+ProcessedStreamData snrStream()
+{
+    ProcessedStreamData d;
+    d.streamLabel  = "CH-40 AGC";
+    d.pcmChannelId = 40;
+    d.mode         = StreamMode::ReceiverChannelInfo;
+    d.timesSec     = { 0.0, 1.0, 2.0 };
+    ProcessedChannelSeries ch;
+    ch.name   = "L_RCVR3";
+    ch.values = { 40.0, 45.0, 50.0 };
+    d.channels.append(ch);
+    return d;
+}
+}  // namespace
+
+void TestPlotWidget::emptyChartKeepsLeftAxis()
+{
+    // Nothing loaded yet. Hiding BOTH axes would leave a bare box that does not read
+    // as a chart, so the left one stays - an empty axis only misleads once there is
+    // other data on the plot to imply this axis has data too.
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+
+    QVERIFY(widget.m_plot->leftAxisVisible());
+    QVERIFY(!widget.m_plot->rightAxisVisible());
+}
+
+void TestPlotWidget::lockOnlyDataHidesRightAxis()
+{
+    // The reported case: a PRN file with no AGC channels still advertised
+    // "Receiver SNR (dB)" auto-ranged to 0.0-1.0, which reads as an SNR measurement
+    // pinned near zero rather than as absent data.
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    vm.addStreamData(lockStream());
+
+    QVERIFY(widget.m_plot->leftAxisVisible());
+    QVERIFY(!widget.m_plot->rightAxisVisible());
+}
+
+void TestPlotWidget::snrOnlyDataHidesLeftAxis()
+{
+    // The mirror case, and the one the old code could not fix at all: there was no
+    // setLeftAxisVisible(), so an AGC-only plot always showed "Framesync Lock (%)"
+    // 0-100 with no curve on it.
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    vm.addStreamData(snrStream());
+
+    QVERIFY(!widget.m_plot->leftAxisVisible());
+    QVERIFY(widget.m_plot->rightAxisVisible());
+}
+
+void TestPlotWidget::hidingLastSnrSeriesReclaimsRightAxis()
+{
+    // Keyed on VISIBLE series, not merely loaded ones: hiding the last SNR series in
+    // Customize View leaves the axis just as empty as never having loaded one.
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    vm.addStreamData(lockStream());
+    vm.addStreamData(snrStream());
+
+    QVERIFY(widget.m_plot->leftAxisVisible());
+    QVERIFY(widget.m_plot->rightAxisVisible());
+
+    // Collect the SNR series by stable id, the way the Customize View dialog does.
+    QVector<int> snr_ids;
+    for (int i = 0; i < vm.seriesCount(); ++i)
+    {
+        if (vm.seriesAt(i).metricType == PlotSeriesData::MetricType::SNR)
+        {
+            snr_ids.append(vm.seriesAt(i).id);
+        }
+    }
+    QVERIFY(!snr_ids.isEmpty());
+
+    for (int id : snr_ids)
+    {
+        vm.setSeriesVisibleById(id, false);
+    }
+    QVERIFY(widget.m_plot->leftAxisVisible());
+    QVERIFY(!widget.m_plot->rightAxisVisible());
+
+    // ...and showing them again brings the axis back.
+    for (int id : snr_ids)
+    {
+        vm.setSeriesVisibleById(id, true);
+    }
+    QVERIFY(widget.m_plot->rightAxisVisible());
 }

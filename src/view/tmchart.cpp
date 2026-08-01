@@ -199,6 +199,17 @@ void TmChart::setRightLabel(const QString& label)
     update();
 }
 
+void TmChart::setLeftAxisVisible(bool visible)
+{
+    if (m_left_visible == visible)
+    {
+        return;
+    }
+    m_left_visible = visible;
+    recalcPlotArea();   // reclaims the left margin when hidden
+    update();
+}
+
 void TmChart::setRightAxisVisible(bool visible)
 {
     if (m_right_visible == visible)
@@ -331,11 +342,16 @@ void TmChart::recalcPlotArea() const
     const QFontMetrics fm(font());
     const int text_h = fm.height();
 
-    // Left margin: widest left-axis tick label, plus the rotated axis title.
-    int left = kOuterMargin + fm.horizontalAdvance(QStringLiteral("-000.0")) + kTickLength;
-    if (!m_left_label.isEmpty())
+    // Left margin: widest left-axis tick label, plus the rotated axis title. A
+    // hidden axis reserves nothing, so the chart reclaims the space.
+    int left = kOuterMargin;
+    if (m_left_visible)
     {
-        left += text_h + kAxisLabelGap;
+        left += fm.horizontalAdvance(QStringLiteral("-000.0")) + kTickLength;
+        if (!m_left_label.isEmpty())
+        {
+            left += text_h + kAxisLabelGap;
+        }
     }
 
     int right = kOuterMargin;
@@ -465,10 +481,24 @@ void TmChart::drawGrid(QPainter& painter) const
         const double px = xToPixel(t);
         painter.drawLine(QPointF(px, m_plot_area.top()), QPointF(px, m_plot_area.bottom()));
     }
-    for (double t : tickValues(m_left_lower, m_left_upper, PlotConstants::kYTickCount))
+    // Horizontal lines follow whichever Y axis is drawn - a grid line that lines up
+    // with no visible tick reads as a misaligned chart. Left wins when both are up,
+    // matching the tick labels the eye lands on first.
+    if (m_left_visible)
     {
-        const double py = leftToPixel(t);
-        painter.drawLine(QPointF(m_plot_area.left(), py), QPointF(m_plot_area.right(), py));
+        for (double t : tickValues(m_left_lower, m_left_upper, PlotConstants::kYTickCount))
+        {
+            const double py = leftToPixel(t);
+            painter.drawLine(QPointF(m_plot_area.left(), py), QPointF(m_plot_area.right(), py));
+        }
+    }
+    else if (m_right_visible)
+    {
+        for (double t : tickValues(m_right_lower, m_right_upper, PlotConstants::kYTickCount))
+        {
+            const double py = rightToPixel(t);
+            painter.drawLine(QPointF(m_plot_area.left(), py), QPointF(m_plot_area.right(), py));
+        }
     }
     painter.restore();
 }
@@ -525,8 +555,11 @@ void TmChart::drawAxes(QPainter& painter) const
     const QFontMetrics fm(font());
     const int text_h = fm.height();
 
-    // Axis lines: left, bottom, and right only when that axis is in use.
-    painter.drawLine(m_plot_area.bottomLeft(), m_plot_area.topLeft());
+    // Axis lines: bottom always; left and right only when that axis is in use.
+    if (m_left_visible)
+    {
+        painter.drawLine(m_plot_area.bottomLeft(), m_plot_area.topLeft());
+    }
     painter.drawLine(m_plot_area.bottomLeft(), m_plot_area.bottomRight());
     if (m_right_visible)
     {
@@ -556,28 +589,37 @@ void TmChart::drawAxes(QPainter& painter) const
         {
             continue;
         }
-        // The last label is pulled inside the plot edge rather than overflowing the
-        // widget, and may displace the one before it - hence the clearance check.
-        const double draw_left = is_last ? std::min(left, m_plot_area.right() - w) : left;
-        if (is_last && draw_left < last_label_right)
+        // Labels at either end are pulled inside the widget rather than overflowing
+        // it. The last one may displace the one before it - hence the clearance
+        // check above; when there is no room for both, the end of the range wins.
+        //
+        // The first one matters whenever the left axis is hidden: without that
+        // gutter the plot area starts at the outer margin, so a centred label would
+        // hang off the left edge and render as a truncated fragment.
+        double draw_left = left;
+        if (is_last)
         {
-            // No room for both; the end of the range wins.
+            draw_left = std::min(draw_left, m_plot_area.right() - w);
         }
+        draw_left = std::max(draw_left, 0.0);
         painter.drawText(QRectF(draw_left, m_plot_area.bottom() + kTickLength, w, text_h),
                          Qt::AlignHCenter | Qt::AlignTop, label);
         last_label_right = draw_left + w;
     }
 
     // --- Left ticks and labels ---
-    for (double t : tickValues(m_left_lower, m_left_upper, PlotConstants::kYTickCount))
+    if (m_left_visible)
     {
-        const double py = leftToPixel(t);
-        painter.drawLine(QPointF(m_plot_area.left() - kTickLength, py),
-                         QPointF(m_plot_area.left(), py));
-        painter.drawText(QRectF(0, py - text_h / 2.0,
-                                m_plot_area.left() - kTickLength - 2, text_h),
-                         Qt::AlignRight | Qt::AlignVCenter,
-                         QString::number(t, 'f', 1));
+        for (double t : tickValues(m_left_lower, m_left_upper, PlotConstants::kYTickCount))
+        {
+            const double py = leftToPixel(t);
+            painter.drawLine(QPointF(m_plot_area.left() - kTickLength, py),
+                             QPointF(m_plot_area.left(), py));
+            painter.drawText(QRectF(0, py - text_h / 2.0,
+                                    m_plot_area.left() - kTickLength - 2, text_h),
+                             Qt::AlignRight | Qt::AlignVCenter,
+                             QString::number(t, 'f', 1));
+        }
     }
 
     // --- Right ticks and labels ---
@@ -603,7 +645,7 @@ void TmChart::drawAxes(QPainter& painter) const
                          Qt::AlignHCenter | Qt::AlignVCenter, m_x_label);
     }
     // Y titles read bottom-to-top alongside their axis, the usual convention.
-    if (!m_left_label.isEmpty())
+    if (m_left_visible && !m_left_label.isEmpty())
     {
         painter.save();
         painter.translate(kOuterMargin, m_plot_area.center().y());

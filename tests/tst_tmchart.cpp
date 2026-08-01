@@ -197,6 +197,40 @@ void TestTmChart::interactionsDisabledIgnoresWheel()
     QCOMPARE(chart.xUpper(), 100.0);
 }
 
+void TestTmChart::hiddenAxisReclaimsItsMargin()
+{
+    // An axis nobody plots against is hidden rather than left auto-ranged under a
+    // label naming data that is not there. Asserted through the plot area because
+    // that is the measurable consequence: a hidden axis reserves no gutter, so the
+    // chart grows into it. Whether the label is *painted* is checked by rendering.
+    TmChart chart;
+    prepare(chart);
+    chart.setLeftLabel(QStringLiteral("Lock (%)"));
+    chart.setRightLabel(QStringLiteral("SNR (dB)"));
+
+    // Defaults: left drawn, right not - an empty chart is still a chart.
+    QVERIFY(chart.leftAxisVisible());
+    QVERIFY(!chart.rightAxisVisible());
+
+    const double left_gutter_shown = chart.plotArea().left();
+    QVERIFY(left_gutter_shown > 0.0);
+
+    chart.setLeftAxisVisible(false);
+    QVERIFY(!chart.leftAxisVisible());
+    QVERIFY(chart.plotArea().left() < left_gutter_shown);   // margin given back
+
+    chart.setRightAxisVisible(true);
+    const double right_edge_shown = chart.plotArea().right();
+    chart.setRightAxisVisible(false);
+    QVERIFY(chart.plotArea().right() > right_edge_shown);
+
+    // The transforms must follow the new plot area, not a stale one - a coordinate
+    // still mapped against the old gutter would draw every point offset.
+    chart.setLeftAxisVisible(true);
+    QVERIFY(qAbs(chart.xToPixel(0.0) - chart.plotArea().left()) < 1e-6);
+    QVERIFY(qAbs(chart.leftToPixel(0.0) - chart.plotArea().bottom()) < 1e-6);
+}
+
 void TestTmChart::renderToPaintsData()
 {
     // renderTo() is the single path used for PNG, SVG and PDF export, so if it
