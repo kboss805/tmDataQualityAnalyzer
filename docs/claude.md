@@ -396,6 +396,17 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.9.0 tag
 
+Landed after the v2.9.0 tag, so the shipped v2.9.0 binaries do **not** have any of it.
+
+#### Cosmetic
+
+- Every title-bar button (hamburger, sidebar toggle, minimize/maximize/close) is now
+  30x26 with a rounded hover box that hugs its glyph, instead of filling a full-height
+  cell. Note this departs from the Windows convention where close spans the top-right
+  corner.
+- The plot reserves 12 px of headroom (`TmChart::setTopInset()`) so the on-chart chip
+  bar no longer sits on the top axis line and the topmost Y tick label.
+
 #### Fixed
 
 - **A Y axis with nothing plotted against it is now hidden.** Both axes were always
@@ -490,15 +501,6 @@ The stories below follow the workflow a first-time user takes through the applic
   in a gitignored IDE config plus a stale user-level `QTDIR` pointing at a removed
   MinGW kit. The shared `.vscode` configs are now tracked so a toolchain change has to
   confront them.
-
-#### Cosmetic
-
-- Every title-bar button (hamburger, sidebar toggle, minimize/maximize/close) is now
-  30x26 with a rounded hover box that hugs its glyph, instead of filling a full-height
-  cell. Note this departs from the Windows convention where close spans the top-right
-  corner.
-- The plot reserves 12 px of headroom (`TmChart::setTopInset()`) so the on-chart chip
-  bar no longer sits on the top axis line and the topmost Y tick label.
 
 #### Tests
 
