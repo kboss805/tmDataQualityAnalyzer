@@ -400,6 +400,23 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ## Version History
 
+### Unreleased — since the v2.9.2 tag
+
+#### CI
+
+- **The test-result gate now pins which test is allowed to skip.** A skipped test is
+  indistinguishable from a passing one in the totals, and the suite has **40 `QSKIP`
+  sites**: 39 are "fixture not available" guards, one is the deliberate opt-in heavy
+  PRN benchmark (`TMDQA_RUN_HEAVY_BENCH`). The old gate only checked
+  `$pass -lt 320` — with the real count now 364, an entire suite could vanish and
+  still pass, and its comment still claimed "expect 357".
+  Both runners now require **exactly one skip, and that it is the benchmark by name**;
+  any other skip fails and prints the skip list. All three `.ch10` fixtures are
+  committed, so this holds on the hosted fallback too.
+  Verified against three doctored result files: clean run passes; an injected extra
+  skip fails; and a run where the count is still 1 but it is the *wrong* test also
+  fails — which a count-only check would have passed.
+
 ### v2.9.2 — Discoverable Plot Shortcuts
 
 #### Improved

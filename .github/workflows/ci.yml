@@ -214,9 +214,24 @@ jobs:
           Write-Host "Results: $pass passed, $fail failed, $skip skipped (exit $code)"
           if ($code -ne 0) { throw "Test suite exited non-zero ($code)" }
           if ($fail -gt 0)  { throw "$fail test(s) failed" }
-          # Fixtures are present, so every integration suite runs - expect 357.
-          # A low count means fixtures are missing and the suites silently skipped.
-          if ($pass -lt 320) { throw "Only $pass tests passed (expected >= 320) - fixtures missing or the suite aborted" }
+          # --- Fixture-loss guard -------------------------------------------
+          # A skipped test is indistinguishable from a passing one in the totals,
+          # and the suite has 40 QSKIP sites: 39 are "fixture not available"
+          # guards, ONE is a deliberate opt-in. So an unpinned skip count is how
+          # four integration suites could quietly stop testing anything while CI
+          # still reported success. All three .ch10 fixtures are committed, so
+          # both runners must land on exactly that one skip.
+          $expectedSkip = 'benchmarkHeavyWorkloadSingleVsMultiStream'
+          $skips = @(Select-String -Path output/results.txt -Pattern '^SKIP')
+          if ($skips.Count -ne 1 -or $skips[0].Line -notmatch $expectedSkip) {
+            Write-Host "Skipped tests:"
+            $skips | ForEach-Object { Write-Host "  $($_.Line)" }
+            throw ("Expected exactly one skip ($expectedSkip, the opt-in heavy PRN " +
+                   "benchmark) but got $($skips.Count) - a test fixture is probably missing")
+          }
+          Write-Host "Skips: 1 (the opt-in $expectedSkip) - as expected."
+          # Coarse backstop against a run that died partway through.
+          if ($pass -lt 350) { throw "Only $pass tests passed - the suite likely aborted partway" }
 
       - name: Upload test results
         if: always()
@@ -355,10 +370,24 @@ jobs:
           Write-Host "Results: $pass passed, $fail failed, $skip skipped (exit $code)"
           if ($code -ne 0) { throw "Test suite exited non-zero ($code)" }
           if ($fail -gt 0)  { throw "$fail test(s) failed" }
-          # The small .ch10 fixtures are committed, so the integration suites run
-          # here too - expect 357. The heavy PRN throughput benchmark is opt-in
-          # (TMDQA_RUN_HEAVY_BENCH) and skips on both runners.
-          if ($pass -lt 320) { throw "Only $pass tests passed (expected >= 320) - fixtures missing or the suite aborted" }
+          # --- Fixture-loss guard -------------------------------------------
+          # A skipped test is indistinguishable from a passing one in the totals,
+          # and the suite has 40 QSKIP sites: 39 are "fixture not available"
+          # guards, ONE is a deliberate opt-in. So an unpinned skip count is how
+          # four integration suites could quietly stop testing anything while CI
+          # still reported success. All three .ch10 fixtures are committed, so
+          # both runners must land on exactly that one skip.
+          $expectedSkip = 'benchmarkHeavyWorkloadSingleVsMultiStream'
+          $skips = @(Select-String -Path output/results.txt -Pattern '^SKIP')
+          if ($skips.Count -ne 1 -or $skips[0].Line -notmatch $expectedSkip) {
+            Write-Host "Skipped tests:"
+            $skips | ForEach-Object { Write-Host "  $($_.Line)" }
+            throw ("Expected exactly one skip ($expectedSkip, the opt-in heavy PRN " +
+                   "benchmark) but got $($skips.Count) - a test fixture is probably missing")
+          }
+          Write-Host "Skips: 1 (the opt-in $expectedSkip) - as expected."
+          # Coarse backstop against a run that died partway through.
+          if ($pass -lt 350) { throw "Only $pass tests passed - the suite likely aborted partway" }
 
       - name: Upload test results
         if: always()
