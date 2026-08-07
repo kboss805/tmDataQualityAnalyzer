@@ -389,10 +389,6 @@ QMenu* PlotWidget::buildContextMenu()
     const bool has_data = m_view_model->hasData();
 
     QMenu& menu = *(new QMenu(this));
-    // Qt suppresses action tooltips in menus unless asked; the View Mode submenu
-    // uses one to advertise its 'V' shortcut (a cycling key has no single entry to
-    // hang a QKeySequence on).
-    menu.setToolTipsVisible(true);
 
     // Set Plot Title leads the menu: it is the most frequently used entry when
     // preparing a plot for a report.
@@ -435,10 +431,11 @@ QMenu* PlotWidget::buildContextMenu()
     }
 
     // --- View Mode: the left-axis metric ----------------------------------
-    QMenu* view_menu = menu.addMenu(QStringLiteral("View Mode"));
-    // 'V' cycles between the two modes; shown on the submenu since the key toggles
-    // rather than selecting one specific entry.
-    view_menu->setToolTip(QStringLiteral("V - switch metric"));
+    // The key lives in the submenu TITLE, not a QKeySequence: 'V' cycles between the
+    // modes rather than selecting one entry, and Qt will not render a shortcut on a
+    // submenu at all. It was a tooltip before, which discovers nothing - a shortcut
+    // you have to hover to find is barely a shortcut.
+    QMenu* view_menu = menu.addMenu(QStringLiteral("View Mode  (V)"));
     // Only meaningful when both left-axis metrics exist (a frame-sync stream
     // produces both); SNR-only data leaves it disabled.
     const bool both_metrics = m_view_model->hasLockSeries() && m_view_model->hasMissedFramesSeries();
@@ -557,10 +554,20 @@ QMenu* PlotWidget::buildContextMenu()
     connect(right_act, &QAction::triggered, this, &PlotWidget::onSetRightYMax);
     y_menu->addSeparator();
     QAction* reset_y_act = y_menu->addAction(QStringLiteral("Reset"));
-    // 'R' resets BOTH axes, so it is advertised here rather than implying it only
-    // clears the Y overrides.
-    reset_y_act->setToolTip(QStringLiteral("R - reset both axes"));
     connect(reset_y_act, &QAction::triggered, this, &PlotWidget::onResetYAxes);
+
+    // --- Reset View: both axes at once ------------------------------------
+    // Top-level rather than inside a submenu for two reasons. It is the menu's only
+    // equivalent of the on-chart Reset view chip - the axis resets are otherwise
+    // split across 'X Axis > Reset Span' and 'Y Axes > Reset', so there was no one
+    // action that did what the chip does. And a top-level QAction is the only place
+    // Qt will actually render the 'R' key, which previously survived as a tooltip on
+    // the Y-axis reset that also misdescribed it as resetting both.
+    QAction* reset_view_act = menu.addAction(QStringLiteral("Reset View"));
+    reset_view_act->setEnabled(has_data);
+    reset_view_act->setShortcut(QKeySequence(Qt::Key_R));
+    reset_view_act->setShortcutVisibleInContextMenu(true);
+    connect(reset_view_act, &QAction::triggered, this, &PlotWidget::resetView);
 
     menu.addSeparator();
 

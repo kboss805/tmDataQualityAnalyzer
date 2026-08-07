@@ -471,6 +471,90 @@ void TestPlotWidget::contextMenuResetActionsClearAxisOverrides()
     QVERIFY(!vm.hasRightYMaxOverride());
 }
 
+void TestPlotWidget::contextMenuAdvertisesEveryPlotShortcut()
+{
+    // US4.1 requires the menu to ADVERTISE each single-key shortcut, so they are
+    // discoverable rather than hidden. Two of them could not be shown as a
+    // QKeySequence and had degenerated into tooltips, which discover nothing:
+    // 'V' cycles rather than selecting one entry, and Qt will not render a shortcut
+    // on a submenu at all; 'R' had no menu item of its own to hang on.
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    addLockStream(vm, "Ch 5", 5);
+
+    QScopedPointer<QMenu> menu(widget.buildContextMenu());
+    QVERIFY(!menu.isNull());
+
+    // V - carried in the submenu title, the only place it can be seen.
+    QAction* view_act = findAction(menu.data(), "View Mode");
+    QVERIFY(view_act != nullptr);
+    QVERIFY2(view_act->text().contains(QLatin1String("(V)")),
+             qPrintable(QStringLiteral("View Mode title was: ") + view_act->text()));
+
+    // L, Home and R are real QKeySequences on their actions. setShortcut alone is
+    // not enough - Qt hides shortcut text in CONTEXT menus unless explicitly told
+    // to show it, so an unset flag would leave the key invisible while the test
+    // still saw a shortcut.
+    struct Expect { const char* menuPath; const char* item; int key; };
+    const Expect direct[] = {
+        { nullptr,  "Show Legend", Qt::Key_L },
+        { "X Axis", "Reset Span",  Qt::Key_Home },
+        { nullptr,  "Reset View",  Qt::Key_R },
+    };
+    for (const Expect& e : direct)
+    {
+        QMenu* owner = menu.data();
+        if (e.menuPath != nullptr)
+        {
+            QAction* sub = findAction(menu.data(), QString::fromLatin1(e.menuPath));
+            QVERIFY(sub != nullptr);
+            owner = sub->menu();
+            QVERIFY(owner != nullptr);
+        }
+        QAction* act = findAction(owner, QString::fromLatin1(e.item));
+        QVERIFY2(act != nullptr, e.item);
+        QCOMPARE(act->shortcut(), QKeySequence(e.key));
+        QVERIFY2(act->isShortcutVisibleInContextMenu(), e.item);
+    }
+}
+
+void TestPlotWidget::contextMenuResetViewResetsBothAxes()
+{
+    // The on-chart Reset view chip restores span AND scaling in one click; the menu
+    // could only do it as two separate actions in two different submenus. This is
+    // the single equivalent, and the only item 'R' can be advertised on.
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+
+    // Disabled until there is something to reset, like every other data-dependent
+    // entry in the menu.
+    {
+        QScopedPointer<QMenu> empty(widget.buildContextMenu());
+        QAction* act = findAction(empty.data(), "Reset View");
+        QVERIFY(act != nullptr);
+        QVERIFY(!act->isEnabled());
+    }
+
+    addLockStream(vm, "Ch 5", 5);
+    vm.setXViewRange(0.5, 1.5);
+    vm.setLeftYMaxOverride(42.0);
+    vm.setRightYMaxOverride(24.0);
+
+    QScopedPointer<QMenu> menu(widget.buildContextMenu());
+    QAction* reset_act = findAction(menu.data(), "Reset View");
+    QVERIFY(reset_act != nullptr);
+    QVERIFY(reset_act->isEnabled());
+    reset_act->trigger();
+
+    // Both halves, from one action - that is the whole point of the entry.
+    QCOMPARE(vm.xViewMin(), vm.xMin());
+    QCOMPARE(vm.xViewMax(), vm.xMax());
+    QVERIFY(!vm.hasLeftYMaxOverride());
+    QVERIFY(!vm.hasRightYMaxOverride());
+}
+
 void TestPlotWidget::contextMenuSetTitleAppliesToViewModel()
 {
     PlotViewModel vm;
