@@ -86,8 +86,8 @@ after('<p>Right-click anywhere on the chart. Entries stay disabled until a file 
       fig('Main Context Menu.png',
           'The plot’s right-click menu — every plot control lives here. Entries that need more than '
           'one loaded file, such as Plot File, stay disabled until they apply.',
-          'The plot right-click menu open over a chart, showing Set Plot Title, Plot File, View Mode, '
-          'Customize View, Show Legend, Readout, X Axis, Y Axes and Export'))
+          'The plot right-click menu open over a chart, showing Set Plot Title, Plot File, '
+          'View Mode (V), Customize View, Show Legend, Readout, X Axis, Y Axes, Reset View and Export'))
 
 after('accumulation line.</p>',
       fig('FrameSync Perctentage Plot with Legend.png',
