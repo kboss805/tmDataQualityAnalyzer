@@ -33,14 +33,22 @@ $ChartCrop = @(405, 38, 1520, 1045)
 $MaxWidth  = 1200
 
 # name -> crop? ($true means crop to the chart region first)
+# Which legend variant is used where is a judgement call, not a default:
+#   - frame-sync plots carry 4 streams, so the legend is compact, sits clear of the
+#     data and names the curves - it earns its place;
+#   - SNR plots carry 48 receiver channels, and that legend is tall enough to cover
+#     the right-hand axis tick labels, so the plain capture reads better.
+# The frame-sync pair is kept BOTH ways because the manual's legend-toggle section is
+# the one place where the contrast itself is the subject.
 $Images = [ordered]@{
-    'Config Streams Dialg.png'       = $false   # already a dialog-sized capture
-    'Main Context Menu.png'          = $true
-    'FrameSync Perctentage Plot.png' = $true
-    'Frame Accumulation Plot.png'    = $true
-    'Uncalibrated SNR plot.png'      = $true
-    'calibrated SNR plot.png'        = $true
-    'Export Dialog.png'              = $false
+    'Config Streams Dialg.png'                       = $false  # already a dialog-sized capture
+    'Main Context Menu.png'                          = $true
+    'FrameSync Perctentage Plot with Legend.png'     = $true
+    'FrameSync Perctentage Plot without Legend.png'  = $true
+    'Frame Error Accumulation Plot with Legend.png'  = $true
+    'Uncalibrated SNR Plot without Legend.png'       = $true
+    'Calibrated SNR Plot without Legend.png'         = $true
+    'Export Dialog.png'                              = $false
 }
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null

@@ -64,12 +64,23 @@ These reach users but nothing in CI exercises them, so they rot silently:
 - **`CLAUDE.md`** — the "Current version" line in the opening paragraph. It sat at 2.7.0
   through two releases, because nothing points at it.
 
-Grep for the OLD version string before packaging; anything still naming it is a place the release
-did not reach:
+**Run the consistency check rather than grepping by hand:**
 
 ```powershell
-git grep -n "2\.8\.0"   # substitute the version you are replacing
+powershell -ExecutionPolicy Bypass -File scripts\check_release_consistency.ps1 -ReleaseMode
 ```
+
+It derives the version from `AppVersion` and asserts every user-facing literal matches, that the
+changelog has a `### vX.Y.Z` section, and (in `-ReleaseMode`) that no `Unreleased` section is left
+behind. A **missing marker is a failure**, not a pass, so rewording one of those lines breaks the
+check loudly instead of silently disabling it. `build_release.ps1` runs it before packaging and CI
+runs it without `-ReleaseMode` on every PR, so drift is caught long before a release.
+
+**What the check cannot judge: whether the screenshots still show the truth.** Look at the figures
+in `resources/usermanual.html` and ask whether anything in this release changes what they depict.
+v2.9.1's headline fix removed the empty axis that four of the seven figures were displaying - a
+manual illustrating the bug it just fixed. No script can catch that; it is a judgement call, so make
+it deliberately every release rather than assuming the figures are fine.
 
 ## Step 5 — Verify before building
 With the **build-and-test** skill: build the app clean (0 warnings) and run the **full** test suite

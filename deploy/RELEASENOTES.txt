@@ -1,3 +1,43 @@
+tmDataQualityAnalyzer v2.9.1 - What's New
+=================================
+
+  - Fixed: The plot no longer shows a scale for data that isn't there. A file with
+    only frame sync streams used to display a "Receiver SNR (dB)" scale down the
+    right-hand side, running 0.0 to 1.0 with nothing plotted against it - which reads
+    as a real SNR measurement sitting near zero. A file with only receiver AGC data
+    did the same thing on the left with "Framesync Lock (%)".
+
+    Each scale now appears only while something is actually plotted against it, and
+    the space it was taking goes back to the chart. This follows what you are
+    currently viewing, not just what was loaded: hide the last SNR channel in
+    Customize View, or switch to a single file that has none, and the right-hand
+    scale steps aside too.
+
+  - Fixed: The first time label along the bottom of the plot is no longer cut off at
+    the left edge.
+
+  - Improved: The title bar buttons highlight in a compact box around the icon
+    instead of a large block filling the bar, which is easier to read at a glance.
+
+  - Improved: The buttons overlaid on the plot (Toggle Legend, view mode, reset) no
+    longer sit on top of the axis and its numbers - the chart leaves room for them.
+
+    Note: the two improvements above were listed in the v2.9.0 notes but did not
+    actually make it into that build. They are genuinely present in this one.
+
+  - Improved: The User Guide installed alongside the application has been rewritten
+    against the current version. It previously described a File menu, a toolbar and
+    buttons that no longer exist, and said nothing about the right-click plot menu,
+    keyboard shortcuts, processing templates or CSV import.
+
+  - Improved: The in-app manual (Help > User Manual) is now illustrated, with
+    screenshots of the Configure Streams dialog, the plot's right-click menu, both
+    frame sync views, calibrated and uncalibrated SNR, and the export dialog.
+
+  Everything else is unchanged from v2.9.0. Your existing settings, configuration
+  files, calibration TOMLs and processing templates all continue to work as before.
+
+
 tmDataQualityAnalyzer v2.9.0 - What's New
 =================================
 
