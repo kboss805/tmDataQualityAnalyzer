@@ -221,6 +221,12 @@ The stories below follow the workflow a first-time user takes through the applic
     or an on-chart overlay, never back to an external widget; that's the standing
     rule this story sets, and `TestPlotWidget` enforces it (no QComboBox /
     QSpinBox / QLineEdit / QAbstractButton may live outside the chart).
+  - **Advertising them** took two forms, because Qt only renders a `QKeySequence` on a
+    plain action in a context menu (and only with `setShortcutVisibleInContextMenu`):
+    `L`, `Home` and `R` are real shortcuts on their actions, while `V` is spelled into
+    the **View Mode** submenu title. `TestPlotWidget::contextMenuAdvertisesEveryPlotShortcut`
+    pins all four, including the visible-in-context-menu flag - without it the key is
+    set but invisible, which is the state this change fixed.
   - **Scope:** This story governs the *placement* of plot controls, not what they do — the underlying behaviors are specified by US4.0 (navigation/appearance), US3.1 (view mode), and US1.1 (Plot File selector). It is deliberately additive to those stories: US4.0's criteria were reworded for the new location, not replaced.
 
 ### US5.0: Recall/store framesync pattern and frame length parameters from/to configuration files — Complete
@@ -393,6 +399,22 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The menu and title-bar icons swap to theme-appropriate variants when the theme changes.
 
 ## Version History
+
+### Unreleased — since the v2.9.1 tag
+
+#### Improved
+
+- **Every plot shortcut is now advertised in the context menu** (US4.1). Only `L` and
+  `Home` were shown as real shortcuts; `V` and `R` had degenerated into tooltips,
+  which discover nothing. `V` now sits in the **View Mode** submenu title as `(V)` -
+  Qt will not render a `QKeySequence` on a submenu, and the key cycles rather than
+  selecting one entry, so the title is the only place it can be seen. `R` gets a new
+  top-level **Reset View** action.
+- **Reset View** also closes a real gap: the on-chart *Reset view* chip restores span
+  and scaling in one click, but the menu split that across `X Axis > Reset Span` and
+  `Y Axes > Reset` with no single equivalent. `Y Axes > Reset` no longer carries a
+  tooltip claiming `R` resets both axes - it resets the Y axes, and the new top-level
+  action is the one that does both.
 
 ### v2.9.1 — Empty-Axis Hiding and Title-Bar Polish
 

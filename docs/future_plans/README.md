@@ -14,18 +14,7 @@ what was built is worse than no plan at all.
 
 ## Open items
 
-### Make the remaining plot shortcuts visible in the context menu
-
-Only `L` is shown inline (next to Show Legend). `Home` is one level down under X Axis;
-`V` and `R` are tooltips only, so they discover nothing - Qt will not render a
-`QKeySequence` on a submenu, which is why they ended up as tooltips.
-
-Two changes would fix it: put `(V)` in the **View Mode** submenu title, and add a
-top-level **Reset View** item carrying `R`. The latter also closes a real gap - the
-on-chart *Reset view* chip resets both axes in one click, but the menu splits that
-across `X Axis > Reset Span` and `Y Axes > Reset`, with no single equivalent.
-
-Low priority - deliberately deferred; the current behaviour is known and accepted.
+Nothing open.
 
 ---
 
@@ -46,4 +35,5 @@ documentation lives.
 | MSVC-flavored clangd config | PR #40 (found already done) | `docs/CLAUDE.md` -> clangd / IntelliSense; `scripts/gen_compile_flags.py`. Verified with `clangd --check` across QCustomPlot / Win32 / irig106 / test TUs: 0 errors |
 | Speed up CI with a parallel build (`jom`) | PR #48 | `scripts/env.ps1` (`TMDQ_MAKE`), [`../ci_runner.md`](../ci_runner.md) - CI run 286s -> 93s |
 | Simplify the plot window | PR #43 | `docs/CLAUDE.md` (US4.0 / US4.1), `resources/usermanual.html` §3 |
+| Make the remaining plot shortcuts visible in the context menu | PR #71 | `PlotWidget::buildContextMenu`. `(V)` in the View Mode submenu title (Qt will not draw a shortcut on a submenu); new top-level **Reset View** carrying `R`, which is also the menu's only single-action equivalent of the on-chart Reset view chip. Both were tooltips, which discover nothing |
 | Hide a Y axis when nothing is plotted against it | PR #68 | `include/view/tmchart.h` (`setLeftAxisVisible`/`setRightAxisVisible`), `PlotViewModel::hasVisibleLeftAxisSeries`/`hasVisibleRightAxisSeries`, `PlotWidget::updateAxisVisibility`. Keys on **visible** series. Rendering the reclaimed layout also caught the first X tick label clipping off the left edge |
