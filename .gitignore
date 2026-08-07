@@ -109,3 +109,7 @@ build_and_sign.ps1
 # manual can be regenerated, but the cropped/downscaled copies are derived output
 # of scripts/build_manual.ps1.
 docs/manual_images/processed/
+
+# Python bytecode cache (scripts/ helpers)
+__pycache__/
+*.pyc

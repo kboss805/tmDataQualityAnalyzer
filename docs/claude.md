@@ -8,13 +8,13 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, `cl` / `nmake`), Qt `msvc2022_64` kit.
   This is the only supported toolchain (and what CI uses).
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
-- **Project Version**: 2.9.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
+- **Project Version**: 2.9.1 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
 
 ## User Stories
 
 The stories below follow the workflow a first-time user takes through the application: open a file and choose what to process (US1), define the per-stream parameters (US2), view the resulting data-quality metrics (US3), customize the plot (US4), manage configuration files and calibration (US5), export and re-import results (US6), and the cross-cutting concerns of input validation (US7), installation (US8), and theming (US9).
 
-**Status: all user stories are Complete** — implemented, tested, and shipped as of v2.9.0. Every acceptance criterion below is delivered functionality (`[x]`), and each story carries a **Complete** marker in its heading. This section is no longer a draft backlog; new work is tracked as new stories appended after US9.0.
+**Status: all user stories are Complete** — implemented, tested, and shipped as of v2.9.1. Every acceptance criterion below is delivered functionality (`[x]`), and each story carries a **Complete** marker in its heading. This section is no longer a draft backlog; new work is tracked as new stories appended after US9.0.
 
 ### US1.0: Open a Ch10 file and configure which streams to process — Complete
 
@@ -394,9 +394,7 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ## Version History
 
-### Unreleased — since the v2.9.0 tag
-
-Landed after the v2.9.0 tag, so the shipped v2.9.0 binaries do **not** have any of it.
+### v2.9.1 — Empty-Axis Hiding and Title-Bar Polish
 
 #### Cosmetic
 
@@ -429,6 +427,25 @@ Landed after the v2.9.0 tag, so the shipped v2.9.0 binaries do **not** have any 
   tick unconditionally, which only fit because the left-axis gutter happened to be
   there; reclaiming that gutter exposed it. Both end labels are now pulled inside.
   Found by rendering the new layout - the 362-test suite passed throughout.
+
+#### Release tooling
+
+- New `scripts/check_release_consistency.ps1`. The version has one source of truth
+  (`AppVersion`), but four user-facing files carry it as **prose** that nothing
+  derives - the root `CLAUDE.md` line, `docs/CLAUDE.md`'s Project Version, the
+  manual's subtitle and footer, and the release-notes header. Each has shipped stale
+  at least once, and the guard was "remember to grep for the old string". The check
+  derives the version and asserts all of them, plus that the changelog has a section
+  for it and (`-ReleaseMode`) that no `Unreleased` section survives into a release -
+  the exact mis-filing that credited two cosmetic changes to a v2.9.0 build without
+  them. `build_release.ps1` runs it before packaging; CI runs it on every PR without
+  `-ReleaseMode`, since an `Unreleased` section is correct *between* releases.
+  A missing marker fails rather than passes, so rewording a checked line cannot
+  silently disable the check.
+- `scripts/embed_manual_images.py` no longer hardcodes an old-to-new version
+  replacement, which would have silently matched nothing once the manual already held
+  the new string. It parses `AppVersion` and hard-errors if either version marker is
+  absent.
 
 #### Tests
 

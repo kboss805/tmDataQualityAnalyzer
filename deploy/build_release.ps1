@@ -43,6 +43,17 @@ $Failures = New-Object System.Collections.Generic.List[string]
 # Inno compile still "produced" a signed installer, because last week's was still there.
 $RunStart = Get-Date
 
+# Version consistency BEFORE the ~10 minute build. Four user-facing files carry the
+# version as prose and nothing derives them from AppVersion; each has shipped stale at
+# least once. Failing here costs a second, failing at the end costs the whole run - and
+# a mismatched manual or release-notes header is not something to discover afterwards.
+Write-Host "`n=== Checking release consistency ==="
+& powershell -ExecutionPolicy Bypass -File "$ProjectDir\scripts\check_release_consistency.ps1" -ReleaseMode
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "`nAborting: fix the inconsistencies above before packaging." -ForegroundColor Red
+    exit 1
+}
+
 # Verifies an artifact was actually produced and, when signing was requested, that it
 # actually carries a valid signature. Signing happens BEFORE the ZIP and the installer
 # compile, so a failed signature silently propagates into everything downstream.

@@ -84,6 +84,17 @@ jobs:
         # run - persistent-runner hygiene, handled for us.
         uses: actions/checkout@v4
 
+      - name: Release consistency (version literals)
+        shell: powershell
+        run: |
+          # Four user-facing files carry the version as prose; nothing derives them
+          # from AppVersion, and each has shipped stale. Needs no toolchain, so it
+          # runs before the build and fails fast. -ReleaseMode is deliberately NOT
+          # passed: an "Unreleased" changelog section is correct between releases and
+          # is only an error at packaging time (build_release.ps1 passes it there).
+          powershell -ExecutionPolicy Bypass -File scripts\check_release_consistency.ps1
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
       - name: Overlay full-size PRN fixture
         shell: powershell
         run: |
@@ -223,6 +234,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Release consistency (version literals)
+        shell: powershell
+        run: |
+          # Four user-facing files carry the version as prose; nothing derives them
+          # from AppVersion, and each has shipped stale. Needs no toolchain, so it
+          # runs before the build and fails fast. -ReleaseMode is deliberately NOT
+          # passed: an "Unreleased" changelog section is correct between releases and
+          # is only an error at packaging time (build_release.ps1 passes it there).
+          powershell -ExecutionPolicy Bypass -File scripts\check_release_consistency.ps1
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Install Qt ${{ env.QT_VERSION }} (MSVC)
         uses: jurplel/install-qt-action@v4
