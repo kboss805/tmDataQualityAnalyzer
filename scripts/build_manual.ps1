@@ -26,13 +26,22 @@ $SrcDir     = Join-Path $ProjectDir 'docs\manual_images'
 $OutDir     = Join-Path $SrcDir 'processed'
 $Manual     = Join-Path $ProjectDir 'resources\usermanual.html'
 
-# Full-window captures are 1936x1119. This is the chart region: past the log
-# sidebar, below the title bar, above the status bar. Cropping keeps the figure on
-# the subject and roughly halves the embedded size.
-$ChartCrop = @(405, 38, 1520, 1045)
-$MaxWidth  = 1200
+# Full-window captures are 1936x1119. This is the chart region within one: past the
+# log sidebar, below the title bar, above the status bar. Cropping keeps the figure
+# on the subject and roughly halves the embedded size.
+$ChartCrop    = @(405, 38, 1520, 1045)
+$ExpectedSize = @(1936, 1119)
+$MaxWidth     = 1200
 
-# name -> crop? ($true means crop to the chart region first)
+# name -> crop instruction:
+#   $false          no crop (already a dialog-sized capture)
+#   $true           crop to $ChartCrop - REQUIRES the capture to be $ExpectedSize
+#   @(x,y,w,h)      explicit crop, for a capture framed differently
+#
+# $true is checked against the window size rather than trusted. A screen grab of the
+# app floating over an IDE is a different size, and the fixed rectangle would then
+# cut somewhere arbitrary - producing a plausible-looking but wrongly framed figure,
+# which is exactly the kind of defect that survives review.
 # Which legend variant is used where is a judgement call, not a default:
 #   - frame-sync plots carry 4 streams, so the legend is compact, sits clear of the
 #     data and names the curves - it earns its place;
@@ -42,7 +51,9 @@ $MaxWidth  = 1200
 # the one place where the contrast itself is the subject.
 $Images = [ordered]@{
     'Config Streams Dialg.png'                       = $false  # already a dialog-sized capture
-    'Main Context Menu.png'                          = $true
+    # Full-screen grab (app floating over the IDE), 1973x1137 - the chart sits at a
+    # different offset, so this one carries its own rectangle.
+    'Main Context Menu.png'                          = @(425, 63, 1520, 1045)
     'FrameSync Perctentage Plot with Legend.png'     = $true
     'FrameSync Perctentage Plot without Legend.png'  = $true
     'Frame Error Accumulation Plot with Legend.png'  = $true
@@ -60,8 +71,28 @@ foreach ($name in $Images.Keys) {
 
     $img  = [System.Drawing.Image]::FromFile($path)
     $work = $img
-    if ($Images[$name]) {
-        $r = New-Object System.Drawing.Rectangle($ChartCrop[0], $ChartCrop[1], $ChartCrop[2], $ChartCrop[3])
+    $spec = $Images[$name]
+    # Read the dimensions BEFORE any Dispose() - a disposed Image reports nothing, and
+    # the size is the whole point of the error messages below.
+    $iw = $img.Width; $ih = $img.Height
+    if ($spec) {
+        if ($spec -is [array]) {
+            $rect = $spec
+        } else {
+            # Bare $true means "the standard chart region of a standard window" - so
+            # verify the window really is standard rather than cropping blind.
+            if ($iw -ne $ExpectedSize[0] -or $ih -ne $ExpectedSize[1]) {
+                $img.Dispose()
+                throw ("$name is ${iw}x${ih}, expected $($ExpectedSize[0])x$($ExpectedSize[1]). " +
+                       "Recapture at the standard window size, or give this entry an explicit @(x,y,w,h) crop.")
+            }
+            $rect = $ChartCrop
+        }
+        if (($rect[0] + $rect[2]) -gt $iw -or ($rect[1] + $rect[3]) -gt $ih) {
+            $img.Dispose()
+            throw "$name : crop @($($rect -join ',')) falls outside the ${iw}x${ih} image."
+        }
+        $r = New-Object System.Drawing.Rectangle($rect[0], $rect[1], $rect[2], $rect[3])
         $work = (New-Object System.Drawing.Bitmap($img)).Clone($r, $img.PixelFormat)
     }
     $scale = [math]::Min(1.0, $MaxWidth / $work.Width)
@@ -73,7 +104,7 @@ foreach ($name in $Images.Keys) {
     $g.DrawImage($work, 0, 0, $w, $h)
     $g.Dispose()
     $dst.Save((Join-Path $OutDir $name), [System.Drawing.Imaging.ImageFormat]::Png)
-    $dst.Dispose(); if ($Images[$name]) { $work.Dispose() }; $img.Dispose()
+    $dst.Dispose(); if ($spec) { $work.Dispose() }; $img.Dispose()
     Write-Host ("  {0,-34} {1}x{2}" -f $name, $w, $h)
 }
 

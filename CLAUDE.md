@@ -2,7 +2,7 @@
 
 Qt 6.11.1 / C++17 desktop app (qmake + MSVC 2022, Windows) for analyzing data quality of IRIG 106
 Chapter 10 PCM telemetry: per-stream **Frame Sync Lock** stats and **Receiver AGC/SNR**, plotted vs.
-time. MVVM, single-reader / parallel-worker processing core. **Current version: 2.9.1.**
+time. MVVM, single-reader / parallel-worker processing core. **Current version: 2.9.2.**
 
 > **Full reference:** `docs/CLAUDE.md` is the canonical, detailed guide (user stories, architecture,
 > conventions, test catalog). Read it when you need depth. This file is the quick orientation that
@@ -23,7 +23,7 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   suites**) is dominated by the real-Ch10 integration suites (a few minutes); add `--fast` (or
   `TMDQ_FAST_TESTS=1`) to skip those four `.ch10` suites for ~1 s local iteration — **local only; CI
   and releases run the full suite**. No CLI single-suite filter.
-  Green baseline: 362 passed / 0 failed / 1 skipped. The one skip is the heavy PRN throughput
+  Green baseline: 364 passed / 0 failed / 1 skipped. The one skip is the heavy PRN throughput
   benchmark, which is opt-in (`TMDQA_RUN_HEAVY_BENCH=1`) because it walks a 640 MB recording nine
   times and takes minutes. In a worktree, junction
   `tests/data` to the main checkout's or the fixture tests skip.

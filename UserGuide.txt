@@ -163,14 +163,17 @@ right-clicking anywhere on the plot.
   Set Plot Title...   Give the plot a title (it appears in exported images).
   Plot File           When several files are loaded, choose which one to view,
                       or overlay them all.
-  View Mode           Switch the left axis between Lock Percentage and
+  View Mode  (V)      Switch the left axis between Lock Percentage and
                       Accumulation.
   Customize View...   Show/hide individual streams, receivers or L/R/C channels,
                       and rename or recolor any series.
   Show Legend         Show or hide the floating legend.
   Readout             Choose which series the hover readout follows (see below).
   X Axis              Set an exact time window, or reset to the full span.
-  Y Axes              Set a maximum for either axis, or reset to automatic.
+  Y Axes              Set a maximum for either axis, or reset those maximums
+                      to automatic.
+  Reset View     R    Restore the full time span AND automatic axis scaling in
+                      one action - the same as the on-chart "Reset view" button.
   Export...           Save an image, the data, or the log.
 
 Entries stay greyed out until data is loaded.
@@ -193,7 +196,8 @@ A small row of buttons sits at the top-left of the chart:
 - Zoom to a range: hold Ctrl and drag (or drag with the middle mouse button) to
   rubber-band a time span; releasing zooms to exactly that span.
 - Back to the full view: double-click the chart, click the "Reset view" button,
-  or use X Axis > Reset Span.
+  press R, or use Reset View on the right-click menu. (X Axis > Reset Span
+  restores the time span only, leaving any axis maximum you pinned.)
 - Keyboard: click the chart once to focus it, then use the single-key shortcuts
   in section 9.
 
@@ -283,4 +287,5 @@ While the chart has focus (click it once):
 
 These are single keys, so they act only on the chart and never interfere with
 typing in a dialog or a settings field. The right-click menu shows each key next
-to its command as a reminder.
+to its command as a reminder - V appears in the "View Mode" entry itself, since
+it cycles between the two views rather than picking one.

@@ -1,3 +1,35 @@
+tmDataQualityAnalyzer v2.9.2 - What's New
+=================================
+
+  A small release about discoverability: every keyboard shortcut for the plot is
+  now visible in the right-click menu, instead of some of them only appearing if
+  you happened to hover in the right place.
+
+  - New: A "Reset View" entry on the plot's right-click menu restores the full
+    time span and automatic axis scaling in one action - the same thing the
+    "Reset view" button on the chart does. Previously the menu could only do it
+    as two separate steps, under X Axis and Y Axes, with nothing that did both.
+
+  - Improved: The right-click menu now shows the key for every shortcut it
+    offers:
+
+        View Mode  (V)      switch between Lock % and Accumulation
+        Show Legend    L    show or hide the legend
+        Reset Span     Home back to the full time span
+        Reset View     R    full span and automatic axes
+
+    "V" and "R" were previously tooltips, so you had to already suspect they
+    existed to find them.
+
+  - Changed: "Y Axes > Reset" no longer suggests it resets both axes. It clears
+    the two axis maximums, as it always did; the new "Reset View" is the one
+    that resets everything.
+
+  Everything else is unchanged from v2.9.1. Your existing settings,
+  configuration files, calibration TOMLs and processing templates all continue
+  to work as before.
+
+
 tmDataQualityAnalyzer v2.9.1 - What's New
 =================================
 
