@@ -14,7 +14,22 @@ what was built is worse than no plan at all.
 
 ## Open items
 
-Nothing open.
+### [Comprehensive, task-oriented user manual](comprehensive-user-manual.md)
+
+The manual is organised by UI surface, which answers "what does this control do" but not
+"I have an AGC recording and a step file - what do I actually do?" Calibration is the
+sharpest case: the most procedural workflow in the product, five nested dialogs deep, gets
+six sentences and no figures.
+
+Proposal is to add task walkthroughs in front of the existing reference sections rather
+than replacing them, with step calibration as the centrepiece - written against the real
+failure modes (turn-on transient, operator down-ramp, inverted polarity, per-channel
+fallback), not just the happy path.
+
+**Blocked on screenshots**, which the plan file enumerates by filename so they can be
+captured in one sitting. It also flags a decision to make *before* writing: the manual is a
+compiled-in Qt resource and nine figures already cost 1.8 MB, so tripling the figure count
+needs a call on how figures are stored.
 
 ---
 
