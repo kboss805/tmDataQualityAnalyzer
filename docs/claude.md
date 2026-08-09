@@ -8,13 +8,13 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, `cl` / `nmake`), Qt `msvc2022_64` kit.
   This is the only supported toolchain (and what CI uses).
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
-- **Project Version**: 2.9.2 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
+- **Project Version**: 2.9.3 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
 
 ## User Stories
 
 The stories below follow the workflow a first-time user takes through the application: open a file and choose what to process (US1), define the per-stream parameters (US2), view the resulting data-quality metrics (US3), customize the plot (US4), manage configuration files and calibration (US5), export and re-import results (US6), and the cross-cutting concerns of input validation (US7), installation (US8), and theming (US9).
 
-**Status: all user stories are Complete** — implemented, tested, and shipped as of v2.9.2. Every acceptance criterion below is delivered functionality (`[x]`), and each story carries a **Complete** marker in its heading. This section is no longer a draft backlog; new work is tracked as new stories appended after US9.0.
+**Status: all user stories are Complete** — implemented, tested, and shipped as of v2.9.3. Every acceptance criterion below is delivered functionality (`[x]`), and each story carries a **Complete** marker in its heading. This section is no longer a draft backlog; new work is tracked as new stories appended after US9.0.
 
 ### US1.0: Open a Ch10 file and configure which streams to process — Complete
 
@@ -400,7 +400,10 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ## Version History
 
-### Unreleased — since the v2.9.2 tag
+### v2.9.3 — CI Skip Gate (no user-facing change)
+
+The application binary is functionally identical to v2.9.2; this release exists to
+keep the tag history aligned with `main`. The only change is to CI.
 
 #### CI
 
