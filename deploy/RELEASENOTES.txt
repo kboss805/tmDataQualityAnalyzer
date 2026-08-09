@@ -1,3 +1,20 @@
+tmDataQualityAnalyzer v2.9.3 - What's New
+=================================
+
+  Nothing, for you.
+
+  This release contains no user-facing changes. The application behaves exactly
+  as v2.9.2 does; the only difference is an internal improvement to the
+  project's automated test checks, which cannot be seen from the application.
+
+  It is published so the released version numbers stay in step with the
+  project's source history. If you are already running v2.9.2 there is no
+  reason to update.
+
+  Your existing settings, configuration files, calibration TOMLs and processing
+  templates all continue to work as before.
+
+
 tmDataQualityAnalyzer v2.9.2 - What's New
 =================================
 
