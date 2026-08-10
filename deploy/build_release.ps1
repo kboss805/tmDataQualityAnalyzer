@@ -211,6 +211,8 @@ foreach ($dir in @('receiver_params', 'rcvr_cals', 'framesync_patterns')) {
 Copy-Item "$ProjectDir\LICENSE"                    "$PortableRoot\LICENSE.txt"
 Copy-Item "$ProjectDir\deploy\README_portable.txt" "$PortableRoot\README.txt"
 Copy-Item "$ProjectDir\UserGuide.txt"              "$PortableRoot\UserGuide.txt"
+# The portable ZIP always carries the full manual - there is no installer to ask.
+Copy-Item "$ProjectDir\UserManual.html"           "$PortableRoot\UserManual.html"
 New-Item  -ItemType File -Path "$PortableRoot\portable" -Force | Out-Null
 
 # --- Step 6: Create portable ZIP ---

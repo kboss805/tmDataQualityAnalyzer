@@ -323,10 +323,24 @@ void MainView::setUpMenuBar()
     // --- Help ---
     menu->addSection(tr("Help"));
 
-    // The manual ships embedded as a Qt resource; a browser can't read qrc:/ URLs,
-    // so it is copied out to the temp dir on first use and opened from there.
+    // Two manuals, and the fallback between them is a NORMAL path, not an error:
+    //
+    //   - the full manual is an optional install, so its absence is expected;
+    //   - the base manual is compiled in as a Qt resource, so it can never be
+    //     missing. That is what makes "there is always a manual" structural rather
+    //     than something the installer has to get right on every path.
+    //
+    // The full manual is a real file on disk and opens directly. The base one is a
+    // resource, and a browser cannot read qrc:/ URLs, so it is copied to temp first.
     QAction* manual_action = menu->addAction("User Manual...");
     connect(manual_action, &QAction::triggered, this, [this]() {
+        const QString full = installedFullManualPath();
+        if (!full.isEmpty())
+        {
+            QDesktopServices::openUrl(QUrl::fromLocalFile(full));
+            return;
+        }
+
         const QString target = QDir::temp().filePath("tmDataQualityAnalyzer_manual.html");
         if (QFile::exists(target) && !QFile::remove(target))
         {
@@ -1284,6 +1298,29 @@ void MainView::finishBatch()
                    .arg(m_batch_processed).arg(m_batch_skipped)
                    .arg(m_batch_export_per_file ? tr(" Output written to %1.").arg(m_batch_output_dir)
                                                 : QString()));
+}
+
+QString MainView::fullManualPathIn(const QString& app_root)
+{
+    // Empty means "not installed", which is a normal outcome - the full manual is an
+    // optional installer task. Callers fall back to the compiled-in base manual.
+    //
+    // Static and root-parameterised so it can be tested against a temporary directory.
+    // A test that probed the real app root would be answering a question about the
+    // developer's checkout - where this file always exists, since it is generated and
+    // tracked - rather than about the logic.
+    if (app_root.isEmpty())
+    {
+        return QString();
+    }
+    const QString candidate = QDir(app_root).filePath(UIConstants::kFullManualFilename);
+    return QFileInfo::exists(candidate) ? candidate : QString();
+}
+
+QString MainView::installedFullManualPath() const
+{
+    return (m_view_model == nullptr) ? QString()
+                                     : fullManualPathIn(m_view_model->appRoot());
 }
 
 void MainView::onToggleTheme()

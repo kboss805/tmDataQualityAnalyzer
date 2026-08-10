@@ -112,6 +112,8 @@ Write-Host "`nEmbedding into the manual (via scripts\embed_manual_images.py)..."
 & py (Join-Path $ProjectDir 'scripts\embed_manual_images.py')
 if ($LASTEXITCODE -ne 0) { throw "embed step failed ($LASTEXITCODE)" }
 
-Write-Host ("`nDone. {0} is now {1} KB." -f (Split-Path $Manual -Leaf),
-            [math]::Round((Get-Item $Manual).Length / 1KB))
-Write-Host "Rebuild the app to pick it up (it is compiled in as a Qt resource)."
+Write-Host "`nDone. Two manuals were written (sizes listed above):"
+Write-Host "  base - resources\usermanual.html, compiled into the exe. Rebuild the app to"
+Write-Host "         pick it up; it is a Qt resource."
+Write-Host "  full - UserManual.html, shipped as a file. Always in the portable ZIP; an"
+Write-Host "         optional task in the installer."

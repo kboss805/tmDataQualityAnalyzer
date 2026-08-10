@@ -400,6 +400,42 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ## Version History
 
+### Unreleased — since the v2.9.3 tag
+
+#### Documentation delivery
+
+- **The user manual is now two artifacts generated from one source.** The *base*
+  manual stays compiled into the exe as a Qt resource; a new *full* manual
+  (`UserManual.html`) ships as a file, always in the portable ZIP and as an optional
+  task in the installer ("Install the full illustrated user manual").
+- **The always-have-a-manual guarantee is structural.** Because the base manual is a
+  compiled-in resource it cannot be deleted or declined, so `Help > User Manual`
+  always has something to open. `MainView::fullManualPathIn()` returns empty when the
+  optional file is absent and the action falls back to the resource - that fallback is
+  a normal path, not an error path, and there is no "manual not found" state.
+- Both manuals come out of `scripts/embed_manual_images.py` from the **same document
+  object**; the full one is the base plus walkthrough sections. They are never
+  maintained as two documents, because two hand-maintained manuals would drift - the
+  failure this project has paid for repeatedly.
+- `check_release_consistency.ps1` now asserts the version markers in **both** manuals.
+  A second shipped artifact that nothing checks is exactly the stale artifact that
+  script exists to prevent.
+
+> **Not for release yet.** The walkthrough sections do not exist, so the full manual is
+> currently identical to the base one and the installer option would offer a choice
+> that changes nothing. This lands so the tooling and the installer page exist —
+> including for the plan's `walk-inst-01-components.png` capture — and ships once the
+> walkthroughs are written. See `docs/future_plans/comprehensive-user-manual.md`.
+
+#### Tests
+
+- `TestMainView::fullManualPathEmptyWhenNotInstalled` /
+  `fullManualPathFoundWhenInstalled`, both against a `QTemporaryDir`. The first draft
+  probed the real app root and failed, correctly: in a developer checkout
+  `UserManual.html` always exists, because it is generated and tracked. The resolution
+  logic was made static and root-parameterised so the test asks about the logic rather
+  than about the machine it runs on. Baseline **366 / 0 / 1**.
+
 ### v2.9.3 — CI Skip Gate (no user-facing change)
 
 The application binary is functionally identical to v2.9.2; this release exists to

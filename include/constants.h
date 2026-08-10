@@ -146,6 +146,12 @@ namespace UIConstants {
     /// @{
     inline constexpr const char* kPortableMarkerFilename = "portable";      ///< Marker file name for portable mode detection.
     inline constexpr const char* kSettingsDirName         = "settings";     ///< Settings directory name relative to app root.
+    /// Optional full user manual, installed beside the app root.
+    ///
+    /// The BASE manual is compiled in as a Qt resource, so it can never be missing.
+    /// This one is an installer option and may legitimately be absent — its absence
+    /// is a normal state, not an error, and Help falls back to the built-in manual.
+    inline constexpr const char* kFullManualFilename      = "UserManual.html";
     inline constexpr const char* kDefaultTomlFilename     = "default.toml"; ///< Default TOML configuration filename, used in each settings subdirectory below.
     inline constexpr const char* kReceiverParamsDirName   = "receiver_params";   ///< Receiver Parameters subdirectory name (relative to settings dir).
     inline constexpr const char* kRcvrCalsDirName         = "rcvr_cals";         ///< Receiver/SNR step calibration subdirectory name (relative to settings dir).

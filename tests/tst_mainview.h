@@ -24,6 +24,10 @@ private slots:
     void importInvalidCsvIsRejected();
     void batchReapplyAppearanceRenamesMatchingSeries();
     void batchBuildTemplateCapturesConfigsAndAppearance();
+
+    // Optional full manual: absence is a normal state, not an error.
+    void fullManualPathEmptyWhenNotInstalled();
+    void fullManualPathFoundWhenInstalled();
 };
 
 #endif // TST_MAINVIEW_H

@@ -60,6 +60,17 @@ private slots:
     void applyTemplateButtonPressed();
     /// Toggles between light and dark themes.
     void onToggleTheme();
+
+    /// @return Path to the full user manual under @p app_root, or empty if absent.
+    ///
+    /// Absence is a normal state, not an error: the full manual is an installer
+    /// option, while the base manual is compiled in and can never be missing.
+    /// Static and root-parameterised so it is testable against a temporary
+    /// directory rather than the developer's own checkout.
+    static QString fullManualPathIn(const QString& app_root);
+
+    /// fullManualPathIn() applied to the ViewModel's app root.
+    QString installedFullManualPath() const;
     /// Opens the StreamConfigDialog after a file has loaded (a fresh session).
     void onFileReadyForStreamConfig();
     /// Applies the batch template's config after the Apply Template loop's
