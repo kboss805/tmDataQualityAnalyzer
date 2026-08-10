@@ -27,9 +27,16 @@ failure modes (turn-on transient, operator down-ramp, inverted polarity, per-cha
 fallback), not just the happy path.
 
 **Blocked on screenshots**, which the plan file enumerates by filename so they can be
-captured in one sitting. It also flags a decision to make *before* writing: the manual is a
-compiled-in Qt resource and nine figures already cost 1.8 MB, so tripling the figure count
-needs a call on how figures are stored.
+captured in one sitting.
+
+The figure-storage question is now **measured**: the manual is stored *uncompressed* in the
+exe (verified in the shipped binary), so 1804 KB of the 2634 KB executable - **68%** - is
+documentation. The proposal on the table is to make the manual an installed file and let the
+installer offer full vs condensed, with the portable ZIP always carrying the full one. That
+is the only option that supports the choice at all, since a compiled-in resource cannot vary
+per installation. Its real benefit is editorial freedom, not download size; its real risk is
+a second artifact that can drift, so the condensed variant must be *generated* from the full
+one and both must be covered by the consistency gate.
 
 ---
 

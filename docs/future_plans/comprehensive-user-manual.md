@@ -99,22 +99,73 @@ Names are the filenames to save into `docs/manual_images/`.
 fails with the actual dimensions rather than cropping blind, and an oddly-sized capture can
 be given its own explicit `@(x,y,w,h)`.
 
-## Constraint worth deciding before writing
+## Figure storage - MEASURED, and the decision
 
-The manual is a **Qt resource compiled into the exe**, with every figure a base64 data URI.
-Nine figures already cost **1.8 MB**. The list above roughly triples the figure count, which
-would put the manual near **4-5 MB** inside the binary.
+This was flagged as "decide before writing". It has now been measured, and a proposal
+from the user resolves it.
 
-Options, cheapest first:
+### What the numbers actually are
 
-- **Downscale dialog captures harder.** They are small and mostly text; 900 px is plenty.
-- **Drop the duplicated legend-toggle pair** (~250 KB today - the same image is embedded
-  twice to support that one contrast).
-- **Ship the manual as a separate installed file** rather than a compiled-in resource, and
-  open it from disk. Loses the single-self-contained-file property that motivated base64,
-  and the portable ZIP would need it alongside the exe.
+| | |
+| --- | --- |
+| Manual as shipped (9 figures) | **1804 KB** |
+| Release exe | **2634 KB** |
+| So documentation is | **68% of the executable** |
+| Prose alone | 15 KB |
+| Per figure, in the binary | ~200 KB |
 
-Decide this **before** writing, because it determines whether figures are cheap or precious.
+**The resource is stored UNCOMPRESSED.** Verified directly: the base64 PNG prefix
+`iVBORw0KGgo` appears verbatim in the shipped exe at offset 617291. rcc only compresses
+when it would save more than 30%, and base64 of already-compressed PNG data compresses to
+about 75% - just under the threshold. So the manual pays base64's 33% expansion **in full**.
+
+Corroborated across releases: the v2.9.0 exe (manual had no figures) was **844 KB**;
+today's is 2634 KB, and 844 + 1804 = 2648. The growth is essentially all manual.
+
+Forcing compression (`QMAKE_RESOURCE_FLAGS += -threshold 0 -compress 9`) was measured by
+running rcc both ways over the real `.qrc`: **27% saving**, i.e. roughly 490 KB today and
+~1.3 MB once the figure count triples. One line in the `.pro`. Worth taking **if the manual
+stays embedded** - but see below, because it may not.
+
+### The proposal that supersedes it
+
+Make the manual **an installed file rather than a compiled-in resource**, and let the
+installer offer a choice:
+
+- **Full manual** - every walkthrough and figure.
+- **Condensed manual** - prose and a handful of key figures.
+- **Portable ZIP always ships the full manual** (no installer, no choice to make).
+
+This is not merely another storage option; it is the *only* one that supports the choice.
+A compiled-in resource cannot vary per installation - the exe is one binary. So picking this
+answers the storage question outright, and the compression tweak becomes moot.
+
+Consequences, good and bad:
+
+- Exe drops from 2634 KB to roughly **830 KB**, and figure count stops constraining the
+  manual at all - which is what unblocks writing it properly.
+- Download size barely moves. The installer is 39 MB and the ZIP 22 MB; Qt's DLLs dominate
+  both, so this is a rounding error either way. **Do not sell this as a size win** - the
+  win is editorial freedom, not bytes.
+- `MainView`'s Help > User Manual currently copies `:/resources/usermanual.html` to temp
+  because a browser cannot read `qrc:/`. Reading an installed file removes that dance, but
+  adds a new failure mode: the file can be missing (condensed install, or a user deleted
+  it). Needs a clear message, not a silent no-op.
+- The installer already has `[Tasks]` for desktop icon and file association, so the
+  machinery is familiar - though an either/or choice fits Inno's `[Types]`/`[Components]`
+  better than `[Tasks]`.
+
+### The risk to design against
+
+**Two manual variants are two artifacts that can drift**, and shipped-artifact drift is the
+exact failure this project keeps paying for - the eighteen-month-stale `UserGuide.txt`, the
+manual that read "Version 2.7.0" at v2.9.0, the figures illustrating the empty axes v2.9.1
+removed. A condensed manual that quietly falls behind the full one would be the same bug in
+a new place.
+
+So if this is taken: generate the condensed variant **from** the full one in
+`build_manual.ps1` (never hand-maintain it), and extend
+`scripts/check_release_consistency.ps1` to assert the version markers in **both**.
 
 ## Not in scope
 
