@@ -99,22 +99,77 @@ Names are the filenames to save into `docs/manual_images/`.
 fails with the actual dimensions rather than cropping blind, and an oddly-sized capture can
 be given its own explicit `@(x,y,w,h)`.
 
-## Constraint worth deciding before writing
+## Figure storage - MEASURED, and the decision
 
-The manual is a **Qt resource compiled into the exe**, with every figure a base64 data URI.
-Nine figures already cost **1.8 MB**. The list above roughly triples the figure count, which
-would put the manual near **4-5 MB** inside the binary.
+This was flagged as "decide before writing". It has now been measured, and a proposal
+from the user resolves it.
 
-Options, cheapest first:
+### What the numbers actually are
 
-- **Downscale dialog captures harder.** They are small and mostly text; 900 px is plenty.
-- **Drop the duplicated legend-toggle pair** (~250 KB today - the same image is embedded
-  twice to support that one contrast).
-- **Ship the manual as a separate installed file** rather than a compiled-in resource, and
-  open it from disk. Loses the single-self-contained-file property that motivated base64,
-  and the portable ZIP would need it alongside the exe.
+| | |
+| --- | --- |
+| Manual as shipped (9 figures) | **1804 KB** |
+| Release exe | **2634 KB** |
+| So documentation is | **68% of the executable** |
+| Prose alone | 15 KB |
+| Per figure, in the binary | ~200 KB |
 
-Decide this **before** writing, because it determines whether figures are cheap or precious.
+**The resource is stored UNCOMPRESSED.** Verified directly: the base64 PNG prefix
+`iVBORw0KGgo` appears verbatim in the shipped exe at offset 617291. rcc only compresses
+when it would save more than 30%, and base64 of already-compressed PNG data compresses to
+about 75% - just under the threshold. So the manual pays base64's 33% expansion **in full**.
+
+Corroborated across releases: the v2.9.0 exe (manual had no figures) was **844 KB**;
+today's is 2634 KB, and 844 + 1804 = 2648. The growth is essentially all manual.
+
+Forcing compression (`QMAKE_RESOURCE_FLAGS += -threshold 0 -compress 9`) was measured by
+running rcc both ways over the real `.qrc`: **27% saving**, i.e. roughly 490 KB today and
+~1.3 MB once the figure count triples. One line in the `.pro`. Worth taking **if the manual
+stays embedded** - but see below, because it may not.
+
+### The decision: a base manual that is always there, plus an optional add-on
+
+Not "full **or** condensed" - that framing was wrong, because it leaves an installation with
+no manual at all if the user picks wrong or later deletes the file. The rule is instead:
+
+1. **Base manual** - today's `usermanual.html`. Stays a **compiled-in Qt resource**, exactly
+   as now. Always present, in the installer *and* the portable ZIP, and impossible to delete.
+2. **Full manual** - the walkthroughs and their figures, shipped as an **installed file** and
+   offered as an optional component in the installer.
+3. **Portable ZIP always carries both**, since it has no installer to ask.
+
+The user always has at least one manual, and that guarantee is **structural** - a resource
+compiled into the executable cannot go missing - rather than something the installer has to
+get right. That is what makes this better than making both external: there is no
+"manual not found" state to design an error message for.
+
+Consequences:
+
+- The exe keeps its ~1.8 MB base manual, so **there is no binary size win** - and none is
+  needed. The point is that the *full* manual's figure budget is no longer bounded by what
+  is tolerable to compile into every copy of the program.
+- `QMAKE_RESOURCE_FLAGS += -threshold 0 -compress 9` becomes worth taking on its own merits:
+  a measured **27%** off the embedded base manual, one line, no downside.
+- `MainView`'s Help > User Manual opens the full manual when it is installed and the base one
+  otherwise. The fallback is a normal path, not an error path.
+- The installer already has `[Tasks]` for desktop icon and file association; an optional
+  add-on fits `[Components]` (or a `[Tasks]` checkbox - either is idiomatic here).
+
+### The risk to design against
+
+**Two manual variants are two artifacts that can drift**, and shipped-artifact drift is the
+exact failure this project keeps paying for - the eighteen-month-stale `UserGuide.txt`, the
+manual that read "Version 2.7.0" at v2.9.0, the figures illustrating the empty axes v2.9.1
+removed.
+
+The base and full manuals share all their reference prose, so they must not be maintained as
+two documents. `build_manual.ps1` should emit **both from one source**: the full manual is the
+base plus the walkthrough sections and their figures. Nothing is hand-copied between them.
+
+`scripts/check_release_consistency.ps1` must then assert the version markers in **both**
+outputs. Today it checks `resources/usermanual.html` only; a second manual that nothing
+checks is a stale artifact waiting to happen, and the whole point of that script is that a
+marker which stops being checked fails loudly rather than silently.
 
 ## Not in scope
 

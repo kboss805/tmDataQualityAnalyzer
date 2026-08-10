@@ -27,9 +27,24 @@ failure modes (turn-on transient, operator down-ramp, inverted polarity, per-cha
 fallback), not just the happy path.
 
 **Blocked on screenshots**, which the plan file enumerates by filename so they can be
-captured in one sitting. It also flags a decision to make *before* writing: the manual is a
-compiled-in Qt resource and nine figures already cost 1.8 MB, so tripling the figure count
-needs a call on how figures are stored.
+captured in one sitting.
+
+The figure-storage question is **decided**. Measured first: the manual is stored
+*uncompressed* in the exe (verified in the shipped binary), so 1804 KB of the 2634 KB
+executable - **68%** - is documentation.
+
+The shape is a **base manual that is always present, plus an optional add-on**: today's
+manual stays a compiled-in resource, and the new full manual ships as an installed file
+offered as an installer component, with the portable ZIP carrying both. The user therefore
+always has a manual, and that guarantee is *structural* - a compiled-in resource cannot go
+missing - so there is no "manual not found" state at all. The benefit is editorial freedom:
+the full manual's figure budget is no longer bounded by what is tolerable to compile into
+every copy of the program.
+
+The risk is two artifacts drifting, so both must be emitted from one source by
+`build_manual.ps1` (the full manual is the base plus walkthroughs), and
+`check_release_consistency.ps1` must assert version markers in **both** - it checks only one
+manual today.
 
 ---
 
