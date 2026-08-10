@@ -1,6 +1,7 @@
 # Comprehensive, task-oriented user manual
 
-**Status:** scoped, not started. Blocked on screenshots (see the capture list below).
+**Status:** scoped. Tooling and the installer option are built (PR #78, unreleased).
+Blocked on the remaining 23 screenshots (see the capture list below).
 
 ## The problem
 
@@ -73,8 +74,8 @@ than written from memory, because the first draft missed several whole surfaces 
 Plot Series*, the hamburger menu, *Set Time Window*, error reporting and the light theme were
 all absent. Existing figures are reused where they still depict the current UI.
 
-**24 captures**, of which 23 can be shot against v2.9.3 today and one is blocked (see
-Sequencing). Plus 7 existing figures reused.
+**24 captures**, of which **1 is done** (`walk-inst-01-components.png`) and 23 remain, all
+of them capturable now. Plus 7 existing figures reused.
 
 Dialog coverage after this list: every `QDialog` in the app is figured except *About*, which
 needs none.
@@ -129,17 +130,18 @@ needs none.
   double the drift surface for very little - the manual only needs to establish that the
   theme exists and looks coherent.
 
-**Installer** (US8.0) - blocked; see the sequencing note below
-- `walk-inst-01-components.png` - the installer page offering the optional full manual
+**Installer** (US8.0) - **CAPTURED**
+- `walk-inst-01-components.png` - the installer's Select Additional Tasks page, showing
+  the optional full manual alongside the desktop-shortcut and file-association options.
+  Cropped to drop the title bar: it carries a version string, and keeping it would stamp
+  one release into a figure that never changes, so it would read as stale from the next
+  version onward. The page heading inside the client area identifies the screen.
 
-### Sequencing
+### Sequencing - resolved
 
-`walk-inst-01-components.png` **cannot be captured until the installer component work is
-built** (see the storage decision above). Either build that first, or accept that the manual
-ships without it and needs one more capture later - which is exactly the trickle this list
-exists to avoid. Prefer building the installer change first.
-
-Everything else can be shot today against v2.9.3.
+The installer work was built first (PR #78) precisely so this figure would not become a
+one-off capture later. It is done. **The remaining 23 are all capturable against the current
+build**, with nothing else gated on code.
 
 **Capture convention.** Full app window at the standard size (**1936x1119**) so the shared
 `$ChartCrop` applies; dialog-only captures need no crop and should be tight to the dialog.

@@ -60,6 +60,12 @@ $Images = [ordered]@{
     'Uncalibrated SNR Plot without Legend.png'       = $true
     'Calibrated SNR Plot without Legend.png'         = $true
     'Export Dialog.png'                              = $false
+    # Installer wizard page. Cropped to drop the title bar, which carries a version
+    # string: keeping it would stamp one release into a figure that never changes, so
+    # it would read as stale from the next version onward. The page's own heading
+    # inside the client area identifies the screen. Staged here so the crop is
+    # validated now; it is embedded when the walkthrough sections are written.
+    'walk-inst-01-components.png'                    = @(1, 32, 596, 431)
 }
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
