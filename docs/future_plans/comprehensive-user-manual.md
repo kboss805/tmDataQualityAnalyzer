@@ -68,6 +68,17 @@ read a fallback channel as a bug.
 Capture in **one sitting** - the trickle approach cost several rounds during v2.9.1/2.9.2.
 Names are the filenames to save into `docs/manual_images/`.
 
+The list below was audited against **every `QDialog` in the codebase** plus the menus, rather
+than written from memory, because the first draft missed several whole surfaces - *Customize
+Plot Series*, the hamburger menu, *Set Time Window*, error reporting and the light theme were
+all absent. Existing figures are reused where they still depict the current UI.
+
+**24 captures**, of which 23 can be shot against v2.9.3 today and one is blocked (see
+Sequencing). Plus 7 existing figures reused.
+
+Dialog coverage after this list: every `QDialog` in the app is figured except *About*, which
+needs none.
+
 **Frame sync walkthrough**
 - `walk-fs-01-open.png` - the Open dialog / drag-drop target
 - `walk-fs-02-configure-streams.png` - Configure Streams, several PCM rows, Mode column
@@ -92,6 +103,43 @@ Names are the filenames to save into `docs/manual_images/`.
 - `walk-batch-01-save-template.png`
 - `walk-batch-02-apply-dialog.png` - including a mismatched file flagged as skipped
 - `walk-batch-03-plot-file-menu.png` - the Plot File submenu with several sources
+
+**Plot customisation** - a major dialog (US4.0) with no figure at all today
+- `walk-cust-01-lock-tab.png` - *Customize Plot Series*, Frame Sync Lock tab, several streams
+- `walk-cust-02-snr-tree.png` - Receiver SNR tab: the receiver/channel tree, a group in its
+  tri-state (partially checked) state, which is the part that reads as broken if unexplained
+- `walk-cust-03-recolor.png` - renaming or recolouring one series
+
+**Application shell** - the entry point to everything, never shown
+- `walk-app-01-hamburger.png` - the ≡ menu open, showing all four sections (Process,
+  Import/Export, Settings, Help). This also covers **Import CSV**, which needs no figure of
+  its own since it opens a standard file dialog.
+- `walk-app-02-sidebar.png` - the log sidebar, with the toggle indicated
+- `walk-app-03-time-window.png` - *Set Time Window*, the `DDD:HH:MM:SS` entry people most
+  often get wrong; show it filled in
+
+**Error handling** (US7.0) - described in prose today, never shown
+- `walk-err-01-log-error.png` - the log with a red error entry, e.g. a rejected CSV or an
+  invalid sync pattern, so users recognise the app's own error reporting
+
+**Theme** (US9.0) - a shipped feature with zero representation; every figure is dark
+- `walk-theme-01-light-plot.png` - one plot in the light theme
+
+  Deliberately **one** figure, not a light twin of every other. Shooting all 22 twice would
+  double the drift surface for very little - the manual only needs to establish that the
+  theme exists and looks coherent.
+
+**Installer** (US8.0) - blocked; see the sequencing note below
+- `walk-inst-01-components.png` - the installer page offering the optional full manual
+
+### Sequencing
+
+`walk-inst-01-components.png` **cannot be captured until the installer component work is
+built** (see the storage decision above). Either build that first, or accept that the manual
+ships without it and needs one more capture later - which is exactly the trickle this list
+exists to avoid. Prefer building the installer change first.
+
+Everything else can be shot today against v2.9.3.
 
 **Capture convention.** Full app window at the standard size (**1936x1119**) so the shared
 `$ChartCrop` applies; dialog-only captures need no crop and should be tight to the dialog.

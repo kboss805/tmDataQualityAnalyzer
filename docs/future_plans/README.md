@@ -26,8 +26,13 @@ than replacing them, with step calibration as the centrepiece - written against 
 failure modes (turn-on transient, operator down-ramp, inverted polarity, per-channel
 fallback), not just the happy path.
 
-**Blocked on screenshots**, which the plan file enumerates by filename so they can be
-captured in one sitting.
+**Blocked on screenshots** - **24** of them, enumerated by filename so they can be captured
+in one sitting. The list was audited against every `QDialog` in the codebase rather than
+written from memory, which caught several whole surfaces the first draft had missed:
+*Customize Plot Series*, the hamburger menu, *Set Time Window*, error reporting and the light
+theme. 23 can be shot against v2.9.3 today; the installer-components figure is blocked on
+building that feature, so **build the installer change first** or accept one more capture
+later.
 
 The figure-storage question is **decided**. Measured first: the manual is stored
 *uncompressed* in the exe (verified in the shipped binary), so 1804 KB of the 2634 KB
