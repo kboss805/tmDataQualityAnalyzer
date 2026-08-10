@@ -87,6 +87,17 @@ $checks = @(
     @{ File = 'deploy\RELEASENOTES.txt'
        Pattern = '^tmDataQualityAnalyzer v([0-9]+\.[0-9]+\.[0-9]+) - What''s New'
        What = 'top release-notes header' }
+
+    # The FULL manual is a second shipped artifact, generated alongside the base one
+    # by build_manual.ps1. A second manual that nothing checks is precisely the stale
+    # artifact this script exists to prevent, so it gets the same two markers.
+    @{ File = 'UserManual.html'
+       Pattern = '<p class="subtitle">User Manual .{1,3} Version ([0-9]+\.[0-9]+\.[0-9]+)</p>'
+       What = 'full manual subtitle' }
+
+    @{ File = 'UserManual.html'
+       Pattern = 'This manual describes\s+version ([0-9]+\.[0-9]+\.[0-9]+)\.'
+       What = 'full manual footer' }
 )
 
 foreach ($c in $checks) {

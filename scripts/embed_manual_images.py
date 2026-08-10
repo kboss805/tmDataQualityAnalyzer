@@ -15,8 +15,23 @@ it must not double them - and because prose edits between runs must survive.
 import io, base64, os, re
 
 SRC = 'docs/manual_images/processed'
-MAN = 'resources/usermanual.html'
 VER = 'include/constants.h'
+
+# TWO outputs from ONE source, so they cannot drift:
+#   BASE - compiled into the exe as a Qt resource. ALWAYS present, in the installer
+#          and the portable ZIP alike, and impossible to delete. That is what makes
+#          "the user always has a manual" a structural guarantee rather than
+#          something the installer has to uphold.
+#   FULL - shipped as an installed file, offered as an optional installer task. It is
+#          the base document PLUS the task walkthroughs and their figures.
+#
+# The walkthrough sections do not exist yet (see
+# docs/future_plans/comprehensive-user-manual.md), so FULL is currently the SAME
+# document as BASE. That is why the installer option must not be released until the
+# walkthroughs are written: offering a choice that changes nothing is worse than
+# offering no choice.
+BASE = 'resources/usermanual.html'
+FULL = 'UserManual.html'
 
 
 def app_version():
@@ -39,7 +54,7 @@ def fig(fname, caption, alt):
     return ('\n<figure>\n  <img alt="%s" src="data:image/png;base64,%s">\n'
             '  <figcaption>%s</figcaption>\n</figure>\n' % (alt, b64, caption))
 
-s = io.open(MAN, encoding='utf-8').read()
+s = io.open(BASE, encoding='utf-8').read()
 
 # --- strip previously embedded figures so this is idempotent ---------------
 before = s.count('<figure>')
@@ -67,7 +82,7 @@ s, n_foot = re.subn(r'(This manual describes\s+version )[0-9.]+\.',
                     r'\g<1>%s.' % _v, s, count=1)
 if not (n_sub and n_foot):
     raise SystemExit('version markers not found in %s (subtitle=%d footer=%d)'
-                     % (MAN, n_sub, n_foot))
+                     % (BASE, n_sub, n_foot))
 print('version set to %s' % _v)
 
 # --- figures, in document order -------------------------------------------
@@ -132,6 +147,22 @@ s = s[:i + len('</ul>\n')] + fig(
     'Export Data dialog with separate toggles and filename fields for image, CSV and log output'
 ) + s[i + len('</ul>\n'):]
 
-io.open(MAN, 'w', encoding='utf-8', newline='\n').write(s)
-print('figures embedded: %d' % s.count('<figure>'))
-print('manual size: %.0f KB' % (len(s.encode('utf-8'))/1024))
+io.open(BASE, 'w', encoding='utf-8', newline='\n').write(s)
+print('base manual : %-24s %5.0f KB, %d figures'
+      % (BASE, len(s.encode('utf-8'))/1024, s.count('<figure>')))
+
+# --- full manual = base + walkthroughs ------------------------------------
+# Built from the SAME document object, never hand-copied - two manuals maintained
+# as two documents would drift, and shipped-doc drift is this project's most
+# repeated failure. When the walkthrough sections are written they slot in here.
+full = s
+WALKTHROUGHS = []   # (anchor, html) pairs - see the plan file
+for anchor, block in WALKTHROUGHS:
+    if anchor not in full:
+        raise SystemExit('walkthrough anchor missing: %r' % anchor[:60])
+    full = full.replace(anchor, anchor + block, 1)
+
+io.open(FULL, 'w', encoding='utf-8', newline='\n').write(full)
+print('full manual : %-24s %5.0f KB, %d figures%s'
+      % (FULL, len(full.encode('utf-8'))/1024, full.count('<figure>'),
+         '  (identical to base - no walkthroughs yet)' if full == s else ''))

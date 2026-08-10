@@ -242,3 +242,37 @@ void TestMainView::batchBuildTemplateCapturesConfigsAndAppearance()
     }
     QVERIFY(found_lock_appearance);
 }
+
+void TestMainView::fullManualPathEmptyWhenNotInstalled()
+{
+    // The full manual is an optional installer task, so "not there" is the normal
+    // case for a default install - not a broken one. It must resolve to empty so the
+    // Help action falls back to the manual compiled into the executable, which is
+    // what makes "there is always a manual" a structural guarantee.
+    //
+    // Tested against an empty temporary directory: probing the real app root would
+    // answer a question about this checkout, where the file always exists because it
+    // is generated and tracked.
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    QVERIFY(MainView::fullManualPathIn(dir.path()).isEmpty());
+
+    // An unknown root is also "not installed" rather than a crash.
+    QVERIFY(MainView::fullManualPathIn(QString()).isEmpty());
+}
+
+void TestMainView::fullManualPathFoundWhenInstalled()
+{
+    // ...and when the optional file IS present beside the app root, it is found and
+    // preferred over the built-in manual.
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = QDir(dir.path()).filePath(UIConstants::kFullManualFilename);
+
+    QFile f(path);
+    QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
+    f.write("<html><body>full manual</body></html>");
+    f.close();
+
+    QCOMPARE(MainView::fullManualPathIn(dir.path()), path);
+}

@@ -53,6 +53,10 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
 Name: "fileassoc"; Description: "Associate .ch10 files with {#MyAppName}"; GroupDescription: "File associations:"
+; The BASE manual is compiled into the executable and is always reachable from
+; Help > User Manual, so declining this still leaves the user with a manual. This
+; adds the fuller illustrated walkthrough alongside it.
+Name: "fullmanual"; Description: "Install the full illustrated user manual"; GroupDescription: "Documentation:"
 
 [Files]
 ; Application binaries and Qt dependencies (from bin/ staging)
@@ -60,6 +64,10 @@ Source: "{#StagingDir}\bin\*"; DestDir: "{app}\bin"; Flags: ignoreversion recurs
 
 ; User Guide
 Source: "..\UserGuide.txt"; DestDir: "{app}"; Flags: ignoreversion
+
+; Full user manual - optional. Its absence is a supported state, not a broken
+; install: Help falls back to the manual compiled into the executable.
+Source: "..\UserManual.html"; DestDir: "{app}"; Flags: ignoreversion; Tasks: fullmanual
 
 ; Settings files (receiver_params\, rcvr_cals\, framesync_patterns\) — preserve
 ; existing user TOML on upgrade; only files not already present are copied.
