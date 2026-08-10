@@ -127,45 +127,49 @@ running rcc both ways over the real `.qrc`: **27% saving**, i.e. roughly 490 KB 
 ~1.3 MB once the figure count triples. One line in the `.pro`. Worth taking **if the manual
 stays embedded** - but see below, because it may not.
 
-### The proposal that supersedes it
+### The decision: a base manual that is always there, plus an optional add-on
 
-Make the manual **an installed file rather than a compiled-in resource**, and let the
-installer offer a choice:
+Not "full **or** condensed" - that framing was wrong, because it leaves an installation with
+no manual at all if the user picks wrong or later deletes the file. The rule is instead:
 
-- **Full manual** - every walkthrough and figure.
-- **Condensed manual** - prose and a handful of key figures.
-- **Portable ZIP always ships the full manual** (no installer, no choice to make).
+1. **Base manual** - today's `usermanual.html`. Stays a **compiled-in Qt resource**, exactly
+   as now. Always present, in the installer *and* the portable ZIP, and impossible to delete.
+2. **Full manual** - the walkthroughs and their figures, shipped as an **installed file** and
+   offered as an optional component in the installer.
+3. **Portable ZIP always carries both**, since it has no installer to ask.
 
-This is not merely another storage option; it is the *only* one that supports the choice.
-A compiled-in resource cannot vary per installation - the exe is one binary. So picking this
-answers the storage question outright, and the compression tweak becomes moot.
+The user always has at least one manual, and that guarantee is **structural** - a resource
+compiled into the executable cannot go missing - rather than something the installer has to
+get right. That is what makes this better than making both external: there is no
+"manual not found" state to design an error message for.
 
-Consequences, good and bad:
+Consequences:
 
-- Exe drops from 2634 KB to roughly **830 KB**, and figure count stops constraining the
-  manual at all - which is what unblocks writing it properly.
-- Download size barely moves. The installer is 39 MB and the ZIP 22 MB; Qt's DLLs dominate
-  both, so this is a rounding error either way. **Do not sell this as a size win** - the
-  win is editorial freedom, not bytes.
-- `MainView`'s Help > User Manual currently copies `:/resources/usermanual.html` to temp
-  because a browser cannot read `qrc:/`. Reading an installed file removes that dance, but
-  adds a new failure mode: the file can be missing (condensed install, or a user deleted
-  it). Needs a clear message, not a silent no-op.
-- The installer already has `[Tasks]` for desktop icon and file association, so the
-  machinery is familiar - though an either/or choice fits Inno's `[Types]`/`[Components]`
-  better than `[Tasks]`.
+- The exe keeps its ~1.8 MB base manual, so **there is no binary size win** - and none is
+  needed. The point is that the *full* manual's figure budget is no longer bounded by what
+  is tolerable to compile into every copy of the program.
+- `QMAKE_RESOURCE_FLAGS += -threshold 0 -compress 9` becomes worth taking on its own merits:
+  a measured **27%** off the embedded base manual, one line, no downside.
+- `MainView`'s Help > User Manual opens the full manual when it is installed and the base one
+  otherwise. The fallback is a normal path, not an error path.
+- The installer already has `[Tasks]` for desktop icon and file association; an optional
+  add-on fits `[Components]` (or a `[Tasks]` checkbox - either is idiomatic here).
 
 ### The risk to design against
 
 **Two manual variants are two artifacts that can drift**, and shipped-artifact drift is the
 exact failure this project keeps paying for - the eighteen-month-stale `UserGuide.txt`, the
 manual that read "Version 2.7.0" at v2.9.0, the figures illustrating the empty axes v2.9.1
-removed. A condensed manual that quietly falls behind the full one would be the same bug in
-a new place.
+removed.
 
-So if this is taken: generate the condensed variant **from** the full one in
-`build_manual.ps1` (never hand-maintain it), and extend
-`scripts/check_release_consistency.ps1` to assert the version markers in **both**.
+The base and full manuals share all their reference prose, so they must not be maintained as
+two documents. `build_manual.ps1` should emit **both from one source**: the full manual is the
+base plus the walkthrough sections and their figures. Nothing is hand-copied between them.
+
+`scripts/check_release_consistency.ps1` must then assert the version markers in **both**
+outputs. Today it checks `resources/usermanual.html` only; a second manual that nothing
+checks is a stale artifact waiting to happen, and the whole point of that script is that a
+marker which stops being checked fails loudly rather than silently.
 
 ## Not in scope
 
