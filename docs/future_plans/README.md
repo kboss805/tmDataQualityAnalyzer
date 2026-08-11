@@ -26,6 +26,12 @@ than replacing them, with step calibration as the centrepiece - written against 
 failure modes (turn-on transient, operator down-ramp, inverted polarity, per-channel
 fallback), not just the happy path.
 
+**A second gap, arguably wider:** the two gear setup dialogs - everything a user must get
+right *before* pressing Process - get three nested bullets, ~90 words. The manual never
+mentions Derandomize, Bits Per Frame, Polarity, voltage range, dB/V or channels-per-receiver
+at all, and unlike calibration this is the path every user takes. Needs no new figures; the
+dialogs are already in the capture list.
+
 **Blocked on screenshots** - **24** of them, enumerated by filename so they can be captured
 in one sitting. The list was audited against every `QDialog` in the codebase rather than
 written from memory, which caught several whole surfaces the first draft had missed:

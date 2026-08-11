@@ -44,6 +44,9 @@ Keep the existing reference sections — they are accurate and useful for lookup
 **walkthrough** ahead of them. Reference answers "what is this control"; the walkthrough
 answers "how do I do the job".
 
+0. **Reference: the setup sub-dialogs** — every field in both gear dialogs, what a wrong
+   value does, and the save/load boundary. See the section below; this is the pre-processing
+   configuration every user meets, and today it is 90 words.
 1. **Walkthrough: frame sync lock** — open a PRN recording, configure one stream, process,
    read the plot, switch to Accumulation, export.
 2. **Walkthrough: receiver SNR, uncalibrated** — configure receivers/channels, scale,
@@ -63,6 +66,56 @@ a signal-generator turn-on transient at the start, an operator down-ramp at the 
 inverted-polarity receivers, and channels whose plateau count does not match the expected
 step count. Those are what Clip Start/End exist for, and a user who has not been told will
 read a fallback channel as a bug.
+
+## The other big gap: the setup sub-dialogs
+
+Calibration is the sharpest case, but it is not the only one. **Everything a user must get
+right before pressing Process** - the two gear sub-dialogs - is covered by three nested
+bullets, roughly 90 words. Grepping the manual for the field names it must explain:
+
+| Field | Mentions in the manual |
+| --- | --- |
+| Derandomize | 0 |
+| Bits Per Frame | 0 |
+| Polarity | 0 |
+| voltage range | 0 |
+| dB/V | 0 |
+| channels per receiver | 0 |
+
+Every one of those must be correct or processing produces confident nonsense, and unlike
+calibration this is the path *every* user takes.
+
+The fields, from `include/view/streamsubdialogs.h`:
+
+- **Configure Frame Sync Lock** - Frame Sync (hex pattern), Frame Sync Mask, Bits Per Frame,
+  Words in Minor Frame, Derandomize, Invert Data, Data Rate (Mbps), Average Period, and
+  Load/Save Frame Sync Parameters.
+- **Configure Receiver SNR** - Num Rcvrs, Num Channels (per receiver), Scale (dB/V), Slope,
+  Polarity, Invert Data, Load Receiver Parameters, and the Extract Calibration action.
+
+### What to document beyond a field list
+
+A table of labels is not worth much on its own. The parts that actually surprise people are
+behaviours the code guarantees but nothing tells the user:
+
+- **Load/Save round-trips only three fields** - sync pattern, sync mask, words per frame.
+  *Derandomize*, *Data Rate* and *Sample Rate* are deliberately per-session and are NOT
+  saved. Users otherwise reasonably read this as the save being broken. This is a documented
+  invariant (US1.0), not an accident, so the manual should state it as intent.
+- **Lock % does not depend on an exact Data Rate.** It is a bit-span quantity, which is why
+  *Auto from TMATS* is safe and why a slightly wrong rate does not skew the percentage. Worth
+  saying, because the field's presence implies otherwise.
+- **Calibration profiles are session-only** and never written to disk - so a template carries
+  the calibration *inputs*, not the extracted profile, and batch runs fall back to linear.
+- **What a wrong value looks like** rather than only what each field means: a mask that is
+  too permissive, a Bits Per Frame that disagrees with the recording, an inverted stream left
+  un-inverted. This is the diagnostic content that turns a reference into a manual.
+
+### No new figures needed
+
+`walk-fs-03-framesync-setup.png` and `walk-snr-02-receiver-setup.png` in the capture list
+below already show both dialogs. This section is **prose against figures already planned**,
+so it does not extend the capture session.
 
 ## Screenshots needed
 
