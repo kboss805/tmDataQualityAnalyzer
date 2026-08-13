@@ -66,6 +66,30 @@ $Images = [ordered]@{
     # inside the client area identifies the screen. Staged here so the crop is
     # validated now; it is embedded when the walkthrough sections are written.
     'walk-inst-01-components.png'                    = @(1, 32, 596, 431)
+
+    # --- Walkthrough figures (batch A) ------------------------------------
+    # Registered before they are embedded so their crops and sizes are validated
+    # now rather than discovered when the walkthroughs are written.
+    #
+    # Dialog captures are window grabs, already tight - no crop.
+    'walk-fs-01-open.png'                            = $false
+    'walk-fs-02-configure-streams.png'               = $false
+    'walk-fs-03-framesync-setup.png'                 = $false
+    'walk-app-03-time-window.png'                    = $false
+    'walk-cust-01-lock-tab.png'                      = $false
+    # Full-window figures: these show the whole application deliberately - the log
+    # sidebar and the light theme are the subjects, so the chart-region crop would
+    # remove the very thing being illustrated.
+    'walk-app-02-sidebar.png'                        = $false
+    # The menu is a popup window, so a window-only grab captures either the menu
+    # without the app or the app without the menu. Captured as the whole window and
+    # cropped to the menu, which is the only technique that shows both.
+    'walk-app-01-hamburger.png'                      = @(0, 0, 640, 430)
+    'walk-theme-01-light-plot.png'                   = $false
+    # Full-SCREEN grab: the figure needs the progress dialog AND the log filling in
+    # beside it, which a window-only capture cannot show. Cropped to the app window
+    # to drop the surrounding desktop.
+    'walk-fs-04-processing.png'                      = @(14, 14, 1936, 1119)
 }
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null

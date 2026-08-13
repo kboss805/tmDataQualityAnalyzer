@@ -1,7 +1,8 @@
 # Comprehensive, task-oriented user manual
 
 **Status:** scoped. Tooling and the installer option are built (PR #78, unreleased).
-Blocked on the remaining 23 screenshots (see the capture list below).
+Capture in progress: **10 of 24 done** (batch A complete); 14 remain, led by the five
+calibration figures.
 
 ## The problem
 
@@ -74,8 +75,12 @@ than written from memory, because the first draft missed several whole surfaces 
 Plot Series*, the hamburger menu, *Set Time Window*, error reporting and the light theme were
 all absent. Existing figures are reused where they still depict the current UI.
 
-**24 captures**, of which **1 is done** (`walk-inst-01-components.png`) and 23 remain, all
-of them capturable now. Plus 7 existing figures reused.
+**24 captures**, of which **10 are done** (batch A: the frame-sync walkthrough, the
+application shell, plot customisation, the light theme and the installer) and 14 remain.
+Plus 7 existing figures reused.
+
+Batch A is complete. The 14 outstanding are the SNR walkthrough (3), calibration (5), batch
+processing (3), the Customize SNR tree (2) and one error-log figure.
 
 Dialog coverage after this list: every `QDialog` in the app is figured except *About*, which
 needs none.
