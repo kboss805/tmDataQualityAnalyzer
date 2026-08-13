@@ -81,6 +81,10 @@ $Images = [ordered]@{
     # sidebar and the light theme are the subjects, so the chart-region crop would
     # remove the very thing being illustrated.
     'walk-app-02-sidebar.png'                        = $false
+    # The menu is a popup window, so a window-only grab captures either the menu
+    # without the app or the app without the menu. Captured as the whole window and
+    # cropped to the menu, which is the only technique that shows both.
+    'walk-app-01-hamburger.png'                      = @(0, 0, 640, 430)
     'walk-theme-01-light-plot.png'                   = $false
     # Full-SCREEN grab: the figure needs the progress dialog AND the log filling in
     # beside it, which a window-only capture cannot show. Cropped to the app window
