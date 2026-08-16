@@ -1,8 +1,8 @@
 # Comprehensive, task-oriented user manual
 
 **Status:** scoped. Tooling and the installer option are built (PR #78, unreleased).
-Capture in progress: **10 of 24 done** (batch A complete); 14 remain, led by the five
-calibration figures.
+Capture in progress: **17 of 23 done** (batches A and B complete, including the whole
+calibration set); 6 remain.
 
 ## The problem
 
@@ -75,12 +75,12 @@ than written from memory, because the first draft missed several whole surfaces 
 Plot Series*, the hamburger menu, *Set Time Window*, error reporting and the light theme were
 all absent. Existing figures are reused where they still depict the current UI.
 
-**24 captures**, of which **10 are done** (batch A: the frame-sync walkthrough, the
-application shell, plot customisation, the light theme and the installer) and 14 remain.
-Plus 7 existing figures reused.
+**23 captures** (24 planned, one dropped as redundant - see the calibration group), of which
+**17 are done** and 6 remain. Plus 7 existing figures reused.
 
-Batch A is complete. The 14 outstanding are the SNR walkthrough (3), calibration (5), batch
-processing (3), the Customize SNR tree (2) and one error-log figure.
+Batches A and B are complete: the frame-sync walkthrough, application shell, light theme,
+installer, the SNR walkthrough and the whole calibration set. The 6 outstanding are batch
+processing (3), the Customize SNR tree and recolour (2) and one error-log figure.
 
 Dialog coverage after this list: every `QDialog` in the app is figured except *About*, which
 needs none.
@@ -92,18 +92,49 @@ needs none.
 - `walk-fs-04-processing.png` - the modal progress dialog mid-run
 - (reuse the existing Lock % and Accumulation plot figures)
 
-**SNR walkthrough**
+**SNR walkthrough** - **CAPTURED**
 - `walk-snr-01-mode-select.png` - setting a row's Mode to Receiver SNR
-- `walk-snr-02-receiver-setup.png` - *Configure Receiver SNR*, receivers/channels/scale/range/polarity
+- `walk-snr-02-receiver-setup.png` - *Configure Receiver SNR*, receivers/channels/scale/range/
+  polarity. Also carries the **Apply Cal** button and its calibration-status text, so it
+  doubles as the "Extract Calibration in context" figure.
 - `walk-snr-03-load-params.png` - loading a receiver-parameters TOML
 
-**Calibration walkthrough** (the priority)
-- `walk-cal-01-extract-button.png` - the *Extract Calibration* action in context
-- `walk-cal-02-extract-dialog.png` - *Extract Calibration*, both file fields populated
-- `walk-cal-03-clip-controls.png` - Clip Start / Clip End set to non-zero
-- `walk-cal-04-summary.png` - the per-channel success/fallback summary box
+**Calibration walkthrough** (the priority) - **CAPTURED**
+- `walk-cal-01-extract-button.png` - *Extract Calibration* as opened, both fields empty
+- `walk-cal-03-clip-controls.png` - the same dialog populated: step TOML, calibration
+  .ch10, and Clip Start / Clip End set to non-zero
+- `walk-cal-04-summary.png` - the "Applied non-linear calibration to N channel(s)" box
 - `walk-cal-05-step-toml.png` - a `[[Step]]` TOML open in an editor, so the format is concrete
 - (reuse the existing uncalibrated/calibrated SNR plots for before/after)
+
+  **`walk-cal-02` was dropped, not skipped.** It was to show the dialog with both files
+  populated but before the clip values; `walk-cal-01` (empty) and `walk-cal-03` (fully
+  populated) bracket that, and a middle state adds nothing. Its other intended job - the
+  *Extract Calibration* action in context - is covered by `walk-snr-02-receiver-setup.png`,
+  which shows the **Apply Cal** button and its "(none - using linear calibration)" status.
+
+### The calibration section must explain "3 of 48"
+
+The captured summary reads **"Applied non-linear calibration to 3 channel(s)"** against a
+48-channel file, and the extract dialog says **"Calibrated 3 of 48 channel(s)"**. That is the
+CORRECT result for `agc_rnrz-l_trc_testfile.ch10`: the real stepped sweep exists only on
+RCVR3's L/R/C words, and the other 45 words are low-level noise that must *not* calibrate.
+They fall back to linear, exactly as designed.
+
+Unexplained, that number reads as catastrophic failure. A user will assume the feature is
+broken, retry with different clip values, and get the same answer. **This is the single most
+valuable thing the section can say** - it turns the summary box from alarming into
+informative, and it is the concrete form of the plan's "write against the real failure modes"
+rule.
+
+The captured set is self-consistent and checkable, which is how it was verified:
+
+| Figure claim | Verified against |
+| --- | --- |
+| "11 steps parsed" | `settings/rcvr_cals/TRC.toml` - 11 `[[Step]]` entries, 0..60 dB |
+| "3 of 48 channel(s)" | `settings/receiver_params/TRC.toml` - 16 rcvrs x 3 channels |
+| Scale 20.000, Polarity Positive | same file - `Scale = "20"`, `Polarity = 0` |
+| calibrated plot tops out at 60 dB | the step TOML's range |
 
 **Batch walkthrough**
 - `walk-batch-01-save-template.png`
