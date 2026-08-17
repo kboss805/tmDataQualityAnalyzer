@@ -85,6 +85,16 @@ namespace UIConstants {
     inline constexpr const char* kSettingsKeyTheme  = "Theme";        ///< QSettings key for theme preference.
     inline constexpr const char* kSettingsKeyLastCh10Dir = "LastCh10Directory"; ///< QSettings key for last Ch10 file dialog directory.
     inline constexpr const char* kSettingsKeyLastTomlDir  = "LastTomlDirectory";  ///< QSettings key for last TOML file dialog directory.
+    /// @name Status glyph colours
+    /// Shared by every dialog that shows a pass/fail mark, so they cannot drift
+    /// apart: the Configure Streams Ready column and the Batch Process Files list
+    /// both read from here. Colour only — each dialog sizes its own glyph.
+    /// @{
+    inline constexpr const char* kStatusOkColor     = "green";        ///< Ready / matched.
+    inline constexpr const char* kStatusFailColor   = "red";          ///< Not ready / rejected.
+    inline constexpr const char* kStatusIdleColor   = "gray";         ///< Not applicable yet.
+    /// @}
+
     inline constexpr const char* kThemeDark         = "dark";         ///< Dark theme identifier.
     inline constexpr const char* kThemeLight        = "light";        ///< Light theme identifier.
     inline constexpr const char* kSettingsKeyRecentFiles = "RecentFiles"; ///< QSettings key for recent files list.

@@ -335,22 +335,22 @@ void StreamConfigDialog::updateReadyIcon(int row)
 
     if (!checked)
     {
-        w.readyLabel->setText(readyMarkup("gray", "✗"));
+        w.readyLabel->setText(readyMarkup(UIConstants::kStatusIdleColor, "✗"));
         w.readyLabel->setToolTip(QString());
     }
     else if (!w.gearConfirmed)
     {
-        w.readyLabel->setText(readyMarkup("red", "✗"));
+        w.readyLabel->setText(readyMarkup(UIConstants::kStatusFailColor, "✗"));
         w.readyLabel->setToolTip("Click the gear icon to configure this stream.");
     }
     else if (!w.frameSyncPattern.isEmpty())
     {
-        w.readyLabel->setText(readyMarkup("green", "✓"));
+        w.readyLabel->setText(readyMarkup(UIConstants::kStatusOkColor, "✓"));
         w.readyLabel->setToolTip(QString());
     }
     else
     {
-        w.readyLabel->setText(readyMarkup("red", "✗"));
+        w.readyLabel->setText(readyMarkup(UIConstants::kStatusFailColor, "✗"));
         w.readyLabel->setToolTip("A frame sync pattern is required.");
     }
 
