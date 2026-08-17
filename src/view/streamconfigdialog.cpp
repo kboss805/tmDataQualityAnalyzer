@@ -234,10 +234,15 @@ void StreamConfigDialog::buildTable()
             hl->addWidget(cell);
         }
 
-        // Channel label: right-justified and elided on the LEFT ("…RNRZ-L") so the
-        // END of a long TMATS-derived name — where the distinguishing detail (band,
-        // rate, code) usually sits — stays visible instead of the common prefix. The
-        // cell doesn't move; only the text alignment. Full name is in the tooltip.
+        // Channel label: left-justified, matching Mode and the rest of the dialog's
+        // inputs. Elision follows the alignment — ElideRight, so the text always runs
+        // from the cell's left edge and any "…" sits at the end where it is expected.
+        //
+        // This trades away something real: these names share a long common prefix
+        // ("CH-01 2250.5MHZ AGC …"), and the DISTINGUISHING detail (band, rate, code)
+        // is at the end, so a truncated long name now hides the part that tells two
+        // channels apart. Accepted deliberately — most names fit, right-aligned text
+        // read oddly for those, and the full name is always in the tooltip.
         // Styled (via the channelNameCell object name) to mimic the Mode combo
         // box's border/fill, so the two columns read as a matched pair.
         {
@@ -245,9 +250,9 @@ void StreamConfigDialog::buildTable()
             lbl->setObjectName("channelNameCell");
             lbl->setFixedWidth(kColWidthChannel);
             lbl->setFixedHeight(kFieldCellHeight);
-            lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            lbl->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
             lbl->setText(QFontMetrics(lbl->font()).elidedText(
-                cfg.label, Qt::ElideLeft, kColWidthChannel - kCellTextPadding));
+                cfg.label, Qt::ElideRight, kColWidthChannel - kCellTextPadding));
             lbl->setToolTip(cfg.label);
             lbl->setAutoFillBackground(false);
             // Read-only: the label just mimics a combo box's look for visual
@@ -272,7 +277,11 @@ void StreamConfigDialog::buildTable()
         w.mode->setToolTip("Analysis mode: Receiver SNR measures channel signal quality; Frame Sync Lock measures synchronization stability.");
         w.mode->setEditable(true);
         w.mode->lineEdit()->setReadOnly(true);
-        w.mode->lineEdit()->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        // Left-aligned, like every other control in the dialog. It was right-aligned
+        // to keep it from crowding the Channel column, but that column is fixed-width
+        // and separated by the grid, so nothing was actually crowded - the text just
+        // sat oddly far from the label it belongs to.
+        w.mode->lineEdit()->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         w.mode->lineEdit()->setCursor(Qt::ArrowCursor); // reads as a selector, not free text
         hl->addWidget(w.mode);
 
