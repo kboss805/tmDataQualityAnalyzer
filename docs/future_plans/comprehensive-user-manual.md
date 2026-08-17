@@ -65,6 +65,60 @@ inverted-polarity receivers, and channels whose plateau count does not match the
 step count. Those are what Clip Start/End exist for, and a user who has not been told will
 read a fallback channel as a bug.
 
+## A third gap: import & export
+
+The whole **Import & export** section is *two bullets*. It names the three outputs and stops,
+which leaves the questions people actually have unanswered - above all **what is in each
+exported thing**.
+
+**Readout is fine and needs no work.** It already explains nearest-vs-pinned, the `(pinned)`
+marker and the revert-to-automatic fallback, in both the context-menu list and "Reading values
+off the plot". Checked before assuming otherwise.
+
+### Each exported item, and what it contains
+
+- **Plot image** - PNG, SVG or PDF (the format follows the filename's extension; PNG if
+  omitted). It reflects **what you see**: hidden series are absent, and a hidden legend is
+  left out. A visible legend is composited in at the position you dragged it to.
+- **Data (CSV)** - a `Time (DOY:HH:MM:SS.mmm)` column followed by one column per series.
+  Column headers are self-describing (`Ch 13 L_RCVR1`, and lock/missed-frames columns carry
+  their metric so a stream's two series do not collide). Multi-file runs prefix `S<n>| ` to
+  columns from the second source onward.
+- **Log (text)** - the log pane's contents verbatim, including the processing summary and any
+  warnings or errors. Useful to attach to a report about a questionable recording.
+
+### The asymmetry that will surprise people
+
+**The image respects visibility; the CSV does not.** `PlotViewModel::exportCsv` walks every
+series and filters only by source - never by `visible` or `effectiveVisible`. So a CSV
+contains:
+
+- series you hid in Customize View, and
+- **both** frame-sync metrics (lock % *and* accumulated missed frames), even though the plot
+  only ever shows one at a time.
+
+Neither is a bug - the CSV is the data set, the image is the picture - but a user who hides
+40 of 48 channels and exports expects 8 columns and gets 48. It must be stated in both
+directions: hiding tidies the *picture*, not the *data*.
+
+### Import, and the round trip
+
+- Import accepts **this application's own export format only**. A CSV with a wrong or missing
+  `Time (DOY:HH:MM:SS.mmm)` header, or the legacy `Day,Time,...` layout, is rejected with a
+  log message rather than drawn as garbage. Malformed rows are skipped and the count
+  reported.
+- Export then import is a **round trip**: `SeriesColumnSchema` builds and parses the same
+  headers, so metric type, receiver and channel identity survive, and the reloaded plot
+  colours and groups the series as before. Worth stating plainly - it is the reason to export
+  CSV rather than screenshot a plot.
+- Import bypasses processing entirely, which is the point: revisiting an old result costs
+  seconds instead of re-reading a multi-gigabyte recording.
+
+### Figures
+
+No new captures needed. The existing **Export Dialog** figure shows the three switches and
+their filename fields, which is exactly what this section describes.
+
 ## Screenshots needed
 
 Capture in **one sitting** - the trickle approach cost several rounds during v2.9.1/2.9.2.
