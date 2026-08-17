@@ -58,7 +58,7 @@ private slots:
     // Channel name cell is styled (via object name) to mimic the Mode combo's
     // box, and the Mode combo's displayed text is right-justified.
     void channelLabelHasComboBoxStyledObjectName();
-    void modeComboDisplaysTextRightJustified();
+    void modeComboDisplaysTextLeftJustified();
     void modeComboSelectionStillTracksIndexChange();
 };
 

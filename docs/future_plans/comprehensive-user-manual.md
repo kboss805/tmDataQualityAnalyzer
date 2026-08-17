@@ -1,8 +1,7 @@
 # Comprehensive, task-oriented user manual
 
 **Status:** scoped. Tooling and the installer option are built (PR #78, unreleased).
-Capture in progress: **17 of 23 done** (batches A and B complete, including the whole
-calibration set); 6 remain.
+**All 23 captures are done.** The remaining work is the writing.
 
 ## The problem
 
@@ -65,6 +64,60 @@ inverted-polarity receivers, and channels whose plateau count does not match the
 step count. Those are what Clip Start/End exist for, and a user who has not been told will
 read a fallback channel as a bug.
 
+## A third gap: import & export
+
+The whole **Import & export** section is *two bullets*. It names the three outputs and stops,
+which leaves the questions people actually have unanswered - above all **what is in each
+exported thing**.
+
+**Readout is fine and needs no work.** It already explains nearest-vs-pinned, the `(pinned)`
+marker and the revert-to-automatic fallback, in both the context-menu list and "Reading values
+off the plot". Checked before assuming otherwise.
+
+### Each exported item, and what it contains
+
+- **Plot image** - PNG, SVG or PDF (the format follows the filename's extension; PNG if
+  omitted). It reflects **what you see**: hidden series are absent, and a hidden legend is
+  left out. A visible legend is composited in at the position you dragged it to.
+- **Data (CSV)** - a `Time (DOY:HH:MM:SS.mmm)` column followed by one column per series.
+  Column headers are self-describing (`Ch 13 L_RCVR1`, and lock/missed-frames columns carry
+  their metric so a stream's two series do not collide). Multi-file runs prefix `S<n>| ` to
+  columns from the second source onward.
+- **Log (text)** - the log pane's contents verbatim, including the processing summary and any
+  warnings or errors. Useful to attach to a report about a questionable recording.
+
+### The asymmetry that will surprise people
+
+**The image respects visibility; the CSV does not.** `PlotViewModel::exportCsv` walks every
+series and filters only by source - never by `visible` or `effectiveVisible`. So a CSV
+contains:
+
+- series you hid in Customize View, and
+- **both** frame-sync metrics (lock % *and* accumulated missed frames), even though the plot
+  only ever shows one at a time.
+
+Neither is a bug - the CSV is the data set, the image is the picture - but a user who hides
+40 of 48 channels and exports expects 8 columns and gets 48. It must be stated in both
+directions: hiding tidies the *picture*, not the *data*.
+
+### Import, and the round trip
+
+- Import accepts **this application's own export format only**. A CSV with a wrong or missing
+  `Time (DOY:HH:MM:SS.mmm)` header, or the legacy `Day,Time,...` layout, is rejected with a
+  log message rather than drawn as garbage. Malformed rows are skipped and the count
+  reported.
+- Export then import is a **round trip**: `SeriesColumnSchema` builds and parses the same
+  headers, so metric type, receiver and channel identity survive, and the reloaded plot
+  colours and groups the series as before. Worth stating plainly - it is the reason to export
+  CSV rather than screenshot a plot.
+- Import bypasses processing entirely, which is the point: revisiting an old result costs
+  seconds instead of re-reading a multi-gigabyte recording.
+
+### Figures
+
+No new captures needed. The existing **Export Dialog** figure shows the three switches and
+their filename fields, which is exactly what this section describes.
+
 ## Screenshots needed
 
 Capture in **one sitting** - the trickle approach cost several rounds during v2.9.1/2.9.2.
@@ -75,8 +128,13 @@ than written from memory, because the first draft missed several whole surfaces 
 Plot Series*, the hamburger menu, *Set Time Window*, error reporting and the light theme were
 all absent. Existing figures are reused where they still depict the current UI.
 
-**23 captures** (24 planned, one dropped as redundant - see the calibration group), of which
-**17 are done** and 6 remain. Plus 7 existing figures reused.
+**23 captures** (24 planned, one dropped as redundant - see the calibration group), and **all
+23 are captured**. Plus 7 existing figures reused.
+
+Three figures were re-taken after the fact because a UI change invalidated them - the
+Configure Streams left-justification affected `walk-fs-02`, `walk-snr-01` and the *shipped*
+`Config Streams Dialg.png`. Worth remembering when the walkthroughs are written: **changing
+the UI invalidates its own figures**, and the shipped ones are the easiest to forget.
 
 Batches A and B are complete: the frame-sync walkthrough, application shell, light theme,
 installer, the SNR walkthrough and the whole calibration set. The 6 outstanding are batch

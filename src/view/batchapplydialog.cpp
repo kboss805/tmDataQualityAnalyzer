@@ -57,15 +57,28 @@ void BatchApplyDialog::setUpLayout(const QList<FileEntry>& files)
     {
         const QString name = QFileInfo(f.filepath).fileName();
         auto* item = new QListWidgetItem(list);
-        if (f.ok)
+
+        // Colour only the glyph, matching the Configure Streams Ready column - a
+        // QListWidgetItem renders plain text, so the row carries a QLabel instead.
+        const QString glyph = f.ok ? QStringLiteral("✓") : QStringLiteral("✗");
+        const QString color = f.ok ? UIConstants::kStatusOkColor
+                                   : UIConstants::kStatusFailColor;
+        const QString trailer = f.ok ? QString() : tr("  —  %1").arg(f.reason);
+        auto* row = new QLabel(QString("<span style='color: %1;'>%2</span>  %3%4")
+                                   .arg(color, glyph, name.toHtmlEscaped(), trailer.toHtmlEscaped()),
+                               list);
+        row->setTextFormat(Qt::RichText);
+
+        // Rejected rows are made unselectable rather than DISABLED. Qt greys a
+        // disabled item's contents regardless of any colour set on it, so disabling
+        // would silently defeat the red glyph this exists to show. The row is inert
+        // either way - nothing reads this list's selection.
+        if (!f.ok)
         {
-            item->setText(QStringLiteral("✓  ") + name);
+            item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
         }
-        else
-        {
-            item->setText(QStringLiteral("✗  ") + name + tr("  —  %1").arg(f.reason));
-            item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-        }
+        item->setSizeHint(row->sizeHint());
+        list->setItemWidget(item, row);
         item->setToolTip(f.filepath);
     }
     layout->addWidget(list);

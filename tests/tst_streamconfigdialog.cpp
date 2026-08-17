@@ -571,8 +571,13 @@ void TestStreamConfigDialog::channelLabelLongNameElidedWithFullTooltip()
 {
     // A long, TMATS-derived descriptive name (like "CH-01 2250.5MHZ AGC 800Kbps
     // RNRZ-L") is wider than the fixed channel column, so it must be elided rather
-    // than hard-clipped. Elision is on the LEFT so the END of the name (the
-    // distinguishing tail) stays visible; the tooltip keeps the full name.
+    // than hard-clipped. Elision follows the LEFT alignment - ElideRight - so the
+    // text runs from the cell's left edge and the ellipsis sits at the end.
+    //
+    // Note what this costs: the distinguishing detail in these names (band, rate,
+    // code) is at the END, so a truncated long name no longer shows the part that
+    // tells two channels apart. That is why the tooltip assertion below matters -
+    // it is now the ONLY place the full name is recoverable.
     const QString fullName = "CH-01 2250.5MHZ AGC 800Kbps RNRZ-L";
     StreamConfig cfg = makeConfig(fullName);
     QScopedPointer<StreamConfigDialog> dlg(makeDialog({cfg}));
@@ -584,8 +589,8 @@ void TestStreamConfigDialog::channelLabelLongNameElidedWithFullTooltip()
     QVERIFY(channelLabel != nullptr);
     QVERIFY(channelLabel->text() != fullName);
     QVERIFY(channelLabel->text().length() < fullName.length());
-    QVERIFY(channelLabel->text().startsWith(QChar(0x2026))); // Unicode ellipsis "…" at the FRONT
-    QVERIFY(channelLabel->text().endsWith("RNRZ-L"));        // the tail stays on screen
+    QVERIFY(channelLabel->text().endsWith(QChar(0x2026)));   // Unicode ellipsis "…" at the END
+    QVERIFY(channelLabel->text().startsWith("CH-01"));       // the head stays on screen
     QCOMPARE(channelLabel->toolTip(), fullName);
 }
 
@@ -639,7 +644,7 @@ void TestStreamConfigDialog::channelLabelHasComboBoxStyledObjectName()
     QCOMPARE(channelLabel->objectName(), QString("channelNameCell"));
 }
 
-void TestStreamConfigDialog::modeComboDisplaysTextRightJustified()
+void TestStreamConfigDialog::modeComboDisplaysTextLeftJustified()
 {
     // QComboBox has no built-in way to right-justify its closed-box text, so the
     // Mode combo is made editable with a read-only internal line edit, which IS
@@ -653,7 +658,10 @@ void TestStreamConfigDialog::modeComboDisplaysTextRightJustified()
     QVERIFY(mode->isEditable());
     QVERIFY(mode->lineEdit() != nullptr);
     QVERIFY(mode->lineEdit()->isReadOnly());
-    QCOMPARE(mode->lineEdit()->alignment(), Qt::Alignment(Qt::AlignRight | Qt::AlignVCenter));
+    // Left-aligned, matching the rest of the dialog's inputs. The editable+readonly
+    // conversion exists to control this alignment at all, so the assertion stays -
+    // it is what catches the line edit silently reverting to a plain combo.
+    QCOMPARE(mode->lineEdit()->alignment(), Qt::Alignment(Qt::AlignLeft | Qt::AlignVCenter));
 }
 
 void TestStreamConfigDialog::modeComboSelectionStillTracksIndexChange()

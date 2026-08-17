@@ -402,6 +402,25 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.9.3 tag
 
+#### Cosmetic
+
+- **Configure Streams: the Channel and Mode columns are left-justified.** Both were
+  right-justified — Mode so it "no longer crowds the Channel column", and Channel to
+  pair with left-side elision. With the short names most files produce, both simply
+  read as text pushed away from its label.
+  Channel's elision follows its alignment (`ElideRight`), which **costs something
+  real**: these names share a long common prefix and the distinguishing detail (band,
+  rate, code) sits at the end, so a truncated long name no longer shows the part that
+  tells two channels apart. Accepted deliberately; the tooltip is now the only place
+  the full name is recoverable, which is why the test asserts it.
+- **Batch Process Files: the status glyphs are green/red**, matching the Configure
+  Streams Ready column. Both read from `UIConstants::kStatusOkColor` /
+  `kStatusFailColor` / `kStatusIdleColor` so they cannot drift apart again.
+  Rejected rows are now *unselectable* rather than *disabled*: Qt greys a disabled
+  item regardless of any colour set on it, so leaving them disabled would have
+  silently defeated the red glyph — and it also greyed the rejection reason, the most
+  useful text in the row.
+
 #### Documentation delivery
 
 - **The user manual is now two artifacts generated from one source.** The *base*
@@ -814,11 +833,9 @@ keep the tag history aligned with `main`. The only change is to CI.
   `ProcessingProgressDialog`; primary-action/Cancel button order corrected to
   match WinUI 3 convention (primary left of Cancel) across `StreamConfigDialog`
   and its three sub-dialogs.
-- Channel column narrowed, right-justified with left-side elision (so the
-  distinguishing tail of a long TMATS name — band, rate, code — stays visible
-  instead of the common prefix), and styled to match the Mode combo box's
-  border/fill. Mode combo's closed-box text is right-justified so it no longer
-  crowds the Channel column.
+- Channel column narrowed and styled to match the Mode combo box's border/fill.
+  (Originally right-justified with left-side elision; both columns were changed to
+  left-justified afterwards — see Unreleased.)
 - The three per-stream sub-dialogs (Frame Sync Lock, Calibration, Receiver SNR)
   now share one layout vocabulary (spacing, grid geometry, icon-button sizing,
   a consistent text-left/buttons-centered alignment rule) so their
@@ -1457,7 +1474,7 @@ source/header files are listed in `tests/tests.pro`.
 - **TestPlotWidget** (`tst_plotwidget`) — Plot widget construction, null/valid ViewModel connection, dark/light theme application, the movable legend overlay populating from data (hidden until data loads, then one row per visible active-metric series), a shown/resized-window regression case asserting the overlay sizes correctly (not a collapsed frame-only box) after a second rebuild adds more rows — a QScrollArea `widgetResizable` sizeHint staleness bug reproduced and fixed post-review — the SNR legend row showing the short `"CH<id> <ch.name>"` form instead of the full TMATS stream title, the legend row layout reserving a right-side gutter matching the style's scrollbar extent, and each legend row carrying an objectName the overlay stylesheet can target to override the app's global `QWidget { background-color: ... }` theme rule (otherwise every row painted as an opaque chip); plus `exportImage()` writing a PNG/SVG/PDF headlessly (the parameterized image-export entry point extracted for batch apply); and the right-click context menu that replaced the external control rows: it lists every expected top-level item, its data-dependent entries are disabled until data loads, the Plot File submenu is disabled for a single source and switches `visibleSource` for a multi-source run, View Mode reflects and sets the active left-axis metric, `X Axis > Reset Span` / `Y Axes > Reset` clear the X window and both Y overrides, plus two structural guards - wheel-zoom/drag-pan stay enabled (horizontal-only) once data arrives, and **no QComboBox / QSpinBox / QLineEdit / QAbstractButton lives outside the chart** - on-chart overlays are allowed, external control rows are not (the machine-checkable form of "no external controls"); plus the legend toggle (shows/hides the overlay and survives a rebuild, appears only once data is loaded, is parented to the chart, and stays in sync with the context menu's checkable Show Legend item); plus Y axis occupancy - a lock-only plot hides the right axis, an SNR-only plot hides the left, an empty chart keeps the left (hiding both would leave a bare box), and hiding the last *visible* SNR series reclaims the right axis just as never loading one would
 - **TestTmChart** (`tst_tmchart`) - the first-party chart replacing QCustomPlot: series bookkeeping across removals and out-of-range access, mismatched x/y lengths truncated (a draw-time overrun), degenerate/non-finite ranges rejected, X and Y coordinate transforms round-tripping with the correct screen orientation, wheel zoom anchoring the value under the cursor and reporting the new range, interactions inert until enabled, and the shared `renderTo()` export path painting real content while omitting the crosshair/zoom-band overlays (cursor state, not data), and that hiding a Y axis reclaims its margin (the measurable consequence) while leaving the coordinate transforms consistent with the new plot area
 - **TestPlotCustomizationDialog** (`tst_plotcustomizationdialog`) — Customize Plot Series dialog: one Frame Sync Lock checkbox per stream, Select All/None, apply → per-stream lock/missed visibility round-trip to the ViewModel; Receiver SNR tree build (receiver grouping), tri-state group cascade, Select All/None, apply → per-channel SNR visibility round-trip, and the Expand/Collapse All button toggle; plus per-stream rename/recolor (lock tab) and per-channel rename/recolor via pending item roles (SNR tab) applied to the ViewModel on OK, and the single batched `seriesAppearanceChanged` emission (reaches private widgets/slots via a friend declaration, same pattern as TestFrameProcessor)
-- **TestStreamConfigDialog** (`tst_streamconfigdialog`) — Per-stream Configure Streams dialog: stream rows, mode selection, gear setup dialogs, TOML load/save round-trips, "Apply to all" fan-out, the Channel column label (short names shown in full, long TMATS-derived names elided on the left with "..." so the distinguishing tail stays visible, right-justified, styled via `channelNameCell` to mimic the Mode combo box's border/fill, and the full name always available via tooltip), the Mode combo's right-justified closed-box text (via an editable-but-readonly internal line edit) while selection still tracks correctly, and the table header/separator using theme-QSS object names (`streamHeaderLabel` / `streamHeaderSeparator`) rather than hard-coded inline colors
+- **TestStreamConfigDialog** (`tst_streamconfigdialog`) — Per-stream Configure Streams dialog: stream rows, mode selection, gear setup dialogs, TOML load/save round-trips, "Apply to all" fan-out, the Channel column label (short names shown in full, long TMATS-derived names elided on the right with "..." , left-justified, styled via `channelNameCell` to mimic the Mode combo box's border/fill, and the full name always available via tooltip — which is now the only place a truncated name is recoverable), the Mode combo's left-justified closed-box text (via an editable-but-readonly internal line edit) while selection still tracks correctly, and the table header/separator using theme-QSS object names (`streamHeaderLabel` / `streamHeaderSeparator`) rather than hard-coded inline colors
 - **TestExportDialog** (`tst_exportdialog`) — Export dialog checkbox-to-field enable logic, export-button validation, and the log-export row defaults/accessors and log-only validation
 - **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US5.3): `[[Step]]` TOML parsing (valid / empty-fails), plateau detection (clean, too-few-fails, extra-plateaus uses last of monotonic run, short-blip doesn't steal a pairing slot, long leading transient doesn't shift pairing, inverted-polarity sweep not reversed, non-monotonic pairing rejected, noisy, settling-at-plateau-start excluded, round-trip exact), and `interpolateCalibration()` (midpoint, below/above clamping, coincident-raw guard)
 - **TestSeriesColumnSchema** (`tst_seriescolumnschema`) — the CSV column-header schema (`SeriesColumnSchema`): SNR name and `columnHeader()` formatting, `parseColumnHeader()` classification (lock/missed suffix vs. SNR `"<id> - "` prefix, multi-word stream labels split at the last space, SNR-shape-wins-over-suffix), the unknown→SNR fallback, and the format→parse round trip that keeps `exportCsv` and `CsvSeriesParser` inverses. Multi-file input: source 0 stays unqualified (byte-identical), source 1+ gets a leading `"S<n>| "` qualifier that round-trips through parse for both SNR and Lock/Missed shapes, an unqualified header still defaults to source 0, and a header merely starting with the letter `'S'` isn't misparsed as a qualifier
