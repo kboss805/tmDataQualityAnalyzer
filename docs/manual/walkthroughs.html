@@ -1,0 +1,194 @@
+<!--
+  Walkthrough sections for the FULL user manual.
+
+  This fragment is inserted into UserManual.html only - the base manual compiled
+  into the executable does not carry it. scripts/embed_manual_images.py reads this
+  file, expands the figure placeholders, and splices the result in ahead of the
+  reference sections, renumbering those by however many walkthrough sections exist.
+
+  Section headings carry NO number - the generator numbers them 1..N in document
+  order and shifts the reference sections by that count. Add or reorder freely.
+
+  Figure placeholder syntax, one per line:
+
+      {{FIG:<file in docs/manual_images/processed>|<caption>|<alt text>}}
+
+  Write prose here, not in the generator. Both manuals come from one source so
+  they cannot drift; this is the part that is unique to the full one.
+
+  Cross-reference other sections by ANCHOR, never by number -
+  <a href="#import-export">Import &amp; export</a>, not "section 10". The numbers are
+  generated, so a hardcoded one goes stale as soon as a section is added or moved.
+-->
+
+<h2 id="walk-setup">Before you process: the two setup dialogs</h2>
+
+<p>Every stream you process is configured through the <strong>gear</strong> button on its row
+in Configure Streams. Which dialog opens depends on the row's <strong>Mode</strong>. Getting
+these fields right is the difference between a meaningful plot and a confident-looking wrong
+one, so they are worth understanding before the walkthroughs that use them.</p>
+
+<h3>Configure Frame Sync Lock</h3>
+
+{{FIG:walk-fs-03-framesync-setup.png|The frame sync setup dialog, configured for a PRN 15 stream. The folder and disk buttons load and save the top three fields as a TOML file.|Configure Frame Sync Lock dialog showing frame sync pattern, mask, bits per frame, data rate and averaging period}}
+
+<table>
+  <tr><th>Field</th><th>What it is</th><th>What a wrong value does</th></tr>
+  <tr><td><strong>Frame Sync</strong></td>
+      <td>The synchronisation pattern in hex, up to 64 bits.</td>
+      <td>No frames are found at all. The log says the pattern was not located and the
+          stream plots as a flat zero.</td></tr>
+  <tr><td><strong>Frame Sync Mask</strong></td>
+      <td>Which bits of the pattern must match. <code>FFFFFFFF</code> means all of them.</td>
+      <td>Too permissive a mask matches noise, so lock&nbsp;% reads high on a stream that is
+          not really locked.</td></tr>
+  <tr><td><strong>Bits Per Frame</strong></td>
+      <td>The minor frame length in bits.</td>
+      <td>The scanner looks for the next sync in the wrong place. You typically see syncs
+          found but few or no frames extracted.</td></tr>
+  <tr><td><strong>Data Rate (Mbps)</strong></td>
+      <td>The stream's bit rate.</td>
+      <td>Very little — see the note below.</td></tr>
+  <tr><td><strong>Average Period</strong></td>
+      <td>The window each lock&nbsp;% figure is computed over: 1&nbsp;s, 100&nbsp;ms or
+          10&nbsp;ms.</td>
+      <td>Nothing is wrong, but a longer window smooths over brief dropouts and a shorter
+          one produces far more points.</td></tr>
+  <tr><td><strong>Derandomize</strong></td>
+      <td>Undo RNRZ-L randomisation before searching for the pattern.</td>
+      <td>On a randomised stream, leaving this off means the pattern is never found.
+          Turning it on for a stream that is not randomised has the same effect.</td></tr>
+  <tr><td><strong>Invert Data</strong></td>
+      <td>Invert every bit before decoding.</td>
+      <td>As above: an inverted stream left un-inverted finds no syncs.</td></tr>
+</table>
+
+<div class="note"><strong>Lock&nbsp;% does not depend on an exact data rate.</strong> It is
+measured as a proportion of the frame-sized bit slots actually traversed, not as
+<em>time&nbsp;×&nbsp;bitrate</em>. A slightly wrong Data Rate will not skew the percentage.
+The field is there because the value is genuinely useful elsewhere, not because the metric is
+fragile.</div>
+
+<div class="note"><strong>Load and Save round-trip only three fields.</strong> The folder and
+disk buttons write <em>Frame Sync</em>, <em>Frame Sync Mask</em> and <em>Bits Per Frame</em>,
+and nothing else. <em>Derandomize</em>, <em>Data Rate</em> and <em>Average Period</em> are
+deliberately treated as per-session choices and are not saved. This is intended, not an
+oversight: a pattern file describes a <em>frame format</em>, which is a property of the
+telemetry, while the others describe how you happen to be looking at it today. If you reload a
+file and those toggles are back at their defaults, nothing was lost.</div>
+
+<h3>Configure Receiver SNR</h3>
+
+{{FIG:walk-snr-02-receiver-setup.png|The receiver setup dialog. The upper half is the same frame sync configuration as above; the lower half describes how receiver samples are laid out and converted.|Configure Receiver SNR dialog showing frame sync fields plus polarity, slope, scale, receiver count and channels per receiver}}
+
+<p>The top half is identical to the frame sync dialog and behaves the same way — an SNR stream
+still has to be frame-synchronised before anything can be read out of it. The lower half
+describes the receiver data:</p>
+
+<table>
+  <tr><th>Field</th><th>What it is</th><th>What a wrong value does</th></tr>
+  <tr><td><strong>Num Rcvrs</strong> and <strong>Num Channels</strong></td>
+      <td>How many receivers the frame carries, and how many channels each has (typically
+          three: left, right, combined). Their product is the total channel count.</td>
+      <td>Reading the wrong words out of the frame, so curves appear that are really other
+          channels' data.</td></tr>
+  <tr><td><strong>Polarity</strong></td>
+      <td>Whether the raw count rises or falls with signal strength.</td>
+      <td>An upside-down plot: signal increases read as decreases.</td></tr>
+  <tr><td><strong>Slope</strong></td>
+      <td>The receiver's output voltage range — 0–5&nbsp;V, 0–10&nbsp;V, ±5&nbsp;V or
+          ±10&nbsp;V.</td>
+      <td>Values scaled by a constant factor. The shape is right, the numbers are not.</td></tr>
+  <tr><td><strong>Scale (dB/V)</strong></td>
+      <td>How many decibels one volt represents.</td>
+      <td>As above — a linear error through every value.</td></tr>
+</table>
+
+<p>The <strong>Apply Cal</strong> button, and the status text beside it, belong to non-linear
+step calibration. Until you attach a profile it reads
+<em>(none — using linear calibration)</em>, meaning values are converted with the slope and
+scale above and nothing else. The calibration walkthrough below covers what that costs
+and how to improve it.</p>
+
+<div class="note"><strong>Apply to all</strong> at the bottom of either dialog copies these
+settings to every other selected stream of the same mode. On a file with sixteen identical
+receiver streams this turns sixteen configuration passes into one.</div>
+
+
+<h2 id="walk-framesync">Walkthrough: frame sync lock</h2>
+
+<p>The goal: take a Chapter 10 recording, measure how well each PCM stream held frame
+synchronisation, and find the moments where it did not.</p>
+
+<h3>Step 1 — Open the recording</h3>
+
+<p>Use <strong>≡ → Open…</strong> (or <kbd>Ctrl</kbd>+<kbd>O</kbd>), or drag a
+<code>.ch10</code> file onto the window.</p>
+
+{{FIG:walk-fs-01-open.png|Opening a Chapter 10 recording. The file type filter shows only .ch10 files.|Open Chapter 10 File dialog with a .ch10 file selected}}
+
+<p>The application reads the file's TMATS metadata — not the data itself, which is why this is
+quick even on a multi-gigabyte recording — and opens the Configure Streams dialog listing every
+PCM channel it found.</p>
+
+<h3>Step 2 — Choose which streams to process, and how</h3>
+
+{{FIG:walk-fs-02-configure-streams.png|Configure Streams. Three streams are selected for processing; the fourth is switched off and greys out. The Ready column shows at a glance which are fully configured.|Configure Streams dialog with four PCM channels, three enabled, showing green and red ready indicators}}
+
+<p>For each stream you want to measure, switch <strong>Process</strong> on and leave
+<strong>Mode</strong> at <em>Frame Sync Lock</em>. Then open its gear dialog and fill in the
+frame sync fields described in
+<a href="#walk-setup">Before you process</a>.</p>
+
+<p>Watch the <strong>Ready</strong> column as you go. It is the dialog telling you whether it
+has enough information to run:</p>
+
+<ul>
+  <li><span style="color:green;">✓</span> — configured and ready to process.</li>
+  <li><span style="color:red;">✗</span> — selected for processing but not yet configured.
+      Open the gear dialog.</li>
+  <li><span style="color:gray;">✗</span> — not selected. Nothing is required of it.</li>
+</ul>
+
+<p>Also set the <strong>Time Channel</strong> at the top. Every stream is timestamped from it,
+so all the curves share one time axis.</p>
+
+<h3>Step 3 — Process</h3>
+
+<p>Press <strong>Process</strong>. The file is read <em>once</em>, with every selected stream
+decoded in parallel, so processing four streams costs little more than processing one.</p>
+
+{{FIG:walk-fs-04-processing.png|Processing under way. The log fills in beside the progress dialog, reporting each stream as it completes.|Processing progress dialog at 74 percent with the log showing per-stream progress}}
+
+<p>The log is worth reading rather than ignoring. Each stream reports the bytes it processed,
+the syncs it found and the frames it extracted — the quickest way to notice that a stream was
+misconfigured is a large sync count with almost no frames.</p>
+
+<h3>Step 4 — Read the plot</h3>
+
+{{FIG:FrameSync Perctentage Plot with Legend.png|Lock % over time. These streams hold near 100% and drop vertically to zero at loss of lock — the cliffs are the events worth investigating.|Frame sync lock percentage plot with four streams near 100 percent dropping to zero}}
+
+<p>The left axis is the percentage of each averaging window in which the stream held lock.
+There is no right-hand axis here because this recording carries no receiver data — an axis
+appears only when something is plotted against it.</p>
+
+<p>Healthy streams sit near 100%. What matters is the <strong>cliffs</strong>: vertical drops
+to zero where synchronisation was lost. Their <em>width</em> is how long the outage lasted and
+their <em>position</em> is when.</p>
+
+<h3>Step 5 — Switch to accumulation</h3>
+
+<p>Press <kbd>V</kbd>, or use the <strong>Show Accumulation</strong> button on the chart.</p>
+
+{{FIG:Frame Error Accumulation Plot with Legend.png|The same streams as accumulated missed frames. Each rise is frames lost at one of the cliffs above; a flat line means nothing was missed.|Accumulated missed frames plot showing step increases where lock was lost}}
+
+<p>Lock&nbsp;% answers "how good was the link at this moment"; accumulation answers "how much
+data did I actually lose". A stream that dips briefly but often can look worse than one long
+outage on the percentage plot while costing far fewer frames — the accumulation view settles
+which is which.</p>
+
+<h3>Step 6 — Export</h3>
+
+<p>Right-click the chart and choose <strong>Export…</strong>. You can produce an image, the
+underlying data as CSV, and the log text in one action; see
+<a href="#import-export">Import &amp; export</a> for exactly what each contains.</p>
