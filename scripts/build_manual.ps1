@@ -90,6 +90,20 @@ $Images = [ordered]@{
     # beside it, which a window-only capture cannot show. Cropped to the app window
     # to drop the surrounding desktop.
     'walk-fs-04-processing.png'                      = @(14, 14, 1936, 1119)
+
+    # --- Walkthrough figures (batch B): SNR + calibration -----------------
+    # All window grabs of dialogs, already tight - no crop. The calibration set is
+    # self-consistent and checkable against the shipped settings files:
+    #   TRC.toml has 11 [[Step]] entries 0..60 dB      -> "11 steps parsed"
+    #   receiver_params/TRC.toml: 16 rcvrs x 3 chans   -> "3 of 48 channel(s)"
+    #   the calibrated plot tops out at 60 dB          -> matches the step range
+    'walk-snr-01-mode-select.png'                    = $false
+    'walk-snr-02-receiver-setup.png'                 = $false
+    'walk-snr-03-load-params.png'                    = $false
+    'walk-cal-01-extract-button.png'                 = $false
+    'walk-cal-03-clip-controls.png'                  = $false
+    'walk-cal-04-summary.png'                        = $false
+    'walk-cal-05-step-toml.png'                      = $false
 }
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
