@@ -104,6 +104,13 @@ $Images = [ordered]@{
     'walk-cal-03-clip-controls.png'                  = $false
     'walk-cal-04-summary.png'                        = $false
     'walk-cal-05-step-toml.png'                      = $false
+
+    # --- Walkthrough figures (batch C): customisation + error reporting ---
+    'walk-cust-02-snr-tree.png'                      = $false
+    'walk-cust-03-recolor.png'                       = $false
+    # Full window, NOT chart-cropped: the log sidebar is the subject here, so the
+    # chart region would crop out the very thing being illustrated.
+    'walk-err-01-log-error.png'                      = $false
 }
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null

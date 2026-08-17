@@ -1,8 +1,7 @@
 # Comprehensive, task-oriented user manual
 
 **Status:** scoped. Tooling and the installer option are built (PR #78, unreleased).
-Capture in progress: **17 of 23 done** (batches A and B complete, including the whole
-calibration set); 6 remain.
+**All 23 captures are done.** The remaining work is the writing.
 
 ## The problem
 
@@ -129,8 +128,13 @@ than written from memory, because the first draft missed several whole surfaces 
 Plot Series*, the hamburger menu, *Set Time Window*, error reporting and the light theme were
 all absent. Existing figures are reused where they still depict the current UI.
 
-**23 captures** (24 planned, one dropped as redundant - see the calibration group), of which
-**17 are done** and 6 remain. Plus 7 existing figures reused.
+**23 captures** (24 planned, one dropped as redundant - see the calibration group), and **all
+23 are captured**. Plus 7 existing figures reused.
+
+Three figures were re-taken after the fact because a UI change invalidated them - the
+Configure Streams left-justification affected `walk-fs-02`, `walk-snr-01` and the *shipped*
+`Config Streams Dialg.png`. Worth remembering when the walkthroughs are written: **changing
+the UI invalidates its own figures**, and the shipped ones are the easiest to forget.
 
 Batches A and B are complete: the frame-sync walkthrough, application shell, light theme,
 installer, the SNR walkthrough and the whole calibration set. The 6 outstanding are batch
