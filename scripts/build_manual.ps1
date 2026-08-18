@@ -108,6 +108,14 @@ $Images = [ordered]@{
     'walk-cal-04-summary.png'                        = $false
     'walk-cal-05-step-toml.png'                      = $false
 
+    # --- Walkthrough figures: batch processing ----------------------------
+    # Two dialog grabs plus one full window. walk-batch-03 shows the Plot File
+    # submenu open over the chart, so it is NOT chart-cropped - the menu is the
+    # subject and sits outside the plot area.
+    'walk-batch-01-save-template.png'                = $false
+    'walk-batch-02-apply-dialog.png'                 = $false
+    'walk-batch-03-plot-file-menu.png'               = $false
+
     # --- Walkthrough figures (batch C): customisation + error reporting ---
     'walk-cust-02-snr-tree.png'                      = $false
     'walk-cust-03-recolor.png'                       = $false

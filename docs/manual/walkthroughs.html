@@ -403,3 +403,98 @@ Re-extract after restarting the application. A processing template stores the <e
 &mdash; which step file and which calibration recording &mdash; rather than the measured
 profile, so a batch run started from a template uses the linear conversion. Non-linear
 calibration is a single-file workflow today.</div>
+
+
+<h2 id="walk-batch">Walkthrough: batch processing with a template</h2>
+
+<p>The goal: configure one recording, then apply that same configuration to as many others as
+you like without setting anything up again.</p>
+
+<p>This is worth doing whenever you have a run of recordings from the same installation &mdash;
+the same receivers, the same PCM channels, the same frame formats. Configuring each one by hand
+is not just tedious; it is an opportunity to enter a slightly different value and not notice.</p>
+
+<h3>Step 1 &mdash; Get one file exactly right</h3>
+
+<p>Open a representative recording and configure it as in the walkthroughs above: modes,
+frame sync fields, receiver layout. Process it, and check the plot actually looks correct.</p>
+
+<p>This is the step worth being fussy about. Everything that follows copies this file's
+configuration, so an error here is an error in every file you process afterwards.</p>
+
+<p>If you intend to rename or recolour series, do it now as well &mdash; a template can carry
+those choices, so every recording in the batch comes out with the same colours for the same
+channels.</p>
+
+<h3>Step 2 &mdash; Save it as a template</h3>
+
+<p>Choose <strong>&equiv; &rarr; Save as Template&hellip;</strong>.</p>
+
+{{FIG:walk-batch-01-save-template.png|Saving a template. Give it a name that identifies the installation or aircraft rather than the recording it came from, since it will be applied to many others.|Save as Template file dialog writing a JSON template file}}
+
+<p>A template is a small <code>.json</code> file holding the per-stream configuration and,
+optionally, each series' name and colour. It contains <strong>no file paths</strong>, so it is
+not tied to the recording it was built from &mdash; it describes a <em>setup</em>, and can be
+kept alongside the receiver parameters files for the same installation.</p>
+
+<h3>Step 3 &mdash; Apply it to a set of recordings</h3>
+
+<p>Choose <strong>&equiv; &rarr; Apply Template to Files&hellip;</strong>, pick the template,
+then select any number of <code>.ch10</code> files. Before anything is processed, each file is
+checked against the template and the result is reported.</p>
+
+{{FIG:walk-batch-02-apply-dialog.png|The batch dialog reports its decision per file before running. Here three files match and one is rejected, with the channel differences that caused it spelled out.|Batch Process Files dialog listing three matching files with green ticks and one rejected file with a red cross and its reason}}
+
+<p>Read this list before pressing Process. Each file is marked:</p>
+
+<ul>
+  <li><span style="color:green;">&check;</span> &mdash; the file's PCM channel IDs match the
+      template exactly, and it will be processed.</li>
+  <li><span style="color:red;">&cross;</span> &mdash; they do not, and it will be skipped. The
+      reason names the channels that are missing and the ones that are unexpectedly present.</li>
+</ul>
+
+<div class="note"><strong>The match has to be exact, and that is deliberate.</strong> A file
+with even one extra or missing channel is rejected rather than partly processed. The template
+addresses streams by channel ID, so applying it to a file whose channel set differs could
+silently attach one channel's settings to a different physical channel &mdash; producing a
+plot that looks entirely reasonable and is wrong. A skipped file you can see is better than a
+mislabelled result you cannot.</div>
+
+<p>Two options are worth knowing before you run it:</p>
+
+<ul>
+  <li><strong>Reuse the template's saved series names and colors</strong> &mdash; on by
+      default. Every file comes out with the same channel in the same colour, which is what
+      makes the results comparable at a glance.</li>
+  <li><strong>Also export a CSV + plot images per file</strong> &mdash; writes, for each
+      recording, a CSV plus two images named after the source file:
+      <code>&hellip;_framesync_lock.png</code> and <code>&hellip;_missed_frames.png</code>.
+      This is the option that turns a batch run into a folder of results you can hand to
+      someone else.</li>
+</ul>
+
+<h3>Step 4 &mdash; Review the results</h3>
+
+<p>Every processed file stays loaded. Right-click the chart and use <strong>Plot File</strong>
+to choose which one you are looking at.</p>
+
+{{FIG:walk-batch-03-plot-file-menu.png|After a batch run, Plot File lists every recording that was processed. All files (overlaid) draws them together on one time axis.|Plot File submenu listing three processed recordings plus an All files overlaid option}}
+
+<p>Two ways to use this. Pick a <strong>single file</strong> to review each recording on its
+own, with the time axis zoomed to that recording's span. Or choose <strong>All files
+(overlaid)</strong> to draw every recording on one axis, which is how you spot the one that
+behaved differently from the rest.</p>
+
+<p>Selecting a file here is a display filter, not a reload &mdash; nothing is re-processed, and
+your per-series visibility choices survive switching between files.</p>
+
+<h3>What a template does not carry</h3>
+
+<div class="note"><strong>Non-linear calibration profiles are not stored in a template.</strong>
+A template records which step file and which calibration recording were used &mdash; the
+<em>inputs</em> &mdash; but not the measured profile itself, because profiles last only for the
+session in which they were extracted. A batch run therefore converts receiver values using the
+<strong>linear</strong> slope and scale. If you need measured calibration, process those
+recordings individually and extract it for each, as in the
+<a href="#walk-calibration">calibration walkthrough</a>.</div>
