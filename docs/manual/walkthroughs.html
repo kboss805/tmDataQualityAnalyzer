@@ -192,3 +192,128 @@ which is which.</p>
 <p>Right-click the chart and choose <strong>Export…</strong>. You can produce an image, the
 underlying data as CSV, and the log text in one action; see
 <a href="#import-export">Import &amp; export</a> for exactly what each contains.</p>
+
+
+<h2 id="walk-calibration">Walkthrough: receiver SNR with step calibration</h2>
+
+<p>A receiver reports signal strength as a raw count. Turning that into decibels needs a
+conversion, and the application offers two.</p>
+
+<p><strong>Linear</strong> conversion &mdash; the default &mdash; applies the voltage range and
+dB/V scale from the setup dialog and nothing else. It assumes the receiver responds in a
+perfectly straight line across its whole range. Real receivers do not.</p>
+
+<p><strong>Non-linear step calibration</strong> measures the receiver instead of assuming it.
+You supply a recording of known signal levels, the application learns what raw count each level
+actually produced, and it interpolates between those measured points from then on.</p>
+
+<h3>What you need before you start</h3>
+
+<p>Two files, prepared in advance:</p>
+
+<ul>
+  <li>A <strong>calibration Chapter&nbsp;10 recording</strong> &mdash; a capture of the receiver
+      being fed a signal that steps through known levels, holding steady at each one.</li>
+  <li>A <strong>step TOML</strong> listing those levels, in the order they occur.</li>
+</ul>
+
+{{FIG:walk-cal-05-step-toml.png|A step configuration file. Each [[Step]] gives one level in dB, in the order the calibration recording steps through them. This one describes eleven steps from 0 to 60 dB in 6 dB increments.|A step configuration TOML open in a text editor showing eleven Step entries from 0 to 60 dB}}
+
+<div class="note">The step file describes <em>what was injected</em>, not how long each level was
+held. Dwell time is not configured anywhere: each plateau is found by looking for a level that
+holds steady, so it does not matter whether a technician left each step for one second or ten.</div>
+
+<h3>Step 1 &mdash; Open the calibration dialog</h3>
+
+<p>Configure the receiver stream as usual, then press <strong>Apply Cal</strong> in the Receiver
+SNR setup dialog. Before any profile is attached, the text beside that button reads
+<em>(none &mdash; using linear calibration)</em>, which is how you can tell at a glance what a
+stream is currently using.</p>
+
+{{FIG:walk-cal-01-extract-button.png|The Extract Calibration dialog as it opens, before either input file has been chosen.|Extract Calibration dialog with empty Step Cal File and Calibration Ch10 fields and clip values at zero}}
+
+<h3>Step 2 &mdash; Choose the two files</h3>
+
+<p>Browse to the step TOML and the calibration recording. The dialog reports what it made of
+each as soon as you select it: how many steps it parsed, and how many channels it managed to
+calibrate.</p>
+
+{{FIG:walk-cal-03-clip-controls.png|Both files chosen and the clip controls set. The confirmations report eleven steps parsed and three of forty-eight channels calibrated.|Extract Calibration dialog populated with a step TOML and calibration Chapter 10 file, clip start 6 seconds and clip end 48 seconds}}
+
+<h3>Step 3 &mdash; Trim the recording, if it needs it</h3>
+
+<p><strong>Clip Start</strong> and <strong>Clip End</strong> discard that many seconds from each
+end of the calibration recording before anything is measured. They exist because real
+calibration recordings usually contain material that is not part of the sweep:</p>
+
+<ul>
+  <li>a <strong>turn-on transient</strong> at the beginning, while the signal generator settles
+      at its first level;</li>
+  <li>an operator <strong>down-ramp</strong> at the end, where the level is walked back down
+      after the sweep proper has finished.</li>
+</ul>
+
+<p>Both look like plateaus to a detector that is asked only to find steady levels, and either
+can be mistaken for a real step. If the number of plateaus found does not match the number of
+steps in your file, trimming the ends is the first thing to try.</p>
+
+<h3>Step 4 &mdash; Read the result honestly</h3>
+
+{{FIG:walk-cal-04-summary.png|The extraction summary. It reports how many channels received a measured profile, not how many you might have expected.|Message box reading Applied non-linear calibration to 3 channels}}
+
+<div class="note"><strong>A small number here is usually correct, not a failure.</strong> The
+recording in these figures carries forty-eight channels and only three were calibrated &mdash;
+because the signal was injected into one receiver's left, right and combined channels and
+nothing else. The other forty-five saw no sweep, so there was nothing to measure. Refusing to
+build a profile out of noise is the right answer.</div>
+
+<p>Channels that were not calibrated are neither broken nor excluded. They keep using the
+<strong>linear</strong> conversion from the setup dialog, exactly as before. A calibration run
+improves the channels it can measure and leaves the rest alone.</p>
+
+<p>So the question to ask of this dialog is not <em>"why so few?"</em> but <em>"did it calibrate
+the channels I actually injected into?"</em> If you swept three channels and it reports three,
+it worked. If you swept forty-eight and it reports three, something is wrong &mdash; and the
+table at the end of this section is where to look.</p>
+
+<h3>Step 5 &mdash; Process, and compare against the uncalibrated run</h3>
+
+<p>Press OK, then <strong>Process</strong>. The profile is applied as the data is decoded.</p>
+
+{{FIG:Uncalibrated SNR Plot without Legend.png|Before: the same sweep converted linearly. The steps are uneven and the channels sit apart from one another, because a straight-line conversion cannot follow the receiver's real response.|Receiver SNR staircase without calibration showing uneven step heights and offset channels}}
+
+{{FIG:Calibrated SNR Plot without Legend.png|After: with a measured profile attached. The steps are evenly spaced and reach the levels that were injected, topping out at 60 dB, the last value in the step file.|Receiver SNR staircase with calibration applied showing evenly spaced steps reaching 60 dB}}
+
+<p>This comparison is the quickest way to confirm a calibration actually took. Look for two
+things: the steps should be <em>evenly spaced</em>, and the top step should sit at the
+<em>highest level in your step file</em>. If the staircase still looks uneven, the profile did
+not attach to the channels you are looking at.</p>
+
+<div class="note">Values beyond the calibrated range <strong>clamp</strong> to the nearest
+measured step rather than being extrapolated. A receiver driven past the range you calibrated
+reads the ceiling or floor value instead of diverging into a number no measurement supports.</div>
+
+<h3>When it does not work</h3>
+
+<table>
+  <tr><th>What you see</th><th>Likely cause</th></tr>
+  <tr><td>Fewer channels calibrated than you injected into</td>
+      <td>The word map does not match the recording, so the sweep is being read from the wrong
+          words. Check <strong>Num Rcvrs</strong> and <strong>Num Channels</strong>, and the
+          receiver-parameters file if you loaded one.</td></tr>
+  <tr><td>Plateaus found does not match the step count</td>
+      <td>A turn-on transient or a trailing down-ramp is being counted as a step. Use
+          <strong>Clip Start</strong> or <strong>Clip End</strong> to trim it.</td></tr>
+  <tr><td>The calibrated staircase runs the wrong way</td>
+      <td>The receiver's raw count falls as signal rises. Set <strong>Polarity</strong> to match
+          <em>before</em> extracting &mdash; the profile is built from raw counts, so polarity
+          has to be right first.</td></tr>
+  <tr><td>It worked, then a later run was linear again</td>
+      <td>Profiles last for the session only. See the note below.</td></tr>
+</table>
+
+<div class="note"><strong>Profiles are session-only and are never written to disk.</strong>
+Re-extract after restarting the application. A processing template stores the <em>inputs</em>
+&mdash; which step file and which calibration recording &mdash; rather than the measured
+profile, so a batch run started from a template uses the linear conversion. Non-linear
+calibration is a single-file workflow today.</div>
