@@ -194,6 +194,92 @@ underlying data as CSV, and the log text in one action; see
 <a href="#import-export">Import &amp; export</a> for exactly what each contains.</p>
 
 
+<h2 id="walk-snr">Walkthrough: receiver SNR</h2>
+
+<p>The goal: take a recording containing receiver AGC samples and plot each receiver channel's
+signal strength in decibels over time.</p>
+
+<p>This is the workflow to run first on any AGC recording. It uses the straightforward linear
+conversion, which is enough to see the shape of the data and to confirm you are reading the
+right words out of the frame. The <a href="#walk-calibration">calibration walkthrough</a> that
+follows builds on it.</p>
+
+<h3>Step 1 &mdash; Set the stream's mode</h3>
+
+<p>Open the recording as before. In Configure Streams, switch <strong>Process</strong> on for
+the AGC stream and change its <strong>Mode</strong> to <em>Receiver SNR</em>.</p>
+
+{{FIG:walk-snr-01-mode-select.png|A stream switched to Receiver SNR. Mode decides which setup dialog the gear button opens, so change it before configuring the stream rather than after.|Configure Streams dialog with one row set to Receiver SNR mode and a green ready indicator}}
+
+<div class="note">Mode decides <em>which dialog the gear opens</em>. Change it first: settings
+entered in the frame sync dialog do not carry over to the receiver dialog, so configuring a
+stream and then switching its mode means configuring it again.</div>
+
+<h3>Step 2 &mdash; Describe the receiver layout</h3>
+
+<p>Open the gear dialog and fill in the fields covered in
+<a href="#walk-setup">Before you process</a>. The frame sync half is exactly as it was for a
+frame sync stream &mdash; an AGC stream still has to be synchronised before anything can be
+read out of it. The receiver half tells the application how to find and convert the samples:
+how many receivers, how many channels each, the voltage range, and how many decibels a volt
+represents.</p>
+
+<p>Rather than typing all of that for every recording from a given system, load a saved
+<strong>receiver parameters</strong> file. It carries the word map &mdash; which word in the
+frame belongs to which receiver and channel &mdash; along with the polarity, slope and scale.</p>
+
+{{FIG:walk-snr-03-load-params.png|Loading a receiver parameters file. These are per-installation rather than per-recording, so one file usually serves every recording from the same hardware.|File dialog for selecting a receiver parameters TOML file}}
+
+<div class="note">A receiver parameters file describes <em>the hardware</em>, not the flight.
+One file typically covers every recording from the same installation, which is why these are
+worth keeping alongside your recordings.</div>
+
+<h3>Step 3 &mdash; Process</h3>
+
+<p>Press <strong>Process</strong>. The log reports the sample count and, importantly, the
+channel count for the stream &mdash; something like
+<em>184 samples, 48 channel(s)</em>. If the channel count is not what you expect, the receiver
+and channel numbers in the setup dialog do not match the recording, and everything downstream
+will be wrong.</p>
+
+<h3>Step 4 &mdash; Read the plot</h3>
+
+{{FIG:Uncalibrated SNR Plot with Legend.png|Receiver SNR over time, converted linearly. This recording is a calibration sweep, so the trace climbs in deliberate steps; ordinary flight data is far less tidy. The legend lists every channel that was processed - all forty-eight of them.|Receiver SNR staircase plot with a legend listing forty-eight receiver channels}}
+
+<p>SNR is plotted against the <strong>right-hand</strong> axis, in decibels. There is no
+left-hand axis here because this recording carries no frame sync streams &mdash; an axis
+appears only when something is plotted against it, so which axes you see tells you what kind
+of data is loaded. In the figure above the legend covers the right-hand scale, which is the
+first sign that forty-eight channels is more than one plot can usefully carry.</p>
+
+<p>The recording shown is a calibration sweep, which is why it climbs in neat steps. On real
+flight data you are looking for the shape instead: sustained levels, the depth and duration of
+fades, and whether channels that should track each other actually do.</p>
+
+<h3>Step 5 &mdash; Narrow it down</h3>
+
+<p>A fully populated receiver frame carries forty-eight channels, which is far more than can
+be read at once. Right-click the chart and choose <strong>Customize View&hellip;</strong> to
+show only what you care about.</p>
+
+{{FIG:walk-cust-02-snr-tree.png|The Receiver SNR tab groups channels by receiver, so a whole receiver can be shown or hidden in one click. Here one receiver is expanded with two of its three channels selected.|Customize Plot Series dialog showing the receiver tree with one group partially checked}}
+
+<p>Channels are grouped by receiver, and a group's checkbox reflects its children: ticked when
+all are shown, empty when none are, and <strong>filled</strong> when only some are. That third
+state is not an error &mdash; it is the tree telling you the receiver is partly selected.
+Clicking it selects or clears the whole group.</p>
+
+<div class="note">Hiding a channel changes the <em>picture</em>, not the <em>data</em>. An
+exported image contains only what is visible, but an exported CSV contains every channel that
+was processed, hidden or not. See <a href="#import-export">Import &amp; export</a>.</div>
+
+<h3>Where to go next</h3>
+
+<p>If the steps in your data are uneven, or channels that were fed the same signal do not agree
+with one another, the linear conversion is the likely reason. The
+<a href="#walk-calibration">calibration walkthrough</a> replaces it with a measured one.</p>
+
+
 <h2 id="walk-calibration">Walkthrough: receiver SNR with step calibration</h2>
 
 <p>A receiver reports signal strength as a raw count. Turning that into decibels needs a

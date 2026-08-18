@@ -58,6 +58,9 @@ $Images = [ordered]@{
     'FrameSync Perctentage Plot without Legend.png'  = $true
     'Frame Error Accumulation Plot with Legend.png'  = $true
     'Uncalibrated SNR Plot without Legend.png'       = $true
+    # Used by the SNR walkthrough: a 48-row legend is the concrete motivation for
+    # the "narrow it down" step, so here the covered axis is the point.
+    'Uncalibrated SNR Plot with Legend.png'          = $true
     'Calibrated SNR Plot without Legend.png'         = $true
     'Export Dialog.png'                              = $false
     # Installer wizard page. Cropped to drop the title bar, which carries a version
