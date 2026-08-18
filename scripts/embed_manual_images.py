@@ -26,11 +26,9 @@ WALK = 'docs/manual/walkthroughs.html'
 #   FULL - shipped as an installed file, offered as an optional installer task. It is
 #          the base document PLUS the task walkthroughs and their figures.
 #
-# The walkthrough sections do not exist yet (see
-# docs/future_plans/comprehensive-user-manual.md), so FULL is currently the SAME
-# document as BASE. That is why the installer option must not be released until the
-# walkthroughs are written: offering a choice that changes nothing is worse than
-# offering no choice.
+# The walkthrough prose lives in docs/manual/walkthroughs.html and is spliced into
+# FULL only, so the two documents genuinely differ - which is what the installer's
+# optional-manual choice needed before it could be released.
 BASE = 'resources/usermanual.html'
 FULL = 'UserManual.html'
 
@@ -92,6 +90,11 @@ def after(anchor, block):
     assert anchor in s, 'anchor missing: %r' % anchor[:60]
     s = s.replace(anchor, anchor + block, 1)
 
+def before(anchor, block):
+    global s
+    assert anchor in s, 'anchor missing: %r' % anchor[:60]
+    s = s.replace(anchor, block + anchor, 1)
+
 after('<p>Each PCM channel row in the Configure Streams dialog has:</p>',
       fig('Config Streams Dialg.png',
           'The Configure Streams dialog. Each row is one PCM channel; the Ready column confirms a '
@@ -139,14 +142,16 @@ after('      sessions, and a hidden legend is also left out of exported images.<
           'hidden legend is also left out of exported images.',
           'The same plot with the legend overlay hidden'))
 
-marker = '</ul>\n\n<h2 id="interface">'
-i = s.index(marker)
-s = s[:i + len('</ul>\n')] + fig(
-    'Export Dialog.png',
-    'The export dialog. Each output has its own switch and filename, so you can produce any '
-    'combination — image, data, log — in a single action.',
-    'Export Data dialog with separate toggles and filename fields for image, CSV and log output'
-) + s[i + len('</ul>\n'):]
+# Placed immediately before the next heading, so it lands at the end of the
+# Import & export section regardless of how that section's prose is written. The
+# previous version keyed on the section ending with '</ul>', and rewriting the
+# prose broke it - a figure's position should depend on the heading it precedes,
+# not on the shape of the paragraph before it.
+before('<h2 id="interface">',
+       fig('Export Dialog.png',
+           'The export dialog. Each output has its own switch and filename, so you can produce '
+           'any combination — image, data, log — in a single action.',
+           'Export Data dialog with separate toggles and filename fields for image, CSV and log output'))
 
 io.open(BASE, 'w', encoding='utf-8', newline='\n').write(s)
 print('base manual : %-24s %5.0f KB, %d figures'
