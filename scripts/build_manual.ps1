@@ -83,7 +83,11 @@ $Images = [ordered]@{
     # Full-window figures: these show the whole application deliberately - the log
     # sidebar and the light theme are the subjects, so the chart-region crop would
     # remove the very thing being illustrated.
-    'walk-app-02-sidebar.png'                        = $false
+    #
+    # walk-app-02-sidebar.png is NOT processed: walk-err-01-log-error.png shows the
+    # same sidebar with an error in it, so it documents the log better and this one
+    # would be a near-duplicate. The capture is kept in docs/manual_images/ in case
+    # a plain sidebar shot is wanted later.
     # The menu is a popup window, so a window-only grab captures either the menu
     # without the app or the app without the menu. Captured as the whole window and
     # cropped to the menu, which is the only technique that shows both.

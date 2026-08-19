@@ -131,6 +131,51 @@ after('to the nearest calibrated step rather than extrapolating.</p>',
           'these two is the quickest way to confirm a calibration actually took.',
           'Receiver SNR staircase with calibration applied, showing evenly spaced steps reaching 60 dB'))
 
+# --- reference-section figures ---------------------------------------------
+# These illustrate the reference sections rather than the walkthroughs, which is
+# why they were captured but initially never placed. Each is anchored on existing
+# prose; after()/before() assert the anchor, so a reworded paragraph breaks the
+# build instead of quietly losing a figure.
+
+after('<h2 id="getting-started">1. Getting started</h2>',
+      fig('walk-app-01-hamburger.png',
+          'The application menu. Every command lives here, grouped into Process, Import/Export, '
+          'Settings and Help. Entries needing loaded data stay greyed out until they apply.',
+          'The hamburger menu open, showing the Process, Import/Export, Settings and Help sections'))
+
+before('<h2 id="configure">',
+       fig('walk-inst-01-components.png',
+           'The installer offers the fuller manual as an optional component. The built-in manual '
+           'is always available from Help regardless of this choice.',
+           'Installer page offering an optional full illustrated user manual'))
+
+after('<h2 id="plot">3. Working with the plot</h2>',
+      fig('walk-cust-01-lock-tab.png',
+          'Customize View, on the Frame Sync Lock tab: one row per stream with its colour and an '
+          'editable name. Hiding a stream here removes it from the plot without reprocessing.',
+          'Customize Plot Series dialog on the Frame Sync Lock Streams tab listing four streams')
+    + fig('walk-cust-03-recolor.png',
+          'Choosing a series colour, reached by right-clicking a series in Customize View. Custom '
+          'names and colours are what a processing template carries between files.',
+          'The colour picker dialog for choosing a plot series colour'))
+
+after('<h3>Navigating</h3>',
+      fig('walk-app-03-time-window.png',
+          'Set Time Window takes a start and stop as DDD:HH:MM:SS. Values outside the recording '
+          'are clamped to its range, and the clamp is noted in the log.',
+          'Set Time Window dialog with start and stop times entered'))
+
+after('<h2 id="interface">7. Interface &amp; settings</h2>',
+      fig('walk-err-01-log-error.png',
+          'The log sidebar. Errors appear in red and warnings in amber among the normal progress '
+          'messages - here a stream whose frame sync pattern was not found, which is why only '
+          'three of the four curves reached the plot.',
+          'The application showing the log sidebar with a red error message among progress lines')
+    + fig('walk-theme-01-light-plot.png',
+          'The light theme. The choice persists between sessions and applies to every window, '
+          'dialog and plot.',
+          'A frame sync lock plot rendered in the light theme'))
+
 # The legend-toggle bullet is the one place where the with/without contrast is the
 # point, rather than incidental to whatever else the figure illustrates.
 after('      sessions, and a hidden legend is also left out of exported images.</li>\n',
