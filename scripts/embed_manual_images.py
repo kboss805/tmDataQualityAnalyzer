@@ -16,6 +16,7 @@ import io, base64, os, re
 
 SRC = 'docs/manual_images/processed'
 VER = 'include/constants.h'
+WALK = 'docs/manual/walkthroughs.html'
 
 # TWO outputs from ONE source, so they cannot drift:
 #   BASE - compiled into the exe as a Qt resource. ALWAYS present, in the installer
@@ -25,11 +26,9 @@ VER = 'include/constants.h'
 #   FULL - shipped as an installed file, offered as an optional installer task. It is
 #          the base document PLUS the task walkthroughs and their figures.
 #
-# The walkthrough sections do not exist yet (see
-# docs/future_plans/comprehensive-user-manual.md), so FULL is currently the SAME
-# document as BASE. That is why the installer option must not be released until the
-# walkthroughs are written: offering a choice that changes nothing is worse than
-# offering no choice.
+# The walkthrough prose lives in docs/manual/walkthroughs.html and is spliced into
+# FULL only, so the two documents genuinely differ - which is what the installer's
+# optional-manual choice needed before it could be released.
 BASE = 'resources/usermanual.html'
 FULL = 'UserManual.html'
 
@@ -91,6 +90,11 @@ def after(anchor, block):
     assert anchor in s, 'anchor missing: %r' % anchor[:60]
     s = s.replace(anchor, anchor + block, 1)
 
+def before(anchor, block):
+    global s
+    assert anchor in s, 'anchor missing: %r' % anchor[:60]
+    s = s.replace(anchor, block + anchor, 1)
+
 after('<p>Each PCM channel row in the Configure Streams dialog has:</p>',
       fig('Config Streams Dialg.png',
           'The Configure Streams dialog. Each row is one PCM channel; the Ready column confirms a '
@@ -138,14 +142,16 @@ after('      sessions, and a hidden legend is also left out of exported images.<
           'hidden legend is also left out of exported images.',
           'The same plot with the legend overlay hidden'))
 
-marker = '</ul>\n\n<h2 id="interface">'
-i = s.index(marker)
-s = s[:i + len('</ul>\n')] + fig(
-    'Export Dialog.png',
-    'The export dialog. Each output has its own switch and filename, so you can produce any '
-    'combination — image, data, log — in a single action.',
-    'Export Data dialog with separate toggles and filename fields for image, CSV and log output'
-) + s[i + len('</ul>\n'):]
+# Placed immediately before the next heading, so it lands at the end of the
+# Import & export section regardless of how that section's prose is written. The
+# previous version keyed on the section ending with '</ul>', and rewriting the
+# prose broke it - a figure's position should depend on the heading it precedes,
+# not on the shape of the paragraph before it.
+before('<h2 id="interface">',
+       fig('Export Dialog.png',
+           'The export dialog. Each output has its own switch and filename, so you can produce '
+           'any combination — image, data, log — in a single action.',
+           'Export Data dialog with separate toggles and filename fields for image, CSV and log output'))
 
 io.open(BASE, 'w', encoding='utf-8', newline='\n').write(s)
 print('base manual : %-24s %5.0f KB, %d figures'
@@ -154,13 +160,71 @@ print('base manual : %-24s %5.0f KB, %d figures'
 # --- full manual = base + walkthroughs ------------------------------------
 # Built from the SAME document object, never hand-copied - two manuals maintained
 # as two documents would drift, and shipped-doc drift is this project's most
-# repeated failure. When the walkthrough sections are written they slot in here.
+# repeated failure.
+#
+# The prose lives in docs/manual/walkthroughs.html rather than in this script, so
+# it can be edited as HTML. Figure placeholders there are expanded here, which is
+# what keeps the walkthroughs' figures on the same base64 pipeline as the rest.
 full = s
-WALKTHROUGHS = []   # (anchor, html) pairs - see the plan file
-for anchor, block in WALKTHROUGHS:
-    if anchor not in full:
-        raise SystemExit('walkthrough anchor missing: %r' % anchor[:60])
-    full = full.replace(anchor, anchor + block, 1)
+
+def expand_figures(fragment):
+    """Replace {{FIG:file|caption|alt}} placeholders with embedded <figure> blocks."""
+    def sub(m):
+        parts = m.group(1).split('|')
+        if len(parts) != 3:
+            raise SystemExit('bad FIG placeholder (need file|caption|alt): %r' % m.group(1))
+        fname, caption, alt = (x.strip() for x in parts)
+        if not os.path.exists(os.path.join(SRC, fname)):
+            raise SystemExit('walkthrough figure not found: %s' % fname)
+        return fig(fname, caption, alt)
+    out, n = re.subn(r'\{\{FIG:([^}]+)\}\}', sub, fragment)
+    print('walkthrough figures expanded: %d' % n)
+    return out
+
+if os.path.exists(WALK):
+    fragment = io.open(WALK, encoding='utf-8').read()
+    # Drop the fragment's own HTML comment header - it is guidance for whoever
+    # edits the file, not manual content.
+    fragment = re.sub(r'^\s*<!--.*?-->\s*', '', fragment, count=1, flags=re.S)
+    fragment = expand_figures(fragment)
+
+    # Number the walkthrough headings 1..N in document order. They are written
+    # WITHOUT numbers in the fragment so that adding or reordering a section cannot
+    # leave a stale number behind, and so the shift applied to the reference
+    # sections below is derived from reality rather than kept in sync by hand.
+    walk_ids = re.findall(r'<h2 id="(walk-[a-z-]+)">', fragment)
+    for n, wid in enumerate(walk_ids, start=1):
+        fragment = fragment.replace('<h2 id="%s">' % wid,
+                                    '<h2 id="%s">%d. ' % (wid, n), 1)
+
+    # The reference sections are numbered 1..8; the walkthroughs take 1..N ahead of
+    # them, so those shift by N - in the nav AND in each heading, or the two
+    # disagree and the contents list stops matching the document.
+    SHIFT = len(walk_ids)
+    def renumber(text):
+        text = re.sub(r'(<li><a href="#[a-z-]+">)([1-8])\. ',
+                      lambda m: '%s%d. ' % (m.group(1), int(m.group(2)) + SHIFT), text)
+        text = re.sub(r'(<h2 id="[a-z-]+">)([1-8])\. ',
+                      lambda m: '%s%d. ' % (m.group(1), int(m.group(2)) + SHIFT), text)
+        return text
+    full = renumber(full)
+
+    # Contents entries for the new sections, ahead of the renumbered ones.
+    # Two-space indent to match the existing entries; the nav is hand-formatted.
+    walk_nav = ''.join(
+        '  <li><a href="#%s">%s</a></li>\n' % (wid, title) for wid, title in
+        re.findall(r'<h2 id="(walk-[a-z-]+)">([^<]+)</h2>', fragment))
+    if not walk_nav:
+        raise SystemExit('no <h2 id="walk-..."> sections found in %s' % WALK)
+
+    nav_anchor = '<ul>\n  <li><a href="#getting-started">'
+    if nav_anchor not in full:
+        raise SystemExit('contents list anchor not found - has the nav markup changed?')
+    full = full.replace(nav_anchor, '<ul>\n' + walk_nav + '  <li><a href="#getting-started">', 1)
+
+    # ...and the sections themselves, ahead of the first reference heading.
+    body_anchor = '<h2 id="getting-started">'
+    full = full.replace(body_anchor, fragment.rstrip() + '\n\n' + body_anchor, 1)
 
 io.open(FULL, 'w', encoding='utf-8', newline='\n').write(full)
 print('full manual : %-24s %5.0f KB, %d figures%s'

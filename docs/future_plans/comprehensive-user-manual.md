@@ -1,7 +1,9 @@
 # Comprehensive, task-oriented user manual
 
 **Status:** scoped. Tooling and the installer option are built (PR #78, unreleased).
-**All 23 captures are done.** The remaining work is the writing.
+**Captures and writing are both complete.** Five walkthrough sections are written and the
+Import & export section is rewritten; the full manual is 4309 KB / 29 figures against the
+base manual's 1808 KB / 9. What remains is a release.
 
 ## The problem
 
@@ -136,9 +138,7 @@ Configure Streams left-justification affected `walk-fs-02`, `walk-snr-01` and th
 `Config Streams Dialg.png`. Worth remembering when the walkthroughs are written: **changing
 the UI invalidates its own figures**, and the shipped ones are the easiest to forget.
 
-Batches A and B are complete: the frame-sync walkthrough, application shell, light theme,
-installer, the SNR walkthrough and the whole calibration set. The 6 outstanding are batch
-processing (3), the Customize SNR tree and recolour (2) and one error-log figure.
+All three capture batches are complete and committed.
 
 Dialog coverage after this list: every `QDialog` in the app is figured except *About*, which
 needs none.

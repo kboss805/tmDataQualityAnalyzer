@@ -1,0 +1,500 @@
+<!--
+  Walkthrough sections for the FULL user manual.
+
+  This fragment is inserted into UserManual.html only - the base manual compiled
+  into the executable does not carry it. scripts/embed_manual_images.py reads this
+  file, expands the figure placeholders, and splices the result in ahead of the
+  reference sections, renumbering those by however many walkthrough sections exist.
+
+  Section headings carry NO number - the generator numbers them 1..N in document
+  order and shifts the reference sections by that count. Add or reorder freely.
+
+  Figure placeholder syntax, one per line:
+
+      {{FIG:<file in docs/manual_images/processed>|<caption>|<alt text>}}
+
+  Write prose here, not in the generator. Both manuals come from one source so
+  they cannot drift; this is the part that is unique to the full one.
+
+  Cross-reference other sections by ANCHOR, never by number -
+  <a href="#import-export">Import &amp; export</a>, not "section 10". The numbers are
+  generated, so a hardcoded one goes stale as soon as a section is added or moved.
+-->
+
+<h2 id="walk-setup">Before you process: the two setup dialogs</h2>
+
+<p>Every stream you process is configured through the <strong>gear</strong> button on its row
+in Configure Streams. Which dialog opens depends on the row's <strong>Mode</strong>. Getting
+these fields right is the difference between a meaningful plot and a confident-looking wrong
+one, so they are worth understanding before the walkthroughs that use them.</p>
+
+<h3>Configure Frame Sync Lock</h3>
+
+{{FIG:walk-fs-03-framesync-setup.png|The frame sync setup dialog, configured for a PRN 15 stream. The folder and disk buttons load and save the top three fields as a TOML file.|Configure Frame Sync Lock dialog showing frame sync pattern, mask, bits per frame, data rate and averaging period}}
+
+<table>
+  <tr><th>Field</th><th>What it is</th><th>What a wrong value does</th></tr>
+  <tr><td><strong>Frame Sync</strong></td>
+      <td>The synchronisation pattern in hex, up to 64 bits.</td>
+      <td>No frames are found at all. The log says the pattern was not located and the
+          stream plots as a flat zero.</td></tr>
+  <tr><td><strong>Frame Sync Mask</strong></td>
+      <td>Which bits of the pattern must match. <code>FFFFFFFF</code> means all of them.</td>
+      <td>Too permissive a mask matches noise, so lock&nbsp;% reads high on a stream that is
+          not really locked.</td></tr>
+  <tr><td><strong>Bits Per Frame</strong></td>
+      <td>The minor frame length in bits.</td>
+      <td>The scanner looks for the next sync in the wrong place. You typically see syncs
+          found but few or no frames extracted.</td></tr>
+  <tr><td><strong>Data Rate (Mbps)</strong></td>
+      <td>The stream's bit rate.</td>
+      <td>Very little — see the note below.</td></tr>
+  <tr><td><strong>Average Period</strong></td>
+      <td>The window each lock&nbsp;% figure is computed over: 1&nbsp;s, 100&nbsp;ms or
+          10&nbsp;ms.</td>
+      <td>Nothing is wrong, but a longer window smooths over brief dropouts and a shorter
+          one produces far more points.</td></tr>
+  <tr><td><strong>Derandomize</strong></td>
+      <td>Undo RNRZ-L randomisation before searching for the pattern.</td>
+      <td>On a randomised stream, leaving this off means the pattern is never found.
+          Turning it on for a stream that is not randomised has the same effect.</td></tr>
+  <tr><td><strong>Invert Data</strong></td>
+      <td>Invert every bit before decoding.</td>
+      <td>As above: an inverted stream left un-inverted finds no syncs.</td></tr>
+</table>
+
+<div class="note"><strong>Lock&nbsp;% does not depend on an exact data rate.</strong> It is
+measured as a proportion of the frame-sized bit slots actually traversed, not as
+<em>time&nbsp;×&nbsp;bitrate</em>. A slightly wrong Data Rate will not skew the percentage.
+The field is there because the value is genuinely useful elsewhere, not because the metric is
+fragile.</div>
+
+<div class="note"><strong>Load and Save round-trip only three fields.</strong> The folder and
+disk buttons write <em>Frame Sync</em>, <em>Frame Sync Mask</em> and <em>Bits Per Frame</em>,
+and nothing else. <em>Derandomize</em>, <em>Data Rate</em> and <em>Average Period</em> are
+deliberately treated as per-session choices and are not saved. This is intended, not an
+oversight: a pattern file describes a <em>frame format</em>, which is a property of the
+telemetry, while the others describe how you happen to be looking at it today. If you reload a
+file and those toggles are back at their defaults, nothing was lost.</div>
+
+<h3>Configure Receiver SNR</h3>
+
+{{FIG:walk-snr-02-receiver-setup.png|The receiver setup dialog. The upper half is the same frame sync configuration as above; the lower half describes how receiver samples are laid out and converted.|Configure Receiver SNR dialog showing frame sync fields plus polarity, slope, scale, receiver count and channels per receiver}}
+
+<p>The top half is identical to the frame sync dialog and behaves the same way — an SNR stream
+still has to be frame-synchronised before anything can be read out of it. The lower half
+describes the receiver data:</p>
+
+<table>
+  <tr><th>Field</th><th>What it is</th><th>What a wrong value does</th></tr>
+  <tr><td><strong>Num Rcvrs</strong> and <strong>Num Channels</strong></td>
+      <td>How many receivers the frame carries, and how many channels each has (typically
+          three: left, right, combined). Their product is the total channel count.</td>
+      <td>Reading the wrong words out of the frame, so curves appear that are really other
+          channels' data.</td></tr>
+  <tr><td><strong>Polarity</strong></td>
+      <td>Whether the raw count rises or falls with signal strength.</td>
+      <td>An upside-down plot: signal increases read as decreases.</td></tr>
+  <tr><td><strong>Slope</strong></td>
+      <td>The receiver's output voltage range — 0–5&nbsp;V, 0–10&nbsp;V, ±5&nbsp;V or
+          ±10&nbsp;V.</td>
+      <td>Values scaled by a constant factor. The shape is right, the numbers are not.</td></tr>
+  <tr><td><strong>Scale (dB/V)</strong></td>
+      <td>How many decibels one volt represents.</td>
+      <td>As above — a linear error through every value.</td></tr>
+</table>
+
+<p>The <strong>Apply Cal</strong> button, and the status text beside it, belong to non-linear
+step calibration. Until you attach a profile it reads
+<em>(none — using linear calibration)</em>, meaning values are converted with the slope and
+scale above and nothing else. The calibration walkthrough below covers what that costs
+and how to improve it.</p>
+
+<div class="note"><strong>Apply to all</strong> at the bottom of either dialog copies these
+settings to every other selected stream of the same mode. On a file with sixteen identical
+receiver streams this turns sixteen configuration passes into one.</div>
+
+
+<h2 id="walk-framesync">Walkthrough: frame sync lock</h2>
+
+<p>The goal: take a Chapter 10 recording, measure how well each PCM stream held frame
+synchronisation, and find the moments where it did not.</p>
+
+<h3>Step 1 — Open the recording</h3>
+
+<p>Use <strong>≡ → Open…</strong> (or <kbd>Ctrl</kbd>+<kbd>O</kbd>), or drag a
+<code>.ch10</code> file onto the window.</p>
+
+{{FIG:walk-fs-01-open.png|Opening a Chapter 10 recording. The file type filter shows only .ch10 files.|Open Chapter 10 File dialog with a .ch10 file selected}}
+
+<p>The application reads the file's TMATS metadata — not the data itself, which is why this is
+quick even on a multi-gigabyte recording — and opens the Configure Streams dialog listing every
+PCM channel it found.</p>
+
+<h3>Step 2 — Choose which streams to process, and how</h3>
+
+{{FIG:walk-fs-02-configure-streams.png|Configure Streams. Three streams are selected for processing; the fourth is switched off and greys out. The Ready column shows at a glance which are fully configured.|Configure Streams dialog with four PCM channels, three enabled, showing green and red ready indicators}}
+
+<p>For each stream you want to measure, switch <strong>Process</strong> on and leave
+<strong>Mode</strong> at <em>Frame Sync Lock</em>. Then open its gear dialog and fill in the
+frame sync fields described in
+<a href="#walk-setup">Before you process</a>.</p>
+
+<p>Watch the <strong>Ready</strong> column as you go. It is the dialog telling you whether it
+has enough information to run:</p>
+
+<ul>
+  <li><span style="color:green;">✓</span> — configured and ready to process.</li>
+  <li><span style="color:red;">✗</span> — selected for processing but not yet configured.
+      Open the gear dialog.</li>
+  <li><span style="color:gray;">✗</span> — not selected. Nothing is required of it.</li>
+</ul>
+
+<p>Also set the <strong>Time Channel</strong> at the top. Every stream is timestamped from it,
+so all the curves share one time axis.</p>
+
+<h3>Step 3 — Process</h3>
+
+<p>Press <strong>Process</strong>. The file is read <em>once</em>, with every selected stream
+decoded in parallel, so processing four streams costs little more than processing one.</p>
+
+{{FIG:walk-fs-04-processing.png|Processing under way. The log fills in beside the progress dialog, reporting each stream as it completes.|Processing progress dialog at 74 percent with the log showing per-stream progress}}
+
+<p>The log is worth reading rather than ignoring. Each stream reports the bytes it processed,
+the syncs it found and the frames it extracted — the quickest way to notice that a stream was
+misconfigured is a large sync count with almost no frames.</p>
+
+<h3>Step 4 — Read the plot</h3>
+
+{{FIG:FrameSync Perctentage Plot with Legend.png|Lock % over time. These streams hold near 100% and drop vertically to zero at loss of lock — the cliffs are the events worth investigating.|Frame sync lock percentage plot with four streams near 100 percent dropping to zero}}
+
+<p>The left axis is the percentage of each averaging window in which the stream held lock.
+There is no right-hand axis here because this recording carries no receiver data — an axis
+appears only when something is plotted against it.</p>
+
+<p>Healthy streams sit near 100%. What matters is the <strong>cliffs</strong>: vertical drops
+to zero where synchronisation was lost. Their <em>width</em> is how long the outage lasted and
+their <em>position</em> is when.</p>
+
+<h3>Step 5 — Switch to accumulation</h3>
+
+<p>Press <kbd>V</kbd>, or use the <strong>Show Accumulation</strong> button on the chart.</p>
+
+{{FIG:Frame Error Accumulation Plot with Legend.png|The same streams as accumulated missed frames. Each rise is frames lost at one of the cliffs above; a flat line means nothing was missed.|Accumulated missed frames plot showing step increases where lock was lost}}
+
+<p>Lock&nbsp;% answers "how good was the link at this moment"; accumulation answers "how much
+data did I actually lose". A stream that dips briefly but often can look worse than one long
+outage on the percentage plot while costing far fewer frames — the accumulation view settles
+which is which.</p>
+
+<h3>Step 6 — Export</h3>
+
+<p>Right-click the chart and choose <strong>Export…</strong>. You can produce an image, the
+underlying data as CSV, and the log text in one action; see
+<a href="#import-export">Import &amp; export</a> for exactly what each contains.</p>
+
+
+<h2 id="walk-snr">Walkthrough: receiver SNR</h2>
+
+<p>The goal: take a recording containing receiver AGC samples and plot each receiver channel's
+signal strength in decibels over time.</p>
+
+<p>This is the workflow to run first on any AGC recording. It uses the straightforward linear
+conversion, which is enough to see the shape of the data and to confirm you are reading the
+right words out of the frame. The <a href="#walk-calibration">calibration walkthrough</a> that
+follows builds on it.</p>
+
+<h3>Step 1 &mdash; Set the stream's mode</h3>
+
+<p>Open the recording as before. In Configure Streams, switch <strong>Process</strong> on for
+the AGC stream and change its <strong>Mode</strong> to <em>Receiver SNR</em>.</p>
+
+{{FIG:walk-snr-01-mode-select.png|A stream switched to Receiver SNR. Mode decides which setup dialog the gear button opens, so change it before configuring the stream rather than after.|Configure Streams dialog with one row set to Receiver SNR mode and a green ready indicator}}
+
+<div class="note">Mode decides <em>which dialog the gear opens</em>. Change it first: settings
+entered in the frame sync dialog do not carry over to the receiver dialog, so configuring a
+stream and then switching its mode means configuring it again.</div>
+
+<h3>Step 2 &mdash; Describe the receiver layout</h3>
+
+<p>Open the gear dialog and fill in the fields covered in
+<a href="#walk-setup">Before you process</a>. The frame sync half is exactly as it was for a
+frame sync stream &mdash; an AGC stream still has to be synchronised before anything can be
+read out of it. The receiver half tells the application how to find and convert the samples:
+how many receivers, how many channels each, the voltage range, and how many decibels a volt
+represents.</p>
+
+<p>Rather than typing all of that for every recording from a given system, load a saved
+<strong>receiver parameters</strong> file. It carries the word map &mdash; which word in the
+frame belongs to which receiver and channel &mdash; along with the polarity, slope and scale.</p>
+
+{{FIG:walk-snr-03-load-params.png|Loading a receiver parameters file. These are per-installation rather than per-recording, so one file usually serves every recording from the same hardware.|File dialog for selecting a receiver parameters TOML file}}
+
+<div class="note">A receiver parameters file describes <em>the hardware</em>, not the flight.
+One file typically covers every recording from the same installation, which is why these are
+worth keeping alongside your recordings.</div>
+
+<h3>Step 3 &mdash; Process</h3>
+
+<p>Press <strong>Process</strong>. The log reports the sample count and, importantly, the
+channel count for the stream &mdash; something like
+<em>184 samples, 48 channel(s)</em>. If the channel count is not what you expect, the receiver
+and channel numbers in the setup dialog do not match the recording, and everything downstream
+will be wrong.</p>
+
+<h3>Step 4 &mdash; Read the plot</h3>
+
+{{FIG:Uncalibrated SNR Plot with Legend.png|Receiver SNR over time, converted linearly. This recording is a calibration sweep, so the trace climbs in deliberate steps; ordinary flight data is far less tidy. The legend lists every channel that was processed - all forty-eight of them.|Receiver SNR staircase plot with a legend listing forty-eight receiver channels}}
+
+<p>SNR is plotted against the <strong>right-hand</strong> axis, in decibels. There is no
+left-hand axis here because this recording carries no frame sync streams &mdash; an axis
+appears only when something is plotted against it, so which axes you see tells you what kind
+of data is loaded. In the figure above the legend covers the right-hand scale, which is the
+first sign that forty-eight channels is more than one plot can usefully carry.</p>
+
+<p>The recording shown is a calibration sweep, which is why it climbs in neat steps. On real
+flight data you are looking for the shape instead: sustained levels, the depth and duration of
+fades, and whether channels that should track each other actually do.</p>
+
+<h3>Step 5 &mdash; Narrow it down</h3>
+
+<p>A fully populated receiver frame carries forty-eight channels, which is far more than can
+be read at once. Right-click the chart and choose <strong>Customize View&hellip;</strong> to
+show only what you care about.</p>
+
+{{FIG:walk-cust-02-snr-tree.png|The Receiver SNR tab groups channels by receiver, so a whole receiver can be shown or hidden in one click. Here one receiver is expanded with two of its three channels selected.|Customize Plot Series dialog showing the receiver tree with one group partially checked}}
+
+<p>Channels are grouped by receiver, and a group's checkbox reflects its children: ticked when
+all are shown, empty when none are, and <strong>filled</strong> when only some are. That third
+state is not an error &mdash; it is the tree telling you the receiver is partly selected.
+Clicking it selects or clears the whole group.</p>
+
+<div class="note">Hiding a channel changes the <em>picture</em>, not the <em>data</em>. An
+exported image contains only what is visible, but an exported CSV contains every channel that
+was processed, hidden or not. See <a href="#import-export">Import &amp; export</a>.</div>
+
+<h3>Where to go next</h3>
+
+<p>If the steps in your data are uneven, or channels that were fed the same signal do not agree
+with one another, the linear conversion is the likely reason. The
+<a href="#walk-calibration">calibration walkthrough</a> replaces it with a measured one.</p>
+
+
+<h2 id="walk-calibration">Walkthrough: receiver SNR with step calibration</h2>
+
+<p>A receiver reports signal strength as a raw count. Turning that into decibels needs a
+conversion, and the application offers two.</p>
+
+<p><strong>Linear</strong> conversion &mdash; the default &mdash; applies the voltage range and
+dB/V scale from the setup dialog and nothing else. It assumes the receiver responds in a
+perfectly straight line across its whole range. Real receivers do not.</p>
+
+<p><strong>Non-linear step calibration</strong> measures the receiver instead of assuming it.
+You supply a recording of known signal levels, the application learns what raw count each level
+actually produced, and it interpolates between those measured points from then on.</p>
+
+<h3>What you need before you start</h3>
+
+<p>Two files, prepared in advance:</p>
+
+<ul>
+  <li>A <strong>calibration Chapter&nbsp;10 recording</strong> &mdash; a capture of the receiver
+      being fed a signal that steps through known levels, holding steady at each one.</li>
+  <li>A <strong>step TOML</strong> listing those levels, in the order they occur.</li>
+</ul>
+
+{{FIG:walk-cal-05-step-toml.png|A step configuration file. Each [[Step]] gives one level in dB, in the order the calibration recording steps through them. This one describes eleven steps from 0 to 60 dB in 6 dB increments.|A step configuration TOML open in a text editor showing eleven Step entries from 0 to 60 dB}}
+
+<div class="note">The step file describes <em>what was injected</em>, not how long each level was
+held. Dwell time is not configured anywhere: each plateau is found by looking for a level that
+holds steady, so it does not matter whether a technician left each step for one second or ten.</div>
+
+<h3>Step 1 &mdash; Open the calibration dialog</h3>
+
+<p>Configure the receiver stream as usual, then press <strong>Apply Cal</strong> in the Receiver
+SNR setup dialog. Before any profile is attached, the text beside that button reads
+<em>(none &mdash; using linear calibration)</em>, which is how you can tell at a glance what a
+stream is currently using.</p>
+
+{{FIG:walk-cal-01-extract-button.png|The Extract Calibration dialog as it opens, before either input file has been chosen.|Extract Calibration dialog with empty Step Cal File and Calibration Ch10 fields and clip values at zero}}
+
+<h3>Step 2 &mdash; Choose the two files</h3>
+
+<p>Browse to the step TOML and the calibration recording. The dialog reports what it made of
+each as soon as you select it: how many steps it parsed, and how many channels it managed to
+calibrate.</p>
+
+{{FIG:walk-cal-03-clip-controls.png|Both files chosen and the clip controls set. The confirmations report eleven steps parsed and three of forty-eight channels calibrated.|Extract Calibration dialog populated with a step TOML and calibration Chapter 10 file, clip start 6 seconds and clip end 48 seconds}}
+
+<h3>Step 3 &mdash; Trim the recording, if it needs it</h3>
+
+<p><strong>Clip Start</strong> and <strong>Clip End</strong> discard that many seconds from each
+end of the calibration recording before anything is measured. They exist because real
+calibration recordings usually contain material that is not part of the sweep:</p>
+
+<ul>
+  <li>a <strong>turn-on transient</strong> at the beginning, while the signal generator settles
+      at its first level;</li>
+  <li>an operator <strong>down-ramp</strong> at the end, where the level is walked back down
+      after the sweep proper has finished.</li>
+</ul>
+
+<p>Both look like plateaus to a detector that is asked only to find steady levels, and either
+can be mistaken for a real step. If the number of plateaus found does not match the number of
+steps in your file, trimming the ends is the first thing to try.</p>
+
+<h3>Step 4 &mdash; Read the result honestly</h3>
+
+{{FIG:walk-cal-04-summary.png|The extraction summary. It reports how many channels received a measured profile, not how many you might have expected.|Message box reading Applied non-linear calibration to 3 channels}}
+
+<div class="note"><strong>A small number here is usually correct, not a failure.</strong> The
+recording in these figures carries forty-eight channels and only three were calibrated &mdash;
+because the signal was injected into one receiver's left, right and combined channels and
+nothing else. The other forty-five saw no sweep, so there was nothing to measure. Refusing to
+build a profile out of noise is the right answer.</div>
+
+<p>Channels that were not calibrated are neither broken nor excluded. They keep using the
+<strong>linear</strong> conversion from the setup dialog, exactly as before. A calibration run
+improves the channels it can measure and leaves the rest alone.</p>
+
+<p>So the question to ask of this dialog is not <em>"why so few?"</em> but <em>"did it calibrate
+the channels I actually injected into?"</em> If you swept three channels and it reports three,
+it worked. If you swept forty-eight and it reports three, something is wrong &mdash; and the
+table at the end of this section is where to look.</p>
+
+<h3>Step 5 &mdash; Process, and compare against the uncalibrated run</h3>
+
+<p>Press OK, then <strong>Process</strong>. The profile is applied as the data is decoded.</p>
+
+{{FIG:Uncalibrated SNR Plot without Legend.png|Before: the same sweep converted linearly. The steps are uneven and the channels sit apart from one another, because a straight-line conversion cannot follow the receiver's real response.|Receiver SNR staircase without calibration showing uneven step heights and offset channels}}
+
+{{FIG:Calibrated SNR Plot without Legend.png|After: with a measured profile attached. The steps are evenly spaced and reach the levels that were injected, topping out at 60 dB, the last value in the step file.|Receiver SNR staircase with calibration applied showing evenly spaced steps reaching 60 dB}}
+
+<p>This comparison is the quickest way to confirm a calibration actually took. Look for two
+things: the steps should be <em>evenly spaced</em>, and the top step should sit at the
+<em>highest level in your step file</em>. If the staircase still looks uneven, the profile did
+not attach to the channels you are looking at.</p>
+
+<div class="note">Values beyond the calibrated range <strong>clamp</strong> to the nearest
+measured step rather than being extrapolated. A receiver driven past the range you calibrated
+reads the ceiling or floor value instead of diverging into a number no measurement supports.</div>
+
+<h3>When it does not work</h3>
+
+<table>
+  <tr><th>What you see</th><th>Likely cause</th></tr>
+  <tr><td>Fewer channels calibrated than you injected into</td>
+      <td>The word map does not match the recording, so the sweep is being read from the wrong
+          words. Check <strong>Num Rcvrs</strong> and <strong>Num Channels</strong>, and the
+          receiver-parameters file if you loaded one.</td></tr>
+  <tr><td>Plateaus found does not match the step count</td>
+      <td>A turn-on transient or a trailing down-ramp is being counted as a step. Use
+          <strong>Clip Start</strong> or <strong>Clip End</strong> to trim it.</td></tr>
+  <tr><td>The calibrated staircase runs the wrong way</td>
+      <td>The receiver's raw count falls as signal rises. Set <strong>Polarity</strong> to match
+          <em>before</em> extracting &mdash; the profile is built from raw counts, so polarity
+          has to be right first.</td></tr>
+  <tr><td>It worked, then a later run was linear again</td>
+      <td>Profiles last for the session only. See the note below.</td></tr>
+</table>
+
+<div class="note"><strong>Profiles are session-only and are never written to disk.</strong>
+Re-extract after restarting the application. A processing template stores the <em>inputs</em>
+&mdash; which step file and which calibration recording &mdash; rather than the measured
+profile, so a batch run started from a template uses the linear conversion. Non-linear
+calibration is a single-file workflow today.</div>
+
+
+<h2 id="walk-batch">Walkthrough: batch processing with a template</h2>
+
+<p>The goal: configure one recording, then apply that same configuration to as many others as
+you like without setting anything up again.</p>
+
+<p>This is worth doing whenever you have a run of recordings from the same installation &mdash;
+the same receivers, the same PCM channels, the same frame formats. Configuring each one by hand
+is not just tedious; it is an opportunity to enter a slightly different value and not notice.</p>
+
+<h3>Step 1 &mdash; Get one file exactly right</h3>
+
+<p>Open a representative recording and configure it as in the walkthroughs above: modes,
+frame sync fields, receiver layout. Process it, and check the plot actually looks correct.</p>
+
+<p>This is the step worth being fussy about. Everything that follows copies this file's
+configuration, so an error here is an error in every file you process afterwards.</p>
+
+<p>If you intend to rename or recolour series, do it now as well &mdash; a template can carry
+those choices, so every recording in the batch comes out with the same colours for the same
+channels.</p>
+
+<h3>Step 2 &mdash; Save it as a template</h3>
+
+<p>Choose <strong>&equiv; &rarr; Save as Template&hellip;</strong>.</p>
+
+{{FIG:walk-batch-01-save-template.png|Saving a template. Give it a name that identifies the installation or aircraft rather than the recording it came from, since it will be applied to many others.|Save as Template file dialog writing a JSON template file}}
+
+<p>A template is a small <code>.json</code> file holding the per-stream configuration and,
+optionally, each series' name and colour. It contains <strong>no file paths</strong>, so it is
+not tied to the recording it was built from &mdash; it describes a <em>setup</em>, and can be
+kept alongside the receiver parameters files for the same installation.</p>
+
+<h3>Step 3 &mdash; Apply it to a set of recordings</h3>
+
+<p>Choose <strong>&equiv; &rarr; Apply Template to Files&hellip;</strong>, pick the template,
+then select any number of <code>.ch10</code> files. Before anything is processed, each file is
+checked against the template and the result is reported.</p>
+
+{{FIG:walk-batch-02-apply-dialog.png|The batch dialog reports its decision per file before running. Here three files match and one is rejected, with the channel differences that caused it spelled out.|Batch Process Files dialog listing three matching files with green ticks and one rejected file with a red cross and its reason}}
+
+<p>Read this list before pressing Process. Each file is marked:</p>
+
+<ul>
+  <li><span style="color:green;">&check;</span> &mdash; the file's PCM channel IDs match the
+      template exactly, and it will be processed.</li>
+  <li><span style="color:red;">&cross;</span> &mdash; they do not, and it will be skipped. The
+      reason names the channels that are missing and the ones that are unexpectedly present.</li>
+</ul>
+
+<div class="note"><strong>The match has to be exact, and that is deliberate.</strong> A file
+with even one extra or missing channel is rejected rather than partly processed. The template
+addresses streams by channel ID, so applying it to a file whose channel set differs could
+silently attach one channel's settings to a different physical channel &mdash; producing a
+plot that looks entirely reasonable and is wrong. A skipped file you can see is better than a
+mislabelled result you cannot.</div>
+
+<p>Two options are worth knowing before you run it:</p>
+
+<ul>
+  <li><strong>Reuse the template's saved series names and colors</strong> &mdash; on by
+      default. Every file comes out with the same channel in the same colour, which is what
+      makes the results comparable at a glance.</li>
+  <li><strong>Also export a CSV + plot images per file</strong> &mdash; writes, for each
+      recording, a CSV plus two images named after the source file:
+      <code>&hellip;_framesync_lock.png</code> and <code>&hellip;_missed_frames.png</code>.
+      This is the option that turns a batch run into a folder of results you can hand to
+      someone else.</li>
+</ul>
+
+<h3>Step 4 &mdash; Review the results</h3>
+
+<p>Every processed file stays loaded. Right-click the chart and use <strong>Plot File</strong>
+to choose which one you are looking at.</p>
+
+{{FIG:walk-batch-03-plot-file-menu.png|After a batch run, Plot File lists every recording that was processed. All files (overlaid) draws them together on one time axis.|Plot File submenu listing three processed recordings plus an All files overlaid option}}
+
+<p>Two ways to use this. Pick a <strong>single file</strong> to review each recording on its
+own, with the time axis zoomed to that recording's span. Or choose <strong>All files
+(overlaid)</strong> to draw every recording on one axis, which is how you spot the one that
+behaved differently from the rest.</p>
+
+<p>Selecting a file here is a display filter, not a reload &mdash; nothing is re-processed, and
+your per-series visibility choices survive switching between files.</p>
+
+<h3>What a template does not carry</h3>
+
+<div class="note"><strong>Non-linear calibration profiles are not stored in a template.</strong>
+A template records which step file and which calibration recording were used &mdash; the
+<em>inputs</em> &mdash; but not the measured profile itself, because profiles last only for the
+session in which they were extracted. A batch run therefore converts receiver values using the
+<strong>linear</strong> slope and scale. If you need measured calibration, process those
+recordings individually and extract it for each, as in the
+<a href="#walk-calibration">calibration walkthrough</a>.</div>
