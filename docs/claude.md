@@ -8,13 +8,13 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, `cl` / `nmake`), Qt `msvc2022_64` kit.
   This is the only supported toolchain (and what CI uses).
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
-- **Project Version**: 2.9.3 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
+- **Project Version**: 2.10.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
 
 ## User Stories
 
 The stories below follow the workflow a first-time user takes through the application: open a file and choose what to process (US1), define the per-stream parameters (US2), view the resulting data-quality metrics (US3), customize the plot (US4), manage configuration files and calibration (US5), export and re-import results (US6), and the cross-cutting concerns of input validation (US7), installation (US8), and theming (US9).
 
-**Status: all user stories are Complete** — implemented, tested, and shipped as of v2.9.3. Every acceptance criterion below is delivered functionality (`[x]`), and each story carries a **Complete** marker in its heading. This section is no longer a draft backlog; new work is tracked as new stories appended after US9.0.
+**Status: all user stories are Complete** — implemented, tested, and shipped as of v2.10.0. Every acceptance criterion below is delivered functionality (`[x]`), and each story carries a **Complete** marker in its heading. This section is no longer a draft backlog; new work is tracked as new stories appended after US9.0.
 
 ### US1.0: Open a Ch10 file and configure which streams to process — Complete
 
@@ -400,7 +400,56 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ## Version History
 
-### Unreleased — since the v2.9.3 tag
+### v2.10.0 — The Illustrated Manual, Optional as an Installer Component
+
+#### One source, two manuals (US8.0)
+
+- **The user manual is now two artifacts generated from one source.** The *base*
+  manual stays compiled into the exe as a Qt resource; a new *full* manual
+  (`UserManual.html`) ships as a file, always in the portable ZIP and as an optional
+  task in the installer ("Install the full illustrated user manual"). 16 figures in
+  the base, 36 in the full.
+- **The always-have-a-manual guarantee is structural.** Because the base manual is a
+  compiled-in resource it cannot be deleted or declined, so `Help > User Manual`
+  always has something to open. `MainView::fullManualPathIn()` returns empty when the
+  optional file is absent and the action falls back to the resource - that fallback is
+  a normal path, not an error path, and there is no "manual not found" state.
+- Both manuals come out of `scripts/embed_manual_images.py` from the **same document
+  object**; the full one is the base plus walkthrough sections. They are never
+  maintained as two documents, because two hand-maintained manuals would drift - the
+  failure this project has paid for repeatedly.
+- `check_release_consistency.ps1` now asserts the version markers in **both** manuals.
+  A second shipped artifact that nothing checks is exactly the stale artifact that
+  script exists to prevent.
+
+#### The walkthroughs (the content that made the option worth offering)
+
+- Five task-oriented walkthroughs in `docs/manual/walkthroughs.html`, illustrated at
+  every dialog: opening a file and configuring streams, a frame sync lock run, a
+  receiver SNR run, non-linear step calibration (US5.3), and batch processing with a
+  template (US1.1). They are the *full* manual's leading sections; the reference
+  chapters that were the whole manual follow them.
+- **Headings carry no numbers and cross-references are anchors, never numbers.** The
+  embedder numbers walkthrough headings 1..N and shifts every reference section by
+  `SHIFT = len(walk_ids)`, so the same prose is correctly numbered in a manual that
+  has the walkthroughs and one that does not. A hand-written "see section 4" would be
+  wrong in exactly one of the two.
+- 23 new captures registered in `scripts/build_manual.ps1`. Each entry declares its
+  crop, and a bare `$true` (the standard chart region) is **validated against the
+  expected window size** rather than trusted - an app floating over an IDE is a
+  different size and the fixed rectangle would silently produce a plausible-looking
+  but wrongly framed figure.
+- **Every registered capture is now placed.** Eight had been registered so their crops
+  were validated during the capture batches but were referenced by no section, leaving
+  them in the repository and in neither manual; they illustrate reference sections, so
+  that is where they went. `after()`/`before()` assert their anchor text, so a
+  reworded paragraph fails the build rather than dropping a figure.
+- **Import & export was rewritten** to enumerate what each export actually contains -
+  every CSV column, what the image export composites, what the log export captures -
+  and the series readout is documented, both nearest-series and pinned.
+- A short **"About this manual"** note explains that two versions exist and how to
+  tell which one you are reading. It is worded to read correctly in both, since both
+  are generated from it.
 
 #### Cosmetic
 
@@ -420,31 +469,6 @@ The stories below follow the workflow a first-time user takes through the applic
   item regardless of any colour set on it, so leaving them disabled would have
   silently defeated the red glyph — and it also greyed the rejection reason, the most
   useful text in the row.
-
-#### Documentation delivery
-
-- **The user manual is now two artifacts generated from one source.** The *base*
-  manual stays compiled into the exe as a Qt resource; a new *full* manual
-  (`UserManual.html`) ships as a file, always in the portable ZIP and as an optional
-  task in the installer ("Install the full illustrated user manual").
-- **The always-have-a-manual guarantee is structural.** Because the base manual is a
-  compiled-in resource it cannot be deleted or declined, so `Help > User Manual`
-  always has something to open. `MainView::fullManualPathIn()` returns empty when the
-  optional file is absent and the action falls back to the resource - that fallback is
-  a normal path, not an error path, and there is no "manual not found" state.
-- Both manuals come out of `scripts/embed_manual_images.py` from the **same document
-  object**; the full one is the base plus walkthrough sections. They are never
-  maintained as two documents, because two hand-maintained manuals would drift - the
-  failure this project has paid for repeatedly.
-- `check_release_consistency.ps1` now asserts the version markers in **both** manuals.
-  A second shipped artifact that nothing checks is exactly the stale artifact that
-  script exists to prevent.
-
-> **Not for release yet.** The walkthrough sections do not exist, so the full manual is
-> currently identical to the base one and the installer option would offer a choice
-> that changes nothing. This lands so the tooling and the installer page exist —
-> including for the plan's `walk-inst-01-components.png` capture — and ships once the
-> walkthroughs are written. See `docs/future_plans/comprehensive-user-manual.md`.
 
 #### Tests
 
@@ -835,7 +859,7 @@ keep the tag history aligned with `main`. The only change is to CI.
   and its three sub-dialogs.
 - Channel column narrowed and styled to match the Mode combo box's border/fill.
   (Originally right-justified with left-side elision; both columns were changed to
-  left-justified afterwards — see Unreleased.)
+  left-justified afterwards — see v2.10.0.)
 - The three per-stream sub-dialogs (Frame Sync Lock, Calibration, Receiver SNR)
   now share one layout vocabulary (spacing, grid geometry, icon-button sizing,
   a consistent text-left/buttons-centered alignment rule) so their
