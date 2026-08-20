@@ -402,6 +402,28 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.10.0 tag
 
+#### Fixed
+
+- **The hamburger menu's section headers were never drawn.** `Process`,
+  `Import/Export` and `Settings` were added with `QMenu::addSection(tr(…))`, but once
+  *any* stylesheet is set on the application `QStyleSheetStyle` takes over menu-item
+  painting and never renders a section's text — so each one degraded silently to a
+  plain separator. `main()` installs the theme at startup, so **no themed build has
+  ever shown them**, while `docs/CLAUDE.md`, the user manual and the manual's figure
+  caption all described named groups. Shipped that way through v2.10.0.
+  Measured on the `Process` band: unstyled it is 12 px and draws the label; with the
+  theme applied it is 9 px — identical to a plain separator — and blank. Deleting the
+  `QMenu::separator { height: 1px; … }` rule does **not** bring the text back, which
+  is the useful part: the cause is the stylesheet existing at all, not what it says,
+  so there is no QSS-only fix.
+  Sections are now built by a file-local `addMenuSection()` — a `QWidgetAction`
+  carrying a `QLabel`, which paints itself and is therefore immune. Its colour comes
+  from the theme QSS by object name (`QLabel#menuSectionLabel`, the same approach as
+  `QLabel#streamHeaderLabel` in `StreamConfigDialog`) so it follows the light/dark
+  switch. The action is disabled so a header is not selectable or keyboard-reachable,
+  and the QSS gives the disabled state the same colour — otherwise it would pick up
+  `QMenu::item:disabled` and read as an unavailable command rather than a heading.
+
 #### Cosmetic
 
 - **User Manual… and About… are collapsed into a `Help` submenu** rather than sitting
@@ -415,12 +437,18 @@ The stories below follow the workflow a first-time user takes through the applic
 
 #### Tests
 
+- `TestMainView::menuSectionHeadersSurviveTheStylesheet` applies the **real** theme
+  stylesheet before building the window, because unstyled is precisely the
+  configuration in which the broken code also passed — the bug only exists once a
+  stylesheet is set. It pins all three header labels, that each has height to draw in,
+  and that none is selectable. Verified to fail (0 headers found) against the
+  `addSection` version.
 - `TestMainView::helpSubmenuHoldsManualAndAbout` asserts both entries are inside
   `m_help_menu` **and that neither is left behind at the top level** — the second half
   is the one that catches a half-done move. Asserted structurally because a screenshot
   cannot tell a submenu from a section header: both render as one row of text with the
   same two entries under it, and only one of them collapses. Verified to fail by
-  putting `About…` back on the top-level menu. Baseline **367 / 0 / 1**.
+  putting `About…` back on the top-level menu. Baseline **368 / 0 / 1**.
 
 ### v2.10.0 — The Illustrated Manual, Optional as an Installer Component
 
@@ -1144,7 +1172,7 @@ not mis-read.
 1. **MainView** (`src/view/mainview.cpp`, `include/view/mainview.h`)
    - Thin GUI layer; creates and lays out all Qt widgets, the hamburger menu, and the custom title bar
    - Frameless window: a custom title bar (set via `setMenuWidget`) hosts the hamburger (≡) menu button, the sidebar toggle, and min/maximize/close buttons; `nativeEvent()` handles `WM_NCCALCSIZE`/`WM_NCHITTEST` so Windows still provides native move/resize/snap/double-click-maximize. The hamburger + sidebar glyphs are QPainter-drawn per theme
-   - All commands live in the single hamburger menu, grouped into flat sections via `addSection`: Process (Open…, Recent Files, Save as Template…, Apply Template to Files…, Exit), Import/Export (Import CSV…, Export…), Settings (theme toggle). **Help is a submenu** (`m_help_menu`, after a separator) holding User Manual… and About… — sections are the default, and a submenu is used only where the entries are reached rarely and by name (Recent Files is the other one)
+   - All commands live in the single hamburger menu, grouped into sections via the file-local `addMenuSection()` helper (**not** `QMenu::addSection`, whose label a stylesheet blanks — see below): Process (Open…, Recent Files, Save as Template…, Apply Template to Files…, Exit), Import/Export (Import CSV…, Export…), Settings (theme toggle). **Help is a submenu** (`m_help_menu`, after a separator) holding User Manual… and About… — sections are the default, and a submenu is used only where the entries are reached rarely and by name (Recent Files is the other one)
    - Binds to MainViewModel Q_PROPERTYs and connects signals/slots; contains no business logic
    - `logError()` / `logWarning()` / `logSuccess()` append colored HTML entries (red / #DAA520 / green) to the log window
    - Errors/warnings shown inline in the log (`QTextBrowser`, clickable links, persistent, auto-scroll); QMessageBox reserved for About and the calibration summary

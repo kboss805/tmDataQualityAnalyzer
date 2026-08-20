@@ -45,6 +45,20 @@ QLabel#streamHeaderLabel
     color: rgba(27, 27, 27, 0.55);
 }
 
+
+/* Hamburger-menu section headers. Both states are given the same colour on
+   purpose: the action is disabled so the header cannot be selected, which would
+   otherwise pick up the greyed-out QMenu::item:disabled colour and read as a
+   command that is unavailable rather than as a heading. */
+QLabel#menuSectionLabel,
+QLabel#menuSectionLabel:disabled
+{
+    color: rgba(27, 27, 27, 0.6);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 8px 16px 2px 16px;
+}
+
 QFrame#streamHeaderSeparator
 {
     color: rgba(27, 27, 27, 0.22);

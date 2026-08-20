@@ -8,6 +8,8 @@
 #include <QColor>
 #include <QFile>
 #include <QMenu>
+#include <QLabel>
+#include <QWidgetAction>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTextStream>
@@ -311,4 +313,48 @@ void TestMainView::helpSubmenuHoldsManualAndAbout()
         QVERIFY2(a->text() != QStringLiteral("About..."),
                  "About must live in the Help submenu, not the top-level menu");
     }
+}
+
+void TestMainView::menuSectionHeadersSurviveTheStylesheet()
+{
+    // The menu's section headers went unrendered for every themed build: the app
+    // sets a stylesheet at startup, and QStyleSheetStyle then owns menu-item
+    // painting and never draws a QMenu::addSection() label. Nothing failed - the
+    // separator still appeared, just nameless - so the code, docs and manual all
+    // described named groups no user had seen.
+    //
+    // Asserted with the REAL stylesheet applied, because unstyled is exactly the
+    // configuration in which the old code also passed.
+    QFile qss(QCoreApplication::applicationDirPath() + "/../../resources/win11-dark.qss");
+    QVERIFY2(qss.open(QIODevice::ReadOnly | QIODevice::Text),
+             "theme stylesheet not found - this test is meaningless without it");
+    const QString saved = qApp->styleSheet();
+    qApp->setStyleSheet(QString::fromUtf8(qss.readAll()));
+
+    MainView view;
+    QMenu* menu = view.m_menu_button->menu();
+    QVERIFY(menu != nullptr);
+    menu->ensurePolished();
+
+    QStringList headers;
+    for (QAction* a : menu->actions())
+    {
+        auto* wa = qobject_cast<QWidgetAction*>(a);
+        if (!wa) continue;
+        auto* label = qobject_cast<QLabel*>(wa->defaultWidget());
+        if (!label || label->objectName() != QStringLiteral("menuSectionLabel")) continue;
+
+        headers << label->text();
+        // A header that renders is the point: a label with room to draw in. The
+        // old addSection() path collapsed to the separator's fixed 1px band.
+        QVERIFY2(label->sizeHint().height() > 1,
+                 qPrintable(QStringLiteral("section '%1' has no height to draw in")
+                                .arg(label->text())));
+        // Not a command: it must not be selectable or keyboard-reachable.
+        QVERIFY(!a->isEnabled());
+    }
+
+    QCOMPARE(headers, QStringList({ "Process", "Import/Export", "Settings" }));
+
+    qApp->setStyleSheet(saved);
 }
