@@ -28,6 +28,7 @@ private slots:
     // Optional full manual: absence is a normal state, not an error.
     void fullManualPathEmptyWhenNotInstalled();
     void fullManualPathFoundWhenInstalled();
+    void helpSubmenuHoldsManualAndAbout();
 };
 
 #endif // TST_MAINVIEW_H

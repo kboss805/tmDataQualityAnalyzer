@@ -7,6 +7,7 @@
 
 #include <QColor>
 #include <QFile>
+#include <QMenu>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTextStream>
@@ -275,4 +276,39 @@ void TestMainView::fullManualPathFoundWhenInstalled()
     f.close();
 
     QCOMPARE(MainView::fullManualPathIn(dir.path()), path);
+}
+
+void TestMainView::helpSubmenuHoldsManualAndAbout()
+{
+    // User Manual and About are collapsed under one Help row rather than sitting as
+    // two flat entries. Asserted structurally because the alternative - a screenshot
+    // - cannot tell a submenu from a section header: both render as one row of text
+    // with the same two entries underneath, and only one of them collapses.
+    MainView view;
+
+    QMenu* menu = view.m_menu_button->menu();
+    QVERIFY(menu != nullptr);
+
+    QVERIFY(view.m_help_menu != nullptr);
+    QCOMPARE(view.m_help_menu->title(), QString("Help"));
+
+    // The submenu's row is in the top-level menu...
+    QVERIFY(menu->actions().contains(view.m_help_menu->menuAction()));
+
+    // ...and both entries live inside it, not beside it.
+    QStringList help_entries;
+    for (QAction* a : view.m_help_menu->actions())
+    {
+        if (!a->isSeparator()) help_entries << a->text();
+    }
+    QCOMPARE(help_entries, QStringList({ "User Manual...", "About..." }));
+
+    // The thing that would silently regress: an entry left behind at the top level.
+    for (QAction* a : menu->actions())
+    {
+        QVERIFY2(a->text() != QStringLiteral("User Manual..."),
+                 "User Manual must live in the Help submenu, not the top-level menu");
+        QVERIFY2(a->text() != QStringLiteral("About..."),
+                 "About must live in the Help submenu, not the top-level menu");
+    }
 }
