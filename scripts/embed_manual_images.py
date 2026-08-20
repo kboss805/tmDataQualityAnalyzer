@@ -139,9 +139,11 @@ after('to the nearest calibrated step rather than extrapolating.</p>',
 
 after('<h2 id="getting-started">1. Getting started</h2>',
       fig('walk-app-01-hamburger.png',
-          'The application menu. Every command lives here, grouped into Process, Import/Export, '
-          'Settings and Help. Entries needing loaded data stay greyed out until they apply.',
-          'The hamburger menu open, showing the Process, Import/Export, Settings and Help sections'))
+          'The application menu. Every command lives here, grouped into Process, Import/Export '
+          'and Settings, with Help as a submenu at the bottom. Entries needing loaded data stay '
+          'greyed out until they apply.',
+          'The hamburger menu open, showing the Process, Import/Export and Settings sections and '
+          'a Help submenu'))
 
 before('<h2 id="configure">',
        fig('walk-inst-01-components.png',

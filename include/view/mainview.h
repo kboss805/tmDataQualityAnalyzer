@@ -187,6 +187,7 @@ private:
     QTextBrowser* m_log_preview;             ///< Compact log preview in the sidebar.
     ProcessingProgressDialog* m_progress_dialog; ///< Modal progress/cancel dialog shown while processing runs.
     QMenu* m_recent_menu;                    ///< File > Recent Files submenu.
+    QMenu* m_help_menu = nullptr;            ///< Help submenu (User Manual, About).
 
     QString m_last_ch10_dir;                 ///< Last directory used in the Open file dialog (.ch10/.csv).
     QString m_pending_csv_path;              ///< CSV import in flight; finalized on the plot's load result.

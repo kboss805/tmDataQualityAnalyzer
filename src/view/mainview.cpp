@@ -264,9 +264,12 @@ void MainView::setUpMainLayout()
 void MainView::setUpMenuBar()
 {
     // A single hamburger menu holds everything, grouped into sections (addSection
-    // renders the muted headers). Flat rather than nested submenus because the
-    // whole menu is small and scannable in one glance. The menu hangs off the
-    // hamburger button in the custom title bar (built at the end of this method).
+    // renders the muted headers). Sections are preferred over submenus because the
+    // whole menu is small and scannable in one glance; a submenu is used only where
+    // the entries are ones you reach for rarely and by name (Recent Files, Help), so
+    // hiding them behind one row costs nothing and shortens the menu for everyone
+    // else. The menu hangs off the hamburger button in the custom title bar (built
+    // at the end of this method).
     QMenu* menu = new QMenu(this);
     menu->setToolTipsVisible(true);
 
@@ -321,7 +324,13 @@ void MainView::setUpMenuBar()
     connect(m_theme_action, &QAction::triggered, this, &MainView::onToggleTheme);
 
     // --- Help ---
-    menu->addSection(tr("Help"));
+    // A submenu rather than a section: both entries are read-once-then-forget, so
+    // they cost two permanent rows in a menu whose other entries are the actual
+    // workflow. A separator keeps the collapsed row from reading as part of the
+    // Settings section above it, since a submenu carries no section header of its
+    // own. Held as a member so the structure is assertable.
+    menu->addSeparator();
+    m_help_menu = menu->addMenu(tr("Help"));
 
     // Two manuals, and the fallback between them is a NORMAL path, not an error:
     //
@@ -332,7 +341,7 @@ void MainView::setUpMenuBar()
     //
     // The full manual is a real file on disk and opens directly. The base one is a
     // resource, and a browser cannot read qrc:/ URLs, so it is copied to temp first.
-    QAction* manual_action = menu->addAction("User Manual...");
+    QAction* manual_action = m_help_menu->addAction("User Manual...");
     connect(manual_action, &QAction::triggered, this, [this]() {
         const QString full = installedFullManualPath();
         if (!full.isEmpty())
@@ -359,7 +368,7 @@ void MainView::setUpMenuBar()
         QDesktopServices::openUrl(QUrl::fromLocalFile(target));
     });
 
-    QAction* about_action = menu->addAction("About...");
+    QAction* about_action = m_help_menu->addAction("About...");
     connect(about_action, &QAction::triggered, this, [this]() {
         QMessageBox about_box(this);
         about_box.setWindowTitle("About");

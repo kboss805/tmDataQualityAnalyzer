@@ -400,6 +400,28 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ## Version History
 
+### Unreleased — since the v2.10.0 tag
+
+#### Cosmetic
+
+- **User Manual… and About… are collapsed into a `Help` submenu** rather than sitting
+  as two flat entries under a `Help` section header. Both are read-once-then-forget,
+  so they were costing two permanent rows in a menu whose other entries are the actual
+  workflow. The section header is gone with them, so the menu is two rows shorter, not
+  one. A separator precedes the submenu row: a submenu carries no section header of its
+  own, so without one it would read as part of the **Settings** section above it.
+  Sections remain the default for the menu; a submenu is used only where the entries
+  are reached rarely and by name, which is now Recent Files and Help.
+
+#### Tests
+
+- `TestMainView::helpSubmenuHoldsManualAndAbout` asserts both entries are inside
+  `m_help_menu` **and that neither is left behind at the top level** — the second half
+  is the one that catches a half-done move. Asserted structurally because a screenshot
+  cannot tell a submenu from a section header: both render as one row of text with the
+  same two entries under it, and only one of them collapses. Verified to fail by
+  putting `About…` back on the top-level menu. Baseline **367 / 0 / 1**.
+
 ### v2.10.0 — The Illustrated Manual, Optional as an Installer Component
 
 #### One source, two manuals (US8.0)
@@ -1122,7 +1144,7 @@ not mis-read.
 1. **MainView** (`src/view/mainview.cpp`, `include/view/mainview.h`)
    - Thin GUI layer; creates and lays out all Qt widgets, the hamburger menu, and the custom title bar
    - Frameless window: a custom title bar (set via `setMenuWidget`) hosts the hamburger (≡) menu button, the sidebar toggle, and min/maximize/close buttons; `nativeEvent()` handles `WM_NCCALCSIZE`/`WM_NCHITTEST` so Windows still provides native move/resize/snap/double-click-maximize. The hamburger + sidebar glyphs are QPainter-drawn per theme
-   - All commands live in the single hamburger menu, grouped into flat sections via `addSection`: Process (Open…, Recent Files, Save as Template…, Apply Template to Files…, Exit), Import/Export (Import CSV…, Export…), Settings (theme toggle), Help (User Manual…, About…)
+   - All commands live in the single hamburger menu, grouped into flat sections via `addSection`: Process (Open…, Recent Files, Save as Template…, Apply Template to Files…, Exit), Import/Export (Import CSV…, Export…), Settings (theme toggle). **Help is a submenu** (`m_help_menu`, after a separator) holding User Manual… and About… — sections are the default, and a submenu is used only where the entries are reached rarely and by name (Recent Files is the other one)
    - Binds to MainViewModel Q_PROPERTYs and connects signals/slots; contains no business logic
    - `logError()` / `logWarning()` / `logSuccess()` append colored HTML entries (red / #DAA520 / green) to the log window
    - Errors/warnings shown inline in the log (`QTextBrowser`, clickable links, persistent, auto-scroll); QMessageBox reserved for About and the calibration summary
