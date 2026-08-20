@@ -14,42 +14,11 @@ what was built is worse than no plan at all.
 
 ## Open items
 
-### [Comprehensive, task-oriented user manual](comprehensive-user-manual.md)
+**None.** Every initiative this file has tracked has shipped; see the table below.
 
-The manual is organised by UI surface, which answers "what does this control do" but not
-"I have an AGC recording and a step file - what do I actually do?" Calibration is the
-sharpest case: the most procedural workflow in the product, five nested dialogs deep, gets
-six sentences and no figures.
-
-Proposal is to add task walkthroughs in front of the existing reference sections rather
-than replacing them, with step calibration as the centrepiece - written against the real
-failure modes (turn-on transient, operator down-ramp, inverted polarity, per-channel
-fallback), not just the happy path.
-
-**Blocked on screenshots** - **24** of them, enumerated by filename so they can be captured
-in one sitting. The list was audited against every `QDialog` in the codebase rather than
-written from memory, which caught several whole surfaces the first draft had missed:
-*Customize Plot Series*, the hamburger menu, *Set Time Window*, error reporting and the light
-theme. 23 can be shot against v2.9.3 today; the installer-components figure is blocked on
-building that feature, so **build the installer change first** or accept one more capture
-later.
-
-The figure-storage question is **decided**. Measured first: the manual is stored
-*uncompressed* in the exe (verified in the shipped binary), so 1804 KB of the 2634 KB
-executable - **68%** - is documentation.
-
-The shape is a **base manual that is always present, plus an optional add-on**: today's
-manual stays a compiled-in resource, and the new full manual ships as an installed file
-offered as an installer component, with the portable ZIP carrying both. The user therefore
-always has a manual, and that guarantee is *structural* - a compiled-in resource cannot go
-missing - so there is no "manual not found" state at all. The benefit is editorial freedom:
-the full manual's figure budget is no longer bounded by what is tolerable to compile into
-every copy of the program.
-
-The risk is two artifacts drifting, so both must be emitted from one source by
-`build_manual.ps1` (the full manual is the base plus walkthroughs), and
-`check_release_consistency.ps1` must assert version markers in **both** - it checks only one
-manual today.
+That is the normal resting state, not a prompt to invent work. Add an entry here when
+something is scoped and not yet started, and give it its own file once it needs more
+than a paragraph.
 
 ---
 
@@ -72,3 +41,4 @@ documentation lives.
 | Simplify the plot window | PR #43 | `docs/CLAUDE.md` (US4.0 / US4.1), `resources/usermanual.html` §3 |
 | Make the remaining plot shortcuts visible in the context menu | PR #71 | `PlotWidget::buildContextMenu`. `(V)` in the View Mode submenu title (Qt will not draw a shortcut on a submenu); new top-level **Reset View** carrying `R`, which is also the menu's only single-action equivalent of the on-chart Reset view chip. Both were tooltips, which discover nothing |
 | Hide a Y axis when nothing is plotted against it | PR #68 | `include/view/tmchart.h` (`setLeftAxisVisible`/`setRightAxisVisible`), `PlotViewModel::hasVisibleLeftAxisSeries`/`hasVisibleRightAxisSeries`, `PlotWidget::updateAxisVisibility`. Keys on **visible** series. Rendering the reclaimed layout also caught the first X tick label clipping off the left edge |
+| A comprehensive, task-oriented user manual | PR #75-#85, released in v2.10.0 | `docs/manual/walkthroughs.html` (the five walkthroughs), `scripts/build_manual.ps1` (figure registry + crop validation), `scripts/embed_manual_images.py` (one document object -> both manuals), `deploy/tmDataQualityAnalyzer.iss` (`fullmanual` task). Walkthrough headings carry no numbers and cross-references are anchors: the embedder numbers them and shifts the reference sections, so the same prose is correct in a manual that has the walkthroughs and one that does not. Registering a capture only validates its crop - it does not place it, and 8 of 23 sat in the repo and in neither manual until that was cross-checked |
