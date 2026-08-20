@@ -1,3 +1,55 @@
+tmDataQualityAnalyzer v2.10.0 - What's New
+=================================
+
+  This release is about the user manual. There are now two of them, and you
+  choose which you get when you install.
+
+  - New: A full, illustrated user manual. It walks you through each job from
+    start to finish, with a picture of every dialog you will see along the way:
+
+        Opening a file and configuring streams
+        Running a Frame Sync Lock analysis
+        Running a Receiver SNR analysis
+        Calibrating a receiver with a step calibration file
+        Processing many files at once with a template
+
+    The step calibration walkthrough is the one to read if you have found that
+    feature hard to approach - it covers preparing the step TOML, choosing the
+    calibration recording, clipping the ends of it, and reading the summary that
+    tells you which channels calibrated and which fell back to linear.
+
+  - New: The installer asks whether you want the full manual. Tick "Install the
+    full illustrated user manual" on the components page and it is installed
+    alongside the application; leave it unticked for a smaller install.
+
+    Either way you always have a manual. The shorter reference manual is built
+    into the application itself and cannot be removed, so Help > User Manual
+    always opens something. If you installed the full one, that is what opens.
+
+    The portable ZIP always contains the full manual - there is nothing to
+    choose.
+
+  - Improved: The manual now describes exactly what each export produces - every
+    column a CSV export writes, what is and is not composited into an exported
+    image, and what the log export captures - and documents the readout that
+    follows your cursor across the plot, including how to pin it to one channel.
+
+  - Improved: In the Configure Streams dialog, the Channel and Mode columns are
+    left-aligned, so their text sits next to its heading instead of being pushed
+    to the right-hand edge.
+
+    Note: a channel name too long for the column is now shortened at the end
+    rather than the start. Hover it to see the full name.
+
+  - Improved: The check and cross in the Batch Process Files dialog are green and
+    red, matching the Ready column in Configure Streams. A file that was rejected
+    also keeps its reason readable instead of greying out along with the row.
+
+  Everything else is unchanged from v2.9.3. Your existing settings, configuration
+  files, calibration TOMLs and processing templates all continue to work as
+  before.
+
+
 tmDataQualityAnalyzer v2.9.3 - What's New
 =================================
 

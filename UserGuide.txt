@@ -22,8 +22,16 @@ TABLE OF CONTENTS
 8. Reopening Earlier Results (CSV Import)
 9. Keyboard Shortcuts
 
-A fuller, illustrated version of this guide is available inside the application
-from the menu: Help > User Manual...
+A fuller, illustrated version of this guide is available from the menu:
+Help > User Manual...
+
+Two versions of that manual exist. A reference manual covering every control and
+setting is built into the application and is always available. A fuller one adds
+step-by-step walkthroughs of each job - frame sync, receiver SNR, step
+calibration and batch processing - illustrated at every dialog; it is an optional
+component in the installer ("Install the full illustrated user manual") and is
+always present in the portable download as UserManual.html. Help > User Manual
+opens whichever one you have.
 
 ================================================================================
 1. INTRODUCTION
