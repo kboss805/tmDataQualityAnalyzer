@@ -306,6 +306,9 @@ def main() -> int:
                         help="sync pattern length in bits (default: 4 * hex digits)")
     parser.add_argument("--frame-bits", type=int, default=None,
                         help="bits in minor frame, as configured in the stream")
+    parser.add_argument("--channel", type=int, default=None,
+                        help="PCM channel ID to analyze (default: the one with the most "
+                             "packets). Channels are separate bitstreams — never mix them.")
     parser.add_argument("--packets", type=int, default=40,
                         help="PCM packets to include in the bit-level scan (default: 40)")
     parser.add_argument("--max-packets", type=int, default=4000,
@@ -324,7 +327,11 @@ def main() -> int:
     census: Counter[int] = Counter()
     chan_by_type: defaultdict[int, Counter[int]] = defaultdict(Counter)
     first_packet = None
-    pcm_payloads: list[bytes] = []
+    # Keyed by channel: each PCM channel is an independent bitstream, exactly as
+    # Ch10PacketReader fans them out to one worker queue per channel. Splicing
+    # two channels into one buffer breaks continuity at every seam and no sync
+    # grid can form, so they are never concatenated here either.
+    pcm_by_channel: defaultdict[int, list[bytes]] = defaultdict(list)
     tmats_attrs: dict[str, str] | None = None
     tmats_text = ""
 
@@ -335,8 +342,8 @@ def main() -> int:
         chan_by_type[dtype][chan] += 1
         if dtype == DT_TMATS and tmats_attrs is None:
             tmats_attrs, tmats_text = parse_tmats(body)
-        elif dtype == DT_PCM and len(pcm_payloads) < args.packets:
-            pcm_payloads.append(body[4:])  # skip the 4-byte channel-specific data word
+        elif dtype == DT_PCM and len(pcm_by_channel[chan]) < args.packets:
+            pcm_by_channel[chan].append(body[4:])  # skip the 4-byte channel-specific data word
 
     if first_packet is None:
         print("\n  !! no readable Ch10 packets — this may not be a Chapter 10 file")
@@ -369,13 +376,28 @@ def main() -> int:
     else:
         print("\n  !! no TMATS packet found")
 
-    if not pcm_payloads:
+    if not pcm_by_channel:
         print("\nNo PCM payloads to scan. Stopping.")
         return 1
 
+    if args.channel is not None:
+        if args.channel not in pcm_by_channel:
+            print(f"\n  !! no PCM packets on channel {args.channel}; "
+                  f"available: {sorted(pcm_by_channel)}")
+            return 1
+        channel = args.channel
+    else:
+        channel = max(pcm_by_channel, key=lambda c: len(pcm_by_channel[c]))
+        if len(pcm_by_channel) > 1:
+            print(f"\n  NOTE: {len(pcm_by_channel)} PCM channels present "
+                  f"({sorted(pcm_by_channel)}); analyzing ch{channel}, the busiest.")
+            print("        Re-run with --channel N to check the others — each is a")
+            print("        separate bitstream and must be analyzed on its own.")
+
+    pcm_payloads = pcm_by_channel[channel]
     blob = b"".join(pcm_payloads)
     odd = sum(1 for p in pcm_payloads if len(p) & 1)
-    print(f"\n--- Sync search over {len(pcm_payloads)} PCM packets "
+    print(f"\n--- Sync search over {len(pcm_payloads)} PCM packets on ch{channel} "
           f"({len(blob)} bytes, {len(blob) * 8} bits) ---")
     print(f"  payload lengths: min={min(len(p) for p in pcm_payloads)} "
           f"max={max(len(p) for p in pcm_payloads)} odd={odd}/{len(pcm_payloads)}")
