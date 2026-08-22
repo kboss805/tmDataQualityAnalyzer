@@ -37,6 +37,7 @@ class MainViewModel : public QObject
     Q_PROPERTY(QStringList timeChannelList READ timeChannelList NOTIFY channelListsChanged)
     Q_PROPERTY(QStringList pcmChannelList READ pcmChannelList NOTIFY channelListsChanged)
     Q_PROPERTY(int timeChannelIndex READ timeChannelIndex WRITE setTimeChannelIndex NOTIFY timeChannelIndexChanged)
+    Q_PROPERTY(bool swapBytes READ swapBytes WRITE setSwapBytes NOTIFY swapBytesChanged)
     Q_PROPERTY(int pcmChannelIndex READ pcmChannelIndex WRITE setPcmChannelIndex NOTIFY pcmChannelIndexChanged)
     Q_PROPERTY(bool fileLoaded READ fileLoaded NOTIFY fileLoadedChanged)
     Q_PROPERTY(int progressPercent READ progressPercent NOTIFY progressPercentChanged)
@@ -59,6 +60,10 @@ public:
     QStringList timeChannelList() const;         ///< @return Display strings for time channel combo box.
     QStringList pcmChannelList() const;          ///< @return Display strings for PCM channel combo box.
     int timeChannelIndex() const;                ///< @return Currently selected time channel index.
+    /// @return Whether the loaded recording's byte pairs are swapped before processing.
+    /// File-scoped: one value per recording, stamped onto every stream job.
+    bool swapBytes() const;
+    void setSwapBytes(bool on);                  ///< Sets the file-level byte order.
     int pcmChannelIndex() const;                 ///< @return Currently selected PCM channel index.
     bool fileLoaded() const;                     ///< @return True if a .ch10 file is loaded.
     int progressPercent() const;                 ///< @return Current processing progress (0--100).
@@ -153,6 +158,7 @@ signals:
     void inputFilenameChanged();      ///< Emitted when the input file path changes.
     void channelListsChanged();       ///< Emitted when channel combo box lists are rebuilt.
     void timeChannelIndexChanged();   ///< Emitted when the selected time channel changes.
+    void swapBytesChanged();          ///< Emitted when the file-level byte order changes.
     void pcmChannelIndexChanged();    ///< Emitted when the selected PCM channel changes.
     void fileLoadedChanged();         ///< Emitted when the file-loaded state changes.
     void progressPercentChanged();    ///< Emitted when the processing progress updates.
@@ -211,6 +217,7 @@ private:
     bool m_file_loaded;                      ///< True when a .ch10 file is loaded.
 
     int m_time_channel_index;                ///< Selected time channel combo box index.
+    bool m_swap_bytes = true;                ///< File-level byte order; true = pre-existing behaviour.
     int m_pcm_channel_index;                 ///< Selected PCM channel combo box index.
 
     QVector<StreamConfig> m_stream_configs;  ///< Per-stream configuration of the file currently being configured.

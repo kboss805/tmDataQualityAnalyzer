@@ -28,6 +28,7 @@ struct Source
     QString filepath;                     ///< Path to the .ch10 file.
     int     sourceId = 0;                 ///< Stable id within the session (0 = first/only source).
     int     timeChannelIndex = 0;         ///< Selected time channel combo box index for this file.
+    bool    swapBytes = true;             ///< File-level byte order used to process this file.
     QVector<StreamConfig> streamConfigs;  ///< Per-stream configuration used for this file's processing run.
 };
 

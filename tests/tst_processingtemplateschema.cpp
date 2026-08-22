@@ -242,3 +242,28 @@ void TestProcessingTemplateSchema::fromJsonRejectsNonObjectDocument()
     QCOMPARE(int(ProcessingTemplateSchema::fromJson(doc, out)),
              int(ProcessingTemplateSchema::LoadStatus::InvalidFormat));
 }
+
+void TestProcessingTemplateSchema::swapBytesRoundTripsAndDefaultsTrue()
+{
+    // A batch is one vendor's recordings, so byte order travels with the template
+    // exactly as timeChannelIndex does.
+    ProcessingTemplate in;
+    in.name             = "safran";
+    in.timeChannelIndex = 1;
+    in.swapBytes        = false;
+
+    ProcessingTemplate out;
+    QCOMPARE(int(ProcessingTemplateSchema::fromJson(ProcessingTemplateSchema::toJson(in), out)),
+             int(ProcessingTemplateSchema::LoadStatus::Success));
+    QCOMPARE(out.swapBytes, false);
+
+    // A template written before this field existed carries no "swapBytes" key. Those
+    // came from a build that always swapped, so absent must read as true - anything
+    // else would silently change how an existing template processes its files.
+    QJsonObject legacy = ProcessingTemplateSchema::toJson(in).object();
+    legacy.remove("swapBytes");
+    ProcessingTemplate from_legacy;
+    QCOMPARE(int(ProcessingTemplateSchema::fromJson(QJsonDocument(legacy), from_legacy)),
+             int(ProcessingTemplateSchema::LoadStatus::Success));
+    QCOMPARE(from_legacy.swapBytes, true);
+}

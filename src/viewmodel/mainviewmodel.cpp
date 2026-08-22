@@ -102,6 +102,15 @@ QStringList MainViewModel::pcmChannelList() const
 }
 
 int MainViewModel::timeChannelIndex() const { return m_time_channel_index; }
+
+bool MainViewModel::swapBytes() const { return m_swap_bytes; }
+
+void MainViewModel::setSwapBytes(bool on)
+{
+    if (m_swap_bytes == on) return;
+    m_swap_bytes = on;
+    emit swapBytesChanged();
+}
 int MainViewModel::pcmChannelIndex() const { return m_pcm_channel_index; }
 bool MainViewModel::fileLoaded() const { return m_file_loaded; }
 int MainViewModel::progressPercent() const { return m_coordinator->progressPercent(); }
@@ -385,6 +394,7 @@ void MainViewModel::onCoordinatorProcessingFinished(bool success)
         src.filepath = m_input_filename;
         src.sourceId = m_pending_source_id;
         src.timeChannelIndex = m_time_channel_index;
+        src.swapBytes        = m_swap_bytes;
         src.streamConfigs = m_stream_configs;
         m_sources.push_back(src);
         emit sourcesChanged();
@@ -567,6 +577,10 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
     out_job.params.bitsInMinorFrame   = bits_in_minor_frame;
     out_job.params.isRandomized       = cfg.sync.randomized;
     out_job.params.isInverted         = cfg.sync.inverted;
+    // File-scoped, so it comes from the view model rather than from cfg: every job
+    // built for this recording gets the same value. Sourcing it per stream would
+    // allow one file's channels to disagree about their own byte order.
+    out_job.params.swapBytes          = m_swap_bytes;
     out_job.params.mode               = cfg.mode;
     out_job.params.dataRateBps        = (cfg.sync.dataRateMbps > 0.0) ? cfg.sync.dataRateMbps * 1e6 : 0.0;
     out_job.params.streamLabel        = stream_desc;
