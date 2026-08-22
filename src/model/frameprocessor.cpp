@@ -454,9 +454,14 @@ void FrameProcessor::scanBit(ScanState& s, uint8_t bit_val, bool in_window,
             }
             else
             {
+                // Off-phase acquisition: a sync match that is NOT on a frame boundary.
+                // boundary_syncs is deliberately not incremented here - it used to be,
+                // which made the failure diagnostic report an off-phase match as
+                // "boundary-aligned" and told operators the opposite of the truth.
                 s.sync_count = 1;
-                s.boundary_syncs++;
                 s.current_sync_run = 1;
+                if (s.current_sync_run > s.max_sync_run)
+                    s.max_sync_run = s.current_sync_run;
             }
 
             // Only extract a sample once the sync match is boundary-aligned; an
@@ -573,6 +578,19 @@ bool FrameProcessor::reportCompletion(const ProcessingParams& params, const Scan
 
     if (d.total_frames_extracted == 0)
     {
+        // Distinguish the two very different shapes of this failure. A handful of
+        // matches with none on a frame boundary is not a marginal lock - it is the
+        // pattern occurring by chance, which a 32-bit pattern does roughly once per
+        // 4 Gbit. Saying so is the difference between "tune something" and "this
+        // stream is not what you configured".
+        const QString hint = (d.boundary_syncs == 0)
+            ? QStringLiteral(
+                  "\n  No sync ever landed on a frame boundary. The pattern matched "
+                  "somewhere, but never at the\n  expected frame spacing - so the sync "
+                  "pattern, bits/frame, or the data's byte order is\n  wrong for this "
+                  "stream. Chance alone produces about one 32-bit match per 4 Gbit.")
+            : QString();
+
         emit errorOccurred(
             QString("Frame sync pattern was found but no valid frames were extracted.\n"
                     "  Config:          bits/frame=%1  words/frame=%2  sync_len=%3 bits  min_syncs=%4\n"
@@ -584,7 +602,8 @@ bool FrameProcessor::reportCompletion(const ProcessingParams& params, const Scan
             .arg(d.buffer_ever_filled ? "filled at least once (save_data reached 2)"
                                       : "NEVER filled — words_in_frame may be too large")
             .arg(d.first_data_time, 0, 'f', 3).arg(d.last_data_time, 0, 'f', 3)
-            .arg(params.startSeconds).arg(params.stopSeconds));
+            .arg(params.startSeconds).arg(params.stopSeconds)
+            + hint);
         emit processingFinished(false);
         return false;
     }

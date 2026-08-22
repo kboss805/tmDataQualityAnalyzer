@@ -445,6 +445,27 @@ The stories below follow the workflow a first-time user takes through the applic
 
 #### Fixed
 
+- **The sync-failure diagnostic reported off-phase matches as boundary-aligned.** The
+  scanner's off-phase branch — a sync match that is *not* on a frame boundary —
+  incremented `boundary_syncs` anyway, and set `current_sync_run` without ever folding
+  it into `max_sync_run`. So the "no valid frames were extracted" report could read
+  `198543 total | 99272 boundary-aligned | longest run=0`, which is self-contradictory
+  (99,272 aligned syncs cannot yield a longest run of zero) and points the reader at
+  the wrong cause: it says the syncs were landing correctly when not one of them was.
+  Both counters are diagnostic-only — written in the scanner, read once, printed once —
+  so no processed data was ever affected. The report was the only casualty, and the
+  report is what an operator uses to decide what to change.
+  The message now also explains a zero-aligned result instead of leaving it to be
+  inferred: the pattern matched somewhere but never at the expected frame spacing, so
+  the pattern, bits/frame or byte order is wrong — and chance alone yields about one
+  32-bit match per 4 Gbit, which is what a handful of "found" syncs across a multi-hour
+  recording actually means.
+- `TestFrameProcessor::offPhaseSyncsAreNotCountedAsBoundaryAligned` reproduces it
+  deterministically — the right sync pattern with a deliberately wrong frame length, so
+  every match is off-phase by construction — and asserts both `0 boundary-aligned` and
+  the new explanation. Verified against the old accounting, which reported 99,272
+  boundary-aligned syncs where the correct answer is zero. Baseline **373 / 0 / 1**.
+
 - **The hamburger menu's section headers were never drawn.** `Process`,
   `Import/Export` and `Settings` were added with `QMenu::addSection(tr(…))`, but once
   *any* stylesheet is set on the application `QStyleSheetStyle` takes over menu-item
