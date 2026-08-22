@@ -23,6 +23,13 @@ odd lengths), `derandomize` mirrors FrameProcessor::derandomizeBitstream, and
 `scan` mirrors the bit-serial MSB-first loop in FrameProcessor::scanBit. Keep
 them in sync if that code changes, or the matrix stops being evidence.
 
+Mirroring means matching the *granularity* too, not just the arithmetic. The byte
+swap is applied per packet, because that is where FrameProcessor applies it and
+because SwapBytes_PcmF1 skips odd-length buffers - so whether a payload is odd
+changes the result. Invert, derandomize and LSB-first are position-independent or
+carry their state across the seam (the LFSR does), so those are safe to run over
+the concatenation.
+
 Usage:
 
     py scripts/ch10_triage.py path/to/file.ch10 --pattern FE6B2840 --frame-bits 8000
@@ -404,6 +411,8 @@ def main() -> int:
     if odd:
         print("  !! odd-length payloads are silently NOT byte-swapped while their")
         print("     even-length neighbors are — an inconsistent bitstream")
+        print("     Every payload here is odd, so the app's byte swap is a NO-OP on")
+        print("     this channel: its real behavior is the swap=False rows.")
 
     results = []
     for swap in (False, True):
@@ -412,7 +421,17 @@ def main() -> int:
                 for lsb in (False, True):
                     bits = blob
                     if swap:
-                        bits = swap_bytes(bits)
+                        # PER PACKET, then rejoin - NOT swap_bytes(blob).
+                        #
+                        # FrameProcessor swaps each packet's payload on its own, and
+                        # SwapBytes_PcmF1 bails out on an odd byte count, so an odd
+                        # payload is left alone. Swapping the concatenation instead
+                        # swaps straight through those packets (400 x 875 bytes is
+                        # even even though every packet is odd) and reports a
+                        # transform the app never applies. That mislabelled the
+                        # "app default" row on exactly the channels this file needed
+                        # it to be right on.
+                        bits = b"".join(swap_bytes(pkt) for pkt in pcm_payloads)
                     if inv:
                         bits = invert(bits)
                     if rand:
