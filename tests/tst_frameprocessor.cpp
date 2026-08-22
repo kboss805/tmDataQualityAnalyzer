@@ -939,3 +939,69 @@ void TestFrameProcessor::oddPayloadSwapSkipIsReported()
              qPrintable(QStringLiteral("all-odd stream must report an inert setting, not a "
                                        "mixed-order warning; log was: %1").arg(joined)));
 }
+
+void TestFrameProcessor::offPhaseSyncsAreNotCountedAsBoundaryAligned()
+{
+    // The off-phase branch of the scanner used to increment boundary_syncs, so a match
+    // that was NOT on a frame boundary was reported as "boundary-aligned" - the exact
+    // opposite of the truth - and it set current_sync_run without ever folding it into
+    // max_sync_run. A real failure report read "1 total | 1 boundary-aligned |
+    // longest run=0", which is self-contradictory and pointed the reader at the wrong
+    // cause.
+    //
+    // Reproduced deterministically with the RIGHT sync pattern and a WRONG frame
+    // length: matches occur at the real 800-bit spacing, so minor_frame_bit_count
+    // never equals the configured 1234 and no match is ever boundary-aligned.
+    const QString filepath = testDataPath("agc_rnrz-l_trc_testfile.ch10");
+    if (!QFileInfo::exists(filepath))
+        QSKIP("RNRZ-L test file not available");
+
+    Chapter10Reader reader;
+    QVERIFY(reader.loadChannels(filepath));
+    const int pcm_id  = reader.getFirstPCMChannelID();
+    const int time_id = reader.getCurrentTimeChannelID();
+    if (pcm_id < 0 || time_id < 0)
+        QSKIP("Missing channels in test file");
+
+    constexpr int kWrongFrameBits = 1234;   // real frames are 800 bits
+    ProcessingParams p = makeTestParams(filepath, time_id, pcm_id,
+                                        0xFE6B2840, 32, 49, kWrongFrameBits);
+    p.startSeconds    = 0;
+    p.stopSeconds     = UINT64_MAX;
+    p.samplePeriodSec = 1.0;
+    p.isRandomized    = true;
+    p.mode            = StreamMode::FrameSyncLockStats;
+
+    PacketQueue queue;
+    p.packetQueue = &queue;
+    Ch10PacketReader rdr;
+    QVector<ProcessingParams*> params_list = { &p };
+    QString error;
+    QVERIFY2(rdr.prepare(p.filename, p.timeChannelId, params_list, error), qPrintable(error));
+
+    FrameSetup empty_setup;
+    FrameProcessor fp;
+    QString reported;
+    QObject::connect(&fp, &FrameProcessor::errorOccurred,
+                     [&reported](const QString& m) { reported = m; });
+
+    QFuture<void> future = QtConcurrent::run([&rdr]() { rdr.run(); });
+    const bool ok = fp.process(p, &empty_setup);
+    future.waitForFinished();
+
+    QVERIFY2(!ok, "a wrong frame length must not yield extracted frames");
+    QVERIFY2(reported.contains("no valid frames were extracted"),
+             qPrintable(QStringLiteral("unexpected error: %1").arg(reported)));
+
+    // The fix: every match here is off-phase, so the count must be zero. Before the
+    // fix this read as thousands of "boundary-aligned" syncs.
+    QVERIFY2(reported.contains("0 boundary-aligned"),
+             qPrintable(QStringLiteral("off-phase matches must not be counted as "
+                                       "boundary-aligned; message was:\n%1").arg(reported)));
+
+    // ...and with none aligned, the report must say what that means rather than
+    // leaving the reader to infer it.
+    QVERIFY2(reported.contains("No sync ever landed on a frame boundary"),
+             qPrintable(QStringLiteral("expected the no-boundary explanation; message was:\n%1")
+                            .arg(reported)));
+}

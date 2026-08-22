@@ -30,6 +30,7 @@ private slots:
     void nonLinearCalibrationAveragesRawBeforeInterpolating();
     void swapBytesOffFindsSyncThatTheSwapDestroys();
     void oddPayloadSwapSkipIsReported();
+    void offPhaseSyncsAreNotCountedAsBoundaryAligned();
 };
 
 #endif // TST_FRAMEPROCESSOR_H
