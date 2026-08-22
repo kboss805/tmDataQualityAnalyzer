@@ -159,6 +159,10 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
 
     // Per-bit diagnostics the scan helpers don't touch.
     uint64_t total_bytes_processed = 0;
+    // Byte-swap bookkeeping, reported once after the drain. See the SwapBytes_PcmF1
+    // call site below for why a skip is possible at all.
+    uint64_t total_packets         = 0;
+    uint64_t swap_skipped_packets  = 0;
     double   first_data_time       = -1.0;
     double   last_data_time        = 0.0;
     bool     time_seeded           = false;
@@ -201,8 +205,18 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
 
         if (needs_swap)
         {
-            SwapBytes_PcmF1(raw_data, static_cast<long>(raw_len));
+            // SwapBytes_PcmF1 returns I106_BUFFER_OVERRUN on an odd byte count and
+            // returns BEFORE touching the buffer, so that packet stays unswapped while
+            // its even-length neighbours are swapped. Discarding the return - which is
+            // what this did - left one stream silently carrying two different byte
+            // orders, and the operator no way to see it. Count them and say so after
+            // the drain rather than per packet, which would flood the log.
+            if (SwapBytes_PcmF1(raw_data, static_cast<long>(raw_len)) != I106_OK)
+            {
+                swap_skipped_packets++;
+            }
         }
+        total_packets++;
         if (is_inverted)
         {
             invertBits(raw_data, raw_len);
@@ -270,6 +284,34 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
 
         global_bit_offset += packet_bits;
         total_bytes_processed += raw_len;
+    }
+
+    // Report any byte-swap skips. Silence here is what made this hard to diagnose:
+    // the stream simply failed to sync, with nothing to distinguish "wrong pattern"
+    // from "half this stream was not transformed the way you asked".
+    if (swap_skipped_packets > 0)
+    {
+        if (swap_skipped_packets == total_packets)
+        {
+            // Every packet skipped: the setting is inert for this stream, which is
+            // worth saying plainly - the operator's choice had no effect at all.
+            emit logMessage(
+                QString("Byte swap had no effect on this stream: all %1 packets have an "
+                        "odd payload length, which cannot be byte-pair swapped. The data "
+                        "was processed unswapped regardless of the Swap byte pairs setting.")
+                    .arg(swap_skipped_packets));
+        }
+        else
+        {
+            // The genuinely corrupting case: one stream, two byte orders.
+            emit logMessage(
+                QString("Warning: byte swap skipped on %1 of %2 packets (odd payload "
+                        "length). Those packets were left unswapped while the rest were "
+                        "swapped, so this stream carries two different byte orders and "
+                        "frame sync may be unreliable.")
+                    .arg(swap_skipped_packets)
+                    .arg(total_packets));
+        }
     }
 
     // Flush the last set of accumulated samples.

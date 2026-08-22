@@ -29,6 +29,7 @@ private slots:
     void offPhaseSyncAfterLockLossIsNotExtracted();
     void nonLinearCalibrationAveragesRawBeforeInterpolating();
     void swapBytesOffFindsSyncThatTheSwapDestroys();
+    void oddPayloadSwapSkipIsReported();
 };
 
 #endif // TST_FRAMEPROCESSOR_H

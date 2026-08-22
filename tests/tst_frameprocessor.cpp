@@ -876,3 +876,66 @@ void TestFrameProcessor::swapBytesOffFindsSyncThatTheSwapDestroys()
              "with swapBytes on the sync must be destroyed and processing must fail");
     QCOMPARE(swapped.peakLock, 0.0);
 }
+
+void TestFrameProcessor::oddPayloadSwapSkipIsReported()
+{
+    // SwapBytes_PcmF1 refuses an odd byte count and returns before touching the
+    // buffer. FrameProcessor used to discard that return, so with the swap ON an
+    // odd-length payload was silently left unswapped while even-length packets in
+    // the same recording were swapped - one stream carrying two byte orders, with
+    // nothing in the log to say so. That silence is what made the Safran recording
+    // hard to diagnose: channel 14 locked and channel 13 did not, under identical
+    // settings, for a reason nothing surfaced.
+    //
+    // Channel 14 is the all-odd case: every payload is 875 bytes, so the swap is
+    // inert for the whole stream and the operator's setting has no effect at all.
+    const QString filepath = testDataPath("safran_testfile.ch10");
+    if (!QFileInfo::exists(filepath))
+        QSKIP("Safran test file not available");
+
+    Chapter10Reader reader;
+    QVERIFY(reader.loadChannels(filepath));
+    const int time_id = reader.getCurrentTimeChannelID();
+    if (time_id < 0)
+        QSKIP("Missing time channel in test file");
+
+    constexpr int kOddPayloadChannelId = 14;
+    constexpr int kPrnFrameBits  = 32767;
+    constexpr int kPrnFrameWords =
+        (kPrnFrameBits + PCMConstants::kCommonWordLen - 1) / PCMConstants::kCommonWordLen;
+
+    ProcessingParams p = makeTestParams(filepath, time_id, kOddPayloadChannelId,
+                                        0x334AABBF, 32, kPrnFrameWords, kPrnFrameBits);
+    p.startSeconds    = 0;
+    p.stopSeconds     = UINT64_MAX;
+    p.samplePeriodSec = 1.0;
+    p.isRandomized    = false;
+    p.swapBytes       = true;   // asked for - and silently not delivered
+    p.mode            = StreamMode::FrameSyncLockStats;
+
+    PacketQueue queue;
+    p.packetQueue = &queue;
+    Ch10PacketReader rdr;
+    QVector<ProcessingParams*> params_list = { &p };
+    QString error;
+    QVERIFY2(rdr.prepare(p.filename, p.timeChannelId, params_list, error), qPrintable(error));
+
+    FrameSetup empty_setup;
+    FrameProcessor fp;
+    QStringList log;
+    QObject::connect(&fp, &FrameProcessor::logMessage,
+                     [&log](const QString& m) { log << m; });
+
+    QFuture<void> future = QtConcurrent::run([&rdr]() { rdr.run(); });
+    fp.process(p, &empty_setup);
+    future.waitForFinished();
+
+    const QString joined = log.join(" | ");
+    QVERIFY2(joined.contains("odd payload length"),
+             qPrintable(QStringLiteral("the skip must be reported; log was: %1").arg(joined)));
+    // Every packet on this channel is odd, so the message must say the setting was
+    // inert rather than warning about a half-swapped stream.
+    QVERIFY2(joined.contains("had no effect on this stream"),
+             qPrintable(QStringLiteral("all-odd stream must report an inert setting, not a "
+                                       "mixed-order warning; log was: %1").arg(joined)));
+}
