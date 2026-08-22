@@ -37,6 +37,10 @@ struct ProcessingTemplate
     QString appVersion;          ///< Informational only; not a load gate.
     QString name;                ///< Optional friendly name for the template.
     int     timeChannelIndex = 0; ///< Time-channel combo index to apply when processing each batch file.
+    /// File-level byte order to apply to every batch file. A batch is one vendor's
+    /// recordings, so one value covers them all. Defaults true, matching both the
+    /// pre-setting behaviour and templates written before this field existed.
+    bool    swapBytes = true;
     QVector<TemplateStreamEntry> entries;
 };
 

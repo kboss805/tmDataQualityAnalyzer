@@ -280,7 +280,13 @@ bool Ch10PacketReader::prepare(const QString& filename,
         // ulMinSyncs == 0 means the TMATS field was not set; treat as 1 (at minimum
         // one confirmed boundary-aligned sync is required before extracting frames).
         ra.minSyncs      = std::max(1u, pcm_attrs->ulMinSyncs);
-        ra.needsSwap     = (pcm_attrs->bDontSwapRawData == 0); // Need swap if not mapped yet
+        // Byte order comes from the operator, not from the library attributes.
+        // bDontSwapRawData is memset to 0 by Set_Attributes_PcmF1 and only ever
+        // assigned by Set_Attributes_Ext_PcmF1 when its lNoByteSwap argument is not
+        // -1 - and we pass -1 above, because TMATS has no field for it. So the old
+        // expression was a constant `true` dressed up as a lookup, and there was no
+        // way to process a recording whose payload is not byte-swapped.
+        ra.needsSwap     = p->swapBytes;
         ra.resolved      = true;
 
         double delta_100ns = pcm_attrs->dDelta100NanoSeconds;

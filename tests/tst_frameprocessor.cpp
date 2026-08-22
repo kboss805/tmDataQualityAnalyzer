@@ -5,6 +5,7 @@
 
 #include "tst_frameprocessor.h"
 
+#include <algorithm>
 #include <cmath>
 
 #include <QByteArray>
@@ -783,4 +784,95 @@ void TestFrameProcessor::nonLinearCalibrationAveragesRawBeforeInterpolating()
     QVERIFY2(qAbs(r.channels[0].values.first() - 10.0) < 1e-9,
              qPrintable(QString("Expected 10.0 dB (raw averaged before calibration), got %1")
                             .arg(r.channels[0].values.first())));
+}
+
+void TestFrameProcessor::swapBytesOffFindsSyncThatTheSwapDestroys()
+{
+    // The Safran recording is byte-ordered the opposite way to every other fixture
+    // here: channel 13 carries PRN-15 (334AABBF, 32767-bit frames) in the raw stream,
+    // and applying the byte swap destroys the pattern outright.
+    //
+    // Before ProcessingParams::swapBytes existed the swap was unconditional - the
+    // reader filled needsSwap from an irig106 attribute that nothing ever assigns, so
+    // it was a constant `true` wearing the costume of a lookup - and this recording
+    // could not be processed at all.
+    //
+    // Both directions are asserted. Checking only that swap=false locks would pass
+    // against a build that ignored the flag and never swapped anything, which would
+    // silently break every other fixture in this suite.
+    const QString filepath = testDataPath("safran_testfile.ch10");
+    if (!QFileInfo::exists(filepath))
+        QSKIP("Safran test file not available");
+
+    Chapter10Reader reader;
+    QVERIFY(reader.loadChannels(filepath));
+    const int time_id = reader.getCurrentTimeChannelID();
+    if (time_id < 0)
+        QSKIP("Missing time channel in test file");
+
+    // Channel 13 specifically. Channels 11 and 12 carry no PRN-15 under any transform,
+    // and channel 14's payloads are an odd number of bytes - which SwapBytes_PcmF1
+    // declines to swap - so 14 locks either way and would prove nothing about the flag.
+    constexpr int kPrnChannelId = 13;
+
+    // PRN-15 is 2^15-1 bits, deliberately NOT a whole number of 8-bit words.
+    // MainViewModel::buildStreamJob resolves that with ceiling division; mirroring the
+    // expression keeps this test honest if the frame geometry ever changes. The floor
+    // finds the sync and then extracts no frames, which is a different failure.
+    constexpr int kPrnFrameBits  = 32767;
+    constexpr int kPrnFrameWords =
+        (kPrnFrameBits + PCMConstants::kCommonWordLen - 1) / PCMConstants::kCommonWordLen;
+
+    struct Outcome { bool processed = false; double peakLock = 0.0; };
+
+    auto run = [&](bool swap) -> Outcome {
+        ProcessingParams p = makeTestParams(filepath, time_id, kPrnChannelId,
+                                            0x334AABBF, 32, kPrnFrameWords, kPrnFrameBits);
+        p.startSeconds    = 0;
+        p.stopSeconds     = UINT64_MAX;
+        p.samplePeriodSec = 1.0;
+        p.isRandomized    = false;
+        p.swapBytes       = swap;
+        p.mode            = StreamMode::FrameSyncLockStats;
+
+        // Open-coded rather than runWithReader() so a prepare() failure - a broken
+        // fixture rather than a byte-order result - is reported as itself.
+        PacketQueue queue;
+        p.packetQueue = &queue;
+        Ch10PacketReader rdr;
+        QVector<ProcessingParams*> params_list = { &p };
+        QString error;
+        if (!rdr.prepare(p.filename, p.timeChannelId, params_list, error))
+        {
+            qWarning("prepare() failed (swap=%d): %s", int(swap), qPrintable(error));
+            return {};
+        }
+
+        FrameSetup empty_setup;  // No word map for lock-only mode.
+        FrameProcessor fp;
+        QFuture<void> future = QtConcurrent::run([&rdr]() { rdr.run(); });
+        Outcome out;
+        out.processed = fp.process(p, &empty_setup);
+        future.waitForFinished();
+
+        for (double v : fp.result().lockPercent)
+            out.peakLock = std::max(out.peakLock, v);
+        return out;
+    };
+
+    const Outcome unswapped = run(false);
+    const Outcome swapped   = run(true);
+
+    QVERIFY2(unswapped.processed,
+             "with swapBytes off the PRN-15 sync is present and processing must succeed");
+    QVERIFY2(unswapped.peakLock > 50.0,
+             qPrintable(QStringLiteral("expected lock with swapBytes off, peak was %1%")
+                            .arg(unswapped.peakLock)));
+
+    // The swap destroys the pattern, so the processor reports "frame sync pattern was
+    // not found" and returns false. That failure IS the expected result here - it is
+    // exactly what the operator saw before the setting existed.
+    QVERIFY2(!swapped.processed,
+             "with swapBytes on the sync must be destroyed and processing must fail");
+    QCOMPARE(swapped.peakLock, 0.0);
 }

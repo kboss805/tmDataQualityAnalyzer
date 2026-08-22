@@ -31,6 +31,9 @@ struct ResolvedPcmAttrs {
     double   delta100ns    = 0.0;   ///< Bit period in 100 ns units (TMATS or user override).
     uint32_t minSyncs      = 0;     ///< Minimum consecutive syncs before frames are saved.
     bool     needsSwap     = true;  ///< True if raw PCM data must be byte-swapped.
+                                    ///< Set by the reader from ProcessingParams::swapBytes;
+                                    ///< NOT from the irig106 attributes, which never carry it
+                                    ///< (see Ch10PacketReader where this is assigned).
     bool     resolved      = false; ///< True once the reader has populated this struct.
 };
 
@@ -50,6 +53,14 @@ struct ProcessingParams {
     double samplePeriodSec = 0.1; ///< Output sample period in seconds (default 100 ms).
     bool isRandomized = false;    ///< True if RNRZ-L encoding (user-specified).
     bool isInverted   = false;    ///< True if raw data should be bit-inverted before any other processing.
+    /// True if each packet's payload should have its byte pairs swapped before any
+    /// other transform. **File-scoped, not per-stream**: byte order is a property of
+    /// the recorder that produced the file, so every stream in one recording shares
+    /// it. MainViewModel stamps the same value onto every job it builds.
+    ///
+    /// Defaults true, which is what the application did unconditionally before this
+    /// was settable, so existing recordings and templates are unaffected.
+    bool swapBytes    = true;
 
     StreamMode mode = StreamMode::ReceiverChannelInfo; ///< Processing mode for this stream.
     double dataRateBps = 0.0;     ///< User bit rate in bits/sec. 0 = use TMATS-derived rate.

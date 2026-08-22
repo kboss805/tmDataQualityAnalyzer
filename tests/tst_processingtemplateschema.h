@@ -24,6 +24,7 @@ private slots:
     void fromJsonRejectsMissingSchemaVersion();
     void fromJsonRejectsMissingEntriesArray();
     void fromJsonRejectsNonObjectDocument();
+    void swapBytesRoundTripsAndDefaultsTrue();
 };
 
 #endif // TST_PROCESSINGTEMPLATESCHEMA_H
