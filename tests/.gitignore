@@ -12,6 +12,7 @@ data/*
 !data/agc_nzl_rasa_testfile.ch10
 !data/agc_rnrz-l_trc_testfile.ch10
 !data/prn_testfile.ch10
+!data/safran_testfile.ch10
 output/
 !output/.gitkeep
 
