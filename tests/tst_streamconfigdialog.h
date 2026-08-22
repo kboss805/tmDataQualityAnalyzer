@@ -60,6 +60,7 @@ private slots:
     void channelLabelHasComboBoxStyledObjectName();
     void modeComboDisplaysTextLeftJustified();
     void modeComboSelectionStillTracksIndexChange();
+    void byteOrderToggleIsFileLevel();
 };
 
 #endif // TST_STREAMCONFIGDIALOG_H

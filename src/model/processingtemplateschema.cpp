@@ -81,6 +81,7 @@ QJsonDocument ProcessingTemplateSchema::toJson(const ProcessingTemplate& tmpl)
     root["appVersion"]       = tmpl.appVersion;
     root["name"]             = tmpl.name;
     root["timeChannelIndex"] = tmpl.timeChannelIndex;
+    root["swapBytes"]        = tmpl.swapBytes;
     root["entries"]          = entries_json;
 
     return QJsonDocument(root);
@@ -107,6 +108,10 @@ ProcessingTemplateSchema::LoadStatus ProcessingTemplateSchema::fromJson(const QJ
     out.appVersion       = root["appVersion"].toString();
     out.name             = root["name"].toString();
     out.timeChannelIndex = root["timeChannelIndex"].toInt(out.timeChannelIndex);
+    // Absent in templates written before the setting existed. Defaulting to the
+    // in-class true reproduces what those templates actually did, so they keep
+    // working without a schemaVersion bump.
+    out.swapBytes        = root["swapBytes"].toBool(out.swapBytes);
     out.entries.clear();
 
     for (const QJsonValue& entry_val : root["entries"].toArray())

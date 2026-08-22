@@ -826,6 +826,7 @@ ProcessingTemplate MainView::buildTemplateFromSource(const Source& src) const
     tmpl.appVersion       = AppVersion::toString();
     tmpl.name             = QFileInfo(src.filepath).baseName();
     tmpl.timeChannelIndex = src.timeChannelIndex;
+    tmpl.swapBytes        = src.swapBytes;
 
     for (const StreamConfig& cfg : src.streamConfigs)
     {
@@ -974,10 +975,12 @@ void MainView::showStreamConfigDialogForPendingSource(bool clearPlotFirst)
                               m_view_model->timeChannelIndex(),
                               m_view_model->reader()->getCurrentTimeChannelID(),
                               m_view_model->appRoot(),
+                              m_view_model->swapBytes(),
                               this);
     if (dialog.exec() == QDialog::Accepted)
     {
         m_view_model->setTimeChannelIndex(dialog.timeChannelIndex());
+        m_view_model->setSwapBytes(dialog.swapBytes());
         m_view_model->setStreamConfigs(dialog.configs());
 
         startProcessingFromDialog();
@@ -1186,6 +1189,8 @@ void MainView::applyBatchSourceConfig()
         configs.append(entry.config);
 
     m_view_model->setTimeChannelIndex(m_batch_template.timeChannelIndex);
+    // A batch is one vendor's files, so the template's byte order applies to all.
+    m_view_model->setSwapBytes(m_batch_template.swapBytes);
     m_view_model->setStreamConfigs(configs);
     m_view_model->startProcessing();
 }

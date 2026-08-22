@@ -402,6 +402,39 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.10.0 tag
 
+#### Byte order is now settable, per file (US1.0)
+
+- **The application byte-swapped every PCM payload unconditionally, and nothing could
+  turn it off.** `Ch10PacketReader` set `ResolvedPcmAttrs::needsSwap` from
+  `bDontSwapRawData`, which `Set_Attributes_PcmF1` memsets to 0 and which only
+  `Set_Attributes_Ext_PcmF1` ever assigns — and only when its `lNoByteSwap` argument is
+  not `-1`, which is exactly what we pass, because TMATS has no field for it. So the
+  expression was a constant `true` wearing the costume of a lookup.
+  Recordings whose payload is not byte-swapped could not be processed at all: the sync
+  pattern was destroyed before the scanner saw it, and the user got an empty plot.
+- **The setting is file-scoped, not per-stream** — a "Swap byte pairs" checkbox on the
+  Configure Streams dialog's Time Channel row, which is where the other file-level
+  control already lives. Byte order is a property of the recorder that wrote the file
+  (this project ingests recordings from two vendors' hardware), so every stream in one
+  recording shares it. Offering it per stream would let a file be configured
+  inconsistently with itself, which is never correct. `MainViewModel` stamps the one
+  value onto every `StreamJob` it builds.
+- **Defaults to on**, which is what the application did before, so every existing
+  recording and template behaves identically. Templates carry it alongside
+  `timeChannelIndex` (a batch is one vendor's files); a template written before the
+  field existed has no key for it and reads back as `true`, reproducing what that
+  template actually did, so no `schemaVersion` bump is needed.
+- **Not in the frame-sync TOML.** It is a per-session operator input like `Randomized`,
+  so `loadFrameSyncToml`/`saveFrameSyncToml` are untouched and the US1.0 boundary
+  (pattern, mask, words/frame only) still holds.
+- **Known rough edge, deliberately not changed here:** `SwapBytes_PcmF1` returns
+  `I106_BUFFER_OVERRUN` on an odd byte count *before touching the buffer*, and
+  `FrameProcessor` discards that return — so with the swap on, an odd-length payload is
+  silently left unswapped while its even-length neighbours are swapped. Two channels of
+  one recording can therefore disagree about their own byte order. On the Safran file
+  that is why channel 14 (875-byte payloads) locks while channel 13 (1250-byte) does
+  not. Surfacing that is a separate change.
+
 #### Cosmetic
 
 - **User Manual… and About… are collapsed into a `Help` submenu** rather than sitting
@@ -1162,7 +1195,7 @@ not mis-read.
    - The gear opens a per-stream sub-dialog — Frame Sync Lock setup or Receiver SNR setup — keyed to the row's Mode
    - Sub-dialogs Load/Save frame-sync and receiver-parameter TOML files (US5.0/US5.1) and host the "Extract Calibration…" action (US5.3) and the "Apply to all `<mode>` streams" fan-out (US2.2)
    - The three sub-dialogs (Frame Lock, Calibration, Receiver SNR) live in the private header `include/view/streamsubdialogs.h` and share one layout vocabulary so their look-and-feel stays consistent: a `DialogLayout` constants block (outer spacing, section/control gaps, grid spacing, icon-button size) plus helpers `configureFormGrid`, `addLoadSaveButtons` (owns the frame-sync grid's gap column + Load/Save cell offsets — no caller hard-codes them), `addCheckboxRow`, `addBottomBar`, `matchControlHeight`, `buildFrameSyncRow`, and `makeDialogButtons`. Convention: text inputs (line edits, combos, spin boxes) are left-aligned; buttons and status icons (gear, Load/Save, ✓/✗) are centered. Table-header/separator colors come from the theme QSS (`QLabel#streamHeaderLabel`, `QFrame#streamHeaderSeparator`), not inline stylesheets, so they read on both light and dark themes
-   - Returns the configured `QVector<StreamConfig>` via `configs()` and the time channel via `timeChannelIndex()`
+   - Returns the configured `QVector<StreamConfig>` via `configs()` and the two **file-level** values via `timeChannelIndex()` and `swapBytes()`. Byte order is file-scoped because it is a property of the recorder that wrote the file; it is stamped onto every `StreamJob` rather than stored per stream
 
 3. **PlotCustomizationDialog** (`src/view/plotcustomizationdialog.cpp`, `include/view/plotcustomizationdialog.h`)
    - "Customize Plot Series" dialog: a Frame Sync Lock tab (one row per stream — visibility toggle, color swatch, editable name) and a Receiver SNR tab (collapsible per-stream receiver/channel tree with tri-state group toggles and Expand/Collapse All; right-click a channel to rename or recolor it). Color/name edits are applied to the ViewModel on OK via `commitAppearanceChanges()`

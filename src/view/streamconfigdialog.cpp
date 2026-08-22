@@ -69,6 +69,7 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
                                        int time_channel_index,
                                        int time_channel_id,
                                        const QString& app_root,
+                                       bool swap_bytes,
                                        QWidget* parent)
     : QDialog(parent)
     , m_configs(configs)
@@ -98,6 +99,20 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
         }
         hl->addWidget(m_time_channel_combo);
         hl->addStretch(1);
+
+        // Byte order sits on the Time Channel row because it shares that row's scope:
+        // both describe the FILE, not a stream. Every per-stream control lives in the
+        // table below or behind a row's gear. Putting this in the gear dialog would
+        // imply channels of one recording can disagree about their own byte order.
+        m_swap_bytes = new QCheckBox("Swap byte pairs", this);
+        m_swap_bytes->setChecked(swap_bytes);
+        m_swap_bytes->setToolTip(
+            "Swap each pair of bytes in the recorded PCM data before searching for the\n"
+            "frame sync pattern. Byte order depends on the recorder that produced the\n"
+            "file, so it applies to every stream in this recording.\n\n"
+            "Leave this on unless no stream finds sync: that is the symptom of the\n"
+            "wrong byte order, and the log says so when it detects it.");
+        hl->addWidget(m_swap_bytes);
         layout->addLayout(hl);
     }
 
@@ -555,6 +570,11 @@ int StreamConfigDialog::timeChannelIndex() const
     if (!m_time_channel_combo || m_time_channel_combo->count() == 0)
         return 0;
     return m_time_channel_combo->currentIndex() + 1;
+}
+
+bool StreamConfigDialog::swapBytes() const
+{
+    return m_swap_bytes != nullptr && m_swap_bytes->isChecked();
 }
 
 QVector<StreamConfig> StreamConfigDialog::configs() const

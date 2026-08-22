@@ -55,9 +55,10 @@ static StreamConfig makeConfig(const QString& label = "Ch 01",
 
 /// Constructs a dialog for testing. Uses one FrameSyncLockStats stream so no
 /// file dialogs are triggered during construction.
-static StreamConfigDialog* makeDialog(const QVector<StreamConfig>& configs = {})
+static StreamConfigDialog* makeDialog(const QVector<StreamConfig>& configs = {},
+                                      bool swap_bytes = true)
 {
-    return new StreamConfigDialog(configs, "", {"Ch 1"}, 1, -1, "");
+    return new StreamConfigDialog(configs, "", {"Ch 1"}, 1, -1, "", swap_bytes);
 }
 
 // ---------------------------------------------------------------------------
@@ -679,4 +680,30 @@ void TestStreamConfigDialog::modeComboSelectionStillTracksIndexChange()
 
     mode->setCurrentIndex(0); // switch to Receiver SNR
     QCOMPARE(dlg->configs()[0].mode, StreamMode::ReceiverChannelInfo);
+}
+
+void TestStreamConfigDialog::byteOrderToggleIsFileLevel()
+{
+    // Byte order is a property of the recorder that wrote the file, so it belongs to
+    // the recording, not to a channel. This pins that it is reachable as a dialog-level
+    // accessor alongside timeChannelIndex() - and, just as importantly, that it did NOT
+    // become a per-stream field: a file whose channels disagreed about their own byte
+    // order would be nonsense.
+    QVector<StreamConfig> cfgs;
+    cfgs << StreamConfig{} << StreamConfig{};
+
+    QScopedPointer<StreamConfigDialog> on(makeDialog(cfgs, true));
+    QVERIFY(on->swapBytes());
+
+    QScopedPointer<StreamConfigDialog> off(makeDialog(cfgs, false));
+    QVERIFY(!off->swapBytes());
+
+    // One control for the whole dialog, not one per row.
+    const QList<QCheckBox*> boxes = off->findChildren<QCheckBox*>();
+    int byte_order_boxes = 0;
+    for (QCheckBox* b : boxes)
+    {
+        if (b->text() == QStringLiteral("Swap byte pairs")) byte_order_boxes++;
+    }
+    QCOMPARE(byte_order_boxes, 1);
 }

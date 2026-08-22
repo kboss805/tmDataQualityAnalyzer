@@ -28,6 +28,7 @@ private slots:
     void calibrationRoundTripOnRealFileProducesCleanSteps();
     void offPhaseSyncAfterLockLossIsNotExtracted();
     void nonLinearCalibrationAveragesRawBeforeInterpolating();
+    void swapBytesOffFindsSyncThatTheSwapDestroys();
 };
 
 #endif // TST_FRAMEPROCESSOR_H

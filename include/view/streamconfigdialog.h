@@ -44,6 +44,7 @@ public:
      *                               settings/receiver_params, settings/rcvr_cals, and
      *                               settings/framesync_patterns directories so the relevant
      *                               "Load" file dialogs can open there by default.
+     * @param[in] swap_bytes         Initial state of the file-level byte-order toggle.
      * @param[in] parent             Optional parent widget.
      */
     explicit StreamConfigDialog(const QVector<StreamConfig>& configs,
@@ -52,6 +53,7 @@ public:
                                 int time_channel_index,
                                 int time_channel_id,
                                 const QString& app_root,
+                                bool swap_bytes,
                                 QWidget* parent = nullptr);
 
     /// @return The per-stream configuration as currently edited.
@@ -59,6 +61,16 @@ public:
 
     /// @return Selected time channel index (1-based; matches MainViewModel convention).
     int timeChannelIndex() const;
+
+    /// @return Whether each packet's byte pairs should be swapped before processing.
+    ///
+    /// **File-scoped, like timeChannelIndex() and unlike everything in configs().**
+    /// Byte order is a property of the recorder that wrote the file - the recordings
+    /// this application handles come from different vendors' hardware - so it applies
+    /// to every stream in the recording rather than being set per channel. Offering it
+    /// per stream would let one file be configured inconsistently with itself, which
+    /// is never correct.
+    bool swapBytes() const;
 
 private slots:
     void validateAndAccept();
@@ -113,6 +125,7 @@ private:
     QWidget*              m_stream_container   = nullptr;
     QVector<RowWidgets>   m_rows;
     QComboBox*            m_time_channel_combo = nullptr;
+    QCheckBox*            m_swap_bytes = nullptr;  ///< File-level byte-order toggle.
     QPushButton*          m_ok_btn             = nullptr;
     QCheckBox*            m_all_toggle         = nullptr;
     int                   m_time_channel_id    = -1; ///< Resolved time channel ID for calibration extraction (US5.3).
