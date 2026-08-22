@@ -15,6 +15,7 @@
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QKeySequence>
+#include <QLabel>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
@@ -27,6 +28,7 @@
 #include <QTime>
 #include <QToolButton>
 #include <QUrl>
+#include <QWidgetAction>
 
 #include "batchapplydialog.h"
 #include "chapter10reader.h"
@@ -105,6 +107,36 @@ namespace
     constexpr char16_t kGlyphRestore  = 0xE923; ///< ChromeRestore
     constexpr char16_t kGlyphClose    = 0xE8BB; ///< ChromeClose
     /// @}
+
+    /// Adds a grey section header to a menu, e.g. "Process".
+    ///
+    /// **Not `QMenu::addSection()`.** Once *any* stylesheet is set on the
+    /// application, `QStyleSheetStyle` takes over menu-item painting and never
+    /// draws a section's text, so `addSection()` degrades silently into a plain
+    /// separator. Measured on the "Process" band: unstyled it is 12 px and shows
+    /// the label; with the theme applied it is 9 px and blank - and *deleting* the
+    /// `QMenu::separator` rule does not bring the text back, because the cause is
+    /// the stylesheet existing at all, not what it says. `main()` installs the
+    /// theme at startup, so every themed build has shown unlabelled separators
+    /// while the code, the docs and the manual all described named groups.
+    ///
+    /// A `QWidgetAction` carrying a `QLabel` paints itself and is therefore immune.
+    /// Its colour comes from the theme QSS via the object name - the same approach
+    /// as `QLabel#streamHeaderLabel` in `StreamConfigDialog` - so it follows the
+    /// light/dark switch instead of hard-coding one theme's grey.
+    void addMenuSection(QMenu* menu, const QString& text)
+    {
+        auto* label = new QLabel(text, menu);
+        label->setObjectName("menuSectionLabel");
+
+        auto* action = new QWidgetAction(menu);
+        action->setDefaultWidget(label);
+        // A header is not a command: disabled keeps it out of both mouse
+        // selection and keyboard navigation. The QSS styles the disabled state
+        // explicitly so it does not also pick up the greyed-out item colour.
+        action->setEnabled(false);
+        menu->addAction(action);
+    }
 
     /// Paints a thin three-line "hamburger" menu glyph (Claude Code style). Drawn in
     /// code so it adapts to the theme without shipping separate dark/light assets.
@@ -263,8 +295,9 @@ void MainView::setUpMainLayout()
 
 void MainView::setUpMenuBar()
 {
-    // A single hamburger menu holds everything, grouped into sections (addSection
-    // renders the muted headers). Sections are preferred over submenus because the
+    // A single hamburger menu holds everything, grouped into sections (see
+    // addMenuSection - NOT QMenu::addSection, which a stylesheet silently blanks).
+    // Sections are preferred over submenus because the
     // whole menu is small and scannable in one glance; a submenu is used only where
     // the entries are ones you reach for rarely and by name (Recent Files, Help), so
     // hiding them behind one row costs nothing and shortens the menu for everyone
@@ -274,7 +307,7 @@ void MainView::setUpMenuBar()
     menu->setToolTipsVisible(true);
 
     // --- Process ---
-    menu->addSection(tr("Process"));
+    addMenuSection(menu, tr("Process"));
 
     m_open_action = menu->addAction("Open...");
     m_open_action->setShortcut(QKeySequence::Open);
@@ -301,7 +334,7 @@ void MainView::setUpMenuBar()
     connect(exit_action, &QAction::triggered, this, &QMainWindow::close);
 
     // --- Import/Export ---
-    menu->addSection(tr("Import/Export"));
+    addMenuSection(menu, tr("Import/Export"));
 
     // Import a previously exported CSV straight into the plot (US6.3).
     m_import_action = menu->addAction("Import CSV...");
@@ -315,7 +348,7 @@ void MainView::setUpMenuBar()
     m_export_action->setEnabled(false);
 
     // --- Settings ---
-    menu->addSection(tr("Settings"));
+    addMenuSection(menu, tr("Settings"));
 
     QSettings app_settings;
     QString current_theme = app_settings.value(UIConstants::kSettingsKeyTheme, UIConstants::kThemeDark).toString();
