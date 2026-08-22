@@ -427,13 +427,22 @@ The stories below follow the workflow a first-time user takes through the applic
 - **Not in the frame-sync TOML.** It is a per-session operator input like `Randomized`,
   so `loadFrameSyncToml`/`saveFrameSyncToml` are untouched and the US1.0 boundary
   (pattern, mask, words/frame only) still holds.
-- **Known rough edge, deliberately not changed here:** `SwapBytes_PcmF1` returns
+- **A skipped byte swap is no longer silent.** `SwapBytes_PcmF1` returns
   `I106_BUFFER_OVERRUN` on an odd byte count *before touching the buffer*, and
-  `FrameProcessor` discards that return — so with the swap on, an odd-length payload is
-  silently left unswapped while its even-length neighbours are swapped. Two channels of
-  one recording can therefore disagree about their own byte order. On the Safran file
-  that is why channel 14 (875-byte payloads) locks while channel 13 (1250-byte) does
-  not. Surfacing that is a separate change.
+  `FrameProcessor` discarded that return — so with the swap on, an odd-length payload
+  was left unswapped while its even-length neighbours were swapped, and one stream could
+  carry two byte orders with nothing in the log to say so. On the Safran recording that
+  is exactly why channel 14 (875-byte payloads) locks while channel 13 (1250-byte) does
+  not, under identical settings.
+  The return is now checked and the skips counted, reported **once after the drain**
+  rather than per packet. The two cases read differently on purpose: when *every* packet
+  is odd the swap is inert for that stream, so the message says the setting had no
+  effect at all; when only *some* are, the message warns that the stream carries two
+  byte orders and sync may be unreliable. The transform behaviour is deliberately
+  unchanged — swapping all-but-the-last-byte would invent semantics the library
+  declines to define, and would break channel 14, which currently works precisely
+  because of the skip.
+
 #### Fixed
 
 - **The hamburger menu's section headers were never drawn.** `Process`,
@@ -490,7 +499,11 @@ The stories below follow the workflow a first-time user takes through the applic
   dialog-level accessor and did not become a per-row field.
 - `TestProcessingTemplateSchema::swapBytesRoundTripsAndDefaultsTrue` covers the round
   trip and that a legacy template missing the key reads back as `true`.
-  Baseline **371 / 0 / 1**.
+- `TestFrameProcessor::oddPayloadSwapSkipIsReported` drives the Safran fixture's
+  channel 14 (every payload odd) with the swap **on** and asserts the log says the
+  setting had no effect — distinguishing the inert-stream message from the
+  mixed-byte-order warning, since asserting merely that *something* was logged would
+  not catch the two branches being swapped. Baseline **372 / 0 / 1**.
 
 ### v2.10.0 — The Illustrated Manual, Optional as an Installer Component
 
