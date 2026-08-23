@@ -5,6 +5,8 @@
 
 #include "frameprocessor.h"
 
+#include <algorithm>
+
 #include <QElapsedTimer>
 #include <QVector>
 
@@ -118,6 +120,8 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
 
     // Initialize the in-memory result bundle for this run.
     m_result = ProcessedStreamData();
+    m_diagnostic_sample.clear();  // per-run, like m_result
+    m_diagnostic_sample.reserve(kDiagnosticSampleBytes);
     m_result.streamLabel  = params.streamLabel;
     m_result.pcmChannelId = params.pcmChannelId;
     m_result.mode         = params.mode;
@@ -202,6 +206,18 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         auto* raw_data = reinterpret_cast<uint8_t*>(item.payload.data()); // detaches COW copy
         uint32_t raw_len = static_cast<uint32_t>(item.payload.size());
         uint64_t packet_bits = item.packetBits;
+
+        // Retain a bounded prefix of the payload AS IT ARRIVED, before the transforms
+        // below rewrite it in place. Only used if the run finds no usable sync, where
+        // the useful question is "what would a different transform have found?" - which
+        // cannot be answered from buffers that have already been transformed.
+        if (m_diagnostic_sample.size() < kDiagnosticSampleBytes)
+        {
+            const qsizetype room = static_cast<qsizetype>(kDiagnosticSampleBytes)
+                                   - m_diagnostic_sample.size();
+            const qsizetype take = std::min(static_cast<qsizetype>(raw_len), room);
+            m_diagnostic_sample.append(item.payload.constData(), take);
+        }
 
         if (needs_swap)
         {
@@ -565,6 +581,128 @@ QVector<ParameterInfo*> FrameProcessor::buildEnabledParams(FrameSetup* frame_set
     return enabled_params;
 }
 
+uint64_t FrameProcessor::countPeriodicSyncs(const QByteArray& raw, bool swapBytes,
+                                            bool derandomize, uint64_t pattern, uint64_t mask,
+                                            uint32_t patternLen, uint32_t bitsInFrame,
+                                            uint64_t& onGrid)
+{
+    onGrid = 0;
+    if (raw.isEmpty() || patternLen == 0 || patternLen > 64) return 0;
+
+    // Work on a copy: the caller reuses this buffer for the other candidates.
+    QByteArray buf = raw;
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+    auto* data = reinterpret_cast<uint8_t*>(buf.data());
+    const uint32_t len = static_cast<uint32_t>(buf.size());
+
+    // Same order the live path applies them in, so a match here means the live path
+    // would have matched too.
+    if (swapBytes)
+    {
+        (void)SwapBytes_PcmF1(data, static_cast<long>(len));
+    }
+    if (derandomize)
+    {
+        uint16_t lfsr = 0;
+        derandomizeBitstream(data, static_cast<uint64_t>(len) * 8, lfsr);
+    }
+
+    const uint64_t reg_mask = (patternLen >= 64) ? ~0ULL : ((1ULL << patternLen) - 1);
+    const uint64_t want     = pattern & mask;
+
+    uint64_t reg = 0, bits_loaded = 0, hits = 0, bit_pos = 0, last_hit = 0;
+    bool have_last = false;
+
+    for (uint32_t byte_idx = 0; byte_idx < len; ++byte_idx)
+    {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+        const uint8_t b = data[byte_idx];
+        for (int bit = 7; bit >= 0; --bit, ++bit_pos)
+        {
+            reg = ((reg << 1) | ((b >> bit) & 1U)) & reg_mask;
+            if (bits_loaded < patternLen) { ++bits_loaded; continue; }
+            if ((reg & mask) != want) continue;
+
+            ++hits;
+            if (have_last && bitsInFrame > 0 && (bit_pos - last_hit) == bitsInFrame)
+            {
+                ++onGrid;
+            }
+            last_hit = bit_pos;
+            have_last = true;
+        }
+    }
+    return hits;
+}
+
+QString FrameProcessor::diagnoseNoSync(const QByteArray& sample, const ProcessingParams& params,
+                                       const ScanDiagnostics& d)
+{
+    if (sample.isEmpty() || d.sync_pat_len == 0) return QString();
+
+    // Only the transforms the operator can actually change from the dialog. Trying
+    // things they cannot act on would be noise, however interesting.
+    // NOTE THE POLARITY. `swap` is the transform; "Legacy Chapter 10" is the checkbox,
+    // and it is the INVERSE - the byte-pair swap is what an ordinary recording needs,
+    // so legacy is the case that goes without it. Writing these the other way round
+    // would have the diagnostic confidently instruct the operator to do the opposite
+    // of what works, which is worse than offering no suggestion at all.
+    struct Candidate { bool swap; bool derand; const char* how; };
+    const Candidate candidates[] = {
+        { true,  false, "Legacy Chapter 10 off, Derandomize off" },
+        { false, false, "Legacy Chapter 10 ON,  Derandomize off" },
+        { true,  true,  "Legacy Chapter 10 off, Derandomize ON"  },
+        { false, true,  "Legacy Chapter 10 ON,  Derandomize ON"  },
+    };
+
+    QString best_how;
+    uint64_t best_on_grid = 0, best_hits = 0;
+    for (const Candidate& c : candidates)
+    {
+        // Skip what was just tried - it is what produced the failure being explained.
+        if (c.swap == params.swapBytes && c.derand == params.isRandomized) continue;
+
+        uint64_t on_grid = 0;
+        const uint64_t hits = countPeriodicSyncs(sample, c.swap, c.derand, d.sync_pat,
+                                                 d.sync_mask, d.sync_pat_len,
+                                                 d.bits_in_frame, on_grid);
+        // Rank by ON-GRID hits, not raw hits. A 32-bit pattern turns up by chance
+        // roughly once per 4 Gbit, and chance never lands on a constant grid - so
+        // on-grid is the measure that distinguishes signal from coincidence.
+        if (on_grid > best_on_grid)
+        {
+            best_on_grid = on_grid;
+            best_hits    = hits;
+            best_how     = QString::fromLatin1(c.how);
+        }
+    }
+
+    const double sample_mbit = (static_cast<double>(sample.size()) * 8.0) / 1e6;
+
+    if (best_on_grid == 0)
+    {
+        // Nothing else worked either, which is itself the answer: the transforms are
+        // not the problem, so the pattern or the frame length is.
+        return QStringLiteral(
+                   "\n  Tried the other byte-order and derandomize combinations over the first "
+                   "%1 Mbit\n  of this stream and none of them found the pattern on a frame grid "
+                   "either. That\n  points at the sync pattern or bits/frame being wrong for this "
+                   "channel rather than\n  at how the data is being decoded.")
+            .arg(sample_mbit, 0, 'f', 1);
+    }
+
+    return QStringLiteral(
+               "\n  TRY THIS: over the first %1 Mbit of this stream, \"%2\" finds %3 syncs, %4 of "
+               "them\n  exactly %5 bits apart - a real frame grid, not chance. The current "
+               "settings found\n  none. Change it in the Configure Streams dialog and process "
+               "again.")
+        .arg(sample_mbit, 0, 'f', 1)
+        .arg(best_how)
+        .arg(best_hits)
+        .arg(best_on_grid)
+        .arg(d.bits_in_frame);
+}
+
 QString FrameProcessor::streamTag(const ProcessingParams& params)
 {
     // Every message a worker emits carries this. Streams are processed by parallel
@@ -618,7 +756,8 @@ bool FrameProcessor::reportCompletion(const ProcessingParams& params, const Scan
     {
         emit errorOccurred(tag + "Frame sync pattern was not found in the data stream.\n"
                            "  Looking for:     " + syncSpec(d) + "\n"
-                           "  Verify the frame sync pattern, bits/frame and PCM channel are correct.");
+                           "  Verify the frame sync pattern, bits/frame and PCM channel are correct."
+                           + diagnoseNoSync(m_diagnostic_sample, params, d));
         emit processingFinished(false);
         return false;
     }
@@ -653,7 +792,12 @@ bool FrameProcessor::reportCompletion(const ProcessingParams& params, const Scan
                                       : "NEVER filled — words_in_frame may be too large")
             .arg(d.first_data_time, 0, 'f', 3).arg(d.last_data_time, 0, 'f', 3)
             .arg(params.startSeconds).arg(params.stopSeconds)
-            + hint);
+            + hint
+            // Only worth probing when nothing landed on a boundary. With SOME syncs
+            // aligned the transforms are already right and the problem is elsewhere,
+            // so suggesting a different byte order would actively mislead.
+            + (d.boundary_syncs == 0 ? diagnoseNoSync(m_diagnostic_sample, params, d)
+                                     : QString()));
         emit processingFinished(false);
         return false;
     }
