@@ -123,8 +123,9 @@ bool buildRealRequest(Chapter10Reader& reader, CalibrationExtractor::Request& re
     req.sync.bitsInMinorFrame = 8000; // true minor-frame length for this recording
     req.sync.randomized       = true; // RNRZ-L
     req.sync.dataRateMbps     = 0.8;  // drives the adaptive extract period
-    // A legacy byte-swapped recording. Stated rather than inherited: the DTO default
-    // is the modern order, and this flag must match whatever the main run uses.
+    // An ordinary Chapter 10 recording, so it needs the byte swap. Stated rather than
+    // inherited, because this flag must match whatever the main run uses - that is the
+    // mirror invariant this suite exists to protect.
     req.swapBytes             = true;
     req.numReceivers          = 16;
     req.receiverChannels      = 3;
@@ -209,7 +210,7 @@ void TestCalibrationExtractor::byteOrderReachesTheExtraction()
     if (!buildRealRequest(reader, req, skip))
         QSKIP(qPrintable(skip));
 
-    // buildRealRequest sets the legacy order this fixture needs; flipping it is the
+    // buildRealRequest sets the byte order this fixture needs; flipping it is the
     // only difference between the two runs below.
     req.swapBytes = false;
 

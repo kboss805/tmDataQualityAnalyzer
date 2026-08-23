@@ -402,6 +402,33 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.10.0 tag
 
+#### A stream that finds no sync now says what would have worked
+
+- When a run ends with no usable sync, `FrameProcessor` re-scans a retained sample
+  under the transforms the operator can actually change — byte order and derandomize —
+  and names the combination that finds a real frame grid:
+  > `TRY THIS: over the first 8.4 Mbit of this stream, "Legacy Chapter 10 ON,`
+  > `Derandomize off" finds 256 syncs, 255 of them exactly 32767 bits apart - a real`
+  > `frame grid, not chance. The current settings found none.`
+- **The candidate table stores the transform but prints the checkbox**, and those are
+  inverses. Writing them the same way round would have the diagnostic confidently
+  instruct the operator to do the opposite of what works — worse than offering nothing.
+  The test asserts the exact wording for that reason.
+- **Ranked by on-grid hits, not raw hits.** A 32-bit pattern turns up by chance about
+  once per 4 Gbit and chance never lands on a constant grid, so on-grid count is the
+  only measure that separates a frame structure from a coincidence. Ranking by raw hits
+  would let a noisy candidate outscore the real one.
+- **It stays quiet when nothing helps.** If no combination finds a grid, it says the
+  transforms were ruled out and points at the pattern or bits/frame instead — the
+  honest answer for a channel carrying a different format, and the one that stops the
+  operator toggling settings that cannot help.
+- The sample is captured **before** the transforms, because the live buffers are
+  rewritten in place and cannot be un-transformed afterwards. Capped at 1 MiB — ~256
+  frames even at PRN-15's 32767 bits — and only scanned on the failure path.
+- Only offered when **no** sync was boundary-aligned. With some already aligned the
+  transforms are right and the problem is elsewhere, so a byte-order suggestion would
+  actively mislead.
+
 #### Frame Sync Lock defaults to PRN-15 (US2.0)
 
 - `kDefaultFrameSyncLockPattern` / `kDefaultFrameSyncLockBits` move from PRN-11
