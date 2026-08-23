@@ -59,6 +59,17 @@ namespace
 {
     constexpr int kTitleBarHeight = 40;  ///< Custom title-bar height (logical px).
 
+    /// CSS applied to every log line so multi-line messages survive the trip into
+    /// the log's rich text.
+    ///
+    /// toHtmlEscaped() escapes the markup characters but leaves a newline as a
+    /// literal newline, and HTML collapses that to a single space - so the
+    /// frame-sync diagnostics, which are deliberately laid out over several aligned
+    /// lines, arrived as one run-on paragraph. `pre-wrap` keeps both the newlines
+    /// and the runs of spaces that align the "Looking for:" / "Config:" / "Syncs:"
+    /// columns, while still wrapping lines too long for the sidebar.
+    constexpr const char* kLogWhiteSpace = "white-space: pre-wrap;";
+
     /// @name Title-bar button metrics
     /// EVERY title-bar button uses these: the hamburger, the sidebar toggle, and the
     /// minimize/maximize/close captions. Each carries a small glyph, so the hover
@@ -812,7 +823,8 @@ void MainView::onLogMessage(const QString& message)
     {
         // Wrap in a neutral <span> so Qt treats this as explicit HTML and does not
         // auto-detect bare file paths (e.g. C:/...) as clickable anchors.
-        html = "<span>" + timestamp + message.toHtmlEscaped() + "</span>";
+        html = "<span style='" + QString(kLogWhiteSpace) + "'>" + timestamp
+               + message.toHtmlEscaped() + "</span>";
     }
     m_log_preview->append(html);
     m_log_preview->verticalScrollBar()->setValue(m_log_preview->verticalScrollBar()->maximum());
@@ -1491,7 +1503,7 @@ void MainView::setAllControlsEnabled(bool enabled)
 void MainView::logError(const QString& message)
 {
     QString timestamp = QTime::currentTime().toString("HH:mm:ss");
-    QString html = "<span style='color: red;'>" + timestamp + "  " +
+    QString html = "<span style='color: red; " + QString(kLogWhiteSpace) + "'>" + timestamp + "  " +
                    message.toHtmlEscaped() + "</span>";
     m_log_preview->append(html);
     m_log_preview->verticalScrollBar()->setValue(m_log_preview->verticalScrollBar()->maximum());
@@ -1500,7 +1512,7 @@ void MainView::logError(const QString& message)
 void MainView::logWarning(const QString& message)
 {
     QString timestamp = QTime::currentTime().toString("HH:mm:ss");
-    QString html = "<span style='color: #DAA520;'>" + timestamp + "  " +
+    QString html = "<span style='color: #DAA520; " + QString(kLogWhiteSpace) + "'>" + timestamp + "  " +
                    message.toHtmlEscaped() + "</span>";
     m_log_preview->append(html);
     m_log_preview->verticalScrollBar()->setValue(m_log_preview->verticalScrollBar()->maximum());
@@ -1509,7 +1521,7 @@ void MainView::logWarning(const QString& message)
 void MainView::logSuccess(const QString& message)
 {
     QString timestamp = QTime::currentTime().toString("HH:mm:ss");
-    QString html = "<span style='color: green;'>" + timestamp + "  " +
+    QString html = "<span style='color: green; " + QString(kLogWhiteSpace) + "'>" + timestamp + "  " +
                    message.toHtmlEscaped() + "</span>";
     m_log_preview->append(html);
     m_log_preview->verticalScrollBar()->setValue(m_log_preview->verticalScrollBar()->maximum());

@@ -30,6 +30,7 @@ private slots:
     void fullManualPathFoundWhenInstalled();
     void helpSubmenuHoldsManualAndAbout();
     void menuSectionHeadersSurviveTheStylesheet();
+    void logPreservesMultiLineMessages();
 };
 
 #endif // TST_MAINVIEW_H
