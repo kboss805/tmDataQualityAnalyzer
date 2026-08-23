@@ -358,3 +358,35 @@ void TestMainView::menuSectionHeadersSurviveTheStylesheet()
 
     qApp->setStyleSheet(saved);
 }
+
+void TestMainView::logPreservesMultiLineMessages()
+{
+    // The frame-sync diagnostics are laid out over several aligned lines - "Looking
+    // for:", "Config:", "Syncs:" - and that layout is the whole reason they are
+    // readable. logError() escapes the message with toHtmlEscaped(), which handles the
+    // markup characters but leaves a newline as a literal newline; HTML then collapses
+    // it to a single space, so a carefully formatted report arrived in the log as one
+    // run-on paragraph. Invisible to every other test, and only caught by looking at a
+    // screenshot of the real thing.
+    MainView view;
+
+    const QString multi = QStringLiteral("first line\n  second line\n  third line");
+    view.logError(multi);
+
+    const QString shown = view.m_log_preview->toPlainText();
+
+    // The line breaks must survive into the rendered document, not just the source
+    // string. Asserting on toPlainText() rather than toHtml() keeps this about what
+    // the operator sees rather than which CSS property achieved it.
+    QVERIFY2(shown.contains(QStringLiteral("first line\n")),
+             qPrintable(QStringLiteral("newline collapsed; log reads: %1").arg(shown)));
+    QVERIFY2(shown.contains(QStringLiteral("second line\n")),
+             qPrintable(QStringLiteral("newline collapsed; log reads: %1").arg(shown)));
+    QVERIFY2(!shown.contains(QStringLiteral("first line   second line")),
+             qPrintable(QStringLiteral("lines were joined into one paragraph: %1").arg(shown)));
+
+    // The leading spaces that align the report's columns must survive too - HTML
+    // collapses runs of spaces just as readily as it collapses newlines.
+    QVERIFY2(shown.contains(QStringLiteral("\n  second line")),
+             qPrintable(QStringLiteral("indent collapsed; log reads: %1").arg(shown)));
+}

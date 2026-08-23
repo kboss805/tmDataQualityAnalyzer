@@ -519,6 +519,20 @@ The stories below follow the workflow a first-time user takes through the applic
 
 #### Fixed
 
+- **The log collapsed every multi-line message into one paragraph.** `logError()` and
+  friends escape the text with `toHtmlEscaped()`, which handles the markup characters
+  but leaves a newline as a literal newline — and HTML collapses that to a single
+  space. So the frame-sync diagnostics, whose whole readability comes from their
+  aligned `Looking for:` / `Config:` / `Syncs:` layout, arrived in the sidebar as a
+  run-on blob. Every log path now carries `white-space: pre-wrap`, which preserves the
+  newlines *and* the runs of spaces that align the columns while still wrapping lines
+  too long for the sidebar.
+  Found by looking at a screenshot taken for the manual — no test could see it, because
+  the messages were correct at every layer except the one the operator reads.
+  `TestMainView::logPreservesMultiLineMessages` now asserts on `toPlainText()` rather
+  than the CSS, so it pins what is shown rather than how. Verified to fail against the
+  old rendering, which produced `first line second line third line`.
+
 - **Every message a stream worker logs now names its channel**, e.g.
   `[CH 13 PCM03] …` (`FrameProcessor::streamTag`). Streams are processed by parallel
   workers writing into one shared log, so their output interleaves in an order that is
