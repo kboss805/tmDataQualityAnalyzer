@@ -123,6 +123,9 @@ bool buildRealRequest(Chapter10Reader& reader, CalibrationExtractor::Request& re
     req.sync.bitsInMinorFrame = 8000; // true minor-frame length for this recording
     req.sync.randomized       = true; // RNRZ-L
     req.sync.dataRateMbps     = 0.8;  // drives the adaptive extract period
+    // A legacy byte-swapped recording. Stated rather than inherited: the DTO default
+    // is the modern order, and this flag must match whatever the main run uses.
+    req.swapBytes             = true;
     req.numReceivers          = 16;
     req.receiverChannels      = 3;
     req.steps                 = steps;
@@ -185,4 +188,38 @@ void TestCalibrationExtractor::realFileCalibratesRcvr3Only()
                  && calibratedWords.contains(8),
              qPrintable(QString("expected words {6,7,8}, got a different set (%1)")
                             .arg(calibratedWords.size())));
+}
+
+void TestCalibrationExtractor::byteOrderReachesTheExtraction()
+{
+    // The extractor must mirror every raw-affecting flag of the main run - the
+    // project invariant that already cost one bug when isInverted was missing. When
+    // byte order became settable, the extractor kept using the ProcessingParams
+    // default instead of the operator's choice, so extracting for a stream whose
+    // byte order differed from that default would build a profile from a different
+    // bitstream than the run it was meant to calibrate. Nothing would have reported
+    // it: the profile attaches and the numbers are simply wrong.
+    //
+    // Asserted behaviourally rather than by inspecting m_params: with the wrong byte
+    // order the sync pattern is destroyed and extraction cannot succeed, which is
+    // only observable if the flag actually reaches the scan.
+    Chapter10Reader reader; // keep the opened Ch10 file alive across extraction
+    CalibrationExtractor::Request req;
+    QString skip;
+    if (!buildRealRequest(reader, req, skip))
+        QSKIP(qPrintable(skip));
+
+    // buildRealRequest sets the legacy order this fixture needs; flipping it is the
+    // only difference between the two runs below.
+    req.swapBytes = false;
+
+    CalibrationExtractor extractor;
+    QString summary;
+    const bool ok = runExtraction(extractor, req, summary);
+    QVERIFY2(!ok, "the wrong byte order must not produce a calibration");
+
+    req.swapBytes = true;
+    CalibrationExtractor extractor_ok;
+    QString summary_ok;
+    QVERIFY2(runExtraction(extractor_ok, req, summary_ok), qPrintable(summary_ok));
 }

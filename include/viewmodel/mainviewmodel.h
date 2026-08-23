@@ -217,7 +217,14 @@ private:
     bool m_file_loaded;                      ///< True when a .ch10 file is loaded.
 
     int m_time_channel_index;                ///< Selected time channel combo box index.
-    bool m_swap_bytes = true;                ///< File-level byte order; true = pre-existing behaviour.
+    /// File-level byte order for the loaded recording; false = modern Chapter 10.
+    ///
+    /// Defaults OFF. The swap is a legacy recorder behaviour, so the common case
+    /// should not need a box ticked. Note this is deliberately NOT the same default
+    /// as ProcessingTemplate::swapBytes, which stays true: a template written before
+    /// the field existed came from a build that always swapped, and reading it as
+    /// false would silently change how that template processes its files.
+    bool m_swap_bytes = false;
     int m_pcm_channel_index;                 ///< Selected PCM channel combo box index.
 
     QVector<StreamConfig> m_stream_configs;  ///< Per-stream configuration of the file currently being configured.

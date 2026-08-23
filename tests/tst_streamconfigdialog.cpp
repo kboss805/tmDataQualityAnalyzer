@@ -703,7 +703,7 @@ void TestStreamConfigDialog::byteOrderToggleIsFileLevel()
     int byte_order_boxes = 0;
     for (QCheckBox* b : boxes)
     {
-        if (b->text() == QStringLiteral("Swap byte pairs")) byte_order_boxes++;
+        if (b->text() == QStringLiteral("Legacy Chapter 10")) byte_order_boxes++;
     }
     QCOMPARE(byte_order_boxes, 1);
 }

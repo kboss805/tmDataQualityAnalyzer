@@ -48,6 +48,10 @@ static ProcessingParams makeTestParams(const QString& filename = {},
                                         int bits_in_frame = 800)
 {
     ProcessingParams p;
+    // Every .ch10 fixture in this suite except the Safran recording is byte-swapped,
+    // so the helper opts into the legacy order and the Safran cases override it. Said
+    // here rather than relying on a DTO default, which now means "modern".
+    p.swapBytes = true;
     p.filename = filename;
     p.timeChannelId = time_channel_id;
     p.pcmChannelId = pcm_channel_id;
@@ -478,6 +482,9 @@ void TestFrameProcessor::calibrationRoundTripOnRealFileProducesCleanSteps()
     req.sync.bitsInMinorFrame   = 8000; // true minor-frame length for this recording
     req.sync.randomized         = true; // RNRZ-L
     req.sync.dataRateMbps       = 0.8;   // 800 kbps -> ~100 frames/s; drives the adaptive extract period
+    // This fixture is a legacy byte-swapped recording; the DTO default is the
+    // modern order, so the requirement is stated rather than inherited.
+    req.swapBytes          = true;
     req.numReceivers       = 16;
     req.receiverChannels   = 3;
     req.steps              = steps;
