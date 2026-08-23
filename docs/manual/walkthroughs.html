@@ -30,7 +30,7 @@ one, so they are worth understanding before the walkthroughs that use them.</p>
 
 <h3>Configure Frame Sync Lock</h3>
 
-{{FIG:walk-fs-03-framesync-setup.png|The frame sync setup dialog, configured for a PRN 15 stream. The folder and disk buttons load and save the top three fields as a TOML file.|Configure Frame Sync Lock dialog showing frame sync pattern, mask, bits per frame, data rate and averaging period}}
+{{FIG:walk-fs-03-framesync-setup.png|The frame sync setup dialog, configured for a PRN 15 stream - which is what a new stream starts on, so a PRN 15 recording needs no pattern file loaded. The folder and disk buttons load and save the top three fields as a TOML file.|Configure Frame Sync Lock dialog showing frame sync pattern, mask, bits per frame, data rate and averaging period}}
 
 <table>
   <tr><th>Field</th><th>What it is</th><th>What a wrong value does</th></tr>
@@ -72,7 +72,9 @@ fragile.</div>
 <div class="note"><strong>Load and Save round-trip only three fields.</strong> The folder and
 disk buttons write <em>Frame Sync</em>, <em>Frame Sync Mask</em> and <em>Bits Per Frame</em>,
 and nothing else. <em>Derandomize</em>, <em>Data Rate</em> and <em>Average Period</em> are
-deliberately treated as per-session choices and are not saved. This is intended, not an
+deliberately treated as per-session choices and are not saved, and neither is
+<strong>Legacy Chapter 10</strong> &mdash; which is not in this dialog at all, because it
+describes the recording rather than the stream. This is intended, not an
 oversight: a pattern file describes a <em>frame format</em>, which is a property of the
 telemetry, while the others describe how you happen to be looking at it today. If you reload a
 file and those toggles are back at their defaults, nothing was lost.</div>
@@ -150,8 +152,16 @@ has enough information to run:</p>
   <li><span style="color:gray;">✗</span> — not selected. Nothing is required of it.</li>
 </ul>
 
-<p>Also set the <strong>Time Channel</strong> at the top. Every stream is timestamped from it,
-so all the curves share one time axis.</p>
+<p>Two settings at the top of the dialog describe the recording rather than a stream, so they
+apply to every channel in the file:</p>
+<ul>
+  <li><strong>Time Channel</strong> — every stream is timestamped from it, so all the curves
+      share one time axis.</li>
+  <li><strong>Legacy Chapter 10</strong> — leave it off for ordinary recordings; turn it on for
+      recordings from older equipment. Byte order belongs to the recorder that wrote the file,
+      not to any one channel, which is why it sits here rather than behind a row's gear. If no
+      stream in the file finds sync, try this before anything else.</li>
+</ul>
 
 <h3>Step 3 — Process</h3>
 
