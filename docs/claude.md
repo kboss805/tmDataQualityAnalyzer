@@ -484,6 +484,24 @@ The stories below follow the workflow a first-time user takes through the applic
 
 #### Fixed
 
+- **Every message a stream worker logs now names its channel**, e.g.
+  `[CH 13 PCM03] …` (`FrameProcessor::streamTag`). Streams are processed by parallel
+  workers writing into one shared log, so their output interleaves in an order that is
+  not even deterministic between runs — a recording with four PCM channels produced
+  four unattributed "pattern was not found" lines with no way to tell which channel
+  each belonged to. The tag leads with the PCM channel ID because that is what the
+  operator configured the stream by; the TMATS label is appended only when it adds
+  something, since `MainViewModel` falls back to `Ch <id>` when TMATS has no name and
+  `[CH 13 Ch 13]` is noise.
+- **The failure report now prints the sync pattern and mask it was actually looking
+  for** (`FrameProcessor::syncSpec`). It printed `sync_len` but never the pattern —
+  and PRN-11 and PRN-15 are *both* 32-bit patterns, so a stream configured with the
+  wrong one was invisible in the report: every printed field looked reasonable. A
+  PRN-11 configuration on a PRN-15 stream could only be spotted by noticing
+  `bits/frame=2047` and knowing what that implied. The mask is reported as
+  "all bits significant" when it is the default, since a non-default mask silently
+  excuses mismatches and is worth seeing.
+
 - **The sync-failure diagnostic reported off-phase matches as boundary-aligned.** The
   scanner's off-phase branch — a sync match that is *not* on a frame boundary —
   incremented `boundary_syncs` anyway, and set `current_sync_run` without ever folding
@@ -503,7 +521,11 @@ The stories below follow the workflow a first-time user takes through the applic
   deterministically — the right sync pattern with a deliberately wrong frame length, so
   every match is off-phase by construction — and asserts both `0 boundary-aligned` and
   the new explanation. Verified against the old accounting, which reported 99,272
-  boundary-aligned syncs where the correct answer is zero. Baseline **373 / 0 / 1**.
+  boundary-aligned syncs where the correct answer is zero.
+- `TestFrameProcessor::failureReportNamesChannelAndSyncPattern` pins the channel tag on
+  the failure report **and on every routine log line** — a tagged error among untagged
+  progress messages is still ambiguous once four streams interleave — plus the printed
+  pattern and mask. Baseline **374 / 0 / 1**.
 
 - **The hamburger menu's section headers were never drawn.** `Process`,
   `Import/Export` and `Settings` were added with `QMenu::addSection(tr(…))`, but once

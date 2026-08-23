@@ -1012,3 +1012,82 @@ void TestFrameProcessor::offPhaseSyncsAreNotCountedAsBoundaryAligned()
              qPrintable(QStringLiteral("expected the no-boundary explanation; message was:\n%1")
                             .arg(reported)));
 }
+
+void TestFrameProcessor::failureReportNamesChannelAndSyncPattern()
+{
+    // Four streams are processed by parallel workers into one shared log, so their
+    // messages interleave in an order that is not deterministic between runs. Before
+    // this, a failure report carried no identity at all: four "pattern was not found"
+    // lines, no way to tell which channel each belonged to.
+    //
+    // The report also printed sync_len but never the pattern itself - and PRN-11 and
+    // PRN-15 are both 32-bit patterns, so a stream running the wrong one was invisible
+    // in the report. That is exactly how a PRN-11 config on a PRN-15 stream went
+    // undiagnosed: every printed field looked reasonable.
+    const QString filepath = testDataPath("agc_rnrz-l_trc_testfile.ch10");
+    if (!QFileInfo::exists(filepath))
+        QSKIP("RNRZ-L test file not available");
+
+    Chapter10Reader reader;
+    QVERIFY(reader.loadChannels(filepath));
+    const int pcm_id  = reader.getFirstPCMChannelID();
+    const int time_id = reader.getCurrentTimeChannelID();
+    if (pcm_id < 0 || time_id < 0)
+        QSKIP("Missing channels in test file");
+
+    // Right pattern, wrong frame length: matches occur at the real 800-bit spacing so
+    // none is ever boundary-aligned, which lands in the detailed report.
+    ProcessingParams p = makeTestParams(filepath, time_id, pcm_id,
+                                        0xFE6B2840, 32, 49, 1234);
+    p.startSeconds    = 0;
+    p.stopSeconds     = UINT64_MAX;
+    p.samplePeriodSec = 1.0;
+    p.isRandomized    = true;
+    p.mode            = StreamMode::FrameSyncLockStats;
+    p.streamLabel     = QStringLiteral("PCM03");
+
+    PacketQueue queue;
+    p.packetQueue = &queue;
+    Ch10PacketReader rdr;
+    QVector<ProcessingParams*> params_list = { &p };
+    QString error;
+    QVERIFY2(rdr.prepare(p.filename, p.timeChannelId, params_list, error), qPrintable(error));
+
+    FrameSetup empty_setup;
+    FrameProcessor fp;
+    QStringList log;
+    QString reported;
+    QObject::connect(&fp, &FrameProcessor::logMessage,
+                     [&log](const QString& m) { log << m; });
+    QObject::connect(&fp, &FrameProcessor::errorOccurred,
+                     [&reported](const QString& m) { reported = m; });
+
+    QFuture<void> future = QtConcurrent::run([&rdr]() { rdr.run(); });
+    fp.process(p, &empty_setup);
+    future.waitForFinished();
+
+    const QString expected_tag = QStringLiteral("[CH %1 PCM03]").arg(pcm_id);
+
+    // Identity on the failure report...
+    QVERIFY2(reported.startsWith(expected_tag),
+             qPrintable(QStringLiteral("report must lead with %1; got:\n%2")
+                            .arg(expected_tag, reported)));
+
+    // ...and on EVERY routine message too, not just the error. A tagged error among
+    // untagged progress lines is still ambiguous once four streams interleave.
+    for (const QString& m : log)
+    {
+        QVERIFY2(m.startsWith(expected_tag),
+                 qPrintable(QStringLiteral("untagged log line: %1").arg(m)));
+    }
+    QVERIFY2(!log.isEmpty(), "expected at least one progress message");
+
+    // The pattern itself, uppercase hex - the field that distinguishes PRN-11 from
+    // PRN-15 when both report sync_len=32.
+    QVERIFY2(reported.contains(QStringLiteral("pattern=0xFE6B2840")),
+             qPrintable(QStringLiteral("the sync pattern must be printed; got:\n%1").arg(reported)));
+    QVERIFY2(reported.contains(QStringLiteral("mask=")),
+             qPrintable(QStringLiteral("the sync mask must be printed; got:\n%1").arg(reported)));
+
+    qInfo("report reads:\n%s", qPrintable(reported));
+}

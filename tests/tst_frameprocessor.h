@@ -31,6 +31,7 @@ private slots:
     void swapBytesOffFindsSyncThatTheSwapDestroys();
     void oddPayloadSwapSkipIsReported();
     void offPhaseSyncsAreNotCountedAsBoundaryAligned();
+    void failureReportNamesChannelAndSyncPattern();
 };
 
 #endif // TST_FRAMEPROCESSOR_H
