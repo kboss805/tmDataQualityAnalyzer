@@ -402,6 +402,17 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.10.0 tag
 
+#### Frame Sync Lock defaults to PRN-15 (US2.0)
+
+- `kDefaultFrameSyncLockPattern` / `kDefaultFrameSyncLockBits` move from PRN-11
+  (`A345CA5C` / 2047) to **PRN-15 (`334AABBF` / 32767)**, so a Frame Sync Lock stream
+  opens on the pattern most recordings here actually use instead of needing the
+  PRN-15 TOML loaded every time.
+- **The two constants are a matched pair and must move together**: a PRN-15 pattern
+  with a PRN-11 frame length can never lock, and nothing in the build would notice.
+  `TestConstants` now pins both, where it previously pinned only the pattern — so the
+  half-change is a test failure rather than a stream that silently never syncs.
+
 #### Byte order is now settable, per file (US1.0)
 
 - **Labelled "Legacy Chapter 10", and defaults OFF.** The swap is an older recorder's
