@@ -296,9 +296,10 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
             // Every packet skipped: the setting is inert for this stream, which is
             // worth saying plainly - the operator's choice had no effect at all.
             emit logMessage(
-                streamTag(params) + QString("byte swap had no effect on this stream: all %1 packets have an "
-                        "odd payload length, which cannot be byte-pair swapped. The data "
-                        "was processed unswapped regardless of the Swap byte pairs setting.")
+                streamTag(params) + QString("all %1 packets have an odd payload length, which "
+                        "cannot be byte-pair swapped, so this stream was processed as Legacy "
+                        "Chapter 10 no matter how that setting is set. It is the only stream "
+                        "shape the setting cannot reach.")
                     .arg(swap_skipped_packets));
         }
         else

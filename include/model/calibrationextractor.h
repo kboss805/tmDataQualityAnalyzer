@@ -57,7 +57,7 @@ public:
         /// `sync`, this MUST match the main run: it is a raw-affecting transform, so
         /// extracting with a different byte order than the run being calibrated
         /// produces a profile built from a different bitstream entirely.
-        bool    swapBytes = false;
+        bool    swapBytes = true;
         QString receiverParamsToml;      ///< Word-map TOML; callers resolve the shipped default.toml here so the map matches the main run (empty only if that file is missing).
         int     numReceivers = 0;        ///< Sequential-grid fallback, used only when receiverParamsToml is empty.
         int     receiverChannels = 0;    ///< Sequential-grid fallback, used only when receiverParamsToml is empty.
