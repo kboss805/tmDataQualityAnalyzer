@@ -101,6 +101,12 @@ private:
         uint32_t words_in_frame         = 0;
         uint32_t sync_pat_len           = 0;
         uint32_t min_syncs              = 0;
+        // The pattern actually scanned for. Reported because sync_pat_len alone
+        // cannot distinguish two configurations: PRN-11 and PRN-15 are both 32-bit
+        // patterns, so a stream configured with the wrong one looks identical in the
+        // failure report unless the value itself is printed.
+        uint64_t sync_pat               = 0;
+        uint64_t sync_mask              = 0;
         double   elapsed_sec            = 0.0;
     };
 
@@ -152,6 +158,14 @@ private:
 
     /// Emits the completion log (or the no-syncs / no-frames error) for a finished
     /// scan and signals processingFinished(). @return true on a successful run.
+    /// Identity prefix for every message this worker logs, e.g. "[CH 13 PCM03] ".
+    /// Parallel workers share one log, so an unlabelled message cannot be traced
+    /// back to the stream that produced it.
+    static QString streamTag(const ProcessingParams& params);
+
+    /// Human-readable description of the sync pattern actually being scanned for.
+    static QString syncSpec(const ScanDiagnostics& d);
+
     bool reportCompletion(const ProcessingParams& params, const ScanDiagnostics& diag);
 
     /// @name PCM bit-level helpers
