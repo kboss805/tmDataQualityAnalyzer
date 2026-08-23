@@ -864,12 +864,14 @@ public:
                                const QString& toml_dir,
                                int time_channel_id,
                                const QString& app_root,
+                               bool swap_bytes,
                                QWidget* parent = nullptr)
         : QDialog(parent)
         , m_receiverParamsToml(cfg.receiverParamsToml)
         , m_toml_dir(toml_dir)
         , m_app_root(app_root)
         , m_timeChannelId(time_channel_id)
+        , m_swapBytes(swap_bytes)
         , m_pcmChannelId(cfg.pcmChannelId)
         , m_calibrationByWord(cfg.calibrationByWord)
         , m_calCh10Path(cfg.calCh10Path)
@@ -1166,6 +1168,9 @@ private:
         base.receiverParamsToml = m_receiverParamsToml;
         base.numReceivers       = numReceivers();
         base.receiverChannels   = receiverChannels();
+        // Mirror the main run's byte order, or the extracted steps come from a
+        // different bitstream than the data they will calibrate.
+        base.swapBytes          = m_swapBytes;
         CalibrationSetupDialog setup(base, m_toml_dir, m_app_root, this);
         if (setup.exec() != QDialog::Accepted) return;
         m_toml_dir = setup.lastTomlDir();
@@ -1196,6 +1201,7 @@ private:
 
     // Non-linear step calibration (US5.3)
     int             m_timeChannelId = -1;     ///< Time channel ID inherited from the parent dialog.
+    bool            m_swapBytes = false;      ///< File-level byte order, inherited from the parent dialog.
     int             m_pcmChannelId  = -1;     ///< PCM channel ID of the stream being calibrated.
     QHash<int, CalibrationProfile> m_calibrationByWord; ///< Extracted profiles, keyed by word index.
     QString         m_calCh10Path;   ///< Calibration input reference (serialized in a template).

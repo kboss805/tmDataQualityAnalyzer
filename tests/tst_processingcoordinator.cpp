@@ -41,6 +41,9 @@ StreamJob makeLockOnlyJob(const QString& filepath, int time_id, int pcm_id, cons
     job.params.timeChannelId    = time_id;
     job.params.pcmChannelId     = pcm_id;
     job.params.frameSync        = 0xFE6B2840;
+    // Legacy byte-swapped fixture; the DTO default is the modern order, so this
+    // is stated rather than inherited.
+    job.params.swapBytes        = true;
     job.params.syncPatternLength = 32;
     job.params.wordsInMinorFrame = 49;
     job.params.bitsInMinorFrame  = 800;
@@ -74,6 +77,9 @@ StreamJob makePrnJob(const QString& filepath, int time_id, int pcm_id,
     job.params.timeChannelId     = time_id;
     job.params.pcmChannelId      = pcm_id;
     job.params.frameSync         = spec.frameSync;
+    // Legacy byte-swapped fixture; the DTO default is the modern order, so this
+    // is stated rather than inherited.
+    job.params.swapBytes         = true;
     job.params.frameSyncMask     = 0xFFFFFFFF;
     job.params.syncPatternLength = 32;
     job.params.wordsInMinorFrame = spec.wordsInMinorFrame;

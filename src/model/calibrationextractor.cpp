@@ -101,6 +101,9 @@ void CalibrationExtractor::start(const Request& request)
     m_params.bitsInMinorFrame  = request.sync.bitsInMinorFrame;
     m_params.isRandomized      = request.sync.randomized;
     m_params.isInverted        = request.sync.inverted;
+    // Raw-affecting, so it belongs with isRandomized/isInverted above: the
+    // extractor must see the same bitstream the main run will.
+    m_params.swapBytes         = request.swapBytes;
     m_params.mode              = StreamMode::ReceiverChannelInfo;
     m_params.dataRateBps       = (request.sync.dataRateMbps > 0.0) ? request.sync.dataRateMbps * 1e6 : 0.0;
     m_params.streamLabel       = "Calibration";

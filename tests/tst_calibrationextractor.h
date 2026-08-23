@@ -10,6 +10,7 @@ class TestCalibrationExtractor : public QObject
 private slots:
     void missingFileFailsCleanly();
     void realFileCalibratesRcvr3Only();
+    void byteOrderReachesTheExtraction();
 };
 
 #endif // TST_CALIBRATIONEXTRACTOR_H

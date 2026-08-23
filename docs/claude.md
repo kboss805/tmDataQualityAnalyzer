@@ -404,6 +404,34 @@ The stories below follow the workflow a first-time user takes through the applic
 
 #### Byte order is now settable, per file (US1.0)
 
+- **Labelled "Legacy Chapter 10", and defaults OFF.** The swap is an older recorder's
+  behaviour, so the common case should not need a box ticked. The label names the
+  *kind of file* the operator has rather than the transform it needs — byte order
+  is not a distinction the operators of this application work in. This is
+  deliberately *not* the same default as `ProcessingTemplate::swapBytes`, which stays
+  `true`: a template written before the field existed came from a build that always
+  swapped, and reading it as `false` would silently change how that template processes
+  its files. `ProcessingParams::swapBytes` follows the UI to `false`, so "unset" means
+  modern — and flipping it surfaced three call sites (two coordinator benchmarks, two
+  calibration requests) that had been silently inheriting the legacy transform. Each
+  now states what it needs, which is the point: a default that quietly supplies a
+  raw-affecting transform is how the bug below happened.
+- **Fixed before it shipped: the calibration extractor did not mirror the flag.**
+  `CalibrationExtractor` sets `isRandomized` and `isInverted` but was never given
+  `swapBytes`, so once byte order became settable it extracted with the DTO default
+  rather than the operator's choice — building a profile from a different bitstream
+  than the run that profile would be applied to. Nothing would have surfaced it: the
+  profile attaches and the numbers are simply wrong. This is the invariant `CLAUDE.md`
+  states ("the calibration extractor must mirror the main run's word map +
+  raw-affecting flags exactly"), and the same shape as the earlier `isInverted`
+  omission. The flag now travels on `CalibrationExtractor::Request`, plumbed from the
+  Configure Streams dialog through the gear dialog exactly as `timeChannelId` was.
+- `TestCalibrationExtractor::byteOrderReachesTheExtraction` asserts the mirror
+  **behaviourally** rather than by reading `m_params`: with the wrong byte order the
+  sync pattern is destroyed and extraction cannot succeed, which is only observable if
+  the flag truly reaches the scan. Verified to fail when the mirror line is removed.
+  Baseline **374 / 0 / 1**.
+
 - **The application byte-swapped every PCM payload unconditionally, and nothing could
   turn it off.** `Ch10PacketReader` set `ResolvedPcmAttrs::needsSwap` from
   `bDontSwapRawData`, which `Set_Attributes_PcmF1` memsets to 0 and which only

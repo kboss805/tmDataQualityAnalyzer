@@ -104,14 +104,19 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
         // both describe the FILE, not a stream. Every per-stream control lives in the
         // table below or behind a row's gear. Putting this in the gear dialog would
         // imply channels of one recording can disagree about their own byte order.
-        m_swap_bytes = new QCheckBox("Swap byte pairs", this);
+        // "Legacy Chapter 10", not "byte order": the label names the KIND OF FILE the
+        // operator has, which they know, rather than the transform it needs, which is
+        // an implementation detail they should not have to reason about.
+        m_swap_bytes = new QCheckBox("Legacy Chapter 10", this);
         m_swap_bytes->setChecked(swap_bytes);
         m_swap_bytes->setToolTip(
-            "Swap each pair of bytes in the recorded PCM data before searching for the\n"
-            "frame sync pattern. Byte order depends on the recorder that produced the\n"
-            "file, so it applies to every stream in this recording.\n\n"
-            "Leave this on unless no stream finds sync: that is the symptom of the\n"
-            "wrong byte order, and the log says so when it detects it.");
+            "Legacy Chapter 10\n\n"
+            "Turn this on for recordings from older equipment. If no stream in this\n"
+            "file finds frame sync, this is the first thing to try - the log says so\n"
+            "when it can tell.\n\n"
+            "It applies to the whole recording, not to one channel.\n\n"
+            "(Technically: older recorders store the PCM payload with each pair of\n"
+            "bytes swapped, and this undoes that before the sync search.)");
         hl->addWidget(m_swap_bytes);
         layout->addLayout(hl);
     }
@@ -489,7 +494,8 @@ void StreamConfigDialog::openGearDialog(int row)
     }
     else
     {
-        ReceiverSNRDialog dlg(temp, m_toml_dir, m_time_channel_id, m_app_root, this);
+        ReceiverSNRDialog dlg(temp, m_toml_dir, m_time_channel_id, m_app_root,
+                              swapBytes(), this);
         if (dlg.exec() == QDialog::Accepted)
         {
             // Single copy of the dialog->row field mapping (see the lock branch).

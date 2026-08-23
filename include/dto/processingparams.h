@@ -58,9 +58,12 @@ struct ProcessingParams {
     /// the recorder that produced the file, so every stream in one recording shares
     /// it. MainViewModel stamps the same value onto every job it builds.
     ///
-    /// Defaults true, which is what the application did unconditionally before this
-    /// was settable, so existing recordings and templates are unaffected.
-    bool swapBytes    = true;
+    /// Defaults false: the swap is a legacy recorder behaviour, and every production
+    /// path stamps this explicitly (MainViewModel for a run, CalibrationExtractor for
+    /// an extraction). A default of true would mean a caller that forgets to set it
+    /// silently gets the legacy transform - which is how the extractor came to
+    /// disagree with the run it was calibrating.
+    bool swapBytes    = false;
 
     StreamMode mode = StreamMode::ReceiverChannelInfo; ///< Processing mode for this stream.
     double dataRateBps = 0.0;     ///< User bit rate in bits/sec. 0 = use TMATS-derived rate.

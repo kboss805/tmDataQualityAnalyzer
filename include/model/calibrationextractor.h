@@ -53,6 +53,11 @@ public:
         int     timeChannelId = -1;      ///< Time channel ID (from the parent dialog).
         int     pcmChannelId = -1;       ///< PCM channel ID of the stream being calibrated.
         FrameSyncParams sync;            ///< Frame sync pattern/mask, frame length, scrambling, data rate. MUST match the main run or the extracted raw counts won't line up with it.
+        /// File-level byte order, mirrored from the Configure Streams dialog. Like
+        /// `sync`, this MUST match the main run: it is a raw-affecting transform, so
+        /// extracting with a different byte order than the run being calibrated
+        /// produces a profile built from a different bitstream entirely.
+        bool    swapBytes = false;
         QString receiverParamsToml;      ///< Word-map TOML; callers resolve the shipped default.toml here so the map matches the main run (empty only if that file is missing).
         int     numReceivers = 0;        ///< Sequential-grid fallback, used only when receiverParamsToml is empty.
         int     receiverChannels = 0;    ///< Sequential-grid fallback, used only when receiverParamsToml is empty.
