@@ -415,10 +415,18 @@ The stories below follow the workflow a first-time user takes through the applic
 
 #### Byte order is now settable, per file (US1.0)
 
-- **Labelled "Legacy Chapter 10", and defaults OFF.** The swap is an older recorder's
-  behaviour, so the common case should not need a box ticked. The label names the
-  *kind of file* the operator has rather than the transform it needs — byte order
-  is not a distinction the operators of this application work in. This is
+- **Labelled "Legacy Chapter 10", and it is the INVERSE of `swapBytes`.** The label
+  names the *kind of file* the operator has rather than the transform it needs — byte
+  order is not a distinction the operators of this application work in.
+  The byte-pair swap is what an **ordinary** Chapter 10 recording needs: three of the
+  four reference recordings require it and only the legacy one does not. So the swap is
+  the normal case, the box is **unticked by default**, and ticking it turns the swap
+  *off*. `StreamConfigDialog::swapBytes()` is the single place the two vocabularies
+  meet; no model-layer code knows the label exists.
+  This was wired the same way round at first, which put the common case behind a ticked
+  box and made the label mean the reverse of the truth. `legacyToggleIsInverseOfByteSwap`
+  pins the widget state as well as the accessor — an accessor-only test passes just as
+  well if both ends are flipped back together. This is
   deliberately *not* the same default as `ProcessingTemplate::swapBytes`, which stays
   `true`: a template written before the field existed came from a build that always
   swapped, and reading it as `false` would silently change how that template processes

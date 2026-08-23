@@ -61,6 +61,7 @@ private slots:
     void modeComboDisplaysTextLeftJustified();
     void modeComboSelectionStillTracksIndexChange();
     void byteOrderToggleIsFileLevel();
+    void legacyToggleIsInverseOfByteSwap();
 };
 
 #endif // TST_STREAMCONFIGDIALOG_H

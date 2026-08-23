@@ -64,6 +64,10 @@ public:
 
     /// @return Whether each packet's byte pairs should be swapped before processing.
     ///
+    /// This is the INVERSE of the "Legacy Chapter 10" checkbox: the swap is what an
+    /// ordinary Chapter 10 recording needs, and a legacy one is the exception that
+    /// does without it.
+    ///
     /// **File-scoped, like timeChannelIndex() and unlike everything in configs().**
     /// Byte order is a property of the recorder that wrote the file - the recordings
     /// this application handles come from different vendors' hardware - so it applies
@@ -125,7 +129,9 @@ private:
     QWidget*              m_stream_container   = nullptr;
     QVector<RowWidgets>   m_rows;
     QComboBox*            m_time_channel_combo = nullptr;
-    QCheckBox*            m_swap_bytes = nullptr;  ///< File-level byte-order toggle.
+    /// File-level "Legacy Chapter 10" toggle. Checked means the byte-pair swap is
+    /// NOT applied - see swapBytes(), which is where the inversion lives.
+    QCheckBox*            m_legacy_ch10 = nullptr;
     QPushButton*          m_ok_btn             = nullptr;
     QCheckBox*            m_all_toggle         = nullptr;
     int                   m_time_channel_id    = -1; ///< Resolved time channel ID for calibration extraction (US5.3).

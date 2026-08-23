@@ -100,24 +100,32 @@ StreamConfigDialog::StreamConfigDialog(const QVector<StreamConfig>& configs,
         hl->addWidget(m_time_channel_combo);
         hl->addStretch(1);
 
-        // Byte order sits on the Time Channel row because it shares that row's scope:
-        // both describe the FILE, not a stream. Every per-stream control lives in the
-        // table below or behind a row's gear. Putting this in the gear dialog would
-        // imply channels of one recording can disagree about their own byte order.
-        // "Legacy Chapter 10", not "byte order": the label names the KIND OF FILE the
-        // operator has, which they know, rather than the transform it needs, which is
-        // an implementation detail they should not have to reason about.
-        m_swap_bytes = new QCheckBox("Legacy Chapter 10", this);
-        m_swap_bytes->setChecked(swap_bytes);
-        m_swap_bytes->setToolTip(
+        // Sits on the Time Channel row because it shares that row's scope: both
+        // describe the FILE, not a stream. Every per-stream control lives in the table
+        // below or behind a row's gear, and putting this there would imply channels of
+        // one recording can disagree about their own byte order.
+        //
+        // The label names the KIND OF FILE the operator has, which they know, rather
+        // than the transform it needs, which they should not have to reason about.
+        //
+        // It is therefore INVERTED with respect to swapBytes. The byte-pair swap is
+        // what ORDINARY Chapter 10 recordings need - three of the four reference
+        // recordings require it and only the legacy one does not - so the swap is the
+        // normal case and "Legacy Chapter 10" is the exception that turns it off.
+        // Wiring it the other way round would put the common case behind a ticked box
+        // and label it backwards besides.
+        m_legacy_ch10 = new QCheckBox("Legacy Chapter 10", this);
+        m_legacy_ch10->setChecked(!swap_bytes);
+        m_legacy_ch10->setToolTip(
             "Legacy Chapter 10\n\n"
             "Turn this on for recordings from older equipment. If no stream in this\n"
             "file finds frame sync, this is the first thing to try - the log says so\n"
             "when it can tell.\n\n"
             "It applies to the whole recording, not to one channel.\n\n"
-            "(Technically: older recorders store the PCM payload with each pair of\n"
-            "bytes swapped, and this undoes that before the sync search.)");
-        hl->addWidget(m_swap_bytes);
+            "(Technically: ordinary Chapter 10 recordings store the PCM payload with\n"
+            "each pair of bytes swapped, and the reader undoes that before searching\n"
+            "for sync. Legacy recordings do not, so this turns that step off.)");
+        hl->addWidget(m_legacy_ch10);
         layout->addLayout(hl);
     }
 
@@ -580,7 +588,12 @@ int StreamConfigDialog::timeChannelIndex() const
 
 bool StreamConfigDialog::swapBytes() const
 {
-    return m_swap_bytes != nullptr && m_swap_bytes->isChecked();
+    // The single place the two vocabularies meet. Below this line everything speaks
+    // in terms of the transform (swapBytes); above it, the operator speaks in terms
+    // of the recording (Legacy Chapter 10). They are opposites, and keeping the
+    // inversion here means no model-layer code has to know the label exists.
+    if (m_legacy_ch10 == nullptr) return true;   // no control: ordinary Chapter 10
+    return !m_legacy_ch10->isChecked();
 }
 
 QVector<StreamConfig> StreamConfigDialog::configs() const

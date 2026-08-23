@@ -940,11 +940,12 @@ void TestFrameProcessor::oddPayloadSwapSkipIsReported()
     const QString joined = log.join(" | ");
     QVERIFY2(joined.contains("odd payload length"),
              qPrintable(QStringLiteral("the skip must be reported; log was: %1").arg(joined)));
-    // Every packet on this channel is odd, so the message must say the setting was
-    // inert rather than warning about a half-swapped stream.
-    QVERIFY2(joined.contains("had no effect on this stream"),
-             qPrintable(QStringLiteral("all-odd stream must report an inert setting, not a "
-                                       "mixed-order warning; log was: %1").arg(joined)));
+    // Every packet on this channel is odd, so the message must say the stream was
+    // forced to Legacy Chapter 10 regardless of the setting - not warn about a
+    // half-swapped stream, which is the other, genuinely corrupting case.
+    QVERIFY2(joined.contains("processed as Legacy Chapter 10 no matter how that setting is set"),
+             qPrintable(QStringLiteral("all-odd stream must report the setting as unreachable, "
+                                       "not a mixed-order warning; log was: %1").arg(joined)));
 }
 
 void TestFrameProcessor::offPhaseSyncsAreNotCountedAsBoundaryAligned()

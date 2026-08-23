@@ -707,3 +707,44 @@ void TestStreamConfigDialog::byteOrderToggleIsFileLevel()
     }
     QCOMPARE(byte_order_boxes, 1);
 }
+
+void TestStreamConfigDialog::legacyToggleIsInverseOfByteSwap()
+{
+    // The control and the transform are OPPOSITES, and that is the whole point: the
+    // byte-pair swap is what an ordinary Chapter 10 recording needs, so "Legacy
+    // Chapter 10" is the exception that turns it off. Wiring them the same way round
+    // was a real bug - three of the four reference recordings need the swap, so the
+    // common case sat behind a ticked box and the label meant the reverse of the truth.
+    //
+    // Pinned on the widget itself, not just the accessor, because an accessor test
+    // alone passes just as well if BOTH ends are flipped back together.
+    QVector<StreamConfig> cfgs;
+    cfgs << StreamConfig{};
+
+    QScopedPointer<StreamConfigDialog> ordinary(makeDialog(cfgs, /*swap_bytes=*/true));
+    QVERIFY2(ordinary->swapBytes(), "an ordinary Chapter 10 file must swap byte pairs");
+
+    QScopedPointer<StreamConfigDialog> legacy(makeDialog(cfgs, /*swap_bytes=*/false));
+    QVERIFY2(!legacy->swapBytes(), "a legacy file must not swap byte pairs");
+
+    auto legacyBox = [](StreamConfigDialog* d) -> QCheckBox* {
+        for (QCheckBox* b : d->findChildren<QCheckBox*>())
+            if (b->text() == QStringLiteral("Legacy Chapter 10")) return b;
+        return nullptr;
+    };
+
+    QCheckBox* ordinary_box = legacyBox(ordinary.data());
+    QCheckBox* legacy_box   = legacyBox(legacy.data());
+    QVERIFY(ordinary_box != nullptr && legacy_box != nullptr);
+
+    // Swapping (ordinary) => box CLEAR. Not swapping (legacy) => box TICKED.
+    QVERIFY2(!ordinary_box->isChecked(),
+             "an ordinary file must leave Legacy Chapter 10 unticked");
+    QVERIFY2(legacy_box->isChecked(),
+             "a legacy file must show Legacy Chapter 10 ticked");
+
+    // And toggling the box must move the reported transform the other way.
+    legacy_box->setChecked(false);
+    QVERIFY2(legacy->swapBytes(),
+             "unticking Legacy Chapter 10 must re-enable the byte swap");
+}

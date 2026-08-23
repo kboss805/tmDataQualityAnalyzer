@@ -63,7 +63,7 @@ struct ProcessingParams {
     /// an extraction). A default of true would mean a caller that forgets to set it
     /// silently gets the legacy transform - which is how the extractor came to
     /// disagree with the run it was calibrating.
-    bool swapBytes    = false;
+    bool swapBytes    = true;
 
     StreamMode mode = StreamMode::ReceiverChannelInfo; ///< Processing mode for this stream.
     double dataRateBps = 0.0;     ///< User bit rate in bits/sec. 0 = use TMATS-derived rate.

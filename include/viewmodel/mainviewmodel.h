@@ -224,7 +224,7 @@ private:
     /// as ProcessingTemplate::swapBytes, which stays true: a template written before
     /// the field existed came from a build that always swapped, and reading it as
     /// false would silently change how that template processes its files.
-    bool m_swap_bytes = false;
+    bool m_swap_bytes = true;
     int m_pcm_channel_index;                 ///< Selected PCM channel combo box index.
 
     QVector<StreamConfig> m_stream_configs;  ///< Per-stream configuration of the file currently being configured.
