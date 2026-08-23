@@ -404,6 +404,15 @@ The stories below follow the workflow a first-time user takes through the applic
 
 #### The processing log is concise
 
+- **Four manual figures re-captured** against this behaviour: the three Configure
+  Streams shots now show the **Legacy Chapter 10** toggle, and the log figure shows the
+  one-line reports. The first set of re-captures came from a build that predated the
+  toggle — worth checking a figure contains the thing it is meant to illustrate, not
+  just that its crop and dimensions are right.
+  `walk-err-02-try-this.png` is deleted: it was named for the removed suggestion, and
+  the log figure already carries the errors, the successful streams and the concise
+  format in one shot.
+
 - **One line per outcome.** The failure reports were a five-line block plus a
   paragraph of explanation; they are now single lines that state what was configured
   and what came of it:
