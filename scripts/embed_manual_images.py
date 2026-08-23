@@ -244,14 +244,19 @@ if os.path.exists(WALK):
         fragment = fragment.replace('<h2 id="%s">' % wid,
                                     '<h2 id="%s">%d. ' % (wid, n), 1)
 
-    # The reference sections are numbered 1..8; the walkthroughs take 1..N ahead of
-    # them, so those shift by N - in the nav AND in each heading, or the two
-    # disagree and the contents list stops matching the document.
+    # The walkthroughs take 1..N ahead of the reference sections, so those shift by N -
+    # in the nav AND in each heading, or the two disagree and the contents list stops
+    # matching the document.
+    #
+    # The number pattern is \d+ rather than a fixed range: it was [1-8] when there were
+    # eight reference sections, which meant adding a ninth silently left it unshifted -
+    # numbered 9 in a full manual whose other sections had moved into the teens. A
+    # counted range here is a trap that springs the next time someone writes a section.
     SHIFT = len(walk_ids)
     def renumber(text):
-        text = re.sub(r'(<li><a href="#[a-z-]+">)([1-8])\. ',
+        text = re.sub(r'(<li><a href="#[a-z-]+">)(\d+)\. ',
                       lambda m: '%s%d. ' % (m.group(1), int(m.group(2)) + SHIFT), text)
-        text = re.sub(r'(<h2 id="[a-z-]+">)([1-8])\. ',
+        text = re.sub(r'(<h2 id="[a-z-]+">)(\d+)\. ',
                       lambda m: '%s%d. ' % (m.group(1), int(m.group(2)) + SHIFT), text)
         return text
     full = renumber(full)

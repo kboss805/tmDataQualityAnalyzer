@@ -402,6 +402,39 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.10.0 tag
 
+#### The manual documents Legacy Chapter 10 (US1.0)
+
+- **Section 2 now describes the two file-level settings together.** Time Channel and
+  Legacy Chapter 10 both describe the recording rather than a stream, so they are
+  presented as a pair, with the reason the byte-order setting is file-scoped stated
+  where an operator will read it - a channel-by-channel search for the right setting
+  is the wrong instinct and the manual should head it off.
+- **New section 9, "When a stream will not sync"** - the manual had no troubleshooting
+  section at all. It reads the three log outcomes (locked / no sync found / sync found
+  but no frames extracted), then lists what to check: pattern and bits-per-frame as a
+  pair, Legacy Chapter 10, derandomize, and the channel itself. The section is much
+  shorter than it would have been a week ago: with the automatic probe gone and the
+  reports down to one line, there is less behaviour to explain.
+- It also documents the **odd-length payload** case, which is otherwise inexplicable
+  from the outside - one channel in a recording ignoring the byte-order setting that
+  its neighbours obey.
+- **The whole-file rule is stated as a diagnostic**, not just a scoping note: if some
+  streams lock and others do not, byte order is *not* the cause. That inference is the
+  useful half, and it is the one an operator cannot make without being told the setting
+  is file-wide.
+- The walkthroughs gain the same file-level pair, and the frame-sync figure caption now
+  says PRN-15 is the default - the caption described the dialog as "configured for a
+  PRN 15 stream" when that is now simply what a new stream opens on.
+
+#### Fixed
+
+- **The section renumbering regex was a counted range.** `embed_manual_images.py`
+  matched `[1-8]` when there were eight reference sections, so adding a ninth left it
+  unshifted - numbered 9 in a full manual whose neighbours had moved into the teens,
+  with the nav and the heading disagreeing. Widened to `\d+`. The generated manuals are
+  now checked for nav/heading agreement and unresolved anchors, which is what caught
+  it: 9 numbered sections in the base, 14 in the full, every internal link resolving.
+
 #### The processing log is concise
 
 - **Four manual figures re-captured** against this behaviour: the three Configure

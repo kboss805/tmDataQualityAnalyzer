@@ -74,6 +74,7 @@ plots two data-quality metrics over time, per stream:</p>
   <li><a href="#import-export">6. Import &amp; export</a></li>
   <li><a href="#interface">7. Interface &amp; settings</a></li>
   <li><a href="#shortcuts">8. Keyboard shortcuts</a></li>
+  <li><a href="#no-sync">9. When a stream will not sync</a></li>
 </ul>
 </nav>
 
@@ -130,8 +131,16 @@ sections, you are reading the fuller one.</div>
     </ul>
   </li>
 </ul>
-<p>The dialog also selects the <strong>time channel</strong> used to timestamp all streams, and an
-optional start/stop time range to restrict processing.</p>
+<p>Two settings at the top of the dialog describe the <em>recording</em> rather than any one
+stream, so they apply to every channel in the file:</p>
+<ul>
+  <li><strong>Time Channel</strong> &mdash; the IRIG time channel used to timestamp all streams.</li>
+  <li><strong>Legacy Chapter 10</strong> &mdash; leave this off for ordinary Chapter 10 recordings.
+      Turn it on for recordings from older equipment. Byte order is a property of the recorder that
+      wrote the file, which is why the setting covers the whole recording and not a single channel;
+      if no stream in a file finds sync, this is the first thing to try.</li>
+</ul>
+<p>The dialog also takes an optional start/stop time range to restrict processing.</p>
 
 <h2 id="plot">3. Working with the plot</h2>
 <figure>
@@ -403,6 +412,49 @@ shows the key next to each command as a reminder.</p>
   <tr><td><kbd>L</kbd></td>
       <td>Show or hide the legend</td></tr>
 </table>
+
+
+<h2 id="no-sync">9. When a stream will not sync</h2>
+<p>A stream that finds no frame sync produces no curve on the plot. The log says which stream
+and what it was looking for, on one line per stream. Streams are processed at the same time, so
+their messages interleave &mdash; each one is prefixed with its PCM channel, for example
+<code>[CH 13 PCM03]</code>.</p>
+
+<h3>Reading the result</h3>
+<table>
+  <tr><th>Log line</th><th>What it means</th></tr>
+  <tr><td><code>&hellip; complete &mdash; N samples extracted</code></td>
+      <td>The stream locked. Its curve is on the plot.</td></tr>
+  <tr><td><code>no frame sync found</code></td>
+      <td>The configured pattern never appeared. The line names the pattern and frame length it
+          searched for, so you can check them against what the stream actually carries.</td></tr>
+  <tr><td><code>sync found but no frames extracted</code></td>
+      <td>The pattern appeared, but never at the expected frame spacing. The line reports how many
+          matches were found and how many were <em>boundary-aligned</em>; when that second number
+          is zero, the matches were coincidence rather than a frame structure.</td></tr>
+</table>
+
+<h3>What to check</h3>
+<ol>
+  <li><strong>The sync pattern and bits per frame.</strong> These belong together &mdash; a pattern
+      with the wrong frame length can never lock. Both are printed in the failure line. Note that
+      two different formats can share a pattern length, so a plausible-looking length is not
+      confirmation that the pattern is right.</li>
+  <li><strong>Legacy Chapter 10.</strong> If <em>no</em> stream in the file finds sync, the
+      recording's byte order is the likely cause; see <a href="#configure">Configuring streams</a>.
+      If some streams lock and others do not, byte order is not the problem &mdash; it applies to
+      the whole file.</li>
+  <li><strong>Derandomize.</strong> A randomised stream left un-derandomised finds no syncs, and so
+      does the reverse.</li>
+  <li><strong>The channel.</strong> A channel carrying a different format, or no data, will not
+      sync no matter how it is configured.</li>
+</ol>
+
+<h3>A stream that ignores the byte-order setting</h3>
+<p>Occasionally the log reports that a stream's payloads are <em>odd-length</em> and were processed
+as Legacy Chapter 10 regardless of the setting. Byte pairs cannot be swapped in a payload with an
+odd number of bytes, so that stream is always read unswapped. This is worth knowing when one
+channel in a recording behaves differently from its neighbours under the same settings.</p>
 
 <hr style="border:none;border-top:1px solid var(--line);margin-top:2.5rem">
 <p style="color:var(--muted);font-size:.9em">TM Data Quality Analyzer · This manual describes
