@@ -11,7 +11,11 @@ void TestConstants::pcmMaxChannelCount()
 
 void TestConstants::pcmDefaultFrameSync()
 {
-    QCOMPARE(QString(PCMConstants::kDefaultFrameSync), QString("A345CA5C"));
+    // PRN15. Both halves are pinned because they are only meaningful as a pair: a
+    // pattern with the wrong frame length never locks, and nothing else in the build
+    // would catch them drifting apart.
+    QCOMPARE(QString(PCMConstants::kDefaultFrameSync), QString("334AABBF"));
+    QCOMPARE(PCMConstants::kDefaultBitsPerFrame, 32767);
 }
 
 void TestConstants::pcmCommonWordLen()

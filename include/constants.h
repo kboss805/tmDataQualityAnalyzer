@@ -28,7 +28,10 @@ namespace PCMConstants {
     inline constexpr int kNumMinorFrames       = 1;     ///< Minor frames per major frame.
     inline constexpr int kMaxChannelCount      = 0x10000; ///< Maximum channel ID range.
     inline constexpr const char* kDefaultFrameSyncMask          = "FFFFFFFF"; ///< Default frame sync mask (all bits active).
-    inline constexpr const char* kDefaultFrameSyncLockPattern   = "A345CA5C"; ///< Default Frame Sync Lock pattern (PRN11).
+    /// Default Frame Sync Lock pattern (PRN15). Paired with kDefaultFrameSyncLockBits
+    /// below - a pattern and a frame length are only meaningful together, and a
+    /// PRN15 pattern with a PRN11 frame length can never lock. Change both or neither.
+    inline constexpr const char* kDefaultFrameSyncLockPattern   = "334AABBF";
     inline constexpr const char* kDefaultReceiverSNRPattern     = "FE6B2840"; ///< Default Receiver SNR frame sync pattern.
     // kDefaultFrameSync kept as an alias so existing call sites compile unchanged.
     inline constexpr const char* kDefaultFrameSync              = kDefaultFrameSyncLockPattern;
@@ -63,7 +66,9 @@ namespace PCMConstants {
     inline constexpr int kMaxSyncPatternHexChars = kMaxSyncPatternBits / kBitsPerHexDigit;
     inline constexpr int kMinFrameLengthBits  = 64;    ///< Minimum total frame length in bits.
     inline constexpr int kMaxFrameLengthBits  = 65536; ///< Maximum total frame length in bits.
-    inline constexpr int kDefaultFrameSyncLockBits   = 2047; ///< Default Frame Sync Lock frame length in bits (PRN11).
+    /// Default Frame Sync Lock frame length in bits (PRN15 = 2^15-1). Paired with
+    /// kDefaultFrameSyncLockPattern; see the note there.
+    inline constexpr int kDefaultFrameSyncLockBits   = 32767;
     inline constexpr int kDefaultReceiverSNRBits     = 800;  ///< Default Receiver SNR frame length in bits.
     inline constexpr int kDefaultBitsPerFrame        = kDefaultFrameSyncLockBits; ///< Alias; matches default mode (Frame Sync Lock).
     /// @}
