@@ -158,23 +158,6 @@ private:
 
     /// Emits the completion log (or the no-syncs / no-frames error) for a finished
     /// scan and signals processingFinished(). @return true on a successful run.
-    /// Counts occurrences of @p pattern in @p raw under one candidate transform, and
-    /// how many of them sit exactly @p bitsInFrame apart from the previous one.
-    ///
-    /// Deliberately NOT the acquire/lock state machine in scanBit(): the question here
-    /// is only "does this pattern recur on a constant grid", which needs no lock
-    /// bookkeeping. Keeping it separate means the diagnostic cannot inherit a bug from
-    /// the scanner it is trying to explain.
-    static uint64_t countPeriodicSyncs(const QByteArray& raw, bool swapBytes, bool derandomize,
-                                       uint64_t pattern, uint64_t mask, uint32_t patternLen,
-                                       uint32_t bitsInFrame, uint64_t& onGrid);
-
-    /// Builds the "here is what would have worked" text for a stream that found no
-    /// usable sync, by re-scanning a retained sample under the transforms the operator
-    /// can actually change. Empty when nothing better was found.
-    static QString diagnoseNoSync(const QByteArray& sample, const ProcessingParams& params,
-                                  const ScanDiagnostics& d);
-
     /// Identity prefix for every message this worker logs, e.g. "[CH 13 PCM03] ".
     /// Parallel workers share one log, so an unlabelled message cannot be traced
     /// back to the stream that produced it.
@@ -213,18 +196,6 @@ private:
 
     std::atomic<bool> m_abort_requested; ///< Thread-safe abort flag.
     ProcessedStreamData m_result;        ///< Accumulated in-memory output of the current run.
-
-    /// Bytes retained per run, capped, for the no-sync diagnostic. Big enough to hold
-    /// hundreds of frames even at the largest supported frame length (PRN-15 is 32767
-    /// bits, so 1 MiB is ~256 frames) and small enough that keeping it costs nothing
-    /// next to the packet queue it is sampled from.
-    static constexpr int kDiagnosticSampleBytes = 1 << 20;
-
-    /// A prefix of the stream's payload as it arrived, BEFORE any byte swap, inversion
-    /// or derandomisation. Captured pre-transform because the diagnostic's whole job is
-    /// to try transforms other than the ones that were applied; the live buffers are
-    /// modified in place and cannot be un-transformed afterwards.
-    QByteArray m_diagnostic_sample;
 };
 
 #endif // FRAMEPROCESSOR_H

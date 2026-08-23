@@ -32,8 +32,6 @@ private slots:
     void oddPayloadSwapSkipIsReported();
     void offPhaseSyncsAreNotCountedAsBoundaryAligned();
     void failureReportNamesChannelAndSyncPattern();
-    void zeroSyncDiagnosticNamesTheWorkingSetting();
-    void zeroSyncDiagnosticStaysQuietWhenNothingHelps();
 };
 
 #endif // TST_FRAMEPROCESSOR_H

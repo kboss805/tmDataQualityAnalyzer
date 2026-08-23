@@ -939,12 +939,12 @@ void TestFrameProcessor::oddPayloadSwapSkipIsReported()
     future.waitForFinished();
 
     const QString joined = log.join(" | ");
-    QVERIFY2(joined.contains("odd payload length"),
+    QVERIFY2(joined.contains("odd-length"),
              qPrintable(QStringLiteral("the skip must be reported; log was: %1").arg(joined)));
     // Every packet on this channel is odd, so the message must say the stream was
     // forced to Legacy Chapter 10 regardless of the setting - not warn about a
     // half-swapped stream, which is the other, genuinely corrupting case.
-    QVERIFY2(joined.contains("processed as Legacy Chapter 10 no matter how that setting is set"),
+    QVERIFY2(joined.contains("processed as Legacy Chapter 10 regardless of the setting"),
              qPrintable(QStringLiteral("all-odd stream must report the setting as unreachable, "
                                        "not a mixed-order warning; log was: %1").arg(joined)));
 }
@@ -999,7 +999,7 @@ void TestFrameProcessor::offPhaseSyncsAreNotCountedAsBoundaryAligned()
     future.waitForFinished();
 
     QVERIFY2(!ok, "a wrong frame length must not yield extracted frames");
-    QVERIFY2(reported.contains("no valid frames were extracted"),
+    QVERIFY2(reported.contains("no frames extracted"),
              qPrintable(QStringLiteral("unexpected error: %1").arg(reported)));
 
     // The fix: every match here is off-phase, so the count must be zero. Before the
@@ -1008,11 +1008,6 @@ void TestFrameProcessor::offPhaseSyncsAreNotCountedAsBoundaryAligned()
              qPrintable(QStringLiteral("off-phase matches must not be counted as "
                                        "boundary-aligned; message was:\n%1").arg(reported)));
 
-    // ...and with none aligned, the report must say what that means rather than
-    // leaving the reader to infer it.
-    QVERIFY2(reported.contains("No sync ever landed on a frame boundary"),
-             qPrintable(QStringLiteral("expected the no-boundary explanation; message was:\n%1")
-                            .arg(reported)));
 }
 
 void TestFrameProcessor::failureReportNamesChannelAndSyncPattern()
@@ -1086,137 +1081,14 @@ void TestFrameProcessor::failureReportNamesChannelAndSyncPattern()
 
     // The pattern itself, uppercase hex - the field that distinguishes PRN-11 from
     // PRN-15 when both report sync_len=32.
-    QVERIFY2(reported.contains(QStringLiteral("pattern=0xFE6B2840")),
+    QVERIFY2(reported.contains(QStringLiteral("pattern 0xFE6B2840")),
              qPrintable(QStringLiteral("the sync pattern must be printed; got:\n%1").arg(reported)));
-    QVERIFY2(reported.contains(QStringLiteral("mask=")),
-             qPrintable(QStringLiteral("the sync mask must be printed; got:\n%1").arg(reported)));
+    // An all-ones mask is every ordinary configuration, so printing it is noise. It
+    // appears only when it is actually constraining the match.
+    QVERIFY2(!reported.contains(QStringLiteral("mask")),
+             qPrintable(QStringLiteral("a default mask must not be printed; got:\n%1")
+                            .arg(reported)));
 
     qInfo("report reads:\n%s", qPrintable(reported));
 }
 
-void TestFrameProcessor::zeroSyncDiagnosticNamesTheWorkingSetting()
-{
-    // The failure this exists for: a stream configured with the wrong byte order finds
-    // nothing, and the report says only "not found" - leaving the operator to guess
-    // which of pattern, frame length, byte order or channel is wrong. Two separate
-    // rounds of real diagnosis went that way before this existed.
-    //
-    // The Safran recording is the legacy one: its channel 13 carries PRN-15 with NO
-    // byte-pair swap, so processing it as an ordinary Chapter 10 file - which does
-    // swap - destroys the pattern. The diagnostic must re-scan the retained sample and
-    // name the setting that works, in the operator's vocabulary rather than the
-    // transform's.
-    const QString filepath = testDataPath("safran_testfile.ch10");
-    if (!QFileInfo::exists(filepath))
-        QSKIP("Safran test file not available");
-
-    Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
-    const int time_id = reader.getCurrentTimeChannelID();
-    if (time_id < 0)
-        QSKIP("Missing time channel in test file");
-
-    constexpr int kPrnFrameBits  = 32767;
-    constexpr int kPrnFrameWords =
-        (kPrnFrameBits + PCMConstants::kCommonWordLen - 1) / PCMConstants::kCommonWordLen;
-
-    ProcessingParams p = makeTestParams(filepath, time_id, 13,
-                                        0x334AABBF, 32, kPrnFrameWords, kPrnFrameBits);
-    p.startSeconds    = 0;
-    p.stopSeconds     = UINT64_MAX;
-    p.samplePeriodSec = 1.0;
-    p.isRandomized    = false;
-    p.swapBytes       = true;   // ordinary-file handling; wrong for this legacy file
-    p.mode            = StreamMode::FrameSyncLockStats;
-
-    PacketQueue queue;
-    p.packetQueue = &queue;
-    Ch10PacketReader rdr;
-    QVector<ProcessingParams*> params_list = { &p };
-    QString error;
-    QVERIFY2(rdr.prepare(p.filename, p.timeChannelId, params_list, error), qPrintable(error));
-
-    FrameSetup empty_setup;
-    FrameProcessor fp;
-    QString reported;
-    QObject::connect(&fp, &FrameProcessor::errorOccurred,
-                     [&reported](const QString& m) { reported = m; });
-
-    QFuture<void> future = QtConcurrent::run([&rdr]() { rdr.run(); });
-    const bool ok = fp.process(p, &empty_setup);
-    future.waitForFinished();
-
-    QVERIFY2(!ok, "the wrong byte order must not lock");
-
-    // It must name the fix, not merely report failure.
-    QVERIFY2(reported.contains("TRY THIS"),
-             qPrintable(QStringLiteral("expected a suggestion; got:\n%1").arg(reported)));
-    // The fix is to TICK Legacy Chapter 10: the swap is what ordinary files need, and
-    // this recording is the exception. Asserting the exact wording matters, because a
-    // suggestion is only useful if its polarity matches the checkbox - getting that
-    // backwards would send the operator the wrong way with full confidence.
-    QVERIFY2(reported.contains("Legacy Chapter 10 ON"),
-             qPrintable(QStringLiteral("must name the setting that works; got:\n%1").arg(reported)));
-    QVERIFY2(!reported.contains("Legacy Chapter 10 off, Derandomize off"),
-             qPrintable(QStringLiteral("must not suggest the setting that just failed; got:\n%1")
-                            .arg(reported)));
-    // And it must justify itself with the grid, since that is what separates a real
-    // frame structure from a 32-bit pattern turning up by chance.
-    QVERIFY2(reported.contains("32767 bits apart"),
-             qPrintable(QStringLiteral("must cite the frame grid; got:\n%1").arg(reported)));
-
-    qInfo("report reads:\n%s", qPrintable(reported));
-}
-
-void TestFrameProcessor::zeroSyncDiagnosticStaysQuietWhenNothingHelps()
-{
-    // The other half of being useful: when no transform helps, say so rather than
-    // suggesting one. Channel 12 of the same recording carries no PRN-15 under any
-    // combination, so the honest answer is "this is not a decoding problem".
-    const QString filepath = testDataPath("safran_testfile.ch10");
-    if (!QFileInfo::exists(filepath))
-        QSKIP("Safran test file not available");
-
-    Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
-    const int time_id = reader.getCurrentTimeChannelID();
-    if (time_id < 0)
-        QSKIP("Missing time channel in test file");
-
-    constexpr int kPrnFrameBits  = 32767;
-    constexpr int kPrnFrameWords =
-        (kPrnFrameBits + PCMConstants::kCommonWordLen - 1) / PCMConstants::kCommonWordLen;
-
-    ProcessingParams p = makeTestParams(filepath, time_id, 12,
-                                        0x334AABBF, 32, kPrnFrameWords, kPrnFrameBits);
-    p.startSeconds    = 0;
-    p.stopSeconds     = UINT64_MAX;
-    p.samplePeriodSec = 1.0;
-    p.isRandomized    = false;
-    p.swapBytes       = false;
-    p.mode            = StreamMode::FrameSyncLockStats;
-
-    PacketQueue queue;
-    p.packetQueue = &queue;
-    Ch10PacketReader rdr;
-    QVector<ProcessingParams*> params_list = { &p };
-    QString error;
-    QVERIFY2(rdr.prepare(p.filename, p.timeChannelId, params_list, error), qPrintable(error));
-
-    FrameSetup empty_setup;
-    FrameProcessor fp;
-    QString reported;
-    QObject::connect(&fp, &FrameProcessor::errorOccurred,
-                     [&reported](const QString& m) { reported = m; });
-
-    QFuture<void> future = QtConcurrent::run([&rdr]() { rdr.run(); });
-    fp.process(p, &empty_setup);
-    future.waitForFinished();
-
-    QVERIFY2(!reported.contains("TRY THIS"),
-             qPrintable(QStringLiteral("must not invent a fix that does not work; got:\n%1")
-                            .arg(reported)));
-    QVERIFY2(reported.contains("none of them found the pattern"),
-             qPrintable(QStringLiteral("must say the transforms were ruled out; got:\n%1")
-                            .arg(reported)));
-}
