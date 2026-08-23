@@ -402,32 +402,35 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.10.0 tag
 
-#### A stream that finds no sync now says what would have worked
+#### The processing log is concise
 
-- When a run ends with no usable sync, `FrameProcessor` re-scans a retained sample
-  under the transforms the operator can actually change — byte order and derandomize —
-  and names the combination that finds a real frame grid:
-  > `TRY THIS: over the first 8.4 Mbit of this stream, "Legacy Chapter 10 ON,`
-  > `Derandomize off" finds 256 syncs, 255 of them exactly 32767 bits apart - a real`
-  > `frame grid, not chance. The current settings found none.`
-- **The candidate table stores the transform but prints the checkbox**, and those are
-  inverses. Writing them the same way round would have the diagnostic confidently
-  instruct the operator to do the opposite of what works — worse than offering nothing.
-  The test asserts the exact wording for that reason.
-- **Ranked by on-grid hits, not raw hits.** A 32-bit pattern turns up by chance about
-  once per 4 Gbit and chance never lands on a constant grid, so on-grid count is the
-  only measure that separates a frame structure from a coincidence. Ranking by raw hits
-  would let a noisy candidate outscore the real one.
-- **It stays quiet when nothing helps.** If no combination finds a grid, it says the
-  transforms were ruled out and points at the pattern or bits/frame instead — the
-  honest answer for a channel carrying a different format, and the one that stops the
-  operator toggling settings that cannot help.
-- The sample is captured **before** the transforms, because the live buffers are
-  rewritten in place and cannot be un-transformed afterwards. Capped at 1 MiB — ~256
-  frames even at PRN-15's 32767 bits — and only scanned on the failure path.
-- Only offered when **no** sync was boundary-aligned. With some already aligned the
-  transforms are right and the problem is elsewhere, so a byte-order suggestion would
-  actively mislead.
+- **Four manual figures re-captured** against this behaviour: the three Configure
+  Streams shots now show the **Legacy Chapter 10** toggle, and the log figure shows the
+  one-line reports. The first set of re-captures came from a build that predated the
+  toggle — worth checking a figure contains the thing it is meant to illustrate, not
+  just that its crop and dimensions are right.
+  `walk-err-02-try-this.png` is deleted: it was named for the removed suggestion, and
+  the log figure already carries the errors, the successful streams and the concise
+  format in one shot.
+
+- **One line per outcome.** The failure reports were a five-line block plus a
+  paragraph of explanation; they are now single lines that state what was configured
+  and what came of it:
+  > `[CH 13 PCM03] no frame sync found — pattern 0x334AABBF (32 bits), 32767 bits/frame.`
+  > `[CH 12 PCM02] sync found but no frames extracted — pattern 0xFE6B2840 (32 bits), 1234 bits/frame; 198543 syncs, 0 boundary-aligned.`
+- **The automatic probe is removed.** A run that found no sync used to re-scan a
+  retained sample under other byte-order/derandomize combinations and suggest one.
+  The operators of this application know their own formats — the useful answer is
+  whether it worked, not the application guessing at settings — so the probe, the
+  1 MiB sample buffer it needed and its two tests are gone. `countPeriodicSyncs` and
+  `diagnoseNoSync` no longer exist.
+- **The sync pattern is still printed**, because it is the one field that separates
+  two otherwise identical-looking configurations: PRN-11 and PRN-15 are both 32 bits.
+  The **mask is not**, unless it is non-default — all-ones is every ordinary setup, so
+  printing it was noise.
+- The unbounded processing window (`stop=18446744073709551615s`) no longer appears; the
+  window is named only when it is actually bounded.
+
 
 #### Frame Sync Lock defaults to PRN-15 (US2.0)
 
