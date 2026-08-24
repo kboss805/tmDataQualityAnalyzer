@@ -32,22 +32,22 @@ void TestChapter10Reader::init()
     // This MUST be a per-test skip (init(), run before every test) — a
     // suite-level QSKIP in initTestCase() poisons the custom multi-qExec harness
     // in main.cpp and silently stops every suite that runs after this one.
-    if (!QFileInfo::exists(testDataPath("agc_nzl_rasa_testfile.ch10")))
-        QSKIP("Chapter 10 test fixture (agc_nzl_rasa_testfile.ch10) not present — "
+    if (!QFileInfo::exists(testDataPath("test files/agc_nzl_rasa_testfile.ch10")))
+        QSKIP("Chapter 10 test fixture (test files/agc_nzl_rasa_testfile.ch10) not present — "
               "large .ch10 fixtures are gitignored; this suite runs locally only");
 }
 
 void TestChapter10Reader::loadChannelsReturnsTrueForValidFile()
 {
     Chapter10Reader reader;
-    bool result = reader.loadChannels(testDataPath("agc_nzl_rasa_testfile.ch10"));
+    bool result = reader.loadChannels(testDataPath("test files/agc_nzl_rasa_testfile.ch10"));
     QVERIFY2(result, "loadChannels should return true for a valid .ch10 file");
 }
 
 void TestChapter10Reader::loadChannelsPopulatesTimeChannels()
 {
     Chapter10Reader reader;
-    reader.loadChannels(testDataPath("agc_nzl_rasa_testfile.ch10"));
+    reader.loadChannels(testDataPath("test files/agc_nzl_rasa_testfile.ch10"));
 
     QStringList time_list = reader.getTimeChannelComboBoxList();
     QVERIFY2(!time_list.isEmpty(), "Time channel list should not be empty after loading a valid file");
@@ -56,7 +56,7 @@ void TestChapter10Reader::loadChannelsPopulatesTimeChannels()
 void TestChapter10Reader::loadChannelsPopulatesPcmChannels()
 {
     Chapter10Reader reader;
-    reader.loadChannels(testDataPath("agc_nzl_rasa_testfile.ch10"));
+    reader.loadChannels(testDataPath("test files/agc_nzl_rasa_testfile.ch10"));
 
     QStringList pcm_list = reader.getPCMChannelComboBoxList();
     QVERIFY2(!pcm_list.isEmpty(), "PCM channel list should not be empty after loading a valid file");
@@ -65,7 +65,7 @@ void TestChapter10Reader::loadChannelsPopulatesPcmChannels()
 void TestChapter10Reader::comboBoxListsContainChannelIdAndName()
 {
     Chapter10Reader reader;
-    reader.loadChannels(testDataPath("agc_nzl_rasa_testfile.ch10"));
+    reader.loadChannels(testDataPath("test files/agc_nzl_rasa_testfile.ch10"));
 
     QStringList time_list = reader.getTimeChannelComboBoxList();
     QVERIFY(!time_list.isEmpty());
@@ -90,7 +90,7 @@ void TestChapter10Reader::comboBoxListsContainChannelIdAndName()
 void TestChapter10Reader::currentTimeChannelSetAfterLoad()
 {
     Chapter10Reader reader;
-    reader.loadChannels(testDataPath("agc_nzl_rasa_testfile.ch10"));
+    reader.loadChannels(testDataPath("test files/agc_nzl_rasa_testfile.ch10"));
 
     // After loading, a default time channel should be selected (not -1)
     QVERIFY2(reader.getCurrentTimeChannelID() != -1,
@@ -100,7 +100,7 @@ void TestChapter10Reader::currentTimeChannelSetAfterLoad()
 void TestChapter10Reader::currentPcmChannelSetAfterLoad()
 {
     Chapter10Reader reader;
-    reader.loadChannels(testDataPath("agc_nzl_rasa_testfile.ch10"));
+    reader.loadChannels(testDataPath("test files/agc_nzl_rasa_testfile.ch10"));
 
     // After loading, a default PCM channel should be selected (not -1). No production
     // caller reads it back through a getter, so the friend class reaches the field
@@ -112,7 +112,7 @@ void TestChapter10Reader::currentPcmChannelSetAfterLoad()
 void TestChapter10Reader::clearSettingsResetsChannels()
 {
     Chapter10Reader reader;
-    reader.loadChannels(testDataPath("agc_nzl_rasa_testfile.ch10"));
+    reader.loadChannels(testDataPath("test files/agc_nzl_rasa_testfile.ch10"));
 
     // Verify channels were loaded
     QVERIFY(!reader.getTimeChannelComboBoxList().isEmpty());
@@ -131,7 +131,7 @@ void TestChapter10Reader::clearSettingsResetsChannels()
 void TestChapter10Reader::timeChannelChangedUpdatesSelection()
 {
     Chapter10Reader reader;
-    reader.loadChannels(testDataPath("agc_nzl_rasa_testfile.ch10"));
+    reader.loadChannels(testDataPath("test files/agc_nzl_rasa_testfile.ch10"));
 
     QStringList time_list = reader.getTimeChannelComboBoxList();
     if (time_list.size() < 1)
@@ -146,7 +146,7 @@ void TestChapter10Reader::timeChannelChangedUpdatesSelection()
 void TestChapter10Reader::pcmChannelChangedUpdatesSelection()
 {
     Chapter10Reader reader;
-    reader.loadChannels(testDataPath("agc_nzl_rasa_testfile.ch10"));
+    reader.loadChannels(testDataPath("test files/agc_nzl_rasa_testfile.ch10"));
 
     QStringList pcm_list = reader.getPCMChannelComboBoxList();
     if (pcm_list.size() < 1)
@@ -167,7 +167,7 @@ void TestChapter10Reader::loadChannelsReturnsFalseForInvalidFile()
 void TestChapter10Reader::getFirstPcmChannelIdReturnsValidId()
 {
     Chapter10Reader reader;
-    reader.loadChannels(testDataPath("agc_nzl_rasa_testfile.ch10"));
+    reader.loadChannels(testDataPath("test files/agc_nzl_rasa_testfile.ch10"));
 
     int first_pcm = reader.getFirstPCMChannelID();
     QVERIFY2(first_pcm != -1, "getFirstPCMChannelID should return a valid ID after loading");

@@ -82,7 +82,7 @@ bool runExtraction(CalibrationExtractor& extractor,
 bool buildRealRequest(Chapter10Reader& reader, CalibrationExtractor::Request& req,
                       QString& skipReason)
 {
-    const QString filepath = testDataPath("agc_rnrz-l_trc_testfile.ch10");
+    const QString filepath = testDataPath("test files/agc_rnrz-l_trc_testfile.ch10");
     if (!QFileInfo::exists(filepath))
     {
         skipReason = "RNRZ-L test file not available";

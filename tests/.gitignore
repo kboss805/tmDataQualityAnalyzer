@@ -6,13 +6,19 @@ run_tests.ps1
 nul
 # The .ch10 fixtures are large and mostly gitignored, EXCEPT the small
 # (<100 MB) committed CI fixtures below, which the hosted CI needs. The full-size
-# variants (e.g. the full PRN recording) stay local-only and are overlaid on the
-# self-hosted runner. Ignore data/ contents, then re-include the committed set.
+# variants (e.g. the full PRN and Safran recordings) stay local-only and are
+# overlaid on the self-hosted runner. "data/test files/" is the canonical fixture
+# folder - everything else directly under data/ (stray exports, scratch csv/png,
+# one-off recordings) is ignored outright, and within test files/ itself only the
+# four small fixtures below are tracked; the multi-GB "full" siblings next to them
+# stay local-only on purpose.
 data/*
-!data/agc_nzl_rasa_testfile.ch10
-!data/agc_rnrz-l_trc_testfile.ch10
-!data/prn_testfile.ch10
-!data/safran_testfile.ch10
+!data/test files/
+data/test files/*
+!data/test files/agc_nzl_rasa_testfile.ch10
+!data/test files/agc_rnrz-l_trc_testfile.ch10
+!data/test files/prn_testfile, sample.ch10
+!data/test files/safran_testfile, sample.ch10
 output/
 !output/.gitkeep
 

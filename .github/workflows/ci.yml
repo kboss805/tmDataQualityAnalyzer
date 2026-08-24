@@ -107,7 +107,7 @@ jobs:
           # .env; it lives OUTSIDE the checkout, so the copy only reads it. If unset,
           # the committed sample stays (that one benchmark just skips).
           if ($env:TMDQA_CH10_FULL -and (Test-Path $env:TMDQA_CH10_FULL)) {
-            Copy-Item $env:TMDQA_CH10_FULL 'tests\data\prn_testfile.ch10' -Force
+            Copy-Item $env:TMDQA_CH10_FULL 'tests\data\test files\prn_testfile, sample.ch10' -Force
             Write-Host "Overlaid full PRN from $env:TMDQA_CH10_FULL"
           } else {
             Write-Host "::warning::TMDQA_CH10_FULL not set/found - using the committed sample PRN (heavy benchmark will skip)."
