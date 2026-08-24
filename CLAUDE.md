@@ -47,7 +47,7 @@ zero errors (see `docs/CLAUDE.md` → clangd / IntelliSense).
 ## Project skills (`.claude/skills/`)
 
 `build-and-test` · `tm-code-review` · `write-qt-test` · `add-stream-setting` · `cut-release` ·
-`verify-ui-change`.
+`verify-ui-change` · `code-cleanup`.
 Invoke explicitly (`/build-and-test`) or let them trigger by intent.
 
 ## Hard rules

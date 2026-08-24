@@ -439,7 +439,8 @@ void TestPlotViewModel::lockSeriesMetricType()
 
 void TestPlotViewModel::lockSeriesColor()
 {
-    // Lock series must be assigned kFrameSyncLockColor, not a receiver-palette color.
+    // The first lock series must be assigned the lock palette's first primary, not a
+    // receiver-palette color.
     QString csv =
         "Time (DOY:HH:MM:SS.mmm),Ch1 Lock (%),L_RCVR1\n"
         "1:00:00:00.000,87.5,-80.0\n";
@@ -449,11 +450,11 @@ void TestPlotViewModel::lockSeriesColor()
     QVERIFY(vm.loadCsvFile(path));
 
     QColor lock_color = vm.seriesAt(0).color;
-    QCOMPARE(lock_color, PlotConstants::kFrameSyncLockColor);
+    QCOMPARE(lock_color, PlotConstants::kFrameSyncLockPrimaryColors[0]);
 
     // SNR series must NOT share the lock color
     QColor snr_color = vm.seriesAt(1).color;
-    QVERIFY(snr_color != PlotConstants::kFrameSyncLockColor);
+    QVERIFY(snr_color != PlotConstants::kFrameSyncLockPrimaryColors[0]);
 
     QFile::remove(path);
 }

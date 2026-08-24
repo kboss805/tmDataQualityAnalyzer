@@ -81,8 +81,8 @@ void TestPlotCustomizationDialog::lockTabOneCheckboxPerStream()
 
     // Two lock streams -> two checkboxes; the default LockPercent view shows the
     // lock series, so both start checked.
-    QCOMPARE(dlg.m_lockRows.size(), 2);
-    for (const auto& row : dlg.m_lockRows)
+    QCOMPARE(dlg.m_lock_rows.size(), 2);
+    for (const auto& row : dlg.m_lock_rows)
         QVERIFY(row.checkbox->isChecked());
 }
 
@@ -93,11 +93,11 @@ void TestPlotCustomizationDialog::selectAllNoneLock()
     PlotCustomizationDialog dlg(&vm);
 
     dlg.selectNoneLock();
-    for (const auto& row : dlg.m_lockRows)
+    for (const auto& row : dlg.m_lock_rows)
         QVERIFY(!row.checkbox->isChecked());
 
     dlg.selectAllLock();
-    for (const auto& row : dlg.m_lockRows)
+    for (const auto& row : dlg.m_lock_rows)
         QVERIFY(row.checkbox->isChecked());
 }
 
@@ -108,11 +108,11 @@ void TestPlotCustomizationDialog::applyChangesLockVisibility()
     PlotCustomizationDialog dlg(&vm);
 
     // Uncheck the first lock stream's box, leave the second checked, apply.
-    dlg.m_lockRows[0].checkbox->setChecked(false);
+    dlg.m_lock_rows[0].checkbox->setChecked(false);
     dlg.applyChanges();
 
     // Box 0's series (both lock and missed) must be hidden.
-    for (int id : dlg.m_lockRows[0].seriesIds)
+    for (int id : dlg.m_lock_rows[0].seriesIds)
     {
         const int idx = vm.indexOfSeriesId(id);
         QVERIFY(idx >= 0);
@@ -122,7 +122,7 @@ void TestPlotCustomizationDialog::applyChangesLockVisibility()
     // Box 1 is checked with the LockPercent view active: its FrameSyncLock series
     // is visible, but its AccumulatedMissedFrames sibling stays hidden (it belongs
     // to the other axis view).
-    for (int id : dlg.m_lockRows[1].seriesIds)
+    for (int id : dlg.m_lock_rows[1].seriesIds)
     {
         const int idx = vm.indexOfSeriesId(id);
         QVERIFY(idx >= 0);
@@ -140,8 +140,8 @@ void TestPlotCustomizationDialog::snrTabTreePerStream()
     populateVm(vm);
     PlotCustomizationDialog dlg(&vm);
 
-    QCOMPARE(dlg.m_snrStreamCombo->count(), 1);
-    const QVector<QTreeWidget*> trees = dlg.m_snrStreamTrees.value(40);
+    QCOMPARE(dlg.m_snr_stream_combo->count(), 1);
+    const QVector<QTreeWidget*> trees = dlg.m_snr_stream_trees.value(40);
     QVERIFY(!trees.isEmpty());
 
     int rcvrCount = 0;
@@ -164,7 +164,7 @@ void TestPlotCustomizationDialog::snrTristateCascade()
     populateVm(vm);
     PlotCustomizationDialog dlg(&vm);
 
-    QTreeWidget* tree = dlg.m_snrStreamTrees.value(40).first();
+    QTreeWidget* tree = dlg.m_snr_stream_trees.value(40).first();
     QTreeWidgetItem* rcvr = tree->topLevelItem(0);
     QVERIFY(rcvr->childCount() >= 2);   // RCVR1 has L and R
 
@@ -194,7 +194,7 @@ void TestPlotCustomizationDialog::selectAllNoneSnr()
     populateVm(vm);
     PlotCustomizationDialog dlg(&vm);
 
-    const QVector<QTreeWidget*> trees = dlg.m_snrStreamTrees.value(40);
+    const QVector<QTreeWidget*> trees = dlg.m_snr_stream_trees.value(40);
 
     dlg.selectAllSnr();
     for (QTreeWidget* tree : trees)
@@ -222,7 +222,7 @@ void TestPlotCustomizationDialog::applyChangesSnrVisibility()
     PlotCustomizationDialog dlg(&vm);
 
     // Uncheck the first channel of RCVR1, leaving the second checked, then apply.
-    QTreeWidget* tree = dlg.m_snrStreamTrees.value(40).first();
+    QTreeWidget* tree = dlg.m_snr_stream_trees.value(40).first();
     QTreeWidgetItem* firstChannel  = tree->topLevelItem(0)->child(0);
     QTreeWidgetItem* secondChannel = tree->topLevelItem(0)->child(1);
     const int hiddenIdx = vm.indexOfSeriesId(firstChannel->data(0, Qt::UserRole).toInt());
@@ -244,16 +244,16 @@ void TestPlotCustomizationDialog::expandCollapseTogglesButton()
     PlotCustomizationDialog dlg(&vm);
 
     // Trees start collapsed, so the button offers to expand.
-    QCOMPARE(dlg.m_snrExpandBtn->text(), QString("Expand All"));
+    QCOMPARE(dlg.m_snr_expand_btn->text(), QString("Expand All"));
 
     dlg.toggleExpandCollapseSnr();
-    QCOMPARE(dlg.m_snrExpandBtn->text(), QString("Collapse All"));
-    for (QTreeWidget* tree : dlg.m_snrStreamTrees.value(40))
+    QCOMPARE(dlg.m_snr_expand_btn->text(), QString("Collapse All"));
+    for (QTreeWidget* tree : dlg.m_snr_stream_trees.value(40))
         for (int r = 0; r < tree->topLevelItemCount(); r++)
             QVERIFY(tree->topLevelItem(r)->isExpanded());
 
     dlg.toggleExpandCollapseSnr();
-    QCOMPARE(dlg.m_snrExpandBtn->text(), QString("Expand All"));
+    QCOMPARE(dlg.m_snr_expand_btn->text(), QString("Expand All"));
 }
 
 void TestPlotCustomizationDialog::lockRenameAppliesToViewModel()
@@ -262,11 +262,11 @@ void TestPlotCustomizationDialog::lockRenameAppliesToViewModel()
     populateVm(vm);
     PlotCustomizationDialog dlg(&vm);
 
-    dlg.m_lockRows[0].nameEdit->setText("Renamed Stream");
+    dlg.m_lock_rows[0].nameEdit->setText("Renamed Stream");
     dlg.applyChanges();
 
     // Applies to every series in the stream (the lock + missed-frames siblings).
-    const QVector<int> ids = dlg.m_lockRows[0].seriesIds;
+    const QVector<int> ids = dlg.m_lock_rows[0].seriesIds;
     QVERIFY(!ids.isEmpty());
     for (int id : ids)
     {
@@ -282,10 +282,10 @@ void TestPlotCustomizationDialog::lockRecolorAppliesToViewModel()
     populateVm(vm);
     PlotCustomizationDialog dlg(&vm);
 
-    dlg.m_lockRows[0].color = QColor(Qt::magenta); // simulate a swatch color pick
+    dlg.m_lock_rows[0].color = QColor(Qt::magenta); // simulate a swatch color pick
     dlg.applyChanges();
 
-    const QVector<int> ids = dlg.m_lockRows[0].seriesIds;
+    const QVector<int> ids = dlg.m_lock_rows[0].seriesIds;
     QVERIFY(!ids.isEmpty());
     for (int id : ids)
     {
@@ -301,7 +301,7 @@ void TestPlotCustomizationDialog::snrRenameRecolorAppliesToViewModel()
     populateVm(vm);
     PlotCustomizationDialog dlg(&vm);
 
-    QTreeWidget* tree = dlg.m_snrStreamTrees.value(40).first();
+    QTreeWidget* tree = dlg.m_snr_stream_trees.value(40).first();
     QTreeWidgetItem* leaf = tree->topLevelItem(0)->child(0);
     const int idx = vm.indexOfSeriesId(leaf->data(0, Qt::UserRole).toInt());
     QVERIFY(idx >= 0);
@@ -334,8 +334,8 @@ void TestPlotCustomizationDialog::applyChangesRobustToSeriesListChange()
     PlotCustomizationDialog dlg(&vm);
 
     // Stage edits: rename CH 33's stream (lock row 1) and hide CH 32 (lock row 0).
-    dlg.m_lockRows[1].nameEdit->setText("CH33 Renamed");
-    dlg.m_lockRows[0].checkbox->setChecked(false);
+    dlg.m_lock_rows[1].nameEdit->setText("CH33 Renamed");
+    dlg.m_lock_rows[0].checkbox->setChecked(false);
 
     // Replace the entire series list while the modal dialog is "open" — the way a
     // completed async CSV import does (commitParseResult moves a whole new vector

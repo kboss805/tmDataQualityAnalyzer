@@ -1755,8 +1755,11 @@ the runner machine's setup and recovery procedure is in
 
 ### Test Suites
 
-The suites below are registered (and run, in this order) in `tests/main.cpp`; the
-source/header files are listed in `tests/tests.pro`.
+The suites below are registered in `tests/main.cpp`, in a different order than they're
+listed here: the fast, no-fixture suites run first, followed by the four heavy
+`.ch10`-integration suites (`TestChapter10Reader`, `TestFrameProcessor`,
+`TestProcessingCoordinator`, `TestCalibrationExtractor`), which `--fast`/`TMDQ_FAST_TESTS`
+skip for quick local iteration. The source/header files are listed in `tests/tests.pro`.
 
 - **TestChannelData** (`tst_channeldata`) — ChannelData model object tests
 - **TestChapter10Reader** (`tst_chapter10reader`) — Chapter 10 metadata reader: channel discovery, time/PCM channel lists, channel ID resolution against real Ch10 test data

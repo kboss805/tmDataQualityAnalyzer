@@ -35,7 +35,7 @@ namespace {
 
 PlotCustomizationDialog::PlotCustomizationDialog(PlotViewModel* viewModel, QWidget* parent)
     : QDialog(parent)
-    , m_viewModel(viewModel)
+    , m_view_model(viewModel)
 {
     setupUi();
     populateData();
@@ -48,72 +48,72 @@ void PlotCustomizationDialog::setupUi()
 
     auto* mainLayout = new QVBoxLayout(this);
 
-    m_tabWidget = new QTabWidget(this);
-    mainLayout->addWidget(m_tabWidget);
+    m_tab_widget = new QTabWidget(this);
+    mainLayout->addWidget(m_tab_widget);
 
     // --- Frame Sync Lock Tab ---
-    m_lockTab = new QWidget();
-    auto* lockTabLayout = new QVBoxLayout(m_lockTab);
+    m_lock_tab = new QWidget();
+    auto* lockTabLayout = new QVBoxLayout(m_lock_tab);
 
     auto* lockDesc = new QLabel(tr("Select the streams to display Frame Sync Lock data for.\n"
-                                   "(This toggles both Lock % and Missed Frames plots)"), m_lockTab);
+                                   "(This toggles both Lock % and Missed Frames plots)"), m_lock_tab);
     lockTabLayout->addWidget(lockDesc);
 
     auto* lockBtnLayout = new QHBoxLayout();
-    auto* lockSelectAllBtn = new QPushButton(tr("Select All"), m_lockTab);
-    auto* lockSelectNoneBtn = new QPushButton(tr("Select None"), m_lockTab);
+    auto* lockSelectAllBtn = new QPushButton(tr("Select All"), m_lock_tab);
+    auto* lockSelectNoneBtn = new QPushButton(tr("Select None"), m_lock_tab);
     lockBtnLayout->addWidget(lockSelectAllBtn);
     lockBtnLayout->addWidget(lockSelectNoneBtn);
     lockBtnLayout->addStretch();
     lockTabLayout->addLayout(lockBtnLayout);
 
-    auto* lockScrollArea = new QScrollArea(m_lockTab);
+    auto* lockScrollArea = new QScrollArea(m_lock_tab);
     lockScrollArea->setWidgetResizable(true);
     // Budget for 8 visible rows (approx 200px tall depending on style)
     lockScrollArea->setMinimumHeight(200);
 
     auto* lockScrollWidget = new QWidget();
-    m_lockListLayout = new QVBoxLayout(lockScrollWidget);
-    m_lockListLayout->setAlignment(Qt::AlignTop);
+    m_lock_list_layout = new QVBoxLayout(lockScrollWidget);
+    m_lock_list_layout->setAlignment(Qt::AlignTop);
     lockScrollArea->setWidget(lockScrollWidget);
     lockTabLayout->addWidget(lockScrollArea);
 
-    m_tabWidget->addTab(m_lockTab, tr("Frame Sync Lock Streams"));
+    m_tab_widget->addTab(m_lock_tab, tr("Frame Sync Lock Streams"));
 
     // --- Receiver SNR Tab ---
-    m_snrTab = new QWidget();
-    auto* snrTabLayout = new QVBoxLayout(m_snrTab);
+    m_snr_tab = new QWidget();
+    auto* snrTabLayout = new QVBoxLayout(m_snr_tab);
 
     auto* snrTopLayout = new QHBoxLayout();
-    snrTopLayout->addWidget(new QLabel(tr("Telemetry Stream Group:"), m_snrTab));
-    m_snrStreamCombo = new QComboBox(m_snrTab);
-    snrTopLayout->addWidget(m_snrStreamCombo, 1);
+    snrTopLayout->addWidget(new QLabel(tr("Telemetry Stream Group:"), m_snr_tab));
+    m_snr_stream_combo = new QComboBox(m_snr_tab);
+    snrTopLayout->addWidget(m_snr_stream_combo, 1);
     snrTabLayout->addLayout(snrTopLayout);
 
     auto* snrBtnLayout = new QHBoxLayout();
-    m_snrExpandBtn = new QPushButton(tr("Expand All"), m_snrTab);
+    m_snr_expand_btn = new QPushButton(tr("Expand All"), m_snr_tab);
     // Its label toggles between "Expand All" and "Collapse All"; a floor wide
     // enough for the longer text keeps the button from resizing as it flips.
-    m_snrExpandBtn->setMinimumWidth(UIConstants::kFlatButtonMinWidth);
-    auto* snrSelectAllBtn = new QPushButton(tr("Select All"), m_snrTab);
-    auto* snrSelectNoneBtn = new QPushButton(tr("Select None"), m_snrTab);
-    snrBtnLayout->addWidget(m_snrExpandBtn);
+    m_snr_expand_btn->setMinimumWidth(UIConstants::kFlatButtonMinWidth);
+    auto* snrSelectAllBtn = new QPushButton(tr("Select All"), m_snr_tab);
+    auto* snrSelectNoneBtn = new QPushButton(tr("Select None"), m_snr_tab);
+    snrBtnLayout->addWidget(m_snr_expand_btn);
     snrBtnLayout->addWidget(snrSelectAllBtn);
     snrBtnLayout->addWidget(snrSelectNoneBtn);
     snrBtnLayout->addStretch();
     snrTabLayout->addLayout(snrBtnLayout);
 
-    auto* snrScrollArea = new QScrollArea(m_snrTab);
+    auto* snrScrollArea = new QScrollArea(m_snr_tab);
     snrScrollArea->setWidgetResizable(true);
 
     auto* snrTreeContainer = new QWidget();
-    m_snrTreeLayout = new QVBoxLayout(snrTreeContainer);
-    m_snrTreeLayout->setContentsMargins(0, 0, 0, 0);
-    m_snrTreeLayout->setAlignment(Qt::AlignTop);
+    m_snr_tree_layout = new QVBoxLayout(snrTreeContainer);
+    m_snr_tree_layout->setContentsMargins(0, 0, 0, 0);
+    m_snr_tree_layout->setAlignment(Qt::AlignTop);
     snrScrollArea->setWidget(snrTreeContainer);
     snrTabLayout->addWidget(snrScrollArea);
 
-    m_tabWidget->addTab(m_snrTab, tr("Receiver SNR Streams"));
+    m_tab_widget->addTab(m_snr_tab, tr("Receiver SNR Streams"));
 
     // --- Dialog Buttons ---
     auto* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -123,21 +123,21 @@ void PlotCustomizationDialog::setupUi()
     connect(buttonBox, &QDialogButtonBox::accepted, this, &PlotCustomizationDialog::applyChanges);
     connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
-    connect(m_snrStreamCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+    connect(m_snr_stream_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &PlotCustomizationDialog::onSnrStreamSelected);
 
     connect(lockSelectAllBtn, &QPushButton::clicked, this, &PlotCustomizationDialog::selectAllLock);
     connect(lockSelectNoneBtn, &QPushButton::clicked, this, &PlotCustomizationDialog::selectNoneLock);
-    connect(m_snrExpandBtn, &QPushButton::clicked, this, &PlotCustomizationDialog::toggleExpandCollapseSnr);
+    connect(m_snr_expand_btn, &QPushButton::clicked, this, &PlotCustomizationDialog::toggleExpandCollapseSnr);
     connect(snrSelectAllBtn, &QPushButton::clicked, this, &PlotCustomizationDialog::selectAllSnr);
     connect(snrSelectNoneBtn, &QPushButton::clicked, this, &PlotCustomizationDialog::selectNoneSnr);
 }
 
 void PlotCustomizationDialog::populateData()
 {
-    if (!m_viewModel) return;
+    if (!m_view_model) return;
 
-    const auto& series = m_viewModel->allSeries();
+    const auto& series = m_view_model->allSeries();
 
     // streamOrder -> list of series indices (Lock tab)
     QMap<int, QVector<int>> lockStreams;
@@ -181,7 +181,7 @@ void PlotCustomizationDialog::populateData()
         // Row: [visibility checkbox "CH <id>"][color swatch][editable series name].
         // The swatch recolors and the edit renames every series in the stream (the
         // ViewModel propagates to the lock/missed sibling); applied to the VM on OK.
-        auto* row = new QWidget(m_lockTab);
+        auto* row = new QWidget(m_lock_tab);
         auto* rowLayout = new QHBoxLayout(row);
         rowLayout->setContentsMargins(0, 0, 0, 0);
         rowLayout->setSpacing(6);
@@ -206,7 +206,7 @@ void PlotCustomizationDialog::populateData()
         rowLayout->addWidget(cb);
         rowLayout->addWidget(swatch);
         rowLayout->addWidget(nameEdit, 1);
-        m_lockListLayout->addWidget(row);
+        m_lock_list_layout->addWidget(row);
 
         // Capture stable series ids (not the raw construction-time indices) so the
         // edits survive a series-list change while this modal dialog is open.
@@ -221,17 +221,17 @@ void PlotCustomizationDialog::populateData()
         lockRow.nameEdit = nameEdit;
         lockRow.swatch = swatch;
         lockRow.color = color0;
-        m_lockRows.append(lockRow);
-        // Captured by index (not pointer/reference into m_lockRows) so a later
+        m_lock_rows.append(lockRow);
+        // Captured by index (not pointer/reference into m_lock_rows) so a later
         // append's reallocation can't leave this lambda holding a dangling row.
-        const int rowIndex = m_lockRows.size() - 1;
+        const int rowIndex = m_lock_rows.size() - 1;
 
         connect(swatch, &QPushButton::clicked, this, [this, rowIndex, swatch]() {
-            const QColor picked = QColorDialog::getColor(m_lockRows[rowIndex].color, this,
+            const QColor picked = QColorDialog::getColor(m_lock_rows[rowIndex].color, this,
                                                          tr("Choose Series Color"));
             if (!picked.isValid())
                 return;
-            m_lockRows[rowIndex].color = picked;
+            m_lock_rows[rowIndex].color = picked;
             swatch->setStyleSheet(swatchStyle(picked));
         });
     }
@@ -248,7 +248,7 @@ void PlotCustomizationDialog::populateData()
         const QVector<int> leftIndices = receiverIndices.mid(0, splitPoint);
         const QVector<int> rightIndices = receiverIndices.mid(splitPoint);
 
-        auto* container = new QWidget(m_snrTab);
+        auto* container = new QWidget(m_snr_tab);
         auto* containerLayout = new QHBoxLayout(container);
         containerLayout->setContentsMargins(0, 0, 0, 0);
 
@@ -264,18 +264,18 @@ void PlotCustomizationDialog::populateData()
         }
 
         container->hide();
-        m_snrTreeLayout->addWidget(container);
-        m_snrStreamContainers.insert(streamOrder, container);
-        m_snrStreamTrees.insert(streamOrder, trees);
+        m_snr_tree_layout->addWidget(container);
+        m_snr_stream_containers.insert(streamOrder, container);
+        m_snr_stream_trees.insert(streamOrder, trees);
 
         // Adding the first item triggers currentIndexChanged(0), which calls
         // onSnrStreamSelected(0) — by then this stream's container is already registered.
-        m_snrStreamCombo->addItem(groupLabel(streamOrder), streamOrder);
+        m_snr_stream_combo->addItem(groupLabel(streamOrder), streamOrder);
     }
 
-    if (m_snrStreamCombo->count() == 0) {
-        m_snrStreamCombo->setEnabled(false);
-        m_snrExpandBtn->setEnabled(false);
+    if (m_snr_stream_combo->count() == 0) {
+        m_snr_stream_combo->setEnabled(false);
+        m_snr_expand_btn->setEnabled(false);
     }
 }
 
@@ -283,7 +283,7 @@ QTreeWidget* PlotCustomizationDialog::buildSnrTree(const QVector<int>& receiverI
                                                     const QMap<int, QVector<int>>& receivers,
                                                     const QVector<PlotSeriesData>& series)
 {
-    auto* tree = new QTreeWidget(m_snrTab);
+    auto* tree = new QTreeWidget(m_snr_tab);
     tree->setHeaderHidden(true);
     tree->setColumnCount(1);
     tree->setRootIsDecorated(true);
@@ -338,7 +338,7 @@ QTreeWidget* PlotCustomizationDialog::buildSnrTree(const QVector<int>& receiverI
         if (item == nullptr || item->parent() == nullptr)
             return; // channel leaves only, not RCVR groups
         const int seriesId = item->data(0, Qt::UserRole).toInt();
-        const PlotSeriesData* s = m_viewModel->seriesById(seriesId);
+        const PlotSeriesData* s = m_view_model->seriesById(seriesId);
         if (s == nullptr)
             return; // series was removed/replaced since the dialog opened
 
@@ -381,19 +381,19 @@ QTreeWidget* PlotCustomizationDialog::buildSnrTree(const QVector<int>& receiverI
 
 QVector<QTreeWidget*> PlotCustomizationDialog::currentSnrTrees() const
 {
-    int index = m_snrStreamCombo->currentIndex();
+    int index = m_snr_stream_combo->currentIndex();
     if (index < 0) return {};
 
-    int streamOrder = m_snrStreamCombo->itemData(index).toInt();
-    return m_snrStreamTrees.value(streamOrder);
+    int streamOrder = m_snr_stream_combo->itemData(index).toInt();
+    return m_snr_stream_trees.value(streamOrder);
 }
 
 void PlotCustomizationDialog::onSnrStreamSelected(int index)
 {
     if (index < 0) return;
 
-    int streamOrder = m_snrStreamCombo->itemData(index).toInt();
-    for (auto it = m_snrStreamContainers.begin(); it != m_snrStreamContainers.end(); ++it) {
+    int streamOrder = m_snr_stream_combo->itemData(index).toInt();
+    for (auto it = m_snr_stream_containers.begin(); it != m_snr_stream_containers.end(); ++it) {
         it.value()->setVisible(it.key() == streamOrder);
     }
 
@@ -407,7 +407,7 @@ void PlotCustomizationDialog::onSnrStreamSelected(int index)
         }
         if (anyCollapsed) break;
     }
-    m_snrExpandBtn->setText(anyCollapsed ? tr("Expand All") : tr("Collapse All"));
+    m_snr_expand_btn->setText(anyCollapsed ? tr("Expand All") : tr("Collapse All"));
 }
 
 void PlotCustomizationDialog::toggleExpandCollapseSnr()
@@ -433,14 +433,14 @@ void PlotCustomizationDialog::toggleExpandCollapseSnr()
             tree->collapseAll();
         }
     }
-    m_snrExpandBtn->setText(anyCollapsed ? tr("Collapse All") : tr("Expand All"));
+    m_snr_expand_btn->setText(anyCollapsed ? tr("Collapse All") : tr("Expand All"));
 }
 
 void PlotCustomizationDialog::onSnrTreeItemChanged(QTreeWidgetItem* item, int column)
 {
-    if (m_updatingSnrTree || column != 0) return;
+    if (m_updating_snr_tree || column != 0) return;
 
-    m_updatingSnrTree = true;
+    m_updating_snr_tree = true;
     if (item->parent() == nullptr) {
         // RCVR group checkbox toggled — push the new state down to its L/R/C channels.
         const Qt::CheckState state = item->checkState(0);
@@ -460,12 +460,12 @@ void PlotCustomizationDialog::onSnrTreeItemChanged(QTreeWidgetItem* item, int co
             : (checkedCount == parent->childCount() ? Qt::Checked : Qt::PartiallyChecked);
         parent->setCheckState(0, parentState);
     }
-    m_updatingSnrTree = false;
+    m_updating_snr_tree = false;
 }
 
 void PlotCustomizationDialog::applyChanges()
 {
-    if (!m_viewModel) return;
+    if (!m_view_model) return;
 
     // Apply lock checkboxes. Each checkbox controls both the FrameSyncLock and
     // AccumulatedMissedFrames series for a stream, but only the metric matching the
@@ -474,27 +474,27 @@ void PlotCustomizationDialog::applyChanges()
     // Quiet setter: this can touch dozens of series across the two loops below, and
     // commitAppearanceChanges() at the end applies one batched refresh instead of a
     // full legend rebuild + replot per checkbox.
-    const bool showMissedFrames = m_viewModel->lockAxisView() == PlotViewModel::LockAxisView::MissedFrames;
-    for (const LockRow& row : m_lockRows) {
+    const bool showMissedFrames = m_view_model->lockAxisView() == PlotViewModel::LockAxisView::MissedFrames;
+    for (const LockRow& row : m_lock_rows) {
         bool checked = row.checkbox->isChecked();
         for (int seriesId : row.seriesIds) {
-            const PlotSeriesData* s = m_viewModel->seriesById(seriesId);
+            const PlotSeriesData* s = m_view_model->seriesById(seriesId);
             if (s == nullptr)
                 continue; // series gone (list changed while dialog open)
             const bool isActiveMetric = (s->metricType == PlotSeriesData::MetricType::AccumulatedMissedFrames)
                 == showMissedFrames;
-            m_viewModel->setSeriesVisibleQuietById(seriesId, checked && isActiveMetric);
+            m_view_model->setSeriesVisibleQuietById(seriesId, checked && isActiveMetric);
         }
     }
 
     // Apply SNR channel checkboxes
-    for (const auto& trees : m_snrStreamTrees) {
+    for (const auto& trees : m_snr_stream_trees) {
         for (QTreeWidget* tree : trees) {
             for (int r = 0; r < tree->topLevelItemCount(); r++) {
                 QTreeWidgetItem* rcvrItem = tree->topLevelItem(r);
                 for (int c = 0; c < rcvrItem->childCount(); c++) {
                     QTreeWidgetItem* chItem = rcvrItem->child(c);
-                    m_viewModel->setSeriesVisibleQuietById(chItem->data(0, Qt::UserRole).toInt(),
+                    m_view_model->setSeriesVisibleQuietById(chItem->data(0, Qt::UserRole).toInt(),
                                                            chItem->checkState(0) == Qt::Checked);
                 }
             }
@@ -504,16 +504,16 @@ void PlotCustomizationDialog::applyChanges()
     // Apply per-stream color/name edits (Lock tab). renameSeriesById/recolorSeriesById
     // are pure setters that propagate to the lock/missed sibling by stream label, and
     // no-op if the stream is gone (series list changed while the dialog was open).
-    for (const LockRow& row : m_lockRows) {
+    for (const LockRow& row : m_lock_rows) {
         if (row.seriesIds.isEmpty())
             continue;
         const int firstId = row.seriesIds.first();
-        m_viewModel->renameSeriesById(firstId, row.nameEdit->text());
-        m_viewModel->recolorSeriesById(firstId, row.color);
+        m_view_model->renameSeriesById(firstId, row.nameEdit->text());
+        m_view_model->recolorSeriesById(firstId, row.color);
     }
 
     // Apply per-channel color/name edits (SNR tab), taken from the pending item roles.
-    for (const auto& trees : m_snrStreamTrees) {
+    for (const auto& trees : m_snr_stream_trees) {
         for (QTreeWidget* tree : trees) {
             for (int r = 0; r < tree->topLevelItemCount(); r++) {
                 QTreeWidgetItem* rcvrItem = tree->topLevelItem(r);
@@ -521,30 +521,30 @@ void PlotCustomizationDialog::applyChanges()
                     QTreeWidgetItem* chItem = rcvrItem->child(c);
                     const int seriesId = chItem->data(0, Qt::UserRole).toInt();
                     if (chItem->data(0, kRolePendingName).isValid())
-                        m_viewModel->renameSeriesById(seriesId, chItem->data(0, kRolePendingName).toString());
+                        m_view_model->renameSeriesById(seriesId, chItem->data(0, kRolePendingName).toString());
                     if (chItem->data(0, kRolePendingColor).isValid())
-                        m_viewModel->recolorSeriesById(seriesId, chItem->data(0, kRolePendingColor).value<QColor>());
+                        m_view_model->recolorSeriesById(seriesId, chItem->data(0, kRolePendingColor).value<QColor>());
                 }
             }
         }
     }
 
     // One batched refresh so the plot re-applies pens and rebuilds the legend once.
-    m_viewModel->commitAppearanceChanges();
+    m_view_model->commitAppearanceChanges();
 
     accept();
 }
 
 void PlotCustomizationDialog::selectAllLock()
 {
-    for (const LockRow& row : m_lockRows) {
+    for (const LockRow& row : m_lock_rows) {
         row.checkbox->setChecked(true);
     }
 }
 
 void PlotCustomizationDialog::selectNoneLock()
 {
-    for (const LockRow& row : m_lockRows) {
+    for (const LockRow& row : m_lock_rows) {
         row.checkbox->setChecked(false);
     }
 }
@@ -554,7 +554,7 @@ void PlotCustomizationDialog::selectAllSnr()
     const QVector<QTreeWidget*> trees = currentSnrTrees();
     if (trees.isEmpty()) return;
 
-    m_updatingSnrTree = true;
+    m_updating_snr_tree = true;
     for (QTreeWidget* tree : trees) {
         for (int r = 0; r < tree->topLevelItemCount(); r++) {
             QTreeWidgetItem* rcvrItem = tree->topLevelItem(r);
@@ -564,7 +564,7 @@ void PlotCustomizationDialog::selectAllSnr()
             }
         }
     }
-    m_updatingSnrTree = false;
+    m_updating_snr_tree = false;
 }
 
 void PlotCustomizationDialog::selectNoneSnr()
@@ -572,7 +572,7 @@ void PlotCustomizationDialog::selectNoneSnr()
     const QVector<QTreeWidget*> trees = currentSnrTrees();
     if (trees.isEmpty()) return;
 
-    m_updatingSnrTree = true;
+    m_updating_snr_tree = true;
     for (QTreeWidget* tree : trees) {
         for (int r = 0; r < tree->topLevelItemCount(); r++) {
             QTreeWidgetItem* rcvrItem = tree->topLevelItem(r);
@@ -582,5 +582,5 @@ void PlotCustomizationDialog::selectNoneSnr()
             }
         }
     }
-    m_updatingSnrTree = false;
+    m_updating_snr_tree = false;
 }

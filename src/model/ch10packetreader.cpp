@@ -11,10 +11,11 @@
 #include <QElapsedTimer>
 #include <QFileInfo>
 
-#include "constants.h"
-#include "packetqueue.h"
 #include "i106_decode_pcmf1.h"
 #include "i106_decode_time.h"
+
+#include "constants.h"
+#include "packetqueue.h"
 
 using namespace Irig106;
 

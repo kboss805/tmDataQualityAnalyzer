@@ -52,13 +52,13 @@ private:
     /// @return The RCVR/channel trees (one or two columns) for the currently selected stream.
     QVector<QTreeWidget*> currentSnrTrees() const;
 
-    PlotViewModel* m_viewModel;
+    PlotViewModel* m_view_model;
 
-    QTabWidget* m_tabWidget;
+    QTabWidget* m_tab_widget;
 
     // Lock Tab UI
-    QWidget* m_lockTab;
-    QVBoxLayout* m_lockListLayout;
+    QWidget* m_lock_tab;
+    QVBoxLayout* m_lock_list_layout;
 
     /// One Lock-tab row's widgets and pending edits, kept together so they can't
     /// drift out of sync the way five parallel QMaps keyed by the same checkbox
@@ -80,21 +80,21 @@ private:
         QPushButton* swatch = nullptr;
         QColor color; ///< Pending color chosen from the swatch; applied to the ViewModel on OK.
     };
-    QVector<LockRow> m_lockRows;
+    QVector<LockRow> m_lock_rows;
 
     // SNR Tab UI
-    QWidget* m_snrTab;
-    QComboBox* m_snrStreamCombo;
-    QVBoxLayout* m_snrTreeLayout;
-    QPushButton* m_snrExpandBtn;
+    QWidget* m_snr_tab;
+    QComboBox* m_snr_stream_combo;
+    QVBoxLayout* m_snr_tree_layout;
+    QPushButton* m_snr_expand_btn;
 
     // Map of Stream Order -> trees of RCVR groups (one or two columns), each with nested L/R/C channel checkboxes
-    QMap<int, QVector<QTreeWidget*>> m_snrStreamTrees;
+    QMap<int, QVector<QTreeWidget*>> m_snr_stream_trees;
 
     // Map of Stream Order -> container widget holding the tree column(s) for that stream
-    QMap<int, QWidget*> m_snrStreamContainers;
+    QMap<int, QWidget*> m_snr_stream_containers;
 
-    bool m_updatingSnrTree = false; ///< Guard against recursive itemChanged signals.
+    bool m_updating_snr_tree = false; ///< Guard against recursive itemChanged signals.
 };
 
 #endif // PLOTCUSTOMIZATIONDIALOG_H
