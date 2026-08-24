@@ -38,6 +38,7 @@ in one file and Frame Sync Lock in another — merged onto a single plot.
 opening a file `clearData()`s the plot and rebinds the reader to that one file.
 
 **What already works (the hard part):**
+
 - `PlotViewModel::addStreamData()` *accumulates* and maps every stream onto a
   shared absolute-time axis: `elapsed = timesSec − m_base_abs_seconds`, base set
   once from the first stream (`plotviewmodel.cpp`). Streams from a second file
@@ -45,6 +46,7 @@ opening a file `clearData()`s the plot and rebinds the reader to that one file.
 - Series identity is `(streamLabel, streamOrder)` — merged streams stay distinct.
 
 **What must change (coordination/UI layer only):**
+
 - `MainViewModel` assumes one file: `m_input_filename`, a single `m_reader`
   rebound per open, `clearState()` → `m_reader->clearSettings()`.
   `startProcessing()` already just hands `m_coordinator->startProcessing(jobs)` a
@@ -58,6 +60,7 @@ opening a file `clearData()`s the plot and rebinds the reader to that one file.
   hard-coding "two" — the same path then handles 1, 2, or 5 files.
 
 **The one real gotcha — time re-basing:**
+
 - The base time is locked to the *first* source. If a later source starts
   *earlier*, its `elapsed` values go negative; unrelated recordings produce
   meaningless offsets.
@@ -87,6 +90,7 @@ suite only ever runs locally by hand. This repo has a documented
 "tests drifted out of sync with src" history that CI would have caught.
 
 **Approach:**
+
 - `windows-latest` GitHub Actions runner.
 - Install Qt 6.10.3 + MinGW via `jurplel/install-qt-action` (aqtinstall), also
   pulling the `tools_mingw` package to match the local toolchain; cache the Qt
@@ -118,6 +122,7 @@ warning actually stands out (and the "zero-warning policy" becomes greppable).
 app warning.
 
 **Approach:**
+
 - Move the third-party sources (`lib/irig106/src/*.c`, `lib/qcustomplot/
   qcustomplot.cpp`) out of the main `.pro`'s `SOURCES` into a **separate
   `staticlib` sub-project** compiled with warnings off (`QMAKE_CFLAGS += -w`,
@@ -152,6 +157,7 @@ stale-index fix by making series identity id-based across the ViewModel surface.
 that outlives a data change. We patched one call site; the shape invites more.
 
 **Approach:**
+
 - Add id-based counterparts (`seriesById(int id)`, `setSeriesVisibleById(...)`,
   `renameSeriesById(...)`, `recolorSeriesById(...)`) implemented on top of the
   existing `indexOfSeriesId()`, each a no-op on a missing id.
@@ -185,6 +191,7 @@ comment linking `PlotViewModel::addStreamData()` and `CsvSeriesParser` — a ren
 away from a silent break.
 
 **Approach:**
+
 - Extract a `SeriesColumnSchema` (header + free functions) with two inverse
   operations: `formatHeader(const PlotSeriesData&) → QString` and
   `parseHeader(QString) → {metricType, streamOrder, streamLabel, receiverIndex,
@@ -210,6 +217,7 @@ time.
 fixture), dominating iteration cost.
 
 **Approach:**
+
 - Add a **runtime** fast-mode to `tests/main.cpp` — a `--fast` flag or
   `TMDQ_FAST_TESTS` env var — that skips the heavy real-file integration cases
   and runs the synthetic-bitstream (`packBitString`) logic tests. **Not** a
@@ -258,6 +266,7 @@ MSVC branch in CI. So GCC tuning + profiling comes first; MSVC is only a
 exhausted.
 
 **Approach:**
+
 1. **Benchmark harness** — process a representative fixture `.ch10` through the
    real `FrameProcessor` pipeline (reuse the `runWithReader` path) N times in a
    **release** build, report median wall-clock. Keep it out of the normal suite

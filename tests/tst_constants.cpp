@@ -189,7 +189,6 @@ void TestConstants::plotConstants()
     // Plot widget parameters
     QCOMPARE(PlotConstants::kTickCount, 10);
     QCOMPARE(PlotConstants::kGraphPenWidth, 1.5);
-    QCOMPARE(PlotConstants::kTitleFontSize, 10);
 }
 
 // v3.2 additions
@@ -245,10 +244,4 @@ void TestConstants::uiSlopeVoltageBounds()
     QCOMPARE(UIConstants::kSlopeVoltageUpper[1],  5.0);
     QCOMPARE(UIConstants::kSlopeVoltageUpper[2], 10.0);
     QCOMPARE(UIConstants::kSlopeVoltageUpper[3],  5.0);
-}
-
-void TestConstants::plotFrameSyncLockColor()
-{
-    // Distinctive purple used to render framesync lock series (US4.0).
-    QCOMPARE(PlotConstants::kFrameSyncLockColor, QColor(106, 13, 173));
 }

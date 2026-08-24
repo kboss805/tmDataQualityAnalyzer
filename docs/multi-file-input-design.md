@@ -1,6 +1,7 @@
 # Design Note — Multi-file input (Phase 1)
 
 **Status:** DECISIONS LOCKED (2026-07-07), ready to implement. Resolved:
+
 - Time alignment = **absolute IRIG time + re-base to the global-earliest sample** (§3). ✔
 - Relative-overlay mode = **deferred post-v1** (§9). ✔
 - **Source removal = IN v1** (§5). ✔
@@ -41,7 +42,7 @@ jobs from a single `m_stream_configs`) and in the **UI flow** (Open →
 
 Replace "the input file" with an ordered list of **sources**, each:
 
-```
+```cpp
 Source {
     QString  filepath;
     int      sourceId;                 // stable within the session, assigned on add
@@ -76,7 +77,7 @@ same X as a sample at *T* in file A. Absolute-time alignment gives that for free
 not just the first-loaded. When a newly added source starts *earlier* than the
 current base:
 
-```
+```text
 delta = old_base_abs − new_base_abs            // > 0
 for every existing series: xValues[i] += delta // shift right, O(total samples)
 m_base_abs_seconds = new_base_abs; recompute m_base_day / m_base_time_offset
@@ -185,8 +186,8 @@ once with per-stream workers; we simply allow a second such run to append.
 
 ## 7. Edge cases
 
-- **Source-qualified CSV columns (IN v1).** Two sources sharing an SNR channel id
-  + label would otherwise export as identical column headers. Add a source
+- **Source-qualified CSV columns (IN v1).** Two sources sharing an SNR channel id +
+  label would otherwise export as identical column headers. Add a source
   qualifier to `SeriesColumnSchema`, designed to stay **backward-compatible**:
   - **Source 0 (first/only source) keeps today's exact header format** — a
     single-file export stays byte-identical and every previously exported CSV
@@ -234,6 +235,7 @@ identity · **source removal** (§5) · **source-qualified CSV export** (§7) ·
 ViewModel + schema tests.
 
 **Deferred (call out, don't build):**
+
 - **Relative-overlay mode** — align each source to *its own* `t = 0` to compare
   two independent runs' shapes. Needs a per-source base / mode flag that breaks
   the single-shared-base model. Post-v1.

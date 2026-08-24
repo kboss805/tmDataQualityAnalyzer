@@ -16,11 +16,13 @@ The version number has **one** source of truth and several derived consumers. Ed
 build derive the rest, update the human-facing notes, then package. Do the steps in order.
 
 ## Step 1 — Decide the version
+
 Semantic-ish: patch for fixes/polish, minor for new user-facing features (a new US), major for big
 shifts. Confirm the target version with the user if it isn't explicit. Current version lives in
 `include/constants.h` (`AppVersion::kMajor/kMinor/kPatch`).
 
 ## Step 2 — Bump the single source of truth
+
 Edit **only** `include/constants.h`:
 
 ```cpp
@@ -36,12 +38,14 @@ Do **not** add a version literal anywhere else. qmake parses this header and gen
 version string elsewhere, that's a bug to remove, not a place to update.
 
 ## Step 3 — Update the developer changelog
+
 In `docs/CLAUDE.md`, under **Version History**, add a new `### vX.Y.Z — <Title>` section at the top of
 the list. Write tight, factual bullets describing what changed and which user story (US#) it serves —
 match the voice of the existing entries (they reference concrete classes/methods). Also bump the
 **Project Version** line near the top of that file.
 
 ## Step 4 — Update the user-facing "What's New"
+
 Rewrite `deploy/RELEASENOTES.txt` for the new version — this is shown as the installer's "What's New"
 page (`InfoBeforeFile`), so it is **end-user language**, not developer changelog. Lead with the
 version header line (`tmDataQualityAnalyzer vX.Y.Z - What's New`) and group bullets as
@@ -59,7 +63,7 @@ These reach users but nothing in CI exercises them, so they rot silently:
   manual that said something different.
 - **`resources/usermanual.html`** — Help > User Manual. Its subtitle carries a version string; it
   read "Version 2.7.0" at v2.9.0. Refresh screenshots with
-  `powershell -File scriptsuild_manual.ps1` if the UI changed.
+  `powershell -File scripts\build_manual.ps1` if the UI changed.
 - **`README.md`** — the "developed on Qt x.y.z" line and the repo tree.
 - **`CLAUDE.md`** — the "Current version" line in the opening paragraph. It sat at 2.7.0
   through two releases, because nothing points at it.
@@ -83,6 +87,7 @@ manual illustrating the bug it just fixed. No script can catch that; it is a jud
 it deliberately every release rather than assuming the figures are fine.
 
 ## Step 5 — Verify before building
+
 With the **build-and-test** skill: build the app clean (0 warnings) and run the **full** test suite
 (all green, 0 failed/0 skipped). Do not package a release over a red or warning-laden build. Confirm
 `git status` is clean except for the intended version/notes changes.
@@ -93,7 +98,7 @@ Packaging takes ~10 minutes and signs at the very end. **Prove the certificate c
 first** — this costs 45 seconds and saved a whole cycle the one time it was skipped:
 
 ```powershell
-$t = 'C:\path	ony.exe'   # copy a built exe to scratch first
+$t = 'C:\scratch\tmDataQualityAnalyzer.exe'   # copy a built exe to scratch first
 $p = Start-Process signtool -ArgumentList @('sign','/sha1',$env:SIGN_CERT_SHA1,
      '/tr','http://timestamp.digicert.com','/td','sha256','/fd','sha256',$t) -NoNewWindow -PassThru
 if ($p.WaitForExit(45000)) { "exit $($p.ExitCode)" } else { $p.Kill(); "HUNG - token locked" }
@@ -105,6 +110,7 @@ looks like either `SignTool Error: No certificates were found...` or signtool **
 prompt. If it hangs, the user must log in to SimplySign — you cannot.
 
 ## Step 7 — Build, sign, and package
+
 Run the release script from the project root in **PowerShell**:
 
 ```powershell
@@ -124,7 +130,9 @@ portable layout → portable ZIP → Inno Setup installer (also signed). It read
   transient "file in use".
 
 ## Step 8 — Confirm the artifacts
+
 The script prints the final paths. Expect, in `deploy/`:
+
 - `tmDataQualityAnalyzer-vX.Y.Z_portable.zip`
 - `tmDataQualityAnalyzer-vX.Y.Z_setup.exe`
 
@@ -134,9 +142,9 @@ for everything. It reports honestly now, but its trustworthiness is exactly what
 check independently:
 
 ```powershell
-foreach ($t in @('deploy\staging\installerin	mDataQualityAnalyzer.exe',
-                 "deploy\staging\portable	mDataQualityAnalyzer-v$v`_portable	mDataQualityAnalyzer.exe",
-                 "deploy	mDataQualityAnalyzer-v$v`_setup.exe")) {
+foreach ($t in @('deploy\staging\installer\bin\tmDataQualityAnalyzer.exe',
+                 "deploy\staging\portable\tmDataQualityAnalyzer-v$v`_portable\tmDataQualityAnalyzer.exe",
+                 "deploy\tmDataQualityAnalyzer-v$v`_setup.exe")) {
   '{0,-8} {1}' -f (Get-AuthenticodeSignature $t).Status, (Get-Item $t).VersionInfo.FileVersion
 }
 ```
@@ -150,12 +158,14 @@ Expect `Status = Valid` and the new version on every one. Report the paths, size
 status back to the user.
 
 ## Step 9 — Commit / tag (only if asked)
+
 Don't commit, tag, or push unless the user asks. When they do: commit the `constants.h` + notes
 changes together with a `feat: release vX.Y.Z` style message, and tag `vX.Y.Z` to match the existing
 tag convention. The release artifacts in `deploy/` are build outputs — follow the repo's existing
 practice on whether they're tracked.
 
 ## Guardrails
+
 - One version source (`constants.h`). Never hand-edit `version_autogen.h`, the `.pro` VERSION, or the
   `.rc` — they're derived.
 - Two notes files, two audiences: `docs/CLAUDE.md` history = developer; `RELEASENOTES.txt` = end user.

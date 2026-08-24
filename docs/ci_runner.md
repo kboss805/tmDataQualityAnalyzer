@@ -58,9 +58,9 @@ on `main` or require approval for all outside-collaborator workflow runs.
    `Authenticated Users`, which covers service accounts), a user profile is not. No
    service restart is needed after installing: detection probes the filesystem at
    build time rather than relying on the service's cached `PATH`.
-2. **The full-size PRN recording.** `C:\actions-runner\.env` sets:
+1. **The full-size PRN recording.** `C:\actions-runner\.env` sets:
 
-   ```
+   ```text
    TMDQA_CH10_FULL=C:\ProgramData\tmdqa-ci-fixtures\prn_testfile_full.ch10
    ```
 

@@ -64,7 +64,7 @@ if (negative_polarity) {            // polarity_idx == 1
 The conversion itself is **offset-then-scale** (note `scale` is an offset in raw
 counts, `slope` is the dB-per-count gain — the field names predate this doc):
 
-```
+```text
 dB = (raw + param->scale) * param->slope
 ```
 
@@ -117,7 +117,7 @@ was extracted and is keyed by word index.
 
 ### 4.1 Lifecycle
 
-```
+```text
 [ Calibration CH10 file ]   [ Step-config TOML ]
             │                        │
             ▼                        ▼

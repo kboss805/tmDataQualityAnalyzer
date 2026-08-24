@@ -230,7 +230,7 @@ void TestFrameProcessor::processInvalidFile()
 
 void TestFrameProcessor::processAccumulatesReceiverData()
 {
-    const QString filepath = testDataPath("agc_rnrz-l_trc_testfile.ch10");
+    const QString filepath = testDataPath("test files/agc_rnrz-l_trc_testfile.ch10");
     if (!QFileInfo::exists(filepath))
         QSKIP("RNRZ-L test file not available");
 
@@ -283,7 +283,7 @@ void TestFrameProcessor::processAccumulatesReceiverData()
 
 void TestFrameProcessor::processLockOnlyModeHasNoChannels()
 {
-    const QString filepath = testDataPath("agc_rnrz-l_trc_testfile.ch10");
+    const QString filepath = testDataPath("test files/agc_rnrz-l_trc_testfile.ch10");
     if (!QFileInfo::exists(filepath))
         QSKIP("RNRZ-L test file not available");
 
@@ -318,7 +318,7 @@ void TestFrameProcessor::processLockOnlyModeHasNoChannels()
 
 void TestFrameProcessor::processFrameSyncErrorsMonotonic()
 {
-    const QString filepath = testDataPath("agc_rnrz-l_trc_testfile.ch10");
+    const QString filepath = testDataPath("test files/agc_rnrz-l_trc_testfile.ch10");
     if (!QFileInfo::exists(filepath))
         QSKIP("RNRZ-L test file not available");
 
@@ -358,7 +358,7 @@ void TestFrameProcessor::processFrameSyncErrorsMonotonic()
 
 void TestFrameProcessor::processSlopeAffectsValues()
 {
-    const QString filepath = testDataPath("agc_rnrz-l_trc_testfile.ch10");
+    const QString filepath = testDataPath("test files/agc_rnrz-l_trc_testfile.ch10");
     if (!QFileInfo::exists(filepath))
         QSKIP("RNRZ-L test file not available");
 
@@ -398,7 +398,7 @@ void TestFrameProcessor::processSlopeAffectsValues()
 
 void TestFrameProcessor::processShortPeriodMoreSamples()
 {
-    const QString filepath = testDataPath("agc_rnrz-l_trc_testfile.ch10");
+    const QString filepath = testDataPath("test files/agc_rnrz-l_trc_testfile.ch10");
     if (!QFileInfo::exists(filepath))
         QSKIP("RNRZ-L test file not available");
 
@@ -440,7 +440,7 @@ void TestFrameProcessor::processShortPeriodMoreSamples()
 ////////////////////////////////////////////////////////////////////////////////
 
 /// End-to-end check on real decoded data (not synthetic, unlike
-/// TestStepDetector::roundTripSameDataIsExact): use agc_rnrz-l_trc_testfile.ch10 as BOTH
+/// TestStepDetector::roundTripSameDataIsExact): use test files/agc_rnrz-l_trc_testfile.ch10 as BOTH
 /// the calibration file and the "main" file being measured. Since they are the
 /// same recording, the resulting calibration should reproduce the exact step
 /// values (0, 6, 12, ... 60 dB) when re-applied — this is the full real
@@ -449,7 +449,7 @@ void TestFrameProcessor::processShortPeriodMoreSamples()
 /// RNRZ-L data, rather than hand-built raw series.
 void TestFrameProcessor::calibrationRoundTripOnRealFileProducesCleanSteps()
 {
-    const QString filepath = testDataPath("agc_rnrz-l_trc_testfile.ch10");
+    const QString filepath = testDataPath("test files/agc_rnrz-l_trc_testfile.ch10");
     if (!QFileInfo::exists(filepath))
         QSKIP("RNRZ-L test file not available");
 
@@ -808,7 +808,7 @@ void TestFrameProcessor::swapBytesOffFindsSyncThatTheSwapDestroys()
     // Both directions are asserted. Checking only that swap=false locks would pass
     // against a build that ignored the flag and never swapped anything, which would
     // silently break every other fixture in this suite.
-    const QString filepath = testDataPath("safran_testfile.ch10");
+    const QString filepath = testDataPath("test files/safran_testfile, sample.ch10");
     if (!QFileInfo::exists(filepath))
         QSKIP("Safran test file not available");
 
@@ -897,7 +897,7 @@ void TestFrameProcessor::oddPayloadSwapSkipIsReported()
     //
     // Channel 14 is the all-odd case: every payload is 875 bytes, so the swap is
     // inert for the whole stream and the operator's setting has no effect at all.
-    const QString filepath = testDataPath("safran_testfile.ch10");
+    const QString filepath = testDataPath("test files/safran_testfile, sample.ch10");
     if (!QFileInfo::exists(filepath))
         QSKIP("Safran test file not available");
 
@@ -961,7 +961,7 @@ void TestFrameProcessor::offPhaseSyncsAreNotCountedAsBoundaryAligned()
     // Reproduced deterministically with the RIGHT sync pattern and a WRONG frame
     // length: matches occur at the real 800-bit spacing, so minor_frame_bit_count
     // never equals the configured 1234 and no match is ever boundary-aligned.
-    const QString filepath = testDataPath("agc_rnrz-l_trc_testfile.ch10");
+    const QString filepath = testDataPath("test files/agc_rnrz-l_trc_testfile.ch10");
     if (!QFileInfo::exists(filepath))
         QSKIP("RNRZ-L test file not available");
 
@@ -1021,7 +1021,7 @@ void TestFrameProcessor::failureReportNamesChannelAndSyncPattern()
     // PRN-15 are both 32-bit patterns, so a stream running the wrong one was invisible
     // in the report. That is exactly how a PRN-11 config on a PRN-15 stream went
     // undiagnosed: every printed field looked reasonable.
-    const QString filepath = testDataPath("agc_rnrz-l_trc_testfile.ch10");
+    const QString filepath = testDataPath("test files/agc_rnrz-l_trc_testfile.ch10");
     if (!QFileInfo::exists(filepath))
         QSKIP("RNRZ-L test file not available");
 

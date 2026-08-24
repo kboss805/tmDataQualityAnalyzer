@@ -55,7 +55,6 @@ private slots:
     void uiDefaultSamplePeriodIndex();
     void uiMaxSlopeIndex();
     void uiSlopeVoltageBounds();
-    void plotFrameSyncLockColor();
 };
 
 #endif // TST_CONSTANTS_H

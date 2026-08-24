@@ -10,12 +10,13 @@
 #include <QElapsedTimer>
 #include <QVector>
 
-#include "framesetup.h"
-#include "packetqueue.h"
 #include "irig106ch10.h"       // IWYU pragma: keep
 #include "i106_time.h"         // IWYU pragma: keep
 #include "i106_decode_tmats.h" // IWYU pragma: keep
 #include "i106_decode_pcmf1.h"
+
+#include "framesetup.h"
+#include "packetqueue.h"
 
 using namespace Irig106;
 

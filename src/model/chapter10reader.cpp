@@ -411,34 +411,9 @@ double Chapter10Reader::getTmatsDataRateBps(int channel_id) const
     return 0.0;
 }
 
-int Chapter10Reader::findChannelIndex(const QList<ChannelData*>& channels, int channel_id)
-{
-    for (qsizetype i = 0; i < channels.size(); i++)
-    {
-        if (channels[i]->channelID() == channel_id)
-            return static_cast<int>(i);
-    }
-    return -1;
-}
-
-int Chapter10Reader::getTimeChannelIndex(int channel_id) const
-{
-    return findChannelIndex(m_time_channels, channel_id);
-}
-
-int Chapter10Reader::getPCMChannelIndex(int channel_id) const
-{
-    return findChannelIndex(m_pcm_channels, channel_id);
-}
-
 int Chapter10Reader::getCurrentTimeChannelID() const
 {
     return m_current_time_channel;
-}
-
-int Chapter10Reader::getCurrentPCMChannelID() const
-{
-    return m_current_pcm_channel;
 }
 
 int Chapter10Reader::getFirstPCMChannelID() const

@@ -44,6 +44,7 @@ stop endorsing the change until it moves.
 ## Domain invariants to verify (the high-value checks)
 
 ### SNR / calibration path (`frameprocessor.cpp`, `calibrationextractor.cpp`, `stepdetector.cpp`)
+
 - **Average raw first, then calibrate.** Within an output window the code accumulates *raw counts*
   (`param->sample_sum += raw_value`) and applies calibration once to the windowed mean in
   `recordTimeSample()`. Reject any change that calibrates per-sample then averages —
@@ -60,6 +61,7 @@ stop endorsing the change until it moves.
   (`n_samples == 0`).
 
 ### Frame-sync / lock path (`frameprocessor.cpp`)
+
 - **Lock % is a bit-span quantity**, not `time × bitrate`: `valid_bits_in_window /
   total_bits_in_window`. Time only delimits the averaging window. Don't reintroduce a data-rate
   dependency into the numerator/denominator. See `docs/framesync_logic.md` §6.
@@ -74,6 +76,7 @@ stop endorsing the change until it moves.
   event count, NOT a bit-level/BER metric.
 
 ### TOML config boundaries (`tomlconfighelper.cpp`, `streamsubdialogs.h`)
+
 - **Frame-sync Load/Save round-trips ONLY** frame sync pattern, sync mask, and words/frame.
   `Randomized`, `Data Rate`, and `Sample Rate` are per-session operator inputs and are intentionally
   excluded (the separator line in the setup dialog = this boundary). Do not widen
@@ -81,6 +84,7 @@ stop endorsing the change until it moves.
 - Calibration profiles are **session-only** and never serialized to disk.
 
 ### Threading / lifecycle (`processingcoordinator.cpp`, `ch10packetreader.cpp`, `packetqueue.h`)
+
 - One `Ch10PacketReader` thread reads the file **once** and routes packets to bounded per-stream
   queues; one `FrameProcessor` worker per stream consumes concurrently. Don't reintroduce per-worker
   file opens (the old 4× I/O bug).
@@ -90,6 +94,7 @@ stop endorsing the change until it moves.
   must operate on its own detached copy. Verify any new mutate-in-place path detaches first.
 
 ### C / irig106 interop (`ch10packetreader.cpp`, `chapter10reader.cpp`)
+
 - Validate at the trust boundary: bound track numbers (negative `atoi` → skip), check
   `ulDataLen > data_offset` before pointer arithmetic, and cap allocations via
   `ensureBufferCapacity` (rejects > `kMaxPacketBufferSize`, catches `bad_alloc`). New parsing code
@@ -99,11 +104,13 @@ stop endorsing the change until it moves.
 - No C++ exceptions may propagate across the C boundary.
 
 ## General pass (still do this)
+
 Correctness/edge cases (off-by-one, overflow in the bit math — note `uint64_t` shift registers and
 `UINT64_MAX` sentinels), input validation, Qt parent/ownership and `delete` correctness, naming and
 convention adherence (`docs/CLAUDE.md` "Coding Conventions"), and DRY against the single-source
 helpers (`FrameSetup::buildDefaultReceiverMap`, `channelPrefix`, `receiverParameterName`).
 
 ## After review
+
 If asked to fix, apply the changes and re-verify with the **build-and-test** skill (a green full
 suite is the bar). Security-sensitive interop changes also warrant the native `/security-review`.
