@@ -142,8 +142,6 @@ void TestPlotViewModel::yAutoRange()
     double expected_max = 50.0;
     QCOMPARE(vm.yMin(), expected_min);
     QCOMPARE(vm.yMax(), expected_max);
-    QCOMPARE(vm.dataYMin(), expected_min);
-    QCOMPARE(vm.dataYMax(), expected_max);
 
     QFile::remove(path);
 }

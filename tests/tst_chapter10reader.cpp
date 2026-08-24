@@ -102,8 +102,10 @@ void TestChapter10Reader::currentPcmChannelSetAfterLoad()
     Chapter10Reader reader;
     reader.loadChannels(testDataPath("agc_nzl_rasa_testfile.ch10"));
 
-    // After loading, a default PCM channel should be selected (not -1)
-    QVERIFY2(reader.getCurrentPCMChannelID() != -1,
+    // After loading, a default PCM channel should be selected (not -1). No production
+    // caller reads it back through a getter, so the friend class reaches the field
+    // directly - see TestChapter10Reader's friend declaration on Chapter10Reader.
+    QVERIFY2(reader.m_current_pcm_channel != -1,
              "Current PCM channel should be set after loading a file with PCM channels");
 }
 
@@ -123,7 +125,7 @@ void TestChapter10Reader::clearSettingsResetsChannels()
     QVERIFY2(reader.getPCMChannelComboBoxList().isEmpty(),
              "PCM channel list should be empty after clearSettings");
     QCOMPARE(reader.getCurrentTimeChannelID(), -1);
-    QCOMPARE(reader.getCurrentPCMChannelID(), -1);
+    QCOMPARE(reader.m_current_pcm_channel, -1);
 }
 
 void TestChapter10Reader::timeChannelChangedUpdatesSelection()
@@ -152,8 +154,7 @@ void TestChapter10Reader::pcmChannelChangedUpdatesSelection()
 
     // Index 0 in combo = placeholder, index 1 = first real channel
     reader.pcmChannelChanged(1);
-    int first_id = reader.getCurrentPCMChannelID();
-    QVERIFY2(first_id != -1, "Selecting first PCM channel should set a valid ID");
+    QVERIFY2(reader.m_current_pcm_channel != -1, "Selecting first PCM channel should set a valid ID");
 }
 
 void TestChapter10Reader::loadChannelsReturnsFalseForInvalidFile()
@@ -170,49 +171,6 @@ void TestChapter10Reader::getFirstPcmChannelIdReturnsValidId()
 
     int first_pcm = reader.getFirstPCMChannelID();
     QVERIFY2(first_pcm != -1, "getFirstPCMChannelID should return a valid ID after loading");
-    QCOMPARE(first_pcm, reader.getCurrentPCMChannelID());
-}
-
-
-void TestChapter10Reader::getTimeChannelIndexReturnsValidIndex()
-{
-    Chapter10Reader reader;
-    reader.loadChannels(testDataPath("agc_nzl_rasa_testfile.ch10"));
-
-    int time_id = reader.getCurrentTimeChannelID();
-    QVERIFY2(time_id != -1, "Precondition: a time channel must be selected after loading");
-
-    int idx = reader.getTimeChannelIndex(time_id);
-    QVERIFY2(idx >= 0, "getTimeChannelIndex should return a non-negative index for a loaded time channel");
-}
-
-void TestChapter10Reader::getTimeChannelIndexReturnsMinusOneForUnknown()
-{
-    Chapter10Reader reader;
-    reader.loadChannels(testDataPath("agc_nzl_rasa_testfile.ch10"));
-
-    QCOMPARE(reader.getTimeChannelIndex(-1),   -1);
-    QCOMPARE(reader.getTimeChannelIndex(9999), -1);
-}
-
-void TestChapter10Reader::getPcmChannelIndexReturnsValidIndex()
-{
-    Chapter10Reader reader;
-    reader.loadChannels(testDataPath("agc_nzl_rasa_testfile.ch10"));
-
-    int pcm_id = reader.getCurrentPCMChannelID();
-    QVERIFY2(pcm_id != -1, "Precondition: a PCM channel must be selected after loading");
-
-    int idx = reader.getPCMChannelIndex(pcm_id);
-    QVERIFY2(idx >= 0, "getPCMChannelIndex should return a non-negative index for a loaded PCM channel");
-}
-
-void TestChapter10Reader::getPcmChannelIndexReturnsMinusOneForUnknown()
-{
-    Chapter10Reader reader;
-    reader.loadChannels(testDataPath("agc_nzl_rasa_testfile.ch10"));
-
-    QCOMPARE(reader.getPCMChannelIndex(-1),   -1);
-    QCOMPARE(reader.getPCMChannelIndex(9999), -1);
+    QCOMPARE(first_pcm, reader.m_current_pcm_channel);
 }
 

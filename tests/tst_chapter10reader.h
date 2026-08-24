@@ -25,10 +25,6 @@ private slots:
     void pcmChannelChangedUpdatesSelection();
     void loadChannelsReturnsFalseForInvalidFile();
     void getFirstPcmChannelIdReturnsValidId();
-    void getTimeChannelIndexReturnsValidIndex();
-    void getTimeChannelIndexReturnsMinusOneForUnknown();
-    void getPcmChannelIndexReturnsValidIndex();
-    void getPcmChannelIndexReturnsMinusOneForUnknown();
 };
 
 #endif // TST_CHAPTER10READER_H

@@ -101,8 +101,6 @@ public:
     double xMax() const;                           ///< @return Data X maximum (elapsed seconds).
     double yMin() const;                           ///< @return Current SNR Y minimum (auto or manual).
     double yMax() const;                           ///< @return Current SNR Y maximum: user override (kept above yMin), else auto or manual.
-    double dataYMin() const;                       ///< @return Computed SNR Y minimum from data.
-    double dataYMax() const;                       ///< @return Computed SNR Y maximum from data.
     bool yAutoScale() const;                       ///< @return True if SNR Y axis is auto-scaled.
     double lockYMin() const;                       ///< @return Lock axis minimum (always 0).
     double lockYMax() const;                       ///< @return Lock axis maximum (always 100).

@@ -33,6 +33,7 @@
 class Chapter10Reader : public QObject
 {
     Q_OBJECT
+    friend class TestChapter10Reader;
 
 public:
     explicit Chapter10Reader(QObject* parent = nullptr);
@@ -82,12 +83,7 @@ public:
      */
     double getTmatsDataRateBps(int channel_id) const;
 
-    /// @return List index matching @p channel_id, or -1 if not found.
-    int getTimeChannelIndex(int channel_id) const;
-    /// @return List index matching @p channel_id, or -1 if not found.
-    int getPCMChannelIndex(int channel_id) const;
     int getCurrentTimeChannelID() const; ///< @return Currently selected time channel ID.
-    int getCurrentPCMChannelID() const;  ///< @return Currently selected PCM channel ID.
     int getFirstPCMChannelID() const;    ///< @return Channel ID of the first PCM channel, or -1 if none.
 
 signals:
@@ -104,8 +100,6 @@ public slots:
 private:
     /// Builds combo box display strings from a list of channel metadata.
     static QStringList buildChannelComboBoxList(const QList<ChannelData*>& channels);
-    /// Returns the list index of @p channel_id, or -1 if not found.
-    static int findChannelIndex(const QList<ChannelData*>& channels, int channel_id);
     bool processTmatsPacket(Irig106::SuI106Ch10Header& header);
     void applyTmatsNames();
     void inferChannelTypeFromHeader(int channel_id);

@@ -795,16 +795,6 @@ double PlotViewModel::yMax() const
     return m_y_auto_scale ? m_data_y_max : m_y_manual_max;
 }
 
-double PlotViewModel::dataYMin() const
-{
-    return m_data_y_min;
-}
-
-double PlotViewModel::dataYMax() const
-{
-    return m_data_y_max;
-}
-
 bool PlotViewModel::yAutoScale() const
 {
     return m_y_auto_scale;
