@@ -426,15 +426,6 @@ The stories below follow the workflow a first-time user takes through the applic
   says PRN-15 is the default - the caption described the dialog as "configured for a
   PRN 15 stream" when that is now simply what a new stream opens on.
 
-#### Fixed
-
-- **The section renumbering regex was a counted range.** `embed_manual_images.py`
-  matched `[1-8]` when there were eight reference sections, so adding a ninth left it
-  unshifted - numbered 9 in a full manual whose neighbours had moved into the teens,
-  with the nav and the heading disagreeing. Widened to `\d+`. The generated manuals are
-  now checked for nav/heading agreement and unresolved anchors, which is what caught
-  it: 9 numbered sections in the base, 14 in the full, every internal link resolving.
-
 #### The processing log is concise
 
 - **Four manual figures re-captured** against this behaviour: the three Configure
@@ -463,7 +454,6 @@ The stories below follow the workflow a first-time user takes through the applic
   printing it was noise.
 - The unbounded processing window (`stop=18446744073709551615s`) no longer appears; the
   window is named only when it is actually bounded.
-
 
 #### Frame Sync Lock defaults to PRN-15 (US2.0)
 
@@ -554,6 +544,13 @@ The stories below follow the workflow a first-time user takes through the applic
   because of the skip.
 
 #### Fixed
+
+- **The section renumbering regex was a counted range.** `embed_manual_images.py`
+  matched `[1-8]` when there were eight reference sections, so adding a ninth left it
+  unshifted - numbered 9 in a full manual whose neighbours had moved into the teens,
+  with the nav and the heading disagreeing. Widened to `\d+`. The generated manuals are
+  now checked for nav/heading agreement and unresolved anchors, which is what caught
+  it: 9 numbered sections in the base, 14 in the full, every internal link resolving.
 
 - **The log collapsed every multi-line message into one paragraph.** `logError()` and
   friends escape the text with `toHtmlEscaped()`, which handles the markup characters
@@ -1455,14 +1452,14 @@ not mis-read.
    - Reads Ch10 file **metadata** up front: scans TMATS to catalog time and PCM channels, provides channel lists, time accessors, and channel ID resolution. Wraps the irig106utils C library.
 
 2. **Ch10PacketReader** (`src/model/ch10packetreader.cpp`, `include/model/ch10packetreader.h`)
-    - The single-pass reader. `prepare()` opens the file, parses TMATS, resolves each stream's PCM attributes, and builds the channel-ID → `PacketQueue` routing; `run()` (on its own QThread) reads the file once, tracks IRIG time, and dispatches each PCM packet's payload to the matching queues, then posts end-of-stream sentinels
-    - Owns the `SuChanInfo` per-channel bookkeeping table
+   - The single-pass reader. `prepare()` opens the file, parses TMATS, resolves each stream's PCM attributes, and builds the channel-ID → `PacketQueue` routing; `run()` (on its own QThread) reads the file once, tracks IRIG time, and dispatches each PCM packet's payload to the matching queues, then posts end-of-stream sentinels
+   - Owns the `SuChanInfo` per-channel bookkeeping table
 
 3. **PacketQueue** (`include/model/packetqueue.h`) — bounded, thread-safe per-stream packet queue connecting the reader to one worker (header-only)
 
 4. **FrameProcessor** (`src/model/frameprocessor.cpp`, `include/model/frameprocessor.h`)
-    - Per-stream worker: drains its PacketQueue, runs the bit-serial frame-sync scanner (acquire/lock, off-phase rejection, bit-span lock %), accumulates lock %, missed frames, and (SNR mode) calibrated channel values into a `ProcessedStreamData`
-    - Private helpers include `derandomizeBitstream()` and `hasSyncPattern()`; applies linear slope/offset or a non-linear `CalibrationProfile` per channel
+   - Per-stream worker: drains its PacketQueue, runs the bit-serial frame-sync scanner (acquire/lock, off-phase rejection, bit-span lock %), accumulates lock %, missed frames, and (SNR mode) calibrated channel values into a `ProcessedStreamData`
+   - Private helpers include `derandomizeBitstream()` and `hasSyncPattern()`; applies linear slope/offset or a non-linear `CalibrationProfile` per channel
 
 5. **FrameSetup** (`src/model/framesetup.cpp`, `include/model/framesetup.h`) — frame configuration / word-map + calibration table built per job
 

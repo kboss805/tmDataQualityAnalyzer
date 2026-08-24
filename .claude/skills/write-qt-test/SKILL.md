@@ -43,6 +43,7 @@ in `tests/tst_*.cpp` — read a neighbor before writing.
 ## House helpers — reuse these, don't reinvent
 
 From `tst_frameprocessor.cpp` (copy the pattern; some are file-local statics):
+
 - `testDataPath("file")` → resolves `tests/data/<file>` via `applicationDirPath().cdUp()`. This is
   **why the test exe must sit one level under `tests/`** — see the build-and-test skill.
 - `packBitString("10110…")` → packs an MSB-first `'1'/'0'` string into a `QByteArray`, for building
@@ -61,6 +62,7 @@ Async signal tests use `QSignalSpy` + a `QEventLoop` (see the `loadCsvFileAsync`
 ## What good coverage looks like here
 
 Use this checklist as the bar — for any class under test, look for:
+
 - **negative tests** (invalid file/channel/time, empty input, malformed TOML row),
 - **boundary tests** (off-by-one on frame/word counts, 0-sample windows, first/last frame at a
   packet seam, sync at the exact boundary vs off-phase),
@@ -75,6 +77,7 @@ future regression fails loudly (e.g. "off-phase sync after lock-loss is not extr
 ## Reference suites for tricky patterns
 
 Every app class now has a dedicated suite; two are worth copying from when you hit the same shapes:
+
 - **`tst_plotcustomizationdialog`** — dialog test that reaches private widgets/slots via a
   `friend class` declaration (tree build, tri-state group cascade, expand/collapse, per-stream
   visibility round-trip to the ViewModel). Mirror this for any View-layer widget with no public

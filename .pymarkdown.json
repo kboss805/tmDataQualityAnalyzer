@@ -1,0 +1,41 @@
+// pymarkdown (pymarkdownlnt) config. Run: python -m pymarkdown scan <files>
+// (JSON5 - comments are fine; pymarkdown reads this format by default).
+{
+  "extensions": {
+    // Every SKILL.md starts with a YAML --- frontmatter block. Without this,
+    // pymarkdown misparses the frontmatter as body content, which cascades into
+    // false MD041/MD023/MD003 findings on every skill file.
+    "front-matter": { "enabled": true },
+    // docs/CLAUDE.md and others use pipe tables throughout.
+    "markdown-tables": { "enabled": true }
+  },
+  "plugins": {
+    // Line-length: this project's markdown is long-form prose, not hand-wrapped
+    // at 80 columns (see CLAUDE.md, docs/claude.md) - enforcing MD013 would mean
+    // rewrapping nearly every doc into a different house style, not fixing a bug.
+    "md013": {
+      "enabled": false
+    },
+    // "$ command, no shown output": false-positives on PowerShell's $env:/$var
+    // syntax, which this project's docs use constantly and isn't a shell prompt.
+    "md014": {
+      "enabled": false
+    },
+    // Emphasis-instead-of-heading: this project's house style leads paragraphs
+    // and list items with a **bold phrase** throughout every skill and doc file.
+    // That's deliberate prose, not a heading in disguise - MD036 can't tell the
+    // difference, and disabling it is more honest than fighting the false
+    // positives file by file.
+    "md036": {
+      "enabled": false
+    },
+    // Duplicate headings: the version-history changelog in docs/claude.md
+    // legitimately reuses "#### Fixed" / "#### Cosmetic" / "#### Tests" under a
+    // different "### vX.Y.Z" parent every release. siblings_only restricts the
+    // check to headings under the SAME parent, which is the actual bug this rule
+    // is meant to catch.
+    "md024": {
+      "siblings_only": true
+    }
+  }
+}

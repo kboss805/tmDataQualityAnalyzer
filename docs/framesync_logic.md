@@ -16,7 +16,7 @@ The RNRZ-L LFSR uses a 15-bit shift register with taps at positions 14 and 13 (2
 
 **Consequence for sync scanning:** In this implementation, the sync word is searched in the **post-derandomization** bitstream — not in the raw stream. This differs from some hardware implementations where the sync word is excluded from randomization. Do not assume the raw bitstream contains a detectable static sync pattern on randomized streams.
 
-```
+```text
 For each packet:
   1. derandomizeBitstream(raw_data, packet_bits, lfsr_state)   // in-place, stateful LFSR
   2. scan derandomized bits for frame sync pattern
@@ -77,24 +77,28 @@ Off-phase rejection above is the first piece of a flywheel already in place. The
 
 The proposed optimization replaces the flat bit-serial loop with a three-state machine that avoids scanning data words once lock is established.
 
-```
+```text
 [ SEARCH ] --(sync found)--> [ CHECK ] --(N consecutive confirmations)--> [ LOCK ]
      ^                            |                                            |
      |-----(no confirm in 2×FL)---+-----------(M consecutive misses)----------+
 ```
+
 *(FL = frame length in bits)*
 
 **SEARCH**
+
 - Perform the full bit scan over every incoming bit.
 - On any match within the acquire BER threshold: record the candidate bit offset; transition to CHECK.
 
 **CHECK**
+
 - Advance by exactly `bitsInMinorFrame` and look for the sync word at the predicted offset.
 - Repeat for `check_confirmations` consecutive frames. If all confirm: transition to LOCK.
 - If any frame fails to confirm within a tolerance window (see §5 Jitter): revert to SEARCH.
 - Abort the CHECK attempt if no confirmation arrives within 2 × `bitsInMinorFrame` bits scanned.
 
 **LOCK**
+
 - Jump directly to the predicted sync offset — do not scan data words (see §5 LOCK-State Skip).
 - Apply the maintenance BER threshold.
 - On match: record locked frame; reset miss counter.
@@ -210,7 +214,7 @@ Do not prefetch in LOCK state — the access pattern is a large stride (jumping 
 
 **Implemented: single reader + per-stream queues.** A dedicated `Ch10PacketReader` thread opened the file once, read packets sequentially, and routed each packet to the appropriate stream's queue by channel ID lookup. Worker threads (one `FrameProcessor` per stream) consumed from their queues concurrently. This replaced the earlier design where each `FrameProcessor` opened the file independently and re-read it end-to-end — which on a 4-stream 24 GB file meant 96 GB of total file I/O (4× what was needed).
 
-```
+```text
 [ Ch10PacketReader Thread ]   — reads the file once (24 GB total I/O)
     routes by channel ID → per-stream bounded PacketQueue
          |            |            |            |
@@ -219,6 +223,7 @@ Do not prefetch in LOCK state — the access pattern is a large stride (jumping 
 ```
 
 Design points as built:
+
 - **Bounded queues** (64 packets per stream): the reader blocked when a queue was full, preventing the whole file from being buffered in RAM.
 - **Sentinel packet**: the reader posted an empty end-of-stream marker to each queue when the file was exhausted so workers knew when to stop.
 - **TMATS parsed once** by the reader in `prepare()`, which also resolved each stream's PCM attributes (`Set_Attributes_Ext_PcmF1`) into a `ResolvedPcmAttrs` struct before any worker started — so workers never needed the file handle or the irig106 attribute structs.
@@ -234,13 +239,13 @@ Design points as built:
 
 **Lock percentage definition (current implementation):**
 
-```
+```text
 lock_pct = (frames_locked_in_window / expected_frames_in_window) × 100
 ```
 
 The denominator is computed from the **actual bit span traversed**, not a theoretical time-based estimate. As each locked frame is recorded, the scanner captures the global bit offset of the first frame (`first_frame_bit_in_window`) and continuously updates the last frame (`last_frame_bit_in_window`) in the current averaging window. When the window closes:
 
-```
+```text
 bit_span           = last_frame_bit_in_window − next_expected_frame_bit + bits_in_frame
 expected_in_window = bit_span / bits_in_frame
 lock_pct           = (n_samples / expected_in_window) × 100        // capped at 100%
@@ -253,9 +258,9 @@ next_expected_frame_bit = last_frame_bit_in_window + bits_in_frame  // carried t
 
 **Per output window (set by `sample_rate_hz`):**
 
-* Frames locked in window (`n_samples`)
-* Expected frames from bit span (`bit_span / bits_in_frame`)
-* Lock percentage (capped at 100%)
+- Frames locked in window (`n_samples`)
+- Expected frames from bit span (`bit_span / bits_in_frame`)
+- Lock percentage (capped at 100%)
 
 These map to `ProcessedStreamData` series entries emitted by `FrameProcessor`.
 

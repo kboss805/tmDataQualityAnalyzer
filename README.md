@@ -14,6 +14,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 ## Features
 
 ### File Input
+
 - **Chapter 10 File Support**: Read, parse, and process IRIG 106 Chapter 10 telemetry files
 - **Channel Selection**: Choose the time channel and one or more PCM channels for processing
 - **Drag-and-Drop**: Drop `.ch10` or exported `.csv` files directly onto the application window, or open them from the ☰ menu (**Open…**)
@@ -21,6 +22,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **CSV Import**: Re-open a CSV this application previously exported straight into the plot — no re-processing of the source `.ch10` file (☰ menu > **Import CSV…**, or drag-and-drop a `.csv`)
 
 ### Frame Sync Lock
+
 - **Lock Percentage Over Time**: Measures per-stream frame synchronization lock and plots it against actual file time
 - **Acquire / Lock Scanner**: Bit-serial sync scanner that confirms a configurable number of in-phase syncs before declaring lock, then drops and re-acquires lock when a true sync is missed
 - **PRN-Robust Matching**: While locked, off-phase sync matches produced by pseudo-random data words are rejected so they cannot corrupt the lock figure (eliminates spurious lock dips on clean randomized streams)
@@ -28,6 +30,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **Configurable Frame Parameters**: Frame sync pattern (hex), sync mask (hex), bits per frame, RNRZ-L randomization on/off, data rate (Mbps, or Auto from TMATS), and averaging window (1/10/100 Hz)
 
 ### Receiver AGC (SNR) Processing
+
 - **Averaging Window**: 1 Hz, 10 Hz, or 100 Hz output sample rates
 - **AGC Processing**: Extract calibrated receiver-channel AGC/SNR values with V-to-dB conversion
 - **Calibration**: Configurable polarity, voltage slope/range, scale (dB/V), receiver count, and channels per receiver
@@ -35,6 +38,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **Non-Linear Step Calibration**: Build a per-channel raw→dB calibration profile from a calibration .ch10 file plus a `[[Step]]` step-config TOML ("Extract Calibration…" in the Receiver SNR setup); applied during processing via piecewise-linear interpolation between steps, clamping to the nearest end-step dB for values past the calibrated range (so out-of-cal receivers read the ceiling/floor instead of diverging), and falling back to linear slope/offset for channels that don't calibrate. Plateau detection is polarity-agnostic and automatically excludes a signal-generator turn-on transient and any operator down-ramp; optional **Clip Start / Clip End** controls let you trim leading/trailing seconds before detection. Runtime-only; the extracted profile is not saved to disk.
 
 ### Multi-Stream Processing
+
 - **Per-Stream Configuration**: One row per PCM channel in the Configure Streams dialog, each independently set to Frame Sync Lock or Receiver SNR mode with its own setup
 - **Concurrent Processing**: A single reader thread reads the file once and routes packets to per-stream queues; each stream is processed on its own worker thread in parallel
 - **Single-Pass I/O**: The Chapter 10 file is read exactly once regardless of how many streams are selected
@@ -42,16 +46,19 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **Cancellation**: A cancel cleanly stops the reader and all worker threads
 
 ### Batch Processing & Templates
+
 - **Processing Templates**: Save one configured file's complete per-stream setup — modes, frame-sync/SNR parameters, calibration references, plus each series' custom name and color — as a file-path-independent template (☰ menu > **Save as Template…**)
 - **Apply Template to Many Files**: Run a saved template against any number of `.ch10` files in one action (☰ menu > **Apply Template to Files…**). Each file's PCM channel-ID set must exactly match the template's; non-matching files are flagged (with the missing/extra channels) and skipped
 - **Retain-All + Plot File Selector**: Every processed file stays in memory; the plot's **Plot File** selector switches between any single file's results and an "All files (overlaid)" comparison view
 - **Optional Per-File Export**: A batch run can auto-write, per file, a CSV plus Frame Sync Lock and Missed Frames plot images to a chosen folder
 
 ### Settings & Configuration
+
 - **TOML Configuration**: Save and load frame sync fields and receiver parameters from TOML files
 - **Per-File-Type Directory Persistence**: Independently remembers the last used directory for Ch10 and TOML file dialogs between sessions
 
 ### Plot & Visualization
+
 - **Interactive Plot Window**: Plot showing frame sync lock (%) and/or receiver AGC (dB) series with mouse wheel zoom, click-drag pan (open/closed-hand grab cursor), auto-scale axes, per-series visibility toggles, and an auto-assigned color palette
 - **Color Coding**: Frame Sync Lock series use purple/blue/green primaries (one per stream) and Receiver SNR series use red/orange/yellow primaries (one per receiver); additional streams, receivers, and channels are derived as progressively lighter shades so related series stay grouped
 - **Customize Plot Series Dialog**: A tabbed dialog selects which series are visible — a Frame Sync Lock tab (one toggle per stream) and a Receiver SNR tab that presents each stream as a collapsible tree of receivers with L/R/C channel checkboxes, tri-state group toggles, and Expand/Collapse All; streams with many receivers split across two columns
@@ -66,6 +73,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **Hover Tooltip**: Shows series name, time (DDD:HH:MM:SS), and value (lock % or dB) on mouse hover
 
 ### Logging & Feedback
+
 - **Inline Log Window**: Persistent, scrollable log with color-coded messages (green for success, yellow for warnings, red for errors)
 - **Status Bar**: Displays file metadata summary (filename, size, channel counts, time range)
 - **Pre-Process Summary**: Logs input file, channels, time range, sample rate, receiver count, and output path before processing
@@ -73,6 +81,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **Clickable Log Links**: Output file path and "Open Folder" links in the log window after processing completes
 
 ### Application & UI
+
 - **Single Hamburger Menu**: Every command lives in one ☰ menu in the window's title bar, grouped into Process, Import/Export, Settings, and Help sections
 - **Frameless Window**: A custom title bar with its own minimize/maximize/close buttons; native Windows drag, resize, snap, and double-click-maximize are preserved
 - **Toggleable Sidebar**: Show or hide the log sidebar from the title bar or with **Ctrl+B**; the choice persists across sessions
@@ -82,11 +91,13 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **Tooltips**: Descriptive tooltips on plot controls and dialog fields
 
 ### Deployment
+
 - **Installer & Portable Distribution**: Inno Setup EXE installer with admin/non-admin support, portable ZIP with local settings, INI upgrade logic, and optional `.ch10` file association
 
 ## System Requirements
 
 ### Software
+
 - **Qt**: Version 6.0.0 or later (developed on 6.11.1), `msvc2022_64` kit
 - **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools — workload
   "Desktop development with C++", giving `cl` / `nmake` + the Windows SDK)
@@ -94,17 +105,20 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **Operating System**: Windows
 
 ### Build Tools
+
 - qmake (Qt build system)
 - MSVC 2022 toolchain (`cl` / `nmake`)
 
 ## Building the Project
 
 ### Using Qt Creator
+
 1. Open `tmDataQualityAnalyzer.pro` in Qt Creator
 2. Configure the project with your Qt MSVC 2022 kit
 3. Build and run (Ctrl+R)
 
 ### Using Command Line (Windows)
+
 ```powershell
 # Set up the MSVC toolchain + Qt (imports vcvars, puts the Qt msvc kit on PATH)
 . .\scripts\env.ps1
@@ -152,7 +166,7 @@ debug\tmDataQualityAnalyzer.exe
 
 ## Project Structure
 
-```
+```text
 tmDataQualityAnalyzer/
 ├── build/                      # Out-of-source build artifacts
 ├── deploy/                     # Release packaging: build_release.ps1, Inno Setup .iss, release notes
