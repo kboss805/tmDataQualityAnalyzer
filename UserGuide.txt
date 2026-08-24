@@ -52,7 +52,10 @@ signal degradation.
    PCM channel found in the file.
 
 2. Select the Time Channel: choose it from the dropdown at the top of the
-   Configure Streams dialog.
+   Configure Streams dialog. Next to it, the "Legacy Chapter 10" switch
+   covers the whole file, not one stream - leave it off for an ordinary
+   recording, and turn it on if every stream in a file refuses to sync
+   from a recorder known to use an older byte order.
 
 3. Configure the streams you care about: switch on "Process" for each channel,
    choose its Mode (Frame Sync Lock or Receiver SNR), then click the gear icon to

@@ -8,7 +8,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, `cl` / `nmake`), Qt `msvc2022_64` kit.
   This is the only supported toolchain (and what CI uses).
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
-- **Project Version**: 2.10.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
+- **Project Version**: 2.11.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
 
 ## User Stories
 
@@ -400,7 +400,7 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ## Version History
 
-### Unreleased — since the v2.10.0 tag
+### v2.11.0 — Legacy Chapter 10 Becomes a Setting, and the Log Gets Quieter
 
 #### The manual documents Legacy Chapter 10 (US1.0)
 

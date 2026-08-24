@@ -1,3 +1,43 @@
+tmDataQualityAnalyzer v2.11.0 - What's New
+=================================
+
+  This release is for recordings from older or different equipment, and for
+  making sense of what happens when a stream will not lock.
+
+  - New: A "Legacy Chapter 10" setting on the Configure Streams dialog, next to
+    the Time Channel selector. Recordings from some older hardware store PCM
+    data in a different byte order than the application expects by default;
+    tick this once for the whole file if a recording's streams will not sync
+    no matter how their frame-sync settings are configured. It applies to every
+    stream in the file, because byte order comes from the recorder that wrote
+    it, not from any one channel - leave it off for an ordinary recording, and
+    on for one from older or different equipment.
+
+  - New: A new Frame Sync Lock stream now starts on the PRN-15 pattern instead
+    of PRN-11, matching what most recordings actually use. You can still change
+    it or load a different pattern file as before.
+
+  - Improved: The processing log is quieter. Each stream now reports its
+    outcome - locked, no sync found, or sync found but not at the right
+    spacing - in a single line that also says which pattern it was looking for
+    and which channel it came from, instead of a longer block of text. On a
+    file with several streams processing at once, it is now much easier to
+    tell which message belongs to which channel.
+
+  - Fixed: A log message that wrapped onto more than one line could display
+    squashed into a single run-on line in the sidebar, with its formatting
+    lost. Multi-line messages now display exactly as written.
+
+  - Improved: The user manual has a new troubleshooting section covering what
+    to check when a stream will not find frame sync, and now explains the
+    Legacy Chapter 10 and Time Channel settings together, since both describe
+    the recording rather than any one stream.
+
+  Everything else is unchanged from v2.10.0. Your existing settings, configuration
+  files, calibration TOMLs and processing templates all continue to work as
+  before.
+
+
 tmDataQualityAnalyzer v2.10.0 - What's New
 =================================
 
