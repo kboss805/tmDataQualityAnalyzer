@@ -8,7 +8,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, `cl` / `nmake`), Qt `msvc2022_64` kit.
   This is the only supported toolchain (and what CI uses).
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
-- **Project Version**: 2.11.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
+- **Project Version**: 2.11.1 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
 
 ## User Stories
 
@@ -399,6 +399,75 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The menu and title-bar icons swap to theme-appropriate variants when the theme changes.
 
 ## Version History
+
+### v2.11.1 — Code Cleanup (no user-facing change)
+
+The application binary is functionally unchanged from v2.11.0 (a handful of dead
+symbols removed shrinks it trivially); this release exists to land a codebase-health
+pass that had been accumulating.
+
+#### Added
+
+- New `.claude/skills/code-cleanup/SKILL.md` — a whole-codebase counterpart to
+  `tm-code-review` (which stays diff-scoped): orphaned code, readability/convention
+  drift, MVVM layering leaks, and documentation that's drifted from the code it
+  describes. Its first move is always checking `docs/CLAUDE.md` and the session's
+  `MEMORY.md` for a documented reason before flagging anything, built around the
+  `PlotViewModel::loadCsvFile` case that looks orphaned but isn't.
+
+#### Removed (dead code, first sweep's findings)
+
+- Two unused `PlotConstants`: `kTitleFontSize` (`TmChart::drawTitle()` never read
+  it) and `kFrameSyncLockColor` (production color assignment uses
+  `kFrameSyncLockPrimaryColors` exclusively; this was a standalone duplicate of its
+  first entry). `TestPlotViewModel::lockSeriesColor` now asserts against the array
+  element that's actually alive rather than the deleted duplicate.
+- Four unused public getters with no production caller and no planned one:
+  `Chapter10Reader::getCurrentPCMChannelID()`/`getTimeChannelIndex()`/
+  `getPCMChannelIndex()` (plus the `findChannelIndex()` helper that existed only to
+  back the latter two) and `PlotViewModel::dataYMin()`/`dataYMax()`. Real behavioral
+  coverage that happened to route through `getCurrentPCMChannelID()` as its
+  observation mechanism was preserved via a new `friend class TestChapter10Reader;`
+  reaching `m_current_pcm_channel` directly, rather than deleted along with the
+  getter.
+
+#### Fixed
+
+- `docs/CLAUDE.md`'s Test Suites section claimed the 20 suites run "in this order" —
+  `tests/main.cpp` actually runs the fast, no-fixture suites first and the four
+  heavy `.ch10`-integration suites last (skippable via `--fast`). Reworded to
+  describe the real grouping instead of a false ordering claim.
+- Naming drift in `plotcustomizationdialog.h`/`.cpp`, the one view file using
+  camelCase members (`m_viewModel`, `m_tabWidget`, …) instead of this project's
+  `m_`-prefixed snake_case convention.
+- Include ordering in `frameprocessor.cpp` and `ch10packetreader.cpp`, which had
+  irig106 headers after the project-headers group instead of before, reversing the
+  documented six-group order.
+- A markdown-lint scrub (`.pymarkdown.json`, `pymarkdown scan` now exits 0 across
+  all tracked `.md` files) turned up two real bugs along the way, not just lint
+  noise: `cut-release/SKILL.md`'s copy-pasteable verification commands had four
+  file paths silently corrupted by the project's known heredoc `\b`/`\t`-mangling
+  failure mode, and `docs/CLAUDE.md` had two separate "#### Fixed" sections under
+  the same v2.11.0 heading (merged into one, matching every other version's
+  one-per-category convention).
+
+#### Reorganized
+
+- `tests/data/test files/` is now the canonical fixture folder; the four small
+  `.ch10` fixtures CI needs moved there (git recognizes the moves as pure renames),
+  and everything else directly under `tests/data/` (stray loose exports and older
+  recordings nothing reads at runtime) is gitignored outright instead of living
+  half-tracked. `tests/.gitignore`, every `testDataPath(...)` call site across the
+  four heavy suites, and the CI workflow's full-recording overlay step were updated
+  to match.
+
+#### Tests
+
+- **372 / 0 / 1**, zero warnings — down from 377 at the v2.11.0 tag: one test
+  dropped with `kTitleFontSize` (no invariant left to assert once the constant was
+  gone) and four more with the removed `Chapter10Reader` index-lookup getters
+  (`getTimeChannelIndex`/`getPCMChannelIndex`, which they tested directly). The
+  fixture-folder move and the markdown scrub touched no test code.
 
 ### v2.11.0 — Legacy Chapter 10 Becomes a Setting, and the Log Gets Quieter
 
