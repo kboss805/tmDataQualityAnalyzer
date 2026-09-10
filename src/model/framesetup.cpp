@@ -195,6 +195,32 @@ QString FrameSetup::receiverParameterName(int channel_index, int receiver_index)
     return channelPrefix(channel_index) + "_RCVR" + QString::number(receiver_index + 1);
 }
 
+namespace {
+    /// Shared split point for the two accessors below, so the token and the
+    /// "trailing digits" rule are stated once.
+    constexpr QLatin1String kReceiverToken("_RCVR");
+}
+
+int FrameSetup::receiverIndexFromName(const QString& name)
+{
+    const int at = name.lastIndexOf(kReceiverToken);
+    if (at < 0)
+    {
+        return 0;
+    }
+    bool ok = false;
+    const int receiver = name.mid(at + kReceiverToken.size()).toInt(&ok);
+    // A name ending in "_RCVR" with no number, or with trailing non-digits, is
+    // not a receiver name — treat it as unparseable rather than guessing.
+    return (ok && receiver > 0) ? receiver : 0;
+}
+
+QString FrameSetup::channelPartOfName(const QString& name)
+{
+    const int at = name.lastIndexOf(kReceiverToken);
+    return (at > 0 && receiverIndexFromName(name) > 0) ? name.left(at) : name;
+}
+
 bool FrameSetup::buildDefaultReceiverMap(int num_receivers, int receiver_channels,
                                          int num_words_in_minor_frame, QString& error)
 {

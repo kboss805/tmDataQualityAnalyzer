@@ -8,6 +8,8 @@
 #include <algorithm>
 
 #include <QFileInfo>
+#include <QMap>
+#include <QStringList>
 #include <QThread>
 
 #include "ch10packetreader.h"
@@ -247,6 +249,10 @@ void CalibrationExtractor::onWorkerFinished(bool success)
                 res.profile          = det.profile;
                 res.detectedPlateaus = det.detectedPlateaus;
                 res.extraPlateaus    = det.extraPlateaus;
+                res.outcome          = det.outcome;
+                res.edgeThreshold    = det.edgeThreshold;
+                res.thresholdRelaxed = det.thresholdRelaxed;
+                res.plateauLevels    = det.plateauLevels;
                 if (res.profile.valid)
                 {
                     calibrated++;
@@ -266,7 +272,15 @@ void CalibrationExtractor::onWorkerFinished(bool success)
                                     .arg(m_steps.size())
                                     .arg(res.detectedPlateaus != m_steps.size()
                                              ? " — MISMATCH" : "")
-                                    .arg(res.profile.valid ? "" : " (no profile)"));
+                                    .arg(res.profile.valid
+                                             ? (res.thresholdRelaxed
+                                                    ? QString(" — calibrated with a relaxed edge "
+                                                              "threshold (%1 raw counts)")
+                                                          .arg(res.edgeThreshold, 0, 'f', 1)
+                                                    : QString())
+                                             : QString(" — %1, edge threshold %2 raw counts")
+                                                   .arg(calibrationOutcomeText(res.outcome))
+                                                   .arg(res.edgeThreshold, 0, 'f', 1)));
             }
             m_results.push_back(res);
         }
@@ -375,4 +389,161 @@ void CalibrationExtractor::finishWithError(const QString& error)
     teardown();
     m_running = false;
     emit finished(false, error);
+}
+
+// ---------------------------------------------------------------------------
+// summarize
+// ---------------------------------------------------------------------------
+
+QString CalibrationExtractor::summarize(const QVector<CalibrationChannelResult>& results,
+                                        int expectedSteps)
+{
+    if (results.isEmpty())
+    {
+        return QStringLiteral("No receiver channels were extracted.");
+    }
+
+    // Group channels by receiver. Receiver 0 collects anything whose name carries
+    // no "_RCVR<N>" suffix (a hand-written receiver-params TOML may name its
+    // parameters anything); those are reported by name instead of by number.
+    struct Group
+    {
+        QStringList calibrated;                        ///< Channel parts that succeeded.
+        QStringList relaxed;                           ///< …of those, ones needing a lower threshold.
+        QMap<CalibrationOutcome, QStringList> failed;  ///< Channel parts per failure reason.
+        QStringList flatLevels;                        ///< Stuck levels of flat channels.
+        int minPlateaus = -1;                          ///< Fewest plateaus seen among failures.
+    };
+    QMap<int, Group> byReceiver;
+
+    int calibratedChannels = 0;
+    for (const CalibrationChannelResult& r : results)
+    {
+        const int receiver = FrameSetup::receiverIndexFromName(r.name);
+        const QString part = (receiver > 0) ? FrameSetup::channelPartOfName(r.name) : r.name;
+        Group& g = byReceiver[receiver];
+
+        if (r.outcome == CalibrationOutcome::Calibrated)
+        {
+            g.calibrated.push_back(part);
+            if (r.thresholdRelaxed)
+            {
+                g.relaxed.push_back(part);
+            }
+            calibratedChannels++;
+        }
+        else
+        {
+            g.failed[r.outcome].push_back(part);
+            if (r.hadData && (g.minPlateaus < 0 || r.detectedPlateaus < g.minPlateaus))
+            {
+                g.minPlateaus = r.detectedPlateaus;
+            }
+            if (r.outcome == CalibrationOutcome::FlatNoSignal && !r.plateauLevels.isEmpty())
+            {
+                const QString level = QString::number(r.plateauLevels.first(), 'f', 0);
+                if (!g.flatLevels.contains(level))
+                {
+                    g.flatLevels.push_back(level);
+                }
+            }
+        }
+    }
+
+    // Receivers whose every channel calibrated collapse to a bare number list -
+    // the common good case should read as one short line, not one line each.
+    QStringList fullyCalibrated;
+    QStringList detailLines;
+    QStringList relaxedLines;
+    for (auto it = byReceiver.constBegin(); it != byReceiver.constEnd(); ++it)
+    {
+        const int receiver = it.key();
+        const Group& g = it.value();
+        const QString label = (receiver > 0)
+                                  ? QStringLiteral("Receiver %1").arg(receiver)
+                                  : QStringLiteral("Unnamed receiver");
+
+        if (!g.relaxed.isEmpty())
+        {
+            relaxedLines.push_back(QStringLiteral("  %1 — %2")
+                                       .arg(label, g.relaxed.join(", ")));
+        }
+
+        if (g.failed.isEmpty())
+        {
+            if (receiver > 0)
+            {
+                fullyCalibrated.push_back(QString::number(receiver));
+            }
+            else
+            {
+                detailLines.push_back(QStringLiteral("  %1 (%2) — calibrated")
+                                          .arg(label, g.calibrated.join(", ")));
+            }
+            continue;
+        }
+
+        // Mixed or wholly failed: say which channels fell back and why. A partly
+        // calibrated receiver is the case most worth spelling out, because the
+        // count alone would let it hide inside "N of M".
+        QStringList reasons;
+        for (auto f = g.failed.constBegin(); f != g.failed.constEnd(); ++f)
+        {
+            QString reason = QString("%1: %2")
+                                 .arg(f.value().join(", "),
+                                      QString::fromLatin1(calibrationOutcomeText(f.key())));
+            if (f.key() == CalibrationOutcome::TooFewPlateaus && g.minPlateaus >= 0)
+            {
+                reason += QStringLiteral(" (%1 of %2 steps resolved)")
+                              .arg(g.minPlateaus).arg(expectedSteps);
+            }
+            else if (f.key() == CalibrationOutcome::FlatNoSignal && !g.flatLevels.isEmpty())
+            {
+                // The level itself is the diagnosis: 0 is a dead input, full
+                // scale is a railed one, and anything between is a stuck DC
+                // level. "Flat" alone would leave the operator guessing which.
+                reason += QStringLiteral(" (held at %1)").arg(g.flatLevels.join(", "));
+            }
+            reasons.push_back(reason);
+        }
+
+        const QString calibratedPart =
+            g.calibrated.isEmpty()
+                ? QString()
+                : QStringLiteral("%1 calibrated; ").arg(g.calibrated.join(", "));
+        detailLines.push_back(QStringLiteral("  %1 — %2%3")
+                                  .arg(label, calibratedPart, reasons.join("; ")));
+    }
+
+    QStringList out;
+    out << QStringLiteral("Applied non-linear calibration to %1 of %2 channel(s).")
+               .arg(calibratedChannels).arg(results.size());
+
+    if (!fullyCalibrated.isEmpty())
+    {
+        out << QString();
+        out << QStringLiteral("Calibrated: receiver%1 %2.")
+                   .arg(fullyCalibrated.size() == 1 ? "" : "s", fullyCalibrated.join(", "));
+    }
+
+    if (!detailLines.isEmpty())
+    {
+        out << QString();
+        out << QStringLiteral("Fell back to linear calibration:");
+        out << detailLines;
+    }
+
+    // Calibrated, but only after loosening the edge threshold: the steps sat close
+    // to this channel's own noise. Reported because it is the early warning the
+    // count cannot give — these receivers calibrated, yet they are the ones
+    // drifting toward the point where they will stop calibrating at all.
+    if (!relaxedLines.isEmpty())
+    {
+        out << QString();
+        out << QStringLiteral("Calibrated only with a relaxed threshold — steps are close to "
+                              "the noise floor, so these receivers are worth checking:");
+        out << relaxedLines;
+    }
+
+    return out.join('\n');
 }

@@ -438,3 +438,205 @@ void TestStepDetector::interpolateCoincidentRawNoCrash()
     // Divide-by-zero guard returns the first point's dB rather than crashing.
     QVERIFY(qFuzzyCompare(interpolateCalibration(1000.0, p), 6.0));
 }
+
+void TestStepDetector::detectOutcomeNamesTheGateThatRejected()
+{
+    QVector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}};
+
+    // Success carries Calibrated, and reports the threshold it judged edges by -
+    // the quantity a merged step is measured against.
+    {
+        QVector<double> raw;
+        appendRun(raw, 1000.0, 150);
+        appendRun(raw, 2000.0, 150);
+        appendRun(raw, 3000.0, 150);
+        StepDetector::Result r = StepDetector::detect(raw, kPeriod, steps);
+        QVERIFY(r.profile.valid);
+        QCOMPARE(r.outcome, CalibrationOutcome::Calibrated);
+        QVERIFY(r.edgeThreshold > 0.0);
+    }
+
+    // Too few plateaus: only two levels for three expected steps. This is the
+    // shape a compressed / near-saturation receiver produces, where adjacent
+    // steps merge because their separation never clears the edge threshold.
+    {
+        QVector<double> raw;
+        appendRun(raw, 1000.0, 150);
+        appendRun(raw, 2000.0, 150);
+        StepDetector::Result r = StepDetector::detect(raw, kPeriod, steps);
+        QVERIFY(!r.profile.valid);
+        QCOMPARE(r.outcome, CalibrationOutcome::TooFewPlateaus);
+    }
+
+    // Enough plateaus, but they zig-zag instead of sweeping one way, so no run of
+    // three consecutive levels moves in a single direction. Distinct from the
+    // case above and pointing at a different cause, which is exactly why the
+    // plateau count alone cannot explain a fallback.
+    {
+        QVector<double> raw;
+        appendRun(raw, 1000.0, 150);
+        appendRun(raw, 3000.0, 150);
+        appendRun(raw, 1000.0, 150);
+        appendRun(raw, 3000.0, 150);
+        StepDetector::Result r = StepDetector::detect(raw, kPeriod, steps);
+        QVERIFY(!r.profile.valid);
+        QVERIFY(r.detectedPlateaus >= steps.size()); // count alone looked fine
+        QCOMPARE(r.outcome, CalibrationOutcome::NoMonotonicSweep);
+    }
+}
+
+void TestStepDetector::detectCompressedOutOfToleranceReceiverStillCalibrates()
+{
+    // A receiver far out of tolerance does not move a uniform number of raw
+    // counts per dB: it is compressed at one end and expansive at the other, so
+    // one sweep can hold both 12-count and 1100-count steps. A single global edge
+    // threshold sized for the large steps cannot see the small ones, which is how
+    // these channels lose their profile and fall back to linear.
+    QVector<StepDefinition> steps = {{0.0}, {3.0}, {6.0}, {12.0}, {24.0}, {36.0}};
+
+    const QVector<double> levels = {800.0, 812.0, 826.0, 900.0, 1500.0, 2600.0};
+
+    // Pseudo-random (not periodic) dither, seeded for reproducibility. A periodic
+    // pattern would be a poor stand-in for receiver noise: its median absolute
+    // deviation collapses to zero even when the swings are large, which drives the
+    // MAD-derived edge threshold to its floor and marks every sample an edge.
+    quint32 seed = 12345u;
+    auto dither = [&seed]() {
+        seed = seed * 1664525u + 1013904223u;      // Numerical Recipes LCG
+        return (static_cast<double>((seed >> 16) & 0xFF) / 255.0 - 0.5) * 8.0; // +/- 4 counts
+    };
+
+    QVector<double> raw;
+    for (double level : levels)
+    {
+        for (int i = 0; i < 150; i++)
+        {
+            raw.push_back(level + dither());
+        }
+    }
+
+    StepDetector::Result r = StepDetector::detect(raw, kPeriod, steps);
+
+    QVERIFY2(r.profile.valid,
+             qPrintable(QString("outcome=%1 plateaus=%2 threshold=%3")
+                            .arg(calibrationOutcomeText(r.outcome))
+                            .arg(r.detectedPlateaus)
+                            .arg(r.edgeThreshold)));
+    QCOMPARE(r.profile.points.size(), steps.size());
+
+    // Every step must keep its own dB: a merged pair would shift the pairing and
+    // silently mis-map the whole channel rather than fail loudly.
+    QCOMPARE(r.profile.points.first().trueDb, 0.0);
+    QCOMPARE(r.profile.points.last().trueDb, 36.0);
+
+    // It only resolved because the threshold was loosened, and that fact is
+    // reported rather than swallowed: a channel whose steps sit this close to its
+    // own noise is the one drifting toward not calibrating at all.
+    QVERIFY(r.thresholdRelaxed);
+
+    // A receiver with well-separated steps must NOT be reported as relaxed - the
+    // signal is only meaningful if the ordinary case stays quiet.
+    QVector<double> healthy;
+    appendRun(healthy, 800.0, 150);
+    appendRun(healthy, 1200.0, 150);
+    appendRun(healthy, 1600.0, 150);
+    appendRun(healthy, 2000.0, 150);
+    appendRun(healthy, 2400.0, 150);
+    appendRun(healthy, 2800.0, 150);
+    StepDetector::Result h = StepDetector::detect(healthy, kPeriod, steps);
+    QVERIFY(h.profile.valid);
+    QVERIFY(!h.thresholdRelaxed);
+}
+
+void TestStepDetector::detectNoiseSplitPlateausDoNotSeverTheSweep()
+{
+    // Levels taken verbatim from a real out-of-tolerance receiver
+    // (STEP_CAL_EXAMPLE.ch10, R_RCVR1): a clean 8-step climb from no-signal to a
+    // saturated ceiling, except noise split two dwells into pairs of plateaus
+    // differing by 3 and -1 raw counts.
+    //
+    // Those sub-count wobbles are not transitions, but the sweep selector read
+    // them as "no real change" and severed the monotonic run mid-sweep, so a
+    // plainly good calibration was discarded and the channel fell back to linear.
+    // Adjacent plateaus within the edge threshold are the SAME physical level and
+    // must be coalesced before the run is sought.
+    QVector<StepDefinition> steps = {{0.0}, {3.0}, {6.0}, {12.0},
+                                     {18.0}, {24.0}, {30.0}, {36.0}};
+
+    const QVector<double> levels = {0.0,     7255.0,  14746.0, 22314.0,
+                                    27315.0, 34752.0, 49892.0, 49895.0,
+                                    57310.0, 57309.0, 65472.0, 0.0};
+
+    // Carry receiver noise too, because it is load-bearing: the noise is what
+    // lifts the edge threshold above the 1-3 count split, and a noiseless copy of
+    // these levels would sit at the 2.0-count floor where a 3-count split is a
+    // "real" transition. The bug only exists in the presence of the noise that
+    // created the splits in the first place.
+    quint32 seed = 987u;
+    auto dither = [&seed]() {
+        seed = seed * 1664525u + 1013904223u;
+        return (static_cast<double>((seed >> 16) & 0xFF) / 255.0 - 0.5) * 4.0; // +/- 2 counts
+    };
+
+    QVector<double> raw;
+    for (double level : levels)
+    {
+        for (int i = 0; i < 150; i++)
+        {
+            raw.push_back(level + dither());
+        }
+    }
+
+    StepDetector::Result r = StepDetector::detect(raw, kPeriod, steps);
+    QVERIFY2(r.profile.valid,
+             qPrintable(QString("outcome=%1 plateaus=%2 threshold=%3")
+                            .arg(calibrationOutcomeText(r.outcome))
+                            .arg(r.detectedPlateaus)
+                            .arg(r.edgeThreshold)));
+    QCOMPARE(r.profile.points.size(), steps.size());
+
+    // The leading no-signal 0 is dropped as pre-roll (the run's last `expected`
+    // levels are kept), so the sweep pairs 7255 -> 0 dB up to the saturated
+    // ceiling -> 36 dB, each split pair contributing exactly one point. Compared
+    // with a tolerance because the dither moves each settled average slightly.
+    QVERIFY2(qAbs(r.profile.points.first().rawAvg - 7255.0) < 5.0,
+             qPrintable(QString::number(r.profile.points.first().rawAvg)));
+    QCOMPARE(r.profile.points.first().trueDb, 0.0);
+    QVERIFY2(qAbs(r.profile.points.last().rawAvg - 65472.0) < 5.0,
+             qPrintable(QString::number(r.profile.points.last().rawAvg)));
+    QCOMPARE(r.profile.points.last().trueDb, 36.0);
+}
+
+void TestStepDetector::detectFlatChannelReportsNoSignalNotMergedSteps()
+{
+    // A dead input holds one value for the whole recording. Before, this reported
+    // "too few plateaus" - the same verdict a compressed receiver gets - which
+    // sends the operator looking for a detection problem when the sweep simply is
+    // not in the recording. The two must read differently.
+    QVector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}};
+
+    QVector<double> flat;
+    appendRun(flat, 0.0, 600);
+    StepDetector::Result r = StepDetector::detect(flat, kPeriod, steps);
+    QVERIFY(!r.profile.valid);
+    QCOMPARE(r.outcome, CalibrationOutcome::FlatNoSignal);
+    // The stuck level is carried out so the report can name it: 0 is a dead
+    // input, full scale is a railed one, and the operator needs to tell them apart.
+    QCOMPARE(r.plateauLevels.size(), 1);
+    QCOMPARE(r.plateauLevels.first(), 0.0);
+
+    // A railed channel is equally flat, just at the other end of the range.
+    QVector<double> railed;
+    appendRun(railed, 65535.0, 600);
+    StepDetector::Result railedResult = StepDetector::detect(railed, kPeriod, steps);
+    QCOMPARE(railedResult.outcome, CalibrationOutcome::FlatNoSignal);
+    QCOMPARE(railedResult.plateauLevels.first(), 65535.0);
+
+    // Two genuine levels is NOT "flat" - it is a real but incomplete sweep, and
+    // still reports as merged steps rather than as a dead channel.
+    QVector<double> twoLevels;
+    appendRun(twoLevels, 1000.0, 300);
+    appendRun(twoLevels, 2000.0, 300);
+    StepDetector::Result partial = StepDetector::detect(twoLevels, kPeriod, steps);
+    QCOMPARE(partial.outcome, CalibrationOutcome::TooFewPlateaus);
+}

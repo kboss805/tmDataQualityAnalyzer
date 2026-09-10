@@ -219,6 +219,29 @@ namespace CalibrationConstants {
     /// data does not produce a degenerate (near-zero) threshold.
     inline constexpr double kMinEdgeRawCounts = 2.0;
 
+    /// The most permissive edge threshold the detector will relax to, as a
+    /// multiple of the same robust sigma kEdgeSigmaMultiple scales.
+    ///
+    /// A receiver far out of tolerance is compressed at one end of its range, so
+    /// its small steps move fewer raw counts than kEdgeSigmaMultiple * sigma and
+    /// merge into their neighbours — the channel then detects too few plateaus and
+    /// loses its profile. StepDetector therefore retries with progressively lower
+    /// thresholds and keeps the first that yields a clean sweep. Below roughly
+    /// this multiple, ordinary sample-to-sample noise clears the threshold on its
+    /// own and plateaus disintegrate instead of merging, so relaxing further
+    /// cannot help.
+    inline constexpr double kMinEdgeSigmaMultiple = 1.5;
+
+    /// Ratio between successive threshold attempts in that search (each attempt is
+    /// this fraction of the previous). Small enough to land near the largest
+    /// workable threshold, large enough to reach the floor in a few tries.
+    inline constexpr double kEdgeRelaxFactor = 0.7;
+
+    /// Cap on threshold attempts, so a pathological channel cannot spin: with the
+    /// factor above this spans roughly a 12x reduction, well past the floor for
+    /// any realistic sigma.
+    inline constexpr int kMaxEdgeRelaxAttempts = 8;
+
     /// Minimum stable-run duration (seconds) required to confirm a level as a
     /// genuine step rather than a transient/partial-jump blip. The detector
     /// requires a run to be stable for at least this long (in addition to the

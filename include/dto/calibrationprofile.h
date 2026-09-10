@@ -34,6 +34,48 @@ struct StepDefinition
 };
 
 /**
+ * @brief Why a channel did or did not receive a non-linear profile.
+ *
+ * A channel that fails falls back to the linear slope/offset model, which is a
+ * legitimate outcome rather than an error — but the operator needs to know
+ * WHICH gate rejected it, because the remedies differ completely: a channel with
+ * no data was never in the recording, whereas a channel whose steps were too
+ * small to resolve is a receiver worth re-checking (or a clip/threshold worth
+ * adjusting). Reporting only a success count, as the summary previously did,
+ * makes those indistinguishable.
+ */
+enum class CalibrationOutcome
+{
+    Calibrated,       ///< A valid profile was built.
+    NoData,           ///< No samples extracted for this channel (absent/disabled word).
+    FlatNoSignal,     ///< Samples arrived but never moved: the channel holds one level for
+                      ///< the whole recording (a dead input reads 0; a railed one reads full
+                      ///< scale). No detector change can calibrate this — the sweep is not in
+                      ///< the recording — so it must read differently from the merged-steps
+                      ///< case below, which IS a detection limit.
+    TooFewPlateaus,   ///< Fewer confirmed plateaus than expected steps — adjacent steps
+                      ///< merged because their raw separation never cleared the edge
+                      ///< threshold (typical of a compressed / near-saturation receiver).
+    NoMonotonicSweep, ///< Enough plateaus, but no run of `expected` consecutive levels
+                      ///< moving strictly one way — a flat/no-signal channel, or a
+                      ///< response that reverses direction partway through the sweep.
+};
+
+/// Human-readable phrase for @p outcome, used in the calibration summary.
+inline const char* calibrationOutcomeText(CalibrationOutcome outcome)
+{
+    switch (outcome)
+    {
+        case CalibrationOutcome::Calibrated:       return "calibrated";
+        case CalibrationOutcome::NoData:           return "no data";
+        case CalibrationOutcome::FlatNoSignal:     return "flat / no signal";
+        case CalibrationOutcome::TooFewPlateaus:   return "too few plateaus";
+        case CalibrationOutcome::NoMonotonicSweep: return "no monotonic sweep";
+    }
+    return "unknown";
+}
+
+/**
  * @brief One measured calibration point: a detected raw-count average mapped to
  *        the true dB value of the corresponding step.
  */

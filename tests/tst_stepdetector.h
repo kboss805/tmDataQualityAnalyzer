@@ -24,6 +24,10 @@ private slots:
     void detectSettlingAtPlateauStartExcluded();
     void roundTripSameDataIsExact();
     void detectMultiChannelSweepStaysTimeAligned();
+    void detectOutcomeNamesTheGateThatRejected();
+    void detectCompressedOutOfToleranceReceiverStillCalibrates();
+    void detectNoiseSplitPlateausDoNotSeverTheSweep();
+    void detectFlatChannelReportsNoSignalNotMergedSteps();
 
     // Interpolation / out-of-range clamping
     void interpolateMidpoint();

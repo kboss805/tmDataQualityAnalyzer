@@ -20,6 +20,7 @@
 #include "calibrationextractor.h"
 #include "calibrationprofile.h"
 #include "chapter10reader.h"
+#include "framesetup.h"
 #include "stepdetector.h"
 
 namespace {
@@ -223,4 +224,161 @@ void TestCalibrationExtractor::byteOrderReachesTheExtraction()
     CalibrationExtractor extractor_ok;
     QString summary_ok;
     QVERIFY2(runExtraction(extractor_ok, req, summary_ok), qPrintable(summary_ok));
+}
+
+void TestCalibrationExtractor::summaryNamesReceiversAndWhyTheyFellBack()
+{
+    // summarize() is pure, so this needs no .ch10 fixture and always runs.
+    auto channel = [](const QString& name, CalibrationOutcome outcome,
+                      int plateaus, bool hadData) {
+        CalibrationChannelResult r;
+        r.name             = name;
+        r.outcome          = outcome;
+        r.detectedPlateaus = plateaus;
+        r.hadData          = hadData;
+        r.profile.valid    = (outcome == CalibrationOutcome::Calibrated);
+        return r;
+    };
+
+    QVector<CalibrationChannelResult> results;
+    // Receiver 1: fully calibrated. Receiver 2: partly - C fell back on merged
+    // steps. Receiver 3: fully calibrated. Receiver 4: absent from the recording.
+    for (const QString& p : {QStringLiteral("L"), QStringLiteral("R"), QStringLiteral("C")})
+    {
+        results << channel(p + "_RCVR1", CalibrationOutcome::Calibrated, 6, true);
+    }
+    results << channel("L_RCVR2", CalibrationOutcome::Calibrated, 6, true);
+    results << channel("R_RCVR2", CalibrationOutcome::Calibrated, 6, true);
+    results << channel("C_RCVR2", CalibrationOutcome::TooFewPlateaus, 4, true);
+    for (const QString& p : {QStringLiteral("L"), QStringLiteral("R"), QStringLiteral("C")})
+    {
+        results << channel(p + "_RCVR3", CalibrationOutcome::Calibrated, 6, true);
+    }
+    for (const QString& p : {QStringLiteral("L"), QStringLiteral("R"), QStringLiteral("C")})
+    {
+        results << channel(p + "_RCVR4", CalibrationOutcome::NoData, 0, false);
+    }
+
+    const QString summary = CalibrationExtractor::summarize(results, 6);
+
+    // The headline count still reports channels, since that is the unit profiles
+    // are keyed by.
+    // 3 (rcvr 1) + 2 (rcvr 2's L and R) + 3 (rcvr 3) = 8 of 12.
+    QVERIFY2(summary.contains("8 of 12 channel(s)"), qPrintable(summary));
+
+    // Receivers whose every channel calibrated are named together, in one line -
+    // the point of the request. Receiver 2 is NOT in that list: it was partial.
+    QVERIFY2(summary.contains("Calibrated: receivers 1, 3."), qPrintable(summary));
+
+    // A partly calibrated receiver is spelled out rather than hidden in the count,
+    // naming both the channels that worked and the one that did not, with a reason
+    // measured against the expected step count.
+    QVERIFY2(summary.contains("Receiver 2"), qPrintable(summary));
+    QVERIFY2(summary.contains("L, R calibrated"), qPrintable(summary));
+    QVERIFY2(summary.contains("C: too few plateaus (4 of 6 steps resolved)"),
+             qPrintable(summary));
+
+    // A receiver that was never in the recording reads as such, not as a
+    // detection failure - different problem, different remedy.
+    QVERIFY2(summary.contains("Receiver 4"), qPrintable(summary));
+    QVERIFY2(summary.contains("no data"), qPrintable(summary));
+
+    // Channels from a hand-written receiver-params TOML carry no "_RCVR<N>", so
+    // they must be reported by name rather than assigned a receiver number.
+    QVector<CalibrationChannelResult> unnamed;
+    unnamed << channel("AGC_LEFT", CalibrationOutcome::NoMonotonicSweep, 7, true);
+    const QString unnamedSummary = CalibrationExtractor::summarize(unnamed, 6);
+    QVERIFY2(unnamedSummary.contains("AGC_LEFT"), qPrintable(unnamedSummary));
+    QVERIFY2(unnamedSummary.contains("no monotonic sweep"), qPrintable(unnamedSummary));
+}
+
+void TestCalibrationExtractor::realStepCalRecordingCalibratesReceivers1356()
+{
+    // STEP_CAL_EXAMPLE.ch10: a real step-calibration recording whose receivers are
+    // far out of alignment. Its known truth, from the operator who recorded it:
+    // exactly 12 channels carry the cal sweep - L, R and C of receivers 1, 3, 5
+    // and 6 - and nothing else does.
+    //
+    // Acquisition parameters (found by probing; nothing else locks): NRZ-L,
+    // byte-swapped, 800-bit minor frames at 800 kbps on PCM channel 26.
+    const QString filepath = testDataPath("test files/STEP_CAL_EXAMPLE.ch10");
+    if (!QFileInfo::exists(filepath))
+        QSKIP("STEP_CAL_EXAMPLE.ch10 not available");
+
+    Chapter10Reader reader; // keep the opened Ch10 file alive across extraction
+    QVERIFY(reader.loadChannels(filepath));
+
+    QVector<StepDefinition> steps;
+    QString step_error;
+    QVERIFY2(StepDetector::parseStepConfig(projectRootPath("settings/rcvr_cals/RASA.toml"),
+                                           steps, step_error), qPrintable(step_error));
+    QCOMPARE(steps.size(), 8);
+
+    CalibrationExtractor::Request req;
+    req.calFilename           = filepath;
+    req.timeChannelId         = reader.getCurrentTimeChannelID();
+    req.pcmChannelId          = reader.getFirstPCMChannelID();
+    req.sync.pattern          = "FE6B2840";
+    req.sync.bitsInMinorFrame = 800;
+    req.sync.randomized       = false;
+    req.sync.dataRateMbps     = 0.8;
+    req.swapBytes             = true;
+    // SEQUENTIAL word map (empty receiverParamsToml -> words 0,1,2 / 3,4,5 / ...).
+    // NOT receiver_params/RASA.toml, despite the 800-bit frame matching RASA's:
+    // RASA's stride-4 card layout treats words 3, 7, 11, 15 ... as empty, which on
+    // this recording skips real channels (receiver 3's word 7, receiver 6's word
+    // 15) and mis-attributes everything above receiver 1 - it reports live
+    // channels as dead with nothing pointing at the map as the cause.
+    req.receiverParamsToml    = QString();
+    req.numReceivers          = 12;
+    req.receiverChannels      = 3;
+    req.steps                 = steps;
+
+    CalibrationExtractor extractor;
+    QString summary;
+    QVERIFY2(runExtraction(extractor, req, summary), qPrintable(summary));
+
+    const QVector<CalibrationChannelResult>& results = extractor.results();
+    QCOMPARE(results.size(), req.numReceivers * req.receiverChannels);
+
+    QSet<int> calibratedReceivers;
+    int calibratedChannels = 0;
+    for (const CalibrationChannelResult& r : results)
+    {
+        if (r.profile.valid)
+        {
+            calibratedReceivers.insert(FrameSetup::receiverIndexFromName(r.name));
+            calibratedChannels++;
+        }
+    }
+
+    // Exactly the known truth: all three channels of receivers 1, 3, 5 and 6, and
+    // no false profile on any of the 24 channels that carry no sweep.
+    QCOMPARE(calibratedChannels, 12);
+    QCOMPARE(calibratedReceivers, (QSet<int>{1, 3, 5, 6}));
+
+    // The regression this fixture exists for. R_RCVR1 and C_RCVR1 carry clean
+    // 8-step sweeps, but noise split two dwells into plateau pairs 1-3 raw counts
+    // apart; before plateau coalescing, the sweep selector read those wobbles as
+    // "no real transition", severed the run mid-sweep, and both fell back to
+    // linear - 10 of 12 instead of 12.
+    for (const CalibrationChannelResult& r : results)
+    {
+        if (r.name == QLatin1String("R_RCVR1") || r.name == QLatin1String("C_RCVR1"))
+        {
+            QVERIFY2(r.profile.valid, qPrintable(r.name + ": "
+                     + QString::fromLatin1(calibrationOutcomeText(r.outcome))));
+        }
+        // A receiver that carries no sweep must say so plainly, not report a
+        // detection shortfall: receiver 2 holds 0 for the whole recording.
+        if (FrameSetup::receiverIndexFromName(r.name) == 2)
+        {
+            QCOMPARE(r.outcome, CalibrationOutcome::FlatNoSignal);
+        }
+    }
+
+    // And the operator-facing report names the receivers, in the unit operators
+    // actually talk in.
+    const QString report = CalibrationExtractor::summarize(results, steps.size());
+    QVERIFY2(report.contains("Calibrated: receivers 1, 3, 5, 6."), qPrintable(report));
 }
