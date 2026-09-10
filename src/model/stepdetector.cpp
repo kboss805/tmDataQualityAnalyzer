@@ -44,6 +44,36 @@ double median(QVector<double> values)
     return values[mid];
 }
 
+/// Merges adjacent values within @p tolerance of each other into one, keeping the
+/// later (more settled) value. Order is preserved.
+QVector<double> coalesceLevels(const QVector<double>& values, double tolerance)
+{
+    QVector<double> levels;
+    for (double v : values)
+    {
+        if (!levels.isEmpty() && std::fabs(v - levels.last()) <= tolerance)
+        {
+            levels.last() = v;
+        }
+        else
+        {
+            levels.push_back(v);
+        }
+    }
+    return levels;
+}
+
+/// Median magnitude of the change between adjacent values (0 for fewer than two).
+double medianAdjacentGap(const QVector<double>& values)
+{
+    QVector<double> gaps;
+    for (int i = 1; i < values.size(); i++)
+    {
+        gaps.push_back(std::fabs(values[i] - values[i - 1]));
+    }
+    return median(gaps);
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -159,7 +189,32 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
     // 2. Adaptive edge threshold from the robust spread of the derivative.
     //    In-plateau samples dominate, so their noise sets the baseline; real
     //    transitions are large outliers above it.
-    const double sigma = robustStdDev(deriv);
+    //
+    //    Samples PINNED at the series' floor or ceiling are left out of that
+    //    estimate. A receiver parked at the converter's zero, or driven onto its
+    //    rail, repeats one value exactly: a run of perfect-zero derivatives that
+    //    says nothing about the noise on the live steps. On a real cal recording
+    //    (pre-sweep at 0, top steps railed at 65472, post-sweep back at 0) that is
+    //    a third of the series, and it drags the estimate far under the live
+    //    steps' own jitter. An undersized threshold then either splits a noisy
+    //    dwell into two plateaus a few tens of counts apart - consuming a pairing
+    //    slot and shifting every step below it by one - or shatters a dwell into
+    //    runs too short to confirm, losing the step altogether.
+    const auto [floor_it, ceiling_it] = std::minmax_element(rawValues.cbegin(), rawValues.cend());
+    QVector<double> live_deriv;
+    live_deriv.reserve(deriv.size());
+    for (int i = 0; i < deriv.size(); i++)
+    {
+        const bool pinned = rawValues[i] == rawValues[i + 1]
+                            && (rawValues[i] == *floor_it || rawValues[i] == *ceiling_it);
+        if (!pinned)
+        {
+            live_deriv.push_back(deriv[i]);
+        }
+    }
+    // A wholly pinned series (a dead or railed channel) has no live samples; fall
+    // back to the full derivative so it still reads as noiseless and flat.
+    const double sigma = robustStdDev(live_deriv.isEmpty() ? deriv : live_deriv);
     const double nominal_threshold = std::max(
         CalibrationConstants::kEdgeSigmaMultiple * sigma,
         CalibrationConstants::kMinEdgeRawCounts);
@@ -364,18 +419,18 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
         // It also sharpens the dead-channel rejection rather than weakening it: a
         // flat channel's plateaus all collapse into ONE level, which can never
         // form a run of `expected`.
-        QVector<double> levels;
-        for (double avg : settledAverages(candidates))
-        {
-            if (!levels.isEmpty() && std::fabs(avg - levels.last()) <= threshold)
-            {
-                levels.last() = avg; // same level; keep the later, more-settled value
-            }
-            else
-            {
-                levels.push_back(avg);
-            }
-        }
+        QVector<double> levels = coalesceLevels(settledAverages(candidates), threshold);
+
+        // ...and again against the STEP size, not only the noise. Noise grows with
+        // signal on a real receiver (~3 counts on its low steps, ~60 on its high
+        // ones), so a split high dwell can sit further apart than any threshold the
+        // quiet steps support: STEP_CAL_EXAMPLE's L_RCVR3 split its 42 dB dwell
+        // into 22797 / 22818 - 22 counts apart against a 17-count threshold, on
+        // steps ~3800 counts tall. Two levels a small fraction of a typical step
+        // apart are one step, whatever the noise estimate says.
+        levels = coalesceLevels(levels,
+                                std::max(threshold, CalibrationConstants::kSameLevelFractionOfStep
+                                                        * medianAdjacentGap(levels)));
         if (attempt == 0)
         {
             // Recorded before the count check below, so a channel that bails out

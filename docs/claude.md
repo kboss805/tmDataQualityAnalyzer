@@ -295,7 +295,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] During main data processing, the application applies the non-linear calibration profile using piece-wise linear interpolation between steps.
 - [x] Raw values outside the calibrated range clamp to the nearest end-step dB instead of extrapolating, so a receiver driven past the calibrated range reads the ceiling or floor value.
 
-  - **Summary report (unreleased):** the summary criterion above is now met literally — the message box names the calibrated receivers ("Calibrated: receivers 1, 3, 5, 6.") and lists each receiver that fell back with its channels and the reason, where it previously reported only a channel count.
+  - **Summary report (unreleased):** the summary criterion above is now met literally — the message box names the calibrated receivers ("Calibrated: receivers 3, 5, 6.") and lists each receiver that fell back with its channels and the reason, where it previously reported only a channel count.
   - **Status (v2.2.5): COMPLETE.** Step selection is polarity-agnostic and robust to real recordings: it takes the first maximal monotonic plateau run and keeps its last `expected` plateaus, which excludes a signal-generator turn-on transient (leading) and the optional operator down-ramp (trailing) for both normal and inverted-polarity receivers — fixing the calibrated-staircase time skew. The extraction sample period is frame-rate-adaptive (100 ms floor) for fast frames, and the Apply Cal dialog adds optional **Clip Start / Clip End** controls so operators can trim leading/trailing seconds before detection. Out-of-range raw values clamp (not extrapolate) to the nearest end-step dB.
 
 ### US6.0: Export the plot as an image file — Complete
@@ -403,28 +403,38 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.11.1 tag
 
-#### Calibration import is resilient to receivers far out of alignment (US5.3)
+#### Calibration pairs every step with its own dwell on out-of-alignment receivers (US5.3)
 
-- **The real failure was not tolerance, it was noise.** There is no dB-per-step
-  tolerance anywhere in the detector — step dB values are positional, paired to
-  plateaus in order — so widening one could not have helped. On
-  `STEP_CAL_EXAMPLE.ch10`, R_RCVR1 and C_RCVR1 carry clean 8-step sweeps, but noise
-  split two dwells into plateau pairs 1-3 raw counts apart. `selectSweep()`'s
-  `sign()` reads a sub-threshold difference as "no transition", which broke the
-  monotonic run mid-sweep, and both channels fell back to linear with
-  "no monotonic sweep": 10 of 12 real channels calibrated.
-- **Fix: adjacent plateaus within the edge threshold are coalesced** into one level
-  (the later, settled average wins) before sweep selection. Two dwells that close
-  cannot be distinct steps — they are below the threshold that defines a step. The
-  same file now calibrates **12 of 12**, exactly receivers 1, 3, 5 and 6.
-- **Threshold search for compressed receivers.** A receiver whose steps are far
-  smaller than nominal can fall under the `max(6σ, 2 counts)` edge threshold
-  entirely. `detect()` now retries at `nominal × 0.7^n` down to a floor of
-  `max(1.5σ, 2 counts)` (`kEdgeRelaxFactor`, `kMinEdgeSigmaMultiple`,
-  `kMaxEdgeRelaxAttempts = 8`), accepting the **first** — i.e. largest — threshold
-  that yields a monotonic sweep. It never fired on the real file (coalescing was the
-  fix there), but covers the compressed case the request described; a relaxed
-  success is flagged so the report can call it out.
+- **"Calibrated" was not the same as "right".** On `STEP_CAL_EXAMPLE.ch10` with its real
+  step config (0–60 dB in 6 dB steps: eleven levels, the first being the level each channel
+  holds before the generator steps up), nine channels attached a profile — and four of them
+  were paired off by a step: L/R_RCVR3 and R_RCVR6 by one, L_RCVR6 by two. The profile
+  attached and nothing reported it. The operator saw receiver 3's three channels a full
+  step apart in time, and a 6 dB swing across one dwell near the top.
+- **Root cause: the noise estimate.** The edge threshold is 6σ of the derivative's robust
+  spread. Samples pinned exactly at the converter floor (the pre-sweep at 0, the post-sweep
+  back at 0) or rail (65472) carry no noise, yet they were a third of the series and
+  dragged σ far under the live steps' jitter — which itself grows with level, from ~3
+  counts on the low steps to ~60 on the high ones. The resulting 11–17-count thresholds
+  split noisy high dwells into two plateaus 20–80 counts apart, on steps ~3800 counts tall.
+  The extra level took a pairing slot, the real 0 dB level was dropped as "pre-roll", and
+  every step below the split read 6 dB low. The same undersized threshold shattered
+  receiver 1's 42 dB dwell into runs too short to confirm, losing that step outright.
+- **The fix has two parts.** Pinned samples no longer vote on σ, which lifts those
+  thresholds to 28–40 counts. And adjacent levels closer than 10% of the channel's median
+  step are merged as one dwell (`CalibrationConstants::kSameLevelFractionOfStep`), because
+  noise that grows with signal can still out-run a threshold sized by the quiet steps. The
+  splits here are 0.5–2% of a step and the smallest genuine step ~30%; a synthetic
+  compressed receiver's smallest step (~16%) is pinned as surviving.
+- **Coalescing within the edge threshold** stays as the first pass. It heals 1–3-count
+  splits like R/C_RCVR1's, which otherwise read as "no transition" and sever the monotonic
+  run mid-sweep.
+- **Threshold search for compressed receivers.** A receiver whose steps are far smaller
+  than nominal can fall under the edge threshold entirely. `detect()` retries at
+  `nominal × 0.7^n` down to a floor of `max(1.5σ, 2 counts)` (`kEdgeRelaxFactor`,
+  `kMinEdgeSigmaMultiple`, `kMaxEdgeRelaxAttempts = 8`), accepting the **first** — i.e.
+  largest — threshold that yields a monotonic sweep, and flags a relaxed success so the
+  report can call it out. It never fires on this recording.
 - **Every failure now says which gate rejected it.** New `CalibrationOutcome`
   (`Calibrated` / `NoData` / `FlatNoSignal` / `TooFewPlateaus` / `NoMonotonicSweep`)
   travels from `StepDetector::Result` into `CalibrationChannelResult`, alongside the
@@ -432,51 +442,63 @@ The stories below follow the workflow a first-time user takes through the applic
   `FlatNoSignal` separates a channel that held one level for the whole recording
   (0 = dead, 65535 = railed) from a genuine detection shortfall — different problem,
   different remedy, and previously both read as "too few plateaus".
+- **Receiver 1 is saturated, and falls back.** Its top two steps (54 and 60 dB) sit on the
+  65472 rail as one 99-sample plateau spanning two dwells, so the recording holds ten
+  distinct levels for eleven steps and no full pairing exists. The report currently gives
+  this as a plateau shortfall / no monotonic sweep rather than naming saturation.
+- **The 8-step config first used on this file was wrong for it.** `rcvr_cals/RASA.toml`
+  (0, 3, 6, 12 … 36 dB) on an eleven-level sweep keeps the top eight levels and pairs them
+  with the wrong dB; its "12 of 12 calibrated" was that mis-pairing, not a success. The
+  regression test uses the 11-step `rcvr_cals/default.toml` and asserts the pairing itself.
 
 #### The calibration summary names receivers, not just a channel count (US5.3)
 
 - `CalibrationExtractor::summarize()` builds the "Calibration Extracted" message:
-  `Calibrated: receivers 1, 3, 5, 6.`, then one line per receiver that fell back,
-  naming its channels and the reason (`too few plateaus (4 of 8 steps resolved)`,
-  `flat / no signal (held at 0)`), then any receivers that calibrated only with a
-  relaxed threshold, as worth checking. A receiver whose channels partly calibrated
-  is spelled out rather than hidden in the count. Channels from a hand-written
-  receiver-params TOML carry no `_RCVR<N>` and are reported by name.
+  `Calibrated: receivers 3, 5, 6.`, then one line per receiver that fell back, naming its
+  channels and the reason (`too few plateaus (4 of 8 steps resolved)`,
+  `flat / no signal (held at 0)`), then any receivers that calibrated only with a relaxed
+  threshold, as worth checking. A receiver whose channels partly calibrated is spelled out
+  rather than hidden in the count. Channels from a hand-written receiver-params TOML carry
+  no `_RCVR<N>` and are reported by name.
 - `FrameSetup::receiverIndexFromName()` / `channelPartOfName()` invert
-  `receiverParameterName()`, so the grouping reads the same names the word map
-  writes rather than re-deriving receiver numbers from word indices.
-- The per-channel log line now carries the reason and threshold on failure, and
-  notes a relaxed-threshold success.
-- **Stale manual figure:** `walk-cal-04-summary.png` (walkthroughs, calibration
-  step 4) shows the old count-only message box, and its caption describes a count.
-  Needs re-capturing against the new report.
+  `receiverParameterName()`, so the grouping reads the same names the word map writes
+  rather than re-deriving receiver numbers from word indices.
+- The per-channel log line now carries the reason and threshold on failure, and notes a
+  relaxed-threshold success.
+- **Stale manual figure:** `walk-cal-04-summary.png` (walkthroughs, calibration step 4)
+  shows the old count-only message box, and its caption describes a count. Needs
+  re-capturing against the new report.
 
 #### Word-map trap found along the way
 
-- `STEP_CAL_EXAMPLE.ch10` is an 800-bit frame like RASA's, but its receivers are
-  laid out **sequentially** (3 words each), not on RASA's stride-4 card layout.
-  Extracting it with `receiver_params/RASA.toml` skips words 3, 7, 11, 15 … and
-  mis-attributes every receiver above 1 — live channels report as dead, with
-  nothing pointing at the map as the cause. The map must match the recording; the
-  new regression test states which one this fixture needs and why.
+- `STEP_CAL_EXAMPLE.ch10` is an 800-bit frame like RASA's, but its receivers are laid out
+  **sequentially** (3 words each), not on RASA's stride-4 card layout. Extracting it with
+  `receiver_params/RASA.toml` skips words 3, 7, 11, 15 … and mis-attributes every receiver
+  above 1 — live channels report as dead, with nothing pointing at the map as the cause.
+  The map must match the recording; the regression test states which one this fixture
+  needs and why.
 
 #### Tests
 
 - New committed fixture `tests/data/test files/STEP_CAL_EXAMPLE.ch10` (6.8 MB), the
   recording that exposed the failure. CI requires exactly one skip, so it had to be
   committed rather than left local.
-- `TestCalibrationExtractor::realStepCalRecordingCalibratesReceivers1356` pins the
-  known truth: exactly 12 channels, receivers {1, 3, 5, 6}, R/C_RCVR1 calibrated,
-  receiver 2 `FlatNoSignal`, and the report naming the receivers.
+- `TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly` pins the known
+  truth under the real 11-step config and the shipped word map: receivers {3, 5, 6}
+  calibrate (nine channels); every profile pairs 0 dB with the pre-sweep level and 60 dB
+  with the top dwell, with no two points closer than 1000 counts (a split dwell is tens);
+  receiver 2 reads flat / no signal; and the report names the receivers.
   `summaryNamesReceiversAndWhyTheyFellBack` covers the report without a fixture.
-- `TestStepDetector` gains four cases: outcome codes, a compressed out-of-tolerance
-  receiver calibrating via the relaxed threshold (and a healthy one *not* relaxing),
-  noise-split plateaus coalescing — built from R_RCVR1's real levels with dither,
-  because the split only exists under noise — and flat channels reporting no signal.
-  `TestFrameSetup::receiverIndexFromNameInvertsParameterName`.
-- `realFileCalibratesRcvr3Only` still passes unchanged: coalescing and the threshold
-  search add no false profile on the other fixture's 45 noise channels.
-  Baseline **379 / 0 / 1**, zero warnings.
+- `TestStepDetector` gains six cases: outcome codes; a compressed out-of-tolerance receiver
+  calibrating via the relaxed threshold (and a healthy one *not* relaxing); noise-split
+  plateaus coalescing, built from R_RCVR1's real levels with dither because the split only
+  exists under noise; flat channels reporting no signal; pinned floor samples kept out of
+  the noise estimate (without that, the dwells shatter and the channel reads flat); and a
+  split dwell far above the noise still pairing as one step (noiseless, so only the
+  step-relative merge can heal it). Both new pairing cases fail against the previous
+  detector. `TestFrameSetup::receiverIndexFromNameInvertsParameterName`.
+- `realFileCalibratesRcvr3Only` still passes unchanged: none of this adds a false profile
+  on the other fixture's 45 noise channels. Baseline **381 / 0 / 1**, zero warnings.
 
 ### v2.11.1 — Code Cleanup (no user-facing change)
 
@@ -1919,9 +1941,9 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestPlotCustomizationDialog** (`tst_plotcustomizationdialog`) — Customize Plot Series dialog: one Frame Sync Lock checkbox per stream, Select All/None, apply → per-stream lock/missed visibility round-trip to the ViewModel; Receiver SNR tree build (receiver grouping), tri-state group cascade, Select All/None, apply → per-channel SNR visibility round-trip, and the Expand/Collapse All button toggle; plus per-stream rename/recolor (lock tab) and per-channel rename/recolor via pending item roles (SNR tab) applied to the ViewModel on OK, and the single batched `seriesAppearanceChanged` emission (reaches private widgets/slots via a friend declaration, same pattern as TestFrameProcessor)
 - **TestStreamConfigDialog** (`tst_streamconfigdialog`) — Per-stream Configure Streams dialog: stream rows, mode selection, gear setup dialogs, TOML load/save round-trips, "Apply to all" fan-out, the Channel column label (short names shown in full, long TMATS-derived names elided on the right with "..." , left-justified, styled via `channelNameCell` to mimic the Mode combo box's border/fill, and the full name always available via tooltip — which is now the only place a truncated name is recoverable), the Mode combo's left-justified closed-box text (via an editable-but-readonly internal line edit) while selection still tracks correctly, and the table header/separator using theme-QSS object names (`streamHeaderLabel` / `streamHeaderSeparator`) rather than hard-coded inline colors
 - **TestExportDialog** (`tst_exportdialog`) — Export dialog checkbox-to-field enable logic, export-button validation, and the log-export row defaults/accessors and log-only validation
-- **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US5.3): `[[Step]]` TOML parsing (valid / empty-fails), plateau detection (clean, too-few-fails, extra-plateaus uses last of monotonic run, short-blip doesn't steal a pairing slot, long leading transient doesn't shift pairing, inverted-polarity sweep not reversed, non-monotonic pairing rejected, noisy, settling-at-plateau-start excluded, round-trip exact), the calibration-import resilience cases (the outcome code names the gate that rejected, a compressed out-of-tolerance receiver still calibrates via the relaxed threshold while a healthy one does not relax, noise-split plateaus coalesce instead of severing the sweep, a flat channel reports "flat / no signal" rather than a plateau shortfall), and `interpolateCalibration()` (midpoint, below/above clamping, coincident-raw guard)
+- **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US5.3): `[[Step]]` TOML parsing (valid / empty-fails), plateau detection (clean, too-few-fails, extra-plateaus uses last of monotonic run, short-blip doesn't steal a pairing slot, long leading transient doesn't shift pairing, inverted-polarity sweep not reversed, non-monotonic pairing rejected, noisy, settling-at-plateau-start excluded, round-trip exact), the calibration-import resilience cases (the outcome code names the gate that rejected, a compressed out-of-tolerance receiver still calibrates via the relaxed threshold while a healthy one does not relax, noise-split plateaus coalesce instead of severing the sweep, a flat channel reports "flat / no signal" rather than a plateau shortfall, samples pinned at the floor or rail kept out of the noise estimate so live dwells neither split nor shatter, a split dwell far above the noise still paired as one step), and `interpolateCalibration()` (midpoint, below/above clamping, coincident-raw guard)
 - **TestSeriesColumnSchema** (`tst_seriescolumnschema`) — the CSV column-header schema (`SeriesColumnSchema`): SNR name and `columnHeader()` formatting, `parseColumnHeader()` classification (lock/missed suffix vs. SNR `"<id> - "` prefix, multi-word stream labels split at the last space, SNR-shape-wins-over-suffix), the unknown→SNR fallback, and the format→parse round trip that keeps `exportCsv` and `CsvSeriesParser` inverses. Multi-file input: source 0 stays unqualified (byte-identical), source 1+ gets a leading `"S<n>| "` qualifier that round-trips through parse for both SNR and Lock/Missed shapes, an unqualified header still defaults to source 0, and a header merely starting with the letter `'S'` isn't misparsed as a qualifier
-- **TestCalibrationExtractor** (`tst_calibrationextractor`) — US5.3 pipeline orchestration (complements TestStepDetector's pure logic): drives the async extraction end to end (reader + FrameProcessor workers → per-channel StepDetector). A bad file (with non-empty steps, so it clears the empty-steps guard) finishes unsuccessfully with a recorded error and no partial state; over `rnrz-l_testfile.ch10`, exactly words 6/7/8 (RCVR3 L/R/C, the only real stepped SNR sweep) build valid non-linear profiles while every other receiver word falls back to linear; over `STEP_CAL_EXAMPLE.ch10` (receivers far out of alignment, sequential 12x3 map), exactly the 12 channels of receivers 1, 3, 5 and 6 calibrate — including R/C_RCVR1, the noise-split victims — receiver 2 reports flat / no signal, and the report names the receivers; plus the pure `summarize()` report (receivers grouped, partial receivers spelled out with reasons, unnamed channels reported by name)
+- **TestCalibrationExtractor** (`tst_calibrationextractor`) — US5.3 pipeline orchestration (complements TestStepDetector's pure logic): drives the async extraction end to end (reader + FrameProcessor workers → per-channel StepDetector). A bad file (with non-empty steps, so it clears the empty-steps guard) finishes unsuccessfully with a recorded error and no partial state; over `rnrz-l_testfile.ch10`, exactly words 6/7/8 (RCVR3 L/R/C, the only real stepped SNR sweep) build valid non-linear profiles while every other receiver word falls back to linear; over `STEP_CAL_EXAMPLE.ch10` (receivers far out of alignment, its real 11-step 0–60 dB config, the shipped sequential word map), receivers 3, 5 and 6 calibrate with every step paired to its own dwell (0 dB at the pre-sweep level, 60 dB at the top dwell, no split dwell taking a slot), receiver 1 falls back because its top two steps sit on the rail, receiver 2 reports flat / no signal, and the report names the receivers; plus the pure `summarize()` report (receivers grouped, partial receivers spelled out with reasons, unnamed channels reported by name)
 - **TestStreamConfigSchema** (`tst_streamconfigschema`) — `StreamConfigSchema` round trip for both `StreamMode` variants and the calibration input references (`calCh10Path`/`stepTomlPath`/`clipStartSec`/`clipEndSec`), confirms `calibrationByWord` itself never appears in the serialized JSON (and the `calibration` block is omitted entirely when no non-linear calibration was ever extracted), and `fromJson()` rejecting an object missing required fields while leaving in-class defaults for anything else omitted
 - **TestProcessingTemplateSchema** (`tst_processingtemplateschema`) — processing templates / batch apply: `ProcessingTemplateSchema` round trip for both `StreamMode`s, series appearance, calibration input references, and `timeChannelIndex`; that appearance is omitted when empty; that `calibrationByWord` is never serialized (inherited from `StreamConfigSchema`); and `schemaVersion` accept/reject + malformed-document rejection — no `.ch10` fixture, runs in CI
 - **TestTemplateMatcher** (`tst_templatematcher`) — batch apply channel-ID matching: `templateChannelIds()` collection and `matchFile()` exact-set comparison (pass regardless of order; reject with the right `missing`/`extra` sets on a missing channel, an extra channel, and both) — pure logic, runs in CI

@@ -292,12 +292,14 @@ void TestCalibrationExtractor::summaryNamesReceiversAndWhyTheyFellBack()
     QVERIFY2(unnamedSummary.contains("no monotonic sweep"), qPrintable(unnamedSummary));
 }
 
-void TestCalibrationExtractor::realStepCalRecordingCalibratesReceivers1356()
+void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
 {
-    // STEP_CAL_EXAMPLE.ch10: a real step-calibration recording whose receivers are
-    // far out of alignment. Its known truth, from the operator who recorded it:
-    // exactly 12 channels carry the cal sweep - L, R and C of receivers 1, 3, 5
-    // and 6 - and nothing else does.
+    // STEP_CAL_EXAMPLE.ch10: a real step-calibration recording from receivers far
+    // out of alignment. Its sweep is 0 to 60 dB in 6 dB steps - eleven levels, the
+    // first being the level each channel holds before the generator steps up - so
+    // it is extracted with the 11-step settings/rcvr_cals/default.toml. Each dwell
+    // lasts ~4.9 s, and a channel's noise grows with its level: ~3 counts on its
+    // low steps, ~60 on its high ones.
     //
     // Acquisition parameters (found by probing; nothing else locks): NRZ-L,
     // byte-swapped, 800-bit minor frames at 800 kbps on PCM channel 26.
@@ -310,9 +312,9 @@ void TestCalibrationExtractor::realStepCalRecordingCalibratesReceivers1356()
 
     QVector<StepDefinition> steps;
     QString step_error;
-    QVERIFY2(StepDetector::parseStepConfig(projectRootPath("settings/rcvr_cals/RASA.toml"),
+    QVERIFY2(StepDetector::parseStepConfig(projectRootPath("settings/rcvr_cals/default.toml"),
                                            steps, step_error), qPrintable(step_error));
-    QCOMPARE(steps.size(), 8);
+    QCOMPARE(steps.size(), 11);
 
     CalibrationExtractor::Request req;
     req.calFilename           = filepath;
@@ -323,14 +325,14 @@ void TestCalibrationExtractor::realStepCalRecordingCalibratesReceivers1356()
     req.sync.randomized       = false;
     req.sync.dataRateMbps     = 0.8;
     req.swapBytes             = true;
-    // SEQUENTIAL word map (empty receiverParamsToml -> words 0,1,2 / 3,4,5 / ...).
-    // NOT receiver_params/RASA.toml, despite the 800-bit frame matching RASA's:
-    // RASA's stride-4 card layout treats words 3, 7, 11, 15 ... as empty, which on
-    // this recording skips real channels (receiver 3's word 7, receiver 6's word
-    // 15) and mis-attributes everything above receiver 1 - it reports live
-    // channels as dead with nothing pointing at the map as the cause.
-    req.receiverParamsToml    = QString();
-    req.numReceivers          = 12;
+    // The shipped sequential word map (three words per receiver), which is what the
+    // main run uses. NOT receiver_params/RASA.toml, despite the 800-bit frame
+    // matching RASA's: RASA's stride-4 card layout treats words 3, 7, 11, 15 ... as
+    // empty, which on this recording skips real channels and mis-attributes every
+    // receiver above 1 - it reports live channels as dead with nothing pointing at
+    // the map as the cause.
+    req.receiverParamsToml    = projectRootPath("settings/receiver_params/default.toml");
+    req.numReceivers          = 16;
     req.receiverChannels      = 3;
     req.steps                 = steps;
 
@@ -345,32 +347,47 @@ void TestCalibrationExtractor::realStepCalRecordingCalibratesReceivers1356()
     int calibratedChannels = 0;
     for (const CalibrationChannelResult& r : results)
     {
-        if (r.profile.valid)
+        if (!r.profile.valid)
+            continue;
+        calibratedReceivers.insert(FrameSetup::receiverIndexFromName(r.name));
+        calibratedChannels++;
+
+        // The regression this fixture exists for: every step pairs with its OWN
+        // dwell. Noise used to split one high dwell into two plateaus a few tens of
+        // counts apart. The split took a pairing slot, the real 0 dB level was
+        // dropped as "pre-roll", and every step below the split read 6 dB low -
+        // L/R_RCVR3 and R_RCVR6 by one step, L_RCVR6 (split twice) by two. The
+        // profile still attached, so nothing reported it: the staircase simply sat
+        // a step behind its neighbours, and noise across the split swung 6 dB.
+        const QVector<CalibrationPoint>& pts = r.profile.points;
+        QCOMPARE(pts.size(), steps.size());
+        QVERIFY2(pts.first().rawAvg < 1000.0 && pts.first().trueDb == 0.0,
+                 qPrintable(QString("%1: 0 dB paired with raw %2, not the pre-sweep level")
+                                .arg(r.name).arg(pts.first().rawAvg)));
+        QCOMPARE(pts.last().trueDb, 60.0);
+        for (int k = 1; k < pts.size(); k++)
         {
-            calibratedReceivers.insert(FrameSetup::receiverIndexFromName(r.name));
-            calibratedChannels++;
+            // Genuine steps here are more than 1000 counts apart (the smallest is
+            // ~1200, on receiver 5); a split dwell is tens.
+            QVERIFY2(pts[k].rawAvg - pts[k - 1].rawAvg > 1000.0,
+                     qPrintable(QString("%1: %2 dB and %3 dB are %4 counts apart - one dwell "
+                                        "split in two")
+                                    .arg(r.name).arg(pts[k - 1].trueDb).arg(pts[k].trueDb)
+                                    .arg(pts[k].rawAvg - pts[k - 1].rawAvg)));
         }
     }
 
-    // Exactly the known truth: all three channels of receivers 1, 3, 5 and 6, and
-    // no false profile on any of the 24 channels that carry no sweep.
-    QCOMPARE(calibratedChannels, 12);
-    QCOMPARE(calibratedReceivers, (QSet<int>{1, 3, 5, 6}));
+    // Receivers 3, 5 and 6 carry the full sweep. Receiver 1 carries it too, but its
+    // top two steps (54 and 60 dB) both sit on the 65472 rail - ten distinct levels
+    // for eleven steps - so no full pairing exists and it falls back. And no false
+    // profile on any of the channels that carry no sweep.
+    QCOMPARE(calibratedChannels, 9);
+    QCOMPARE(calibratedReceivers, (QSet<int>{3, 5, 6}));
 
-    // The regression this fixture exists for. R_RCVR1 and C_RCVR1 carry clean
-    // 8-step sweeps, but noise split two dwells into plateau pairs 1-3 raw counts
-    // apart; before plateau coalescing, the sweep selector read those wobbles as
-    // "no real transition", severed the run mid-sweep, and both fell back to
-    // linear - 10 of 12 instead of 12.
+    // A receiver that carries no sweep says so plainly, not as a detection
+    // shortfall: receiver 2 holds 0 for the whole recording.
     for (const CalibrationChannelResult& r : results)
     {
-        if (r.name == QLatin1String("R_RCVR1") || r.name == QLatin1String("C_RCVR1"))
-        {
-            QVERIFY2(r.profile.valid, qPrintable(r.name + ": "
-                     + QString::fromLatin1(calibrationOutcomeText(r.outcome))));
-        }
-        // A receiver that carries no sweep must say so plainly, not report a
-        // detection shortfall: receiver 2 holds 0 for the whole recording.
         if (FrameSetup::receiverIndexFromName(r.name) == 2)
         {
             QCOMPARE(r.outcome, CalibrationOutcome::FlatNoSignal);
@@ -380,5 +397,5 @@ void TestCalibrationExtractor::realStepCalRecordingCalibratesReceivers1356()
     // And the operator-facing report names the receivers, in the unit operators
     // actually talk in.
     const QString report = CalibrationExtractor::summarize(results, steps.size());
-    QVERIFY2(report.contains("Calibrated: receivers 1, 3, 5, 6."), qPrintable(report));
+    QVERIFY2(report.contains("Calibrated: receivers 3, 5, 6."), qPrintable(report));
 }

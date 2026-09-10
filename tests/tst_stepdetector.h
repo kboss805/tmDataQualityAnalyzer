@@ -28,6 +28,8 @@ private slots:
     void detectCompressedOutOfToleranceReceiverStillCalibrates();
     void detectNoiseSplitPlateausDoNotSeverTheSweep();
     void detectFlatChannelReportsNoSignalNotMergedSteps();
+    void detectPinnedSamplesDoNotShrinkTheNoiseEstimate();
+    void detectSplitDwellFarAboveNoiseIsStillOneStep();
 
     // Interpolation / out-of-range clamping
     void interpolateMidpoint();

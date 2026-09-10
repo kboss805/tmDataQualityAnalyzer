@@ -551,7 +551,7 @@ void TestStepDetector::detectCompressedOutOfToleranceReceiverStillCalibrates()
 void TestStepDetector::detectNoiseSplitPlateausDoNotSeverTheSweep()
 {
     // Levels taken verbatim from a real out-of-tolerance receiver
-    // (STEP_CAL_EXAMPLE.ch10, R_RCVR1): a clean 8-step climb from no-signal to a
+    // (STEP_CAL_EXAMPLE.ch10, R_RCVR1): a clean climb from no-signal to a
     // saturated ceiling, except noise split two dwells into pairs of plateaus
     // differing by 3 and -1 raw counts.
     //
@@ -595,10 +595,12 @@ void TestStepDetector::detectNoiseSplitPlateausDoNotSeverTheSweep()
                             .arg(r.edgeThreshold)));
     QCOMPARE(r.profile.points.size(), steps.size());
 
-    // The leading no-signal 0 is dropped as pre-roll (the run's last `expected`
-    // levels are kept), so the sweep pairs 7255 -> 0 dB up to the saturated
-    // ceiling -> 36 dB, each split pair contributing exactly one point. Compared
-    // with a tolerance because the dither moves each settled average slightly.
+    // Nine levels for eight steps, so the run's last `expected` are kept: 7255 ->
+    // 0 dB up to the ceiling -> 36 dB, each split pair contributing exactly one
+    // point. (These levels are a coalescing fixture, not a correct calibration of
+    // that receiver: its true sweep is 0-60 dB in eleven steps with the top two
+    // on the rail - see TestCalibrationExtractor.) Compared with a tolerance
+    // because the dither moves each settled average slightly.
     QVERIFY2(qAbs(r.profile.points.first().rawAvg - 7255.0) < 5.0,
              qPrintable(QString::number(r.profile.points.first().rawAvg)));
     QCOMPARE(r.profile.points.first().trueDb, 0.0);
@@ -639,4 +641,73 @@ void TestStepDetector::detectFlatChannelReportsNoSignalNotMergedSteps()
     appendRun(twoLevels, 2000.0, 300);
     StepDetector::Result partial = StepDetector::detect(twoLevels, kPeriod, steps);
     QCOMPARE(partial.outcome, CalibrationOutcome::TooFewPlateaus);
+}
+
+void TestStepDetector::detectPinnedSamplesDoNotShrinkTheNoiseEstimate()
+{
+    // A receiver parked at the converter floor repeats 0 exactly: noise-free, and
+    // on a real cal recording a large share of the series (the pre-sweep, and the
+    // post-sweep once the generator drops). Counted into the noise estimate, those
+    // perfect-zero derivatives drag it far under the live steps' jitter; the edge
+    // threshold falls to its 2-count floor, every jittering sample reads as an
+    // edge, and the dwells shatter into runs too short to confirm. The channel
+    // then reads as flat with its sweep plainly present.
+    //
+    // The pinned share is exaggerated here (a majority) so the failure is
+    // deterministic rather than dependent on where a median happens to land.
+    QVector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}, {18.0}, {24.0}};
+
+    QVector<double> raw;
+    appendRun(raw, 0.0, 1000); // pinned at the floor: the 0 dB level
+    for (double level : {1000.0, 2000.0, 3000.0, 4000.0})
+    {
+        for (int i = 0; i < 150; i++)
+        {
+            raw.push_back(level + ((i % 2 == 0) ? 5.0 : -5.0)); // +/-5 count jitter
+        }
+    }
+
+    StepDetector::Result r = StepDetector::detect(raw, kPeriod, steps);
+    QVERIFY2(r.profile.valid, qPrintable(QString("outcome=%1 threshold=%2")
+                                             .arg(calibrationOutcomeText(r.outcome))
+                                             .arg(r.edgeThreshold)));
+    QCOMPARE(r.profile.points.size(), steps.size());
+    QCOMPARE(r.profile.points.first().rawAvg, 0.0);
+    QCOMPARE(r.profile.points.first().trueDb, 0.0);
+    QVERIFY(qAbs(r.profile.points.last().rawAvg - 4000.0) < 6.0);
+    QCOMPARE(r.profile.points.last().trueDb, 24.0);
+}
+
+void TestStepDetector::detectSplitDwellFarAboveNoiseIsStillOneStep()
+{
+    // Noise grows with signal on a real receiver, so a high dwell can split into
+    // two plateaus further apart than any threshold the quiet low steps support:
+    // STEP_CAL_EXAMPLE's L_RCVR3 split its 42 dB dwell 22 counts apart against a
+    // 17-count threshold, on steps ~3800 counts tall. The split took a pairing
+    // slot, the real 0 dB level was dropped as "pre-roll", and every step below the
+    // split read 6 dB low. Levels a small fraction of a typical step apart are one
+    // step, whatever the noise estimate says.
+    //
+    // Noiseless here, so the edge threshold sits at its 2-count floor and only the
+    // step-relative merge can heal the 30-count split.
+    QVector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}, {18.0}, {24.0}};
+
+    QVector<double> raw;
+    appendRun(raw, 0.0, 150);    // 0 dB
+    appendRun(raw, 1000.0, 150); // 6 dB
+    appendRun(raw, 2000.0, 150); // 12 dB
+    appendRun(raw, 3000.0, 150); // 18 dB, first half of the dwell...
+    appendRun(raw, 3030.0, 150); // ...second half, split 30 counts high
+    appendRun(raw, 4000.0, 150); // 24 dB
+
+    StepDetector::Result r = StepDetector::detect(raw, kPeriod, steps);
+    QVERIFY(r.profile.valid);
+    QCOMPARE(r.profile.points.size(), steps.size());
+    // The pre-sweep level keeps its 0 dB slot instead of being dropped as pre-roll.
+    QCOMPARE(r.profile.points.first().rawAvg, 0.0);
+    QCOMPARE(r.profile.points.first().trueDb, 0.0);
+    // The split dwell is ONE point at 18 dB, carried by its later, settled half.
+    QCOMPARE(r.profile.points[3].rawAvg, 3030.0);
+    QCOMPARE(r.profile.points[3].trueDb, 18.0);
+    QCOMPARE(r.profile.points.last().trueDb, 24.0);
 }

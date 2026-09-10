@@ -242,6 +242,15 @@ namespace CalibrationConstants {
     /// any realistic sigma.
     inline constexpr int kMaxEdgeRelaxAttempts = 8;
 
+    /// Adjacent plateau levels closer than this fraction of the channel's median
+    /// step are one physical level split by noise, and are merged before sweep
+    /// selection. Complements the noise-based edge threshold, which cannot size
+    /// itself for noise that grows with signal level. On STEP_CAL_EXAMPLE the
+    /// splits run 0.5-2% of a step and the smallest genuine step ~30%, so 10%
+    /// sits well clear of both; a synthetic compressed receiver's smallest real
+    /// step is ~16% (TestStepDetector pins that it survives).
+    inline constexpr double kSameLevelFractionOfStep = 0.1;
+
     /// Minimum stable-run duration (seconds) required to confirm a level as a
     /// genuine step rather than a transient/partial-jump blip. The detector
     /// requires a run to be stable for at least this long (in addition to the
