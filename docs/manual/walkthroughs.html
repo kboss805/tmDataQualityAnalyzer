@@ -334,13 +334,21 @@ stream is currently using.</p>
 each as soon as you select it: how many steps it parsed, and how many channels it managed to
 calibrate.</p>
 
-{{FIG:walk-cal-03-clip-controls.png|Both files chosen and the clip controls set. The confirmations report eleven steps parsed and three of forty-eight channels calibrated.|Extract Calibration dialog populated with a step TOML and calibration Chapter 10 file, clip start 6 seconds and clip end 48 seconds}}
+{{FIG:walk-cal-03-clip-controls.png|Both files chosen and the clip controls set: 6 seconds trimmed from the start of the recording and 2 seconds from its end. The confirmations report eleven steps parsed and twelve of forty-eight channels calibrated.|Extract Calibration dialog populated with default.toml and step_cal, example.ch10, clip start 6 seconds and clip end 2 seconds, reporting 11 steps parsed and 12 of 48 channels calibrated}}
 
 <h3>Step 3 &mdash; Trim the recording, if it needs it</h3>
 
 <p><strong>Clip Start</strong> and <strong>Clip End</strong> discard that many seconds from each
 end of the calibration recording before anything is measured. They exist because real
 calibration recordings usually contain material that is not part of the sweep:</p>
+
+<div class="note"><strong>Both values are amounts to trim, not times.</strong> Clip Start is
+measured in from the <em>beginning</em> of the recording, and Clip End is measured back from its
+<em>end</em> &mdash; not from the beginning, and not from Clip Start. On a 65-second recording,
+Clip Start 6 and Clip End 2 keep the part from 6&nbsp;s to 63&nbsp;s. Entering Clip End 50
+there does <em>not</em> mean "stop at 50&nbsp;s": it trims the last 50 seconds and keeps only
+6&nbsp;s to 15&nbsp;s, which leaves almost none of the sweep. If the two values add up to more
+than the whole recording, they are ignored and the entire recording is used.</div>
 
 <ul>
   <li>a <strong>turn-on transient</strong> at the beginning, while the signal generator settles
@@ -352,6 +360,12 @@ calibration recordings usually contain material that is not part of the sweep:</
 <p>Both look like plateaus to a detector that is asked only to find steady levels, and either
 can be mistaken for a real step. If the number of plateaus found does not match the number of
 steps in your file, trimming the ends is the first thing to try.</p>
+
+<p>Trim only what is outside the sweep. The level the receiver holds <em>before</em> the
+generator starts stepping is usually the first step itself, and the top step runs right up to
+the moment the level drops back &mdash; so trimming too far at either end removes real steps
+rather than noise, and the channel count in the confirmation falls. Watch that count as you
+change the values: the dialog re-runs the extraction each time.</p>
 
 <h3>Step 4 &mdash; Read the result honestly</h3>
 

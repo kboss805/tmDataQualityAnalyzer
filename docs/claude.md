@@ -520,7 +520,12 @@ The stories below follow the workflow a first-time user takes through the applic
   at, and what a saturated receiver looks like. The troubleshooting table gains three rows:
   a swept receiver reading *flat / no signal* (word map), steps landing at the wrong levels
   despite success (step file shorter than the recording), and a trace that flattens below
-  the top step (saturation).
+  the top step (saturation). `walk-cal-03-clip-controls.png` is re-captured on the same recording
+  (Clip Start 6, Clip End 2, 12 of 48), and step 3 now states plainly that both clip values
+  are amounts trimmed from each end - Clip End counts back from the end of the recording, not
+  forward from its start or from Clip Start - with a worked example of how a mistaken
+  "stop at 50 s" entry keeps almost none of the sweep, and that clips adding up to more than
+  the recording are ignored.
 
 #### Word-map trap found along the way
 
