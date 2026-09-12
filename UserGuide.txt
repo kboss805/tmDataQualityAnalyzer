@@ -128,13 +128,28 @@ recording instead of relying on the linear slope/scale alone.
 
 1. Click "Extract Calibration..." in the Receiver SNR setup dialog.
 2. Step Cal File: load the step-config TOML listing the expected dB step levels
-   that were injected (for example 0, 3, 6, 12, 18, 24, 30, 36 dB).
+   that were injected (for example 0, 6, 12 ... 60 dB). It must list EVERY level
+   the recording steps through: a file with fewer steps than the recording can
+   still calibrate, but every step ends up paired with the wrong level.
 3. Calibration Ch10: load the .ch10 file that recorded the step-cal sweep.
 4. The application detects the step plateaus on each receiver channel and builds
    a calibration profile for every channel that cleanly resolves the expected
-   number of steps. A summary reports which channels calibrated and which fell
-   back to the standard linear calibration. The message log lists the plateau
-   count detected per channel.
+   number of steps. A summary names the receivers that calibrated, and for each
+   receiver that fell back to the standard linear calibration it lists the
+   channels and the reason:
+     - flat / no signal (held at N): the channel never moved, so the sweep is
+       not in it - usually a channel nothing was injected into.
+     - too few plateaus (X of N steps resolved): the channel moved through fewer
+       levels than the step file lists.
+     - no monotonic sweep: enough levels, but they did not climb steadily.
+     - no data: nothing was extracted for the channel.
+   The message log lists the plateau count detected per channel.
+
+   A receiver driven past the top of its range during the sweep (its top steps
+   all read the same full-scale value) is calibrated over the steps it could
+   still measure, and readings above the last of those hold there. The summary
+   lists such receivers separately and says where they stop; the usual cause is
+   a receiver gain set too high for the calibration levels.
 
    Detection is automatic and works regardless of receiver polarity (whether the
    raw count rises or falls as signal increases). A signal-generator turn-on
@@ -144,6 +159,13 @@ recording instead of relying on the linear slope/scale alone.
 5. Clip Start / Clip End (optional): if the start or end of your recording
    contains extra transients that confuse detection, enter the number of seconds
    to ignore at each end before step detection runs. Defaults are 0.
+
+   Both are amounts to trim, not times. Clip Start counts in from the beginning
+   of the recording; Clip End counts back from its END - not from the beginning,
+   and not from Clip Start. On a 65-second recording, Clip Start 6 and Clip End 2
+   keep 6 s to 63 s; Clip End 50 keeps only 6 s to 15 s. If the two add up to
+   more than the whole recording they are ignored. Trim only what is outside the
+   sweep, and watch the channel count, which updates as you change the values.
 
 Notes:
 - The calibration profile is session-only; it is not saved to disk. Re-extract it

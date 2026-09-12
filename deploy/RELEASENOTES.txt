@@ -1,3 +1,51 @@
+tmDataQualityAnalyzer v2.12.0 - What's New
+=================================
+
+  This release is about non-linear step calibration on receivers that are far
+  out of alignment. If you calibrate receiver SNR from a step-cal recording,
+  re-extract your calibrations with this version: some profiles built by
+  earlier versions were paired with the wrong steps, with no warning.
+
+  - Fixed: Calibrated channels could read a whole step (6 dB) low - or two -
+    while the calibration still reported success. Noise near the top of a
+    sweep could make one step look like two, which pushed every step below it
+    onto the wrong dB value. On the plot this showed as channels from the same
+    receiver stepping a full level apart, with a large noise swing near the
+    top. Every step is now paired with its own level.
+
+  - Fixed: A step whose level was too noisy to pick out could be skipped, and
+    readings there were estimated from the steps either side - about 1 dB off
+    on an out-of-alignment receiver. That step is now measured directly.
+
+  - New: A receiver driven past the top of its range during the calibration
+    sweep is now calibrated over the steps it could still measure, instead of
+    falling back to linear calibration for everything. Readings above its last
+    measured step hold at that step. The summary tells you which receivers this
+    affected and where they stop - usually a sign the receiver gain was set too
+    high for the calibration levels.
+
+  - Improved: The calibration summary names receivers instead of just counting
+    channels - for example "Calibrated: receivers 1, 3, 5, 6." - and for every
+    receiver that fell back to linear calibration it says which channels and
+    why: no signal (with the level it held), too few steps found, no steady
+    climb, or no data.
+
+  - Improved: Receivers far out of alignment, whose steps are much smaller or
+    less even than usual, calibrate more reliably.
+
+  - Improved: The user manual's calibration walkthrough shows the new summary,
+    explains each reason a receiver can fall back, and makes clear that Clip
+    Start and Clip End are both amounts trimmed from their own end of the
+    recording - Clip End counts back from the end, not forward from the start.
+
+  Tip: make sure your step file lists every level the calibration recording
+  steps through. A step file with fewer steps than the recording can still
+  "succeed" while pairing every step with the wrong level.
+
+  Your existing settings, configuration files, calibration TOMLs and processing
+  templates all continue to work as before.
+
+
 tmDataQualityAnalyzer v2.11.1 - What's New
 =================================
 

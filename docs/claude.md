@@ -8,7 +8,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, `cl` / `nmake`), Qt `msvc2022_64` kit.
   This is the only supported toolchain (and what CI uses).
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
-- **Project Version**: 2.11.1 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
+- **Project Version**: 2.12.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
 
 ## User Stories
 
@@ -295,10 +295,10 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] During main data processing, the application applies the non-linear calibration profile using piece-wise linear interpolation between steps.
 - [x] Raw values outside the calibrated range clamp to the nearest end-step dB instead of extrapolating, so a receiver driven past the calibrated range reads the ceiling or floor value.
 
-  - **Saturated receivers (unreleased):** a receiver driven past its converter's range
+  - **Saturated receivers (v2.12.0):** a receiver driven past its converter's range
     mid-sweep is now calibrated over the steps that stayed in scale, with readings clamped at
     the top measured step, instead of losing the whole channel to the linear fallback.
-  - **Summary report (unreleased):** the summary criterion above is now met literally — the message box names the calibrated receivers ("Calibrated: receivers 1, 3, 5, 6.") and lists each receiver that fell back with its channels and the reason, where it previously reported only a channel count.
+  - **Summary report (v2.12.0):** the summary criterion above is now met literally — the message box names the calibrated receivers ("Calibrated: receivers 1, 3, 5, 6.") and lists each receiver that fell back with its channels and the reason, where it previously reported only a channel count.
   - **Status (v2.2.5): COMPLETE.** Step selection is polarity-agnostic and robust to real recordings: it takes the first maximal monotonic plateau run and keeps its last `expected` plateaus, which excludes a signal-generator turn-on transient (leading) and the optional operator down-ramp (trailing) for both normal and inverted-polarity receivers — fixing the calibrated-staircase time skew. The extraction sample period is frame-rate-adaptive (100 ms floor) for fast frames, and the Apply Cal dialog adds optional **Clip Start / Clip End** controls so operators can trim leading/trailing seconds before detection. Out-of-range raw values clamp (not extrapolate) to the nearest end-step dB.
 
 ### US6.0: Export the plot as an image file — Complete
@@ -404,7 +404,7 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ## Version History
 
-### Unreleased — since the v2.11.1 tag
+### v2.12.0 — Calibration That Pairs Every Step Correctly, Even on Out-of-Alignment Receivers
 
 #### Calibration pairs every step with its own dwell on out-of-alignment receivers (US5.3)
 
