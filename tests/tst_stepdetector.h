@@ -30,6 +30,8 @@ private slots:
     void detectFlatChannelReportsNoSignalNotMergedSteps();
     void detectPinnedSamplesDoNotShrinkTheNoiseEstimate();
     void detectSplitDwellFarAboveNoiseIsStillOneStep();
+    void detectRailedTopStepsCalibrateWhatStayedInRange();
+    void detectMissingDwellDoesNotShiftTheStepsAfterIt();
 
     // Interpolation / out-of-range clamping
     void interpolateMidpoint();

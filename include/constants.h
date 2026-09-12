@@ -180,33 +180,40 @@ namespace UIConstants {
 
 /// @brief Constants for non-linear step calibration extraction (US5.3).
 namespace CalibrationConstants {
-    /// Fine output sample period (seconds) used when extracting raw calibration
-    /// data, so dwell plateaus are resolved with many samples each. This is the
-    /// FLOOR; the actual period is sized up to hold ~kFramesPerExtractWindow
-    /// frames per window (see below) so low-frame-rate recordings don't produce
-    /// sparse/zero-laced windows.
+    /// Output sample period (seconds) assumed for a calibration extraction until
+    /// the reader resolves the recording's real bit rate, at which point the
+    /// period is sized from the frame rate (see kFramesPerExtractWindow).
     inline constexpr double kExtractSamplePeriodSec = 0.01; // 10 ms (100 Hz)
 
-    /// Target number of decoded frames to average into each extraction output
-    /// sample. The extractor derives its sample period from the resolved bit
-    /// rate so each window holds roughly this many frames: too few (e.g. ~1 on
-    /// an ~8000-bit/100 Hz stream at 10 ms) yields a noisy, gap-laced series the
-    /// step detector cannot read; too many over-coarsens the plateaus.
+    /// Decoded frames averaged into each extraction output sample.
+    ///
+    /// Sampling once per frame sounds strictly better - it is the finest a
+    /// recording can give - but it is not: the AGC word updates more slowly than
+    /// the frame rate, so consecutive frames repeat the same count and the series
+    /// becomes a quantised staircase whose median absolute derivative is exactly
+    /// zero. The edge threshold then collapses to kMinEdgeRawCounts and every
+    /// real jitter step reads as an edge, shattering every dwell.
     inline constexpr int kFramesPerExtractWindow = 10;
 
     /// Lower bound (seconds) on the adaptively-sized extraction sample period.
-    /// Distinct from kExtractSamplePeriodSec (the raw default): on fast frames
-    /// (e.g. 800-bit minor frames at ~1000 Hz) the "~kFramesPerExtractWindow
-    /// frames/window" sizing collapses to a few milliseconds, which over-resolves
-    /// each dwell plateau into many samples. StepDetector then sees fine
-    /// settling/noise as extra sub-plateaus and mis-pairs small steps (a 3 dB
-    /// first step gets dropped, drifting every later step). Flooring the period at
-    /// ~kStepConfirmSeconds / kFramesPerExtractWindow keeps each confirm window to
-    /// a moderate sample count, which detects cleanly across slow and fast frames.
+    ///
+    /// Finer is NOT better here, which is worth stating because it is the
+    /// intuitive assumption. A window smaller than this resolves the settling
+    /// ramp at the start of each dwell (~1 s on a real receiver) into sub-plateaus
+    /// the detector reads as extra levels. Measured on STEP_CAL_EXAMPLE, whose
+    /// 1 ms frames make every option available: one sample per frame calibrates
+    /// 0 of 48 channels, 10 ms calibrates 10, and 100 ms calibrates 12.
+    ///
+    /// The window is also the resolution of every dwell BOUNDARY - one window
+    /// straddles each transition and reads as a level belonging to neither step -
+    /// but that costs nothing: those samples are marked unstable and excluded, and
+    /// each level is taken from the END of its dwell. The boundary smear an
+    /// operator sees BETWEEN plateaus on the plot comes from the main run's own
+    /// sample period, not from this.
     inline constexpr double kMinAdaptiveExtractPeriodSec = 0.1; // 100 ms
 
     /// Upper bound (seconds) on the adaptively-sized extraction sample period,
-    /// so that a very low frame rate can't coarsen the window past the point of
+    /// so that a very low frame rate can not coarsen the window past the point of
     /// leaving enough samples per dwell plateau to confirm a step.
     inline constexpr double kMaxExtractSamplePeriodSec = 0.2; // 200 ms
 
@@ -250,6 +257,35 @@ namespace CalibrationConstants {
     /// sits well clear of both; a synthetic compressed receiver's smallest real
     /// step is ~16% (TestStepDetector pins that it survives).
     inline constexpr double kSameLevelFractionOfStep = 0.1;
+
+    /// A plateau within this fraction of either end of the converter's range is
+    /// PINNED there rather than measured: a receiver driven onto its rail (or
+    /// under its floor) reports the same count whatever the signal does, so such
+    /// a dwell carries no calibration information and must not be paired with a
+    /// step. 0.98 of full scale is 64224 counts; the real railed dwells on
+    /// STEP_CAL_EXAMPLE sit at 65472.
+    inline constexpr double kSaturatedRawFraction = 0.98;
+
+    /// How far (in dwells) a plateau's end may sit off the regular dwell grid
+    /// before the saturated-top fallback refuses to infer step indices from
+    /// timing. A recording whose steps were not each held for the same length of
+    /// time fails this and keeps the linear fallback, rather than being given a
+    /// silently mis-numbered profile.
+    inline constexpr double kMaxDwellSlotError = 0.25;
+
+    /// Fewest measured steps a partial (saturated-top) profile may be built from;
+    /// it must also cover at least half the expected steps. Below that the
+    /// profile would describe so little of the sweep that linear is the more
+    /// honest answer.
+    inline constexpr int kMinPartialProfileSteps = 3;
+
+    /// A derivative at least this fraction of the channel's median step is a dwell
+    /// TRANSITION rather than in-dwell noise. The saturated-top fallback counts
+    /// these to number the steps, so it wants a threshold well above the noise
+    /// (tens of counts) and well below the smallest real step - including the
+    /// compressed ones an out-of-tolerance receiver produces, which on
+    /// STEP_CAL_EXAMPLE run to a third of the median step.
+    inline constexpr double kMajorEdgeFractionOfStep = 0.25;
 
     /// Minimum stable-run duration (seconds) required to confirm a level as a
     /// genuine step rather than a transient/partial-jump blip. The detector

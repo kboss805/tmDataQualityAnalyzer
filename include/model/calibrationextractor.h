@@ -43,6 +43,9 @@ struct CalibrationChannelResult
     bool               thresholdRelaxed = false; ///< Calibrated only after loosening the
                                                   ///< edge threshold (steps near the noise floor).
     QVector<double>    plateauLevels;   ///< Settled plateau averages detection found.
+    bool               saturated = false; ///< Calibrated only up to a railed top; readings
+                                          ///< clamp at the highest step still measurable.
+    QVector<double>    unresolvedDb;    ///< dB of steps no measured level could be paired with.
 };
 
 /// @brief Extracts non-linear calibration profiles from a calibration Ch10 file.

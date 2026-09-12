@@ -44,25 +44,6 @@ double median(QVector<double> values)
     return values[mid];
 }
 
-/// Merges adjacent values within @p tolerance of each other into one, keeping the
-/// later (more settled) value. Order is preserved.
-QVector<double> coalesceLevels(const QVector<double>& values, double tolerance)
-{
-    QVector<double> levels;
-    for (double v : values)
-    {
-        if (!levels.isEmpty() && std::fabs(v - levels.last()) <= tolerance)
-        {
-            levels.last() = v;
-        }
-        else
-        {
-            levels.push_back(v);
-        }
-    }
-    return levels;
-}
-
 /// Median magnitude of the change between adjacent values (0 for fewer than two).
 double medianAdjacentGap(const QVector<double>& values)
 {
@@ -289,6 +270,63 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
         return plateauAvg;
     };
 
+    // A coalesced level: the settled value plus the sample span it was measured
+    // over. The span is what lets the saturated-top fallback (7d) tell a plateau
+    // covering two dwells from two plateaus covering one each.
+    struct Level
+    {
+        double value;
+        int    begin;
+        int    end;
+    };
+
+    auto spanned = [&](const QVector<Plateau>& plateaus) {
+        const QVector<double> averages = settledAverages(plateaus);
+        QVector<Level> levels;
+        levels.reserve(plateaus.size());
+        for (int k = 0; k < plateaus.size(); k++)
+        {
+            levels.push_back(Level{averages[k], plateaus[k].begin, plateaus[k].end});
+        }
+        return levels;
+    };
+
+    // Merges adjacent levels within @p tolerance into one, keeping the later
+    // (more settled) value and extending the span across both halves.
+    auto coalesce = [](const QVector<Level>& in, double tolerance) {
+        QVector<Level> out;
+        for (const Level& level : in)
+        {
+            if (!out.isEmpty() && std::fabs(level.value - out.last().value) <= tolerance)
+            {
+                out.last().value = level.value;
+                out.last().end   = level.end;
+            }
+            else
+            {
+                out.push_back(level);
+            }
+        }
+        return out;
+    };
+
+    auto valuesOf = [](const QVector<Level>& levels) {
+        QVector<double> values;
+        values.reserve(levels.size());
+        for (const Level& level : levels)
+        {
+            values.push_back(level.value);
+        }
+        return values;
+    };
+
+    // A level change smaller than the edge threshold is not a real transition.
+    auto direction = [](double delta, double threshold) {
+        if (delta > threshold) return 1;
+        if (delta < -threshold) return -1;
+        return 0;
+    };
+
     // 7. Select one clean calibration sweep: the first run of `expected`
     //    CONSECUTIVE plateaus whose settled averages move strictly in one
     //    direction (a real receiver response is monotonic — increasing or
@@ -305,12 +343,6 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
     //    old "first N plateaus" rule, which paired no-signal noise with the step
     //    dB values and produced degenerate (all-equal rawAvg) profiles.
     auto selectSweep = [&](const QVector<double>& plateauAvg, double threshold) -> int {
-    auto sign = [&](double delta) -> int {
-        if (delta > threshold) return 1;
-        if (delta < -threshold) return -1;
-        return 0; // change too small to be a real step transition
-    };
-
     // Find the FIRST maximal run of plateaus whose settled averages move strictly
     // in one direction, long enough to hold the whole sweep, and take its LAST
     // `expected` plateaus.
@@ -334,7 +366,7 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
     int run_start = -1;
     for (int begin = 0; begin + 1 < plateauAvg.size() && run_start < 0; )
     {
-        const int dir = sign(plateauAvg[begin + 1] - plateauAvg[begin]);
+        const int dir = direction(plateauAvg[begin + 1] - plateauAvg[begin], threshold);
         if (dir == 0)
         {
             begin++; // sub-threshold step: not a real transition, skip
@@ -342,7 +374,7 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
         }
         int end = begin + 1;
         while (end + 1 < plateauAvg.size() &&
-               sign(plateauAvg[end + 1] - plateauAvg[end]) == dir)
+               direction(plateauAvg[end + 1] - plateauAvg[end], threshold) == dir)
         {
             end++;
         }
@@ -358,6 +390,197 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
     }
     return run_start;
     }; // selectSweep
+
+    // 7d. Saturated top: calibrate the steps that stayed in range.
+    //
+    // A receiver whose gain is set too high for the injected levels runs off the
+    // end of its converter partway through the sweep: every dwell from there on
+    // reads the same full-scale count, so the recording physically cannot hold
+    // `expected` distinct levels and no threshold will find them. Those railed
+    // dwells are not measurements - the receiver had no headroom left - so they
+    // are dropped rather than paired, and the profile covers the steps below.
+    // interpolateCalibration() already clamps above its top point, so a raw value
+    // that reaches the rail in the main run reads the top measured step's dB
+    // rather than a number invented by extrapolating past the data.
+    //
+    // Pairing the survivors needs to know WHICH steps they are, and position
+    // alone cannot say once a dwell is missing from the middle (noise can shatter
+    // one into runs too short to confirm, which is what L_RCVR1 does on
+    // STEP_CAL_EXAMPLE). The generator holds every step for the same length of
+    // time, so plateau END times fall on a regular grid - each level's distance
+    // from the first, in whole dwells, is its step index. Ends rather than starts,
+    // because the pre-sweep level runs for however long the operator took to begin
+    // and only its end lands on the grid. A recording whose dwells are not regular
+    // fails the check and keeps the linear fallback rather than guessing.
+    auto calibrateSaturatedTop = [&](const QVector<Level>& levels) -> bool {
+        auto isPinned = [](double value) {
+            const double full_scale = PCMConstants::kMaxRawSampleValue;
+            return value >= CalibrationConstants::kSaturatedRawFraction * full_scale
+                   || value <= (1.0 - CalibrationConstants::kSaturatedRawFraction) * full_scale;
+        };
+
+        if (levels.size() < 2)
+        {
+            return false;
+        }
+        const QVector<double> values = valuesOf(levels);
+
+        // Longest monotonic run, by the same rule the full-sweep selection uses
+        // but of any length - here the run is short BECAUSE the top railed.
+        int run_begin = 0;
+        int run_end   = 0;
+        for (int begin = 0; begin + 1 < values.size(); )
+        {
+            const int dir = direction(values[begin + 1] - values[begin], nominal_threshold);
+            if (dir == 0)
+            {
+                begin++;
+                continue;
+            }
+            int end = begin + 1;
+            while (end + 1 < values.size()
+                   && direction(values[end + 1] - values[end], nominal_threshold) == dir)
+            {
+                end++;
+            }
+            if (end - begin > run_end - run_begin)
+            {
+                run_begin = begin;
+                run_end   = end;
+            }
+            begin = end;
+        }
+        if (run_end <= run_begin)
+        {
+            return false;
+        }
+
+        // Drop the railed dwells at the TOP of the run only: a pinned level at its
+        // start is the pre-sweep level, which is a real measurement of a real step.
+        int last   = run_end;
+        int railed = 0;
+        while (last > run_begin && isPinned(values[last]))
+        {
+            last--;
+            railed++;
+        }
+        if (railed == 0)
+        {
+            return false; // a short run with nothing railed is a different failure
+        }
+        const int measured = last - run_begin + 1;
+        if (measured < std::max(CalibrationConstants::kMinPartialProfileSteps, expected / 2))
+        {
+            return false; // too little of the sweep survived to be worth a profile
+        }
+
+        // The dwell grid comes from the TRANSITIONS, not from the plateau spans.
+        // A plateau's end is not reliably on the grid - noise shatters the tail of
+        // a dwell into runs too short to confirm, which on STEP_CAL_EXAMPLE ends
+        // R_RCVR1's 36 dB plateau a third of a dwell early. A plateau's BEGIN is
+        // always inside its own dwell, though (the transition samples either side
+        // are marked unstable), so counting whole dwells between transitions
+        // places every level.
+        const double major_edge =
+            CalibrationConstants::kMajorEdgeFractionOfStep
+            * medianAdjacentGap(values.mid(run_begin, run_end - run_begin + 1));
+        QVector<int> boundaries;
+        for (int i = 0; i < deriv.size(); i++)
+        {
+            if (std::fabs(deriv[i]) < major_edge)
+            {
+                continue;
+            }
+            // One transition can smear across the window that straddles it, so
+            // marks a sample or two apart are the same boundary.
+            if (boundaries.isEmpty() || i - boundaries.last() > 2)
+            {
+                boundaries.push_back(i);
+            }
+        }
+        if (boundaries.size() < 2)
+        {
+            return false;
+        }
+        QVector<double> spacings;
+        for (int i = 1; i < boundaries.size(); i++)
+        {
+            spacings.push_back(boundaries[i] - boundaries[i - 1]);
+        }
+        const double dwell = median(spacings);
+        if (dwell <= 0.0)
+        {
+            return false;
+        }
+        // Step index of each boundary. A gap of two dwells means one step never
+        // produced a transition of its own - the railed pair at the top, or a
+        // dwell noise ate - and the numbering must skip it rather than shift.
+        QVector<int> boundary_slot(boundaries.size(), 0);
+        for (int i = 1; i < boundaries.size(); i++)
+        {
+            const double gap     = (boundaries[i] - boundaries[i - 1]) / dwell;
+            const int    spanned = static_cast<int>(std::llround(gap));
+            if (spanned < 1 || std::fabs(gap - spanned) > CalibrationConstants::kMaxDwellSlotError)
+            {
+                return false; // dwells were not held for a uniform time; do not guess
+            }
+            boundary_slot[i] = boundary_slot[i - 1] + spanned;
+        }
+        // Each level belongs to the dwell its first sample sits in. The run's
+        // first level is taken to be step 0: unlike the full-sweep path there is
+        // no spare level to drop as a turn-on transient, because the whole reason
+        // this path runs is that levels are MISSING.
+        auto slotOf = [&](int begin_sample) {
+            int slot = 0;
+            for (int i = 0; i < boundaries.size(); i++)
+            {
+                if (begin_sample > boundaries[i])
+                {
+                    slot = boundary_slot[i] + 1;
+                }
+            }
+            return slot;
+        };
+        QVector<int> step_slots;
+        for (int k = run_begin; k <= last; k++)
+        {
+            const int slot = slotOf(levels[k].begin);
+            if (slot < 0 || slot >= expected
+                || (!step_slots.isEmpty() && slot <= step_slots.last()))
+            {
+                return false;
+            }
+            step_slots.push_back(slot);
+        }
+
+        CalibrationProfile& profile = result.profile;
+        profile.points.clear();
+        profile.points.reserve(measured);
+        QVector<bool> paired(expected, false);
+        for (int i = 0; i < measured; i++)
+        {
+            CalibrationPoint point;
+            point.rawAvg = values[run_begin + i];
+            point.trueDb = steps[step_slots[i]].db;
+            profile.points.push_back(point);
+            paired[step_slots[i]] = true;
+        }
+        std::sort(profile.points.begin(), profile.points.end(),
+                  [](const CalibrationPoint& a, const CalibrationPoint& b) {
+                      return a.rawAvg < b.rawAvg;
+                  });
+        for (int s = 0; s < expected; s++)
+        {
+            if (!paired[s])
+            {
+                result.unresolvedDb.push_back(steps[s].db);
+            }
+        }
+        profile.valid    = true;
+        result.saturated = true;
+        result.outcome   = CalibrationOutcome::Calibrated;
+        return true;
+    };
 
     // 7b. Search the edge threshold, using the expected step count as the target
     //     rather than only as a pass/fail test.
@@ -384,6 +607,7 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
 
     QVector<Plateau> plateaus;
     QVector<double> plateauAvg;
+    QVector<Level>  nominal_levels; ///< Levels the nominal pass saw, for the 7d fallback.
     double accepted_threshold = nominal_threshold;
     int run_start = -1;
     bool reached_sweep_stage = false;
@@ -419,7 +643,7 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
         // It also sharpens the dead-channel rejection rather than weakening it: a
         // flat channel's plateaus all collapse into ONE level, which can never
         // form a run of `expected`.
-        QVector<double> levels = coalesceLevels(settledAverages(candidates), threshold);
+        QVector<Level> levels = coalesce(spanned(candidates), threshold);
 
         // ...and again against the STEP size, not only the noise. Noise grows with
         // signal on a real receiver (~3 counts on its low steps, ~60 on its high
@@ -428,16 +652,17 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
         // into 22797 / 22818 - 22 counts apart against a 17-count threshold, on
         // steps ~3800 counts tall. Two levels a small fraction of a typical step
         // apart are one step, whatever the noise estimate says.
-        levels = coalesceLevels(levels,
-                                std::max(threshold, CalibrationConstants::kSameLevelFractionOfStep
-                                                        * medianAdjacentGap(levels)));
+        levels = coalesce(levels,
+                          std::max(threshold, CalibrationConstants::kSameLevelFractionOfStep
+                                                  * medianAdjacentGap(valuesOf(levels))));
         if (attempt == 0)
         {
             // Recorded before the count check below, so a channel that bails out
             // early still reports what it saw — that is exactly the case where
             // the levels are the only thing that explains the verdict (one level
             // at 0 is a dead input; one level at full scale is a railed one).
-            result.plateauLevels = levels;
+            result.plateauLevels = valuesOf(levels);
+            nominal_levels       = levels;
         }
         best_levels = std::max(best_levels, static_cast<int>(levels.size()));
         if (levels.size() < expected)
@@ -446,7 +671,7 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
         }
         reached_sweep_stage = true;
 
-        const QVector<double>& averages = levels;
+        const QVector<double> averages = valuesOf(levels);
         const int start = selectSweep(averages, threshold);
         if (start >= 0)
         {
@@ -463,6 +688,10 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
 
     if (run_start < 0)
     {
+        if (calibrateSaturatedTop(nominal_levels))
+        {
+            return result; // partial profile over the steps that stayed in range
+        }
         // Report the furthest gate reached. A channel that never resolved more
         // than one level did not "merge its steps" — it never moved at all, so
         // the sweep is absent from the recording rather than beyond the

@@ -711,3 +711,74 @@ void TestStepDetector::detectSplitDwellFarAboveNoiseIsStillOneStep()
     QCOMPARE(r.profile.points[3].trueDb, 18.0);
     QCOMPARE(r.profile.points.last().trueDb, 24.0);
 }
+
+void TestStepDetector::detectRailedTopStepsCalibrateWhatStayedInRange()
+{
+    // A receiver whose gain is set too high for the injected levels runs off the
+    // top of its converter partway up the sweep: the last dwells all read full
+    // scale, so the recording cannot hold `expected` distinct levels and no
+    // threshold will find them. Before, the whole channel fell back to linear and
+    // lost the steps it HAD measured. Those railed dwells carry no information -
+    // the receiver had no headroom - so they are dropped, the steps below them are
+    // calibrated, and interpolateCalibration() clamps above the top measured step
+    // rather than inventing values by extrapolating past the data.
+    QVector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}, {18.0}, {24.0}};
+
+    QVector<double> raw;
+    appendRun(raw, 1000.0, 150);
+    appendRun(raw, 2000.0, 150);
+    appendRun(raw, 3000.0, 150);
+    appendRun(raw, 65535.0, 300); // 18 and 24 dB both peg the converter
+
+    StepDetector::Result r = StepDetector::detect(raw, kPeriod, steps);
+    QVERIFY2(r.profile.valid, qPrintable(QString::fromLatin1(calibrationOutcomeText(r.outcome))));
+    QVERIFY(r.saturated);
+    QCOMPARE(r.outcome, CalibrationOutcome::Calibrated);
+
+    // The three measured dwells keep their own dB - the sweep starts at step 0.
+    QCOMPARE(r.profile.points.size(), 3);
+    QCOMPARE(r.profile.points.first().rawAvg, 1000.0);
+    QCOMPARE(r.profile.points.first().trueDb, 0.0);
+    QCOMPARE(r.profile.points.last().rawAvg, 3000.0);
+    QCOMPARE(r.profile.points.last().trueDb, 12.0);
+    QCOMPARE(r.unresolvedDb, QVector<double>({18.0, 24.0}));
+
+    // A raw value at the rail reads the top step that was actually measured. It
+    // is not 24 dB: the recording cannot say whether the signal was 18, 24, or
+    // anything above, so the honest answer is the last one it could see.
+    QCOMPARE(interpolateCalibration(65535.0, r.profile), 12.0);
+}
+
+void TestStepDetector::detectMissingDwellDoesNotShiftTheStepsAfterIt()
+{
+    // The 18 dB dwell is in the recording but its plateau never confirms - noise
+    // shatters it into runs too short to hold. Position alone would then pair the
+    // 24 dB dwell with the 18 dB step and slide everything after it down one, the
+    // same silent mis-calibration a split dwell used to cause. Step numbers come
+    // from the dwell grid (counting transitions) instead, so a missing level
+    // leaves a hole rather than a shift.
+    QVector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}, {18.0}, {24.0}, {30.0}};
+
+    QVector<double> raw;
+    appendRun(raw, 1000.0, 150);
+    appendRun(raw, 2000.0, 150);
+    appendRun(raw, 3000.0, 150);
+    // 18 dB: jitters by a few counts for its whole dwell, so no run of it is ever
+    // stable long enough to confirm - but the transitions either side still are.
+    for (int i = 0; i < 150; i++)
+    {
+        raw.push_back(4000.0 + ((i % 2 == 0) ? 0.0 : 6.0));
+    }
+    appendRun(raw, 5000.0, 150);
+    appendRun(raw, 65535.0, 150); // 30 dB pegs the converter
+
+    StepDetector::Result r = StepDetector::detect(raw, kPeriod, steps);
+    QVERIFY2(r.profile.valid, qPrintable(QString::fromLatin1(calibrationOutcomeText(r.outcome))));
+    QVERIFY(r.saturated);
+    QCOMPARE(r.profile.points.size(), 4);
+
+    // The step after the hole keeps its own dB - this is the whole point.
+    QCOMPARE(r.profile.points.last().rawAvg, 5000.0);
+    QCOMPARE(r.profile.points.last().trueDb, 24.0);
+    QCOMPARE(r.unresolvedDb, QVector<double>({18.0, 30.0}));
+}

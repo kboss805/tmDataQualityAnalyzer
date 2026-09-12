@@ -360,11 +360,9 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
         // profile still attached, so nothing reported it: the staircase simply sat
         // a step behind its neighbours, and noise across the split swung 6 dB.
         const QVector<CalibrationPoint>& pts = r.profile.points;
-        QCOMPARE(pts.size(), steps.size());
         QVERIFY2(pts.first().rawAvg < 1000.0 && pts.first().trueDb == 0.0,
                  qPrintable(QString("%1: 0 dB paired with raw %2, not the pre-sweep level")
                                 .arg(r.name).arg(pts.first().rawAvg)));
-        QCOMPARE(pts.last().trueDb, 60.0);
         for (int k = 1; k < pts.size(); k++)
         {
             // Genuine steps here are more than 1000 counts apart (the smallest is
@@ -375,14 +373,33 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
                                     .arg(r.name).arg(pts[k - 1].trueDb).arg(pts[k].trueDb)
                                     .arg(pts[k].rawAvg - pts[k - 1].rawAvg)));
         }
+
+        if (r.saturated)
+        {
+            // Receiver 1 alone: its gain is set too high for this sweep, so its top
+            // two steps both sit on the 65472 rail and carry no measurement. It is
+            // calibrated over the range it could still resolve, and readings hold
+            // at the top of that range instead of being extrapolated past it.
+            QCOMPARE(FrameSetup::receiverIndexFromName(r.name), 1);
+            QCOMPARE(pts.last().trueDb, 48.0);
+            QVERIFY2(r.unresolvedDb.contains(54.0) && r.unresolvedDb.contains(60.0),
+                     qPrintable(r.name));
+            QCOMPARE(interpolateCalibration(65472.0, r.profile), 48.0);
+            // L_RCVR1 loses its 24 dB dwell to noise as well, so it carries one
+            // point fewer - and the steps above that hole must still be their own.
+            QVERIFY(pts.size() >= steps.size() - 3);
+        }
+        else
+        {
+            QCOMPARE(pts.size(), steps.size());
+            QCOMPARE(pts.last().trueDb, 60.0);
+        }
     }
 
-    // Receivers 3, 5 and 6 carry the full sweep. Receiver 1 carries it too, but its
-    // top two steps (54 and 60 dB) both sit on the 65472 rail - ten distinct levels
-    // for eleven steps - so no full pairing exists and it falls back. And no false
-    // profile on any of the channels that carry no sweep.
-    QCOMPARE(calibratedChannels, 9);
-    QCOMPARE(calibratedReceivers, (QSet<int>{3, 5, 6}));
+    // All three channels of receivers 1, 3, 5 and 6 carry the sweep - the operator's
+    // own count - and no channel that carries none gets a false profile.
+    QCOMPARE(calibratedChannels, 12);
+    QCOMPARE(calibratedReceivers, (QSet<int>{1, 3, 5, 6}));
 
     // A receiver that carries no sweep says so plainly, not as a detection
     // shortfall: receiver 2 holds 0 for the whole recording.
@@ -395,7 +412,8 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
     }
 
     // And the operator-facing report names the receivers, in the unit operators
-    // actually talk in.
+    // actually talk in, and says where a saturated one stops being trustworthy.
     const QString report = CalibrationExtractor::summarize(results, steps.size());
-    QVERIFY2(report.contains("Calibrated: receivers 3, 5, 6."), qPrintable(report));
+    QVERIFY2(report.contains("Calibrated: receivers 1, 3, 5, 6."), qPrintable(report));
+    QVERIFY2(report.contains("Receiver 1") && report.contains("hold at 48 dB"), qPrintable(report));
 }

@@ -53,6 +53,16 @@ public:
         /// whether those 12 levels are 8 real steps plus 4 noise splits, or a
         /// genuine reversal.
         QVector<double> plateauLevels;
+        /// True when the sweep ran off an end of the converter and the railed
+        /// dwells were dropped: the profile covers the steps below them, and
+        /// interpolateCalibration() clamps everything above to the top step that
+        /// was still measurable. The operator needs to know - the channel IS
+        /// calibrated, but only over part of its sweep, and the usual cause is a
+        /// receiver gain set too high for the levels being injected.
+        bool saturated = false;
+        /// dB of every step no measured level could be paired with: the railed
+        /// ones, plus any dwell noise shattered into runs too short to confirm.
+        QVector<double> unresolvedDb;
     };
 
     /**
