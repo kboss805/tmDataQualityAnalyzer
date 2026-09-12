@@ -406,7 +406,7 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
     // Pairing the survivors needs to know WHICH steps they are, and position
     // alone cannot say once a dwell is missing from the middle (noise can shatter
     // one into runs too short to confirm, which is what L_RCVR1 does on
-    // STEP_CAL_EXAMPLE). The generator holds every step for the same length of
+    // the step_cal recording). The generator holds every step for the same length of
     // time, so plateau END times fall on a regular grid - each level's distance
     // from the first, in whole dwells, is its step index. Ends rather than starts,
     // because the pre-sweep level runs for however long the operator took to begin
@@ -476,7 +476,7 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
 
         // The dwell grid comes from the TRANSITIONS, not from the plateau spans.
         // A plateau's end is not reliably on the grid - noise shatters the tail of
-        // a dwell into runs too short to confirm, which on STEP_CAL_EXAMPLE ends
+        // a dwell into runs too short to confirm, which on the step_cal recording ends
         // R_RCVR1's 36 dB plateau a third of a dwell early. A plateau's BEGIN is
         // always inside its own dwell, though (the transition samples either side
         // are marked unstable), so counting whole dwells between transitions
@@ -572,7 +572,7 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
         // from the RECORDING, only from plateau detection - the grid says exactly
         // where it is. Leaving it out is not neutral: interpolating straight across
         // the hole assumes the receiver is linear there, and an out-of-tolerance
-        // receiver is not. On STEP_CAL_EXAMPLE, L_RCVR1's 24 dB dwell sits at
+        // receiver is not. On the step_cal recording, L_RCVR1's 24 dB dwell sits at
         // 28556 counts; bridged from 18 dB to 30 dB it read 23.09 dB. So measure it
         // directly: the median of its settled tail, between the two transitions
         // that bound it. Only a gap of exactly one dwell qualifies (a wider one
@@ -716,7 +716,7 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
         // ...and again against the STEP size, not only the noise. Noise grows with
         // signal on a real receiver (~3 counts on its low steps, ~60 on its high
         // ones), so a split high dwell can sit further apart than any threshold the
-        // quiet steps support: STEP_CAL_EXAMPLE's L_RCVR3 split its 42 dB dwell
+        // quiet steps support: the step_cal recording's L_RCVR3 split its 42 dB dwell
         // into 22797 / 22818 - 22 counts apart against a 17-count threshold, on
         // steps ~3800 counts tall. Two levels a small fraction of a typical step
         // apart are one step, whatever the noise estimate says.

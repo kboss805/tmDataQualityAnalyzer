@@ -294,7 +294,7 @@ void TestCalibrationExtractor::summaryNamesReceiversAndWhyTheyFellBack()
 
 void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
 {
-    // STEP_CAL_EXAMPLE.ch10: a real step-calibration recording from receivers far
+    // step_cal, example.ch10: a real step-calibration recording from receivers far
     // out of alignment. Its sweep is 0 to 60 dB in 6 dB steps - eleven levels, the
     // first being the level each channel holds before the generator steps up - so
     // it is extracted with the 11-step settings/rcvr_cals/default.toml. Each dwell
@@ -303,9 +303,9 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
     //
     // Acquisition parameters (found by probing; nothing else locks): NRZ-L,
     // byte-swapped, 800-bit minor frames at 800 kbps on PCM channel 26.
-    const QString filepath = testDataPath("test files/STEP_CAL_EXAMPLE.ch10");
+    const QString filepath = testDataPath("test files/step_cal, example.ch10");
     if (!QFileInfo::exists(filepath))
-        QSKIP("STEP_CAL_EXAMPLE.ch10 not available");
+        QSKIP("step_cal, example.ch10 not available");
 
     Chapter10Reader reader; // keep the opened Ch10 file alive across extraction
     QVERIFY(reader.loadChannels(filepath));

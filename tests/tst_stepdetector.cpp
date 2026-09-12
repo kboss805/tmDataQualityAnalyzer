@@ -551,7 +551,7 @@ void TestStepDetector::detectCompressedOutOfToleranceReceiverStillCalibrates()
 void TestStepDetector::detectNoiseSplitPlateausDoNotSeverTheSweep()
 {
     // Levels taken verbatim from a real out-of-tolerance receiver
-    // (STEP_CAL_EXAMPLE.ch10, R_RCVR1): a clean climb from no-signal to a
+    // (step_cal, example.ch10, R_RCVR1): a clean climb from no-signal to a
     // saturated ceiling, except noise split two dwells into pairs of plateaus
     // differing by 3 and -1 raw counts.
     //
@@ -682,7 +682,7 @@ void TestStepDetector::detectSplitDwellFarAboveNoiseIsStillOneStep()
 {
     // Noise grows with signal on a real receiver, so a high dwell can split into
     // two plateaus further apart than any threshold the quiet low steps support:
-    // STEP_CAL_EXAMPLE's L_RCVR3 split its 42 dB dwell 22 counts apart against a
+    // the step_cal recording's L_RCVR3 split its 42 dB dwell 22 counts apart against a
     // 17-count threshold, on steps ~3800 counts tall. The split took a pairing
     // slot, the real 0 dB level was dropped as "pre-roll", and every step below the
     // split read 6 dB low. Levels a small fraction of a typical step apart are one
@@ -758,7 +758,7 @@ void TestStepDetector::detectUnconfirmedDwellIsMeasuredFromTheGrid()
     //    used to cause;
     //  - leaving the hole and interpolating across it assumes the receiver is
     //    linear there, which is exactly what an out-of-tolerance receiver is not
-    //    (L_RCVR1's 24 dB dwell read 23.09 dB that way on STEP_CAL_EXAMPLE).
+    //    (L_RCVR1's 24 dB dwell read 23.09 dB that way on the step_cal recording).
     // The dwell grid says where the missing dwell is, so it is measured directly.
     QVector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}, {18.0}, {24.0}, {30.0}};
 

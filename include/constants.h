@@ -200,7 +200,7 @@ namespace CalibrationConstants {
     /// Finer is NOT better here, which is worth stating because it is the
     /// intuitive assumption. A window smaller than this resolves the settling
     /// ramp at the start of each dwell (~1 s on a real receiver) into sub-plateaus
-    /// the detector reads as extra levels. Measured on STEP_CAL_EXAMPLE, whose
+    /// the detector reads as extra levels. Measured on the step_cal recording, whose
     /// 1 ms frames make every option available: one sample per frame calibrates
     /// 0 of 48 channels, 10 ms calibrates 10, and 100 ms calibrates 12.
     ///
@@ -252,7 +252,7 @@ namespace CalibrationConstants {
     /// Adjacent plateau levels closer than this fraction of the channel's median
     /// step are one physical level split by noise, and are merged before sweep
     /// selection. Complements the noise-based edge threshold, which cannot size
-    /// itself for noise that grows with signal level. On STEP_CAL_EXAMPLE the
+    /// itself for noise that grows with signal level. On the step_cal recording the
     /// splits run 0.5-2% of a step and the smallest genuine step ~30%, so 10%
     /// sits well clear of both; a synthetic compressed receiver's smallest real
     /// step is ~16% (TestStepDetector pins that it survives).
@@ -263,7 +263,7 @@ namespace CalibrationConstants {
     /// under its floor) reports the same count whatever the signal does, so such
     /// a dwell carries no calibration information and must not be paired with a
     /// step. 0.98 of full scale is 64224 counts; the real railed dwells on
-    /// STEP_CAL_EXAMPLE sit at 65472.
+    /// the step_cal recording sit at 65472.
     inline constexpr double kSaturatedRawFraction = 0.98;
 
     /// How far (in dwells) a plateau's end may sit off the regular dwell grid
@@ -284,7 +284,7 @@ namespace CalibrationConstants {
     /// these to number the steps, so it wants a threshold well above the noise
     /// (tens of counts) and well below the smallest real step - including the
     /// compressed ones an out-of-tolerance receiver produces, which on
-    /// STEP_CAL_EXAMPLE run to a third of the median step.
+    /// the step_cal recording run to a third of the median step.
     inline constexpr double kMajorEdgeFractionOfStep = 0.25;
 
     /// Minimum stable-run duration (seconds) required to confirm a level as a
