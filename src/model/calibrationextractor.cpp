@@ -8,6 +8,8 @@
 #include <algorithm>
 
 #include <QFileInfo>
+#include <QMap>
+#include <QStringList>
 #include <QThread>
 
 #include "ch10packetreader.h"
@@ -17,6 +19,23 @@
 #include "packetqueue.h"
 #include "processedstreamdata.h"
 #include "stepdetector.h"
+
+namespace {
+
+/// Highest dB a profile actually measured. Points are sorted by raw count and an
+/// inverted-polarity receiver's count falls as dB climbs, so the top dB can sit
+/// at either end - take the maximum rather than the last point.
+double topResolvedDb(const CalibrationProfile& profile)
+{
+    double top = 0.0;
+    for (const CalibrationPoint& point : profile.points)
+    {
+        top = std::max(top, point.trueDb);
+    }
+    return top;
+}
+
+} // namespace
 
 CalibrationExtractor::CalibrationExtractor(QObject* parent)
     : QObject(parent)
@@ -128,28 +147,27 @@ void CalibrationExtractor::start(const Request& request)
         return;
     }
 
-    // Size the extraction sample period to the resolved bit rate so each window
-    // averages ~kFramesPerExtractWindow frames. The reader has just resolved the
-    // per-bit period (from the user's data rate or TMATS) into resolvedAttrs.
-    // The fixed 10 ms default starves windows on low-frame-rate recordings
-    // (e.g. ~8000-bit frames at ~100 frames/s -> ~1 frame per 10 ms -> a sparse,
-    // zero-laced series StepDetector reads as noise), so derive it instead.
+    // Size the extraction window to average kFramesPerExtractWindow frames, then
+    // clamp it to the range that detects reliably. The reader has just resolved
+    // the per-bit period (from the user's data rate or TMATS) into resolvedAttrs.
+    //
+    // Both bounds are load-bearing and neither is arbitrary - see the constants,
+    // which carry the measured calibrated-channel counts. Finer windows are worse,
+    // not better: they resolve each dwell's settling ramp into sub-plateaus.
     const double bit_period_sec = m_params.resolvedAttrs.delta100ns * 1e-7;
     if (bit_period_sec > 0.0 && m_params.bitsInMinorFrame > 0)
     {
         const double frame_duration_sec =
             static_cast<double>(m_params.bitsInMinorFrame) * bit_period_sec;
-        double period = CalibrationConstants::kFramesPerExtractWindow * frame_duration_sec;
-        // Floor at kMinAdaptiveExtractPeriodSec (not the finer raw default): on
-        // fast frames the frames/window sizing collapses to a few ms, which
-        // over-resolves plateaus and makes StepDetector mis-pair small steps.
-        period = std::clamp(period, CalibrationConstants::kMinAdaptiveExtractPeriodSec,
-                            CalibrationConstants::kMaxExtractSamplePeriodSec);
+        const double period =
+            std::clamp(CalibrationConstants::kFramesPerExtractWindow * frame_duration_sec,
+                       CalibrationConstants::kMinAdaptiveExtractPeriodSec,
+                       CalibrationConstants::kMaxExtractSamplePeriodSec);
         m_sample_period_sec      = period;
         m_params.samplePeriodSec = period;
         emit logMessage(QString("Calibration extraction sample period: %1 ms "
                                 "(~%2 frames/window at %3-bit frames).")
-                            .arg(period * 1000.0, 0, 'f', 1)
+                            .arg(period * 1000.0, 0, 'f', 2)
                             .arg(period / frame_duration_sec, 0, 'f', 0)
                             .arg(m_params.bitsInMinorFrame));
     }
@@ -247,6 +265,12 @@ void CalibrationExtractor::onWorkerFinished(bool success)
                 res.profile          = det.profile;
                 res.detectedPlateaus = det.detectedPlateaus;
                 res.extraPlateaus    = det.extraPlateaus;
+                res.outcome          = det.outcome;
+                res.edgeThreshold    = det.edgeThreshold;
+                res.thresholdRelaxed = det.thresholdRelaxed;
+                res.plateauLevels    = det.plateauLevels;
+                res.saturated        = det.saturated;
+                res.unresolvedDb     = det.unresolvedDb;
                 if (res.profile.valid)
                 {
                     calibrated++;
@@ -258,6 +282,30 @@ void CalibrationExtractor::onWorkerFinished(bool success)
                 // whose raw->dB pairing is shifted. Applied to the main run that
                 // mis-mapping makes the channel climb at a different rate, which
                 // shows up as the calibrated steps no longer lining up in time.
+                QString note;
+                if (!res.profile.valid)
+                {
+                    note = QString(" — %1, edge threshold %2 raw counts")
+                               .arg(calibrationOutcomeText(res.outcome))
+                               .arg(res.edgeThreshold, 0, 'f', 1);
+                }
+                else if (res.saturated)
+                {
+                    // Calibrated, but only over part of its sweep. Say which part:
+                    // the profile clamps above it, so a reading at that dB may mean
+                    // "this or anything higher".
+                    note = QString(" — top step(s) railed; calibrated %1 of %2 step(s), "
+                                   "readings hold at %3 dB")
+                               .arg(res.profile.points.size())
+                               .arg(m_steps.size())
+                               .arg(topResolvedDb(res.profile), 0, 'f', 0);
+                }
+                else if (res.thresholdRelaxed)
+                {
+                    note = QString(" — calibrated with a relaxed edge threshold "
+                                   "(%1 raw counts)")
+                               .arg(res.edgeThreshold, 0, 'f', 1);
+                }
                 emit logMessage(QString("  %1 (word %2): %3 plateau(s) detected, "
                                         "%4 step(s) expected%5%6")
                                     .arg(res.name)
@@ -266,7 +314,7 @@ void CalibrationExtractor::onWorkerFinished(bool success)
                                     .arg(m_steps.size())
                                     .arg(res.detectedPlateaus != m_steps.size()
                                              ? " — MISMATCH" : "")
-                                    .arg(res.profile.valid ? "" : " (no profile)"));
+                                    .arg(note));
             }
             m_results.push_back(res);
         }
@@ -375,4 +423,207 @@ void CalibrationExtractor::finishWithError(const QString& error)
     teardown();
     m_running = false;
     emit finished(false, error);
+}
+
+// ---------------------------------------------------------------------------
+// summarize
+// ---------------------------------------------------------------------------
+
+QString CalibrationExtractor::summarize(const QVector<CalibrationChannelResult>& results,
+                                        int expectedSteps)
+{
+    if (results.isEmpty())
+    {
+        return QStringLiteral("No receiver channels were extracted.");
+    }
+
+    // Group channels by receiver. Receiver 0 collects anything whose name carries
+    // no "_RCVR<N>" suffix (a hand-written receiver-params TOML may name its
+    // parameters anything); those are reported by name instead of by number.
+    struct Group
+    {
+        QStringList calibrated;                        ///< Channel parts that succeeded.
+        QStringList relaxed;                           ///< …of those, ones needing a lower threshold.
+        QStringList saturated;                         ///< …of those, ones whose top steps railed.
+        double      topDb = 0.0;                       ///< Highest dB those actually measured.
+        QVector<double> unresolved;                    ///< dB no level could be paired with.
+        QMap<CalibrationOutcome, QStringList> failed;  ///< Channel parts per failure reason.
+        QStringList flatLevels;                        ///< Stuck levels of flat channels.
+        int minPlateaus = -1;                          ///< Fewest plateaus seen among failures.
+    };
+    QMap<int, Group> byReceiver;
+
+    int calibratedChannels = 0;
+    for (const CalibrationChannelResult& r : results)
+    {
+        const int receiver = FrameSetup::receiverIndexFromName(r.name);
+        const QString part = (receiver > 0) ? FrameSetup::channelPartOfName(r.name) : r.name;
+        Group& g = byReceiver[receiver];
+
+        if (r.outcome == CalibrationOutcome::Calibrated)
+        {
+            g.calibrated.push_back(part);
+            if (r.thresholdRelaxed)
+            {
+                g.relaxed.push_back(part);
+            }
+            if (r.saturated)
+            {
+                g.saturated.push_back(part);
+                g.topDb = std::max(g.topDb, topResolvedDb(r.profile));
+                for (double db : r.unresolvedDb)
+                {
+                    if (!g.unresolved.contains(db))
+                    {
+                        g.unresolved.push_back(db);
+                    }
+                }
+            }
+            calibratedChannels++;
+        }
+        else
+        {
+            g.failed[r.outcome].push_back(part);
+            if (r.hadData && (g.minPlateaus < 0 || r.detectedPlateaus < g.minPlateaus))
+            {
+                g.minPlateaus = r.detectedPlateaus;
+            }
+            if (r.outcome == CalibrationOutcome::FlatNoSignal && !r.plateauLevels.isEmpty())
+            {
+                const QString level = QString::number(r.plateauLevels.first(), 'f', 0);
+                if (!g.flatLevels.contains(level))
+                {
+                    g.flatLevels.push_back(level);
+                }
+            }
+        }
+    }
+
+    // Receivers whose every channel calibrated collapse to a bare number list -
+    // the common good case should read as one short line, not one line each.
+    QStringList fullyCalibrated;
+    QStringList detailLines;
+    QStringList relaxedLines;
+    QStringList saturatedLines;
+    for (auto it = byReceiver.constBegin(); it != byReceiver.constEnd(); ++it)
+    {
+        const int receiver = it.key();
+        const Group& g = it.value();
+        const QString label = (receiver > 0)
+                                  ? QStringLiteral("Receiver %1").arg(receiver)
+                                  : QStringLiteral("Unnamed receiver");
+
+        if (!g.relaxed.isEmpty())
+        {
+            relaxedLines.push_back(QStringLiteral("  %1 — %2")
+                                       .arg(label, g.relaxed.join(", ")));
+        }
+
+        if (!g.saturated.isEmpty())
+        {
+            QStringList unresolvedText;
+            for (double db : g.unresolved)
+            {
+                unresolvedText << QString::number(db, 'f', 0);
+            }
+            saturatedLines.push_back(
+                QStringLiteral("  %1 — %2: readings hold at %3 dB%4")
+                    .arg(label, g.saturated.join(", "))
+                    .arg(g.topDb, 0, 'f', 0)
+                    .arg(unresolvedText.isEmpty()
+                             ? QString()
+                             : QStringLiteral(" (no measurement for %1 dB)")
+                                   .arg(unresolvedText.join(", "))));
+        }
+
+        if (g.failed.isEmpty())
+        {
+            if (receiver > 0)
+            {
+                fullyCalibrated.push_back(QString::number(receiver));
+            }
+            else
+            {
+                detailLines.push_back(QStringLiteral("  %1 (%2) — calibrated")
+                                          .arg(label, g.calibrated.join(", ")));
+            }
+            continue;
+        }
+
+        // Mixed or wholly failed: say which channels fell back and why. A partly
+        // calibrated receiver is the case most worth spelling out, because the
+        // count alone would let it hide inside "N of M".
+        QStringList reasons;
+        for (auto f = g.failed.constBegin(); f != g.failed.constEnd(); ++f)
+        {
+            QString reason = QString("%1: %2")
+                                 .arg(f.value().join(", "),
+                                      QString::fromLatin1(calibrationOutcomeText(f.key())));
+            if (f.key() == CalibrationOutcome::TooFewPlateaus && g.minPlateaus >= 0)
+            {
+                reason += QStringLiteral(" (%1 of %2 steps resolved)")
+                              .arg(g.minPlateaus).arg(expectedSteps);
+            }
+            else if (f.key() == CalibrationOutcome::FlatNoSignal && !g.flatLevels.isEmpty())
+            {
+                // The level itself is the diagnosis: 0 is a dead input, full
+                // scale is a railed one, and anything between is a stuck DC
+                // level. "Flat" alone would leave the operator guessing which.
+                reason += QStringLiteral(" (held at %1)").arg(g.flatLevels.join(", "));
+            }
+            reasons.push_back(reason);
+        }
+
+        const QString calibratedPart =
+            g.calibrated.isEmpty()
+                ? QString()
+                : QStringLiteral("%1 calibrated; ").arg(g.calibrated.join(", "));
+        detailLines.push_back(QStringLiteral("  %1 — %2%3")
+                                  .arg(label, calibratedPart, reasons.join("; ")));
+    }
+
+    QStringList out;
+    out << QStringLiteral("Applied non-linear calibration to %1 of %2 channel(s).")
+               .arg(calibratedChannels).arg(results.size());
+
+    if (!fullyCalibrated.isEmpty())
+    {
+        out << QString();
+        out << QStringLiteral("Calibrated: receiver%1 %2.")
+                   .arg(fullyCalibrated.size() == 1 ? "" : "s", fullyCalibrated.join(", "));
+    }
+
+    if (!detailLines.isEmpty())
+    {
+        out << QString();
+        out << QStringLiteral("Fell back to linear calibration:");
+        out << detailLines;
+    }
+
+    // Calibrated, but only after loosening the edge threshold: the steps sat close
+    // to this channel's own noise. Reported because it is the early warning the
+    // count cannot give — these receivers calibrated, yet they are the ones
+    // drifting toward the point where they will stop calibrating at all.
+    // Calibrated, but the receiver ran out of range partway up the sweep, so the
+    // profile stops there and clamps above it. Reported because the plot then
+    // cannot rise past that step no matter how strong the signal gets - which
+    // reads as a ceiling in the data rather than as a receiver setting to fix.
+    if (!saturatedLines.isEmpty())
+    {
+        out << QString();
+        out << QStringLiteral("Calibrated only up to a saturated top — these receivers ran out "
+                              "of range partway through the sweep, so their readings hold at "
+                              "the highest step still measurable:");
+        out << saturatedLines;
+    }
+
+    if (!relaxedLines.isEmpty())
+    {
+        out << QString();
+        out << QStringLiteral("Calibrated only with a relaxed threshold — steps are close to "
+                              "the noise floor, so these receivers are worth checking:");
+        out << relaxedLines;
+    }
+
+    return out.join('\n');
 }

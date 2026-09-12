@@ -11,6 +11,8 @@ private slots:
     void missingFileFailsCleanly();
     void realFileCalibratesRcvr3Only();
     void byteOrderReachesTheExtraction();
+    void realStepCalRecordingPairsEveryStepCorrectly();
+    void summaryNamesReceiversAndWhyTheyFellBack();
 };
 
 #endif // TST_CALIBRATIONEXTRACTOR_H

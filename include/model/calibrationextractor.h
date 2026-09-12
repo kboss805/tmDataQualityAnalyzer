@@ -38,6 +38,14 @@ struct CalibrationChannelResult
     int                detectedPlateaus = 0; ///< Number of plateaus detected.
     bool               extraPlateaus = false; ///< More plateaus than expected steps.
     bool               hadData = false;  ///< Whether any samples were extracted for this channel.
+    CalibrationOutcome outcome = CalibrationOutcome::NoData; ///< Which gate decided the outcome.
+    double             edgeThreshold = 0.0; ///< Raw-count edge threshold detection used.
+    bool               thresholdRelaxed = false; ///< Calibrated only after loosening the
+                                                  ///< edge threshold (steps near the noise floor).
+    QVector<double>    plateauLevels;   ///< Settled plateau averages detection found.
+    bool               saturated = false; ///< Calibrated only up to a railed top; readings
+                                          ///< clamp at the highest step still measurable.
+    QVector<double>    unresolvedDb;    ///< dB of steps no measured level could be paired with.
 };
 
 /// @brief Extracts non-linear calibration profiles from a calibration Ch10 file.
@@ -81,6 +89,27 @@ public:
     const QVector<CalibrationChannelResult>& results() const { return m_results; }
     /// @return Error message if the run failed.
     QString error() const { return m_error; }
+
+    /**
+     * @brief Builds the operator-facing calibration report from @p results.
+     *
+     * Names which receivers were calibrated and, for the rest, why — grouped by
+     * receiver (the unit operators actually think and speak in) rather than by
+     * the individual L/R/C words. A bare "calibrated N of M channel(s)" count
+     * cannot distinguish a receiver that was absent from the recording from one
+     * whose steps were too compressed to resolve, which are entirely different
+     * problems with entirely different remedies.
+     *
+     * Pure and static so the wording is unit-testable without running an
+     * extraction over a real .ch10 file.
+     *
+     * @param[in] results       Per-channel outcomes, in word order.
+     * @param[in] expectedSteps Step count from the step-config TOML, so a
+     *                          plateau shortfall can be reported against it.
+     * @return Multi-line report suitable for a message box.
+     */
+    static QString summarize(const QVector<CalibrationChannelResult>& results,
+                             int expectedSteps);
 
 signals:
     /// File-read completion percentage (0..100).

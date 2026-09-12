@@ -235,3 +235,30 @@ void TestFrameSetup::tryLoadingFileSingleChannelFrameSize()
     QCOMPARE(fs.length(), 1);
     QCOMPARE(fs.getParameter(0)->word, 0);
 }
+
+void TestFrameSetup::receiverIndexFromNameInvertsParameterName()
+{
+    // Round-trips against the constructor it inverts, across the known channel
+    // prefixes and past them (where the prefix becomes "CH<n+1>").
+    for (int receiver = 0; receiver < 16; receiver++)
+    {
+        for (int channel = 0; channel < 5; channel++)
+        {
+            const QString name = FrameSetup::receiverParameterName(channel, receiver);
+            QCOMPARE(FrameSetup::receiverIndexFromName(name), receiver + 1);
+            QCOMPARE(FrameSetup::channelPartOfName(name),
+                     FrameSetup::channelPrefix(channel));
+        }
+    }
+
+    // A receiver-params TOML may name parameters anything at all. Those must read
+    // as "no receiver number" (0) rather than a guess, so the calibration summary
+    // falls back to listing names instead of inventing receivers.
+    QCOMPARE(FrameSetup::receiverIndexFromName("AGC_LEFT"), 0);
+    QCOMPARE(FrameSetup::receiverIndexFromName(""), 0);
+    QCOMPARE(FrameSetup::receiverIndexFromName("L_RCVR"), 0);   // token, no number
+    QCOMPARE(FrameSetup::receiverIndexFromName("L_RCVR0"), 0);  // receivers are 1-based
+    QCOMPARE(FrameSetup::receiverIndexFromName("L_RCVRx2"), 0); // not a bare number
+    // An unparseable name keeps its whole self as the "channel part".
+    QCOMPARE(FrameSetup::channelPartOfName("AGC_LEFT"), QString("AGC_LEFT"));
+}

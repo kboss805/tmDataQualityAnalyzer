@@ -633,6 +633,10 @@ public:
     QHash<int, CalibrationProfile> calibrationByWord() const { return m_calibrationByWord; }
     QString lastTomlDir() const { return m_tomlDir; }
 
+    /// Operator-facing report naming which receivers calibrated and why the rest
+    /// fell back. Valid after the dialog is accepted.
+    QString calibrationReport() const { return m_calibrationReport; }
+
     // Input references: what produced the profiles above, so a processing template
     // can store them for a later re-extraction pass.
     QString calFilePath()  const { return m_calPath; }
@@ -820,6 +824,11 @@ private:
                 valid++;
             }
         }
+        // Built here, while the per-channel outcomes are still in hand:
+        // m_calibrationByWord keeps only the successes (keyed by word), so it
+        // cannot say which receivers fell back or why once the extractor is gone.
+        m_calibrationReport = CalibrationExtractor::summarize(extractor.results(),
+                                                              m_steps.size());
 
         m_calOk = (valid > 0);
         setStatus(m_calStatus, m_calOk ? Ok : Fail, summary);
@@ -841,6 +850,7 @@ private:
 
     // Extracted profiles, keyed by word index (populated by maybeRunExtraction).
     QHash<int, CalibrationProfile> m_calibrationByWord;
+    QString m_calibrationReport; ///< Receiver-grouped outcome report for the summary box.
 
     // Widgets.
     QLabel*      m_stepPathLabel = nullptr;
@@ -1181,9 +1191,12 @@ private:
         m_clipStartSec = setup.clipStartSec();
         m_clipEndSec   = setup.clipEndSec();
         updateCalibrationLabel();
+        const QString report = setup.calibrationReport();
         QMessageBox::information(this, tr("Calibration Extracted"),
-            tr("Applied non-linear calibration to %1 channel(s).")
-                .arg(m_calibrationByWord.size()));
+            report.isEmpty()
+                ? tr("Applied non-linear calibration to %1 channel(s).")
+                      .arg(m_calibrationByWord.size())
+                : report);
     }
 
     FrameSyncWidgets m_fs; ///< Frame Sync / Mask / Bits Per Frame / Data Rate / Average Period.

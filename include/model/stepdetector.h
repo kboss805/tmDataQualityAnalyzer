@@ -32,6 +32,37 @@ public:
         CalibrationProfile profile;           ///< Built profile (valid only if enough plateaus found).
         int  detectedPlateaus = 0;            ///< Number of plateaus detected.
         bool extraPlateaus    = false;        ///< True if more plateaus than expected steps were found.
+        /// Which gate decided the outcome. `detectedPlateaus` alone cannot say: a
+        /// channel with exactly the expected count still fails if those levels
+        /// never form a monotonic sweep, and the two cases point at different
+        /// causes (see CalibrationOutcome).
+        CalibrationOutcome outcome = CalibrationOutcome::NoData;
+        /// Raw-count edge threshold used to split plateaus. Reported because it is
+        /// the quantity a too-small step is measured against, so a channel that
+        /// merged its steps can be read directly against the threshold that merged
+        /// them rather than inferred.
+        double edgeThreshold = 0.0;
+        /// True when the nominal threshold could not resolve the sweep and a lower
+        /// one was needed. Worth surfacing rather than hiding: a channel that only
+        /// calibrates after relaxation has steps close to its own noise, which is
+        /// itself the signature of a receiver drifting out of tolerance.
+        bool thresholdRelaxed = false;
+        /// Settled averages of the plateaus detection actually found, in time
+        /// order. The raw material behind every other field: a channel that
+        /// "found 12 plateaus but no sweep" can only be understood by seeing
+        /// whether those 12 levels are 8 real steps plus 4 noise splits, or a
+        /// genuine reversal.
+        QVector<double> plateauLevels;
+        /// True when the sweep ran off an end of the converter and the railed
+        /// dwells were dropped: the profile covers the steps below them, and
+        /// interpolateCalibration() clamps everything above to the top step that
+        /// was still measurable. The operator needs to know - the channel IS
+        /// calibrated, but only over part of its sweep, and the usual cause is a
+        /// receiver gain set too high for the levels being injected.
+        bool saturated = false;
+        /// dB of every step no measured level could be paired with: the railed
+        /// ones, plus any dwell noise shattered into runs too short to confirm.
+        QVector<double> unresolvedDb;
     };
 
     /**

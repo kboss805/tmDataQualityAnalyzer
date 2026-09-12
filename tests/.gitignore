@@ -19,6 +19,9 @@ data/test files/*
 !data/test files/agc_rnrz-l_trc_testfile.ch10
 !data/test files/prn_testfile, sample.ch10
 !data/test files/safran_testfile, sample.ch10
+# Real step-calibration recording (6.8 MB) with receivers far out of alignment -
+# pins the calibration-import resilience fixes against the file that exposed them.
+!data/test files/step_cal, example.ch10
 output/
 !output/.gitkeep
 

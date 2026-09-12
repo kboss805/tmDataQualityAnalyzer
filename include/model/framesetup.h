@@ -79,6 +79,19 @@ public:
     /// agree on names (a divergence silently misattaches calibration profiles).
     static QString receiverParameterName(int channel_index, int receiver_index);
 
+    /// Inverse of receiverParameterName(): the 1-based receiver number carried by
+    /// a parameter name's "_RCVR<N>" suffix, or 0 when the name carries none.
+    ///
+    /// Returning 0 rather than failing is deliberate: a receiver-params TOML may
+    /// name its parameters anything at all, so callers that group by receiver
+    /// (the calibration summary) must degrade to listing the names themselves
+    /// rather than inventing a receiver number.
+    static int receiverIndexFromName(const QString& name);
+
+    /// The channel-position part of a "<prefix>_RCVR<N>" name ("L", "R", "C", …),
+    /// or the whole name when it carries no "_RCVR<N>" suffix.
+    static QString channelPartOfName(const QString& name);
+
     /// Builds the default receiver word map — NumReceivers x ReceiverChannels
     /// parameters named via receiverParameterName(), assigned sequential words —
     /// into this FrameSetup (appending to any existing parameters). Returns false

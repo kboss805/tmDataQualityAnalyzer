@@ -24,6 +24,7 @@ private slots:
     void tryLoadingFileSmallerFrameRejectsBoundary();
     void tryLoadingFileLargerFrameAccepts();
     void tryLoadingFileSingleChannelFrameSize();
+    void receiverIndexFromNameInvertsParameterName();
 };
 
 #endif // TST_FRAMESETUP_H

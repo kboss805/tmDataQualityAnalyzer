@@ -216,10 +216,10 @@ jobs:
           if ($fail -gt 0)  { throw "$fail test(s) failed" }
           # --- Fixture-loss guard -------------------------------------------
           # A skipped test is indistinguishable from a passing one in the totals,
-          # and the suite has 40 QSKIP sites: 39 are "fixture not available"
-          # guards, ONE is a deliberate opt-in. So an unpinned skip count is how
+          # and the suite has dozens of QSKIP sites: all but one are "fixture not
+          # available" guards, ONE is a deliberate opt-in. So an unpinned skip count is how
           # four integration suites could quietly stop testing anything while CI
-          # still reported success. All three .ch10 fixtures are committed, so
+          # still reported success. Every .ch10 fixture the suite reads is committed, so
           # both runners must land on exactly that one skip.
           $expectedSkip = 'benchmarkHeavyWorkloadSingleVsMultiStream'
           $skips = @(Select-String -Path output/results.txt -Pattern '^SKIP')
@@ -372,10 +372,10 @@ jobs:
           if ($fail -gt 0)  { throw "$fail test(s) failed" }
           # --- Fixture-loss guard -------------------------------------------
           # A skipped test is indistinguishable from a passing one in the totals,
-          # and the suite has 40 QSKIP sites: 39 are "fixture not available"
-          # guards, ONE is a deliberate opt-in. So an unpinned skip count is how
+          # and the suite has dozens of QSKIP sites: all but one are "fixture not
+          # available" guards, ONE is a deliberate opt-in. So an unpinned skip count is how
           # four integration suites could quietly stop testing anything while CI
-          # still reported success. All three .ch10 fixtures are committed, so
+          # still reported success. Every .ch10 fixture the suite reads is committed, so
           # both runners must land on exactly that one skip.
           $expectedSkip = 'benchmarkHeavyWorkloadSingleVsMultiStream'
           $skips = @(Select-String -Path output/results.txt -Pattern '^SKIP')

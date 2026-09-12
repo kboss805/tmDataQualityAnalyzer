@@ -20,6 +20,7 @@
 #include "calibrationextractor.h"
 #include "calibrationprofile.h"
 #include "chapter10reader.h"
+#include "framesetup.h"
 #include "stepdetector.h"
 
 namespace {
@@ -223,4 +224,199 @@ void TestCalibrationExtractor::byteOrderReachesTheExtraction()
     CalibrationExtractor extractor_ok;
     QString summary_ok;
     QVERIFY2(runExtraction(extractor_ok, req, summary_ok), qPrintable(summary_ok));
+}
+
+void TestCalibrationExtractor::summaryNamesReceiversAndWhyTheyFellBack()
+{
+    // summarize() is pure, so this needs no .ch10 fixture and always runs.
+    auto channel = [](const QString& name, CalibrationOutcome outcome,
+                      int plateaus, bool hadData) {
+        CalibrationChannelResult r;
+        r.name             = name;
+        r.outcome          = outcome;
+        r.detectedPlateaus = plateaus;
+        r.hadData          = hadData;
+        r.profile.valid    = (outcome == CalibrationOutcome::Calibrated);
+        return r;
+    };
+
+    QVector<CalibrationChannelResult> results;
+    // Receiver 1: fully calibrated. Receiver 2: partly - C fell back on merged
+    // steps. Receiver 3: fully calibrated. Receiver 4: absent from the recording.
+    for (const QString& p : {QStringLiteral("L"), QStringLiteral("R"), QStringLiteral("C")})
+    {
+        results << channel(p + "_RCVR1", CalibrationOutcome::Calibrated, 6, true);
+    }
+    results << channel("L_RCVR2", CalibrationOutcome::Calibrated, 6, true);
+    results << channel("R_RCVR2", CalibrationOutcome::Calibrated, 6, true);
+    results << channel("C_RCVR2", CalibrationOutcome::TooFewPlateaus, 4, true);
+    for (const QString& p : {QStringLiteral("L"), QStringLiteral("R"), QStringLiteral("C")})
+    {
+        results << channel(p + "_RCVR3", CalibrationOutcome::Calibrated, 6, true);
+    }
+    for (const QString& p : {QStringLiteral("L"), QStringLiteral("R"), QStringLiteral("C")})
+    {
+        results << channel(p + "_RCVR4", CalibrationOutcome::NoData, 0, false);
+    }
+
+    const QString summary = CalibrationExtractor::summarize(results, 6);
+
+    // The headline count still reports channels, since that is the unit profiles
+    // are keyed by.
+    // 3 (rcvr 1) + 2 (rcvr 2's L and R) + 3 (rcvr 3) = 8 of 12.
+    QVERIFY2(summary.contains("8 of 12 channel(s)"), qPrintable(summary));
+
+    // Receivers whose every channel calibrated are named together, in one line -
+    // the point of the request. Receiver 2 is NOT in that list: it was partial.
+    QVERIFY2(summary.contains("Calibrated: receivers 1, 3."), qPrintable(summary));
+
+    // A partly calibrated receiver is spelled out rather than hidden in the count,
+    // naming both the channels that worked and the one that did not, with a reason
+    // measured against the expected step count.
+    QVERIFY2(summary.contains("Receiver 2"), qPrintable(summary));
+    QVERIFY2(summary.contains("L, R calibrated"), qPrintable(summary));
+    QVERIFY2(summary.contains("C: too few plateaus (4 of 6 steps resolved)"),
+             qPrintable(summary));
+
+    // A receiver that was never in the recording reads as such, not as a
+    // detection failure - different problem, different remedy.
+    QVERIFY2(summary.contains("Receiver 4"), qPrintable(summary));
+    QVERIFY2(summary.contains("no data"), qPrintable(summary));
+
+    // Channels from a hand-written receiver-params TOML carry no "_RCVR<N>", so
+    // they must be reported by name rather than assigned a receiver number.
+    QVector<CalibrationChannelResult> unnamed;
+    unnamed << channel("AGC_LEFT", CalibrationOutcome::NoMonotonicSweep, 7, true);
+    const QString unnamedSummary = CalibrationExtractor::summarize(unnamed, 6);
+    QVERIFY2(unnamedSummary.contains("AGC_LEFT"), qPrintable(unnamedSummary));
+    QVERIFY2(unnamedSummary.contains("no monotonic sweep"), qPrintable(unnamedSummary));
+}
+
+void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
+{
+    // step_cal, example.ch10: a real step-calibration recording from receivers far
+    // out of alignment. Its sweep is 0 to 60 dB in 6 dB steps - eleven levels, the
+    // first being the level each channel holds before the generator steps up - so
+    // it is extracted with the 11-step settings/rcvr_cals/default.toml. Each dwell
+    // lasts ~4.9 s, and a channel's noise grows with its level: ~3 counts on its
+    // low steps, ~60 on its high ones.
+    //
+    // Acquisition parameters (found by probing; nothing else locks): NRZ-L,
+    // byte-swapped, 800-bit minor frames at 800 kbps on PCM channel 26.
+    const QString filepath = testDataPath("test files/step_cal, example.ch10");
+    if (!QFileInfo::exists(filepath))
+        QSKIP("step_cal, example.ch10 not available");
+
+    Chapter10Reader reader; // keep the opened Ch10 file alive across extraction
+    QVERIFY(reader.loadChannels(filepath));
+
+    QVector<StepDefinition> steps;
+    QString step_error;
+    QVERIFY2(StepDetector::parseStepConfig(projectRootPath("settings/rcvr_cals/default.toml"),
+                                           steps, step_error), qPrintable(step_error));
+    QCOMPARE(steps.size(), 11);
+
+    CalibrationExtractor::Request req;
+    req.calFilename           = filepath;
+    req.timeChannelId         = reader.getCurrentTimeChannelID();
+    req.pcmChannelId          = reader.getFirstPCMChannelID();
+    req.sync.pattern          = "FE6B2840";
+    req.sync.bitsInMinorFrame = 800;
+    req.sync.randomized       = false;
+    req.sync.dataRateMbps     = 0.8;
+    req.swapBytes             = true;
+    // The shipped sequential word map (three words per receiver), which is what the
+    // main run uses. NOT receiver_params/RASA.toml, despite the 800-bit frame
+    // matching RASA's: RASA's stride-4 card layout treats words 3, 7, 11, 15 ... as
+    // empty, which on this recording skips real channels and mis-attributes every
+    // receiver above 1 - it reports live channels as dead with nothing pointing at
+    // the map as the cause.
+    req.receiverParamsToml    = projectRootPath("settings/receiver_params/default.toml");
+    req.numReceivers          = 16;
+    req.receiverChannels      = 3;
+    req.steps                 = steps;
+
+    CalibrationExtractor extractor;
+    QString summary;
+    QVERIFY2(runExtraction(extractor, req, summary), qPrintable(summary));
+
+    const QVector<CalibrationChannelResult>& results = extractor.results();
+    QCOMPARE(results.size(), req.numReceivers * req.receiverChannels);
+
+    QSet<int> calibratedReceivers;
+    int calibratedChannels = 0;
+    for (const CalibrationChannelResult& r : results)
+    {
+        if (!r.profile.valid)
+            continue;
+        calibratedReceivers.insert(FrameSetup::receiverIndexFromName(r.name));
+        calibratedChannels++;
+
+        // The regression this fixture exists for: every step pairs with its OWN
+        // dwell. Noise used to split one high dwell into two plateaus a few tens of
+        // counts apart. The split took a pairing slot, the real 0 dB level was
+        // dropped as "pre-roll", and every step below the split read 6 dB low -
+        // L/R_RCVR3 and R_RCVR6 by one step, L_RCVR6 (split twice) by two. The
+        // profile still attached, so nothing reported it: the staircase simply sat
+        // a step behind its neighbours, and noise across the split swung 6 dB.
+        const QVector<CalibrationPoint>& pts = r.profile.points;
+        QVERIFY2(pts.first().rawAvg < 1000.0 && pts.first().trueDb == 0.0,
+                 qPrintable(QString("%1: 0 dB paired with raw %2, not the pre-sweep level")
+                                .arg(r.name).arg(pts.first().rawAvg)));
+        for (int k = 1; k < pts.size(); k++)
+        {
+            // Genuine steps here are more than 1000 counts apart (the smallest is
+            // ~1200, on receiver 5); a split dwell is tens.
+            QVERIFY2(pts[k].rawAvg - pts[k - 1].rawAvg > 1000.0,
+                     qPrintable(QString("%1: %2 dB and %3 dB are %4 counts apart - one dwell "
+                                        "split in two")
+                                    .arg(r.name).arg(pts[k - 1].trueDb).arg(pts[k].trueDb)
+                                    .arg(pts[k].rawAvg - pts[k - 1].rawAvg)));
+        }
+
+        if (r.saturated)
+        {
+            // Receiver 1 alone: its gain is set too high for this sweep, so its top
+            // two steps both sit on the 65472 rail and carry no measurement. It is
+            // calibrated over the range it could still resolve, and readings hold
+            // at the top of that range instead of being extrapolated past it.
+            QCOMPARE(FrameSetup::receiverIndexFromName(r.name), 1);
+            QCOMPARE(pts.last().trueDb, 48.0);
+            QVERIFY2(r.unresolvedDb.contains(54.0) && r.unresolvedDb.contains(60.0),
+                     qPrintable(r.name));
+            QCOMPARE(interpolateCalibration(65472.0, r.profile), 48.0);
+            // Every step from 0 to 48 dB is measured - including L_RCVR1's 24 dB
+            // dwell, whose plateau noise shatters. Left as a hole it was bridged
+            // linearly from 18 to 30 dB and read 23.09 dB; the dwell grid locates
+            // it so it is measured instead.
+            QCOMPARE(pts.size(), steps.size() - 2);
+            QCOMPARE(r.unresolvedDb, QVector<double>({54.0, 60.0}));
+        }
+        else
+        {
+            QCOMPARE(pts.size(), steps.size());
+            QCOMPARE(pts.last().trueDb, 60.0);
+        }
+    }
+
+    // All three channels of receivers 1, 3, 5 and 6 carry the sweep - the operator's
+    // own count - and no channel that carries none gets a false profile.
+    QCOMPARE(calibratedChannels, 12);
+    QCOMPARE(calibratedReceivers, (QSet<int>{1, 3, 5, 6}));
+
+    // A receiver that carries no sweep says so plainly, not as a detection
+    // shortfall: receiver 2 holds 0 for the whole recording.
+    for (const CalibrationChannelResult& r : results)
+    {
+        if (FrameSetup::receiverIndexFromName(r.name) == 2)
+        {
+            QCOMPARE(r.outcome, CalibrationOutcome::FlatNoSignal);
+        }
+    }
+
+    // And the operator-facing report names the receivers, in the unit operators
+    // actually talk in, and says where a saturated one stops being trustworthy.
+    const QString report = CalibrationExtractor::summarize(results, steps.size());
+    QVERIFY2(report.contains("Calibrated: receivers 1, 3, 5, 6."), qPrintable(report));
+    QVERIFY2(report.contains("Receiver 1") && report.contains("hold at 48 dB"), qPrintable(report));
 }
