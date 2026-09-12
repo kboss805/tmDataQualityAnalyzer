@@ -514,9 +514,13 @@ The stories below follow the workflow a first-time user takes through the applic
   rather than re-deriving receiver numbers from word indices.
 - The per-channel log line now carries the reason and threshold on failure, and notes a
   relaxed-threshold success.
-- **Stale manual figure:** `walk-cal-04-summary.png` (walkthroughs, calibration step 4)
-  shows the old count-only message box, and its caption describes a count. Needs
-  re-capturing against the new report.
+- **The manual's calibration walkthrough is rewritten for it.** `walk-cal-04-summary.png`
+  is re-captured against the new report (on `step_cal, example.ch10`), and step 4 now
+  explains how to read it: the four sections, what each fallback reason means and points
+  at, and what a saturated receiver looks like. The troubleshooting table gains three rows:
+  a swept receiver reading *flat / no signal* (word map), steps landing at the wrong levels
+  despite success (step file shorter than the recording), and a trace that flattens below
+  the top step (saturation).
 
 #### Word-map trap found along the way
 

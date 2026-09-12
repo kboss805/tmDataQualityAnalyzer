@@ -355,22 +355,63 @@ steps in your file, trimming the ends is the first thing to try.</p>
 
 <h3>Step 4 &mdash; Read the result honestly</h3>
 
-{{FIG:walk-cal-04-summary.png|The extraction summary. It reports how many channels received a measured profile, not how many you might have expected.|Message box reading Applied non-linear calibration to 3 channels}}
+{{FIG:walk-cal-04-summary.png|The extraction summary for a recording whose sweep was injected into receivers 1, 3, 5 and 6. It names the receivers that calibrated, says why every other receiver fell back to linear, and flags receiver 1, which ran out of range before the sweep finished.|Calibration Extracted message box listing calibrated receivers 1, 3, 5 and 6, the receivers that fell back to linear with a reason for each, and receiver 1 holding at 48 dB}}
 
-<div class="note"><strong>A small number here is usually correct, not a failure.</strong> The
-recording in these figures carries forty-eight channels and only three were calibrated &mdash;
-because the signal was injected into one receiver's left, right and combined channels and
-nothing else. The other forty-five saw no sweep, so there was nothing to measure. Refusing to
-build a profile out of noise is the right answer.</div>
+<p>The summary is organised by receiver, because that is the unit you injected into. Read it
+top to bottom:</p>
+
+<ul>
+  <li><strong>The count</strong> &mdash; how many channels received a measured profile, out of
+      every channel in the word map.</li>
+  <li><strong>Calibrated</strong> &mdash; the receivers whose channels all calibrated.</li>
+  <li><strong>Fell back to linear calibration</strong> &mdash; every other receiver, with the
+      channels affected and the reason. A receiver that only partly calibrated is spelled out
+      here rather than hidden in the count.</li>
+  <li><strong>Calibrated only up to a saturated top</strong> &mdash; receivers that calibrated
+      but ran out of range before the sweep finished (see below). This section, and one for
+      receivers that needed a <em>relaxed threshold</em>, appear only when they apply.</li>
+</ul>
+
+<p>Each fallback reason points at a different cause:</p>
+
+<table>
+  <tr><th>Reason</th><th>What it means</th></tr>
+  <tr><td><strong>flat / no signal</strong> (held at&nbsp;<em>n</em>)</td>
+      <td>The channel held one value for the whole recording, so the sweep is not in it. A
+          value of 0 is usually a channel nothing was injected into; a value near 65535 is a
+          receiver pinned at full scale. This is not a detection problem.</td></tr>
+  <tr><td><strong>too few plateaus</strong> (<em>x</em> of <em>n</em> steps resolved)</td>
+      <td>The channel moved, but through fewer distinct levels than your step file lists.
+          Check that the step file matches the recording, then look for steps too close
+          together to tell apart.</td></tr>
+  <tr><td><strong>no monotonic sweep</strong></td>
+      <td>There were enough levels, but they did not climb (or fall) steadily &mdash; a noisy
+          channel, or a response that reverses partway through.</td></tr>
+  <tr><td><strong>no data</strong></td>
+      <td>Nothing was extracted for that channel at all.</td></tr>
+</table>
+
+<div class="note"><strong>A long fallback list is usually correct, not a failure.</strong> The
+recording in this figure carries forty-eight channels, and the sweep was injected into the
+left, right and combined channels of four receivers &mdash; twelve channels. Every other
+receiver reads <em>flat / no signal</em> because it saw no sweep, so there was nothing to
+measure. Refusing to build a profile out of noise is the right answer.</div>
 
 <p>Channels that were not calibrated are neither broken nor excluded. They keep using the
 <strong>linear</strong> conversion from the setup dialog, exactly as before. A calibration run
 improves the channels it can measure and leaves the rest alone.</p>
 
 <p>So the question to ask of this dialog is not <em>"why so few?"</em> but <em>"did it calibrate
-the channels I actually injected into?"</em> If you swept three channels and it reports three,
-it worked. If you swept forty-eight and it reports three, something is wrong &mdash; and the
-table at the end of this section is where to look.</p>
+the receivers I actually injected into?"</em> If you swept four receivers and it names those
+four, it worked. If a receiver you swept is listed as falling back, the table at the end of this
+section is where to look.</p>
+
+<p><strong>A saturated receiver.</strong> Receiver 1 in the figure was driven past the top of its
+range: its 54&nbsp;dB and 60&nbsp;dB steps both read the same full-scale count, so they cannot be
+told apart. Rather than discard the whole channel, the application calibrates the steps that
+stayed in range and holds anything higher at the top one &mdash; 48&nbsp;dB here. On the plot,
+that receiver climbs with the others and then flattens. The usual cause is a receiver gain set
+too high for the calibration levels; correcting it and re-recording recovers the full range.</p>
 
 <h3>Step 5 &mdash; Process, and compare against the uncalibrated run</h3>
 
@@ -393,10 +434,20 @@ reads the ceiling or floor value instead of diverging into a number no measureme
 
 <table>
   <tr><th>What you see</th><th>Likely cause</th></tr>
-  <tr><td>Fewer channels calibrated than you injected into</td>
+  <tr><td>A receiver you injected into reads <em>flat / no signal</em>, or fewer receivers
+          calibrated than you swept</td>
       <td>The word map does not match the recording, so the sweep is being read from the wrong
           words. Check <strong>Num Rcvrs</strong> and <strong>Num Channels</strong>, and the
-          receiver-parameters file if you loaded one.</td></tr>
+          receiver-parameters file if you loaded one &mdash; a map that skips a word per
+          receiver moves every receiver after the first.</td></tr>
+  <tr><td>Calibration succeeded, but the steps land at the wrong levels</td>
+      <td>The step file lists fewer steps than the recording holds. The extra levels at the
+          start of the sweep are treated as lead-in and dropped, so every step is paired with
+          the wrong dB. Make the step file describe every level that was injected.</td></tr>
+  <tr><td>A receiver's calibrated trace flattens below the top step</td>
+      <td>The receiver saturated during the calibration sweep and its top steps could not be
+          measured; readings above the last measured step hold there. Lower the receiver gain
+          and re-record the calibration.</td></tr>
   <tr><td>Plateaus found does not match the step count</td>
       <td>A turn-on transient or a trailing down-ramp is being counted as a step. Use
           <strong>Clip Start</strong> or <strong>Clip End</strong> to trim it.</td></tr>
