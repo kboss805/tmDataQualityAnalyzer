@@ -31,7 +31,7 @@ private slots:
     void detectPinnedSamplesDoNotShrinkTheNoiseEstimate();
     void detectSplitDwellFarAboveNoiseIsStillOneStep();
     void detectRailedTopStepsCalibrateWhatStayedInRange();
-    void detectMissingDwellDoesNotShiftTheStepsAfterIt();
+    void detectUnconfirmedDwellIsMeasuredFromTheGrid();
 
     // Interpolation / out-of-range clamping
     void interpolateMidpoint();

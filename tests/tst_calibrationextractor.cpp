@@ -385,9 +385,12 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
             QVERIFY2(r.unresolvedDb.contains(54.0) && r.unresolvedDb.contains(60.0),
                      qPrintable(r.name));
             QCOMPARE(interpolateCalibration(65472.0, r.profile), 48.0);
-            // L_RCVR1 loses its 24 dB dwell to noise as well, so it carries one
-            // point fewer - and the steps above that hole must still be their own.
-            QVERIFY(pts.size() >= steps.size() - 3);
+            // Every step from 0 to 48 dB is measured - including L_RCVR1's 24 dB
+            // dwell, whose plateau noise shatters. Left as a hole it was bridged
+            // linearly from 18 to 30 dB and read 23.09 dB; the dwell grid locates
+            // it so it is measured instead.
+            QCOMPARE(pts.size(), steps.size() - 2);
+            QCOMPARE(r.unresolvedDb, QVector<double>({54.0, 60.0}));
         }
         else
         {

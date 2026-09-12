@@ -461,13 +461,18 @@ The stories below follow the workflow a first-time user takes through the applic
   `interpolateCalibration()` already clamps above its top point, so a raw value that reaches
   the rail reads the top measured step (48 dB here) rather than a number invented by
   extrapolating past the data. The report says
-  `readings hold at 48 dB (no measurement for 24, 54, 60 dB)`.
+  `readings hold at 48 dB (no measurement for 54, 60 dB)`.
 - **Step numbers come from the dwell grid, not from position.** Once a level is missing,
   position cannot say which step the next one is - and L_RCVR1 loses its 24 dB dwell to noise
   as well as its top two to the rail. Counting transitions gives each level its own step:
-  L_RCVR1 pairs 22906 -> 18 dB and then 36238 -> 30 dB, leaving the hole rather than shifting
-  every step after it. Plateau *ends* cannot do this - noise shatters the tail of a dwell,
+  L_RCVR1's 30 dB dwell stays 30 dB rather than sliding down to 24. Plateau *ends* cannot do this - noise shatters the tail of a dwell,
   ending R_RCVR1's 36 dB plateau a third of a dwell early - but transitions can.
+- **A dwell the grid can see but plateau detection missed is measured, not bridged.**
+  L_RCVR1's 24 dB plateau shatters under noise. Left as a hole, readings there were
+  interpolated straight from 18 dB to 30 dB and read **23.09 dB** at a dwell that sits at
+  28556 counts - the receiver is not linear across that gap. The dwell's position is known
+  from the transitions either side, so its level is the median of its settled tail; it must
+  fall between its measured neighbours, and only a one-dwell gap qualifies.
 - **Guards, because this path infers rather than measures:** only a run whose top is actually
   railed takes it, at least half the steps (and at least three) must survive, and every gap
   between transitions must land on the dwell grid within a quarter of a dwell. A recording
@@ -531,8 +536,8 @@ The stories below follow the workflow a first-time user takes through the applic
   truth under the real 11-step config and the shipped word map: receivers {1, 3, 5, 6}
   calibrate (twelve channels); every profile pairs 0 dB with the pre-sweep level and no two
   points sit closer than 1000 counts (a split dwell is tens); the unsaturated ones carry all
-  eleven steps to 60 dB while receiver 1 holds at 48 dB with 54 and 60 unresolved and a
-  rail-value reading of exactly 48 dB; receiver 2 reads flat / no signal; and the report
+  eleven steps to 60 dB while receiver 1 carries all nine from 0 to 48 dB, holds there with
+  54 and 60 unresolved, and reads exactly 48 dB at the rail; receiver 2 reads flat / no signal; and the report
   names the receivers.
   `summaryNamesReceiversAndWhyTheyFellBack` covers the report without a fixture.
 - `TestStepDetector` gains eight cases: outcome codes; a compressed out-of-tolerance
@@ -543,7 +548,8 @@ The stories below follow the workflow a first-time user takes through the applic
   split dwell far above the noise still pairing as one step (noiseless, so only the
   step-relative merge can heal it); railed top steps calibrating what stayed in range, with
   a rail-level raw reading the top measured step rather than an extrapolated one; and a dwell
-  that never confirms leaving a hole instead of shifting every step after it. The pairing
+  that never confirms being measured from the dwell grid rather than bridged by linear
+  interpolation (which read 23.09 dB at a 24 dB dwell) or shifting the steps after it. The pairing
   cases fail against the previous detector.
   `TestFrameSetup::receiverIndexFromNameInvertsParameterName`.
 - `realFileCalibratesRcvr3Only` still passes unchanged: none of this adds a false profile
@@ -1990,7 +1996,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestPlotCustomizationDialog** (`tst_plotcustomizationdialog`) — Customize Plot Series dialog: one Frame Sync Lock checkbox per stream, Select All/None, apply → per-stream lock/missed visibility round-trip to the ViewModel; Receiver SNR tree build (receiver grouping), tri-state group cascade, Select All/None, apply → per-channel SNR visibility round-trip, and the Expand/Collapse All button toggle; plus per-stream rename/recolor (lock tab) and per-channel rename/recolor via pending item roles (SNR tab) applied to the ViewModel on OK, and the single batched `seriesAppearanceChanged` emission (reaches private widgets/slots via a friend declaration, same pattern as TestFrameProcessor)
 - **TestStreamConfigDialog** (`tst_streamconfigdialog`) — Per-stream Configure Streams dialog: stream rows, mode selection, gear setup dialogs, TOML load/save round-trips, "Apply to all" fan-out, the Channel column label (short names shown in full, long TMATS-derived names elided on the right with "..." , left-justified, styled via `channelNameCell` to mimic the Mode combo box's border/fill, and the full name always available via tooltip — which is now the only place a truncated name is recoverable), the Mode combo's left-justified closed-box text (via an editable-but-readonly internal line edit) while selection still tracks correctly, and the table header/separator using theme-QSS object names (`streamHeaderLabel` / `streamHeaderSeparator`) rather than hard-coded inline colors
 - **TestExportDialog** (`tst_exportdialog`) — Export dialog checkbox-to-field enable logic, export-button validation, and the log-export row defaults/accessors and log-only validation
-- **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US5.3): `[[Step]]` TOML parsing (valid / empty-fails), plateau detection (clean, too-few-fails, extra-plateaus uses last of monotonic run, short-blip doesn't steal a pairing slot, long leading transient doesn't shift pairing, inverted-polarity sweep not reversed, non-monotonic pairing rejected, noisy, settling-at-plateau-start excluded, round-trip exact), the calibration-import resilience cases (the outcome code names the gate that rejected, a compressed out-of-tolerance receiver still calibrates via the relaxed threshold while a healthy one does not relax, noise-split plateaus coalesce instead of severing the sweep, a flat channel reports "flat / no signal" rather than a plateau shortfall, samples pinned at the floor or rail kept out of the noise estimate so live dwells neither split nor shatter, a split dwell far above the noise still paired as one step, railed top steps calibrating the range that stayed in scale while the rail clamps rather than extrapolates, an unconfirmed dwell leaving a hole rather than shifting the steps after it), and `interpolateCalibration()` (midpoint, below/above clamping, coincident-raw guard)
+- **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US5.3): `[[Step]]` TOML parsing (valid / empty-fails), plateau detection (clean, too-few-fails, extra-plateaus uses last of monotonic run, short-blip doesn't steal a pairing slot, long leading transient doesn't shift pairing, inverted-polarity sweep not reversed, non-monotonic pairing rejected, noisy, settling-at-plateau-start excluded, round-trip exact), the calibration-import resilience cases (the outcome code names the gate that rejected, a compressed out-of-tolerance receiver still calibrates via the relaxed threshold while a healthy one does not relax, noise-split plateaus coalesce instead of severing the sweep, a flat channel reports "flat / no signal" rather than a plateau shortfall, samples pinned at the floor or rail kept out of the noise estimate so live dwells neither split nor shatter, a split dwell far above the noise still paired as one step, railed top steps calibrating the range that stayed in scale while the rail clamps rather than extrapolates, an unconfirmed dwell measured from the dwell grid rather than bridged or shifted), and `interpolateCalibration()` (midpoint, below/above clamping, coincident-raw guard)
 - **TestSeriesColumnSchema** (`tst_seriescolumnschema`) — the CSV column-header schema (`SeriesColumnSchema`): SNR name and `columnHeader()` formatting, `parseColumnHeader()` classification (lock/missed suffix vs. SNR `"<id> - "` prefix, multi-word stream labels split at the last space, SNR-shape-wins-over-suffix), the unknown→SNR fallback, and the format→parse round trip that keeps `exportCsv` and `CsvSeriesParser` inverses. Multi-file input: source 0 stays unqualified (byte-identical), source 1+ gets a leading `"S<n>| "` qualifier that round-trips through parse for both SNR and Lock/Missed shapes, an unqualified header still defaults to source 0, and a header merely starting with the letter `'S'` isn't misparsed as a qualifier
 - **TestCalibrationExtractor** (`tst_calibrationextractor`) — US5.3 pipeline orchestration (complements TestStepDetector's pure logic): drives the async extraction end to end (reader + FrameProcessor workers → per-channel StepDetector). A bad file (with non-empty steps, so it clears the empty-steps guard) finishes unsuccessfully with a recorded error and no partial state; over `rnrz-l_testfile.ch10`, exactly words 6/7/8 (RCVR3 L/R/C, the only real stepped SNR sweep) build valid non-linear profiles while every other receiver word falls back to linear; over `STEP_CAL_EXAMPLE.ch10` (receivers far out of alignment, its real 11-step 0–60 dB config, the shipped sequential word map), receivers 1, 3, 5 and 6 calibrate with every step paired to its own dwell (0 dB at the pre-sweep level, 60 dB at the top dwell, no split dwell taking a slot), receiver 1 over only the range that stayed in scale because its top two steps sit on the rail (readings hold at 48 dB), receiver 2 reports flat / no signal, and the report names the receivers; plus the pure `summarize()` report (receivers grouped, partial receivers spelled out with reasons, unnamed channels reported by name)
 - **TestStreamConfigSchema** (`tst_streamconfigschema`) — `StreamConfigSchema` round trip for both `StreamMode` variants and the calibration input references (`calCh10Path`/`stepTomlPath`/`clipStartSec`/`clipEndSec`), confirms `calibrationByWord` itself never appears in the serialized JSON (and the `calibration` block is omitted entirely when no non-linear calibration was ever extracted), and `fromJson()` rejecting an object missing required fields while leaving in-class defaults for anything else omitted

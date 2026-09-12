@@ -556,14 +556,82 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
         CalibrationProfile& profile = result.profile;
         profile.points.clear();
         profile.points.reserve(measured);
-        QVector<bool> paired(expected, false);
+        QVector<bool>   paired(expected, false);
+        QVector<double> raw_of_slot(expected, 0.0);
         for (int i = 0; i < measured; i++)
         {
             CalibrationPoint point;
             point.rawAvg = values[run_begin + i];
             point.trueDb = steps[step_slots[i]].db;
             profile.points.push_back(point);
-            paired[step_slots[i]] = true;
+            paired[step_slots[i]]      = true;
+            raw_of_slot[step_slots[i]] = point.rawAvg;
+        }
+
+        // A dwell inside the sweep that never confirmed a plateau is not missing
+        // from the RECORDING, only from plateau detection - the grid says exactly
+        // where it is. Leaving it out is not neutral: interpolating straight across
+        // the hole assumes the receiver is linear there, and an out-of-tolerance
+        // receiver is not. On STEP_CAL_EXAMPLE, L_RCVR1's 24 dB dwell sits at
+        // 28556 counts; bridged from 18 dB to 30 dB it read 23.09 dB. So measure it
+        // directly: the median of its settled tail, between the two transitions
+        // that bound it. Only a gap of exactly one dwell qualifies (a wider one
+        // holds several steps that cannot be told apart), the value must fall
+        // between its measured neighbours, and railed dwells above the top
+        // measured step stay unresolved - there is nothing there to measure.
+        const int top_slot = step_slots.last();
+        for (int i = 0; i + 1 < boundaries.size(); i++)
+        {
+            if (boundary_slot[i + 1] - boundary_slot[i] != 1)
+            {
+                continue;
+            }
+            const int slot = boundary_slot[i] + 1;
+            if (slot >= top_slot || paired[slot])
+            {
+                continue;
+            }
+            int below = slot - 1;
+            while (below >= 0 && !paired[below])
+            {
+                below--;
+            }
+            int above = slot + 1;
+            while (above < expected && !paired[above])
+            {
+                above++;
+            }
+            if (below < 0 || above >= expected)
+            {
+                continue;
+            }
+            // The tail of the dwell, clear of both transitions: settling has died
+            // out by then, and the sample straddling the next edge is excluded.
+            const int lo = std::max(boundaries[i] + 2, boundaries[i + 1] - confirm_samples);
+            const int hi = boundaries[i + 1];
+            if (hi - lo < CalibrationConstants::kMinConfirmSamples)
+            {
+                continue;
+            }
+            QVector<double> tail;
+            tail.reserve(hi - lo);
+            for (int j = lo; j < hi; j++)
+            {
+                tail.push_back(rawValues[j]);
+            }
+            const double level = median(tail);
+            const double lower = std::min(raw_of_slot[below], raw_of_slot[above]);
+            const double upper = std::max(raw_of_slot[below], raw_of_slot[above]);
+            if (level <= lower || level >= upper)
+            {
+                continue; // not between its neighbours: not a clean dwell, leave the hole
+            }
+            CalibrationPoint point;
+            point.rawAvg = level;
+            point.trueDb = steps[slot].db;
+            profile.points.push_back(point);
+            paired[slot]      = true;
+            raw_of_slot[slot] = level;
         }
         std::sort(profile.points.begin(), profile.points.end(),
                   [](const CalibrationPoint& a, const CalibrationPoint& b) {

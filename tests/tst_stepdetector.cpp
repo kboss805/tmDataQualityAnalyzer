@@ -749,14 +749,17 @@ void TestStepDetector::detectRailedTopStepsCalibrateWhatStayedInRange()
     QCOMPARE(interpolateCalibration(65535.0, r.profile), 12.0);
 }
 
-void TestStepDetector::detectMissingDwellDoesNotShiftTheStepsAfterIt()
+void TestStepDetector::detectUnconfirmedDwellIsMeasuredFromTheGrid()
 {
     // The 18 dB dwell is in the recording but its plateau never confirms - noise
-    // shatters it into runs too short to hold. Position alone would then pair the
-    // 24 dB dwell with the 18 dB step and slide everything after it down one, the
-    // same silent mis-calibration a split dwell used to cause. Step numbers come
-    // from the dwell grid (counting transitions) instead, so a missing level
-    // leaves a hole rather than a shift.
+    // shatters it into runs too short to hold. Two failures to guard against:
+    //  - position alone would pair the 24 dB dwell with the 18 dB step and slide
+    //    everything after it down one, the silent mis-calibration a split dwell
+    //    used to cause;
+    //  - leaving the hole and interpolating across it assumes the receiver is
+    //    linear there, which is exactly what an out-of-tolerance receiver is not
+    //    (L_RCVR1's 24 dB dwell read 23.09 dB that way on STEP_CAL_EXAMPLE).
+    // The dwell grid says where the missing dwell is, so it is measured directly.
     QVector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}, {18.0}, {24.0}, {30.0}};
 
     QVector<double> raw;
@@ -765,9 +768,11 @@ void TestStepDetector::detectMissingDwellDoesNotShiftTheStepsAfterIt()
     appendRun(raw, 3000.0, 150);
     // 18 dB: jitters by a few counts for its whole dwell, so no run of it is ever
     // stable long enough to confirm - but the transitions either side still are.
+    // Deliberately NOT the midpoint of its neighbours, so a linear bridge across
+    // the hole would read the wrong dB.
     for (int i = 0; i < 150; i++)
     {
-        raw.push_back(4000.0 + ((i % 2 == 0) ? 0.0 : 6.0));
+        raw.push_back(3600.0 + ((i % 2 == 0) ? 0.0 : 6.0));
     }
     appendRun(raw, 5000.0, 150);
     appendRun(raw, 65535.0, 150); // 30 dB pegs the converter
@@ -775,10 +780,15 @@ void TestStepDetector::detectMissingDwellDoesNotShiftTheStepsAfterIt()
     StepDetector::Result r = StepDetector::detect(raw, kPeriod, steps);
     QVERIFY2(r.profile.valid, qPrintable(QString::fromLatin1(calibrationOutcomeText(r.outcome))));
     QVERIFY(r.saturated);
-    QCOMPARE(r.profile.points.size(), 4);
+    QCOMPARE(r.profile.points.size(), 5);
 
-    // The step after the hole keeps its own dB - this is the whole point.
+    // The unconfirmed dwell is measured at its own level and keeps its own dB...
+    QCOMPARE(r.profile.points[3].rawAvg, 3603.0);
+    QCOMPARE(r.profile.points[3].trueDb, 18.0);
+    QCOMPARE(interpolateCalibration(3603.0, r.profile), 18.0);
+    // ...the step after it keeps ITS own dB rather than sliding down one...
     QCOMPARE(r.profile.points.last().rawAvg, 5000.0);
     QCOMPARE(r.profile.points.last().trueDb, 24.0);
-    QCOMPARE(r.unresolvedDb, QVector<double>({18.0, 30.0}));
+    // ...and only the railed step is left unresolved.
+    QCOMPARE(r.unresolvedDb, QVector<double>({30.0}));
 }
