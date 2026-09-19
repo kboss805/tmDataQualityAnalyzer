@@ -61,6 +61,8 @@ void CalibrationExtractor::start(const Request& request)
     m_steps = request.steps;
     m_clip_start_sec = qMax(0.0, request.clipStartSec);
     m_clip_end_sec   = qMax(0.0, request.clipEndSec);
+    m_clip_ignored   = false;
+    m_recording_sec  = 0.0;
     m_sample_period_sec = CalibrationConstants::kExtractSamplePeriodSec;
 
     if (request.steps.isEmpty())
@@ -259,6 +261,11 @@ void CalibrationExtractor::onWorkerFinished(bool success)
                 }
                 const QVector<double> clipped =
                     (lo < hi) ? full.mid(lo, hi - lo) : full; // ignore an over-aggressive clip
+                m_recording_sec = full.size() * m_sample_period_sec;
+                if (lo >= hi && (m_clip_start_sec > 0.0 || m_clip_end_sec > 0.0))
+                {
+                    m_clip_ignored = true;
+                }
 
                 StepDetector::Result det =
                     StepDetector::detect(clipped, m_sample_period_sec, m_steps);
@@ -271,6 +278,7 @@ void CalibrationExtractor::onWorkerFinished(bool success)
                 res.plateauLevels    = det.plateauLevels;
                 res.saturated        = det.saturated;
                 res.unresolvedDb     = det.unresolvedDb;
+                res.sweepLevels      = det.sweepLevels;
                 if (res.profile.valid)
                 {
                     calibrated++;
@@ -317,6 +325,14 @@ void CalibrationExtractor::onWorkerFinished(bool success)
                                     .arg(note));
             }
             m_results.push_back(res);
+        }
+
+        if (m_clip_ignored)
+        {
+            emit logMessage(QString("Clip Start + Clip End (%1 s) exceed the recording (%2 s); "
+                                    "both were ignored and the whole recording was used.")
+                                .arg(m_clip_start_sec + m_clip_end_sec, 0, 'f', 1)
+                                .arg(m_recording_sec, 0, 'f', 1));
         }
 
         teardown();
@@ -445,6 +461,8 @@ QString CalibrationExtractor::summarize(const QVector<CalibrationChannelResult>&
         QStringList calibrated;                        ///< Channel parts that succeeded.
         QStringList relaxed;                           ///< …of those, ones needing a lower threshold.
         QStringList saturated;                         ///< …of those, ones whose top steps railed.
+        int         recordingLevels = 0;               ///< Most levels a calibrated channel's sweep
+                                                       ///< held, when well beyond the step file's.
         double      topDb = 0.0;                       ///< Highest dB those actually measured.
         QVector<double> unresolved;                    ///< dB no level could be paired with.
         QMap<CalibrationOutcome, QStringList> failed;  ///< Channel parts per failure reason.
@@ -463,6 +481,10 @@ QString CalibrationExtractor::summarize(const QVector<CalibrationChannelResult>&
         if (r.outcome == CalibrationOutcome::Calibrated)
         {
             g.calibrated.push_back(part);
+            if (r.sweepLevels - expectedSteps > CalibrationConstants::kMaxLeadInLevels)
+            {
+                g.recordingLevels = std::max(g.recordingLevels, r.sweepLevels);
+            }
             if (r.thresholdRelaxed)
             {
                 g.relaxed.push_back(part);
@@ -505,6 +527,8 @@ QString CalibrationExtractor::summarize(const QVector<CalibrationChannelResult>&
     QStringList detailLines;
     QStringList relaxedLines;
     QStringList saturatedLines;
+    QStringList stepFileLines;
+    QStringList wordMapLines;
     for (auto it = byReceiver.constBegin(); it != byReceiver.constEnd(); ++it)
     {
         const int receiver = it.key();
@@ -512,6 +536,25 @@ QString CalibrationExtractor::summarize(const QVector<CalibrationChannelResult>&
         const QString label = (receiver > 0)
                                   ? QStringLiteral("Receiver %1").arg(receiver)
                                   : QStringLiteral("Unnamed receiver");
+
+        if (g.recordingLevels > 0)
+        {
+            stepFileLines.push_back(QStringLiteral("  %1 — %2 levels in the recording, %3 in the step file")
+                                        .arg(label)
+                                        .arg(g.recordingLevels)
+                                        .arg(expectedSteps));
+        }
+
+        // One channel swept and another never moved: the signature a word map that
+        // does not match the recording leaves, because it files one receiver's words
+        // under another's name. A genuinely dead channel looks the same, so this is
+        // a prompt to check, not a verdict.
+        const auto flat = g.failed.constFind(CalibrationOutcome::FlatNoSignal);
+        if (receiver > 0 && !g.calibrated.isEmpty() && flat != g.failed.constEnd())
+        {
+            wordMapLines.push_back(QStringLiteral("  %1 — %2 calibrated; %3 never moved")
+                                       .arg(label, g.calibrated.join(", "), flat.value().join(", ")));
+        }
 
         if (!g.relaxed.isEmpty())
         {
@@ -591,6 +634,28 @@ QString CalibrationExtractor::summarize(const QVector<CalibrationChannelResult>&
         out << QString();
         out << QStringLiteral("Calibrated: receiver%1 %2.")
                    .arg(fullyCalibrated.size() == 1 ? "" : "s", fullyCalibrated.join(", "));
+    }
+
+    // The two checks below come before the fallback list on purpose: they flag
+    // results that LOOK successful but may be wrong, which the operator would
+    // otherwise only discover from the plot.
+    if (!stepFileLines.isEmpty())
+    {
+        out << QString();
+        out << QStringLiteral("Check the step file — these receivers stepped through more levels "
+                              "than it lists, so the lowest were set aside as lead-in. If those "
+                              "are real steps, every step is paired with the wrong level:");
+        out << stepFileLines;
+    }
+
+    if (!wordMapLines.isEmpty())
+    {
+        out << QString();
+        out << QStringLiteral("Check the word map — in these receivers one channel swept and "
+                              "another never moved. A word map that does not match the recording "
+                              "files one receiver's words under another's name; otherwise a "
+                              "channel may be dead:");
+        out << wordMapLines;
     }
 
     if (!detailLines.isEmpty())

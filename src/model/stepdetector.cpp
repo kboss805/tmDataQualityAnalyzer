@@ -342,6 +342,7 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
     //    around the noise floor, never forming a monotonic run — instead of the
     //    old "first N plateaus" rule, which paired no-signal noise with the step
     //    dB values and produced degenerate (all-equal rawAvg) profiles.
+    int selected_run_levels = 0; ///< Length of the run selectSweep last accepted.
     auto selectSweep = [&](const QVector<double>& plateauAvg, double threshold) -> int {
     // Find the FIRST maximal run of plateaus whose settled averages move strictly
     // in one direction, long enough to hold the whole sweep, and take its LAST
@@ -382,6 +383,7 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
         if (end - begin + 1 >= expected)
         {
             run_start = end - (expected - 1); // keep the last `expected` of the run
+            selected_run_levels = end - begin + 1;
         }
         else
         {
@@ -644,8 +646,9 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
                 result.unresolvedDb.push_back(steps[s].db);
             }
         }
-        profile.valid    = true;
-        result.saturated = true;
+        profile.valid      = true;
+        result.saturated   = true;
+        result.sweepLevels = run_end - run_begin + 1;
         result.outcome   = CalibrationOutcome::Calibrated;
         return true;
     };
@@ -770,6 +773,7 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
         return result; // linear fallback
     }
     result.extraPlateaus = plateaus.size() > expected;
+    result.sweepLevels   = selected_run_levels;
 
     // 8. Pair the selected sweep with the steps in time order (Nth plateau of
     //    the sweep <-> Nth step), then sort by raw so interpolateCalibration()

@@ -151,6 +151,14 @@ recording instead of relying on the linear slope/scale alone.
    lists such receivers separately and says where they stop; the usual cause is
    a receiver gain set too high for the calibration levels.
 
+   Two prompts appear when a result LOOKS successful but may be wrong:
+     - "Check the step file": a receiver stepped through more levels than the
+       step file lists (for example 11 against an 8-step file). The extra levels
+       are set aside as lead-in and every step is paired with the wrong level.
+     - "Check the word map": one channel of a receiver swept and another never
+       moved - what a receiver-parameters file that does not match the recording
+       leaves behind (or a dead channel).
+
    Detection is automatic and works regardless of receiver polarity (whether the
    raw count rises or falls as signal increases). A signal-generator turn-on
    transient at the start of the recording, and an optional operator down-ramp at
@@ -164,7 +172,8 @@ recording instead of relying on the linear slope/scale alone.
    of the recording; Clip End counts back from its END - not from the beginning,
    and not from Clip Start. On a 65-second recording, Clip Start 6 and Clip End 2
    keep 6 s to 63 s; Clip End 50 keeps only 6 s to 15 s. If the two add up to
-   more than the whole recording they are ignored. Trim only what is outside the
+   more than the whole recording they are ignored, and the dialog says so in
+   amber beside the channel count. Trim only what is outside the
    sweep, and watch the channel count, which updates as you change the values.
 
 Notes:

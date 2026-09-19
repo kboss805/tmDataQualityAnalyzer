@@ -480,7 +480,9 @@ measured in from the <em>beginning</em> of the recording, and Clip End is measur
 Clip Start 6 and Clip End 2 keep the part from 6&nbsp;s to 63&nbsp;s. Entering Clip End 50
 there does <em>not</em> mean "stop at 50&nbsp;s": it trims the last 50 seconds and keeps only
 6&nbsp;s to 15&nbsp;s, which leaves almost none of the sweep. If the two values add up to more
-than the whole recording, they are ignored and the entire recording is used.</div>
+than the whole recording, they are ignored and the entire recording is used &mdash; the
+dialog says so in amber beside the channel count, so a value that had no effect never looks
+like one that worked.</div>
 
 <ul>
   <li>a <strong>turn-on transient</strong> at the beginning, while the signal generator settles
@@ -515,12 +517,29 @@ top to bottom:</p>
   <li><strong>The count</strong> &mdash; how many channels received a measured profile, out of
       every channel in the word map.</li>
   <li><strong>Calibrated</strong> &mdash; the receivers whose channels all calibrated.</li>
+  <li><strong>Check the step file</strong> / <strong>Check the word map</strong> &mdash; prompts
+      that appear only when a result <em>looks</em> successful but may be wrong (see below).</li>
   <li><strong>Fell back to linear calibration</strong> &mdash; every other receiver, with the
       channels affected and the reason. A receiver that only partly calibrated is spelled out
       here rather than hidden in the count.</li>
   <li><strong>Calibrated only up to a saturated top</strong> &mdash; receivers that calibrated
       but ran out of range before the sweep finished (see below). This section, and one for
       receivers that needed a <em>relaxed threshold</em>, appear only when they apply.</li>
+</ul>
+
+<p><strong>The two "check" prompts.</strong> Both catch a setup mistake that otherwise
+calibrates without complaint:</p>
+
+<ul>
+  <li><strong>Check the step file</strong> appears when a receiver stepped through more levels
+      than the step file lists &mdash; for example eleven levels against an eight-step file.
+      The extra levels at the start are set aside as lead-in, so every remaining step is paired
+      with the wrong dB even though the receiver reports <em>calibrated</em>. One extra level is
+      normal (a signal-generator turn-on transient) and does not trigger it.</li>
+  <li><strong>Check the word map</strong> appears when one channel of a receiver swept and
+      another never moved. That is what a receiver-parameters file that does not match the
+      recording leaves behind: it files one receiver's words under another's name. A genuinely
+      dead channel looks the same, so treat it as a prompt to check rather than a verdict.</li>
 </ul>
 
 <p>Each fallback reason points at a different cause:</p>

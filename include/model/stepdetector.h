@@ -63,6 +63,11 @@ public:
         /// dB of every step no measured level could be paired with: the railed
         /// ones, plus any dwell noise shattered into runs too short to confirm.
         QVector<double> unresolvedDb;
+        /// Levels in the monotonic run the sweep was taken from. More than the step
+        /// file's count means leading levels were set aside as lead-in; more than one
+        /// extra (CalibrationConstants::kMaxLeadInLevels) suggests the step file is
+        /// short rather than that the recording has a turn-on transient.
+        int sweepLevels = 0;
     };
 
     /**

@@ -645,7 +645,7 @@ public:
     double  clipEndSec()   const { return m_clipEnd   ? m_clipEnd->value()   : 0.0; }
 
 private:
-    enum StatusKind { Pending, Ok, Fail };
+    enum StatusKind { Pending, Ok, Warn, Fail };
 
     void setStatus(QLabel* label, StatusKind kind, const QString& text)
     {
@@ -654,6 +654,7 @@ private:
         switch (kind)
         {
             case Ok:      prefix = "✓ "; color = "green"; break;  // checkmark
+            case Warn:    prefix = "⚠ "; color = "#DAA520"; break; // the log's warning colour
             case Fail:    prefix = "✗ "; color = "#cc0000"; break; // cross
             case Pending: default: color = "gray"; break;
         }
@@ -831,7 +832,22 @@ private:
                                                               m_steps.size());
 
         m_calOk = (valid > 0);
-        setStatus(m_calStatus, m_calOk ? Ok : Fail, summary);
+        if (extractor.clipIgnored())
+        {
+            // The clips are silently dropped when they would leave nothing to
+            // measure, so without this the operator sees a result that ignored the
+            // values they typed and has no way to tell.
+            const QString warning =
+                tr("Clip Start + Clip End (%1 s) exceed the recording (%2 s) - clips ignored.")
+                    .arg(clipStartSec() + clipEndSec(), 0, 'f', 1)
+                    .arg(extractor.recordingSeconds(), 0, 'f', 1);
+            m_calibrationReport.prepend(warning + "\n\n");
+            setStatus(m_calStatus, Warn, warning + " " + summary);
+        }
+        else
+        {
+            setStatus(m_calStatus, m_calOk ? Ok : Fail, summary);
+        }
         updateOk();
     }
 

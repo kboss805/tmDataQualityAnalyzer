@@ -32,6 +32,7 @@ private slots:
     void detectSplitDwellFarAboveNoiseIsStillOneStep();
     void detectRailedTopStepsCalibrateWhatStayedInRange();
     void detectUnconfirmedDwellIsMeasuredFromTheGrid();
+    void detectReportsHowManyLevelsTheSweepHeld();
 
     // Interpolation / out-of-range clamping
     void interpolateMidpoint();

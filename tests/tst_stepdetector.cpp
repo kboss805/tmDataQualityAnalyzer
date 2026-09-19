@@ -792,3 +792,31 @@ void TestStepDetector::detectUnconfirmedDwellIsMeasuredFromTheGrid()
     // ...and only the railed step is left unresolved.
     QCOMPARE(r.unresolvedDb, QVector<double>({30.0}));
 }
+
+void TestStepDetector::detectReportsHowManyLevelsTheSweepHeld()
+{
+    // An 8-step file against an 11-level sweep still "calibrates": the detector keeps
+    // the last eight levels and sets the lower three aside as lead-in, so every step
+    // is paired with the wrong level and nothing fails. sweepLevels is what lets the
+    // report notice - the sweep held more levels than the step file describes.
+    QVector<StepDefinition> steps = {{0.0}, {3.0}, {6.0}, {12.0}, {18.0}, {24.0}, {30.0}, {36.0}};
+
+    QVector<double> eleven;
+    for (int k = 1; k <= 11; k++)
+    {
+        appendRun(eleven, 1000.0 * k, 150);
+    }
+    StepDetector::Result r = StepDetector::detect(eleven, kPeriod, steps);
+    QVERIFY(r.profile.valid);
+    QCOMPARE(r.sweepLevels, 11);
+
+    // A sweep that matches the step file exactly reports exactly that many.
+    QVector<double> eight;
+    for (int k = 1; k <= 8; k++)
+    {
+        appendRun(eight, 1000.0 * k, 150);
+    }
+    StepDetector::Result exact = StepDetector::detect(eight, kPeriod, steps);
+    QVERIFY(exact.profile.valid);
+    QCOMPARE(exact.sweepLevels, 8);
+}

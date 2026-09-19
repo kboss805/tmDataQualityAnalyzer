@@ -46,6 +46,8 @@ struct CalibrationChannelResult
     bool               saturated = false; ///< Calibrated only up to a railed top; readings
                                           ///< clamp at the highest step still measurable.
     QVector<double>    unresolvedDb;    ///< dB of steps no measured level could be paired with.
+    int                sweepLevels = 0; ///< Levels in the sweep run; more than the step
+                                        ///< file lists means some were set aside as lead-in.
 };
 
 /// @brief Extracts non-linear calibration profiles from a calibration Ch10 file.
@@ -89,6 +91,13 @@ public:
     const QVector<CalibrationChannelResult>& results() const { return m_results; }
     /// @return Error message if the run failed.
     QString error() const { return m_error; }
+    /// @return True if Clip Start + Clip End would have left nothing of the
+    ///         recording, so both were ignored and the whole recording was used.
+    ///         Reported because the dialog otherwise gives no sign the values the
+    ///         operator typed had no effect.
+    bool clipIgnored() const { return m_clip_ignored; }
+    /// @return Length of the extracted recording in seconds (valid after finished()).
+    double recordingSeconds() const { return m_recording_sec; }
 
     /**
      * @brief Builds the operator-facing calibration report from @p results.
@@ -139,6 +148,8 @@ private:
     double            m_sample_period_sec = 0.0;
     double            m_clip_start_sec = 0.0; ///< Cal seconds to ignore at the start before step detection.
     double            m_clip_end_sec = 0.0;   ///< Cal seconds to ignore at the end before step detection.
+    bool              m_clip_ignored = false; ///< The clips exceeded the recording and were ignored.
+    double            m_recording_sec = 0.0;  ///< Extracted recording length, in seconds.
     QVector<CalibrationChannelResult> m_results;
     QString           m_error;
     bool              m_cancelled = false;
