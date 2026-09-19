@@ -143,6 +143,25 @@ bool StepDetector::parseStepConfig(const QString& path,
     return true;
 }
 
+QString StepDetector::initialStepConfigPath(const QString& appRoot, const QString& preferred)
+{
+    // A reference that no longer resolves - a template written on another machine,
+    // a moved settings tree - falls through to the default rather than opening
+    // the dialog on a file that is not there.
+    if (!preferred.isEmpty() && QFileInfo(preferred).isFile())
+    {
+        return preferred;
+    }
+    if (appRoot.isEmpty())
+    {
+        return QString();
+    }
+    const QString fallback = appRoot + "/" + UIConstants::kSettingsDirName + "/"
+                             + UIConstants::kRcvrCalsDirName + "/"
+                             + UIConstants::kDefaultTomlFilename;
+    return QFileInfo(fallback).isFile() ? fallback : QString();
+}
+
 // ---------------------------------------------------------------------------
 // detect
 // ---------------------------------------------------------------------------

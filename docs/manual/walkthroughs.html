@@ -330,8 +330,15 @@ stream is currently using.</p>
 
 <h3>Step 2 &mdash; Choose the two files</h3>
 
-<p>Browse to the step TOML and the calibration recording. The dialog reports what it made of
-each as soon as you select it: how many steps it parsed, and how many channels it managed to
+<p>The step TOML is already filled in: the dialog opens with the file this stream used last,
+or with the shipped default (<code>settings\rcvr_cals\default.toml</code>, eleven steps from
+0 to 60&nbsp;dB) if it has not been calibrated before. The status beside it says
+<em>loaded automatically</em>, so you can see which file is in play. Browse only if this
+recording stepped through different levels &mdash; the step file must list every level that was
+injected.</p>
+
+<p>Then browse to the calibration recording. The dialog reports what it made of each file as
+soon as it has it: how many steps it parsed, and how many channels it managed to
 calibrate.</p>
 
 {{FIG:walk-cal-03-clip-controls.png|Both files chosen and the clip controls set: 6 seconds trimmed from the start of the recording and 2 seconds from its end. The confirmations report eleven steps parsed and twelve of forty-eight channels calibrated.|Extract Calibration dialog populated with default.toml and step_cal, example.ch10, clip start 6 seconds and clip end 2 seconds, reporting 11 steps parsed and 12 of 48 channels calibrated}}

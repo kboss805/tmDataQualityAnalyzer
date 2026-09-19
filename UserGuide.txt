@@ -131,6 +131,9 @@ recording instead of relying on the linear slope/scale alone.
    that were injected (for example 0, 6, 12 ... 60 dB). It must list EVERY level
    the recording steps through: a file with fewer steps than the recording can
    still calibrate, but every step ends up paired with the wrong level.
+   The dialog opens with this already filled in - the step file the stream used
+   last, or the shipped default settings\rcvr_cals\default.toml (0 to 60 dB in
+   6 dB steps) - and says "loaded automatically". Browse only to change it.
 3. Calibration Ch10: load the .ch10 file that recorded the step-cal sweep.
 4. The application detects the step plateaus on each receiver channel and builds
    a calibration profile for every channel that cleanly resolves the expected

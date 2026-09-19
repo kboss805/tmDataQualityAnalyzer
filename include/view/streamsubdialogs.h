@@ -528,9 +528,13 @@ public:
     /// @param baseRequest Acquisition + receiver fields already filled by the
     ///        caller (frame sync, channel IDs, word-map source). The dialog adds
     ///        the cal file, parsed steps, and clip seconds before extracting.
+    /// @param initialStepPath The step file this stream last used, if any. The
+    ///        dialog opens with it, or with the shipped default if it is empty or
+    ///        gone (StepDetector::initialStepConfigPath).
     CalibrationSetupDialog(const CalibrationExtractor::Request& baseRequest,
                            const QString& tomlDir,
                            const QString& appRoot,
+                           const QString& initialStepPath = QString(),
                            QWidget* parent = nullptr)
         : QDialog(parent)
         , m_baseRequest(baseRequest)
@@ -624,6 +628,18 @@ public:
 
         setStatus(m_stepStatus, Pending, "No file selected.");
         setStatus(m_calStatus,  Pending, "No file selected.");
+
+        // Almost every calibration uses the same step file, so start with one
+        // loaded. The status says it was loaded automatically: a step file that
+        // does not match the recording still calibrates, just wrongly, so the
+        // operator must be able to see which file is in play without browsing.
+        const QString initialStep =
+            StepDetector::initialStepConfigPath(m_appRoot, initialStepPath);
+        if (!initialStep.isEmpty())
+        {
+            loadStepFile(initialStep, /*automatic=*/true);
+        }
+
         updateOk();
         adjustSize();
     }
@@ -679,6 +695,14 @@ private:
         if (path.isEmpty()) return;
 
         m_tomlDir = QFileInfo(path).absolutePath();
+        loadStepFile(path, /*automatic=*/false);
+    }
+
+    /// Selects @p path as the step file and parses it. @p automatic marks a file
+    /// the dialog preloaded rather than one the operator chose, so the status can
+    /// say so.
+    void loadStepFile(const QString& path, bool automatic)
+    {
         m_stepPath = path;
         m_stepPathLabel->setText(QFileInfo(path).fileName());
 
@@ -689,7 +713,9 @@ private:
             m_steps  = steps;
             m_stepOk = true;
             setStatus(m_stepStatus, Ok,
-                      QString("%1 steps parsed.").arg(steps.size()));
+                      QString("%1 steps parsed%2.")
+                          .arg(steps.size())
+                          .arg(automatic ? QStringLiteral(" (loaded automatically)") : QString()));
         }
         else
         {
@@ -1197,7 +1223,7 @@ private:
         // Mirror the main run's byte order, or the extracted steps come from a
         // different bitstream than the data they will calibrate.
         base.swapBytes          = m_swapBytes;
-        CalibrationSetupDialog setup(base, m_toml_dir, m_app_root, this);
+        CalibrationSetupDialog setup(base, m_toml_dir, m_app_root, m_stepTomlPath, this);
         if (setup.exec() != QDialog::Accepted) return;
         m_toml_dir = setup.lastTomlDir();
 

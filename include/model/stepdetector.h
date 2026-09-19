@@ -86,6 +86,21 @@ public:
                                 QString& error);
 
     /**
+     * @brief The step-config TOML the Extract Calibration dialog opens with.
+     *
+     * Almost every calibration uses the same step file, so the dialog preloads one
+     * rather than making the operator browse to it each time. It prefers the file
+     * this stream last used (an earlier extraction, or a processing template's
+     * stored reference) and otherwise falls back to the shipped default.
+     *
+     * @param[in] appRoot   Application root holding the settings/ tree.
+     * @param[in] preferred The stream's previous step file; may be empty.
+     * @return @p preferred if it names an existing file; else
+     *         `<appRoot>/settings/rcvr_cals/default.toml` if that exists; else empty.
+     */
+    static QString initialStepConfigPath(const QString& appRoot, const QString& preferred);
+
+    /**
      * @brief Detects confirmed step plateaus in @p rawValues and builds a
      *        CalibrationProfile.
      *

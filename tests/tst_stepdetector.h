@@ -33,6 +33,7 @@ private slots:
     void detectRailedTopStepsCalibrateWhatStayedInRange();
     void detectUnconfirmedDwellIsMeasuredFromTheGrid();
     void detectReportsHowManyLevelsTheSweepHeld();
+    void initialStepConfigPrefersTheStreamsFileThenTheDefault();
 
     // Interpolation / out-of-range clamping
     void interpolateMidpoint();
