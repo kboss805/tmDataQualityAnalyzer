@@ -563,9 +563,8 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
                 QString::number(PCMConstants::kMinFrameLengthBits) + ".";
         return false;
     }
-    // Derive word count for the frame-setup word-map loader (ceiling division).
-    int words_in_minor_frame =
-        (bits_in_minor_frame + PCMConstants::kCommonWordLen - 1) / PCMConstants::kCommonWordLen;
+    // Derive word count for the frame-setup word-map loader.
+    int words_in_minor_frame = FrameSetup::wordsInMinorFrame(bits_in_minor_frame);
 
     // ---- Assemble the per-stream ProcessingParams ----
     out_job.params = base;

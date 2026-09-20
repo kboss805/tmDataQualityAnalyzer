@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QSettings>
 #include <QTemporaryFile>
 #include <QtTest>
@@ -261,4 +262,221 @@ void TestFrameSetup::receiverIndexFromNameInvertsParameterName()
     QCOMPARE(FrameSetup::receiverIndexFromName("L_RCVRx2"), 0); // not a bare number
     // An unparseable name keeps its whole self as the "channel part".
     QCOMPARE(FrameSetup::channelPartOfName("AGC_LEFT"), QString("AGC_LEFT"));
+}
+
+// ---------------------------------------------------------------------------
+// Receiver-parameters files: the word map and the scalars are one file, and
+// saving must produce a file that loading accepts (v2.12.1).
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// @return <repo root>/settings/receiver_params, alongside the built test exe.
+QString shippedReceiverParamsDir()
+{
+    QDir root(QCoreApplication::applicationDirPath());
+    root.cdUp();   // tests/
+    root.cdUp();   // project root
+    return root.absolutePath() + "/settings/receiver_params";
+}
+
+/// Writes a minimal word-map TOML: one group per entry, Word being 1-based.
+void writeWordMap(const QString& path, const QList<QPair<QString, int>>& words)
+{
+    QFile::remove(path);
+    QSettings cfg(path, TomlConfigHelper::format());
+    for (const auto& entry : words)
+    {
+        cfg.beginGroup(entry.first);
+        cfg.setValue("Word", entry.second);
+        cfg.endGroup();
+    }
+    cfg.sync();
+}
+
+} // namespace
+
+void TestFrameSetup::wordsInMinorFrameRoundsUp()
+{
+    // A partially filled last word still occupies a word slot, so the division
+    // rounds up — the word map's bounds check depends on this.
+    QCOMPARE(FrameSetup::wordsInMinorFrame(800), 50);
+    QCOMPARE(FrameSetup::wordsInMinorFrame(801), 51);
+    QCOMPARE(FrameSetup::wordsInMinorFrame(16),  1);
+    QCOMPARE(FrameSetup::wordsInMinorFrame(1),   1);
+}
+
+void TestFrameSetup::tryLoadingFileMetadataOnlyFileYieldsNoParameters()
+{
+    // A file with metadata sections but no word-map groups parses, and leaves no
+    // parameters behind. Callers must check length(); this pins the contract they
+    // rely on, and is exactly the file the dialog's Save used to produce.
+    const QString path = QDir::tempPath() + "/tst_rcvr_meta_only.toml";
+    QFile::remove(path);
+    {
+        QSettings cfg(path, TomlConfigHelper::format());
+        cfg.beginGroup("Parameters");
+        cfg.setValue("Polarity", 1);
+        cfg.setValue("Slope", 2);
+        cfg.endGroup();
+        cfg.sync();
+    }
+    QVERIFY(QFileInfo(path).size() > 0);
+
+    FrameSetup fs;
+    QVERIFY(fs.tryLoadingFile(path, kTestWordsInFrame));
+    QCOMPARE(fs.length(), 0);
+
+    QFile::remove(path);
+}
+
+void TestFrameSetup::readReceiverParamsReadsTheShippedReceiversBlock()
+{
+    // The shipped files carry their receiver counts under [Receivers], which the
+    // dialog never read — loading RASA left the counts showing the defaults.
+    const QString rasa = shippedReceiverParamsDir() + "/RASA.toml";
+    QVERIFY2(QFileInfo(rasa).isFile(), qPrintable(rasa));
+
+    const ReceiverParams params = FrameSetup::readReceiverParams(rasa);
+    QCOMPARE(params.numReceivers, 12);
+    QCOMPARE(params.receiverChannels, 3);
+    QCOMPARE(params.polarityIndex, 1);
+    QCOMPARE(params.slopeIndex, 2);
+    QCOMPARE(params.scaleDdBPerV, 10.0);
+}
+
+void TestFrameSetup::readReceiverParamsAcceptsTheOlderParametersKeys()
+{
+    // Files the dialog wrote before this change put the counts under [Parameters].
+    const QString path = QDir::tempPath() + "/tst_rcvr_legacy_keys.toml";
+    QFile::remove(path);
+    {
+        QSettings cfg(path, TomlConfigHelper::format());
+        cfg.beginGroup("Parameters");
+        cfg.setValue("NumReceivers", 4);
+        cfg.setValue("ReceiverChannels", 2);
+        cfg.endGroup();
+        cfg.sync();
+    }
+    QVERIFY(QFileInfo(path).size() > 0);
+
+    const ReceiverParams params = FrameSetup::readReceiverParams(path);
+    QCOMPARE(params.numReceivers, 4);
+    QCOMPARE(params.receiverChannels, 2);
+
+    // A key the file does not carry keeps the value the caller passed in — the
+    // dialog passes what it is showing, so a partial file changes only what it
+    // actually specifies instead of resetting the rest to the app defaults.
+    ReceiverParams on_screen;
+    on_screen.polarityIndex    = 1;
+    on_screen.scaleDdBPerV     = 33.0;
+    on_screen.numReceivers     = 9;
+    on_screen.receiverChannels = 5;
+    const ReceiverParams merged = FrameSetup::readReceiverParams(path, on_screen);
+    QCOMPARE(merged.polarityIndex, 1);      // absent from the file
+    QCOMPARE(merged.scaleDdBPerV, 33.0);    // absent from the file
+    QCOMPARE(merged.numReceivers, 4);       // the file wins where it speaks
+    QCOMPARE(merged.receiverChannels, 2);
+
+    QFile::remove(path);
+}
+
+void TestFrameSetup::receiverParamsFileRoundTripsScalarsAndWordMap()
+{
+    // Save then load: the scalars come back, and so does the word map that was
+    // carried over from the file the stream had loaded. Without the map the
+    // saved file loads with zero parameters and the stream cannot process.
+    const QString source = QDir::tempPath() + "/tst_rcvr_source.toml";
+    writeWordMap(source, {{"L_RCVR1", 1}, {"R_RCVR1", 2}, {"C_RCVR1", 3}});
+
+    ReceiverParams params;
+    params.polarityIndex    = 1;
+    params.slopeIndex       = 2;
+    params.scaleDdBPerV     = 12.5;
+    params.numReceivers     = 1;
+    params.receiverChannels = 3;
+
+    const QString saved = QDir::tempPath() + "/tst_rcvr_saved.toml";
+    QFile::remove(saved);
+    QString error;
+    QVERIFY2(FrameSetup::saveReceiverParamsFile(saved, params, source, kTestWordsInFrame, error),
+             qPrintable(error));
+
+    const ReceiverParams back = FrameSetup::readReceiverParams(saved);
+    QCOMPARE(back.polarityIndex, 1);
+    QCOMPARE(back.slopeIndex, 2);
+    QCOMPARE(back.scaleDdBPerV, 12.5);
+    QCOMPARE(back.numReceivers, 1);
+    QCOMPARE(back.receiverChannels, 3);
+
+    FrameSetup fs;
+    QVERIFY(fs.tryLoadingFile(saved, kTestWordsInFrame));
+    QCOMPARE(fs.length(), 3);
+    QHash<QString, int> by_name;
+    for (int i = 0; i < fs.length(); i++)
+    {
+        by_name.insert(fs.getParameter(i)->name, fs.getParameter(i)->word);
+    }
+    QCOMPARE(by_name.value("L_RCVR1", -1), 0);
+    QCOMPARE(by_name.value("R_RCVR1", -1), 1);
+    QCOMPARE(by_name.value("C_RCVR1", -1), 2);
+
+    QFile::remove(source);
+    QFile::remove(saved);
+}
+
+void TestFrameSetup::receiverParamsFileFallsBackToTheDefaultWordMap()
+{
+    // No file was loaded, so the saved file carries the default map for the
+    // counts on screen — the same map the run would have built for them.
+    ReceiverParams params;
+    params.numReceivers     = 2;
+    params.receiverChannels = 3;
+
+    const QString saved = QDir::tempPath() + "/tst_rcvr_default_map.toml";
+    QFile::remove(saved);
+    QString error;
+    QVERIFY2(FrameSetup::saveReceiverParamsFile(saved, params, QString(), kTestWordsInFrame, error),
+             qPrintable(error));
+
+    FrameSetup fs;
+    QVERIFY(fs.tryLoadingFile(saved, kTestWordsInFrame));
+    QCOMPARE(fs.length(), 6);
+
+    FrameSetup expected;
+    QString build_error;
+    QVERIFY(expected.buildDefaultReceiverMap(2, 3, kTestWordsInFrame, build_error));
+    QHash<QString, int> saved_words;
+    for (int i = 0; i < fs.length(); i++)
+    {
+        saved_words.insert(fs.getParameter(i)->name, fs.getParameter(i)->word);
+    }
+    for (int i = 0; i < expected.length(); i++)
+    {
+        const ParameterInfo* p = expected.getParameter(i);
+        QCOMPARE(saved_words.value(p->name, -1), p->word);
+    }
+
+    QFile::remove(saved);
+}
+
+void TestFrameSetup::receiverParamsFileIsNeverWrittenWithoutAWordMap()
+{
+    // Counts that cannot fit the frame leave no map to write, and a scalars-only
+    // file is one the application rejects — so nothing is written at all.
+    ReceiverParams params;
+    params.numReceivers     = 40;
+    params.receiverChannels = 3;   // 120 words into a 49-word frame
+
+    const QString saved = QDir::tempPath() + "/tst_rcvr_nomap.toml";
+    QFile::remove(saved);
+    QString error;
+    QVERIFY(!FrameSetup::saveReceiverParamsFile(saved, params, QString(), kTestWordsInFrame, error));
+    QVERIFY(!error.isEmpty());
+    QVERIFY(!QFileInfo::exists(saved));
+
+    // The instance-level writer refuses an empty map for the same reason.
+    FrameSetup empty;
+    QVERIFY(!empty.writeReceiverParams(saved, params));
+    QVERIFY(!QFileInfo::exists(saved));
 }

@@ -11,6 +11,7 @@
 #include <QSettings>
 
 #include "calibrationprofile.h"
+#include "constants.h"
 
 /**
  * @brief Describes one named parameter within a PCM minor frame.
@@ -32,6 +33,24 @@ struct ParameterInfo
 };
 
 /**
+ * @brief The scalar settings a receiver-parameters TOML carries alongside its
+ *        word map.
+ *
+ * These are the five values the Receiver SNR dialog shows above the word map.
+ * They live here, next to the word-map reader, so the file's two halves are
+ * read and written in one place: a save that wrote only these produced a file
+ * every consumer rejects for having no parameters.
+ */
+struct ReceiverParams
+{
+    int    polarityIndex    = UIConstants::kDefaultPolarityIndex;    ///< 0 = positive, 1 = negative.
+    int    slopeIndex       = UIConstants::kDefaultSlopeIndex;       ///< Index into the voltage ranges.
+    double scaleDdBPerV     = PCMConstants::kDefaultScaleDdBPerV;    ///< Calibration scale, dB per volt.
+    int    numReceivers     = PCMConstants::kDefaultNumReceivers;    ///< Receivers contributing channels.
+    int    receiverChannels = PCMConstants::kDefaultReceiverChannels;///< Channels per receiver.
+};
+
+/**
  * @brief Loads and manages the list of PCM frame parameters.
  *
  * Parameters are read from a TOML file that maps receiver/channel names
@@ -46,15 +65,50 @@ public:
     explicit FrameSetup(QObject* parent = nullptr);
 
     /**
-     * @brief Loads parameters from a TOML file.
+     * @brief Loads the word map from a receiver-parameters TOML file.
      * @param[in] filename Path to the TOML file.
      * @param[in] num_words_in_minor_frame Number of words per minor frame.
-     * @return true if at least one parameter was loaded.
+     * @return true if the file parsed — NOT that it yielded any parameters.
+     *
+     * A file holding only metadata sections (a [Parameters] block and no word-map
+     * groups) parses successfully and leaves length() == 0, so every caller must
+     * check length() before using the setup. Both do, and each reports a clearer
+     * cause than a bare false would allow ("contains no parameters" vs. "check the
+     * word map"). saveReceiverParamsFile() refuses to write such a file in the
+     * first place.
      */
     bool tryLoadingFile(const QString& filename, int num_words_in_minor_frame);
 
     /// Saves the current parameter list to @p settings.
-    void saveToSettings(QSettings& settings);
+    void saveToSettings(QSettings& settings) const;
+
+    /// @return Words per minor frame for @p bits_in_minor_frame, rounded up: a
+    /// frame whose last word is partially filled still occupies that word's slot.
+    /// Single-sourced because the word map's bounds check depends on it.
+    static int wordsInMinorFrame(int bits_in_minor_frame);
+
+    /// Reads the scalar settings from a receiver-parameters TOML (the word map is
+    /// loaded separately by tryLoadingFile()). A key the file does not carry keeps
+    /// its value from @p defaults, so a caller can pass what it is already showing
+    /// and have a partial file change only what it actually specifies.
+    static ReceiverParams readReceiverParams(const QString& path,
+                                             const ReceiverParams& defaults = ReceiverParams());
+
+    /// Writes a complete receiver-parameters TOML — the scalars plus this setup's
+    /// word map. Refuses (returns false) when there is no word map to write.
+    bool writeReceiverParams(const QString& path, const ReceiverParams& params) const;
+
+    /// Writes a complete receiver-parameters file the way the Receiver SNR dialog
+    /// needs it: the word map comes from @p word_map_source when that names a
+    /// readable file, and otherwise is the default map for the params' receiver
+    /// counts — i.e. whichever map the stream would actually process with.
+    /// @return false with a reason in @p error if no usable map could be built or
+    ///         the file could not be written.
+    static bool saveReceiverParamsFile(const QString& path,
+                                       const ReceiverParams& params,
+                                       const QString& word_map_source,
+                                       int num_words_in_minor_frame,
+                                       QString& error);
 
     int length() const; ///< @return Number of parameters.
 

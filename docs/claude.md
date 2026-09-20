@@ -446,8 +446,47 @@ successful. Each now says so.
   plot. The manual's calibration walkthrough and `UserGuide.txt` explain both prompts and
   the clip warning.
 
+#### A saved receiver-parameters file is one the application can load again (US5.1)
+
+Found during a codebase cleanup sweep, by following an unused function.
+
+- **Save wrote half a file.** The Receiver SNR dialog's *Save receiver parameters* wrote the
+  `[Parameters]` scalars and no word map. Loading that file back gives a setup with zero
+  parameters, which both consumers reject ("Receiver Parameters file contains no
+  parameters") - so the button produced a file the application refuses. The half that was
+  missing is `FrameSetup::saveToSettings()`, which writes the word map and had no
+  production caller at all.
+- **The counts were read from a key the shipped files do not use.** Load read
+  `[Parameters] NumReceivers` / `ReceiverChannels`; `RASA.toml`, `TRC.toml` and
+  `default.toml` all carry their counts under `[Receivers] Count` /
+  `ChannelsPerReceiver`. So loading RASA showed 16x3 instead of its real 12x3 - the
+  dialog quietly disagreed with the file it had just loaded.
+- **Both halves of the file are now read and written in one place.** `FrameSetup` gains
+  `ReceiverParams` (the five scalars), `readReceiverParams()`, `writeReceiverParams()`
+  and the static `saveReceiverParamsFile()`, which resolves *which* word map to write -
+  the file this stream loaded, or the default map for the counts on screen, i.e. whichever
+  map the run would actually use - and **refuses to write a file with no word map at all**.
+  Reading accepts the old `[Parameters]` count keys as well, so files the dialog wrote
+  before this still populate it. The dialog now only moves values between widgets and the
+  Model.
+- `FrameSetup::wordsInMinorFrame()` replaces the ceiling division that `MainViewModel` and
+  `CalibrationExtractor` each spelled out, since the word map's bounds check depends on it.
+- `tryLoadingFile()`'s doc comment claimed it returned "true if at least one parameter was
+  loaded" while the code returns true for a file with no word-map groups at all. The
+  behaviour is what both callers actually need (each reports a clearer cause than a bare
+  false would allow), so the comment was corrected to state it, and a test pins it.
+
 #### Tests
 
+- `TestFrameSetup` gains seven cases: the word-count rounding; a metadata-only file parsing
+  to zero parameters (the contract both callers depend on); the shipped RASA counts read
+  from `[Receivers]`; the older `[Parameters]` count keys still read; a save/load round trip
+  carrying both the scalars and the word map; the default-map fallback matching
+  `buildDefaultReceiverMap()`; and nothing written at all when no map can be built. The
+  round-trip case fails against the previous Save.
+- **Trap:** `QSettings` writes through a rename, which does not land on a path a live
+  `QTemporaryFile` still owns on Windows - the write silently produces an empty file. Tests
+  that write TOML use a plain path plus `QFile::remove()`.
 - `TestStepDetector::detectReportsHowManyLevelsTheSweepHeld`: 11 levels against 8 steps
   reports 11; an exact match reports 8.
 - `TestCalibrationExtractor::summaryFlagsAShortStepFileAndAMismatchedWordMap` (pure): the
@@ -1762,7 +1801,7 @@ not mis-read.
 
 8. **CalibrationExtractor** (`src/model/calibrationextractor.cpp`, `include/model/calibrationextractor.h`) — *US5.3*; drives a raw extraction over a calibration Ch10 file (reusing the Ch10PacketReader + FrameProcessor pipeline with unit slope / zero offset) and runs StepDetector per channel to build session-only profiles
 
-9. **TomlConfigHelper** (`src/model/tomlconfighelper.cpp`, `include/model/tomlconfighelper.h`) — registers a custom QSettings TOML format and provides the frame-sync / receiver-parameter load/save helpers
+9. **TomlConfigHelper** (`src/model/tomlconfighelper.cpp`, `include/model/tomlconfighelper.h`) — registers the custom QSettings TOML format every settings file is read and written through. It is the format only: the frame-sync helpers live with the dialogs that use them, and the receiver-parameters file (scalars + word map) is read and written by `FrameSetup`
 
 10. **CsvSeriesParser** (`src/model/csvseriesparser.cpp`, `include/model/csvseriesparser.h`) — pure (UI-free) static parser that turns a FrameProcessor `Day,Time,param…` CSV into `PlotSeriesData` (returned as a `CsvParseResult`). Extracted out of PlotViewModel so file parsing lives in the Model layer; thread-safe, so PlotViewModel runs `parse()` on a worker thread via `loadCsvFileAsync()`
 
@@ -2056,7 +2095,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestConstants** (`tst_constants`) — Verifies all PCMConstants, UIConstants, PlotConstants, AppVersion, and recent files constants (including kMaxPacketBufferSize, kFrameSyncHexPattern)
 - **TestFrameProcessor** (`tst_frameprocessor`) — constructor defaults, abort flag, `derandomizeBitstream` (identity/short and changed/long), invalid time-channel/PCM-channel/file handling, and processing real Ch10 data (receiver-data accumulation, lock-only mode has no channels, monotonic frame-sync errors, slope affects values, shorter period → more samples, calibration round-trip clean steps, off-phase sync after lock-loss not extracted)
 - **TestMainViewModelHelpers** (`tst_mainviewmodel_helpers`) — ViewModel helper methods (`channelPrefix` and `parameterName` over known/unknown/boundary indices)
-- **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration, and `receiverIndexFromName()` inverting `receiverParameterName()` (0 for a name with no parseable `_RCVR<N>`)
+- **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration, `receiverIndexFromName()` inverting `receiverParameterName()` (0 for a name with no parseable `_RCVR<N>`), and the receiver-parameters file as a whole: the scalars read from the `[Receivers]` block the shipped files actually use (and the older `[Parameters]` keys still accepted), a save/load round trip that carries the word map with them, the default-map fallback when no file was loaded, nothing written when there is no map to write, and the metadata-only file that parses to zero parameters — the contract `tryLoadingFile()`'s two callers depend on
 - **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, Y auto/manual range, X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), the left-axis view toggle preserving per-stream selection, and stream-identity regression coverage: two streams sharing a TMATS-derived `streamLabel` but different `streamOrder` must stay independent through reprocess-replace and `renameSeries()`/`recolorSeries()` sibling-sync (pinned after a pre-v2.6.0 cross-contamination bug). Multi-file input: cross-source identity (two different `sourceId`s reusing the same `streamLabel`/`streamOrder` stay independent through reprocess-replace/rename/recolor), time-base re-basing (a later-added source starting earlier shifts existing series right; three successively-earlier sources compound correctly; a later source starting after triggers no shift), the non-overlap warning signal (fires once per newly-arriving non-overlapping source, not for an overlapping range), and `removeSource()` (drops only the target source, re-bases left only when the removed source held the earliest sample, clears all data when the last source is removed, no-ops for an unknown id). US1.1 source view: `setVisibleSource()` isolates a source via `effectiveVisible()` without mutating per-series `visible`, `sourceList()` lists distinct labeled sources, and `exportCsv(path, sourceId)` writes only that source's columns
 - **TestProcessingCoordinator** (`tst_processingcoordinator`) — constructor defaults, `reset()` clears state, cancel-with-no-run no-op, `startProcessing()` empty-returns-false and processing-state emission, plus single-vs-multi-stream throughput benchmarks
 - **TestMainView** (`tst_mainview`) — Main window construction, widget wiring, log routing, dock visibility behavior, the CSV import routing (`openPath`/`importCsv`, valid/invalid), and batch apply's CI-safe helpers: `reapplyTemplateAppearance()` maps the template's saved names/colors onto the right series, and `buildTemplateFromSource()` captures configs + `timeChannelIndex` + series appearance (the full `advanceBatch()` orchestration needs a real `.ch10` fixture, so it is app-verified not unit-tested)

@@ -100,7 +100,7 @@ void CalibrationExtractor::start(const Request& request)
     }
 
     const int words_in_minor_frame =
-        (request.sync.bitsInMinorFrame + PCMConstants::kCommonWordLen - 1) / PCMConstants::kCommonWordLen;
+        FrameSetup::wordsInMinorFrame(request.sync.bitsInMinorFrame);
 
     // ---- Word map (unit slope, zero offset -> raw counts out) ----
     QString setup_error;

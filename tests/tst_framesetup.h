@@ -25,6 +25,14 @@ private slots:
     void tryLoadingFileLargerFrameAccepts();
     void tryLoadingFileSingleChannelFrameSize();
     void receiverIndexFromNameInvertsParameterName();
+
+    void wordsInMinorFrameRoundsUp();
+    void tryLoadingFileMetadataOnlyFileYieldsNoParameters();
+    void readReceiverParamsReadsTheShippedReceiversBlock();
+    void readReceiverParamsAcceptsTheOlderParametersKeys();
+    void receiverParamsFileRoundTripsScalarsAndWordMap();
+    void receiverParamsFileFallsBackToTheDefaultWordMap();
+    void receiverParamsFileIsNeverWrittenWithoutAWordMap();
 };
 
 #endif // TST_FRAMESETUP_H

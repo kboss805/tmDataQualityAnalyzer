@@ -36,6 +36,7 @@
 
 #include "calibrationextractor.h"
 #include "constants.h"
+#include "framesetup.h"
 #include "framesyncparams.h"
 #include "stepdetector.h"
 #include "streamconfig.h"
@@ -1076,20 +1077,26 @@ public:
                 if (filename.isEmpty()) return;
                 m_toml_dir = QFileInfo(filename).absolutePath();
                 m_receiverParamsToml = filename;
-                QSettings cfg(filename, TomlConfigHelper::format());
-                m_polarity->setCurrentIndex(
-                    cfg.value("Parameters/Polarity", UIConstants::kDefaultPolarityIndex).toInt());
-                m_slope->setCurrentIndex(
-                    cfg.value("Parameters/Slope", UIConstants::kDefaultSlopeIndex).toInt());
-                double scale = cfg.value("Parameters/Scale",
-                                         PCMConstants::kDefaultScaleDdBPerV).toDouble();
-                if (scale > 0.0) m_scale->setValue(scale);
-                int nr = cfg.value("Parameters/NumReceivers",
-                                    PCMConstants::kDefaultNumReceivers).toInt();
-                if (nr > 0) m_numReceivers->setValue(nr);
-                int rc = cfg.value("Parameters/ReceiverChannels",
-                                    PCMConstants::kDefaultReceiverChannels).toInt();
-                if (rc > 0) m_receiverChannels->setValue(rc);
+
+                // The file's two halves are read by the Model: the scalars here,
+                // the word map by FrameSetup::tryLoadingFile() when the stream is
+                // processed. The dialog only displays what it is handed. What is on
+                // screen goes in as the defaults, so a file that omits a key leaves
+                // that field alone rather than resetting it.
+                ReceiverParams current;
+                current.polarityIndex    = m_polarity->currentIndex();
+                current.slopeIndex       = m_slope->currentIndex();
+                current.scaleDdBPerV     = m_scale->value();
+                current.numReceivers     = m_numReceivers->value();
+                current.receiverChannels = m_receiverChannels->value();
+
+                const ReceiverParams params =
+                    FrameSetup::readReceiverParams(filename, current);
+                m_polarity->setCurrentIndex(params.polarityIndex);
+                m_slope->setCurrentIndex(params.slopeIndex);
+                m_scale->setValue(params.scaleDdBPerV);
+                m_numReceivers->setValue(params.numReceivers);
+                m_receiverChannels->setValue(params.receiverChannels);
             });
             connect(saveBtn2, &QPushButton::clicked, this, [this]() {
                 QString filename = QFileDialog::getSaveFileName(
@@ -1098,15 +1105,25 @@ public:
                 if (filename.isEmpty()) return;
                 if (QFileInfo(filename).suffix().isEmpty()) filename += ".toml";
                 m_toml_dir = QFileInfo(filename).absolutePath();
-                QSettings cfg(filename, TomlConfigHelper::format());
-                cfg.beginGroup("Parameters");
-                cfg.setValue("Polarity",         m_polarity->currentIndex());
-                cfg.setValue("Slope",            m_slope->currentIndex());
-                cfg.setValue("Scale",            m_scale->value());
-                cfg.setValue("NumReceivers",     m_numReceivers->value());
-                cfg.setValue("ReceiverChannels", m_receiverChannels->value());
-                cfg.endGroup();
-                cfg.sync();
+
+                ReceiverParams params;
+                params.polarityIndex    = m_polarity->currentIndex();
+                params.slopeIndex       = m_slope->currentIndex();
+                params.scaleDdBPerV     = m_scale->value();
+                params.numReceivers     = m_numReceivers->value();
+                params.receiverChannels = m_receiverChannels->value();
+
+                // Saving the scalars alone produced a file the application then
+                // rejected for having no parameters, so the word map goes with
+                // them: the one this stream loaded, or the default map for these
+                // counts. Which map that is, is the Model's rule, not the dialog's.
+                QString error;
+                if (!FrameSetup::saveReceiverParamsFile(
+                        filename, params, m_receiverParamsToml,
+                        FrameSetup::wordsInMinorFrame(m_fs.bitsPerFrame->value()), error))
+                {
+                    QMessageBox::warning(this, tr("Save Receiver Parameters"), error);
+                }
             });
 
             outer->addLayout(grid);
