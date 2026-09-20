@@ -2,7 +2,7 @@
 
 Qt 6.11.1 / C++17 desktop app (qmake + MSVC 2022, Windows) for analyzing data quality of IRIG 106
 Chapter 10 PCM telemetry: per-stream **Frame Sync Lock** stats and **Receiver AGC/SNR**, plotted vs.
-time. MVVM, single-reader / parallel-worker processing core. **Current version: 2.12.0.**
+time. MVVM, single-reader / parallel-worker processing core. **Current version: 2.12.1.**
 
 > **Full reference:** `docs/CLAUDE.md` is the canonical, detailed guide (user stories, architecture,
 > conventions, test catalog). Read it when you need depth. This file is the quick orientation that

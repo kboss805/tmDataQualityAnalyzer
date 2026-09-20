@@ -1,3 +1,48 @@
+tmDataQualityAnalyzer v2.12.1 - What's New
+=================================
+
+  This release is about the setup around calibration: the settings that have to
+  be right before a run, and the cases where a result looked successful but was
+  not. The calibration maths is unchanged from v2.12.0.
+
+  - New: Extract Calibration opens with a step file already loaded - the one
+    this stream used last, or the shipped default (0 to 60 dB in 6 dB steps) -
+    and says "loaded automatically" beside it so you can see which file is in
+    play. Browse only when the recording stepped through different levels.
+
+  - New: The calibration summary now warns about two setups that used to pass
+    silently while pairing every step with the wrong level:
+      * "Check the step file" - the receiver stepped through more levels than
+        the step file lists, so the extra ones are set aside and every
+        remaining step lands on the wrong dB.
+      * "Check the word map" - one channel of a receiver swept while another
+        never moved, which is what a receiver-parameters file that does not
+        match the recording leaves behind.
+
+  - New: Clip Start and Clip End values that add up to more than the recording
+    are ignored, and the dialog now says so in amber instead of quietly using
+    the whole recording.
+
+  - Fixed: "Save receiver parameters" wrote only the polarity, slope, scale and
+    receiver counts, leaving out the word map - so the saved file could not be
+    loaded back: the application rejected it as containing no parameters. Saved
+    files now carry the word map with them.
+
+  - Fixed: Loading a receiver-parameters file did not pick up its receiver
+    counts, so the dialog showed the defaults rather than the file's own
+    values. Loading the supplied RASA file now shows its 12 receivers, not 16.
+
+  - Improved: The built-in manual now describes the receiver SNR fields - the
+    receiver counts, Polarity, Slope and Scale (dB/V) - with what a wrong value
+    looks like on the plot. These were covered only in the optional full
+    manual, and none of them fails loudly: a wrong value gives a plot that
+    looks plausible and is wrong.
+
+  Your existing settings, configuration files, calibration TOMLs and processing
+  templates all continue to work as before. Receiver-parameters files saved by
+  earlier versions still load.
+
+
 tmDataQualityAnalyzer v2.12.0 - What's New
 =================================
 

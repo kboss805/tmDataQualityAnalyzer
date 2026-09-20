@@ -15,7 +15,7 @@
 struct AppVersion {
     static constexpr int kMajor = 2;   ///< Major version number.
     static constexpr int kMinor = 12;   ///< Minor version number.
-    static constexpr int kPatch = 0;   ///< Patch version number.
+    static constexpr int kPatch = 1;   ///< Patch version number.
 
     /// @return Version string in "major.minor.patch" format.
     static QString toString() { return QString("%1.%2.%3").arg(kMajor).arg(kMinor).arg(kPatch); }
