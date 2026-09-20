@@ -11,18 +11,18 @@
 #include "tst_streamconfigdialog.h"
 
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDialogButtonBox>
+#include <QDoubleSpinBox>
 #include <QFrame>
 #include <QLabel>
+#include <QLineEdit>
+#include <QPushButton>
 #include <QSettings>
 #include <QTemporaryFile>
-#include <QVector>
-#include <QtTest>
 #include <QTimer>
-#include <QLineEdit>
-#include <QDoubleSpinBox>
-#include <QComboBox>
-#include <QPushButton>
+#include <QtTest>
+#include <QVector>
 
 #include "constants.h"
 #include "streamconfig.h"

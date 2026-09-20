@@ -14,6 +14,7 @@
 #include <QString>
 #include <QVector>
 
+#include "constants.h"
 #include "csvseriesparser.h"
 #include "plotseriesdata.h"
 #include "processedstreamdata.h"
@@ -99,9 +100,8 @@ public:
     QString plotTitle() const;                     ///< @return Current plot title.
     double xMin() const;                           ///< @return Data X minimum (elapsed seconds).
     double xMax() const;                           ///< @return Data X maximum (elapsed seconds).
-    double yMin() const;                           ///< @return Current SNR Y minimum (auto or manual).
-    double yMax() const;                           ///< @return Current SNR Y maximum: user override (kept above yMin), else auto or manual.
-    bool yAutoScale() const;                       ///< @return True if SNR Y axis is auto-scaled.
+    double yMin() const;                           ///< @return SNR Y minimum, computed from the visible data.
+    double yMax() const;                           ///< @return SNR Y maximum: the user override (kept above yMin), else computed from the visible data.
     double lockYMin() const;                       ///< @return Lock axis minimum (always 0).
     double lockYMax() const;                       ///< @return Lock axis maximum (always 100).
     double leftYMax() const;                       ///< @return Left axis max: user override, or 100 (lock %) / auto (missed frames).
@@ -157,8 +157,6 @@ public:
     /// commitAppearanceChanges() once after the whole batch.
     void setSeriesVisibleQuietById(int id, bool visible);
     void setPlotTitle(const QString& title);
-    void setYManualRange(double min, double max);
-    void setYAutoScale(bool enabled);
     void setXViewRange(double min, double max);
     void resetXRange();
     void resetYRange();
@@ -242,14 +240,11 @@ private:
 
     double m_data_y_min = 0.0;                     ///< Computed SNR Y minimum from visible data.
     double m_data_y_max = 0.0;                     ///< Computed SNR Y maximum from visible data.
-    double m_y_manual_min = 0.0;                   ///< Manual SNR Y minimum override.
-    double m_y_manual_max = 0.0;                   ///< Manual SNR Y maximum override.
-    bool m_y_auto_scale = true;                    ///< True to auto-scale SNR Y axis.
-    double m_lock_y_min = 0.0;                     ///< Lock axis minimum (fixed at 0).
-    double m_lock_y_max = 100.0;                   ///< Lock axis maximum (fixed at 100).
+    double m_lock_y_min = PlotConstants::kLockAxisMin;  ///< Lock axis minimum (fixed).
+    double m_lock_y_max = PlotConstants::kLockAxisMax;  ///< Lock axis maximum (fixed).
     bool m_has_lock_series = false;                ///< True if any FrameSyncLock series are present.
     bool m_left_y_max_user_set = false;            ///< True when user has overridden the left axis max.
-    double m_left_y_max_user = 100.0;             ///< User-set left axis max value.
+    double m_left_y_max_user = PlotConstants::kLockAxisMax;  ///< User-set left axis max value (inert until set).
     bool m_right_y_max_user_set = false;           ///< True when user has overridden the right axis max.
     double m_right_y_max_user = 0.0;              ///< User-set right axis max value.
     bool m_has_missed_frames_series = false;       ///< True if any AccumulatedMissedFrames series are present.

@@ -237,6 +237,35 @@ void TestFrameSetup::tryLoadingFileSingleChannelFrameSize()
     QCOMPARE(fs.getParameter(0)->word, 0);
 }
 
+void TestFrameSetup::channelPrefixNamesKnownPositionsThenFallsBack()
+{
+    // The known channel positions, then the CH<n+1> fallback past them. These
+    // moved here from TestMainViewModelHelpers with the MainViewModel forwarders
+    // they used to call: FrameSetup is where the naming actually lives, and is
+    // what the calibration extractor shares with the main run.
+    QCOMPARE(FrameSetup::channelPrefix(0), QString("L"));
+    QCOMPARE(FrameSetup::channelPrefix(1), QString("R"));
+    QCOMPARE(FrameSetup::channelPrefix(2), QString("C"));
+
+    // First index past the known prefixes, and well past them.
+    QCOMPARE(FrameSetup::channelPrefix(3), QString("CH4"));
+    QCOMPARE(FrameSetup::channelPrefix(10), QString("CH11"));
+    QCOMPARE(FrameSetup::channelPrefix(99), QString("CH100"));
+    QCOMPARE(FrameSetup::channelPrefix(999), QString("CH1000"));
+    QCOMPARE(FrameSetup::channelPrefix(9999), QString("CH10000"));
+}
+
+void TestFrameSetup::receiverParameterNameCombinesPrefixAndReceiver()
+{
+    QCOMPARE(FrameSetup::receiverParameterName(0, 0), QString("L_RCVR1"));
+    QCOMPARE(FrameSetup::receiverParameterName(1, 2), QString("R_RCVR3"));
+    QCOMPARE(FrameSetup::receiverParameterName(2, 15), QString("C_RCVR16"));
+
+    // A channel index past the known prefixes carries the fallback through.
+    QCOMPARE(FrameSetup::receiverParameterName(3, 0), QString("CH4_RCVR1"));
+    QCOMPARE(FrameSetup::receiverParameterName(5, 4), QString("CH6_RCVR5"));
+}
+
 void TestFrameSetup::receiverIndexFromNameInvertsParameterName()
 {
     // Round-trips against the constructor it inverts, across the known channel
