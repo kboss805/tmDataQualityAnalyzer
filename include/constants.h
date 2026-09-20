@@ -287,6 +287,15 @@ namespace CalibrationConstants {
     /// the step_cal recording run to a third of the median step.
     inline constexpr double kMajorEdgeFractionOfStep = 0.25;
 
+    /// Extra levels a sweep may carry ahead of the step file's before the step file
+    /// itself is suspected. One is the ordinary signal-generator turn-on transient,
+    /// which the detector drops as lead-in by design. More than that usually means
+    /// the step file lists fewer steps than were injected - and then EVERY step is
+    /// paired with the wrong level while the channel still reports calibrated.
+    /// the step_cal recording's eleven-level sweep extracted with the 8-step RASA file did
+    /// exactly that on all twelve channels.
+    inline constexpr int kMaxLeadInLevels = 1;
+
     /// Minimum stable-run duration (seconds) required to confirm a level as a
     /// genuine step rather than a transient/partial-jump blip. The detector
     /// requires a run to be stable for at least this long (in addition to the

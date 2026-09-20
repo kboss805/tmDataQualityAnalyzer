@@ -1,5 +1,6 @@
 #include "tst_stepdetector.h"
 
+#include <QTemporaryDir>
 #include <QTemporaryFile>
 #include <QtTest>
 
@@ -791,4 +792,63 @@ void TestStepDetector::detectUnconfirmedDwellIsMeasuredFromTheGrid()
     QCOMPARE(r.profile.points.last().trueDb, 24.0);
     // ...and only the railed step is left unresolved.
     QCOMPARE(r.unresolvedDb, QVector<double>({30.0}));
+}
+
+void TestStepDetector::detectReportsHowManyLevelsTheSweepHeld()
+{
+    // An 8-step file against an 11-level sweep still "calibrates": the detector keeps
+    // the last eight levels and sets the lower three aside as lead-in, so every step
+    // is paired with the wrong level and nothing fails. sweepLevels is what lets the
+    // report notice - the sweep held more levels than the step file describes.
+    QVector<StepDefinition> steps = {{0.0}, {3.0}, {6.0}, {12.0}, {18.0}, {24.0}, {30.0}, {36.0}};
+
+    QVector<double> eleven;
+    for (int k = 1; k <= 11; k++)
+    {
+        appendRun(eleven, 1000.0 * k, 150);
+    }
+    StepDetector::Result r = StepDetector::detect(eleven, kPeriod, steps);
+    QVERIFY(r.profile.valid);
+    QCOMPARE(r.sweepLevels, 11);
+
+    // A sweep that matches the step file exactly reports exactly that many.
+    QVector<double> eight;
+    for (int k = 1; k <= 8; k++)
+    {
+        appendRun(eight, 1000.0 * k, 150);
+    }
+    StepDetector::Result exact = StepDetector::detect(eight, kPeriod, steps);
+    QVERIFY(exact.profile.valid);
+    QCOMPARE(exact.sweepLevels, 8);
+}
+
+void TestStepDetector::initialStepConfigPrefersTheStreamsFileThenTheDefault()
+{
+    // The Extract Calibration dialog opens with a step file already loaded, because
+    // almost every calibration uses the same one. Which file is decided here.
+    QDir root(QCoreApplication::applicationDirPath());
+    root.cdUp(); // tests/
+    root.cdUp(); // project root
+    const QString appRoot     = root.absolutePath();
+    const QString shipped     = appRoot + "/settings/rcvr_cals/default.toml";
+    const QString rasa        = appRoot + "/settings/rcvr_cals/RASA.toml";
+    QVERIFY2(QFileInfo(shipped).isFile(), qPrintable(shipped));
+
+    // No previous choice: the shipped default.
+    QCOMPARE(StepDetector::initialStepConfigPath(appRoot, QString()), shipped);
+
+    // A stream that already used a step file keeps it, even when it is not the
+    // default - re-opening the dialog must not silently swap the operator's file.
+    QCOMPARE(StepDetector::initialStepConfigPath(appRoot, rasa), rasa);
+
+    // A stored reference that no longer resolves (a template from another machine)
+    // falls back to the default instead of opening on a missing file.
+    QCOMPARE(StepDetector::initialStepConfigPath(appRoot, "C:/nowhere/gone.toml"), shipped);
+
+    // No settings tree at all (a bare build directory): nothing to preload, and the
+    // dialog opens empty as it did before.
+    QTemporaryDir bare;
+    QVERIFY(bare.isValid());
+    QVERIFY(StepDetector::initialStepConfigPath(bare.path(), QString()).isEmpty());
+    QVERIFY(StepDetector::initialStepConfigPath(QString(), QString()).isEmpty());
 }

@@ -63,6 +63,11 @@ public:
         /// dB of every step no measured level could be paired with: the railed
         /// ones, plus any dwell noise shattered into runs too short to confirm.
         QVector<double> unresolvedDb;
+        /// Levels in the monotonic run the sweep was taken from. More than the step
+        /// file's count means leading levels were set aside as lead-in; more than one
+        /// extra (CalibrationConstants::kMaxLeadInLevels) suggests the step file is
+        /// short rather than that the recording has a turn-on transient.
+        int sweepLevels = 0;
     };
 
     /**
@@ -79,6 +84,21 @@ public:
     static bool parseStepConfig(const QString& path,
                                 QVector<StepDefinition>& out,
                                 QString& error);
+
+    /**
+     * @brief The step-config TOML the Extract Calibration dialog opens with.
+     *
+     * Almost every calibration uses the same step file, so the dialog preloads one
+     * rather than making the operator browse to it each time. It prefers the file
+     * this stream last used (an earlier extraction, or a processing template's
+     * stored reference) and otherwise falls back to the shipped default.
+     *
+     * @param[in] appRoot   Application root holding the settings/ tree.
+     * @param[in] preferred The stream's previous step file; may be empty.
+     * @return @p preferred if it names an existing file; else
+     *         `<appRoot>/settings/rcvr_cals/default.toml` if that exists; else empty.
+     */
+    static QString initialStepConfigPath(const QString& appRoot, const QString& preferred);
 
     /**
      * @brief Detects confirmed step plateaus in @p rawValues and builds a

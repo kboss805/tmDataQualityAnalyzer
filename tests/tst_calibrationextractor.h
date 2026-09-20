@@ -12,6 +12,10 @@ private slots:
     void realFileCalibratesRcvr3Only();
     void byteOrderReachesTheExtraction();
     void realStepCalRecordingPairsEveryStepCorrectly();
+    void summaryFlagsAShortStepFileAndAMismatchedWordMap();
+    void realStepCalWithShortStepFileIsFlagged();
+    void realStepCalWithWrongWordMapIsFlagged();
+    void clipsBeyondTheRecordingAreReported();
     void summaryNamesReceiversAndWhyTheyFellBack();
 };
 

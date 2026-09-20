@@ -134,6 +134,46 @@ bool buildRealRequest(Chapter10Reader& reader, CalibrationExtractor::Request& re
     return true;
 }
 
+/// Builds a Request over step_cal, example.ch10 with the given step file and
+/// receiver-parameters word map (both relative to the project root). @return false
+/// with a skip reason if the fixture or a settings file is unavailable.
+bool buildStepCalRequest(Chapter10Reader& reader, CalibrationExtractor::Request& req,
+                         const QString& stepToml, const QString& receiverParams,
+                         QString& skipReason)
+{
+    const QString filepath = testDataPath("test files/step_cal, example.ch10");
+    if (!QFileInfo::exists(filepath))
+    {
+        skipReason = "step_cal, example.ch10 not available";
+        return false;
+    }
+    if (!reader.loadChannels(filepath))
+    {
+        skipReason = "Could not load channels from step_cal, example.ch10";
+        return false;
+    }
+    QVector<StepDefinition> steps;
+    QString step_error;
+    if (!StepDetector::parseStepConfig(projectRootPath(stepToml), steps, step_error))
+    {
+        skipReason = "Could not parse " + stepToml + ": " + step_error;
+        return false;
+    }
+    req.calFilename           = filepath;
+    req.timeChannelId         = reader.getCurrentTimeChannelID();
+    req.pcmChannelId          = reader.getFirstPCMChannelID();
+    req.sync.pattern          = "FE6B2840";
+    req.sync.bitsInMinorFrame = 800;
+    req.sync.randomized       = false;
+    req.sync.dataRateMbps     = 0.8;
+    req.swapBytes             = true;
+    req.receiverParamsToml    = projectRootPath(receiverParams);
+    req.numReceivers          = 16;
+    req.receiverChannels      = 3;
+    req.steps                 = steps;
+    return true;
+}
+
 } // namespace
 
 void TestCalibrationExtractor::missingFileFailsCleanly()
@@ -419,4 +459,159 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
     const QString report = CalibrationExtractor::summarize(results, steps.size());
     QVERIFY2(report.contains("Calibrated: receivers 1, 3, 5, 6."), qPrintable(report));
     QVERIFY2(report.contains("Receiver 1") && report.contains("hold at 48 dB"), qPrintable(report));
+
+    // And neither "check this" prompt fires on a correct setup. They exist to catch a
+    // wrong step file or word map; a false alarm here would teach operators to ignore
+    // them. (Receiver 1's saturated sweep holds FEWER levels than the file, not more.)
+    QVERIFY2(!report.contains("Check the step file"), qPrintable(report));
+    QVERIFY2(!report.contains("Check the word map"), qPrintable(report));
+}
+
+void TestCalibrationExtractor::summaryFlagsAShortStepFileAndAMismatchedWordMap()
+{
+    // summarize() is pure, so this needs no .ch10 fixture and always runs.
+    auto calibrated = [](const QString& name, int sweepLevels) {
+        CalibrationChannelResult r;
+        r.name          = name;
+        r.outcome       = CalibrationOutcome::Calibrated;
+        r.hadData       = true;
+        r.profile.valid = true;
+        r.sweepLevels   = sweepLevels;
+        return r;
+    };
+    auto flat = [](const QString& name) {
+        CalibrationChannelResult r;
+        r.name          = name;
+        r.outcome       = CalibrationOutcome::FlatNoSignal;
+        r.hadData       = true;
+        r.plateauLevels = {0.0};
+        return r;
+    };
+    const QStringList parts = {QStringLiteral("L"), QStringLiteral("R"), QStringLiteral("C")};
+
+    // An 8-step file on an 11-level sweep: every channel reports calibrated and every
+    // step is paired with the wrong level. The report has to say so, because nothing
+    // else will.
+    QVector<CalibrationChannelResult> shortFile;
+    for (const QString& p : parts)
+    {
+        shortFile << calibrated(p + "_RCVR3", 11);
+    }
+    const QString shortReport = CalibrationExtractor::summarize(shortFile, 8);
+    QVERIFY2(shortReport.contains("Check the step file"), qPrintable(shortReport));
+    QVERIFY2(shortReport.contains("Receiver 3 — 11 levels in the recording, 8 in the step file"),
+             qPrintable(shortReport));
+
+    // One extra level is the ordinary turn-on transient the detector is built to drop;
+    // warning on it would fire on healthy recordings and teach operators to ignore it.
+    QVector<CalibrationChannelResult> transient;
+    for (const QString& p : parts)
+    {
+        transient << calibrated(p + "_RCVR3", 9);
+    }
+    const QString transientReport = CalibrationExtractor::summarize(transient, 8);
+    QVERIFY2(!transientReport.contains("Check the step file"), qPrintable(transientReport));
+
+    // One channel swept and two never moved: what a word map that does not match the
+    // recording leaves behind, since it files one receiver's words under another's.
+    QVector<CalibrationChannelResult> mixed;
+    mixed << flat("L_RCVR2") << flat("R_RCVR2") << calibrated("C_RCVR2", 11);
+    const QString mixedReport = CalibrationExtractor::summarize(mixed, 11);
+    QVERIFY2(mixedReport.contains("Check the word map"), qPrintable(mixedReport));
+    QVERIFY2(mixedReport.contains("Receiver 2 — C calibrated; L, R never moved"),
+             qPrintable(mixedReport));
+
+    // A receiver that is simply absent - every channel flat - is not a word-map hint;
+    // most receivers in a real calibration recording look like that.
+    QVector<CalibrationChannelResult> absent;
+    for (const QString& p : parts)
+    {
+        absent << flat(p + "_RCVR4");
+    }
+    const QString absentReport = CalibrationExtractor::summarize(absent, 11);
+    QVERIFY2(!absentReport.contains("Check the word map"), qPrintable(absentReport));
+}
+
+void TestCalibrationExtractor::realStepCalWithShortStepFileIsFlagged()
+{
+    // The real trap this guard exists for. rcvr_cals/RASA.toml lists 8 steps (0, 3,
+    // 6, 12 ... 36 dB); this recording steps through 11 (0 to 60 dB). Extraction
+    // "succeeds" on all twelve swept channels while pairing every one of them with
+    // the wrong level - which is exactly how it first reported "12 of 12".
+    Chapter10Reader reader;
+    CalibrationExtractor::Request req;
+    QString skip;
+    if (!buildStepCalRequest(reader, req, "settings/rcvr_cals/RASA.toml",
+                             "settings/receiver_params/default.toml", skip))
+        QSKIP(qPrintable(skip));
+
+    CalibrationExtractor extractor;
+    QString summary;
+    QVERIFY2(runExtraction(extractor, req, summary), qPrintable(summary));
+
+    const QString report = CalibrationExtractor::summarize(extractor.results(), req.steps.size());
+    QVERIFY2(report.contains("Check the step file"), qPrintable(report));
+    QVERIFY2(report.contains("Receiver 3 — 11 levels in the recording, 8 in the step file"),
+             qPrintable(report));
+}
+
+void TestCalibrationExtractor::realStepCalWithWrongWordMapIsFlagged()
+{
+    // The other real trap. This recording lays its receivers out three words apiece;
+    // receiver_params/RASA.toml assumes four-word cards with an unused fourth word, so
+    // it files words under the wrong receivers and reports live channels as dead with
+    // nothing pointing at the map. The report now points at it.
+    Chapter10Reader reader;
+    CalibrationExtractor::Request req;
+    QString skip;
+    if (!buildStepCalRequest(reader, req, "settings/rcvr_cals/default.toml",
+                             "settings/receiver_params/RASA.toml", skip))
+        QSKIP(qPrintable(skip));
+
+    CalibrationExtractor extractor;
+    QString summary;
+    QVERIFY2(runExtraction(extractor, req, summary), qPrintable(summary));
+
+    const QString report = CalibrationExtractor::summarize(extractor.results(), req.steps.size());
+    QVERIFY2(report.contains("Check the word map"), qPrintable(report));
+}
+
+void TestCalibrationExtractor::clipsBeyondTheRecordingAreReported()
+{
+    // Clip Start + Clip End that add up to more than the recording are ignored and the
+    // whole recording is used - so the result looks fine while the values the operator
+    // typed did nothing. The extractor now says so, and the dialog shows it.
+    Chapter10Reader reader;
+    CalibrationExtractor::Request req;
+    QString skip;
+    if (!buildStepCalRequest(reader, req, "settings/rcvr_cals/default.toml",
+                             "settings/receiver_params/default.toml", skip))
+        QSKIP(qPrintable(skip));
+
+    auto calibratedCount = [](const CalibrationExtractor& e) {
+        int n = 0;
+        for (const CalibrationChannelResult& r : e.results())
+        {
+            n += r.profile.valid ? 1 : 0;
+        }
+        return n;
+    };
+
+    // 6 s + 60 s on a ~65 s recording: nothing would be left, so both are ignored.
+    req.clipStartSec = 6.0;
+    req.clipEndSec   = 60.0;
+    CalibrationExtractor ignored;
+    QString summary;
+    QVERIFY2(runExtraction(ignored, req, summary), qPrintable(summary));
+    QVERIFY(ignored.clipIgnored());
+    QVERIFY2(ignored.recordingSeconds() > 60.0 && ignored.recordingSeconds() < 70.0,
+             qPrintable(QString::number(ignored.recordingSeconds())));
+    QCOMPARE(calibratedCount(ignored), 12); // the whole recording was used
+
+    // 6 s + 2 s is honoured, and is not reported.
+    req.clipEndSec = 2.0;
+    CalibrationExtractor honoured;
+    QVERIFY2(runExtraction(honoured, req, summary), qPrintable(summary));
+    QVERIFY(!honoured.clipIgnored());
+    QCOMPARE(calibratedCount(honoured), 12);
 }
