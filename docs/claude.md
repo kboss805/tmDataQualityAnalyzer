@@ -449,6 +449,27 @@ successful. Each now says so.
   plot. The manual's calibration walkthrough and `UserGuide.txt` explain both prompts and
   the clip warning.
 
+#### The base manual documents the receiver SNR fields (US8.0)
+
+Closing PR #80 (a v2.10.0-era plan for these sections) meant checking what the shipped
+manual actually covers. The walkthroughs cover it; the **base** manual did not.
+
+- The base manual is the Qt resource compiled into the exe - it cannot be declined or
+  deleted, which is what makes "the user always has a manual" structural. It described the
+  whole SNR half of the gear dialog in one line ("word layout of the receiver channels
+  within the frame, plus inversion/randomization flags") and never named **Polarity**, the
+  voltage range, **dB/V** or the receiver counts. Those appeared only in the walkthroughs,
+  which ship as an *optional* installer task - so a user who declined it had no
+  description of the four fields that most quietly corrupt an SNR run.
+- New "The receiver SNR fields" section: a field table giving each one's meaning and, more
+  usefully, what a wrong value looks like on the plot (other channels' words, an
+  upside-down trace, a constant scale error), plus what a receiver-parameters TOML carries
+  and why polarity must be right before a calibration profile is extracted. It is terser
+  than the walkthrough's treatment rather than a copy of it - the walkthrough teaches the
+  task, the base manual is the reference.
+- `UserGuide.txt` had the same hole and gains the same fields, since it ships in both the
+  installer and the portable ZIP and nothing in CI reads it.
+
 #### Cleanup sweep: dead code, one owner per value, one naming convention
 
 A whole-codebase pass (the `code-cleanup` skill). Every source file on disk is built,

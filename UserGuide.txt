@@ -113,10 +113,21 @@ This copies the current stream's settings to every other active stream in Frame
 Sync Lock mode.
 
 --- Receiver SNR Mode ---
-Use this mode to evaluate raw signal strength.
-- Configure the calibration slope and scale offsets for your receiver equipment.
-- Load a Receiver Parameters TOML to define the word map (which minor-frame words
-  map to which receiver/channel) and the linear calibration.
+Use this mode to evaluate raw signal strength. The upper half of the dialog is
+the frame sync block above - an SNR stream still has to be synchronised. The
+lower half describes the receiver. None of these fail loudly, so a wrong value
+gives a plausible-looking plot that is wrong:
+- Num Rcvrs / Num Channels: how many receivers the frame carries and how many
+  channels each has (typically three: left, right, combined). Wrong, and the
+  words read out belong to other channels.
+- Polarity: whether the raw count rises or falls with signal strength. Reversed,
+  every increase plots as a decrease.
+- Slope: the receiver's output voltage range (0-5 V, 0-10 V, +/-5 V, +/-10 V).
+- Scale (dB/V): how many decibels one volt represents. Slope or Scale wrong
+  scales every value by a constant factor - right shape, wrong numbers.
+- Load a Receiver Parameters TOML to set all of these at once: it carries the
+  word map (which minor-frame words map to which receiver/channel) along with
+  the polarity, slope and scale. Saving writes both halves back out.
 
 Tip (Apply to All Streams): as above, switch on "Apply to all Receiver SNR
 streams" to broadcast your calibration settings to the other active SNR streams.
