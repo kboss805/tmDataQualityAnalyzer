@@ -123,8 +123,6 @@ signals:
 private:
     /// Handles a chart X range change from mouse interaction.
     void handlePlotXRangeChanged(double lower, double upper);
-    /// Handles a chart Y range change from mouse interaction.
-    void handlePlotYRangeChanged(double lower, double upper);
     void setUpLayout();
     void setUpConnections();
 

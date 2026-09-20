@@ -10,7 +10,6 @@
 #include <QMap>
 #include <QTextStream>
 #include <QVarLengthArray>
-#include <QtMath>
 
 #include "constants.h"
 #include "seriescolumnschema.h"

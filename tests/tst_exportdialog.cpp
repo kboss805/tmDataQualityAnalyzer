@@ -1,10 +1,11 @@
 #include "tst_exportdialog.h"
-#include "exportdialog.h"
 
 #include <QCheckBox>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QtTest>
+
+#include "exportdialog.h"
 
 void TestExportDialog::testCheckboxTogglesFields()
 {

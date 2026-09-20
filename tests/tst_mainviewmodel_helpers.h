@@ -8,12 +8,6 @@ class TestMainViewModelHelpers : public QObject
     Q_OBJECT
 
 private slots:
-    void channelPrefixKnownIndices();
-    void channelPrefixUnknownIndices();
-    void parameterNameKnownChannels();
-    void parameterNameUnknownChannels();
-    void channelPrefixBoundaryIndex();
-    void channelPrefixLargeIndex();
     void classifyLogMessageSeverity();
 };
 

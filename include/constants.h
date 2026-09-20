@@ -318,6 +318,12 @@ namespace PlotConstants {
     inline constexpr int kPlotMinChartHeight = 250;   ///< Minimum height for the chart area within the plot widget.
     inline constexpr double kAxisMarginFactor = 0.05; ///< Y-axis padding as fraction of data range.
     inline constexpr double kMinAxisSpan      = 1.0;  ///< Minimum span enforced so a user max override can't invert/collapse an axis.
+    /// Lock-% axis bounds. Lock percentage is a fixed 0-100 quantity, not a
+    /// data-driven range, and three places need to agree on it: the chart's
+    /// initial left range, the ViewModel's lock-axis accessors, and the upper
+    /// limit the Set Left Max dialog will accept.
+    inline constexpr double kLockAxisMin      = 0.0;
+    inline constexpr double kLockAxisMax      = 100.0;
     inline constexpr const char* kXAxisLabel        = "Time (DDD:HH:MM:SS)"; ///< X axis label.
     inline constexpr const char* kYAxisLabel        = "Framesync Lock (%)"; ///< Left Y axis label (lock-% mode).
     inline constexpr const char* kMissedFramesAxisLabel = "Accumulated Missed Frames"; ///< Left Y axis label (missed frames mode).

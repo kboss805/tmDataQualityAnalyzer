@@ -194,16 +194,6 @@ bool Chapter10Reader::loadChannels(const QString& filename)
     return true;
 }
 
-void Chapter10Reader::addChannelInfoEntry(int channel_id)
-{
-    // If an entry for channel_id doesn't exist in m_channel_info, make one.
-    // If the entry already exists, do nothing.
-    if (!m_channel_data.contains(channel_id))
-    {
-        m_channel_data.insert(channel_id, new ChannelData(channel_id));
-    }
-}
-
 QStringList Chapter10Reader::buildChannelComboBoxList(const QList<ChannelData*>& channels)
 {
     QStringList list;

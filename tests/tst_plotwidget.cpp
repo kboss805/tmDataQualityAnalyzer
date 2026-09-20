@@ -5,20 +5,20 @@
 
 #include "tst_plotwidget.h"
 
-#include <QApplication>
-#include <QFileInfo>
 #include <QAbstractButton>
 #include <QAction>
+#include <QApplication>
 #include <QComboBox>
 #include <QDoubleSpinBox>
-#include <QLineEdit>
-#include <QSpinBox>
+#include <QFileInfo>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMenu>
+#include <QSpinBox>
 #include <QStyle>
-#include <QVBoxLayout>
 #include <QTemporaryDir>
 #include <QtTest>
+#include <QVBoxLayout>
 
 #include "constants.h"
 #include "plotviewmodel.h"

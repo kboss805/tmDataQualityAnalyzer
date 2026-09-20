@@ -11,6 +11,7 @@
 #include <QApplication>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDir>
 #include <QFile>
 #include <QFrame>
 #include <QGridLayout>
@@ -22,15 +23,14 @@
 #include <QPageSize>
 #include <QPainter>
 #include <QPdfWriter>
+#include <QRegularExpression>
 #include <QScrollArea>
+#include <QSettings>
 #include <QStyle>
+#include <QTextStream>
 #include <QToolTip>
 #include <QtSvg/QSvgGenerator>
 #include <QVBoxLayout>
-#include <QSettings>
-#include <QDir>
-#include <QRegularExpression>
-#include <QTextStream>
 
 
 #include "constants.h"
@@ -658,7 +658,7 @@ void PlotWidget::onSetLeftYMax()
     // accepted range follows the active left-axis metric (as the old spinbox did).
     const bool is_lock_pct =
         (m_view_model->lockAxisView() == PlotViewModel::LockAxisView::LockPercent);
-    const double max_allowed = is_lock_pct ? 100.0 : 10000000.0;
+    const double max_allowed = is_lock_pct ? PlotConstants::kLockAxisMax : 10000000.0;
 
     bool ok = false;
     const double value = QInputDialog::getDouble(
@@ -941,7 +941,7 @@ void PlotWidget::setUpLayout()
     m_plot->setContextMenuPolicy(Qt::CustomContextMenu);
     m_plot->setXLabel(PlotConstants::kXAxisLabel);
     m_plot->setLeftLabel(PlotConstants::kYAxisLabel);
-    m_plot->setLeftRange(0, 100);
+    m_plot->setLeftRange(PlotConstants::kLockAxisMin, PlotConstants::kLockAxisMax);
     // Axis visibility is data-driven from here on (updateAxisVisibility); TmChart
     // starts left-only, which is what an empty chart should show.
     // Keep the axes clear of the overlay chip bar (see kOverlayHeadroomPx).

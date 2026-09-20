@@ -108,11 +108,6 @@ public:
     /// @name Helpers
     /// @{
 
-    /// @return Channel prefix string ("L", "R", "C", ...) for the given index.
-    static QString channelPrefix(int index);
-    /// @return Full parameter name (e.g., "L_RCVR1") for a channel/receiver pair.
-    static QString parameterName(int channel_index, int receiver_index);
-
     /// Severity of a log line, classified from its text. The classification policy
     /// lives in the ViewModel (not the View) so it is single-sourced and testable;
     /// the View only maps the level to a render style.

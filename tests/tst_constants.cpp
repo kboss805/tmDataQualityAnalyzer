@@ -164,6 +164,8 @@ void TestConstants::plotConstants()
 {
     QCOMPARE(PlotConstants::kPlotDockMinWidth, 1024);
     QCOMPARE(PlotConstants::kAxisMarginFactor, 0.05);
+    QCOMPARE(PlotConstants::kLockAxisMin, 0.0);
+    QCOMPARE(PlotConstants::kLockAxisMax, 100.0);
     QCOMPARE(QString(PlotConstants::kDefaultPlotTitle), QString("Framesync/SNR Plot"));
     QCOMPARE(QString(PlotConstants::kYAxisLabel),  QString("Framesync Lock (%)"));
     QCOMPARE(QString(PlotConstants::kMissedFramesAxisLabel), QString("Accumulated Missed Frames"));

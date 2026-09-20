@@ -7,14 +7,14 @@
 
 #include <QColor>
 #include <QFile>
-#include <QMenu>
 #include <QLabel>
-#include <QWidgetAction>
+#include <QMenu>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTextStream>
 #include <QToolButton>
 #include <QtTest>
+#include <QWidgetAction>
 
 #include "constants.h"
 #include "mainview.h"

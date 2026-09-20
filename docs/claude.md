@@ -292,6 +292,9 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Channels that successfully map the expected number of steps are assigned a non-linear calibration profile for the session.
 - [x] Channels that fail step extraction (e.g., due to noise or no data) fall back to the standard linear (slope/offset) calibration.
 - [x] A summary message box informs the user which channels succeeded and which fell back.
+- [x] The summary flags a result that looks successful but may not be: a receiver whose sweep held more levels than the step file lists, and a receiver with one channel swept and another flat (the signature of a word map that does not match the recording).
+- [x] Clip values that exceed the recording are reported rather than silently ignored.
+- [x] The step-config TOML is preloaded when the dialog opens — the file this stream last used, else the shipped default — and the status says it was loaded automatically.
 - [x] During main data processing, the application applies the non-linear calibration profile using piece-wise linear interpolation between steps.
 - [x] Raw values outside the calibrated range clamp to the nearest end-step dB instead of extrapolating, so a receiver driven past the calibrated range reads the ceiling or floor value.
 
@@ -446,6 +449,54 @@ successful. Each now says so.
   plot. The manual's calibration walkthrough and `UserGuide.txt` explain both prompts and
   the clip warning.
 
+#### Cleanup sweep: dead code, one owner per value, one naming convention
+
+A whole-codebase pass (the `code-cleanup` skill). Every source file on disk is built,
+all 138 constants are referenced, no Model or ViewModel file reaches for a widget header,
+and there are no TODO/FIXME markers - what follows is what the sweep did turn up. No
+user-facing behaviour changes.
+
+- **Dead code removed.** `PlotWidget::handlePlotYRangeChanged` was declared with no
+  definition and no caller (its X twin is live; `TmChart` emits no Y-range signal).
+  `Chapter10Reader::addChannelInfoEntry()` had no caller in `src/` or `tests/`.
+- **The manual-Y-range path is gone.** `setYManualRange()`, `setYAutoScale()`,
+  `yAutoScale()` and the `m_y_manual_min/max` + `m_y_auto_scale` members were reachable
+  only from a test: production has pinned `m_y_auto_scale` true since the left/right max
+  overrides replaced them, so four `if (m_y_auto_scale)` branches never ran either.
+  `yMin()`/`yMax()` now read the computed range directly. The test that drove the removed
+  setters is replaced by one covering the override that *is* live - and which, unlike the
+  old one, actually reaches `computeYRange()` (the old fixture's negative dB values were
+  clipped at 0 by a path the manual range bypassed).
+- **The lock axis has one owner.** `PlotConstants::kLockAxisMin` / `kLockAxisMax` replace
+  the `0` / `100` literals in `PlotWidget`'s initial left range and its Set-Left-Max bound,
+  and back `PlotViewModel`'s lock-axis accessors and `leftYMax()` - four places that each
+  spelled the same fixed 0-100 range.
+- **`MainViewModel::channelPrefix()` / `parameterName()` deleted.** Both were pass-through
+  forwarders to `FrameSetup`, called only by `TestMainViewModelHelpers` - so that suite was
+  testing the forwarder rather than the naming. Its six naming cases moved to
+  `TestFrameSetup` as two, aimed at `FrameSetup` directly; the suite keeps
+  `classifyLogMessageSeverity`, which tests a real `MainViewModel` helper.
+- **`streamsubdialogs.h` is one naming convention again.** 29 camelCase members across its
+  three dialogs are now `m_snake_case` like the rest of the project (180 occurrences). The
+  file had held `m_tomlDir` *and* `m_toml_dir`, `m_appRoot` *and* `m_app_root` - the same
+  concept spelled two ways in one file. Same drift v2.11.1 fixed in
+  `plotcustomizationdialog`; nothing outside this private header names these members.
+- **Include order.** `plotcustomizationdialog.cpp` and `tst_exportdialog.cpp` had project
+  headers ahead of the Qt group, and eight files had unalphabetized Qt groups. An unused
+  `<QtMath>` in `csvseriesparser.cpp` is gone. (`main.cpp`'s leading `"mainview.h"` and
+  `mainview.cpp`'s trailing `<windows.h>` are both correct as they stand - a related header
+  and a guarded platform include.)
+- **Stale prose.** The PlotWidget component notes still said "all replots use
+  `rpQueuedReplot`", a QCustomPlot call removed in v2.9.0, and a `PlotViewModel` comment
+  still reasoned about handing `QCPRange` an inverted range. US5.3 gains criteria for the
+  two "check" prompts, the ignored-clip warning and the preloaded step file, which had
+  shipped with only a changelog entry.
+- Kept deliberately, with a reason: `PlotViewModel::loadCsvFile()` (the documented
+  `exportCsv` partner), the id-based `setSeriesVisibleById()` (one of four in a coherent
+  family), `TmChart`'s observation accessors - `seriesPen()` had no caller at all and is
+  now covered by `TestTmChart` rather than deleted, since its siblings are - and
+  `MainView`'s batch loop, whose location `docs/CLAUDE.md` already explains.
+
 #### A saved receiver-parameters file is one the application can load again (US5.1)
 
 Found during a codebase cleanup sweep, by following an unused function.
@@ -487,6 +538,10 @@ Found during a codebase cleanup sweep, by following an unused function.
 - **Trap:** `QSettings` writes through a rename, which does not land on a path a live
   `QTemporaryFile` still owns on Windows - the write silently produces an empty file. Tests
   that write TOML use a plain path plus `QFile::remove()`.
+- The cleanup sweep nets **-4** cases: six channel-naming cases consolidate into two aimed
+  at `FrameSetup`, while the SNR max-override and `TmChart::seriesPen` cases replace what
+  the removals took with coverage of live code, and `TestConstants` pins the two new
+  lock-axis constants. Baseline **392 / 0 / 1**, zero warnings.
 - `TestStepDetector::detectReportsHowManyLevelsTheSweepHeld`: 11 levels against 8 steps
   reports 11; an exact match reports 8.
 - `TestCalibrationExtractor::summaryFlagsAShortStepFileAndAMismatchedWordMap` (pure): the
@@ -1751,8 +1806,8 @@ not mis-read.
 
 5. **PlotWidget** (`src/view/plotwidget.cpp`, `include/view/plotwidget.h`)
    - Self-contained `TmChart` chart filling the whole widget - no external control rows; every control (Plot File, View Mode, Customize View, plot title, X/Y axis ranges, Export) lives in the right-click context menu built by `buildContextMenu()`/`showPlotContextMenu()` - plus a movable legend overlay (a translucent, draggable frame parented to the chart; single-column line-swatch + label rows with a vertical scrollbar for dense plots; composited into PNG/SVG exports)
-   - Mouse wheel zoom and click-drag pan; `onSeriesVisibilityToggled()` toggles a graph without a full rebuild
-   - All replots use `rpQueuedReplot`; controls disabled until data loads; `applyTheme(bool dark)` syncs colors with the app theme
+   - Mouse wheel zoom and click-drag pan; `onSeriesVisibilityToggled()` toggles one series without a full rebuild
+   - `TmChart` repaints from `paintEvent()`, so there is no replot call to schedule; context-menu entries stay disabled until data loads, and `applyTheme(bool dark)` syncs colors with the app theme
 
 #### ViewModel
 
@@ -2094,9 +2149,9 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestChapter10Reader** (`tst_chapter10reader`) — Chapter 10 metadata reader: channel discovery, time/PCM channel lists, channel ID resolution against real Ch10 test data
 - **TestConstants** (`tst_constants`) — Verifies all PCMConstants, UIConstants, PlotConstants, AppVersion, and recent files constants (including kMaxPacketBufferSize, kFrameSyncHexPattern)
 - **TestFrameProcessor** (`tst_frameprocessor`) — constructor defaults, abort flag, `derandomizeBitstream` (identity/short and changed/long), invalid time-channel/PCM-channel/file handling, and processing real Ch10 data (receiver-data accumulation, lock-only mode has no channels, monotonic frame-sync errors, slope affects values, shorter period → more samples, calibration round-trip clean steps, off-phase sync after lock-loss not extracted)
-- **TestMainViewModelHelpers** (`tst_mainviewmodel_helpers`) — ViewModel helper methods (`channelPrefix` and `parameterName` over known/unknown/boundary indices)
-- **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration, `receiverIndexFromName()` inverting `receiverParameterName()` (0 for a name with no parseable `_RCVR<N>`), and the receiver-parameters file as a whole: the scalars read from the `[Receivers]` block the shipped files actually use (and the older `[Parameters]` keys still accepted), a save/load round trip that carries the word map with them, the default-map fallback when no file was loaded, nothing written when there is no map to write, and the metadata-only file that parses to zero parameters — the contract `tryLoadingFile()`'s two callers depend on
-- **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, Y auto/manual range, X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), the left-axis view toggle preserving per-stream selection, and stream-identity regression coverage: two streams sharing a TMATS-derived `streamLabel` but different `streamOrder` must stay independent through reprocess-replace and `renameSeries()`/`recolorSeries()` sibling-sync (pinned after a pre-v2.6.0 cross-contamination bug). Multi-file input: cross-source identity (two different `sourceId`s reusing the same `streamLabel`/`streamOrder` stay independent through reprocess-replace/rename/recolor), time-base re-basing (a later-added source starting earlier shifts existing series right; three successively-earlier sources compound correctly; a later source starting after triggers no shift), the non-overlap warning signal (fires once per newly-arriving non-overlapping source, not for an overlapping range), and `removeSource()` (drops only the target source, re-bases left only when the removed source held the earliest sample, clears all data when the last source is removed, no-ops for an unknown id). US1.1 source view: `setVisibleSource()` isolates a source via `effectiveVisible()` without mutating per-series `visible`, `sourceList()` lists distinct labeled sources, and `exportCsv(path, sourceId)` writes only that source's columns
+- **TestMainViewModelHelpers** (`tst_mainviewmodel_helpers`) — `MainViewModel::classifyLogMessage()`, the severity policy the View renders but does not decide. The channel-naming cases that used to live here moved to **TestFrameSetup** with the `MainViewModel` forwarders they called: `FrameSetup` is where that naming lives
+- **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration, `channelPrefix()` naming the known channel positions then falling back to `CH<n+1>`, `receiverParameterName()` combining the two, `receiverIndexFromName()` inverting it (0 for a name with no parseable `_RCVR<N>`), and the receiver-parameters file as a whole: the scalars read from the `[Receivers]` block the shipped files actually use (and the older `[Parameters]` keys still accepted), a save/load round trip that carries the word map with them, the default-map fallback when no file was loaded, nothing written when there is no map to write, and the metadata-only file that parses to zero parameters — the contract `tryLoadingFile()`'s two callers depend on
+- **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, the computed Y range and the SNR max override that pins it (the minimum stays automatic, Reset returns it to the data), X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), the left-axis view toggle preserving per-stream selection, and stream-identity regression coverage: two streams sharing a TMATS-derived `streamLabel` but different `streamOrder` must stay independent through reprocess-replace and `renameSeries()`/`recolorSeries()` sibling-sync (pinned after a pre-v2.6.0 cross-contamination bug). Multi-file input: cross-source identity (two different `sourceId`s reusing the same `streamLabel`/`streamOrder` stay independent through reprocess-replace/rename/recolor), time-base re-basing (a later-added source starting earlier shifts existing series right; three successively-earlier sources compound correctly; a later source starting after triggers no shift), the non-overlap warning signal (fires once per newly-arriving non-overlapping source, not for an overlapping range), and `removeSource()` (drops only the target source, re-bases left only when the removed source held the earliest sample, clears all data when the last source is removed, no-ops for an unknown id). US1.1 source view: `setVisibleSource()` isolates a source via `effectiveVisible()` without mutating per-series `visible`, `sourceList()` lists distinct labeled sources, and `exportCsv(path, sourceId)` writes only that source's columns
 - **TestProcessingCoordinator** (`tst_processingcoordinator`) — constructor defaults, `reset()` clears state, cancel-with-no-run no-op, `startProcessing()` empty-returns-false and processing-state emission, plus single-vs-multi-stream throughput benchmarks
 - **TestMainView** (`tst_mainview`) — Main window construction, widget wiring, log routing, dock visibility behavior, the CSV import routing (`openPath`/`importCsv`, valid/invalid), and batch apply's CI-safe helpers: `reapplyTemplateAppearance()` maps the template's saved names/colors onto the right series, and `buildTemplateFromSource()` captures configs + `timeChannelIndex` + series appearance (the full `advanceBatch()` orchestration needs a real `.ch10` fixture, so it is app-verified not unit-tested)
 - **TestPlotWidget** (`tst_plotwidget`) — Plot widget construction, null/valid ViewModel connection, dark/light theme application, the movable legend overlay populating from data (hidden until data loads, then one row per visible active-metric series), a shown/resized-window regression case asserting the overlay sizes correctly (not a collapsed frame-only box) after a second rebuild adds more rows — a QScrollArea `widgetResizable` sizeHint staleness bug reproduced and fixed post-review — the SNR legend row showing the short `"CH<id> <ch.name>"` form instead of the full TMATS stream title, the legend row layout reserving a right-side gutter matching the style's scrollbar extent, and each legend row carrying an objectName the overlay stylesheet can target to override the app's global `QWidget { background-color: ... }` theme rule (otherwise every row painted as an opaque chip); plus `exportImage()` writing a PNG/SVG/PDF headlessly (the parameterized image-export entry point extracted for batch apply); and the right-click context menu that replaced the external control rows: it lists every expected top-level item, its data-dependent entries are disabled until data loads, the Plot File submenu is disabled for a single source and switches `visibleSource` for a multi-source run, View Mode reflects and sets the active left-axis metric, `X Axis > Reset Span` / `Y Axes > Reset` clear the X window and both Y overrides, plus two structural guards - wheel-zoom/drag-pan stay enabled (horizontal-only) once data arrives, and **no QComboBox / QSpinBox / QLineEdit / QAbstractButton lives outside the chart** - on-chart overlays are allowed, external control rows are not (the machine-checkable form of "no external controls"); plus the legend toggle (shows/hides the overlay and survives a rebuild, appears only once data is loaded, is parented to the chart, and stays in sync with the context menu's checkable Show Legend item); plus Y axis occupancy - a lock-only plot hides the right axis, an SNR-only plot hides the left, an empty chart keeps the left (hiding both would leave a bare box), and hiding the last *visible* SNR series reclaims the right axis just as never loading one would

@@ -11,8 +11,8 @@
 #include <QFileInfo>
 #include <QSignalSpy>
 #include <QTimer>
-#include <QVector>
 #include <QtTest>
+#include <QVector>
 
 #include "chapter10reader.h"
 #include "framesetup.h"
