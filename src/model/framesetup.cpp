@@ -6,6 +6,7 @@
 #include "framesetup.h"
 
 #include <QFile>
+#include <QFileInfo>
 #include <QRegularExpression>
 #include <QTextStream>
 
@@ -181,6 +182,106 @@ int FrameSetup::attachCalibrationProfiles(const QHash<int, CalibrationProfile>& 
     return attached;
 }
 
+int FrameSetup::wordsInMinorFrame(int bits_in_minor_frame)
+{
+    return (bits_in_minor_frame + PCMConstants::kCommonWordLen - 1) / PCMConstants::kCommonWordLen;
+}
+
+ReceiverParams FrameSetup::readReceiverParams(const QString& path,
+                                              const ReceiverParams& defaults)
+{
+    ReceiverParams params = defaults;
+    QSettings cfg(path, TomlConfigHelper::format());
+
+    params.polarityIndex = cfg.value("Parameters/Polarity", params.polarityIndex).toInt();
+    params.slopeIndex    = cfg.value("Parameters/Slope", params.slopeIndex).toInt();
+
+    const double scale = cfg.value("Parameters/Scale", params.scaleDdBPerV).toDouble();
+    if (scale > 0.0)
+    {
+        params.scaleDdBPerV = scale;
+    }
+
+    // The receiver counts live under [Receivers] in every shipped parameters file.
+    // Files the dialog itself wrote before v2.12.1 put them under [Parameters]
+    // instead, so read those too rather than silently showing the defaults.
+    const int receivers = cfg.value("Receivers/Count",
+                                    cfg.value("Parameters/NumReceivers",
+                                              params.numReceivers)).toInt();
+    const int channels  = cfg.value("Receivers/ChannelsPerReceiver",
+                                    cfg.value("Parameters/ReceiverChannels",
+                                              params.receiverChannels)).toInt();
+    if (receivers > 0)
+    {
+        params.numReceivers = receivers;
+    }
+    if (channels > 0)
+    {
+        params.receiverChannels = channels;
+    }
+    return params;
+}
+
+bool FrameSetup::writeReceiverParams(const QString& path, const ReceiverParams& params) const
+{
+    // A file with no word map parses but yields no parameters, and every consumer
+    // then rejects it. Refusing here is what keeps save and load inverses.
+    if (m_parameters.isEmpty())
+    {
+        return false;
+    }
+
+    // QSettings merges into whatever the file already holds, so an overwrite would
+    // otherwise leave the old file's word map behind alongside the new one.
+    QFile::remove(path);
+
+    QSettings cfg(path, TomlConfigHelper::format());
+    cfg.beginGroup("Parameters");
+    cfg.setValue("Polarity", params.polarityIndex);
+    cfg.setValue("Slope",    params.slopeIndex);
+    cfg.setValue("Scale",    params.scaleDdBPerV);
+    cfg.endGroup();
+    cfg.beginGroup("Receivers");
+    cfg.setValue("Count",               params.numReceivers);
+    cfg.setValue("ChannelsPerReceiver", params.receiverChannels);
+    cfg.endGroup();
+    saveToSettings(cfg);
+    cfg.sync();
+    return cfg.status() == QSettings::NoError;
+}
+
+bool FrameSetup::saveReceiverParamsFile(const QString& path,
+                                        const ReceiverParams& params,
+                                        const QString& word_map_source,
+                                        int num_words_in_minor_frame,
+                                        QString& error)
+{
+    FrameSetup setup;
+    bool have_map = false;
+    if (!word_map_source.isEmpty() && QFileInfo::exists(word_map_source))
+    {
+        have_map = setup.tryLoadingFile(word_map_source, num_words_in_minor_frame)
+                   && setup.length() > 0;
+    }
+    if (!have_map)
+    {
+        // A rejected load can leave a partial map behind, and buildDefaultReceiverMap
+        // appends — clear first so the default map is the whole file.
+        setup.clearParameters();
+        if (!setup.buildDefaultReceiverMap(params.numReceivers, params.receiverChannels,
+                                           num_words_in_minor_frame, error))
+        {
+            return false;
+        }
+    }
+    if (!setup.writeReceiverParams(path, params))
+    {
+        error = "Could not write '" + QFileInfo(path).fileName() + "'.";
+        return false;
+    }
+    return true;
+}
+
 QString FrameSetup::channelPrefix(int channel_index)
 {
     if (channel_index < UIConstants::kNumKnownPrefixes)
@@ -241,7 +342,7 @@ bool FrameSetup::buildDefaultReceiverMap(int num_receivers, int receiver_channel
     return true;
 }
 
-void FrameSetup::saveToSettings(QSettings& settings)
+void FrameSetup::saveToSettings(QSettings& settings) const
 {
     for (const auto& param : m_parameters)
     {
