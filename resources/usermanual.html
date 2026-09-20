@@ -123,14 +123,52 @@ sections, you are reading the fuller one.</div>
       <li><em>Frame sync</em>: sync pattern, sync mask, and words per frame. These three fields can
           be saved to / loaded from a TOML file for reuse. Below the separator, <em>Randomized</em>,
           <em>Data Rate</em>, and <em>Sample Rate</em> are per-session inputs and are not saved.</li>
-      <li><em>SNR setup</em> (SNR mode): word layout of the receiver channels within the frame, plus
-          inversion/randomization flags.</li>
+      <li><em>SNR setup</em> (SNR mode): where the receiver samples sit in the frame and how
+          raw counts become decibels. The fields are listed below.</li>
       <li><em>Calibration</em> (SNR mode): extract a calibration profile from a calibration run so
           raw counts convert to dB. Profiles apply to the current session only — they are never
           written to disk.</li>
     </ul>
   </li>
 </ul>
+<h3>The receiver SNR fields</h3>
+
+<p>An SNR stream still has to be frame-synchronised, so the upper half of its gear dialog is the
+frame-sync block above. The lower half describes the receiver itself. Every one of these has to
+be right before you press Process: nothing here fails loudly, so a wrong value produces a plot
+that looks plausible and is wrong.</p>
+
+<table>
+  <tr><th>Field</th><th>What it is</th><th>What a wrong value does</th></tr>
+  <tr><td><strong>Num Rcvrs</strong>, <strong>Num Channels</strong></td>
+      <td>How many receivers the frame carries and how many channels each has (typically three:
+          left, right, combined). Their product is the total channel count.</td>
+      <td>Reads the wrong words out of the frame, so a curve shown as one channel is really
+          another channel's data.</td></tr>
+  <tr><td><strong>Polarity</strong></td>
+      <td>Whether the raw count rises or falls as signal strength rises.</td>
+      <td>An upside-down plot &mdash; every increase reads as a decrease.</td></tr>
+  <tr><td><strong>Slope</strong></td>
+      <td>The receiver's output voltage range: 0&ndash;5&nbsp;V, 0&ndash;10&nbsp;V,
+          &plusmn;5&nbsp;V or &plusmn;10&nbsp;V.</td>
+      <td>Scales every value by a constant factor. The shape of the plot is right and the
+          numbers are not.</td></tr>
+  <tr><td><strong>Scale (dB/V)</strong></td>
+      <td>How many decibels one volt represents.</td>
+      <td>As above &mdash; a linear error running through every value.</td></tr>
+</table>
+
+<p>Rather than entering these for every recording, load a <strong>receiver parameters</strong>
+TOML. It carries the word map &mdash; which word in the frame belongs to which receiver and
+channel &mdash; together with the polarity, slope and scale, so a given recording system is
+described once. Saving writes the same two halves back out, word map included.</p>
+
+<p><strong>Apply Cal</strong>, and the status beside it, belong to non-linear step calibration.
+Until a profile is attached it reads <em>(none &mdash; using linear calibration)</em>, meaning
+values are converted with the slope and scale above and nothing else. Set <em>Polarity</em>
+correctly <em>before</em> extracting a profile: the profile is built from raw counts, so the
+polarity has to be right first.</p>
+
 <p>Two settings at the top of the dialog describe the <em>recording</em> rather than any one
 stream, so they apply to every channel in the file:</p>
 <ul>
