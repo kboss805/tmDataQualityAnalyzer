@@ -65,9 +65,6 @@ public:
      */
     bool loadChannels(const QString& filename);
 
-    /// Ensures a ChannelData entry exists for @p channel_id.
-    void addChannelInfoEntry(int channel_id);
-
     QStringList getTimeChannelComboBoxList() const; ///< @return Display strings for time channels.
     QStringList getPCMChannelComboBoxList() const;  ///< @return Display strings for PCM channels.
 

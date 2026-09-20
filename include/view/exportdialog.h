@@ -1,8 +1,8 @@
 #ifndef EXPORTDIALOG_H
 #define EXPORTDIALOG_H
 
-#include <QDialog>
 #include <QCheckBox>
+#include <QDialog>
 #include <QLineEdit>
 #include <QPushButton>
 

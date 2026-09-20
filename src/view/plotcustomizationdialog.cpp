@@ -1,24 +1,25 @@
 #include "plotcustomizationdialog.h"
-#include "plotviewmodel.h"
-#include "constants.h"
 
 #include <algorithm>
 
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QTabWidget>
-#include <QPushButton>
-#include <QScrollArea>
-#include <QComboBox>
 #include <QCheckBox>
 #include <QColorDialog>
-#include <QInputDialog>
-#include <QLineEdit>
-#include <QMenu>
-#include <QTreeWidget>
-#include <QLabel>
+#include <QComboBox>
 #include <QDialogButtonBox>
+#include <QHBoxLayout>
+#include <QInputDialog>
+#include <QLabel>
+#include <QLineEdit>
 #include <QMap>
+#include <QMenu>
+#include <QPushButton>
+#include <QScrollArea>
+#include <QTabWidget>
+#include <QTreeWidget>
+#include <QVBoxLayout>
+
+#include "constants.h"
+#include "plotviewmodel.h"
 
 namespace {
     /// Item data roles storing pending per-channel edits on the SNR tree until OK.

@@ -57,6 +57,9 @@ void TestTmChart::seriesAddRemoveAndClear()
 
     chart.setSeriesName(a, QStringLiteral("first"));
     chart.setSeriesName(b, QStringLiteral("second"));
+    chart.setSeriesPen(a, QPen(Qt::red));
+    QCOMPARE(chart.seriesPen(a).color(), QColor(Qt::red));
+
     chart.setSeriesVisible(a, false);
     QVERIFY(!chart.seriesVisible(a));
     QVERIFY(chart.seriesVisible(b));

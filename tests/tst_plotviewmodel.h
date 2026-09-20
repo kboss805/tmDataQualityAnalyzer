@@ -18,7 +18,7 @@ private slots:
     void csvTimeConversion();
     void seriesColorAssignment();
     void yAutoRange();
-    void yManualRange();
+    void snrYMaxOverride();
     void xTimeWindow();
     void seriesVisibility();
     void clearData();

@@ -24,6 +24,8 @@ private slots:
     void tryLoadingFileSmallerFrameRejectsBoundary();
     void tryLoadingFileLargerFrameAccepts();
     void tryLoadingFileSingleChannelFrameSize();
+    void channelPrefixNamesKnownPositionsThenFallsBack();
+    void receiverParameterNameCombinesPrefixAndReceiver();
     void receiverIndexFromNameInvertsParameterName();
 
     void wordsInMinorFrameRoundsUp();

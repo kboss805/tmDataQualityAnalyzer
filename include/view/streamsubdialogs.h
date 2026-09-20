@@ -482,10 +482,10 @@ public:
             accept();
         });
 
-        m_applyToAll = new QCheckBox(this);
-        m_applyToAll->setToolTip("Copy these settings to every other selected "
+        m_apply_to_all = new QCheckBox(this);
+        m_apply_to_all->setToolTip("Copy these settings to every other selected "
                                   "stream currently set to Frame Sync Lock mode.");
-        addBottomBar(outer, btns, this, m_applyToAll, "Apply to all Frame Sync Lock streams");
+        addBottomBar(outer, btns, this, m_apply_to_all, "Apply to all Frame Sync Lock streams");
 
         adjustSize();
     }
@@ -498,13 +498,13 @@ public:
     int     samplePeriodIndex() const { return m_fs.sampleRate->currentIndex(); }
     double  dataRateMbps()      const { return m_fs.dataRate->value(); }
     QString lastTomlDir()       const { return m_toml_dir; }
-    bool    applyToAll()        const { return m_applyToAll->isChecked(); }
+    bool    applyToAll()        const { return m_apply_to_all->isChecked(); }
 
 private:
     FrameSyncWidgets m_fs; ///< Frame Sync / Mask / Bits Per Frame / Data Rate / Average Period.
     QCheckBox*      m_randomized   = nullptr;
     QCheckBox*      m_inverted     = nullptr;
-    QCheckBox*      m_applyToAll   = nullptr;
+    QCheckBox*      m_apply_to_all   = nullptr;
     QString         m_toml_dir;
     QString         m_app_root;
 };
@@ -538,9 +538,9 @@ public:
                            const QString& initialStepPath = QString(),
                            QWidget* parent = nullptr)
         : QDialog(parent)
-        , m_baseRequest(baseRequest)
-        , m_tomlDir(tomlDir)
-        , m_appRoot(appRoot)
+        , m_base_request(baseRequest)
+        , m_toml_dir(tomlDir)
+        , m_app_root(appRoot)
     {
         setWindowTitle("Extract Calibration");
         setModal(true);
@@ -554,26 +554,26 @@ public:
 
         // ---- Row 0/1: Step Cal file -----------------------------------------
         grid->addWidget(new QLabel("Step Cal File:"), 0, 0);
-        m_stepPathLabel = new QLabel(this);
-        m_stepPathLabel->setMinimumWidth(260);
-        grid->addWidget(m_stepPathLabel, 0, 1);
+        m_step_path_label = new QLabel(this);
+        m_step_path_label->setMinimumWidth(260);
+        grid->addWidget(m_step_path_label, 0, 1);
         auto* stepBrowse = new QPushButton("Browse...", this);
         stepBrowse->setToolTip("Browse for the step calibration configuration TOML file that defines the RF signal step levels.");
         grid->addWidget(stepBrowse, 0, 2);
-        m_stepStatus = new QLabel(this);
-        grid->addWidget(m_stepStatus, 1, 1, 1, 2);
+        m_step_status = new QLabel(this);
+        grid->addWidget(m_step_status, 1, 1, 1, 2);
 
         // ---- Row 2/3: Calibration Ch10 file ---------------------------------
         grid->setRowMinimumHeight(2, DialogLayout::kControlGap);
         grid->addWidget(new QLabel("Calibration Ch10:"), 3, 0);
-        m_calPathLabel = new QLabel(this);
-        m_calPathLabel->setMinimumWidth(260);
-        grid->addWidget(m_calPathLabel, 3, 1);
-        m_calBrowse = new QPushButton("Browse...", this);
-        m_calBrowse->setToolTip("Browse for the calibration Chapter 10 recording file. The last folder you used will be remembered.");
-        grid->addWidget(m_calBrowse, 3, 2);
-        m_calStatus = new QLabel(this);
-        grid->addWidget(m_calStatus, 4, 1, 1, 2);
+        m_cal_path_label = new QLabel(this);
+        m_cal_path_label->setMinimumWidth(260);
+        grid->addWidget(m_cal_path_label, 3, 1);
+        m_cal_browse = new QPushButton("Browse...", this);
+        m_cal_browse->setToolTip("Browse for the calibration Chapter 10 recording file. The last folder you used will be remembered.");
+        grid->addWidget(m_cal_browse, 3, 2);
+        m_cal_status = new QLabel(this);
+        grid->addWidget(m_cal_status, 4, 1, 1, 2);
 
         // ---- Rows 5-7: Clip Start / Clip End (seconds), stacked ----------------
         // Ignore the first/last N seconds of the cal recording before detecting
@@ -585,57 +585,57 @@ public:
                                           QSizePolicy::Minimum, QSizePolicy::Fixed), 5, 0);
 
             grid->addWidget(new QLabel("Clip Start (s):", this), 6, 0);
-            m_clipStart = new QDoubleSpinBox(this);
-            m_clipStart->setRange(0.0, 100000.0);
-            m_clipStart->setDecimals(1);
-            m_clipStart->setSingleStep(1.0);
-            m_clipStart->setValue(0.0);
-            m_clipStart->setFixedWidth(100);
-            m_clipStart->setToolTip("Ignore this many seconds at the START of the "
+            m_clip_start = new QDoubleSpinBox(this);
+            m_clip_start->setRange(0.0, 100000.0);
+            m_clip_start->setDecimals(1);
+            m_clip_start->setSingleStep(1.0);
+            m_clip_start->setValue(0.0);
+            m_clip_start->setFixedWidth(100);
+            m_clip_start->setToolTip("Ignore this many seconds at the START of the "
                 "calibration recording before detecting steps (skips signal-generator "
                 "turn-on transients).");
-            grid->addWidget(m_clipStart, 6, 1, Qt::AlignLeft);
+            grid->addWidget(m_clip_start, 6, 1, Qt::AlignLeft);
 
             grid->addWidget(new QLabel("Clip End (s):", this), 7, 0);
-            m_clipEnd = new QDoubleSpinBox(this);
-            m_clipEnd->setRange(0.0, 100000.0);
-            m_clipEnd->setDecimals(1);
-            m_clipEnd->setSingleStep(1.0);
-            m_clipEnd->setValue(0.0);
-            m_clipEnd->setFixedWidth(100);
-            m_clipEnd->setToolTip("Ignore this many seconds at the END of the "
+            m_clip_end = new QDoubleSpinBox(this);
+            m_clip_end->setRange(0.0, 100000.0);
+            m_clip_end->setDecimals(1);
+            m_clip_end->setSingleStep(1.0);
+            m_clip_end->setValue(0.0);
+            m_clip_end->setFixedWidth(100);
+            m_clip_end->setToolTip("Ignore this many seconds at the END of the "
                 "calibration recording before detecting steps.");
-            grid->addWidget(m_clipEnd, 7, 1, Qt::AlignLeft);
+            grid->addWidget(m_clip_end, 7, 1, Qt::AlignLeft);
 
             // Re-run extraction when the user changes a clip value (only fires if
             // both files are already loaded).
-            connect(m_clipStart, &QDoubleSpinBox::editingFinished,
+            connect(m_clip_start, &QDoubleSpinBox::editingFinished,
                     this, [this]() { maybeRunExtraction(); });
-            connect(m_clipEnd, &QDoubleSpinBox::editingFinished,
+            connect(m_clip_end, &QDoubleSpinBox::editingFinished,
                     this, [this]() { maybeRunExtraction(); });
         }
 
         outer->addLayout(grid);
 
         connect(stepBrowse,  &QPushButton::clicked, this, [this]() { onBrowseStep(); });
-        connect(m_calBrowse, &QPushButton::clicked, this, [this]() { onBrowseCal(); });
+        connect(m_cal_browse, &QPushButton::clicked, this, [this]() { onBrowseCal(); });
 
         addSeparator(outer, this);
 
         DialogButtons calBtns = makeDialogButtons(this, tr("OK"));
-        m_okButton = calBtns.primary;
-        connect(m_okButton, &QPushButton::clicked, this, &QDialog::accept);
+        m_ok_button = calBtns.primary;
+        connect(m_ok_button, &QPushButton::clicked, this, &QDialog::accept);
         addBottomBar(outer, calBtns, this);
 
-        setStatus(m_stepStatus, Pending, "No file selected.");
-        setStatus(m_calStatus,  Pending, "No file selected.");
+        setStatus(m_step_status, Pending, "No file selected.");
+        setStatus(m_cal_status,  Pending, "No file selected.");
 
         // Almost every calibration uses the same step file, so start with one
         // loaded. The status says it was loaded automatically: a step file that
         // does not match the recording still calibrates, just wrongly, so the
         // operator must be able to see which file is in play without browsing.
         const QString initialStep =
-            StepDetector::initialStepConfigPath(m_appRoot, initialStepPath);
+            StepDetector::initialStepConfigPath(m_app_root, initialStepPath);
         if (!initialStep.isEmpty())
         {
             loadStepFile(initialStep, /*automatic=*/true);
@@ -647,19 +647,19 @@ public:
 
     /// Per-channel calibration profiles produced by the whole-file extraction,
     /// keyed by word index. Valid after the dialog is accepted.
-    QHash<int, CalibrationProfile> calibrationByWord() const { return m_calibrationByWord; }
-    QString lastTomlDir() const { return m_tomlDir; }
+    QHash<int, CalibrationProfile> calibrationByWord() const { return m_calibration_by_word; }
+    QString lastTomlDir() const { return m_toml_dir; }
 
     /// Operator-facing report naming which receivers calibrated and why the rest
     /// fell back. Valid after the dialog is accepted.
-    QString calibrationReport() const { return m_calibrationReport; }
+    QString calibrationReport() const { return m_calibration_report; }
 
     // Input references: what produced the profiles above, so a processing template
     // can store them for a later re-extraction pass.
-    QString calFilePath()  const { return m_calPath; }
-    QString stepFilePath() const { return m_stepPath; }
-    double  clipStartSec() const { return m_clipStart ? m_clipStart->value() : 0.0; }
-    double  clipEndSec()   const { return m_clipEnd   ? m_clipEnd->value()   : 0.0; }
+    QString calFilePath()  const { return m_cal_path; }
+    QString stepFilePath() const { return m_step_path; }
+    double  clipStartSec() const { return m_clip_start ? m_clip_start->value() : 0.0; }
+    double  clipEndSec()   const { return m_clip_end   ? m_clip_end->value()   : 0.0; }
 
 private:
     enum StatusKind { Pending, Ok, Warn, Fail };
@@ -681,9 +681,9 @@ private:
 
     void updateOk()
     {
-        if (m_okButton != nullptr)
+        if (m_ok_button != nullptr)
         {
-            m_okButton->setEnabled(m_stepOk && m_calOk);
+            m_ok_button->setEnabled(m_step_ok && m_cal_ok);
         }
     }
 
@@ -691,11 +691,11 @@ private:
     {
         const QString path = QFileDialog::getOpenFileName(
             this, tr("Select Step Configuration (TOML)"),
-            settingsSubdir(m_appRoot, UIConstants::kRcvrCalsDirName, m_tomlDir),
+            settingsSubdir(m_app_root, UIConstants::kRcvrCalsDirName, m_toml_dir),
             tr("TOML Files (*.toml);;All Files (*.*)"));
         if (path.isEmpty()) return;
 
-        m_tomlDir = QFileInfo(path).absolutePath();
+        m_toml_dir = QFileInfo(path).absolutePath();
         loadStepFile(path, /*automatic=*/false);
     }
 
@@ -704,16 +704,16 @@ private:
     /// say so.
     void loadStepFile(const QString& path, bool automatic)
     {
-        m_stepPath = path;
-        m_stepPathLabel->setText(QFileInfo(path).fileName());
+        m_step_path = path;
+        m_step_path_label->setText(QFileInfo(path).fileName());
 
         QVector<StepDefinition> steps;
         QString error;
         if (StepDetector::parseStepConfig(path, steps, error))
         {
             m_steps  = steps;
-            m_stepOk = true;
-            setStatus(m_stepStatus, Ok,
+            m_step_ok = true;
+            setStatus(m_step_status, Ok,
                       QString("%1 steps parsed%2.")
                           .arg(steps.size())
                           .arg(automatic ? QStringLiteral(" (loaded automatically)") : QString()));
@@ -721,8 +721,8 @@ private:
         else
         {
             m_steps.clear();
-            m_stepOk = false;
-            setStatus(m_stepStatus, Fail, error);
+            m_step_ok = false;
+            setStatus(m_step_status, Fail, error);
         }
         updateOk();
         maybeRunExtraction();
@@ -730,7 +730,7 @@ private:
 
     void onBrowseCal()
     {
-        if (m_baseRequest.sync.pattern.trimmed().isEmpty())
+        if (m_base_request.sync.pattern.trimmed().isEmpty())
         {
             QMessageBox::warning(this, tr("Missing Frame Sync"),
                 tr("Set a frame sync pattern before loading the calibration file."));
@@ -742,14 +742,14 @@ private:
 
         const QString path = QFileDialog::getOpenFileName(
             this, tr("Select Calibration Chapter 10 File"),
-            lastCalDir.isEmpty() ? m_tomlDir : lastCalDir,
+            lastCalDir.isEmpty() ? m_toml_dir : lastCalDir,
             tr("Chapter 10 Files (*.ch10 *.c10);;All Files (*.*)"));
         if (path.isEmpty()) return;
 
         settings.setValue("CalibrationSetupDialog/lastCalDir", QFileInfo(path).absolutePath());
 
-        m_calPath = path;
-        m_calPathLabel->setText(QFileInfo(path).fileName());
+        m_cal_path = path;
+        m_cal_path_label->setText(QFileInfo(path).fileName());
         maybeRunExtraction();
     }
 
@@ -758,31 +758,31 @@ private:
     /// builds the per-channel profiles. OK simply hands these back to the owner.
     void maybeRunExtraction()
     {
-        if (m_calPath.isEmpty())
+        if (m_cal_path.isEmpty())
         {
             return; // Nothing to do until a cal file is chosen.
         }
-        if (!m_stepOk)
+        if (!m_step_ok)
         {
-            m_calOk = false;
-            setStatus(m_calStatus, Pending,
+            m_cal_ok = false;
+            setStatus(m_cal_status, Pending,
                       tr("Select a valid step cal file to process this recording."));
             updateOk();
             return;
         }
 
-        m_calOk = false;
-        m_calibrationByWord.clear();
-        setStatus(m_calStatus, Pending, tr("Processing calibration file…"));
+        m_cal_ok = false;
+        m_calibration_by_word.clear();
+        setStatus(m_cal_status, Pending, tr("Processing calibration file…"));
         updateOk();
 
         // Start from the caller-supplied acquisition/receiver fields and add the
         // cal file, parsed steps, and clip seconds the dialog collected.
-        CalibrationExtractor::Request req = m_baseRequest;
-        req.calFilename        = m_calPath;
+        CalibrationExtractor::Request req = m_base_request;
+        req.calFilename        = m_cal_path;
         req.steps              = m_steps;
-        req.clipStartSec       = m_clipStart ? m_clipStart->value() : 0.0;
-        req.clipEndSec         = m_clipEnd ? m_clipEnd->value() : 0.0;
+        req.clipStartSec       = m_clip_start ? m_clip_start->value() : 0.0;
+        req.clipEndSec         = m_clip_end ? m_clip_end->value() : 0.0;
         // Resolve the word map the SAME way the main processing run does
         // (mainviewmodel buildJob): when the user hasn't picked an explicit
         // Receiver Parameters file, fall back to the shipped default.toml rather
@@ -792,7 +792,7 @@ private:
         // profile and the plot falls back to linear calibration.
         if (req.receiverParamsToml.isEmpty())
         {
-            const QString defaultRcvrParams = m_appRoot + "/" + UIConstants::kSettingsDirName +
+            const QString defaultRcvrParams = m_app_root + "/" + UIConstants::kSettingsDirName +
                 "/" + UIConstants::kReceiverParamsDirName + "/" + UIConstants::kDefaultTomlFilename;
             if (QFileInfo::exists(defaultRcvrParams))
             {
@@ -838,7 +838,7 @@ private:
 
         if (!success)
         {
-            setStatus(m_calStatus, Fail, summary);
+            setStatus(m_cal_status, Fail, summary);
             updateOk();
             return;
         }
@@ -848,17 +848,17 @@ private:
         {
             if (r.profile.valid)
             {
-                m_calibrationByWord.insert(r.word, r.profile);
+                m_calibration_by_word.insert(r.word, r.profile);
                 valid++;
             }
         }
         // Built here, while the per-channel outcomes are still in hand:
-        // m_calibrationByWord keeps only the successes (keyed by word), so it
+        // m_calibration_by_word keeps only the successes (keyed by word), so it
         // cannot say which receivers fell back or why once the extractor is gone.
-        m_calibrationReport = CalibrationExtractor::summarize(extractor.results(),
+        m_calibration_report = CalibrationExtractor::summarize(extractor.results(),
                                                               m_steps.size());
 
-        m_calOk = (valid > 0);
+        m_cal_ok = (valid > 0);
         if (extractor.clipIgnored())
         {
             // The clips are silently dropped when they would leave nothing to
@@ -868,42 +868,42 @@ private:
                 tr("Clip Start + Clip End (%1 s) exceed the recording (%2 s) - clips ignored.")
                     .arg(clipStartSec() + clipEndSec(), 0, 'f', 1)
                     .arg(extractor.recordingSeconds(), 0, 'f', 1);
-            m_calibrationReport.prepend(warning + "\n\n");
-            setStatus(m_calStatus, Warn, warning + " " + summary);
+            m_calibration_report.prepend(warning + "\n\n");
+            setStatus(m_cal_status, Warn, warning + " " + summary);
         }
         else
         {
-            setStatus(m_calStatus, m_calOk ? Ok : Fail, summary);
+            setStatus(m_cal_status, m_cal_ok ? Ok : Fail, summary);
         }
         updateOk();
     }
 
     // Caller-supplied acquisition + receiver settings forwarded to the extractor;
     // the dialog only adds the cal file, steps, and clip seconds before running.
-    CalibrationExtractor::Request m_baseRequest;
-    QString m_tomlDir;
-    QString m_appRoot;
+    CalibrationExtractor::Request m_base_request;
+    QString m_toml_dir;
+    QString m_app_root;
 
     // Selected files + parsed steps.
-    QString m_stepPath;
-    QString m_calPath;
+    QString m_step_path;
+    QString m_cal_path;
     QVector<StepDefinition> m_steps;
-    bool    m_stepOk = false;
-    bool    m_calOk  = false;
+    bool    m_step_ok = false;
+    bool    m_cal_ok  = false;
 
     // Extracted profiles, keyed by word index (populated by maybeRunExtraction).
-    QHash<int, CalibrationProfile> m_calibrationByWord;
-    QString m_calibrationReport; ///< Receiver-grouped outcome report for the summary box.
+    QHash<int, CalibrationProfile> m_calibration_by_word;
+    QString m_calibration_report; ///< Receiver-grouped outcome report for the summary box.
 
     // Widgets.
-    QLabel*      m_stepPathLabel = nullptr;
-    QLabel*      m_stepStatus    = nullptr;
-    QLabel*      m_calPathLabel  = nullptr;
-    QLabel*      m_calStatus     = nullptr;
-    QPushButton* m_calBrowse     = nullptr;
-    QPushButton* m_okButton      = nullptr;
-    QDoubleSpinBox* m_clipStart  = nullptr; ///< Seconds to clip from the start before step detection.
-    QDoubleSpinBox* m_clipEnd    = nullptr; ///< Seconds to clip from the end before step detection.
+    QLabel*      m_step_path_label = nullptr;
+    QLabel*      m_step_status    = nullptr;
+    QLabel*      m_cal_path_label  = nullptr;
+    QLabel*      m_cal_status     = nullptr;
+    QPushButton* m_cal_browse     = nullptr;
+    QPushButton* m_ok_button      = nullptr;
+    QDoubleSpinBox* m_clip_start  = nullptr; ///< Seconds to clip from the start before step detection.
+    QDoubleSpinBox* m_clip_end    = nullptr; ///< Seconds to clip from the end before step detection.
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -920,17 +920,17 @@ public:
                                bool swap_bytes,
                                QWidget* parent = nullptr)
         : QDialog(parent)
-        , m_receiverParamsToml(cfg.receiverParamsToml)
+        , m_receiver_params_toml(cfg.receiverParamsToml)
         , m_toml_dir(toml_dir)
         , m_app_root(app_root)
-        , m_timeChannelId(time_channel_id)
-        , m_swapBytes(swap_bytes)
-        , m_pcmChannelId(cfg.pcmChannelId)
-        , m_calibrationByWord(cfg.calibrationByWord)
-        , m_calCh10Path(cfg.calCh10Path)
-        , m_stepTomlPath(cfg.stepTomlPath)
-        , m_clipStartSec(cfg.clipStartSec)
-        , m_clipEndSec(cfg.clipEndSec)
+        , m_time_channel_id(time_channel_id)
+        , m_swap_bytes(swap_bytes)
+        , m_pcm_channel_id(cfg.pcmChannelId)
+        , m_calibration_by_word(cfg.calibrationByWord)
+        , m_cal_ch10_path(cfg.calCh10Path)
+        , m_step_toml_path(cfg.stepTomlPath)
+        , m_clip_start_sec(cfg.clipStartSec)
+        , m_clip_end_sec(cfg.clipEndSec)
     {
         setWindowTitle("Configure Receiver SNR — " + cfg.label);
         setModal(true);
@@ -1047,17 +1047,17 @@ public:
             grid->addWidget(new QLabel("Num Channels"), 3, 1, kFieldAlign);
 
             // Row 4: inputs
-            m_numReceivers = new QSpinBox(this);
-            m_numReceivers->setRange(1, 100);
-            m_numReceivers->setValue(cfg.numReceivers);
-            m_numReceivers->setToolTip("Number of individual receiver units contributing channels to this stream.");
-            grid->addWidget(m_numReceivers, 4, 0, kFieldAlign);
+            m_num_receivers = new QSpinBox(this);
+            m_num_receivers->setRange(1, 100);
+            m_num_receivers->setValue(cfg.numReceivers);
+            m_num_receivers->setToolTip("Number of individual receiver units contributing channels to this stream.");
+            grid->addWidget(m_num_receivers, 4, 0, kFieldAlign);
 
-            m_receiverChannels = new QSpinBox(this);
-            m_receiverChannels->setRange(1, 100);
-            m_receiverChannels->setValue(cfg.receiverChannels);
-            m_receiverChannels->setToolTip("Number of channels per receiver (e.g. 3 for L/R/C configuration).");
-            grid->addWidget(m_receiverChannels, 4, 1, kFieldAlign);
+            m_receiver_channels = new QSpinBox(this);
+            m_receiver_channels->setRange(1, 100);
+            m_receiver_channels->setValue(cfg.receiverChannels);
+            m_receiver_channels->setToolTip("Number of channels per receiver (e.g. 3 for L/R/C configuration).");
+            grid->addWidget(m_receiver_channels, 4, 1, kFieldAlign);
 
             auto* loadBtn2 = new QPushButton(this);
             loadBtn2->setIcon(QIcon(":/resources/folder-open.svg"));
@@ -1076,7 +1076,7 @@ public:
                     tr("TOML Files (*.toml);;All Files (*.*)"));
                 if (filename.isEmpty()) return;
                 m_toml_dir = QFileInfo(filename).absolutePath();
-                m_receiverParamsToml = filename;
+                m_receiver_params_toml = filename;
 
                 // The file's two halves are read by the Model: the scalars here,
                 // the word map by FrameSetup::tryLoadingFile() when the stream is
@@ -1087,16 +1087,16 @@ public:
                 current.polarityIndex    = m_polarity->currentIndex();
                 current.slopeIndex       = m_slope->currentIndex();
                 current.scaleDdBPerV     = m_scale->value();
-                current.numReceivers     = m_numReceivers->value();
-                current.receiverChannels = m_receiverChannels->value();
+                current.numReceivers     = m_num_receivers->value();
+                current.receiverChannels = m_receiver_channels->value();
 
                 const ReceiverParams params =
                     FrameSetup::readReceiverParams(filename, current);
                 m_polarity->setCurrentIndex(params.polarityIndex);
                 m_slope->setCurrentIndex(params.slopeIndex);
                 m_scale->setValue(params.scaleDdBPerV);
-                m_numReceivers->setValue(params.numReceivers);
-                m_receiverChannels->setValue(params.receiverChannels);
+                m_num_receivers->setValue(params.numReceivers);
+                m_receiver_channels->setValue(params.receiverChannels);
             });
             connect(saveBtn2, &QPushButton::clicked, this, [this]() {
                 QString filename = QFileDialog::getSaveFileName(
@@ -1110,8 +1110,8 @@ public:
                 params.polarityIndex    = m_polarity->currentIndex();
                 params.slopeIndex       = m_slope->currentIndex();
                 params.scaleDdBPerV     = m_scale->value();
-                params.numReceivers     = m_numReceivers->value();
-                params.receiverChannels = m_receiverChannels->value();
+                params.numReceivers     = m_num_receivers->value();
+                params.receiverChannels = m_receiver_channels->value();
 
                 // Saving the scalars alone produced a file the application then
                 // rejected for having no parameters, so the word map goes with
@@ -1119,7 +1119,7 @@ public:
                 // counts. Which map that is, is the Model's rule, not the dialog's.
                 QString error;
                 if (!FrameSetup::saveReceiverParamsFile(
-                        filename, params, m_receiverParamsToml,
+                        filename, params, m_receiver_params_toml,
                         FrameSetup::wordsInMinorFrame(m_fs.bitsPerFrame->value()), error))
                 {
                     QMessageBox::warning(this, tr("Save Receiver Parameters"), error);
@@ -1144,8 +1144,8 @@ public:
                     [this]() { onExtractCalibration(); });
             row->addWidget(extractBtn);
 
-            m_calibrationLabel = new QLabel(this);
-            row->addWidget(m_calibrationLabel);
+            m_calibration_label = new QLabel(this);
+            row->addWidget(m_calibration_label);
             row->addStretch(1);
             outer->addLayout(row);
             updateCalibrationLabel();
@@ -1164,10 +1164,10 @@ public:
             accept();
         });
 
-        m_applyToAll = new QCheckBox(this);
-        m_applyToAll->setToolTip("Copy these settings to every other selected "
+        m_apply_to_all = new QCheckBox(this);
+        m_apply_to_all->setToolTip("Copy these settings to every other selected "
                                   "stream currently set to Receiver SNR mode.");
-        addBottomBar(outer, btns, this, m_applyToAll, "Apply to all Receiver SNR streams");
+        addBottomBar(outer, btns, this, m_apply_to_all, "Apply to all Receiver SNR streams");
 
         adjustSize();
     }
@@ -1187,33 +1187,33 @@ public:
     int     polarityIndex()      const { return m_polarity->currentIndex(); }
     int     slopeIndex()         const { return m_slope->currentIndex(); }
     double  scaleDdBPerV()       const { return m_scale->value(); }
-    int     numReceivers()       const { return m_numReceivers->value(); }
-    int     receiverChannels()   const { return m_receiverChannels->value(); }
-    QString receiverParamsToml() const { return m_receiverParamsToml; }
+    int     numReceivers()       const { return m_num_receivers->value(); }
+    int     receiverChannels()   const { return m_receiver_channels->value(); }
+    QString receiverParamsToml() const { return m_receiver_params_toml; }
     QString lastTomlDir()        const { return m_toml_dir; }
-    bool    applyToAll()         const { return m_applyToAll->isChecked(); }
-    QHash<int, CalibrationProfile> calibrationByWord() const { return m_calibrationByWord; }
+    bool    applyToAll()         const { return m_apply_to_all->isChecked(); }
+    QHash<int, CalibrationProfile> calibrationByWord() const { return m_calibration_by_word; }
 
     // Input references: captured from the setup sub-dialog on extraction so a
     // processing template can store them alongside the config.
-    QString calCh10Path()  const { return m_calCh10Path; }
-    QString stepTomlPath() const { return m_stepTomlPath; }
-    double  clipStartSec() const { return m_clipStartSec; }
-    double  clipEndSec()   const { return m_clipEndSec; }
+    QString calCh10Path()  const { return m_cal_ch10_path; }
+    QString stepTomlPath() const { return m_step_toml_path; }
+    double  clipStartSec() const { return m_clip_start_sec; }
+    double  clipEndSec()   const { return m_clip_end_sec; }
 
 private:
     void updateCalibrationLabel()
     {
         int n = 0;
-        for (const CalibrationProfile& p : m_calibrationByWord)
+        for (const CalibrationProfile& p : m_calibration_by_word)
         {
             if (p.valid) n++;
         }
         if (n == 0)
-            m_calibrationLabel->setText(
+            m_calibration_label->setText(
                 "<span style='color: gray;'>(none — using linear calibration)</span>");
         else
-            m_calibrationLabel->setText(
+            m_calibration_label->setText(
                 QString("%1 channel(s) calibrated (non-linear)").arg(n));
     }
 
@@ -1222,7 +1222,7 @@ private:
     /// per-channel profiles; here we simply adopt them on accept (US5.3).
     void onExtractCalibration()
     {
-        if (m_timeChannelId < 0)
+        if (m_time_channel_id < 0)
         {
             QMessageBox::warning(this, tr("No Time Channel"),
                 tr("Select a Time Channel in the Configure Streams dialog before "
@@ -1231,30 +1231,30 @@ private:
         }
 
         CalibrationExtractor::Request base;
-        base.timeChannelId      = m_timeChannelId;
-        base.pcmChannelId       = m_pcmChannelId;
+        base.timeChannelId      = m_time_channel_id;
+        base.pcmChannelId       = m_pcm_channel_id;
         base.sync               = frameSyncParams();
-        base.receiverParamsToml = m_receiverParamsToml;
+        base.receiverParamsToml = m_receiver_params_toml;
         base.numReceivers       = numReceivers();
         base.receiverChannels   = receiverChannels();
         // Mirror the main run's byte order, or the extracted steps come from a
         // different bitstream than the data they will calibrate.
-        base.swapBytes          = m_swapBytes;
-        CalibrationSetupDialog setup(base, m_toml_dir, m_app_root, m_stepTomlPath, this);
+        base.swapBytes          = m_swap_bytes;
+        CalibrationSetupDialog setup(base, m_toml_dir, m_app_root, m_step_toml_path, this);
         if (setup.exec() != QDialog::Accepted) return;
         m_toml_dir = setup.lastTomlDir();
 
-        m_calibrationByWord = setup.calibrationByWord();
-        m_calCh10Path  = setup.calFilePath();
-        m_stepTomlPath = setup.stepFilePath();
-        m_clipStartSec = setup.clipStartSec();
-        m_clipEndSec   = setup.clipEndSec();
+        m_calibration_by_word = setup.calibrationByWord();
+        m_cal_ch10_path  = setup.calFilePath();
+        m_step_toml_path = setup.stepFilePath();
+        m_clip_start_sec = setup.clipStartSec();
+        m_clip_end_sec   = setup.clipEndSec();
         updateCalibrationLabel();
         const QString report = setup.calibrationReport();
         QMessageBox::information(this, tr("Calibration Extracted"),
             report.isEmpty()
                 ? tr("Applied non-linear calibration to %1 channel(s).")
-                      .arg(m_calibrationByWord.size())
+                      .arg(m_calibration_by_word.size())
                 : report);
     }
 
@@ -1264,23 +1264,23 @@ private:
     QComboBox*      m_polarity         = nullptr;
     QComboBox*      m_slope            = nullptr;
     QDoubleSpinBox* m_scale            = nullptr;
-    QSpinBox*       m_numReceivers     = nullptr;
-    QSpinBox*       m_receiverChannels = nullptr;
-    QCheckBox*      m_applyToAll       = nullptr;
-    QString         m_receiverParamsToml;
+    QSpinBox*       m_num_receivers     = nullptr;
+    QSpinBox*       m_receiver_channels = nullptr;
+    QCheckBox*      m_apply_to_all       = nullptr;
+    QString         m_receiver_params_toml;
     QString         m_toml_dir;
     QString         m_app_root;
 
     // Non-linear step calibration (US5.3)
-    int             m_timeChannelId = -1;     ///< Time channel ID inherited from the parent dialog.
-    bool            m_swapBytes = false;      ///< File-level byte order, inherited from the parent dialog.
-    int             m_pcmChannelId  = -1;     ///< PCM channel ID of the stream being calibrated.
-    QHash<int, CalibrationProfile> m_calibrationByWord; ///< Extracted profiles, keyed by word index.
-    QString         m_calCh10Path;   ///< Calibration input reference (serialized in a template).
-    QString         m_stepTomlPath;  ///< Calibration input reference (serialized in a template).
-    double          m_clipStartSec = 0.0; ///< Calibration input reference (serialized in a template).
-    double          m_clipEndSec   = 0.0; ///< Calibration input reference (serialized in a template).
-    QLabel*         m_calibrationLabel = nullptr; ///< Status text for the calibration section.
+    int             m_time_channel_id = -1;     ///< Time channel ID inherited from the parent dialog.
+    bool            m_swap_bytes = false;      ///< File-level byte order, inherited from the parent dialog.
+    int             m_pcm_channel_id  = -1;     ///< PCM channel ID of the stream being calibrated.
+    QHash<int, CalibrationProfile> m_calibration_by_word; ///< Extracted profiles, keyed by word index.
+    QString         m_cal_ch10_path;   ///< Calibration input reference (serialized in a template).
+    QString         m_step_toml_path;  ///< Calibration input reference (serialized in a template).
+    double          m_clip_start_sec = 0.0; ///< Calibration input reference (serialized in a template).
+    double          m_clip_end_sec   = 0.0; ///< Calibration input reference (serialized in a template).
+    QLabel*         m_calibration_label = nullptr; ///< Status text for the calibration section.
 };
 
 } // namespace

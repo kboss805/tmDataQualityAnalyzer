@@ -478,7 +478,6 @@ void PlotViewModel::clearData()
     m_x_min = m_x_max = 0.0;
     m_x_view_min = m_x_view_max = 0.0;
     m_data_y_min = m_data_y_max = 0.0;
-    m_y_auto_scale = true;
     m_has_lock_series = false;
     m_has_missed_frames_series = false;
     m_lock_axis_view = LockAxisView::LockPercent;
@@ -731,11 +730,8 @@ void PlotViewModel::commitAppearanceChanges()
     // Mirrors the per-call Y-range recompute that setSeriesVisible() does — a
     // batched setSeriesVisibleQuiet() edit skips that per-call, so it must happen
     // once here before views react to the appearance/visibility signal.
-    if (m_y_auto_scale)
-    {
-        computeYRange();
-        emit axisRangeChanged();
-    }
+    computeYRange();
+    emit axisRangeChanged();
     emit seriesAppearanceChanged();
 }
 
@@ -781,7 +777,7 @@ double PlotViewModel::xMax() const
 
 double PlotViewModel::yMin() const
 {
-    return m_y_auto_scale ? m_data_y_min : m_y_manual_min;
+    return m_data_y_min;
 }
 
 double PlotViewModel::yMax() const
@@ -789,15 +785,10 @@ double PlotViewModel::yMax() const
     if (m_right_y_max_user_set)
     {
         // Never let a user override drop below the current min — that would hand
-        // QCPRange an inverted (max < min) range. Keep it at least a minimum span above.
+        // the chart an inverted (max < min) range. Keep it at least a minimum span above.
         return qMax(m_right_y_max_user, yMin() + PlotConstants::kMinAxisSpan);
     }
-    return m_y_auto_scale ? m_data_y_max : m_y_manual_max;
-}
-
-bool PlotViewModel::yAutoScale() const
-{
-    return m_y_auto_scale;
+    return m_data_y_max;
 }
 
 double PlotViewModel::xViewMin() const
@@ -828,11 +819,8 @@ void PlotViewModel::setSeriesVisible(int index, bool visible)
     m_series[index].visible = visible;
     emit seriesVisibilityChanged(index);
 
-    if (m_y_auto_scale)
-    {
-        computeYRange();
-        emit axisRangeChanged();
-    }
+    computeYRange();
+    emit axisRangeChanged();
 }
 
 void PlotViewModel::setSeriesVisibleQuiet(int index, bool visible)
@@ -854,28 +842,6 @@ void PlotViewModel::setPlotTitle(const QString& title)
     emit plotTitleChanged();
 }
 
-void PlotViewModel::setYManualRange(double min, double max)
-{
-    m_y_manual_min = min;
-    m_y_manual_max = max;
-    m_y_auto_scale = false;
-    emit axisRangeChanged();
-}
-
-void PlotViewModel::setYAutoScale(bool enabled)
-{
-    if (m_y_auto_scale == enabled)
-    {
-        return;
-    }
-    m_y_auto_scale = enabled;
-    if (enabled)
-    {
-        computeYRange();
-    }
-    emit axisRangeChanged();
-}
-
 void PlotViewModel::setXViewRange(double min, double max)
 {
     m_x_view_min = min;
@@ -892,7 +858,6 @@ void PlotViewModel::resetXRange()
 
 void PlotViewModel::resetYRange()
 {
-    m_y_auto_scale = true;
     m_left_y_max_user_set = false;
     m_right_y_max_user_set = false;
     computeYRange();
@@ -1100,7 +1065,7 @@ double PlotViewModel::leftYMax() const
         return m_left_y_max_user;
     if (m_lock_axis_view == LockAxisView::MissedFrames)
         return missedFramesMax() * (1.0 + PlotConstants::kAxisMarginFactor);
-    return 100.0;
+    return m_lock_y_max;
 }
 
 double PlotViewModel::missedFramesMax() const

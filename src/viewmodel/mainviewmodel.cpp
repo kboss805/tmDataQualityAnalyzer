@@ -201,18 +201,6 @@ void MainViewModel::removeSource(int sourceId)
 //                               HELPERS                                      //
 ////////////////////////////////////////////////////////////////////////////////
 
-QString MainViewModel::channelPrefix(int index)
-{
-    // Delegate to FrameSetup, the single source of truth for default parameter
-    // naming shared with the calibration extractor.
-    return FrameSetup::channelPrefix(index);
-}
-
-QString MainViewModel::parameterName(int channel_index, int receiver_index)
-{
-    return FrameSetup::receiverParameterName(channel_index, receiver_index);
-}
-
 MainViewModel::LogLevel MainViewModel::classifyLogMessage(const QString& message)
 {
     // Severity cues, highest precedence first. These strings come from the

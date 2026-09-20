@@ -38,7 +38,7 @@ void TestPlotViewModel::defaultState()
     QVERIFY(!vm.hasData());
     QCOMPARE(vm.seriesCount(), 0);
     QCOMPARE(vm.plotTitle(), QString(PlotConstants::kDefaultPlotTitle));
-    QVERIFY(vm.yAutoScale());
+    QVERIFY(!vm.hasRightYMaxOverride());
 }
 
 void TestPlotViewModel::loadCsvFile()
@@ -146,31 +146,38 @@ void TestPlotViewModel::yAutoRange()
     QFile::remove(path);
 }
 
-void TestPlotViewModel::yManualRange()
+void TestPlotViewModel::snrYMaxOverride()
 {
+    // Pinning the SNR axis maximum is the one way the user overrides the computed
+    // range (context menu > Y Axes > Set Right Max…); the minimum stays automatic,
+    // and Reset returns the axis to the data. The values are positive dB because
+    // computeYRange() clips the SNR minimum at 0, so a negative fixture would
+    // never reach the computed range at all.
     QString csv =
         "Time (DOY:HH:MM:SS.mmm),L_RCVR1\n"
-        "1:00:00:00.000,-100.0\n"
-        "1:00:00:01.000,-50.0\n";
+        "1:00:00:00.000,12.0\n"
+        "1:00:00:01.000,40.0\n";
     QString path = writeTempCsv(csv);
 
     PlotViewModel vm;
     QVERIFY(vm.loadCsvFile(path));
 
+    const double auto_min = vm.yMin();
+    const double auto_max = vm.yMax();
+    QVERIFY(auto_max > auto_min);
+
     QSignalSpy spy(&vm, &PlotViewModel::axisRangeChanged);
 
-    // Set manual range
-    vm.setYManualRange(-120.0, -30.0);
-    QVERIFY(!vm.yAutoScale());
-    QCOMPARE(vm.yMin(), -120.0);
-    QCOMPARE(vm.yMax(), -30.0);
+    vm.setRightYMaxOverride(30.0);
+    QVERIFY(vm.hasRightYMaxOverride());
+    QCOMPARE(vm.rightYMaxOverrideValue(), 30.0);
+    QCOMPARE(vm.yMax(), 30.0);
+    QCOMPARE(vm.yMin(), auto_min);   // the minimum is never overridden
     QCOMPARE(spy.count(), 1);
 
-    // Reset to auto
     vm.resetYRange();
-    QVERIFY(vm.yAutoScale());
-    // Should revert to auto-computed range
-    QVERIFY(vm.yMin() > -120.0);
+    QVERIFY(!vm.hasRightYMaxOverride());
+    QCOMPARE(vm.yMax(), auto_max);
     QCOMPARE(spy.count(), 2);
 
     QFile::remove(path);

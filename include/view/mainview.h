@@ -8,8 +8,8 @@
 #include <QDockWidget>
 #include <QDragEnterEvent>
 #include <QMainWindow>
-#include <QTextBrowser>
 #include <QStringList>
+#include <QTextBrowser>
 #include <QVBoxLayout>
 
 #include "processingtemplate.h"
