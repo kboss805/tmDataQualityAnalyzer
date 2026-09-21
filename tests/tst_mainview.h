@@ -22,8 +22,6 @@ private slots:
     void openPathImportsCsv();
     void importValidCsvPopulatesPlot();
     void importInvalidCsvIsRejected();
-    void batchReapplyAppearanceRenamesMatchingSeries();
-    void batchBuildTemplateCapturesConfigsAndAppearance();
 
     // Optional full manual: absence is a normal state, not an error.
     void fullManualPathEmptyWhenNotInstalled();

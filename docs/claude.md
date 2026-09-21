@@ -60,7 +60,7 @@ The stories below follow the workflow a first-time user takes through the applic
   - **Config application:** each file's run feeds the template's `StreamConfig`s through unchanged (`applyBatchSourceConfig`); the reader dispatches each stream by `pcmChannelId`, which is safe precisely because of the exact-set match. **Non-linear calibration:** a template stores only the calibration *input references* (not the extracted profile), so **all batch files process with the linear slope/offset fallback**. Non-linear step calibration is available for single-file processing only; re-extraction on template apply is a possible future add.
   - **Custom names/colors:** captured only when **saving a template** from an already-processed, customized plot (`buildTemplateFromSource`), and reapplied per file after each run (`reapplyTemplateAppearance`, matched by channel id + metric/receiver/channel). Every file's copy of a channel intentionally shares the same name/color (they are the same channel across recordings); use the **Plot File** selector to view one file at a time when per-file distinction matters.
   - **Retain-all + file selector:** a batch always keeps every processed file in memory; the plot's right-click **Plot File** submenu chooses which file to view, defaulting to every source overlaid, with "All files (overlaid)" for comparison. The filter is a `PlotViewModel` source gate (`setVisibleSource`/`effectiveVisible`) orthogonal to per-series visibility and the **View Mode** (lock %/accumulation) selector. Optional per-file export runs as a post-pass (`finishBatch` isolates each source, then `exportCsv(path, sourceId)` + a `_framesync_lock.png` and `_missed_frames.png` via `exportImage`).
-  - **Status: implemented** (Save/Apply Template, one `startBatchFromTemplate` batch loop, retain-all + Plot File selector). Schema/matcher/appearance/headless-export/source-view are unit-tested; the full sequential run is app-verified (needs real multi-file `.ch10` recordings). See `docs/processing-template-design.md`.
+  - **Status: implemented** (Save/Apply Template, one `BatchController` batch loop, retain-all + Plot File selector). Schema/matcher/appearance/headless-export/source-view are unit-tested; the full sequential run is app-verified (needs real multi-file `.ch10` recordings). See `docs/processing-template-design.md`.
 
 ### US2.0: Define the key parameters required to process the framesync lock statistics and frame sync error accumulation — Complete
 
@@ -409,6 +409,22 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.12.1 tag
 
+#### The batch loop leaves the View (US1.1)
+
+- **`MainView` ran a state machine.** Nine members and eight `m_batch_*` fields drove
+  Apply Template's sequential run: the queue, the file in flight, the per-file config
+  application, the appearance reuse and the export post-pass. `docs/CLAUDE.md` documented
+  where it lived, which made it known rather than accidental - but it is business logic,
+  and the project's own rule is that the View displays.
+- **`BatchController` (ViewModel layer) owns it now.** The View keeps the half that is
+  genuinely the View's: `MainView::confirmAndStartBatch()` shows the confirmation dialog,
+  and an injected `ImageExporter` callback renders each per-file image, because only the
+  widget can draw the plot. The controller reports through `message(LogLevel, QString)`
+  and `finished()` instead of calling `logError()` / `logWarning()` directly.
+- `validate()`, `buildTemplate()` and `applyAppearance()` are static and dialog-free, so
+  the parts worth testing no longer need a window. `describeMismatch()` moved with them.
+- `MainView` drops ~330 lines (1564 → 1333) and two includes it no longer needs.
+
 #### StepDetector::detect() is an orchestrator, not a 649-line function (US5.3)
 
 No behaviour change - the real-recording pairing assertions on
@@ -463,7 +479,14 @@ attempt at all.
   preload from the dialog rather than from `StepDetector`: the shipped default
   when the stream has no file, the stream's own file when it has one, and the
   default again when a stored path no longer resolves.
-- Baseline **394 / 0 / 1**, zero warnings.
+- New suite **TestBatchController**. `buildTemplateCapturesConfigsAndAppearance` and
+  `applyAppearanceRenamesMatchingSeries` moved here from `TestMainView` - same
+  assertions, no `MainView` required, and they reach the real production path rather
+  than a friend-accessed private member. Two further cases the loop's old home made
+  impractical: a queue whose files have all gone missing drains to `finished()` with
+  both counted as skipped (rather than stalling on a reader that never opens), and
+  `start()` with nothing matched neither clears the session nor announces a run.
+- Baseline **398 / 0 / 1** across **21 suites**, zero warnings.
 
 ### v2.12.1 — Calibration Warnings, a Preloaded Step File, and a Receiver-Parameters File That Round-Trips
 
@@ -1503,7 +1526,7 @@ keep the tag history aligned with `main`. The only change is to CI.
   (`MatchResult` reports missing/extra ids); non-matching files are flagged in
   `BatchApplyDialog` and skipped — never silently mis-applied. The batch loop is a
   sequential state machine (`advanceBatch()` ↔ `onBatchProcessingFinished()`)
-  mirroring the old session-load turn-taking.
+  mirroring the old session-load turn-taking. (Moved to `BatchController` after v2.12.1.)
 - All processed files are retained in memory; `PlotViewModel` gained per-source
   labels/filtering (`setVisibleSource`, `sourceList`, `effectiveVisible`) and the
   plot toolbar a **Plot File** selector ("All files (overlaid)" or any single file).
@@ -1836,16 +1859,19 @@ runs use the **linear** calibration fallback). **File > Apply Template to Files�
 picks a template + N files, validates each file's PCM channel-ID set against the
 template (`TemplateMatcher`, **exact-set match** — a file with any missing/extra
 channel is rejected with a reason), then processes every matching file in one batch
-(`MainView::startBatchFromTemplate()`). Every processed file is **retained in
+(`BatchController`, `include/viewmodel/batchcontroller.h`). Every processed file is **retained in
 memory**; the plot's right-click **Plot File** submenu
 chooses which one to view (or "All files (overlaid)"), driven by
 `PlotViewModel::setVisibleSource` / `effectiveVisible` (a source gate orthogonal to
 per-series visibility and the **View Mode** lock%/accumulation selector). A batch
 can **also** export a CSV + a Frame Sync Lock and a Missed Frames image per file
 (optional checkbox → a post-pass in `finishBatch` that isolates each source). The
-batch loop is a sequential one-run-at-a-time state machine (`advanceBatch()` ↔
-`onProcessingFinished()`) that can re-apply the template's saved series names/colors
-onto each file's freshly-created series. Exact-set matching is what makes it safe to
+batch loop is a sequential one-run-at-a-time state machine (`BatchController::advance()`
+↔ `onProcessingFinished()`) that can re-apply the template's saved series names/colors
+onto each file's freshly-created series. It lives in the **ViewModel** layer; the View
+keeps only its own half - `MainView::confirmAndStartBatch()` shows the confirmation
+dialog, and an `ImageExporter` callback renders the per-file images, because only the
+widget can draw the plot. Exact-set matching is what makes it safe to
 feed the template's stored `pcmChannelId`s straight to `setStreamConfigs()`.
 `schemaVersion` gates the template format so a newer/unrecognized file is rejected,
 not mis-read.
@@ -1904,7 +1930,13 @@ not mis-read.
    - `cancelProcessing()` requests a cooperative abort of all workers and the reader; `reset()` clears transient state
    - Emits `progressChanged(int)`, `processingStateChanged(bool)`, `streamProcessed(ProcessedStreamData)`, `processingFinished(bool)`, `logMessageReceived(QString)`, `errorOccurred(QString)`
 
-3. **PlotViewModel** (`src/viewmodel/plotviewmodel.cpp`, `include/viewmodel/plotviewmodel.h`)
+3. **BatchController** (`src/viewmodel/batchcontroller.cpp`, `include/viewmodel/batchcontroller.h`)
+   - *Processing templates / batch apply (US1.1)*; owns the sequential Apply Template run: the file queue, which file is in flight, the per-file config application, the appearance reuse, and the export post-pass
+   - `validate()` checks each file's channel set against the template (the slow part of starting a batch, since it reads every file's channels); `buildTemplate()` captures a processed source as a template; `applyAppearance()` reapplies a template's saved names/colors. All three are static and free of dialog code, which is what makes them testable
+   - Reports through `message(LogLevel, QString)` and `finished()` rather than calling the View, and renders per-file images through an injected `ImageExporter` callback — the widget draws, the controller decides when and where
+   - Lived in `MainView` until v2.12.1; the View kept a state machine, which is the layering leak this removes
+
+4. **PlotViewModel** (`src/viewmodel/plotviewmodel.cpp`, `include/viewmodel/plotviewmodel.h`)
    - Converts each `ProcessedStreamData` into in-memory `PlotSeriesData` vectors (name, receiver/channel indices, x/y values, cached Y min/max, color), carrying its `sourceId` through so cross-source identity checks (reprocess-replace, rename/recolor sibling-sync) never cross a source boundary
    - Converts absolute IRIG seconds to elapsed seconds against a shared base that tracks the **earliest absolute sample across every source** (not just the first-added one): `addStreamData()` re-bases — shifting every existing series right — when a later-added source started earlier; `removeSource()` is the mirror, shifting left only if the removed source held the earliest sample. Emits `nonOverlappingSourceWarning(sourceId)` (informational) the first time a newly added source's absolute range doesn't intersect what's already loaded
    - Assigns the purple/blue/green (lock) and red/orange/yellow (SNR) palette
@@ -2232,7 +2264,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration, `channelPrefix()` naming the known channel positions then falling back to `CH<n+1>`, `receiverParameterName()` combining the two, `receiverIndexFromName()` inverting it (0 for a name with no parseable `_RCVR<N>`), and the receiver-parameters file as a whole: the scalars read from the `[Receivers]` block the shipped files actually use (and the older `[Parameters]` keys still accepted), a save/load round trip that carries the word map with them, the default-map fallback when no file was loaded, nothing written when there is no map to write, and the metadata-only file that parses to zero parameters — the contract `tryLoadingFile()`'s two callers depend on
 - **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, the computed Y range and the SNR max override that pins it (the minimum stays automatic, Reset returns it to the data), X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), the left-axis view toggle preserving per-stream selection, and stream-identity regression coverage: two streams sharing a TMATS-derived `streamLabel` but different `streamOrder` must stay independent through reprocess-replace and `renameSeries()`/`recolorSeries()` sibling-sync (pinned after a pre-v2.6.0 cross-contamination bug). Multi-file input: cross-source identity (two different `sourceId`s reusing the same `streamLabel`/`streamOrder` stay independent through reprocess-replace/rename/recolor), time-base re-basing (a later-added source starting earlier shifts existing series right; three successively-earlier sources compound correctly; a later source starting after triggers no shift), the non-overlap warning signal (fires once per newly-arriving non-overlapping source, not for an overlapping range), and `removeSource()` (drops only the target source, re-bases left only when the removed source held the earliest sample, clears all data when the last source is removed, no-ops for an unknown id). US1.1 source view: `setVisibleSource()` isolates a source via `effectiveVisible()` without mutating per-series `visible`, `sourceList()` lists distinct labeled sources, and `exportCsv(path, sourceId)` writes only that source's columns
 - **TestProcessingCoordinator** (`tst_processingcoordinator`) — constructor defaults, `reset()` clears state, cancel-with-no-run no-op, `startProcessing()` empty-returns-false and processing-state emission, plus single-vs-multi-stream throughput benchmarks
-- **TestMainView** (`tst_mainview`) — Main window construction, widget wiring, log routing, dock visibility behavior, the CSV import routing (`openPath`/`importCsv`, valid/invalid), and batch apply's CI-safe helpers: `reapplyTemplateAppearance()` maps the template's saved names/colors onto the right series, and `buildTemplateFromSource()` captures configs + `timeChannelIndex` + series appearance (the full `advanceBatch()` orchestration needs a real `.ch10` fixture, so it is app-verified not unit-tested)
+- **TestMainView** (`tst_mainview`) — Main window construction, widget wiring, log routing, dock visibility behavior, and the CSV import routing (`openPath`/`importCsv`, valid/invalid). The batch-apply cases moved to **TestBatchController** with the state machine itself
 - **TestPlotWidget** (`tst_plotwidget`) — Plot widget construction, null/valid ViewModel connection, dark/light theme application, the movable legend overlay populating from data (hidden until data loads, then one row per visible active-metric series), a shown/resized-window regression case asserting the overlay sizes correctly (not a collapsed frame-only box) after a second rebuild adds more rows — a QScrollArea `widgetResizable` sizeHint staleness bug reproduced and fixed post-review — the SNR legend row showing the short `"CH<id> <ch.name>"` form instead of the full TMATS stream title, the legend row layout reserving a right-side gutter matching the style's scrollbar extent, and each legend row carrying an objectName the overlay stylesheet can target to override the app's global `QWidget { background-color: ... }` theme rule (otherwise every row painted as an opaque chip); plus `exportImage()` writing a PNG/SVG/PDF headlessly (the parameterized image-export entry point extracted for batch apply); and the right-click context menu that replaced the external control rows: it lists every expected top-level item, its data-dependent entries are disabled until data loads, the Plot File submenu is disabled for a single source and switches `visibleSource` for a multi-source run, View Mode reflects and sets the active left-axis metric, `X Axis > Reset Span` / `Y Axes > Reset` clear the X window and both Y overrides, plus two structural guards - wheel-zoom/drag-pan stay enabled (horizontal-only) once data arrives, and **no QComboBox / QSpinBox / QLineEdit / QAbstractButton lives outside the chart** - on-chart overlays are allowed, external control rows are not (the machine-checkable form of "no external controls"); plus the legend toggle (shows/hides the overlay and survives a rebuild, appears only once data is loaded, is parented to the chart, and stays in sync with the context menu's checkable Show Legend item); plus Y axis occupancy - a lock-only plot hides the right axis, an SNR-only plot hides the left, an empty chart keeps the left (hiding both would leave a bare box), and hiding the last *visible* SNR series reclaims the right axis just as never loading one would
 - **TestTmChart** (`tst_tmchart`) - the first-party chart replacing QCustomPlot: series bookkeeping across removals and out-of-range access, mismatched x/y lengths truncated (a draw-time overrun), degenerate/non-finite ranges rejected, X and Y coordinate transforms round-tripping with the correct screen orientation, wheel zoom anchoring the value under the cursor and reporting the new range, interactions inert until enabled, and the shared `renderTo()` export path painting real content while omitting the crosshair/zoom-band overlays (cursor state, not data), and that hiding a Y axis reclaims its margin (the measurable consequence) while leaving the coordinate transforms consistent with the new plot area
 - **TestPlotCustomizationDialog** (`tst_plotcustomizationdialog`) — Customize Plot Series dialog: one Frame Sync Lock checkbox per stream, Select All/None, apply → per-stream lock/missed visibility round-trip to the ViewModel; Receiver SNR tree build (receiver grouping), tri-state group cascade, Select All/None, apply → per-channel SNR visibility round-trip, and the Expand/Collapse All button toggle; plus per-stream rename/recolor (lock tab) and per-channel rename/recolor via pending item roles (SNR tab) applied to the ViewModel on OK, and the single batched `seriesAppearanceChanged` emission (reaches private widgets/slots via a friend declaration, same pattern as TestFrameProcessor)
@@ -2243,6 +2275,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestCalibrationExtractor** (`tst_calibrationextractor`) — US5.3 pipeline orchestration (complements TestStepDetector's pure logic): drives the async extraction end to end (reader + FrameProcessor workers → per-channel StepDetector). A bad file (with non-empty steps, so it clears the empty-steps guard) finishes unsuccessfully with a recorded error and no partial state; over `rnrz-l_testfile.ch10`, exactly words 6/7/8 (RCVR3 L/R/C, the only real stepped SNR sweep) build valid non-linear profiles while every other receiver word falls back to linear; over `step_cal, example.ch10` (receivers far out of alignment, its real 11-step 0–60 dB config, the shipped sequential word map), receivers 1, 3, 5 and 6 calibrate with every step paired to its own dwell (0 dB at the pre-sweep level, 60 dB at the top dwell, no split dwell taking a slot), receiver 1 over only the range that stayed in scale because its top two steps sit on the rail (readings hold at 48 dB), receiver 2 reports flat / no signal, and the report names the receivers; plus the pure `summarize()` report (receivers grouped, partial receivers spelled out with reasons, unnamed channels reported by name) and its two "check" prompts - a step file shorter than the recording and a word map that does not match it - each proven on the real recording with the wrong file, and silent on the correct setup; and clips that exceed the recording being reported rather than silently ignored
 - **TestStreamConfigSchema** (`tst_streamconfigschema`) — `StreamConfigSchema` round trip for both `StreamMode` variants and the calibration input references (`calCh10Path`/`stepTomlPath`/`clipStartSec`/`clipEndSec`), confirms `calibrationByWord` itself never appears in the serialized JSON (and the `calibration` block is omitted entirely when no non-linear calibration was ever extracted), and `fromJson()` rejecting an object missing required fields while leaving in-class defaults for anything else omitted
 - **TestProcessingTemplateSchema** (`tst_processingtemplateschema`) — processing templates / batch apply: `ProcessingTemplateSchema` round trip for both `StreamMode`s, series appearance, calibration input references, and `timeChannelIndex`; that appearance is omitted when empty; that `calibrationByWord` is never serialized (inherited from `StreamConfigSchema`); and `schemaVersion` accept/reject + malformed-document rejection — no `.ch10` fixture, runs in CI
+- **TestBatchController** (`tst_batchcontroller`) — the Apply Template batch loop (US1.1): `buildTemplate()` capturing a source's configs + time channel + byte order + each series' name/color, `applyAppearance()` mapping a template's saved appearance onto the right series (both moved here from TestMainView, and no longer need a window to run), plus two cases the loop's old home made impractical — a queue whose files have all gone missing drains to `finished()` with both counted as skipped rather than stalling on a reader, and `start()` with nothing matched does not clear the session or announce a run
 - **TestTemplateMatcher** (`tst_templatematcher`) — batch apply channel-ID matching: `templateChannelIds()` collection and `matchFile()` exact-set comparison (pass regardless of order; reject with the right `missing`/`extra` sets on a missing channel, an extra channel, and both) — pure logic, runs in CI
 
 ### Running Tests
