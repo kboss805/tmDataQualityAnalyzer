@@ -122,13 +122,6 @@ public:
     static Result detect(const QVector<double>& rawValues,
                          double samplePeriodSec,
                          const QVector<StepDefinition>& steps);
-
-private:
-    /// @brief A contiguous run of stable (non-transition) samples [begin, end).
-    struct Plateau { int begin; int end; };
-
-    /// Robust (MAD-based) standard-deviation estimate of @p values.
-    static double robustStdDev(const QVector<double>& values);
 };
 
 #endif // STEPDETECTOR_H
