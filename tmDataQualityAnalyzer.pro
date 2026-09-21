@@ -91,6 +91,7 @@ SOURCES += \
 SOURCES += \
     src/view/mainview.cpp \
     src/view/streamconfigdialog.cpp \
+    src/view/streamsubdialogs.cpp \
     src/view/exportdialog.cpp \
     src/view/batchapplydialog.cpp \
     src/view/plotcustomizationdialog.cpp \
