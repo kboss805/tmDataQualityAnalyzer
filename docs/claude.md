@@ -409,6 +409,33 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.12.1 tag
 
+#### StepDetector::detect() is an orchestrator, not a 649-line function (US5.3)
+
+No behaviour change - the real-recording pairing assertions on
+`step_cal, example.ch10` hold throughout, which is what made the split safe to
+attempt at all.
+
+- `detect()` was **649 lines** holding nine numbered stages and five lambdas,
+  two of which (`selectSweep`, `calibrateSaturatedTop`) were themselves 66 and
+  260 lines. It is now **185 lines** that read as the algorithm's outline:
+  derivative, noise sigma, threshold, the relax loop, sweep selection, the
+  saturated-top fallback, pairing.
+- Eleven file-local helpers carry the stages, each taking what it needs
+  explicitly rather than capturing the enclosing scope: `sampleDerivative`,
+  `robustStdDev`, `liveNoiseSigma`, `markStableSamples`, `confirmedPlateaus`,
+  `levelsOf`, `coalesceLevels`, `valuesOf`, `transitionDirection`,
+  `selectSweepStart`, `calibrateSaturatedTop`.
+- The saturated-top path is split further: `isRailedLevel`, `buildDwellGrid`
+  (with a `DwellGrid` struct for the boundaries, their step slots and the dwell
+  length) and `measureUnconfirmedDwells` - the last being the subtlest logic in
+  the file, the part that stops a dwell plateau detection missed from being
+  bridged by interpolation (which read 23.09 dB at a 24 dB dwell).
+- `Plateau` and `robustStdDev` move out of the header: neither had a caller
+  outside this translation unit, so `StepDetector` no longer has a private
+  section at all.
+- The `1.`/`7b.`/`7d.` stage numbering is gone with the lambdas it indexed - the
+  function names carry it now.
+
 #### The stream setup dialogs are testable (US1.0)
 
 - **`streamsubdialogs.h` held 1288 lines of implementation in an anonymous
