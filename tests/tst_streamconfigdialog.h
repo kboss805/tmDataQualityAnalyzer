@@ -28,6 +28,8 @@ private slots:
     // Frame-sync TOML scope boundary (US5.0 / US1.0):
     // Save writes exactly FrameSync, FrameSyncMask, WordsInMinorFrame under [Frame].
     // Load reads back those same three keys.
+    void subDialogsRoundTripAStreamConfig();
+    void calibrationDialogPreloadsTheStepFile();
     void tomlFrameSyncSaveRoundtrip();
     void tomlFrameSyncLoadPopulatesThreeFields();
     void tomlFrameSyncSaveDoesNotWriteRandomized();

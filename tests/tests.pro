@@ -44,6 +44,7 @@ SOURCES += \
     $$PWD/../src/viewmodel/plotviewmodel.cpp \
     $$PWD/../src/view/mainview.cpp \
     $$PWD/../src/view/streamconfigdialog.cpp \
+    $$PWD/../src/view/streamsubdialogs.cpp \
     $$PWD/../src/view/plotwidget.cpp \
     $$PWD/../src/view/tmchart.cpp \
     $$PWD/../src/view/plotcustomizationdialog.cpp \

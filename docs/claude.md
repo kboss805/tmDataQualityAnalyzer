@@ -407,6 +407,37 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ## Version History
 
+### Unreleased — since the v2.12.1 tag
+
+#### The stream setup dialogs are testable (US1.0)
+
+- **`streamsubdialogs.h` held 1288 lines of implementation in an anonymous
+  namespace**, private to the one translation unit that included it
+  (`streamconfigdialog.cpp`). Nothing else could name the types, so no test could
+  construct a dialog - which is why the receiver-parameters Save/Load round trip
+  and the step-file preload had to be checked by hand, from screenshots.
+- The header is now **301 lines of declarations**; `src/view/streamsubdialogs.cpp`
+  carries the definitions. The shared layout helpers stay file-local in an
+  anonymous namespace there, except the four `StreamConfigDialog` also builds its
+  own rows with (`styleIconButton`, `makeDialogButtons`, `addBottomBar`,
+  `loadReceiverFrameDefaults`), which are declared in the header. The widget
+  includes stay in the header rather than becoming forward declarations, because
+  the inline accessors read their widgets.
+- No behaviour change: same classes, same members, same call sites.
+
+#### Tests
+
+- `TestStreamConfigDialog::subDialogsRoundTripAStreamConfig` builds a
+  `ReceiverSNRDialog` and a `FrameLockSetupDialog` from a config that differs from
+  the defaults in every field and reads all of it back, including
+  `frameSyncParams()` agreeing with the individual accessors - a widget wired to
+  the wrong field was previously invisible to the suite.
+- `TestStreamConfigDialog::calibrationDialogPreloadsTheStepFile` pins the v2.12.1
+  preload from the dialog rather than from `StepDetector`: the shipped default
+  when the stream has no file, the stream's own file when it has one, and the
+  default again when a stored path no longer resolves.
+- Baseline **394 / 0 / 1**, zero warnings.
+
 ### v2.12.1 — Calibration Warnings, a Preloaded Step File, and a Receiver-Parameters File That Round-Trips
 
 #### Calibration warns when a result looks right but may not be (US5.3)

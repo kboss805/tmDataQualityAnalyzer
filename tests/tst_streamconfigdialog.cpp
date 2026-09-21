@@ -27,6 +27,7 @@
 #include "constants.h"
 #include "streamconfig.h"
 #include "streamconfigdialog.h"
+#include "streamsubdialogs.h"
 #include "tomlconfighelper.h"
 
 // ---------------------------------------------------------------------------
@@ -747,4 +748,112 @@ void TestStreamConfigDialog::legacyToggleIsInverseOfByteSwap()
     legacy_box->setChecked(false);
     QVERIFY2(legacy->swapBytes(),
              "unticking Legacy Chapter 10 must re-enable the byte swap");
+}
+
+// ---------------------------------------------------------------------------
+// The three setup sub-dialogs. These could not be tested at all until their
+// implementations moved out of the header: they were an anonymous namespace
+// private to streamconfigdialog.cpp, so no test could name the types.
+// ---------------------------------------------------------------------------
+
+void TestStreamConfigDialog::subDialogsRoundTripAStreamConfig()
+{
+    // Every value StreamConfigDialog reads back out of a gear dialog comes from
+    // these accessors, so a widget wired to the wrong field is invisible to the
+    // rest of the suite. Round-trip a config that differs from the defaults in
+    // every field, so a dropped assignment cannot pass by coincidence.
+    StreamConfig cfg;
+    cfg.label             = "CH 12 PCM02";
+    cfg.pcmChannelId      = 12;
+    cfg.mode              = StreamMode::ReceiverChannelInfo;
+    cfg.sync.pattern      = "FE6B2840";
+    cfg.sync.mask         = "FFFFFFFF";
+    cfg.sync.bitsInMinorFrame = 800;
+    cfg.sync.randomized   = true;
+    cfg.sync.inverted     = true;
+    cfg.sync.dataRateMbps = 0.8;
+    cfg.samplePeriodIndex = 2;
+    cfg.polarityIndex     = 1;
+    cfg.slopeIndex        = 2;
+    cfg.scaleDdBPerV      = 12.5;
+    cfg.numReceivers      = 12;
+    cfg.receiverChannels  = 3;
+    cfg.receiverParamsToml = "C:/somewhere/RASA.toml";
+
+    ReceiverSNRDialog snr(cfg, QDir::tempPath(), /*time_channel_id=*/1,
+                          QDir::tempPath(), /*swap_bytes=*/true);
+    QCOMPARE(snr.frameSyncPattern(), QString("FE6B2840"));
+    QCOMPARE(snr.frameSyncMask(), QString("FFFFFFFF"));
+    QCOMPARE(snr.bitsPerFrame(), 800);
+    QCOMPARE(snr.randomized(), true);
+    QCOMPARE(snr.inverted(), true);
+    QCOMPARE(snr.samplePeriodIndex(), 2);
+    QCOMPARE(snr.polarityIndex(), 1);
+    QCOMPARE(snr.slopeIndex(), 2);
+    QCOMPARE(snr.scaleDdBPerV(), 12.5);
+    QCOMPARE(snr.numReceivers(), 12);
+    QCOMPARE(snr.receiverChannels(), 3);
+    QCOMPARE(snr.receiverParamsToml(), QString("C:/somewhere/RASA.toml"));
+    QVERIFY(!snr.applyToAll());   // the fan-out is opt-in, never the default
+
+    // frameSyncParams() is what MainViewModel actually processes with, so it has
+    // to agree with the individual accessors rather than being built separately.
+    const FrameSyncParams params = snr.frameSyncParams();
+    QCOMPARE(params.pattern, snr.frameSyncPattern());
+    QCOMPARE(params.mask, snr.frameSyncMask());
+    QCOMPARE(params.bitsInMinorFrame, snr.bitsPerFrame());
+    QCOMPARE(params.randomized, snr.randomized());
+    QCOMPARE(params.inverted, snr.inverted());
+
+    // The frame-sync half is shared, and the Frame Sync Lock dialog reads it the
+    // same way.
+    StreamConfig lock_cfg = cfg;
+    lock_cfg.mode = StreamMode::FrameSyncLockStats;
+    FrameLockSetupDialog lock(lock_cfg, QDir::tempPath(), QDir::tempPath());
+    QCOMPARE(lock.frameSyncPattern(), QString("FE6B2840"));
+    QCOMPARE(lock.bitsPerFrame(), 800);
+    QCOMPARE(lock.randomized(), true);
+    QCOMPARE(lock.inverted(), true);
+    QCOMPARE(lock.samplePeriodIndex(), 2);
+    QVERIFY(!lock.applyToAll());
+}
+
+void TestStreamConfigDialog::calibrationDialogPreloadsTheStepFile()
+{
+    // Extract Calibration opens with a step file already loaded (v2.12.1). Until
+    // now that could only be confirmed by looking at a screenshot of the dialog.
+    QDir root(QCoreApplication::applicationDirPath());
+    root.cdUp();   // tests/
+    root.cdUp();   // project root
+    const QString app_root = root.absolutePath();
+    const QString shipped  = app_root + "/settings/rcvr_cals/default.toml";
+    QVERIFY2(QFileInfo(shipped).isFile(), qPrintable(shipped));
+
+    CalibrationExtractor::Request base;
+    base.pcmChannelId = 26;
+    base.timeChannelId = 1;
+
+    // No previous file: the dialog opens on the shipped default.
+    {
+        CalibrationSetupDialog dlg(base, QDir::tempPath(), app_root);
+        QCOMPARE(dlg.stepFilePath(), shipped);
+        QVERIFY(dlg.calFilePath().isEmpty());   // only the step file is preloaded
+        QCOMPARE(dlg.clipStartSec(), 0.0);
+        QCOMPARE(dlg.clipEndSec(), 0.0);
+    }
+
+    // A stream that already used a step file keeps it.
+    const QString rasa = app_root + "/settings/rcvr_cals/RASA.toml";
+    QVERIFY2(QFileInfo(rasa).isFile(), qPrintable(rasa));
+    {
+        CalibrationSetupDialog dlg(base, QDir::tempPath(), app_root, rasa);
+        QCOMPARE(dlg.stepFilePath(), rasa);
+    }
+
+    // A stored path that no longer resolves falls back to the default rather
+    // than opening on a file that is not there.
+    {
+        CalibrationSetupDialog dlg(base, QDir::tempPath(), app_root, "C:/nowhere/gone.toml");
+        QCOMPARE(dlg.stepFilePath(), shipped);
+    }
 }
