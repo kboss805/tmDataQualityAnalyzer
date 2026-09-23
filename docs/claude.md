@@ -409,6 +409,31 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.12.1 tag
 
+#### The window chrome is its own translation unit (US4.1)
+
+- `mainviewchrome.cpp` takes the hamburger menu, the recent-files submenu, the
+  theme-drawn glyphs and the custom title bar out of `mainview.cpp`, which drops from
+  1333 to 986 lines. These are still `MainView`'s own members - the class is unchanged -
+  but menu and title-bar construction is self-contained and reads better away from the
+  window's wiring.
+- **`setUpMenuBar()` is now `setUpChrome()`**, which is what it always did: its own
+  comment said "the menu hangs off the hamburger button in the custom title bar (built at
+  the end of this method)". The name described a third of the function.
+- **Nine title-bar constants moved to `UIConstants`** - `kTitleBarHeight`,
+  `kTitleBarEdgeGap`, the three `kToolGlyph*` metrics and the four caption-button
+  codepoints. They were file-local to `mainview.cpp`, which was fine while the title bar
+  and the window lived in one file; the split makes them shared, and a file-local copy in
+  each file is how two sources of truth start. `TestConstants` pins all nine - the glyphs
+  especially, since they are private-use-area codepoints where a wrong value is a blank
+  button that no other test would notice.
+- Also cleaned up: the empty anonymous namespace `describeMismatch()` left behind in
+  `mainview.cpp` when the batch loop moved, and the two orphaned Doxygen `@}` closers its
+  constants left when they moved to `UIConstants`.
+- **Verified by rendering.** The title bar was grabbed and measured before and after: the
+  PNGs are byte-identical and all five buttons report the same geometry (`30x26` at the
+  same positions, same icons). Pure code motion, but the constants moved with it, and a
+  mistyped glyph codepoint would not have failed a single test.
+
 #### The legend is its own widget (US4.0)
 
 - **`PlotLegendOverlay`** (`include/view/plotlegendoverlay.h`) owns the movable legend:

@@ -113,7 +113,7 @@ protected:
 private:
     /// @name Widget setup helpers
     /// @{
-    void setUpMenuBar();                     ///< Builds the custom title bar (hamburger menu + window buttons).
+    void setUpChrome();                      ///< Builds the custom title bar and the hamburger menu (mainviewchrome.cpp).
     void setUpMainLayout();                  ///< Creates the top-level layout.
     void setUpConnections();                 ///< Connects all ViewModel signals to View slots.
     /// Sets the Import/Export menu-action icons to the dark or light theme variant.

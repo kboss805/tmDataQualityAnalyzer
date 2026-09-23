@@ -91,6 +91,7 @@ SOURCES += \
 # View: widgets and dialogs
 SOURCES += \
     src/view/mainview.cpp \
+    src/view/mainviewchrome.cpp \
     src/view/streamconfigdialog.cpp \
     src/view/streamsubdialogs.cpp \
     src/view/exportdialog.cpp \
