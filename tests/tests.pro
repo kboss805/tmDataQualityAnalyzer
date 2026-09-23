@@ -44,6 +44,7 @@ SOURCES += \
     $$PWD/../src/viewmodel/batchcontroller.cpp \
     $$PWD/../src/viewmodel/plotviewmodel.cpp \
     $$PWD/../src/view/mainview.cpp \
+    $$PWD/../src/view/mainviewchrome.cpp \
     $$PWD/../src/view/streamconfigdialog.cpp \
     $$PWD/../src/view/streamsubdialogs.cpp \
     $$PWD/../src/view/plotlegendoverlay.cpp \

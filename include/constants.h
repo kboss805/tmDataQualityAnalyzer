@@ -141,6 +141,57 @@ namespace UIConstants {
     inline constexpr std::array<double, 4> kSlopeVoltageUpper = {10.0, 5.0, 10.0, 5.0};  ///< Upper voltage bound per scale option.
     /// @}
 
+
+    /// @name Custom title bar (frameless window)
+    /// Moved here from mainview.cpp when the title bar and the hamburger menu
+    /// were split into their own translation unit: both files need them, and a
+    /// file-local copy in each is how two sources of truth start.
+    /// @{
+    inline constexpr int kTitleBarHeight = 40;  ///< Custom title-bar height (logical px).
+    /// @name Title-bar button metrics
+    /// EVERY title-bar button uses these: the hamburger, the sidebar toggle, and the
+    /// minimize/maximize/close captions. Each carries a small glyph, so the hover
+    /// highlight is sized to hug it rather than filling a full-height cell. At the
+    /// original metrics the highlight was several times the glyph's visual area and
+    /// read as a large block floating in the bar; a compact, rounded box matches how
+    /// editors (VS Code, Antigravity) highlight their own title-bar controls.
+    ///
+    /// Kept >= 24 px in both axes: that is the usual minimum comfortable pointer
+    /// target, so tightening the box does not make the buttons fiddly to hit.
+    ///
+    /// Note this is a deliberate departure from the Windows caption convention, where
+    /// close spans the top-right corner (making it a Fitts's-law "infinite" target at
+    /// a maximized window's edge). Consistency across the whole bar was preferred; the
+    /// corner is now draggable caption instead.
+    /// @{
+    inline constexpr int kToolGlyphButtonW = 30;
+    inline constexpr int kToolGlyphButtonH = 26;
+    inline constexpr int kToolGlyphIconPx  = 24;
+    /// Gap between the last caption button and the window edge. The compact
+    /// buttons no longer span the corner, so without this their rounded hover
+    /// box would sit flush against the frame.
+    inline constexpr int kTitleBarEdgeGap  = 6;
+    /// @}
+
+    /// @name Caption-button glyphs from the Windows icon font
+    /// Segoe Fluent Icons (Windows 11), falling back to Segoe MDL2 Assets — the
+    /// same glyphs Windows draws for its own window buttons, so minimize,
+    /// maximize/restore and close share one set of metrics. Ordinary Unicode
+    /// look-alikes (U+2212, U+25A1, U+2715) do NOT: the UI font draws them at
+    /// noticeably different optical sizes, which is what made these buttons look
+    /// mismatched.
+    ///
+    /// Written as codepoints rather than literal characters on purpose: they live
+    /// in the Unicode private use area, so a literal in the source is fragile —
+    /// editors and tooling can silently drop it, leaving a blank button.
+    /// @{
+    inline constexpr char16_t kGlyphMinimize = 0xE921; ///< ChromeMinimize
+    inline constexpr char16_t kGlyphMaximize = 0xE922; ///< ChromeMaximize
+    inline constexpr char16_t kGlyphRestore  = 0xE923; ///< ChromeRestore
+    inline constexpr char16_t kGlyphClose    = 0xE8BB; ///< ChromeClose
+    /// @}
+    /// @}
+
     inline constexpr int kDefaultPolarityIndex = 0;  ///< Default polarity value (0 = Positive).
 
     /// @name Progress / layout

@@ -129,6 +129,19 @@ void TestConstants::uiTimeConversionConstants()
 void TestConstants::uiPolarityConstants()
 {
     QCOMPARE(UIConstants::kDefaultPolarityIndex, 0);
+    // Title-bar chrome: file-local to mainview.cpp until the chrome moved into its
+    // own translation unit, and now shared by both - so pinned like the rest.
+    QCOMPARE(UIConstants::kTitleBarHeight, 40);
+    QCOMPARE(UIConstants::kToolGlyphButtonW, 30);
+    QCOMPARE(UIConstants::kToolGlyphButtonH, 26);
+    QCOMPARE(UIConstants::kToolGlyphIconPx, 24);
+    QCOMPARE(UIConstants::kTitleBarEdgeGap, 6);
+    // The caption glyphs live in the Unicode private use area, where a literal is
+    // fragile; a wrong codepoint is a blank button, which no other test would see.
+    QCOMPARE(static_cast<int>(UIConstants::kGlyphMinimize), 0xE921);
+    QCOMPARE(static_cast<int>(UIConstants::kGlyphMaximize), 0xE922);
+    QCOMPARE(static_cast<int>(UIConstants::kGlyphRestore), 0xE923);
+    QCOMPARE(static_cast<int>(UIConstants::kGlyphClose), 0xE8BB);
 }
 
 // v2.2 additions
