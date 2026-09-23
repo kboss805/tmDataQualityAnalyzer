@@ -409,6 +409,24 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.12.1 tag
 
+#### The plot's right-click menu is its own translation unit (US4.1)
+
+- `plotcontextmenu.cpp` takes `buildContextMenu()` (200 lines) and its caller
+  `showPlotContextMenu()` out of `plotwidget.cpp`, which drops from 1608 to 1398 lines.
+  Every plot control is reached from that menu or an on-chart chip, so building it is a
+  long run of `QAction` wiring with little to do with the rest of the widget.
+- Still `PlotWidget` members: the handlers they connect to mutate the widget, so the menu
+  is not separable into a type of its own without inventing an interface for them to call
+  back through. A file split, not an extraction - as the plan said it would be.
+- It needed nothing else to move, unlike the chrome split: `kReadoutNearest` is already a
+  static member on the class, and `plotwidget.cpp`'s two file-local helpers
+  (`legendDisplayName`, `isLeftAxisMetric`) belong to the legend and chart rebuilds rather
+  than the menu. `<QMenu>` and `<QActionGroup>` left `plotwidget.cpp` with it.
+- Covered by the six `TestPlotWidget` context-menu cases, which assert the item list, the
+  disabled-until-data states, the Plot File submenu, the View Mode round trip, the reset
+  actions and the advertised shortcuts - the strongest test coverage of anything split so
+  far, so no render check was needed here.
+
 #### The window chrome is its own translation unit (US4.1)
 
 - `mainviewchrome.cpp` takes the hamburger menu, the recent-files submenu, the
