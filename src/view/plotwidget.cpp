@@ -34,6 +34,7 @@
 
 
 #include "constants.h"
+#include "plotlegendoverlay.h"
 #include "plotviewmodel.h"
 #include "exportdialog.h"
 #include "plotcustomizationdialog.h"
@@ -128,7 +129,7 @@ void PlotWidget::applyTheme(bool dark)
     m_plot->setThemeColors(bg, fg, grid, m_title_color);
 
     m_dark_theme = dark;
-    styleLegendOverlay(dark);
+    m_legend->applyTheme(dark);
     styleLegendToggle(dark);
 
     m_plot->update();
@@ -821,9 +822,9 @@ bool PlotWidget::exportImage(const QString& path)
         px.fill(Qt::transparent);
         QPainter painter(&px);
         m_plot->renderTo(painter, m_plot->size());
-        if (m_legend_overlay != nullptr && m_legend_overlay->isVisible())
+        if (m_legend != nullptr && m_legend->isVisible())
         {
-            m_legend_overlay->render(&painter, m_legend_overlay->pos());
+            m_legend->render(&painter, m_legend->pos());
         }
         painter.end();
         success = px.save(filename, "PNG");
@@ -843,9 +844,9 @@ bool PlotWidget::exportImage(const QString& path)
         if (success)
         {
             m_plot->renderTo(painter, m_plot->size());
-            if (m_legend_overlay != nullptr && m_legend_overlay->isVisible())
+            if (m_legend != nullptr && m_legend->isVisible())
             {
-                m_legend_overlay->render(&painter, m_legend_overlay->pos());
+                m_legend->render(&painter, m_legend->pos());
             }
             painter.end();
         }
@@ -873,9 +874,9 @@ bool PlotWidget::exportImage(const QString& path)
             const double sy = writer.height() / static_cast<double>(m_plot->height());
             painter.scale(sx, sy);
             m_plot->renderTo(painter, m_plot->size());
-            if (m_legend_overlay != nullptr && m_legend_overlay->isVisible())
+            if (m_legend != nullptr && m_legend->isVisible())
             {
-                m_legend_overlay->render(&painter, m_legend_overlay->pos());
+                m_legend->render(&painter, m_legend->pos());
             }
             painter.end();
         }
@@ -955,47 +956,9 @@ void PlotWidget::setUpLayout()
     // A translucent, rounded frame parented to m_plot so it composites over the
     // chart. Holds a single-column, vertically scrolling list of line-swatch +
     // label rows; the user can drag it anywhere inside the plot (see eventFilter).
-    m_legend_overlay = new QFrame(m_plot);
-    m_legend_overlay->setObjectName("legendOverlay");
-    m_legend_overlay->setCursor(Qt::OpenHandCursor);
-    auto* overlay_layout = new QVBoxLayout(m_legend_overlay);
-    overlay_layout->setContentsMargins(PlotConstants::kLegendContentMargin,
-                                       PlotConstants::kLegendContentMargin,
-                                       PlotConstants::kLegendContentMargin,
-                                       PlotConstants::kLegendContentMargin);
-    overlay_layout->setSpacing(0);
-
-    m_legend_widget = new QWidget;
-    m_legend_widget->setObjectName("legendContent");
-    m_legend_rows = new QVBoxLayout(m_legend_widget);
-    // Reserve a permanent right-side gutter matching the style's scrollbar width so
-    // the vertical scrollbar — shown only once content overflows the height cap —
-    // never sits on top of the last few characters of a row's label. Always-on
-    // rather than conditional: whether a row's text runs into that gutter isn't
-    // knowable until the scrollbar decision is made, so a fixed reservation is the
-    // only way to guarantee no overlap regardless of content length.
-    const int scrollbar_gutter = QApplication::style()->pixelMetric(QStyle::PM_ScrollBarExtent);
-    m_legend_rows->setContentsMargins(0, 0, scrollbar_gutter, 0);
-    m_legend_rows->setSpacing(PlotConstants::kLegendRowSpacing);
-
-    m_legend_scroll = new QScrollArea(m_legend_overlay);
-    m_legend_scroll->setObjectName("legendScroll");
-    m_legend_scroll->setWidget(m_legend_widget);
-    m_legend_scroll->setWidgetResizable(true);
-    m_legend_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_legend_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    m_legend_scroll->setFrameShape(QFrame::NoFrame);
-    m_legend_scroll->viewport()->setAutoFillBackground(false);
-    m_legend_scroll->viewport()->setCursor(Qt::OpenHandCursor);
-    overlay_layout->addWidget(m_legend_scroll);
-
-    // Drag wiring: each row is click-through (WA_TransparentForMouseEvents set in
-    // rebuildLegend), so content presses fall to the viewport; the frame catches
-    // presses on its padding. Both — plus m_plot resizes — route to eventFilter().
-    m_legend_overlay->installEventFilter(this);
-    m_legend_scroll->viewport()->installEventFilter(this);
+    m_legend = new PlotLegendOverlay(m_plot);
+    // The chart's own resizes re-anchor the legend (see eventFilter).
     m_plot->installEventFilter(this);
-    m_legend_overlay->hide();
 
     // On-chart legend show/hide control. An overlay (child of m_plot) rather than
     // an external control, matching the rest of the plot UI. Anchored top-left so
@@ -1172,42 +1135,18 @@ void PlotWidget::rebuildLegend()
 {
     if (m_view_model == nullptr || !m_view_model->hasData())
     {
-        for (const LegendRow& row : std::as_const(m_legend_row_by_id))
-        {
-            m_legend_rows->removeWidget(row.widget);
-            row.widget->deleteLater();
-        }
-        m_legend_row_by_id.clear();
-        m_legend_overlay->hide();
+        m_legend->rebuild({}, m_dark_theme, m_legend_visible);
         return;
     }
 
-    const auto& all_series = m_view_model->allSeries();
+    // Which series the legend lists is the ViewModel's business, so it is decided
+    // here; the overlay is handed the finished list and owns everything after it.
     const PlotViewModel::LockAxisView axis_view = m_view_model->lockAxisView();
-    int shown = 0;
-    // Track the content's natural (unconstrained) size ourselves from each row's
-    // sizeHint() as it's built, rather than asking the container widget for its
-    // aggregate sizeHint() afterwards: once the QScrollArea (widgetResizable=true)
-    // has squeezed m_legend_widget down to a small viewport on an earlier, sparser
-    // rebuild, QWidget::sizeHint()/QLayout::sizeHint() can report a stale/zero size
-    // on the next rebuild even though the layout correctly holds the new rows —
-    // this was reproduced directly (row sizeHints valid, aggregate sizeHint (0,0)).
-    int content_w = 0;
-    int content_h = 0;
-
-    // Reconciled by series id (mirrors rebuildChart()'s m_graph_by_id): a run with
-    // many streams calls rebuildLegend() once per completed stream, so rebuilding
-    // every row's widgets from scratch each time is O(streams^2) widget churn
-    // across the run. Existing rows are updated in place and only reordered in
-    // the layout (cheap bookkeeping); only genuinely new/removed series pay for
-    // widget construction/destruction.
-    QHash<int, LegendRow> next_row_by_id;
-    next_row_by_id.reserve(static_cast<int>(all_series.size()));
-
-    for (const PlotSeriesData& s : all_series)
+    QVector<PlotLegendOverlay::Entry> entries;
+    for (const PlotSeriesData& s : m_view_model->allSeries())
     {
-        // Only show visible series; skip whichever lock metric is not active so the
-        // legend matches exactly what is drawn (and honor the active source filter).
+        // Only visible series, and only the active lock metric, so the legend
+        // matches exactly what is drawn (and honors the active source filter).
         if (!m_view_model->effectiveVisible(s))
         {
             continue;
@@ -1222,81 +1161,10 @@ void PlotWidget::rebuildLegend()
         {
             continue;
         }
-
-        LegendRow row = m_legend_row_by_id.take(s.id);
-        if (row.widget == nullptr)
-        {
-            // Read-only row: [line swatch][label]. Both are click-through so a press
-            // anywhere on the content falls to the viewport and starts a drag; color
-            // and name are edited from the Customize Plot Series dialog.
-            row.widget = new QWidget;
-            row.widget->setObjectName("legendRow");
-            row.widget->setAttribute(Qt::WA_TransparentForMouseEvents, true);
-            auto* row_layout = new QHBoxLayout(row.widget);
-            row_layout->setContentsMargins(0, 0, 0, 0);
-            row_layout->setSpacing(6);
-
-            row.swatch = new QLabel;
-            row.swatch->setAttribute(Qt::WA_TransparentForMouseEvents, true);
-            row.swatch->setFixedSize(PlotConstants::kLegendSwatchLen, PlotConstants::kLegendSwatchThick);
-
-            row.label = new QLabel;
-            row.label->setObjectName("legendLabel");
-            row.label->setAttribute(Qt::WA_TransparentForMouseEvents, true);
-
-            row_layout->addWidget(row.swatch, 0, Qt::AlignVCenter);
-            row_layout->addWidget(row.label, 1, Qt::AlignVCenter);
-        }
-        row.swatch->setStyleSheet(QString("background-color: %1; border-radius: 1px;").arg(s.color.name()));
-        row.label->setText(legendDisplayName(s));
-
-        // Re-add regardless of whether the row is new or reused: removeWidget() is
-        // a no-op bookkeeping call for a widget not currently in the layout, and
-        // this guarantees row order always matches all_series order (which can
-        // shift — addStreamData() re-sorts by job submission index as parallel
-        // streams complete out of order) without destroying/recreating widgets.
-        m_legend_rows->removeWidget(row.widget);
-        m_legend_rows->addWidget(row.widget);
-        next_row_by_id.insert(s.id, row);
-
-        const QSize row_hint = row.widget->sizeHint();
-        content_w = qMax(content_w, row_hint.width());
-        content_h += row_hint.height();
-        if (shown > 0)
-        {
-            content_h += PlotConstants::kLegendRowSpacing;
-        }
-        ++shown;
+        entries.push_back(PlotLegendOverlay::Entry{ s.id, legendDisplayName(s), s.color });
     }
 
-    // Rows left in m_legend_row_by_id belong to series that are no longer shown
-    // (hidden, reprocessed away, or axis-view switched) — remove them.
-    for (const LegendRow& row : std::as_const(m_legend_row_by_id))
-    {
-        m_legend_rows->removeWidget(row.widget);
-        row.widget->deleteLater();
-    }
-    m_legend_row_by_id = std::move(next_row_by_id);
-
-    if (shown == 0)
-    {
-        m_legend_overlay->hide();
-        return;
-    }
-
-    // m_legend_rows carries a permanent right-side gutter (set in setUpLayout, same
-    // pixelMetric) so the vertical scrollbar never overlaps a row's text; include it
-    // here so the overlay is sized to fit that reserved space rather than clip it.
-    const int scrollbar_gutter = QApplication::style()->pixelMetric(QStyle::PM_ScrollBarExtent);
-    styleLegendOverlay(m_dark_theme);
-    layoutLegendOverlay(QSize(content_w + scrollbar_gutter, content_h));
-    // The user's show/hide choice wins over "there are rows to draw": keep the
-    // overlay hidden (and out of exports) until they turn it back on.
-    m_legend_overlay->setVisible(m_legend_visible);
-    if (m_legend_visible)
-    {
-        m_legend_overlay->raise();
-    }
+    m_legend->rebuild(entries, m_dark_theme, m_legend_visible);
 }
 
 void PlotWidget::setLegendVisible(bool visible)
@@ -1570,91 +1438,9 @@ void PlotWidget::positionLegendToggle()
     m_overlay_bar->raise();
 }
 
-void PlotWidget::layoutLegendOverlay(const QSize& content)
-{
-    if (m_legend_overlay == nullptr || m_plot == nullptr)
-    {
-        return;
-    }
 
-    const int frame = 2 * PlotConstants::kLegendContentMargin;
 
-    // Cap the legend to a fraction of the chart so a dense plot can't let it grow
-    // to swallow the data; overflow past the height cap scrolls. The scrollbar
-    // gutter is already folded into content's width (see rebuildLegend), so no
-    // further reservation is needed here even when the height cap forces scrolling.
-    const int max_w = qMax(80, static_cast<int>(m_plot->width()  * PlotConstants::kLegendMaxWidthFrac));
-    const int max_h = qMax(60, static_cast<int>(m_plot->height() * PlotConstants::kLegendMaxHeightFrac));
 
-    const int w = qMin(content.width() + frame, max_w);
-    const int h = qMin(content.height() + frame, max_h);
-    m_legend_overlay->resize(w, h);
-
-    // Keep the default top-right anchor until the user drags it; afterwards just
-    // keep it inside the (possibly resized) chart.
-    if (m_legend_user_moved)
-    {
-        clampLegendIntoView();
-    }
-    else
-    {
-        positionLegendTopRight();
-    }
-}
-
-void PlotWidget::positionLegendTopRight()
-{
-    if (m_legend_overlay == nullptr || m_plot == nullptr)
-    {
-        return;
-    }
-    const int m = PlotConstants::kLegendMarginPx;
-    const int x = m_plot->width() - m_legend_overlay->width() - m;
-    m_legend_overlay->move(qMax(m, x), m);
-}
-
-void PlotWidget::clampLegendIntoView()
-{
-    if (m_legend_overlay == nullptr || m_plot == nullptr)
-    {
-        return;
-    }
-    const int m = PlotConstants::kLegendMarginPx;
-    const int max_x = qMax(m, m_plot->width()  - m_legend_overlay->width()  - m);
-    const int max_y = qMax(m, m_plot->height() - m_legend_overlay->height() - m);
-    QPoint p = m_legend_overlay->pos();
-    p.setX(qBound(m, p.x(), max_x));
-    p.setY(qBound(m, p.y(), max_y));
-    m_legend_overlay->move(p);
-}
-
-void PlotWidget::styleLegendOverlay(bool dark)
-{
-    if (m_legend_overlay == nullptr)
-    {
-        return;
-    }
-    const QColor bg     = dark ? QColor(32, 32, 32, PlotConstants::kLegendBgAlpha)
-                               : QColor(255, 255, 255, PlotConstants::kLegendBgAlpha);
-    const QColor border = dark ? QColor(90, 90, 90) : QColor(170, 170, 170);
-    const QColor text   = dark ? QColor(230, 230, 230) : QColor(30, 30, 30);
-    // The app's global theme QSS (resources/win11-{dark,light}.qss) gives every
-    // plain QWidget a solid background-color, so each legend row would otherwise
-    // paint as an opaque chip against the overlay's own translucent background
-    // (a boxed/tabular look). QWidget#legendRow overrides that with a more
-    // specific id selector so only the swatch + text show through.
-    m_legend_overlay->setStyleSheet(QString(
-        "QFrame#legendOverlay { background-color: rgba(%1,%2,%3,%4);"
-        " border: 1px solid %5; border-radius: %6px; }"
-        "QScrollArea#legendScroll { background: transparent; border: none; }"
-        "QWidget#legendContent { background: transparent; }"
-        "QWidget#legendRow { background: transparent; }"
-        "QLabel#legendLabel { background: transparent; color: %7; }")
-        .arg(bg.red()).arg(bg.green()).arg(bg.blue()).arg(bg.alpha())
-        .arg(border.name())
-        .arg(PlotConstants::kLegendCornerRadius)
-        .arg(text.name()));
-}
 
 void PlotWidget::onPlotMouseMove(QMouseEvent* event)
 {
@@ -1812,66 +1598,11 @@ bool PlotWidget::eventFilter(QObject* watched, QEvent* event)
 
     // Keep the legend inside the chart when the chart itself resizes.
     if (watched == m_plot && event->type() == QEvent::Resize
-        && m_legend_overlay != nullptr && m_legend_overlay->isVisible())
+        && m_legend != nullptr && m_legend->isVisible())
     {
-        if (m_legend_user_moved)
-        {
-            clampLegendIntoView();
-        }
-        else
-        {
-            positionLegendTopRight();
-        }
+        m_legend->reposition();
         return false; // let the chart handle its own resize too
     }
 
-    // Drag the legend: content rows are click-through, so presses arrive on the
-    // viewport; presses on the frame padding arrive on the frame itself.
-    const bool on_legend = (watched == m_legend_overlay)
-        || (m_legend_scroll != nullptr && watched == m_legend_scroll->viewport());
-    if (on_legend && m_legend_overlay != nullptr && m_legend_overlay->isVisible())
-    {
-        switch (event->type())
-        {
-            case QEvent::MouseButtonPress:
-            {
-                auto* me = static_cast<QMouseEvent*>(event);
-                if (me->button() == Qt::LeftButton)
-                {
-                    m_dragging_legend   = true;
-                    m_drag_start_global = me->globalPosition().toPoint();
-                    m_legend_start_pos  = m_legend_overlay->pos();
-                    m_legend_overlay->setCursor(Qt::ClosedHandCursor);
-                    return true;
-                }
-                break;
-            }
-            case QEvent::MouseMove:
-            {
-                if (m_dragging_legend)
-                {
-                    auto* me = static_cast<QMouseEvent*>(event);
-                    const QPoint delta = me->globalPosition().toPoint() - m_drag_start_global;
-                    m_legend_overlay->move(m_legend_start_pos + delta);
-                    clampLegendIntoView();
-                    m_legend_user_moved = true;
-                    return true;
-                }
-                break;
-            }
-            case QEvent::MouseButtonRelease:
-            {
-                if (m_dragging_legend)
-                {
-                    m_dragging_legend = false;
-                    m_legend_overlay->setCursor(Qt::OpenHandCursor);
-                    return true;
-                }
-                break;
-            }
-            default:
-                break;
-        }
-    }
     return QWidget::eventFilter(watched, event);
 }

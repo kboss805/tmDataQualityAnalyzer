@@ -409,6 +409,29 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.12.1 tag
 
+#### The legend is its own widget (US4.0)
+
+- **`PlotLegendOverlay`** (`include/view/plotlegendoverlay.h`) owns the movable legend:
+  its rows, its size, where it sits, how it is styled, and the drag that moves it. It was
+  eight `PlotWidget` methods, six members and a nested `LegendRow` struct, with the drag
+  spread across `PlotWidget::eventFilter()`.
+- `PlotWidget` decides *what* to list - which series, in which order, and whether the user
+  wants the legend shown - and hands over a finished `QVector<Entry>`. The overlay knows
+  nothing about `PlotViewModel`.
+- The drag moved with it: presses on the frame's padding are ordinary mouse events on the
+  overlay now, and presses on the click-through rows still arrive via a filter the overlay
+  installs on its own scroll viewport. `PlotWidget::eventFilter()` keeps only the
+  chart-resize hook, which calls `reposition()`.
+- `rowCount()` / `rowAt()` / `rowGutter()` are observation points for the tests, the same
+  role `TmChart`'s accessors play - the tests no longer reach through a friend declaration
+  into a layout.
+- `plotwidget.cpp` 1878 → 1608 lines.
+- **Verified by rendering, not by the suite passing.** The legend was rendered with three
+  series before and after the extraction (`exportImage`, offscreen) and the PNGs are
+  **byte-identical**; the measurements (geometry 950,8 234x54, three rows, 14px scrollbar
+  gutter, 338-char stylesheet) match exactly. The `verify-ui-change` skill exists because
+  the suite asserts almost nothing about appearance, and this is a View refactor.
+
 #### The batch loop leaves the View (US1.1)
 
 - **`MainView` ran a state machine.** Nine members and eight `m_batch_*` fields drove
@@ -1909,7 +1932,12 @@ not mis-read.
 4. **ExportDialog** (`src/view/exportdialog.cpp`, `include/view/exportdialog.h`)
    - Unified export dialog: any combination of CSV data, a plot image (PNG/SVG/PDF), and the log text, each with its own filename/location; checkbox-to-field enable logic and export-button validation
 
-5. **PlotWidget** (`src/view/plotwidget.cpp`, `include/view/plotwidget.h`)
+5. **PlotLegendOverlay** (`src/view/plotlegendoverlay.cpp`, `include/view/plotlegendoverlay.h`)
+   - The movable legend that floats over the chart: a translucent, rounded frame parented to `TmChart`, holding a scrolling single-column list of line-swatch + label rows
+   - Owns its rows (reconciled by series id across rebuilds), its size and placement (top-right until dragged, clamped inside afterwards), its light/dark styling, and the drag itself
+   - Takes a finished list of `Entry{id, label, color}`; `PlotWidget` decides which series belong in it, so the overlay never sees a ViewModel
+
+6. **PlotWidget** (`src/view/plotwidget.cpp`, `include/view/plotwidget.h`)
    - Self-contained `TmChart` chart filling the whole widget - no external control rows; every control (Plot File, View Mode, Customize View, plot title, X/Y axis ranges, Export) lives in the right-click context menu built by `buildContextMenu()`/`showPlotContextMenu()` - plus a movable legend overlay (a translucent, draggable frame parented to the chart; single-column line-swatch + label rows with a vertical scrollbar for dense plots; composited into PNG/SVG exports)
    - Mouse wheel zoom and click-drag pan; `onSeriesVisibilityToggled()` toggles one series without a full rebuild
    - `TmChart` repaints from `paintEvent()`, so there is no replot call to schedule; context-menu entries stay disabled until data loads, and `applyTheme(bool dark)` syncs colors with the app theme

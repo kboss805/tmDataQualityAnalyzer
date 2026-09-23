@@ -22,6 +22,7 @@
 
 #include "constants.h"
 #include "plotviewmodel.h"
+#include "plotlegendoverlay.h"
 #include "plotwidget.h"
 #include "processedstreamdata.h"
 #include "streamconfig.h"
@@ -78,7 +79,7 @@ void TestPlotWidget::legendOverlayPopulatesFromData()
     widget.setViewModel(&vm);
 
     // No data yet: the legend overlay stays hidden.
-    QVERIFY(widget.m_legend_overlay->isHidden());
+    QVERIFY(widget.m_legend->isHidden());
 
     // Add one lock stream (yields a lock + a missed-frames series). addStreamData
     // emits dataChanged(), which drives the widget's rebuildChart + rebuildLegend.
@@ -93,8 +94,8 @@ void TestPlotWidget::legendOverlayPopulatesFromData()
 
     // With the default Lock % view active, only the lock series is visible, so the
     // legend shows exactly one row and is no longer hidden.
-    QVERIFY(!widget.m_legend_overlay->isHidden());
-    QCOMPARE(widget.m_legend_rows->count(), 1);
+    QVERIFY(!widget.m_legend->isHidden());
+    QCOMPARE(widget.m_legend->rowCount(), 1);
 }
 
 void TestPlotWidget::legendOverlaySizesCorrectlyAfterRebuild()
@@ -125,8 +126,8 @@ void TestPlotWidget::legendOverlaySizesCorrectlyAfterRebuild()
 
     // A real, visible row must contribute well beyond the frame's own padding.
     const int frame_only = 2 * PlotConstants::kLegendContentMargin;
-    QVERIFY(widget.m_legend_overlay->width()  > frame_only + 20);
-    QVERIFY(widget.m_legend_overlay->height() > frame_only + 8);
+    QVERIFY(widget.m_legend->width()  > frame_only + 20);
+    QVERIFY(widget.m_legend->height() > frame_only + 8);
 
     // Second stream triggers a full rebuild (old row torn down, two new rows
     // built) — this is the rebuild path that previously collapsed to 12x12.
@@ -139,9 +140,9 @@ void TestPlotWidget::legendOverlaySizesCorrectlyAfterRebuild()
     d2.accumulatedMissedFrames = { 0.0, 0.0, 1.0, 1.0 };
     vm.addStreamData(d2);
 
-    QCOMPARE(widget.m_legend_rows->count(), 2);
-    QVERIFY(widget.m_legend_overlay->width()  > frame_only + 20);
-    QVERIFY(widget.m_legend_overlay->height() > frame_only + 8);
+    QCOMPARE(widget.m_legend->rowCount(), 2);
+    QVERIFY(widget.m_legend->width()  > frame_only + 20);
+    QVERIFY(widget.m_legend->height() > frame_only + 8);
 }
 
 void TestPlotWidget::legendUsesShortNameForSnrSeries()
@@ -165,8 +166,8 @@ void TestPlotWidget::legendUsesShortNameForSnrSeries()
     d.channels.append(ch);
     vm.addStreamData(d);
 
-    QCOMPARE(widget.m_legend_rows->count(), 1);
-    auto* row = widget.m_legend_rows->itemAt(0)->widget();
+    QCOMPARE(widget.m_legend->rowCount(), 1);
+    auto* row = widget.m_legend->rowAt(0);
     QVERIFY(row != nullptr);
     auto* label = qobject_cast<QLabel*>(row->layout()->itemAt(1)->widget());
     QVERIFY(label != nullptr);
@@ -183,7 +184,7 @@ void TestPlotWidget::legendReservesScrollbarGutter()
     PlotWidget widget;
     const int expected_gutter = QApplication::style()->pixelMetric(QStyle::PM_ScrollBarExtent);
     QVERIFY(expected_gutter > 0);
-    QCOMPARE(widget.m_legend_rows->contentsMargins().right(), expected_gutter);
+    QCOMPARE(widget.m_legend->rowGutter(), expected_gutter);
 }
 
 void TestPlotWidget::legendRowsOverrideGlobalWidgetBackground()
@@ -208,12 +209,12 @@ void TestPlotWidget::legendRowsOverrideGlobalWidgetBackground()
     d.accumulatedMissedFrames = { 0.0, 1.0, 1.0 };
     vm.addStreamData(d);
 
-    QCOMPARE(widget.m_legend_rows->count(), 1);
-    auto* row = widget.m_legend_rows->itemAt(0)->widget();
+    QCOMPARE(widget.m_legend->rowCount(), 1);
+    auto* row = widget.m_legend->rowAt(0);
     QVERIFY(row != nullptr);
     QCOMPARE(row->objectName(), QString("legendRow"));
 
-    const QString stylesheet = widget.m_legend_overlay->styleSheet();
+    const QString stylesheet = widget.m_legend->styleSheet();
     QVERIFY(stylesheet.contains("QWidget#legendRow"));
     QVERIFY(stylesheet.contains("background: transparent"));
 }
@@ -646,20 +647,20 @@ void TestPlotWidget::legendToggleShowsAndHidesLegend()
     widget.setLegendVisible(true);   // known starting state (the pref is persisted)
     addLockStream(vm, "Ch 5", 5);
 
-    QVERIFY(!widget.m_legend_overlay->isHidden());
+    QVERIFY(!widget.m_legend->isHidden());
 
     // Hiding via the on-chart toggle takes the legend off the chart - and with it
     // out of exported images, since exportImage only composites a visible overlay.
     widget.setLegendVisible(false);
-    QVERIFY(widget.m_legend_overlay->isHidden());
+    QVERIFY(widget.m_legend->isHidden());
     QVERIFY(!widget.m_legend_toggle->isChecked());
 
     // A rebuild (e.g. another stream finishing) must not resurrect it.
     addLockStream(vm, "Ch 6", 6);
-    QVERIFY(widget.m_legend_overlay->isHidden());
+    QVERIFY(widget.m_legend->isHidden());
 
     widget.setLegendVisible(true);
-    QVERIFY(!widget.m_legend_overlay->isHidden());
+    QVERIFY(!widget.m_legend->isHidden());
     QVERIFY(widget.m_legend_toggle->isChecked());
 }
 
@@ -724,7 +725,7 @@ void TestPlotWidget::contextMenuShowLegendMirrorsToggle()
         // triggered(newState), so it must NOT be pre-set here.
         act->trigger();
     }
-    QVERIFY(widget.m_legend_overlay->isHidden());
+    QVERIFY(widget.m_legend->isHidden());
     QVERIFY(!widget.m_legend_toggle->isChecked());
 
     // Reopening the menu shows the updated state (it is rebuilt per request).
