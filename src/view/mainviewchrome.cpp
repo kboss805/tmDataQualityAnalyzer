@@ -32,6 +32,17 @@
 #include "constants.h"
 #include "mainviewmodel.h"
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <windowsx.h>
+#endif
+
 namespace
 {
 
@@ -383,4 +394,125 @@ void MainView::updateRecentFilesMenu()
     connect(clear_action, &QAction::triggered, this, [this]() {
         m_view_model->clearRecentFiles();
     });
+}
+
+// ---------------------------------------------------------------------------
+// Frameless window: the title bar's own behaviour
+//
+// The bar above is a plain widget where the window's caption used to be, so
+// Windows must be told which parts of it still act like a caption - dragging,
+// resizing, snapping, double-click to maximize. That is what nativeEvent()
+// answers, and why the maximize glyph is kept in step here rather than in the
+// window's general wiring.
+// ---------------------------------------------------------------------------
+
+void MainView::updateMaximizeButton()
+{
+    if (m_max_button == nullptr)
+        return;
+    const bool maximized = isMaximized();
+    // ChromeRestore / ChromeMaximize from the Windows icon font (see setUpTitleBar).
+    m_max_button->setText(QChar(maximized ? UIConstants::kGlyphRestore : UIConstants::kGlyphMaximize));
+    m_max_button->setToolTip(maximized ? tr("Restore") : tr("Maximize"));
+}
+
+void MainView::changeEvent(QEvent* event)
+{
+    if (event->type() == QEvent::WindowStateChange)
+        updateMaximizeButton();
+    QMainWindow::changeEvent(event);
+}
+
+bool MainView::nativeEvent(const QByteArray& eventType, void* message, qintptr* result)
+{
+#ifdef _WIN32
+    if (eventType == "windows_generic_MSG" && message != nullptr)
+    {
+        MSG* msg = static_cast<MSG*>(message);
+        switch (msg->message)
+        {
+        case WM_NCCALCSIZE:
+            // Strip the native title bar: the client area becomes the whole window.
+            if (msg->wParam == TRUE)
+            {
+                // When maximized, inset by the frame thickness so the client doesn't
+                // spill off-screen or cover the taskbar.
+                if (::IsZoomed(msg->hwnd))
+                {
+                    auto* params = reinterpret_cast<NCCALCSIZE_PARAMS*>(msg->lParam);
+                    const int fx = ::GetSystemMetrics(SM_CXFRAME) + ::GetSystemMetrics(SM_CXPADDEDBORDER);
+                    const int fy = ::GetSystemMetrics(SM_CYFRAME) + ::GetSystemMetrics(SM_CXPADDEDBORDER);
+                    params->rgrc[0].left   += fx;
+                    params->rgrc[0].right  -= fx;
+                    params->rgrc[0].top    += fy;
+                    params->rgrc[0].bottom -= fy;
+                }
+                *result = 0;
+                return true;
+            }
+            break;
+
+        case WM_NCHITTEST:
+        {
+            // Report resize borders + the draggable caption so Windows still does
+            // move/resize/snap/double-click-maximize natively.
+            RECT rc;
+            ::GetWindowRect(msg->hwnd, &rc);
+            const long gx = GET_X_LPARAM(msg->lParam);
+            const long gy = GET_Y_LPARAM(msg->lParam);
+            const long lx = gx - rc.left;
+            const long ly = gy - rc.top;
+            const long w  = rc.right - rc.left;
+            const long h  = rc.bottom - rc.top;
+
+            const double dpr     = devicePixelRatioF();
+            const long   border  = static_cast<long>(8 * dpr);
+            const long   titleH  = static_cast<long>(UIConstants::kTitleBarHeight * dpr);
+
+            if (!::IsZoomed(msg->hwnd))
+            {
+                const bool onL = lx < border, onR = lx >= w - border;
+                const bool onT = ly < border, onB = ly >= h - border;
+                if (onT && onL) { *result = HTTOPLEFT;     return true; }
+                if (onT && onR) { *result = HTTOPRIGHT;    return true; }
+                if (onB && onL) { *result = HTBOTTOMLEFT;  return true; }
+                if (onB && onR) { *result = HTBOTTOMRIGHT; return true; }
+                if (onL)        { *result = HTLEFT;   return true; }
+                if (onR)        { *result = HTRIGHT;  return true; }
+                if (onT)        { *result = HTTOP;    return true; }
+                if (onB)        { *result = HTBOTTOM; return true; }
+            }
+
+            // Client-relative coordinates (not window-relative): when maximized,
+            // WM_NCCALCSIZE insets the client by the frame thickness, so lx/ly would
+            // be offset by that inset for the strip check and childAt() below.
+            POINT client_pt{ gx, gy };
+            ::ScreenToClient(msg->hwnd, &client_pt);
+
+            if (client_pt.y >= 0 && client_pt.y < titleH)
+            {
+                // Any actual button on the strip (hamburger, sidebar toggle, window
+                // controls) must receive clicks; the empty space between them is the
+                // draggable caption. Detecting the child widget under the cursor keeps
+                // this correct no matter how many buttons the title bar grows.
+                const QPoint local(static_cast<int>(client_pt.x / dpr),
+                                   static_cast<int>(client_pt.y / dpr));
+                const bool on_button = qobject_cast<QToolButton*>(childAt(local)) != nullptr;
+                *result = on_button ? HTCLIENT : HTCAPTION;
+                return true;
+            }
+
+            *result = HTCLIENT;
+            return true;
+        }
+        default:
+            break;
+        }
+    }
+#else
+    Q_UNUSED(eventType);
+    Q_UNUSED(message);
+    Q_UNUSED(result);
+#endif
+    return QMainWindow::nativeEvent(eventType, message, result);
 }
