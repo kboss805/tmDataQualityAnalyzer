@@ -99,6 +99,7 @@ SOURCES += \
     src/view/plotcustomizationdialog.cpp \
     src/view/processingprogressdialog.cpp \
     src/view/plotlegendoverlay.cpp \
+    src/view/plotcontextmenu.cpp \
     src/view/plotwidget.cpp \
     src/view/tmchart.cpp
 
