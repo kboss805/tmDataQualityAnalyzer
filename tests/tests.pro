@@ -46,6 +46,7 @@ SOURCES += \
     $$PWD/../src/view/mainview.cpp \
     $$PWD/../src/view/streamconfigdialog.cpp \
     $$PWD/../src/view/streamsubdialogs.cpp \
+    $$PWD/../src/view/plotlegendoverlay.cpp \
     $$PWD/../src/view/plotwidget.cpp \
     $$PWD/../src/view/tmchart.cpp \
     $$PWD/../src/view/plotcustomizationdialog.cpp \
@@ -86,6 +87,7 @@ HEADERS += \
     $$PWD/../include/view/mainview.h \
     $$PWD/../include/view/streamconfigdialog.h \
     $$PWD/../include/view/streamsubdialogs.h \
+    $$PWD/../include/view/plotlegendoverlay.h \
     $$PWD/../include/view/plotwidget.h \
     $$PWD/../include/view/tmchart.h \
     $$PWD/../include/view/plotcustomizationdialog.h \

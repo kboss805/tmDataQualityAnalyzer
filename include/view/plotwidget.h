@@ -23,6 +23,7 @@ class QMenu;
 
 #include "tmchart.h"
 
+class PlotLegendOverlay;
 class PlotViewModel;
 
 /**
@@ -134,19 +135,7 @@ private:
                          const QString& entered_start, const QString& entered_stop);
     /// Rebuilds the floating legend's rows from current ViewModel series visibility.
     void rebuildLegend();
-    /// Sizes the legend overlay to fit @p content (height/width capped) and
-    /// positions/clamps it in view. @p content is the natural, unconstrained size
-    /// of the legend rows, computed by the caller (rebuildLegend()) directly from
-    /// each row's sizeHint() — NOT re-derived here from the container widget, since
-    /// QWidget::sizeHint() on the QScrollArea's content widget can go stale once
-    /// the scroll area has resized it down on an earlier, sparser rebuild.
-    void layoutLegendOverlay(const QSize& content);
-    /// Places the legend at its default top-right corner inside the chart.
-    void positionLegendTopRight();
-    /// Clamps the legend fully inside the chart's current bounds.
-    void clampLegendIntoView();
     /// Applies the translucent background, border, and text colors for the theme.
-    void styleLegendOverlay(bool dark);
     /// Applies the overlay chips' theme-appropriate glyphs and styling.
     void styleLegendToggle(bool dark);
     /// Anchors the overlay chip bar at the chart's top-left (the legend itself
@@ -219,28 +208,9 @@ private:
 
     /// @name Legend overlay (movable box floating over the chart, child of m_plot)
     /// @{
-    QFrame*      m_legend_overlay   = nullptr; ///< Translucent, rounded, draggable frame.
-    QScrollArea* m_legend_scroll    = nullptr; ///< Scroll area inside the frame (vertical scroll for dense plots).
-    QWidget*     m_legend_widget    = nullptr; ///< Inner container holding one row per visible series.
-    QVBoxLayout* m_legend_rows      = nullptr; ///< Single-column list of swatch+label rows.
-    bool         m_dragging_legend  = false;   ///< True while the user is dragging the legend.
-    bool         m_legend_user_moved = false;  ///< True once dragged; suppresses the top-right auto-anchor.
-    QPoint       m_drag_start_global;          ///< Global cursor position captured at drag start.
-    QPoint       m_legend_start_pos;           ///< Legend top-left (in m_plot coords) at drag start.
+    PlotLegendOverlay* m_legend = nullptr; ///< Owns its rows, size, placement, styling and drag.
+    /// @{
 
-    /// One legend row's widgets, kept together so rebuildLegend() can update an
-    /// existing row's swatch color/label text in place instead of destroying and
-    /// recreating it every time a stream completes.
-    struct LegendRow
-    {
-        QWidget* widget = nullptr;
-        QLabel*  swatch = nullptr;
-        QLabel*  label  = nullptr;
-    };
-    /// Series id → its legend row, for incremental reconcile across appends —
-    /// mirrors m_series_index_by_id so a run with many streams doesn't rebuild every
-    /// row's widgets from scratch on each stream's completion.
-    QHash<int, LegendRow> m_legend_row_by_id;
     /// Overlay chip bar floating at the chart's top-left: the only persistent
     /// on-chart chrome. Holds the legend toggle, the View Mode chip and the
     /// self-hiding Reset chip. Deliberately an overlay rather than an external
