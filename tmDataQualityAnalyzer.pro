@@ -85,6 +85,7 @@ SOURCES += \
 SOURCES += \
     src/viewmodel/mainviewmodel.cpp \
     src/viewmodel/processingcoordinator.cpp \
+    src/viewmodel/batchcontroller.cpp \
     src/viewmodel/plotviewmodel.cpp
 
 # View: widgets and dialogs
@@ -153,6 +154,7 @@ HEADERS += \
 HEADERS += \
     include/viewmodel/mainviewmodel.h \
     include/viewmodel/processingcoordinator.h \
+    include/viewmodel/batchcontroller.h \
     include/viewmodel/plotviewmodel.h
 
 # View: widgets and dialogs

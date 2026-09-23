@@ -41,6 +41,7 @@ SOURCES += \
     $$PWD/../src/model/tomlconfighelper.cpp \
     $$PWD/../src/viewmodel/mainviewmodel.cpp \
     $$PWD/../src/viewmodel/processingcoordinator.cpp \
+    $$PWD/../src/viewmodel/batchcontroller.cpp \
     $$PWD/../src/viewmodel/plotviewmodel.cpp \
     $$PWD/../src/view/mainview.cpp \
     $$PWD/../src/view/streamconfigdialog.cpp \
@@ -80,6 +81,7 @@ HEADERS += \
     $$PWD/../include/dto/processingtemplate.h \
     $$PWD/../include/viewmodel/mainviewmodel.h \
     $$PWD/../include/viewmodel/processingcoordinator.h \
+    $$PWD/../include/viewmodel/batchcontroller.h \
     $$PWD/../include/viewmodel/plotviewmodel.h \
     $$PWD/../include/view/mainview.h \
     $$PWD/../include/view/streamconfigdialog.h \
@@ -132,6 +134,7 @@ SOURCES += \
     tst_channeldata.cpp \
     tst_chapter10reader.cpp \
     tst_constants.cpp \
+    tst_batchcontroller.cpp \
     tst_mainview.cpp \
     tst_mainviewmodel_helpers.cpp \
     tst_framesetup.cpp \
@@ -155,6 +158,7 @@ HEADERS += \
     tst_channeldata.h \
     tst_chapter10reader.h \
     tst_constants.h \
+    tst_batchcontroller.h \
     tst_mainview.h \
     tst_mainviewmodel_helpers.h \
     tst_framesetup.h \

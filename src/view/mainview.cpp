@@ -31,6 +31,7 @@
 #include <QWidgetAction>
 
 #include "batchapplydialog.h"
+#include "batchcontroller.h"
 #include "chapter10reader.h"
 #include "constants.h"
 #include "mainviewmodel.h"
@@ -42,7 +43,6 @@
 #include "processingtemplateschema.h"
 #include "source.h"
 #include "streamconfigdialog.h"
-#include "templatematcher.h"
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -248,6 +248,7 @@ void MainView::setUpMainLayout()
 
     // PlotWidget as central widget — fills all space right of the sidebar dock
     m_plot_view_model = new PlotViewModel(this);
+    m_batch = new BatchController(m_view_model, m_plot_view_model, this);
     m_plot_widget = new PlotWidget;
     m_plot_widget->setViewModel(m_plot_view_model);
     m_plot_widget->setMinimumWidth(PlotConstants::kPlotDockMinWidth);
@@ -647,6 +648,22 @@ bool MainView::nativeEvent(const QByteArray& eventType, void* message, qintptr* 
 
 void MainView::setUpConnections()
 {
+    // The batch loop renders through the widget (only the widget can draw the
+    // plot) and reports through the log, so the View supplies both.
+    m_batch->setImageExporter([this](const QString& path) {
+        return m_plot_widget->exportImage(path);
+    });
+    connect(m_batch, &BatchController::message, this,
+            [this](MainViewModel::LogLevel level, const QString& text) {
+                switch (level)
+                {
+                    case MainViewModel::LogLevel::Error:   logError(text);   break;
+                    case MainViewModel::LogLevel::Warning: logWarning(text); break;
+                    case MainViewModel::LogLevel::Success: logSuccess(text); break;
+                    case MainViewModel::LogLevel::Info:    onLogMessage(text); break;
+                }
+            });
+
     // ViewModel -> View: data binding
     connect(m_view_model, &MainViewModel::fileLoadedChanged, this, &MainView::updateStatusBar);
     connect(m_view_model, &MainViewModel::recentFilesChanged, this, &MainView::updateRecentFilesMenu);
@@ -772,9 +789,9 @@ void MainView::onStreamProcessed(const ProcessedStreamData& data)
 
 void MainView::onProcessingFinished(bool success)
 {
-    if (m_batch_active)
+    if (m_batch->active())
     {
-        onBatchProcessingFinished(success);
+        m_batch->onProcessingFinished(success);
         return;
     }
 
@@ -865,41 +882,6 @@ void MainView::importFileButtonPressed()
     openPath(filename);
 }
 
-ProcessingTemplate MainView::buildTemplateFromSource(const Source& src) const
-{
-    ProcessingTemplate tmpl;
-    tmpl.appVersion       = AppVersion::toString();
-    tmpl.name             = QFileInfo(src.filepath).baseName();
-    tmpl.timeChannelIndex = src.timeChannelIndex;
-    tmpl.swapBytes        = src.swapBytes;
-
-    for (const StreamConfig& cfg : src.streamConfigs)
-    {
-        TemplateStreamEntry entry;
-        entry.config = cfg;
-
-        // Capture the current appearance of every plot series this stream produced,
-        // keyed (within the entry) by metric/receiver/channel. Only series from this
-        // source and this stream's channel id are this entry's; a non-processed
-        // stream produces none, leaving the appearance list empty.
-        for (const PlotSeriesData& series : m_plot_view_model->allSeries())
-        {
-            if (series.sourceId != src.sourceId || series.streamOrder != cfg.pcmChannelId)
-                continue;
-
-            SeriesAppearance appearance;
-            appearance.metricType    = series.metricType;
-            appearance.receiverIndex = series.receiverIndex;
-            appearance.channelIndex  = series.channelIndex;
-            appearance.name          = series.name;
-            appearance.color         = series.color;
-            entry.appearance.append(appearance);
-        }
-
-        tmpl.entries.append(entry);
-    }
-    return tmpl;
-}
 
 void MainView::saveTemplateButtonPressed()
 {
@@ -935,7 +917,8 @@ void MainView::saveTemplateButtonPressed()
     if (path.isEmpty())
         return;
 
-    const ProcessingTemplate tmpl = buildTemplateFromSource(sources.at(source_index));
+    const ProcessingTemplate tmpl =
+        BatchController::buildTemplate(sources.at(source_index), *m_plot_view_model);
     const QJsonDocument doc = ProcessingTemplateSchema::toJson(tmpl);
 
     QFile file(path);
@@ -1001,9 +984,9 @@ void MainView::onSourceReadyForStreamConfig()
 {
     // addSource() is now driven only by the Apply Template batch loop, which applies
     // the template's configs to each file without a per-file Configure Streams step.
-    if (m_batch_active)
+    if (m_batch->active())
     {
-        applyBatchSourceConfig();
+        m_batch->onSourceReady();
     }
 }
 
@@ -1035,30 +1018,48 @@ void MainView::showStreamConfigDialogForPendingSource(bool clearPlotFirst)
 namespace
 {
     /// Human-readable reason a file's channel set didn't match a template.
-    QString describeMismatch(const TemplateMatcher::MatchResult& match)
+}
+
+void MainView::confirmAndStartBatch(const ProcessingTemplate& tmpl, const QStringList& files,
+                                    bool showReuseAppearance)
+{
+    // Validating reads every file's channel list, so it is the slow part of
+    // starting a batch; the dialog then shows which files will run and which are
+    // rejected, and why.
+    const QVector<BatchController::FileCheck> checks = BatchController::validate(tmpl, files);
+
+    QList<BatchApplyDialog::FileEntry> entries;
+    QStringList matched;
+    entries.reserve(checks.size());
+    for (const BatchController::FileCheck& check : checks)
     {
-        QStringList parts;
-        if (!match.missing.isEmpty())
+        BatchApplyDialog::FileEntry entry;
+        entry.filepath = check.filepath;
+        entry.ok       = check.ok;
+        entry.reason   = check.reason;
+        entries.append(entry);
+        if (check.ok)
         {
-            QStringList ids;
-            for (int id : match.missing)
-                ids << QString::number(id);
-            parts << QObject::tr("missing channel(s) %1").arg(ids.join(", "));
+            matched.append(check.filepath);
         }
-        if (!match.extra.isEmpty())
-        {
-            QStringList ids;
-            for (int id : match.extra)
-                ids << QString::number(id);
-            parts << QObject::tr("extra channel(s) %1").arg(ids.join(", "));
-        }
-        return parts.join("; ");
     }
+
+    BatchApplyDialog dialog(entries, m_last_ch10_dir, showReuseAppearance, this);
+    if (dialog.exec() != QDialog::Accepted || matched.isEmpty())
+    {
+        return;
+    }
+
+    BatchController::Options options;
+    options.exportPerFile   = dialog.exportPerFile();
+    options.reuseAppearance = dialog.reuseAppearance();
+    options.outputDir       = dialog.outputDir();
+    m_batch->start(tmpl, matched, options);
 }
 
 void MainView::applyTemplateButtonPressed()
 {
-    if (m_view_model->processing() || m_batch_active)
+    if (m_view_model->processing() || m_batch->active())
     {
         return;
     }
@@ -1118,246 +1119,14 @@ void MainView::applyTemplateButtonPressed()
         return;
     }
 
-    startBatchFromTemplate(tmpl, picked, /*showReuseAppearance=*/true);
+    confirmAndStartBatch(tmpl, picked, /*showReuseAppearance=*/true);
 }
 
-void MainView::startBatchFromTemplate(const ProcessingTemplate& tmpl, const QStringList& files,
-                                      bool showReuseAppearance)
-{
-    // Validate each file's channel set against the template, up front, so the
-    // dialog can show which files will run and which are rejected (and why).
-    QList<BatchApplyDialog::FileEntry> entries;
-    entries.reserve(files.size());
-    for (const QString& file_path : files)
-    {
-        BatchApplyDialog::FileEntry entry;
-        entry.filepath = file_path;
 
-        Chapter10Reader reader;
-        if (!reader.loadChannels(file_path))
-        {
-            entry.ok = false;
-            entry.reason = tr("could not read channels");
-        }
-        else
-        {
-            const TemplateMatcher::MatchResult match =
-                TemplateMatcher::matchFile(tmpl, reader.getPCMChannelList());
-            entry.ok = match.ok;
-            if (!match.ok)
-                entry.reason = describeMismatch(match);
-        }
-        entries.append(entry);
-    }
 
-    // Confirm output options (merged vs separate, appearance reuse, output dir).
-    BatchApplyDialog dialog(entries, m_last_ch10_dir, showReuseAppearance, this);
-    if (dialog.exec() != QDialog::Accepted)
-    {
-        return;
-    }
 
-    // Kick off the batch over the matched files only.
-    m_batch_files.clear();
-    for (const BatchApplyDialog::FileEntry& e : entries)
-    {
-        if (e.ok)
-            m_batch_files.append(e.filepath);
-    }
-    if (m_batch_files.isEmpty())
-    {
-        return;
-    }
 
-    m_batch_template         = tmpl;
-    m_batch_export_per_file  = dialog.exportPerFile();
-    m_batch_reuse_appearance = dialog.reuseAppearance();
-    m_batch_output_dir       = dialog.outputDir();
-    m_batch_index            = 0;
-    m_batch_processed        = 0;
-    m_batch_skipped          = 0;
-    m_batch_active           = true;
 
-    // A batch always starts a fresh session/plot.
-    m_view_model->clearState();
-    m_plot_view_model->clearData();
-
-    logSuccess(tr("Processing %1 file(s)...").arg(m_batch_files.size()));
-    advanceBatch();
-}
-
-void MainView::advanceBatch()
-{
-    while (m_batch_index < m_batch_files.size())
-    {
-        const QString path = m_batch_files.at(m_batch_index);
-
-        if (!QFileInfo::exists(path))
-        {
-            logWarning("Skipped missing batch file: " + path);
-            ++m_batch_skipped;
-            ++m_batch_index;
-            continue;
-        }
-
-        // Every file is retained in memory (accumulated onto the shared axis) so the
-        // user can browse them via the plot toolbar's file selector; per-file export,
-        // if requested, runs as a post-pass in finishBatch().
-        m_view_model->addSource(path);
-        return; // wait for onSourceReadyForStreamConfig()
-    }
-
-    finishBatch();
-}
-
-void MainView::applyBatchSourceConfig()
-{
-    // Belt-and-suspenders re-check against the freshly loaded file (the up-front
-    // validation could be stale if the file changed on disk since it was picked).
-    const TemplateMatcher::MatchResult match =
-        TemplateMatcher::matchFile(m_batch_template, m_view_model->reader()->getPCMChannelList());
-    if (!match.ok)
-    {
-        logWarning("Skipped (channels no longer match template): "
-                   + QFileInfo(m_view_model->inputFilename()).fileName());
-        ++m_batch_skipped;
-        ++m_batch_index;
-        advanceBatch();
-        return;
-    }
-
-    // Files match exactly, so the template's stored pcmChannelIds are correct for
-    // this file -- feed its configs straight through to processing.
-    QVector<StreamConfig> configs;
-    configs.reserve(m_batch_template.entries.size());
-    for (const TemplateStreamEntry& entry : m_batch_template.entries)
-        configs.append(entry.config);
-
-    m_view_model->setTimeChannelIndex(m_batch_template.timeChannelIndex);
-    // A batch is one vendor's files, so the template's byte order applies to all.
-    m_view_model->setSwapBytes(m_batch_template.swapBytes);
-    m_view_model->setStreamConfigs(configs);
-    m_view_model->startProcessing();
-}
-
-void MainView::onBatchProcessingFinished(bool success)
-{
-    const QString base = QFileInfo(m_view_model->inputFilename()).baseName();
-
-    if (success)
-    {
-        ++m_batch_processed;
-
-        // The just-finished run was appended as the newest source before this
-        // signal (MainViewModel::onCoordinatorProcessingFinished).
-        const int sourceId = m_view_model->sources().isEmpty()
-            ? 0 : m_view_model->sources().last().sourceId;
-
-        // Label the source for the plot toolbar's file selector, and reapply the
-        // template's saved names/colors onto this file's fresh series.
-        m_plot_view_model->setSourceLabel(sourceId, base);
-        if (m_batch_reuse_appearance)
-            reapplyTemplateAppearance(sourceId);
-    }
-    else
-    {
-        ++m_batch_skipped;
-        logError("Batch file failed to process: " + base);
-    }
-
-    ++m_batch_index;
-    advanceBatch();
-}
-
-void MainView::reapplyTemplateAppearance(int sourceId)
-{
-    for (const TemplateStreamEntry& entry : m_batch_template.entries)
-    {
-        for (const SeriesAppearance& appearance : entry.appearance)
-        {
-            for (const PlotSeriesData& series : m_plot_view_model->allSeries())
-            {
-                if (series.sourceId != sourceId
-                    || series.streamOrder != entry.config.pcmChannelId
-                    || series.metricType != appearance.metricType
-                    || series.receiverIndex != appearance.receiverIndex
-                    || series.channelIndex != appearance.channelIndex)
-                {
-                    continue;
-                }
-                m_plot_view_model->renameSeriesById(series.id, appearance.name);
-                m_plot_view_model->recolorSeriesById(series.id, appearance.color);
-                break;
-            }
-        }
-    }
-    // renameSeriesById/recolorSeriesById are pure setters; one commit refreshes views.
-    m_plot_view_model->commitAppearanceChanges();
-}
-
-void MainView::finishBatch()
-{
-    m_batch_active = false;
-
-    const QVector<Source>& sources = m_view_model->sources();
-
-    // Optional per-file export post-pass: isolate each source in turn (so the CSV
-    // and the rendered images both cover just that file), then export. Runs over the
-    // fully-retained plot after all files are processed.
-    if (m_batch_export_per_file)
-    {
-        // One CSV per file (carries every metric's columns), plus, when the batch has
-        // frame-sync data, a separate image for each left-axis metric: Frame Sync
-        // Lock % and Accumulated Missed Frames. Restore the user's view afterward.
-        const PlotViewModel::LockAxisView original_view = m_plot_view_model->lockAxisView();
-        const bool has_frame_sync = m_plot_view_model->hasLockSeries()
-                                    || m_plot_view_model->hasMissedFramesSeries();
-
-        for (const Source& src : sources)
-        {
-            const QString base = QFileInfo(src.filepath).baseName();
-            m_plot_view_model->setVisibleSource(src.sourceId); // rebuilds chart to this file
-
-            const QString csv_path = QDir(m_batch_output_dir).filePath(base + ".csv");
-            if (m_plot_view_model->exportCsv(csv_path, src.sourceId))
-                logSuccess("Exported: " + csv_path);
-            else
-                logError("Failed to export CSV: " + csv_path);
-
-            if (has_frame_sync)
-            {
-                m_plot_view_model->setLockAxisView(PlotViewModel::LockAxisView::LockPercent);
-                m_plot_widget->exportImage(QDir(m_batch_output_dir).filePath(base + "_framesync_lock.png"));
-                m_plot_view_model->setLockAxisView(PlotViewModel::LockAxisView::MissedFrames);
-                m_plot_widget->exportImage(QDir(m_batch_output_dir).filePath(base + "_missed_frames.png"));
-            }
-            else
-            {
-                m_plot_widget->exportImage(QDir(m_batch_output_dir).filePath(base + ".png"));
-            }
-        }
-
-        m_plot_view_model->setLockAxisView(original_view);
-    }
-
-    // Default the plot to the first processed file (browse intent); a single file
-    // leaves the selector disabled and shows everything. "All files (overlaid)" is
-    // available from the dropdown.
-    if (sources.size() > 1)
-    {
-        m_plot_view_model->setVisibleSource(sources.first().sourceId);
-        m_plot_view_model->setPlotTitle(QFileInfo(sources.first().filepath).baseName());
-    }
-    else if (sources.size() == 1)
-    {
-        m_plot_view_model->setPlotTitle(QFileInfo(sources.first().filepath).baseName());
-    }
-
-    logSuccess(tr("Batch complete: %1 processed, %2 skipped.%3")
-                   .arg(m_batch_processed).arg(m_batch_skipped)
-                   .arg(m_batch_export_per_file ? tr(" Output written to %1.").arg(m_batch_output_dir)
-                                                : QString()));
-}
 
 QString MainView::fullManualPathIn(const QString& app_root)
 {

@@ -11,6 +11,7 @@
 #include "tst_constants.h"
 #include "tst_frameprocessor.h"
 #include "tst_framesetup.h"
+#include "tst_batchcontroller.h"
 #include "tst_mainview.h"
 #include "tst_mainviewmodel_helpers.h"
 #include "tst_plotviewmodel.h"
@@ -114,6 +115,7 @@ int main(int argc, char* argv[])
     status |= runSuite<TestMainViewModelHelpers>(log_path);
     status |= runSuite<TestFrameSetup>(log_path);
     status |= runSuite<TestPlotViewModel>(log_path);
+    status |= runSuite<TestBatchController>(log_path);
     status |= runSuite<TestMainView>(log_path);
     status |= runSuite<TestPlotWidget>(log_path);
     status |= runSuite<TestTmChart>(log_path);

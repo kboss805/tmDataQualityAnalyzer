@@ -15,6 +15,7 @@
 #include "processingtemplate.h"
 
 class MainViewModel;
+class BatchController;
 class PlotViewModel;
 class PlotWidget;
 class ProcessingProgressDialog;
@@ -58,6 +59,12 @@ private slots:
     /// against the template, and (on confirm) batch-processes every matching file
     /// (retaining all in memory; optional per-file CSV+image export).
     void applyTemplateButtonPressed();
+    /// Validates @p files against @p tmpl, shows the confirmation dialog
+    /// (@p showReuseAppearance gates the appearance option) and, on confirm, hands
+    /// the matched files to BatchController. The View's half of starting a batch:
+    /// the dialog and the file picking, not the run.
+    void confirmAndStartBatch(const ProcessingTemplate& tmpl, const QStringList& files,
+                              bool showReuseAppearance);
     /// Toggles between light and dark themes.
     void onToggleTheme();
 
@@ -123,35 +130,6 @@ private:
     /// metadata for, then starts processing on Accept. @p clearPlotFirst is true
     /// for a fresh Open (new session) and false for Add Source (accumulate).
     void showStreamConfigDialogForPendingSource(bool clearPlotFirst);
-    /// Builds a ProcessingTemplate from @p src's stream configs, capturing each
-    /// stream's current series appearance (name/color) from the plot ViewModel.
-    ProcessingTemplate buildTemplateFromSource(const Source& src) const;
-    /// Shared batch kickoff: validates each of @p files against @p tmpl's channel
-    /// set, shows BatchApplyDialog (@p showReuseAppearance gates the appearance
-    /// option), and on confirm starts the batch run. Used by both Apply Template
-    /// and Open Multiple Files.
-    void startBatchFromTemplate(const ProcessingTemplate& tmpl, const QStringList& files,
-                                bool showReuseAppearance);
-
-    /// @name Batch apply state machine (one sequential run per matched file)
-    /// @{
-    /// Starts the next not-yet-processed batch file: addSource() and waits for
-    /// onSourceReadyForStreamConfig(); calls finishBatch() once every file has been
-    /// attempted.
-    void advanceBatch();
-    /// Applies the batch template's stream configs to the just-loaded file (after
-    /// re-validating its channel set) and starts processing -- the batch
-    /// counterpart of applyPendingSessionSourceConfig().
-    void applyBatchSourceConfig();
-    /// Handles a batch file's processing completion: reapplies template appearance,
-    /// exports (separate mode), then advances to the next file.
-    void onBatchProcessingFinished(bool success);
-    /// Re-applies the batch template's captured series names/colors onto the
-    /// freshly-created series of @p sourceId, matched by channel id + metric/rx/ch.
-    void reapplyTemplateAppearance(int sourceId);
-    /// Finalizes the batch: sets a merged title or logs the separate-output summary.
-    void finishBatch();
-    /// @}
 
     void saveLastCh10Dir();                              ///< Persists m_last_ch10_dir to QSettings.
     /// Routes a path to the .ch10 processing pipeline or the CSV importer by extension.
@@ -190,19 +168,11 @@ private:
     QMenu* m_help_menu = nullptr;            ///< Help submenu (User Manual, About).
 
     QString m_last_ch10_dir;                 ///< Last directory used in the Open file dialog (.ch10/.csv).
+    BatchController* m_batch = nullptr;      ///< Apply Template batch loop (US1.1).
     QString m_pending_csv_path;              ///< CSV import in flight; finalized on the plot's load result.
 
     /// @name Batch apply state (Batch Apply)
     /// @{
-    bool m_batch_active = false;             ///< True while a batch-apply run is in flight.
-    ProcessingTemplate m_batch_template;     ///< The template being applied to every batch file.
-    QStringList m_batch_files;               ///< The matched files to process, in order.
-    int  m_batch_index = 0;                  ///< Index into m_batch_files of the file in flight.
-    bool m_batch_export_per_file = false;    ///< True = also write a CSV+image per file (post-pass) to m_batch_output_dir.
-    bool m_batch_reuse_appearance = true;    ///< True = reapply the template's saved series names/colors.
-    QString m_batch_output_dir;              ///< Output folder for per-file CSV/image exports.
-    int  m_batch_processed = 0;              ///< Count of files successfully processed this batch.
-    int  m_batch_skipped = 0;                ///< Count of files skipped/failed this batch.
     /// @}
 };
 #endif // MAINVIEW_H
