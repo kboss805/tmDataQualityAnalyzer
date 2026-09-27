@@ -58,6 +58,13 @@ Name: "fileassoc"; Description: "Associate .ch10 files with {#MyAppName}"; Group
 ; adds the fuller illustrated walkthrough alongside it.
 Name: "fullmanual"; Description: "Install the full illustrated user manual"; GroupDescription: "Documentation:"
 
+[InstallDelete]
+; v2.13.0 and earlier shipped vc_redist.x64.exe (25.6 MB) inside bin\, staged by
+; windeployqt and never run by anything - the CRT is deployed as loose DLLs instead.
+; Inno leaves files behind when they simply stop being in the package, so without
+; this an upgrade from <= v2.13.0 would keep paying for it on disk forever.
+Type: files; Name: "{app}\bin\vc_redist.x64.exe"
+
 [Files]
 ; Application binaries and Qt dependencies (from bin/ staging)
 Source: "{#StagingDir}\bin\*"; DestDir: "{app}\bin"; Flags: ignoreversion recursesubdirs createallsubdirs

@@ -1,62 +1,38 @@
-tmDataQualityAnalyzer v2.13.0 - What's New
+tmDataQualityAnalyzer v2.13.1 - What's New
 =================================
 
-  This release is about the plot. Large recordings no longer bog the plot window
-  down, both ends of both Y axes can now be pinned, and a few menu entries moved
-  to where you would look for them.
-
-  Improved:
-
-  - The plot is dramatically faster on large recordings. Twelve channels of an
-    hour at 10 ms resolution used to take about a minute and a half to redraw -
-    and a redraw happens every time you pan, zoom, or move the mouse across the
-    chart, which is what made the window feel stuck. The same plot now redraws
-    in a small fraction of a second. Zooming in is faster still, because only
-    the part of the recording you are looking at is drawn.
-
-    Nothing about your data changed - every sample is still processed, still
-    exported to CSV, and still read out by the crosshair. Only the drawing
-    changed.
-
-  - Reading a plot is also quicker to set up: moving the crosshair or dragging
-    the legend no longer causes the whole plot to be rebuilt.
-
-  New:
-
-  - You can now set the MINIMUM of either Y axis, not just the maximum.
-    Right-click the plot and use Y Axes > Set Left Min... or Set Right Min...
-
-    This matters most for frame sync lock. Healthy streams all sit in the top
-    two or three percent of a 0-100% axis, where they overlap into a single line
-    across the top of the plot. Set the left minimum to 98 and the difference
-    between 98.4% and 99.7% fills the whole plot.
-
-    A limit you do not set still scales automatically, and Y Axes > Reset puts
-    all four back to automatic. You cannot turn an axis inside out: if you raise
-    a minimum past its maximum, the maximum moves up out of the way.
-
-  - The main menu's Open and Save as Template entries now carry a folder and a
-    save icon, matching the buttons in the stream setup dialogs.
-
-  Changed:
-
-  - Export... has been removed from the plot's right-click menu. It writes a
-    CSV, an image and the log, which is a file operation rather than a plot
-    control, so it now lives in one place only: the main menu, under
-    Import/Export, next to Import CSV. Nothing about exporting itself changed.
-
-  - Exit is now the last entry in the main menu, below Help, instead of sitting
-    among the file commands.
+  A packaging fix. The application itself is unchanged from v2.13.0 - if you are
+  already running that version, nothing you do in the program will behave any
+  differently.
 
   Fixed:
 
+  - The installer was more than twice the size it needed to be. It carried a
+    copy of the Microsoft Visual C++ redistributable installer that was never
+    run: the Visual C++ files the application actually needs have always been
+    installed alongside the program itself, so the extra copy did nothing but
+    take up space - both in the download and on your disk afterwards.
+
+    The installer is now 18.4 MB instead of 41.0 MB - less than half - and the
+    installed folder is about 25 MB smaller. Nothing was removed that the
+    application uses.
+
+    The portable ZIP is unaffected - it never contained the extra copy.
+
+  If you are installing over v2.13.0, the leftover file is removed for you as
+  part of the upgrade. Your settings are untouched, as always.
+
+  ---
+
+  New in v2.13.0, if you are coming from an earlier version:
+
+  - The plot is dramatically faster on large recordings - twelve channels of an
+    hour at 10 ms resolution went from about a minute and a half per redraw to a
+    small fraction of a second.
+  - You can now set the MINIMUM of either Y axis, not just the maximum
+    (right-click the plot, Y Axes). Setting the left minimum to 98 spreads a set
+    of frame sync lock streams that all sit near 100% across the whole plot.
   - The Derandomize setting is now saved to and restored from frame sync pattern
-    files. Previously only Invert Data was saved, so loading a pattern file for
-    a randomized stream meant ticking Derandomize by hand every time. Pattern
-    files written before this release are still read correctly - they simply
-    leave your current Derandomize setting alone rather than clearing it.
-
-  Also in this release:
-
-  - The built-in manual now shows both tabs of the Customize View dialog, and
-    its right-click menu figure has been brought up to date.
+    files.
+  - Export... moved off the plot's right-click menu; it lives in the main menu
+    under Import/Export. Exit is now the last entry in the main menu.

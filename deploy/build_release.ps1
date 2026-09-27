@@ -147,7 +147,12 @@ New-Item -ItemType Directory -Force -Path "$PortableRoot\settings\framesync_patt
 # --- Step 3: Copy exe and run windeployqt for installer layout ---
 Write-Host "[4/7] Running windeployqt (installer layout)..."
 Copy-Item "$ProjectDir\build\release\tmDataQualityAnalyzer.exe" "$InstallerStage\bin\"
-& windeployqt --release --no-translations --no-opengl-sw --no-system-d3d-compiler "$InstallerStage\bin\tmDataQualityAnalyzer.exe"
+# --no-compiler-runtime: windeployqt otherwise stages vc_redist.x64.exe (25.6 MB) into
+# bin\, and the .iss ships bin\* wholesale - so every installer carried a redist
+# INSTALLER that nothing ever runs, roughly a third of the payload. The CRT is deployed
+# as loose DLLs a few lines below instead, which is what both the installed and the
+# portable layout actually need.
+& windeployqt --release --no-translations --no-opengl-sw --no-system-d3d-compiler --no-compiler-runtime "$InstallerStage\bin\tmDataQualityAnalyzer.exe"
 if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
 
 # App-local Visual C++ runtime: copy the CRT redist DLLs next to the exe so the

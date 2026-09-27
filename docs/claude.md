@@ -8,7 +8,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, `cl` / `nmake`), Qt `msvc2022_64` kit.
   This is the only supported toolchain (and what CI uses).
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
-- **Project Version**: 2.13.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
+- **Project Version**: 2.13.1 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
 
 ## User Stories
 
@@ -407,6 +407,50 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The menu and title-bar icons swap to theme-appropriate variants when the theme changes.
 
 ## Version History
+
+### v2.13.1 — A Third of the Installer Was a Redistributable Nothing Ran
+
+The application binary is functionally identical to v2.13.0; this release exists to
+fix what was in the installer around it.
+
+#### The installer no longer ships an unused Visual C++ redistributable (US8.0)
+
+- **`vc_redist.x64.exe` (25.6 MB) was inside every installer, and nothing ever ran it.**
+  `windeployqt` stages it into `bin\` unless told otherwise, and the `.iss` ships
+  `bin\*` wholesale, so it travelled into the setup and then sat in the installed
+  `{app}\bin` directory forever.
+- The redist was never the mechanism anyway: `build_release.ps1` copies the CRT DLLs
+  (`vcruntime140*`, `msvcp140*`) next to the exe, because that is what serves the
+  **portable** layout too - a ZIP cannot run an installer. The script's own comment
+  said so; the flag to stop staging it was simply never passed.
+- `--no-compiler-runtime` on the windeployqt call. Installer payload **77 MB → 51.8 MB**,
+  setup.exe **41.0 MB → 18.4 MB** - a bigger drop than the raw 25.6 MB suggests,
+  because an already-compressed executable does not compress again inside the setup,
+  so it was contributing close to its full size. The portable ZIP is unchanged, because its layout
+  never included the redist.
+- **Found by testing the installer rather than by reading it.** A dependency-closure
+  walk over the payload - every import of every DLL resolved against the payload plus
+  the known Windows set - turned it up as the one entry whose own dependencies pointed
+  at an installer's world (`msi.dll`, `wintrust.dll`, `cabinet.dll`) rather than the
+  application's.
+
+#### Verified on an installed copy, not just in the staging directory
+
+The same checks that found it were re-run against the rebuilt installer:
+
+- Silent per-user install to a scratch directory, with the `.ch10` file association
+  task deliberately off.
+- **Launched with Qt absent from `PATH` and `QTDIR` cleared** - the condition a clean
+  machine puts the app in. Every `Qt6*.dll`, the CRT, and `platforms\qwindows.dll`
+  loaded from the install directory rather than the system. That plugin is the classic
+  omission: without it the app dies at startup with no window and no useful error.
+- Uninstall removes the program files, the Start Menu entry and the uninstall registry
+  entry; `settings\` is deliberately left behind (`uninsneveruninstall`, US8.0).
+
+**What this still does not prove:** first-run behaviour on a machine that has never
+held this application's settings or registry state - in particular the `new_x.toml`
+merge path when a shipped default gains fields a user's file lacks. That needs a
+genuinely clean Windows target; Windows 11 Home offers neither Sandbox nor Hyper-V.
 
 ### v2.13.0 — The Plot Stops Choking, and Both Y Axes Take Limits
 
