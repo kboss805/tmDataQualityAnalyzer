@@ -27,6 +27,8 @@ private slots:
     void hiddenAxisReclaimsItsMargin();
     void renderToPaintsData();
     void denseSeriesStillDrawsASingleSampleDropout();
+    void linePersistsWhenNoSampleIsInsideTheView();
+    void rangeChangeRedrawsInsteadOfReusingGeometry();
     void exportOmitsCursorOverlays();
 };
 
