@@ -78,6 +78,10 @@ $Images = [ordered]@{
     # Y axis - the reason each entry declares its own rectangle rather than sharing
     # the standard one.
     'Main Context Menu.png'                          = @(14, 45, 1918, 1055)
+    # The Y Axes submenu, captured the same way and for the same reason as the menu
+    # above: a popup cannot be grabbed with its parent any other way. 1946x1129 with
+    # the sidebar hidden, so like its sibling the crop starts at the left edge.
+    'Y Axes Submenu.png'                             = @(14, 45, 1918, 1060)
     'FrameSync Perctentage Plot with Legend.png'     = $true
     'FrameSync Perctentage Plot without Legend.png'  = $true
     'Frame Error Accumulation Plot with Legend.png'  = $true

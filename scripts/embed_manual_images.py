@@ -110,7 +110,14 @@ after('<p>Right-click anywhere on the chart. Entries stay disabled until a file 
           'The plot’s right-click menu — every plot control lives here. Entries that need more than '
           'one loaded file, such as Plot File, stay disabled until they apply.',
           'The plot right-click menu open over a chart, showing Set Plot Title, Plot File, '
-          'View Mode (V), Customize View, Show Legend, Readout, X Axis, Y Axes, Reset View and Export'))
+          'View Mode (V), Customize View, Show Legend, Readout, X Axis, Y Axes and Reset View')
+    + fig('Y Axes Submenu.png',
+          'Y Axes, opened. Either end of either axis can be pinned, and a limit left alone still '
+          'scales to the data — so setting only the left minimum to 98 spreads a set of streams '
+          'that all sit near 100% across the whole plot instead of overlapping in one line at the '
+          'top. Reset returns all four to automatic.',
+          'The Y Axes submenu open beside the plot right-click menu, showing Set Left Min, '
+          'Set Left Max, Set Right Min, Set Right Max and Reset'))
 
 after('accumulation line.</p>',
       fig('FrameSync Perctentage Plot with Legend.png',
