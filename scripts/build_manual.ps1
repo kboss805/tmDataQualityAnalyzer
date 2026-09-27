@@ -51,9 +51,14 @@ $MaxWidth     = 1200
 # the one place where the contrast itself is the subject.
 $Images = [ordered]@{
     'Config Streams Dialg.png'                       = $false  # already a dialog-sized capture
-    # Full-screen grab (app floating over the IDE), 1973x1137 - the chart sits at a
-    # different offset, so this one carries its own rectangle.
-    'Main Context Menu.png'                          = @(425, 63, 1520, 1045)
+    # Full-screen grab (app floating over the IDE), 1949x1107 - the chart sits at a
+    # different offset, so this one carries its own rectangle. Re-captured for the
+    # menu that no longer carries Export; this capture has the log sidebar HIDDEN,
+    # so the crop starts at the left edge. The previous rectangle began at x=425 to
+    # skip a sidebar that was open then, and reusing it here would have cut off the
+    # Y axis - the reason each entry declares its own rectangle rather than sharing
+    # the standard one.
+    'Main Context Menu.png'                          = @(14, 45, 1918, 1055)
     'FrameSync Perctentage Plot with Legend.png'     = $true
     'FrameSync Perctentage Plot without Legend.png'  = $true
     'Frame Error Accumulation Plot with Legend.png'  = $true
@@ -129,6 +134,12 @@ $Images = [ordered]@{
 }
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+
+# Clear previous output first: processed/ is gitignored build output, and a
+# capture that gets renamed otherwise leaves its old file behind forever. Three
+# such leftovers had accumulated, which is what made the directory useless as a
+# record of what the manual actually uses.
+if (Test-Path $OutDir) { Remove-Item (Join-Path $OutDir '*.png') -Force }
 
 Write-Host "Processing screenshots..."
 foreach ($name in $Images.Keys) {

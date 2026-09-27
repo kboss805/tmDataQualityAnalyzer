@@ -142,7 +142,13 @@ void MainView::setUpChrome()
     // --- Process ---
     addMenuSection(menu, tr("Process"));
 
+    // The folder and save glyphs are the SAME resources the setup dialogs use for
+    // their Load/Save TOML buttons, rather than new artwork: a menu entry and a
+    // toolbutton that both mean "open a file" should not be drawn two ways. Unlike
+    // export/import these carry their own colour (yellow, blue) and read on both
+    // themes, so they are set once here instead of in applyActionIconsForTheme().
     m_open_action = menu->addAction("Open...");
+    m_open_action->setIcon(QIcon(":/resources/folder-open.svg"));
     m_open_action->setShortcut(QKeySequence::Open);
     connect(m_open_action, &QAction::triggered, this, &MainView::inputFileButtonPressed);
 
@@ -154,6 +160,7 @@ void MainView::setUpChrome()
     // file-path-independent template for Batch Apply. It needs at least one
     // finished source, so it starts disabled.
     m_save_template_action = menu->addAction("Save as Template...");
+    m_save_template_action->setIcon(QIcon(":/resources/floppy-save.svg"));
     m_save_template_action->setEnabled(false);
     connect(m_save_template_action, &QAction::triggered, this, &MainView::saveTemplateButtonPressed);
 

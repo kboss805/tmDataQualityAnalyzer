@@ -410,6 +410,44 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.12.1 tag
 
+#### The menu carries icons, the tests carry the resources, and both manual tabs are shown (US1.0, US8.0)
+
+- **Open and Save as Template carry the folder and save glyphs** - the same
+  `folder-open.svg` / `floppy-save.svg` the setup dialogs use for Load/Save, not new
+  artwork: a menu entry and a toolbutton that both mean "open a file" should not be
+  drawn two ways. They carry their own colour and read on both themes, so unlike
+  export/import they need no per-theme variant.
+- **The test binary had no Qt resources at all.** `RESOURCES` was listed inline in the
+  app `.pro`, and qmake derives each alias from the file's path *relative to the .pro
+  that lists it* - so the app resolved `:/resources/folder-open.svg` while a test
+  building from `tests/` resolved the same file as `:/folder-open.svg`. Every icon in
+  every widget under test was a null QIcon, and 96 `qt.svg` warnings scrolled past on
+  each run. Nothing failed, because a widget whose icon is missing still constructs and
+  still lays out - it simply draws nothing, which is precisely the class of defect the
+  UI tests exist to catch. A shared `resources.qrc` (paths inside a `.qrc` resolve
+  relative to the `.qrc`) plus `resources.pri` gives both binaries the same prefix.
+  **96 warnings to 0.**
+- `openAndSaveTemplateCarryIcons` asserts both icons are non-null *and* that each
+  produces a non-empty pixmap - a QIcon built from a missing or malformed SVG is
+  non-null but draws nothing, so the first check alone would pass on artwork that never
+  appears.
+- **The base manual now shows both Customize View tabs.** The Receiver SNR tree was in
+  the walkthroughs only - and the walkthroughs are an *optional* install, so a user who
+  declined them saw one half of a two-tab dialog. Same reasoning as v2.12.1 moving the
+  receiver SNR field descriptions into the base manual.
+- **The manual build now fails on a capture that reaches neither manual**, and warns on
+  a capture sitting in `docs/manual_images/` that is registered nowhere (three were:
+  two deliberate legend-variant spares and `walk-app-02-sidebar.png`). A capture can be
+  placed two ways - a `fig()` call or a `{{FIG:}}` placeholder - and checking only one
+  reports figures as orphaned when they are not; both funnel through `fig()`, which is
+  what makes the check honest. `build_manual.ps1` also clears `processed/` first: it is
+  gitignored build output, and three stale files from renamed captures had accumulated
+  there, enough to make any check against that directory meaningless.
+- `Main Context Menu.png` is **re-captured** for the menu without Export. Its crop
+  rectangle changed with it - the new capture has the log sidebar hidden, and the old
+  rectangle began at x=425 to skip a sidebar that was open then, so reusing it would
+  have cut off the Y axis.
+
 #### Export leaves the plot's context menu, and Exit moves to the bottom (US4.1, US6.0)
 
 Two menu corrections, both about what belongs where.

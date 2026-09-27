@@ -193,31 +193,8 @@ HEADERS += \
     lib/irig106/include/i106_decode_tmats_common.h \
     lib/irig106/include/i106_decode_pcmf1.h \
 
-RESOURCES += \
-    resources/win11-dark.qss \
-    resources/win11-light.qss \
-    resources/icon.ico \
-    resources/checkmark.svg \
-    resources/chevron-down-dark.svg \
-    resources/chevron-down-light.svg \
-    resources/chevron-right-dark.svg \
-    resources/chevron-right-light.svg \
-    resources/chevron-down-disabled-dark.svg \
-    resources/chevron-down-disabled-light.svg \
-    resources/folder-open.svg \
-    resources/floppy-save.svg \
-    resources/play.svg \
-    resources/gear.svg \
-    resources/retry.svg \
-    resources/export-dark.svg \
-    resources/export-light.svg \
-    resources/import-dark.svg \
-    resources/import-light.svg \
-    resources/toggle-on-dark.svg \
-    resources/toggle-off-dark.svg \
-    resources/toggle-on-light.svg \
-    resources/toggle-off-light.svg \
-    resources/usermanual.html
+# Shared with tests/tests.pro so the two cannot drift - see resources.pri.
+include($$PWD/resources.pri)
 
 RC_FILE = resources/tmDataQualityAnalyzer_resource.rc
 
