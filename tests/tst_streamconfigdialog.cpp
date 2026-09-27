@@ -160,6 +160,80 @@ void TestStreamConfigDialog::tomlFrameSyncSaveRoundtrip()
     QFile::remove(tmpFile);
 }
 
+void TestStreamConfigDialog::tomlFrameSyncRoundTripsStreamFormatFlags()
+{
+    // Derandomize and Invert Data both describe the recording's signal format -
+    // US2.0 calls NRZ-L / RNRZ-L a PCM code format, like the sync pattern - so both
+    // belong in the file. The version of this test being replaced wrote a TOML by
+    // hand and asserted that a key it had never written was absent, so it never
+    // touched saveFrameSyncToToml and could not have caught this.
+    const QString path = QDir::tempPath() + "/tst_framesync_flags.toml";
+    QFile::remove(path);
+
+    QString toml_dir;
+    saveFrameSyncToToml(path, "FE6B2840", "FFFFFFFF", 800,
+                        /*inverted=*/true, /*randomized=*/true, toml_dir);
+
+    QSettings in(path, TomlConfigHelper::format());
+    QCOMPARE(in.value("Frame/FrameSync").toString(), QString("FE6B2840"));
+    QCOMPARE(in.value("Frame/BitsPerFrame").toInt(), 800);
+    QCOMPARE(in.value("Frame/Inverted").toBool(), true);
+    QCOMPARE(in.value("Frame/Randomized").toBool(), true);
+
+    // ...and loading puts both flags back on the widgets.
+    QLineEdit sync;
+    QLineEdit mask;
+    QSpinBox  bits;
+    bits.setRange(PCMConstants::kMinFrameLengthBits, 65536);
+    QCheckBox inverted;
+    QCheckBox randomized;
+    loadFrameSyncFromToml(path, &sync, &mask, &bits, toml_dir, &inverted, &randomized);
+    QCOMPARE(sync.text(), QString("FE6B2840"));
+    QCOMPARE(bits.value(), 800);
+    QVERIFY(inverted.isChecked());
+    QVERIFY(randomized.isChecked());
+
+    // A file written before Randomized was persisted - every shipped PRN pattern -
+    // carries no key, and must leave the operator's current choice alone rather
+    // than silently clearing it.
+    const QString legacy = QDir::tempPath() + "/tst_framesync_legacy.toml";
+    QFile::remove(legacy);
+    {
+        QSettings out(legacy, TomlConfigHelper::format());
+        out.beginGroup("Frame");
+        out.setValue("FrameSync", "334AABBF");
+        out.setValue("BitsPerFrame", 32767);
+        out.endGroup();
+        out.sync();
+    }
+    randomized.setChecked(true);
+    loadFrameSyncFromToml(legacy, &sync, &mask, &bits, toml_dir, &inverted, &randomized);
+    QCOMPARE(sync.text(), QString("334AABBF"));
+    QVERIFY(randomized.isChecked());
+
+    QFile::remove(path);
+    QFile::remove(legacy);
+}
+
+void TestStreamConfigDialog::tomlFrameSyncOmitsPerSessionFields()
+{
+    // The other half of the US1.0 boundary: Data Rate and Sample Rate are per-session
+    // operator inputs and stay out of the file, so loading a pattern never changes
+    // the rate a stream is processed at.
+    const QString path = QDir::tempPath() + "/tst_framesync_scope.toml";
+    QFile::remove(path);
+
+    QString toml_dir;
+    saveFrameSyncToToml(path, "FE6B2840", "FFFFFFFF", 800,
+                        /*inverted=*/false, /*randomized=*/false, toml_dir);
+
+    QSettings in(path, TomlConfigHelper::format());
+    QVERIFY(!in.contains("Frame/DataRate"));
+    QVERIFY(!in.contains("Frame/SampleRate"));
+
+    QFile::remove(path);
+}
+
 void TestStreamConfigDialog::tomlFrameSyncLoadPopulatesThreeFields()
 {
     // Write a TOML file with exactly the keys loadFrameSyncToml expects.
@@ -178,46 +252,7 @@ void TestStreamConfigDialog::tomlFrameSyncLoadPopulatesThreeFields()
     QCOMPARE(cfg.value("Frame/WordsInMinorFrame").toInt(), 64);
 }
 
-void TestStreamConfigDialog::tomlFrameSyncSaveDoesNotWriteRandomized()
-{
-    // Confirm the scope boundary: a saved frame-sync TOML must NOT contain
-    // Randomized — it is below the wireframe separator.
-    QTemporaryFile tmp;
-    QVERIFY(tmp.open());
-    tmp.close();
 
-    QSettings out(tmp.fileName(), TomlConfigHelper::format());
-    out.beginGroup("Frame");
-    out.setValue("FrameSync",         "FE6B2840");
-    out.setValue("FrameSyncMask",     "FFFFFFFF");
-    out.setValue("WordsInMinorFrame", 48);
-    out.endGroup();
-    out.sync();
-
-    QSettings in(tmp.fileName(), TomlConfigHelper::format());
-    QVERIFY(!in.contains("Frame/Randomized"));
-}
-
-void TestStreamConfigDialog::tomlFrameSyncSaveDoesNotWriteDataRate()
-{
-    // Confirm the scope boundary: a saved frame-sync TOML must NOT contain
-    // DataRate — it is below the wireframe separator.
-    QTemporaryFile tmp;
-    QVERIFY(tmp.open());
-    tmp.close();
-
-    QSettings out(tmp.fileName(), TomlConfigHelper::format());
-    out.beginGroup("Frame");
-    out.setValue("FrameSync",         "FE6B2840");
-    out.setValue("FrameSyncMask",     "FFFFFFFF");
-    out.setValue("WordsInMinorFrame", 48);
-    out.endGroup();
-    out.sync();
-
-    QSettings in(tmp.fileName(), TomlConfigHelper::format());
-    QVERIFY(!in.contains("Frame/DataRate"));
-    QVERIFY(!in.contains("Frame/DataRateMbps"));
-}
 
 // ---------------------------------------------------------------------------
 // Validation (US7.0)

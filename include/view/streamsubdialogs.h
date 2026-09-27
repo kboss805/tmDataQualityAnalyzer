@@ -53,6 +53,31 @@ namespace DialogLayout {
     constexpr int kCheckboxLabelGap = 6;   ///< Gap between a checkbox and its text label.
 }
 
+/// Loads frame sync fields from a TOML file into the given widgets. Handles both
+/// the current BitsPerFrame key and the older WordsInMinorFrame one.
+///
+/// Randomized is applied only when the file carries the key: files written before
+/// it was persisted (including the shipped PRN patterns) must not silently clear a
+/// choice the operator has already made.
+void loadFrameSyncFromToml(const QString& filename,
+                           QLineEdit* syncEdit,
+                           QLineEdit* maskEdit,
+                           QSpinBox*  bitsSpinBox,
+                           QString&   toml_dir,
+                           QCheckBox* invertedBox = nullptr,
+                           QCheckBox* randomizedBox = nullptr);
+
+/// Saves frame sync fields to a TOML file: the pattern, the mask, the frame length,
+/// and the two stream-format flags (Invert Data, Derandomize). Data Rate and Sample
+/// Rate stay out - they are per-session operator inputs (US1.0).
+void saveFrameSyncToToml(const QString& filename,
+                         const QString& syncPattern,
+                         const QString& syncMask,
+                         int            bitsPerFrame,
+                         bool           inverted,
+                         bool           randomized,
+                         QString&       toml_dir);
+
 void styleIconButton(QPushButton* button, int size);
 
 /// Default Receiver SNR frame parameters (pattern, mask, bits-per-frame),

@@ -96,63 +96,6 @@ void addSeparator(QVBoxLayout* layout, QWidget* parent)
     layout->addLayout(wrapper);
 }
 
-/// Loads frame sync fields from a TOML file into the provided widgets.
-/// Handles both the new BitsPerFrame key and the old WordsInMinorFrame key for
-/// backward compatibility with previously saved files.
-void loadFrameSyncFromToml(const QString& filename,
-                           QLineEdit* syncEdit,
-                           QLineEdit* maskEdit,
-                           QSpinBox*  bitsSpinBox,
-                           QString&   toml_dir,
-                           QCheckBox* invertedBox = nullptr)
-{
-    toml_dir = QFileInfo(filename).absolutePath();
-    QSettings cfg(filename, TomlConfigHelper::format());
-
-    QString sync = cfg.value("Frame/FrameSync").toString();
-    if (!sync.isEmpty())
-        syncEdit->setText(sync.toUpper());
-
-    QString mask = cfg.value("Frame/FrameSyncMask").toString();
-    if (!mask.isEmpty())
-        maskEdit->setText(mask.toUpper());
-
-    int bits = cfg.value("Frame/BitsPerFrame", 0).toInt();
-    if (bits < PCMConstants::kMinFrameLengthBits)
-    {
-        // Fall back to old WordsInMinorFrame key (words × 16 bits)
-        int words = cfg.value("Frame/WordsInMinorFrame", 0).toInt();
-        if (words >= 2)
-            bits = words * PCMConstants::kCommonWordLen;
-    }
-    if (bits >= PCMConstants::kMinFrameLengthBits)
-        bitsSpinBox->setValue(bits);
-
-    if (invertedBox)
-    {
-        bool inv = cfg.value("Frame/Inverted", false).toBool();
-        invertedBox->setChecked(inv);
-    }
-}
-
-/// Saves frame sync fields to a TOML file.
-void saveFrameSyncToToml(const QString& filename,
-                         const QString& syncPattern,
-                         const QString& syncMask,
-                         int            bitsPerFrame,
-                         bool           inverted,
-                         QString&       toml_dir)
-{
-    toml_dir = QFileInfo(filename).absolutePath();
-    QSettings cfg(filename, TomlConfigHelper::format());
-    cfg.beginGroup("Frame");
-    cfg.setValue("FrameSync",     syncPattern);
-    cfg.setValue("FrameSyncMask", syncMask);
-    cfg.setValue("BitsPerFrame",  bitsPerFrame);
-    cfg.setValue("Inverted",      inverted);
-    cfg.endGroup();
-    cfg.sync();
-}
 
 /// Makes @p control the same height as @p reference, so combo boxes line up with
 /// the line edits sharing their row.
@@ -270,6 +213,76 @@ void addCheckboxRow(QVBoxLayout* layout, QWidget* parent, QCheckBox* box, const 
 
 } // namespace
 
+/// Loads frame sync fields from a TOML file into the provided widgets.
+/// Handles both the new BitsPerFrame key and the old WordsInMinorFrame key for
+/// backward compatibility with previously saved files.
+void loadFrameSyncFromToml(const QString& filename,
+                           QLineEdit* syncEdit,
+                           QLineEdit* maskEdit,
+                           QSpinBox*  bitsSpinBox,
+                           QString&   toml_dir,
+                           QCheckBox* invertedBox,
+                           QCheckBox* randomizedBox)
+{
+    toml_dir = QFileInfo(filename).absolutePath();
+    QSettings cfg(filename, TomlConfigHelper::format());
+
+    QString sync = cfg.value("Frame/FrameSync").toString();
+    if (!sync.isEmpty())
+        syncEdit->setText(sync.toUpper());
+
+    QString mask = cfg.value("Frame/FrameSyncMask").toString();
+    if (!mask.isEmpty())
+        maskEdit->setText(mask.toUpper());
+
+    int bits = cfg.value("Frame/BitsPerFrame", 0).toInt();
+    if (bits < PCMConstants::kMinFrameLengthBits)
+    {
+        // Fall back to old WordsInMinorFrame key (words × 16 bits)
+        int words = cfg.value("Frame/WordsInMinorFrame", 0).toInt();
+        if (words >= 2)
+            bits = words * PCMConstants::kCommonWordLen;
+    }
+    if (bits >= PCMConstants::kMinFrameLengthBits)
+        bitsSpinBox->setValue(bits);
+
+    if (invertedBox)
+    {
+        bool inv = cfg.value("Frame/Inverted", false).toBool();
+        invertedBox->setChecked(inv);
+    }
+
+    // Only applied when the file actually carries the key. Every frame-sync TOML
+    // written before this field was persisted - including the shipped PRN files -
+    // has no Randomized entry, and defaulting those to false would silently clear
+    // a setting the operator had already made.
+    if (randomizedBox && cfg.contains("Frame/Randomized"))
+    {
+        randomizedBox->setChecked(cfg.value("Frame/Randomized").toBool());
+    }
+}
+
+/// Saves frame sync fields to a TOML file.
+void saveFrameSyncToToml(const QString& filename,
+                         const QString& syncPattern,
+                         const QString& syncMask,
+                         int            bitsPerFrame,
+                         bool           inverted,
+                         bool           randomized,
+                         QString&       toml_dir)
+{
+    toml_dir = QFileInfo(filename).absolutePath();
+    QSettings cfg(filename, TomlConfigHelper::format());
+    cfg.beginGroup("Frame");
+    cfg.setValue("FrameSync",     syncPattern);
+    cfg.setValue("FrameSyncMask", syncMask);
+    cfg.setValue("BitsPerFrame",  bitsPerFrame);
+    cfg.setValue("Inverted",      inverted);
+    cfg.setValue("Randomized",    randomized);
+    cfg.endGroup();
+    cfg.sync();
+}
+
 /// Sizes an icon-only button so its SVG icon fills the button, with a
 /// transparent, borderless background.
 void styleIconButton(QPushButton* button, int size)
@@ -373,7 +386,7 @@ FrameLockSetupDialog::FrameLockSetupDialog(const StreamConfig& cfg,
             tr("TOML Files (*.toml);;All Files (*.*)"));
         if (!filename.isEmpty())
             loadFrameSyncFromToml(filename, m_fs.syncPattern, m_fs.syncMask,
-                                  m_fs.bitsPerFrame, m_toml_dir, m_inverted);
+                                  m_fs.bitsPerFrame, m_toml_dir, m_inverted, m_randomized);
     });
     connect(saveBtn, &QPushButton::clicked, this, [this]() {
         QString filename = QFileDialog::getSaveFileName(
@@ -386,6 +399,7 @@ FrameLockSetupDialog::FrameLockSetupDialog(const StreamConfig& cfg,
                             m_fs.syncMask->text().trimmed().toUpper(),
                             m_fs.bitsPerFrame->value(),
                             m_inverted->isChecked(),
+                            m_randomized->isChecked(),
                             m_toml_dir);
     });
 
@@ -807,7 +821,7 @@ ReceiverSNRDialog::ReceiverSNRDialog(const StreamConfig& cfg,
                 tr("TOML Files (*.toml);;All Files (*.*)"));
             if (!filename.isEmpty())
                 loadFrameSyncFromToml(filename, m_fs.syncPattern, m_fs.syncMask,
-                                     m_fs.bitsPerFrame, m_toml_dir, m_inverted);
+                                     m_fs.bitsPerFrame, m_toml_dir, m_inverted, m_randomized);
         });
         connect(saveBtn1, &QPushButton::clicked, this, [this]() {
             QString filename = QFileDialog::getSaveFileName(
@@ -820,6 +834,7 @@ ReceiverSNRDialog::ReceiverSNRDialog(const StreamConfig& cfg,
                                 m_fs.syncMask->text().trimmed().toUpper(),
                                 m_fs.bitsPerFrame->value(),
                                 m_inverted->isChecked(),
+                                m_randomized->isChecked(),
                                 m_toml_dir);
         });
 
