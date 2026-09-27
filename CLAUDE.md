@@ -65,9 +65,10 @@ Invoke explicitly (`/build-and-test`) or let them trigger by intent.
   flags exactly.
 - **Frame sync:** lock % is a **bit-span** quantity, not `time × bitrate`. Reject off-phase syncs
   while locked. Don't double-count missed frames (gap extrapolation only when a window has zero bits).
-- **TOML boundary:** frame-sync Load/Save round-trips ONLY sync pattern, sync mask, words/frame —
-  `Randomized`/`Data Rate`/`Sample Rate` are per-session and excluded. Calibration profiles are
-  session-only, never serialized.
+- **TOML boundary:** frame-sync Load/Save round-trips the sync pattern, sync mask, words/frame and
+  the two **stream-format flags** (`Inverted`, `Randomized`) — they describe the recording's PCM code
+  format, like the pattern itself. `Data Rate`/`Sample Rate` are per-session operator inputs and stay
+  out. Calibration profiles are session-only, never serialized.
 
 ## Memory
 

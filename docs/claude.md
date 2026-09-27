@@ -32,7 +32,8 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The dialog window allows the user to specify the framesync pattern, frame length, framesync mask, and bitrate parameters for each telemetry stream.
 - [x] The dialog window allows the user to recall/restore previous frame parameters for each stream using configuration files.
 
-  - **Scope:** Frame-sync Load/Save round-trips ONLY frame sync pattern, sync mask, and words/frame (bits per frame). Randomized, Data Rate, and Sample Rate are per-session operator inputs and are intentionally excluded — this is the meaning of the separator line in the setup-dialog wireframe. Keep `loadFrameSyncToml`/`saveFrameSyncToml` symmetric and do not widen them past that boundary.
+  - **Scope:** Frame-sync Load/Save round-trips the frame sync pattern, sync mask, words/frame (bits per frame), and the two stream-format flags — **Invert Data** and **Derandomize**. Those two describe how the recording's bits are encoded (US2.0 calls NRZ-L / RNRZ-L a PCM code format), so a saved pattern file is only usable if it carries them: loading PRN-15 into a randomized stream and having to tick Derandomize by hand every time is the bug this fixes. **Data Rate** and **Sample Rate** stay out — the first is usually TMATS-derived and the second is an output resolution the operator chooses per session, so neither belongs to the pattern. Keep `loadFrameSyncFromToml`/`saveFrameSyncToToml` symmetric.
+  - **Compatibility:** a file with no `Randomized` key (every pattern file written before this, including the shipped PRN ones) leaves the operator's current choice alone rather than clearing it.
 - [x] The dialog window allows the user to specify the SNR signal data parameters to be used for SNR signal data streams.
 - [x] The dialog window allows the user to recall/restore previous SNR signal data parameters using configuration files.
 - [x] The dialog window closes when the user clicks the "Process" button.
@@ -545,6 +546,15 @@ attempt at all.
   preload from the dialog rather than from `StepDetector`: the shipped default
   when the stream has no file, the stream's own file when it has one, and the
   default again when a stored path no longer resolves.
+- The two tests that guarded the old boundary **never called the production code**: they
+  wrote a TOML by hand with `QSettings` and asserted that a key they had not written was
+  absent. That is why nothing failed when `Inverted` started being written.
+- They are replaced by two that drive the real functions, which are now declared in
+  `streamsubdialogs.h` rather than being file-local:
+  `tomlFrameSyncRoundTripsStreamFormatFlags` (save → file → load, both flags, plus a
+  legacy file with no key leaving the checkbox alone) and `tomlFrameSyncOmitsPerSessionFields`
+  (Data Rate and Sample Rate absent from a real save). The round-trip case was verified to
+  fail against the old save: *Actual 0, Expected 1*.
 - New suite **TestBatchController**. `buildTemplateCapturesConfigsAndAppearance` and
   `applyAppearanceRenamesMatchingSeries` moved here from `TestMainView` - same
   assertions, no `MainView` required, and they reach the real production path rather
@@ -553,6 +563,27 @@ attempt at all.
   both counted as skipped (rather than stalling on a reader that never opens), and
   `start()` with nothing matched neither clears the session nor announces a run.
 - Baseline **398 / 0 / 1** across **21 suites**, zero warnings.
+
+#### Derandomize is saved with the frame-sync pattern (US1.0)
+
+- **Reported as: "the randomized setting is not saved to the TOML files."** It was not, by
+  design - but `Invert Data`, the checkbox directly below it, *was*, and had been since the
+  calibration work. Two adjacent flags of the same kind, one persisted and one not, with
+  nothing in the docs explaining the split.
+- `saveFrameSyncToToml()` now writes `Randomized` alongside `Inverted`, and
+  `loadFrameSyncFromToml()` reads it back. Both describe the recording's PCM code format
+  (US2.0: NRZ-L vs RNRZ-L), like the sync pattern itself, so a pattern file is only usable
+  if it carries them.
+- **A file with no `Randomized` key leaves the operator's current choice alone.** Every
+  pattern file written before this - including the shipped PRN-11 and PRN-15 files - has no
+  such key, and defaulting them to false would silently clear a setting that was already
+  made. `Inverted` still defaults to false when absent; that asymmetry is left alone here
+  rather than changed on the way past.
+- `Data Rate` and `Sample Rate` stay out: the first is usually TMATS-derived, the second is
+  an output resolution chosen per session.
+- The US1.0 scope note and the `CLAUDE.md` hard rule are updated to match. The rule said
+  "do not widen them past that boundary", so widening it is a deliberate change to a
+  documented invariant, not a quiet one.
 
 ### v2.12.1 — Calibration Warnings, a Preloaded Step File, and a Receiver-Parameters File That Round-Trips
 
@@ -1079,9 +1110,11 @@ pass that had been accumulating.
   `timeChannelIndex` (a batch is one vendor's files); a template written before the
   field existed has no key for it and reads back as `true`, reproducing what that
   template actually did, so no `schemaVersion` bump is needed.
-- **Not in the frame-sync TOML.** It is a per-session operator input like `Randomized`,
-  so `loadFrameSyncToml`/`saveFrameSyncToml` are untouched and the US1.0 boundary
-  (pattern, mask, words/frame only) still holds.
+- **Not in the frame-sync TOML.** It is a per-session operator input like `Data Rate`,
+  so `loadFrameSyncToml`/`saveFrameSyncToml` were untouched and the US1.0 boundary
+  still holds. (That boundary later grew to carry the two stream-format flags,
+  `Inverted` and `Randomized`; byte order remains outside it, file-scoped rather
+  than per-stream.)
 - **A skipped byte swap is no longer silent.** `SwapBytes_PcmF1` returns
   `I106_BUFFER_OVERRUN` on an odd byte count *before touching the buffer*, and
   `FrameProcessor` discarded that return — so with the swap on, an odd-length payload

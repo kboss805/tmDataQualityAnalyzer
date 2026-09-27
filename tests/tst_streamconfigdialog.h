@@ -32,8 +32,8 @@ private slots:
     void calibrationDialogPreloadsTheStepFile();
     void tomlFrameSyncSaveRoundtrip();
     void tomlFrameSyncLoadPopulatesThreeFields();
-    void tomlFrameSyncSaveDoesNotWriteRandomized();
-    void tomlFrameSyncSaveDoesNotWriteDataRate();
+    void tomlFrameSyncRoundTripsStreamFormatFlags();
+    void tomlFrameSyncOmitsPerSessionFields();
 
     // validateAndAccept rejects a checked stream with no frame sync pattern (US7.0)
     void validateRejectsCheckedStreamWithEmptyFrameSync();
