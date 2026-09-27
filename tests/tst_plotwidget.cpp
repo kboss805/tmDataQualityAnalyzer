@@ -340,7 +340,10 @@ void TestPlotWidget::contextMenuListsExpectedTopLevelItems()
     QVERIFY(findAction(menu.data(), "Set Plot Title") != nullptr);
     QVERIFY(findAction(menu.data(), "X Axis") != nullptr);
     QVERIFY(findAction(menu.data(), "Y Axes") != nullptr);
-    QVERIFY(findAction(menu.data(), "Export") != nullptr);
+    // Export is NOT on this menu: it is a file operation on the session, and it
+    // lives in the main menu beside Import CSV. Asserted as an absence so that
+    // putting it back is a test failure rather than a silent second home for it.
+    QVERIFY(findAction(menu.data(), "Export") == nullptr);
 }
 
 void TestPlotWidget::contextMenuItemsDisabledUntilDataLoads()
@@ -357,7 +360,6 @@ void TestPlotWidget::contextMenuItemsDisabledUntilDataLoads()
         QVERIFY(!findAction(menu.data(), "Set Plot Title")->isEnabled());
         QVERIFY(!findAction(menu.data(), "X Axis")->isEnabled());
         QVERIFY(!findAction(menu.data(), "Y Axes")->isEnabled());
-        QVERIFY(!findAction(menu.data(), "Export")->isEnabled());
     }
 
     addLockStream(vm, "Ch 5", 5);
@@ -369,7 +371,6 @@ void TestPlotWidget::contextMenuItemsDisabledUntilDataLoads()
         QVERIFY(findAction(menu.data(), "Set Plot Title")->isEnabled());
         QVERIFY(findAction(menu.data(), "X Axis")->isEnabled());
         QVERIFY(findAction(menu.data(), "Y Axes")->isEnabled());
-        QVERIFY(findAction(menu.data(), "Export")->isEnabled());
     }
 }
 

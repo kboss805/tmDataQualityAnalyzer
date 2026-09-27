@@ -166,7 +166,7 @@ The stories below follow the workflow a first-time user takes through the applic
 
 - [x] The plot fills the central area of the main application window (it is the window's central widget; the log occupies a toggleable left sidebar).
 - [x] The chart occupies the entire plot area: there are no external control rows. Every plot control is reached from a **right-click context menu** on the chart, whose items are disabled until data is loaded.
-- [x] The context menu provides: **Plot File** (which processed file to view), **View Mode** (Lock Percentage / Accumulation), **Customize View…**, **Set Plot Title…**, **Show Legend** (checkable), **X Axis** (Set Time Window… / Reset Span), **Y Axes** (Set Left Min… / Set Left Max… / Set Right Min… / Set Right Max… / Reset), and **Export…**.
+- [x] The context menu provides: **Plot File** (which processed file to view), **View Mode** (Lock Percentage / Accumulation), **Customize View…**, **Set Plot Title…**, **Show Legend** (checkable), **X Axis** (Set Time Window… / Reset Span), **Y Axes** (Set Left Min… / Set Left Max… / Set Right Min… / Set Right Max… / Reset), and **Reset View**. Export is deliberately not here — it writes a CSV, an image and the log, which is a file operation on the session rather than a plot control, so it lives only in the main menu beside Import CSV.
 - [x] The user can specify a custom title for the plot (context menu > Set Plot Title…).
 - [x] The left Y axis is labeled with its unit of measure, average framesync lock percent.
 - [x] The right Y axis is labeled with its unit of measure, SNR in decibels.
@@ -202,7 +202,7 @@ The stories below follow the workflow a first-time user takes through the applic
 
 - [x] The plot window has no external control rows: the chart fills the entire plot area.
 - [x] Every plot control is reached from a right-click context menu on the chart, or from a control overlaid on the chart itself.
-- [x] The context menu leads with **Set Plot Title…**, then **Plot File**, **View Mode**, **Customize View…**, **Show Legend**, **X Axis**, **Y Axes**, and **Export…**; entries are disabled until data is loaded.
+- [x] The context menu leads with **Set Plot Title…**, then **Plot File**, **View Mode**, **Customize View…**, **Show Legend**, **X Axis**, **Y Axes** and **Reset View**; entries are disabled until data is loaded. Every entry is a plot control — the menu holds nothing that acts on files.
 - [x] The legend can be shown or hidden from a toggle overlaid on the chart, and the choice persists across sessions.
 - [x] The persistent on-chart controls are gathered into a single chip bar at the chart's top-left (legend toggle, View Mode chip, Reset view chip) rather than scattered around the plot; each chip hides itself when it would be meaningless, so the bar is empty-by-default clutter-free.
 - [x] Frequent actions have chrome-free gestures: Ctrl+drag / middle-drag rubber-bands a time range to zoom, double-click restores the full span, and a crosshair follows the cursor for reading several series at one instant.
@@ -409,6 +409,30 @@ The stories below follow the workflow a first-time user takes through the applic
 ## Version History
 
 ### Unreleased — since the v2.12.1 tag
+
+#### Export leaves the plot's context menu, and Exit moves to the bottom (US4.1, US6.0)
+
+Two menu corrections, both about what belongs where.
+
+- **Export is no longer on the plot's right-click menu.** It writes a CSV, an image and
+  the log - a file operation on the session, not a plot control - and the menu it sat in
+  is otherwise entirely plot controls. It keeps its home in the main menu's
+  Import/Export section, beside its counterpart Import CSV, so there is one place to
+  look for it rather than two. v2.8.0 added it to the plot menu *as well*; that is what
+  is being undone. `PlotWidget::onExportPlot()` is unchanged and still the handler - the
+  main menu's action connects to it directly, so nothing is dead.
+  The `TestPlotWidget` case now asserts Export is **absent**, so restoring a second home
+  for it is a test failure rather than a quiet regression.
+- **Exit is the last entry in the main menu**, below the Help submenu, instead of sitting
+  inside the Process section with the file commands. It ends the application rather than
+  doing anything to a file, and the bottom of the menu is where a quit command is looked
+  for. `exitIsTheLastMenuEntry` pins the position, which is precisely what a later
+  addition to the menu breaks without breaking anything else: a new action appended after
+  it still works, still looks reasonable, and quietly moves Exit off the bottom. Verified
+  to fail with Exit back in the Process section.
+
+**This invalidates the manual's context-menu figure** (`Main Context Menu.png`), which
+shows the `Export...` row. It needs re-capturing before the next release.
 
 #### Either end of either Y axis can be pinned (US4.0, US4.1)
 

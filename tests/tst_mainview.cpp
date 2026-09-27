@@ -211,6 +211,33 @@ void TestMainView::helpSubmenuHoldsManualAndAbout()
     }
 }
 
+void TestMainView::exitIsTheLastMenuEntry()
+{
+    // Exit ends the application, so it belongs at the bottom of the menu rather than
+    // inside the Process section with the file commands. Position is the whole point
+    // of this entry, and it is exactly what a later addition to the menu breaks
+    // without breaking anything else - a new action appended after it still works,
+    // still looks reasonable, and quietly moves Exit off the bottom.
+    MainView view;
+
+    QMenu* menu = view.m_menu_button->menu();
+    QVERIFY(menu != nullptr);
+
+    QStringList entries;
+    for (QAction* a : menu->actions())
+    {
+        if (!a->isSeparator() && !a->text().isEmpty())
+        {
+            entries << a->text();
+        }
+    }
+    QVERIFY(!entries.isEmpty());
+    QCOMPARE(entries.last(), QString("Exit"));
+
+    // ...and it is below Help, not merely last among the file commands.
+    QVERIFY(entries.indexOf("Exit") > entries.indexOf("Help"));
+}
+
 void TestMainView::menuSectionHeadersSurviveTheStylesheet()
 {
     // The menu's section headers went unrendered for every themed build: the app
