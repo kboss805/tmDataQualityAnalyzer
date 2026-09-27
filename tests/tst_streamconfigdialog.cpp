@@ -423,7 +423,7 @@ void TestStreamConfigDialog::testDefaultSampleRate()
                 QCOMPARE(sampleRate->count(), 3);
                 // The default period index is 0 (1 s)
                 QCOMPARE(sampleRate->currentIndex(), 0);
-                QCOMPARE(sampleRate->itemText(0), QString("1 s"));
+                QCOMPARE(sampleRate->itemText(0), QString("1 second"));   // not "1 s": it misread as "1 ms"
                 QCOMPARE(sampleRate->itemText(1), QString("100 ms"));
                 QCOMPARE(sampleRate->itemText(2), QString("10 ms"));
                 testExecuted = true;

@@ -52,8 +52,16 @@ const QRegularExpression kHexRegex = makeSyncPatternValidatorRegex();
 
 QString periodText(double sec)
 {
+    // "second" is spelled out rather than abbreviated to "s". Reported as an ordering
+    // bug: next to "100 ms" and "10 ms" the eye groups all three labels, "1 s" scans
+    // as "1 ms", and the (correctly descending) list then reads 1, 100, 10. The unit
+    // is the only thing distinguishing the largest option from the smallest, so it is
+    // the one thing that must not be easy to skim past.
     if (sec >= 1.0)
-        return QString::number(static_cast<int>(sec)) + " s";
+    {
+        const int whole = static_cast<int>(sec);
+        return QString::number(whole) + (whole == 1 ? " second" : " seconds");
+    }
     return QString::number(static_cast<int>(sec * 1000)) + " ms";
 }
 
