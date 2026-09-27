@@ -100,6 +100,7 @@ SOURCES += \
     src/view/processingprogressdialog.cpp \
     src/view/plotlegendoverlay.cpp \
     src/view/plotcontextmenu.cpp \
+    src/view/plotexport.cpp \
     src/view/plotwidget.cpp \
     src/view/tmchart.cpp
 

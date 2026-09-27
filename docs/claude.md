@@ -409,6 +409,28 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.12.1 tag
 
+#### Image export and the frameless-window handlers move out (US6.0, US4.1)
+
+The last of the file splits; the two remaining large View files are now ordinary sizes.
+
+- `plotexport.cpp` takes `onExportPlot()` and `exportImage()` out of `plotwidget.cpp`
+  (1398 → 1239). One `TmChart::renderTo()` serves screen, PNG, SVG and PDF, so the three
+  formats cannot drift - which is the point worth keeping together in one file.
+- The frameless-window handlers - `nativeEvent()`, `changeEvent()` and
+  `updateMaximizeButton()` - join `mainviewchrome.cpp` rather than getting a file of their
+  own: they *are* the title bar's behaviour (caption hit-testing, resize borders, the
+  maximize glyph), and the bar itself is already there. `mainview.cpp` 986 → 833.
+- The guarded `<windows.h>` / `<windowsx.h>` block moved with `nativeEvent()`, its only
+  user. `mainview.cpp` no longer includes any Win32 header.
+
+Where the View files stand after the whole pass:
+
+| File | Before | After |
+| --- | --- | --- |
+| `plotwidget.cpp` | 1878 | **1239** |
+| `mainview.cpp` | 1564 | **833** |
+| `streamsubdialogs.h` | 1288 | **301** (declarations) |
+
 #### The plot's right-click menu is its own translation unit (US4.1)
 
 - `plotcontextmenu.cpp` takes `buildContextMenu()` (200 lines) and its caller

@@ -49,6 +49,7 @@ SOURCES += \
     $$PWD/../src/view/streamsubdialogs.cpp \
     $$PWD/../src/view/plotlegendoverlay.cpp \
     $$PWD/../src/view/plotcontextmenu.cpp \
+    $$PWD/../src/view/plotexport.cpp \
     $$PWD/../src/view/plotwidget.cpp \
     $$PWD/../src/view/tmchart.cpp \
     $$PWD/../src/view/plotcustomizationdialog.cpp \
