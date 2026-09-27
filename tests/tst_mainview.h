@@ -27,6 +27,7 @@ private slots:
     void fullManualPathEmptyWhenNotInstalled();
     void fullManualPathFoundWhenInstalled();
     void helpSubmenuHoldsManualAndAbout();
+    void exitIsTheLastMenuEntry();
     void menuSectionHeadersSurviveTheStylesheet();
     void logPreservesMultiLineMessages();
 };

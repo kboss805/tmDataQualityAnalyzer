@@ -161,11 +161,6 @@ void MainView::setUpChrome()
     m_apply_template_action = menu->addAction("Apply Template to Files...");
     connect(m_apply_template_action, &QAction::triggered, this, &MainView::applyTemplateButtonPressed);
 
-    menu->addSeparator();
-
-    QAction* exit_action = menu->addAction("Exit");
-    connect(exit_action, &QAction::triggered, this, &QMainWindow::close);
-
     // --- Import/Export ---
     addMenuSection(menu, tr("Import/Export"));
 
@@ -248,6 +243,16 @@ void MainView::setUpChrome()
             "IRIG 106 Chapter 10 PCM recordings and plots the results over time.</p>");
         about_box.exec();
     });
+
+
+
+    // Exit sits at the very bottom, outside every section. It is not part of
+    // Process - it ends the application rather than doing anything to a file - and
+    // the bottom of the menu is where a quit command is looked for. Its separator
+    // keeps it clear of the Help submenu row above it.
+    menu->addSeparator();
+    QAction* exit_action = menu->addAction("Exit");
+    connect(exit_action, &QAction::triggered, this, &QMainWindow::close);
 
     // --- Custom title bar (frameless window) ---
     // Replaces the native Windows title bar: the hamburger on the left opens the
@@ -349,6 +354,7 @@ void MainView::setUpChrome()
 
     setMenuWidget(title_bar);
     updateMaximizeButton();
+
 }
 
 void MainView::applyActionIconsForTheme(bool dark)

@@ -233,11 +233,11 @@ QMenu* PlotWidget::buildContextMenu()
     reset_view_act->setShortcutVisibleInContextMenu(true);
     connect(reset_view_act, &QAction::triggered, this, &PlotWidget::resetView);
 
-    menu.addSeparator();
-
-    QAction* export_act = menu.addAction(QStringLiteral("Export..."));
-    export_act->setEnabled(has_data);
-    connect(export_act, &QAction::triggered, this, &PlotWidget::onExportPlot);
+    // Export is deliberately NOT here. It writes a CSV, an image and the log - a
+    // file operation on the session rather than a plot control - so it lives in the
+    // main menu's Import/Export section with its counterpart, Import CSV, and is
+    // reached from one place only. `PlotWidget::onExportPlot` is still its handler;
+    // the main menu's action connects to it directly.
 
     return &menu;
 }
