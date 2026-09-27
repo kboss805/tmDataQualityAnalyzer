@@ -204,8 +204,16 @@ QMenu* PlotWidget::buildContextMenu()
     // --- Y axes -----------------------------------------------------------
     QMenu* y_menu = menu.addMenu(QStringLiteral("Y Axes"));
     y_menu->setEnabled(has_data);
+    // Min before max, and both axes' pairs kept together: the two limits of one
+    // axis are read as a pair, and an operator pinning a window - lock % between 98
+    // and 100, say - sets them one after the other.
+    QAction* left_min_act = y_menu->addAction(QStringLiteral("Set Left Min..."));
+    connect(left_min_act, &QAction::triggered, this, &PlotWidget::onSetLeftYMin);
     QAction* left_act = y_menu->addAction(QStringLiteral("Set Left Max..."));
     connect(left_act, &QAction::triggered, this, &PlotWidget::onSetLeftYMax);
+    y_menu->addSeparator();
+    QAction* right_min_act = y_menu->addAction(QStringLiteral("Set Right Min..."));
+    connect(right_min_act, &QAction::triggered, this, &PlotWidget::onSetRightYMin);
     QAction* right_act = y_menu->addAction(QStringLiteral("Set Right Max..."));
     connect(right_act, &QAction::triggered, this, &PlotWidget::onSetRightYMax);
     y_menu->addSeparator();

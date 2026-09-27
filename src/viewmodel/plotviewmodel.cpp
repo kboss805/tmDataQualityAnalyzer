@@ -777,18 +777,21 @@ double PlotViewModel::xMax() const
 
 double PlotViewModel::yMin() const
 {
+    if (m_right_y_min_user_set)
+    {
+        return m_right_y_min_user;
+    }
     return m_data_y_min;
 }
 
 double PlotViewModel::yMax() const
 {
-    if (m_right_y_max_user_set)
-    {
-        // Never let a user override drop below the current min — that would hand
-        // the chart an inverted (max < min) range. Keep it at least a minimum span above.
-        return qMax(m_right_y_max_user, yMin() + PlotConstants::kMinAxisSpan);
-    }
-    return m_data_y_max;
+    // The minimum is taken as given and the maximum is what yields, on both axes:
+    // with either limit settable the two can be driven past each other, and one
+    // consistent rule is easier to reason about than a race between them. It also
+    // means a max override can never hand the chart an inverted or collapsed range.
+    const double max_val = m_right_y_max_user_set ? m_right_y_max_user : m_data_y_max;
+    return qMax(max_val, yMin() + PlotConstants::kMinAxisSpan);
 }
 
 double PlotViewModel::xViewMin() const
@@ -858,9 +861,18 @@ void PlotViewModel::resetXRange()
 
 void PlotViewModel::resetYRange()
 {
+    m_left_y_min_user_set = false;
     m_left_y_max_user_set = false;
+    m_right_y_min_user_set = false;
     m_right_y_max_user_set = false;
     computeYRange();
+    emit axisRangeChanged();
+}
+
+void PlotViewModel::setLeftYMinOverride(double min)
+{
+    m_left_y_min_user_set = true;
+    m_left_y_min_user = min;
     emit axisRangeChanged();
 }
 
@@ -868,6 +880,13 @@ void PlotViewModel::setLeftYMaxOverride(double max)
 {
     m_left_y_max_user_set = true;
     m_left_y_max_user = max;
+    emit axisRangeChanged();
+}
+
+void PlotViewModel::setRightYMinOverride(double min)
+{
+    m_right_y_min_user_set = true;
+    m_right_y_min_user = min;
     emit axisRangeChanged();
 }
 
@@ -1054,18 +1073,41 @@ bool PlotViewModel::hasVisibleRightAxisSeries() const
 bool PlotViewModel::hasMissedFramesSeries() const { return m_has_missed_frames_series; }
 PlotViewModel::LockAxisView PlotViewModel::lockAxisView() const { return m_lock_axis_view; }
 
+bool PlotViewModel::hasLeftYMinOverride() const { return m_left_y_min_user_set; }
+double PlotViewModel::leftYMinOverrideValue() const { return m_left_y_min_user; }
 bool PlotViewModel::hasLeftYMaxOverride() const { return m_left_y_max_user_set; }
 double PlotViewModel::leftYMaxOverrideValue() const { return m_left_y_max_user; }
+bool PlotViewModel::hasRightYMinOverride() const { return m_right_y_min_user_set; }
+double PlotViewModel::rightYMinOverrideValue() const { return m_right_y_min_user; }
 bool PlotViewModel::hasRightYMaxOverride() const { return m_right_y_max_user_set; }
 double PlotViewModel::rightYMaxOverrideValue() const { return m_right_y_max_user; }
 
+bool PlotViewModel::hasYRangeOverride() const
+{
+    return m_left_y_min_user_set || m_left_y_max_user_set
+        || m_right_y_min_user_set || m_right_y_max_user_set;
+}
+
+double PlotViewModel::leftYMin() const
+{
+    // Lock % and accumulated missed frames both start at zero when left alone; the
+    // override exists because lock % lives in the top few percent of its axis, and
+    // an operator comparing streams at 98% needs the axis to start near there.
+    if (m_left_y_min_user_set)
+    {
+        return m_left_y_min_user;
+    }
+    return m_lock_y_min;
+}
+
 double PlotViewModel::leftYMax() const
 {
-    if (m_left_y_max_user_set)
-        return m_left_y_max_user;
-    if (m_lock_axis_view == LockAxisView::MissedFrames)
-        return missedFramesMax() * (1.0 + PlotConstants::kAxisMarginFactor);
-    return m_lock_y_max;
+    const double max_val =
+        m_left_y_max_user_set              ? m_left_y_max_user
+        : m_lock_axis_view == LockAxisView::MissedFrames
+                                           ? missedFramesMax() * (1.0 + PlotConstants::kAxisMarginFactor)
+                                           : m_lock_y_max;
+    return qMax(max_val, leftYMin() + PlotConstants::kMinAxisSpan);   // see yMax()
 }
 
 double PlotViewModel::missedFramesMax() const

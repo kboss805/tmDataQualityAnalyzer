@@ -451,7 +451,9 @@ void TestPlotWidget::contextMenuResetActionsClearAxisOverrides()
 
     // Narrow the X window and pin both Y maxima, as the menu dialogs would.
     vm.setXViewRange(0.5, 1.5);
+    vm.setLeftYMinOverride(10.0);
     vm.setLeftYMaxOverride(42.0);
+    vm.setRightYMinOverride(2.0);
     vm.setRightYMaxOverride(24.0);
     QVERIFY(vm.hasLeftYMaxOverride());
     QVERIFY(vm.hasRightYMaxOverride());
@@ -468,8 +470,50 @@ void TestPlotWidget::contextMenuResetActionsClearAxisOverrides()
     // did the X and Y halves together; they are separate menu items now).
     QMenu* y_menu = findAction(menu.data(), "Y Axes")->menu();
     findAction(y_menu, "Reset")->trigger();
-    QVERIFY(!vm.hasLeftYMaxOverride());
-    QVERIFY(!vm.hasRightYMaxOverride());
+    QVERIFY(!vm.hasYRangeOverride());
+}
+
+void TestPlotWidget::yMinOverrideReachesTheChartAxis()
+{
+    // The minimum has to travel all the way to the axis, not just sit in the
+    // ViewModel. updateAxes() passed a literal 0.0 as the left minimum for as long
+    // as only maxima were settable, and an override that stopped there would look
+    // exactly like one that worked: the menu item accepts the value, the ViewModel
+    // reports it, and the plot does not move.
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    widget.resize(600, 400);
+    addLockStream(vm, "Ch 5", 5);
+
+    TmChart* chart = widget.findChild<TmChart*>();
+    QVERIFY(chart != nullptr);
+
+    vm.setLeftYMinOverride(98.0);
+    // The axis minimum is by definition at the bottom edge of the plot area.
+    QCOMPARE(chart->leftToPixel(98.0), chart->plotArea().bottom());
+
+    vm.resetYRange();
+    QCOMPARE(chart->leftToPixel(PlotConstants::kLockAxisMin), chart->plotArea().bottom());
+}
+
+void TestPlotWidget::contextMenuOffersBothYLimits()
+{
+    // US4.1 lists what the menu provides; the two minima joined it when the axis
+    // minima became settable.
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    addLockStream(vm, "Ch 5", 5);
+
+    QScopedPointer<QMenu> menu(widget.buildContextMenu());
+    QMenu* y_menu = findAction(menu.data(), "Y Axes")->menu();
+    QVERIFY(y_menu != nullptr);
+    for (const char* label : { "Set Left Min...", "Set Left Max...",
+                               "Set Right Min...", "Set Right Max...", "Reset" })
+    {
+        QVERIFY2(findAction(y_menu, label) != nullptr, label);
+    }
 }
 
 void TestPlotWidget::contextMenuAdvertisesEveryPlotShortcut()

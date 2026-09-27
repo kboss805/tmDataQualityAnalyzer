@@ -109,8 +109,10 @@ private slots:
     /// Resets the X axis to the full data span.
     void onResetXAxis();
     /// Prompts for the left y-axis maximum override.
+    void onSetLeftYMin();
     void onSetLeftYMax();
     /// Prompts for the right y-axis maximum override.
+    void onSetRightYMin();
     void onSetRightYMax();
     /// Clears both y-axis maximum overrides (back to auto).
     void onResetYAxes();

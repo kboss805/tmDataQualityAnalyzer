@@ -224,9 +224,13 @@ amount of space shows data.</p>
       <code>DDD:HH:MM:SS</code> to zoom to an exact span. Values outside the file's range are
       clamped to it and a note appears in the log. <strong>Reset Span</strong> returns to the full
       time range.</li>
-  <li><strong>Y Axes → Set Left Max… / Set Right Max…</strong> — pin the top of the left
-      (lock&nbsp;% or missed frames) or right (SNR&nbsp;dB) axis. Minimums always scale
-      automatically. <strong>Reset</strong> clears both maximums back to automatic.</li>
+  <li><strong>Y Axes → Set Left Min… / Set Left Max… / Set Right Min… / Set Right
+      Max…</strong> — pin either end of the left (lock&nbsp;% or missed frames) or right
+      (SNR&nbsp;dB) axis. Pinning a minimum is how you separate healthy streams that all sit
+      in the top few percent of the lock axis: set the left minimum to 98 and the difference
+      between 98.4&nbsp;% and 99.7&nbsp;% fills the plot. A limit you do not set keeps scaling
+      automatically, and a minimum you raise past the maximum pushes the maximum up rather
+      than inverting the axis. <strong>Reset</strong> clears all four back to automatic.</li>
   <li><strong>Reset View</strong> <kbd>R</kbd> — restores the full time span <em>and</em>
       automatic axis scaling in one action, exactly as the on-chart <em>Reset view</em> chip
       does. <em>X Axis → Reset Span</em> and <em>Y Axes → Reset</em> each do half of it.</li>

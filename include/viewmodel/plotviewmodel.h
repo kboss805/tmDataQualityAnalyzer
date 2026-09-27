@@ -100,11 +100,12 @@ public:
     QString plotTitle() const;                     ///< @return Current plot title.
     double xMin() const;                           ///< @return Data X minimum (elapsed seconds).
     double xMax() const;                           ///< @return Data X maximum (elapsed seconds).
-    double yMin() const;                           ///< @return SNR Y minimum, computed from the visible data.
+    double yMin() const;                           ///< @return SNR Y minimum: the user override, else computed from the visible data.
     double yMax() const;                           ///< @return SNR Y maximum: the user override (kept above yMin), else computed from the visible data.
     double lockYMin() const;                       ///< @return Lock axis minimum (always 0).
     double lockYMax() const;                       ///< @return Lock axis maximum (always 100).
-    double leftYMax() const;                       ///< @return Left axis max: user override, or 100 (lock %) / auto (missed frames).
+    double leftYMin() const;                       ///< @return Left axis min: the user override, else 0.
+    double leftYMax() const;                       ///< @return Left axis max: user override (kept above leftYMin), or 100 (lock %) / auto (missed frames).
     bool hasLockSeries() const;                    ///< @return True if any FrameSyncLock series are loaded.
 
     /// @name Axis occupancy
@@ -120,10 +121,15 @@ public:
     LockAxisView lockAxisView() const;             ///< @return Active left-axis metric (lock % vs missed frames).
     /// @name Axis-max override state
     /// @{
+    bool hasLeftYMinOverride() const;              ///< @return True if the user has overridden the left axis min.
+    double leftYMinOverrideValue() const;          ///< @return The user-set left axis min (only meaningful if hasLeftYMinOverride()).
     bool hasLeftYMaxOverride() const;              ///< @return True if the user has overridden the left axis max.
     double leftYMaxOverrideValue() const;          ///< @return The user-set left axis max (only meaningful if hasLeftYMaxOverride()).
+    bool hasRightYMinOverride() const;             ///< @return True if the user has overridden the right (SNR) axis min.
+    double rightYMinOverrideValue() const;         ///< @return The user-set right axis min (only meaningful if hasRightYMinOverride()).
     bool hasRightYMaxOverride() const;             ///< @return True if the user has overridden the right (SNR) axis max.
     double rightYMaxOverrideValue() const;         ///< @return The user-set right axis max (only meaningful if hasRightYMaxOverride()).
+    bool hasYRangeOverride() const;                ///< @return True if any of the four Y limits has been overridden.
     /// @}
     bool hasMissedFramesSeries() const;            ///< @return True if any AccumulatedMissedFrames series are loaded.
     double missedFramesMax() const;                ///< @return Max value across visible AccumulatedMissedFrames series (>= 1).
@@ -160,7 +166,9 @@ public:
     void setXViewRange(double min, double max);
     void resetXRange();
     void resetYRange();
+    void setLeftYMinOverride(double min);    ///< User-set left axis minimum; resets on resetYRange().
     void setLeftYMaxOverride(double max);   ///< User-set left axis maximum; resets on resetYRange().
+    void setRightYMinOverride(double min);  ///< User-set right (SNR) axis minimum; resets on resetYRange().
     void setRightYMaxOverride(double max);  ///< User-set right (SNR) axis maximum; resets on resetYRange().
     /// Switches the left-axis metric and flips visibility of lock/missed frames series.
     void setLockAxisView(LockAxisView view);
@@ -243,8 +251,12 @@ private:
     double m_lock_y_min = PlotConstants::kLockAxisMin;  ///< Lock axis minimum (fixed).
     double m_lock_y_max = PlotConstants::kLockAxisMax;  ///< Lock axis maximum (fixed).
     bool m_has_lock_series = false;                ///< True if any FrameSyncLock series are present.
+    bool m_left_y_min_user_set = false;            ///< True when user has overridden the left axis min.
+    double m_left_y_min_user = PlotConstants::kLockAxisMin;  ///< User-set left axis min value (inert until set).
     bool m_left_y_max_user_set = false;            ///< True when user has overridden the left axis max.
     double m_left_y_max_user = PlotConstants::kLockAxisMax;  ///< User-set left axis max value (inert until set).
+    bool m_right_y_min_user_set = false;           ///< True when user has overridden the right axis min.
+    double m_right_y_min_user = 0.0;              ///< User-set right axis min value.
     bool m_right_y_max_user_set = false;           ///< True when user has overridden the right axis max.
     double m_right_y_max_user = 0.0;              ///< User-set right axis max value.
     bool m_has_missed_frames_series = false;       ///< True if any AccumulatedMissedFrames series are present.

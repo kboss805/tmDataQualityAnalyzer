@@ -166,7 +166,7 @@ The stories below follow the workflow a first-time user takes through the applic
 
 - [x] The plot fills the central area of the main application window (it is the window's central widget; the log occupies a toggleable left sidebar).
 - [x] The chart occupies the entire plot area: there are no external control rows. Every plot control is reached from a **right-click context menu** on the chart, whose items are disabled until data is loaded.
-- [x] The context menu provides: **Plot File** (which processed file to view), **View Mode** (Lock Percentage / Accumulation), **Customize View…**, **Set Plot Title…**, **Show Legend** (checkable), **X Axis** (Set Time Window… / Reset Span), **Y Axes** (Set Left Max… / Set Right Max… / Reset), and **Export…**.
+- [x] The context menu provides: **Plot File** (which processed file to view), **View Mode** (Lock Percentage / Accumulation), **Customize View…**, **Set Plot Title…**, **Show Legend** (checkable), **X Axis** (Set Time Window… / Reset Span), **Y Axes** (Set Left Min… / Set Left Max… / Set Right Min… / Set Right Max… / Reset), and **Export…**.
 - [x] The user can specify a custom title for the plot (context menu > Set Plot Title…).
 - [x] The left Y axis is labeled with its unit of measure, average framesync lock percent.
 - [x] The right Y axis is labeled with its unit of measure, SNR in decibels.
@@ -174,7 +174,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The Y axis automatically scales to the data's min/max values.
 - [x] The X axis automatically scales to the full time span of the loaded data.
 - [x] The user can set a time window to zoom and pan the X axis to just that range (context menu > X Axis > Set Time Window…, entered as DDD:HH:MM:SS; values outside the file range are clamped with a warning in the log). **X Axis > Reset Span** restores the full span.
-- [x] The user can manually override the Y axis maximum values (context menu > Y Axes > Set Left/Right Max…); minima remain automatic. **Y Axes > Reset** clears both overrides.
+- [x] The user can manually override either end of either Y axis (context menu > Y Axes > Set Left/Right Min… and Set Left/Right Max…). A limit left alone still scales automatically; a minimum is taken as given and the maximum yields to it, never closer than `kMinAxisSpan`, so no entry can invert or collapse an axis. **Y Axes > Reset** clears all four overrides.
 - [x] The mouse wheel zooms the X axis.
 - [x] A mouse click and hold pans the X axis.
 - [x] The user can show or hide individual Frame Sync Lock and Receiver SNR series.
@@ -409,6 +409,26 @@ The stories below follow the workflow a first-time user takes through the applic
 ## Version History
 
 ### Unreleased — since the v2.12.1 tag
+
+#### Either end of either Y axis can be pinned (US4.0, US4.1)
+
+Only the maxima were settable, and the axis that most needed a minimum was the one that
+could not have one: a healthy stream's lock % lives in the top two or three percent of a
+0-100 axis, where several streams overlap into a single line at the top of the plot. Set
+the left minimum to 98 and the difference between 98.4% and 99.7% fills the plot.
+
+- **`Y Axes > Set Left Min…` and `Set Right Min…`** join the two maxima in the context menu,
+  each axis' pair kept together. `PlotViewModel` gained `leftYMin()` and the four
+  `has/valueOverride` accessors to match, plus `hasYRangeOverride()` - which the Reset chip
+  now asks instead of testing the two maxima it used to know about.
+- **One rule decides a crossed pair, on both axes: the minimum is taken as given and the
+  maximum yields**, never closer than `kMinAxisSpan`. With both limits settable they can be
+  driven past each other, and a chart handed an inverted range still draws something. The
+  dialogs also bound each entry by the opposite limit, so it takes a later change to the
+  other end to reach the guard at all.
+- `updateAxes()` passed a literal `0.0` as the left minimum, which would have made a working
+  menu item and a dead one look identical. `yMinOverrideReachesTheChartAxis` pins the axis
+  minimum to the bottom edge of the plot area; it was verified to fail against that literal.
 
 #### The plot repaints in milliseconds: cached geometry, culling, and drawLines() (US4.0)
 
