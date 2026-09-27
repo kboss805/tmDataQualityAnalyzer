@@ -324,9 +324,9 @@ void PlotWidget::updateAxes()
 
     m_plot->setXRange(m_view_model->xViewMin(), m_view_model->xViewMax());
 
-    // Left axis (yAxis): uses user override if set, else 100 for Lock % or auto for Missed Frames.
-    const double left_max = m_view_model->leftYMax();
-    m_plot->setLeftRange(0.0, left_max);
+    // Left axis (yAxis): user overrides if set, else 0 and 100 for Lock % or auto
+    // for Missed Frames.
+    m_plot->setLeftRange(m_view_model->leftYMin(), m_view_model->leftYMax());
 
     // Right axis (yAxis2) auto-scales to SNR data limits, or manual/user-override limits
     m_plot->setRightRange(m_view_model->yMin(), m_view_model->yMax());
@@ -436,6 +436,32 @@ void PlotWidget::onResetXAxis()
     }
 }
 
+void PlotWidget::onSetLeftYMin()
+{
+    if (m_view_model == nullptr || !m_view_model->hasData())
+    {
+        return;
+    }
+
+    // Bounded above by the current maximum so the dialog cannot produce an inverted
+    // range in the first place; the ViewModel still enforces the span if the other
+    // limit is moved afterwards.
+    const bool is_lock_pct =
+        (m_view_model->lockAxisView() == PlotViewModel::LockAxisView::LockPercent);
+
+    bool ok = false;
+    const double value = QInputDialog::getDouble(
+        this, QStringLiteral("Set Left Y-Axis Minimum"),
+        is_lock_pct ? QStringLiteral("Minimum lock %:")
+                    : QStringLiteral("Minimum accumulated missed frames:"),
+        m_view_model->leftYMin(), 0.0,
+        m_view_model->leftYMax() - PlotConstants::kMinAxisSpan, 0, &ok);
+    if (ok)
+    {
+        m_view_model->setLeftYMinOverride(value);
+    }
+}
+
 void PlotWidget::onSetLeftYMax()
 {
     if (m_view_model == nullptr || !m_view_model->hasData())
@@ -454,10 +480,32 @@ void PlotWidget::onSetLeftYMax()
         this, QStringLiteral("Set Left Y-Axis Maximum"),
         is_lock_pct ? QStringLiteral("Maximum lock %:")
                     : QStringLiteral("Maximum accumulated missed frames:"),
-        m_view_model->leftYMax(), 1.0, max_allowed, 0, &ok);
+        m_view_model->leftYMax(),
+        m_view_model->leftYMin() + PlotConstants::kMinAxisSpan, max_allowed, 0, &ok);
     if (ok)
     {
         m_view_model->setLeftYMaxOverride(value);
+    }
+}
+
+void PlotWidget::onSetRightYMin()
+{
+    if (m_view_model == nullptr || !m_view_model->hasData())
+    {
+        return;
+    }
+
+    // SNR in dB is genuinely negative on a weak link, so the minimum is not floored
+    // at zero the way the left axis is.
+    bool ok = false;
+    const double value = QInputDialog::getDouble(
+        this, QStringLiteral("Set Right Y-Axis Minimum"),
+        QStringLiteral("Minimum SNR (dB):"),
+        m_view_model->yMin(), -PlotConstants::kYSpinBoxMax,
+        m_view_model->yMax() - PlotConstants::kMinAxisSpan, 1, &ok);
+    if (ok)
+    {
+        m_view_model->setRightYMinOverride(value);
     }
 }
 
@@ -472,7 +520,8 @@ void PlotWidget::onSetRightYMax()
     const double value = QInputDialog::getDouble(
         this, QStringLiteral("Set Right Y-Axis Maximum"),
         QStringLiteral("Maximum SNR (dB):"),
-        m_view_model->yMax(), 1.0, PlotConstants::kYSpinBoxMax, 1, &ok);
+        m_view_model->yMax(), m_view_model->yMin() + PlotConstants::kMinAxisSpan,
+        PlotConstants::kYSpinBoxMax, 1, &ok);
     if (ok)
     {
         m_view_model->setRightYMaxOverride(value);
@@ -895,8 +944,7 @@ void PlotWidget::updateOverlayChips()
     const bool zoomed = has_data
         && (!qFuzzyCompare(m_view_model->xViewMin(), m_view_model->xMin())
             || !qFuzzyCompare(m_view_model->xViewMax(), m_view_model->xMax()));
-    const bool pinned = has_data
-        && (m_view_model->hasLeftYMaxOverride() || m_view_model->hasRightYMaxOverride());
+    const bool pinned = has_data && m_view_model->hasYRangeOverride();
     m_reset_chip->setVisible(zoomed || pinned);
 
     m_overlay_bar->setVisible(has_data);

@@ -148,9 +148,10 @@ void TestPlotViewModel::yAutoRange()
 
 void TestPlotViewModel::snrYMaxOverride()
 {
-    // Pinning the SNR axis maximum is the one way the user overrides the computed
-    // range (context menu > Y Axes > Set Right Max…); the minimum stays automatic,
-    // and Reset returns the axis to the data. The values are positive dB because
+    // Pinning the SNR axis maximum is one of the four ways the user overrides the
+    // computed range (context menu > Y Axes > Set Left/Right Min/Max…), and Reset
+    // returns the axis to the data. The minima are covered by
+    // yMinOverridesAndTheSpanGuard(); this case leaves them alone deliberately. The values are positive dB because
     // computeYRange() clips the SNR minimum at 0, so a negative fixture would
     // never reach the computed range at all.
     QString csv =
@@ -172,13 +173,76 @@ void TestPlotViewModel::snrYMaxOverride()
     QVERIFY(vm.hasRightYMaxOverride());
     QCOMPARE(vm.rightYMaxOverrideValue(), 30.0);
     QCOMPARE(vm.yMax(), 30.0);
-    QCOMPARE(vm.yMin(), auto_min);   // the minimum is never overridden
+    QCOMPARE(vm.yMin(), auto_min);   // this case never sets it
     QCOMPARE(spy.count(), 1);
 
     vm.resetYRange();
     QVERIFY(!vm.hasRightYMaxOverride());
     QCOMPARE(vm.yMax(), auto_max);
     QCOMPARE(spy.count(), 2);
+
+    QFile::remove(path);
+}
+
+void TestPlotViewModel::yMinOverridesAndTheSpanGuard()
+{
+    // Both Y limits are user-settable (context menu > Y Axes > Set Left/Right
+    // Min/Max...). Lock % is the reason the minimum matters: healthy streams sit in
+    // the top two or three percent of a 0-100 axis, where they are indistinguishable
+    // until the axis starts near them.
+    //
+    // With both limits settable they can be driven past each other, so ONE rule
+    // decides it on both axes: the minimum is taken as given and the maximum yields,
+    // never closer than kMinAxisSpan. A chart handed an inverted range draws
+    // something, which is why this is enforced rather than trusted to the dialogs.
+    QString csv =
+        "Time (DOY:HH:MM:SS.mmm),L_RCVR1\n"
+        "1:00:00:00.000,12.0\n"
+        "1:00:00:01.000,40.0\n";
+    QString path = writeTempCsv(csv);
+
+    PlotViewModel vm;
+    QVERIFY(vm.loadCsvFile(path));
+
+    const double auto_min = vm.yMin();
+    const double auto_max = vm.yMax();
+    QVERIFY(!vm.hasYRangeOverride());
+
+    QSignalSpy spy(&vm, &PlotViewModel::axisRangeChanged);
+
+    // --- right (SNR) axis --------------------------------------------------
+    vm.setRightYMinOverride(auto_min + 5.0);
+    QVERIFY(vm.hasRightYMinOverride());
+    QVERIFY(vm.hasYRangeOverride());
+    QCOMPARE(vm.rightYMinOverrideValue(), auto_min + 5.0);
+    QCOMPARE(vm.yMin(), auto_min + 5.0);
+    QCOMPARE(vm.yMax(), auto_max);          // the max is untouched while it fits
+    QCOMPARE(spy.count(), 1);
+
+    // Pushed past the maximum, the maximum is what moves.
+    vm.setRightYMinOverride(auto_max + 10.0);
+    QCOMPARE(vm.yMin(), auto_max + 10.0);
+    QCOMPARE(vm.yMax(), vm.yMin() + PlotConstants::kMinAxisSpan);
+
+    // --- left (lock %) axis ------------------------------------------------
+    vm.setLeftYMinOverride(98.0);
+    QVERIFY(vm.hasLeftYMinOverride());
+    QCOMPARE(vm.leftYMin(), 98.0);
+    QCOMPARE(vm.leftYMax(), PlotConstants::kLockAxisMax);   // still the 0-100 top
+
+    vm.setLeftYMinOverride(PlotConstants::kLockAxisMax);
+    QCOMPARE(vm.leftYMax(), PlotConstants::kLockAxisMax + PlotConstants::kMinAxisSpan);
+
+    // --- reset clears all four ---------------------------------------------
+    vm.setLeftYMaxOverride(42.0);
+    vm.setRightYMaxOverride(24.0);
+    vm.resetYRange();
+    QVERIFY(!vm.hasYRangeOverride());
+    QVERIFY(!vm.hasLeftYMinOverride());
+    QVERIFY(!vm.hasRightYMinOverride());
+    QCOMPARE(vm.yMin(), auto_min);
+    QCOMPARE(vm.yMax(), auto_max);
+    QCOMPARE(vm.leftYMin(), PlotConstants::kLockAxisMin);
 
     QFile::remove(path);
 }

@@ -31,6 +31,8 @@ private slots:
     void contextMenuPlotFileSubmenuTracksSources();
     void contextMenuViewModeReflectsAndSetsMode();
     void contextMenuResetActionsClearAxisOverrides();
+    void contextMenuOffersBothYLimits();
+    void yMinOverrideReachesTheChartAxis();
     void contextMenuAdvertisesEveryPlotShortcut();
     void contextMenuResetViewResetsBothAxes();
     void contextMenuSetTitleAppliesToViewModel();

@@ -19,6 +19,7 @@ private slots:
     void seriesColorAssignment();
     void yAutoRange();
     void snrYMaxOverride();
+    void yMinOverridesAndTheSpanGuard();
     void xTimeWindow();
     void seriesVisibility();
     void clearData();
