@@ -1,6 +1,7 @@
 #include "tmchart.h"
 
 #include <algorithm>
+#include <climits>
 #include <cmath>
 
 #include <QFontMetrics>
@@ -503,6 +504,117 @@ void TmChart::drawGrid(QPainter& painter) const
     painter.restore();
 }
 
+QPainterPath TmChart::seriesPath(const Series& s) const
+{
+    QPainterPath path;
+
+    // A plot only has as many pixel columns as it is wide, so a series with far
+    // more samples than that cannot show them individually: the extra points cost
+    // time to transform, to store in the path and to rasterize, and land on pixels
+    // that are already covered. Above kMaxSamplesPerPixelColumn samples per column
+    // the series is drawn from its ENVELOPE instead - per column: the first sample,
+    // the column's minimum and maximum, then the last sample.
+    //
+    // Min and max are what keep this honest. Taking every Nth sample would drop a
+    // one-sample dropout between the samples it kept, which on this plot is exactly
+    // the event an operator is looking for; the envelope always draws it, because a
+    // spike is a column's min or max by definition. First and last keep the line
+    // joining its neighbouring columns where the data actually is.
+    //
+    // The samples themselves are untouched - PlotViewModel still holds every point,
+    // so CSV export and the readout are unaffected. This is a drawing decision only.
+    const int columns = m_plot_area.width();
+    const bool decimate = columns > 0
+        && s.xs.size() > static_cast<qsizetype>(columns)
+                             * PlotConstants::kMaxSamplesPerPixelColumn;
+
+    auto pixelFor = [&](double vx, double vy) {
+        return QPointF(xToPixel(vx),
+                       s.axis == Axis::Left ? leftToPixel(vy) : rightToPixel(vy));
+    };
+
+    if (!decimate)
+    {
+        bool started = false;
+        for (int i = 0; i < s.xs.size(); ++i)
+        {
+            const double vx = s.xs[i];
+            const double vy = s.ys[i];
+            if (!std::isfinite(vx) || !std::isfinite(vy))
+            {
+                // A gap in the data must break the line rather than draw a straight
+                // segment across it, which would read as real data.
+                started = false;
+                continue;
+            }
+            const QPointF pt = pixelFor(vx, vy);
+            started ? path.lineTo(pt) : (path.moveTo(pt), started = true, void());
+        }
+        return path;
+    }
+
+    bool started       = false;   ///< Whether the path has a current point.
+    int  column        = INT_MIN; ///< Pixel column being accumulated.
+    QPointF first;                ///< First sample in the column.
+    QPointF last;                 ///< Last sample in the column.
+    double  lo = 0.0;             ///< Lowest y (in pixels) in the column.
+    double  hi = 0.0;             ///< Highest y (in pixels) in the column.
+
+    auto flush = [&]() {
+        if (column == INT_MIN)
+        {
+            return;
+        }
+        if (!started)
+        {
+            path.moveTo(first);
+            started = true;
+        }
+        else
+        {
+            path.lineTo(first);
+        }
+        // Order min before max only to keep the segment direction consistent; both
+        // are drawn, so the column shows the full range the samples covered.
+        path.lineTo(QPointF(first.x(), lo));
+        path.lineTo(QPointF(first.x(), hi));
+        path.lineTo(last);
+        column = INT_MIN;
+    };
+
+    for (int i = 0; i < s.xs.size(); ++i)
+    {
+        const double vx = s.xs[i];
+        const double vy = s.ys[i];
+        if (!std::isfinite(vx) || !std::isfinite(vy))
+        {
+            flush();
+            started = false;   // the gap breaks the line, as above
+            continue;
+        }
+
+        const QPointF pt = pixelFor(vx, vy);
+        const int col = static_cast<int>(std::floor(pt.x()));
+        if (col != column)
+        {
+            flush();
+            column = col;
+            first  = pt;
+            lo     = pt.y();
+            hi     = pt.y();
+        }
+        else
+        {
+            lo = std::min(lo, pt.y());
+            hi = std::max(hi, pt.y());
+        }
+        last = pt;
+    }
+    flush();
+
+    return path;
+}
+
 void TmChart::drawSeries(QPainter& painter) const
 {
     painter.save();
@@ -518,32 +630,7 @@ void TmChart::drawSeries(QPainter& painter) const
         }
         painter.setPen(s.pen);
 
-        QPainterPath path;
-        bool started = false;
-        for (int i = 0; i < s.xs.size(); ++i)
-        {
-            const double vx = s.xs[i];
-            const double vy = s.ys[i];
-            if (!std::isfinite(vx) || !std::isfinite(vy))
-            {
-                // A gap in the data must break the line rather than draw a
-                // straight segment across it, which would read as real data.
-                started = false;
-                continue;
-            }
-            const QPointF pt(xToPixel(vx),
-                             s.axis == Axis::Left ? leftToPixel(vy) : rightToPixel(vy));
-            if (!started)
-            {
-                path.moveTo(pt);
-                started = true;
-            }
-            else
-            {
-                path.lineTo(pt);
-            }
-        }
-        painter.drawPath(path);
+        painter.drawPath(seriesPath(s));
     }
     painter.restore();
 }

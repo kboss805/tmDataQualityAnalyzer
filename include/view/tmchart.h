@@ -177,6 +177,9 @@ private:
     void drawGrid(QPainter& painter) const;
     void drawAxes(QPainter& painter) const;
     void drawSeries(QPainter& painter) const;
+    /// @return the path for one series, drawn per sample when the series is small
+    /// enough to warrant it and from its per-pixel-column envelope when it is not.
+    QPainterPath seriesPath(const Series& s) const;
     void drawTitle(QPainter& painter, const QRect& rect) const;
     /// @return @p count evenly spaced values across [lower, upper].
     static QVector<double> tickValues(double lower, double upper, int count);

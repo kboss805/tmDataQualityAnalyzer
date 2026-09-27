@@ -373,6 +373,14 @@ namespace PlotConstants {
     /// data-driven range, and three places need to agree on it: the chart's
     /// initial left range, the ViewModel's lock-axis accessors, and the upper
     /// limit the Set Left Max dialog will accept.
+    /// Samples per pixel column above which a series is drawn from its envelope
+    /// rather than sample by sample. One column can only show one vertical run of
+    /// pixels, so beyond a couple of samples per column the extra points cost time
+    /// and change nothing on screen. Measured on a 1200 px plot: 12 channels of one
+    /// hour at 10 ms (360k samples each) took 102 s per repaint drawing every
+    /// point.
+    inline constexpr int kMaxSamplesPerPixelColumn = 2;
+
     inline constexpr double kLockAxisMin      = 0.0;
     inline constexpr double kLockAxisMax      = 100.0;
     inline constexpr const char* kXAxisLabel        = "Time (DDD:HH:MM:SS)"; ///< X axis label.

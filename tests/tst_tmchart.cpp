@@ -234,6 +234,82 @@ void TestTmChart::hiddenAxisReclaimsItsMargin()
     QVERIFY(qAbs(chart.leftToPixel(0.0) - chart.plotArea().bottom()) < 1e-6);
 }
 
+void TestTmChart::denseSeriesStillDrawsASingleSampleDropout()
+{
+    // A series with far more samples than the plot has pixel columns is drawn from
+    // its per-column envelope rather than sample by sample. The envelope has to
+    // keep a one-sample dropout: on this plot that lone sample IS the event an
+    // operator is hunting for, and a reduction that kept only the first and last
+    // sample of each column would lose it.
+    //
+    // The dropout is placed in the MIDDLE of a column, computed from the rendered
+    // plot area rather than guessed. An earlier version of this test put it at
+    // exactly half the series, which - x being the sample index, and the mapping
+    // linear - makes it the column's first sample, drawn either way. The test
+    // passed against the reduction it exists to reject.
+    TmChart chart;
+    chart.resize(600, 400);
+    chart.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&chart));
+
+    const int kSamples = 200000;
+    QVector<double> xs;
+    QVector<double> ys;
+    xs.reserve(kSamples);
+    ys.reserve(kSamples);
+    for (int i = 0; i < kSamples; ++i)
+    {
+        xs.push_back(i);
+        ys.push_back(100.0);
+    }
+
+    const int id = chart.addSeries(TmChart::Axis::Left);
+    chart.setSeriesPen(id, QPen(Qt::red));
+    chart.setSeriesData(id, xs, ys);
+    chart.setXRange(0, kSamples - 1);
+    chart.setLeftRange(0, 100);
+
+    auto render = [&]() {
+        QImage img(chart.size(), QImage::Format_ARGB32);
+        img.fill(Qt::white);
+        QPainter painter(&img);
+        chart.renderTo(painter, chart.size());
+        painter.end();
+        return img;
+    };
+
+    // First render establishes the plot area, which fixes how many samples share a
+    // pixel column; the dropout then goes halfway into one.
+    render();
+    const QRectF area = chart.plotArea();
+    QVERIFY(area.width() > 100);
+    const int per_column = kSamples / static_cast<int>(area.width());
+    QVERIFY2(per_column > 10, "series is not dense enough to be drawn from its envelope");
+
+    const int drop_at = kSamples / 2 + per_column / 2;
+    ys[drop_at] = 0.0;                  // one sample at the bottom of the range
+    chart.setSeriesData(id, xs, ys);
+
+    const QImage img = render();
+
+    // The flat line sits at the top of the axis, so any series-coloured pixel in
+    // the bottom quarter can only be the dropout.
+    int reddish = 0;
+    for (int y = static_cast<int>(area.bottom() - area.height() * 0.25);
+         y < static_cast<int>(area.bottom()) && y < img.height(); ++y)
+    {
+        for (int x = 0; x < img.width(); ++x)
+        {
+            const QColor c = img.pixelColor(x, y);
+            if (c.red() > 120 && c.green() < 100 && c.blue() < 100)
+            {
+                ++reddish;
+            }
+        }
+    }
+    QVERIFY2(reddish > 0, "a one-sample dropout mid-column was not drawn");
+}
+
 void TestTmChart::renderToPaintsData()
 {
     // renderTo() is the single path used for PNG, SVG and PDF export, so if it
