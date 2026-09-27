@@ -316,13 +316,26 @@ if os.path.exists(WALK):
     # manual. That cannot fail the build - an unregistered file is not broken, it
     # is undecided - but it must be said out loud, because the alternative is a
     # screenshot sitting in the repository for releases on end believing it ships.
+    # Spares are captures build_manual.ps1 declares as kept-on-purpose. Without
+    # them this fired on three deliberate decisions every single build, which is how
+    # a warning stops being read - and an unread warning is worse than none, because
+    # it looks like coverage.
+    spares = set()
+    spares_file = os.path.join(SRC, '.spares')
+    if os.path.exists(spares_file):
+        spares = {ln.strip() for ln in io.open(spares_file, encoding='utf-8-sig')
+                  if ln.strip()}
+
     src_dir = os.path.dirname(SRC)
-    registered = {f for f in os.listdir(src_dir) if f.lower().endswith('.png')}
-    unregistered = sorted(registered - have)
-    for f in unregistered:
-        print('WARNING: %s is in %s but is registered in no manual '
-              '(add it to $Images in build_manual.ps1, or delete it)'
+    on_disk = {f for f in os.listdir(src_dir) if f.lower().endswith('.png')}
+    forgotten = sorted(on_disk - have - spares)
+    for f in forgotten:
+        print('WARNING: %s is in %s but reaches no manual. Register it in $Images '
+              'in build_manual.ps1, record why it is kept in $Spares, or delete it.'
               % (f, src_dir))
+    if spares:
+        print('spares: %d capture(s) kept on purpose and used in neither manual'
+              % len(spares))
 
 io.open(FULL, 'w', encoding='utf-8', newline='\n').write(full)
 print('full manual : %-24s %5.0f KB, %d figures%s'
