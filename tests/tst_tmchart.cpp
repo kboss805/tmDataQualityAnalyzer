@@ -4,6 +4,8 @@
 #include <QPainter>
 #include <QtTest>
 
+#include <cmath>
+
 #include "constants.h"
 #include "tmchart.h"
 
@@ -308,6 +310,110 @@ void TestTmChart::denseSeriesStillDrawsASingleSampleDropout()
         }
     }
     QVERIFY2(reddish > 0, "a one-sample dropout mid-column was not drawn");
+}
+
+void TestTmChart::linePersistsWhenNoSampleIsInsideTheView()
+{
+    // A series is built only from the samples inside the X range, which is what
+    // makes a zoomed plot cheap. The sample on each SIDE of the range has to be
+    // kept anyway: zoomed far enough in - or sitting between two sparse points -
+    // the view can contain no sample at all, and the line crossing it is still
+    // real data. Keeping only what is strictly inside would blank the plot at
+    // exactly the zoom level an operator uses to read a value off it.
+    TmChart chart;
+    chart.resize(400, 300);
+    chart.setLeftRange(0, 100);
+
+    const int s = chart.addSeries(TmChart::Axis::Left);
+    chart.setSeriesPen(s, QPen(Qt::red, 2));
+    chart.setSeriesData(s, { 0.0, 100.0 }, { 50.0, 50.0 });
+
+    // A window in the middle of the single segment: no sample lies within it.
+    chart.setXRange(40.0, 60.0);
+
+    QImage img(chart.size(), QImage::Format_ARGB32);
+    const QColor bg(10, 10, 10);
+    img.fill(bg);
+    QPainter painter(&img);
+    chart.renderTo(painter, chart.size());
+    painter.end();
+
+    const QRectF area = chart.plotArea();
+    int reddish = 0;
+    for (int y = static_cast<int>(area.top()); y < static_cast<int>(area.bottom()); ++y)
+    {
+        for (int x = static_cast<int>(area.left()); x < static_cast<int>(area.right()); ++x)
+        {
+            const QColor c = img.pixelColor(x, y);
+            if (c.red() > 120 && c.green() < 100 && c.blue() < 100)
+            {
+                ++reddish;
+            }
+        }
+    }
+    QVERIFY2(reddish > 0, "the series vanished when no sample was inside the view");
+}
+
+void TestTmChart::rangeChangeRedrawsInsteadOfReusingGeometry()
+{
+    // The geometry is in pixels and is cached across paints, because a crosshair
+    // move repaints without changing anything it was built from. A range change
+    // DOES change it, and reusing it would leave the plot showing the previous
+    // view - a stale picture that still looks like a plausible plot, which is the
+    // hard kind of wrong. Same for the plot area: a resize moves every pixel.
+    TmChart chart;
+    chart.resize(400, 300);
+    chart.setLeftRange(0, 100);
+
+    // A step: low over the first half of the span, high over the second.
+    QVector<double> xs;
+    QVector<double> ys;
+    for (int i = 0; i <= 100; ++i)
+    {
+        xs.push_back(i);
+        ys.push_back(i < 50 ? 10.0 : 90.0);
+    }
+    const int s = chart.addSeries(TmChart::Axis::Left);
+    chart.setSeriesPen(s, QPen(Qt::red, 2));
+    chart.setSeriesData(s, xs, ys);
+    chart.setXRange(0, 100);
+
+    const QColor bg(10, 10, 10);
+    auto meanSeriesY = [&]() {
+        QImage img(chart.size(), QImage::Format_ARGB32);
+        img.fill(bg);
+        QPainter painter(&img);
+        chart.renderTo(painter, chart.size());
+        painter.end();
+
+        const QRectF area = chart.plotArea();
+        double sum   = 0.0;
+        int    count = 0;
+        for (int y = static_cast<int>(area.top()); y < static_cast<int>(area.bottom()); ++y)
+        {
+            for (int x = static_cast<int>(area.left()); x < static_cast<int>(area.right()); ++x)
+            {
+                const QColor c = img.pixelColor(x, y);
+                if (c.red() > 120 && c.green() < 100 && c.blue() < 100)
+                {
+                    sum += y;
+                    ++count;
+                }
+            }
+        }
+        return count > 0 ? sum / count : -1.0;
+    };
+
+    const double both_halves = meanSeriesY();
+    QVERIFY(both_halves > 0.0);
+
+    // Zoom onto the high half only. Y grows downwards, so the series must now sit
+    // measurably HIGHER on the image than the average of the two halves did.
+    chart.setXRange(60.0, 100.0);
+    const double high_half = meanSeriesY();
+    QVERIFY(high_half > 0.0);
+    QVERIFY2(high_half < both_halves - 10.0,
+             "the plot still showed the previous X range");
 }
 
 void TestTmChart::renderToPaintsData()

@@ -410,6 +410,67 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.12.1 tag
 
+#### The plot repaints in milliseconds: cached geometry, culling, and drawLines() (US4.0)
+
+Follows the per-pixel-column envelope directly below. That change predicted the remaining
+cost was "the per-sample loop that builds the envelope - not the path or the rasterizer."
+**That prediction was wrong, and measuring it is what found the real bottleneck.**
+
+Instrumenting the draw showed the envelope builder was not the problem: caching the built
+path dropped rebuilds per repaint to zero and the repaint took exactly as long as before.
+Almost all of it was inside the single `QPainter::drawPath()` call - and the time did not
+track the element count, which is what made it worth chasing. 1M samples x 3 series and
+360k x 12 produce 12,738 and 50,880 path elements, yet the first took 1,327 ms and the
+second 1,512 ms. The cost was not the geometry, it was stroking it.
+
+Same geometry, same 1.5 px pen, per repaint on a 1200 px plot:
+
+| case | `drawPath()` | `drawPolyline()` | `drawLines()` |
+| --- | --- | --- | --- |
+| 360k x 3 | 343 ms | 340 ms | **6 ms** |
+| 360k x 12 | 1,423 ms | 1,725 ms | **27 ms** |
+| 1M x 3 | 1,815 ms | 1,552 ms | **12 ms** |
+
+A non-cosmetic pen sends both a path and a polyline through the stroker, which builds an
+outline polygon across the whole run; `drawLines()` strokes each segment on its own and
+skips it. Disabling antialiasing was tried first and rejected - it helped zoomed views,
+left full-span repaints unchanged and made the 1M case *worse* (1,327 → 1,815 ms).
+
+Three changes, all in `TmChart`:
+
+- **Geometry is kept as `QVector<QLineF>` and drawn with one `drawLines()` per series.**
+  `seriesPath()` became `seriesSegments()`. A gap in the data breaks the line by emitting
+  no segment across it, which a `QPainterPath` needed a subpath to express. Steep slopes
+  were checked by rendering, not just measured: segment ends meet cleanly at zigzag peaks.
+- **The segments are cached per series** and rebuilt only when something they were built
+  from changes - the data, either Y range, the X range, or the plot area. A crosshair move,
+  a tooltip or a legend drag repaints without touching any of those, and now costs nothing
+  to prepare.
+- **Only the samples in view are built**, by binary search on the times when they are
+  sorted (`Series::sortedX`, computed once in `setSeriesData()` rather than assumed - the
+  chart is general, only `PlotViewModel`'s time series are ordered by construction). One
+  sample is kept on each *side* of the range: zoomed in far enough, the view can contain no
+  sample at all, and the line crossing it is still real data.
+
+Release build, one hour of data, per paint:
+
+| samples/series | series | first paint | repaint | zoomed to 1% |
+| --- | --- | --- | --- | --- |
+| 360,000 | 3 | 36 ms | **8 ms** | 4 ms |
+| 360,000 | 12 | 157 ms | **34 ms** | 20 ms |
+| 1,000,000 | 3 | 79 ms | **13 ms** | 5 ms |
+
+The twelve-channel repaint that opened this work at **102 seconds** is now **34 ms**.
+
+Two tests, each verified to fail against the defect it describes:
+
+- `linePersistsWhenNoSampleIsInsideTheView` - a window between two sparse samples still
+  draws the line. Without the one-sample margin the plot goes blank at exactly the zoom an
+  operator uses to read a value off it.
+- `rangeChangeRedrawsInsteadOfReusingGeometry` - a step function zoomed onto its high half
+  must move up the image. A stale cache shows the previous view, which still looks like a
+  plausible plot - the hard kind of wrong.
+
 #### Image export and the frameless-window handlers move out (US6.0, US4.1)
 
 The last of the file splits; the two remaining large View files are now ordinary sizes.
@@ -631,8 +692,9 @@ Release build, after:
 | 360,000 | 12 | 102,126 ms | **1,483 ms** |
 | 1,000,000 | 3 | 84,689 ms | **1,422 ms** |
 
-**What is left.** The remaining cost is the per-sample loop that builds the envelope -
-4.3M samples for the twelve-channel case - not the path or the rasterizer. Two further
+**What is left.** (Superseded - see the entry above. Measurement showed the cost was the
+rasterizer after all, not this loop.) The remaining cost is the per-sample loop that builds
+the envelope - 4.3M samples for the twelve-channel case - not the path or the rasterizer. Two further
 steps would address it, in this order: cache each series' path and rebuild it only when
 the data, the ranges or the plot area change (a crosshair move or a legend drag would then
 cost nothing), and cull to the visible X range by binary search on the sorted times (a

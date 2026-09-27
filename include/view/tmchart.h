@@ -4,6 +4,7 @@
 #include <functional>
 
 #include <QColor>
+#include <QLineF>
 #include <QPen>
 #include <QString>
 #include <QVector>
@@ -160,6 +161,19 @@ private:
         QString name;
         Axis    axis    = Axis::Left;
         bool    visible = true;
+
+        /// True when xs is finite and non-decreasing, which is what lets the draw
+        /// skip straight to the samples in view by binary search. Computed once per
+        /// setSeriesData() rather than assumed: TmChart is a general chart, and only
+        /// PlotViewModel's time series are ordered by construction.
+        bool sortedX = true;
+
+        /// The geometry last drawn, and whether it still matches the current data,
+        /// ranges and plot area. A crosshair move repaints without changing any of
+        /// those, and rebuilding an envelope over millions of samples for each of
+        /// those repaints is what made the plot feel stuck.
+        mutable QVector<QLineF> cachedSegments;
+        mutable bool            segmentsValid = false;
     };
 
     /// Recomputes m_plot_area from the current size, fonts and which chrome is
@@ -177,9 +191,12 @@ private:
     void drawGrid(QPainter& painter) const;
     void drawAxes(QPainter& painter) const;
     void drawSeries(QPainter& painter) const;
-    /// @return the path for one series, drawn per sample when the series is small
-    /// enough to warrant it and from its per-pixel-column envelope when it is not.
-    QPainterPath seriesPath(const Series& s) const;
+    /// @return the line segments for one series, built per sample when the series is
+    /// small enough to warrant it and from its per-pixel-column envelope when not.
+    QVector<QLineF> seriesSegments(const Series& s) const;
+    /// Drops every series' cached geometry. Called whenever something it was built
+    /// from changes: the data, a range, or the plot area.
+    void invalidateSeriesGeometry() const;
     void drawTitle(QPainter& painter, const QRect& rect) const;
     /// @return @p count evenly spaced values across [lower, upper].
     static QVector<double> tickValues(double lower, double upper, int count);
