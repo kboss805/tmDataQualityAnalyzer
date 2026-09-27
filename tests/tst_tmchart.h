@@ -26,6 +26,7 @@ private slots:
     void interactionsDisabledIgnoresWheel();
     void hiddenAxisReclaimsItsMargin();
     void renderToPaintsData();
+    void denseSeriesStillDrawsASingleSampleDropout();
     void exportOmitsCursorOverlays();
 };
 

@@ -568,6 +568,13 @@ attempt at all.
   preload from the dialog rather than from `StepDetector`: the shipped default
   when the stream has no file, the stream's own file when it has one, and the
   default again when a stored path no longer resolves.
+- `TestTmChart::denseSeriesStillDrawsASingleSampleDropout`: 200k samples, flat, with one
+  sample at the opposite end of the range, placed **mid-column** - computed from the
+  rendered plot area rather than guessed. The first version of this test put the dropout at
+  exactly half the series, which (x being the sample index, the mapping linear) makes it the
+  column's first sample and therefore drawn either way; it passed against the reduction it
+  exists to reject. With the dropout mid-column it fails against a first/last-only envelope
+  and passes against min/max, which was verified both ways.
 - The two tests that guarded the old boundary **never called the production code**: they
   wrote a TOML by hand with `QSettings` and asserted that a key they had not written was
   absent. That is why nothing failed when `Inverted` started being written.
@@ -585,6 +592,51 @@ attempt at all.
   both counted as skipped (rather than stalling on a reader that never opens), and
   `start()` with nothing matched neither clears the session nor announces a run.
 - Baseline **398 / 0 / 1** across **21 suites**, zero warnings.
+
+#### The plot draws at pixel resolution, not sample resolution (US3.0, US3.2)
+
+Reported as the plot "choking" on 10 ms data. Measured before changing anything, on a
+1200x700 plot, synthetic SNR series (debug build):
+
+| samples/series | series | addStreamData | rebuildChart | paint |
+| --- | --- | --- | --- | --- |
+| 10,000 | 3 | 46 ms | 0 ms | 310 ms |
+| 100,000 | 3 | 91 ms | 0 ms | 4,245 ms |
+| 360,000 | 3 | 194 ms | 0 ms | 30,197 ms |
+| 360,000 | 12 | 936 ms | 0 ms | **102,126 ms** |
+| 1,000,000 | 3 | 477 ms | 0 ms | 84,689 ms |
+
+One hour of twelve channels at 10 ms is 360k samples each, and **every repaint took 102
+seconds** - and a repaint happens on every pan, zoom, crosshair move and tooltip. Painting
+was over 99% of the cost and grew faster than linearly (10x the samples cost 13.7x the
+time), which is `QPainterPath` accumulating millions of segments.
+
+- `TmChart::seriesPath()` now draws a dense series from its **per-pixel-column envelope**:
+  for each column, the first sample, the column's minimum and maximum, then the last.
+  A plot 1200 px wide cannot show more than 1200 columns, so beyond
+  `PlotConstants::kMaxSamplesPerPixelColumn` (2) samples per column the extra points cost
+  time and change nothing on screen. Below that threshold every sample is still drawn.
+- **Min and max are what keep it honest.** Taking every Nth sample would drop a one-sample
+  dropout whenever it fell between the kept samples - and on this plot that lone sample is
+  the event an operator is hunting for. A spike is always its column's min or max.
+- **The samples are untouched.** `PlotViewModel` still holds every point, so CSV export,
+  the crosshair readout and the Y-range computation are unaffected. This is a drawing
+  decision, made where the drawing happens.
+
+Release build, after:
+
+| samples/series | series | paint before (debug) | paint after (release) |
+| --- | --- | --- | --- |
+| 360,000 | 3 | 30,197 ms | **371 ms** |
+| 360,000 | 12 | 102,126 ms | **1,483 ms** |
+| 1,000,000 | 3 | 84,689 ms | **1,422 ms** |
+
+**What is left.** The remaining cost is the per-sample loop that builds the envelope -
+4.3M samples for the twelve-channel case - not the path or the rasterizer. Two further
+steps would address it, in this order: cache each series' path and rebuild it only when
+the data, the ranges or the plot area change (a crosshair move or a legend drag would then
+cost nothing), and cull to the visible X range by binary search on the sorted times (a
+zoomed-in view would cost in proportion to what it shows). Neither is in this change.
 
 #### Derandomize is saved with the frame-sync pattern (US1.0)
 
