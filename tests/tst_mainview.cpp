@@ -238,6 +238,29 @@ void TestMainView::exitIsTheLastMenuEntry()
     QVERIFY(entries.indexOf("Exit") > entries.indexOf("Help"));
 }
 
+void TestMainView::openAndSaveTemplateCarryIcons()
+{
+    // Open and Save as Template carry the folder and save glyphs. Asserted as
+    // non-null icons rather than by resource path: a missing Qt resource yields a
+    // null QIcon, and setIcon() on a path that does not exist fails silently - the
+    // menu entry simply renders without a glyph, which no other test would notice.
+    MainView view;
+
+    QVERIFY(view.m_open_action != nullptr);
+    QVERIFY(view.m_save_template_action != nullptr);
+    QVERIFY2(!view.m_open_action->icon().isNull(), "Open... has no icon");
+    QVERIFY2(!view.m_save_template_action->icon().isNull(),
+             "Save as Template... has no icon");
+
+    // ...and they must actually render. A QIcon built from a missing or malformed
+    // SVG is non-null but produces an empty pixmap, so the check above alone would
+    // pass on artwork that draws nothing.
+    const QSize sz(16, 16);
+    QVERIFY2(!view.m_open_action->icon().pixmap(sz).isNull(), "folder glyph is empty");
+    QVERIFY2(!view.m_save_template_action->icon().pixmap(sz).isNull(),
+             "save glyph is empty");
+}
+
 void TestMainView::menuSectionHeadersSurviveTheStylesheet()
 {
     // The menu's section headers went unrendered for every themed build: the app

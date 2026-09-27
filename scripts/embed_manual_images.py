@@ -47,7 +47,11 @@ def app_version():
         raise SystemExit('could not parse AppVersion from %s' % VER)
     return '.'.join(m.group(1) for m in nums)
 
+PLACED = set()   # every capture this run embeds, for the coverage check below
+
+
 def fig(fname, caption, alt):
+    PLACED.add(fname)
     with open(os.path.join(SRC, fname), 'rb') as f:
         b64 = base64.b64encode(f.read()).decode('ascii')
     return ('\n<figure>\n  <img alt="%s" src="data:image/png;base64,%s">\n'
@@ -151,11 +155,22 @@ before('<h2 id="configure">',
            'is always available from Help regardless of this choice.',
            'Installer page offering an optional full illustrated user manual'))
 
+# Customize View has TWO tabs and both are shown here, in tab order. The SNR tree
+# was previously in the walkthroughs only - and the walkthroughs are an OPTIONAL
+# install, so a user who declined them saw only half of the dialog. The base manual
+# is the one compiled into the exe and cannot be declined, which is the same reason
+# v2.12.1 moved the receiver SNR field descriptions into it.
 after('<h2 id="plot">3. Working with the plot</h2>',
       fig('walk-cust-01-lock-tab.png',
           'Customize View, on the Frame Sync Lock tab: one row per stream with its colour and an '
           'editable name. Hiding a stream here removes it from the plot without reprocessing.',
           'Customize Plot Series dialog on the Frame Sync Lock Streams tab listing four streams')
+    + fig('walk-cust-02-snr-tree.png',
+          'The same dialog on the Receiver SNR tab. Channels are grouped under their receiver, '
+          'and a group toggle shows a partial state when only some of its channels are visible - '
+          'which is how a 48-channel file is narrowed to the few receivers worth looking at.',
+          'Customize Plot Series dialog on the Receiver SNR tab showing a collapsible '
+          'receiver and channel tree')
     + fig('walk-cust-03-recolor.png',
           'Choosing a series colour, reached by right-clicking a series in Customize View. Custom '
           'names and colours are what a processing template carries between files.',
@@ -277,6 +292,50 @@ if os.path.exists(WALK):
     # ...and the sections themselves, ahead of the first reference heading.
     body_anchor = '<h2 id="getting-started">'
     full = full.replace(body_anchor, fragment.rstrip() + '\n\n' + body_anchor, 1)
+
+# --- every registered capture must actually appear somewhere ------------------
+# A capture can be placed two ways - a fig() call here, or a {{FIG:}} placeholder in
+# the walkthroughs - so checking only one of them reports figures as orphaned when
+# they are not. Both funnel through fig(), which is why PLACED is collected there.
+#
+# Only meaningful once the walkthroughs have been expanded, since they place most of
+# the captures; without that file this would flag every walkthrough figure.
+if os.path.exists(WALK):
+    have = {f for f in os.listdir(SRC) if f.lower().endswith('.png')}
+    unplaced = sorted(have - PLACED)
+    if unplaced:
+        raise SystemExit(
+            'these captures are processed but appear in neither manual:\n  '
+            + '\n  '.join(unplaced)
+            + '\nAdd a fig() call here or a {{FIG:}} placeholder in %s, '
+              'or delete the capture.' % WALK)
+    print('figure coverage: %d/%d captures placed' % (len(PLACED), len(have)))
+
+    # The other direction: a capture dropped into docs/manual_images/ but never
+    # registered in build_manual.ps1 is never cropped, so it never reaches either
+    # manual. That cannot fail the build - an unregistered file is not broken, it
+    # is undecided - but it must be said out loud, because the alternative is a
+    # screenshot sitting in the repository for releases on end believing it ships.
+    # Spares are captures build_manual.ps1 declares as kept-on-purpose. Without
+    # them this fired on three deliberate decisions every single build, which is how
+    # a warning stops being read - and an unread warning is worse than none, because
+    # it looks like coverage.
+    spares = set()
+    spares_file = os.path.join(SRC, '.spares')
+    if os.path.exists(spares_file):
+        spares = {ln.strip() for ln in io.open(spares_file, encoding='utf-8-sig')
+                  if ln.strip()}
+
+    src_dir = os.path.dirname(SRC)
+    on_disk = {f for f in os.listdir(src_dir) if f.lower().endswith('.png')}
+    forgotten = sorted(on_disk - have - spares)
+    for f in forgotten:
+        print('WARNING: %s is in %s but reaches no manual. Register it in $Images '
+              'in build_manual.ps1, record why it is kept in $Spares, or delete it.'
+              % (f, src_dir))
+    if spares:
+        print('spares: %d capture(s) kept on purpose and used in neither manual'
+              % len(spares))
 
 io.open(FULL, 'w', encoding='utf-8', newline='\n').write(full)
 print('full manual : %-24s %5.0f KB, %d figures%s'

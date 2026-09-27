@@ -49,11 +49,35 @@ $MaxWidth     = 1200
 #     the right-hand axis tick labels, so the plain capture reads better.
 # The frame-sync pair is kept BOTH ways because the manual's legend-toggle section is
 # the one place where the contrast itself is the subject.
+# Captures kept on purpose but used in neither manual. Naming them here is what
+# separates "decided against" from "forgotten": the coverage check reports anything
+# in docs/manual_images/ that is neither processed nor listed below, and a check
+# that also fired on these three deliberate choices would be noise on every build -
+# which is how a warning stops being read at all.
+#
+# Each entry records WHY, because the reason is the whole value of keeping the file.
+$Spares = [ordered]@{
+    # Near-duplicate: walk-err-01-log-error.png shows the same sidebar with an error
+    # in it, which documents the log better. Kept in case a plain sidebar shot is
+    # ever wanted.
+    'walk-app-02-sidebar.png'                        = 'superseded by walk-err-01-log-error.png'
+    # The unused halves of the with/without-legend pairs. Which variant suits which
+    # section is a judgement call (see the note above $Images), so both are captured
+    # and only one is placed.
+    'Calibrated SNR Plot with Legend.png'            = 'unused half of a legend pair'
+    'Frame Error Accumulation Plot without Legend.png' = 'unused half of a legend pair'
+}
+
 $Images = [ordered]@{
     'Config Streams Dialg.png'                       = $false  # already a dialog-sized capture
-    # Full-screen grab (app floating over the IDE), 1973x1137 - the chart sits at a
-    # different offset, so this one carries its own rectangle.
-    'Main Context Menu.png'                          = @(425, 63, 1520, 1045)
+    # Full-screen grab (app floating over the IDE), 1949x1107 - the chart sits at a
+    # different offset, so this one carries its own rectangle. Re-captured for the
+    # menu that no longer carries Export; this capture has the log sidebar HIDDEN,
+    # so the crop starts at the left edge. The previous rectangle began at x=425 to
+    # skip a sidebar that was open then, and reusing it here would have cut off the
+    # Y axis - the reason each entry declares its own rectangle rather than sharing
+    # the standard one.
+    'Main Context Menu.png'                          = @(14, 45, 1918, 1055)
     'FrameSync Perctentage Plot with Legend.png'     = $true
     'FrameSync Perctentage Plot without Legend.png'  = $true
     'Frame Error Accumulation Plot with Legend.png'  = $true
@@ -84,10 +108,7 @@ $Images = [ordered]@{
     # sidebar and the light theme are the subjects, so the chart-region crop would
     # remove the very thing being illustrated.
     #
-    # walk-app-02-sidebar.png is NOT processed: walk-err-01-log-error.png shows the
-    # same sidebar with an error in it, so it documents the log better and this one
-    # would be a near-duplicate. The capture is kept in docs/manual_images/ in case
-    # a plain sidebar shot is wanted later.
+    # (walk-app-02-sidebar.png is deliberately not processed - see $Spares above.)
     # The menu is a popup window, so a window-only grab captures either the menu
     # without the app or the app without the menu. Captured as the whole window and
     # cropped to the menu, which is the only technique that shows both.
@@ -130,6 +151,16 @@ $Images = [ordered]@{
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
+# Clear previous output first: processed/ is gitignored build output, and a
+# capture that gets renamed otherwise leaves its old file behind forever. Three
+# such leftovers had accumulated, which is what made the directory useless as a
+# record of what the manual actually uses.
+if (Test-Path $OutDir) { Remove-Item (Join-Path $OutDir '*.png') -Force }
+
+# The embed step does the coverage check and needs to know which unused captures
+# are deliberate. Passed as a file rather than a parameter so the two scripts do not
+# grow a positional contract.
+$SparesFile = Join-Path $OutDir '.spares'
 Write-Host "Processing screenshots..."
 foreach ($name in $Images.Keys) {
     $path = Join-Path $SrcDir $name
@@ -175,6 +206,13 @@ foreach ($name in $Images.Keys) {
 }
 
 Write-Host "`nEmbedding into the manual (via scripts\embed_manual_images.py)..."
+# Record the deliberate spares for the embedder's coverage check.
+New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+# @() forces enumeration: without it the key collection stringifies to one line of
+# "System.Collections.Specialized...KeyValueCollection", which the reader then takes
+# as a single filename - a spares list that silently covers nothing.
+Set-Content -Path $SparesFile -Value @($Spares.Keys) -Encoding UTF8
+
 & py (Join-Path $ProjectDir 'scripts\embed_manual_images.py')
 if ($LASTEXITCODE -ne 0) { throw "embed step failed ($LASTEXITCODE)" }
 

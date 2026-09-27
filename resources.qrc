@@ -1,0 +1,36 @@
+<!-- Qt resources compiled into BOTH the app and the test binary.
+
+     An explicit .qrc rather than a bare RESOURCES file list, because qmake
+     derives an alias from each file's path RELATIVE TO THE .pro THAT LISTS IT.
+     The app builds from the root and got ":/resources/x.svg"; the tests build
+     from tests/ and got ":/x.svg" for the same file, so every icon lookup in a
+     widget under test silently returned a null QIcon. Paths inside a .qrc are
+     relative to the .qrc itself, so both builds now agree. -->
+<RCC>
+  <qresource prefix="/">
+    <file>resources/win11-dark.qss</file>
+    <file>resources/win11-light.qss</file>
+    <file>resources/icon.ico</file>
+    <file>resources/checkmark.svg</file>
+    <file>resources/chevron-down-dark.svg</file>
+    <file>resources/chevron-down-light.svg</file>
+    <file>resources/chevron-right-dark.svg</file>
+    <file>resources/chevron-right-light.svg</file>
+    <file>resources/chevron-down-disabled-dark.svg</file>
+    <file>resources/chevron-down-disabled-light.svg</file>
+    <file>resources/folder-open.svg</file>
+    <file>resources/floppy-save.svg</file>
+    <file>resources/play.svg</file>
+    <file>resources/gear.svg</file>
+    <file>resources/retry.svg</file>
+    <file>resources/export-dark.svg</file>
+    <file>resources/export-light.svg</file>
+    <file>resources/import-dark.svg</file>
+    <file>resources/import-light.svg</file>
+    <file>resources/toggle-on-dark.svg</file>
+    <file>resources/toggle-off-dark.svg</file>
+    <file>resources/toggle-on-light.svg</file>
+    <file>resources/toggle-off-light.svg</file>
+    <file>resources/usermanual.html</file>
+  </qresource>
+</RCC>

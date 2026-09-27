@@ -24,6 +24,10 @@ win32 {
 # app's -Wall -Wextra so their pre-existing warnings don't bury real app warnings.
 include($$PWD/../thirdparty.pri)
 
+# The same Qt resources the app compiles in. Widgets under test load their
+# icons from :/resources/..., and without this every one is a null QIcon.
+include($$PWD/../resources.pri)
+
 # Application sources (exclude main.cpp to avoid duplicate main), grouped by layer.
 SOURCES += \
     $$PWD/../src/model/channeldata.cpp \
