@@ -68,9 +68,8 @@ signal degradation.
    processed at the same time; each appears on the plot as it finishes. A
    progress dialog shows how far along the run is and can cancel it.
 
-5. Export: right-click the plot and choose "Export...", or use the menu's
-   Import/Export section, to save the plot as an image, the data as a CSV, or the
-   message log as text.
+5. Export: use the menu's Import/Export section to save the plot as an image,
+   the data as a CSV, or the message log as text.
 
 ================================================================================
 3. PROCESSING SCOPE & AVERAGING WINDOW
@@ -226,13 +225,20 @@ right-clicking anywhere on the plot.
   Show Legend         Show or hide the floating legend.
   Readout             Choose which series the hover readout follows (see below).
   X Axis              Set an exact time window, or reset to the full span.
-  Y Axes              Set a maximum for either axis, or reset those maximums
-                      to automatic.
+  Y Axes              Set a minimum and/or a maximum for either axis, or reset
+                      all four back to automatic. A limit you do not set still
+                      scales to the data.
   Reset View     R    Restore the full time span AND automatic axis scaling in
                       one action - the same as the on-chart "Reset view" button.
-  Export...           Save an image, the data, or the log.
 
 Entries stay greyed out until data is loaded.
+
+Setting a Y-axis minimum is worth knowing about for frame sync lock. Healthy
+streams all sit in the top two or three percent of the 0-100% axis, where they
+overlap into one line across the top of the plot. Y Axes > Set Left Min... set
+to 98 spreads the difference between 98.4% and 99.7% across the whole plot.
+Raising a minimum past its maximum pushes the maximum up rather than turning the
+axis inside out.
 
 --- On-chart buttons ---
 A small row of buttons sits at the top-left of the chart:
@@ -273,9 +279,8 @@ clear of the data you are studying. With many channels it scrolls.
 6. EXPORTING RESULTS
 ================================================================================
 To share findings or process the data in external tools (such as MATLAB or
-Excel), use Export - from the plot's right-click menu or the main menu's
-Import/Export section. One dialog handles all three, and you can produce any
-combination in a single action.
+Excel), use Export in the main menu's Import/Export section. One dialog handles
+all three, and you can produce any combination in a single action.
 
 - Image: saves the current visual state of the plot, including your current zoom
   and pan window, as PNG, SVG or PDF. The legend is included, positioned exactly
