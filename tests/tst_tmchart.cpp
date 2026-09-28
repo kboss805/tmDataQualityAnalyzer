@@ -312,6 +312,69 @@ void TestTmChart::denseSeriesStillDrawsASingleSampleDropout()
     QVERIFY2(reddish > 0, "a one-sample dropout mid-column was not drawn");
 }
 
+void TestTmChart::denseSeriesShowsItsSpreadNotJustItsMean()
+{
+    // A decimated series draws a BAND from each pixel column's minimum to its
+    // maximum, with the line running through the column's mean. Drawing the mean
+    // alone would be a defensible-looking plot that quietly hides how much the
+    // signal moved inside every column - and on a noisy receiver that spread is the
+    // measurement.
+    //
+    // The series alternates between two extremes, so its mean sits exactly in the
+    // middle of the axis and nothing but the band can put ink near the edges.
+    TmChart chart;
+    chart.resize(600, 400);
+    chart.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&chart));
+
+    const int kSamples = 200000;
+    QVector<double> xs;
+    QVector<double> ys;
+    xs.reserve(kSamples);
+    ys.reserve(kSamples);
+    for (int i = 0; i < kSamples; ++i)
+    {
+        xs.push_back(i);
+        ys.push_back((i % 2) ? 90.0 : 10.0);
+    }
+
+    const int id = chart.addSeries(TmChart::Axis::Left);
+    chart.setSeriesPen(id, QPen(Qt::red));
+    chart.setSeriesData(id, xs, ys);
+    chart.setXRange(0, kSamples - 1);
+    chart.setLeftRange(0, 100);
+
+    QImage img(chart.size(), QImage::Format_ARGB32);
+    img.fill(Qt::white);
+    QPainter painter(&img);
+    chart.renderTo(painter, chart.size());
+    painter.end();
+
+    const QRectF area = chart.plotArea();
+    auto inkIn = [&](double from_fraction, double to_fraction) {
+        int n = 0;
+        const int y0 = static_cast<int>(area.top() + area.height() * from_fraction);
+        const int y1 = static_cast<int>(area.top() + area.height() * to_fraction);
+        for (int y = y0; y < y1 && y < img.height(); ++y)
+        {
+            for (int x = static_cast<int>(area.left()); x < static_cast<int>(area.right()); ++x)
+            {
+                const QColor c = img.pixelColor(x, y);
+                if (c.red() > c.green() + 40 && c.red() > c.blue() + 40)
+                {
+                    ++n;
+                }
+            }
+        }
+        return n;
+    };
+
+    // The mean line sits mid-axis; the band has to reach both extremes.
+    QVERIFY2(inkIn(0.05, 0.20) > 0, "nothing drawn near the series maximum");
+    QVERIFY2(inkIn(0.80, 0.95) > 0, "nothing drawn near the series minimum");
+    QVERIFY2(inkIn(0.45, 0.55) > 0, "the mean line is missing from the middle");
+}
+
 void TestTmChart::linePersistsWhenNoSampleIsInsideTheView()
 {
     // A series is built only from the samples inside the X range, which is what

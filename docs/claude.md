@@ -410,6 +410,36 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.13.1 tag
 
+#### A decimated series shows its spread, not just a line through it (US3.0, US3.2)
+
+The idea is Qwt's `QwtPlotIntervalCurve`, from the same review that rejected the
+library itself.
+
+The decimation has always computed each pixel column's minimum and maximum, then
+drawn them as an opaque outline - which on dense noisy data reads as one solid blob.
+The spread was on screen but not legible, and there was nothing to say where inside
+it the signal actually sat.
+
+- **The column's min-max range is now a translucent band, and the line runs through
+  the column's MEAN** rather than whichever sample happened to land first. On a noisy
+  receiver that spread is the measurement, and the mean is what makes it readable.
+- **The band is outlined, not merely filled.** The polygon's top and bottom edges ARE
+  the extremes, so stroking them is what keeps a one-sample excursion as sharp as it
+  was before the band existed. Rendering the fill alone first - and looking at it -
+  showed the dropout degraded from a solid line to a faint smudge, on the plot whose
+  whole purpose is spotting dropouts. The outline uses a cosmetic pen, which draws
+  crisply and skips Qt's stroker.
+- Both come out of one column walk, so the extra geometry costs no extra pass. With
+  the backing store above, it is also built once per view change rather than per paint.
+- Sparse series are unchanged: below the decimation threshold a column holds a sample
+  or two and there is no spread to show, so there is no band.
+
+`denseSeriesShowsItsSpreadNotJustItsMean` alternates a dense series between two
+extremes, so its mean sits mid-axis and only the band can put ink near the edges;
+it asserts ink at both extremes and in the middle. Verified to fail without the band -
+as, more tellingly, does the existing `denseSeriesStillDrawsASingleSampleDropout`,
+which now depends on the band to reach the dropout at all.
+
 #### A repaint that changed nothing costs a blit (US4.0)
 
 The idea is Qwt's `QwtPlotCanvas::BackingStore`, taken from a review of that library

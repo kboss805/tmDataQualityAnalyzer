@@ -6,6 +6,7 @@
 #include <QColor>
 #include <QLineF>
 #include <QPixmap>
+#include <QPolygonF>
 #include <QPen>
 #include <QString>
 #include <QVector>
@@ -173,8 +174,15 @@ private:
         /// ranges and plot area. A crosshair move repaints without changing any of
         /// those, and rebuilding an envelope over millions of samples for each of
         /// those repaints is what made the plot feel stuck.
+        /// The line actually stroked: every sample when the series is sparse enough
+        /// to draw one by one, otherwise each pixel column's MEAN - the value the
+        /// column represents, rather than whichever sample happened to land first.
         mutable QVector<QLineF> cachedSegments;
-        mutable bool            segmentsValid = false;
+        /// One filled polygon per unbroken run of columns, spanning each column's
+        /// minimum to its maximum. Empty unless the series is decimated: below the
+        /// threshold a column holds a sample or two and there is no spread to show.
+        mutable QVector<QPolygonF> cachedBands;
+        mutable bool               segmentsValid = false;
     };
 
     /// Recomputes m_plot_area from the current size, fonts and which chrome is
@@ -205,7 +213,9 @@ private:
     void drawSeries(QPainter& painter) const;
     /// @return the line segments for one series, built per sample when the series is
     /// small enough to warrant it and from its per-pixel-column envelope when not.
-    QVector<QLineF> seriesSegments(const Series& s) const;
+    /// Fills @p s cachedSegments and cachedBands for the current ranges and plot
+    /// area. One pass: the mean line and the band come from the same column walk.
+    void rebuildSeriesGeometry(const Series& s) const;
     /// Drops every series' cached geometry. Called whenever something it was built
     /// from changes: the data, a range, or the plot area.
     void invalidateSeriesGeometry() const;
