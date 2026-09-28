@@ -410,6 +410,41 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.13.1 tag
 
+#### X ticks land on round times (US4.0)
+
+The idea is Qwt's `QwtDateScaleEngine`, from the same review.
+
+The ticks divided the visible span into N equal parts, so their VALUES were whatever
+the span happened to be over four - a 116-second view produced ticks 29 seconds
+apart, and an axis read as `DDD:HH:MM:SS` had nothing on it a person would name.
+
+- `TmChart::timeTickValues()` snaps the step to the next natural interval at or above
+  the evenly divided one, from a ladder of 1/2/5/10/15/30 s, 1/2/5/10/15/30 min,
+  1/2/3/6/12 h and a day, then starts at the first round time at or after the range.
+  Ticks no longer sit on the range ends, which is the point: they sit on round times
+  inside it.
+- **Beyond a day per tick the step becomes a whole number of days.** Without that the
+  ladder's top entry would be reused and a multi-week recording would grow ticks
+  without bound.
+- **Below a second it falls back to even division** - the format has no field finer
+  than seconds, so there is nothing to snap to and pretending otherwise would give
+  one tick for the whole view.
+- Snapping applies only when a **time formatter** is set. That is what makes the axis
+  a time axis; without one `TmChart` is a general chart whose X values are numbers,
+  and snapping them to 15 s would be meaningless. The Y axes are untouched - lock %
+  and dB are not times.
+- Grid lines and labels both go through one `xTickValues()`, so they cannot disagree
+  about where a tick is.
+
+`timeTicksLandOnRoundTimes` covers all five cases - half-minutes, an offset range
+where neither end is round, half-hours, whole days, and the sub-second fallback -
+asserting the values rather than the rendered labels, because offscreen rendering has
+no fonts to read a label back with and the property claimed is arithmetic. Verified to
+fail against the even division it replaces.
+
+`timeTickValues()` is public, unlike the evenly spaced `tickValues()`: it is pure,
+stateless and worth asserting directly, and `TmChart` exposes observation points
+rather than befriending its tests.
 #### A decimated series shows its spread, not just a line through it (US3.0, US3.2)
 
 The idea is Qwt's `QwtPlotIntervalCurve`, from the same review that rejected the

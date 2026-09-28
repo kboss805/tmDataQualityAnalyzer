@@ -22,6 +22,7 @@ private slots:
     void xTransformRoundTrips();
     void yTransformsAreOrientedAndIndependent();
     void tickValuesSpanRangeInclusive();
+    void timeTicksLandOnRoundTimes();
     void wheelZoomAnchorsUnderCursorAndReportsRange();
     void interactionsDisabledIgnoresWheel();
     void hiddenAxisReclaimsItsMargin();

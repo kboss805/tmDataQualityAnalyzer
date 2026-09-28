@@ -163,6 +163,73 @@ void TestTmChart::tickValuesSpanRangeInclusive()
     QCOMPARE(chart.xToPixel(chart.xUpper()), chart.plotArea().right());
 }
 
+void TestTmChart::timeTicksLandOnRoundTimes()
+{
+    // Ticks are read as DDD:HH:MM:SS, so they have to fall on times a person would
+    // name. Dividing the span evenly put them on arbitrary instants - a 116-second
+    // view gave ticks 29 seconds apart, and nothing on screen fell on a round time.
+    //
+    // Asserted on the VALUES rather than the rendered labels: offscreen rendering
+    // has no fonts, so a screenshot here proves only layout, and the whole property
+    // being claimed is arithmetic.
+    auto allMultiplesOf = [](const QVector<double>& ticks, double step) {
+        for (double t : ticks)
+        {
+            if (std::abs(t / step - std::round(t / step)) > 1e-6)
+            {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    // 116 s over 5 ticks wants ~29 s; the ladder's next step up is 30 s.
+    {
+        const QVector<double> ticks = TmChart::timeTickValues(0.0, 116.0, 5);
+        QVERIFY(ticks.size() >= 3);
+        QVERIFY2(allMultiplesOf(ticks, 30.0), "ticks are not whole half-minutes");
+        for (double t : ticks)
+        {
+            QVERIFY(t >= 0.0 && t <= 116.0);
+        }
+    }
+
+    // Offset so neither end is round: the ticks must still be, which is exactly what
+    // the old implementation could not do - it started at the range edge.
+    {
+        const QVector<double> ticks = TmChart::timeTickValues(1000.0, 1116.0, 5);
+        QVERIFY(!ticks.isEmpty());
+        QVERIFY2(allMultiplesOf(ticks, 30.0), "ticks are not whole half-minutes");
+        QVERIFY(ticks.first() >= 1000.0);
+        QVERIFY(ticks.last() <= 1116.0);
+    }
+
+    // An hour and a half over 5 ticks wants ~22 min; the ladder gives 30 min.
+    {
+        const QVector<double> ticks = TmChart::timeTickValues(0.0, 5400.0, 5);
+        QVERIFY2(allMultiplesOf(ticks, 1800.0), "ticks are not whole half-hours");
+    }
+
+    // Longer than a day per tick: whole days, so a multi-week recording stays round
+    // instead of reusing the ladder's top entry and growing ticks without bound.
+    {
+        const double kDay = 86400.0;
+        const QVector<double> ticks = TmChart::timeTickValues(0.0, 30.0 * kDay, 5);
+        QVERIFY(!ticks.isEmpty());
+        QVERIFY(ticks.size() < 20);
+        QVERIFY2(allMultiplesOf(ticks, kDay), "ticks are not whole days");
+    }
+
+    // Below a second there is no field to snap to, so an evenly divided span is the
+    // honest answer - and it still has to cover the range.
+    {
+        const QVector<double> ticks = TmChart::timeTickValues(0.0, 0.5, 5);
+        QCOMPARE(ticks.size(), 5);
+        QCOMPARE(ticks.first(), 0.0);
+        QCOMPARE(ticks.last(), 0.5);
+    }
+}
+
 void TestTmChart::wheelZoomAnchorsUnderCursorAndReportsRange()
 {
     TmChart chart;
