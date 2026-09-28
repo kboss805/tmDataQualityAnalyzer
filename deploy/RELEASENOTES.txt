@@ -1,38 +1,45 @@
-tmDataQualityAnalyzer v2.13.1 - What's New
+tmDataQualityAnalyzer v2.14.0 - What's New
 =================================
 
-  A packaging fix. The application itself is unchanged from v2.13.0 - if you are
-  already running that version, nothing you do in the program will behave any
-  differently.
+  Four improvements to the plot window, all of them about reading the data
+  rather than processing it. Nothing about how streams are processed, calibrated
+  or exported has changed.
 
-  Fixed:
+  New:
 
-  - The installer was more than twice the size it needed to be. It carried a
-    copy of the Microsoft Visual C++ redistributable installer that was never
-    run: the Visual C++ files the application actually needs have always been
-    installed alongside the program itself, so the extra copy did nothing but
-    take up space - both in the download and on your disk afterwards.
+  - Zoom Back. Right-click the plot and use X Axis > Zoom Back, or press
+    Backspace, to return to the view you were looking at before the last zoom -
+    one level at a time. Drilling into a loss-of-lock and retracing your way out
+    no longer means starting again from the full recording.
 
-    The installer is now 18.4 MB instead of 41.0 MB - less than half - and the
-    installed folder is about 25 MB smaller. Nothing was removed that the
-    application uses.
+    It remembers the zooms you chose deliberately - a drag across the plot, or a
+    time window you typed - and ignores the mouse wheel and panning, so the list
+    stays the handful of views you meant rather than every notch of the wheel.
+    Reset Span still returns the whole recording and forgets the levels.
 
-    The portable ZIP is unaffected - it never contained the extra copy.
+  Improved:
 
-  If you are installing over v2.13.0, the leftover file is removed for you as
-  part of the upgrade. Your settings are untouched, as always.
+  - A dense trace now shows how much the signal moved, not just where it
+    averaged. Where a recording has more samples than the plot has pixels, each
+    column is drawn as a band from its lowest to its highest value, with the line
+    running through the column's average. Previously those columns were drawn as
+    a single outline, which on a noisy receiver read as one solid shape with no
+    indication of where inside it the signal actually sat.
 
-  ---
+    A one-sample dropout is still drawn as sharply as before - it is the bottom
+    of its column, and the band's edge is drawn solid for exactly that reason.
 
-  New in v2.13.0, if you are coming from an earlier version:
+  - Time labels land on round times. The axis used to divide whatever span was on
+    screen into equal parts, so a two-minute view produced labels 29 seconds
+    apart. It now steps in intervals you would actually name - 15 seconds, 5
+    minutes, 6 hours - and places them on round times within the view.
 
-  - The plot is dramatically faster on large recordings - twelve channels of an
-    hour at 10 ms resolution went from about a minute and a half per redraw to a
-    small fraction of a second.
-  - You can now set the MINIMUM of either Y axis, not just the maximum
-    (right-click the plot, Y Axes). Setting the left minimum to 98 spreads a set
-    of frame sync lock streams that all sit near 100% across the whole plot.
-  - The Derandomize setting is now saved to and restored from frame sync pattern
-    files.
-  - Export... moved off the plot's right-click menu; it lives in the main menu
-    under Import/Export. Exit is now the last entry in the main menu.
+  - The plot redraws instantly. Moving the mouse across the chart, dragging the
+    legend or showing a tooltip used to redraw every curve from scratch; on a
+    large recording that was most of a second each time, which is what made the
+    window feel sluggish. The drawn plot is now kept and reused until something
+    about it actually changes.
+
+    Together with the previous release's work, a plot of twelve channels over an
+    hour at 10 ms resolution has gone from roughly a minute and a half per redraw
+    to under a thousandth of a second.
