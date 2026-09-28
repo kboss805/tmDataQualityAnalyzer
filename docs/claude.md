@@ -408,6 +408,78 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ## Version History
 
+### Unreleased — since the v2.13.1 tag
+
+#### A repaint that changed nothing costs a blit (US4.0)
+
+The idea is Qwt's `QwtPlotCanvas::BackingStore`, taken from a review of that library
+rather than from adopting it - see the note at the end.
+
+v2.13.0 cached each series' *geometry*, which stopped the segments being rebuilt but
+still re-rasterized them on every paint. So moving the crosshair across twelve
+channels cost the full 34 ms draw, every mouse move, for a picture that had not
+changed. The data layer - background, title, grid, series, axes - is now painted once
+into a `QPixmap` and blitted; the crosshair and zoom band are painted on top of the
+blit and are deliberately never part of it.
+
+Release build, per paint:
+
+| samples/series | series | first paint | repaint | crosshair move |
+| --- | --- | --- | --- | --- |
+| 360,000 | 3 | 35 ms | **0 ms** | **0 ms** |
+| 360,000 | 12 | 127 ms | **1 ms** | **0 ms** |
+| 1,000,000 | 3 | 81 ms | **0 ms** | **0 ms** |
+
+Where the twelve-channel repaint has been across three changes: **102 s → 1,483 ms
+→ 34 ms → under 1 ms.**
+
+- `render()` splits into `renderData()` (everything cacheable) and
+  `renderOverlays()` (cursor state). `renderTo()` is untouched and never uses the
+  pixmap: an export renders at its own size and must not be a rescaled screen grab.
+- **Every setter that changes the data layer now calls `updateData()`** rather than
+  `update()`; only `setCrosshair()` and `setZoomBand()` call `update()` directly, and
+  that difference is the whole optimisation. 18 call sites moved, 2 deliberately did
+  not. `invalidateSeriesGeometry()` drops the pixmap too - anything that makes the
+  segments stale makes the picture drawn from them stale.
+- The pixmap carries the widget's device pixel ratio and is rebuilt when either the
+  size or the ratio changes, so moving the window to a differently-scaled monitor
+  re-renders rather than upscaling.
+
+Two tests, each verified to fail against the defect it describes. Both go through
+`grab()` rather than `renderTo()`, because `renderTo()` paints straight to its target
+and never touches the pixmap - the existing rendering tests could not have caught
+either of these:
+
+- `cachedPaintStillFollowsTheData` - two identical paints must match, and a range
+  change must not. A stale pixmap shows the previous view, which still looks like a
+  plausible plot.
+- `crosshairDrawsOverTheCachedPlot` - the crosshair must change the image and hiding
+  it must restore it exactly. The opposite failure to a stale plot: an overlay that
+  never appears because the blit is all that reaches the screen.
+
+#### Why not Qwt itself
+
+Reviewed at the same time, and **not adopted**. `QwtPlotCurve::drawLines` ends in
+`QwtPainter::drawPolyline`, a wrapper over `QPainter::drawPolyline`, with the pen used
+as-is and no cosmetic-pen handling - which is the call this project measured at
+**1,725 ms** against `drawLines()`'s 27 ms for the same geometry and the same 1.5 px
+pen. Adopting it would have cost roughly 60x the paint time it now has.
+
+Worth recording from the review:
+
+- **`QwtPlotCurve::FilterPointsAggressive` reduces each pixel column to "first, min,
+  max, last"** - the same envelope v2.13.0 arrived at independently. Two
+  implementations converging on it is reasonable evidence it is right. It is off by
+  default in Qwt and limited to integer-coordinate devices.
+- Qwt's licence would not have been the obstacle (LGPL with a static-linking
+  exception, no attribution required). The scale was: ~200 classes, ~40 of them plot
+  classes, against `TmChart`'s ~700 lines - and v2.9.0 deliberately deleted 44,700
+  lines of QCustomPlot to be rid of exactly that.
+- Still on the list as ideas rather than dependencies: a zoom stack with history
+  (`QwtPlotZoomer`), an interval band drawn from the per-column min/max the decimation
+  already computes (`QwtPlotIntervalCurve`), and tick steps snapped to natural time
+  boundaries (`QwtDateScaleEngine`) instead of the current linear spacing in seconds.
+
 ### v2.13.1 — A Third of the Installer Was a Redistributable Nothing Ran
 
 The application binary is functionally identical to v2.13.0; this release exists to

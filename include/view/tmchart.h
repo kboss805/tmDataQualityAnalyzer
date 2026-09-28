@@ -5,6 +5,7 @@
 
 #include <QColor>
 #include <QLineF>
+#include <QPixmap>
 #include <QPen>
 #include <QString>
 #include <QVector>
@@ -188,6 +189,17 @@ private:
     /// Paints everything at @p rect. Shared by paintEvent() and renderTo();
     /// @p with_overlays is false for export.
     void render(QPainter& painter, const QRect& rect, bool with_overlays) const;
+    /// Paints the data layer - background, title, grid, series, axes. Everything
+    /// that only changes when the data, the ranges or the styling change.
+    void renderData(QPainter& painter, const QRect& rect) const;
+    /// Paints the cursor overlays - zoom band and crosshair - on top of the data
+    /// layer. These move constantly and are never part of the backing store.
+    void renderOverlays(QPainter& painter) const;
+    /// Marks the backing store stale and schedules a repaint. Every setter that
+    /// changes the DATA layer calls this rather than update() directly; only the
+    /// two cursor-overlay setters call update() on its own, which is what makes a
+    /// crosshair move cheap.
+    void updateData();
     void drawGrid(QPainter& painter) const;
     void drawAxes(QPainter& painter) const;
     void drawSeries(QPainter& painter) const;
@@ -229,6 +241,16 @@ private:
 
     mutable QRectF m_plot_area;
     mutable QSize m_layout_size;   ///< Widget size m_plot_area was computed for.
+
+    /// The data layer, already painted. Rebuilt only when something it was drawn
+    /// from changes; a repaint that only moves the crosshair blits this instead of
+    /// rasterizing every series again. Held at device pixel ratio, so it is
+    /// rebuilt when the widget moves to a screen with a different scaling too.
+    ///
+    /// Screen only - renderTo() paints straight to its target, because an export
+    /// renders at its own size and must not be a rescaled screen pixmap.
+    mutable QPixmap m_backing;
+    mutable bool    m_backing_valid = false;
 
     bool   m_interactions = false;
     bool   m_panning      = false;

@@ -29,6 +29,8 @@ private slots:
     void denseSeriesStillDrawsASingleSampleDropout();
     void linePersistsWhenNoSampleIsInsideTheView();
     void rangeChangeRedrawsInsteadOfReusingGeometry();
+    void cachedPaintStillFollowsTheData();
+    void crosshairDrawsOverTheCachedPlot();
     void exportOmitsCursorOverlays();
 };
 
