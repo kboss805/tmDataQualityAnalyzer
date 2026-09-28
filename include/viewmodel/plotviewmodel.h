@@ -164,7 +164,17 @@ public:
     void setSeriesVisibleQuietById(int id, bool visible);
     void setPlotTitle(const QString& title);
     void setXViewRange(double min, double max);
+    /// Remembers the current view, then shows [min, max]. This is what a DISCRETE
+    /// zoom uses - a rubber-band drag or the Set Time Window dialog. Wheel zoom and
+    /// drag-pan deliberately do not: they are continuous, and one history entry per
+    /// mouse notch would bury the levels the user actually chose.
+    void pushXZoom(double min, double max);
+    /// Returns to the view before the last pushXZoom(). No-op when nothing is
+    /// remembered.
+    void zoomBack();
     void resetXRange();
+    bool canZoomBack() const;                      ///< @return True if a zoom level is remembered.
+    int  zoomDepth() const;                        ///< @return How many levels are remembered.
     void resetYRange();
     void setLeftYMinOverride(double min);    ///< User-set left axis minimum; resets on resetYRange().
     void setLeftYMaxOverride(double max);   ///< User-set left axis maximum; resets on resetYRange().
@@ -243,6 +253,10 @@ private:
 
     double m_x_min = 0.0;                          ///< Data X range minimum.
     double m_x_max = 0.0;                          ///< Data X range maximum.
+    /// Previous X views, oldest first, for zoomBack(). Cleared by resetXRange():
+    /// once the full span is back on screen there is nothing left to step out to.
+    QVector<QPair<double, double>> m_x_zoom_stack;
+
     double m_x_view_min = 0.0;                     ///< Current viewport X minimum.
     double m_x_view_max = 0.0;                     ///< Current viewport X maximum.
 

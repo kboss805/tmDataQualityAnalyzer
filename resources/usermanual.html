@@ -232,8 +232,11 @@ amount of space shows data.</p>
       re-processed, the readout reverts to automatic.</li>
   <li><strong>X Axis → Set Time Window…</strong> — type a start and stop time as
       <code>DDD:HH:MM:SS</code> to zoom to an exact span. Values outside the file's range are
-      clamped to it and a note appears in the log. <strong>Reset Span</strong> returns to the full
-      time range.</li>
+      clamped to it and a note appears in the log. <strong>Zoom Back</strong> (<kbd>Backspace</kbd>)
+      steps out to the view before the last zoom, one level at a time, so you can drill into an
+      event and retrace your way out; it remembers drags and time windows, not every turn of the
+      mouse wheel. <strong>Reset Span</strong> is the same idea taken to its limit — it returns
+      to the full time range and forgets the levels.</li>
   <li><strong>Y Axes → Set Left Min… / Set Left Max… / Set Right Min… / Set Right
       Max…</strong> — pin either end of the left (lock&nbsp;% or missed frames) or right
       (SNR&nbsp;dB) axis. Pinning a minimum is how you separate healthy streams that all sit

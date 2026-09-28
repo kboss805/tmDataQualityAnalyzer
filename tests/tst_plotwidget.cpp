@@ -517,6 +517,40 @@ void TestPlotWidget::contextMenuOffersBothYLimits()
     }
 }
 
+void TestPlotWidget::contextMenuOffersZoomBack()
+{
+    // Zoom Back steps out one level; Reset Span discards every level at once. The
+    // entry is disabled until there is somewhere to go back TO, so it never offers
+    // an action that would do nothing.
+    PlotViewModel vm;
+    PlotWidget widget;
+    widget.setViewModel(&vm);
+    addLockStream(vm, "Ch 5", 5);
+
+    {
+        QScopedPointer<QMenu> menu(widget.buildContextMenu());
+        QMenu* x_menu = findAction(menu.data(), "X Axis")->menu();
+        QVERIFY(x_menu != nullptr);
+        QAction* back = findAction(x_menu, "Zoom Back");
+        QVERIFY2(back != nullptr, "X Axis has no Zoom Back entry");
+        QVERIFY2(!back->isEnabled(), "Zoom Back offered with no history to step back to");
+    }
+
+    const double full_min = vm.xViewMin();
+    const double full_max = vm.xViewMax();
+    vm.pushXZoom(full_min + 0.2, full_max - 0.2);
+
+    QScopedPointer<QMenu> menu(widget.buildContextMenu());
+    QMenu* x_menu = findAction(menu.data(), "X Axis")->menu();
+    QAction* back = findAction(x_menu, "Zoom Back");
+    QVERIFY(back->isEnabled());
+
+    back->trigger();
+    QCOMPARE(vm.xViewMin(), full_min);
+    QCOMPARE(vm.xViewMax(), full_max);
+    QVERIFY(!vm.canZoomBack());
+}
+
 void TestPlotWidget::contextMenuAdvertisesEveryPlotShortcut()
 {
     // US4.1 requires the menu to ADVERTISE each single-key shortcut, so they are

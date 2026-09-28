@@ -247,6 +247,75 @@ void TestPlotViewModel::yMinOverridesAndTheSpanGuard()
     QFile::remove(path);
 }
 
+void TestPlotViewModel::zoomStackRemembersDiscreteZoomsOnly()
+{
+    // Drilling into an event and stepping back out is the workflow this exists for.
+    // The distinction that makes it usable: a rubber-band drag or the Set Time
+    // Window dialog is a level the user CHOSE, while wheel zoom and drag-pan are
+    // continuous - recording those would bury the chosen levels under a notch-by-
+    // notch trail, and "back" would stop meaning anything.
+    QString csv =
+        "Time (DOY:HH:MM:SS.mmm),L_RCVR1\n"
+        "1:00:00:00.000,10.0\n"
+        "1:00:01:00.000,20.0\n";
+    QString path = writeTempCsv(csv);
+
+    PlotViewModel vm;
+    QVERIFY(vm.loadCsvFile(path));
+
+    const double full_min = vm.xViewMin();
+    const double full_max = vm.xViewMax();
+    QVERIFY(!vm.canZoomBack());
+
+    // Two discrete zooms, each remembering what it replaced.
+    vm.pushXZoom(full_min + 5.0, full_max - 5.0);
+    QVERIFY(vm.canZoomBack());
+    QCOMPARE(vm.zoomDepth(), 1);
+
+    const double level1_min = vm.xViewMin();
+    const double level1_max = vm.xViewMax();
+    vm.pushXZoom(level1_min + 2.0, level1_max - 2.0);
+    QCOMPARE(vm.zoomDepth(), 2);
+
+    // A continuous change in between must NOT add a level.
+    vm.setXViewRange(vm.xViewMin() + 0.5, vm.xViewMax());
+    QCOMPARE(vm.zoomDepth(), 2);
+
+    // Back once returns to the first zoom, not to wherever the wheel left things.
+    vm.zoomBack();
+    QCOMPARE(vm.xViewMin(), level1_min);
+    QCOMPARE(vm.xViewMax(), level1_max);
+    QCOMPARE(vm.zoomDepth(), 1);
+
+    // Back again returns to the full span, and there is nothing left to step to.
+    vm.zoomBack();
+    QCOMPARE(vm.xViewMin(), full_min);
+    QCOMPARE(vm.xViewMax(), full_max);
+    QVERIFY(!vm.canZoomBack());
+
+    // Stepping back from empty is a no-op, not a crash or a jump.
+    vm.zoomBack();
+    QCOMPARE(vm.xViewMin(), full_min);
+
+    // Reset discards the history: the whole recording is back on screen, and
+    // stepping "back" to a window just discarded would be the opposite of Reset.
+    vm.pushXZoom(full_min + 1.0, full_max - 1.0);
+    QVERIFY(vm.canZoomBack());
+    vm.resetXRange();
+    QVERIFY(!vm.canZoomBack());
+    QCOMPARE(vm.xViewMin(), full_min);
+
+    // The history is bounded, and the levels kept are the ones nearest the current
+    // view - the ones an operator is about to step back through.
+    for (int i = 0; i < PlotConstants::kMaxZoomDepth + 5; ++i)
+    {
+        vm.pushXZoom(full_min + i * 0.01, full_max - i * 0.01);
+    }
+    QCOMPARE(vm.zoomDepth(), PlotConstants::kMaxZoomDepth);
+
+    QFile::remove(path);
+}
+
 void TestPlotViewModel::xTimeWindow()
 {
     QString csv =

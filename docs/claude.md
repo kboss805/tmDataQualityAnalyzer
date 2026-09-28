@@ -166,7 +166,7 @@ The stories below follow the workflow a first-time user takes through the applic
 
 - [x] The plot fills the central area of the main application window (it is the window's central widget; the log occupies a toggleable left sidebar).
 - [x] The chart occupies the entire plot area: there are no external control rows. Every plot control is reached from a **right-click context menu** on the chart, whose items are disabled until data is loaded.
-- [x] The context menu provides: **Plot File** (which processed file to view), **View Mode** (Lock Percentage / Accumulation), **Customize View…**, **Set Plot Title…**, **Show Legend** (checkable), **X Axis** (Set Time Window… / Reset Span), **Y Axes** (Set Left Min… / Set Left Max… / Set Right Min… / Set Right Max… / Reset), and **Reset View**. Export is deliberately not here — it writes a CSV, an image and the log, which is a file operation on the session rather than a plot control, so it lives only in the main menu beside Import CSV.
+- [x] The context menu provides: **Plot File** (which processed file to view), **View Mode** (Lock Percentage / Accumulation), **Customize View…**, **Set Plot Title…**, **Show Legend** (checkable), **X Axis** (Set Time Window… / Zoom Back / Reset Span), **Y Axes** (Set Left Min… / Set Left Max… / Set Right Min… / Set Right Max… / Reset), and **Reset View**. Export is deliberately not here — it writes a CSV, an image and the log, which is a file operation on the session rather than a plot control, so it lives only in the main menu beside Import CSV.
 - [x] The user can specify a custom title for the plot (context menu > Set Plot Title…).
 - [x] The left Y axis is labeled with its unit of measure, average framesync lock percent.
 - [x] The right Y axis is labeled with its unit of measure, SNR in decibels.
@@ -409,6 +409,35 @@ The stories below follow the workflow a first-time user takes through the applic
 ## Version History
 
 ### Unreleased — since the v2.13.1 tag
+
+#### The X axis remembers where you zoomed from (US4.0, US4.1)
+
+The idea is Qwt's `QwtPlotZoomer`, the last of the four taken from that review.
+
+You could drill into an event but not step back out of it: the only way back was
+Reset Span, which discards every level at once and returns the whole recording. An
+operator working down through a loss-of-lock had to re-zoom from the top each time.
+
+- **`X Axis > Zoom Back`** (and `Backspace`) returns to the view before the last
+  zoom. It sits above Reset Span, which is the same action taken to its limit, so the
+  two read as a pair from least to most drastic. Disabled until there is somewhere to
+  go back to, so it never offers an action that would do nothing.
+- **Only DISCRETE zooms are recorded** - a rubber-band drag or the Set Time Window
+  dialog, which both arrive at `applyTimeWindow()`. Wheel zoom and drag-pan go
+  through `handlePlotXRangeChanged()` and are deliberately not: they are continuous,
+  and one history entry per mouse notch would bury the levels the user actually chose
+  under a notch-by-notch trail until "back" stopped meaning anything.
+- **Reset clears the history.** Once the full span is back on screen, stepping "back"
+  into a window just discarded would be the opposite of what Reset means.
+- Bounded at `PlotConstants::kMaxZoomDepth` (32), dropping the OLDEST when full: the
+  levels nearest the current view are the ones about to be stepped through.
+
+`zoomStackRemembersDiscreteZoomsOnly` covers the lot - two levels stepped back in
+order, a continuous change in between that must not add one, stepping back from empty
+as a no-op, Reset clearing it, and the depth cap.
+`contextMenuOffersZoomBack` covers the entry's disabled-until-useful state and that
+triggering it actually steps back. **Both verified to fail** against a build that
+records continuous changes too, which is the mistake worth guarding.
 
 #### X ticks land on round times (US4.0)
 
@@ -1913,7 +1942,7 @@ keep the tag history aligned with `main`. The only change is to CI.
   File** (radio list of processed sources + "All files (overlaid)"; disabled for a
   single source), **View Mode** (Lock Percentage / Accumulation; disabled unless
   both left-axis metrics exist), **Customize View…**, **Set Plot Title…**,
-  **X Axis** (Set Time Window… / Reset Span), **Y Axes** (Set Left Max… / Set
+  **X Axis** (Set Time Window… / Zoom Back / Reset Span), **Y Axes** (Set Left Max… / Set
   Right Max… / Reset), and **Export…**. The menu is rebuilt on every request, so
   it can never show a stale source list or mode.
 - The single Reset button became **two** items — `X Axis > Reset Span` and
