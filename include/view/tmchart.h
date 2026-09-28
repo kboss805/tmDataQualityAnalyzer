@@ -129,6 +129,17 @@ public:
     double leftToPixel(double value) const;
     double rightToPixel(double value) const;
 
+    /// @return tick positions snapped to natural time intervals - 15 s, 5 min, 6 h -
+    /// covering [lower, upper]. Unlike the evenly divided ticks the chart uses for a
+    /// non-time axis, these do NOT sit on the range ends; they sit on round times
+    /// inside it, which is the whole point.
+    ///
+    /// Public because it is pure and worth asserting directly: the property being
+    /// claimed is arithmetic, and offscreen rendering has no fonts with which to read
+    /// a label back. TmChart exposes observation points rather than befriending its
+    /// tests - see plotArea() and the coordinate transforms above.
+    static QVector<double> timeTickValues(double lower, double upper, int count);
+
     // --- Export -----------------------------------------------------------
     /// Paints the whole chart at @p size onto @p painter. Used for PNG, SVG and
     /// PDF alike so exports cannot drift from the on-screen rendering. Overlays
@@ -222,6 +233,10 @@ private:
     void drawTitle(QPainter& painter, const QRect& rect) const;
     /// @return @p count evenly spaced values across [lower, upper].
     static QVector<double> tickValues(double lower, double upper, int count);
+    /// @return the X ticks to draw: time-snapped when a time formatter is set,
+    /// evenly spaced otherwise. Grid and labels both go through this so they cannot
+    /// disagree about where a tick is.
+    QVector<double> xTickValues() const;
     QString formatX(double value) const;
     bool indexValid(int index) const { return index >= 0 && index < m_series.size(); }
 

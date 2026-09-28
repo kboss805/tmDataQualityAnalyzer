@@ -555,7 +555,7 @@ void TmChart::drawGrid(QPainter& painter) const
     painter.save();
     painter.setPen(QPen(m_grid, 0, Qt::DotLine));
 
-    for (double t : tickValues(m_x_lower, m_x_upper, m_x_tick_count))
+    for (double t : xTickValues())
     {
         const double px = xToPixel(t);
         painter.drawLine(QPointF(px, m_plot_area.top()), QPointF(px, m_plot_area.bottom()));
@@ -810,7 +810,7 @@ void TmChart::drawAxes(QPainter& painter) const
     // unreadable smear on a normal-width window. Draw a label only when it clears
     // the previous one, and always keep the last tick's label so the range end
     // stays readable.
-    const QVector<double> x_ticks = tickValues(m_x_lower, m_x_upper, m_x_tick_count);
+    const QVector<double> x_ticks = xTickValues();
     double last_label_right = -1e9;
     for (int i = 0; i < x_ticks.size(); ++i)
     {
@@ -903,6 +903,70 @@ void TmChart::drawAxes(QPainter& painter) const
         painter.restore();
     }
     painter.restore();
+}
+
+QVector<double> TmChart::timeTickValues(double lower, double upper, int count)
+{
+    QVector<double> ticks;
+    if (!usableRange(lower, upper))
+    {
+        return ticks;
+    }
+
+    // The X axis is read as DDD:HH:MM:SS, so a tick every 17 s is noise where a tick
+    // every 15 s is a landmark. Dividing the span evenly - what this used to do -
+    // put labels on arbitrary instants: a 116-second view produced ticks 29 seconds
+    // apart, and nothing on screen fell on a round time.
+    static const double kSteps[] = {
+        1, 2, 5, 10, 15, 30,                         // seconds
+        60, 120, 300, 600, 900, 1800,                // 1, 2, 5, 10, 15, 30 minutes
+        3600, 7200, 10800, 21600, 43200,             // 1, 2, 3, 6, 12 hours
+        86400                                        // 1 day
+    };
+
+    const int    n   = std::max(2, count);
+    const double raw = (upper - lower) / (n - 1);
+
+    // Below a second there is no natural step to snap to - the format has no field
+    // finer than seconds - so an evenly divided span is the honest answer.
+    if (raw < 1.0)
+    {
+        return tickValues(lower, upper, count);
+    }
+
+    double step = 0.0;
+    for (double s : kSteps)
+    {
+        if (s >= raw)
+        {
+            step = s;
+            break;
+        }
+    }
+    if (step == 0.0)
+    {
+        // Longer than a day per tick: whole days, which stay round however many the
+        // span needs. Without this the ladder's top entry would be reused and a
+        // multi-week recording would grow ticks without bound.
+        step = std::ceil(raw / 86400.0) * 86400.0;
+    }
+
+    // Start at the first round time at or after the range, not at the range itself.
+    const double first = std::ceil(lower / step) * step;
+    for (double t = first; t <= upper + step * 1e-9; t += step)
+    {
+        ticks.append(t);
+    }
+    return ticks;
+}
+
+QVector<double> TmChart::xTickValues() const
+{
+    // The formatter is what makes the axis a TIME axis; without one this is a
+    // general chart whose X values are just numbers, and snapping them to 15 s would
+    // be meaningless.
+    return m_formatter ? timeTickValues(m_x_lower, m_x_upper, m_x_tick_count)
+                       : tickValues(m_x_lower, m_x_upper, m_x_tick_count);
 }
 
 QVector<double> TmChart::tickValues(double lower, double upper, int count)
