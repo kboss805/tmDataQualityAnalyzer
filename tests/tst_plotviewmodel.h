@@ -20,6 +20,7 @@ private slots:
     void yAutoRange();
     void snrYMaxOverride();
     void yMinOverridesAndTheSpanGuard();
+    void zoomStackRemembersDiscreteZoomsOnly();
     void xTimeWindow();
     void seriesVisibility();
     void clearData();

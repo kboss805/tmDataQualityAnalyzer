@@ -571,7 +571,10 @@ void PlotWidget::applyTimeWindow(double raw_start, double raw_stop,
         stop = start;
     }
 
-    m_view_model->setXViewRange(start, stop);
+    // A discrete zoom, so it is remembered: both the rubber band and the Set Time
+    // Window dialog arrive here. Wheel and pan go through handlePlotXRangeChanged()
+    // instead and are deliberately not recorded.
+    m_view_model->pushXZoom(start, stop);
 }
 
 
@@ -1002,6 +1005,12 @@ void PlotWidget::keyPressEvent(QKeyEvent* event)
         break;
     case Qt::Key_R:
         resetView();
+        break;
+    case Qt::Key_Backspace:
+        if (m_view_model != nullptr && m_view_model->canZoomBack())
+        {
+            m_view_model->zoomBack();
+        }
         break;
     case Qt::Key_Home:
         // Narrower than R on purpose: restore the full time span but keep any

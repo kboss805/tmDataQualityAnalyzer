@@ -224,7 +224,8 @@ right-clicking anywhere on the plot.
                       and rename or recolor any series.
   Show Legend         Show or hide the floating legend.
   Readout             Choose which series the hover readout follows (see below).
-  X Axis              Set an exact time window, or reset to the full span.
+  X Axis              Set an exact time window, step back one zoom level
+                      (Zoom Back, Backspace), or reset to the full span.
   Y Axes              Set a minimum and/or a maximum for either axis, or reset
                       all four back to automatic. A limit you do not set still
                       scales to the data.

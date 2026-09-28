@@ -196,6 +196,20 @@ QMenu* PlotWidget::buildContextMenu()
     x_menu->setEnabled(has_data);
     QAction* window_act = x_menu->addAction(QStringLiteral("Set Time Window..."));
     connect(window_act, &QAction::triggered, this, &PlotWidget::onSetTimeWindow);
+    // Zoom Back sits above Reset Span: one steps out a level, the other discards
+    // every level at once, and they read as a pair from least to most drastic.
+    QAction* zoom_back_act = x_menu->addAction(QStringLiteral("Zoom Back"));
+    zoom_back_act->setEnabled(has_data && m_view_model != nullptr
+                              && m_view_model->canZoomBack());
+    zoom_back_act->setShortcut(QKeySequence(Qt::Key_Backspace));
+    zoom_back_act->setShortcutVisibleInContextMenu(true);
+    connect(zoom_back_act, &QAction::triggered, this, [this]() {
+        if (m_view_model != nullptr)
+        {
+            m_view_model->zoomBack();
+        }
+    });
+
     QAction* reset_x_act = x_menu->addAction(QStringLiteral("Reset Span"));
     reset_x_act->setShortcut(QKeySequence(Qt::Key_Home));
     reset_x_act->setShortcutVisibleInContextMenu(true);

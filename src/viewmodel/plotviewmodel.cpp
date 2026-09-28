@@ -852,8 +852,38 @@ void PlotViewModel::setXViewRange(double min, double max)
     emit axisRangeChanged();
 }
 
+void PlotViewModel::pushXZoom(double min, double max)
+{
+    m_x_zoom_stack.append(qMakePair(m_x_view_min, m_x_view_max));
+    if (m_x_zoom_stack.size() > PlotConstants::kMaxZoomDepth)
+    {
+        // Drop the OLDEST: the levels nearest the current view are the ones an
+        // operator steps back through, and the earliest are the ones they have
+        // already left behind.
+        m_x_zoom_stack.removeFirst();
+    }
+    setXViewRange(min, max);
+}
+
+void PlotViewModel::zoomBack()
+{
+    if (m_x_zoom_stack.isEmpty())
+    {
+        return;
+    }
+    const QPair<double, double> previous = m_x_zoom_stack.takeLast();
+    setXViewRange(previous.first, previous.second);
+}
+
+bool PlotViewModel::canZoomBack() const { return !m_x_zoom_stack.isEmpty(); }
+int  PlotViewModel::zoomDepth() const { return static_cast<int>(m_x_zoom_stack.size()); }
+
 void PlotViewModel::resetXRange()
 {
+    // The history goes with it. Reset puts the whole recording back on screen, and
+    // stepping "back" from there to a window the user has just discarded would be
+    // the opposite of what the action means.
+    m_x_zoom_stack.clear();
     m_x_view_min = m_x_min;
     m_x_view_max = m_x_max;
     emit axisRangeChanged();

@@ -32,6 +32,7 @@ private slots:
     void contextMenuViewModeReflectsAndSetsMode();
     void contextMenuResetActionsClearAxisOverrides();
     void contextMenuOffersBothYLimits();
+    void contextMenuOffersZoomBack();
     void yMinOverrideReachesTheChartAxis();
     void contextMenuAdvertisesEveryPlotShortcut();
     void contextMenuResetViewResetsBothAxes();

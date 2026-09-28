@@ -393,6 +393,11 @@ namespace PlotConstants {
     /// smudge where it used to be a solid line. The outline restores it.
     inline constexpr int kEnvelopeEdgeAlpha = 190;
 
+    /// How many zoom levels the X axis remembers. Deep enough that an operator
+    /// drilling into an event never runs out on the way back, bounded so a long
+    /// session cannot accumulate history without limit.
+    inline constexpr int kMaxZoomDepth = 32;
+
     inline constexpr double kLockAxisMin      = 0.0;
     inline constexpr double kLockAxisMax      = 100.0;
     inline constexpr const char* kXAxisLabel        = "Time (DDD:HH:MM:SS)"; ///< X axis label.
