@@ -60,14 +60,14 @@ void TmChart::removeSeries(int index)
     if (indexValid(index))
     {
         m_series.remove(index);
-        update();
+        updateData();
     }
 }
 
 void TmChart::clearSeries()
 {
     m_series.clear();
-    update();
+    updateData();
 }
 
 void TmChart::setSeriesData(int index, const QVector<double>& xs, const QVector<double>& ys)
@@ -106,7 +106,7 @@ void TmChart::setSeriesData(int index, const QVector<double>& xs, const QVector<
         }
     }
 
-    update();
+    updateData();
 }
 
 void TmChart::setSeriesPen(int index, const QPen& pen)
@@ -114,7 +114,7 @@ void TmChart::setSeriesPen(int index, const QPen& pen)
     if (indexValid(index))
     {
         m_series[index].pen = pen;
-        update();
+        updateData();
     }
 }
 
@@ -123,7 +123,7 @@ void TmChart::setSeriesVisible(int index, bool visible)
     if (indexValid(index))
     {
         m_series[index].visible = visible;
-        update();
+        updateData();
     }
 }
 
@@ -154,6 +154,10 @@ QString TmChart::seriesName(int index) const
 
 void TmChart::invalidateSeriesGeometry() const
 {
+    // The painted pixmap goes with it: anything that makes the segments stale makes
+    // the picture drawn from them stale too, and a stale picture still looks like a
+    // plausible plot.
+    m_backing_valid = false;
     for (const Series& s : m_series)
     {
         s.segmentsValid = false;
@@ -170,7 +174,7 @@ void TmChart::setXRange(double lower, double upper)
     m_x_lower = lower;
     m_x_upper = upper;
     invalidateSeriesGeometry();
-    update();
+    updateData();
 }
 
 void TmChart::setLeftRange(double lower, double upper)
@@ -182,7 +186,7 @@ void TmChart::setLeftRange(double lower, double upper)
     m_left_lower = lower;
     m_left_upper = upper;
     invalidateSeriesGeometry();
-    update();
+    updateData();
 }
 
 void TmChart::setRightRange(double lower, double upper)
@@ -194,7 +198,7 @@ void TmChart::setRightRange(double lower, double upper)
     m_right_lower = lower;
     m_right_upper = upper;
     invalidateSeriesGeometry();
-    update();
+    updateData();
 }
 
 // ---------------------------------------------------------------- chrome ----
@@ -203,28 +207,28 @@ void TmChart::setTitle(const QString& title)
 {
     m_title = title;
     recalcPlotArea();   // a title appearing/vanishing changes the top margin
-    update();
+    updateData();
 }
 
 void TmChart::setXLabel(const QString& label)
 {
     m_x_label = label;
     recalcPlotArea();
-    update();
+    updateData();
 }
 
 void TmChart::setLeftLabel(const QString& label)
 {
     m_left_label = label;
     recalcPlotArea();
-    update();
+    updateData();
 }
 
 void TmChart::setRightLabel(const QString& label)
 {
     m_right_label = label;
     recalcPlotArea();
-    update();
+    updateData();
 }
 
 void TmChart::setLeftAxisVisible(bool visible)
@@ -235,7 +239,7 @@ void TmChart::setLeftAxisVisible(bool visible)
     }
     m_left_visible = visible;
     recalcPlotArea();   // reclaims the left margin when hidden
-    update();
+    updateData();
 }
 
 void TmChart::setRightAxisVisible(bool visible)
@@ -246,7 +250,7 @@ void TmChart::setRightAxisVisible(bool visible)
     }
     m_right_visible = visible;
     recalcPlotArea();   // reclaims the right margin when hidden
-    update();
+    updateData();
 }
 
 void TmChart::setTopInset(int px)
@@ -258,19 +262,19 @@ void TmChart::setTopInset(int px)
     }
     m_top_inset = clamped;
     recalcPlotArea();
-    update();
+    updateData();
 }
 
 void TmChart::setXTickCount(int count)
 {
     m_x_tick_count = std::max(2, count);
-    update();
+    updateData();
 }
 
 void TmChart::setTimeFormatter(std::function<QString(double)> formatter)
 {
     m_formatter = std::move(formatter);
-    update();
+    updateData();
 }
 
 void TmChart::setThemeColors(const QColor& background, const QColor& foreground,
@@ -280,7 +284,7 @@ void TmChart::setThemeColors(const QColor& background, const QColor& foreground,
     m_foreground  = foreground;
     m_grid        = grid;
     m_title_color = title;
-    update();
+    updateData();
 }
 
 void TmChart::setInteractionsEnabled(bool enabled)
@@ -296,7 +300,7 @@ void TmChart::setCrosshair(double x, bool visible)
 {
     m_crosshair_x       = x;
     m_crosshair_visible = visible;
-    update();
+    update();   // overlay only - deliberately keeps the backing store
 }
 
 void TmChart::setZoomBand(double x0, double x1, bool visible)
@@ -304,7 +308,7 @@ void TmChart::setZoomBand(double x0, double x1, bool visible)
     m_band_x0      = x0;
     m_band_x1      = x1;
     m_band_visible = visible;
-    update();
+    update();   // overlay only - deliberately keeps the backing store
 }
 
 // ------------------------------------------------------------- geometry -----
@@ -435,8 +439,29 @@ QRectF TmChart::plotArea() const
 
 void TmChart::paintEvent(QPaintEvent* /*event*/)
 {
+    ensureLayout();
     QPainter painter(this);
-    render(painter, rect(), /*with_overlays=*/true);
+
+    // The data layer is painted once into m_backing and then blitted. The cost of
+    // a repaint that changed nothing - a crosshair move, a tooltip, a legend drag -
+    // becomes the blit rather than every series' rasterization, which is what the
+    // geometry cache alone could not avoid.
+    const qreal dpr = devicePixelRatioF();
+    const QSize want(qRound(width() * dpr), qRound(height() * dpr));
+    if (want.isEmpty())
+    {
+        return;
+    }
+    if (!m_backing_valid || m_backing.size() != want)
+    {
+        m_backing = QPixmap(want);
+        m_backing.setDevicePixelRatio(dpr);
+        QPainter into(&m_backing);
+        renderData(into, rect());
+        m_backing_valid = true;
+    }
+    painter.drawPixmap(0, 0, m_backing);
+    renderOverlays(painter);
 }
 
 void TmChart::resizeEvent(QResizeEvent* event)
@@ -455,6 +480,16 @@ void TmChart::renderTo(QPainter& painter, const QSize& size) const
 void TmChart::render(QPainter& painter, const QRect& rect, bool with_overlays) const
 {
     ensureLayout();
+    renderData(painter, rect);
+    if (with_overlays)
+    {
+        renderOverlays(painter);
+    }
+}
+
+void TmChart::renderData(QPainter& painter, const QRect& rect) const
+{
+    ensureLayout();
     painter.save();
     painter.setRenderHint(QPainter::Antialiasing, true);
     painter.fillRect(rect, m_background);
@@ -463,28 +498,38 @@ void TmChart::render(QPainter& painter, const QRect& rect, bool with_overlays) c
     drawGrid(painter);
     drawSeries(painter);
     drawAxes(painter);
+    painter.restore();
+}
 
-    if (with_overlays)
+void TmChart::renderOverlays(QPainter& painter) const
+{
+    ensureLayout();
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    if (m_band_visible)
     {
-        if (m_band_visible)
-        {
-            const double p0 = xToPixel(std::min(m_band_x0, m_band_x1));
-            const double p1 = xToPixel(std::max(m_band_x0, m_band_x1));
-            QColor fill = m_foreground;
-            fill.setAlpha(PlotConstants::kZoomBandAlpha);
-            painter.fillRect(QRectF(p0, m_plot_area.top(), p1 - p0, m_plot_area.height()), fill);
-        }
-        if (m_crosshair_visible)
-        {
-            QColor line = m_foreground;
-            line.setAlpha(PlotConstants::kCrosshairAlpha);
-            painter.setPen(QPen(line, 0, Qt::DashLine));
-            const double px = xToPixel(m_crosshair_x);
-            painter.drawLine(QPointF(px, m_plot_area.top()),
-                             QPointF(px, m_plot_area.bottom()));
-        }
+        const double p0 = xToPixel(std::min(m_band_x0, m_band_x1));
+        const double p1 = xToPixel(std::max(m_band_x0, m_band_x1));
+        QColor fill = m_foreground;
+        fill.setAlpha(PlotConstants::kZoomBandAlpha);
+        painter.fillRect(QRectF(p0, m_plot_area.top(), p1 - p0, m_plot_area.height()), fill);
+    }
+    if (m_crosshair_visible)
+    {
+        QColor line = m_foreground;
+        line.setAlpha(PlotConstants::kCrosshairAlpha);
+        painter.setPen(QPen(line, 0, Qt::DashLine));
+        const double px = xToPixel(m_crosshair_x);
+        painter.drawLine(QPointF(px, m_plot_area.top()),
+                         QPointF(px, m_plot_area.bottom()));
     }
     painter.restore();
+}
+
+void TmChart::updateData()
+{
+    m_backing_valid = false;
+    update();
 }
 
 void TmChart::drawTitle(QPainter& painter, const QRect& rect) const

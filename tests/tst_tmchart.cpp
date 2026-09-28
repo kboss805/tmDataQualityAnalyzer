@@ -416,6 +416,72 @@ void TestTmChart::rangeChangeRedrawsInsteadOfReusingGeometry()
              "the plot still showed the previous X range");
 }
 
+void TestTmChart::cachedPaintStillFollowsTheData()
+{
+    // The painted data layer is cached as a pixmap and blitted, so a repaint that
+    // changed nothing costs a blit instead of rasterizing every series again. The
+    // risk that buys is a SECOND stale-cache failure mode, one the geometry tests
+    // cannot see: they go through renderTo(), which paints straight to its target
+    // and never touches the pixmap. This one goes through grab(), so it exercises
+    // paintEvent - the only path that uses it.
+    TmChart chart;
+    chart.resize(400, 300);
+    chart.setLeftRange(0, 100);
+    chart.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&chart));
+
+    // A step: low over the first half of the span, high over the second.
+    QVector<double> xs;
+    QVector<double> ys;
+    for (int i = 0; i <= 100; ++i)
+    {
+        xs.push_back(i);
+        ys.push_back(i < 50 ? 10.0 : 90.0);
+    }
+    const int s = chart.addSeries(TmChart::Axis::Left);
+    chart.setSeriesPen(s, QPen(Qt::red, 2));
+    chart.setSeriesData(s, xs, ys);
+    chart.setXRange(0, 100);
+
+    const QImage both = chart.grab().toImage();
+    QVERIFY(!both.isNull());
+
+    // Painted twice with nothing changed, the picture must be identical - that is
+    // the cache doing its job rather than a coincidence worth asserting elsewhere.
+    QCOMPARE(chart.grab().toImage(), both);
+
+    // Zoomed onto the high half it must NOT be identical. A stale pixmap here shows
+    // the previous view, which still looks like a plausible plot.
+    chart.setXRange(60.0, 100.0);
+    QVERIFY2(chart.grab().toImage() != both, "the plot still showed the previous X range");
+}
+
+void TestTmChart::crosshairDrawsOverTheCachedPlot()
+{
+    // The crosshair is deliberately NOT part of the cached layer - that is what
+    // makes moving it cheap. The failure that buys is the opposite of a stale plot:
+    // an overlay that never appears, because the blit is all that reaches the
+    // screen. Nothing else in the suite would notice, since every other rendering
+    // test goes through renderTo(), which excludes overlays by design.
+    TmChart chart;
+    chart.resize(400, 300);
+    chart.setLeftRange(0, 100);
+    chart.setXRange(0, 100);
+    chart.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&chart));
+
+    const QImage plain = chart.grab().toImage();
+
+    chart.setCrosshair(50.0, true);
+    const QImage with_cursor = chart.grab().toImage();
+    QVERIFY2(with_cursor != plain, "the crosshair was swallowed by the cached layer");
+
+    // ...and hiding it returns the plot to exactly what it was, so the overlay is
+    // not being baked into the cache either.
+    chart.setCrosshair(50.0, false);
+    QCOMPARE(chart.grab().toImage(), plain);
+}
+
 void TestTmChart::renderToPaintsData()
 {
     // renderTo() is the single path used for PNG, SVG and PDF export, so if it
