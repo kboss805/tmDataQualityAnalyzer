@@ -381,6 +381,18 @@ namespace PlotConstants {
     /// point.
     inline constexpr int kMaxSamplesPerPixelColumn = 2;
 
+    /// Alpha for the min/max band drawn behind a decimated series. Translucent so
+    /// the mean line drawn over it stays legible, but solid enough that a one-sample
+    /// excursion - the event this plot exists to show - is unmistakable against the
+    /// background on both themes.
+    inline constexpr int kEnvelopeBandAlpha = 90;
+
+    /// Alpha for the band's outline - the min/max envelope itself. Stronger than the
+    /// fill because those edges ARE the extremes: a one-sample dropout is a single
+    /// pixel column reaching the axis, and with the fill alone it rendered as a faint
+    /// smudge where it used to be a solid line. The outline restores it.
+    inline constexpr int kEnvelopeEdgeAlpha = 190;
+
     inline constexpr double kLockAxisMin      = 0.0;
     inline constexpr double kLockAxisMax      = 100.0;
     inline constexpr const char* kXAxisLabel        = "Time (DDD:HH:MM:SS)"; ///< X axis label.

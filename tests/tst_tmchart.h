@@ -27,6 +27,7 @@ private slots:
     void hiddenAxisReclaimsItsMargin();
     void renderToPaintsData();
     void denseSeriesStillDrawsASingleSampleDropout();
+    void denseSeriesShowsItsSpreadNotJustItsMean();
     void linePersistsWhenNoSampleIsInsideTheView();
     void rangeChangeRedrawsInsteadOfReusingGeometry();
     void cachedPaintStillFollowsTheData();

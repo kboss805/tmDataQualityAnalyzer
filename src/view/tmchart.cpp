@@ -162,6 +162,7 @@ void TmChart::invalidateSeriesGeometry() const
     {
         s.segmentsValid = false;
         s.cachedSegments.clear();
+        s.cachedBands.clear();
     }
 }
 
@@ -581,9 +582,10 @@ void TmChart::drawGrid(QPainter& painter) const
     painter.restore();
 }
 
-QVector<QLineF> TmChart::seriesSegments(const Series& s) const
+void TmChart::rebuildSeriesGeometry(const Series& s) const
 {
-    QVector<QLineF> segments;
+    QVector<QLineF>    segments;
+    QVector<QPolygonF> bands;
 
     // Only the samples in view can draw anything, so when the times are ordered the
     // rest are skipped outright rather than transformed and clipped. One sample is
@@ -594,25 +596,23 @@ QVector<QLineF> TmChart::seriesSegments(const Series& s) const
     int end   = static_cast<int>(s.xs.size());
     if (s.sortedX && !s.xs.isEmpty())
     {
-        const auto lo = std::lower_bound(s.xs.cbegin(), s.xs.cend(), m_x_lower);
-        const auto hi = std::upper_bound(s.xs.cbegin(), s.xs.cend(), m_x_upper);
-        begin = std::max(0, static_cast<int>(lo - s.xs.cbegin()) - 1);
+        const auto lo_it = std::lower_bound(s.xs.cbegin(), s.xs.cend(), m_x_lower);
+        const auto hi_it = std::upper_bound(s.xs.cbegin(), s.xs.cend(), m_x_upper);
+        begin = std::max(0, static_cast<int>(lo_it - s.xs.cbegin()) - 1);
         end   = std::min(static_cast<int>(s.xs.size()),
-                         static_cast<int>(hi - s.xs.cbegin()) + 1);
+                         static_cast<int>(hi_it - s.xs.cbegin()) + 1);
     }
 
     // A plot only has as many pixel columns as it is wide, so a series with far more
-    // samples than that cannot show them individually: the extra points cost time to
-    // transform, to store and to rasterize, and land on pixels that are already
-    // covered. Above kMaxSamplesPerPixelColumn samples per column the series is drawn
-    // from its ENVELOPE instead - per column: the first sample, the column's minimum
-    // and maximum, then the last sample.
+    // samples than that cannot show them individually. Above
+    // kMaxSamplesPerPixelColumn samples per column the column is summarised instead:
+    // a BAND from its minimum to its maximum, and a line through its MEAN.
     //
-    // Min and max are what keep this honest. Taking every Nth sample would drop a
-    // one-sample dropout between the samples it kept, which on this plot is exactly
-    // the event an operator is looking for; the envelope always draws it, because a
-    // spike is a column's min or max by definition. First and last keep the line
-    // joining its neighbouring columns where the data actually is.
+    // The band is what keeps this honest. A one-sample dropout is its column's
+    // minimum by definition, so the band always reaches it - and on this plot that
+    // lone sample is the event an operator is hunting for. The mean is what makes it
+    // readable: the outline alone drew dense noisy data as a solid blob with no
+    // indication of where the signal actually sat inside it.
     //
     // The samples themselves are untouched - PlotViewModel still holds every point,
     // so CSV export and the readout are unaffected. This is a drawing decision only.
@@ -625,13 +625,10 @@ QVector<QLineF> TmChart::seriesSegments(const Series& s) const
                        s.axis == Axis::Left ? leftToPixel(vy) : rightToPixel(vy));
     };
 
-    // The geometry is kept as segments rather than a path or a polyline because the
-    // draw call is what dominates a repaint, and only drawLines() avoids the stroker.
-    // Same geometry and pen on a 1200 px plot, per repaint: twelve channels of an
-    // hour at 10 ms took 1423 ms through drawPath() and 1725 ms through
-    // drawPolyline(), against 27 ms through drawLines(). A gap in the data breaks the
-    // line simply by emitting no segment across it, which a path needed a subpath to
-    // express.
+    // Segments rather than a path or a polyline because only drawLines() avoids Qt's
+    // stroker for a non-cosmetic pen: same geometry and pen, twelve channels of an
+    // hour at 10 ms measured 1423 ms through drawPath(), 1725 ms through
+    // drawPolyline() and 27 ms through drawLines().
     QPointF prev;
     bool    have_prev = false;
 
@@ -658,28 +655,47 @@ QVector<QLineF> TmChart::seriesSegments(const Series& s) const
             }
             addPoint(pixelFor(vx, vy));
         }
-        return segments;
+        s.cachedSegments = segments;
+        s.cachedBands.clear();
+        return;
     }
 
-    segments.reserve(4 * columns);   // at most four points per column
+    segments.reserve(columns);
+    bands.reserve(1);
 
     int     column = INT_MIN;        ///< Pixel column being accumulated.
-    QPointF first;                   ///< First sample in the column.
-    QPointF last;                    ///< Last sample in the column.
-    double  lo = 0.0;                ///< Lowest y (in pixels) in the column.
-    double  hi = 0.0;                ///< Highest y (in pixels) in the column.
+    double  col_x  = 0.0;            ///< Its x in pixels.
+    double  lo     = 0.0;            ///< Lowest y (in pixels) in the column.
+    double  hi     = 0.0;            ///< Highest y (in pixels) in the column.
+    double  sum    = 0.0;            ///< Sum of the column's y pixels, for the mean.
+    int     count  = 0;
+
+    // The band is built as two edges: tops left-to-right, bottoms right-to-left, so
+    // closing the polygon traces the outline of the run.
+    QVector<QPointF> tops;
+    QVector<QPointF> bottoms;
+
+    auto closeBand = [&]() {
+        if (tops.size() >= 2)
+        {
+            QPolygonF poly;
+            poly.reserve(tops.size() + bottoms.size());
+            for (const QPointF& pt : tops) poly.push_back(pt);
+            for (int i = bottoms.size() - 1; i >= 0; --i) poly.push_back(bottoms[i]);
+            bands.push_back(poly);
+        }
+        tops.clear();
+        bottoms.clear();
+    };
 
     auto flushColumn = [&]() {
         if (column == INT_MIN)
         {
             return;
         }
-        addPoint(first);
-        // Order min before max only to keep the segment direction consistent; both
-        // are drawn, so the column shows the full range the samples covered.
-        addPoint(QPointF(first.x(), lo));
-        addPoint(QPointF(first.x(), hi));
-        addPoint(last);
+        tops.push_back(QPointF(col_x, lo));
+        bottoms.push_back(QPointF(col_x, hi));
+        addPoint(QPointF(col_x, sum / count));
         column = INT_MIN;
     };
 
@@ -690,7 +706,8 @@ QVector<QLineF> TmChart::seriesSegments(const Series& s) const
         if (!std::isfinite(vx) || !std::isfinite(vy))
         {
             flushColumn();
-            have_prev = false;   // the gap breaks the line, as above
+            closeBand();
+            have_prev = false;   // the gap breaks both the line and the band
             continue;
         }
 
@@ -700,20 +717,25 @@ QVector<QLineF> TmChart::seriesSegments(const Series& s) const
         {
             flushColumn();
             column = col;
-            first  = pt;
+            col_x  = pt.x();
             lo     = pt.y();
             hi     = pt.y();
+            sum    = pt.y();
+            count  = 1;
         }
         else
         {
-            lo = std::min(lo, pt.y());
-            hi = std::max(hi, pt.y());
+            lo   = std::min(lo, pt.y());
+            hi   = std::max(hi, pt.y());
+            sum += pt.y();
+            ++count;
         }
-        last = pt;
     }
     flushColumn();
+    closeBand();
 
-    return segments;
+    s.cachedSegments = segments;
+    s.cachedBands    = bands;
 }
 
 void TmChart::drawSeries(QPainter& painter) const
@@ -733,9 +755,31 @@ void TmChart::drawSeries(QPainter& painter) const
 
         if (!s.segmentsValid)
         {
-            s.cachedSegments = seriesSegments(s);
-            s.segmentsValid  = true;
+            rebuildSeriesGeometry(s);
+            s.segmentsValid = true;
         }
+
+        // The band goes down first so the mean line reads on top of it.
+        if (!s.cachedBands.isEmpty())
+        {
+            QColor fill = s.pen.color();
+            fill.setAlpha(PlotConstants::kEnvelopeBandAlpha);
+            QColor edge = s.pen.color();
+            edge.setAlpha(PlotConstants::kEnvelopeEdgeAlpha);
+            // Outlined, not just filled: the polygon's top and bottom edges are the
+            // per-column minima and maxima, so stroking them is what keeps a
+            // one-sample excursion as sharp as it was before the band existed. A
+            // cosmetic pen (width 0) both draws crisply and skips Qt's stroker.
+            painter.setPen(QPen(edge, 0));
+            painter.setBrush(fill);
+            for (const QPolygonF& band : s.cachedBands)
+            {
+                painter.drawPolygon(band);
+            }
+            painter.setBrush(Qt::NoBrush);
+        }
+
+        painter.setPen(s.pen);
         painter.drawLines(s.cachedSegments);
     }
     painter.restore();
