@@ -139,10 +139,10 @@ private:
     void rebuildLegend();
     /// Applies the translucent background, border, and text colors for the theme.
     /// Applies the overlay chips' theme-appropriate glyphs and styling.
-    void styleLegendToggle(bool dark);
+    void styleOverlayBar(bool dark);
     /// Anchors the overlay chip bar at the chart's top-left (the legend itself
     /// defaults to the top-right, so they never collide) and keeps it on top.
-    void positionLegendToggle();
+    void positionOverlayBar();
     /// Shows/hides and relabels the overlay chips for the current state: the View
     /// Mode chip only when both left-axis metrics exist, the Reset chip only when
     /// the view is actually zoomed or an axis maximum is pinned.
@@ -220,7 +220,6 @@ private:
     /// m_legend_overlay is rendered into exports.
     QWidget* m_overlay_bar = nullptr;
     /// On-chart show/hide control for the legend.
-    QToolButton* m_legend_toggle = nullptr;
     /// One-click switch between the two left-axis metrics; hidden unless the data
     /// provides both (same rule as the View Mode submenu).
     QToolButton* m_view_mode_chip = nullptr;

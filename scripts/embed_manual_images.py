@@ -207,8 +207,7 @@ after('      sessions, and a hidden legend is also left out of exported images.<
           'The legend shown — one row per visible series, draggable anywhere inside the chart.',
           'Plot with the legend overlay visible in the top-right corner')
     + fig('FrameSync Perctentage Plot without Legend.png',
-          'The same plot with the legend hidden from the <strong>Toggle Legend</strong> chip. A '
-          'hidden legend is also left out of exported images.',
+          'The same plot with the legend hidden - right-click the chart and use <strong>Show Legend</strong>, or press <kbd>L</kbd>. A hidden legend is also left out of exported images.',
           'The same plot with the legend overlay hidden'))
 
 # Placed immediately before the next heading, so it lands at the end of the

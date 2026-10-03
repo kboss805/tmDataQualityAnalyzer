@@ -718,7 +718,7 @@ void TestPlotWidget::noExternalControlWidgetsRemain()
     }
 }
 
-void TestPlotWidget::legendToggleShowsAndHidesLegend()
+void TestPlotWidget::legendVisibilitySurvivesRebuilds()
 {
     PlotViewModel vm;
     PlotWidget widget;
@@ -728,11 +728,10 @@ void TestPlotWidget::legendToggleShowsAndHidesLegend()
 
     QVERIFY(!widget.m_legend->isHidden());
 
-    // Hiding via the on-chart toggle takes the legend off the chart - and with it
-    // out of exported images, since exportImage only composites a visible overlay.
+    // Hiding takes the legend off the chart - and with it out of exported images,
+    // since exportImage only composites a visible overlay.
     widget.setLegendVisible(false);
     QVERIFY(widget.m_legend->isHidden());
-    QVERIFY(!widget.m_legend_toggle->isChecked());
 
     // A rebuild (e.g. another stream finishing) must not resurrect it.
     addLockStream(vm, "Ch 6", 6);
@@ -740,50 +739,52 @@ void TestPlotWidget::legendToggleShowsAndHidesLegend()
 
     widget.setLegendVisible(true);
     QVERIFY(!widget.m_legend->isHidden());
-    QVERIFY(widget.m_legend_toggle->isChecked());
 }
 
-void TestPlotWidget::legendChipIsLabelledAndDescribed()
-{
-    PlotViewModel vm;
-    PlotWidget widget;
-    widget.setViewModel(&vm);
-    widget.setLegendVisible(true);
-    addLockStream(vm, "Ch 5", 5);
-
-    // The chip carries visible text - an unlabelled glyph gave no clue what it
-    // did - and a tooltip that states which way the click will go.
-    QCOMPARE(widget.m_legend_toggle->text(), QString("Toggle Legend"));
-    QVERIFY(widget.m_legend_toggle->toolTip().contains("Hide", Qt::CaseInsensitive));
-
-    widget.setLegendVisible(false);
-    QVERIFY(widget.m_legend_toggle->toolTip().contains("Show", Qt::CaseInsensitive));
-
-    widget.setLegendVisible(true);   // leave the persisted pref as we found it
-}
-
-void TestPlotWidget::legendToggleAppearsOnlyWithData()
+void TestPlotWidget::overlayBarAppearsOnlyWithData()
 {
     PlotViewModel vm;
     PlotWidget widget;
     widget.setViewModel(&vm);
 
-    // Nothing plotted yet: the chip bar carrying the toggle is hidden, so the
-    // toggle is off the chart. Asserted on the bar's own hidden flag because that
-    // is the widget the code shows/hides - and isVisible() would be false here
-    // regardless, since this test never show()s the top-level widget.
+    // Nothing plotted yet: the chip bar is hidden, so no chip is on the chart.
+    // Asserted on the bar's own hidden flag because that is the widget the code
+    // shows/hides - and isVisible() would be false here regardless, since this test
+    // never show()s the top-level widget.
     QVERIFY(widget.m_overlay_bar->isHidden());
 
     addLockStream(vm, "Ch 5", 5);
     QVERIFY(!widget.m_overlay_bar->isHidden());
-    QVERIFY(!widget.m_legend_toggle->isHidden());  // not hidden in its own right
 
-    // It is an overlay on the chart (inside the chip bar), not an external control.
-    QCOMPARE(widget.m_legend_toggle->parentWidget(), widget.m_overlay_bar);
+    // The bar is an overlay ON the chart, not an external control - the rule US4.1
+    // sets for every plot control that is not a menu item.
     QCOMPARE(widget.m_overlay_bar->parentWidget(), static_cast<QWidget*>(widget.m_plot));
+
+    // Both remaining chips hide themselves when they would mean nothing, so the bar
+    // can now be shown with NO children - a state the legend toggle used to mask,
+    // since it was always there. It must collapse rather than paint an empty box
+    // over the chart.
+    PlotViewModel snr_vm;
+    PlotWidget snr_widget;
+    snr_widget.setViewModel(&snr_vm);
+    ProcessedStreamData snr;
+    snr.streamLabel  = "SNR only";
+    snr.pcmChannelId = 9;
+    snr.mode         = StreamMode::ReceiverChannelInfo;
+    snr.timesSec     = { 0.0, 1.0, 2.0 };
+    ProcessedChannelSeries ch;
+    ch.name   = "L_RCVR1";
+    ch.word   = 0;
+    ch.values = { 10.0, 11.0, 12.0 };
+    snr.channels.push_back(ch);
+    snr_vm.addStreamData(snr);
+
+    QVERIFY(snr_widget.m_view_mode_chip->isHidden());   // one metric only
+    QVERIFY(snr_widget.m_reset_chip->isHidden());       // not zoomed
+    QCOMPARE(snr_widget.m_overlay_bar->size(), QSize(0, 0));
 }
 
-void TestPlotWidget::contextMenuShowLegendMirrorsToggle()
+void TestPlotWidget::contextMenuShowLegendDrivesTheLegend()
 {
     PlotViewModel vm;
     PlotWidget widget;
@@ -799,13 +800,14 @@ void TestPlotWidget::contextMenuShowLegendMirrorsToggle()
         QVERIFY(act->isCheckable());
         QVERIFY(act->isChecked());
 
-        // ...and toggling it drives the same path as the on-chart button.
+        // ...and toggling it hides the legend. This entry is now the ONLY control
+        // for it - the on-chart chip was removed as a duplicate - so this case is
+        // the whole of the feature's UI coverage.
         // trigger() on a checkable action flips the state itself and emits
         // triggered(newState), so it must NOT be pre-set here.
         act->trigger();
     }
     QVERIFY(widget.m_legend->isHidden());
-    QVERIFY(!widget.m_legend_toggle->isChecked());
 
     // Reopening the menu shows the updated state (it is rebuilt per request).
     QScopedPointer<QMenu> menu2(widget.buildContextMenu());
@@ -824,7 +826,6 @@ void TestPlotWidget::overlayBarHoldsChipsAndIsChartParented()
     // around the chart, and the bar is parented to the chart itself.
     QVERIFY(widget.m_overlay_bar != nullptr);
     QCOMPARE(widget.m_overlay_bar->parentWidget(), static_cast<QWidget*>(widget.m_plot));
-    QCOMPARE(widget.m_legend_toggle->parentWidget(),  widget.m_overlay_bar);
     QCOMPARE(widget.m_view_mode_chip->parentWidget(), widget.m_overlay_bar);
     QCOMPARE(widget.m_reset_chip->parentWidget(),     widget.m_overlay_bar);
 
