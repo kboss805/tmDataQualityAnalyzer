@@ -181,7 +181,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] A movable legend overlay floats inside the chart instead of sitting in a separate panel below it, showing a line-swatch and label for each visible series.
 - [x] The user can click-drag the legend anywhere inside the plot area to keep it clear of data of interest.
 - [x] The legend defaults to the top-right corner and resets there each new session.
-- [x] The user can show or hide the legend from a small toggle button overlaid on the chart's top-left corner (mirrored by the context menu's **Show Legend** item). The choice persists across sessions, and a hidden legend is excluded from exported images.
+- [x] The user can show or hide the legend from the context menu's **Show Legend** item (or `L`). The choice persists across sessions, and a hidden legend is excluded from exported images.
 - [x] The legend background is translucent so plot data behind it stays visible.
 - [x] The legend's height is capped with a vertical scrollbar for dense plots, such as a Receiver SNR file with 48+ channels.
 - [x] Receiver SNR legend rows show a short label (channel id plus receiver/channel code) instead of the full TMATS-derived stream title, though the full name remains available via tooltip and in CSV export headers.
@@ -203,8 +203,8 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The plot window has no external control rows: the chart fills the entire plot area.
 - [x] Every plot control is reached from a right-click context menu on the chart, or from a control overlaid on the chart itself.
 - [x] The context menu leads with **Set Plot Title…**, then **Plot File**, **View Mode**, **Customize View…**, **Show Legend**, **X Axis**, **Y Axes** and **Reset View**; entries are disabled until data is loaded. Every entry is a plot control — the menu holds nothing that acts on files.
-- [x] The legend can be shown or hidden from a toggle overlaid on the chart, and the choice persists across sessions.
-- [x] The persistent on-chart controls are gathered into a single chip bar at the chart's top-left (legend toggle, View Mode chip, Reset view chip) rather than scattered around the plot; each chip hides itself when it would be meaningless, so the bar is empty-by-default clutter-free.
+- [x] The legend can be shown or hidden from the context menu (or `L`), and the choice persists across sessions.
+- [x] The persistent on-chart controls are gathered into a single chip bar at the chart's top-left (View Mode chip, Reset view chip) rather than scattered around the plot; each chip hides itself when it would be meaningless, and with neither showing the bar collapses to nothing - so it costs no chart space at rest.
 - [x] Frequent actions have chrome-free gestures: Ctrl+drag / middle-drag rubber-bands a time range to zoom, double-click restores the full span, and a crosshair follows the cursor for reading several series at one instant.
 - [x] Mouse-wheel zoom and click-drag pan of the X axis are retained as the primary navigation.
 - [x] The log/console occupies a left sidebar that the user can toggle on and off, and which is open by default.
@@ -407,6 +407,39 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The menu and title-bar icons swap to theme-appropriate variants when the theme changes.
 
 ## Version History
+
+### Unreleased — since the v2.14.0 tag
+
+#### The on-chart legend toggle is gone; Show Legend stays in the menu (US4.1)
+
+A control with two homes. `Show Legend` has been in the right-click menu since the
+menu replaced the external control rows, and `L` has toggled it since the keyboard
+shortcuts landed - so the chip was a third way to do the same thing, permanently
+occupying chart space to duplicate a menu item one click away.
+
+- The chip, its click handler, its event-filter registration, its two tooltip
+  refreshes and its stylesheet rules are removed. The legend itself, the persisted
+  `LegendVisible` preference, the menu item and the `L` key are untouched.
+- **Two helpers were named after the button while actually operating on the whole
+  bar**, so they are renamed to what they do: `positionLegendToggle()` →
+  `positionOverlayBar()`, `styleLegendToggle()` → `styleOverlayBar()`. The latter's
+  null-guard moved from the button to the bar, which is what it dereferences.
+- The `:checked` stylesheet rule went with it - the two remaining chips are
+  momentary actions, not states.
+
+**A state the chip used to mask.** With both remaining chips self-hiding, a plot with
+one left-axis metric and no zoom now shows a bar with NO children. Measured: it
+collapses to 0x0 rather than painting an empty translucent box over the chart, and
+`overlayBarAppearsOnlyWithData` now pins that.
+
+`legendChipIsLabelledAndDescribed` is deleted - it tested only the removed button.
+The three other legend tests keep their assertions and lose the chip ones;
+`contextMenuShowLegendMirrorsToggle` becomes
+`contextMenuShowLegendDrivesTheLegend`, since there is no longer a second control
+to mirror.
+
+**The manual's figures still show the chip.** They were already due for re-capture
+after v2.14.0's tick change, so this folds into that round rather than adding one.
 
 ### v2.14.0 — Ideas From Qwt, Without Qwt
 

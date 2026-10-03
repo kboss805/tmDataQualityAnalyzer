@@ -39,16 +39,15 @@ private slots:
     void contextMenuSetTitleAppliesToViewModel();
     void wheelZoomAndDragPanRemainEnabled();
     void noExternalControlWidgetsRemain();
-    void legendToggleShowsAndHidesLegend();
+    void legendVisibilitySurvivesRebuilds();
 
     // Y axis occupancy: an axis with nothing plotted against it is hidden.
     void emptyChartKeepsLeftAxis();
     void lockOnlyDataHidesRightAxis();
     void snrOnlyDataHidesLeftAxis();
     void hidingLastSnrSeriesReclaimsRightAxis();
-    void legendToggleAppearsOnlyWithData();
-    void legendChipIsLabelledAndDescribed();
-    void contextMenuShowLegendMirrorsToggle();
+    void overlayBarAppearsOnlyWithData();
+    void contextMenuShowLegendDrivesTheLegend();
     void overlayBarHoldsChipsAndIsChartParented();
     void viewModeChipSwitchesLeftAxisMetric();
     void resetChipAppearsOnlyWhenViewChanged();

@@ -128,7 +128,7 @@ void PlotWidget::applyTheme(bool dark)
 
     m_dark_theme = dark;
     m_legend->applyTheme(dark);
-    styleLegendToggle(dark);
+    styleOverlayBar(dark);
 
     m_plot->update();
 }
@@ -660,18 +660,6 @@ void PlotWidget::setUpLayout()
     chip_row->setContentsMargins(0, 0, 0, 0);
     chip_row->setSpacing(PlotConstants::kOverlayChipSpacingPx);
 
-    m_legend_toggle = new QToolButton(m_overlay_bar);
-    m_legend_toggle->setObjectName("legendToggle");
-    m_legend_toggle->setCheckable(true);
-    m_legend_toggle->setChecked(m_legend_visible);
-    m_legend_toggle->setCursor(Qt::PointingHandCursor);
-    // Text only, like the chips beside it: a bare glyph gave no indication of what
-    // the button did, and text + glyph took more of the chart than the label alone.
-    m_legend_toggle->setText(QStringLiteral("Toggle Legend"));
-    m_legend_toggle->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    m_legend_toggle->setFixedHeight(PlotConstants::kOverlayChipHeightPx);
-    chip_row->addWidget(m_legend_toggle);
-
     // One click to flip the left axis between its two metrics - the same choice as
     // the View Mode submenu, for the case where the user flips back and forth.
     m_view_mode_chip = new QToolButton(m_overlay_bar);
@@ -697,7 +685,6 @@ void PlotWidget::setUpLayout()
     // otherwise Qt keeps that tooltip - owned by m_plot, which contains the chips -
     // and the chip's own tooltip never appears.
     m_overlay_bar->installEventFilter(this);
-    m_legend_toggle->installEventFilter(this);
     m_view_mode_chip->installEventFilter(this);
     m_reset_chip->installEventFilter(this);
 
@@ -768,9 +755,6 @@ void PlotWidget::setUpConnections()
         }
         updatePlotCursor();
     });
-
-    connect(m_legend_toggle, &QToolButton::clicked, this,
-            [this](bool checked) { setLegendVisible(checked); });
 
     // View Mode chip: flip to the other left-axis metric.
     connect(m_view_mode_chip, &QToolButton::clicked, this, [this]() {
@@ -859,25 +843,14 @@ void PlotWidget::setLegendVisible(bool visible)
     m_legend_visible = visible;
     QSettings().setValue(UIConstants::kSettingsKeyLegendVisible, visible);
 
-    if (m_legend_toggle != nullptr)
-    {
-        QSignalBlocker blocker(m_legend_toggle);
-        m_legend_toggle->setChecked(visible);
-        // Refresh the tooltip here rather than only in the chip-update pass:
-        // toggling the legend doesn't run that pass, so the hint would otherwise
-        // keep offering the action the user just took.
-        m_legend_toggle->setToolTip(visible
-            ? QStringLiteral("Hide the legend (also in the right-click menu)")
-            : QStringLiteral("Show the legend (also in the right-click menu)"));
-    }
     // rebuildLegend() re-evaluates rows and applies the new visibility (it also
     // keeps the overlay hidden when there is nothing to show).
     rebuildLegend();
 }
 
-void PlotWidget::styleLegendToggle(bool dark)
+void PlotWidget::styleOverlayBar(bool dark)
 {
-    if (m_legend_toggle == nullptr)
+    if (m_overlay_bar == nullptr)
     {
         return;
     }
@@ -891,13 +864,13 @@ void PlotWidget::styleLegendToggle(bool dark)
 
     if (m_overlay_bar != nullptr)
     {
+        // One rule for every chip on the bar. The :checked state went with the
+        // legend toggle - the remaining chips are momentary actions, not states.
         m_overlay_bar->setStyleSheet(QString(
-            "QToolButton#legendToggle, QToolButton#overlayChip {"
+            "QToolButton#overlayChip {"
             " background-color: rgba(%1,%2,%3,%4); border: 1px solid %5;"
             " border-radius: %6px; color: %7; padding: 0 8px; }"
-            "QToolButton#legendToggle:hover, QToolButton#overlayChip:hover {"
-            " border: 1px solid %8; }"
-            "QToolButton#legendToggle:checked { border: 1px solid %8; }")
+            "QToolButton#overlayChip:hover { border: 1px solid %8; }")
             .arg(bg.red()).arg(bg.green()).arg(bg.blue())
             .arg(PlotConstants::kLegendBgAlpha)
             .arg(border.name())
@@ -935,13 +908,6 @@ void PlotWidget::updateOverlayChips()
             : QStringLiteral("Switch the left axis to Frame Sync Lock %"));
     }
 
-    if (m_legend_toggle != nullptr)
-    {
-        m_legend_toggle->setToolTip(m_legend_visible
-            ? QStringLiteral("Hide the legend (also in the right-click menu)")
-            : QStringLiteral("Show the legend (also in the right-click menu)"));
-    }
-
     // Reset chip: only meaningful once something has actually been changed away
     // from the default view, so it stays hidden the rest of the time.
     const bool zoomed = has_data
@@ -952,7 +918,7 @@ void PlotWidget::updateOverlayChips()
 
     m_overlay_bar->setVisible(has_data);
     m_overlay_bar->adjustSize();
-    positionLegendToggle();
+    positionOverlayBar();
 }
 
 void PlotWidget::updateCrosshair(double x, bool visible)
@@ -1115,7 +1081,7 @@ void PlotWidget::updatePlotCursor()
     m_plot->setCursor(pannable ? Qt::OpenHandCursor : Qt::ArrowCursor);
 }
 
-void PlotWidget::positionLegendToggle()
+void PlotWidget::positionOverlayBar()
 {
     if (m_overlay_bar == nullptr || m_plot == nullptr)
     {
@@ -1268,7 +1234,7 @@ void PlotWidget::resizeEvent(QResizeEvent* event)
     // Keep the on-chart overlay bar anchored to the (new) top-left corner.
     if (m_overlay_bar != nullptr && m_overlay_bar->isVisible())
     {
-        positionLegendToggle();
+        positionOverlayBar();
     }
 }
 
