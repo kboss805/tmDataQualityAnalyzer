@@ -410,6 +410,30 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.14.0 tag
 
+#### env.ps1 stops printing a message nobody can act on
+
+Every script that dot-sources `scripts/env.ps1` printed
+
+    'vswhere.exe' is not recognized as an internal or external command
+
+before doing its actual work. It came from inside Microsoft's `vcvars64.bat`, which
+invokes `vswhere.exe` by **bare name**: vswhere is installed at the standard path - so
+`env.ps1`'s own lookup finds it - but it is not on `PATH`, so vcvars falls through to its
+own fallbacks and the import succeeds anyway. Harmless, not ours to fix, and printed on
+every single run, which is how output stops being read at all.
+
+- vcvars' stderr is discarded (`2>nul` inside the `cmd /c`, so only that call is
+  silenced and `set` still flows).
+- **The import is now judged by its result instead of its chatter.** A PARTIAL import -
+  the failure that actually matters - was silent either way: it surfaces much later as
+  qmake's `QMAKE_MSC_VER isn't set`, which names neither vcvars nor this script. If
+  `INCLUDE` or `LIB` is unset after the import, `env.ps1` re-runs vcvars **with its
+  output shown** and throws naming the path it ran.
+
+Verified both directions: a fresh shell is silent and still gets `INCLUDE`, `LIB` and
+`cl.exe`, an incremental build through it exits 0, and pointing `TMDQ_VCVARS` at a batch
+file that sets nothing produces the re-run, the script's own output, and the throw.
+
 #### X ticks land on round CLOCK times, not round elapsed values (US4.0)
 
 v2.14.0 snapped the tick step to a natural interval, which fixed the spacing but not
