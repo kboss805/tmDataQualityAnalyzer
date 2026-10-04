@@ -278,6 +278,18 @@ void TmChart::setTimeFormatter(std::function<QString(double)> formatter)
     updateData();
 }
 
+void TmChart::setTimeOrigin(double seconds)
+{
+    if (qFuzzyCompare(m_time_origin, seconds))
+    {
+        return;
+    }
+    m_time_origin = seconds;
+    // Moves where every tick lands, and ticks are grid lines and labels - both in
+    // the cached data layer, so the backing store has to go.
+    updateData();
+}
+
 void TmChart::setThemeColors(const QColor& background, const QColor& foreground,
                              const QColor& grid, const QColor& title)
 {
@@ -905,7 +917,8 @@ void TmChart::drawAxes(QPainter& painter) const
     painter.restore();
 }
 
-QVector<double> TmChart::timeTickValues(double lower, double upper, int count)
+QVector<double> TmChart::timeTickValues(double lower, double upper, int count,
+                                        double origin)
 {
     QVector<double> ticks;
     if (!usableRange(lower, upper))
@@ -951,11 +964,19 @@ QVector<double> TmChart::timeTickValues(double lower, double upper, int count)
         step = std::ceil(raw / 86400.0) * 86400.0;
     }
 
-    // Start at the first round time at or after the range, not at the range itself.
-    const double first = std::ceil(lower / step) * step;
-    for (double t = first; t <= upper + step * 1e-9; t += step)
+    // Start at the first round time at or after the range, not at the range itself -
+    // and round in the domain the LABEL is read in, which is the clock, not the
+    // elapsed value. An X value is seconds since the recording's first sample, while
+    // its label is a time of day; snapping the X value puts ticks a round interval
+    // apart but starting from whenever the recording happened to begin. A file
+    // starting at 10:30:17.046 produced ticks reading :17, :47, :17 - evenly spaced
+    // and never on a round second. Only a recording that began exactly on a round
+    // second looked right, which is why frame-sync runs (whose first window starts on
+    // a whole second) appeared correct while SNR runs did not.
+    const double first = std::ceil((lower + origin) / step) * step;
+    for (double clock = first; clock <= upper + origin + step * 1e-9; clock += step)
     {
-        ticks.append(t);
+        ticks.append(clock - origin);
     }
     return ticks;
 }
@@ -965,7 +986,7 @@ QVector<double> TmChart::xTickValues() const
     // The formatter is what makes the axis a TIME axis; without one this is a
     // general chart whose X values are just numbers, and snapping them to 15 s would
     // be meaningless.
-    return m_formatter ? timeTickValues(m_x_lower, m_x_upper, m_x_tick_count)
+    return m_formatter ? timeTickValues(m_x_lower, m_x_upper, m_x_tick_count, m_time_origin)
                        : tickValues(m_x_lower, m_x_upper, m_x_tick_count);
 }
 

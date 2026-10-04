@@ -230,6 +230,64 @@ void TestTmChart::timeTicksLandOnRoundTimes()
     }
 }
 
+void TestTmChart::timeTicksAreRoundOnTheClockNotInElapsedSeconds()
+{
+    // A tick VALUE is seconds since the recording's first sample; its LABEL is a time
+    // of day. Snapping the value made ticks a round interval apart but starting from
+    // whenever the recording began, so a file starting at 10:30:17.046 produced ticks
+    // reading :17, :47, :17 - evenly spaced and never on a round second. Only a
+    // recording that began exactly on a round second looked right, which is why
+    // frame-sync runs appeared correct (their first window starts on a whole second)
+    // while SNR runs did not.
+    //
+    // The origin is what closes that gap, so it is what this asserts: the CLOCK time
+    // of each tick, origin + value, has to be the round number - not the value.
+    auto clockMultiplesOf = [](const QVector<double>& ticks, double origin, double step) {
+        for (double t : ticks)
+        {
+            const double clock = t + origin;
+            if (std::abs(clock / step - std::round(clock / step)) > 1e-6)
+            {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    // A mid-second start, which is what an SNR run gives: 116 s over 5 ticks wants
+    // ~29 s, so the ladder gives 30 s.
+    {
+        const double kOrigin = 37817.046;   // 10:30:17.046
+        const QVector<double> ticks = TmChart::timeTickValues(0.0, 116.0, 5, kOrigin);
+        QVERIFY(ticks.size() >= 3);
+        QVERIFY2(clockMultiplesOf(ticks, kOrigin, 30.0),
+                 "ticks do not land on whole half-minutes of the clock");
+        // Still inside the view - snapping must not push a tick off the axis.
+        for (double t : ticks)
+        {
+            QVERIFY(t >= 0.0 && t <= 116.0);
+        }
+    }
+
+    // A whole-second start that is simply not round. No fraction is involved, so this
+    // pins that the bug was never about sub-second times.
+    {
+        const double kOrigin = 37812.0;     // 10:30:12
+        const QVector<double> ticks = TmChart::timeTickValues(0.0, 600.0, 5, kOrigin);
+        QVERIFY(!ticks.isEmpty());
+        QVERIFY2(clockMultiplesOf(ticks, kOrigin, 300.0),
+                 "ticks do not land on whole five-minute marks of the clock");
+    }
+
+    // Omitting the origin must behave exactly as before: x IS the clock time. This is
+    // what the no-formatter and sub-second paths rely on.
+    {
+        const QVector<double> with_zero = TmChart::timeTickValues(0.0, 116.0, 5, 0.0);
+        const QVector<double> defaulted = TmChart::timeTickValues(0.0, 116.0, 5);
+        QCOMPARE(defaulted, with_zero);
+    }
+}
+
 void TestTmChart::wheelZoomAnchorsUnderCursorAndReportsRange()
 {
     TmChart chart;

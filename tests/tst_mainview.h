@@ -28,6 +28,7 @@ private slots:
     void fullManualPathFoundWhenInstalled();
     void helpSubmenuHoldsManualAndAbout();
     void exitIsTheLastMenuEntry();
+    void lightThemeReachesNativeWindowFrames();
     void openAndSaveTemplateCarryIcons();
     void menuSectionHeadersSurviveTheStylesheet();
     void logPreservesMultiLineMessages();

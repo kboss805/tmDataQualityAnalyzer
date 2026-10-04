@@ -322,6 +322,12 @@ void PlotWidget::updateAxes()
 
     m_updating_from_vm = true;
 
+    // Kept in step with the formatter: both describe the same mapping from an X value
+    // to a clock time, and the ViewModel re-bases it whenever a source with an earlier
+    // first sample arrives. Set here rather than once beside setTimeFormatter for that
+    // reason - a one-time copy would snap to the previous recording's start.
+    m_plot->setTimeOrigin(m_view_model->baseTimeOffset());
+
     m_plot->setXRange(m_view_model->xViewMin(), m_view_model->xViewMax());
 
     // Left axis (yAxis): user overrides if set, else 0 and 100 for Lock % or auto
