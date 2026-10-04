@@ -94,14 +94,78 @@ $StageDir       = "$ProjectDir\deploy\staging"
 $InstallerStage = "$StageDir\installer"
 $PortableRoot   = "$StageDir\portable\tmDataQualityAnalyzer-v${version}_portable"
 
-# Locate signtool.exe - prefer WDK x64 path, fall back to PATH
+# Locate signtool.exe: newest Windows SDK x64 build, else whatever vcvars put on
+# PATH. Discovered rather than pinned - this used to name 10.0.26100.0 outright, so
+# an SDK update would silently demote it to the bare-name fallback and the failure
+# would surface at the signing step, minutes into packaging.
 $SigntoolExe = 'signtool'
-$wdkSigntool = 'C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe'
-if (Test-Path $wdkSigntool) { $SigntoolExe = $wdkSigntool }
+$sdkSigntool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" `
+                   -ErrorAction SilentlyContinue |
+               Sort-Object { [version]($_.Directory.Parent.Name) } -ErrorAction SilentlyContinue |
+               Select-Object -Last 1
+if ($sdkSigntool) { $SigntoolExe = $sdkSigntool.FullName }
+
+function Test-SigningWorks {
+    <#
+        Prove the certificate can actually produce a signature, BEFORE the build.
+
+        The certificate being present in the store proves nothing: it is token-backed
+        (Certum SimplySign), and with the token locked it still reports as valid with
+        HasPrivateKey = True. The two failure shapes are signtool erroring with "No
+        certificates were found" or HANGING on the PIN prompt - so this signs a
+        throwaway copy under a timeout.
+
+        Signs a copy of signtool itself: any PE file will do, nothing in the build
+        exists yet, and a copy is never the file we ship.
+    #>
+    param([string]$Thumbprint, [string]$Signtool, [string]$Timestamp)
+
+    $probeDir = Join-Path $env:TEMP ("tmdq-signprobe-" + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Force -Path $probeDir | Out-Null
+    try {
+        $sample = if (Test-Path $Signtool) { $Signtool } else { (Get-Command signtool).Source }
+        $probe  = Join-Path $probeDir 'probe.exe'
+        Copy-Item $sample $probe -Force
+
+        $p = Start-Process $Signtool -ArgumentList @(
+                'sign', '/sha1', $Thumbprint, '/tr', $Timestamp,
+                '/td', 'sha256', '/fd', 'sha256', $probe
+             ) -NoNewWindow -PassThru `
+               -RedirectStandardOutput (Join-Path $probeDir 'out.txt') `
+               -RedirectStandardError  (Join-Path $probeDir 'err.txt')
+
+        # 90s, not 45: a healthy pre-flight measured 36s here, nearly all of it the
+        # timestamp-server round trip, so a slow network would otherwise trip the
+        # timeout and report a locked token - a confident, wrong diagnosis.
+        if (-not $p.WaitForExit(90000)) {
+            $p.Kill()
+            throw "Signing pre-flight timed out after 90s. Most likely the signing token is locked (signtool waits on the PIN prompt) - log in to SimplySign and re-run. A very slow or unreachable timestamp server ($Timestamp) would look the same. Nothing was built."
+        }
+        if ($p.ExitCode -ne 0) {
+            $why = (Get-Content (Join-Path $probeDir 'out.txt'), (Join-Path $probeDir 'err.txt') -ErrorAction SilentlyContinue) -join ' '
+            throw "Signing pre-flight FAILED (exit $($p.ExitCode)): $why`nFix the certificate, or pass -SignCertSha1 '' to build unsigned."
+        }
+        Write-Host "  Signing pre-flight OK (cert $Thumbprint can sign)."
+    } finally {
+        Remove-Item $probeDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
 
 Write-Host "============================================"
 Write-Host " Building tmDataQualityAnalyzer v$version Release"
 Write-Host "============================================"
+
+# Before the build, not after it. Packaging is a ten-minute run that signs near the
+# end, so a locked token used to be discovered only once everything else was done.
+if ($SignCertSha1) {
+    Write-Host "[0/8] Signing pre-flight..."
+    if (-not (Get-Command $SigntoolExe -ErrorAction SilentlyContinue) -and -not (Test-Path $SigntoolExe)) {
+        throw "signtool not found. Install the Windows SDK signing tools, or pass -SignCertSha1 '' to build unsigned."
+    }
+    Test-SigningWorks -Thumbprint $SignCertSha1 -Signtool $SigntoolExe -Timestamp $SignTimestamp
+} else {
+    Write-Host "[0/8] Signing disabled (-SignCertSha1 '') - skipping pre-flight."
+}
 
 # --- Step 1: Clean and build release ---
 Set-Location $ProjectDir
