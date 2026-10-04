@@ -13,7 +13,7 @@ description: >-
 
 # Build and Test — tmDataQualityAnalyzer
 
-This project is Qt 6.11.1 / C++17 built with qmake + MSVC 2022 (Visual Studio 2022 C++ Build Tools)
+This project is Qt 6.12.0 / C++17 built with qmake + MSVC 2022 (Visual Studio 2022 C++ Build Tools)
 on Windows. The toolchain is **not on PATH**, so every build session must set it up first. There are
 two separate qmake projects: the app (`tmDataQualityAnalyzer.pro` at the root) and the tests
 (`tests/tests.pro`).

@@ -4,7 +4,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 
 ## Version Information
 
-- **Qt Version**: 6.11.1 (minimum: Qt 6.0.0)
+- **Qt Version**: 6.12.0 (minimum: Qt 6.0.0)
 - **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, `cl` / `nmake`), Qt `msvc2022_64` kit.
   This is the only supported toolchain (and what CI uses).
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
@@ -409,6 +409,33 @@ The stories below follow the workflow a first-time user takes through the applic
 ## Version History
 
 ### Unreleased — since the v2.14.0 tag
+
+#### Qt 6.12.0, and a deploy check that survives a version bump
+
+- `QT_VERSION` in `scripts/env.ps1` and `.github/workflows/ci.yml` moves to **6.12.0**,
+  which is the only Qt now installed - 6.11.1 is gone, so the build was broken until
+  this landed. `compile_flags.txt` regenerated (its Qt paths are absolute and
+  version-pinned), both `.qmake.stash` files wiped, and `gen_compile_flags.py`'s own
+  fallback default moved with them, since a stale one there silently points clangd at
+  a Qt that no longer exists. **411 / 0 / 1, zero warnings** on 6.12.0.
+
+- **`deploy_qt_local.ps1` skipped re-deploying after the bump, and that is a bug worth
+  the fix rather than the workaround.** Its "already deployed" check compared the
+  deployed `Qt6Core.dll`'s LastWriteTime against the kit's - which answers the wrong
+  question after a version change. Qt 6.12.0's DLLs carry an *older* build date than
+  the 6.11.1 copies already sitting beside the exe, so the check skipped, the freshly
+  linked test binary loaded the previous runtime, and it died with
+  **`0xC0000139` (entry point not found)** and no results file - no message, nothing on
+  screen to explain it.
+  The check now compares the **Qt version** of the deployed DLL against the kit's, so a
+  bump always re-deploys. This is the same family as the `0xC0000135` that followed the
+  6.11.1 upgrade: local DLLs shadow `PATH`, so a stale copy beside the exe wins over a
+  correct one on the search path.
+
+- Not changed here, because it is a machine setting rather than a repository one: the
+  **persistent user `QTDIR`** still points at 6.11.1. Builds are unaffected (`env.ps1`
+  sets its own), but cpptools and Qt Creator read it. `env.ps1` warns on every run and
+  names the fix - `scripts\setup-env.ps1`.
 
 #### The on-chart legend toggle is gone; Show Legend stays in the menu (US4.1)
 
@@ -2571,7 +2598,7 @@ User opens .ch10 ─► MainView ─► MainViewModel ─► Chapter10Reader (me
 
 ### Qt Version Compatibility
 
-- **Target**: Qt 6.11.1
+- **Target**: Qt 6.12.0
 - **Important**: Qt 6 made significant changes to container classes
   - `QStringList` methods differ from Qt 5
   - Prefer range-based for loops when iterating over Qt containers

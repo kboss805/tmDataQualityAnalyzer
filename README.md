@@ -98,7 +98,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 
 ### Software
 
-- **Qt**: Version 6.0.0 or later (developed on 6.11.1), `msvc2022_64` kit
+- **Qt**: Version 6.0.0 or later (developed on 6.12.0), `msvc2022_64` kit
 - **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools — workload
   "Desktop development with C++", giving `cl` / `nmake` + the Windows SDK)
 - **C++ Standard**: C++17 required
