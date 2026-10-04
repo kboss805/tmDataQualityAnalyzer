@@ -37,7 +37,13 @@ function Set-UserEnvVar {
 }
 
 Write-Host ""
-Write-Host "tmDataQualityAnalyzer — Developer Environment Setup"
+# Keep non-ASCII out of STRINGS in this file. It is UTF-8 without a BOM and is run as
+# `powershell -File`, i.e. Windows PowerShell 5.1, which decodes it as ANSI: an em dash
+# becomes three characters ending in U+201D, and PowerShell accepts a curly quote as a
+# string delimiter. The string closed early, quote parity flipped, and the script failed
+# to PARSE - reporting the error on an unrelated line 11 lines further down. Comments are
+# unaffected (they end at the newline either way).
+Write-Host "tmDataQualityAnalyzer - Developer Environment Setup"
 Write-Host "============================================"
 Write-Host ""
 Write-Host "Registering user environment variables..."
