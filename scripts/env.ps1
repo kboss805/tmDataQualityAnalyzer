@@ -69,11 +69,29 @@ if (-not $env:TMDQ_VCVARS_DONE) {
     }
 
     # Run vcvars in cmd and copy the resulting environment into this session.
-    cmd /c "`"$vcvars`" && set" | ForEach-Object {
+    #
+    # Its stderr is discarded on purpose. vcvars64.bat invokes `vswhere.exe` by bare
+    # name, so on a machine where vswhere exists but is not on PATH it prints
+    #   'vswhere.exe' is not recognized as an internal or external command
+    # and carries on with its own fallbacks. The import is fine - but that line was
+    # printed by every script that dot-sources this one, and output nobody can act on
+    # is how output stops being read at all. It is Microsoft's script, not ours to fix.
+    cmd /c "`"$vcvars`" 2>nul && set" | ForEach-Object {
         if ($_ -match '^([^=]+)=(.*)$') {
             [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2])
         }
     }
+
+    # Judge the import by its RESULT, now that its chatter is gone. A PARTIAL import is
+    # the failure that matters and it is otherwise silent: qmake fails much later with
+    # "QMAKE_MSC_VER isn't set", which names neither vcvars nor this script. INCLUDE and
+    # LIB are what the compiler cannot work without.
+    if (-not $env:INCLUDE -or -not $env:LIB) {
+        Write-Host "vcvars64.bat left INCLUDE/LIB unset - re-running it with its output shown:"
+        cmd /c "`"$vcvars`""
+        throw "vcvars64.bat did not produce a usable build environment. Ran: $vcvars"
+    }
+
     $env:TMDQ_VCVARS_DONE = '1'
 }
 
