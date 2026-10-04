@@ -92,22 +92,25 @@ With the **build-and-test** skill: build the app clean (0 warnings) and run the 
 (all green, 0 failed/0 skipped). Do not package a release over a red or warning-laden build. Confirm
 `git status` is clean except for the intended version/notes changes.
 
-## Step 6 — Smoke-test signing BEFORE packaging
+## Step 6 — Signing is proven automatically (nothing to do by hand)
 
-Packaging takes ~10 minutes and signs at the very end. **Prove the certificate can actually sign
-first** — this costs 45 seconds and saved a whole cycle the one time it was skipped:
+`build_release.ps1` runs a **signing pre-flight as step 0**, before the build: it signs a
+throwaway copy under a timeout and aborts if the certificate cannot produce a signature. This
+used to be a manual ritual here, and skipping it once cost a whole packaging cycle.
 
-```powershell
-$t = 'C:\scratch\tmDataQualityAnalyzer.exe'   # copy a built exe to scratch first
-$p = Start-Process signtool -ArgumentList @('sign','/sha1',$env:SIGN_CERT_SHA1,
-     '/tr','http://timestamp.digicert.com','/td','sha256','/fd','sha256',$t) -NoNewWindow -PassThru
-if ($p.WaitForExit(45000)) { "exit $($p.ExitCode)" } else { $p.Kill(); "HUNG - token locked" }
-```
+What that protects against, and why it needs an actual signature rather than a store lookup:
 
-**The certificate being present in the store proves nothing.** It is token-backed (Certum
-SimplySign): with the token locked it still shows as valid with `HasPrivateKey = True`. The failure
-looks like either `SignTool Error: No certificates were found...` or signtool **hanging** on the PIN
-prompt. If it hangs, the user must log in to SimplySign — you cannot.
+- **The certificate being present proves nothing.** It is token-backed (Certum SimplySign) and
+  with the token locked it still reports as valid with `HasPrivateKey = True`.
+- The two failure shapes are `SignTool Error: No certificates were found...` and signtool
+  **hanging** on the PIN prompt. Both now fail in the first seconds with a message naming the
+  cause, rather than at step 5 of 8.
+- **If it reports a locked token, the user must log in to SimplySign — you cannot.**
+
+`signtool` is discovered from the newest installed Windows SDK rather than a pinned path, so an
+SDK update no longer silently demotes it to the bare name on `PATH`.
+
+To build unsigned, pass `-SignCertSha1 ''`; the pre-flight is skipped with a note.
 
 ## Step 7 — Build, sign, and package
 

@@ -410,6 +410,35 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.14.0 tag
 
+#### Signing fails in the first seconds, not the tenth minute
+
+The release script's most fragile dependency was `signtool`, and all three of its
+problems had already cost time.
+
+- **The SDK path was pinned to `10.0.26100.0`.** An SDK update would silently demote
+  it to the bare name on `PATH` - still working, until it did not. It is now
+  discovered from the newest installed Windows SDK.
+- **A missing signtool surfaced at step 5 of 8.** Packaging is a ten-minute run that
+  signs near the end, so the check now runs as **step 0** and aborts before the build.
+- **The certificate being present proves nothing.** It is token-backed (Certum
+  SimplySign) and with the token locked it still reports valid with
+  `HasPrivateKey = True`, so only an actual signature settles it. `build_release.ps1`
+  now signs a throwaway copy under a timeout before building - the smoke test that was
+  previously a manual ritual in the `cut-release` skill, and that cost a whole cycle
+  the one time it was skipped.
+
+Verified both ways against the real function: a bad thumbprint throws in **0.1 s**
+carrying signtool's own message, and the real certificate passes in **36 s**, leaving
+no temp files behind.
+
+That 36 s is why the timeout is **90 s rather than 45**: nearly all of it is the
+timestamp-server round trip, so the shorter timeout would have reported a locked token
+on a slow network - a confident, wrong diagnosis. The timeout message now names both
+possible causes instead of asserting one.
+
+The `cut-release` skill's Step 6 drops its hand-run snippet and says the script does
+it, which is the point: a ritual nobody can forget.
+
 #### Qt 6.12.0, and a deploy check that survives a version bump
 
 - `QT_VERSION` in `scripts/env.ps1` and `.github/workflows/ci.yml` moves to **6.12.0**,
