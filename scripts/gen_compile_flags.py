@@ -35,8 +35,8 @@ def qtdir() -> Path:
     version = os.environ.get("QT_VERSION")
     if not version:
         # Fall back to the version single-sourced in constants.h is overkill here;
-        # env.ps1 defaults to 6.11.1, so match that.
-        version = "6.11.1"
+        # env.ps1 defaults to 6.12.0, so match that.
+        version = "6.12.0"
     root = os.environ.get("QT_ROOT") or f"C:/Qt/{version}"
     return Path(root) / "msvc2022_64"
 

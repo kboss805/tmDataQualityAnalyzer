@@ -1,6 +1,6 @@
 # tmDataQualityAnalyzer — Claude Code guide
 
-Qt 6.11.1 / C++17 desktop app (qmake + MSVC 2022, Windows) for analyzing data quality of IRIG 106
+Qt 6.12.0 / C++17 desktop app (qmake + MSVC 2022, Windows) for analyzing data quality of IRIG 106
 Chapter 10 PCM telemetry: per-stream **Frame Sync Lock** stats and **Receiver AGC/SNR**, plotted vs.
 time. MVVM, single-reader / parallel-worker processing core. **Current version: 2.14.0.**
 

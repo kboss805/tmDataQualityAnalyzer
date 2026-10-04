@@ -51,13 +51,25 @@ if (-not (Test-Path $exe)) {
 $deployed = Join-Path (Split-Path $exe -Parent) 'Qt6Core.dll'
 $deployedDebug = Join-Path (Split-Path $exe -Parent) 'Qt6Cored.dll'
 if ((Test-Path $deployed) -or (Test-Path $deployedDebug)) {
-    # Already deployed and still newer than the kit: skip, so this can be wired
-    # as a pre-launch step without adding seconds to every F5.
+    # Skip only when the deployed copy came from THIS kit, so this can be wired as a
+    # pre-launch step without adding seconds to every F5.
+    #
+    # Compared by Qt VERSION, not by timestamp. A timestamp answers the wrong
+    # question after a bump - whether the copy is older than the kit, when what
+    # matters is whether it came from a different one. Qt 6.12.0's DLLs carry an
+    # older build date than the 6.11.1 copies that were already here, so the old
+    # check said "already deployed" and the freshly linked exe loaded the previous
+    # runtime: 0xC0000139, entry point not found, with nothing on screen to explain
+    # it. A Qt bump must always re-deploy.
     $stamp = if (Test-Path $deployedDebug) { $deployedDebug } else { $deployed }
-    if ((Get-Item $stamp).LastWriteTime -ge (Get-Item (Join-Path $env:QTDIR 'bin\Qt6Core.dll')).LastWriteTime) {
-        Write-Host "Qt runtime already deployed beside $Config exe (from $env:QTDIR)."
+    $kitCore = Join-Path $env:QTDIR 'bin\Qt6Core.dll'
+    $deployedVer = (Get-Item $stamp).VersionInfo.FileVersion
+    $kitVer      = (Get-Item $kitCore).VersionInfo.FileVersion
+    if ($deployedVer -eq $kitVer) {
+        Write-Host "Qt runtime already deployed beside $Config exe (Qt $kitVer, from $env:QTDIR)."
         exit 0
     }
+    Write-Host "Deployed Qt is $deployedVer but the kit is $kitVer - re-deploying."
 }
 
 Write-Host "Deploying Qt runtime from $env:QTDIR next to the $Config exe..."

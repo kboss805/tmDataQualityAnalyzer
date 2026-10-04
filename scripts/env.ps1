@@ -11,7 +11,7 @@
 #   . "$PSScriptRoot\env.ps1"
 # =============================================================================
 
-if (-not $env:QT_VERSION) { $env:QT_VERSION = '6.11.1' }
+if (-not $env:QT_VERSION) { $env:QT_VERSION = '6.12.0' }
 if (-not $env:QT_ROOT)    { $env:QT_ROOT    = "C:\Qt\$env:QT_VERSION" }
 
 $env:QTDIR = "$env:QT_ROOT\msvc2022_64"
