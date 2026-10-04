@@ -410,6 +410,53 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.14.0 tag
 
+#### X ticks land on round CLOCK times, not round elapsed values (US4.0)
+
+v2.14.0 snapped the tick step to a natural interval, which fixed the spacing but not
+where the ticks sit. A tick's VALUE is seconds since the recording's first sample,
+while its LABEL is a time of day - and those are the same thing only when the
+recording began exactly on a round second.
+
+- Reported as "SNR files are not snapping to even numbers like 5 and 10 in the time,
+  like the frame sync does". **It was never about SNR.** Frame-sync runs tend to start
+  on a whole second, so their ticks landed on round clock times by luck; SNR runs
+  sample from an arbitrary packet time and did not. Measured on three bases: a start at
+  `:30:00.000` gives ticks reading `:00, :30, :00`, a start at `:30:17.046` gives
+  `:17, :47, :17`, and a start at `:30:12.000` - no fraction involved at all - gives
+  `:12, :42, :12`. Evenly spaced every time, round only in the first case.
+- `TmChart::setTimeOrigin()` carries the clock time of x = 0, and `timeTickValues()`
+  takes it as a fourth argument, snapping in origin-shifted space and shifting back.
+  The default of 0 preserves the existing behaviour exactly, which is what the
+  no-formatter and sub-second paths assume.
+- **Set in `updateAxes()`, not once beside `setTimeFormatter()`.** `PlotViewModel`
+  re-bases the origin whenever a source with an earlier first sample arrives, so a
+  one-time copy would snap to the previous recording's start.
+
+`timeTicksAreRoundOnTheClockNotInElapsedSeconds` asserts the CLOCK time of each tick is
+the round number, across a mid-second start and a whole-second-but-not-round start, and
+pins that omitting the origin is unchanged. Verified to fail against the elapsed-domain
+snapping it replaces.
+
+#### The light theme reaches dialog title bars (US9.0)
+
+- Reported as the progress dialog keeping a dark title bar in the light theme - true of
+  every ordinary dialog, not just that one. A stylesheet paints widgets and has no reach
+  into a window's frame, which Windows draws from **Qt's colour scheme**. The
+  application set the stylesheet and never the scheme. The main window hides this,
+  being frameless with a title bar of its own; every dialog shows it.
+- `MainView::applyApplicationTheme()` now sets both, and **startup and the theme toggle
+  share it**. They previously loaded the stylesheet separately, which is how the two
+  could disagree in the first place - adding the scheme call to one and not the other
+  would have reproduced the bug in a different half of the application.
+
+`lightThemeReachesNativeWindowFrames` asserts the stylesheet unconditionally and the
+colour scheme wherever the platform supports one. **The offscreen plugin - which CI
+uses - has no platform theme for the override to reach**: `setColorScheme` is inert
+there, `colorScheme()` stays `Unknown` and no signal is emitted, so the test probes
+whether the override is live rather than asserting into a vacuum. The scheme half
+therefore runs on a developer machine and not in CI; it was verified to fail against a
+build that applies only the stylesheet.
+
 #### Signing fails in the first seconds, not the tenth minute
 
 The release script's most fragile dependency was `signtool`, and all three of its

@@ -3,13 +3,14 @@
  * @brief Smoke tests for MainView — construction, destruction, basic widget checks.
  */
 
+#include <QStyleHints>
+#include <QGuiApplication>
 #include "tst_mainview.h"
 
 #include <QColor>
 #include <QFile>
 #include <QLabel>
 #include <QMenu>
-#include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTextStream>
 #include <QToolButton>
@@ -209,6 +210,44 @@ void TestMainView::helpSubmenuHoldsManualAndAbout()
         QVERIFY2(a->text() != QStringLiteral("About..."),
                  "About must live in the Help submenu, not the top-level menu");
     }
+}
+
+void TestMainView::lightThemeReachesNativeWindowFrames()
+{
+    // The stylesheet paints widgets and nothing else. A dialog's title bar is drawn by
+    // Windows from Qt's colour scheme, so applying only the QSS left every ordinary
+    // dialog with a dark title bar in the light theme - reported against the progress
+    // dialog, but true of all of them. The main window is frameless and draws its own
+    // bar, which is why it never showed the fault.
+    //
+    // Asserted on the colour scheme rather than a screenshot: the frame is painted by
+    // the system, outside anything an offscreen grab can see.
+    const Qt::ColorScheme original = QGuiApplication::styleHints()->colorScheme();
+
+    // Is the override live on this platform? The offscreen plugin - which CI uses -
+    // has no platform theme for it to reach: setColorScheme is inert there and
+    // colorScheme() stays Unknown, with no signal either. Probing rather than
+    // assuming, so the real assertions run wherever they CAN (any developer machine,
+    // and any run under the real platform plugin) instead of being written off.
+    QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Dark);
+    const bool scheme_is_live =
+        QGuiApplication::styleHints()->colorScheme() != Qt::ColorScheme::Unknown;
+
+    MainView::applyApplicationTheme(false);
+    QVERIFY2(!qApp->styleSheet().isEmpty(), "light theme applied no stylesheet");
+    if (scheme_is_live)
+    {
+        QCOMPARE(QGuiApplication::styleHints()->colorScheme(), Qt::ColorScheme::Light);
+    }
+
+    MainView::applyApplicationTheme(true);
+    QVERIFY2(!qApp->styleSheet().isEmpty(), "dark theme applied no stylesheet");
+    if (scheme_is_live)
+    {
+        QCOMPARE(QGuiApplication::styleHints()->colorScheme(), Qt::ColorScheme::Dark);
+    }
+
+    QGuiApplication::styleHints()->setColorScheme(original);
 }
 
 void TestMainView::exitIsTheLastMenuEntry()

@@ -52,17 +52,7 @@ int main(int argc, char** argv)
 
     QSettings app_settings;
     QString theme = app_settings.value(UIConstants::kSettingsKeyTheme, UIConstants::kThemeDark).toString();
-    QString qss_path = (theme == UIConstants::kThemeLight)
-        ? ":/resources/win11-light.qss"
-        : ":/resources/win11-dark.qss";
-
-    QFile qss_file(qss_path);
-    if (qss_file.open(QFile::ReadOnly))
-    {
-        QString styleSheet = QLatin1String(qss_file.readAll());
-        qApp->setStyleSheet(styleSheet);
-        qss_file.close();
-    }
+    MainView::applyApplicationTheme(theme != UIConstants::kThemeLight);
 
     QApplication::setWindowIcon(QIcon(":/resources/icon.ico"));
 

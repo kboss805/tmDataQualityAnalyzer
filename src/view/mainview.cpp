@@ -10,6 +10,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
+#include <QGuiApplication>
 #include <QIcon>
 #include <QInputDialog>
 #include <QJsonDocument>
@@ -25,6 +26,7 @@
 #include <QSettings>
 #include <QSignalBlocker>
 #include <QStatusBar>
+#include <QStyleHints>
 #include <QTime>
 #include <QToolButton>
 #include <QUrl>
@@ -684,23 +686,29 @@ QString MainView::installedFullManualPath() const
                                      : fullManualPathIn(m_view_model->appRoot());
 }
 
+void MainView::applyApplicationTheme(bool dark)
+{
+    QFile qss_file(dark ? ":/resources/win11-dark.qss" : ":/resources/win11-light.qss");
+    if (qss_file.open(QFile::ReadOnly))
+    {
+        qApp->setStyleSheet(QLatin1String(qss_file.readAll()));
+        qss_file.close();
+    }
+
+    // The stylesheet paints widgets; it has no reach into a window's frame, which on
+    // Windows is drawn by the system from Qt's colour scheme. Without this a dialog
+    // in the light theme kept a dark title bar.
+    QGuiApplication::styleHints()->setColorScheme(dark ? Qt::ColorScheme::Dark
+                                                       : Qt::ColorScheme::Light);
+}
+
 void MainView::onToggleTheme()
 {
     QSettings app_settings;
     QString current_theme = app_settings.value(UIConstants::kSettingsKeyTheme, UIConstants::kThemeDark).toString();
     QString new_theme = (current_theme == UIConstants::kThemeDark) ? UIConstants::kThemeLight : UIConstants::kThemeDark;
 
-    QString qss_path = (new_theme == UIConstants::kThemeLight)
-        ? ":/resources/win11-light.qss"
-        : ":/resources/win11-dark.qss";
-
-    QFile qss_file(qss_path);
-    if (qss_file.open(QFile::ReadOnly))
-    {
-        qobject_cast<QApplication*>(QApplication::instance())->setStyleSheet(
-            QLatin1String(qss_file.readAll()));
-        qss_file.close();
-    }
+    applyApplicationTheme(new_theme == UIConstants::kThemeDark);
 
     app_settings.setValue(UIConstants::kSettingsKeyTheme, new_theme);
 

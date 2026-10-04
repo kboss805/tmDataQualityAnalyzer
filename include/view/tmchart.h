@@ -98,6 +98,11 @@ public:
     /// Formats an X value for its tick label (elapsed seconds -> DDD:HH:MM:SS).
     /// Without one, values print as plain numbers.
     void setTimeFormatter(std::function<QString(double)> formatter);
+    /// Seconds between an X value and the clock time its label shows, i.e. the
+    /// wall-clock time of x = 0. Tick snapping needs it: an X value is elapsed
+    /// seconds, but the label is read as a time of day, and those are only the same
+    /// thing when the recording began exactly on a round second.
+    void setTimeOrigin(double seconds);
 
     /// Applies the palette. Kept as one call so a theme switch cannot leave some
     /// elements on the old colours.
@@ -138,7 +143,12 @@ public:
     /// claimed is arithmetic, and offscreen rendering has no fonts with which to read
     /// a label back. TmChart exposes observation points rather than befriending its
     /// tests - see plotArea() and the coordinate transforms above.
-    static QVector<double> timeTickValues(double lower, double upper, int count);
+    /// @p origin is the clock time of x = 0 (see setTimeOrigin). Snapping happens in
+    /// origin-shifted space and the result is shifted back, so the returned values
+    /// are still plain X coordinates. The default of 0 means "x is already the clock
+    /// time", which is what the sub-second and no-formatter paths assume.
+    static QVector<double> timeTickValues(double lower, double upper, int count,
+                                          double origin = 0.0);
 
     // --- Export -----------------------------------------------------------
     /// Paints the whole chart at @p size onto @p painter. Used for PNG, SVG and
@@ -258,6 +268,7 @@ private:
     int     m_x_tick_count  = PlotConstants::kTickCount;
     int     m_top_inset     = 0;   ///< Extra reserved headroom; see setTopInset().
     std::function<QString(double)> m_formatter;
+    double                         m_time_origin = 0.0;
 
     QColor m_background{Qt::black};
     QColor m_foreground{Qt::white};

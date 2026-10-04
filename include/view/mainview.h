@@ -38,6 +38,17 @@ public:
     ~MainView() override;
     Q_DISABLE_COPY_MOVE(MainView)
 
+    /// Applies @p dark to the whole application: the stylesheet every widget is
+    /// painted with, and Qt's colour scheme, which is what native window frames
+    /// follow.
+    ///
+    /// Static and shared by startup and the theme toggle on purpose. They used to
+    /// load the stylesheet separately, and that is how the title bars drifted: the
+    /// QSS reaches only widgets, so a dialog's frame - drawn by Windows, not by Qt -
+    /// stayed dark in the light theme. The main window hides this, being frameless
+    /// with a title bar of its own; every ordinary dialog shows it.
+    static void applyApplicationTheme(bool dark);
+
     // Grants the unit test access to the private file-routing/import internals
     // (openPath/importCsv/isSupportedFile and m_plot_view_model) so the View-layer
     // CSV routing can be exercised without exposing it on the public API.

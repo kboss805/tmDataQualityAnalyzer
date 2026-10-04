@@ -23,6 +23,7 @@ private slots:
     void yTransformsAreOrientedAndIndependent();
     void tickValuesSpanRangeInclusive();
     void timeTicksLandOnRoundTimes();
+    void timeTicksAreRoundOnTheClockNotInElapsedSeconds();
     void wheelZoomAnchorsUnderCursorAndReportsRange();
     void interactionsDisabledIgnoresWheel();
     void hiddenAxisReclaimsItsMargin();
