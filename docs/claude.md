@@ -410,6 +410,36 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased — since the v2.14.0 tag
 
+#### The manual's figures are re-captured, and the spares are gone (US8.0)
+
+Thirteen captures re-taken against a clean 6.12.0 build: the six plot figures and
+`walk-theme-01` / `walk-err-01` / `walk-batch-03` for the removed on-chart legend toggle
+and the clock-rounded X ticks, the three menu figures for Export leaving the plot menu,
+the icons on Open / Save as Template and Exit moving to the bottom, and
+`walk-fs-04-processing` - which still carried a **v2.9.3** banner and the verbose
+`stop=18446744073709551615s` log line that v2.11.0 removed, so it had been stale for four
+releases. 32/32 captures placed; both manuals rebuilt.
+
+**`$Spares` is now empty.** It held three - two unused halves of with/without-legend
+pairs and a sidebar shot superseded by `walk-err-01-log-error.png`. All three predated the
+legend-toggle removal, so none could have been placed without re-capturing first. A stale
+spare looks like an option and is not one. The mechanism stays for the next deliberate
+one.
+
+**Two traps worth recording, because neither announces itself:**
+
+- **A `$true` crop is size-validated; an explicit rectangle is not.** `walk-fs-04`'s
+  `@(14, 14, 1936, 1119)` assumes a 1962x1142 full-screen grab, and two window-sized
+  re-captures (1946x1130, then 1950x1129) fell under it. The failure is
+  `System.Drawing`'s `"possibly due to a lack of memory"`, which actually means an
+  out-of-bounds rectangle and sends the reader somewhere else entirely. Every rectangle
+  is now checked against its image before a build, not just the strict crops.
+- **The crosshair is cursor state and lands wherever the pointer was.** Four plot figures
+  came back with a readout box sitting over the data, and the with/without-legend pair -
+  the one place the manual puts two figures side by side so the legend is the only
+  difference - also disagreed on whether the status bar was visible. Move the pointer off
+  the chart before capturing.
+
 #### env.ps1 stops printing a message nobody can act on
 
 Every script that dot-sources `scripts/env.ps1` printed

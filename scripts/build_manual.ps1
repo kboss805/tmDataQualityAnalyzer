@@ -49,23 +49,22 @@ $MaxWidth     = 1200
 #     the right-hand axis tick labels, so the plain capture reads better.
 # The frame-sync pair is kept BOTH ways because the manual's legend-toggle section is
 # the one place where the contrast itself is the subject.
-# Captures kept on purpose but used in neither manual. Naming them here is what
+# Captures kept on purpose but used in neither manual. Naming one here is what
 # separates "decided against" from "forgotten": the coverage check reports anything
-# in docs/manual_images/ that is neither processed nor listed below, and a check
-# that also fired on these three deliberate choices would be noise on every build -
-# which is how a warning stops being read at all.
+# in docs/manual_images/ that is neither processed nor listed below, and a check that
+# also fired on a deliberate choice would be noise on every build - which is how a
+# warning stops being read at all.
+#
+# CURRENTLY EMPTY, and that is the honest state rather than an oversight. It held
+# three: two unused halves of with/without-legend pairs, and a plain sidebar shot
+# superseded by walk-err-01-log-error.png. All three were deleted in the v2.14.1
+# re-capture round - a spare is only worth keeping while it still shows the current
+# UI, and these predated the removal of the on-chart legend toggle, so each would have
+# needed re-capturing before it could ever be placed. A stale spare is worse than no
+# spare: it looks like an option and is not one.
 #
 # Each entry records WHY, because the reason is the whole value of keeping the file.
 $Spares = [ordered]@{
-    # Near-duplicate: walk-err-01-log-error.png shows the same sidebar with an error
-    # in it, which documents the log better. Kept in case a plain sidebar shot is
-    # ever wanted.
-    'walk-app-02-sidebar.png'                        = 'superseded by walk-err-01-log-error.png'
-    # The unused halves of the with/without-legend pairs. Which variant suits which
-    # section is a judgement call (see the note above $Images), so both are captured
-    # and only one is placed.
-    'Calibrated SNR Plot with Legend.png'            = 'unused half of a legend pair'
-    'Frame Error Accumulation Plot without Legend.png' = 'unused half of a legend pair'
 }
 
 $Images = [ordered]@{

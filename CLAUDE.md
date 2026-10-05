@@ -28,6 +28,16 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   times and takes minutes. In a worktree, junction
   `tests/data` to the main checkout's or the fixture tests skip.
 
+**After a Qt version bump, CLEAN every build directory** — `build/` *and* `tests/`, Debug and
+Release: `& $env:TMDQ_MAKE -f Makefile.<Config> clean` then rebuild. jom rebuilds an object only
+when its dependencies look newer, and a new Qt's headers can carry an *older* date than the objects
+already on disk, so objects compiled against the previous Qt are silently relinked against the new
+one. **The symptom is a crash in a test that has nothing to do with the change**, at a meaningless
+address — `0xc0000005` in `TestStepDetector`, `0xC0000409` entering `TestPlotViewModel`,
+`0xC000041D` in the app. Three separate debugging sessions were spent on this before the cause was
+identified. CI never sees it because it builds fresh; only local builds after a bump are affected.
+(Also regenerate `compile_flags.txt` and delete both `.qmake.stash` files — see `docs/CLAUDE.md`.)
+
 The **`build-and-test`** skill encodes all of this; prefer it.
 
 **Running a built exe (IDE or by hand):** `py`-free one-liner
