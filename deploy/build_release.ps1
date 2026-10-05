@@ -134,6 +134,16 @@ function Test-SigningWorks {
                -RedirectStandardOutput (Join-Path $probeDir 'out.txt') `
                -RedirectStandardError  (Join-Path $probeDir 'err.txt')
 
+        # Touch .Handle BEFORE waiting. Windows PowerShell 5.1 - which is how this
+        # script is invoked - returns a Process from Start-Process -PassThru that has
+        # not cached its handle, and once the process has exited the handle can no
+        # longer be obtained, so $p.ExitCode reads back EMPTY. Measured both ways
+        # against a deliberately bad thumbprint: without this line the exit code is
+        # '', with it the real 1 comes through. Empty is not 0, so the check below
+        # used to report a SUCCESSFUL signing as a failure - "exit " alongside
+        # signtool's own "Successfully signed" in one message.
+        $null = $p.Handle
+
         # 90s, not 45: a healthy pre-flight measured 36s here, nearly all of it the
         # timestamp-server round trip, so a slow network would otherwise trip the
         # timeout and report a locked token - a confident, wrong diagnosis.
@@ -141,9 +151,20 @@ function Test-SigningWorks {
             $p.Kill()
             throw "Signing pre-flight timed out after 90s. Most likely the signing token is locked (signtool waits on the PIN prompt) - log in to SimplySign and re-run. A very slow or unreachable timestamp server ($Timestamp) would look the same. Nothing was built."
         }
-        if ($p.ExitCode -ne 0) {
+        # WaitForExit(Int32) can return before the redirected streams are flushed;
+        # .NET documents calling the no-argument overload afterwards for this case.
+        $p.WaitForExit()
+        $exit = $p.ExitCode
+
+        if ($null -eq $exit) {
+            # Should not happen now the handle is cached, but guessing either way is
+            # worse than saying so: calling it success defeats the pre-flight, and
+            # calling it failure is the bug this replaced.
+            Write-Host "  Signing pre-flight: signtool finished but reported no exit code; continuing. The signing steps below will surface a real failure."
+        }
+        elseif ($exit -ne 0) {
             $why = (Get-Content (Join-Path $probeDir 'out.txt'), (Join-Path $probeDir 'err.txt') -ErrorAction SilentlyContinue) -join ' '
-            throw "Signing pre-flight FAILED (exit $($p.ExitCode)): $why`nFix the certificate, or pass -SignCertSha1 '' to build unsigned."
+            throw "Signing pre-flight FAILED (exit $exit): $why`nFix the certificate, or pass -SignCertSha1 '' to build unsigned."
         }
         Write-Host "  Signing pre-flight OK (cert $Thumbprint can sign)."
     } finally {

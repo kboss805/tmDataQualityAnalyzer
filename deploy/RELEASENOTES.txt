@@ -1,45 +1,40 @@
-tmDataQualityAnalyzer v2.14.0 - What's New
+tmDataQualityAnalyzer v2.14.1 - What's New
 =================================
 
-  Four improvements to the plot window, all of them about reading the data
-  rather than processing it. Nothing about how streams are processed, calibrated
-  or exported has changed.
+  A corrective release. Two things v2.14.0 got wrong are fixed, one control is
+  removed, and the user manual's screenshots are brought up to date. Nothing
+  about how streams are processed, calibrated or exported has changed.
 
-  New:
+  Fixed:
 
-  - Zoom Back. Right-click the plot and use X Axis > Zoom Back, or press
-    Backspace, to return to the view you were looking at before the last zoom -
-    one level at a time. Drilling into a loss-of-lock and retracing your way out
-    no longer means starting again from the full recording.
+  - Time labels now land on round clock times. v2.14.0 made the axis step in
+    intervals you would name - 15 seconds, 5 minutes - but it measured those
+    intervals from the start of the recording rather than from the clock. A file
+    that began at 10:30:17 produced labels reading :17, :47, :17 - correctly
+    spaced thirty seconds apart, and never on a round second.
 
-    It remembers the zooms you chose deliberately - a drag across the plot, or a
-    time window you typed - and ignores the mouse wheel and panning, so the list
-    stays the handful of views you meant rather than every notch of the wheel.
-    Reset Span still returns the whole recording and forgets the levels.
+    Recordings that happened to begin exactly on a round second looked right,
+    which is why frame sync files usually did and receiver SNR files usually did
+    not. The axis now places its labels on round clock times whatever time the
+    recording started.
 
-  Improved:
+  - Dialogs follow the light theme. The processing dialog, and every other
+    dialog, kept a dark title bar after switching to the light theme. The main
+    window was unaffected because it draws its own title bar, which is why this
+    went unnoticed.
 
-  - A dense trace now shows how much the signal moved, not just where it
-    averaged. Where a recording has more samples than the plot has pixels, each
-    column is drawn as a band from its lowest to its highest value, with the line
-    running through the column's average. Previously those columns were drawn as
-    a single outline, which on a noisy receiver read as one solid shape with no
-    indication of where inside it the signal actually sat.
+  Changed:
 
-    A one-sample dropout is still drawn as sharply as before - it is the bottom
-    of its column, and the band's edge is drawn solid for exactly that reason.
+  - The Toggle Legend button has been removed from the chart. Showing and hiding
+    the legend is still available from the right-click menu (Show Legend) and
+    from the L key, which is where it has been since those were added - the
+    button was a third way to do the same thing, and it occupied chart space
+    permanently to do it.
 
-  - Time labels land on round times. The axis used to divide whatever span was on
-    screen into equal parts, so a two-minute view produced labels 29 seconds
-    apart. It now steps in intervals you would actually name - 15 seconds, 5
-    minutes, 6 hours - and places them on round times within the view.
+  - The user manual's screenshots are re-captured. Thirteen figures were showing
+    an older version of the window, including one that had been out of date for
+    four releases.
 
-  - The plot redraws instantly. Moving the mouse across the chart, dragging the
-    legend or showing a tooltip used to redraw every curve from scratch; on a
-    large recording that was most of a second each time, which is what made the
-    window feel sluggish. The drawn plot is now kept and reused until something
-    about it actually changes.
+  Under the hood:
 
-    Together with the previous release's work, a plot of twelve channels over an
-    hour at 10 ms resolution has gone from roughly a minute and a half per redraw
-    to under a thousandth of a second.
+  - Built against Qt 6.12.0.

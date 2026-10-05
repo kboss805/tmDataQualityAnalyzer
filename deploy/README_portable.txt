@@ -11,5 +11,5 @@ Documentation: UserGuide.txt is a plain-text overview. UserManual.html is the
 full illustrated manual, with a walkthrough of each job - open it in any browser,
 or from the application under Help > User Manual. Both are in this folder.
 
-Source code: https://github.com/kevinbossoletti/tmDataQualityAnalyzer
+Source code: https://github.com/kboss805/tmDataQualityAnalyzer
 License:     GPLv3 (see LICENSE.txt)

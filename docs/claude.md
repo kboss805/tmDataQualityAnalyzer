@@ -8,7 +8,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, `cl` / `nmake`), Qt `msvc2022_64` kit.
   This is the only supported toolchain (and what CI uses).
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
-- **Project Version**: 2.14.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
+- **Project Version**: 2.14.1 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
 
 ## User Stories
 
@@ -408,7 +408,25 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ## Version History
 
-### Unreleased — since the v2.14.0 tag
+### v2.14.1 — Ticks That Match the Clock, and a Manual That Matches the Build
+
+A corrective release. The processing core is untouched: nothing about how streams are
+read, synced, calibrated or exported has changed, and the binary differs from v2.14.0
+only in the plot's tick placement, the theme's reach into window frames, and the removal
+of the on-chart legend toggle.
+
+Three of the six entries below are repairs to v2.14.0 itself - the tick snapping it
+introduced measured from the wrong origin, and the figures that shipped with it were
+already stale. The other three are build and release tooling that had been costing time
+quietly.
+
+#### The portable README pointed at a repository that is not this one (US8.0)
+
+`deploy/README_portable.txt` ships in every portable ZIP and gave the source URL as
+`github.com/kevinbossoletti/tmDataQualityAnalyzer`; the remote is `kboss805`. Nothing
+reads that file in CI, which is why it sat wrong - the same reason `UserGuide.txt` once
+went eighteen months stale. Found by reading every shipped artifact during packaging,
+not by a check, because there is no check that could know.
 
 #### The manual's figures are re-captured, and the spares are gone (US8.0)
 
@@ -529,8 +547,28 @@ problems had already cost time.
   the one time it was skipped.
 
 Verified both ways against the real function: a bad thumbprint throws in **0.1 s**
-carrying signtool's own message, and the real certificate passes in **36 s**, leaving
-no temp files behind.
+carrying signtool's own message, and the real certificate passes, leaving no temp files
+behind.
+
+**That verification was run under the wrong shell, and the pre-flight was broken on
+arrival.** It was exercised with `pwsh`, while `build_release.ps1` is invoked with
+`powershell` - Windows PowerShell 5.1 - whose `Start-Process -PassThru` returns a
+`Process` that has **not cached its handle**. Once the process exits the handle can no
+longer be obtained, so `$p.ExitCode` reads back **empty**; empty is not 0, so the very
+first real release run reported a *successful* signing as a failure, printing `exit `
+and signtool's own `Successfully signed` in one message, and aborted before the build.
+
+The fix is one line - touch `$p.Handle` **before** waiting - and it is measured rather
+than assumed: against a deliberately bad thumbprint the exit code is `''` without it and
+`1` with it. Re-verified under 5.1 in both directions: the real certificate passes, and a
+bad thumbprint throws carrying `SignTool Error: No certificates were found...`. A null
+exit code no longer fails the build either, because guessing in either direction is worse
+than saying so - treating it as success would defeat the pre-flight, and treating it as
+failure was this bug.
+
+Second time in this release that something was verified under `pwsh` and shipped broken
+for 5.1 (see `setup-env.ps1` below). **Release and setup scripts must be exercised with
+`powershell`, not `pwsh`.**
 
 That 36 s is why the timeout is **90 s rather than 45**: nearly all of it is the
 timestamp-server round trip, so the shorter timeout would have reported a locked token
