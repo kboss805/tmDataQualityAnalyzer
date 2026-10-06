@@ -160,7 +160,47 @@ is how v2.8.0 nearly shipped unsigned.
 Expect `Status = Valid` and the new version on every one. Report the paths, sizes and signature
 status back to the user.
 
-## Step 9 — Commit / tag (only if asked)
+## Step 9 - Install it on a clean machine
+
+Everything up to here ran on a machine that already holds this application's Qt runtime,
+its settings and its registry state, so it can only prove the artifacts are correctly
+signed and versioned. Whether the installer **works somewhere new** is a different claim,
+and v2.13.1 could not make it: that needed "a genuinely clean Windows target; Windows 11
+Home offers neither Sandbox nor Hyper-V."
+
+On Windows Pro/Enterprise with the **Windows Sandbox** feature enabled:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\sandbox\run_sandbox_test.ps1
+```
+
+One command. It stages the newest `setup.exe`, generates the `.wsb` (absolute host paths,
+which is why it is generated rather than committed), launches a disposable VM that has
+never seen this application, and prints the results back here. Exits non-zero on failure.
+
+What it establishes that nothing else can:
+
+- **The DLL closure.** Every `Qt6*`, `qwindows.dll`, `MSVCP140*` and `VCRUNTIME140*` must
+  load from the install directory on a machine with no Qt at all. This is the check worth
+  the whole exercise after a **Qt version bump** - v2.14.1 was the first build on 6.12.0,
+  and the closure had last been verified on 6.11.1.
+- **`platforms\qwindows.dll`** present and loaded - the classic omission, which kills a Qt
+  app at startup with no window and no useful error.
+- **First-run side effects** on a machine with no prior settings: what the app writes, and
+  what it leaves alone.
+- **Uninstall**: program files and the ProgID go, `settings\` stays (`uninsneveruninstall`,
+  US8.0), the `.ch10` value is cleared while its now-empty key is left behind on purpose.
+
+**A red result is not automatically a product defect.** The first run of this harness
+reported three failures and every one was the harness: a Windows system DLL caught by a
+loose name filter, a registry KEY checked where the VALUE is the contract, and a check for
+a setting that landed after the build under test. Confirm the check before chasing the code.
+
+**Do not force-kill the Sandbox window.** It leaves the container half torn down and the
+next launch fails silently with no error; close it normally. The launcher refuses to start
+while one is running, for that reason.
+
+## Step 10 - Commit / tag (only if asked)
 
 Don't commit, tag, or push unless the user asks. When they do: commit the `constants.h` + notes
 changes together with a `feat: release vX.Y.Z` style message, and tag `vX.Y.Z` to match the existing

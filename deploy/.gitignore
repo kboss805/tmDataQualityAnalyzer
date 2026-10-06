@@ -3,3 +3,9 @@
 !.gitignore
 !build_release.ps1
 !tmDataQualityAnalyzer.iss
+
+# The clean-machine install harness. The directory has to be re-included before its
+# contents, because git will not descend into an excluded directory at all. Its own
+# .gitignore ignores the generated .work/ payload, and a nested rule wins over this one.
+!sandbox/
+!sandbox/**
