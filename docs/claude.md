@@ -408,6 +408,48 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ## Version History
 
+### Unreleased — since the v2.14.1 tag
+
+#### The installer is tested on a machine that has never seen it (US8.0)
+
+`deploy/sandbox/` makes the clean-machine install a command rather than an intention:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\sandbox\run_sandbox_test.ps1
+```
+
+It stages the newest `setup.exe`, generates a `.wsb`, launches **Windows Sandbox** - a
+disposable VM that has never held this application - installs silently, launches, reads
+what the first run did, uninstalls, and prints the results back on the host. Exit code
+follows the result. `cut-release` gains it as Step 9.
+
+**v2.13.1 named this gap and could not close it**: the first-run path "needs a genuinely
+clean Windows target; Windows 11 Home offers neither Sandbox nor Hyper-V." The machine is
+now on Pro, so it can be closed.
+
+**Run against v2.14.1: all checks passed.** The result worth having is the DLL closure -
+every `Qt6*`, `qwindows.dll`, `MSVCP140*` and `VCRUNTIME140*` loaded **from the install
+directory** on a machine with no Qt at all. v2.14.1 was the first build on **Qt 6.12.0**
+and that closure had last been verified on 6.11.1, so it was the one real untested risk in
+the release. It also confirms, from the other direction, what
+`docs/future_plans/settings-upgrade-gap.md` argues from the code: a first run wrote
+**nothing** under `settings\` and no registry key, so there is no `new_x.toml` merge to
+find.
+
+- The `.wsb` is **generated, not committed**. Sandbox requires absolute host paths and does
+  not expand environment variables in them, so a checked-in one would carry one
+  developer's directory layout.
+- **The harness refuses to start while a Sandbox is running, and says not to kill it.**
+  Force-killing leaves the container half torn down and the next launch fails *silently* -
+  no error, no window, nothing in the results directory.
+- **A red result is not automatically a product defect.** The first run reported three
+  failures and all three were the harness: `msvcp_win.dll` is a Windows UCRT component
+  that correctly loads from System32 and is not in our payload, but matched a `^msvcp`
+  filter; the `.ch10` registry KEY is deliberately left behind by `uninsdeletevalue` while
+  the VALUE is the actual contract; and `Randomized = false` was asserted against a build
+  that predates it. Each was checked against the payload and the `.iss` rather than taken
+  at face value, and the corrected harness states this where a future reader will meet it.
+
 ### v2.14.1 — Ticks That Match the Clock, and a Manual That Matches the Build
 
 A corrective release. The processing core is untouched: nothing about how streams are

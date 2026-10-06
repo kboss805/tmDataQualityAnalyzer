@@ -1,0 +1,3 @@
+# Generated at run time by run_sandbox_test.ps1 (staged payload + the .wsb,
+# which must carry absolute host paths).
+.work/
