@@ -14,7 +14,13 @@ what was built is worse than no plan at all.
 
 ## Open items
 
-**None.** Every initiative this file has tracked has shipped; see the table below.
+**[Settings on upgrade: US8.0 claims a merge that does not exist](settings-upgrade-gap.md)**
+- two US8.0 acceptance criteria are marked complete but are not implemented anywhere. The
+installer preserves a user's TOML (`onlyifdoesntexist`) but never writes the `new_x.toml`
+with carried-over values that the criteria promise. Not currently harmful - the readers
+tolerate files written by any earlier version, which is what has been doing the work - so
+the likely resolution is correcting the criteria rather than building a merge. Found while
+evaluating the Qt Installer Framework, which would have meant porting it.
 
 That is the normal resting state, not a prompt to invent work. Add an entry here when
 something is scoped and not yet started, and give it its own file once it needs more

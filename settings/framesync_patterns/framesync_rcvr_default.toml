@@ -7,8 +7,13 @@
 #   FrameSync     - frame sync pattern (hex)
 #   FrameSyncMask - frame sync mask (hex); FFFFFFFF = all 32 bits significant
 #   BitsPerFrame  - total bits per minor frame (including the sync words)
+#   Randomized    - true if the stream is RNRZ-L and must be derandomized.
+#                   Present and false here on purpose: loading this file then
+#                   SETS the Derandomize box rather than leaving whatever was
+#                   already ticked, so the loaded state is always explicit.
 
 [Frame]
 FrameSync = "FE6B2840"
 FrameSyncMask = "FFFFFFFF"
 BitsPerFrame = 800
+Randomized = false

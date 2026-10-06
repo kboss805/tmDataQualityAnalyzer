@@ -2,3 +2,4 @@
 BitsPerFrame = 2047
 FrameSync = "A345CA5C"
 FrameSyncMask = "FFFFFFFF"
+Randomized = false
