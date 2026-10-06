@@ -102,9 +102,16 @@ Use this mode to evaluate the structural integrity of the PCM stream.
 - Bits in Frame / Words in Frame: the structural dimensions of your minor frames.
 
 You can save these settings to a TOML file and load them again later using the
-Load/Save buttons in the setup dialog. Note that only the sync pattern, sync mask
-and words-per-frame are stored - the Derandomize, Data Rate and Sample Rate
-fields are per-session settings and are deliberately not saved.
+Load/Save buttons in the setup dialog. A saved file carries the sync pattern,
+sync mask, words-per-frame, and the two format flags - Invert Data and
+Derandomize - because those describe how the recording's bits are encoded, so a
+pattern file is only usable if it carries them. Data Rate and Sample Rate stay
+out: the first usually comes from TMATS, the second is an output resolution you
+choose per session.
+
+A pattern file written before those flags were saved simply has no entry for
+them, and loading it leaves your current Derandomize setting alone rather than
+clearing it.
 
 Tip (Apply to All Streams): if several streams use the same sync parameters,
 switch on "Apply to all Frame Sync Lock streams" at the bottom of the dialog.
@@ -328,6 +335,23 @@ Imported series behave exactly like processed ones - they appear in the legend
 and the Customize View dialog, and can be re-exported. Only this application's
 own export format is supported; another CSV layout is rejected with an
 explanation in the message log rather than being mis-read.
+
+--- Your settings files, and what an upgrade does to them ---
+The settings\ folder beside the application holds the shipped frame sync
+patterns, receiver parameters and calibration step files, plus anything you save
+there yourself.
+
+Installing a newer version NEVER changes a settings file you already have. A
+file is written only when it is missing, and uninstalling leaves the whole
+folder behind, so your own patterns and parameters survive both.
+
+The consequence worth knowing: when a new version adds a field to one of the
+SHIPPED default files, that addition reaches a fresh install, not an existing
+one - your copy stays exactly as it stands. Nothing is lost by this. Any file
+written by an earlier version stays readable, and a setting it does not mention
+simply takes the application's own default. If you do want a new shipped
+default, rename or move your copy and reinstall, and the new one will be written
+in its place.
 
 ================================================================================
 9. KEYBOARD SHORTCUTS

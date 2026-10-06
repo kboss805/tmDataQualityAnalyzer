@@ -14,13 +14,7 @@ what was built is worse than no plan at all.
 
 ## Open items
 
-**[Settings on upgrade: US8.0 claims a merge that does not exist](settings-upgrade-gap.md)**
-- two US8.0 acceptance criteria are marked complete but are not implemented anywhere. The
-installer preserves a user's TOML (`onlyifdoesntexist`) but never writes the `new_x.toml`
-with carried-over values that the criteria promise. Not currently harmful - the readers
-tolerate files written by any earlier version, which is what has been doing the work - so
-the likely resolution is correcting the criteria rather than building a merge. Found while
-evaluating the Qt Installer Framework, which would have meant porting it.
+**None.** Every initiative this file has tracked has shipped; see the table below.
 
 That is the normal resting state, not a prompt to invent work. Add an entry here when
 something is scoped and not yet started, and give it its own file once it needs more
@@ -48,3 +42,4 @@ documentation lives.
 | Make the remaining plot shortcuts visible in the context menu | PR #71 | `PlotWidget::buildContextMenu`. `(V)` in the View Mode submenu title (Qt will not draw a shortcut on a submenu); new top-level **Reset View** carrying `R`, which is also the menu's only single-action equivalent of the on-chart Reset view chip. Both were tooltips, which discover nothing |
 | Hide a Y axis when nothing is plotted against it | PR #68 | `include/view/tmchart.h` (`setLeftAxisVisible`/`setRightAxisVisible`), `PlotViewModel::hasVisibleLeftAxisSeries`/`hasVisibleRightAxisSeries`, `PlotWidget::updateAxisVisibility`. Keys on **visible** series. Rendering the reclaimed layout also caught the first X tick label clipping off the left edge |
 | A comprehensive, task-oriented user manual | PR #75-#85, released in v2.10.0 | `docs/manual/walkthroughs.html` (the five walkthroughs), `scripts/build_manual.ps1` (figure registry + crop validation), `scripts/embed_manual_images.py` (one document object -> both manuals), `deploy/tmDataQualityAnalyzer.iss` (`fullmanual` task). Walkthrough headings carry no numbers and cross-references are anchors: the embedder numbers them and shifts the reference sections, so the same prose is correct in a manual that has the walkthroughs and one that does not. Registering a capture only validates its crop - it does not place it, and 8 of 23 sat in the repo and in neither manual until that was cross-checked |
+| Settings on upgrade: correct US8.0 to describe what ships | this change | `docs/CLAUDE.md` (US8.0), `UserGuide.txt` ("Your settings files, and what an upgrade does to them"). Two criteria claimed a `new_x.toml` merge that was never built - no `[Code]` section in the `.iss`, no merge logic anywhere - so they are replaced by the guarantee that is real: a settings file is never overwritten, and any file an earlier version wrote stays readable because every reader supplies its own default for a key the file lacks. That reader tolerance is named in the criteria, because it is load-bearing rather than incidental. Confirmed on a clean machine by `deploy/sandbox/`: a first run wrote nothing under `settings\` and no registry key |

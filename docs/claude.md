@@ -389,9 +389,13 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The installer can install to "Program Files" for admin users.
 - [x] The installer can install to a user-selected directory for users without admin privileges.
 - [x] The installer shows progress while installing.
-- [x] The installer never overwrites an existing user TOML settings file.
-- [x] If the shipped default TOML has new fields the user's file lacks, the installer saves the new version as "new_x.toml" instead of overwriting the user's file.
-- [x] The installer carries over as many parameter values as possible from the user's old TOML file into the new "new_x.toml" file.
+- [x] The installer never overwrites an existing user TOML settings file, on upgrade or reinstall. A settings file is written only when it is absent (`onlyifdoesntexist`), and is left behind by uninstall (`uninsneveruninstall`).
+- [x] A settings file written by any earlier version stays usable: every reader supplies its own default for a key the file does not carry, so an older file degrades to "missing keys fall back to defaults" rather than to a wrong result.
+- [x] New fields added to a shipped default therefore reach a **fresh install**, not an existing one. An upgraded install keeps the operator's file exactly as it stands.
+
+  - **Replaces two criteria that described a merge this project never built.** They claimed the installer saved a conflicting default as `new_x.toml` and carried the user's old values into it. Nothing implements that: `tmDataQualityAnalyzer.iss` is 95 declarative lines with no `[Code]` section, and there is no `new_x`, migration, schema-version or merge logic in `src/`, `deploy/` or `scripts/`. Confirmed on a clean machine by `deploy/sandbox/` - a first run wrote nothing under `settings\` and no registry key.
+  - **The guarantee above is weaker but true, and the defensive readers are what make it safe** - `FrameSetup::readReceiverParams()` accepts both the current `[Receivers]` keys and the older `[Parameters]` spelling, an absent `Randomized` leaves the operator's choice alone rather than clearing it, and `StreamConfigSchema::fromJson()` keeps in-class defaults for anything omitted. A change that removed that tolerance would look harmless and would not be: it is load-bearing for this criterion, not incidental.
+  - **When a merge would become necessary:** a shipped default gaining a field whose absence an old file cannot express - where "missing" and a deliberate choice are indistinguishable. `Randomized` is exactly that shape and was only safe because the reader was written to notice. See `docs/future_plans/settings-upgrade-gap.md` for the implementation sketch if that day comes.
 
 ### US9.0: Switch between light and dark theme — Complete
 
@@ -409,6 +413,37 @@ The stories below follow the workflow a first-time user takes through the applic
 ## Version History
 
 ### Unreleased — since the v2.14.1 tag
+
+#### US8.0 now describes the installer that exists (US8.0)
+
+Two acceptance criteria claimed the installer saved a conflicting shipped default as
+`new_x.toml` and carried the user's old values into it. **Nothing implements that** -
+`tmDataQualityAnalyzer.iss` is 95 declarative lines with no `[Code]` section, and there
+is no `new_x`, migration, schema-version or merge logic in `src/`, `deploy/` or
+`scripts/`. The clean-machine run above confirmed it from the other side: a first run
+wrote nothing under `settings\` and no registry key.
+
+They are **replaced, not deleted**, by the guarantee that is real: a settings file is
+never overwritten, and a file written by any earlier version stays usable because every
+reader supplies its own default for a key the file does not carry. The consequence is
+stated plainly rather than left to be inferred - a field added to a shipped default
+reaches a **fresh** install, not an existing one.
+
+**The defensive readers are named in the criteria**, because they are what make the
+weaker guarantee safe and a change removing that tolerance would otherwise look
+harmless: `readReceiverParams()` accepts both the current and older count keys, an
+absent `Randomized` leaves the operator's choice alone, `fromJson()` keeps in-class
+defaults. The condition that would force a real merge is also written down - a shipped
+default gaining a field whose absence an old file cannot express, which is exactly the
+`Randomized` shape.
+
+`UserGuide.txt` gains a section saying what an upgrade does to `settings\`, and loses a
+stale claim while it is there: it still said Derandomize was "deliberately not saved",
+which v2.13.0 made untrue when the flag started round-tripping through the pattern file.
+
+Option B - actually building the merge - is not taken. It moves the installer from zero
+custom code to scripted, which is the thing that currently makes it cheap to maintain,
+and nobody has asked for it in fourteen releases.
 
 #### The installer is tested on a machine that has never seen it (US8.0)
 
