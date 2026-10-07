@@ -44,8 +44,17 @@ if (-not (Test-Path "$env:SystemRoot\System32\WindowsSandbox.exe")) {
 # A running Sandbox blocks a new one, and FORCE-KILLING it leaves the container
 # half torn down so the next launch fails silently - found the hard way. Ask
 # instead of killing.
-if (Get-Process -Name 'WindowsSandbox' -ErrorAction SilentlyContinue) {
-    throw "A Windows Sandbox is already running. Close it (do not kill it) and re-run; a force-kill leaves the container in a state where the next launch fails."
+# Match the WHOLE family, not just WindowsSandbox.exe. The window process exits
+# before WindowsSandboxServer and WindowsSandboxRemoteSession do, so an exact-name
+# check reports "clear" while a session is still alive - and the launch that follows
+# collides with it and produces no results at all. Measured: three processes alive
+# (Server + two RemoteSession) with no WindowsSandbox.exe among them.
+$live = @(Get-Process -Name 'WindowsSandbox*' -ErrorAction SilentlyContinue)
+if ($live.Count -gt 0) {
+    throw ("A Windows Sandbox session is still active (" +
+           (($live | ForEach-Object { $_.ProcessName }) -join ', ') +
+           "). Close the Sandbox window and wait a few seconds for it to tear down, then re-run. " +
+           "Do not force-kill it: that leaves the container half torn down and the next launch fails silently.")
 }
 
 if (-not $Setup) {

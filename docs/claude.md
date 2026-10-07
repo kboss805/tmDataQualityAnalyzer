@@ -8,7 +8,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, `cl` / `nmake`), Qt `msvc2022_64` kit.
   This is the only supported toolchain (and what CI uses).
 - **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
-- **Project Version**: 2.14.1 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
+- **Project Version**: 2.14.2 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
 
 ## User Stories
 
@@ -412,7 +412,41 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ## Version History
 
-### Unreleased — since the v2.14.1 tag
+### v2.14.2 — Shipped Defaults That Say What They Mean, and an Installer Test That Can Run
+
+The application binary is unchanged from v2.14.1 apart from its version. Everything here
+is a shipped data file, a document, or the tooling that checks them - which is precisely
+the category this project keeps finding stale, because nothing in CI reads any of it.
+
+Three of the four entries exist because something claimed to be true and was not: three
+pattern files left a setting unstated, two acceptance criteria described an installer
+feature that was never built, and the clean-machine install had been listed as untestable
+since v2.13.1.
+
+#### The shipped pattern files state Derandomize explicitly (US1.0, US2.0)
+
+`framesync_PRN11.toml`, `framesync_PRN15.toml` and `framesync_rcvr_default.toml` now
+carry `Randomized = false`.
+
+**This changes what loading one does, deliberately.** v2.13.0 left the key out so a
+pattern file would leave the operator's Derandomize choice alone - the reader gates on
+`contains("Frame/Randomized")`, and an absent key means "not mentioned, do not touch".
+With the key present, loading any of these three files now **sets** the box, so the
+state after a load is always explicit rather than partly inherited from whatever was
+ticked before.
+
+**The value is a judgement about the recordings, not about the sync pattern.**
+`Randomized` describes the recording's PCM code format, which the fixtures show plainly:
+the RNRZ-L recording runs with it on, the Safran one with it off. The same PRN-15 pattern
+appears in both. So `false` here is a statement that these shipped defaults target
+non-randomized streams, and an operator whose stream is RNRZ-L still ticks the box - the
+difference is that the file no longer silently leaves the previous answer standing.
+
+A pattern file the operator saved before this is unaffected: it has no `Randomized` key,
+so it keeps the leave-it-alone behaviour.
+
+Verified through the real parser rather than by reading the syntax: all three report
+`contains=yes` with `toBool=false`, and their sync patterns and bit counts are unchanged.
 
 #### US8.0 now describes the installer that exists (US8.0)
 
@@ -484,6 +518,28 @@ find.
   the VALUE is the actual contract; and `Randomized = false` was asserted against a build
   that predates it. Each was checked against the payload and the `.iss` rather than taken
   at face value, and the corrected harness states this where a future reader will meet it.
+
+**Two more of its own bugs surfaced the first time it met a real release, and both are
+the same shape as the signing pre-flight's:** exercised once under the conditions that
+happened to hold, then wrong on the next release.
+
+- **It hardcoded the expected version.** `Check "exe version" ($v -like '2.14.1*')` passed
+  for exactly one release and then called a correct `2.14.2.0` install a failure. This
+  project keeps ONE version source and treats a literal anywhere else as a bug to remove,
+  not a place to update - a rule this file states and the harness broke. It now derives
+  the expectation from the `setup.exe` under test, which is the only version it has any
+  business asserting. The remaining `2.14.1` literal in the `Randomized` gate stays: that
+  is a historical boundary - the release the key landed after - not a moving target.
+- **Its "a Sandbox is already running" guard matched the wrong process name.** It checked
+  `-Name 'WindowsSandbox'` exactly, but the window process exits before
+  `WindowsSandboxServer` and `WindowsSandboxRemoteSession` do - so it reported "clear"
+  while a session was still alive, let a second launch collide with it, and that run
+  produced no results at all. Measured: three processes alive with no `WindowsSandbox.exe`
+  among them. The guard now matches `WindowsSandbox*` and names what it found.
+
+The substantive result was unaffected: every product check passed against v2.14.2,
+including `PRN15 carries Randomized = false` firing as a real assertion for the first time
+rather than reporting INFO.
 
 ### v2.14.1 — Ticks That Match the Clock, and a Manual That Matches the Build
 

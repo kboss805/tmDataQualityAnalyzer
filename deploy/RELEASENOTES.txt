@@ -1,40 +1,41 @@
-tmDataQualityAnalyzer v2.14.1 - What's New
+tmDataQualityAnalyzer v2.14.2 - What's New
 =================================
 
-  A corrective release. Two things v2.14.0 got wrong are fixed, one control is
-  removed, and the user manual's screenshots are brought up to date. Nothing
-  about how streams are processed, calibrated or exported has changed.
-
-  Fixed:
-
-  - Time labels now land on round clock times. v2.14.0 made the axis step in
-    intervals you would name - 15 seconds, 5 minutes - but it measured those
-    intervals from the start of the recording rather than from the clock. A file
-    that began at 10:30:17 produced labels reading :17, :47, :17 - correctly
-    spaced thirty seconds apart, and never on a round second.
-
-    Recordings that happened to begin exactly on a round second looked right,
-    which is why frame sync files usually did and receiver SNR files usually did
-    not. The axis now places its labels on round clock times whatever time the
-    recording started.
-
-  - Dialogs follow the light theme. The processing dialog, and every other
-    dialog, kept a dark title bar after switching to the light theme. The main
-    window was unaffected because it draws its own title bar, which is why this
-    went unnoticed.
+  The application itself is unchanged from v2.14.1. This release corrects three
+  of the files that ship alongside it and one piece of the documentation.
+  Nothing about how streams are processed, calibrated, plotted or exported has
+  changed.
 
   Changed:
 
-  - The Toggle Legend button has been removed from the chart. Showing and hiding
-    the legend is still available from the right-click menu (Show Legend) and
-    from the L key, which is where it has been since those were added - the
-    button was a third way to do the same thing, and it occupied chart space
-    permanently to do it.
+  - The three supplied frame sync pattern files now state the Derandomize
+    setting instead of leaving it unmentioned. Loading PRN-11, PRN-15 or the
+    receiver default now sets that box - previously it left whatever you had
+    already ticked, so the result depended on what you had been doing before.
 
-  - The user manual's screenshots are re-captured. Thirteen figures were showing
-    an older version of the window, including one that had been out of date for
-    four releases.
+    All three state Derandomize OFF, which is what these supplied patterns
+    target. If your stream is RNRZ-L you still tick the box after loading, as
+    before. A pattern file you saved yourself is unaffected and keeps the old
+    leave-it-alone behaviour.
+
+  Fixed:
+
+  - The user guide said the Derandomize setting was "deliberately not saved"
+    when you save a frame sync pattern file. That stopped being true in v2.13.0,
+    when it started being saved alongside Invert Data. The guide now describes
+    what a saved pattern file actually carries.
+
+  - The user guide now says what installing a new version does to your settings
+    folder: nothing. Your own pattern files, receiver parameters and calibration
+    step files are never overwritten by an upgrade and are kept when you
+    uninstall. A new setting added to a supplied default file reaches a fresh
+    installation rather than an existing one, and your files stay readable
+    either way.
 
   Under the hood:
 
-  - Built against Qt 6.12.0.
+  - The installer is now tested by installing it on a clean machine - a
+    throwaway Windows Sandbox that has never held this application - which
+    checks that it runs somewhere with no Qt installed, that the first run
+    leaves your settings alone, and that uninstalling removes the program while
+    keeping the settings folder.

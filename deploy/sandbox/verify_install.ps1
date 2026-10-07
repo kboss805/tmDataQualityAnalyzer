@@ -54,8 +54,15 @@ $app = 'C:\Program Files\tmDataQualityAnalyzer'
 $exe = Join-Path $app 'bin\tmDataQualityAnalyzer.exe'
 Check "exe installed" (Test-Path $exe) $exe
 if (Test-Path $exe) {
-    $v = (Get-Item $exe).VersionInfo.FileVersion
-    Check "exe version" ($v -like '2.14.1*') $v
+    # Derived from the setup.exe under test, never a literal. This line used to
+    # assert -like '2.14.1*', which passed for exactly one release and then called a
+    # correct 2.14.2.0 install a failure. The project keeps ONE version source and
+    # treats a hardcoded version anywhere else as a bug to remove.
+    #
+    # An Inno setup.exe carries its version in ProductVersion, not FileVersion.
+    $want = (Get-Item $setup).VersionInfo.ProductVersion
+    $v    = (Get-Item $exe).VersionInfo.FileVersion
+    Check "exe version matches the setup it came from" ($v -like "$want*") ("installed $v, setup says $want")
     Check "exe signature" ((Get-AuthenticodeSignature $exe).Status -eq 'Valid') (Get-AuthenticodeSignature $exe).Status
 }
 Check "qwindows platform plugin" (Test-Path (Join-Path $app 'bin\platforms\qwindows.dll')) 'the classic omission'
@@ -78,6 +85,9 @@ if (Test-Path $prn) {
     # Randomized = false landed AFTER v2.14.1, so it is informational against that
     # build and a real check against anything later. Asserting it unconditionally
     # reported a failure for an artifact that could not have carried it.
+    #
+    # This literal is a HISTORICAL boundary - the release the key landed after - not
+    # the current version, so it does not rot the way the exe-version check did.
     $hasRand = (Get-Content $prn -Raw) -match '(?m)^\s*Randomized\s*=\s*false'
     $ver = if (Test-Path $exe) { [version](Get-Item $exe).VersionInfo.FileVersion } else { [version]'0.0.0.0' }
     if ($ver -gt [version]'2.14.1.0') {
