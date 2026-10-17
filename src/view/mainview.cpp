@@ -37,12 +37,14 @@
 #include "chapter10reader.h"
 #include "constants.h"
 #include "mainviewmodel.h"
+#include "plotconstants.h"
 #include "plotviewmodel.h"
 #include "plotwidget.h"
 #include "processedstreamdata.h"
 #include "processingprogressdialog.h"
 #include "processingtemplate.h"
 #include "processingtemplateschema.h"
+#include "seriescolumnschema.h"
 #include "source.h"
 #include "streamconfigdialog.h"
 
@@ -252,7 +254,7 @@ void MainView::setUpConnections()
             const QString name = QFileInfo(m_pending_csv_path).fileName();
             m_pending_csv_path.clear();
             displayErrorMessage("ERROR: '" + name + "' is not a recognized exported CSV (expected a '"
-                                + QString(PlotConstants::kCsvTimeHeader)
+                                + QString(SeriesColumnSchema::kTimeHeader)
                                 + "' column with data rows). Nothing was imported.");
         }
         else

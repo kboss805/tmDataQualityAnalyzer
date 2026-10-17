@@ -39,7 +39,7 @@ struct CsvParseResult
  * @brief Parses the application's CSV export back into PlotSeriesData.
  *
  * The format is the one PlotViewModel::exportCsv writes (the two are a matched
- * pair, see PlotConstants::kCsv* tokens): a single combined timestamp column
+ * pair, see SeriesColumnSchema::kTimeHeader and friends): a single combined timestamp column
  * "Time (DOY:HH:MM:SS.mmm)" (values "DDD:HH:MM:SS.mmm"), followed by one column
  * per series whose header is qualified per metric — "<name> Lock (%)",
  * "<name> Accumulated Missed Frames", or a bare SNR name. The legacy two-column

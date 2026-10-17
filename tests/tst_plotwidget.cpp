@@ -3,6 +3,7 @@
  * @brief Smoke tests for PlotWidget — construction, ViewModel connection, theme.
  */
 
+#include "plotconstants.h"
 #include "tst_plotwidget.h"
 
 #include <QAbstractButton>

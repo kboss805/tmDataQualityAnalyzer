@@ -34,9 +34,9 @@ void TestSeriesColumnSchema::columnHeaderAddsMetricSuffix()
 {
     // Left-axis metrics get a suffix so a stream's lock/missed columns don't collide.
     QCOMPARE(SeriesColumnSchema::columnHeader(makeSeries(MetricType::FrameSyncLock, "Ch 05")),
-             QString("Ch 05") + PlotConstants::kCsvLockSuffix);
+             QString("Ch 05") + SeriesColumnSchema::kLockSuffix);
     QCOMPARE(SeriesColumnSchema::columnHeader(makeSeries(MetricType::AccumulatedMissedFrames, "Ch 05")),
-             QString("Ch 05") + PlotConstants::kCsvMissedFramesSuffix);
+             QString("Ch 05") + SeriesColumnSchema::kMissedFramesSuffix);
 }
 
 void TestSeriesColumnSchema::columnHeaderSnrPassthrough()
@@ -49,7 +49,7 @@ void TestSeriesColumnSchema::columnHeaderSnrPassthrough()
 void TestSeriesColumnSchema::parseLockHeader()
 {
     const auto col = SeriesColumnSchema::parseColumnHeader(
-        QString("Ch 05") + PlotConstants::kCsvLockSuffix);
+        QString("Ch 05") + SeriesColumnSchema::kLockSuffix);
     QVERIFY(col.metricType == MetricType::FrameSyncLock);
     QCOMPARE(col.name, QString("Ch 05"));
     QCOMPARE(col.streamLabel, QString("Ch 05"));   // re-links the lock/missed pair
@@ -59,7 +59,7 @@ void TestSeriesColumnSchema::parseLockHeader()
 void TestSeriesColumnSchema::parseMissedHeader()
 {
     const auto col = SeriesColumnSchema::parseColumnHeader(
-        QString("Ch 05") + PlotConstants::kCsvMissedFramesSuffix);
+        QString("Ch 05") + SeriesColumnSchema::kMissedFramesSuffix);
     QVERIFY(col.metricType == MetricType::AccumulatedMissedFrames);
     QCOMPARE(col.name, QString("Ch 05"));
     QCOMPARE(col.streamLabel, QString("Ch 05"));
@@ -90,7 +90,7 @@ void TestSeriesColumnSchema::parseSnrShapeWinsOverSuffix()
 {
     // A header that both looks like SNR ("<digits> - ") and ends with a metric suffix
     // must resolve as SNR, not be misrouted to Lock/MissedFrames.
-    const QString header = QString("12 - Weird L_RCVR1") + PlotConstants::kCsvLockSuffix;
+    const QString header = QString("12 - Weird L_RCVR1") + SeriesColumnSchema::kLockSuffix;
     const auto col = SeriesColumnSchema::parseColumnHeader(header);
     QVERIFY(col.metricType == MetricType::SNR);
     QCOMPARE(col.streamOrder, 12);
@@ -134,7 +134,7 @@ void TestSeriesColumnSchema::columnHeaderSourceZeroIsUnqualified()
     const QString name = "40 - RCVR Data L_RCVR1";
     QCOMPARE(SeriesColumnSchema::columnHeader(makeSeries(MetricType::SNR, name, /*sourceId=*/0)), name);
     QCOMPARE(SeriesColumnSchema::columnHeader(makeSeries(MetricType::FrameSyncLock, "Ch 05", /*sourceId=*/0)),
-             QString("Ch 05") + PlotConstants::kCsvLockSuffix);
+             QString("Ch 05") + SeriesColumnSchema::kLockSuffix);
 }
 
 void TestSeriesColumnSchema::columnHeaderNonZeroSourceAddsQualifier()
@@ -143,7 +143,7 @@ void TestSeriesColumnSchema::columnHeaderNonZeroSourceAddsQualifier()
     QCOMPARE(SeriesColumnSchema::columnHeader(makeSeries(MetricType::SNR, name, /*sourceId=*/1)),
              QString("S1| ") + name);
     QCOMPARE(SeriesColumnSchema::columnHeader(makeSeries(MetricType::FrameSyncLock, "Ch 05", /*sourceId=*/2)),
-             QString("S2| Ch 05") + PlotConstants::kCsvLockSuffix);
+             QString("S2| Ch 05") + SeriesColumnSchema::kLockSuffix);
 }
 
 void TestSeriesColumnSchema::parseSourceQualifiedSnrHeader()
@@ -162,7 +162,7 @@ void TestSeriesColumnSchema::parseSourceQualifiedSnrHeader()
 void TestSeriesColumnSchema::parseSourceQualifiedLockHeader()
 {
     const auto col = SeriesColumnSchema::parseColumnHeader(
-        QString("S2| Ch 05") + PlotConstants::kCsvLockSuffix);
+        QString("S2| Ch 05") + SeriesColumnSchema::kLockSuffix);
     QVERIFY(col.metricType == MetricType::FrameSyncLock);
     QCOMPARE(col.sourceId, 2);
     QCOMPARE(col.name, QString("Ch 05"));
@@ -173,7 +173,7 @@ void TestSeriesColumnSchema::parseUnqualifiedHeaderDefaultsToSourceZero()
 {
     QCOMPARE(SeriesColumnSchema::parseColumnHeader("40 - RCVR Data L_RCVR1").sourceId, 0);
     QCOMPARE(SeriesColumnSchema::parseColumnHeader(
-                 QString("Ch 05") + PlotConstants::kCsvLockSuffix).sourceId, 0);
+                 QString("Ch 05") + SeriesColumnSchema::kLockSuffix).sourceId, 0);
 }
 
 void TestSeriesColumnSchema::headerStartingWithLetterSButNotAQualifierIsUnaffected()

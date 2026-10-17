@@ -64,6 +64,7 @@ SOURCES += \
 # Application headers, grouped by layer.
 HEADERS += \
     $$PWD/../include/constants.h \
+    $$PWD/../include/plotconstants.h \
     $$PWD/../include/model/channeldata.h \
     $$PWD/../include/model/chapter10reader.h \
     $$PWD/../include/model/ch10packetreader.h \

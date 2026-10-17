@@ -3,6 +3,7 @@
  * @brief Implementation of PlotViewModel — series state, axis ranges, colors.
  */
 
+#include "plotconstants.h"
 #include "plotviewmodel.h"
 
 #include <algorithm>
@@ -521,7 +522,7 @@ bool PlotViewModel::exportCsv(const QString& filepath, int sourceId) const
     // columns are self-describing (a stream's lock and missed-frames series share the
     // same bare name and would otherwise export as two identical headers) and stays
     // the inverse of the import parser.
-    out << PlotConstants::kCsvTimeHeader;
+    out << SeriesColumnSchema::kTimeHeader;
     for (const auto& s : m_series)
     {
         if (included(s))

@@ -5,6 +5,7 @@
 
 #include <QStyleHints>
 #include <QGuiApplication>
+#include "seriescolumnschema.h"
 #include "tst_mainview.h"
 
 #include <QColor>
@@ -86,7 +87,7 @@ void TestMainView::openPathImportsCsv()
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     const QString path = dir.filePath("routed.csv");
-    writeCsv(path, QString(PlotConstants::kCsvTimeHeader) + ",Stream1 Lock (%)\n"
+    writeCsv(path, QString(SeriesColumnSchema::kTimeHeader) + ",Stream1 Lock (%)\n"
                    "001:00:00:00.000,100.0\n"
                    "001:00:00:01.000,95.0\n");
 
@@ -104,7 +105,7 @@ void TestMainView::importValidCsvPopulatesPlot()
 
     // A minimal file in the app's own export format: the combined-time column
     // plus one Frame Sync Lock series and one Receiver SNR series.
-    writeCsv(path, QString(PlotConstants::kCsvTimeHeader) + ",Stream1 Lock (%),L_RCVR1\n"
+    writeCsv(path, QString(SeriesColumnSchema::kTimeHeader) + ",Stream1 Lock (%),L_RCVR1\n"
                    "001:00:00:00.000,100.0,3.5\n"
                    "001:00:00:01.000,99.5,3.6\n"
                    "001:00:00:02.000,98.0,3.7\n");

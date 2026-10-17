@@ -19,6 +19,21 @@
 
 namespace SeriesColumnSchema
 {
+    /// CSV export/import header tokens. The exporter (PlotViewModel::exportCsv) and
+    /// the importer (CsvSeriesParser) MUST agree on these so an exported file can be
+    /// re-loaded. The first column is the combined day+time stamp; frame-sync series
+    /// names are qualified per metric (the bare name is shared by a stream's lock and
+    /// missed-frames series and would otherwise export as two identical headers).
+    ///
+    /// These lived in PlotConstants until the de-Qt work. They are a serialization
+    /// contract rather than plot presentation, and this file is already the documented
+    /// single source of truth for the CSV column format - so they belong here, next to
+    /// the code that formats and parses them. Keeping them in constants.h beside the
+    /// QColor palettes is also what forced the MODEL layer to include a QtGui header.
+    inline constexpr const char* kTimeHeader          = "Time (DOY:HH:MM:SS.mmm)";
+    inline constexpr const char* kLockSuffix          = " Lock (%)";
+    inline constexpr const char* kMissedFramesSuffix  = " Accumulated Missed Frames";
+
     /// Identity fields recovered from a data-column header. `channelIndex` is NOT
     /// here: it is a per-(stream, receiver) running count the parser assigns while
     /// walking columns left to right, not something a single header carries.

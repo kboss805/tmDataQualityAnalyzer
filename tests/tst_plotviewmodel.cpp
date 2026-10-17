@@ -3,6 +3,7 @@
  * @brief Implementation of PlotViewModel unit tests.
  */
 
+#include "plotconstants.h"
 #include "tst_plotviewmodel.h"
 
 #include <QEventLoop>

@@ -16,6 +16,7 @@
 
 #include "constants.h"
 #include "csvseriesparser.h"
+#include "plotconstants.h"
 #include "plotseriesdata.h"
 #include "processedstreamdata.h"
 

@@ -123,7 +123,8 @@ SOURCES += \
 # Application headers, grouped by MVVM layer.
 # Shared / cross-cutting
 HEADERS += \
-    include/constants.h
+    include/constants.h \
+    include/plotconstants.h
 
 # Model: data ingestion, processing pipeline, domain logic
 HEADERS += \
