@@ -7,15 +7,26 @@
  * payloads (already time-stamped, but not yet byte-swapped or derandomized); the
  * worker dequeues and processes them. The queue is bounded so the reader blocks
  * when a worker falls behind, preventing the whole file from being buffered in RAM.
+ *
+ * **Synchronisation is `std`, not Qt** (`std::mutex` / `std::condition_variable` /
+ * `std::deque` in place of `QMutex` / `QWaitCondition` / `QQueue`). First step of the
+ * de-Qt work in `docs/future_plans/dotnet-port-assessment.md`: this file is pure
+ * infrastructure with no Qt semantics to preserve, and the interop spike already drives
+ * the reader with `std::thread`. `PacketItem::payload` stays a `QByteArray` for now -
+ * converting it reaches into both the producer and the consumer, so it is its own step.
  */
 
 #ifndef PACKETQUEUE_H
 #define PACKETQUEUE_H
 
+#include <condition_variable>
+#include <cstddef>
+#include <cstdint>
+#include <deque>
+#include <mutex>
+#include <utility>
+
 #include <QByteArray>
-#include <QMutex>
-#include <QQueue>
-#include <QWaitCondition>
 
 /**
  * @brief One unit of work handed from the reader to a worker.
@@ -44,7 +55,8 @@ class PacketQueue
 {
 public:
     explicit PacketQueue(int max_depth = kDefaultMaxDepth)
-        : m_max_depth(max_depth > 0 ? max_depth : kDefaultMaxDepth)
+        : m_max_depth(max_depth > 0 ? static_cast<std::size_t>(max_depth)
+                                    : static_cast<std::size_t>(kDefaultMaxDepth))
     {
     }
 
@@ -59,17 +71,18 @@ public:
      */
     bool enqueue(PacketItem item)
     {
-        QMutexLocker locker(&m_mutex);
-        while (!m_closed && m_queue.size() >= m_max_depth)
-        {
-            m_not_full.wait(&m_mutex);
-        }
+        std::unique_lock<std::mutex> lock(m_mutex);
+        // Predicate form rather than a bare wait in a while loop: it is the same
+        // condition the Qt version looped on, and it handles spurious wakeups itself.
+        m_not_full.wait(lock, [this] {
+            return m_closed || m_queue.size() < m_max_depth;
+        });
         if (m_closed)
         {
             return false;
         }
-        m_queue.enqueue(std::move(item));
-        m_not_empty.wakeOne();
+        m_queue.push_back(std::move(item));
+        m_not_empty.notify_one();
         return true;
     }
 
@@ -81,40 +94,42 @@ public:
      */
     PacketItem dequeue()
     {
-        QMutexLocker locker(&m_mutex);
-        while (m_queue.isEmpty() && !m_closed)
-        {
-            m_not_empty.wait(&m_mutex);
-        }
-        if (m_queue.isEmpty())
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_not_empty.wait(lock, [this] {
+            return !m_queue.empty() || m_closed;
+        });
+        if (m_queue.empty())
         {
             PacketItem eos;
             eos.endOfStream = true;
             return eos;
         }
-        PacketItem item = m_queue.dequeue();
-        m_not_full.wakeOne();
+        PacketItem item = std::move(m_queue.front());
+        m_queue.pop_front();
+        m_not_full.notify_one();
         return item;
     }
 
     /// Closes the queue and wakes all blocked producers/consumers.
     void close()
     {
-        QMutexLocker locker(&m_mutex);
+        std::lock_guard<std::mutex> lock(m_mutex);
         m_closed = true;
-        m_not_full.wakeAll();
-        m_not_empty.wakeAll();
+        m_not_full.notify_all();
+        m_not_empty.notify_all();
     }
 
 private:
     static constexpr int kDefaultMaxDepth = 64; ///< Max packets buffered per stream.
 
-    QMutex            m_mutex;
-    QWaitCondition    m_not_full;
-    QWaitCondition    m_not_empty;
-    QQueue<PacketItem> m_queue;
-    int               m_max_depth;
-    bool              m_closed = false;
+    std::mutex              m_mutex;
+    std::condition_variable m_not_full;
+    std::condition_variable m_not_empty;
+    std::deque<PacketItem>  m_queue;
+    /// Stored unsigned so the fullness check needs no signed/unsigned cast against
+    /// std::deque::size(); the constructor still takes an int for the existing API.
+    std::size_t             m_max_depth;
+    bool                    m_closed = false;
 };
 
 #endif // PACKETQUEUE_H

@@ -160,6 +160,7 @@ SOURCES += \
     tst_streamconfigschema.cpp \
     tst_processingtemplateschema.cpp \
     tst_templatematcher.cpp \
+    tst_packetqueue.cpp \
     tst_stepdetector.cpp \
     tst_calibrationextractor.cpp
 
@@ -184,5 +185,6 @@ HEADERS += \
     tst_streamconfigschema.h \
     tst_processingtemplateschema.h \
     tst_templatematcher.h \
+    tst_packetqueue.h \
     tst_stepdetector.h \
     tst_calibrationextractor.h
