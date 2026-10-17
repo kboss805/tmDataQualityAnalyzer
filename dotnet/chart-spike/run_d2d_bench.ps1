@@ -30,7 +30,7 @@ if (-not $SkipBuild) {
     & cl /nologo /std:c++17 /O2 /EHsc /W4 /MD `
         d2d_chart_bench.cpp `
         /Fe:d2d_chart_bench.exe /Fo:d2d_chart_bench.obj `
-        /link d2d1.lib d3d11.lib dxgi.lib 2>&1 | Tee-Object -Variable clOut | Out-Null
+        /link d2d1.lib d3d11.lib dxgi.lib d3dcompiler.lib 2>&1 | Tee-Object -Variable clOut | Out-Null
     $code = $LASTEXITCODE
     Pop-Location
     $ErrorActionPreference = 'Stop'

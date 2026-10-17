@@ -74,32 +74,48 @@ Neither was a rewrite. Both passed; details in their own READMEs.
    marginally *faster*. It is a Qt workaround, not a general truth - do not carry it
    across as gospel.
 
-   **But Win2D does not build here**, so the chart-in-C# option is not yet proven:
-   `Microsoft.Graphics.Win2D` needs Visual Studio's AppxPackage MSBuild tooling, which VS
-   BuildTools alone does not provide. The measurement was taken against Direct2D natively
-   instead - Win2D *is* Direct2D, so the rasterizer numbers hold, but the managed
-   per-call overhead is unmeasured. **The WinUI 3 / Win2D path needs VS with the WinUI or
-   UWP workload**, which is a real prerequisite to weigh before choosing the framework.
+   **Direct3D is faster again by three orders of magnitude** - 1 to 5 **microseconds**
+   per frame, against Direct2D's 18-30 ms for the same picture. Not because the GPU beat
+   the GPU (Direct2D already runs on Direct3D) but because Direct2D needs **~14,424 draw
+   calls** where Direct3D needs **24**. Direct2D's cost here is CPU-side tessellation and
+   call overhead. With Direct3D the renderer stops being the bottleneck at all and the
+   geometry build becomes ~2000x the cost of drawing it.
 
-The chart is the real decision, and it couples to the UI framework:
+   **Win2D now builds and runs**, after VS Community 2026 supplied the AppxPackage
+   MSBuild tooling that VS BuildTools lacks - and after calling `Bootstrap.TryInitialize`
+   explicitly, because the auto-initializer kills the process silently (exit 22) with no
+   indication of why. **Both are real prerequisites of the chart-in-C# option.**
 
-- **WinUI 3 + Win2D** keeps everything in C#. Win2D is Microsoft-published over
-  Direct2D, and `CanvasDrawingSession` is immediate-mode like `QPainter`. Plausibly
-  *faster* than today, because the `drawLines()`-vs-`drawPath()` finding was about Qt's
-  CPU stroker building an outline polygon - a problem a GPU rasterizer does not have.
-  Cost: `AppWindowTitleBar.SetDragRectangles` is an approximation of the current
-  `WM_NCHITTEST` frameless chrome.
-- **WPF + a native Direct2D renderer** (via `D3DImage`) preserves the rendering work
-  almost literally and keeps `HwndSourceHook` for the chrome, but keeps C++ in the UI
-  path. Win2D is not supported on WPF.
+## The chart decision, now that it is measured
 
-Starting point was **WinUI 3 + Win2D**. The chart spike did not overturn that on
-performance - it could not test it at all, because Win2D needs build tooling this
-machine lacks. That shifts the balance slightly toward **WPF + a native Direct2D
-renderer**, which is now the option with measured numbers behind it and no extra
-Visual Studio workload. Decide once someone has tried Win2D on a machine with the WinUI
-workload installed; the rasterizer is the same either way, so the open question is only
-the managed call overhead and the tooling cost.
+**Every Microsoft option beats the Qt baseline.** The choice is no longer about speed.
+
+- **Direct2D** - 18-31 ms for the 12-series redraw against Qt's 34 ms, text free via
+  DirectWrite, no version trap. **The recommended starting point**: lowest risk. But note
+  the margin over Qt is *not* large and the figure swings 3x between runs, because
+  Direct2D's cost here is CPU-side - so "comfortably faster" overstates it.
+- **Direct3D** - 1-5 us/frame. Costs you text (needs a glyph atlas, or the standard
+  hybrid: D3D for the data, Direct2D/DirectWrite for the chrome) and explicit AA. **Keep
+  it as the escape hatch**, not the starting point - the measurement says it is there and
+  it is enormous, so its complexity can wait until something needs it.
+- **Win2D** - works, but **pins you to the 1.x line with no announced successor**:
+  `Microsoft.Graphics.Win2D` has 28 versions, newest 1.4.0, and **zero 2.x**, while
+  WindowsAppSDK 2.5.1 ships no graphics component at all (`.DWrite` and
+  `.InteractiveExperiences` exist as 2.x components; `.Graphics`, `.Canvas`, `.Direct2D`
+  and `.Win2D` do not). Native Direct2D and Direct3D have no such exposure - they are
+  Windows **SDK**, not Windows **App** SDK.
+
+**That reverses the earlier starting point.** WinUI 3 + Win2D was the pick for keeping
+everything in C#; the 1.x binding is now the strongest argument against it, and it is an
+architectural risk rather than a performance one. **WPF + a native renderer** behind the
+flat ABI is the option with measured numbers, no extra Visual Studio workload, and no
+exposure to the 2.x restructuring. Its cost is keeping C++ in the UI path and
+`HwndSourceHook` rather than `SetDragRectangles` for the frameless chrome - which is the
+*better* side of that trade anyway, since the current `WM_NCHITTEST` code transfers
+literally.
+
+Either way: **keep the renderer behind your own interface** so the backend stays
+swappable. That is the lesson all three options point at.
 
 ## Testing
 
