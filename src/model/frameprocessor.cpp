@@ -6,8 +6,8 @@
 #include "frameprocessor.h"
 
 #include <algorithm>
+#include <chrono>
 
-#include <QElapsedTimer>
 #include <QVector>
 
 #include "irig106ch10.h"       // IWYU pragma: keep
@@ -116,8 +116,8 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         return false;
     }
 
-    QElapsedTimer elapsed_timer;
-    elapsed_timer.start();
+    // Monotonic, so a wall-clock adjustment mid-run cannot report a negative duration.
+    const auto run_start = std::chrono::steady_clock::now();
 
     // Initialize the in-memory result bundle for this run.
     m_result = ProcessedStreamData();
@@ -338,7 +338,10 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         state.rows_written++;
     }
 
-    qint64 elapsed_ms = elapsed_timer.elapsed();
+    // duration_cast truncates to whole milliseconds, exactly as QElapsedTimer::elapsed()
+    // did, so the one-decimal seconds this feeds in the completion log are unchanged.
+    const int64_t elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - run_start).count();
     constexpr double kMsPerSec = 1000.0;
 
     ScanDiagnostics diag;

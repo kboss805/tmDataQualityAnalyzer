@@ -417,7 +417,7 @@ The stories below follow the workflow a first-time user takes through the applic
 Items from `docs/future_plans/dotnet-port-assessment.md` that are worth doing whether or not
 that port ever happens - the throughput guard, the TOML move off `QSettings`, and now the
 de-Qt of the native core in small steps (QtGui out of the model's headers, then
-`PacketQueue`) - plus the clean-build regression the TOML change caused. No user-facing
+`PacketQueue`, then the `QElapsedTimer`s) - plus the clean-build regression the TOML change caused. No user-facing
 behaviour changes.
 
 #### A deleted header broke the clean build, and an incremental one could not see it
@@ -519,6 +519,46 @@ the pipeline already depended on rather than whatever the rewrite happens to do.
 
 Baseline **426 / 0 / 1** (was 413 / 0 / 1; 13 new lines = 11 cases + the framework's
 `initTestCase` / `cleanupTestCase`), **427 / 0 / 0** at release. 22 suites.
+
+#### The progress throttle is `std::chrono`, behind a tested gate (de-Qt, step 3)
+
+The two `QElapsedTimer`s in the native core are gone. `FrameProcessor` keeps a plain
+`steady_clock` start point and `duration_cast<milliseconds>` for the one-shot duration that
+becomes the completion log's one-decimal seconds (both truncate to whole milliseconds, so the
+printed figure is unchanged). `Ch10PacketReader::run()` gets a small new type,
+**`IntervalGate`** (`include/model/intervalgate.h`, `<chrono>` only).
+
+**Why a type rather than four inline lines.** The throttle is the one place in this change
+that can go wrong *silently*: seconds where milliseconds were meant makes it never fire,
+microseconds makes it fire on every packet, `>` where `>=` was drifts it late - and none of
+those is caught by a build, or by the pipeline tests, because the recordings in the suite
+read faster than the 100 ms interval and a time-based check inside a per-packet loop cannot
+be observed from outside. With the time point injectable, the whole contract is pinned
+deterministically with no sleeps. Same lesson as `PacketQueue`: a swap with no test under it
+is a swap you are trusting rather than checking.
+
+New suite **`TestIntervalGate`** (7 cases): not due before the interval, due at *exactly* the
+interval, `due()` reporting without restarting the interval, milliseconds rather than seconds
+or microseconds, `reset()` measuring from the reset, sub-millisecond agreement on every side
+of the boundary, and a default-constructed gate starting at *now* rather than the clock's
+epoch (which would make it due the instant it exists).
+
+**Validated against seven single-defect mutants; every one fails**, each caught by the test
+written for it: `>=` weakened to `>`; the interval read as seconds; read as microseconds;
+`reset()` a no-op; `due()` restarting the interval itself; an epoch default start; and
+rounding the elapsed time up so it fires up to a millisecond early. The real gate passes 9/9.
+
+**Equivalence with `QElapsedTimer` was measured, not argued.** The injected-time tests pin the
+gate's own contract but cannot show it matches the timer it replaced, because `QElapsedTimer`
+has no injectable clock. So both were run against the real clock side by side, twelve runs,
+reading the timer first and the gate second: the gate was **never late** (zero iterations with
+the timer due and the gate not), and the first-due instants differed by **at most 1.3 us,
+always on the early side**. That residue is the harness constructing the gate a moment before
+calling `timer.start()`, not a property of the gate; at a 100 ms interval it is a relative
+difference of about 1e-5. Stated as measured rather than called identical.
+
+Baseline **435 / 0 / 1** (was 426 / 0 / 1; 9 new lines = 7 cases + the framework's
+`initTestCase` / `cleanupTestCase`), **436 / 0 / 0** at release. 23 suites.
 
 #### The model layer no longer pulls in QtGui (de-Qt, step 1)
 
@@ -3392,6 +3432,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestBatchController** (`tst_batchcontroller`) — the Apply Template batch loop (US1.1): `buildTemplate()` capturing a source's configs + time channel + byte order + each series' name/color, `applyAppearance()` mapping a template's saved appearance onto the right series (both moved here from TestMainView, and no longer need a window to run), plus two cases the loop's old home made impractical — a queue whose files have all gone missing drains to `finished()` with both counted as skipped rather than stalling on a reader, and `start()` with nothing matched does not clear the session or announce a run
 - **TestTemplateMatcher** (`tst_templatematcher`) — batch apply channel-ID matching: `templateChannelIds()` collection and `matchFile()` exact-set comparison (pass regardless of order; reject with the right `missing`/`extra` sets on a missing channel, an extra channel, and both) — pure logic, runs in CI
 - **TestPacketQueue** (`tst_packetqueue`) — the bounded reader-to-worker hand-off, tested directly rather than only through the pipeline: FIFO order, every `PacketItem` field surviving (including an embedded NUL in the payload), the producer blocking at exactly the configured depth and resuming after one dequeue, the consumer blocking when empty and resuming after one enqueue, `close()` releasing a blocked producer (`enqueue` returns false) and a blocked consumer (end-of-stream sentinel), a closed queue draining what it already holds before reporting end-of-stream, a non-positive depth falling back to the default of 64, and 20,000 items through a depth-4 queue in order under constant hand-off with a watchdog so a lost wakeup fails instead of hanging the suite. Validated against the original Qt-based queue (must pass) and eight single-defect mutants (every one must fail) - see the changelog. Pure logic, runs in CI
+- **TestIntervalGate** (`tst_intervalgate`) — the progress throttle that replaced `QElapsedTimer` in `Ch10PacketReader::run()`, pinned with injected time points so nothing depends on a sleep: not due before the interval, due at *exactly* the interval (`>=`, not `>`), due long after without `due()` restarting the interval itself, the interval read as milliseconds rather than seconds or microseconds, `reset()` measuring from the reset, sub-millisecond precision agreeing with `QElapsedTimer`'s truncation on every side of the boundary, and a default-constructed gate starting at *now* rather than the clock's epoch (otherwise it is due the instant it exists and throttles nothing). Validated against seven single-defect mutants, every one of which must fail. Pure logic, runs in CI
 
 ### Running Tests
 
