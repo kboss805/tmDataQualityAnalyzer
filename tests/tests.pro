@@ -68,6 +68,7 @@ HEADERS += \
     $$PWD/../include/model/channeldata.h \
     $$PWD/../include/model/chapter10reader.h \
     $$PWD/../include/model/ch10packetreader.h \
+    $$PWD/../include/model/intervalgate.h \
     $$PWD/../include/model/packetqueue.h \
     $$PWD/../include/model/framesetup.h \
     $$PWD/../include/model/frameprocessor.h \
@@ -161,6 +162,7 @@ SOURCES += \
     tst_processingtemplateschema.cpp \
     tst_templatematcher.cpp \
     tst_packetqueue.cpp \
+    tst_intervalgate.cpp \
     tst_stepdetector.cpp \
     tst_calibrationextractor.cpp
 
@@ -186,5 +188,6 @@ HEADERS += \
     tst_processingtemplateschema.h \
     tst_templatematcher.h \
     tst_packetqueue.h \
+    tst_intervalgate.h \
     tst_stepdetector.h \
     tst_calibrationextractor.h
