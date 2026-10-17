@@ -131,6 +131,7 @@ HEADERS += \
     include/model/channeldata.h \
     include/model/chapter10reader.h \
     include/model/ch10packetreader.h \
+    include/model/intervalgate.h \
     include/model/packetqueue.h \
     include/model/framesetup.h \
     include/model/frameprocessor.h \

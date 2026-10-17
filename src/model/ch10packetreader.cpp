@@ -5,16 +5,17 @@
 
 #include "ch10packetreader.h"
 
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 
-#include <QElapsedTimer>
 #include <QFileInfo>
 
 #include "i106_decode_pcmf1.h"
 #include "i106_decode_time.h"
 
 #include "constants.h"
+#include "intervalgate.h"
 #include "packetqueue.h"
 
 using namespace Irig106;
@@ -334,8 +335,7 @@ void Ch10PacketReader::run()
     emit logMessage("Reading Chapter 10 file...");
 
     int  last_reported_percent = -1;
-    QElapsedTimer progress_timer;
-    progress_timer.start();
+    IntervalGate progress_gate{std::chrono::milliseconds(PCMConstants::kProgressReportIntervalMs)};
     double prev_time_seconds = -1.0;
     int  time_gaps_detected = 0;
 
@@ -358,9 +358,12 @@ void Ch10PacketReader::run()
             break;
         }
 
-        if (m_total_file_size > 0 && progress_timer.elapsed() >= PCMConstants::kProgressReportIntervalMs)
+        // The size test comes first on purpose: it short-circuits, so a file of unknown
+        // size never reads the clock at all, as before. This runs once per packet header,
+        // so the clock read is the per-iteration cost - one monotonic read either way.
+        if (m_total_file_size > 0 && progress_gate.due())
         {
-            progress_timer.restart();
+            progress_gate.reset();
             int64_t current_pos = 0;
             enI106Ch10GetPos(m_file_handle, &current_pos);
             int percent = static_cast<int>(current_pos * kPercent100 / m_total_file_size);
