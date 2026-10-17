@@ -15,8 +15,9 @@
 #define CH10PACKETREADER_H
 
 #include <atomic>
+#include <cstdint>
+#include <vector>
 
-#include <QByteArray>
 #include <QHash>
 #include <QObject>
 #include <QString>
@@ -114,7 +115,7 @@ private:
     int                   m_file_handle = -1;
     bool                  m_file_open   = false;
     Irig106::SuI106Ch10Header m_header;
-    QByteArray            m_buffer;
+    std::vector<uint8_t>  m_buffer;
     Irig106::SuTmatsInfo  m_tmats_info;
     QVector<SuChanInfo*>  m_channel_info;
     Irig106::SuIrig106Time m_irig_time;

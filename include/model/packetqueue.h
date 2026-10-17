@@ -12,8 +12,10 @@
  * `std::deque` in place of `QMutex` / `QWaitCondition` / `QQueue`). First step of the
  * de-Qt work in `docs/future_plans/dotnet-port-assessment.md`: this file is pure
  * infrastructure with no Qt semantics to preserve, and the interop spike already drives
- * the reader with `std::thread`. `PacketItem::payload` stays a `QByteArray` for now -
- * converting it reaches into both the producer and the consumer, so it is its own step.
+ * the reader with `std::thread`. `PacketItem::payload` is a shared, read-only
+ * `std::vector<uint8_t>`: it replaced a `QByteArray`, whose implicit sharing the reader
+ * relied on to hand one packet to several queues for the price of a reference count.
+ * That sharing is now explicit (see PacketPayload).
  */
 
 #ifndef PACKETQUEUE_H
@@ -23,10 +25,20 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <memory>
 #include <mutex>
 #include <utility>
+#include <vector>
 
-#include <QByteArray>
+/**
+ * @brief The raw bytes of one packet, shared between every queue that receives it.
+ *
+ * The reader hands the SAME packet to each stream configured on a channel, and it is the
+ * single bottleneck of the pipeline, so it must not copy the bytes once per stream. The
+ * pointee is `const`: nothing downstream may modify a payload another worker is reading.
+ * A worker that needs to swap, invert or derandomize copies it into its own buffer first.
+ */
+using PacketPayload = std::shared_ptr<const std::vector<uint8_t>>;
 
 /**
  * @brief One unit of work handed from the reader to a worker.
@@ -37,7 +49,7 @@
  */
 struct PacketItem
 {
-    QByteArray payload;                 ///< Raw PCM payload bits (ChanSpec header stripped).
+    PacketPayload payload;              ///< Raw PCM payload bits (ChanSpec header stripped); null on the sentinel.
     double     baseAbsSeconds = 0.0;    ///< Absolute IRIG seconds of this packet's base time.
     uint64_t   packetBits     = 0;      ///< Number of valid PCM bits in @c payload.
     bool       endOfStream    = false;  ///< Sentinel: no more packets for this stream.
