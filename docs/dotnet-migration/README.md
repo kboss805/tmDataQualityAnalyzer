@@ -54,15 +54,32 @@ pointer-plus-length arrays, C++/CLI's marshalling convenience does not pay for i
 toolchain oddity. Keep the structs blittable and the `Pack` hazard stays confined to the
 Ch10 headers, which never leave the native side.
 
-## The two spikes that actually decide this
+## The two spikes that decide this - BOTH DONE
 
-Neither is a rewrite. Do these before any shell work.
+Neither was a rewrite. Both passed; details in their own READMEs.
 
-1. **Interop spike** - one stream, one channel, results into a C# console app. Proves
-   the ABI and the numbers.
-2. **Chart spike** - port the per-pixel-column envelope and the binary-search culling
-   (both pure arithmetic, so they transfer unchanged) onto Win2D, and measure against
-   the current **34 ms** repaint *and* the **<1 ms** cached repaint.
+1. **Interop spike** - `dotnet/interop-spike/`. **Passed.** Struct layout agrees
+   (72/72, 40/40, 136/136), a real stream runs through a flat C ABI, and the boundary
+   costs 0.4% with marshalling at 0.005% of the run. .NET 10 and .NET Framework agree
+   exactly on the results, which rules out the layout agreement being a runtime
+   artifact.
+2. **Chart spike** - `dotnet/chart-spike/`. **Passed, with one surprise.** Direct2D
+   redraws the 12-series case in **18.1 ms against Qt's 34 ms**, and 26.4 ms against
+   157 ms including the geometry build. The envelope and culling are pure arithmetic and
+   ported unchanged.
+
+   **The surprise: this project's `drawLines()`-not-`drawPath()` rule does not carry
+   over.** On Qt that choice was worth 1423 ms vs 27 ms, because a non-cosmetic pen goes
+   through Qt's stroker. On Direct2D the two are near-equivalent and the batched path is
+   marginally *faster*. It is a Qt workaround, not a general truth - do not carry it
+   across as gospel.
+
+   **But Win2D does not build here**, so the chart-in-C# option is not yet proven:
+   `Microsoft.Graphics.Win2D` needs Visual Studio's AppxPackage MSBuild tooling, which VS
+   BuildTools alone does not provide. The measurement was taken against Direct2D natively
+   instead - Win2D *is* Direct2D, so the rasterizer numbers hold, but the managed
+   per-call overhead is unmeasured. **The WinUI 3 / Win2D path needs VS with the WinUI or
+   UWP workload**, which is a real prerequisite to weigh before choosing the framework.
 
 The chart is the real decision, and it couples to the UI framework:
 
@@ -76,7 +93,13 @@ The chart is the real decision, and it couples to the UI framework:
   almost literally and keeps `HwndSourceHook` for the chrome, but keeps C++ in the UI
   path. Win2D is not supported on WPF.
 
-Starting point: **WinUI 3 + Win2D**, switching only if measurement says otherwise.
+Starting point was **WinUI 3 + Win2D**. The chart spike did not overturn that on
+performance - it could not test it at all, because Win2D needs build tooling this
+machine lacks. That shifts the balance slightly toward **WPF + a native Direct2D
+renderer**, which is now the option with measured numbers behind it and no extra
+Visual Studio workload. Decide once someone has tried Win2D on a machine with the WinUI
+workload installed; the rasterizer is the same either way, so the open question is only
+the managed call overhead and the tooling cost.
 
 ## Testing
 
