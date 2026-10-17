@@ -414,9 +414,11 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased
 
-Three items from `docs/future_plans/dotnet-port-assessment.md` that are worth doing whether
-or not that port ever happens, plus the clean-build regression the second of them caused.
-No user-facing behaviour changes.
+Items from `docs/future_plans/dotnet-port-assessment.md` that are worth doing whether or not
+that port ever happens - the throughput guard, the TOML move off `QSettings`, and now the
+de-Qt of the native core in small steps (QtGui out of the model's headers, then
+`PacketQueue`) - plus the clean-build regression the TOML change caused. No user-facing
+behaviour changes.
 
 #### A deleted header broke the clean build, and an incremental one could not see it
 
@@ -461,6 +463,62 @@ called from our code is reported at **our** call site, so those keep warning exa
 v2.9.0 intended. Every first-party header here is quote-included, so `anglebrackets` covers
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
+
+#### `PacketQueue` is `std`, and finally has tests of its own (de-Qt, step 2)
+
+`include/model/packetqueue.h` - the bounded hand-off between the single reader and each
+worker - moves from `QMutex` / `QWaitCondition` / `QQueue` to `std::mutex` /
+`std::condition_variable` / `std::deque`. It was the right next step: header-only, pure
+infrastructure with no Qt semantics to preserve, and on the hot path, where the interop
+spike had already shown `std::thread` driving the reader fine. `PacketItem::payload` stays a
+`QByteArray` for now - converting it reaches into both the producer and the consumer, so it
+is its own step.
+
+**The queue had no direct test.** It was only exercised incidentally, through the whole
+reader + `FrameProcessor` pipeline - tolerable on Qt's primitives, not tolerable the moment
+they are swapped, because a lost wakeup or a wrong fullness test shows up there as a hang or
+a silently shortened stream, far from its cause. New suite **`TestPacketQueue`** (11 cases):
+FIFO order; every `PacketItem` field surviving, including an embedded NUL in the payload;
+the producer blocking at *exactly* the configured depth and resuming after one dequeue; the
+consumer blocking when empty and resuming after one enqueue; `close()` releasing a blocked
+producer and a blocked consumer; a closed queue draining what it holds before reporting
+end-of-stream; a non-positive depth falling back to 64; and 20,000 items through a depth-4
+queue in order under constant hand-off.
+
+**The tests were validated, not assumed.** Run in an isolated harness against the original
+Qt-based queue and the rewrite, plus eight single-defect mutants of the rewrite:
+
+| variant | result | caught by |
+| --- | --- | --- |
+| original Qt queue | **pass 13/13** | - (the tests encode existing behaviour) |
+| `std` rewrite | **pass 13/13** | - |
+| full at `depth + 1` | fail | the producer-blocks, depth-bound and fallback tests |
+| LIFO instead of FIFO | fail | ordering and the 20,000-item stress test |
+| `close()` never notifies | fail | `closeReleasesABlockedProducer` |
+| `enqueue()` never notifies | fail | consumer-resumes and the stress test |
+| `dequeue()` never notifies | fail | producer-resumes and the stress test |
+| non-positive depth taken literally | fail | the fallback test |
+| `close()` discards queued items | fail | the drain test |
+
+Passing against the *original* is the stronger half: it shows the suite pins the behaviour
+the pipeline already depended on rather than whatever the rewrite happens to do.
+
+**Two things the mutation run found about the tests themselves.**
+
+- A `close()` that records the flag but never wakes anyone **hung** the validation run past
+  150 s instead of failing. The helper-thread guard closes the queue and then joins - and if
+  `close()` is the broken part, that join waits forever. CI sets no `timeout-minutes`, so a
+  hung suite would hold the self-hosted runner for GitHub's six-hour default. The join is now
+  bounded (5 s) and aborts the process with a message naming the cause; that mutant now fails
+  in about 10 s. The 30 s stress-test watchdog got the same treatment.
+- The first matrix was meaningless: **every variant, including the original, "failed" with
+  empty output.** Qt Test on Windows writes nothing to a piped stdout, so the harness had read
+  nothing and a missing result counted as a failure. It now reads the `-o file,txt` results
+  file, as the project's own harness does. A column of FAILs would have looked like the tests
+  working.
+
+Baseline **426 / 0 / 1** (was 413 / 0 / 1; 13 new lines = 11 cases + the framework's
+`initTestCase` / `cleanupTestCase`), **427 / 0 / 0** at release. 22 suites.
 
 #### The model layer no longer pulls in QtGui (de-Qt, step 1)
 
@@ -3333,6 +3391,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestProcessingTemplateSchema** (`tst_processingtemplateschema`) — processing templates / batch apply: `ProcessingTemplateSchema` round trip for both `StreamMode`s, series appearance, calibration input references, and `timeChannelIndex`; that appearance is omitted when empty; that `calibrationByWord` is never serialized (inherited from `StreamConfigSchema`); and `schemaVersion` accept/reject + malformed-document rejection — no `.ch10` fixture, runs in CI
 - **TestBatchController** (`tst_batchcontroller`) — the Apply Template batch loop (US1.1): `buildTemplate()` capturing a source's configs + time channel + byte order + each series' name/color, `applyAppearance()` mapping a template's saved appearance onto the right series (both moved here from TestMainView, and no longer need a window to run), plus two cases the loop's old home made impractical — a queue whose files have all gone missing drains to `finished()` with both counted as skipped rather than stalling on a reader, and `start()` with nothing matched does not clear the session or announce a run
 - **TestTemplateMatcher** (`tst_templatematcher`) — batch apply channel-ID matching: `templateChannelIds()` collection and `matchFile()` exact-set comparison (pass regardless of order; reject with the right `missing`/`extra` sets on a missing channel, an extra channel, and both) — pure logic, runs in CI
+- **TestPacketQueue** (`tst_packetqueue`) — the bounded reader-to-worker hand-off, tested directly rather than only through the pipeline: FIFO order, every `PacketItem` field surviving (including an embedded NUL in the payload), the producer blocking at exactly the configured depth and resuming after one dequeue, the consumer blocking when empty and resuming after one enqueue, `close()` releasing a blocked producer (`enqueue` returns false) and a blocked consumer (end-of-stream sentinel), a closed queue draining what it already holds before reporting end-of-stream, a non-positive depth falling back to the default of 64, and 20,000 items through a depth-4 queue in order under constant hand-off with a watchdog so a lost wakeup fails instead of hanging the suite. Validated against the original Qt-based queue (must pass) and eight single-defect mutants (every one must fail) - see the changelog. Pure logic, runs in CI
 
 ### Running Tests
 

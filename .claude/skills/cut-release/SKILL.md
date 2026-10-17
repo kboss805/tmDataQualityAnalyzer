@@ -97,7 +97,7 @@ powershell -ExecutionPolicy Bypass -File scripts\run_throughput_bench.ps1
 
 This replaces the by-hand full-suite run rather than adding to it: it builds the tests in
 **Release** and runs every suite, and the benchmark is only meaningful against an optimised
-build. Expect **414 passed / 0 failed / 0 skipped** and a printed ratio block.
+build. Expect **427 passed / 0 failed / 0 skipped** and a printed ratio block.
 
 **"0 skipped" is now literally true, and was not before.** This step has always asked for it,
 but the heavy PRN throughput benchmark skipped on every run — it was opt-in behind
