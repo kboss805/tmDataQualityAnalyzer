@@ -43,13 +43,28 @@ address — `0xc0000005` in `TestStepDetector`, `0xC0000409` entering `TestPlotV
 identified. CI never sees it because it builds fresh; only local builds after a bump are affected.
 (Also regenerate `compile_flags.txt` and delete both `.qmake.stash` files — see `docs/CLAUDE.md`.)
 
+**A change that DELETES a header is also only verified by a clean build** — and this one fails the
+other way, as a **false pass** rather than a crash. jom does not notice that a header has gone, so
+every translation unit that still `#include`s it keeps its stale `.obj`, relinks, and the build
+reports success. v2.14.2's TOML refactor removed `tomlconfighelper.h` and left a dead include in
+`streamconfigdialog.cpp`; the full suite ran green at 414/0/0 with zero warnings, entirely against
+a stale object, and **CI went red on the very next clean build**. Grepping for the *class* name
+cannot catch this: what survives is the *filename*. So after deleting or renaming a header, wipe
+`build/` and `tests/` before believing any result.
+
 The **`build-and-test`** skill encodes all of this; prefer it.
 
 **Running a built exe (IDE or by hand):** `py`-free one-liner
 `powershell -File scripts\deploy_qt_local.ps1 -Config debug [-Tests]` copies the Qt
 runtime next to the exe, so launching needs **no Qt on PATH**. Prefer this to adding Qt
 to PATH in an IDE config: a hard-coded Qt path silently rots on the next `QT_VERSION`
-bump (that is what caused a `0xC0000135` DLL-not-found after the 6.11.1 upgrade). The
+bump (that is what caused a `0xC0000135` DLL-not-found after the 6.11.1 upgrade).
+**Re-run it after any clean**: wiping `tests/debug/` removes the deployed Qt runtime
+along with the objects, and the suite then dies before its first test with exit **127**
+and `Qt6Cored.dll: cannot open shared object file` — which looks nothing like a missing
+deploy step, and leaves `output/results.txt` holding the PREVIOUS run's numbers for
+anyone who reads it without checking. Delete that file before a run you intend to
+trust. The
 script also copies the **offscreen** platform plugin, which `windeployqt` omits and
 headless runs (`QT_QPA_PLATFORM=offscreen`) need.
 

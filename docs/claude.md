@@ -414,8 +414,78 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased
 
-Two items from `docs/future_plans/dotnet-port-assessment.md` that are worth doing whether or
-not that port ever happens. No user-facing behaviour changes.
+Three items from `docs/future_plans/dotnet-port-assessment.md` that are worth doing whether
+or not that port ever happens, plus the clean-build regression the second of them caused.
+No user-facing behaviour changes.
+
+#### A deleted header broke the clean build, and an incremental one could not see it
+
+CI went red on `main` for one reason: the TOML change below deleted
+`include/model/tomlconfighelper.h` and left a dangling `#include` in
+`src/view/streamconfigdialog.cpp`. The include was **dead** - nothing in that file used
+it - so nothing functional was wrong, but a clean build cannot compile the file.
+
+**Every verification build had been incremental, and that is why it passed.** jom does not
+notice that a header has been *deleted*, so the stale `streamconfigdialog.obj` was relinked
+and the build reported success. The full suite ran **414 / 0 / 0 with zero warnings** against
+that stale object. CI builds clean and failed immediately.
+
+This is the stale-object trap `CLAUDE.md` already documents, arriving from the opposite
+direction: not a crash at a meaningless address, a **false pass**. And grepping for the class
+name `TomlConfigHelper` could not have found it, because what survived the refactor was the
+*filename*. `CLAUDE.md` now says plainly that a change deleting a header is only verified by a
+clean build.
+
+A second stale-artifact trap on the way to fixing it, also now recorded: wiping `tests/debug/`
+removes the Qt runtime that `deploy_qt_local.ps1` had put beside the test exe, so the suite
+dies before its first test with exit **127** and `Qt6Cored.dll: cannot open shared object
+file`. Meanwhile `output/results.txt` still holds the *previous* run's numbers, so reading it
+reports a result for a run that never happened.
+
+#### Qt's own deprecation warnings are suppressed, in the one way v2.9.0 left open
+
+With the compile error gone, a clean build surfaced **13 `warning C4996`** - all from Qt 6.12
+itself, at `qguiapplication.h(169)`, where `QGuiApplication` overrides the deprecated
+`QCoreApplication::compressEvent`. Every translation unit that includes `<QGuiApplication>`
+emits it, this application never calls `compressEvent`, and there is no fix available in our
+code. CI's gate matches `warning [A-Z]\d+`, so a clean build could not go green while they
+were visible.
+
+`thirdparty.pri` now sets **`/external:anglebrackets /external:W0`**.
+
+**Deliberately not `/wd4996`.** That flag used to live in this very file, suppressed
+deprecation warnings for *application* code as collateral, and was removed on purpose in
+v2.9.0 - the file carries a note saying so. `/external:` suppresses warnings whose *location*
+is a non-first-party header while leaving our own files fully warned, and a deprecated API
+called from our code is reported at **our** call site, so those keep warning exactly as
+v2.9.0 intended. Every first-party header here is quote-included, so `anglebrackets` covers
+Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
+19.51.
+
+#### The model layer no longer pulls in QtGui (de-Qt, step 1)
+
+`include/constants.h` held `PlotConstants`' `QColor` palettes alongside `PCMConstants`,
+`AppVersion`, `UIConstants` and `CalibrationConstants` - so **every model translation unit
+included `<QColor>`** and pulled in QtGui. Nothing in the model references a colour.
+
+Found by trying to build the model as a standalone native DLL with `QT -= gui` (the interop
+spike on `explore/dotnet-migration`), which died on `constants.h(11): fatal error C1083:
+Cannot open include file: 'QColor'`. Compile-time coupling only - the palettes are
+`inline constexpr` and unreferenced there, so no QtGui code was ever emitted into the model.
+
+- `PlotConstants` moves to the new **`include/plotconstants.h`**, which owns the QtGui
+  dependency and is included only by the View, the ViewModel and their tests.
+- `constants.h` is now QtGui-free: `<array>`, `<cstdint>`, `<QString>`.
+- The three CSV header tokens move into **`SeriesColumnSchema`** as `kTimeHeader`,
+  `kLockSuffix` and `kMissedFramesSuffix`. They are a serialization contract rather than plot
+  presentation, this file already documents itself as the single source of truth for the CSV
+  column format, and their presence in `PlotConstants` is specifically what made the model
+  depend on a QtGui-bearing header. They now sit beside the code that formats and parses them.
+
+**Not finished by this.** Eight `QColor` references remain in the model and DTO layer - a hex
+string round trip in `processingtemplateschema.cpp` and value fields in `plotseriesdata.h` and
+`seriesappearance.h`. The transitive *header* coupling is gone, which is what blocked a
+gui-free build; naming the type in three files is the next step.
 
 #### The decommutation pipeline has a performance guard, and it had none before
 
