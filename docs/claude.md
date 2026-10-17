@@ -412,6 +412,53 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ## Version History
 
+### Unreleased
+
+Two pieces of groundwork that stand on their own merits. No user-facing behaviour changes.
+
+#### The decommutation pipeline has a performance guard, and it had none before
+
+`benchmarkHeavyWorkloadSingleVsMultiStream` existed, and measured the right thing, and was
+**three separate kinds of inert**:
+
+- **It asserted nothing.** It printed four solo timings and a parallel timing through
+  `qWarning()` and then ended. A throughput regression would have passed, in a log nobody
+  reads. Reporting is not guarding, and this is the one that mattered most.
+- **It was opt-in behind `TMDQA_RUN_HEAVY_BENCH`, and nothing set it.** Not CI, not the
+  release, not any script.
+- **It was pointed at a fixture that cannot satisfy it.** The path moved from
+  `prn_testfile.ch10` to `test files/prn_testfile, sample.ch10` in PR #105's fixture
+  reorganization (v2.11.1), which read as a mechanical rename and was not: the committed
+  77 MB sample carries PCM packets for channels **13 and 15 only**, while 14 and 16 appear
+  in its TMATS with no data behind them. The benchmark times four channels, so enabling the
+  variable produced no number - it probed four, recognized two, and skipped with a message
+  blaming channel identification. Established with `scripts/ch10_triage.py`, which reports
+  `no PCM packets on channel 14; available: [13, 15]`.
+
+What changed:
+
+- **The ratios are asserted**, not the milliseconds. Absolute times belong to the machine;
+  the ratios belong to the architecture, and four historical runs held them to within 0.01.
+  Limits are `parallel / slowest-solo <= 1.50` and `parallel / all-sequential <= 0.85`,
+  against a measured 0.92 and 0.59 - deliberate headroom, because a reader serialized behind
+  worker back-pressure (the regression this catches) would drive the first toward 4.0, not up
+  a few percent. Below 4 cores the ratios describe the machine instead, so they are reported
+  and explicitly NOT asserted.
+- **It runs at every release**, via the new `scripts/run_throughput_bench.ps1`, which the
+  `cut-release` skill's Step 5 now invokes in place of the by-hand suite run. It builds
+  Release, enables the benchmark, fails on a skip or a missing fixture rather than letting
+  either pass quietly, and prints the ratio block.
+- **Not in CI.** CI was cut 286s -> 93s deliberately (PR #48); this adds minutes for a
+  property that is not correctness, and the full recording is not committed anyway. CI still
+  leaves the benchmark skipped, so its "exactly one skip" gate is unchanged.
+- **Release baseline is 414 / 0 / 0**, where the ordinary baseline stays 413 / 0 / 1.
+
+The `640 MB` figure in both `CLAUDE.md` files was **correct** and is unchanged - it describes
+`prn_testfile, full.ch10`, measured at 640.1 MB. It was briefly "corrected" during this work
+on the reasoning that the test read the sample; the test did read the sample, which was the
+bug, not the documentation.
+
+
 ### v2.14.2 — Shipped Defaults That Say What They Mean, and an Installer Test That Can Run
 
 The application binary is unchanged from v2.14.1 apart from its version. Everything here
