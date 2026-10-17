@@ -14,19 +14,34 @@ what was built is worse than no plan at all.
 
 ## Open items
 
-**[Porting to a Microsoft-only native stack (.NET)](dotnet-port-assessment.md)** -
-assessed and **not recommended as a whole**. The question was whether the application
-could move to .NET/XAML using only Microsoft tools. Measured: ~19k lines of first-party
-source, of which the ~7k view layer and the 11.3k test suite would be rebuilt, against
-real gains in deployment (`dotnet publish` retires windeployqt and most of the
-DLL-closure risk) and the end of the Qt-bump ritual. Two shortfalls carry the risk - the
-chart's QPainter-specific performance findings do not transfer to a retained-mode stack,
-and the bit-level decommutation loop would be re-derived in a GC language with no
-throughput guard in place. If the gains are ever wanted, the file argues for the hybrid
-(keep `src/model` as a native DLL behind a flat C ABI, rewrite only the view in WPF)
-rather than the full port. **Two of its phases are proposed for action on their own
-merits**: de-Qt the model layer, and turn on the throughput benchmark. Both improve the
-Qt application whether or not anything is ever ported.
+**[Moving to a Microsoft-only stack](dotnet-port-assessment.md)** - **ACTIVE**, on the
+branch `explore/dotnet-migration`. The working plan lives in
+`docs/dotnet-migration/README.md` **on that branch**; the file here is the costed
+assessment behind it.
+
+The full C# rewrite is still **not recommended** - it is a view-layer plus test-suite
+rebuild (~7k of view, 11.3k of tests) that re-derives two measured performance results
+from scratch. What is being explored instead is the **hybrid**: the performance-critical
+core stays native MSVC C++ with no framework, and the whole developer-facing surface
+becomes C#. That satisfies "Microsoft-only" because **MSVC is Microsoft** - Qt is the only
+non-Microsoft framework in the tree - so the bit-serial scanner, the derandomizer and the
+calibration maths are never rewritten. Only results cross the boundary: ~34 MB once per
+run against a 640 MB recording.
+
+Two spikes decide it, neither a rewrite: the interop boundary, and the chart on Win2D
+measured against the current 34 ms / sub-1 ms repaints.
+
+**Both standalone phases are done and on `main`**: the throughput guard (which is how
+every performance claim now gets measured rather than argued) and the TOML move off
+`QSettings`. **One item moved from "dropped" to "required"** by the Microsoft-only goal -
+the `QString`/`QVector` sweep of the native core, re-measured at 431 mechanical
+substitutions over ~4,170 lines. It belongs on `main`, not the branch, because it keeps
+the Qt app shipping at every step.
+
+**Branch discipline:** anything that keeps the Qt application building and shipping goes
+to `main`. The branch holds only what cannot - the C# solution, the interop layer, the
+Win2D chart, the XAML shell - so it stays almost entirely new files and keeps merging
+cleanly while maintenance continues on `main`.
 
 Add an entry here when something is scoped and not yet started, and give it its own file
 once it needs more than a paragraph. An empty list is the normal resting state, not a

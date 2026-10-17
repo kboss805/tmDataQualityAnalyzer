@@ -1,7 +1,13 @@
 # Porting to a Microsoft-only native stack (.NET)
 
-**Status: assessed, not recommended as a whole. Two of its five phases are worth doing
-on their own merits and are the only part proposed for action.**
+**Status: ACTIVE on `explore/dotnet-migration`, under a Microsoft-only goal.** The full
+C# rewrite is still not recommended; the hybrid below is the path being explored. Both
+standalone phases are done and landed on `main`.
+
+See `docs/dotnet-migration/README.md` **on that branch** for the working plan - the
+phase split, the two deciding spikes, and the rule that keeps the branch mergeable
+(anything that keeps the Qt app shipping goes to `main`, not the branch). This file stays
+the costed assessment; it is not the work plan.
 
 The question was whether the application could move to a native Windows stack built
 only with Microsoft tools — .NET, XAML — and what that would cost. This file records
@@ -116,6 +122,14 @@ the ~30k first-party lines, buying deployment simplification and the end of Qt-b
 maintenance at the price of re-deriving two measured performance results with no guard
 currently in place for either.
 
+**"Microsoft-only" does not mean "C#-only", and that is what makes the performance answer
+possible.** MSVC is Microsoft; Qt is the only non-Microsoft *framework* in the tree
+(`irig106` is third-party C and is irreplaceable either way). So the constraint is satisfied
+by dropping Qt while keeping C++ - which means the bit-serial scanner, the derandomizer and
+the calibration maths are never rewritten at all. Only **results** cross the interop
+boundary: `ProcessedStreamData` is flat `double` arrays, worst realistic case ~34 MB once
+per run, against a 640 MB recording read and scanned entirely on the native side.
+
 **If the gains are wanted without that risk, the hybrid is the honest answer:** keep
 `src/model` as a native DLL behind a flat `extern "C"` ABI — it is already GUI-free, it is
 where the performance lives, and it is where the hard-won tests are — and rewrite only the
@@ -138,10 +152,31 @@ passing is worth recording here, because both were worse than this file assumed:
   larger than "a layering smell": `FrameSetup` had been parsing every word-map file **twice**
   (QSettings sorts sections, a word map is meaningful in file order), writes needed a
   `QFile::remove()` first because QSettings merges, and the format needed process-wide
-  registration from two separate `main()`s. **The `QString`/`QVector` sweep was dropped** -
-  this file was wrong to bundle it. The hybrid port recommended above keeps the model as a
-  native DLL linking Qt Core, so the sweep buys nothing short of a full C# rewrite, and it
-  would have been ~380 call sites of churn for that.
+  registration from two separate `main()`s. **The `QString`/`QVector` sweep was dropped at the
+  time** - this file was wrong to bundle it with the TOML work, which stands alone.
+
+  **That reasoning is now superseded, and the sweep is REQUIRED.** It was dropped because
+  the hybrid keeps the model as a native DLL linking Qt Core, so the sweep bought nothing
+  short of a full C# rewrite. Under a **Microsoft-only** goal that no longer holds: Qt Core
+  has to leave the core too. Re-measured against the six files that would actually form the
+  native core (~4,170 lines), it is far smaller than the ~380 call sites quoted here -
+  **431 Qt token occurrences**, every one a mechanical substitution:
+
+  | | | | |
+  | --- | --- | --- | --- |
+  | `QString` 182 | `QVector` 90 | `QObject` 20 | `QStringList` 17 |
+  | `QFileInfo` 14 | `QFile` 9 | `QList` 8 | `QByteArray` 8 |
+  | `QIODevice` 7 | `QMap` 6 | `QHash` 5 | `QTextStream` 5 |
+  | `QElapsedTimer` 4 | `QThread`/`QMutex`/`QWaitCondition` 8 | rest <= 3 | |
+
+  The hot files specifically - `frameprocessor.cpp`, `stepdetector.cpp`,
+  `ch10packetreader.cpp` - use only `QString`, `QVector`, `QByteArray`, `QObject` and
+  `QElapsedTimer`; the bit-serial scanner is already plain arithmetic. Signals become
+  `std::function` callbacks and the threading primitives become their `std` equivalents.
+
+  **This work belongs on `main`, not the branch** - it keeps the Qt application building at
+  every step, and it touches the files maintenance touches, so doing it on a branch is the
+  maximum-conflict choice.
 - **~~Turn on the throughput benchmark.~~ Done, and the gap was deeper than "nothing sets
   the variable".** The benchmark **asserted nothing** - it printed timings through
   `qWarning()` and passed regardless - so describing it above as a guard that merely needed
