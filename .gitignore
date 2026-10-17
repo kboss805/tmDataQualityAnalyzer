@@ -57,6 +57,12 @@ version_autogen.h
 # paths) by scripts/gen_compile_flags.py; never committed.
 compile_flags.txt
 compile_commands.json
+
+# Visual Studio projects — generated per-machine (absolute Qt/repo paths) by
+# scripts/gen_vs_project.ps1; never committed. /vs/ is that script's output; the
+# unrelated per-user .vs/ cache VS itself creates is ignored above.
+/vs/
+/tmDataQualityAnalyzer.sln
 *.ncb
 *.sdf
 *.opensdf

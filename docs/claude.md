@@ -417,8 +417,56 @@ The stories below follow the workflow a first-time user takes through the applic
 Items from `docs/future_plans/dotnet-port-assessment.md` that are worth doing whether or not
 that port ever happens - the throughput guard, the TOML move off `QSettings`, and now the
 de-Qt of the native core in small steps (QtGui out of the model's headers, then
-`PacketQueue`, then the `QElapsedTimer`s) - plus the clean-build regression the TOML change caused. No user-facing
+`PacketQueue`, then the `QElapsedTimer`s) - plus the clean-build regression the TOML change
+caused, and a generated Visual Studio solution. No user-facing
 behaviour changes.
+
+#### A Visual Studio solution, generated rather than committed
+
+`scripts/gen_vs_project.ps1` produces `tmDataQualityAnalyzer.sln` for developers who want
+Visual Studio Community instead of VS Code + the `env.ps1` shell. It runs `qmake -tp vc`
+on the app and test `.pro` files (so the `.pro` files stay the single source of truth for
+sources, defines and libraries) and writes the solution around the two projects. The
+output is **gitignored**: it carries absolute Qt and repo paths, exactly like
+`compile_flags.txt`, and a committed copy would rot at the next Qt bump. Regenerate after
+a `.pro` change, a Qt bump or a Visual Studio update. Regenerating keeps build products,
+so the build that follows is incremental (0 files recompiled, 3 s, against about 170 s
+for a clean one).
+
+Raw `qmake -tp vc` output does **not** build usefully in Visual Studio. Six things are
+corrected after the fact, each found by building and reading the failure:
+
+1. **Executable location.** The app finds `settings/` relative to its own directory and
+   the tests find `data/` one level above theirs, so the exes must land in
+   `build/<cfg>/` and `tests/<cfg>/`, not under `vs/`. `OutDir` is rewritten.
+2. **Vendored C warnings.** `lib/irig106` raises C4100/C4267 at the project warning
+   level, and the zero-warning gate applies. The library may not be edited, so its
+   `ClCompile` items get `WarningLevel=TurnOffAllWarnings`. The script throws if it finds
+   none, so a layout change cannot silently turn this into a no-op.
+3. **Qt's own deprecation warnings.** `thirdparty.pri` passes `/external:anglebrackets
+   /external:W0`; MSBuild adds `/external:W3` itself, which then collides (D9025,
+   "overriding /external:W3 with /external:W0"). The raw options are stripped and the
+   equivalent properties `TreatAngleIncludeAsExternal` and `ExternalWarningLevel` are
+   set instead.
+4. **Parallel PDB writes.** A solution build compiles both projects at once and fails
+   intermittently with `C1090: PDB API call failed, error code '3'` (about one build in
+   four) because the two compilers race on the PDB service. `ForceSynchronousPDBWrites`
+   (`/FS`) fixes it; three consecutive full `/t:Rebuild` runs were clean after the change.
+5. **Qt runtime.** A post-build step runs `scripts/deploy_qt_local.ps1`, so F5 needs no Qt
+   on `PATH` (the same reason that script exists for IDE launches in general).
+6. **Solution file.** qmake writes only projects. The `.sln` is written directly (UTF-8
+   with BOM, CRLF), app project first so it is the startup project, with the project GUIDs
+   read back out of the generated `.vcxproj` files.
+
+Verified: Debug|x64 and Release|x64 both build with 0 warnings and 0 errors, and the
+Visual Studio-built test exe gives 426 passed / 0 failed / 1 skipped, identical to the
+`jom` baseline. No Qt VS Tools extension is required.
+
+**Toolchain drift noticed on the way.** Since Visual Studio Community 2026 was installed,
+`env.ps1` resolves `cl` to its MSVC 14.51 (toolset v145) rather than the Build Tools'
+14.44 (v143), so the "MSVC 2022 only" statement in these docs no longer describes what
+the qmake build actually uses. Nothing broke; the toolset is simply unpinned. Pinning it
+in `env.ps1` is the open decision.
 
 #### A deleted header broke the clean build, and an incremental one could not see it
 
