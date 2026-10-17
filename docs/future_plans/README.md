@@ -14,11 +14,23 @@ what was built is worse than no plan at all.
 
 ## Open items
 
-**None.** Every initiative this file has tracked has shipped; see the table below.
+**[Porting to a Microsoft-only native stack (.NET)](dotnet-port-assessment.md)** -
+assessed and **not recommended as a whole**. The question was whether the application
+could move to .NET/XAML using only Microsoft tools. Measured: ~19k lines of first-party
+source, of which the ~7k view layer and the 11.3k test suite would be rebuilt, against
+real gains in deployment (`dotnet publish` retires windeployqt and most of the
+DLL-closure risk) and the end of the Qt-bump ritual. Two shortfalls carry the risk - the
+chart's QPainter-specific performance findings do not transfer to a retained-mode stack,
+and the bit-level decommutation loop would be re-derived in a GC language with no
+throughput guard in place. If the gains are ever wanted, the file argues for the hybrid
+(keep `src/model` as a native DLL behind a flat C ABI, rewrite only the view in WPF)
+rather than the full port. **Two of its phases are proposed for action on their own
+merits**: de-Qt the model layer, and turn on the throughput benchmark. Both improve the
+Qt application whether or not anything is ever ported.
 
-That is the normal resting state, not a prompt to invent work. Add an entry here when
-something is scoped and not yet started, and give it its own file once it needs more
-than a paragraph.
+Add an entry here when something is scoped and not yet started, and give it its own file
+once it needs more than a paragraph. An empty list is the normal resting state, not a
+prompt to invent work.
 
 ---
 

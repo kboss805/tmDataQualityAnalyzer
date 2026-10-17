@@ -395,7 +395,7 @@ The stories below follow the workflow a first-time user takes through the applic
 
   - **Replaces two criteria that described a merge this project never built.** They claimed the installer saved a conflicting default as `new_x.toml` and carried the user's old values into it. Nothing implements that: `tmDataQualityAnalyzer.iss` is 95 declarative lines with no `[Code]` section, and there is no `new_x`, migration, schema-version or merge logic in `src/`, `deploy/` or `scripts/`. Confirmed on a clean machine by `deploy/sandbox/` - a first run wrote nothing under `settings\` and no registry key.
   - **The guarantee above is weaker but true, and the defensive readers are what make it safe** - `FrameSetup::readReceiverParams()` accepts both the current `[Receivers]` keys and the older `[Parameters]` spelling, an absent `Randomized` leaves the operator's choice alone rather than clearing it, and `StreamConfigSchema::fromJson()` keeps in-class defaults for anything omitted. A change that removed that tolerance would look harmless and would not be: it is load-bearing for this criterion, not incidental.
-  - **When a merge would become necessary:** a shipped default gaining a field whose absence an old file cannot express - where "missing" and a deliberate choice are indistinguishable. `Randomized` is exactly that shape and was only safe because the reader was written to notice. See `docs/future_plans/settings-upgrade-gap.md` for the implementation sketch if that day comes.
+  - **When a merge would become necessary:** a shipped default gaining a field whose absence an old file cannot express - where "missing" and a deliberate choice are indistinguishable. `Randomized` is exactly that shape and was only safe because the reader was written to notice. Option B - building the merge in the installer's `[Code]` section - was scoped and deliberately not taken; see the "Settings on upgrade" row in `docs/future_plans/README.md` for why, and rebuild the sketch from this criterion if that day comes.
 
 ### US9.0: Switch between light and dark theme — Complete
 
@@ -414,7 +414,8 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased
 
-Two pieces of groundwork that stand on their own merits. No user-facing behaviour changes.
+Two items from `docs/future_plans/dotnet-port-assessment.md` that are worth doing whether or
+not that port ever happens. No user-facing behaviour changes.
 
 #### The decommutation pipeline has a performance guard, and it had none before
 
@@ -458,6 +459,51 @@ The `640 MB` figure in both `CLAUDE.md` files was **correct** and is unchanged -
 on the reasoning that the test read the sample; the test did read the sample, which was the
 bug, not the documentation.
 
+#### TOML parsing is plain file I/O, not a QSettings format
+
+`TomlConfigHelper` implemented the settings-file subset as a custom `QSettings::Format`.
+Replaced by `TomlDocument` (`include/model/tomldocument.h`), which reads and writes the same
+subset directly. `QSettings` is a settings *store* - scoped, cached, merged, written through
+an atomic rename - and using it as a file-format parser cost real work at every call site:
+
+- **It sorted.** `childGroups()` came back alphabetically, but a receiver word map is
+  meaningful in file order, so `FrameSetup::tryLoadingFile()` opened and parsed the same file
+  a **second** time through a `readGroupsInFileOrder()` helper just to recover that order.
+  Both are gone: one parse, and `sectionsInFileOrder()` is the primary interface.
+- **It merged.** `writeReceiverParams()` had to `QFile::remove()` the target first or the old
+  file's word map survived beside the new one. `TomlDocument::save()` truncates.
+- **It needed global registration.** `registerFormat()` is process-wide and lazy, so `main()`
+  *and* the test harness each had to call it before any config file could be read. Both calls
+  are gone.
+- **It cannot express arrays**, which is why `StepDetector::parseStepConfig` is a second,
+  hand-written TOML parser for `[[Step]]` files. Unifying the two is the obvious follow-up and
+  is deliberately **not** in this change: that parser feeds calibration, and it deserves its
+  own verifiable step rather than riding along on this one.
+
+`FrameSetup::saveToSettings(QSettings&)` becomes `writeWordMap(TomlDocument&)`, which is what
+it always did. Scope note: this does **not** remove the Qt Core dependency and was not meant
+to - `TomlDocument` still uses `QString`. The `QString`/`QVector` sweep that the assessment
+also listed is not done, because the hybrid port it recommends keeps the model as a native DLL
+that links Qt Core regardless, so that sweep buys nothing until a full C# rewrite.
+
+**Value semantics are reproduced, not quietly tightened**, because a refactor whose claim is
+"same subset" must not change how an existing file reads. `boolean()` is
+`QVariant::toBool()`'s exact rule (lowercase; false only for empty, `0` or `false`; anything
+else true), which is what the QSettings path went through. A stricter rule would arguably be
+better and is left as its own decision.
+
+Two differences are deliberate and named:
+
+- **`integer()` returns the caller's fallback for a present-but-unparseable value**, where
+  `QVariant::toInt()` returned 0 - silently turning a corrupt `Polarity` or `Slope` into
+  index 0 rather than the default the caller passed. No call site wanted the old behaviour.
+- **Escaping is symmetric.** The old writer escaped `\` and `"` on the way out but its reader
+  only stripped the surrounding quotes, so neither character survived a round trip. No
+  shipped key carries either, so this corrects an asymmetry rather than any real file's
+  meaning - but reproducing it on purpose in fresh code seemed worse.
+
+Application preference storage is untouched and still `QSettings` (theme, recent files,
+sidebar and legend visibility), which is what that class is for.
 
 ### v2.14.2 — Shipped Defaults That Say What They Mean, and an Installer Test That Can Run
 
@@ -547,10 +593,10 @@ now on Pro, so it can be closed.
 every `Qt6*`, `qwindows.dll`, `MSVCP140*` and `VCRUNTIME140*` loaded **from the install
 directory** on a machine with no Qt at all. v2.14.1 was the first build on **Qt 6.12.0**
 and that closure had last been verified on 6.11.1, so it was the one real untested risk in
-the release. It also confirms, from the other direction, what
-`docs/future_plans/settings-upgrade-gap.md` argues from the code: a first run wrote
-**nothing** under `settings\` and no registry key, so there is no `new_x.toml` merge to
-find.
+the release. It also confirms, from the other direction, what the settings-upgrade
+scoping argued from the code (its plan file was deleted on landing, per the
+`docs/future_plans/` convention): a first run wrote **nothing** under `settings\` and no
+registry key, so there is no `new_x.toml` merge to find.
 
 - The `.wsb` is **generated, not committed**. Sandbox requires absolute host paths and does
   not expand environment variables in them, so a checked-in one would carry one
@@ -2907,7 +2953,7 @@ not mis-read.
 
 8. **CalibrationExtractor** (`src/model/calibrationextractor.cpp`, `include/model/calibrationextractor.h`) — *US5.3*; drives a raw extraction over a calibration Ch10 file (reusing the Ch10PacketReader + FrameProcessor pipeline with unit slope / zero offset) and runs StepDetector per channel to build session-only profiles
 
-9. **TomlConfigHelper** (`src/model/tomlconfighelper.cpp`, `include/model/tomlconfighelper.h`) — registers the custom QSettings TOML format every settings file is read and written through. It is the format only: the frame-sync helpers live with the dialogs that use them, and the receiver-parameters file (scalars + word map) is read and written by `FrameSetup`
+9. **TomlDocument** (`src/model/tomldocument.cpp`, `include/model/tomldocument.h`) — reads and writes the TOML subset every settings file uses, as plain file I/O. Replaced `TomlConfigHelper`, which implemented the same subset as a custom `QSettings::Format`: QSettings sorts its sections (so `FrameSetup` had to re-parse each file to recover word-map order), merges on write (so callers had to delete the file first), and needs process-wide `registerFormat()` before anything can be read. It is the format only: the frame-sync helpers live with the dialogs that use them, and the receiver-parameters file (scalars + word map) is read and written by `FrameSetup` via `writeWordMap()`. **`StepDetector::parseStepConfig` is a second TOML parser**, for `[[Step]]` array-of-tables files, which this class deliberately does not implement; folding the two together is a known follow-up
 
 10. **CsvSeriesParser** (`src/model/csvseriesparser.cpp`, `include/model/csvseriesparser.h`) — pure (UI-free) static parser that turns a FrameProcessor `Day,Time,param…` CSV into `PlotSeriesData` (returned as a `CsvParseResult`). Extracted out of PlotViewModel so file parsing lives in the Model layer; thread-safe, so PlotViewModel runs `parse()` on a worker thread via `loadCsvFileAsync()`
 
@@ -3148,7 +3194,7 @@ that worktrees also need.
 
 1. Add the field to the `StreamConfig` struct in `include/dto/streamconfig.h` (with a default in `constants.h` if appropriate)
 2. Surface it in the relevant gear sub-dialog in `StreamConfigDialog` (Frame Sync Lock or Receiver SNR setup), and include it in the "Apply to all" fan-out if it should propagate
-3. If it must round-trip to a TOML file, add it to the matching `TomlConfigHelper` load/save helper (respecting the US5.1/US1.0 boundaries)
+3. If it must round-trip to a TOML file, add it to the matching `loadFrameSyncFromToml` / `saveFrameSyncToToml` helper in `streamsubdialogs.cpp`, or to `FrameSetup`'s receiver-parameters read/write, which both go through `TomlDocument` (respecting the US5.1/US1.0 boundaries)
 4. Carry it into `ProcessingParams` (and `FrameSetup` if it affects the word map) where `MainViewModel` builds each `StreamJob`
 5. Consume it in `FrameProcessor::process()`
 

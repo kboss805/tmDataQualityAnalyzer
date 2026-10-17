@@ -5,13 +5,10 @@
 
 #include "framesetup.h"
 
-#include <QFile>
 #include <QFileInfo>
-#include <QRegularExpression>
-#include <QTextStream>
 
 #include "constants.h"
-#include "tomlconfighelper.h"
+#include "tomldocument.h"
 
 const QStringList FrameSetup::kSettingsGroups = {
     // Non-parameter metadata sections, skipped by tryLoadingFile(). "EMPTY"
@@ -21,31 +18,6 @@ const QStringList FrameSetup::kSettingsGroups = {
     // channel. Repeated [EMPTY] sections are fine — they are all skipped here.
     "Defaults", "Frame", "Parameters", "Time", "Receivers", "Bounds", "EMPTY"
 };
-
-QStringList FrameSetup::readGroupsInFileOrder(const QString& filename)
-{
-    QFile file(filename);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-    {
-        return {};
-    }
-
-    static const QRegularExpression sectionPattern(R"(^\[(.+)\]\s*$)");
-    QStringList groups;
-    QTextStream in(&file);
-
-    while (!in.atEnd())
-    {
-        QString line = in.readLine().trimmed();
-        QRegularExpressionMatch match = sectionPattern.match(line);
-        if (match.hasMatch())
-        {
-            groups.append(match.captured(1));
-        }
-    }
-
-    return groups;
-}
 
 FrameSetup::FrameSetup(QObject* parent) :
     QObject(parent)
@@ -57,13 +29,16 @@ bool FrameSetup::tryLoadingFile(const QString& filename, int num_words_in_minor_
 {
     clearParameters();
 
-    QSettings settings(filename, TomlConfigHelper::format());
-    if (settings.status() != QSettings::NoError)
+    // One parse, not two. This used to build a QSettings AND separately re-read the
+    // file with readGroupsInFileOrder(), because QSettings returns childGroups()
+    // sorted while a word map's order is the order the file lists it in.
+    const TomlDocument doc = TomlDocument::load(filename);
+    if (!doc.ok())
     {
         return false;
     }
 
-    QStringList groups = readGroupsInFileOrder(filename);
+    const QStringList groups = doc.sectionsInFileOrder();
     if (groups.isEmpty())
     {
         return false;
@@ -76,16 +51,14 @@ bool FrameSetup::tryLoadingFile(const QString& filename, int num_words_in_minor_
             continue;
         }
 
-        settings.beginGroup(group);
-
-        if (!settings.contains("Word"))
+        const QString word_key = group + "/Word";
+        if (!doc.contains(word_key))
         {
-            settings.endGroup();
             return false;
         }
 
         bool word_ok = false;
-        int parameter_word = settings.value("Word").toInt(&word_ok) - 1;
+        int parameter_word = doc.integer(word_key, 0, &word_ok) - 1;
 
         // num_words_in_minor_frame counts the sync word, so the last addressable
         // DATA word is index num_words_in_minor_frame - 2 (the final slot is the
@@ -94,13 +67,10 @@ bool FrameSetup::tryLoadingFile(const QString& filename, int num_words_in_minor_
         // tryLoadingFileWordEqualsFrameSize / ...RejectsBoundary tests.
         if (!word_ok || parameter_word < 0 || parameter_word >= num_words_in_minor_frame - 1)
         {
-            settings.endGroup();
             return false;
         }
 
         addParameter(group, parameter_word);
-
-        settings.endGroup();
     }
 
     return true;
@@ -191,12 +161,12 @@ ReceiverParams FrameSetup::readReceiverParams(const QString& path,
                                               const ReceiverParams& defaults)
 {
     ReceiverParams params = defaults;
-    QSettings cfg(path, TomlConfigHelper::format());
+    const TomlDocument cfg = TomlDocument::load(path);
 
-    params.polarityIndex = cfg.value("Parameters/Polarity", params.polarityIndex).toInt();
-    params.slopeIndex    = cfg.value("Parameters/Slope", params.slopeIndex).toInt();
+    params.polarityIndex = cfg.integer("Parameters/Polarity", params.polarityIndex);
+    params.slopeIndex    = cfg.integer("Parameters/Slope", params.slopeIndex);
 
-    const double scale = cfg.value("Parameters/Scale", params.scaleDdBPerV).toDouble();
+    const double scale = cfg.number("Parameters/Scale", params.scaleDdBPerV);
     if (scale > 0.0)
     {
         params.scaleDdBPerV = scale;
@@ -204,13 +174,16 @@ ReceiverParams FrameSetup::readReceiverParams(const QString& path,
 
     // The receiver counts live under [Receivers] in every shipped parameters file.
     // Files the dialog itself wrote before v2.12.1 put them under [Parameters]
-    // instead, so read those too rather than silently showing the defaults.
-    const int receivers = cfg.value("Receivers/Count",
-                                    cfg.value("Parameters/NumReceivers",
-                                              params.numReceivers)).toInt();
-    const int channels  = cfg.value("Receivers/ChannelsPerReceiver",
-                                    cfg.value("Parameters/ReceiverChannels",
-                                              params.receiverChannels)).toInt();
+    // instead, so read those too rather than silently showing the defaults. Spelled
+    // as an explicit contains() rather than a nested default, which is what the
+    // QSettings version had to do and which read as though [Receivers] were optional
+    // in a different sense than it is.
+    const int receivers = cfg.contains("Receivers/Count")
+        ? cfg.integer("Receivers/Count", params.numReceivers)
+        : cfg.integer("Parameters/NumReceivers", params.numReceivers);
+    const int channels  = cfg.contains("Receivers/ChannelsPerReceiver")
+        ? cfg.integer("Receivers/ChannelsPerReceiver", params.receiverChannels)
+        : cfg.integer("Parameters/ReceiverChannels", params.receiverChannels);
     if (receivers > 0)
     {
         params.numReceivers = receivers;
@@ -231,23 +204,17 @@ bool FrameSetup::writeReceiverParams(const QString& path, const ReceiverParams& 
         return false;
     }
 
-    // QSettings merges into whatever the file already holds, so an overwrite would
-    // otherwise leave the old file's word map behind alongside the new one.
-    QFile::remove(path);
-
-    QSettings cfg(path, TomlConfigHelper::format());
-    cfg.beginGroup("Parameters");
-    cfg.setValue("Polarity", params.polarityIndex);
-    cfg.setValue("Slope",    params.slopeIndex);
-    cfg.setValue("Scale",    params.scaleDdBPerV);
-    cfg.endGroup();
-    cfg.beginGroup("Receivers");
-    cfg.setValue("Count",               params.numReceivers);
-    cfg.setValue("ChannelsPerReceiver", params.receiverChannels);
-    cfg.endGroup();
-    saveToSettings(cfg);
-    cfg.sync();
-    return cfg.status() == QSettings::NoError;
+    // No QFile::remove() first any more: TomlDocument::save() truncates. QSettings
+    // merged into whatever the file already held, so without the delete an overwrite
+    // left the old file's word map behind alongside the new one.
+    TomlDocument cfg;
+    cfg.setValue("Parameters/Polarity", params.polarityIndex);
+    cfg.setValue("Parameters/Slope",    params.slopeIndex);
+    cfg.setValue("Parameters/Scale",    params.scaleDdBPerV);
+    cfg.setValue("Receivers/Count",               params.numReceivers);
+    cfg.setValue("Receivers/ChannelsPerReceiver", params.receiverChannels);
+    writeWordMap(cfg);
+    return cfg.save(path);
 }
 
 bool FrameSetup::saveReceiverParamsFile(const QString& path,
@@ -342,12 +309,10 @@ bool FrameSetup::buildDefaultReceiverMap(int num_receivers, int receiver_channel
     return true;
 }
 
-void FrameSetup::saveToSettings(QSettings& settings) const
+void FrameSetup::writeWordMap(TomlDocument& doc) const
 {
     for (const auto& param : m_parameters)
     {
-        settings.beginGroup(param.name);
-        settings.setValue("Word", param.word + 1);
-        settings.endGroup();
+        doc.setValue(param.name + "/Word", param.word + 1);
     }
 }

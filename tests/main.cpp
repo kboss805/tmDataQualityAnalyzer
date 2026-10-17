@@ -4,7 +4,6 @@
 #include <QTextStream>
 #include <QtTest>
 
-#include "tomlconfighelper.h"
 
 #include "tst_channeldata.h"
 #include "tst_chapter10reader.h"
@@ -73,8 +72,9 @@ int main(int argc, char* argv[])
     app.setOrganizationName("tmDataQualityAnalyzer_tests");
     app.setApplicationName("tmDataQualityAnalyzer_tests");
     QSettings::setDefaultFormat(QSettings::IniFormat);
-    // Register the custom TOML format so all config file I/O works in tests
-    (void)TomlConfigHelper::format();
+    // Nothing to register for TOML: TomlDocument is plain file I/O. The previous
+    // TomlConfigHelper needed a process-wide QSettings::Format registered here before
+    // any test could read a config file.
 
     // Determine output log path: use -o argument if provided, else output/results.txt
     // output/ is gitignored so results never clutter the repo.

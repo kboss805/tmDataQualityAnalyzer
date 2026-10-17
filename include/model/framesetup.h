@@ -8,10 +8,10 @@
 
 #include <QHash>
 #include <QObject>
-#include <QSettings>
 
 #include "calibrationprofile.h"
 #include "constants.h"
+#include "tomldocument.h"
 
 /**
  * @brief Describes one named parameter within a PCM minor frame.
@@ -55,7 +55,7 @@ struct ReceiverParams
  *
  * Parameters are read from a TOML file that maps receiver/channel names
  * to word positions within the PCM minor frame. The class also supports
- * saving the current parameter configuration back to a QSettings file.
+ * saving the current parameter configuration back to a TOML file.
  */
 class FrameSetup : public QObject
 {
@@ -79,8 +79,9 @@ public:
      */
     bool tryLoadingFile(const QString& filename, int num_words_in_minor_frame);
 
-    /// Saves the current parameter list to @p settings.
-    void saveToSettings(QSettings& settings) const;
+    /// Writes the current parameter list into @p doc as one [Name] section per
+    /// parameter, each carrying its 1-based Word. The caller owns saving the doc.
+    void writeWordMap(TomlDocument& doc) const;
 
     /// @return Words per minor frame for @p bits_in_minor_frame, rounded up: a
     /// frame whose last word is partially filled still occupies that word's slot.
@@ -167,9 +168,6 @@ public:
     int attachCalibrationProfiles(const QHash<int, CalibrationProfile>& by_word);
 
 private:
-    /// Reads TOML section names in the order they appear in the file.
-    static QStringList readGroupsInFileOrder(const QString& filename);
-
     static const QStringList kSettingsGroups; ///< Reserved TOML group names to skip.
     QList<ParameterInfo> m_parameters;        ///< Ordered list of frame parameters.
 };

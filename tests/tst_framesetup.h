@@ -17,7 +17,7 @@ private slots:
     void tryLoadingFileOutOfBoundsWord();
     void tryLoadingFileWordZeroFails();
     void tryLoadingFileWordEqualsFrameSize();
-    void saveToSettingsWritesCorrectData();
+    void writeWordMapWritesCorrectData();
 
     // Dynamic frame size tests
     void tryLoadingFileSmallerFrameAccepts();

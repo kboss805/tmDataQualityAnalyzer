@@ -13,7 +13,6 @@
 #include <QStyleFactory>
 
 #include "constants.h"
-#include "tomlconfighelper.h"
 
 #ifndef QT_NO_DEBUG
 #include <intrin.h>
@@ -29,9 +28,10 @@ int main(int argc, char** argv)
     QCoreApplication::setOrganizationName(UIConstants::kOrganizationName);
     QCoreApplication::setApplicationName(UIConstants::kApplicationName);
 
-    // Register the custom TOML format so all QSettings(path, TomlConfigHelper::format())
-    // calls work correctly throughout the application lifetime.
-    (void)TomlConfigHelper::format();
+    // No TOML format registration here any more. TomlConfigHelper registered a custom
+    // QSettings::Format process-wide and lazily, so this call had to happen before any
+    // settings file could be read at all - and the test harness had to remember the
+    // same thing. TomlDocument is plain file I/O with nothing to register.
 
     // App-level preferences (theme, recent files, etc.) still use the platform
     // default format (INI on Windows via QSettings::IniFormat).

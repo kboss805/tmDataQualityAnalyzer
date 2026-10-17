@@ -79,7 +79,7 @@ SOURCES += \
     src/model/streamconfigschema.cpp \
     src/model/processingtemplateschema.cpp \
     src/model/templatematcher.cpp \
-    src/model/tomlconfighelper.cpp
+    src/model/tomldocument.cpp
 
 # ViewModel: presentation state + processing orchestration
 SOURCES += \
@@ -140,7 +140,7 @@ HEADERS += \
     include/model/streamconfigschema.h \
     include/model/processingtemplateschema.h \
     include/model/templatematcher.h \
-    include/model/tomlconfighelper.h
+    include/model/tomldocument.h
 
 # DTOs: plain data carried across layers
 HEADERS += \
