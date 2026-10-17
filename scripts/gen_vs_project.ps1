@@ -15,8 +15,8 @@
 # and to the Qt kit, so a committed copy would be wrong on every other machine. The .pro
 # files stay the single source of truth for what gets built; this script is a view of them.
 # Re-run it after changing a .pro (added or removed files), after a Qt bump, or after
-# switching Visual Studio versions - the platform toolset is taken from whichever compiler
-# scripts\env.ps1 selects.
+# switching Visual Studio versions - the platform toolset is taken from the compiler of the
+# environment this script imports (Visual Studio 2026 by default, see TMDQ_VS_RANGE below).
 #
 # HOW IT WORKS
 #
@@ -71,7 +71,16 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Root      = Split-Path -Parent $ScriptDir
 
 # Puts qmake and the MSVC environment on PATH and tells us which Qt kit is in use.
+# env.ps1 pins the builds to Visual Studio 2022; this script wants the compiler of the
+# Visual Studio that will OPEN the solution (2026, toolset v145), because qmake writes
+# that compiler's PlatformToolset into the project.
+if (-not $env:TMDQ_VS_RANGE) { $env:TMDQ_VS_RANGE = '[18.0,19.0)' }
 . (Join-Path $ScriptDir 'env.ps1')
+if ([version]$env:VisualStudioVersion -lt [version]'18.0') {
+    Write-Warning ("This shell already holds the Visual Studio $env:VisualStudioVersion environment " +
+                   "(MSVC $env:VCToolsVersion), so the projects will target that toolset. " +
+                   "Run the script from a fresh shell to target Visual Studio 2026.")
+}
 
 $VsDir     = Join-Path $Root 'vs'
 $MsbuildNs = 'http://schemas.microsoft.com/developer/msbuild/2003'

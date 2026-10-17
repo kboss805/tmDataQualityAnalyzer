@@ -9,6 +9,13 @@
 # vcvars64.bat — located via vswhere, then a direct path probe — and puts the Qt
 # msvc2022_64 kit on PATH. Dot-source it before building:
 #   . "$PSScriptRoot\env.ps1"
+#
+# The toolset is PINNED to Visual Studio 2022 (17.x, MSVC v143). vswhere -latest used to
+# pick whatever was newest, so installing Visual Studio 2026 silently moved every build
+# to MSVC 14.51 (v145) while the docs, CI and the Qt msvc2022_64 kit all said 2022.
+# Objects compiled by two compilers then sit in one build tree. Set TMDQ_VS_RANGE (a
+# vswhere version range, e.g. '[18.0,19.0)') to choose another on purpose;
+# scripts\gen_vs_project.ps1 does, because VS 2026 builds v145 projects.
 # =============================================================================
 
 if (-not $env:QT_VERSION) { $env:QT_VERSION = '6.12.0' }
@@ -36,12 +43,13 @@ if ($persistentQtDir -and $persistentQtDir -ne $env:QTDIR) {
 # "QMAKE_MSC_VER isn't set". Always run a full import once.
 if (-not $env:TMDQ_VCVARS_DONE) {
     $vcvars = $env:TMDQ_VCVARS  # explicit override wins
+    $vsRange = if ($env:TMDQ_VS_RANGE) { $env:TMDQ_VS_RANGE } else { '[17.0,18.0)' }
 
     # 1) vswhere, if the VS Installer shipped it at the standard location.
     if (-not $vcvars) {
         $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
         if (Test-Path $vswhere) {
-            $vsPath = & $vswhere -latest -products * `
+            $vsPath = & $vswhere -latest -products * -version $vsRange `
                 -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
                 -property installationPath 2>$null | Select-Object -First 1
             if ($vsPath) {
@@ -52,8 +60,10 @@ if (-not $env:TMDQ_VCVARS_DONE) {
     }
 
     # 2) Fallback: probe the known 2022 install roots/editions directly. Build
-    #    Tools installs don't always ship vswhere in the Installer dir.
-    if (-not $vcvars) {
+    #    Tools installs don't always ship vswhere in the Installer dir. Skipped when
+    #    TMDQ_VS_RANGE asks for something else, so a failed lookup cannot quietly hand
+    #    back 2022 to a caller that wanted 2026.
+    if (-not $vcvars -and -not $env:TMDQ_VS_RANGE) {
         foreach ($pf in @(${env:ProgramFiles(x86)}, $env:ProgramFiles)) {
             foreach ($ed in @('BuildTools','Community','Professional','Enterprise')) {
                 $candidate = Join-Path $pf "Microsoft Visual Studio\2022\$ed\VC\Auxiliary\Build\vcvars64.bat"
@@ -64,8 +74,9 @@ if (-not $env:TMDQ_VCVARS_DONE) {
     }
 
     if (-not $vcvars -or -not (Test-Path $vcvars)) {
-        throw "vcvars64.bat not found. Install the Visual Studio 2022 C++ Build Tools " +
-              "(workload 'Desktop development with C++'), or set `$env:TMDQ_VCVARS to its vcvars64.bat."
+        throw "vcvars64.bat not found for Visual Studio version range $vsRange. Install the " +
+              "Visual Studio 2022 C++ Build Tools (workload 'Desktop development with C++'), " +
+              "or set `$env:TMDQ_VCVARS to a vcvars64.bat / `$env:TMDQ_VS_RANGE to another range."
     }
 
     # Run vcvars in cmd and copy the resulting environment into this session.

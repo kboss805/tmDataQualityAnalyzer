@@ -462,11 +462,18 @@ Verified: Debug|x64 and Release|x64 both build with 0 warnings and 0 errors, and
 Visual Studio-built test exe gives 426 passed / 0 failed / 1 skipped, identical to the
 `jom` baseline. No Qt VS Tools extension is required.
 
-**Toolchain drift noticed on the way.** Since Visual Studio Community 2026 was installed,
-`env.ps1` resolves `cl` to its MSVC 14.51 (toolset v145) rather than the Build Tools'
-14.44 (v143), so the "MSVC 2022 only" statement in these docs no longer describes what
-the qmake build actually uses. Nothing broke; the toolset is simply unpinned. Pinning it
-in `env.ps1` is the open decision.
+**Toolchain drift, and the pin.** Since Visual Studio Community 2026 was installed,
+`env.ps1` resolved `cl` to its MSVC 14.51 (toolset v145) rather than the Build Tools'
+14.44 (v143): `vswhere -latest` takes whatever is newest, so the "MSVC 2022 only"
+statement in these docs, the Qt `msvc2022_64` kit and CI no longer described what a local
+build used, and a tree built across the install held objects from both compilers.
+`env.ps1` now asks vswhere for `[17.0,18.0)` (override: `TMDQ_VS_RANGE`), and skips its
+2022 path-probe fallback when a range was requested so a failed 2026 lookup cannot quietly
+return 2022. `gen_vs_project.ps1` requests `[18.0,19.0)`, because the projects it writes
+carry the compiler's `PlatformToolset` and VS 2026 builds v145; it warns if the shell
+already holds an older environment. Verified: default resolves 14.44, the override
+resolves 14.51, an unsatisfiable range throws, and a clean Debug rebuild of the app and
+tests under 14.44 gave 0 warnings and 435 passed / 0 failed / 1 skipped.
 
 #### A deleted header broke the clean build, and an incremental one could not see it
 
