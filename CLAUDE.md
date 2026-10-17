@@ -74,10 +74,17 @@ include/define change. **Run it inside each worktree too**: the paths are absolu
 worktree otherwise silently resolves headers from the main checkout while still reporting
 zero errors (see `docs/CLAUDE.md` → clangd / IntelliSense).
 
+**Toolset is pinned to Visual Studio 2022 (MSVC 14.44, v143).** `env.ps1` asks vswhere for
+`[17.0,18.0)` rather than `-latest`; installing VS 2026 had silently moved every build to
+MSVC 14.51 and left two compilers' objects in one tree. Override with `TMDQ_VS_RANGE`
+(a vswhere range). **After changing the compiler, wipe `build/` and `tests/` objects** —
+same stale-object trap as a Qt bump.
+
 **Visual Studio:** `powershell -File scripts\gen_vs_project.ps1` generates
 `tmDataQualityAnalyzer.sln` (app + tests, Debug|x64 and Release|x64) from the `.pro` files
 via `qmake -tp vc`, then fixes what the raw output gets wrong. Open it in Visual Studio
-Community and F5. The solution and `vs/` are **generated and gitignored** (absolute Qt
+Community and F5 (it targets VS 2026 / toolset v145; `env.ps1` itself stays on VS 2022 —
+see below). The solution and `vs/` are **generated and gitignored** (absolute Qt
 paths) — **regenerate after a `.pro` change, a Qt bump, or a Visual Studio update**. It
 builds with VS's own MSBuild (no Qt VS Tools needed); the Qt runtime is deployed by a
 post-build step. The qmake build stays the supported/CI one; the `.pro` files remain the
