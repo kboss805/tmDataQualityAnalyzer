@@ -74,6 +74,15 @@ include/define change. **Run it inside each worktree too**: the paths are absolu
 worktree otherwise silently resolves headers from the main checkout while still reporting
 zero errors (see `docs/CLAUDE.md` → clangd / IntelliSense).
 
+**Visual Studio:** `powershell -File scripts\gen_vs_project.ps1` generates
+`tmDataQualityAnalyzer.sln` (app + tests, Debug|x64 and Release|x64) from the `.pro` files
+via `qmake -tp vc`, then fixes what the raw output gets wrong. Open it in Visual Studio
+Community and F5. The solution and `vs/` are **generated and gitignored** (absolute Qt
+paths) — **regenerate after a `.pro` change, a Qt bump, or a Visual Studio update**. It
+builds with VS's own MSBuild (no Qt VS Tools needed); the Qt runtime is deployed by a
+post-build step. The qmake build stays the supported/CI one; the `.pro` files remain the
+source of truth. Rationale for each correction: `docs/CLAUDE.md` → Unreleased.
+
 ## Project skills (`.claude/skills/`)
 
 `build-and-test` · `tm-code-review` · `write-qt-test` · `add-stream-setting` · `cut-release` ·
