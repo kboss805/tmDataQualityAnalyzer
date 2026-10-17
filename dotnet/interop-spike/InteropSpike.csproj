@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    NOT BUILDABLE ON THE CURRENT DEV MACHINE. The .NET runtimes (6, 8, 10) are
+    installed but there is no SDK - no C:\Program Files\dotnet\sdk, and only VS
+    BuildTools, so no .NET workload either. Committed so `dotnet run` works the moment
+    an SDK is installed; until then run_spike.ps1 drives the identical ABI through
+    PowerShell's Add-Type.
+
+    TargetFramework is net8.0 rather than net10.0 deliberately: 8 is the newest
+    runtime here that is an LTS, so the spike will run on this machine as soon as the
+    matching SDK lands. Bump it when the shell's target is actually decided.
+
+    AllowUnsafeBlocks is for the zero-copy ReadOnlySpan path in Program.cs - the one
+    thing the PowerShell route cannot exercise and the main reason this project exists.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>InteropSpike</AssemblyName>
+    <RootNamespace>Tmdq.InteropSpike</RootNamespace>
+    <!-- x64 only: tmdq_core.dll is built by the msvc2022_64 kit, and an x86 host
+         would fail to load it with a BadImageFormatException. -->
+    <PlatformTarget>x64</PlatformTarget>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="TmdqCore.cs" />
+    <Compile Include="Program.cs" />
+  </ItemGroup>
+
+</Project>
