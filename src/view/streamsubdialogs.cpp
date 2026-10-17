@@ -28,7 +28,7 @@
 #include <QVBoxLayout>
 
 #include "framesetup.h"
-#include "tomlconfighelper.h"
+#include "tomldocument.h"
 
 namespace {
 
@@ -225,21 +225,21 @@ void loadFrameSyncFromToml(const QString& filename,
                            QCheckBox* randomizedBox)
 {
     toml_dir = QFileInfo(filename).absolutePath();
-    QSettings cfg(filename, TomlConfigHelper::format());
+    const TomlDocument cfg = TomlDocument::load(filename);
 
-    QString sync = cfg.value("Frame/FrameSync").toString();
+    QString sync = cfg.string("Frame/FrameSync");
     if (!sync.isEmpty())
         syncEdit->setText(sync.toUpper());
 
-    QString mask = cfg.value("Frame/FrameSyncMask").toString();
+    QString mask = cfg.string("Frame/FrameSyncMask");
     if (!mask.isEmpty())
         maskEdit->setText(mask.toUpper());
 
-    int bits = cfg.value("Frame/BitsPerFrame", 0).toInt();
+    int bits = cfg.integer("Frame/BitsPerFrame", 0);
     if (bits < PCMConstants::kMinFrameLengthBits)
     {
         // Fall back to old WordsInMinorFrame key (words × 16 bits)
-        int words = cfg.value("Frame/WordsInMinorFrame", 0).toInt();
+        int words = cfg.integer("Frame/WordsInMinorFrame", 0);
         if (words >= 2)
             bits = words * PCMConstants::kCommonWordLen;
     }
@@ -248,7 +248,7 @@ void loadFrameSyncFromToml(const QString& filename,
 
     if (invertedBox)
     {
-        bool inv = cfg.value("Frame/Inverted", false).toBool();
+        bool inv = cfg.boolean("Frame/Inverted", false);
         invertedBox->setChecked(inv);
     }
 
@@ -258,7 +258,7 @@ void loadFrameSyncFromToml(const QString& filename,
     // a setting the operator had already made.
     if (randomizedBox && cfg.contains("Frame/Randomized"))
     {
-        randomizedBox->setChecked(cfg.value("Frame/Randomized").toBool());
+        randomizedBox->setChecked(cfg.boolean("Frame/Randomized"));
     }
 }
 
@@ -272,15 +272,13 @@ void saveFrameSyncToToml(const QString& filename,
                          QString&       toml_dir)
 {
     toml_dir = QFileInfo(filename).absolutePath();
-    QSettings cfg(filename, TomlConfigHelper::format());
-    cfg.beginGroup("Frame");
-    cfg.setValue("FrameSync",     syncPattern);
-    cfg.setValue("FrameSyncMask", syncMask);
-    cfg.setValue("BitsPerFrame",  bitsPerFrame);
-    cfg.setValue("Inverted",      inverted);
-    cfg.setValue("Randomized",    randomized);
-    cfg.endGroup();
-    cfg.sync();
+    TomlDocument cfg;
+    cfg.setValue("Frame/FrameSync",     syncPattern);
+    cfg.setValue("Frame/FrameSyncMask", syncMask);
+    cfg.setValue("Frame/BitsPerFrame",  bitsPerFrame);
+    cfg.setValue("Frame/Inverted",      inverted);
+    cfg.setValue("Frame/Randomized",    randomized);
+    cfg.save(filename);
 }
 
 /// Sizes an icon-only button so its SVG icon fills the button, with a
@@ -301,14 +299,14 @@ ReceiverFrameDefaults loadReceiverFrameDefaults(const QString& app_root)
     if (!QFileInfo::exists(path))
         return d;
 
-    QSettings cfg(path, TomlConfigHelper::format());
-    const QString sync = cfg.value("Frame/FrameSync").toString();
+    const TomlDocument cfg = TomlDocument::load(path);
+    const QString sync = cfg.string("Frame/FrameSync");
     if (!sync.isEmpty())
         d.pattern = sync.toUpper();
-    const QString mask = cfg.value("Frame/FrameSyncMask").toString();
+    const QString mask = cfg.string("Frame/FrameSyncMask");
     if (!mask.isEmpty())
         d.mask = mask.toUpper();
-    const int bits = cfg.value("Frame/BitsPerFrame", 0).toInt();
+    const int bits = cfg.integer("Frame/BitsPerFrame", 0);
     if (bits >= PCMConstants::kMinFrameLengthBits)
         d.bits = bits;
     return d;

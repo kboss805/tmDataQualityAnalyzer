@@ -23,9 +23,14 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   suites**) is dominated by the real-Ch10 integration suites (a few minutes); add `--fast` (or
   `TMDQ_FAST_TESTS=1`) to skip those four `.ch10` suites for ~1 s local iteration — **local only; CI
   and releases run the full suite**. No CLI single-suite filter.
-  Green baseline: 413 passed / 0 failed / 1 skipped. The one skip is the heavy PRN throughput
-  benchmark, which is opt-in (`TMDQA_RUN_HEAVY_BENCH=1`) because it walks a 640 MB recording nine
-  times and takes minutes. In a worktree, junction
+  Green baseline: **413 passed / 0 failed / 1 skipped** normally, **414 / 0 / 0** at release. The
+  one standing skip is the heavy PRN throughput benchmark, opt-in via `TMDQA_RUN_HEAVY_BENCH=1`
+  because it walks a 640 MB recording nine times and takes minutes. At release it is not skipped:
+  `scripts\run_throughput_bench.ps1` builds Release, enables it, and **asserts** the
+  parallel-vs-solo ratios — it printed its timings and asserted nothing before that, so this is
+  the decommutation pipeline's only performance guard. It needs
+  `tests/data/test files/prn_testfile, full.ch10` (gitignored); the committed sample carries data
+  for 2 of the 4 channels it times and cannot stand in. In a worktree, junction
   `tests/data` to the main checkout's or the fixture tests skip.
 
 **After a Qt version bump, CLEAN every build directory** — `build/` *and* `tests/`, Debug and

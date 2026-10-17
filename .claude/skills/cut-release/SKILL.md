@@ -88,9 +88,32 @@ it deliberately every release rather than assuming the figures are fine.
 
 ## Step 5 — Verify before building
 
-With the **build-and-test** skill: build the app clean (0 warnings) and run the **full** test suite
-(all green, 0 failed/0 skipped). Do not package a release over a red or warning-laden build. Confirm
-`git status` is clean except for the intended version/notes changes.
+Build the app clean (0 warnings) with the **build-and-test** skill, then run the release
+verification, which is the full suite **with the throughput guard enabled**:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_throughput_bench.ps1
+```
+
+This replaces the by-hand full-suite run rather than adding to it: it builds the tests in
+**Release** and runs every suite, and the benchmark is only meaningful against an optimised
+build. Expect **414 passed / 0 failed / 0 skipped** and a printed ratio block.
+
+**"0 skipped" is now literally true, and was not before.** This step has always asked for it,
+but the heavy PRN throughput benchmark skipped on every run — it was opt-in behind
+`TMDQA_RUN_HEAVY_BENCH`, nothing set that variable, and *it asserted nothing even when it ran*.
+So the decommutation pipeline had no performance guard at all, and the suite's standing
+"413/0/1" baseline was that hole. The script sets the variable, the benchmark now asserts its
+ratios, and **any** remaining skip is a missing fixture rather than business as usual.
+
+It needs `tests/data/test files/prn_testfile, full.ch10` (~640 MB, gitignored). The committed
+sample is **not** a substitute — it carries PCM data for 2 of the 4 channels the benchmark
+times — and the script says so up front instead of letting the benchmark skip quietly.
+
+CI deliberately still leaves the benchmark off, so its "exactly one skip" gate is unchanged.
+
+Do not package a release over a red or warning-laden build. Confirm `git status` is clean
+except for the intended version/notes changes.
 
 ## Step 6 — Signing is proven automatically (nothing to do by hand)
 

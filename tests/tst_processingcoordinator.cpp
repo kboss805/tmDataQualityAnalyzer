@@ -10,6 +10,7 @@
 #include <QEventLoop>
 #include <QFileInfo>
 #include <QSignalSpy>
+#include <QThread>
 #include <QTimer>
 #include <QtTest>
 #include <QVector>
@@ -100,6 +101,31 @@ constexpr qint64 kRunFailed   = -1;
 constexpr qint64 kRunTimedOut = -2;
 /// Grace period for a cancelled run to wind its threads down.
 constexpr int    kCancelDrainMs = 30000;
+
+/// Throughput thresholds for benchmarkHeavyWorkloadSingleVsMultiStream.
+///
+/// The guard is on RATIOS, never on milliseconds. Absolute times belong to the
+/// machine - the heaviest channel in this fixture runs ~39 s on the development box -
+/// while the ratios belong to the ARCHITECTURE, and measured stable to within 0.01
+/// across four separate runs.
+///
+/// Measured baseline (release build, `prn_testfile, sample.ch10`, four streams):
+///   parallel / slowest-solo     1.00 - 1.01
+///   parallel / all-sequential   0.64 - 0.65
+///
+/// The single-reader design's entire claim is that N streams cost about what the
+/// slowest ONE costs, because the file is read once and the workers overlap it. The
+/// regression this catches is worker back-pressure serializing the reader, which
+/// would drive the first ratio toward 4.0 - the sum of the solos over the slowest.
+/// Both limits carry deliberate headroom over the measurement, because a real
+/// serialization regression is a multiple rather than a few percent, and a merely
+/// busy machine must not fail a release.
+constexpr double kMaxParallelVsSlowestSolo = 1.50;
+constexpr double kMaxParallelVsSequential  = 0.85;
+/// Four concurrent streams plus a reader thread. Below this the machine cannot
+/// overlap them at all, so the ratios would measure the core count rather than the
+/// architecture - reported, but not asserted.
+constexpr int    kMinCoresForThroughputGuard = 4;
 
 /// Waits for @p coord to actually stop after a timeout, so it is safe to destroy.
 ///
@@ -267,16 +293,36 @@ void TestProcessingCoordinator::benchmarkSingleVsMultiStreamThroughput()
 /// streams with very different data rates.
 void TestProcessingCoordinator::benchmarkHeavyWorkloadSingleVsMultiStream()
 {
-    // Opt-in. This walks a 640 MB recording nine times (four channel probes, four
-    // solo runs, one parallel run) and takes minutes. It measures throughput and
-    // asserts nothing about correctness, but on a loaded machine it can exceed its
-    // timeout - and it was the sole source of CI instability, where a slow run
-    // could take the whole suite down with it. Run it deliberately when you want
-    // throughput numbers:  set TMDQA_RUN_HEAVY_BENCH=1
+    // Opt-in, and run at every release by `scripts/run_throughput_bench.ps1`.
+    //
+    // It walks a ~640 MB recording nine times (four channel probes, four solo runs,
+    // one parallel run) and takes minutes. It asserts throughput rather than
+    // correctness, and on a loaded machine it can exceed its timeout - it was the sole
+    // source of CI instability, where a slow run could take the whole suite down with
+    // it, which is why CI still leaves it off. Run it by hand with
+    // TMDQA_RUN_HEAVY_BENCH=1
+    //
+    // WHICH FIXTURE, AND WHY IT MATTERS
+    //
+    // This used to read `prn_testfile, sample.ch10` unconditionally. That file is the
+    // committed 77 MB excerpt and it carries PCM packets for channels 13 and 15 ONLY -
+    // 14 and 16 are described in its TMATS but hold no data at all. So the benchmark
+    // could not run against it: it probed four channels, recognized two, and skipped
+    // with a message that blamed channel identification rather than the fixture. Being
+    // opt-in hid that, so "nobody sets the variable" was never the whole story - the
+    // benchmark had no fixture it could work on.
     if (!qEnvironmentVariableIsSet("TMDQA_RUN_HEAVY_BENCH"))
         QSKIP("Heavy PRN throughput benchmark is opt-in (set TMDQA_RUN_HEAVY_BENCH=1)");
 
-    const QString filepath = testDataPath("test files/prn_testfile, sample.ch10");
+    // Prefer the full recording where it sits beside the sample, as it does on the
+    // development box - that costs nothing. Otherwise fall back to the sample PATH,
+    // which is deliberately also the overlay target: the self-hosted runner copies the
+    // full recording over it from $TMDQA_CH10_FULL (see .github/workflows/ci.yml), so
+    // on that machine this path IS the full recording. Checking for the full file by
+    // name must not defeat that.
+    const QString full_path   = testDataPath("test files/prn_testfile, full.ch10");
+    const QString sample_path = testDataPath("test files/prn_testfile, sample.ch10");
+    const QString filepath = QFileInfo::exists(full_path) ? full_path : sample_path;
     if (!QFileInfo::exists(filepath))
         QSKIP("PRN test file not available");
 
@@ -290,7 +336,9 @@ void TestProcessingCoordinator::benchmarkHeavyWorkloadSingleVsMultiStream()
     if (pcm_channels.size() < 4)
         QSKIP("PRN test file does not have 4 PCM channels");
 
-    constexpr int kTimeoutMs = 300000; // 5 min — test files/prn_testfile, sample.ch10 is up to 671 MB (full, local)
+    // 5 min per run. The heaviest channel is PRN15 at 20 Mbps over a ~640 MB recording
+    // and the scanner is bit-serial, so one pass measures ~39 s on the dev box.
+    constexpr int kTimeoutMs = 300000;
 
     // Assign channels by matching each PCM channel against both PRN specs.
     // This handles any channel ordering the file may use and is self-documenting
@@ -331,7 +379,18 @@ void TestProcessingCoordinator::benchmarkHeavyWorkloadSingleVsMultiStream()
     {
         qWarning() << "[benchmark-heavy] need ≥2 PRN11 and ≥2 PRN15 channels; got"
                    << prn11_ids.size() << "PRN11 and" << prn15_ids.size() << "PRN15";
-        QSKIP("Could not identify 2×PRN11 and 2×PRN15 channels in test file");
+        // Name the usual cause rather than only the symptom. This message used to say
+        // just "could not identify" the channels, which reads as a decode problem and
+        // sends the reader into the probe logic. It is almost always the fixture: the
+        // committed sample carries PCM data for channels 13 and 15 only, so against it
+        // this is the EXPECTED outcome, not a defect.
+        QSKIP(qPrintable(QString(
+            "Could not identify 2xPRN11 and 2xPRN15 channels in %1. The committed "
+            "'prn_testfile, sample.ch10' holds PCM data for 2 of the 4 channels this "
+            "benchmark times, so it cannot produce a throughput number; the full ~640 MB "
+            "recording is needed, either beside it as 'prn_testfile, full.ch10' or "
+            "overlaid onto the sample path via TMDQA_CH10_FULL.")
+            .arg(QFileInfo(filepath).fileName())));
     }
 
     // Time every discovered channel individually so we know the true single-stream
@@ -374,12 +433,40 @@ void TestProcessingCoordinator::benchmarkHeavyWorkloadSingleVsMultiStream()
     qint64 sequential_all_ms = std::accumulate(solo_times.begin(), solo_times.end(), qint64(0));
     double ratio_vs_ideal = ideal_ms > 0 ? double(parallel_ms) / double(ideal_ms) : 0.0;
     double ratio_vs_seq   = sequential_all_ms > 0 ? double(parallel_ms) / double(sequential_all_ms) : 0.0;
+    const int cores = QThread::idealThreadCount();
 
     qWarning().noquote() << QString(
         "[benchmark-heavy] 4-stream parallel: %1 ms | "
-        "vs slowest solo (%2 ms): %3x | vs all-sequential (%4 ms): %5x")
+        "vs slowest solo (%2 ms): %3x | vs all-sequential (%4 ms): %5x | %6 cores")
         .arg(parallel_ms).arg(ideal_ms)
         .arg(ratio_vs_ideal, 0, 'f', 2)
         .arg(sequential_all_ms)
-        .arg(ratio_vs_seq,   0, 'f', 2);
+        .arg(ratio_vs_seq,   0, 'f', 2)
+        .arg(cores);
+
+    // Everything above this line is reporting, and until these assertions existed
+    // that was ALL this benchmark did: it printed its numbers and asserted nothing,
+    // so the decommutation pipeline had no throughput guard and a regression would
+    // have scrolled past in a log nobody reads. Reporting is not guarding.
+    if (cores < kMinCoresForThroughputGuard)
+    {
+        qWarning().noquote() << QString(
+            "[benchmark-heavy] NOT GUARDED: %1 cores, below the %2 these four concurrent "
+            "streams need - the ratios above describe this machine, not the architecture.")
+            .arg(cores).arg(kMinCoresForThroughputGuard);
+        return;
+    }
+
+    QVERIFY2(ratio_vs_ideal <= kMaxParallelVsSlowestSolo,
+             qPrintable(QString("four concurrent streams cost %1x the slowest one alone "
+                                "(limit %2x) - the reader is being serialized by worker "
+                                "back-pressure instead of reading the file once")
+                        .arg(ratio_vs_ideal, 0, 'f', 2)
+                        .arg(kMaxParallelVsSlowestSolo, 0, 'f', 2)));
+    QVERIFY2(ratio_vs_seq <= kMaxParallelVsSequential,
+             qPrintable(QString("four concurrent streams cost %1x what running them one at "
+                                "a time costs (limit %2x) - parallel processing has stopped "
+                                "buying anything")
+                        .arg(ratio_vs_seq, 0, 'f', 2)
+                        .arg(kMaxParallelVsSequential, 0, 'f', 2)));
 }

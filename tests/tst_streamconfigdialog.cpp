@@ -28,7 +28,7 @@
 #include "streamconfig.h"
 #include "streamconfigdialog.h"
 #include "streamsubdialogs.h"
-#include "tomlconfighelper.h"
+#include "tomldocument.h"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -132,8 +132,8 @@ void TestStreamConfigDialog::configsRoundtripProcessFlag()
 //
 // These tests exercise the key contract between saveFrameSyncToml and
 // loadFrameSyncToml without going through QFileDialog (which can't be driven
-// in automated tests). They write/read QSettings directly with the same
-// TomlConfigHelper format and the same key paths the dialog uses.
+// in automated tests). They write/read TomlDocument directly, with the same key
+// paths the dialog uses.
 // ---------------------------------------------------------------------------
 
 void TestStreamConfigDialog::tomlFrameSyncSaveRoundtrip()
@@ -143,19 +143,18 @@ void TestStreamConfigDialog::tomlFrameSyncSaveRoundtrip()
     QFile::remove(tmpFile);
 
     {
-        QSettings out(tmpFile, TomlConfigHelper::format());
-        out.beginGroup("Frame");
-        out.setValue("FrameSync",         "A345CA5C");
-        out.setValue("FrameSyncMask",     "FFFF0000");
-        out.setValue("WordsInMinorFrame", 128);
-        out.endGroup();
-        out.sync();
+        TomlDocument out;
+        out.setValue("Frame/FrameSync",         QString("A345CA5C"));
+        out.setValue("Frame/FrameSyncMask",     QString("FFFF0000"));
+        out.setValue("Frame/WordsInMinorFrame", 128);
+        QVERIFY(out.save(tmpFile));
     }
     // Simulate what loadFrameSyncToml reads.
-    QSettings in(tmpFile, TomlConfigHelper::format());
-    QCOMPARE(in.value("Frame/FrameSync").toString(),          QString("A345CA5C"));
-    QCOMPARE(in.value("Frame/FrameSyncMask").toString(),      QString("FFFF0000"));
-    QCOMPARE(in.value("Frame/WordsInMinorFrame").toInt(),     128);
+    const TomlDocument in = TomlDocument::load(tmpFile);
+    QVERIFY(in.ok());
+    QCOMPARE(in.string("Frame/FrameSync"),           QString("A345CA5C"));
+    QCOMPARE(in.string("Frame/FrameSyncMask"),       QString("FFFF0000"));
+    QCOMPARE(in.integer("Frame/WordsInMinorFrame"),  128);
 
     QFile::remove(tmpFile);
 }
@@ -174,11 +173,12 @@ void TestStreamConfigDialog::tomlFrameSyncRoundTripsStreamFormatFlags()
     saveFrameSyncToToml(path, "FE6B2840", "FFFFFFFF", 800,
                         /*inverted=*/true, /*randomized=*/true, toml_dir);
 
-    QSettings in(path, TomlConfigHelper::format());
-    QCOMPARE(in.value("Frame/FrameSync").toString(), QString("FE6B2840"));
-    QCOMPARE(in.value("Frame/BitsPerFrame").toInt(), 800);
-    QCOMPARE(in.value("Frame/Inverted").toBool(), true);
-    QCOMPARE(in.value("Frame/Randomized").toBool(), true);
+    const TomlDocument in = TomlDocument::load(path);
+    QVERIFY(in.ok());
+    QCOMPARE(in.string("Frame/FrameSync"), QString("FE6B2840"));
+    QCOMPARE(in.integer("Frame/BitsPerFrame"), 800);
+    QCOMPARE(in.boolean("Frame/Inverted"), true);
+    QCOMPARE(in.boolean("Frame/Randomized"), true);
 
     // ...and loading puts both flags back on the widgets.
     QLineEdit sync;
@@ -199,12 +199,10 @@ void TestStreamConfigDialog::tomlFrameSyncRoundTripsStreamFormatFlags()
     const QString legacy = QDir::tempPath() + "/tst_framesync_legacy.toml";
     QFile::remove(legacy);
     {
-        QSettings out(legacy, TomlConfigHelper::format());
-        out.beginGroup("Frame");
-        out.setValue("FrameSync", "334AABBF");
-        out.setValue("BitsPerFrame", 32767);
-        out.endGroup();
-        out.sync();
+        TomlDocument out;
+        out.setValue("Frame/FrameSync", QString("334AABBF"));
+        out.setValue("Frame/BitsPerFrame", 32767);
+        QVERIFY(out.save(legacy));
     }
     randomized.setChecked(true);
     loadFrameSyncFromToml(legacy, &sync, &mask, &bits, toml_dir, &inverted, &randomized);
@@ -227,7 +225,8 @@ void TestStreamConfigDialog::tomlFrameSyncOmitsPerSessionFields()
     saveFrameSyncToToml(path, "FE6B2840", "FFFFFFFF", 800,
                         /*inverted=*/false, /*randomized=*/false, toml_dir);
 
-    QSettings in(path, TomlConfigHelper::format());
+    const TomlDocument in = TomlDocument::load(path);
+    QVERIFY(in.ok());
     QVERIFY(!in.contains("Frame/DataRate"));
     QVERIFY(!in.contains("Frame/SampleRate"));
 
@@ -246,10 +245,11 @@ void TestStreamConfigDialog::tomlFrameSyncLoadPopulatesThreeFields()
     tmp.flush();
     tmp.close();
 
-    QSettings cfg(tmp.fileName(), TomlConfigHelper::format());
-    QCOMPARE(cfg.value("Frame/FrameSync").toString(),      QString("FE6B2840"));
-    QCOMPARE(cfg.value("Frame/FrameSyncMask").toString(),  QString("FFFFFFFF"));
-    QCOMPARE(cfg.value("Frame/WordsInMinorFrame").toInt(), 64);
+    const TomlDocument cfg = TomlDocument::load(tmp.fileName());
+    QVERIFY(cfg.ok());
+    QCOMPARE(cfg.string("Frame/FrameSync"),          QString("FE6B2840"));
+    QCOMPARE(cfg.string("Frame/FrameSyncMask"),      QString("FFFFFFFF"));
+    QCOMPARE(cfg.integer("Frame/WordsInMinorFrame"), 64);
 }
 
 

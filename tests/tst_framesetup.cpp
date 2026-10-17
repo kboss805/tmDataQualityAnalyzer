@@ -9,7 +9,7 @@
 #include <QtTest>
 
 #include "framesetup.h"
-#include "tomlconfighelper.h"
+#include "tomldocument.h"
 
 /// Test frame size: 48 data words + 1 (matches default 16 receivers x 3 channels).
 static constexpr int kTestWordsInFrame = 49;
@@ -149,7 +149,7 @@ void TestFrameSetup::tryLoadingFileWordEqualsFrameSize()
     QVERIFY(!result);
 }
 
-void TestFrameSetup::saveToSettingsWritesCorrectData()
+void TestFrameSetup::writeWordMapWritesCorrectData()
 {
     QString path = testFixturePath("test_framesetup.toml");
     if (!QFile::exists(path))
@@ -164,21 +164,17 @@ void TestFrameSetup::saveToSettingsWritesCorrectData()
         QSKIP("Could not create temporary file");
     tmp.close();
 
-    QSettings out_settings(tmp.fileName(), TomlConfigHelper::format());
-    fs.saveToSettings(out_settings);
-    out_settings.sync();
+    TomlDocument out_doc;
+    fs.writeWordMap(out_doc);
+    QVERIFY(out_doc.save(tmp.fileName()));
 
-    QSettings in_settings(tmp.fileName(), TomlConfigHelper::format());
+    const TomlDocument in_doc = TomlDocument::load(tmp.fileName());
+    QVERIFY(in_doc.ok());
 
-    in_settings.beginGroup("L_RCVR1");
-    QCOMPARE(in_settings.value("Word").toInt(), 1);
-    QVERIFY(!in_settings.contains("Enabled"));
-    in_settings.endGroup();
-
-    in_settings.beginGroup("C_RCVR1");
-    QCOMPARE(in_settings.value("Word").toInt(), 3);
-    QVERIFY(!in_settings.contains("Enabled"));
-    in_settings.endGroup();
+    QCOMPARE(in_doc.integer("L_RCVR1/Word"), 1);
+    QVERIFY(!in_doc.contains("L_RCVR1/Enabled"));
+    QCOMPARE(in_doc.integer("C_RCVR1/Word"), 3);
+    QVERIFY(!in_doc.contains("C_RCVR1/Enabled"));
 }
 
 void TestFrameSetup::tryLoadingFileSmallerFrameAccepts()
@@ -312,15 +308,12 @@ QString shippedReceiverParamsDir()
 /// Writes a minimal word-map TOML: one group per entry, Word being 1-based.
 void writeWordMap(const QString& path, const QList<QPair<QString, int>>& words)
 {
-    QFile::remove(path);
-    QSettings cfg(path, TomlConfigHelper::format());
+    TomlDocument cfg;
     for (const auto& entry : words)
     {
-        cfg.beginGroup(entry.first);
-        cfg.setValue("Word", entry.second);
-        cfg.endGroup();
+        cfg.setValue(entry.first + "/Word", entry.second);
     }
-    cfg.sync();
+    cfg.save(path);
 }
 
 } // namespace
@@ -343,12 +336,10 @@ void TestFrameSetup::tryLoadingFileMetadataOnlyFileYieldsNoParameters()
     const QString path = QDir::tempPath() + "/tst_rcvr_meta_only.toml";
     QFile::remove(path);
     {
-        QSettings cfg(path, TomlConfigHelper::format());
-        cfg.beginGroup("Parameters");
-        cfg.setValue("Polarity", 1);
-        cfg.setValue("Slope", 2);
-        cfg.endGroup();
-        cfg.sync();
+        TomlDocument cfg;
+        cfg.setValue("Parameters/Polarity", 1);
+        cfg.setValue("Parameters/Slope", 2);
+        QVERIFY(cfg.save(path));
     }
     QVERIFY(QFileInfo(path).size() > 0);
 
@@ -380,12 +371,10 @@ void TestFrameSetup::readReceiverParamsAcceptsTheOlderParametersKeys()
     const QString path = QDir::tempPath() + "/tst_rcvr_legacy_keys.toml";
     QFile::remove(path);
     {
-        QSettings cfg(path, TomlConfigHelper::format());
-        cfg.beginGroup("Parameters");
-        cfg.setValue("NumReceivers", 4);
-        cfg.setValue("ReceiverChannels", 2);
-        cfg.endGroup();
-        cfg.sync();
+        TomlDocument cfg;
+        cfg.setValue("Parameters/NumReceivers", 4);
+        cfg.setValue("Parameters/ReceiverChannels", 2);
+        QVERIFY(cfg.save(path));
     }
     QVERIFY(QFileInfo(path).size() > 0);
 

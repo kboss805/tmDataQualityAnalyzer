@@ -14,11 +14,38 @@ what was built is worse than no plan at all.
 
 ## Open items
 
-**None.** Every initiative this file has tracked has shipped; see the table below.
+**[Moving to a Microsoft-only stack](dotnet-port-assessment.md)** - **ACTIVE**, on the
+branch `explore/dotnet-migration`. The working plan lives in
+`docs/dotnet-migration/README.md` **on that branch**; the file here is the costed
+assessment behind it.
 
-That is the normal resting state, not a prompt to invent work. Add an entry here when
-something is scoped and not yet started, and give it its own file once it needs more
-than a paragraph.
+The full C# rewrite is still **not recommended** - it is a view-layer plus test-suite
+rebuild (~7k of view, 11.3k of tests) that re-derives two measured performance results
+from scratch. What is being explored instead is the **hybrid**: the performance-critical
+core stays native MSVC C++ with no framework, and the whole developer-facing surface
+becomes C#. That satisfies "Microsoft-only" because **MSVC is Microsoft** - Qt is the only
+non-Microsoft framework in the tree - so the bit-serial scanner, the derandomizer and the
+calibration maths are never rewritten. Only results cross the boundary: ~34 MB once per
+run against a 640 MB recording.
+
+Two spikes decide it, neither a rewrite: the interop boundary, and the chart on Win2D
+measured against the current 34 ms / sub-1 ms repaints.
+
+**Both standalone phases are done and on `main`**: the throughput guard (which is how
+every performance claim now gets measured rather than argued) and the TOML move off
+`QSettings`. **One item moved from "dropped" to "required"** by the Microsoft-only goal -
+the `QString`/`QVector` sweep of the native core, re-measured at 431 mechanical
+substitutions over ~4,170 lines. It belongs on `main`, not the branch, because it keeps
+the Qt app shipping at every step.
+
+**Branch discipline:** anything that keeps the Qt application building and shipping goes
+to `main`. The branch holds only what cannot - the C# solution, the interop layer, the
+Win2D chart, the XAML shell - so it stays almost entirely new files and keeps merging
+cleanly while maintenance continues on `main`.
+
+Add an entry here when something is scoped and not yet started, and give it its own file
+once it needs more than a paragraph. An empty list is the normal resting state, not a
+prompt to invent work.
 
 ---
 
