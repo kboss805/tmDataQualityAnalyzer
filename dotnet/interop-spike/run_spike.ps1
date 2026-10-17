@@ -147,7 +147,7 @@ Write-Host ("  LockResult   native {0,3}  managed {1,3}" -f
     [Tmdq.Interop.TmdqCore]::ManagedSizeOfLockResult())
 Write-Host ("  FileInfo     native {0,3}  managed {1,3}" -f
     [Tmdq.Interop.TmdqCore]::tmdq_sizeof_file_info(),
-    [Tmdq.Interop.TmdqCore]::ManagedSizeOfFileInfo())
+    [Tmdq.Interop.TmdqCore]::ManagedSizeOfCh10FileInfo())
 
 $layout = [Tmdq.Interop.TmdqCore]::CheckLayout()
 if ($layout) {
@@ -164,7 +164,7 @@ Write-Host ''
 Write-Host '--- 2. Probe the recording (metadata only) ---' -ForegroundColor Cyan
 $pathPtr = [Tmdq.Interop.TmdqCore]::Utf8Alloc($Fixture)
 try {
-    $info = New-Object Tmdq.Interop.FileInfo
+    $info = New-Object Tmdq.Interop.Ch10FileInfo
     $rc = [Tmdq.Interop.TmdqCore]::tmdq_probe_file($pathPtr, [ref]$info)
     if ($rc -ne 0) {
         Write-Host ("FAILED - probe returned {0}: {1}" -f $rc, [Tmdq.Interop.TmdqCore]::LastError()) -ForegroundColor Red

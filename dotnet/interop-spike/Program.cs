@@ -53,7 +53,7 @@ internal static class Program
         IntPtr pathPtr = TmdqCore.Utf8Alloc(fixturePath);
         try
         {
-            FileInfo info;
+            Ch10FileInfo info;
             int rc = TmdqCore.tmdq_probe_file(pathPtr, out info);
             if (rc != 0)
             {

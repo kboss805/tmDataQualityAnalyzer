@@ -7,9 +7,13 @@
     an SDK is installed; until then run_spike.ps1 drives the identical ABI through
     PowerShell's Add-Type.
 
-    TargetFramework is net8.0 rather than net10.0 deliberately: 8 is the newest
-    runtime here that is an LTS, so the spike will run on this machine as soon as the
-    matching SDK lands. Bump it when the shell's target is actually decided.
+    TargetFramework is net10.0. It was briefly net8.0, chosen as the newest LTS runtime
+    already on the machine - but the per-user SDK install brings its OWN runtime
+    (10.0.13) under %LOCALAPPDATA%\Microsoft\dotnet\shared, and `dotnet run` resolves
+    against that root, not C:\Program Files\dotnet. So a net8.0 build failed with
+    "You must install or update .NET to run this application ... The following
+    frameworks were found: 10.0.13". .NET 10 is LTS, so targeting it is both the fix and
+    the right long-term choice.
 
     AllowUnsafeBlocks is for the zero-copy ReadOnlySpan path in Program.cs - the one
     thing the PowerShell route cannot exercise and the main reason this project exists.
@@ -17,7 +21,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -29,9 +33,10 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Compile Include="TmdqCore.cs" />
-    <Compile Include="Program.cs" />
-  </ItemGroup>
+  <!--
+    No explicit <Compile> items: the SDK globs *.cs from the project directory by
+    default, and listing them as well is error NETSDK1022 (duplicate Compile items).
+    TmdqCore.cs and Program.cs are picked up automatically.
+  -->
 
 </Project>

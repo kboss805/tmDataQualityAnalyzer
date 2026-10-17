@@ -68,8 +68,12 @@ namespace Tmdq.Interop
     }
 
     /// Mirrors tmdq_file_info, including the fixed inline array.
+    ///
+    /// Named Ch10FileInfo, not FileInfo: the latter collides with System.IO.FileInfo
+    /// (error CS0104) the moment a file writes "using System.IO", which Program.cs does.
+    /// The native side needs no rename - tmdq_ prefixes already keep C names distinct.
     [StructLayout(LayoutKind.Sequential, Pack = 8)]
-    public struct FileInfo
+    public struct Ch10FileInfo
     {
         public int TimeChannelId;
         public int PcmChannelCount;
@@ -127,7 +131,7 @@ namespace Tmdq.Interop
         public static extern int tmdq_sizeof_file_info();
 
         [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int tmdq_probe_file(IntPtr filenameUtf8, out FileInfo info);
+        public static extern int tmdq_probe_file(IntPtr filenameUtf8, out Ch10FileInfo info);
 
         [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
         public static extern int tmdq_run_lock_stream(ref LockRequest req, out LockResult result);
@@ -170,7 +174,7 @@ namespace Tmdq.Interop
         // the managed side owning its own layout question is the better split anyway.
         public static int ManagedSizeOfLockRequest() { return Marshal.SizeOf(typeof(LockRequest)); }
         public static int ManagedSizeOfLockResult()  { return Marshal.SizeOf(typeof(LockResult)); }
-        public static int ManagedSizeOfFileInfo()    { return Marshal.SizeOf(typeof(FileInfo)); }
+        public static int ManagedSizeOfCh10FileInfo() { return Marshal.SizeOf(typeof(Ch10FileInfo)); }
 
         /// The layout assertion the spike exists to make. Returns null when the managed
         /// and native views of every struct agree, otherwise a description of the first
@@ -198,11 +202,11 @@ namespace Tmdq.Interop
                 return "LockResult size mismatch: managed " + mRes + ", native " + nRes;
             }
 
-            int mInfo = Marshal.SizeOf(typeof(FileInfo));
+            int mInfo = Marshal.SizeOf(typeof(Ch10FileInfo));
             int nInfo = tmdq_sizeof_file_info();
             if (mInfo != nInfo)
             {
-                return "FileInfo size mismatch: managed " + mInfo + ", native " + nInfo;
+                return "Ch10FileInfo size mismatch: managed " + mInfo + ", native " + nInfo;
             }
 
             return null;

@@ -42,15 +42,28 @@ run**. The boundary is not a cost worth designing around.
 - **That Qt is gone.** `tmdq_core.dll` still links Qt Core. De-Qt'ing the core is
   separate work that belongs on `main`, where it keeps the Qt application building at
   every step. The ABI is Qt-free; what sits behind it is not yet.
-- **The modern managed path.** There is no .NET SDK on this machine (runtimes 6/8/10
-  are installed, `C:\Program Files\dotnet\sdk` does not exist, and only VS BuildTools
-  is present so there is no .NET workload). The spike runs through PowerShell's
-  `Add-Type`, which compiles against .NET Framework. `DllImport` marshalling of
-  blittable structs and pointer-plus-length arrays is the same mechanism there as on
-  .NET 10, so the contract is proven - but `Span<T>` over the returned arrays (zero
-  copy, no `Marshal.Copy` at all) is not. `Program.cs` and `InteropSpike.csproj` are
-  committed ready for `dotnet run`, with that path written out, for the moment an SDK
-  lands. Given the copy already costs 0.005%, expect it to be a rounding error.
+- ~~**The modern managed path.**~~ **Now covered.** SDK 10.0.402 was installed per-user
+  (see below) and `InteropSpike.csproj` runs on real .NET 10:
+
+  ```text
+  abi version 1, struct layout agrees
+  time channel 1, 4 pcm channels
+  11554 samples, native 2312.5 ms, total 2313.7 ms, copy 0.22 ms
+  span 1777584474.153..1777584589.682s, last missed 838
+  span-based mean 92.643 in 2.490 ms (zero copy)
+  ```
+
+  **The two runtimes agree exactly** - 11,554 samples, 838 missed frames and a 92.643
+  mean from both .NET 10 and the Add-Type path. That matters more than either number
+  alone: it rules out the layout agreement being a .NET Framework artifact.
+
+  **The zero-copy measurement is confounded and should not be read as a result.** The
+  span iteration shows 2.490 ms against the copy's 0.22 ms, but those are not the same
+  operation: `Marshal.Copy` is a bulk memcpy intrinsic, while the span path is 11,554
+  individual additions plus first-call JIT. It does not show that zero-copy is slower.
+  The honest conclusion is that **the question is already settled by the copy being
+  0.005% of the run** - there is nothing left for zero-copy to win, so the real shell
+  can use whichever reads better.
 - **Value-level agreement with the Qt application.** The numbers are self-consistent
   and plausible - 116 samples over 115 s at a 1 s period is exactly right, lock stays
   in 0..100, missed frames are monotonic - but nothing here cross-checks them against
@@ -89,13 +102,30 @@ My first diagnosis of this was wrong - `dumpbin` showed `Qt6Core.dll` importing
 Loading both DLLs by absolute path succeeded immediately, proving nothing was missing
 and the problem was resolution all along.
 
-**3. PowerShell hex literals above 0x7FFFFFFF need an `L`.** `[uint64]0xA345CA5C`
+**3. Two naming collisions the SDK caught that `Add-Type` had not.** Building the real
+project surfaced both:
+
+- `NETSDK1022` - the `.csproj` listed `<Compile Include>` items the SDK already globs by
+  default. Removed; the SDK picks up `*.cs` on its own.
+- `CS0104` - the managed mirror of `tmdq_file_info` was called `FileInfo`, which is
+  ambiguous against `System.IO.FileInfo` as soon as a file says `using System.IO`.
+  Renamed `Ch10FileInfo`. The native side needed no change, because the `tmdq_` prefix
+  already keeps C names distinct - a reminder that the C and managed sides have
+  different collision rules and the managed one is stricter.
+
+Also: the per-user SDK brings its **own** runtime under
+`%LOCALAPPDATA%\Microsoft\dotnet\shared`, and `dotnet run` resolves against that root
+rather than `C:\Program Files\dotnet`. A `net8.0` target therefore failed to launch
+even though runtime 8.0.22 is installed system-wide. Retargeted to `net10.0`, which is
+LTS and is what the SDK ships.
+
+**4. PowerShell hex literals above 0x7FFFFFFF need an `L`.** `[uint64]0xA345CA5C`
 throws: the literal parses as `Int32`, overflows to -1555707300, and the cast fails.
 `0xA345CA5CL` parses as `Int64` first and survives. Worth recording because
 `0x334AABBF` (PRN15) fits in a positive `Int32` and works bare - so this would have
 shipped broken for exactly one of the two patterns.
 
-**4. Accumulated missed frames depends on the sample period.** The same stream reports
+**5. Accumulated missed frames depends on the sample period.** The same stream reports
 **1100** missed frames at a 1 s period and **838** at 10 ms. Lock % also differs
 (93.532 vs 92.643), which is expected - it is an unweighted mean over a different
 number of windows. The missed-frames difference is less obviously right: it is a
@@ -117,7 +147,20 @@ deciding deliberately. Worth its own look, separate from this spike.
 | `tmdq_core.pro` | qmake DLL. `QT += core gui` only; no viewmodel, no view, no CSV/template schemas |
 | `TmdqCore.cs` | P/Invoke bindings and the layout assertion. Deliberately conservative C# so it compiles under both the modern SDK and `Add-Type` |
 | `run_spike.ps1` | builds and runs everything; this is what produced the numbers above |
-| `Program.cs`, `InteropSpike.csproj` | the same spike as a real console app, for when an SDK exists |
+| `Program.cs`, `InteropSpike.csproj` | the same spike on real .NET 10, including the zero-copy span path |
 
 Build output (`release/`, `Makefile.*`, `.qmake.stash`, `build.log`) is already covered
-by the repository's `.gitignore`.
+by the repository's `.gitignore`. The .NET side adds `bin/` and `obj/`.
+
+## The SDK on this machine
+
+Installed **per-user**, not machine-wide: `winget install Microsoft.DotNet.SDK.10
+--scope user` reports "No applicable installer found" because that package is
+machine-scope only, which needs elevation. Microsoft's `dotnet-install.ps1` was used
+instead, giving **SDK 10.0.402** in `%LOCALAPPDATA%\Microsoft\dotnet`.
+
+It is deliberately **not on `PATH`** (`-NoPath`), so a plain `dotnet` still resolves to
+the runtime-only `C:\Program Files\dotnet` and reports no SDKs. Prepending it would
+shadow the system install for every tool on the machine. Either invoke it by full path,
+as the commands above do, or install machine-wide with an elevated
+`winget install Microsoft.DotNet.SDK.10` and delete the per-user copy.

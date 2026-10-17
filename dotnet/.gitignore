@@ -1,0 +1,12 @@
+# .NET build output.
+#
+# Scoped here rather than added to the repository root .gitignore on purpose: that file
+# belongs to main, and this branch's rule is to stay additive so merges from main keep
+# being trivial (see docs/dotnet-migration/README.md). A new file in a new directory
+# cannot conflict; an edit to the root ignore list can.
+#
+# The qmake side (release/, Makefile.*, .qmake.stash, *.log) is already covered by the
+# root .gitignore, so only the .NET artifacts need listing.
+
+bin/
+obj/
