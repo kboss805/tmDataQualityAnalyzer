@@ -20,6 +20,7 @@
 #include "constants.h"
 #include "framesetup.h"
 #include "processingcoordinator.h"
+#include "qtbridge.h"
 
 MainViewModel::MainViewModel(QObject* parent)
     : QObject(parent),
@@ -600,7 +601,7 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
         const QString default_rcvr_params = m_app_root + "/" + UIConstants::kSettingsDirName +
             "/" + UIConstants::kReceiverParamsDirName + "/" + UIConstants::kDefaultTomlFilename;
         if (QFileInfo::exists(default_rcvr_params) &&
-            out_job.frameSetup->tryLoadingFile(default_rcvr_params, words_in_minor_frame))
+            out_job.frameSetup->tryLoadingFile(toFsPath(default_rcvr_params), words_in_minor_frame))
         {
             // Loaded successfully from the default file.
         }
@@ -608,11 +609,11 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
         {
             // Default file missing or unusable: build the default word map
             // (sequential words for NumReceivers x ReceiverChannels parameters).
-            QString map_error;
+            std::string map_error;
             if (!out_job.frameSetup->buildDefaultReceiverMap(cfg.numReceivers, cfg.receiverChannels,
                                                              words_in_minor_frame, map_error))
             {
-                error = stream_desc + ": " + map_error;
+                error = stream_desc + ": " + QString::fromStdString(map_error);
                 return false;
             }
         }
@@ -623,7 +624,7 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
                 QFileInfo(cfg.receiverParamsToml).fileName() + "' was not found.";
         return false;
     }
-    else if (!out_job.frameSetup->tryLoadingFile(cfg.receiverParamsToml, words_in_minor_frame))
+    else if (!out_job.frameSetup->tryLoadingFile(toFsPath(cfg.receiverParamsToml), words_in_minor_frame))
     {
         error = stream_desc + ": Failed to load Receiver Parameters from '" +
                 QFileInfo(cfg.receiverParamsToml).fileName() + "'. Check the word map.";

@@ -418,8 +418,8 @@ Items from `docs/future_plans/dotnet-port-assessment.md` that are worth doing wh
 that port ever happens - the throughput guard, the TOML move off `QSettings`, and now the
 de-Qt of the native core in small steps (QtGui out of the model's headers, then
 `PacketQueue`, then the `QElapsedTimer`s, then the packet bytes, then the first `QVector`s, the processing result and the pipeline's pointer lists) - plus the clean-build regression the TOML change
-caused, a generated Visual Studio solution, and C++20. The first `QString` step moves `TomlDocument`
-to UTF-8 `std::string`. One user-facing fix, found during the
+caused, a generated Visual Studio solution, and C++20. The first `QString` steps move `TomlDocument`
+and `FrameSetup` to UTF-8 `std::string`. One user-facing fix, found during the
 `QString` survey: recordings under a folder with a non-ASCII name can be processed.
 
 #### A Visual Studio solution, generated rather than committed
@@ -519,6 +519,48 @@ called from our code is reported at **our** call site, so those keep warning exa
 v2.9.0 intended. Every first-party header here is quote-included, so `anglebrackets` covers
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
+
+#### `FrameSetup` is UTF-8 `std::string` and `std::filesystem::path` (de-Qt, `QString` step 2)
+
+The word map and receiver-parameters file reader/writer: `ParameterInfo::name`, parameter names, the
+reserved-section list, `channelPrefix()` / `receiverParameterName()` / `receiverIndexFromName()` /
+`channelPartOfName()`, error out-params, and every path are now `std::string` /
+`std::filesystem::path`, and `m_parameters` is a `std::vector`. It is still a `QObject` and still takes
+its calibration profiles in a `QHash`: the QObject step and the associative containers are later.
+
+`ProcessedChannelSeries::name` follows (it is `param->name` copied out), so the core's output is
+`std::string` end to end. The seam moves up a layer: `PlotViewModel` and `CalibrationExtractor` convert
+the name to `QString` where they build a plot series and a report line. `StreamConfig`'s path fields and
+`CalibrationChannelResult::name` stay `QString`, since the report text they feed is built with
+`QString::arg` and is its own step.
+
+**Tests first, again.** `receiverNameParsingMatchesQStringToInt` was written against the `QString`
+implementation and passed there before anything changed. It pins what `QString::toInt` quietly did to a
+name typed by hand into a receiver-parameters TOML: the token is the **last** `_RCVR`; whitespace and a
+leading `+` are tolerated (`"L_RCVR 3"`, `"L_RCVR+4"`); a second sign, a negative, trailing junk and an
+overflow read as "no receiver"; a name that *starts* with the token has no channel part to split off
+(`"_RCVR2"` returns the whole name though its number parses); non-ASCII names pass through.
+
+**One parser, not two.** Those rules are exactly what `TomlDocument` already reproduced for its numbers,
+so they moved out of `tomldocument.cpp` into **`include/textparse.h`** (`trimmed`, `parseInteger`,
+`parseDouble`) and both use it. A second hand-rolled copy would have been a place for them to drift
+apart. `PlotViewModel` has its *own* receiver-number parse with slightly different rules (it accepts 0
+and negatives); it was left alone and now reads a converted copy of the name.
+
+**Validated against four single-defect mutants; each fails the test written for it**: the first
+`_RCVR` instead of the last, a channel part split at index 0, an accepted receiver 0, and `trimmed()`
+disabled. The last also fails 26 other cases across `TestFrameSetup`, `TestStreamConfigDialog` and
+`TestTomlDocument`, which is what sharing the parser buys. The first attempt at the first mutant did
+not apply (a pattern that missed on line endings) and reported a clean pass; it was caught because the
+run printed no failing test, redone, and the source confirmed byte-identical afterwards.
+
+**Throughput, checked rather than assumed**, since `ParameterInfo` is on the decode path and
+`std::string` is 32 bytes against `QString`'s 24: pinned release gate, branch **14035 / 14030 / 14058
+ms** against `main`'s **14989 / 14301 ms** straight after. Not slower. Pinned numbers are stable
+*within* a session but drift about 5% *between* them (the same code read 13.6-13.7 s earlier the same day),
+so only interleaved runs mean anything.
+
+Baseline **458 / 0 / 1** (was 457 / 0 / 1), **459 / 0 / 0** at release. 24 suites.
 
 #### `TomlDocument` is UTF-8 `std::string` and `std::filesystem::path` (de-Qt, `QString` step 1)
 
@@ -3762,7 +3804,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestConstants** (`tst_constants`) — Verifies all PCMConstants, UIConstants, PlotConstants, AppVersion, and recent files constants (including kMaxPacketBufferSize, kFrameSyncHexPattern)
 - **TestFrameProcessor** (`tst_frameprocessor`) — constructor defaults, abort flag, `derandomizeBitstream` (identity/short and changed/long), invalid time-channel/PCM-channel/file handling, and processing real Ch10 data (receiver-data accumulation, lock-only mode has no channels, monotonic frame-sync errors, slope affects values, shorter period → more samples, calibration round-trip clean steps, off-phase sync after lock-loss not extracted)
 - **TestMainViewModelHelpers** (`tst_mainviewmodel_helpers`) — `MainViewModel::classifyLogMessage()`, the severity policy the View renders but does not decide. The channel-naming cases that used to live here moved to **TestFrameSetup** with the `MainViewModel` forwarders they called: `FrameSetup` is where that naming lives
-- **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration, `channelPrefix()` naming the known channel positions then falling back to `CH<n+1>`, `receiverParameterName()` combining the two, `receiverIndexFromName()` inverting it (0 for a name with no parseable `_RCVR<N>`), and the receiver-parameters file as a whole: the scalars read from the `[Receivers]` block the shipped files actually use (and the older `[Parameters]` keys still accepted), a save/load round trip that carries the word map with them, the default-map fallback when no file was loaded, nothing written when there is no map to write, and the metadata-only file that parses to zero parameters — the contract `tryLoadingFile()`'s two callers depend on
+- **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration, `channelPrefix()` naming the known channel positions then falling back to `CH<n+1>`, `receiverParameterName()` combining the two, `receiverIndexFromName()` inverting it (0 for a name with no parseable `_RCVR<N>`), and the receiver-parameters file as a whole: the scalars read from the `[Receivers]` block the shipped files actually use (and the older `[Parameters]` keys still accepted), a save/load round trip that carries the word map with them, the default-map fallback when no file was loaded, nothing written when there is no map to write, and the metadata-only file that parses to zero parameters — the contract `tryLoadingFile()`'s two callers depend on; and `receiverNameParsingMatchesQStringToInt`, which pins how a hand-typed parameter name parses (the last `_RCVR` token wins, whitespace and a leading `+` tolerated, a second sign / negative / trailing junk / overflow reads as no receiver, a name starting with the token has no channel part) - written against the `QString` implementation first
 - **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, the computed Y range and the SNR max override that pins it (the minimum stays automatic, Reset returns it to the data), X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), the left-axis view toggle preserving per-stream selection, and stream-identity regression coverage: two streams sharing a TMATS-derived `streamLabel` but different `streamOrder` must stay independent through reprocess-replace and `renameSeries()`/`recolorSeries()` sibling-sync (pinned after a pre-v2.6.0 cross-contamination bug). Multi-file input: cross-source identity (two different `sourceId`s reusing the same `streamLabel`/`streamOrder` stay independent through reprocess-replace/rename/recolor), time-base re-basing (a later-added source starting earlier shifts existing series right; three successively-earlier sources compound correctly; a later source starting after triggers no shift), the non-overlap warning signal (fires once per newly-arriving non-overlapping source, not for an overlapping range), and `removeSource()` (drops only the target source, re-bases left only when the removed source held the earliest sample, clears all data when the last source is removed, no-ops for an unknown id). US1.1 source view: `setVisibleSource()` isolates a source via `effectiveVisible()` without mutating per-series `visible`, `sourceList()` lists distinct labeled sources, and `exportCsv(path, sourceId)` writes only that source's columns
 - **TestProcessingCoordinator** (`tst_processingcoordinator`) — constructor defaults, `reset()` clears state, cancel-with-no-run no-op, `startProcessing()` empty-returns-false and processing-state emission, plus single-vs-multi-stream throughput benchmarks
 - **TestMainView** (`tst_mainview`) — Main window construction, widget wiring, log routing, dock visibility behavior, and the CSV import routing (`openPath`/`importCsv`, valid/invalid). The batch-apply cases moved to **TestBatchController** with the state machine itself

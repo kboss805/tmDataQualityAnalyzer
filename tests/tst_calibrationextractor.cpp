@@ -393,7 +393,7 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
     {
         if (!r.profile.valid)
             continue;
-        calibratedReceivers.insert(FrameSetup::receiverIndexFromName(r.name));
+        calibratedReceivers.insert(FrameSetup::receiverIndexFromName(r.name.toStdString()));
         calibratedChannels++;
 
         // The regression this fixture exists for: every step pairs with its OWN
@@ -424,7 +424,7 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
             // two steps both sit on the 65472 rail and carry no measurement. It is
             // calibrated over the range it could still resolve, and readings hold
             // at the top of that range instead of being extrapolated past it.
-            QCOMPARE(FrameSetup::receiverIndexFromName(r.name), 1);
+            QCOMPARE(FrameSetup::receiverIndexFromName(r.name.toStdString()), 1);
             QCOMPARE(pts.back().trueDb, 48.0);
             QVERIFY2(std::count(r.unresolvedDb.begin(), r.unresolvedDb.end(), 54.0) > 0
                          && std::count(r.unresolvedDb.begin(), r.unresolvedDb.end(), 60.0) > 0,
@@ -453,7 +453,7 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
     // shortfall: receiver 2 holds 0 for the whole recording.
     for (const CalibrationChannelResult& r : results)
     {
-        if (FrameSetup::receiverIndexFromName(r.name) == 2)
+        if (FrameSetup::receiverIndexFromName(r.name.toStdString()) == 2)
         {
             QCOMPARE(r.outcome, CalibrationOutcome::FlatNoSignal);
         }

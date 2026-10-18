@@ -948,7 +948,7 @@ ReceiverSNRDialog::ReceiverSNRDialog(const StreamConfig& cfg,
             current.receiverChannels = m_receiver_channels->value();
 
             const ReceiverParams params =
-                FrameSetup::readReceiverParams(filename, current);
+                FrameSetup::readReceiverParams(toFsPath(filename), current);
             m_polarity->setCurrentIndex(params.polarityIndex);
             m_slope->setCurrentIndex(params.slopeIndex);
             m_scale->setValue(params.scaleDdBPerV);
@@ -974,12 +974,13 @@ ReceiverSNRDialog::ReceiverSNRDialog(const StreamConfig& cfg,
             // rejected for having no parameters, so the word map goes with
             // them: the one this stream loaded, or the default map for these
             // counts. Which map that is, is the Model's rule, not the dialog's.
-            QString error;
+            std::string error;
             if (!FrameSetup::saveReceiverParamsFile(
-                    filename, params, m_receiver_params_toml,
+                    toFsPath(filename), params, toFsPath(m_receiver_params_toml),
                     FrameSetup::wordsInMinorFrame(m_fs.bitsPerFrame->value()), error))
             {
-                QMessageBox::warning(this, tr("Save Receiver Parameters"), error);
+                QMessageBox::warning(this, tr("Save Receiver Parameters"),
+                                     QString::fromStdString(error));
             }
         });
 

@@ -5,16 +5,16 @@
 
 #include "framesetup.h"
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
-#include <QFileInfo>
-
 #include "constants.h"
-#include "qtbridge.h"
+#include "containerutil.h"
+#include "textparse.h"
 #include "tomldocument.h"
 
-const QStringList FrameSetup::kSettingsGroups = {
+const std::vector<std::string> FrameSetup::kSettingsGroups = {
     // Non-parameter metadata sections, skipped by tryLoadingFile(). "EMPTY"
     // lets a word map explicitly list an unused/placeholder word (e.g. the
     // unpopulated 4th channel of a 4-channel receiver card) so its Word number
@@ -29,14 +29,14 @@ FrameSetup::FrameSetup(QObject* parent) :
 
 }
 
-bool FrameSetup::tryLoadingFile(const QString& filename, int num_words_in_minor_frame)
+bool FrameSetup::tryLoadingFile(const std::filesystem::path& filename, int num_words_in_minor_frame)
 {
     clearParameters();
 
     // One parse, not two. This used to build a QSettings AND separately re-read the
     // file with readGroupsInFileOrder(), because QSettings returns childGroups()
     // sorted while a word map's order is the order the file lists it in.
-    const TomlDocument doc = TomlDocument::load(toFsPath(filename));
+    const TomlDocument doc = TomlDocument::load(filename);
     if (!doc.ok())
     {
         return false;
@@ -48,15 +48,15 @@ bool FrameSetup::tryLoadingFile(const QString& filename, int num_words_in_minor_
         return false;
     }
 
-    for (const std::string& group_utf8 : groups)
+    for (const std::string& group : groups)
     {
-        const QString group = QString::fromStdString(group_utf8);
-        if (kSettingsGroups.contains(group))
+        if (std::find(kSettingsGroups.begin(), kSettingsGroups.end(), group)
+                != kSettingsGroups.end())
         {
             continue;
         }
 
-        const std::string word_key = group_utf8 + "/Word";
+        const std::string word_key = group + "/Word";
         if (!doc.contains(word_key))
         {
             return false;
@@ -88,7 +88,7 @@ int FrameSetup::length() const
 
 const ParameterInfo* FrameSetup::getParameter(int i) const
 {
-    if (i < 0 || i >= m_parameters.size())
+    if (i < 0 || i >= intSize(m_parameters))
     {
         return nullptr;
     }
@@ -97,7 +97,7 @@ const ParameterInfo* FrameSetup::getParameter(int i) const
 
 ParameterInfo* FrameSetup::getParameter(int i)
 {
-    if (i < 0 || i >= m_parameters.size())
+    if (i < 0 || i >= intSize(m_parameters))
     {
         return nullptr;
     }
@@ -109,14 +109,14 @@ void FrameSetup::clearParameters()
     m_parameters.clear();
 }
 
-void FrameSetup::addParameter(const QString& name, int word)
+void FrameSetup::addParameter(const std::string& name, int word)
 {
     ParameterInfo parameter;
     parameter.name = name;
     parameter.word = word;
     parameter.is_enabled = true; // slope/scale/sample_sum default to 0 via NSDMIs
 
-    m_parameters.append(parameter);
+    m_parameters.push_back(parameter);
 }
 
 void FrameSetup::applyLinearCalibration(int polarity_index, int slope_index, double scale_dB_per_V)
@@ -162,11 +162,11 @@ int FrameSetup::wordsInMinorFrame(int bits_in_minor_frame)
     return (bits_in_minor_frame + PCMConstants::kCommonWordLen - 1) / PCMConstants::kCommonWordLen;
 }
 
-ReceiverParams FrameSetup::readReceiverParams(const QString& path,
+ReceiverParams FrameSetup::readReceiverParams(const std::filesystem::path& path,
                                               const ReceiverParams& defaults)
 {
     ReceiverParams params = defaults;
-    const TomlDocument cfg = TomlDocument::load(toFsPath(path));
+    const TomlDocument cfg = TomlDocument::load(path);
 
     params.polarityIndex = cfg.integer("Parameters/Polarity", params.polarityIndex);
     params.slopeIndex    = cfg.integer("Parameters/Slope", params.slopeIndex);
@@ -200,11 +200,11 @@ ReceiverParams FrameSetup::readReceiverParams(const QString& path,
     return params;
 }
 
-bool FrameSetup::writeReceiverParams(const QString& path, const ReceiverParams& params) const
+bool FrameSetup::writeReceiverParams(const std::filesystem::path& path, const ReceiverParams& params) const
 {
     // A file with no word map parses but yields no parameters, and every consumer
     // then rejects it. Refusing here is what keeps save and load inverses.
-    if (m_parameters.isEmpty())
+    if (m_parameters.empty())
     {
         return false;
     }
@@ -219,18 +219,19 @@ bool FrameSetup::writeReceiverParams(const QString& path, const ReceiverParams& 
     cfg.setValue("Receivers/Count",               params.numReceivers);
     cfg.setValue("Receivers/ChannelsPerReceiver", params.receiverChannels);
     writeWordMap(cfg);
-    return cfg.save(toFsPath(path));
+    return cfg.save(path);
 }
 
-bool FrameSetup::saveReceiverParamsFile(const QString& path,
+bool FrameSetup::saveReceiverParamsFile(const std::filesystem::path& path,
                                         const ReceiverParams& params,
-                                        const QString& word_map_source,
+                                        const std::filesystem::path& word_map_source,
                                         int num_words_in_minor_frame,
-                                        QString& error)
+                                        std::string& error)
 {
     FrameSetup setup;
     bool have_map = false;
-    if (!word_map_source.isEmpty() && QFileInfo::exists(word_map_source))
+    std::error_code ec; // exists() with an error code never throws on a bad path
+    if (!word_map_source.empty() && std::filesystem::exists(word_map_source, ec))
     {
         have_map = setup.tryLoadingFile(word_map_source, num_words_in_minor_frame)
                    && setup.length() > 0;
@@ -248,54 +249,60 @@ bool FrameSetup::saveReceiverParamsFile(const QString& path,
     }
     if (!setup.writeReceiverParams(path, params))
     {
-        error = "Could not write '" + QFileInfo(path).fileName() + "'.";
+        const auto name = path.filename().u8string();
+        error = "Could not write '" + std::string(name.begin(), name.end()) + "'.";
         return false;
     }
     return true;
 }
 
-QString FrameSetup::channelPrefix(int channel_index)
+std::string FrameSetup::channelPrefix(int channel_index)
 {
     if (channel_index < UIConstants::kNumKnownPrefixes)
     {
         return UIConstants::kChannelPrefixes[channel_index];
     }
-    return "CH" + QString::number(channel_index + 1);
+    return "CH" + std::to_string(channel_index + 1);
 }
 
-QString FrameSetup::receiverParameterName(int channel_index, int receiver_index)
+std::string FrameSetup::receiverParameterName(int channel_index, int receiver_index)
 {
-    return channelPrefix(channel_index) + "_RCVR" + QString::number(receiver_index + 1);
+    return channelPrefix(channel_index) + "_RCVR" + std::to_string(receiver_index + 1);
 }
 
 namespace {
     /// Shared split point for the two accessors below, so the token and the
     /// "trailing digits" rule are stated once.
-    constexpr QLatin1String kReceiverToken("_RCVR");
+    constexpr const char* kReceiverToken = "_RCVR";
+    constexpr std::size_t kReceiverTokenLength = 5;
 }
 
-int FrameSetup::receiverIndexFromName(const QString& name)
+int FrameSetup::receiverIndexFromName(const std::string& name)
 {
-    const int at = name.lastIndexOf(kReceiverToken);
-    if (at < 0)
+    const std::size_t at = name.rfind(kReceiverToken);
+    if (at == std::string::npos)
     {
         return 0;
     }
-    bool ok = false;
-    const int receiver = name.mid(at + kReceiverToken.size()).toInt(&ok);
+    // QString::toInt's rules (whitespace and a leading '+' tolerated) via the shared
+    // parser; pinned by receiverNameParsingMatchesQStringToInt.
+    int receiver = 0;
+    const bool ok = textparse::parseInteger(name.substr(at + kReceiverTokenLength), receiver);
     // A name ending in "_RCVR" with no number, or with trailing non-digits, is
     // not a receiver name — treat it as unparseable rather than guessing.
     return (ok && receiver > 0) ? receiver : 0;
 }
 
-QString FrameSetup::channelPartOfName(const QString& name)
+std::string FrameSetup::channelPartOfName(const std::string& name)
 {
-    const int at = name.lastIndexOf(kReceiverToken);
-    return (at > 0 && receiverIndexFromName(name) > 0) ? name.left(at) : name;
+    const std::size_t at = name.rfind(kReceiverToken);
+    return (at != std::string::npos && at > 0 && receiverIndexFromName(name) > 0)
+        ? name.substr(0, at)
+        : name;
 }
 
 bool FrameSetup::buildDefaultReceiverMap(int num_receivers, int receiver_channels,
-                                         int num_words_in_minor_frame, QString& error)
+                                         int num_words_in_minor_frame, std::string& error)
 {
     const int total_params = num_receivers * receiver_channels;
     if (total_params <= 0 || total_params >= num_words_in_minor_frame)
@@ -318,6 +325,6 @@ void FrameSetup::writeWordMap(TomlDocument& doc) const
 {
     for (const auto& param : m_parameters)
     {
-        doc.setValue((param.name + "/Word").toStdString(), param.word + 1);
+        doc.setValue(param.name + "/Word", param.word + 1);
     }
 }

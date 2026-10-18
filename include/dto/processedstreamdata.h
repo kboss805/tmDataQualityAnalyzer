@@ -10,6 +10,7 @@
 #ifndef PROCESSEDSTREAMDATA_H
 #define PROCESSEDSTREAMDATA_H
 
+#include <string>
 #include <vector>
 
 #include <QString>
@@ -23,7 +24,7 @@
  */
 struct ProcessedChannelSeries
 {
-    QString         name;   ///< Parameter name, e.g. "L_RCVR1".
+    std::string     name;   ///< Parameter name, e.g. "L_RCVR1" (UTF-8).
     int             word = -1; ///< Zero-based word index within the minor frame.
     std::vector<double> values; ///< Calibrated value per output time sample.
 };

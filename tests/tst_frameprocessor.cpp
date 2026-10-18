@@ -29,6 +29,7 @@
 #include "constants.h"
 #include "frameprocessor.h"
 #include "framesetup.h"
+#include "qtbridge.h"
 #include "packetqueue.h"
 #include "processedstreamdata.h"
 #include "stepdetector.h"
@@ -116,7 +117,7 @@ static bool loadDefaultFrameSetup(FrameSetup& setup)
         return false;
     }
     // 16 receivers * 3 channels = 48 data words + 1 sync word = 49
-    return setup.tryLoadingFile(toml_path, 49);
+    return setup.tryLoadingFile(toFsPath(toml_path), 49);
 }
 
 /// Helper: enables all params with the given slope/offset calibration.
@@ -568,7 +569,7 @@ void TestFrameProcessor::calibrationRoundTripOnRealFileProducesCleanSteps()
     {
         for (int c = 0; c < req.receiverChannels; c++)
         {
-            setup.addParameter(QString(kPrefixes[c]) + "_RCVR" + QString::number(r + 1),
+            setup.addParameter(std::string(kPrefixes[c]) + "_RCVR" + std::to_string(r + 1),
                                r * req.receiverChannels + c);
         }
     }

@@ -19,6 +19,7 @@
 #include "framesetup.h"
 #include "packetqueue.h"
 #include "processedstreamdata.h"
+#include "qtbridge.h"
 #include "stepdetector.h"
 
 namespace {
@@ -242,7 +243,7 @@ void CalibrationExtractor::onWorkerFinished(bool success)
         for (const ProcessedChannelSeries& ch : data.channels)
         {
             CalibrationChannelResult res;
-            res.name    = ch.name;
+            res.name    = QString::fromStdString(ch.name);
             res.word    = ch.word;
             res.hadData = !ch.values.empty();
 
@@ -369,9 +370,11 @@ bool CalibrationExtractor::buildFrameSetup(const Request& request,
 
     if (request.receiverParamsToml.isEmpty())
     {
+        std::string map_error;
         if (!m_frame_setup->buildDefaultReceiverMap(request.numReceivers, request.receiverChannels,
-                                                    wordsInMinorFrame, error))
+                                                    wordsInMinorFrame, map_error))
         {
+            error = QString::fromStdString(map_error);
             return false;
         }
     }
@@ -381,7 +384,7 @@ bool CalibrationExtractor::buildFrameSetup(const Request& request,
                 QFileInfo(request.receiverParamsToml).fileName() + "' was not found.";
         return false;
     }
-    else if (!m_frame_setup->tryLoadingFile(request.receiverParamsToml, wordsInMinorFrame))
+    else if (!m_frame_setup->tryLoadingFile(toFsPath(request.receiverParamsToml), wordsInMinorFrame))
     {
         error = "Failed to load Receiver Parameters word map. Check the file.";
         return false;
@@ -477,8 +480,11 @@ QString CalibrationExtractor::summarize(const std::vector<CalibrationChannelResu
     int calibratedChannels = 0;
     for (const CalibrationChannelResult& r : results)
     {
-        const int receiver = FrameSetup::receiverIndexFromName(r.name);
-        const QString part = (receiver > 0) ? FrameSetup::channelPartOfName(r.name) : r.name;
+        const std::string name_utf8 = r.name.toStdString();
+        const int receiver = FrameSetup::receiverIndexFromName(name_utf8);
+        const QString part = (receiver > 0)
+            ? QString::fromStdString(FrameSetup::channelPartOfName(name_utf8))
+            : r.name;
         Group& g = byReceiver[receiver];
 
         if (r.outcome == CalibrationOutcome::Calibrated)
