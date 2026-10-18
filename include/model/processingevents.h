@@ -13,8 +13,10 @@
  * implementation that must deliver them somewhere else - the UI thread - has to do its
  * own hand-off; `qtprocessingevents.h` is the Qt one. Messages are UTF-8.
  *
- * Calls arrive in order per source, and `processingFinished` is always last: nothing
- * follows it, so a receiver may take the result as soon as it sees it.
+ * Calls arrive in order per source. Which events a source raises depends on what it is:
+ * `FrameProcessor` raises log / error / finished, and `processingFinished` is always its
+ * last call, so a receiver may take its result as soon as it sees it; `Ch10PacketReader`
+ * raises log / error / progress and no completion event (its owner joins the thread).
  */
 
 #ifndef PROCESSINGEVENTS_H
@@ -35,6 +37,10 @@ public:
 
     /// The run is over. @p success is true only on clean completion.
     virtual void processingFinished(bool success) = 0;
+
+    /// How far through its input a source has got, 0..100. Optional: a sink that does not
+    /// show progress need not override it.
+    virtual void progressUpdated(int percent) { (void)percent; }
 };
 
 #endif // PROCESSINGEVENTS_H

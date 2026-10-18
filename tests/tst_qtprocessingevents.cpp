@@ -79,6 +79,43 @@ void TestQtProcessingEvents::deliversOnTheTargetsThreadInOrder()
     QVERIFY(seen.back().success);
 }
 
+void TestQtProcessingEvents::progressArrivesOnTheTargetsThreadInOrder()
+{
+    // The packet reader reports how far through the file it is. Those values drive the
+    // progress bar, so they must arrive on the UI thread and never out of order.
+    QObject target;
+    struct Tick { QThread* thread; int percent; };
+    std::vector<Tick> ticks;
+    QEventLoop loop;
+
+    QtProcessingEvents events(
+        &target, nullptr, nullptr,
+        [&](bool) { loop.quit(); },
+        [&](int percent) { ticks.push_back({QThread::currentThread(), percent}); });
+
+    QThread* worker_thread = nullptr;
+    std::thread worker([&]() {
+        worker_thread = QThread::currentThread();
+        for (int percent = 0; percent <= 100; ++percent)
+        {
+            events.progressUpdated(percent);
+        }
+        events.processingFinished(true);
+    });
+
+    QTimer::singleShot(15000, &loop, &QEventLoop::quit);
+    loop.exec();
+    worker.join();
+
+    QVERIFY(worker_thread != QThread::currentThread());
+    QCOMPARE(ticks.size(), std::size_t{101});
+    for (int i = 0; i <= 100; ++i)
+    {
+        QCOMPARE(ticks[static_cast<std::size_t>(i)].thread, QThread::currentThread());
+        QCOMPARE(ticks[static_cast<std::size_t>(i)].percent, i);
+    }
+}
+
 void TestQtProcessingEvents::messagesAreDecodedFromUtf8()
 {
     // The core's messages are UTF-8; the em dash and an accented letter must survive.
@@ -107,6 +144,7 @@ void TestQtProcessingEvents::missingHandlersAreSkipped()
     QtProcessingEvents only_finished(&target, nullptr, nullptr, [&](bool) { ++finished; });
     only_finished.logMessage("ignored");
     only_finished.errorOccurred("ignored");
+    only_finished.progressUpdated(50);
     only_finished.processingFinished(false);
     QCoreApplication::processEvents();
     QCOMPARE(finished, 1);

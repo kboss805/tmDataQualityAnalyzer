@@ -197,6 +197,7 @@ void TestProcessingCoordinator::workerReportsPrecedeTheResultAndFinishComesLast(
 
     ProcessingCoordinator coord;
     QStringList order;           // one entry per relayed event, in arrival order
+    QList<int> progress;         // every progressChanged value, in arrival order
     bool run_ok = false;
     QEventLoop loop;
     QObject::connect(&coord, &ProcessingCoordinator::logMessageReceived,
@@ -205,6 +206,8 @@ void TestProcessingCoordinator::workerReportsPrecedeTheResultAndFinishComesLast(
                      [&](const QString& m) { order << "error:" + m; });
     QObject::connect(&coord, &ProcessingCoordinator::streamProcessed,
                      [&](const ProcessedStreamData&) { order << "result"; });
+    QObject::connect(&coord, &ProcessingCoordinator::progressChanged,
+                     [&](int percent) { progress << percent; });
     QObject::connect(&coord, &ProcessingCoordinator::processingFinished, &loop,
                      [&](bool ok) { run_ok = ok; order << "finished"; loop.quit(); });
 
@@ -247,6 +250,14 @@ void TestProcessingCoordinator::workerReportsPrecedeTheResultAndFinishComesLast(
     }
     QVERIFY(std::none_of(order.begin(), order.end(),
                          [](const QString& e) { return e.startsWith("error:"); }));
+
+    // The progress bar: 0 when the run starts, and 100 reported TWICE - once by the reader
+    // when it has read the whole file, once by the coordinator when it finishes. A reader
+    // whose progress never reached the coordinator would leave exactly one. The reader's
+    // last event is queued by a thread that is still ending when the run's own finish is
+    // delivered, so it may land just after - wait for it rather than race it.
+    QCOMPARE(progress.first(), 0);
+    QTRY_COMPARE_WITH_TIMEOUT(static_cast<int>(std::count(progress.begin(), progress.end(), 100)), 2, 5000);
 }
 
 void TestProcessingCoordinator::constructorDefaults()

@@ -582,6 +582,36 @@ void TestCalibrationExtractor::realStepCalWithWrongWordMapIsFlagged()
     QVERIFY2(report.contains("Check the word map"), qPrintable(report));
 }
 
+void TestCalibrationExtractor::extractionReportsItsProgress()
+{
+    // The Extract Calibration dialog shows a progress dialog fed by progressChanged(), which
+    // the extractor relays from the packet reader. Nothing else observed it, so a break in
+    // that relay would leave the dialog at 0% for the whole extraction.
+    Chapter10Reader reader;
+    CalibrationExtractor::Request req;
+    QString skip;
+    if (!buildStepCalRequest(reader, req, "settings/rcvr_cals/default.toml",
+                             "settings/receiver_params/default.toml", skip))
+        QSKIP(qPrintable(skip));
+
+    CalibrationExtractor extractor;
+    QList<int> progress;
+    QObject::connect(&extractor, &CalibrationExtractor::progressChanged,
+                     [&](int percent) { progress << percent; });
+    QString summary;
+    QVERIFY2(runExtraction(extractor, req, summary), qPrintable(summary));
+
+    // The reader's last report (100) is queued by a thread that is still ending when the
+    // extraction's own finish is delivered, so it may land just after - wait for it.
+    QTRY_VERIFY_WITH_TIMEOUT(!progress.isEmpty() && progress.last() == 100, 5000);
+    for (int i = 0; i < progress.size(); ++i)
+    {
+        QVERIFY(progress.at(i) >= 0 && progress.at(i) <= 100);
+        if (i > 0)
+            QVERIFY2(progress.at(i) >= progress.at(i - 1), "progress went backwards");
+    }
+}
+
 void TestCalibrationExtractor::clipsBeyondTheRecordingAreReported()
 {
     // Clip Start + Clip End that add up to more than the recording are ignored and the

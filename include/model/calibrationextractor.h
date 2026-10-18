@@ -138,7 +138,7 @@ private:
     void teardown();
     void finishWithError(const QString& error);
 
-    Ch10PacketReader* m_reader        = nullptr;
+    std::shared_ptr<Ch10PacketReader> m_reader; ///< Shared with the reader thread's body.
     QThread*          m_reader_thread = nullptr;
     std::shared_ptr<FrameProcessor> m_worker; ///< Shared with the worker thread's body.
     QThread*          m_worker_thread = nullptr;
