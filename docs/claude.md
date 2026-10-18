@@ -417,7 +417,7 @@ The stories below follow the workflow a first-time user takes through the applic
 Items from `docs/future_plans/dotnet-port-assessment.md` that are worth doing whether or not
 that port ever happens - the throughput guard, the TOML move off `QSettings`, and now the
 de-Qt of the native core in small steps (QtGui out of the model's headers, then
-`PacketQueue`, then the `QElapsedTimer`s, then the packet bytes) - plus the clean-build regression the TOML change
+`PacketQueue`, then the `QElapsedTimer`s, then the packet bytes, then the first `QVector`s) - plus the clean-build regression the TOML change
 caused, and a generated Visual Studio solution. No user-facing
 behaviour changes.
 
@@ -518,6 +518,53 @@ called from our code is reported at **our** call site, so those keep warning exa
 v2.9.0 intended. Every first-party header here is quote-included, so `anglebrackets` covers
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
+
+#### The calibration path uses `std::vector`, not `QVector` (de-Qt, step 5)
+
+`QVector` is about 500 occurrences across the model, the DTOs, the view model, the view and 12
+test files, and it cannot be swapped in one move: the data flows through it. So this is the first
+of several steps, taken leaf-first like the earlier ones. It covers `StepDetector`,
+`CalibrationExtractor`, `CalibrationProfile::points`, `StepDefinition` lists, and the dialog and
+tests that touch them. The view-only uses (`QTreeWidget*`, `QPolygonF`, `QLineF`, widget lists)
+are Qt-API lists and stay as they are.
+
+**`size()` is the hazard, not `append`.** `QVector::size()` is signed; `std::vector::size()` is
+unsigned. The code indexes with `int` everywhere, and MSVC at `/W3` does **not** warn on
+`int i < v.size()` (it did flag `size_t` -> `int` truncations, C4267, which is how most sites were
+found). Left alone, those comparisons are correct only while the index is non-negative. So every
+`.size()` on a converted container goes through a new `intSize()` (`include/containerutil.h`),
+which returns an `int` and keeps the signed idiom, rather than rewriting each loop to unsigned and
+auditing each subtraction. One site genuinely needed more: `deriv.reserve(size - 1)` on an empty
+series passes -1, which `QVector` ignored and `std::vector` reads as 18 quintillion elements and
+throws. It is guarded, and `detect()` also rejects fewer than two samples before reaching it.
+
+**`QVector<bool>` became `std::vector<char>`, not `std::vector<bool>`.** The latter is a
+bit-packed proxy container (no real references, no `data()`), a trap rather than a saving for
+per-sample flags.
+
+Other `QVector` conveniences with no `std::vector` equivalent were replaced explicitly:
+`first()/last()` -> `front()/back()`, `mid(pos, n)` -> an iterator-range copy, `contains()` ->
+`std::find` (same exact-`==` semantics), `<<` and `append` -> `push_back` or a braced list.
+
+**A temporary seam.** `ProcessedChannelSeries::values` is still a `QVector<double>` (the DTOs convert
+in a later step), so the extractor builds the detector's `std::vector` from it with an iterator
+range, and one test does the same. Both are marked, and both disappear when the DTO converts.
+
+New case **`detectOnATooShortSeriesFailsCleanly`**: an empty and a one-sample series come back
+"not calibrated". Checked by mutation: with `detect()`'s early return and the `reserve` guard both
+removed, the suite dies with an unhandled `std::length_error` (exit `0xE06D7363`); restored, it passes.
+
+Release throughput gate, full 640 MB recording: 4-stream parallel **13987 ms** against 14011 ms
+(unmodified `main`) and 14201 ms (previous step), 1.01x vs the slowest solo stream, 0.64x vs
+sequential. `interpolateCalibration` runs per sample and now reads a `std::vector`; no change
+beyond the earlier runs' spread. Single runs; variance not measured.
+
+Still `QVector`, in the order they will be converted: the DTO series (`ProcessedStreamData`,
+`PlotSeriesData`, which reach the view model and the chart), the pointer lists inside
+`FrameProcessor` / `Ch10PacketReader`, and the configuration lists (`StreamConfig`, `Source`,
+`StreamJob`) in the view model.
+
+Baseline **437 / 0 / 1** (was 436 / 0 / 1), **438 / 0 / 0** at release. 23 suites.
 
 #### Packet bytes are a shared `std::vector`, not a `QByteArray` (de-Qt, step 4)
 

@@ -14,6 +14,7 @@ private slots:
 
     // Plateau detection
     void detectCleanSteps();
+    void detectOnATooShortSeriesFailsCleanly();
     void detectTooFewPlateausFails();
     void detectExtraPlateausUsesLastOfMonotonicRun();
     void detectShortBlipDoesNotStealPairingSlot();

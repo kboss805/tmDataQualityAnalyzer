@@ -17,8 +17,9 @@
 #ifndef STEPDETECTOR_H
 #define STEPDETECTOR_H
 
+#include <vector>
+
 #include <QString>
-#include <QVector>
 
 #include "calibrationprofile.h"
 
@@ -52,7 +53,7 @@ public:
         /// "found 12 plateaus but no sweep" can only be understood by seeing
         /// whether those 12 levels are 8 real steps plus 4 noise splits, or a
         /// genuine reversal.
-        QVector<double> plateauLevels;
+        std::vector<double> plateauLevels;
         /// True when the sweep ran off an end of the converter and the railed
         /// dwells were dropped: the profile covers the steps below them, and
         /// interpolateCalibration() clamps everything above to the top step that
@@ -62,7 +63,7 @@ public:
         bool saturated = false;
         /// dB of every step no measured level could be paired with: the railed
         /// ones, plus any dwell noise shattered into runs too short to confirm.
-        QVector<double> unresolvedDb;
+        std::vector<double> unresolvedDb;
         /// Levels in the monotonic run the sweep was taken from. More than the step
         /// file's count means leading levels were set aside as lead-in; more than one
         /// extra (CalibrationConstants::kMaxLeadInLevels) suggests the step file is
@@ -82,7 +83,7 @@ public:
      * @return true if at least one valid step was parsed.
      */
     static bool parseStepConfig(const QString& path,
-                                QVector<StepDefinition>& out,
+                                std::vector<StepDefinition>& out,
                                 QString& error);
 
     /**
@@ -119,9 +120,9 @@ public:
      * @param[in] steps           Expected steps from the step-config TOML.
      * @return Detection result; Result::profile.valid is false on failure.
      */
-    static Result detect(const QVector<double>& rawValues,
+    static Result detect(const std::vector<double>& rawValues,
                          double samplePeriodSec,
-                         const QVector<StepDefinition>& steps);
+                         const std::vector<StepDefinition>& steps);
 };
 
 #endif // STEPDETECTOR_H

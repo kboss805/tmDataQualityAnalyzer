@@ -10,6 +10,9 @@
 
 #include "tst_calibrationextractor.h"
 
+#include <algorithm>
+#include <vector>
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QEventLoop>
@@ -18,6 +21,7 @@
 #include <QtTest>
 
 #include "calibrationextractor.h"
+#include "containerutil.h"
 #include "calibrationprofile.h"
 #include "chapter10reader.h"
 #include "framesetup.h"
@@ -45,11 +49,11 @@ QString projectRootPath(const QString& rel)
 
 /// A minimal but non-empty step list, so a Request clears the "no steps" guard
 /// and actually drives the reader/frame-setup path.
-QVector<StepDefinition> dummySteps()
+std::vector<StepDefinition> dummySteps()
 {
-    QVector<StepDefinition> steps;
+    std::vector<StepDefinition> steps;
     for (double db : { 0.0, 6.0, 12.0 })
-        steps.append(StepDefinition{ db });
+        steps.push_back(StepDefinition{ db });
     return steps;
 }
 
@@ -109,9 +113,9 @@ bool buildRealRequest(Chapter10Reader& reader, CalibrationExtractor::Request& re
         skipReason = "step-config TOML (rcvr_cals/default.toml) not available";
         return false;
     }
-    QVector<StepDefinition> steps;
+    std::vector<StepDefinition> steps;
     QString step_error;
-    if (!StepDetector::parseStepConfig(step_toml, steps, step_error) || steps.isEmpty())
+    if (!StepDetector::parseStepConfig(step_toml, steps, step_error) || steps.empty())
     {
         skipReason = "Could not parse step config: " + step_error;
         return false;
@@ -152,7 +156,7 @@ bool buildStepCalRequest(Chapter10Reader& reader, CalibrationExtractor::Request&
         skipReason = "Could not load channels from step_cal, example.ch10";
         return false;
     }
-    QVector<StepDefinition> steps;
+    std::vector<StepDefinition> steps;
     QString step_error;
     if (!StepDetector::parseStepConfig(projectRootPath(stepToml), steps, step_error))
     {
@@ -196,7 +200,7 @@ void TestCalibrationExtractor::missingFileFailsCleanly()
     // recorded error and no per-channel results — no hang, no partial state.
     QVERIFY(!ok);
     QVERIFY(!extractor.error().isEmpty());
-    QVERIFY(extractor.results().isEmpty());
+    QVERIFY(extractor.results().empty());
 }
 
 void TestCalibrationExtractor::realFileCalibratesRcvr3Only()
@@ -211,7 +215,7 @@ void TestCalibrationExtractor::realFileCalibratesRcvr3Only()
     QString summary;
     QVERIFY2(runExtraction(extractor, req, summary), qPrintable(summary));
 
-    const QVector<CalibrationChannelResult>& results = extractor.results();
+    const std::vector<CalibrationChannelResult>& results = extractor.results();
 
     // One result per word-map channel (16 receivers x 3 channels).
     QCOMPARE(results.size(), req.numReceivers * req.receiverChannels);
@@ -280,23 +284,23 @@ void TestCalibrationExtractor::summaryNamesReceiversAndWhyTheyFellBack()
         return r;
     };
 
-    QVector<CalibrationChannelResult> results;
+    std::vector<CalibrationChannelResult> results;
     // Receiver 1: fully calibrated. Receiver 2: partly - C fell back on merged
     // steps. Receiver 3: fully calibrated. Receiver 4: absent from the recording.
     for (const QString& p : {QStringLiteral("L"), QStringLiteral("R"), QStringLiteral("C")})
     {
-        results << channel(p + "_RCVR1", CalibrationOutcome::Calibrated, 6, true);
+        results.push_back(channel(p + "_RCVR1", CalibrationOutcome::Calibrated, 6, true));
     }
-    results << channel("L_RCVR2", CalibrationOutcome::Calibrated, 6, true);
-    results << channel("R_RCVR2", CalibrationOutcome::Calibrated, 6, true);
-    results << channel("C_RCVR2", CalibrationOutcome::TooFewPlateaus, 4, true);
+    results.push_back(channel("L_RCVR2", CalibrationOutcome::Calibrated, 6, true));
+    results.push_back(channel("R_RCVR2", CalibrationOutcome::Calibrated, 6, true));
+    results.push_back(channel("C_RCVR2", CalibrationOutcome::TooFewPlateaus, 4, true));
     for (const QString& p : {QStringLiteral("L"), QStringLiteral("R"), QStringLiteral("C")})
     {
-        results << channel(p + "_RCVR3", CalibrationOutcome::Calibrated, 6, true);
+        results.push_back(channel(p + "_RCVR3", CalibrationOutcome::Calibrated, 6, true));
     }
     for (const QString& p : {QStringLiteral("L"), QStringLiteral("R"), QStringLiteral("C")})
     {
-        results << channel(p + "_RCVR4", CalibrationOutcome::NoData, 0, false);
+        results.push_back(channel(p + "_RCVR4", CalibrationOutcome::NoData, 0, false));
     }
 
     const QString summary = CalibrationExtractor::summarize(results, 6);
@@ -325,8 +329,8 @@ void TestCalibrationExtractor::summaryNamesReceiversAndWhyTheyFellBack()
 
     // Channels from a hand-written receiver-params TOML carry no "_RCVR<N>", so
     // they must be reported by name rather than assigned a receiver number.
-    QVector<CalibrationChannelResult> unnamed;
-    unnamed << channel("AGC_LEFT", CalibrationOutcome::NoMonotonicSweep, 7, true);
+    std::vector<CalibrationChannelResult> unnamed;
+    unnamed.push_back(channel("AGC_LEFT", CalibrationOutcome::NoMonotonicSweep, 7, true));
     const QString unnamedSummary = CalibrationExtractor::summarize(unnamed, 6);
     QVERIFY2(unnamedSummary.contains("AGC_LEFT"), qPrintable(unnamedSummary));
     QVERIFY2(unnamedSummary.contains("no monotonic sweep"), qPrintable(unnamedSummary));
@@ -350,7 +354,7 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
     Chapter10Reader reader; // keep the opened Ch10 file alive across extraction
     QVERIFY(reader.loadChannels(filepath));
 
-    QVector<StepDefinition> steps;
+    std::vector<StepDefinition> steps;
     QString step_error;
     QVERIFY2(StepDetector::parseStepConfig(projectRootPath("settings/rcvr_cals/default.toml"),
                                            steps, step_error), qPrintable(step_error));
@@ -380,7 +384,7 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
     QString summary;
     QVERIFY2(runExtraction(extractor, req, summary), qPrintable(summary));
 
-    const QVector<CalibrationChannelResult>& results = extractor.results();
+    const std::vector<CalibrationChannelResult>& results = extractor.results();
     QCOMPARE(results.size(), req.numReceivers * req.receiverChannels);
 
     QSet<int> calibratedReceivers;
@@ -399,10 +403,10 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
         // L/R_RCVR3 and R_RCVR6 by one step, L_RCVR6 (split twice) by two. The
         // profile still attached, so nothing reported it: the staircase simply sat
         // a step behind its neighbours, and noise across the split swung 6 dB.
-        const QVector<CalibrationPoint>& pts = r.profile.points;
-        QVERIFY2(pts.first().rawAvg < 1000.0 && pts.first().trueDb == 0.0,
+        const std::vector<CalibrationPoint>& pts = r.profile.points;
+        QVERIFY2(pts.front().rawAvg < 1000.0 && pts.front().trueDb == 0.0,
                  qPrintable(QString("%1: 0 dB paired with raw %2, not the pre-sweep level")
-                                .arg(r.name).arg(pts.first().rawAvg)));
+                                .arg(r.name).arg(pts.front().rawAvg)));
         for (int k = 1; k < pts.size(); k++)
         {
             // Genuine steps here are more than 1000 counts apart (the smallest is
@@ -421,8 +425,9 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
             // calibrated over the range it could still resolve, and readings hold
             // at the top of that range instead of being extrapolated past it.
             QCOMPARE(FrameSetup::receiverIndexFromName(r.name), 1);
-            QCOMPARE(pts.last().trueDb, 48.0);
-            QVERIFY2(r.unresolvedDb.contains(54.0) && r.unresolvedDb.contains(60.0),
+            QCOMPARE(pts.back().trueDb, 48.0);
+            QVERIFY2(std::count(r.unresolvedDb.begin(), r.unresolvedDb.end(), 54.0) > 0
+                         && std::count(r.unresolvedDb.begin(), r.unresolvedDb.end(), 60.0) > 0,
                      qPrintable(r.name));
             QCOMPARE(interpolateCalibration(65472.0, r.profile), 48.0);
             // Every step from 0 to 48 dB is measured - including L_RCVR1's 24 dB
@@ -430,12 +435,12 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
             // linearly from 18 to 30 dB and read 23.09 dB; the dwell grid locates
             // it so it is measured instead.
             QCOMPARE(pts.size(), steps.size() - 2);
-            QCOMPARE(r.unresolvedDb, QVector<double>({54.0, 60.0}));
+            QCOMPARE(r.unresolvedDb, std::vector<double>({54.0, 60.0}));
         }
         else
         {
             QCOMPARE(pts.size(), steps.size());
-            QCOMPARE(pts.last().trueDb, 60.0);
+            QCOMPARE(pts.back().trueDb, 60.0);
         }
     }
 
@@ -456,7 +461,7 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
 
     // And the operator-facing report names the receivers, in the unit operators
     // actually talk in, and says where a saturated one stops being trustworthy.
-    const QString report = CalibrationExtractor::summarize(results, steps.size());
+    const QString report = CalibrationExtractor::summarize(results, intSize(steps));
     QVERIFY2(report.contains("Calibrated: receivers 1, 3, 5, 6."), qPrintable(report));
     QVERIFY2(report.contains("Receiver 1") && report.contains("hold at 48 dB"), qPrintable(report));
 
@@ -492,10 +497,10 @@ void TestCalibrationExtractor::summaryFlagsAShortStepFileAndAMismatchedWordMap()
     // An 8-step file on an 11-level sweep: every channel reports calibrated and every
     // step is paired with the wrong level. The report has to say so, because nothing
     // else will.
-    QVector<CalibrationChannelResult> shortFile;
+    std::vector<CalibrationChannelResult> shortFile;
     for (const QString& p : parts)
     {
-        shortFile << calibrated(p + "_RCVR3", 11);
+        shortFile.push_back(calibrated(p + "_RCVR3", 11));
     }
     const QString shortReport = CalibrationExtractor::summarize(shortFile, 8);
     QVERIFY2(shortReport.contains("Check the step file"), qPrintable(shortReport));
@@ -504,18 +509,18 @@ void TestCalibrationExtractor::summaryFlagsAShortStepFileAndAMismatchedWordMap()
 
     // One extra level is the ordinary turn-on transient the detector is built to drop;
     // warning on it would fire on healthy recordings and teach operators to ignore it.
-    QVector<CalibrationChannelResult> transient;
+    std::vector<CalibrationChannelResult> transient;
     for (const QString& p : parts)
     {
-        transient << calibrated(p + "_RCVR3", 9);
+        transient.push_back(calibrated(p + "_RCVR3", 9));
     }
     const QString transientReport = CalibrationExtractor::summarize(transient, 8);
     QVERIFY2(!transientReport.contains("Check the step file"), qPrintable(transientReport));
 
     // One channel swept and two never moved: what a word map that does not match the
     // recording leaves behind, since it files one receiver's words under another's.
-    QVector<CalibrationChannelResult> mixed;
-    mixed << flat("L_RCVR2") << flat("R_RCVR2") << calibrated("C_RCVR2", 11);
+    const std::vector<CalibrationChannelResult> mixed{
+        flat("L_RCVR2"), flat("R_RCVR2"), calibrated("C_RCVR2", 11)};
     const QString mixedReport = CalibrationExtractor::summarize(mixed, 11);
     QVERIFY2(mixedReport.contains("Check the word map"), qPrintable(mixedReport));
     QVERIFY2(mixedReport.contains("Receiver 2 — C calibrated; L, R never moved"),
@@ -523,10 +528,10 @@ void TestCalibrationExtractor::summaryFlagsAShortStepFileAndAMismatchedWordMap()
 
     // A receiver that is simply absent - every channel flat - is not a word-map hint;
     // most receivers in a real calibration recording look like that.
-    QVector<CalibrationChannelResult> absent;
+    std::vector<CalibrationChannelResult> absent;
     for (const QString& p : parts)
     {
-        absent << flat(p + "_RCVR4");
+        absent.push_back(flat(p + "_RCVR4"));
     }
     const QString absentReport = CalibrationExtractor::summarize(absent, 11);
     QVERIFY2(!absentReport.contains("Check the word map"), qPrintable(absentReport));
@@ -549,7 +554,7 @@ void TestCalibrationExtractor::realStepCalWithShortStepFileIsFlagged()
     QString summary;
     QVERIFY2(runExtraction(extractor, req, summary), qPrintable(summary));
 
-    const QString report = CalibrationExtractor::summarize(extractor.results(), req.steps.size());
+    const QString report = CalibrationExtractor::summarize(extractor.results(), intSize(req.steps));
     QVERIFY2(report.contains("Check the step file"), qPrintable(report));
     QVERIFY2(report.contains("Receiver 3 — 11 levels in the recording, 8 in the step file"),
              qPrintable(report));
@@ -572,7 +577,7 @@ void TestCalibrationExtractor::realStepCalWithWrongWordMapIsFlagged()
     QString summary;
     QVERIFY2(runExtraction(extractor, req, summary), qPrintable(summary));
 
-    const QString report = CalibrationExtractor::summarize(extractor.results(), req.steps.size());
+    const QString report = CalibrationExtractor::summarize(extractor.results(), intSize(req.steps));
     QVERIFY2(report.contains("Check the word map"), qPrintable(report));
 }
 

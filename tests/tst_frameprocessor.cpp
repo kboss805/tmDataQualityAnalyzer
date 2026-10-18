@@ -470,11 +470,11 @@ void TestFrameProcessor::calibrationRoundTripOnRealFileProducesCleanSteps()
     if (!QFileInfo::exists(step_toml))
         QSKIP("default.toml (rcvr_cals) not available");
 
-    QVector<StepDefinition> steps;
+    std::vector<StepDefinition> steps;
     QString step_error;
     QVERIFY2(StepDetector::parseStepConfig(step_toml, steps, step_error),
              qPrintable(step_error));
-    QVERIFY(!steps.isEmpty());
+    QVERIFY(!steps.empty());
 
     // ---- Extraction pass: build calibration profiles from this same file ----
     CalibrationExtractor::Request req;
@@ -591,7 +591,9 @@ void TestFrameProcessor::calibrationRoundTripOnRealFileProducesCleanSteps()
             continue;
         }
 
-        StepDetector::Result det = StepDetector::detect(series.values, p.samplePeriodSec, steps);
+        // series.values is still a QVector (the DTO converts in a later step).
+        const std::vector<double> raw(series.values.begin(), series.values.end());
+        StepDetector::Result det = StepDetector::detect(raw, p.samplePeriodSec, steps);
         if (!det.profile.valid)
         {
             continue; // This word's main-pass series didn't show clean re-detectable plateaus.

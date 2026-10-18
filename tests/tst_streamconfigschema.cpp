@@ -108,8 +108,8 @@ void TestStreamConfigSchema::toJsonNeverIncludesCalibrationByWord()
 
     CalibrationProfile profile;
     profile.valid = true;
-    profile.points.append({ 100.0, 0.0 });
-    profile.points.append({ 200.0, 10.0 });
+    profile.points.push_back({ 100.0, 0.0 });
+    profile.points.push_back({ 200.0, 10.0 });
     in.calibrationByWord.insert(6, profile);
 
     const QJsonObject json = StreamConfigSchema::toJson(in);

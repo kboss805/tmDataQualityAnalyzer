@@ -16,6 +16,8 @@
 #ifndef STREAMSUBDIALOGS_H
 #define STREAMSUBDIALOGS_H
 
+#include <vector>
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
@@ -228,7 +230,7 @@ private:
     // Selected files + parsed steps.
     QString m_step_path;
     QString m_cal_path;
-    QVector<StepDefinition> m_steps;
+    std::vector<StepDefinition> m_steps;
     bool    m_step_ok = false;
     bool    m_cal_ok  = false;
 

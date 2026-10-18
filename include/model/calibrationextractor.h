@@ -16,9 +16,10 @@
 #ifndef CALIBRATIONEXTRACTOR_H
 #define CALIBRATIONEXTRACTOR_H
 
+#include <vector>
+
 #include <QObject>
 #include <QString>
-#include <QVector>
 
 #include "calibrationprofile.h"
 #include "processingparams.h"
@@ -42,10 +43,10 @@ struct CalibrationChannelResult
     double             edgeThreshold = 0.0; ///< Raw-count edge threshold detection used.
     bool               thresholdRelaxed = false; ///< Calibrated only after loosening the
                                                   ///< edge threshold (steps near the noise floor).
-    QVector<double>    plateauLevels;   ///< Settled plateau averages detection found.
+    std::vector<double>    plateauLevels;   ///< Settled plateau averages detection found.
     bool               saturated = false; ///< Calibrated only up to a railed top; readings
                                           ///< clamp at the highest step still measurable.
-    QVector<double>    unresolvedDb;    ///< dB of steps no measured level could be paired with.
+    std::vector<double>    unresolvedDb;    ///< dB of steps no measured level could be paired with.
     int                sweepLevels = 0; ///< Levels in the sweep run; more than the step
                                         ///< file lists means some were set aside as lead-in.
 };
@@ -71,7 +72,7 @@ public:
         QString receiverParamsToml;      ///< Word-map TOML; callers resolve the shipped default.toml here so the map matches the main run (empty only if that file is missing).
         int     numReceivers = 0;        ///< Sequential-grid fallback, used only when receiverParamsToml is empty.
         int     receiverChannels = 0;    ///< Sequential-grid fallback, used only when receiverParamsToml is empty.
-        QVector<StepDefinition> steps;   ///< Expected steps parsed from the step-config TOML.
+        std::vector<StepDefinition> steps;   ///< Expected steps parsed from the step-config TOML.
         double  clipStartSec = 0.0;      ///< Seconds of the cal recording to ignore at the START before step detection (skip signal-generator turn-on transients).
         double  clipEndSec = 0.0;        ///< Seconds of the cal recording to ignore at the END before step detection.
     };
@@ -88,7 +89,7 @@ public:
     void cancel();
 
     /// @return Per-channel results (valid after finished() fires).
-    const QVector<CalibrationChannelResult>& results() const { return m_results; }
+    const std::vector<CalibrationChannelResult>& results() const { return m_results; }
     /// @return Error message if the run failed.
     QString error() const { return m_error; }
     /// @return True if Clip Start + Clip End would have left nothing of the
@@ -117,7 +118,7 @@ public:
      *                          plateau shortfall can be reported against it.
      * @return Multi-line report suitable for a message box.
      */
-    static QString summarize(const QVector<CalibrationChannelResult>& results,
+    static QString summarize(const std::vector<CalibrationChannelResult>& results,
                              int expectedSteps);
 
 signals:
@@ -144,13 +145,13 @@ private:
     FrameSetup*       m_frame_setup   = nullptr;
 
     ProcessingParams  m_params;
-    QVector<StepDefinition> m_steps;
+    std::vector<StepDefinition> m_steps;
     double            m_sample_period_sec = 0.0;
     double            m_clip_start_sec = 0.0; ///< Cal seconds to ignore at the start before step detection.
     double            m_clip_end_sec = 0.0;   ///< Cal seconds to ignore at the end before step detection.
     bool              m_clip_ignored = false; ///< The clips exceeded the recording and were ignored.
     double            m_recording_sec = 0.0;  ///< Extracted recording length, in seconds.
-    QVector<CalibrationChannelResult> m_results;
+    std::vector<CalibrationChannelResult> m_results;
     QString           m_error;
     bool              m_cancelled = false;
     bool              m_running   = false;
