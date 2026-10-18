@@ -10,13 +10,12 @@
 #include <cstdint>
 #include <vector>
 
-#include <QVector>
-
 #include "irig106ch10.h"       // IWYU pragma: keep
 #include "i106_time.h"         // IWYU pragma: keep
 #include "i106_decode_tmats.h" // IWYU pragma: keep
 #include "i106_decode_pcmf1.h"
 
+#include "containerutil.h"
 #include "framesetup.h"
 #include "packetqueue.h"
 
@@ -129,7 +128,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
 
     // Cache enabled parameters for the hot loop and build the index-aligned
     // in-memory channel series (see buildEnabledParams).
-    QVector<ParameterInfo*> enabled_params = buildEnabledParams(frame_setup, receiver_mode);
+    std::vector<ParameterInfo*> enabled_params = buildEnabledParams(frame_setup, receiver_mode);
     for (auto* param : enabled_params)
     {
         param->sample_sum = 0;
@@ -154,7 +153,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     state.sample_period       = params.samplePeriodSec;
     state.current_time_sample = static_cast<double>(start_seconds);
     state.next_time_sample    = state.current_time_sample + state.sample_period;
-    state.frame_words = QVector<uint64_t>(state.words_in_frame, 0);
+    state.frame_words = std::vector<uint64_t>(state.words_in_frame, 0);
 
     const double delta_100ns    = attrs.delta100ns;
     const bool   needs_swap     = attrs.needsSwap;
@@ -381,7 +380,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
 
 void FrameProcessor::closeElapsedWindows(ScanState& s, double current_time_eval,
                                          const ProcessingParams& params,
-                                         const QVector<ParameterInfo*>& enabled_params)
+                                         const std::vector<ParameterInfo*>& enabled_params)
 {
     while (s.next_time_sample < current_time_eval)
     {
@@ -439,7 +438,7 @@ void FrameProcessor::closeElapsedWindows(ScanState& s, double current_time_eval,
 }
 
 void FrameProcessor::scanBit(ScanState& s, uint8_t bit_val, bool in_window,
-                             const QVector<ParameterInfo*>& enabled_params)
+                             const std::vector<ParameterInfo*>& enabled_params)
 {
     s.test_word = (s.test_word << 1) | bit_val;
     s.bits_loaded++;
@@ -560,9 +559,9 @@ void FrameProcessor::scanBit(ScanState& s, uint8_t bit_val, bool in_window,
     }
 }
 
-QVector<ParameterInfo*> FrameProcessor::buildEnabledParams(FrameSetup* frame_setup, bool receiver_mode)
+std::vector<ParameterInfo*> FrameProcessor::buildEnabledParams(FrameSetup* frame_setup, bool receiver_mode)
 {
-    QVector<ParameterInfo*> enabled_params;
+    std::vector<ParameterInfo*> enabled_params;
     if (receiver_mode && frame_setup != nullptr)
     {
         enabled_params.reserve(frame_setup->length());
@@ -671,7 +670,7 @@ void FrameProcessor::recordTimeSample(double current_time_sample,
                                       int n_samples,
                                       double lock_percentage,
                                       double accumulated_missed_frames,
-                                      const QVector<ParameterInfo*>& enabled_params)
+                                      const std::vector<ParameterInfo*>& enabled_params)
 {
     // Store the absolute IRIG seconds; the plot derives DOY/HH:MM:SS from this.
     m_result.timesSec.push_back(current_time_sample);
@@ -693,7 +692,7 @@ void FrameProcessor::recordTimeSample(double current_time_sample,
     // n_samples can be 0 for a window that produced no extracted frames (a
     // recording gap, or an SNR window entirely out of lock); emit 0 in that case
     // rather than calibrating a meaningless zero average.
-    for (int i = 0; i < enabled_params.size(); i++)
+    for (int i = 0; i < intSize(enabled_params); i++)
     {
         ParameterInfo* param = enabled_params[i];
         double value = 0.0;

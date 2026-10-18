@@ -417,7 +417,7 @@ The stories below follow the workflow a first-time user takes through the applic
 Items from `docs/future_plans/dotnet-port-assessment.md` that are worth doing whether or not
 that port ever happens - the throughput guard, the TOML move off `QSettings`, and now the
 de-Qt of the native core in small steps (QtGui out of the model's headers, then
-`PacketQueue`, then the `QElapsedTimer`s, then the packet bytes, then the first `QVector`s and the processing result) - plus the clean-build regression the TOML change
+`PacketQueue`, then the `QElapsedTimer`s, then the packet bytes, then the first `QVector`s, the processing result and the pipeline's pointer lists) - plus the clean-build regression the TOML change
 caused, and a generated Visual Studio solution. No user-facing
 behaviour changes.
 
@@ -518,6 +518,37 @@ called from our code is reported at **our** call site, so those keep warning exa
 v2.9.0 intended. Every first-party header here is quote-included, so `anglebrackets` covers
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
+
+#### The pipeline's internal lists are `std::vector`, and the decoder got 7% faster (de-Qt, step 7)
+
+`FrameProcessor`'s enabled-parameter list and per-frame word buffer, `Ch10PacketReader`'s channel
+table and queue lists, and the `ProcessingParams*` list handed to `Ch10PacketReader::prepare()` move
+from `QVector` to `std::vector`. `ch10packetreader.h` and `frameprocessor.h` no longer include
+`<QVector>` at all. The routing table stays a `QHash` (now of `std::vector`s): replacing Qt's
+associative containers is its own step.
+
+**It is the first step of the sweep to measurably change throughput, and it is faster.** Release
+gate, pinned to the performance cores (previous entry), interleaved with unmodified `main`:
+
+| run | binary | 4-stream parallel | slowest solo |
+|---|---|---|---|
+| main (PR #147's two runs) | main | 14696 / 14594 ms | 14531 / 14535 ms |
+| branch | branch | 13614 ms | 13529 ms |
+| branch | same binary | 13596 ms | 13484 ms |
+| main, straight after | main | 14690 ms | 14455 ms |
+
+About **7%** on every pinned run, reproducible in both directions. The only part of this change on
+the per-bit path is `ScanState::frame_words`: the scanner writes it once per word and reads it once
+per enabled parameter per frame, through a non-const reference. A non-const `QVector` subscript
+checks whether the buffer is shared, and detaches if so, on **every** access; `std::vector`'s is a
+plain index. That is the likely source of the gain, inferred from the code rather than profiled.
+
+Nothing else here touches a hot path - the queue lists are walked once per packet, the channel
+table once at `prepare()` - and the one logic change, `QVector::contains` -> `std::find` when
+de-duplicating the end-of-stream queue list, is covered by the pipeline suites: inverted, it would
+post no sentinels and every worker would wait forever.
+
+Baseline unchanged, **438 / 0 / 1**, **439 / 0 / 0** at release.
 
 #### The throughput gate runs on the performance cores, so its milliseconds mean something
 

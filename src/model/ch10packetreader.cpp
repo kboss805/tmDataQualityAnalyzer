@@ -5,6 +5,7 @@
 
 #include "ch10packetreader.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
@@ -64,7 +65,7 @@ void Ch10PacketReader::requestAbort()
 //                          IRIG106 HELPERS                                   //
 ////////////////////////////////////////////////////////////////////////////////
 
-void Ch10PacketReader::freeChanInfoTable(QVector<SuChanInfo*>& channel_info)
+void Ch10PacketReader::freeChanInfoTable(std::vector<SuChanInfo*>& channel_info)
 {
     for (auto* info : channel_info)
     {
@@ -88,7 +89,7 @@ void Ch10PacketReader::freeChanInfoTable(QVector<SuChanInfo*>& channel_info)
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 EnI106Status Ch10PacketReader::assembleAttributesFromTMATS(SuTmatsInfo* tmats_info,
-                                                           QVector<SuChanInfo*>& channel_info)
+                                                           std::vector<SuChanInfo*>& channel_info)
 {
     if ((tmats_info->psuFirstGRecord == nullptr) || (tmats_info->psuFirstRRecord == nullptr))
     {
@@ -179,7 +180,7 @@ bool Ch10PacketReader::ensureBufferCapacity(qsizetype required)
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 bool Ch10PacketReader::prepare(const QString& filename,
                                int time_channel_id,
-                               QVector<ProcessingParams*>& params_list,
+                               std::vector<ProcessingParams*>& params_list,
                                QString& error)
 {
     m_time_channel_id = time_channel_id;
@@ -307,7 +308,7 @@ bool Ch10PacketReader::prepare(const QString& filename,
         if (p->packetQueue != nullptr)
         {
             m_routing[ch].push_back(p->packetQueue);
-            if (!m_all_queues.contains(p->packetQueue))
+            if (std::find(m_all_queues.begin(), m_all_queues.end(), p->packetQueue) == m_all_queues.end())
             {
                 m_all_queues.push_back(p->packetQueue);
             }
@@ -456,7 +457,7 @@ void Ch10PacketReader::run()
             item.baseAbsSeconds = base_abs_seconds;
             item.packetBits    = static_cast<uint64_t>(raw_len) * 8;
 
-            const QVector<PacketQueue*>& queues = route_it.value();
+            const std::vector<PacketQueue*>& queues = route_it.value();
             for (PacketQueue* q : queues)
             {
                 q->enqueue(item); // copies the shared_ptr, not the bytes; each worker copies before it mutates
