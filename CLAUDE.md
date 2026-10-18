@@ -26,7 +26,8 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   Green baseline: **438 passed / 0 failed / 1 skipped** normally, **439 / 0 / 0** at release. The
   one standing skip is the heavy PRN throughput benchmark, opt-in via `TMDQA_RUN_HEAVY_BENCH=1`
   because it walks a 640 MB recording nine times and takes minutes. At release it is not skipped:
-  `scripts\run_throughput_bench.ps1` builds Release, enables it, and **asserts** the
+  `scripts\run_throughput_bench.ps1` builds Release, enables it, runs it **pinned to the
+  performance cores** (absolute times were bimodal ~1.9x on this hybrid CPU), and **asserts** the
   parallel-vs-solo ratios — it printed its timings and asserted nothing before that, so this is
   the decommutation pipeline's only performance guard. It needs
   `tests/data/test files/prn_testfile, full.ch10` (gitignored); the committed sample carries data
