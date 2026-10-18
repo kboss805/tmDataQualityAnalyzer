@@ -29,6 +29,7 @@
 
 #include "containerutil.h"
 #include "framesetup.h"
+#include "qtbridge.h"
 #include "tomldocument.h"
 
 namespace {
@@ -226,13 +227,13 @@ void loadFrameSyncFromToml(const QString& filename,
                            QCheckBox* randomizedBox)
 {
     toml_dir = QFileInfo(filename).absolutePath();
-    const TomlDocument cfg = TomlDocument::load(filename);
+    const TomlDocument cfg = TomlDocument::load(toFsPath(filename));
 
-    QString sync = cfg.string("Frame/FrameSync");
+    QString sync = QString::fromStdString(cfg.string("Frame/FrameSync"));
     if (!sync.isEmpty())
         syncEdit->setText(sync.toUpper());
 
-    QString mask = cfg.string("Frame/FrameSyncMask");
+    QString mask = QString::fromStdString(cfg.string("Frame/FrameSyncMask"));
     if (!mask.isEmpty())
         maskEdit->setText(mask.toUpper());
 
@@ -274,12 +275,12 @@ void saveFrameSyncToToml(const QString& filename,
 {
     toml_dir = QFileInfo(filename).absolutePath();
     TomlDocument cfg;
-    cfg.setValue("Frame/FrameSync",     syncPattern);
-    cfg.setValue("Frame/FrameSyncMask", syncMask);
+    cfg.setValue("Frame/FrameSync",     syncPattern.toStdString());
+    cfg.setValue("Frame/FrameSyncMask", syncMask.toStdString());
     cfg.setValue("Frame/BitsPerFrame",  bitsPerFrame);
     cfg.setValue("Frame/Inverted",      inverted);
     cfg.setValue("Frame/Randomized",    randomized);
-    cfg.save(filename);
+    cfg.save(toFsPath(filename));
 }
 
 /// Sizes an icon-only button so its SVG icon fills the button, with a
@@ -300,11 +301,11 @@ ReceiverFrameDefaults loadReceiverFrameDefaults(const QString& app_root)
     if (!QFileInfo::exists(path))
         return d;
 
-    const TomlDocument cfg = TomlDocument::load(path);
-    const QString sync = cfg.string("Frame/FrameSync");
+    const TomlDocument cfg = TomlDocument::load(toFsPath(path));
+    const QString sync = QString::fromStdString(cfg.string("Frame/FrameSync"));
     if (!sync.isEmpty())
         d.pattern = sync.toUpper();
-    const QString mask = cfg.string("Frame/FrameSyncMask");
+    const QString mask = QString::fromStdString(cfg.string("Frame/FrameSyncMask"));
     if (!mask.isEmpty())
         d.mask = mask.toUpper();
     const int bits = cfg.integer("Frame/BitsPerFrame", 0);

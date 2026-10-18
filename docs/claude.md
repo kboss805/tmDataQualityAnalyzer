@@ -418,7 +418,8 @@ Items from `docs/future_plans/dotnet-port-assessment.md` that are worth doing wh
 that port ever happens - the throughput guard, the TOML move off `QSettings`, and now the
 de-Qt of the native core in small steps (QtGui out of the model's headers, then
 `PacketQueue`, then the `QElapsedTimer`s, then the packet bytes, then the first `QVector`s, the processing result and the pipeline's pointer lists) - plus the clean-build regression the TOML change
-caused, a generated Visual Studio solution, and C++20. One user-facing fix, found during the
+caused, a generated Visual Studio solution, and C++20. The first `QString` step moves `TomlDocument`
+to UTF-8 `std::string`. One user-facing fix, found during the
 `QString` survey: recordings under a folder with a non-ASCII name can be processed.
 
 #### A Visual Studio solution, generated rather than committed
@@ -518,6 +519,49 @@ called from our code is reported at **our** call site, so those keep warning exa
 v2.9.0 intended. Every first-party header here is quote-included, so `anglebrackets` covers
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
+
+#### `TomlDocument` is UTF-8 `std::string` and `std::filesystem::path` (de-Qt, `QString` step 1)
+
+The reader/writer behind every settings file no longer uses Qt: keys and values are UTF-8
+`std::string`, paths are `std::filesystem::path`, and `QFile`/`QTextStream` are `std::ifstream` /
+`std::ofstream`. Callers still holding a `QString` convert at their own boundary: the new
+**`include/qtbridge.h`** supplies `toFsPath()` for paths (via UTF-16, lossless for any name the file
+system can hold), and text uses Qt 6's `toStdString()` / `fromStdString()`, which are UTF-8. It is
+C++17 only (`from_chars` / `to_chars`), so it does not depend on the C++20 change.
+
+**The order matters: the suite came first.** `TomlDocument` had no tests of its own. The new
+`TestTomlDocument` (14 cases, 15 results) was written against the **Qt implementation** and passed
+there before anything was ported, so it encodes what the code did, not what the rewrite happens to
+do. Its four helpers are the only lines that touch `TomlDocument`'s string types; across the port only
+those helpers changed, and every assertion passed unchanged against the new code.
+
+What `QFile` + `QTextStream` + `QString` supplied for free, now reproduced and pinned:
+
+- **Encoding:** a UTF-8 BOM is skipped, and UTF-16 LE or BE with a BOM is decoded. That is Qt's
+  Unicode auto-detection, and older Notepad's "Unicode" setting writes UTF-16.
+- **Numbers:** integers and doubles tolerate surrounding whitespace and a leading `+`, which
+  `std::from_chars` does not. Out of range fails rather than saturating.
+- **Writing:** doubles are `%g` with six significant digits (`QString::number`'s spelling: `3.0` writes
+  as a bare `3`, `0.00001` as `"1e-05"`), and the file is written with CRLF and no BOM.
+- **A trap the old API had too:** `setValue("K", "text")` binds a string literal to the `bool` overload,
+  because a pointer-to-bool conversion beats the one to `std::string`. A `const char*` overload now
+  catches it.
+
+Two narrowings, neither reachable from a shipped file: whitespace trimming is ASCII only (Qt also
+trimmed Unicode spaces such as U+00A0), and invalid UTF-8 is kept as bytes rather than replaced.
+
+**Validated against four single-defect mutants of the port; each fails the test written for it**: BOM
+handling removed (the BOM case and both UTF-16 rows), LF instead of CRLF (the exact-file-format case),
+shortest-round-trip doubles instead of `%g` (the doubles case), and no whitespace / `+` tolerance (the
+integer case). **The first mutation run was wrong, and was caught.** Run in a loop, two mutants
+reported exactly the failures of the mutant before them: the loop checked that the source recompiled
+but not that the test exe was relinked, and a stale binary ran. Each mutant was rerun on its own with
+the build checked, and the table above comes from those runs.
+
+Consumers: `FrameSetup` (word map, receiver parameters) and the frame-sync dialog helpers in
+`streamsubdialogs.cpp` convert at the call; both are next in the `QString` sweep. Baseline **457 / 0 / 1**
+(was 440 / 0 / 1; 17 new = 15 results + `initTestCase` / `cleanupTestCase`), **458 / 0 / 0** at release.
+24 suites.
 
 #### C++20 (ahead of the de-Qt string work)
 
@@ -3736,6 +3780,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestTemplateMatcher** (`tst_templatematcher`) — batch apply channel-ID matching: `templateChannelIds()` collection and `matchFile()` exact-set comparison (pass regardless of order; reject with the right `missing`/`extra` sets on a missing channel, an extra channel, and both) — pure logic, runs in CI
 - **TestPacketQueue** (`tst_packetqueue`) — the bounded reader-to-worker hand-off, tested directly rather than only through the pipeline: FIFO order, every `PacketItem` field surviving (including an embedded NUL in the payload), the producer blocking at exactly the configured depth and resuming after one dequeue, the consumer blocking when empty and resuming after one enqueue, `close()` releasing a blocked producer (`enqueue` returns false) and a blocked consumer (end-of-stream sentinel), a closed queue draining what it already holds before reporting end-of-stream, a non-positive depth falling back to the default of 64, and 20,000 items through a depth-4 queue in order under constant hand-off with a watchdog so a lost wakeup fails instead of hanging the suite. Validated against the original Qt-based queue (must pass) and eight single-defect mutants (every one must fail) - see the changelog. Pure logic, runs in CI
 - **TestIntervalGate** (`tst_intervalgate`) — the progress throttle that replaced `QElapsedTimer` in `Ch10PacketReader::run()`, pinned with injected time points so nothing depends on a sleep: not due before the interval, due at *exactly* the interval (`>=`, not `>`), due long after without `due()` restarting the interval itself, the interval read as milliseconds rather than seconds or microseconds, `reset()` measuring from the reset, sub-millisecond precision agreeing with `QElapsedTimer`'s truncation on every side of the boundary, and a default-constructed gate starting at *now* rather than the clock's epoch (otherwise it is due the instant it exists and throttles nothing). Validated against seven single-defect mutants, every one of which must fail. Pure logic, runs in CI
+- **TestTomlDocument** (`tst_tomldocument`) — the settings-file reader/writer, pinned directly rather than only through `FrameSetup` and the dialogs: sections and keys in file order (not sorted), an empty `[EMPTY]` section still declared, `[[Step]]` read as a literal section named `[Step]`, quote-aware `#` comments, `\"` and `\\` unescaped, a repeated key overwriting, a UTF-8 BOM with CRLF, UTF-16 LE and BE with a BOM, a non-ASCII value saved to and loaded from a folder outside every Western code page, the integer rule (whitespace and `+` tolerated, junk / fraction / overflow / empty return the caller's fallback with `parsed` false), the double rule (including `inf`), `QVariant::toBool()`'s boolean rule (even `no` is true), the exact bytes `save()` writes (top-level keys first, a blank line between sections, CRLF, no BOM), doubles as `%g` with six digits, `save()` truncating rather than merging, and both error paths naming the file. Written against the Qt implementation first; validated against four mutants of the `std` port. Pure logic, runs in CI
 
 ### Running Tests
 
