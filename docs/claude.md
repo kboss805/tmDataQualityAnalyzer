@@ -418,8 +418,8 @@ Items from `docs/future_plans/dotnet-port-assessment.md` that are worth doing wh
 that port ever happens - the throughput guard, the TOML move off `QSettings`, and now the
 de-Qt of the native core in small steps (QtGui out of the model's headers, then
 `PacketQueue`, then the `QElapsedTimer`s, then the packet bytes, then the first `QVector`s, the processing result and the pipeline's pointer lists) - plus the clean-build regression the TOML change
-caused, a generated Visual Studio solution, and C++20. The first `QString` steps move `TomlDocument`
-and `FrameSetup` to UTF-8 `std::string`. One user-facing fix, found during the
+caused, a generated Visual Studio solution, and C++20. The first `QString` steps move `TomlDocument`,
+`FrameSetup` and the step-file parser to UTF-8 `std::string`. One user-facing fix, found during the
 `QString` survey: recordings under a folder with a non-ASCII name can be processed.
 
 #### A Visual Studio solution, generated rather than committed
@@ -519,6 +519,58 @@ called from our code is reported at **our** call site, so those keep warning exa
 v2.9.0 intended. Every first-party header here is quote-included, so `anglebrackets` covers
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
+
+#### The step-file parser is `std::string` and `std::filesystem::path`, and shares its file reading (de-Qt, `QString` step 3)
+
+`StepDetector::parseStepConfig` (the `[[Step]]` calibration file) and `initialStepConfigPath` no longer
+use Qt: `QFile` / `QTextStream` / `QFileInfo` are gone, the error is a UTF-8 `std::string`, and the
+path is a `std::filesystem::path`. `initialStepConfigPath` stays string-in, string-out on purpose: its
+result is shown in the Extract Calibration dialog, and `path / "x"` would put a backslash in the
+middle of `<root>/settings/rcvr_cals/default.toml`. `stepdetector.h` and `.cpp` now contain no Qt.
+
+**This changed course from "fold it into `TomlDocument`", and the reason is in the tests.** Writing
+down what the parser actually does showed it is not the duplicate it looked like. It matches `[[Step]]`
+and its keys **case-insensitively**, where `TomlDocument` is case-sensitive; it does **not** strip
+quotes, so `db = "6"` is skipped and the step keeps 0, where `TomlDocument` would read 6; and it
+compares the whole header line, so `[[Step]] # first` is not a step header at all. A fold would have
+changed what an existing calibration file means, for no gain in the de-Qt goal. So it is ported in
+place with behaviour unchanged, and what it genuinely shares with `TomlDocument` is shared instead.
+
+**Characterisation tests first, again**: 9 methods, 26 results, written against the `QString`
+implementation and passing there before anything was ported. They pin the quirks above, plus: a key or
+header before any step or inside another section belongs to no step; a step with no parseable `db`
+still exists at 0; the file order and last-`db`-wins; the output cleared on every call, success or not;
+`QString::toDouble`'s rules on the value (`+6`, `.5`, `5.`, `1e1` read; `"6"`, `6x`, `1,5`, `0x10`,
+`1e999`, `+-6`, empty skipped); UTF-8 BOM with CRLF and UTF-16 LE and BE read; a non-ASCII path
+opens; and both error messages name the file. Only a two-line `parseSteps()` helper changed across
+the port.
+
+**One reader, not two.** The BOM / UTF-16 decoding that `TomlDocument` had written moved out into
+**`include/model/textfile.h`** (`readText`, `decodeText`, `utf8FileName`, `pathFromUtf8`), and the
+number rules live in `include/textparse.h` from the previous step. `TomlDocument` and the step
+parser both use them, so a Notepad-saved file behaves the same in either.
+
+**Validated against ten single-defect mutants**; eight fail the test written for them: header
+matched case-sensitively; key matched case-sensitively; a comment allowed on the header; the output
+not cleared; a bad value dropping the step (6 cases fail); no leading `+`; no BOM / UTF-16 handling (6
+cases across two suites); and `exists()` for `is_regular_file()` so a directory counts as a step file
+(caught by a new `initialStepConfigPathIgnoresADirectory`, added because nothing covered it).
+**Two survived, and both are equivalent rather than missed.** Ignoring keys outside a step has no
+observable effect: a stray `db` sets the pending step, and `flush()` discards it unless a step is
+open. And `pathFromUtf8` reading its bytes in the ANSI code page is unobservable in this process,
+because the UTF-8 code-page manifest (the non-ASCII path fix) makes the ANSI page UTF-8; the
+`char8_t` route stays as the correct spelling for any host without that manifest.
+
+**A build-harness trap found along the way, worth knowing**: several mutant runs reported
+`tests exit 0` with no failures when the test exe had not been produced at all. The link was
+failing intermittently with `LNK1201` (error writing the program database), and the runner script
+prints the exit status of the previous exe when `.\debug\...exe` does not exist. Disk space was fine
+(195 GB free). Deleting `tests/debug/*.pdb` and relinking cleared it. Such runs were discarded, the
+runner now deletes the exe, PDB and results first and refuses to report a result unless both exist
+afterwards, and the affected mutants were redone.
+
+Baseline **485 / 0 / 1** (was 458 / 0 / 1; 27 new = 26 step-parser results + the directory case),
+**486 / 0 / 0** at release. 24 suites.
 
 #### `FrameSetup` is UTF-8 `std::string` and `std::filesystem::path` (de-Qt, `QString` step 2)
 
@@ -3813,7 +3865,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestPlotCustomizationDialog** (`tst_plotcustomizationdialog`) — Customize Plot Series dialog: one Frame Sync Lock checkbox per stream, Select All/None, apply → per-stream lock/missed visibility round-trip to the ViewModel; Receiver SNR tree build (receiver grouping), tri-state group cascade, Select All/None, apply → per-channel SNR visibility round-trip, and the Expand/Collapse All button toggle; plus per-stream rename/recolor (lock tab) and per-channel rename/recolor via pending item roles (SNR tab) applied to the ViewModel on OK, and the single batched `seriesAppearanceChanged` emission (reaches private widgets/slots via a friend declaration, same pattern as TestFrameProcessor)
 - **TestStreamConfigDialog** (`tst_streamconfigdialog`) — Per-stream Configure Streams dialog: stream rows, mode selection, gear setup dialogs, TOML load/save round-trips, "Apply to all" fan-out, the Channel column label (short names shown in full, long TMATS-derived names elided on the right with "..." , left-justified, styled via `channelNameCell` to mimic the Mode combo box's border/fill, and the full name always available via tooltip — which is now the only place a truncated name is recoverable), the Mode combo's left-justified closed-box text (via an editable-but-readonly internal line edit) while selection still tracks correctly, and the table header/separator using theme-QSS object names (`streamHeaderLabel` / `streamHeaderSeparator`) rather than hard-coded inline colors
 - **TestExportDialog** (`tst_exportdialog`) — Export dialog checkbox-to-field enable logic, export-button validation, and the log-export row defaults/accessors and log-only validation
-- **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US5.3): `[[Step]]` TOML parsing (valid / empty-fails), plateau detection (clean, too-few-fails, extra-plateaus uses last of monotonic run, short-blip doesn't steal a pairing slot, long leading transient doesn't shift pairing, inverted-polarity sweep not reversed, non-monotonic pairing rejected, noisy, settling-at-plateau-start excluded, round-trip exact), the calibration-import resilience cases (the outcome code names the gate that rejected, a compressed out-of-tolerance receiver still calibrates via the relaxed threshold while a healthy one does not relax, noise-split plateaus coalesce instead of severing the sweep, a flat channel reports "flat / no signal" rather than a plateau shortfall, samples pinned at the floor or rail kept out of the noise estimate so live dwells neither split nor shatter, a split dwell far above the noise still paired as one step, railed top steps calibrating the range that stayed in scale while the rail clamps rather than extrapolates, an unconfirmed dwell measured from the dwell grid rather than bridged or shifted, the number of levels the sweep held reported so a short step file can be flagged, and which step file the Extract Calibration dialog preloads), and `interpolateCalibration()` (midpoint, below/above clamping, coincident-raw guard)
+- **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US5.3): `[[Step]]` TOML parsing (valid / empty-fails), plateau detection (clean, too-few-fails, extra-plateaus uses last of monotonic run, short-blip doesn't steal a pairing slot, long leading transient doesn't shift pairing, inverted-polarity sweep not reversed, non-monotonic pairing rejected, noisy, settling-at-plateau-start excluded, round-trip exact), the calibration-import resilience cases (the outcome code names the gate that rejected, a compressed out-of-tolerance receiver still calibrates via the relaxed threshold while a healthy one does not relax, noise-split plateaus coalesce instead of severing the sweep, a flat channel reports "flat / no signal" rather than a plateau shortfall, samples pinned at the floor or rail kept out of the noise estimate so live dwells neither split nor shatter, a split dwell far above the noise still paired as one step, railed top steps calibrating the range that stayed in scale while the rail clamps rather than extrapolates, an unconfirmed dwell measured from the dwell grid rather than bridged or shifted, the number of levels the sweep held reported so a short step file can be flagged, and which step file the Extract Calibration dialog preloads), and `interpolateCalibration()` (midpoint, below/above clamping, coincident-raw guard); and the step-file parser pinned directly, written against the `QString` implementation first: case-insensitive `[[Step]]` header and `db` key, a header with a trailing comment or inner spaces not counting as a step, keys outside a step or in another section ignored, a step with no parseable `db` kept at 0, `QString::toDouble`'s value rules (quotes are NOT stripped), file order with the last `db` winning, the output cleared on every call, UTF-8 BOM / UTF-16 files, a non-ASCII path, both error messages, and `initialStepConfigPath` ignoring a directory
 - **TestSeriesColumnSchema** (`tst_seriescolumnschema`) — the CSV column-header schema (`SeriesColumnSchema`): SNR name and `columnHeader()` formatting, `parseColumnHeader()` classification (lock/missed suffix vs. SNR `"<id> - "` prefix, multi-word stream labels split at the last space, SNR-shape-wins-over-suffix), the unknown→SNR fallback, and the format→parse round trip that keeps `exportCsv` and `CsvSeriesParser` inverses. Multi-file input: source 0 stays unqualified (byte-identical), source 1+ gets a leading `"S<n>| "` qualifier that round-trips through parse for both SNR and Lock/Missed shapes, an unqualified header still defaults to source 0, and a header merely starting with the letter `'S'` isn't misparsed as a qualifier
 - **TestCalibrationExtractor** (`tst_calibrationextractor`) — US5.3 pipeline orchestration (complements TestStepDetector's pure logic): drives the async extraction end to end (reader + FrameProcessor workers → per-channel StepDetector). A bad file (with non-empty steps, so it clears the empty-steps guard) finishes unsuccessfully with a recorded error and no partial state; over `rnrz-l_testfile.ch10`, exactly words 6/7/8 (RCVR3 L/R/C, the only real stepped SNR sweep) build valid non-linear profiles while every other receiver word falls back to linear; over `step_cal, example.ch10` (receivers far out of alignment, its real 11-step 0–60 dB config, the shipped sequential word map), receivers 1, 3, 5 and 6 calibrate with every step paired to its own dwell (0 dB at the pre-sweep level, 60 dB at the top dwell, no split dwell taking a slot), receiver 1 over only the range that stayed in scale because its top two steps sit on the rail (readings hold at 48 dB), receiver 2 reports flat / no signal, and the report names the receivers; plus the pure `summarize()` report (receivers grouped, partial receivers spelled out with reasons, unnamed channels reported by name) and its two "check" prompts - a step file shorter than the recording and a word map that does not match it - each proven on the real recording with the wrong file, and silent on the correct setup; and clips that exceed the recording being reported rather than silently ignored
 - **TestStreamConfigSchema** (`tst_streamconfigschema`) — `StreamConfigSchema` round trip for both `StreamMode` variants and the calibration input references (`calCh10Path`/`stepTomlPath`/`clipStartSec`/`clipEndSec`), confirms `calibrationByWord` itself never appears in the serialized JSON (and the `calibration` block is omitted entirely when no non-linear calibration was ever extracted), and `fromJson()` rejecting an object missing required fields while leaving in-class defaults for anything else omitted

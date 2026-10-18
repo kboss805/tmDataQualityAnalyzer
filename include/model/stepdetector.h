@@ -17,9 +17,9 @@
 #ifndef STEPDETECTOR_H
 #define STEPDETECTOR_H
 
+#include <filesystem>
+#include <string>
 #include <vector>
-
-#include <QString>
 
 #include "calibrationprofile.h"
 
@@ -74,17 +74,21 @@ public:
     /**
      * @brief Parses an `[[Step]]` array-of-tables step-config TOML file.
      *
-     * The custom QSettings TOML format does not support arrays, so this is a
-     * dedicated line parser. Each `[[Step]]` table must provide `db`.
+     * `TomlDocument` deliberately does not implement arrays, so this is a dedicated line
+     * parser. It reads the file through the same `textfile` helpers, so a BOM or UTF-16 is
+     * handled alike. Each `[[Step]]` table must provide `db`. The header and the key are
+     * matched without regard to case; the header must be exactly `[[Step]]` (a trailing
+     * comment on it means it is not a step header); a value that is not a bare number is
+     * skipped and leaves the step at 0. `TestStepDetector` pins each of these.
      *
      * @param[in]  path  Path to the step-config TOML file.
      * @param[out] out   Parsed steps, in file order.
-     * @param[out] error Human-readable error message on failure.
+     * @param[out] error Human-readable error message on failure (UTF-8).
      * @return true if at least one valid step was parsed.
      */
-    static bool parseStepConfig(const QString& path,
+    static bool parseStepConfig(const std::filesystem::path& path,
                                 std::vector<StepDefinition>& out,
-                                QString& error);
+                                std::string& error);
 
     /**
      * @brief The step-config TOML the Extract Calibration dialog opens with.
@@ -98,8 +102,11 @@ public:
      * @param[in] preferred The stream's previous step file; may be empty.
      * @return @p preferred if it names an existing file; else
      *         `<appRoot>/settings/rcvr_cals/default.toml` if that exists; else empty.
+     *         UTF-8 in and out, and a plain string rather than a path so the displayed
+     *         form keeps its forward slashes.
      */
-    static QString initialStepConfigPath(const QString& appRoot, const QString& preferred);
+    static std::string initialStepConfigPath(const std::string& appRoot,
+                                             const std::string& preferred);
 
     /**
      * @brief Detects confirmed step plateaus in @p rawValues and builds a

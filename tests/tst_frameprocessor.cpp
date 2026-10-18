@@ -511,9 +511,9 @@ void TestFrameProcessor::calibrationRoundTripOnRealFileProducesCleanSteps()
         QSKIP("default.toml (rcvr_cals) not available");
 
     std::vector<StepDefinition> steps;
-    QString step_error;
-    QVERIFY2(StepDetector::parseStepConfig(step_toml, steps, step_error),
-             qPrintable(step_error));
+    std::string step_error;
+    QVERIFY2(StepDetector::parseStepConfig(toFsPath(step_toml), steps, step_error),
+             step_error.c_str());
     QVERIFY(!steps.empty());
 
     // ---- Extraction pass: build calibration profiles from this same file ----
