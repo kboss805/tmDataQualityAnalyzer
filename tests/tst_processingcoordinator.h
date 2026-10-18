@@ -9,6 +9,7 @@ class TestProcessingCoordinator : public QObject
 
 private slots:
     void constructorDefaults();
+    void workerReportsPrecedeTheResultAndFinishComesLast();
     void resetClearsState();
     void cancelProcessingNoRunNoOp();
     void startProcessingEmptyReturnsFalse();

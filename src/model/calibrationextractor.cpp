@@ -19,6 +19,7 @@
 #include "framesetup.h"
 #include "packetqueue.h"
 #include "processedstreamdata.h"
+#include "qtprocessingevents.h"
 #include "qtbridge.h"
 #include "stepdetector.h"
 
@@ -177,24 +178,26 @@ void CalibrationExtractor::start(const Request& request)
     }
 
     // ---- Worker ----
-    m_worker = new FrameProcessor;
-    m_worker_thread = new QThread;
-    m_worker->moveToThread(m_worker_thread);
-    connect(m_worker, &FrameProcessor::processingFinished,
-            this, &CalibrationExtractor::onWorkerFinished);
-    connect(m_worker, &FrameProcessor::logMessage, this, &CalibrationExtractor::logMessage);
-    // Capture the worker's failure reason (e.g. "Frame sync pattern was not
-    // found...") so finished() reports it instead of the generic fallback.
-    connect(m_worker, &FrameProcessor::errorOccurred, this, [this](const QString& msg) {
-        m_error = msg;
-        emit logMessage(msg);
-    });
-    connect(m_worker_thread, &QThread::finished, m_worker, &QObject::deleteLater);
+    m_worker = std::make_shared<FrameProcessor>();
+    // What the worker reports reaches this object's thread as queued events, in order -
+    // the delivery the signals it replaced gave.
+    m_worker->setEvents(std::make_shared<QtProcessingEvents>(
+        this,
+        [this](const QString& message) { emit logMessage(message); },
+        // Capture the worker's failure reason (e.g. "Frame sync pattern was not
+        // found...") so finished() reports it instead of the generic fallback.
+        [this](const QString& message) {
+            m_error = message;
+            emit logMessage(message);
+        },
+        [this](bool ok) { onWorkerFinished(ok); }));
 
     ProcessingParams params = m_params;
     FrameSetup* setup = m_frame_setup;
-    connect(m_worker_thread, &QThread::started, m_worker, [this, params, setup]() {
-        m_worker->process(params, setup);
+    std::shared_ptr<FrameProcessor> worker = m_worker;
+    // QThread::create runs the body on the new thread and ends it when the body returns.
+    m_worker_thread = QThread::create([worker, params, setup]() {
+        worker->process(params, setup);
     });
 
     // ---- Reader thread ----
@@ -419,7 +422,7 @@ void CalibrationExtractor::teardown()
         delete m_worker_thread;
         m_worker_thread = nullptr;
     }
-    m_worker = nullptr; // auto-deleted via deleteLater on thread finish
+    m_worker.reset(); // the thread is joined, so this is the last reference
 
     if (m_reader_thread != nullptr)
     {

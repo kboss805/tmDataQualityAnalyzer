@@ -419,7 +419,8 @@ that port ever happens - the throughput guard, the TOML move off `QSettings`, an
 de-Qt of the native core in small steps (QtGui out of the model's headers, then
 `PacketQueue`, then the `QElapsedTimer`s, then the packet bytes, then the first `QVector`s, the processing result and the pipeline's pointer lists) - plus the clean-build regression the TOML change
 caused, a generated Visual Studio solution, and C++20. The first `QString` steps move `TomlDocument`,
-`FrameSetup` and the step-file parser to UTF-8 `std::string`. One user-facing fix, found during the
+`FrameSetup` and the step-file parser to UTF-8 `std::string`, and the first `QObject` step takes
+Qt out of `FrameProcessor`. One user-facing fix, found during the
 `QString` survey: recordings under a folder with a non-ASCII name can be processed.
 
 #### A Visual Studio solution, generated rather than committed
@@ -519,6 +520,61 @@ called from our code is reported at **our** call site, so those keep warning exa
 v2.9.0 intended. Every first-party header here is quote-included, so `anglebrackets` covers
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
+
+#### `FrameProcessor` has no Qt: it reports through an event sink (de-Qt, `QObject` step 1)
+
+`FrameProcessor` was a `QObject` that emitted `logMessage`, `errorOccurred` and
+`processingFinished`. It is now a plain class: what it has to say goes to a
+**`ProcessingEvents`** sink (`include/model/processingevents.h`: three methods, UTF-8
+`std::string` messages) set with `setEvents()`. `frameprocessor.h` and `.cpp` contain no Qt, the
+messages are built with `std::format` (C++20, the reason for that change), and the class needs
+neither `moc` nor a thread with an event loop.
+
+**The Qt side stays Qt.** `include/qtprocessingevents.h` is a `ProcessingEvents` that posts each call
+to a target `QObject` with a queued invocation, which is the delivery the signals gave: events from
+one source arrive on the target's thread in the order they were raised. `ProcessingCoordinator` and
+`CalibrationExtractor` keep their own signals and create the adapter to forward into them. The
+adapter is Qt, so the C# shell will implement the same three-method interface over its own
+mechanism rather than reuse it.
+
+Two consequences in the consumers, both small but not mechanical:
+
+- **The worker thread is a `QThread::create`, not an event-loop thread.** It runs `process()` and
+  ends when that returns. The processor is owned by `shared_ptr` (held by `Worker` and by the thread's
+  body) instead of `deleteLater` on `QThread::finished`, so it is freed when the coordinator clears
+  its workers after the join.
+- **The finish handler looks the processor up by job index at delivery time** rather than holding a
+  pointer to it. An event delivered after teardown then finds nothing, instead of a dangling object.
+  (Qt drops events still queued for a destroyed target, which `TestQtProcessingEvents` checks.)
+
+**Tests first, as before.** `reportsExactlyTheseMessages` (9 rows) was written against the signals
+implementation and passed there before anything was ported. It pins the full text and order of
+everything `FrameProcessor` reports: success, a bounded window (named; an unbounded one is not), a
+masked pattern, sync-but-no-frames, cancel, both "internal error" cases, and the two byte-swap
+warnings. The mixed-byte-order warning had **no test at all** before this. Only its capture function
+changed across the port, and all nine rows pass unchanged.
+
+New suite **`TestQtProcessingEvents`** (4 cases) pins the hand-off itself: 300 mixed events from a
+worker thread arrive on the target's thread in order with completion last; UTF-8 decodes; missing
+handlers are skipped; and events for a destroyed target are dropped. New
+`TestProcessingCoordinator::workerReportsPrecedeTheResultAndFinishComesLast` checks the same
+property through a real run: the worker's completion line is relayed before the stream's result,
+and `processingFinished` is last.
+
+**Validated against eight single-defect mutants; all caught.** Delivered directly instead of queued
+(the run crashes with an access violation: handlers run on the worker thread); completion alone
+delivered directly (it overtakes the log lines; also crashes); the message read as Latin-1; the cancel
+path not reporting completion; elapsed time with two decimals; the label always appended; the pattern
+in lower case (caught only by the real-file test, since the synthetic rows use `0x9`, which has no
+letter); and error reports dropped (11 cases). **Two of them abort the run rather than fail a case,
+which still counts: the race they create is exactly what the queued hand-off exists to prevent.**
+
+Throughput: pinned release gate 13866 ms, 1.01x the slowest solo stream, 0.65x sequential; the
+only per-event cost is one null-checked virtual call.
+
+Baseline **501 / 0 / 1** (was 485 / 0 / 1; 16 new = 9 message rows + 4 hand-off cases + 1
+coordinator case + the new suite's `initTestCase` / `cleanupTestCase`), **502 / 0 / 0** at release.
+**25 suites.**
 
 #### The step-file parser is `std::string` and `std::filesystem::path`, and shares its file reading (de-Qt, `QString` step 3)
 
@@ -3552,6 +3608,7 @@ not mis-read.
 
 4. **FrameProcessor** (`src/model/frameprocessor.cpp`, `include/model/frameprocessor.h`)
    - Per-stream worker: drains its PacketQueue, runs the bit-serial frame-sync scanner (acquire/lock, off-phase rejection, bit-span lock %), accumulates lock %, missed frames, and (SNR mode) calibrated channel values into a `ProcessedStreamData`
+   - Plain C++, no Qt: it reports log lines, errors and completion to a `ProcessingEvents` sink (`include/model/processingevents.h`) on the processing thread; `qtprocessingevents.h` forwards them to a `QObject`'s thread as queued calls
    - Private helpers include `derandomizeBitstream()` and `hasSyncPattern()`; applies linear slope/offset or a non-linear `CalibrationProfile` per channel
 
 5. **FrameSetup** (`src/model/framesetup.cpp`, `include/model/framesetup.h`) — frame configuration / word-map + calibration table built per job
@@ -3766,8 +3823,8 @@ that worktrees also need.
 - Central processing function: `FrameProcessor::process()`, driven per stream from its `ProcessingParams` + `FrameSetup`
 - Drains the stream's `PacketQueue` (fed by the single `Ch10PacketReader`) rather than opening the file itself
 - Accumulates results into an in-memory `ProcessedStreamData` (lock %, accumulated missed frames, and SNR channel series) — there is no CSV-on-disk intermediate
-- One `FrameProcessor` per stream runs on its own `QThread`; `ProcessingCoordinator` owns the lifecycle and tears the threads down when each worker finishes
-- Emits progress, completion, log, and error signals consumed by the coordinator
+- One `FrameProcessor` per stream runs on its own `QThread` (`QThread::create`, no event loop); `ProcessingCoordinator` owns the lifecycle and tears the threads down when each worker finishes
+- Reports log, error, and completion through `ProcessingEvents`; the coordinator's adapter relays them as its own signals, on the UI thread and in order
 
 ### Framesync Lock Statistics Calculation
 
@@ -3854,11 +3911,11 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestChannelData** (`tst_channeldata`) — ChannelData model object tests
 - **TestChapter10Reader** (`tst_chapter10reader`) — Chapter 10 metadata reader: channel discovery, time/PCM channel lists, channel ID resolution against real Ch10 test data
 - **TestConstants** (`tst_constants`) — Verifies all PCMConstants, UIConstants, PlotConstants, AppVersion, and recent files constants (including kMaxPacketBufferSize, kFrameSyncHexPattern)
-- **TestFrameProcessor** (`tst_frameprocessor`) — constructor defaults, abort flag, `derandomizeBitstream` (identity/short and changed/long), invalid time-channel/PCM-channel/file handling, and processing real Ch10 data (receiver-data accumulation, lock-only mode has no channels, monotonic frame-sync errors, slope affects values, shorter period → more samples, calibration round-trip clean steps, off-phase sync after lock-loss not extracted)
+- **TestFrameProcessor** (`tst_frameprocessor`) — constructor defaults, abort flag, `derandomizeBitstream` (identity/short and changed/long), invalid time-channel/PCM-channel/file handling, and processing real Ch10 data (receiver-data accumulation, lock-only mode has no channels, monotonic frame-sync errors, slope affects values, shorter period → more samples, calibration round-trip clean steps, off-phase sync after lock-loss not extracted); and `reportsExactlyTheseMessages` (9 rows), the exact text and order of everything it reports - success, a bounded window, a masked pattern, sync-but-no-frames, cancel, both internal errors, and the all-odd and mixed byte-swap warnings - written against the signals implementation first
 - **TestMainViewModelHelpers** (`tst_mainviewmodel_helpers`) — `MainViewModel::classifyLogMessage()`, the severity policy the View renders but does not decide. The channel-naming cases that used to live here moved to **TestFrameSetup** with the `MainViewModel` forwarders they called: `FrameSetup` is where that naming lives
 - **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration, `channelPrefix()` naming the known channel positions then falling back to `CH<n+1>`, `receiverParameterName()` combining the two, `receiverIndexFromName()` inverting it (0 for a name with no parseable `_RCVR<N>`), and the receiver-parameters file as a whole: the scalars read from the `[Receivers]` block the shipped files actually use (and the older `[Parameters]` keys still accepted), a save/load round trip that carries the word map with them, the default-map fallback when no file was loaded, nothing written when there is no map to write, and the metadata-only file that parses to zero parameters — the contract `tryLoadingFile()`'s two callers depend on; and `receiverNameParsingMatchesQStringToInt`, which pins how a hand-typed parameter name parses (the last `_RCVR` token wins, whitespace and a leading `+` tolerated, a second sign / negative / trailing junk / overflow reads as no receiver, a name starting with the token has no channel part) - written against the `QString` implementation first
 - **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, the computed Y range and the SNR max override that pins it (the minimum stays automatic, Reset returns it to the data), X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), the left-axis view toggle preserving per-stream selection, and stream-identity regression coverage: two streams sharing a TMATS-derived `streamLabel` but different `streamOrder` must stay independent through reprocess-replace and `renameSeries()`/`recolorSeries()` sibling-sync (pinned after a pre-v2.6.0 cross-contamination bug). Multi-file input: cross-source identity (two different `sourceId`s reusing the same `streamLabel`/`streamOrder` stay independent through reprocess-replace/rename/recolor), time-base re-basing (a later-added source starting earlier shifts existing series right; three successively-earlier sources compound correctly; a later source starting after triggers no shift), the non-overlap warning signal (fires once per newly-arriving non-overlapping source, not for an overlapping range), and `removeSource()` (drops only the target source, re-bases left only when the removed source held the earliest sample, clears all data when the last source is removed, no-ops for an unknown id). US1.1 source view: `setVisibleSource()` isolates a source via `effectiveVisible()` without mutating per-series `visible`, `sourceList()` lists distinct labeled sources, and `exportCsv(path, sourceId)` writes only that source's columns
-- **TestProcessingCoordinator** (`tst_processingcoordinator`) — constructor defaults, `reset()` clears state, cancel-with-no-run no-op, `startProcessing()` empty-returns-false and processing-state emission, plus single-vs-multi-stream throughput benchmarks
+- **TestProcessingCoordinator** (`tst_processingcoordinator`) — constructor defaults, `reset()` clears state, cancel-with-no-run no-op, `startProcessing()` empty-returns-false and processing-state emission, plus single-vs-multi-stream throughput benchmarks; and `workerReportsPrecedeTheResultAndFinishComesLast`, which checks through a real run that the worker's completion line is relayed before the stream's result and `processingFinished` is last
 - **TestMainView** (`tst_mainview`) — Main window construction, widget wiring, log routing, dock visibility behavior, and the CSV import routing (`openPath`/`importCsv`, valid/invalid). The batch-apply cases moved to **TestBatchController** with the state machine itself
 - **TestPlotWidget** (`tst_plotwidget`) — Plot widget construction, null/valid ViewModel connection, dark/light theme application, the movable legend overlay populating from data (hidden until data loads, then one row per visible active-metric series), a shown/resized-window regression case asserting the overlay sizes correctly (not a collapsed frame-only box) after a second rebuild adds more rows — a QScrollArea `widgetResizable` sizeHint staleness bug reproduced and fixed post-review — the SNR legend row showing the short `"CH<id> <ch.name>"` form instead of the full TMATS stream title, the legend row layout reserving a right-side gutter matching the style's scrollbar extent, and each legend row carrying an objectName the overlay stylesheet can target to override the app's global `QWidget { background-color: ... }` theme rule (otherwise every row painted as an opaque chip); plus `exportImage()` writing a PNG/SVG/PDF headlessly (the parameterized image-export entry point extracted for batch apply); and the right-click context menu that replaced the external control rows: it lists every expected top-level item, its data-dependent entries are disabled until data loads, the Plot File submenu is disabled for a single source and switches `visibleSource` for a multi-source run, View Mode reflects and sets the active left-axis metric, `X Axis > Reset Span` / `Y Axes > Reset` clear the X window and both Y overrides, plus two structural guards - wheel-zoom/drag-pan stay enabled (horizontal-only) once data arrives, and **no QComboBox / QSpinBox / QLineEdit / QAbstractButton lives outside the chart** - on-chart overlays are allowed, external control rows are not (the machine-checkable form of "no external controls"); plus the legend toggle (shows/hides the overlay and survives a rebuild, appears only once data is loaded, is parented to the chart, and stays in sync with the context menu's checkable Show Legend item); plus Y axis occupancy - a lock-only plot hides the right axis, an SNR-only plot hides the left, an empty chart keeps the left (hiding both would leave a bare box), and hiding the last *visible* SNR series reclaims the right axis just as never loading one would
 - **TestTmChart** (`tst_tmchart`) - the first-party chart replacing QCustomPlot: series bookkeeping across removals and out-of-range access, mismatched x/y lengths truncated (a draw-time overrun), degenerate/non-finite ranges rejected, X and Y coordinate transforms round-tripping with the correct screen orientation, wheel zoom anchoring the value under the cursor and reporting the new range, interactions inert until enabled, and the shared `renderTo()` export path painting real content while omitting the crosshair/zoom-band overlays (cursor state, not data), and that hiding a Y axis reclaims its margin (the measurable consequence) while leaving the coordinate transforms consistent with the new plot area
@@ -3875,6 +3932,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestPacketQueue** (`tst_packetqueue`) — the bounded reader-to-worker hand-off, tested directly rather than only through the pipeline: FIFO order, every `PacketItem` field surviving (including an embedded NUL in the payload), the producer blocking at exactly the configured depth and resuming after one dequeue, the consumer blocking when empty and resuming after one enqueue, `close()` releasing a blocked producer (`enqueue` returns false) and a blocked consumer (end-of-stream sentinel), a closed queue draining what it already holds before reporting end-of-stream, a non-positive depth falling back to the default of 64, and 20,000 items through a depth-4 queue in order under constant hand-off with a watchdog so a lost wakeup fails instead of hanging the suite. Validated against the original Qt-based queue (must pass) and eight single-defect mutants (every one must fail) - see the changelog. Pure logic, runs in CI
 - **TestIntervalGate** (`tst_intervalgate`) — the progress throttle that replaced `QElapsedTimer` in `Ch10PacketReader::run()`, pinned with injected time points so nothing depends on a sleep: not due before the interval, due at *exactly* the interval (`>=`, not `>`), due long after without `due()` restarting the interval itself, the interval read as milliseconds rather than seconds or microseconds, `reset()` measuring from the reset, sub-millisecond precision agreeing with `QElapsedTimer`'s truncation on every side of the boundary, and a default-constructed gate starting at *now* rather than the clock's epoch (otherwise it is due the instant it exists and throttles nothing). Validated against seven single-defect mutants, every one of which must fail. Pure logic, runs in CI
 - **TestTomlDocument** (`tst_tomldocument`) — the settings-file reader/writer, pinned directly rather than only through `FrameSetup` and the dialogs: sections and keys in file order (not sorted), an empty `[EMPTY]` section still declared, `[[Step]]` read as a literal section named `[Step]`, quote-aware `#` comments, `\"` and `\\` unescaped, a repeated key overwriting, a UTF-8 BOM with CRLF, UTF-16 LE and BE with a BOM, a non-ASCII value saved to and loaded from a folder outside every Western code page, the integer rule (whitespace and `+` tolerated, junk / fraction / overflow / empty return the caller's fallback with `parsed` false), the double rule (including `inf`), `QVariant::toBool()`'s boolean rule (even `no` is true), the exact bytes `save()` writes (top-level keys first, a blank line between sections, CRLF, no BOM), doubles as `%g` with six digits, `save()` truncating rather than merging, and both error paths naming the file. Written against the Qt implementation first; validated against four mutants of the `std` port. Pure logic, runs in CI
+- **TestQtProcessingEvents** (`tst_qtprocessingevents`) — the hand-off from a processing thread to Qt that replaced `FrameProcessor`'s signals: 300 mixed log / error events raised on a worker thread arrive on the target's thread in the order raised with completion last (and the test really did cross threads); UTF-8 messages decode (an accented letter and an em dash); any handler may be missing; events still queued for a destroyed target are dropped, which is what lets the coordinator and extractor die with events in flight. Validated against mutants that deliver directly instead of queued (the run crashes) and that decode as Latin-1. Pure logic, runs in CI
 
 ### Running Tests
 

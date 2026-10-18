@@ -84,9 +84,9 @@ private:
     /// Per-stream worker bookkeeping.
     struct Worker
     {
-        QThread*        thread    = nullptr;
-        FrameProcessor* processor = nullptr;
-        PacketQueue*    queue     = nullptr;
+        QThread*                        thread    = nullptr;
+        std::shared_ptr<FrameProcessor> processor; ///< Shared with the thread's body.
+        PacketQueue*                    queue     = nullptr;
     };
 
     /// Frees and clears any remaining queued jobs (including frame setups).
@@ -98,7 +98,7 @@ private:
 
     // Slots
     void onReaderProgress(int percent);
-    void onWorkerFinished(FrameProcessor* processor, bool success, int job_index);
+    void onWorkerFinished(bool success, int job_index);
 
     // Reader
     QThread*          m_reader_thread = nullptr;

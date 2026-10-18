@@ -104,6 +104,85 @@ static std::vector<uint8_t> packBitString(const QString& bits)
     return data;
 }
 
+namespace {
+
+/// Everything a FrameProcessor reports, in order. The only place the tests below touch the
+/// reporting mechanism is captureEvents(), so the Qt-signals-to-event-sink change swaps that
+/// one function and nothing else: the expected text was written against the signals.
+struct Capture
+{
+    QStringList logs;
+    QStringList errors;
+    QList<bool> finished;
+};
+
+/// Records into a Capture. Called on the processing thread, which in every test below is
+/// the test thread, so no locking is needed.
+class CaptureSink final : public ProcessingEvents
+{
+public:
+    explicit CaptureSink(Capture& c) : m_c(c) {}
+    void logMessage(const std::string& m) override { m_c.logs << QString::fromStdString(m); }
+    void errorOccurred(const std::string& m) override { m_c.errors << QString::fromStdString(m); }
+    void processingFinished(bool ok) override { m_c.finished << ok; }
+
+private:
+    Capture& m_c;
+};
+
+void captureEvents(FrameProcessor& fp, Capture& c)
+{
+    fp.setEvents(std::make_shared<CaptureSink>(c));
+}
+
+/// A 4-bit-sync, 12-bit-frame synthetic stream: the same layout the off-phase test uses.
+/// Fills @p p's resolved attributes; the caller sets what it varies (label, window, ...).
+void syntheticParams(ProcessingParams& p, PacketQueue& queue)
+{
+    p.packetQueue      = &queue;
+    p.pcmChannelId     = 7;
+    p.streamLabel      = "Rcvr Bus";
+    p.mode             = StreamMode::FrameSyncLockStats;
+    p.startSeconds     = 0;
+    p.stopSeconds      = UINT64_MAX;
+    p.samplePeriodSec  = 1e9;
+    p.useDataRateClock = true;
+    p.isRandomized     = false;
+    p.isInverted       = false;
+
+    p.resolvedAttrs.syncPat      = 0x9; // 1001b
+    p.resolvedAttrs.syncMask     = 0xF;
+    p.resolvedAttrs.syncPatLen   = 4;
+    p.resolvedAttrs.bitsInFrame  = 12;
+    p.resolvedAttrs.wordsInFrame = 2;
+    p.resolvedAttrs.wordLen      = 4;
+    p.resolvedAttrs.wordMask     = 0xF;
+    p.resolvedAttrs.minSyncs     = 1;
+    p.resolvedAttrs.delta100ns   = 1.0;
+    p.resolvedAttrs.needsSwap    = false;
+    p.resolvedAttrs.resolved     = true;
+}
+
+/// Queues one packet carrying @p bits, MSB first.
+void enqueueBits(PacketQueue& queue, const QString& bits)
+{
+    PacketItem item;
+    item.payload        = std::make_shared<const std::vector<uint8_t>>(packBitString(bits));
+    item.baseAbsSeconds = 0.0;
+    item.packetBits     = static_cast<uint64_t>(bits.size());
+    QVERIFY(queue.enqueue(item));
+}
+
+void enqueueEndOfStream(PacketQueue& queue)
+{
+    PacketItem eos;
+    eos.endOfStream = true;
+    QVERIFY(queue.enqueue(eos));
+}
+
+} // namespace
+
+
 /// Helper: loads the default frame setup (word map) from
 /// settings/receiver_params/default.toml.
 static bool loadDefaultFrameSetup(FrameSetup& setup)
@@ -177,6 +256,172 @@ void TestFrameProcessor::nonAsciiPathOpensInBothReaders()
              "packet reader could not open a path the metadata reader opened");
 }
 
+void TestFrameProcessor::reportsExactlyTheseMessages_data()
+{
+    QTest::addColumn<QString>("scenario");
+    QTest::addColumn<bool>("returned");
+    QTest::addColumn<QStringList>("logs");
+    QTest::addColumn<QStringList>("errors");
+
+    const QString tag = QStringLiteral("[CH 7 Rcvr Bus] ");
+
+    QTest::newRow("success")
+        << "success" << true
+        << QStringList{tag + "processing...",
+                       tag + "4 bytes processed, 3 syncs found, 2 frames extracted.",
+                       tag + "complete — 1 samples extracted, elapsed N.Ns."}
+        << QStringList{};
+
+    // A bounded window is named; an unbounded one is not (an unset stop would print as
+    // 18446744073709551615s on every ordinary run).
+    QTest::newRow("bounded-window")
+        << "bounded" << false
+        << QStringList{tag + "processing (1s to 100s)...",
+                       tag + "2 bytes processed, 2 syncs found, 0 frames extracted."}
+        << QStringList{tag + "sync found but no frames extracted — pattern 0x9 (4 bits), "
+                             "12 bits/frame; 2 syncs, 1 boundary-aligned."};
+
+    // The mask is printed only when it constrains something.
+    QTest::newRow("masked-pattern-no-sync")
+        << "masked" << false
+        << QStringList{tag + "processing...",
+                       tag + "2 bytes processed, 0 syncs found, 0 frames extracted."}
+        << QStringList{tag + "no frame sync found — pattern 0x9 (4 bits, mask 0xE), "
+                             "12 bits/frame."};
+
+    QTest::newRow("sync-but-no-frames")
+        << "noframes" << false
+        << QStringList{tag + "processing...",
+                       tag + "1 bytes processed, 1 syncs found, 0 frames extracted."}
+        << QStringList{tag + "sync found but no frames extracted — pattern 0x9 (4 bits), "
+                             "12 bits/frame; 1 syncs, 0 boundary-aligned."};
+
+    QTest::newRow("cancelled")
+        << "cancelled" << false
+        << QStringList{tag + "processing...", tag + "processing cancelled by user."}
+        << QStringList{};
+
+    // The label "Ch 7" is the fallback MainViewModel uses when TMATS has no name, so the
+    // tag drops it; an empty label drops it too.
+    QTest::newRow("no-packet-queue")
+        << "noqueue" << false << QStringList{}
+        << QStringList{QStringLiteral("[CH 7] Internal error: no packet queue for stream.")};
+    QTest::newRow("attributes-unresolved")
+        << "unresolved" << false << QStringList{}
+        << QStringList{QStringLiteral("[CH 7] Internal error: PCM attributes not resolved.")};
+
+    // Odd-length payloads cannot be byte-pair swapped. Every packet odd: the setting had
+    // no effect at all. Some odd: one stream carrying two byte orders.
+    QTest::newRow("every-payload-odd")
+        << "allodd" << false
+        << QStringList{tag + "processing...",
+                       tag + "all 1 payloads are odd-length and cannot be byte-pair swapped — "
+                             "processed as Legacy Chapter 10 regardless of the setting.",
+                       tag + "3 bytes processed, 2 syncs found, 0 frames extracted."}
+        << QStringList{tag + "sync found but no frames extracted — pattern 0x9 (4 bits), "
+                             "12 bits/frame; 2 syncs, 0 boundary-aligned."};
+    QTest::newRow("some-payloads-odd")
+        << "mixed" << true
+        << QStringList{tag + "processing...",
+                       tag + "warning: byte swap skipped on 1 of 2 packets (odd length) — "
+                             "mixed byte order, sync may be unreliable.",
+                       tag + "5 bytes processed, 4 syncs found, 1 frames extracted.",
+                       tag + "complete — 1 samples extracted, elapsed N.Ns."}
+        << QStringList{};
+}
+
+void TestFrameProcessor::reportsExactlyTheseMessages()
+{
+    // The text of every message FrameProcessor reports, exactly, in order. Written
+    // against the QString/signals implementation and kept as it was across the move to
+    // std::format and an event sink: a format specifier is the kind of thing a port gets
+    // subtly wrong (%1 of %2, 'f' with one decimal) and nothing else would notice.
+    QFETCH(QString, scenario);
+    QFETCH(bool, returned);
+    QFETCH(QStringList, logs);
+    QFETCH(QStringList, errors);
+
+    PacketQueue q;
+    ProcessingParams p;
+    FrameSetup s;
+    syntheticParams(p, q);
+
+    if (scenario == "success")
+    {
+        enqueueBits(q, "1001" "0000" "00001001" "0000" "00001001");
+        enqueueEndOfStream(q);
+    }
+    else if (scenario == "bounded")
+    {
+        p.startSeconds = 1;
+        p.stopSeconds  = 100;
+        enqueueBits(q, "1001" "0000" "00001001");
+        enqueueEndOfStream(q);
+    }
+    else if (scenario == "masked")
+    {
+        p.resolvedAttrs.syncMask = 0xE;
+        enqueueBits(q, "0000" "0000" "0000");
+        enqueueEndOfStream(q);
+    }
+    else if (scenario == "noframes")
+    {
+        enqueueBits(q, "1001");
+        enqueueEndOfStream(q);
+    }
+    else if (scenario == "cancelled")
+    {
+        enqueueBits(q, "1001");
+        enqueueEndOfStream(q);
+    }
+    else if (scenario == "noqueue")
+    {
+        p.packetQueue = nullptr;
+        p.streamLabel = "Ch 7";
+    }
+    else if (scenario == "unresolved")
+    {
+        p.resolvedAttrs.resolved = false;
+        p.streamLabel = "";
+    }
+    else if (scenario == "allodd")
+    {
+        p.resolvedAttrs.needsSwap = true;
+        enqueueBits(q, "100100000000000000001001"); // 3 bytes
+        enqueueEndOfStream(q);
+    }
+    else if (scenario == "mixed")
+    {
+        p.resolvedAttrs.needsSwap = true;
+        enqueueBits(q, "100100000000000000001001"); // 3 bytes (odd)
+        enqueueBits(q, "1001000000001001");         // 2 bytes (even)
+        enqueueEndOfStream(q);
+    }
+
+    FrameProcessor fp;
+    Capture c;
+    captureEvents(fp, c);
+    if (scenario == "cancelled")
+    {
+        fp.requestAbort();
+    }
+    const bool ok = fp.process(p, &s);
+
+    // The one non-deterministic piece: how long the run took, printed to a tenth.
+    const QRegularExpression elapsed(QStringLiteral("elapsed [0-9]+\\.[0-9]s"));
+    QStringList actual = c.logs;
+    for (QString& m : actual)
+    {
+        m.replace(elapsed, QStringLiteral("elapsed N.Ns"));
+    }
+
+    QCOMPARE(ok, returned);
+    QCOMPARE(actual, logs);
+    QCOMPARE(c.errors, errors);
+    // Exactly one completion notice per run, and it agrees with the return value.
+    QCOMPARE(c.finished, QList<bool>({returned}));
+}
+
 void TestFrameProcessor::constructorDefaults()
 {
     FrameProcessor fp;
@@ -187,7 +432,8 @@ void TestFrameProcessor::constructorDefaults()
 void TestFrameProcessor::requestAbortSetsFlag()
 {
     FrameProcessor fp;
-    QSignalSpy log_spy(&fp, &FrameProcessor::logMessage);
+    Capture cap;
+    captureEvents(fp, cap);
     fp.requestAbort();
     QVERIFY(true);
 }
@@ -221,8 +467,8 @@ void TestFrameProcessor::derandomizeLongerBufferChanges()
 void TestFrameProcessor::processInvalidTimeChannel()
 {
     FrameProcessor fp;
-    QSignalSpy error_spy(&fp, &FrameProcessor::errorOccurred);
-    QSignalSpy finished_spy(&fp, &FrameProcessor::processingFinished);
+    Capture cap;
+    captureEvents(fp, cap);
 
     FrameSetup setup;
     ProcessingParams p = makeTestParams("dummy.ch10", -1, 1);
@@ -230,16 +476,16 @@ void TestFrameProcessor::processInvalidTimeChannel()
     p.stopSeconds = 100;
     p.samplePeriodSec = 1.0;
     QVERIFY(!fp.process(p, &setup));
-    QVERIFY(!error_spy.isEmpty());
-    QVERIFY(!finished_spy.isEmpty());
-    QCOMPARE(finished_spy.last().at(0).toBool(), false);
+    QVERIFY(!cap.errors.isEmpty());
+    QVERIFY(!cap.finished.isEmpty());
+    QCOMPARE(cap.finished.last(), false);
 }
 
 void TestFrameProcessor::processInvalidPcmChannel()
 {
     FrameProcessor fp;
-    QSignalSpy error_spy(&fp, &FrameProcessor::errorOccurred);
-    QSignalSpy finished_spy(&fp, &FrameProcessor::processingFinished);
+    Capture cap;
+    captureEvents(fp, cap);
 
     FrameSetup setup;
     ProcessingParams p = makeTestParams("dummy.ch10", 1, -1);
@@ -247,15 +493,16 @@ void TestFrameProcessor::processInvalidPcmChannel()
     p.stopSeconds = 100;
     p.samplePeriodSec = 1.0;
     QVERIFY(!fp.process(p, &setup));
-    QVERIFY(!error_spy.isEmpty());
-    QVERIFY(!finished_spy.isEmpty());
-    QCOMPARE(finished_spy.last().at(0).toBool(), false);
+    QVERIFY(!cap.errors.isEmpty());
+    QVERIFY(!cap.finished.isEmpty());
+    QCOMPARE(cap.finished.last(), false);
 }
 
 void TestFrameProcessor::processInvalidFile()
 {
     FrameProcessor fp;
-    QSignalSpy error_spy(&fp, &FrameProcessor::errorOccurred);
+    Capture cap;
+    captureEvents(fp, cap);
 
     FrameSetup setup;
     ProcessingParams p = makeTestParams("nonexistent_file.ch10", 1, 1);
@@ -263,7 +510,7 @@ void TestFrameProcessor::processInvalidFile()
     p.stopSeconds = 100;
     p.samplePeriodSec = 1.0;
     QVERIFY(!fp.process(p, &setup));
-    QVERIFY(!error_spy.isEmpty());
+    QVERIFY(!cap.errors.isEmpty());
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -972,13 +1219,13 @@ void TestFrameProcessor::oddPayloadSwapSkipIsReported()
 
     FrameSetup empty_setup;
     FrameProcessor fp;
-    QStringList log;
-    QObject::connect(&fp, &FrameProcessor::logMessage,
-                     [&log](const QString& m) { log << m; });
+    Capture cap;
+    captureEvents(fp, cap);
 
     QFuture<void> future = QtConcurrent::run([&rdr]() { rdr.run(); });
     fp.process(p, &empty_setup);
     future.waitForFinished();
+    const QStringList& log = cap.logs;
 
     const QString joined = log.join(" | ");
     QVERIFY2(joined.contains("odd-length"),
@@ -1032,13 +1279,13 @@ void TestFrameProcessor::offPhaseSyncsAreNotCountedAsBoundaryAligned()
 
     FrameSetup empty_setup;
     FrameProcessor fp;
-    QString reported;
-    QObject::connect(&fp, &FrameProcessor::errorOccurred,
-                     [&reported](const QString& m) { reported = m; });
+    Capture cap;
+    captureEvents(fp, cap);
 
     QFuture<void> future = QtConcurrent::run([&rdr]() { rdr.run(); });
     const bool ok = fp.process(p, &empty_setup);
     future.waitForFinished();
+    const QString reported = cap.errors.isEmpty() ? QString() : cap.errors.last();
 
     QVERIFY2(!ok, "a wrong frame length must not yield extracted frames");
     QVERIFY2(reported.contains("no frames extracted"),
@@ -1094,16 +1341,14 @@ void TestFrameProcessor::failureReportNamesChannelAndSyncPattern()
 
     FrameSetup empty_setup;
     FrameProcessor fp;
-    QStringList log;
-    QString reported;
-    QObject::connect(&fp, &FrameProcessor::logMessage,
-                     [&log](const QString& m) { log << m; });
-    QObject::connect(&fp, &FrameProcessor::errorOccurred,
-                     [&reported](const QString& m) { reported = m; });
+    Capture cap;
+    captureEvents(fp, cap);
 
     QFuture<void> future = QtConcurrent::run([&rdr]() { rdr.run(); });
     fp.process(p, &empty_setup);
     future.waitForFinished();
+    const QStringList& log = cap.logs;
+    const QString reported = cap.errors.isEmpty() ? QString() : cap.errors.last();
 
     const QString expected_tag = QStringLiteral("[CH %1 PCM03]").arg(pcm_id);
 
