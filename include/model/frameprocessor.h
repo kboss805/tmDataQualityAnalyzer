@@ -14,10 +14,10 @@
 
 #include <atomic>
 #include <cstdint>
+#include <vector>
 
 #include <QObject>
 #include <QString>
-#include <QVector>
 
 #include "processedstreamdata.h"
 #include "processingparams.h"
@@ -125,7 +125,7 @@ private:
         uint32_t minor_frame_bit_count = 0, minor_frame_word_count = 0, data_word_bit_count = 0;
         int32_t  save_data = 0;            ///< 0=waiting, 1=collecting, 2=frame complete.
         uint64_t sync_count = UINT64_MAX;  ///< No in-phase sync confirmed yet.
-        QVector<uint64_t> frame_words;     ///< Words of the minor frame being collected.
+        std::vector<uint64_t> frame_words;     ///< Words of the minor frame being collected.
         // Output windowing.
         double current_time_sample = 0.0, next_time_sample = 0.0;
         int    n_samples = 0;
@@ -143,18 +143,18 @@ private:
     /// genuine recording gap) and advancing the windowing clock in @p s.
     void closeElapsedWindows(ScanState& s, double current_time_eval,
                              const ProcessingParams& params,
-                             const QVector<ParameterInfo*>& enabled_params);
+                             const std::vector<ParameterInfo*>& enabled_params);
 
     /// Feeds one decoded PCM bit through the acquire/lock state machine: shifts the
     /// sync register, tracks frame-boundary rollover/missed frames, honors in-phase
     /// sync matches (rejecting off-phase ones while locked), collects data words, and
     /// tallies lock-percentage bits. @p in_window gates window-bounded accounting.
     void scanBit(ScanState& s, uint8_t bit_val, bool in_window,
-                 const QVector<ParameterInfo*>& enabled_params);
+                 const std::vector<ParameterInfo*>& enabled_params);
 
     /// Caches the enabled parameters for the hot loop and builds the index-aligned
     /// in-memory channel series in m_result. @return the enabled-parameter pointers.
-    QVector<ParameterInfo*> buildEnabledParams(FrameSetup* frame_setup, bool receiver_mode);
+    std::vector<ParameterInfo*> buildEnabledParams(FrameSetup* frame_setup, bool receiver_mode);
 
     /// Emits the completion log (or the no-syncs / no-frames error) for a finished
     /// scan and signals processingFinished(). @return true on a successful run.
@@ -192,7 +192,7 @@ private:
                           int n_samples,
                           double lock_percentage,
                           double accumulated_missed_frames,
-                          const QVector<ParameterInfo*>& enabled_params);
+                          const std::vector<ParameterInfo*>& enabled_params);
 
     std::atomic<bool> m_abort_requested; ///< Thread-safe abort flag.
     ProcessedStreamData m_result;        ///< Accumulated in-memory output of the current run.

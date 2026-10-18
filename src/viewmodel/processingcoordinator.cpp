@@ -64,7 +64,7 @@ bool ProcessingCoordinator::startProcessing(QVector<StreamJob> jobs)
 
     // Resolve TMATS-derived attributes once, synchronously, via the reader.
     m_reader = new Ch10PacketReader;
-    QVector<ProcessingParams*> params_list;
+    std::vector<ProcessingParams*> params_list;
     params_list.reserve(m_jobs.size());
     for (StreamJob& job : m_jobs)
     {

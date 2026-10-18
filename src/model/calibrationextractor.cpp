@@ -142,7 +142,7 @@ void CalibrationExtractor::start(const Request& request)
     m_params.packetQueue = m_queue;
 
     m_reader = new Ch10PacketReader;
-    QVector<ProcessingParams*> params_list{ &m_params };
+    std::vector<ProcessingParams*> params_list{ &m_params };
     QString error;
     if (!m_reader->prepare(request.calFilename, request.timeChannelId, params_list, error))
     {

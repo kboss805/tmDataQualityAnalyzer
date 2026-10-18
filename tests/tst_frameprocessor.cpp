@@ -74,7 +74,7 @@ static bool runWithReader(FrameProcessor& fp, ProcessingParams& p, FrameSetup* s
     p.packetQueue = &queue;
 
     Ch10PacketReader reader;
-    QVector<ProcessingParams*> params_list = { &p };
+    std::vector<ProcessingParams*> params_list = { &p };
     QString error;
     if (!reader.prepare(p.filename, p.timeChannelId, params_list, error))
         return false;
@@ -850,7 +850,7 @@ void TestFrameProcessor::swapBytesOffFindsSyncThatTheSwapDestroys()
         PacketQueue queue;
         p.packetQueue = &queue;
         Ch10PacketReader rdr;
-        QVector<ProcessingParams*> params_list = { &p };
+        std::vector<ProcessingParams*> params_list = { &p };
         QString error;
         if (!rdr.prepare(p.filename, p.timeChannelId, params_list, error))
         {
@@ -926,7 +926,7 @@ void TestFrameProcessor::oddPayloadSwapSkipIsReported()
     PacketQueue queue;
     p.packetQueue = &queue;
     Ch10PacketReader rdr;
-    QVector<ProcessingParams*> params_list = { &p };
+    std::vector<ProcessingParams*> params_list = { &p };
     QString error;
     QVERIFY2(rdr.prepare(p.filename, p.timeChannelId, params_list, error), qPrintable(error));
 
@@ -986,7 +986,7 @@ void TestFrameProcessor::offPhaseSyncsAreNotCountedAsBoundaryAligned()
     PacketQueue queue;
     p.packetQueue = &queue;
     Ch10PacketReader rdr;
-    QVector<ProcessingParams*> params_list = { &p };
+    std::vector<ProcessingParams*> params_list = { &p };
     QString error;
     QVERIFY2(rdr.prepare(p.filename, p.timeChannelId, params_list, error), qPrintable(error));
 
@@ -1048,7 +1048,7 @@ void TestFrameProcessor::failureReportNamesChannelAndSyncPattern()
     PacketQueue queue;
     p.packetQueue = &queue;
     Ch10PacketReader rdr;
-    QVector<ProcessingParams*> params_list = { &p };
+    std::vector<ProcessingParams*> params_list = { &p };
     QString error;
     QVERIFY2(rdr.prepare(p.filename, p.timeChannelId, params_list, error), qPrintable(error));
 

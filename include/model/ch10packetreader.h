@@ -21,7 +21,6 @@
 #include <QHash>
 #include <QObject>
 #include <QString>
-#include <QVector>
 
 #include "irig106ch10.h"
 #include "i106_time.h"
@@ -78,7 +77,7 @@ public:
      */
     bool prepare(const QString& filename,
                  int time_channel_id,
-                 QVector<ProcessingParams*>& params_list,
+                 std::vector<ProcessingParams*>& params_list,
                  QString& error);
 
     /// Requests a cooperative abort of the read loop.
@@ -100,11 +99,11 @@ signals:
 
 private:
     /// Frees the per-channel attribute table.
-    static void freeChanInfoTable(QVector<SuChanInfo*>& channel_info);
+    static void freeChanInfoTable(std::vector<SuChanInfo*>& channel_info);
     /// Builds per-channel attribute structures from TMATS metadata.
     static Irig106::EnI106Status assembleAttributesFromTMATS(
         Irig106::SuTmatsInfo* tmats_info,
-        QVector<SuChanInfo*>& channel_info);
+        std::vector<SuChanInfo*>& channel_info);
 
     /// Grows m_buffer to at least @p required bytes. Returns false on failure.
     bool ensureBufferCapacity(qsizetype required);
@@ -117,15 +116,15 @@ private:
     Irig106::SuI106Ch10Header m_header;
     std::vector<uint8_t>  m_buffer;
     Irig106::SuTmatsInfo  m_tmats_info;
-    QVector<SuChanInfo*>  m_channel_info;
+    std::vector<SuChanInfo*>  m_channel_info;
     Irig106::SuIrig106Time m_irig_time;
     int64_t               m_total_file_size = 0;
     int                   m_time_channel_id = -1;
 
     /// channel ID -> queues that want that channel's PCM packets.
-    QHash<int, QVector<PacketQueue*>> m_routing;
+    QHash<int, std::vector<PacketQueue*>> m_routing;
     /// All distinct queues (for sentinel fan-out).
-    QVector<PacketQueue*> m_all_queues;
+    std::vector<PacketQueue*> m_all_queues;
 
     std::atomic<bool> m_abort_requested;
 };
