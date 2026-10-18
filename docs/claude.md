@@ -418,8 +418,8 @@ Items from `docs/future_plans/dotnet-port-assessment.md` that are worth doing wh
 that port ever happens - the throughput guard, the TOML move off `QSettings`, and now the
 de-Qt of the native core in small steps (QtGui out of the model's headers, then
 `PacketQueue`, then the `QElapsedTimer`s, then the packet bytes, then the first `QVector`s, the processing result and the pipeline's pointer lists) - plus the clean-build regression the TOML change
-caused, and a generated Visual Studio solution. No user-facing
-behaviour changes.
+caused, and a generated Visual Studio solution. One user-facing fix, found during the
+`QString` survey: recordings under a folder with a non-ASCII name can be processed.
 
 #### A Visual Studio solution, generated rather than committed
 
@@ -518,6 +518,37 @@ called from our code is reported at **our** call site, so those keep warning exa
 v2.9.0 intended. Every first-party header here is quote-included, so `anglebrackets` covers
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
+
+#### A recording under a non-ASCII folder could be listed but not processed (US1.0)
+
+Found while surveying `QString` for the de-Qt sweep, not reported. Both Chapter 10 readers hand the
+path to irig106's `enI106Ch10Open()`, which opens it with the C runtime's narrow `open(char*)` - and
+they encoded it **differently**: `Chapter10Reader` with `toLocal8Bit()` (the ANSI code page, which is
+what that `open()` reads), `Ch10PacketReader` with `toUtf8()`. So a file under `C:\Users\Jos<e-acute>\`
+- users' own folders being exactly where recordings get copied - opened in the Configure Streams
+dialog, listed its channels, and failed with "Error opening data file." the moment Process was
+pressed. A folder name the ANSI code page cannot spell at all (any non-Latin script on a Western
+system) could not be opened by either reader.
+
+**Reproduced before it was fixed.** New `TestFrameProcessor::nonAsciiPathOpensInBothReaders` copies a
+committed fixture into a `caf<e-acute>` folder and an `omega-<Greek capital omega>` folder and opens each with both readers.
+Against the old code: the Latin row failed in the packet reader only, the Greek row in the metadata
+reader already.
+
+**The fix is the process code page, not the string.** `lib/irig106` may not be edited, so its narrow
+`open()` stays; the new **`codepage.pri`** merges an `activeCodePage` = `UTF-8` manifest
+(`resources/utf8codepage.manifest`, Windows 10 1903+) into both executables with `/MANIFESTINPUT`.
+Under it the CRT's narrow file functions take UTF-8, and Qt's `toLocal8Bit()` produces UTF-8, so both
+readers now pass `toLocal8Bit()`: any path opens, and on an older Windows that ignores the setting the
+two readers still agree, which they did not before. Verified with `mt.exe` that both the app and the
+test exe embed the setting alongside the existing Common Controls dependency, and that the generated
+Visual Studio projects carry it. The whole widget suite now runs under the UTF-8 code page; nothing
+else in the application noticed.
+
+Not addressed: a path longer than `MAX_PATH` (260). irig106 stores the name in a `char[MAX_PATH]`
+and the CRT's `open()` needs long-path support enabled machine-wide - a separate change.
+
+Baseline **440 / 0 / 1** (the test is data-driven: two rows), **441 / 0 / 0** at release.
 
 #### The pipeline's internal lists are `std::vector`, and the decoder got 7% faster (de-Qt, step 7)
 

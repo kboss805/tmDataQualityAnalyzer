@@ -186,7 +186,10 @@ bool Ch10PacketReader::prepare(const QString& filename,
     m_time_channel_id = time_channel_id;
     m_total_file_size = QFileInfo(filename).size(); // qint64, handles >2 GB correctly
 
-    m_status = enI106Ch10Open(&m_file_handle, filename.toUtf8().constData(), I106_READ);
+    // toLocal8Bit(), matching Chapter10Reader: irig106 opens with the CRT's narrow
+    // open(), which reads the process code page - UTF-8 under codepage.pri's manifest.
+    // This was toUtf8(), so a path the metadata reader opened could fail here.
+    m_status = enI106Ch10Open(&m_file_handle, filename.toLocal8Bit().constData(), I106_READ);
     if (m_status != I106_OK && m_status != I106_OPEN_WARNING)
     {
         error = "Error opening data file.";
