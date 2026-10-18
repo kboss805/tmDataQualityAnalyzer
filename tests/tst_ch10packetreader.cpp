@@ -98,7 +98,7 @@ bool loadFixture(Fixture& f)
 ProcessingParams paramsFor(const Fixture& f, PacketQueue* queue)
 {
     ProcessingParams p;
-    p.filename          = f.path;
+    p.filename          = toFsPath(f.path);
     p.timeChannelId     = f.time_id;
     p.pcmChannelId      = f.pcm_id;
     p.frameSync         = 0xFE6B2840;

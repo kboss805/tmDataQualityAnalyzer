@@ -151,7 +151,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
 
     // Initialize the in-memory result bundle for this run.
     m_result = ProcessedStreamData();
-    m_result.streamLabel  = params.streamLabel;
+    m_result.streamLabel  = QString::fromStdString(params.streamLabel);
     m_result.pcmChannelId = params.pcmChannelId;
     m_result.mode         = params.mode;
 
@@ -624,7 +624,7 @@ std::string FrameProcessor::streamTag(const ProcessingParams& params)
     // The channel ID leads because that is what the operator configured the stream
     // by. The label is appended only when it adds something - MainViewModel falls
     // back to "Ch <id>" when TMATS gives no name, and "[CH 13 Ch 13]" is noise.
-    const std::string label = params.streamLabel.toStdString();
+    const std::string& label = params.streamLabel;
     const std::string fallback = "Ch " + std::to_string(params.pcmChannelId);
     if (label.empty() || label == fallback)
         return std::format("[CH {}] ", params.pcmChannelId);

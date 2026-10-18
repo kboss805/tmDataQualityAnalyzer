@@ -23,6 +23,7 @@
 #include <QString>
 
 #include "calibrationprofile.h"
+#include "framesyncparams.h"
 #include "processingparams.h"
 
 class Ch10PacketReader;

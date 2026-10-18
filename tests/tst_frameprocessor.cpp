@@ -57,7 +57,7 @@ static ProcessingParams makeTestParams(const QString& filename = {},
     // this. Set explicitly rather than inherited, so a change to the DTO default
     // cannot silently retune what these tests are decoding.
     p.swapBytes = true;
-    p.filename = filename;
+    p.filename = toFsPath(filename);
     p.timeChannelId = time_channel_id;
     p.pcmChannelId = pcm_channel_id;
     p.frameSync = frame_sync;
@@ -79,7 +79,7 @@ static bool runWithReader(FrameProcessor& fp, ProcessingParams& p, FrameSetup* s
     Ch10PacketReader reader;
     std::vector<ProcessingParams*> params_list = { &p };
     std::string error;
-    if (!reader.prepare(toFsPath(p.filename), p.timeChannelId, params_list, error))
+    if (!reader.prepare(p.filename, p.timeChannelId, params_list, error))
         return false;
 
     QFuture<void> future = QtConcurrent::run([&reader]() { reader.run(); });
@@ -171,6 +171,12 @@ void enqueueBits(PacketQueue& queue, const QString& bits)
     item.baseAbsSeconds = 0.0;
     item.packetBits     = static_cast<uint64_t>(bits.size());
     QVERIFY(queue.enqueue(item));
+}
+
+/// Sets a stream's display label. The one place these tests assign a QString label.
+void setStreamLabel(ProcessingParams& p, const QString& label)
+{
+    p.streamLabel = label.toStdString();
 }
 
 void enqueueEndOfStream(PacketQueue& queue)
@@ -274,6 +280,17 @@ void TestFrameProcessor::reportsExactlyTheseMessages_data()
 
     // A bounded window is named; an unbounded one is not (an unset stop would print as
     // 18446744073709551615s on every ordinary run).
+    // A label outside ASCII (an accented letter and Greek omega) goes in, is quoted in
+    // every message's tag, and comes back out unchanged in the result.
+    const QString unicode_tag = QStringLiteral("[CH 7 R") + QChar(0x00E9) + QStringLiteral("cepteur ")
+                                + QChar(0x03A9) + QStringLiteral("] ");
+    QTest::newRow("non-ascii-label")
+        << "unicodelabel" << true
+        << QStringList{unicode_tag + "processing...",
+                       unicode_tag + "4 bytes processed, 3 syncs found, 2 frames extracted.",
+                       unicode_tag + "complete — 1 samples extracted, elapsed N.Ns."}
+        << QStringList{};
+
     QTest::newRow("bounded-window")
         << "bounded" << false
         << QStringList{tag + "processing (1s to 100s)...",
@@ -346,8 +363,13 @@ void TestFrameProcessor::reportsExactlyTheseMessages()
     FrameSetup s;
     syntheticParams(p, q);
 
-    if (scenario == "success")
+    if (scenario == "success" || scenario == "unicodelabel")
     {
+        if (scenario == "unicodelabel")
+        {
+            setStreamLabel(p, QStringLiteral("R") + QChar(0x00E9) + QStringLiteral("cepteur ")
+                                  + QChar(0x03A9));
+        }
         enqueueBits(q, "1001" "0000" "00001001" "0000" "00001001");
         enqueueEndOfStream(q);
     }
@@ -418,6 +440,12 @@ void TestFrameProcessor::reportsExactlyTheseMessages()
     QCOMPARE(ok, returned);
     QCOMPARE(actual, logs);
     QCOMPARE(c.errors, errors);
+    if (scenario == "unicodelabel")
+    {
+        // The label also travels into the result, where the plot reads it.
+        QCOMPARE(fp.result().streamLabel, QStringLiteral("R") + QChar(0x00E9)
+                                              + QStringLiteral("cepteur ") + QChar(0x03A9));
+    }
     // Exactly one completion notice per run, and it agrees with the return value.
     QCOMPARE(c.finished, QList<bool>({returned}));
 }
@@ -1139,7 +1167,7 @@ void TestFrameProcessor::swapBytesOffFindsSyncThatTheSwapDestroys()
         Ch10PacketReader rdr;
         std::vector<ProcessingParams*> params_list = { &p };
         std::string error;
-        if (!rdr.prepare(toFsPath(p.filename), p.timeChannelId, params_list, error))
+        if (!rdr.prepare(p.filename, p.timeChannelId, params_list, error))
         {
             qWarning("prepare() failed (swap=%d): %s", int(swap), error.c_str());
             return {};
@@ -1215,7 +1243,7 @@ void TestFrameProcessor::oddPayloadSwapSkipIsReported()
     Ch10PacketReader rdr;
     std::vector<ProcessingParams*> params_list = { &p };
     std::string error;
-    QVERIFY2(rdr.prepare(toFsPath(p.filename), p.timeChannelId, params_list, error), error.c_str());
+    QVERIFY2(rdr.prepare(p.filename, p.timeChannelId, params_list, error), error.c_str());
 
     FrameSetup empty_setup;
     FrameProcessor fp;
@@ -1275,7 +1303,7 @@ void TestFrameProcessor::offPhaseSyncsAreNotCountedAsBoundaryAligned()
     Ch10PacketReader rdr;
     std::vector<ProcessingParams*> params_list = { &p };
     std::string error;
-    QVERIFY2(rdr.prepare(toFsPath(p.filename), p.timeChannelId, params_list, error), error.c_str());
+    QVERIFY2(rdr.prepare(p.filename, p.timeChannelId, params_list, error), error.c_str());
 
     FrameSetup empty_setup;
     FrameProcessor fp;
@@ -1330,14 +1358,14 @@ void TestFrameProcessor::failureReportNamesChannelAndSyncPattern()
     p.samplePeriodSec = 1.0;
     p.isRandomized    = true;
     p.mode            = StreamMode::FrameSyncLockStats;
-    p.streamLabel     = QStringLiteral("PCM03");
+    p.streamLabel     = "PCM03";
 
     PacketQueue queue;
     p.packetQueue = &queue;
     Ch10PacketReader rdr;
     std::vector<ProcessingParams*> params_list = { &p };
     std::string error;
-    QVERIFY2(rdr.prepare(toFsPath(p.filename), p.timeChannelId, params_list, error), error.c_str());
+    QVERIFY2(rdr.prepare(p.filename, p.timeChannelId, params_list, error), error.c_str());
 
     FrameSetup empty_setup;
     FrameProcessor fp;

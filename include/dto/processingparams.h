@@ -7,9 +7,10 @@
 #define PROCESSINGPARAMS_H
 
 #include <cstdint>
-#include <QString>
+#include <filesystem>
+#include <string>
 
-#include "streamconfig.h"
+#include "streammode.h"
 
 class PacketQueue;
 
@@ -37,9 +38,15 @@ struct ResolvedPcmAttrs {
     bool     resolved      = false; ///< True once the reader has populated this struct.
 };
 
-/// @brief Validated parameters bundle passed to the worker thread.
+/**
+ * @brief Validated parameters bundle passed to the worker thread.
+ *
+ * Plain C++: the core's input. Text is UTF-8 `std::string` and the file is a
+ * `std::filesystem::path`; the layers that still hold Qt types convert where they fill it in
+ * (`qtbridge.h`).
+ */
 struct ProcessingParams {
-    QString filename;              ///< Path to the .ch10 input file.
+    std::filesystem::path filename; ///< Path to the .ch10 input file.
     int sourceId = 0;             ///< Id of the .ch10 file (multi-file session) this job belongs to; 0 for the first/only source. Carried into the completed ProcessedStreamData by ProcessingCoordinator (mirrors jobIndex).
     int timeChannelId = -1;       ///< Resolved time channel ID.
     int pcmChannelId = -1;        ///< Resolved PCM channel ID.
@@ -67,7 +74,7 @@ struct ProcessingParams {
 
     StreamMode mode = StreamMode::ReceiverChannelInfo; ///< Processing mode for this stream.
     double dataRateBps = 0.0;     ///< User bit rate in bits/sec. 0 = use TMATS-derived rate.
-    QString streamLabel;          ///< Display label of the source stream (for plot/logs).
+    std::string streamLabel;      ///< Display label of the source stream (for plot/logs), UTF-8.
 
     /// Derive the sample-windowing clock from bits processed (data rate) starting
     /// at zero, instead of from IRIG absolute time. Calibration extraction sets
