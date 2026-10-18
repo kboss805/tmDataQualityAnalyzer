@@ -117,6 +117,11 @@ literally.
 Either way: **keep the renderer behind your own interface** so the backend stays
 swappable. That is the lesson all three options point at.
 
+**Shell framework.** Avalonia and .NET MAUI were assessed against this plan in
+[presentation-layer.md](presentation-layer.md): MAUI is ruled out, Avalonia fails the
+Microsoft-only rule, and WPF stays - but with an **airspace** gap to close first (WPF cannot
+draw over a hosted native surface, and the legend, chips and crosshair sit on the chart).
+
 ## Testing
 
 - **Domain suites stay C++** on **MSTest for C++ (`CppUnitTest`)**, which ships with
