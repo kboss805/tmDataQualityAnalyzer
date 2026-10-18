@@ -519,6 +519,36 @@ v2.9.0 intended. Every first-party header here is quote-included, so `anglebrack
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
 
+#### The throughput gate runs on the performance cores, so its milliseconds mean something
+
+`scripts/run_throughput_bench.ps1` now pins the suite to the CPU's highest efficiency class before it
+runs, restores the affinity afterwards, and prints the mask it used. `-AllCores` opts out.
+
+The cause of the bimodal timings in the entry below was **tested, not assumed**. The same executable,
+pinned each way:
+
+| affinity | 4-stream parallel | slowest solo |
+|---|---|---|
+| efficiency cores only (`0xFFF0000`) | 26112 ms | 24965 ms |
+| performance cores only (`0xFFFF`) | 14189 ms | 14178 ms |
+
+The efficiency-core run reproduces the slow mode exactly, so Windows was sometimes scheduling the
+single-threaded decoder onto efficiency cores. Two pinned runs back to back afterwards - the pattern
+that had produced 14962 ms and then 26386 ms from one binary - measured **14696 ms and 14594 ms**
+(slowest solo 14531 and 14535 ms).
+
+- **The mask is discovered, not hard-coded.** `GetLogicalProcessorInformationEx` reports each
+  physical core's `EfficiencyClass`; the cores in the highest class are the performance cores. On
+  this i7-14700KF that is 8 cores / 16 logical processors (`0xFFFF`), and on another machine it is
+  whatever that machine reports. A CPU with one core class, or more than one processor group, is
+  left unpinned and says so.
+- **It relies on inheritance, not on `Start-Process`.** The script already runs the test exe
+  directly, to avoid Windows PowerShell 5.1's empty-`ExitCode` trap, and a child process inherits
+  its parent's affinity. So the script pins itself and the exe follows.
+- The ratios were never at risk - they held at 0.97-1.01x in every run, pinned or not - but the gate
+  is also the only place this project measures throughput at all, and a measurement that halves
+  depending on the scheduler is not one anybody can compare against.
+
 #### The processing result is `std::vector`; the plot deliberately stays `QVector` (de-Qt, step 6)
 
 `ProcessedStreamData` and `ProcessedChannelSeries` - what `FrameProcessor` produces and the
@@ -558,8 +588,8 @@ solo runs included, slower by the same ~1.9x and every ratio unchanged. Two A/B 
 Branch 2 and branch 3 are one executable, 14962 ms and then 26386 ms, so the slow mode is the machine
 and not the code. The change cannot account for it anyway: the benchmark samples at 1 s, so the
 touched code runs a few hundred times per run against billions of bit operations in the unchanged
-decoder. The likely cause, **not verified**, is the i7-14700KF's hybrid layout (8 performance + 12
-efficiency cores): a single-threaded decoder scheduled onto efficiency cores runs about half speed.
+decoder. The cause - the i7-14700KF's efficiency cores - was confirmed afterwards and the gate now
+pins itself to the performance cores; see the entry above.
 The guard asserts ratios, which held at 0.97-1.01x in every run, so it is unaffected; **absolute
 milliseconds quoted from single runs in the entries above are less trustworthy than they were
 presented**, and comparisons between runs should be A/B pairs or pinned to the performance cores.

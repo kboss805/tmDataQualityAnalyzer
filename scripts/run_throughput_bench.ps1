@@ -44,10 +44,25 @@
 # exactly what a release needs anyway - it replaces the by-hand Step 5 run rather
 # than adding to it.
 #
+# THE RUN IS PINNED TO THE PERFORMANCE CORES
+#
+# On a hybrid CPU the absolute timings were bimodal. On the i7-14700KF development box
+# one unchanged executable measured 14962 ms and then 26386 ms for the 4-stream run,
+# every channel ~1.9x slower at once and every ratio unchanged - which read as a
+# regression in a change that could not have caused one. Pinning settled the cause:
+# the same binary measured 26112 ms on the efficiency cores alone and 14189 ms on the
+# performance cores alone. Windows was sometimes scheduling the single-threaded
+# decoder onto efficiency cores. The guard asserts ratios, so it held throughout, but
+# the milliseconds were useless as before/after evidence. So the suite now runs
+# pinned to the highest efficiency class, discovered from Windows at run time
+# (GetLogicalProcessorInformationEx) rather than hard-coded, and the mask is printed
+# so a result says what it measured. On a CPU with one core class nothing is pinned.
+#
 # Usage (exits 1 if any test fails):
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\run_throughput_bench.ps1
 #   powershell -ExecutionPolicy Bypass -File scripts\run_throughput_bench.ps1 -SkipBuild
+#   powershell -ExecutionPolicy Bypass -File scripts\run_throughput_bench.ps1 -AllCores
 # =============================================================================
 
 param(
@@ -60,7 +75,11 @@ param(
     # numbers are NOT comparable to the recorded Release baseline.
     # Deliberately not named -Debug: that is a PowerShell common parameter name, and
     # it would start colliding the moment anyone added [CmdletBinding()] above.
-    [switch]$DebugBuild
+    [switch]$DebugBuild,
+
+    # Do not pin to the performance cores. For comparing against an unpinned run;
+    # the absolute timings may then land in either mode (see the header).
+    [switch]$AllCores
 )
 
 $ErrorActionPreference = 'Stop'
@@ -143,6 +162,65 @@ Write-Host "This takes several minutes - four channel probes, four solo runs, on
 Write-Host "parallel run, plus the four .ch10 integration suites."
 Write-Host ''
 
+# --- pin to the performance cores (see the header) ----------------------------
+function Get-PerformanceCoreMask {
+    # One PROCESSOR_RELATIONSHIP per physical core. Offsets: Size @4, EfficiencyClass
+    # @9 (higher = faster), GroupMask[0] @32 = KAFFINITY Mask (8 bytes) + WORD Group.
+    $src = @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+public static class TmdqCoreClasses {
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool GetLogicalProcessorInformationEx(int relation, IntPtr buffer, ref uint length);
+    public static List<long[]> Cores() {
+        uint len = 0;
+        GetLogicalProcessorInformationEx(0, IntPtr.Zero, ref len);
+        IntPtr buf = Marshal.AllocHGlobal((int)len);
+        var result = new List<long[]>();
+        try {
+            if (!GetLogicalProcessorInformationEx(0, buf, ref len))
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            long off = 0;
+            while (off < len) {
+                IntPtr p = new IntPtr(buf.ToInt64() + off);
+                result.Add(new long[] { Marshal.ReadByte(p, 9), Marshal.ReadInt16(p, 40), Marshal.ReadInt64(p, 32) });
+                off += Marshal.ReadInt32(p, 4);
+            }
+        } finally { Marshal.FreeHGlobal(buf); }
+        return result;
+    }
+}
+'@
+    if (-not ('TmdqCoreClasses' -as [type])) { Add-Type -TypeDefinition $src }
+    $cores = [TmdqCoreClasses]::Cores()
+    $classes = @($cores | ForEach-Object { $_[0] } | Sort-Object -Unique)
+    if ($classes.Count -lt 2) { return $null }                    # not a hybrid CPU
+    if (@($cores | Where-Object { $_[1] -ne 0 }).Count -gt 0) { return $null }  # >1 processor group
+    $top = ($classes | Measure-Object -Maximum).Maximum
+    $mask = [long]0
+    foreach ($c in $cores) { if ($c[0] -eq $top) { $mask = $mask -bor $c[2] } }
+    return $mask
+}
+
+$self = [System.Diagnostics.Process]::GetCurrentProcess()
+$originalAffinity = $self.ProcessorAffinity
+$pinned = $false
+if ($AllCores) {
+    Write-Host "Not pinned (-AllCores): absolute timings may land in either mode." -ForegroundColor Yellow
+} else {
+    $pMask = Get-PerformanceCoreMask
+    if ($pMask) {
+        # The test exe inherits this process's affinity when it starts.
+        $self.ProcessorAffinity = [IntPtr]$pMask
+        $pinned = $true
+        Write-Host ("Pinned to the performance cores: affinity 0x{0:X} ({1} logical processors)." -f `
+                    $pMask, ([Convert]::ToString($pMask, 2) -replace '0', '').Length)
+    } else {
+        Write-Host "One core class on this CPU (or several processor groups): not pinned."
+    }
+}
+
 $env:TMDQA_RUN_HEAVY_BENCH = '1'
 try {
     # Invoked directly rather than through Start-Process: under Windows PowerShell
@@ -153,6 +231,7 @@ try {
     $code = $LASTEXITCODE
 } finally {
     Remove-Item Env:\TMDQA_RUN_HEAVY_BENCH -ErrorAction SilentlyContinue
+    if ($pinned) { $self.ProcessorAffinity = $originalAffinity }
 }
 
 # --- report ------------------------------------------------------------------
