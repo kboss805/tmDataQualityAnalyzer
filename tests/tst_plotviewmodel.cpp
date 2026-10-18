@@ -867,7 +867,7 @@ static ProcessedStreamData makeReceiverStream(const QString& label, double time_
     d.timesSec.push_back(time_sec);
     d.lockPercent.push_back(lock_pct);
     ProcessedChannelSeries ch;
-    ch.name = ch_name;
+    ch.name = ch_name.toStdString();
     ch.word = 1;
     ch.values.push_back(snr);
     d.channels.push_back(ch);

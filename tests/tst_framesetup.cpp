@@ -15,6 +15,13 @@
 /// Test frame size: 48 data words + 1 (matches default 16 receivers x 3 channels).
 static constexpr int kTestWordsInFrame = 49;
 
+/// FrameSetup speaks UTF-8 std::string; the assertions below compare QStrings so a
+/// failure prints its values.
+static QString q(const std::string& value)
+{
+    return QString::fromStdString(value);
+}
+
 static QString testFixturePath(const QString& filename)
 {
     // The test executable is built in tests/debug/ or tests/release/.
@@ -50,7 +57,7 @@ void TestFrameSetup::clearParametersResetsToEmpty()
     QString path = testFixturePath("test_framesetup.toml");
     if (QFile::exists(path))
     {
-        fs.tryLoadingFile(path, kTestWordsInFrame);
+        fs.tryLoadingFile(toFsPath(path), kTestWordsInFrame);
         QVERIFY(fs.length() > 0);
     }
     fs.clearParameters();
@@ -77,7 +84,7 @@ void TestFrameSetup::tryLoadingFileValidFile()
         QSKIP("Test fixture file not found");
 
     FrameSetup fs;
-    bool result = fs.tryLoadingFile(path, kTestWordsInFrame);
+    bool result = fs.tryLoadingFile(toFsPath(path), kTestWordsInFrame);
 
     QVERIFY(result);
     QCOMPARE(fs.length(), 3);
@@ -112,7 +119,7 @@ void TestFrameSetup::tryLoadingFileMissingWordKey()
         QSKIP("Test fixture file not found");
 
     FrameSetup fs;
-    bool result = fs.tryLoadingFile(path, kTestWordsInFrame);
+    bool result = fs.tryLoadingFile(toFsPath(path), kTestWordsInFrame);
 
     QVERIFY(!result);
 }
@@ -124,7 +131,7 @@ void TestFrameSetup::tryLoadingFileOutOfBoundsWord()
         QSKIP("Test fixture file not found");
 
     FrameSetup fs;
-    bool result = fs.tryLoadingFile(path, kTestWordsInFrame);
+    bool result = fs.tryLoadingFile(toFsPath(path), kTestWordsInFrame);
 
     QVERIFY(!result);
 }
@@ -135,7 +142,7 @@ void TestFrameSetup::tryLoadingFileWordZeroFails()
     QVERIFY(!path.isEmpty());
 
     FrameSetup fs;
-    bool result = fs.tryLoadingFile(path, kTestWordsInFrame);
+    bool result = fs.tryLoadingFile(toFsPath(path), kTestWordsInFrame);
     QVERIFY(!result);
 }
 
@@ -146,7 +153,7 @@ void TestFrameSetup::tryLoadingFileWordEqualsFrameSize()
     QVERIFY(!path.isEmpty());
 
     FrameSetup fs;
-    bool result = fs.tryLoadingFile(path, kTestWordsInFrame);
+    bool result = fs.tryLoadingFile(toFsPath(path), kTestWordsInFrame);
     QVERIFY(!result);
 }
 
@@ -157,7 +164,7 @@ void TestFrameSetup::writeWordMapWritesCorrectData()
         QSKIP("Test fixture file not found");
 
     FrameSetup fs;
-    fs.tryLoadingFile(path, kTestWordsInFrame);
+    fs.tryLoadingFile(toFsPath(path), kTestWordsInFrame);
 
     QTemporaryFile tmp;
     tmp.setAutoRemove(true);
@@ -187,7 +194,7 @@ void TestFrameSetup::tryLoadingFileSmallerFrameAccepts()
         QSKIP("Test fixture file not found");
 
     FrameSetup fs;
-    bool result = fs.tryLoadingFile(path, 4); // 3 data words + 1
+    bool result = fs.tryLoadingFile(toFsPath(path), 4); // 3 data words + 1
     QVERIFY(result);
     QCOMPARE(fs.length(), 3);
 }
@@ -202,7 +209,7 @@ void TestFrameSetup::tryLoadingFileSmallerFrameRejectsBoundary()
         QSKIP("Test fixture file not found");
 
     FrameSetup fs;
-    bool result = fs.tryLoadingFile(path, 3); // 2 data words + 1
+    bool result = fs.tryLoadingFile(toFsPath(path), 3); // 2 data words + 1
     QVERIFY(!result);
 }
 
@@ -215,7 +222,7 @@ void TestFrameSetup::tryLoadingFileLargerFrameAccepts()
         QSKIP("Test fixture file not found");
 
     FrameSetup fs;
-    bool result = fs.tryLoadingFile(path, 100);
+    bool result = fs.tryLoadingFile(toFsPath(path), 100);
     QVERIFY(result);
     QCOMPARE(fs.length(), 3);
 }
@@ -228,7 +235,7 @@ void TestFrameSetup::tryLoadingFileSingleChannelFrameSize()
     QVERIFY(!path.isEmpty());
 
     FrameSetup fs;
-    bool result = fs.tryLoadingFile(path, 2); // 1 data word + 1
+    bool result = fs.tryLoadingFile(toFsPath(path), 2); // 1 data word + 1
     QVERIFY(result);
     QCOMPARE(fs.length(), 1);
     QCOMPARE(fs.getParameter(0)->word, 0);
@@ -240,27 +247,27 @@ void TestFrameSetup::channelPrefixNamesKnownPositionsThenFallsBack()
     // moved here from TestMainViewModelHelpers with the MainViewModel forwarders
     // they used to call: FrameSetup is where the naming actually lives, and is
     // what the calibration extractor shares with the main run.
-    QCOMPARE(FrameSetup::channelPrefix(0), QString("L"));
-    QCOMPARE(FrameSetup::channelPrefix(1), QString("R"));
-    QCOMPARE(FrameSetup::channelPrefix(2), QString("C"));
+    QCOMPARE(q(FrameSetup::channelPrefix(0)), QString("L"));
+    QCOMPARE(q(FrameSetup::channelPrefix(1)), QString("R"));
+    QCOMPARE(q(FrameSetup::channelPrefix(2)), QString("C"));
 
     // First index past the known prefixes, and well past them.
-    QCOMPARE(FrameSetup::channelPrefix(3), QString("CH4"));
-    QCOMPARE(FrameSetup::channelPrefix(10), QString("CH11"));
-    QCOMPARE(FrameSetup::channelPrefix(99), QString("CH100"));
-    QCOMPARE(FrameSetup::channelPrefix(999), QString("CH1000"));
-    QCOMPARE(FrameSetup::channelPrefix(9999), QString("CH10000"));
+    QCOMPARE(q(FrameSetup::channelPrefix(3)), QString("CH4"));
+    QCOMPARE(q(FrameSetup::channelPrefix(10)), QString("CH11"));
+    QCOMPARE(q(FrameSetup::channelPrefix(99)), QString("CH100"));
+    QCOMPARE(q(FrameSetup::channelPrefix(999)), QString("CH1000"));
+    QCOMPARE(q(FrameSetup::channelPrefix(9999)), QString("CH10000"));
 }
 
 void TestFrameSetup::receiverParameterNameCombinesPrefixAndReceiver()
 {
-    QCOMPARE(FrameSetup::receiverParameterName(0, 0), QString("L_RCVR1"));
-    QCOMPARE(FrameSetup::receiverParameterName(1, 2), QString("R_RCVR3"));
-    QCOMPARE(FrameSetup::receiverParameterName(2, 15), QString("C_RCVR16"));
+    QCOMPARE(q(FrameSetup::receiverParameterName(0, 0)), QString("L_RCVR1"));
+    QCOMPARE(q(FrameSetup::receiverParameterName(1, 2)), QString("R_RCVR3"));
+    QCOMPARE(q(FrameSetup::receiverParameterName(2, 15)), QString("C_RCVR16"));
 
     // A channel index past the known prefixes carries the fallback through.
-    QCOMPARE(FrameSetup::receiverParameterName(3, 0), QString("CH4_RCVR1"));
-    QCOMPARE(FrameSetup::receiverParameterName(5, 4), QString("CH6_RCVR5"));
+    QCOMPARE(q(FrameSetup::receiverParameterName(3, 0)), QString("CH4_RCVR1"));
+    QCOMPARE(q(FrameSetup::receiverParameterName(5, 4)), QString("CH6_RCVR5"));
 }
 
 void TestFrameSetup::receiverIndexFromNameInvertsParameterName()
@@ -271,10 +278,10 @@ void TestFrameSetup::receiverIndexFromNameInvertsParameterName()
     {
         for (int channel = 0; channel < 5; channel++)
         {
-            const QString name = FrameSetup::receiverParameterName(channel, receiver);
+            const std::string name = FrameSetup::receiverParameterName(channel, receiver);
             QCOMPARE(FrameSetup::receiverIndexFromName(name), receiver + 1);
-            QCOMPARE(FrameSetup::channelPartOfName(name),
-                     FrameSetup::channelPrefix(channel));
+            QCOMPARE(q(FrameSetup::channelPartOfName(name)),
+                     q(FrameSetup::channelPrefix(channel)));
         }
     }
 
@@ -287,7 +294,38 @@ void TestFrameSetup::receiverIndexFromNameInvertsParameterName()
     QCOMPARE(FrameSetup::receiverIndexFromName("L_RCVR0"), 0);  // receivers are 1-based
     QCOMPARE(FrameSetup::receiverIndexFromName("L_RCVRx2"), 0); // not a bare number
     // An unparseable name keeps its whole self as the "channel part".
-    QCOMPARE(FrameSetup::channelPartOfName("AGC_LEFT"), QString("AGC_LEFT"));
+    QCOMPARE(q(FrameSetup::channelPartOfName("AGC_LEFT")), QString("AGC_LEFT"));
+}
+
+void TestFrameSetup::receiverNameParsingMatchesQStringToInt()
+{
+    // receiverIndexFromName() used to hand the text after "_RCVR" to QString::toInt, so
+    // a name written by hand in a receiver-parameters TOML parsed with toInt's rules.
+    // When the helper moved to std::string these were pinned FIRST, against the QString
+    // implementation, because a plain from_chars would change every one of them.
+    // The token is the LAST "_RCVR": an earlier one is just part of the name.
+    QCOMPARE(FrameSetup::receiverIndexFromName("A_RCVR1_RCVR2"), 2);
+    QCOMPARE(q(FrameSetup::channelPartOfName("A_RCVR1_RCVR2")), QString("A_RCVR1"));
+    // toInt ignores surrounding whitespace and accepts a leading '+'...
+    QCOMPARE(FrameSetup::receiverIndexFromName("L_RCVR 3"), 3);
+    QCOMPARE(FrameSetup::receiverIndexFromName("L_RCVR3 "), 3);
+    QCOMPARE(FrameSetup::receiverIndexFromName("L_RCVR+4"), 4);
+    // ...but not a second sign, a negative number, trailing junk or an overflow.
+    QCOMPARE(FrameSetup::receiverIndexFromName("L_RCVR++4"), 0);
+    QCOMPARE(FrameSetup::receiverIndexFromName("L_RCVR-1"), 0);
+    QCOMPARE(FrameSetup::receiverIndexFromName("L_RCVR3x"), 0);
+    QCOMPARE(FrameSetup::receiverIndexFromName("L_RCVR99999999999"), 0);
+    // A name that STARTS with the token has no channel part to split off: the whole
+    // name comes back, even though the receiver number parses.
+    QCOMPARE(FrameSetup::receiverIndexFromName("_RCVR2"), 2);
+    QCOMPARE(q(FrameSetup::channelPartOfName("_RCVR2")), QString("_RCVR2"));
+    // The channel part is everything before the token, whatever it holds.
+    QCOMPARE(q(FrameSetup::channelPartOfName("CH12_RCVR7")), QString("CH12"));
+    QCOMPARE(q(FrameSetup::channelPartOfName("L_RCVR")), QString("L_RCVR"));
+    // Non-ASCII names pass through untouched.
+    const QString greek = QString(QChar(0x0391)) + QStringLiteral("_RCVR5");
+    QCOMPARE(FrameSetup::receiverIndexFromName(greek.toStdString()), 5);
+    QCOMPARE(q(FrameSetup::channelPartOfName(greek.toStdString())), QString(QChar(0x0391)));
 }
 
 // ---------------------------------------------------------------------------
@@ -345,7 +383,7 @@ void TestFrameSetup::tryLoadingFileMetadataOnlyFileYieldsNoParameters()
     QVERIFY(QFileInfo(path).size() > 0);
 
     FrameSetup fs;
-    QVERIFY(fs.tryLoadingFile(path, kTestWordsInFrame));
+    QVERIFY(fs.tryLoadingFile(toFsPath(path), kTestWordsInFrame));
     QCOMPARE(fs.length(), 0);
 
     QFile::remove(path);
@@ -358,7 +396,7 @@ void TestFrameSetup::readReceiverParamsReadsTheShippedReceiversBlock()
     const QString rasa = shippedReceiverParamsDir() + "/RASA.toml";
     QVERIFY2(QFileInfo(rasa).isFile(), qPrintable(rasa));
 
-    const ReceiverParams params = FrameSetup::readReceiverParams(rasa);
+    const ReceiverParams params = FrameSetup::readReceiverParams(toFsPath(rasa));
     QCOMPARE(params.numReceivers, 12);
     QCOMPARE(params.receiverChannels, 3);
     QCOMPARE(params.polarityIndex, 1);
@@ -379,7 +417,7 @@ void TestFrameSetup::readReceiverParamsAcceptsTheOlderParametersKeys()
     }
     QVERIFY(QFileInfo(path).size() > 0);
 
-    const ReceiverParams params = FrameSetup::readReceiverParams(path);
+    const ReceiverParams params = FrameSetup::readReceiverParams(toFsPath(path));
     QCOMPARE(params.numReceivers, 4);
     QCOMPARE(params.receiverChannels, 2);
 
@@ -391,7 +429,7 @@ void TestFrameSetup::readReceiverParamsAcceptsTheOlderParametersKeys()
     on_screen.scaleDdBPerV     = 33.0;
     on_screen.numReceivers     = 9;
     on_screen.receiverChannels = 5;
-    const ReceiverParams merged = FrameSetup::readReceiverParams(path, on_screen);
+    const ReceiverParams merged = FrameSetup::readReceiverParams(toFsPath(path), on_screen);
     QCOMPARE(merged.polarityIndex, 1);      // absent from the file
     QCOMPARE(merged.scaleDdBPerV, 33.0);    // absent from the file
     QCOMPARE(merged.numReceivers, 4);       // the file wins where it speaks
@@ -417,11 +455,11 @@ void TestFrameSetup::receiverParamsFileRoundTripsScalarsAndWordMap()
 
     const QString saved = QDir::tempPath() + "/tst_rcvr_saved.toml";
     QFile::remove(saved);
-    QString error;
-    QVERIFY2(FrameSetup::saveReceiverParamsFile(saved, params, source, kTestWordsInFrame, error),
-             qPrintable(error));
+    std::string error;
+    QVERIFY2(FrameSetup::saveReceiverParamsFile(toFsPath(saved), params, toFsPath(source), kTestWordsInFrame, error),
+             error.c_str());
 
-    const ReceiverParams back = FrameSetup::readReceiverParams(saved);
+    const ReceiverParams back = FrameSetup::readReceiverParams(toFsPath(saved));
     QCOMPARE(back.polarityIndex, 1);
     QCOMPARE(back.slopeIndex, 2);
     QCOMPARE(back.scaleDdBPerV, 12.5);
@@ -429,12 +467,12 @@ void TestFrameSetup::receiverParamsFileRoundTripsScalarsAndWordMap()
     QCOMPARE(back.receiverChannels, 3);
 
     FrameSetup fs;
-    QVERIFY(fs.tryLoadingFile(saved, kTestWordsInFrame));
+    QVERIFY(fs.tryLoadingFile(toFsPath(saved), kTestWordsInFrame));
     QCOMPARE(fs.length(), 3);
     QHash<QString, int> by_name;
     for (int i = 0; i < fs.length(); i++)
     {
-        by_name.insert(fs.getParameter(i)->name, fs.getParameter(i)->word);
+        by_name.insert(QString::fromStdString(fs.getParameter(i)->name), fs.getParameter(i)->word);
     }
     QCOMPARE(by_name.value("L_RCVR1", -1), 0);
     QCOMPARE(by_name.value("R_RCVR1", -1), 1);
@@ -454,26 +492,26 @@ void TestFrameSetup::receiverParamsFileFallsBackToTheDefaultWordMap()
 
     const QString saved = QDir::tempPath() + "/tst_rcvr_default_map.toml";
     QFile::remove(saved);
-    QString error;
-    QVERIFY2(FrameSetup::saveReceiverParamsFile(saved, params, QString(), kTestWordsInFrame, error),
-             qPrintable(error));
+    std::string error;
+    QVERIFY2(FrameSetup::saveReceiverParamsFile(toFsPath(saved), params, std::filesystem::path(), kTestWordsInFrame, error),
+             error.c_str());
 
     FrameSetup fs;
-    QVERIFY(fs.tryLoadingFile(saved, kTestWordsInFrame));
+    QVERIFY(fs.tryLoadingFile(toFsPath(saved), kTestWordsInFrame));
     QCOMPARE(fs.length(), 6);
 
     FrameSetup expected;
-    QString build_error;
+    std::string build_error;
     QVERIFY(expected.buildDefaultReceiverMap(2, 3, kTestWordsInFrame, build_error));
     QHash<QString, int> saved_words;
     for (int i = 0; i < fs.length(); i++)
     {
-        saved_words.insert(fs.getParameter(i)->name, fs.getParameter(i)->word);
+        saved_words.insert(QString::fromStdString(fs.getParameter(i)->name), fs.getParameter(i)->word);
     }
     for (int i = 0; i < expected.length(); i++)
     {
         const ParameterInfo* p = expected.getParameter(i);
-        QCOMPARE(saved_words.value(p->name, -1), p->word);
+        QCOMPARE(saved_words.value(QString::fromStdString(p->name), -1), p->word);
     }
 
     QFile::remove(saved);
@@ -489,13 +527,13 @@ void TestFrameSetup::receiverParamsFileIsNeverWrittenWithoutAWordMap()
 
     const QString saved = QDir::tempPath() + "/tst_rcvr_nomap.toml";
     QFile::remove(saved);
-    QString error;
-    QVERIFY(!FrameSetup::saveReceiverParamsFile(saved, params, QString(), kTestWordsInFrame, error));
-    QVERIFY(!error.isEmpty());
+    std::string error;
+    QVERIFY(!FrameSetup::saveReceiverParamsFile(toFsPath(saved), params, std::filesystem::path(), kTestWordsInFrame, error));
+    QVERIFY(!error.empty());
     QVERIFY(!QFileInfo::exists(saved));
 
     // The instance-level writer refuses an empty map for the same reason.
     FrameSetup empty;
-    QVERIFY(!empty.writeReceiverParams(saved, params));
+    QVERIFY(!empty.writeReceiverParams(toFsPath(saved), params));
     QVERIFY(!QFileInfo::exists(saved));
 }

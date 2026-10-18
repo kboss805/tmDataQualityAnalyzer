@@ -27,6 +27,7 @@ private slots:
     void channelPrefixNamesKnownPositionsThenFallsBack();
     void receiverParameterNameCombinesPrefixAndReceiver();
     void receiverIndexFromNameInvertsParameterName();
+    void receiverNameParsingMatchesQStringToInt();
 
     void wordsInMinorFrameRoundsUp();
     void tryLoadingFileMetadataOnlyFileYieldsNoParameters();

@@ -16,29 +16,13 @@
 #include <sstream>
 #include <system_error>
 
+#include "textparse.h"
+
 namespace {
 
-/// The whitespace QString::trimmed() would remove, restricted to ASCII. Qt also
-/// trimmed Unicode spaces (U+00A0 and friends); no shipped file carries one.
-bool isAsciiSpace(char c)
-{
-    return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r';
-}
-
-std::string trimmed(const std::string& s)
-{
-    std::size_t b = 0;
-    std::size_t e = s.size();
-    while (b < e && isAsciiSpace(s[b]))
-    {
-        ++b;
-    }
-    while (e > b && isAsciiSpace(s[e - 1]))
-    {
-        --e;
-    }
-    return s.substr(b, e - b);
-}
+using textparse::parseDouble;
+using textparse::parseInteger;
+using textparse::trimmed;
 
 bool startsWith(const std::string& s, char c)
 {
@@ -60,66 +44,6 @@ std::string asciiLower(std::string s)
         }
     }
     return s;
-}
-
-/// QString::toInt / toLongLong semantics: surrounding whitespace ignored, one optional
-/// leading '+' or '-', base 10, the whole remainder must be digits, and out of range
-/// fails rather than saturating.
-template <typename Int>
-bool parseInteger(const std::string& text, Int& out)
-{
-    const std::string s = trimmed(text);
-    const char* first = s.data();
-    const char* last  = s.data() + s.size();
-    if (first != last && *first == '+')
-    {
-        ++first;
-        if (first != last && (*first == '+' || *first == '-'))
-        {
-            return false; // "+-3" is not a number to Qt either
-        }
-    }
-    if (first == last)
-    {
-        return false;
-    }
-    Int value{};
-    const auto [ptr, ec] = std::from_chars(first, last, value);
-    if (ec != std::errc() || ptr != last)
-    {
-        return false;
-    }
-    out = value;
-    return true;
-}
-
-/// QString::toDouble semantics, as far as a settings file can reach: surrounding
-/// whitespace ignored, an optional leading '+', decimal or exponent form, "inf"/"nan".
-bool parseDouble(const std::string& text, double& out)
-{
-    const std::string s = trimmed(text);
-    const char* first = s.data();
-    const char* last  = s.data() + s.size();
-    if (first != last && *first == '+')
-    {
-        ++first;
-        if (first != last && (*first == '+' || *first == '-'))
-        {
-            return false;
-        }
-    }
-    if (first == last)
-    {
-        return false;
-    }
-    double value = 0.0;
-    const auto [ptr, ec] = std::from_chars(first, last, value, std::chars_format::general);
-    if (ec != std::errc() || ptr != last)
-    {
-        return false;
-    }
-    out = value;
-    return true;
 }
 
 /// Appends one Unicode code point as UTF-8.
