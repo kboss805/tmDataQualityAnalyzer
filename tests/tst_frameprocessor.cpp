@@ -265,8 +265,8 @@ void TestFrameProcessor::processAccumulatesReceiverData()
     QVERIFY2(r.hasSamples(), "Result must contain at least one time sample");
     // Receiver (SNR) streams are always considered locked (they come from a
     // separate piece of equipment), so no lock/error series is produced.
-    QVERIFY2(r.lockPercent.isEmpty(), "Receiver mode must produce no lock series");
-    QVERIFY2(r.accumulatedMissedFrames.isEmpty(), "Receiver mode must produce no missed-frames series");
+    QVERIFY2(r.lockPercent.empty(), "Receiver mode must produce no lock series");
+    QVERIFY2(r.accumulatedMissedFrames.empty(), "Receiver mode must produce no missed-frames series");
     QCOMPARE(r.channels.size(), setup.length());
     QCOMPARE(r.streamLabel, QString("Ch test"));
     QCOMPARE(r.mode, StreamMode::ReceiverChannelInfo);
@@ -312,7 +312,7 @@ void TestFrameProcessor::processLockOnlyModeHasNoChannels()
 
     const ProcessedStreamData& r = fp.result();
     QVERIFY2(r.hasSamples(), "Lock-only result must contain time samples");
-    QVERIFY2(r.channels.isEmpty(), "Lock-only mode must produce no receiver channels");
+    QVERIFY2(r.channels.empty(), "Lock-only mode must produce no receiver channels");
     QCOMPARE(r.lockPercent.size(), r.timesSec.size());
     QCOMPARE(r.accumulatedMissedFrames.size(), r.timesSec.size());
     QCOMPARE(r.mode, StreamMode::FrameSyncLockStats);
@@ -350,7 +350,7 @@ void TestFrameProcessor::processFrameSyncErrorsMonotonic()
     QCOMPARE(r.accumulatedMissedFrames.size(), r.timesSec.size());
 
     // The accumulated count starts at >= 0 and never decreases.
-    QVERIFY(r.accumulatedMissedFrames.first() >= 0.0);
+    QVERIFY(r.accumulatedMissedFrames.front() >= 0.0);
     for (int i = 1; i < r.accumulatedMissedFrames.size(); i++)
     {
         QVERIFY2(r.accumulatedMissedFrames[i] >= r.accumulatedMissedFrames[i - 1],
@@ -384,10 +384,10 @@ void TestFrameProcessor::processSlopeAffectsValues()
         p.samplePeriodSec = 1.0;
         p.isRandomized = true;
         FrameProcessor fp;
-        if (!runWithReader(fp, p, &setup) || fp.result().channels.isEmpty()
-            || fp.result().channels[0].values.isEmpty())
+        if (!runWithReader(fp, p, &setup) || fp.result().channels.empty()
+            || fp.result().channels[0].values.empty())
             return 0.0;
-        return fp.result().channels[0].values.first();
+        return fp.result().channels[0].values.front();
     };
 
     double v1 = run(1.0);
@@ -586,14 +586,12 @@ void TestFrameProcessor::calibrationRoundTripOnRealFileProducesCleanSteps()
     for (int ci = 0; ci < result.channels.size(); ci++)
     {
         const ProcessedChannelSeries& series = result.channels[ci];
-        if (!calibration_by_word.contains(series.word) || series.values.isEmpty())
+        if (!calibration_by_word.contains(series.word) || series.values.empty())
         {
             continue;
         }
 
-        // series.values is still a QVector (the DTO converts in a later step).
-        const std::vector<double> raw(series.values.begin(), series.values.end());
-        StepDetector::Result det = StepDetector::detect(raw, p.samplePeriodSec, steps);
+        StepDetector::Result det = StepDetector::detect(series.values, p.samplePeriodSec, steps);
         if (!det.profile.valid)
         {
             continue; // This word's main-pass series didn't show clean re-detectable plateaus.
@@ -693,12 +691,12 @@ void TestFrameProcessor::offPhaseSyncAfterLockLossIsNotExtracted()
     QVERIFY2(fp.process(p, &setup), "Synthetic off-phase-sync stream should process successfully");
 
     const ProcessedStreamData& r = fp.result();
-    QVERIFY2(!r.channels.isEmpty() && !r.channels[0].values.isEmpty(),
+    QVERIFY2(!r.channels.empty() && !r.channels[0].values.empty(),
              "Expected at least one extracted sample");
     // Only the boundary-aligned sync should yield a sample (word B = 15). If the
     // off-phase false positive after lock loss were wrongly extracted, the stale
     // word A (0) would be averaged in, producing 7.5 instead of 15.
-    QCOMPARE(r.channels[0].values.first(), 15.0);
+    QCOMPARE(r.channels[0].values.front(), 15.0);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -789,13 +787,13 @@ void TestFrameProcessor::nonLinearCalibrationAveragesRawBeforeInterpolating()
     QVERIFY2(fp.process(p, &setup), "Synthetic non-linear-calibration stream should process successfully");
 
     const ProcessedStreamData& r = fp.result();
-    QVERIFY2(!r.channels.isEmpty() && !r.channels[0].values.isEmpty(),
+    QVERIFY2(!r.channels.empty() && !r.channels[0].values.empty(),
              "Expected at least one extracted sample");
     // Correct (average raw, then calibrate once): interpolate(mean(0,15)=7.5) = 10 dB.
     // Buggy (calibrate each frame, then average): mean(10, 160) = 85 dB.
-    QVERIFY2(qAbs(r.channels[0].values.first() - 10.0) < 1e-9,
+    QVERIFY2(qAbs(r.channels[0].values.front() - 10.0) < 1e-9,
              qPrintable(QString("Expected 10.0 dB (raw averaged before calibration), got %1")
-                            .arg(r.channels[0].values.first())));
+                            .arg(r.channels[0].values.front())));
 }
 
 void TestFrameProcessor::swapBytesOffFindsSyncThatTheSwapDestroys()

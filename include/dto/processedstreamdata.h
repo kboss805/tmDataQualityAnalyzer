@@ -10,8 +10,9 @@
 #ifndef PROCESSEDSTREAMDATA_H
 #define PROCESSEDSTREAMDATA_H
 
+#include <vector>
+
 #include <QString>
-#include <QVector>
 
 #include "streamconfig.h"
 
@@ -24,7 +25,7 @@ struct ProcessedChannelSeries
 {
     QString         name;   ///< Parameter name, e.g. "L_RCVR1".
     int             word = -1; ///< Zero-based word index within the minor frame.
-    QVector<double> values; ///< Calibrated value per output time sample.
+    std::vector<double> values; ///< Calibrated value per output time sample.
 };
 
 /**
@@ -42,13 +43,13 @@ struct ProcessedStreamData
     int        sourceId     = 0;    ///< Id of the .ch10 file (multi-file session) this stream came from; 0 for the first/only source. Two sources can legitimately reuse the same pcmChannelId, so identity checks that key on pcmChannelId must also key on sourceId to avoid cross-source collisions.
     StreamMode mode = StreamMode::ReceiverChannelInfo; ///< Mode used to produce this data.
 
-    QVector<double> timesSec;       ///< Absolute IRIG seconds per output sample.
-    QVector<double> lockPercent;    ///< Frame-sync lock percentage (0..100) per output sample.
-    QVector<double> accumulatedMissedFrames; ///< Cumulative missed frames count per output sample (monotonic, parallel to timesSec).
-    QVector<ProcessedChannelSeries> channels; ///< SNR channel series (empty in lock-only mode).
+    std::vector<double> timesSec;       ///< Absolute IRIG seconds per output sample.
+    std::vector<double> lockPercent;    ///< Frame-sync lock percentage (0..100) per output sample.
+    std::vector<double> accumulatedMissedFrames; ///< Cumulative missed frames count per output sample (monotonic, parallel to timesSec).
+    std::vector<ProcessedChannelSeries> channels; ///< SNR channel series (empty in lock-only mode).
 
     /// @return true if at least one output sample was recorded.
-    bool hasSamples() const { return !timesSec.isEmpty(); }
+    bool hasSamples() const { return !timesSec.empty(); }
 };
 
 #endif // PROCESSEDSTREAMDATA_H

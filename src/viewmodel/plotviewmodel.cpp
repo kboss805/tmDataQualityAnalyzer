@@ -21,6 +21,26 @@
 #include "csvseriesparser.h"
 #include "seriescolumnschema.h"
 
+namespace {
+
+/// The processing core hands its results over as std::vector; the plot keeps QVector.
+///
+/// This is deliberate, and it is the boundary rather than a step not yet taken. The
+/// plot's data relies on QVector's implicit sharing in three places: one `elapsed`
+/// time axis is shared by every series of a stream, TmChart holds its own reference
+/// to each series' buffers so a full chart rebuild copies nothing, and building the
+/// series list copies a reference count rather than the samples. With std::vector
+/// each of those becomes a deep copy - every series its own time axis, and every
+/// rebuild a copy of every sample. The view model and chart are the layers the port
+/// replaces wholesale, so they keep Qt's containers until then, and the one copy is
+/// paid here, once per series per stream.
+QVector<double> toPlotVector(const std::vector<double>& values)
+{
+    return QVector<double>(values.begin(), values.end());
+}
+
+} // namespace
+
 PlotViewModel::PlotViewModel(QObject* parent)
     : QObject(parent)
     , m_plot_title(PlotConstants::kDefaultPlotTitle)
@@ -214,8 +234,8 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         {
             const double existing_min_abs = m_base_abs_seconds;
             const double existing_max_abs = m_base_abs_seconds + m_x_max;
-            const double new_min_abs = data.timesSec.first();
-            const double new_max_abs = data.timesSec.last();
+            const double new_min_abs = data.timesSec.front();
+            const double new_max_abs = data.timesSec.back();
             const bool overlaps = new_min_abs <= existing_max_abs && existing_min_abs <= new_max_abs;
             if (!overlaps)
             {
@@ -232,10 +252,10 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
     // earlier than the first.
     if (m_series.isEmpty())
     {
-        m_base_abs_seconds = data.timesSec.first();
+        m_base_abs_seconds = data.timesSec.front();
         recomputeBaseDayAndOffset();
     }
-    else if (data.timesSec.first() < m_base_abs_seconds)
+    else if (data.timesSec.front() < m_base_abs_seconds)
     {
         // This source's earliest sample precedes everything already loaded.
         // Re-base: shift every existing series' elapsed seconds right by the
@@ -243,7 +263,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         // keeps working unchanged) while every sample's absolute-time
         // correlation across sources is preserved. O(total samples), a
         // one-time cost per add that starts a new earliest source.
-        const double delta = m_base_abs_seconds - data.timesSec.first();
+        const double delta = m_base_abs_seconds - data.timesSec.front();
         for (PlotSeriesData& s : m_series)
         {
             for (double& x : s.xValues)
@@ -251,7 +271,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
                 x += delta;
             }
         }
-        m_base_abs_seconds = data.timesSec.first();
+        m_base_abs_seconds = data.timesSec.front();
         recomputeBaseDayAndOffset();
     }
 
@@ -273,7 +293,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
     };
 
     // Frame-sync lock series — present for both lock-only and receiver modes.
-    if (!data.lockPercent.isEmpty())
+    if (!data.lockPercent.empty())
     {
         PlotSeriesData lock;
         lock.name = data.streamLabel;
@@ -286,7 +306,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         lock.sourceId = data.sourceId;
         lock.id = m_next_series_id++;
         lock.xValues = elapsed;
-        lock.yValues = data.lockPercent;
+        lock.yValues = toPlotVector(data.lockPercent);
         lock.visible = (m_lock_axis_view == LockAxisView::LockPercent);
         fillCaches(lock);
         m_series.push_back(lock);
@@ -294,7 +314,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
 
     // Missed frames accumulation series — left-axis sibling of the lock series,
     // shown only when the left-axis view is in MissedFrames mode.
-    if (!data.accumulatedMissedFrames.isEmpty())
+    if (!data.accumulatedMissedFrames.empty())
     {
         PlotSeriesData errors;
         errors.name = data.streamLabel;
@@ -307,7 +327,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         errors.sourceId = data.sourceId;
         errors.id = m_next_series_id++;
         errors.xValues = elapsed;
-        errors.yValues = data.accumulatedMissedFrames;
+        errors.yValues = toPlotVector(data.accumulatedMissedFrames);
         errors.visible = (m_lock_axis_view == LockAxisView::MissedFrames);
         fillCaches(errors);
         m_series.push_back(errors);
@@ -340,7 +360,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         s.sourceId = data.sourceId;
         s.id = m_next_series_id++;
         s.xValues = elapsed;
-        s.yValues = ch.values;
+        s.yValues = toPlotVector(ch.values);
         fillCaches(s);
         m_series.push_back(s);
     }

@@ -14,6 +14,7 @@
 
 #include "ch10packetreader.h"
 #include "constants.h"
+#include "containerutil.h"
 #include "frameprocessor.h"
 #include "framesetup.h"
 #include "packetqueue.h"
@@ -243,7 +244,7 @@ void CalibrationExtractor::onWorkerFinished(bool success)
             CalibrationChannelResult res;
             res.name    = ch.name;
             res.word    = ch.word;
-            res.hadData = !ch.values.isEmpty();
+            res.hadData = !ch.values.empty();
 
             if (res.hadData)
             {
@@ -251,20 +252,19 @@ void CalibrationExtractor::onWorkerFinished(bool success)
                 // detection, so signal-generator turn-on transients (and any
                 // trailing junk) don't get mistaken for cal plateaus. The series
                 // is sampled every m_sample_period_sec, so seconds -> sample count.
-                // ch.values is still a QVector (the DTO converts in a later step); the
-                // clipped copy handed to the detector is a std::vector.
-                const QVector<double>& full = ch.values;
+                const std::vector<double>& full = ch.values;
+                const int count = intSize(full);
                 int lo = 0;
-                int hi = full.size();
+                int hi = count;
                 if (m_sample_period_sec > 0.0)
                 {
-                    lo = qBound(0, static_cast<int>(m_clip_start_sec / m_sample_period_sec), full.size());
-                    hi = full.size() - qBound(0, static_cast<int>(m_clip_end_sec / m_sample_period_sec), full.size());
+                    lo = qBound(0, static_cast<int>(m_clip_start_sec / m_sample_period_sec), count);
+                    hi = count - qBound(0, static_cast<int>(m_clip_end_sec / m_sample_period_sec), count);
                 }
                 const std::vector<double> clipped =
                     (lo < hi) ? std::vector<double>(full.begin() + lo, full.begin() + hi)
-                              : std::vector<double>(full.begin(), full.end()); // ignore an over-aggressive clip
-                m_recording_sec = full.size() * m_sample_period_sec;
+                              : full; // ignore an over-aggressive clip
+                m_recording_sec = count * m_sample_period_sec;
                 if (lo >= hi && (m_clip_start_sec > 0.0 || m_clip_end_sec > 0.0))
                 {
                     m_clip_ignored = true;
