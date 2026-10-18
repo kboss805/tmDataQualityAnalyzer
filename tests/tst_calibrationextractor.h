@@ -15,6 +15,7 @@ private slots:
     void summaryFlagsAShortStepFileAndAMismatchedWordMap();
     void realStepCalWithShortStepFileIsFlagged();
     void realStepCalWithWrongWordMapIsFlagged();
+    void extractionReportsItsProgress();
     void clipsBeyondTheRecordingAreReported();
     void summaryNamesReceiversAndWhyTheyFellBack();
 };

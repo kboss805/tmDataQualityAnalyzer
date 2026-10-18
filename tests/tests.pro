@@ -168,6 +168,7 @@ SOURCES += \
     tst_intervalgate.cpp \
     tst_tomldocument.cpp \
     tst_qtprocessingevents.cpp \
+    tst_ch10packetreader.cpp \
     tst_stepdetector.cpp \
     tst_calibrationextractor.cpp
 
@@ -196,5 +197,6 @@ HEADERS += \
     tst_intervalgate.h \
     tst_tomldocument.h \
     tst_qtprocessingevents.h \
+    tst_ch10packetreader.h \
     tst_stepdetector.h \
     tst_calibrationextractor.h

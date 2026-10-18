@@ -10,6 +10,7 @@
 #include "frameprocessor.h"
 #include "framesetup.h"
 #include "packetqueue.h"
+#include "qtbridge.h"
 #include "qtprocessingevents.h"
 
 ProcessingCoordinator::ProcessingCoordinator(QObject* parent)
@@ -64,7 +65,7 @@ bool ProcessingCoordinator::startProcessing(QVector<StreamJob> jobs)
     }
 
     // Resolve TMATS-derived attributes once, synchronously, via the reader.
-    m_reader = new Ch10PacketReader;
+    m_reader = std::make_shared<Ch10PacketReader>();
     std::vector<ProcessingParams*> params_list;
     params_list.reserve(m_jobs.size());
     for (StreamJob& job : m_jobs)
@@ -75,12 +76,11 @@ bool ProcessingCoordinator::startProcessing(QVector<StreamJob> jobs)
     const QString filename       = m_jobs[0].params.filename;
     const int     time_channel   = m_jobs[0].params.timeChannelId;
 
-    QString error;
-    if (!m_reader->prepare(filename, time_channel, params_list, error))
+    std::string error;
+    if (!m_reader->prepare(toFsPath(filename), time_channel, params_list, error))
     {
-        emit errorOccurred(error);
-        delete m_reader;
-        m_reader = nullptr;
+        emit errorOccurred(QString::fromStdString(error));
+        m_reader.reset();
         for (PacketQueue* q : m_queues) { delete q; }
         m_queues.clear();
         clearJobs();
@@ -126,15 +126,16 @@ bool ProcessingCoordinator::startProcessing(QVector<StreamJob> jobs)
     }
 
     // Reader thread.
-    m_reader_thread = new QThread;
-    m_reader->moveToThread(m_reader_thread);
-    connect(m_reader, &Ch10PacketReader::progressUpdated,
-            this, &ProcessingCoordinator::onReaderProgress);
-    connect(m_reader, &Ch10PacketReader::logMessage,
-            this, &ProcessingCoordinator::logMessageReceived);
-    connect(m_reader, &Ch10PacketReader::errorOccurred,
-            this, &ProcessingCoordinator::errorOccurred);
-    connect(m_reader_thread, &QThread::started, m_reader, &Ch10PacketReader::run);
+    // Its reports reach this object's thread as queued events, in order (the delivery the
+    // signals it replaced gave). No completion handler: the thread is joined at teardown.
+    m_reader->setEvents(std::make_shared<QtProcessingEvents>(
+        this,
+        [this](const QString& message) { emit logMessageReceived(message); },
+        [this](const QString& message) { emit errorOccurred(message); },
+        nullptr,
+        [this](int percent) { onReaderProgress(percent); }));
+    std::shared_ptr<Ch10PacketReader> reader = m_reader;
+    m_reader_thread = QThread::create([reader]() { reader->run(); });
 
     m_processing = true;
     emit processingStateChanged(true);
@@ -220,11 +221,7 @@ void ProcessingCoordinator::teardownAll()
         delete m_reader_thread;
         m_reader_thread = nullptr;
     }
-    if (m_reader != nullptr)
-    {
-        delete m_reader;
-        m_reader = nullptr;
-    }
+    m_reader.reset(); // the reader thread is joined above, so this is the last reference
 
     // Queues are safe to delete now that all threads have stopped.
     for (PacketQueue* q : m_queues)

@@ -78,8 +78,8 @@ static bool runWithReader(FrameProcessor& fp, ProcessingParams& p, FrameSetup* s
 
     Ch10PacketReader reader;
     std::vector<ProcessingParams*> params_list = { &p };
-    QString error;
-    if (!reader.prepare(p.filename, p.timeChannelId, params_list, error))
+    std::string error;
+    if (!reader.prepare(toFsPath(p.filename), p.timeChannelId, params_list, error))
         return false;
 
     QFuture<void> future = QtConcurrent::run([&reader]() { reader.run(); });
@@ -250,9 +250,9 @@ void TestFrameProcessor::nonAsciiPathOpensInBothReaders()
 
     Ch10PacketReader reader;
     std::vector<ProcessingParams*> none;
-    QString error;
-    reader.prepare(dst, meta.getCurrentTimeChannelID(), none, error);
-    QVERIFY2(error != QStringLiteral("Error opening data file."),
+    std::string error;
+    reader.prepare(toFsPath(dst), meta.getCurrentTimeChannelID(), none, error);
+    QVERIFY2(error != "Error opening data file.",
              "packet reader could not open a path the metadata reader opened");
 }
 
@@ -1138,10 +1138,10 @@ void TestFrameProcessor::swapBytesOffFindsSyncThatTheSwapDestroys()
         p.packetQueue = &queue;
         Ch10PacketReader rdr;
         std::vector<ProcessingParams*> params_list = { &p };
-        QString error;
-        if (!rdr.prepare(p.filename, p.timeChannelId, params_list, error))
+        std::string error;
+        if (!rdr.prepare(toFsPath(p.filename), p.timeChannelId, params_list, error))
         {
-            qWarning("prepare() failed (swap=%d): %s", int(swap), qPrintable(error));
+            qWarning("prepare() failed (swap=%d): %s", int(swap), error.c_str());
             return {};
         }
 
@@ -1214,8 +1214,8 @@ void TestFrameProcessor::oddPayloadSwapSkipIsReported()
     p.packetQueue = &queue;
     Ch10PacketReader rdr;
     std::vector<ProcessingParams*> params_list = { &p };
-    QString error;
-    QVERIFY2(rdr.prepare(p.filename, p.timeChannelId, params_list, error), qPrintable(error));
+    std::string error;
+    QVERIFY2(rdr.prepare(toFsPath(p.filename), p.timeChannelId, params_list, error), error.c_str());
 
     FrameSetup empty_setup;
     FrameProcessor fp;
@@ -1274,8 +1274,8 @@ void TestFrameProcessor::offPhaseSyncsAreNotCountedAsBoundaryAligned()
     p.packetQueue = &queue;
     Ch10PacketReader rdr;
     std::vector<ProcessingParams*> params_list = { &p };
-    QString error;
-    QVERIFY2(rdr.prepare(p.filename, p.timeChannelId, params_list, error), qPrintable(error));
+    std::string error;
+    QVERIFY2(rdr.prepare(toFsPath(p.filename), p.timeChannelId, params_list, error), error.c_str());
 
     FrameSetup empty_setup;
     FrameProcessor fp;
@@ -1336,8 +1336,8 @@ void TestFrameProcessor::failureReportNamesChannelAndSyncPattern()
     p.packetQueue = &queue;
     Ch10PacketReader rdr;
     std::vector<ProcessingParams*> params_list = { &p };
-    QString error;
-    QVERIFY2(rdr.prepare(p.filename, p.timeChannelId, params_list, error), qPrintable(error));
+    std::string error;
+    QVERIFY2(rdr.prepare(toFsPath(p.filename), p.timeChannelId, params_list, error), error.c_str());
 
     FrameSetup empty_setup;
     FrameProcessor fp;

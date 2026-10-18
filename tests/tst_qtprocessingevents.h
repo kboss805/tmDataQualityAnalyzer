@@ -20,6 +20,7 @@ class TestQtProcessingEvents : public QObject
 
 private slots:
     void deliversOnTheTargetsThreadInOrder();
+    void progressArrivesOnTheTargetsThreadInOrder();
     void messagesAreDecodedFromUtf8();
     void missingHandlersAreSkipped();
     void eventsForADestroyedTargetAreDropped();

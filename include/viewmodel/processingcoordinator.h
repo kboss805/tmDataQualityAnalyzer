@@ -102,7 +102,7 @@ private:
 
     // Reader
     QThread*          m_reader_thread = nullptr;
-    Ch10PacketReader* m_reader        = nullptr;
+    std::shared_ptr<Ch10PacketReader> m_reader; ///< Shared with the reader thread's body.
 
     // Workers (one per job)
     QVector<Worker>   m_workers;

@@ -33,16 +33,19 @@
 class QtProcessingEvents final : public ProcessingEvents
 {
 public:
-    using TextHandler = std::function<void(const QString&)>;
-    using DoneHandler = std::function<void(bool)>;
+    using TextHandler     = std::function<void(const QString&)>;
+    using DoneHandler     = std::function<void(bool)>;
+    using ProgressHandler = std::function<void(int)>;
 
     /// @p target is the object whose thread runs the handlers (normally the UI thread's
     /// owner). Each handler is optional.
-    QtProcessingEvents(QObject* target, TextHandler on_log, TextHandler on_error, DoneHandler on_finished)
+    QtProcessingEvents(QObject* target, TextHandler on_log, TextHandler on_error,
+                       DoneHandler on_finished, ProgressHandler on_progress = nullptr)
         : m_target(target)
         , m_on_log(std::move(on_log))
         , m_on_error(std::move(on_error))
         , m_on_finished(std::move(on_finished))
+        , m_on_progress(std::move(on_progress))
     {
     }
 
@@ -69,6 +72,17 @@ public:
             Qt::QueuedConnection);
     }
 
+    void progressUpdated(int percent) override
+    {
+        if (!m_on_progress)
+        {
+            return;
+        }
+        QMetaObject::invokeMethod(
+            m_target, [handler = m_on_progress, percent]() { handler(percent); },
+            Qt::QueuedConnection);
+    }
+
 private:
     void postText(const TextHandler& handler, const std::string& message)
     {
@@ -86,6 +100,7 @@ private:
     TextHandler m_on_log;
     TextHandler m_on_error;
     DoneHandler m_on_finished;
+    ProgressHandler m_on_progress;
 };
 
 #endif // QTPROCESSINGEVENTS_H

@@ -19,8 +19,8 @@
 #include "framesetup.h"
 #include "packetqueue.h"
 #include "processedstreamdata.h"
-#include "qtprocessingevents.h"
 #include "qtbridge.h"
+#include "qtprocessingevents.h"
 #include "stepdetector.h"
 
 namespace {
@@ -143,12 +143,12 @@ void CalibrationExtractor::start(const Request& request)
     m_queue = new PacketQueue();
     m_params.packetQueue = m_queue;
 
-    m_reader = new Ch10PacketReader;
+    m_reader = std::make_shared<Ch10PacketReader>();
     std::vector<ProcessingParams*> params_list{ &m_params };
-    QString error;
-    if (!m_reader->prepare(request.calFilename, request.timeChannelId, params_list, error))
+    std::string error;
+    if (!m_reader->prepare(toFsPath(request.calFilename), request.timeChannelId, params_list, error))
     {
-        finishWithError(error);
+        finishWithError(QString::fromStdString(error));
         return;
     }
 
@@ -201,15 +201,17 @@ void CalibrationExtractor::start(const Request& request)
     });
 
     // ---- Reader thread ----
-    m_reader_thread = new QThread;
-    m_reader->moveToThread(m_reader_thread);
-    connect(m_reader, &Ch10PacketReader::progressUpdated, this, &CalibrationExtractor::progressChanged);
-    connect(m_reader, &Ch10PacketReader::logMessage, this, &CalibrationExtractor::logMessage);
-    connect(m_reader, &Ch10PacketReader::errorOccurred, this, [this](const QString& msg) {
-        m_error = msg;
-        emit logMessage(msg);
-    });
-    connect(m_reader_thread, &QThread::started, m_reader, &Ch10PacketReader::run);
+    m_reader->setEvents(std::make_shared<QtProcessingEvents>(
+        this,
+        [this](const QString& message) { emit logMessage(message); },
+        [this](const QString& message) {
+            m_error = message;
+            emit logMessage(message);
+        },
+        nullptr,
+        [this](int percent) { emit progressChanged(percent); }));
+    std::shared_ptr<Ch10PacketReader> reader = m_reader;
+    m_reader_thread = QThread::create([reader]() { reader->run(); });
 
     m_worker_thread->start();
     m_reader_thread->start();
@@ -431,8 +433,7 @@ void CalibrationExtractor::teardown()
         delete m_reader_thread;
         m_reader_thread = nullptr;
     }
-    delete m_reader;
-    m_reader = nullptr;
+    m_reader.reset(); // the reader thread is joined above, so this is the last reference
 
     delete m_queue;
     m_queue = nullptr;
