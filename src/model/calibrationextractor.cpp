@@ -65,7 +65,7 @@ void CalibrationExtractor::start(const Request& request)
     m_recording_sec  = 0.0;
     m_sample_period_sec = CalibrationConstants::kExtractSamplePeriodSec;
 
-    if (request.steps.isEmpty())
+    if (request.steps.empty())
     {
         finishWithError("No calibration steps were provided.");
         return;
@@ -251,6 +251,8 @@ void CalibrationExtractor::onWorkerFinished(bool success)
                 // detection, so signal-generator turn-on transients (and any
                 // trailing junk) don't get mistaken for cal plateaus. The series
                 // is sampled every m_sample_period_sec, so seconds -> sample count.
+                // ch.values is still a QVector (the DTO converts in a later step); the
+                // clipped copy handed to the detector is a std::vector.
                 const QVector<double>& full = ch.values;
                 int lo = 0;
                 int hi = full.size();
@@ -259,8 +261,9 @@ void CalibrationExtractor::onWorkerFinished(bool success)
                     lo = qBound(0, static_cast<int>(m_clip_start_sec / m_sample_period_sec), full.size());
                     hi = full.size() - qBound(0, static_cast<int>(m_clip_end_sec / m_sample_period_sec), full.size());
                 }
-                const QVector<double> clipped =
-                    (lo < hi) ? full.mid(lo, hi - lo) : full; // ignore an over-aggressive clip
+                const std::vector<double> clipped =
+                    (lo < hi) ? std::vector<double>(full.begin() + lo, full.begin() + hi)
+                              : std::vector<double>(full.begin(), full.end()); // ignore an over-aggressive clip
                 m_recording_sec = full.size() * m_sample_period_sec;
                 if (lo >= hi && (m_clip_start_sec > 0.0 || m_clip_end_sec > 0.0))
                 {
@@ -304,8 +307,8 @@ void CalibrationExtractor::onWorkerFinished(bool success)
                     // "this or anything higher".
                     note = QString(" — top step(s) railed; calibrated %1 of %2 step(s), "
                                    "readings hold at %3 dB")
-                               .arg(res.profile.points.size())
-                               .arg(m_steps.size())
+                               .arg(intSize(res.profile.points))
+                               .arg(intSize(m_steps))
                                .arg(topResolvedDb(res.profile), 0, 'f', 0);
                 }
                 else if (res.thresholdRelaxed)
@@ -319,8 +322,8 @@ void CalibrationExtractor::onWorkerFinished(bool success)
                                     .arg(res.name)
                                     .arg(res.word)
                                     .arg(res.detectedPlateaus)
-                                    .arg(m_steps.size())
-                                    .arg(res.detectedPlateaus != m_steps.size()
+                                    .arg(intSize(m_steps))
+                                    .arg(res.detectedPlateaus != intSize(m_steps)
                                              ? " — MISMATCH" : "")
                                     .arg(note));
             }
@@ -338,7 +341,7 @@ void CalibrationExtractor::onWorkerFinished(bool success)
         teardown();
         m_running = false;
 
-        const int total = m_results.size();
+        const int total = intSize(m_results);
         const QString summary = QString("Calibrated %1 of %2 channel(s).").arg(calibrated).arg(total);
         emit finished(true, summary);
         return;
@@ -445,10 +448,10 @@ void CalibrationExtractor::finishWithError(const QString& error)
 // summarize
 // ---------------------------------------------------------------------------
 
-QString CalibrationExtractor::summarize(const QVector<CalibrationChannelResult>& results,
+QString CalibrationExtractor::summarize(const std::vector<CalibrationChannelResult>& results,
                                         int expectedSteps)
 {
-    if (results.isEmpty())
+    if (results.empty())
     {
         return QStringLiteral("No receiver channels were extracted.");
     }
@@ -464,7 +467,7 @@ QString CalibrationExtractor::summarize(const QVector<CalibrationChannelResult>&
         int         recordingLevels = 0;               ///< Most levels a calibrated channel's sweep
                                                        ///< held, when well beyond the step file's.
         double      topDb = 0.0;                       ///< Highest dB those actually measured.
-        QVector<double> unresolved;                    ///< dB no level could be paired with.
+        std::vector<double> unresolved;                    ///< dB no level could be paired with.
         QMap<CalibrationOutcome, QStringList> failed;  ///< Channel parts per failure reason.
         QStringList flatLevels;                        ///< Stuck levels of flat channels.
         int minPlateaus = -1;                          ///< Fewest plateaus seen among failures.
@@ -495,7 +498,7 @@ QString CalibrationExtractor::summarize(const QVector<CalibrationChannelResult>&
                 g.topDb = std::max(g.topDb, topResolvedDb(r.profile));
                 for (double db : r.unresolvedDb)
                 {
-                    if (!g.unresolved.contains(db))
+                    if (std::find(g.unresolved.begin(), g.unresolved.end(), db) == g.unresolved.end())
                     {
                         g.unresolved.push_back(db);
                     }
@@ -510,9 +513,9 @@ QString CalibrationExtractor::summarize(const QVector<CalibrationChannelResult>&
             {
                 g.minPlateaus = r.detectedPlateaus;
             }
-            if (r.outcome == CalibrationOutcome::FlatNoSignal && !r.plateauLevels.isEmpty())
+            if (r.outcome == CalibrationOutcome::FlatNoSignal && !r.plateauLevels.empty())
             {
-                const QString level = QString::number(r.plateauLevels.first(), 'f', 0);
+                const QString level = QString::number(r.plateauLevels.front(), 'f', 0);
                 if (!g.flatLevels.contains(level))
                 {
                     g.flatLevels.push_back(level);
@@ -627,7 +630,7 @@ QString CalibrationExtractor::summarize(const QVector<CalibrationChannelResult>&
 
     QStringList out;
     out << QStringLiteral("Applied non-linear calibration to %1 of %2 channel(s).")
-               .arg(calibratedChannels).arg(results.size());
+               .arg(calibratedChannels).arg(intSize(results));
 
     if (!fullyCalibrated.isEmpty())
     {

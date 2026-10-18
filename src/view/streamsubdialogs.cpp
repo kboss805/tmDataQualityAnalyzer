@@ -27,6 +27,7 @@
 #include <QSettings>
 #include <QVBoxLayout>
 
+#include "containerutil.h"
 #include "framesetup.h"
 #include "tomldocument.h"
 
@@ -595,7 +596,7 @@ void CalibrationSetupDialog::loadStepFile(const QString& path, bool automatic)
     m_step_path = path;
     m_step_path_label->setText(QFileInfo(path).fileName());
 
-    QVector<StepDefinition> steps;
+    std::vector<StepDefinition> steps;
     QString error;
     if (StepDetector::parseStepConfig(path, steps, error))
     {
@@ -741,7 +742,7 @@ void CalibrationSetupDialog::maybeRunExtraction()
     // m_calibration_by_word keeps only the successes (keyed by word), so it
     // cannot say which receivers fell back or why once the extractor is gone.
     m_calibration_report = CalibrationExtractor::summarize(extractor.results(),
-                                                          m_steps.size());
+                                                          intSize(m_steps));
 
     m_cal_ok = (valid > 0);
     if (extractor.clipIgnored())

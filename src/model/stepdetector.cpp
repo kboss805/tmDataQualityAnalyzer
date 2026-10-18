@@ -8,14 +8,22 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <vector>
 
 #include <QFile>
 #include <QFileInfo>
 #include <QTextStream>
 
 #include "constants.h"
+#include "containerutil.h"
 
 namespace {
+
+/// One flag per sample. Deliberately not `std::vector<bool>`: that specialisation is a
+/// bit-packed proxy container (no real references, no data()), which is a trap here
+/// rather than a saving.
+using Flags = std::vector<char>;
 
 /// Strips an inline `#` comment (outside quotes) and surrounding whitespace.
 QString stripComment(QString value)
@@ -29,15 +37,15 @@ QString stripComment(QString value)
 }
 
 /// Median of a copy of @p values (returns 0 for an empty input).
-double median(QVector<double> values)
+double median(std::vector<double> values)
 {
-    if (values.isEmpty())
+    if (values.empty())
     {
         return 0.0;
     }
     std::sort(values.begin(), values.end());
-    const int mid = values.size() / 2;
-    if (values.size() % 2 == 0)
+    const int mid = intSize(values) / 2;
+    if (intSize(values) % 2 == 0)
     {
         return 0.5 * (values[mid - 1] + values[mid]);
     }
@@ -45,10 +53,10 @@ double median(QVector<double> values)
 }
 
 /// Median magnitude of the change between adjacent values (0 for fewer than two).
-double medianAdjacentGap(const QVector<double>& values)
+double medianAdjacentGap(const std::vector<double>& values)
 {
-    QVector<double> gaps;
-    for (int i = 1; i < values.size(); i++)
+    std::vector<double> gaps;
+    for (int i = 1; i < intSize(values); i++)
     {
         gaps.push_back(std::fabs(values[i] - values[i - 1]));
     }
@@ -67,8 +75,8 @@ bool isRailedLevel(double value)
 /// Where each step transition happened, and which step each one lands on.
 struct DwellGrid
 {
-    QVector<int> boundaries;  ///< Derivative indices where a transition happened.
-    QVector<int> slot;        ///< Step index each boundary lands on.
+    std::vector<int> boundaries;  ///< Derivative indices where a transition happened.
+    std::vector<int> slot;        ///< Step index each boundary lands on.
     double       dwell = 0.0; ///< Median samples per dwell.
 };
 
@@ -83,11 +91,11 @@ struct DwellGrid
 /// Returns false when the recording cannot support a grid: a sweep whose dwells
 /// were not each held for the same length of time keeps the linear fallback
 /// rather than being handed a silently mis-numbered profile.
-bool buildDwellGrid(const QVector<double>& deriv, double majorEdge, DwellGrid& out)
+bool buildDwellGrid(const std::vector<double>& deriv, double majorEdge, DwellGrid& out)
 {
     out = DwellGrid{};
 
-    for (int i = 0; i < deriv.size(); i++)
+    for (int i = 0; i < intSize(deriv); i++)
     {
         if (std::fabs(deriv[i]) < majorEdge)
         {
@@ -95,17 +103,17 @@ bool buildDwellGrid(const QVector<double>& deriv, double majorEdge, DwellGrid& o
         }
         // One transition can smear across the window that straddles it, so
         // marks a sample or two apart are the same boundary.
-        if (out.boundaries.isEmpty() || i - out.boundaries.last() > 2)
+        if (out.boundaries.empty() || i - out.boundaries.back() > 2)
         {
             out.boundaries.push_back(i);
         }
     }
-    if (out.boundaries.size() < 2)
+    if (intSize(out.boundaries) < 2)
     {
         return false;
     }
-    QVector<double> spacings;
-    for (int i = 1; i < out.boundaries.size(); i++)
+    std::vector<double> spacings;
+    for (int i = 1; i < intSize(out.boundaries); i++)
     {
         spacings.push_back(out.boundaries[i] - out.boundaries[i - 1]);
     }
@@ -117,8 +125,8 @@ bool buildDwellGrid(const QVector<double>& deriv, double majorEdge, DwellGrid& o
     // Step index of each boundary. A gap of two dwells means one step never
     // produced a transition of its own - the railed pair at the top, or a
     // dwell noise ate - and the numbering must skip it rather than shift.
-    out.slot.assign(out.boundaries.size(), 0);
-    for (int i = 1; i < out.boundaries.size(); i++)
+    out.slot.assign(intSize(out.boundaries), 0);
+    for (int i = 1; i < intSize(out.boundaries); i++)
     {
         const double gap     = (out.boundaries[i] - out.boundaries[i - 1]) / out.dwell;
         const int    spanned = static_cast<int>(std::llround(gap));
@@ -142,19 +150,19 @@ bool buildDwellGrid(const QVector<double>& deriv, double majorEdge, DwellGrid& o
 /// holds several steps that cannot be told apart), the value must fall
 /// between its measured neighbours, and railed dwells above the top
 /// measured step stay unresolved - there is nothing there to measure.
-void measureUnconfirmedDwells(const QVector<double>& rawValues,
-                             const QVector<StepDefinition>& steps,
+void measureUnconfirmedDwells(const std::vector<double>& rawValues,
+                             const std::vector<StepDefinition>& steps,
                              const DwellGrid& grid,
                              int top_slot,
                              int confirm_samples,
-                             QVector<bool>& paired,
-                             QVector<double>& raw_of_slot,
+                             Flags& paired,
+                             std::vector<double>& raw_of_slot,
                              CalibrationProfile& profile)
 {
-    const QVector<int>& boundaries    = grid.boundaries;
-    const QVector<int>& boundary_slot = grid.slot;
-    const int expected = steps.size();
-for (int i = 0; i + 1 < boundaries.size(); i++)
+    const std::vector<int>& boundaries    = grid.boundaries;
+    const std::vector<int>& boundary_slot = grid.slot;
+    const int expected = intSize(steps);
+for (int i = 0; i + 1 < intSize(boundaries); i++)
 {
     if (boundary_slot[i + 1] - boundary_slot[i] != 1)
     {
@@ -187,7 +195,7 @@ for (int i = 0; i + 1 < boundaries.size(); i++)
     {
         continue;
     }
-    QVector<double> tail;
+    std::vector<double> tail;
     tail.reserve(hi - lo);
     for (int j = lo; j < hi; j++)
     {
@@ -227,11 +235,13 @@ struct Level
 };
 
 /// Sample-to-sample difference of @p raw (one shorter than its input).
-QVector<double> sampleDerivative(const QVector<double>& raw)
+std::vector<double> sampleDerivative(const std::vector<double>& raw)
 {
-    QVector<double> deriv;
-    deriv.reserve(raw.size() - 1);
-    for (int i = 1; i < raw.size(); i++)
+    std::vector<double> deriv;
+    // reserve() takes an unsigned count: for an empty series the "one fewer" is -1, which
+    // QVector shrugged off and a std::vector reads as 18 quintillion elements.
+    deriv.reserve(static_cast<std::size_t>(std::max(0, intSize(raw) - 1)));
+    for (int i = 1; i < intSize(raw); i++)
     {
         deriv.push_back(raw[i] - raw[i - 1]);
     }
@@ -240,15 +250,15 @@ QVector<double> sampleDerivative(const QVector<double>& raw)
 
 /// Robust (MAD-based) standard-deviation estimate of @p values. Sizes the
 /// derivative threshold adaptively per channel.
-double robustStdDev(const QVector<double>& values)
+double robustStdDev(const std::vector<double>& values)
 {
-    if (values.isEmpty())
+    if (values.empty())
     {
         return 0.0;
     }
     const double med = median(values);
-    QVector<double> abs_dev;
-    abs_dev.reserve(values.size());
+    std::vector<double> abs_dev;
+    abs_dev.reserve(intSize(values));
     for (double v : values)
     {
         abs_dev.push_back(std::fabs(v - med));
@@ -271,12 +281,12 @@ double robustStdDev(const QVector<double>& values)
 ///
 /// A wholly pinned series (a dead or railed channel) has no live samples; it
 /// falls back to the full derivative so it still reads as noiseless and flat.
-double liveNoiseSigma(const QVector<double>& raw, const QVector<double>& deriv)
+double liveNoiseSigma(const std::vector<double>& raw, const std::vector<double>& deriv)
 {
     const auto [floor_it, ceiling_it] = std::minmax_element(raw.cbegin(), raw.cend());
-    QVector<double> live;
-    live.reserve(deriv.size());
-    for (int i = 0; i < deriv.size(); i++)
+    std::vector<double> live;
+    live.reserve(intSize(deriv));
+    for (int i = 0; i < intSize(deriv); i++)
     {
         const bool pinned = raw[i] == raw[i + 1]
                             && (raw[i] == *floor_it || raw[i] == *ceiling_it);
@@ -285,16 +295,16 @@ double liveNoiseSigma(const QVector<double>& raw, const QVector<double>& deriv)
             live.push_back(deriv[i]);
         }
     }
-    return robustStdDev(live.isEmpty() ? deriv : live);
+    return robustStdDev(live.empty() ? deriv : live);
 }
 
 /// Marks samples that are NOT part of a transition. A transition at derivative
 /// index i sits between raw[i] and raw[i+1], so both endpoints are marked
 /// unstable and plateaus exclude the moving region.
-QVector<bool> markStableSamples(const QVector<double>& deriv, int sampleCount, double threshold)
+Flags markStableSamples(const std::vector<double>& deriv, int sampleCount, double threshold)
 {
-    QVector<bool> stable(sampleCount, true);
-    for (int i = 0; i < deriv.size(); i++)
+    Flags stable(sampleCount, true);
+    for (int i = 0; i < intSize(deriv); i++)
     {
         if (std::fabs(deriv[i]) > threshold)
         {
@@ -307,9 +317,9 @@ QVector<bool> markStableSamples(const QVector<double>& deriv, int sampleCount, d
 
 /// Maximal runs of stable samples that hold for at least @p confirmSamples, so a
 /// transient or partial-jump blip is not mistaken for a settled step.
-QVector<Plateau> confirmedPlateaus(const QVector<bool>& stable, int sampleCount, int confirmSamples)
+std::vector<Plateau> confirmedPlateaus(const Flags& stable, int sampleCount, int confirmSamples)
 {
-    QVector<Plateau> plateaus;
+    std::vector<Plateau> plateaus;
     int run_begin = -1;
     for (int i = 0; i <= sampleCount; i++)
     {
@@ -337,12 +347,12 @@ QVector<Plateau> confirmedPlateaus(const QVector<bool>& stable, int sampleCount,
 /// settling after a jump has had the rest of the plateau to die out by then, so
 /// this avoids transition contamination without needing a separate trim
 /// fraction.
-QVector<Level> levelsOf(const QVector<double>& raw,
-                        const QVector<Plateau>& plateaus,
+std::vector<Level> levelsOf(const std::vector<double>& raw,
+                        const std::vector<Plateau>& plateaus,
                         int confirmSamples)
 {
-    QVector<Level> levels;
-    levels.reserve(plateaus.size());
+    std::vector<Level> levels;
+    levels.reserve(intSize(plateaus));
     for (const Plateau& p : plateaus)
     {
         const int lo = std::max(p.begin, p.end - confirmSamples);
@@ -358,15 +368,15 @@ QVector<Level> levelsOf(const QVector<double>& raw,
 
 /// Merges adjacent levels within @p tolerance into one, keeping the later (more
 /// settled) value and extending the span across both halves.
-QVector<Level> coalesceLevels(const QVector<Level>& in, double tolerance)
+std::vector<Level> coalesceLevels(const std::vector<Level>& in, double tolerance)
 {
-    QVector<Level> out;
+    std::vector<Level> out;
     for (const Level& level : in)
     {
-        if (!out.isEmpty() && std::fabs(level.value - out.last().value) <= tolerance)
+        if (!out.empty() && std::fabs(level.value - out.back().value) <= tolerance)
         {
-            out.last().value = level.value;
-            out.last().end   = level.end;
+            out.back().value = level.value;
+            out.back().end   = level.end;
         }
         else
         {
@@ -376,10 +386,10 @@ QVector<Level> coalesceLevels(const QVector<Level>& in, double tolerance)
     return out;
 }
 
-QVector<double> valuesOf(const QVector<Level>& levels)
+std::vector<double> valuesOf(const std::vector<Level>& levels)
 {
-    QVector<double> values;
-    values.reserve(levels.size());
+    std::vector<double> values;
+    values.reserve(intSize(levels));
     for (const Level& level : levels)
     {
         values.push_back(level.value);
@@ -410,7 +420,7 @@ int transitionDirection(double delta, double threshold)
 /// around the noise floor, never forming a monotonic run — instead of the
 /// old "first N plateaus" rule, which paired no-signal noise with the step
 /// dB values and produced degenerate (all-equal rawAvg) profiles.
-int selectSweepStart(const QVector<double>& plateauAvg, int expected,
+int selectSweepStart(const std::vector<double>& plateauAvg, int expected,
                      double threshold, int& runLevels)
 {
     runLevels = 0;
@@ -435,7 +445,7 @@ int selectSweepStart(const QVector<double>& plateauAvg, int expected,
 // return ramp, which on a full pyramid/valley recording forms an equally valid
 // monotonic run in the opposite half.
 int run_start = -1;
-for (int begin = 0; begin + 1 < plateauAvg.size() && run_start < 0; )
+for (int begin = 0; begin + 1 < intSize(plateauAvg) && run_start < 0; )
 {
     const int dir = transitionDirection(plateauAvg[begin + 1] - plateauAvg[begin], threshold);
     if (dir == 0)
@@ -444,7 +454,7 @@ for (int begin = 0; begin + 1 < plateauAvg.size() && run_start < 0; )
         continue;
     }
     int end = begin + 1;
-    while (end + 1 < plateauAvg.size() &&
+    while (end + 1 < intSize(plateauAvg) &&
            transitionDirection(plateauAvg[end + 1] - plateauAvg[end], threshold) == dir)
     {
         end++;
@@ -484,26 +494,26 @@ return run_start;
 /// because the pre-sweep level runs for however long the operator took to begin
 /// and only its end lands on the grid. A recording whose dwells are not regular
 /// fails the check and keeps the linear fallback rather than guessing.
-bool calibrateSaturatedTop(const QVector<double>& rawValues,
-                           const QVector<double>& deriv,
-                           const QVector<Level>& levels,
-                           const QVector<StepDefinition>& steps,
+bool calibrateSaturatedTop(const std::vector<double>& rawValues,
+                           const std::vector<double>& deriv,
+                           const std::vector<Level>& levels,
+                           const std::vector<StepDefinition>& steps,
                            double nominal_threshold,
                            int confirm_samples,
                            StepDetector::Result& result)
 {
-    const int expected = steps.size();
-    if (levels.size() < 2)
+    const int expected = intSize(steps);
+    if (intSize(levels) < 2)
     {
         return false;
     }
-    const QVector<double> values = valuesOf(levels);
+    const std::vector<double> values = valuesOf(levels);
 
     // Longest monotonic run, by the same rule the full-sweep selection uses
     // but of any length - here the run is short BECAUSE the top railed.
     int run_begin = 0;
     int run_end   = 0;
-    for (int begin = 0; begin + 1 < values.size(); )
+    for (int begin = 0; begin + 1 < intSize(values); )
     {
         const int dir = transitionDirection(values[begin + 1] - values[begin], nominal_threshold);
         if (dir == 0)
@@ -512,7 +522,7 @@ bool calibrateSaturatedTop(const QVector<double>& rawValues,
             continue;
         }
         int end = begin + 1;
-        while (end + 1 < values.size()
+        while (end + 1 < intSize(values)
                && transitionDirection(values[end + 1] - values[end], nominal_threshold) == dir)
         {
             end++;
@@ -557,21 +567,22 @@ bool calibrateSaturatedTop(const QVector<double>& rawValues,
     // places every level.
     const double major_edge =
         CalibrationConstants::kMajorEdgeFractionOfStep
-        * medianAdjacentGap(values.mid(run_begin, run_end - run_begin + 1));
+        * medianAdjacentGap(std::vector<double>(values.begin() + run_begin,
+                                                values.begin() + run_end + 1));
     DwellGrid grid;
     if (!buildDwellGrid(deriv, major_edge, grid))
     {
         return false;
     }
-    const QVector<int>& boundaries    = grid.boundaries;
-    const QVector<int>& boundary_slot = grid.slot;
+    const std::vector<int>& boundaries    = grid.boundaries;
+    const std::vector<int>& boundary_slot = grid.slot;
     // Each level belongs to the dwell its first sample sits in. The run's
     // first level is taken to be step 0: unlike the full-sweep path there is
     // no spare level to drop as a turn-on transient, because the whole reason
     // this path runs is that levels are MISSING.
     auto slotOf = [&](int begin_sample) {
         int slot = 0;
-        for (int i = 0; i < boundaries.size(); i++)
+        for (int i = 0; i < intSize(boundaries); i++)
         {
             if (begin_sample > boundaries[i])
             {
@@ -580,12 +591,12 @@ bool calibrateSaturatedTop(const QVector<double>& rawValues,
         }
         return slot;
     };
-    QVector<int> step_slots;
+    std::vector<int> step_slots;
     for (int k = run_begin; k <= last; k++)
     {
         const int slot = slotOf(levels[k].begin);
         if (slot < 0 || slot >= expected
-            || (!step_slots.isEmpty() && slot <= step_slots.last()))
+            || (!step_slots.empty() && slot <= step_slots.back()))
         {
             return false;
         }
@@ -595,8 +606,8 @@ bool calibrateSaturatedTop(const QVector<double>& rawValues,
     CalibrationProfile& profile = result.profile;
     profile.points.clear();
     profile.points.reserve(measured);
-    QVector<bool>   paired(expected, false);
-    QVector<double> raw_of_slot(expected, 0.0);
+    Flags   paired(expected, false);
+    std::vector<double> raw_of_slot(expected, 0.0);
     for (int i = 0; i < measured; i++)
     {
         CalibrationPoint point;
@@ -609,7 +620,7 @@ bool calibrateSaturatedTop(const QVector<double>& rawValues,
 
     // Dwells the grid can see but plateau detection missed are measured here,
     // not left as holes for interpolation to bridge.
-    measureUnconfirmedDwells(rawValues, steps, grid, step_slots.last(), confirm_samples,
+    measureUnconfirmedDwells(rawValues, steps, grid, step_slots.back(), confirm_samples,
                              paired, raw_of_slot, profile);
     std::sort(profile.points.begin(), profile.points.end(),
               [](const CalibrationPoint& a, const CalibrationPoint& b) {
@@ -636,7 +647,7 @@ bool calibrateSaturatedTop(const QVector<double>& rawValues,
 // ---------------------------------------------------------------------------
 
 bool StepDetector::parseStepConfig(const QString& path,
-                                   QVector<StepDefinition>& out,
+                                   std::vector<StepDefinition>& out,
                                    QString& error)
 {
     out.clear();
@@ -709,7 +720,7 @@ bool StepDetector::parseStepConfig(const QString& path,
     }
     flush();
 
-    if (out.isEmpty())
+    if (out.empty())
     {
         error = "No [[Step]] entries found in '" + QFileInfo(path).fileName() + "'.";
         return false;
@@ -740,19 +751,19 @@ QString StepDetector::initialStepConfigPath(const QString& appRoot, const QStrin
 // detect
 // ---------------------------------------------------------------------------
 
-StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
+StepDetector::Result StepDetector::detect(const std::vector<double>& rawValues,
                                           double samplePeriodSec,
-                                          const QVector<StepDefinition>& steps)
+                                          const std::vector<StepDefinition>& steps)
 {
     Result result;
 
-    const int expected = steps.size();
-    if (expected == 0 || rawValues.size() < 2 || samplePeriodSec <= 0.0)
+    const int expected = intSize(steps);
+    if (expected == 0 || intSize(rawValues) < 2 || samplePeriodSec <= 0.0)
     {
         return result; // invalid by default
     }
 
-    const QVector<double> deriv = sampleDerivative(rawValues);
+    const std::vector<double> deriv = sampleDerivative(rawValues);
 
     // The edge threshold comes from the robust spread of the derivative: samples
     // inside a plateau dominate, so their noise sets the baseline and real
@@ -772,8 +783,8 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
         static_cast<int>(std::ceil(CalibrationConstants::kStepConfirmSeconds / samplePeriodSec)));
 
     auto plateausAt = [&](double threshold) {
-        return confirmedPlateaus(markStableSamples(deriv, rawValues.size(), threshold),
-                                 rawValues.size(), confirm_samples);
+        return confirmedPlateaus(markStableSamples(deriv, intSize(rawValues), threshold),
+                                 intSize(rawValues), confirm_samples);
     };
 
     // Search the edge threshold, using the expected step count as the target
@@ -799,10 +810,10 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
         CalibrationConstants::kMinEdgeSigmaMultiple * sigma,
         CalibrationConstants::kMinEdgeRawCounts);
 
-    QVector<Plateau> plateaus;
-    QVector<double> plateauAvg;
+    std::vector<Plateau> plateaus;
+    std::vector<double> plateauAvg;
     int selected_run_levels = 0; ///< Length of the run selectSweepStart accepted.
-    QVector<Level>  nominal_levels; ///< Levels the nominal pass saw, for the saturated-top fallback.
+    std::vector<Level>  nominal_levels; ///< Levels the nominal pass saw, for the saturated-top fallback.
     double accepted_threshold = nominal_threshold;
     int run_start = -1;
     bool reached_sweep_stage = false;
@@ -817,12 +828,12 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
             break; // below the noise floor every sample reads as an edge
         }
 
-        const QVector<Plateau> candidates = plateausAt(threshold);
+        const std::vector<Plateau> candidates = plateausAt(threshold);
         if (attempt == 0)
         {
             // Report the nominal pass's count, so the diagnostic describes the
             // channel as detection first saw it rather than as the last retry did.
-            result.detectedPlateaus = candidates.size();
+            result.detectedPlateaus = intSize(candidates);
         }
 
         // Coalesce adjacent plateaus that sit at the SAME physical level. Noise
@@ -838,7 +849,7 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
         // It also sharpens the dead-channel rejection rather than weakening it: a
         // flat channel's plateaus all collapse into ONE level, which can never
         // form a run of `expected`.
-        QVector<Level> levels =
+        std::vector<Level> levels =
             coalesceLevels(levelsOf(rawValues, candidates, confirm_samples), threshold);
 
         // ...and again against the STEP size, not only the noise. Noise grows with
@@ -860,14 +871,14 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
             result.plateauLevels = valuesOf(levels);
             nominal_levels       = levels;
         }
-        best_levels = std::max(best_levels, static_cast<int>(levels.size()));
-        if (levels.size() < expected)
+        best_levels = std::max(best_levels, static_cast<int>(intSize(levels)));
+        if (intSize(levels) < expected)
         {
             continue; // steps still merged; loosen and look again
         }
         reached_sweep_stage = true;
 
-        const QVector<double> averages = valuesOf(levels);
+        const std::vector<double> averages = valuesOf(levels);
         const int start =
             selectSweepStart(averages, expected, threshold, selected_run_levels);
         if (start >= 0)
@@ -899,7 +910,7 @@ StepDetector::Result StepDetector::detect(const QVector<double>& rawValues,
                                                  : CalibrationOutcome::TooFewPlateaus;
         return result; // linear fallback
     }
-    result.extraPlateaus = plateaus.size() > expected;
+    result.extraPlateaus = intSize(plateaus) > expected;
     result.sweepLevels   = selected_run_levels;
 
     // Pair the selected sweep with the steps in time order (Nth plateau of the
