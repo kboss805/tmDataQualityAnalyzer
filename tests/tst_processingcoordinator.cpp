@@ -8,14 +8,17 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QEventLoop>
+#include <QFile>
 #include <QFileInfo>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QThread>
 #include <QTimer>
 #include <QtTest>
 #include <QVector>
 
 #include "chapter10reader.h"
+#include "qtbridge.h"
 #include "framesetup.h"
 #include "processingcoordinator.h"
 #include "processingparams.h"
@@ -38,7 +41,7 @@ QString testDataPath(const QString& filename)
 StreamJob makeLockOnlyJob(const QString& filepath, int time_id, int pcm_id, const QString& label)
 {
     StreamJob job;
-    job.params.filename         = filepath;
+    job.params.filename         = toFsPath(filepath);
     job.params.timeChannelId    = time_id;
     job.params.pcmChannelId     = pcm_id;
     job.params.frameSync        = 0xFE6B2840;
@@ -53,7 +56,7 @@ StreamJob makeLockOnlyJob(const QString& filepath, int time_id, int pcm_id, cons
     job.params.samplePeriodSec  = 1.0;
     job.params.isRandomized     = true;
     job.params.mode             = StreamMode::FrameSyncLockStats;
-    job.params.streamLabel      = label;
+    job.params.streamLabel      = label.toStdString();
     job.frameSetup              = std::make_shared<FrameSetup>(nullptr); // no channels needed for lock-only mode
     return job;
 }
@@ -74,7 +77,7 @@ StreamJob makePrnJob(const QString& filepath, int time_id, int pcm_id,
                      const PrnSpec& spec, const QString& label)
 {
     StreamJob job;
-    job.params.filename          = filepath;
+    job.params.filename          = toFsPath(filepath);
     job.params.timeChannelId     = time_id;
     job.params.pcmChannelId      = pcm_id;
     job.params.frameSync         = spec.frameSync;
@@ -90,7 +93,7 @@ StreamJob makePrnJob(const QString& filepath, int time_id, int pcm_id,
     job.params.samplePeriodSec   = 1.0;
     job.params.isRandomized      = false;
     job.params.mode              = StreamMode::FrameSyncLockStats;
-    job.params.streamLabel       = label;
+    job.params.streamLabel       = label.toStdString();
     job.frameSetup               = std::make_shared<FrameSetup>(nullptr);
     return job;
 }
@@ -258,6 +261,57 @@ void TestProcessingCoordinator::workerReportsPrecedeTheResultAndFinishComesLast(
     // delivered, so it may land just after - wait for it rather than race it.
     QCOMPARE(progress.first(), 0);
     QTRY_COMPARE_WITH_TIMEOUT(static_cast<int>(std::count(progress.begin(), progress.end(), 100)), 2, 5000);
+}
+
+void TestProcessingCoordinator::aRecordingUnderANonAsciiFolderProcessesEndToEnd()
+{
+    // The whole path from a job's file name to a finished stream, with the recording under
+    // folders whose names no Western code page can spell. The two readers used to disagree
+    // about such a path (one encoded it as the local code page, the other as UTF-8), so a
+    // file would list its channels and then fail at Process; the coordinator is where the
+    // job's file name is handed to the reader.
+    const QString source = testDataPath("test files/step_cal, example.ch10");
+    if (!QFileInfo::exists(source))
+        QSKIP("step_cal fixture not available");
+
+    QTemporaryDir dir;
+    const QString folder = QStringLiteral("caf") + QChar(0x00E9) + QStringLiteral("-")
+                           + QChar(0x03A9);
+    QVERIFY(QDir(dir.path()).mkdir(folder));
+    const QString copy = QDir(dir.path()).filePath(folder + "/recording.ch10");
+    QVERIFY(QFile::copy(source, copy));
+
+    Chapter10Reader reader;
+    QVERIFY2(reader.loadChannels(copy), "the metadata reader must open the non-ASCII path");
+    const int pcm_id  = reader.getFirstPCMChannelID();
+    const int time_id = reader.getCurrentTimeChannelID();
+    QVERIFY(pcm_id >= 0 && time_id >= 0);
+
+    // step_cal's acquisition parameters: 800-bit frames, ordinary byte order, not randomized.
+    StreamJob job = makeLockOnlyJob(copy, time_id, pcm_id, "Ch " + QString::number(pcm_id));
+    job.params.isRandomized     = false;
+    job.params.wordsInMinorFrame = 50;
+
+    ProcessingCoordinator coord;
+    QEventLoop loop;
+    bool finished_ok = false;
+    bool got_result = false;
+    QStringList errors;
+    QObject::connect(&coord, &ProcessingCoordinator::streamProcessed,
+                     [&](const ProcessedStreamData& d) { got_result = d.hasSamples(); });
+    QObject::connect(&coord, &ProcessingCoordinator::errorOccurred,
+                     [&](const QString& m) { errors << m; });
+    QObject::connect(&coord, &ProcessingCoordinator::processingFinished, &loop,
+                     [&](bool ok) { finished_ok = ok; loop.quit(); });
+
+    QVector<StreamJob> jobs = { job };
+    QVERIFY2(coord.startProcessing(std::move(jobs)), qPrintable(errors.join("\n")));
+    QTimer::singleShot(120000, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    QVERIFY2(errors.isEmpty(), qPrintable(errors.join("\n")));
+    QVERIFY2(finished_ok, "the run did not finish successfully");
+    QVERIFY2(got_result, "the stream produced no samples");
 }
 
 void TestProcessingCoordinator::constructorDefaults()

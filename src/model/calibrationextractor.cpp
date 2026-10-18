@@ -115,7 +115,7 @@ void CalibrationExtractor::start(const Request& request)
 
     // ---- ProcessingParams ----
     m_params = ProcessingParams{};
-    m_params.filename          = request.calFilename;
+    m_params.filename          = toFsPath(request.calFilename);
     m_params.timeChannelId     = request.timeChannelId;
     m_params.pcmChannelId      = request.pcmChannelId;
     m_params.frameSync         = frame_sync;

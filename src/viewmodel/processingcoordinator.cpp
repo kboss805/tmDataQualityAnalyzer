@@ -73,11 +73,11 @@ bool ProcessingCoordinator::startProcessing(QVector<StreamJob> jobs)
         params_list.push_back(&job.params);
     }
 
-    const QString filename       = m_jobs[0].params.filename;
+    const std::filesystem::path filename = m_jobs[0].params.filename;
     const int     time_channel   = m_jobs[0].params.timeChannelId;
 
     std::string error;
-    if (!m_reader->prepare(toFsPath(filename), time_channel, params_list, error))
+    if (!m_reader->prepare(filename, time_channel, params_list, error))
     {
         emit errorOccurred(QString::fromStdString(error));
         m_reader.reset();

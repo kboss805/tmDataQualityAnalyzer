@@ -441,7 +441,7 @@ void MainViewModel::startProcessing()
     emit logMessageReceived("  Streams: " + QString::number(jobs.size()));
     emit logMessageReceived("  Time range: all");
     for (const StreamJob& job : jobs)
-        emit logMessageReceived("  " + job.params.streamLabel + ": "
+        emit logMessageReceived("  " + QString::fromStdString(job.params.streamLabel) + ": "
                                 + QString::number(job.params.samplePeriodSec * 1000.0) + " ms period");
 
     m_coordinator->startProcessing(std::move(jobs));
@@ -486,7 +486,7 @@ void MainViewModel::cancelProcessing()
 
 bool MainViewModel::buildBaseParams(ProcessingParams& out, QString& error)
 {
-    out.filename = m_input_filename;
+    out.filename = toFsPath(m_input_filename);
     out.sourceId = m_pending_source_id;
 
     out.timeChannelId = m_reader->getCurrentTimeChannelID();
@@ -571,7 +571,7 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
     out_job.params.swapBytes          = m_swap_bytes;
     out_job.params.mode               = cfg.mode;
     out_job.params.dataRateBps        = (cfg.sync.dataRateMbps > 0.0) ? cfg.sync.dataRateMbps * 1e6 : 0.0;
-    out_job.params.streamLabel        = stream_desc;
+    out_job.params.streamLabel        = stream_desc.toStdString();
 
     // Set per-stream sample period.
     switch (cfg.samplePeriodIndex)
