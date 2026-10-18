@@ -29,6 +29,7 @@
 #include "tst_templatematcher.h"
 #include "tst_packetqueue.h"
 #include "tst_intervalgate.h"
+#include "tst_tomldocument.h"
 
 /// Runs a single test suite and appends results to the shared log file.
 template<typename T>
@@ -131,6 +132,7 @@ int main(int argc, char* argv[])
     status |= runSuite<TestTemplateMatcher>(log_path);
     status |= runSuite<TestPacketQueue>(log_path);
     status |= runSuite<TestIntervalGate>(log_path);
+    status |= runSuite<TestTomlDocument>(log_path);
 
     // Heavy suites — integration over a real .ch10 fixture; TestFrameProcessor alone
     // is ~74 s and dominates the ~85 s run. Skipped in fast mode for quick iteration;

@@ -23,9 +23,19 @@
  *     obvious next step and is deliberately NOT part of this change: that parser feeds
  *     calibration, and it deserves its own verifiable step rather than riding along.
  *
- * This class is plain file I/O over a `QString`-keyed map. It keeps Qt types (QString,
- * QVariant-free typed getters) - the point was never to drop Qt Core, it was to stop
- * using a settings store as a parser.
+ * This class is plain file I/O over a map of UTF-8 `std::string`s, with paths as
+ * `std::filesystem::path` - no Qt at all (de-Qt sweep). Callers still holding a `QString`
+ * convert at their own boundary: `toFsPath()` from `qtbridge.h` for a path, and
+ * `toStdString()` / `fromStdString()` for text, which are UTF-8 in Qt 6.
+ *
+ * The port reproduces what `QFile` + `QTextStream` + `QString` supplied for free, and
+ * `TestTomlDocument` was written against the Qt version first to pin it: a UTF-8 BOM is
+ * skipped, UTF-16 (LE or BE, with a BOM) is decoded, integers and doubles tolerate
+ * surrounding whitespace and a leading '+', doubles are written `%g` with six
+ * significant digits, and the file is written with CRLF line endings and no BOM.
+ * Two narrowings, neither reachable from a shipped file: whitespace trimming is
+ * ASCII only (Qt also trimmed Unicode spaces such as U+00A0), and invalid UTF-8 is
+ * kept as bytes rather than replaced with U+FFFD.
  *
  * Supported subset, unchanged from what the shipped files use:
  *   - Section headers:    [SectionName]
@@ -50,9 +60,10 @@
 #ifndef TOMLDOCUMENT_H
 #define TOMLDOCUMENT_H
 
-#include <QMap>
-#include <QString>
-#include <QStringList>
+#include <filesystem>
+#include <map>
+#include <string>
+#include <vector>
 
 class TomlDocument
 {
@@ -61,22 +72,22 @@ public:
     TomlDocument() = default;
 
     /// Parses @p path. On failure the document is !ok() and empty; @p error, when
-    /// given, receives a human-readable reason. A file that parses but holds nothing
-    /// is ok() with no keys - "unreadable" and "empty" are different answers, and
-    /// callers here distinguish them.
-    static TomlDocument load(const QString& path, QString* error = nullptr);
+    /// given, receives a human-readable reason (UTF-8). A file that parses but holds
+    /// nothing is ok() with no keys - "unreadable" and "empty" are different answers,
+    /// and callers here distinguish them.
+    static TomlDocument load(const std::filesystem::path& path, std::string* error = nullptr);
 
     /// False only when the file could not be read at all.
     bool ok() const { return m_ok; }
 
-    bool contains(const QString& key) const;
+    bool contains(const std::string& key) const;
 
     /// @p parsed, when given, reports whether the value was present AND converted -
     /// which is how a genuine 0 is told apart from a missing or malformed key.
-    QString string (const QString& key, const QString& fallback = QString()) const;
-    int     integer(const QString& key, int fallback = 0, bool* parsed = nullptr) const;
-    double  number (const QString& key, double fallback = 0.0) const;
-    bool    boolean(const QString& key, bool fallback = false) const;
+    std::string string (const std::string& key, const std::string& fallback = {}) const;
+    int         integer(const std::string& key, int fallback = 0, bool* parsed = nullptr) const;
+    double      number (const std::string& key, double fallback = 0.0) const;
+    bool        boolean(const std::string& key, bool fallback = false) const;
 
     /// Section names in the order the file first declares each one.
     ///
@@ -89,12 +100,16 @@ public:
     /// name, so collapsing repeats loses nothing a caller reads. A section with no
     /// keys at all still appears, because its presence is what makes the word
     /// numbering read as contiguous.
-    const QStringList& sectionsInFileOrder() const { return m_sections; }
+    const std::vector<std::string>& sectionsInFileOrder() const { return m_sections; }
 
-    void setValue(const QString& key, const QString& value);
-    void setValue(const QString& key, int value);
-    void setValue(const QString& key, double value);
-    void setValue(const QString& key, bool value);
+    void setValue(const std::string& key, const std::string& value);
+    /// Without this, a string literal would bind to setValue(key, bool): a pointer
+    /// converts to bool by a standard conversion, which beats the user-defined one to
+    /// std::string - so `setValue("K", "text")` would silently write `K = true`.
+    void setValue(const std::string& key, const char* value) { setValue(key, std::string(value)); }
+    void setValue(const std::string& key, int value);
+    void setValue(const std::string& key, double value);
+    void setValue(const std::string& key, bool value);
 
     /// Writes the document to @p path, REPLACING whatever is there. Unlike QSettings
     /// this never merges, so no caller needs to delete the file first.
@@ -102,20 +117,19 @@ public:
     /// Sections are emitted in the order they were first set, and keys in the order
     /// they were set within each section, so a file this writes reads back in the same
     /// order it was built. The QSettings implementation emitted both alphabetically.
-    bool save(const QString& path, QString* error = nullptr) const;
+    bool save(const std::filesystem::path& path, std::string* error = nullptr) const;
 
 private:
     /// Splits "Section/Key" into its parts; an unqualified key has an empty section.
-    static void splitKey(const QString& key, QString& section, QString& bare);
-    void rememberOrder(const QString& section, const QString& bare);
+    static void splitKey(const std::string& key, std::string& section, std::string& bare);
+    void rememberOrder(const std::string& section, const std::string& bare);
 
-    QMap<QString, QString> m_values;    ///< compound key -> raw (unquoted) value
-    QStringList            m_sections;  ///< section names, file/insertion order, with duplicates
-    /// Per-section key order. Not a QMap of QStringList keyed by section alone,
-    /// because a section name can repeat; the writer coalesces repeats, which only
-    /// affects [EMPTY]-style placeholders that carry no distinct values.
-    QMap<QString, QStringList> m_section_keys;
-    bool                   m_ok = true;
+    std::map<std::string, std::string> m_values;   ///< compound key -> raw (unquoted) value
+    std::vector<std::string>           m_sections; ///< section names, file/insertion order, each once
+    /// Per-section key order. Keyed by section name; the writer coalesces a repeated
+    /// section, which only affects [EMPTY]-style placeholders with no distinct values.
+    std::map<std::string, std::vector<std::string>> m_section_keys;
+    bool m_ok = true;
 };
 
 #endif // TOMLDOCUMENT_H

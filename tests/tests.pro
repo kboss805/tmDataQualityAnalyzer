@@ -164,6 +164,7 @@ SOURCES += \
     tst_templatematcher.cpp \
     tst_packetqueue.cpp \
     tst_intervalgate.cpp \
+    tst_tomldocument.cpp \
     tst_stepdetector.cpp \
     tst_calibrationextractor.cpp
 
@@ -190,5 +191,6 @@ HEADERS += \
     tst_templatematcher.h \
     tst_packetqueue.h \
     tst_intervalgate.h \
+    tst_tomldocument.h \
     tst_stepdetector.h \
     tst_calibrationextractor.h

@@ -5,9 +5,13 @@
 
 #include "framesetup.h"
 
+#include <string>
+#include <vector>
+
 #include <QFileInfo>
 
 #include "constants.h"
+#include "qtbridge.h"
 #include "tomldocument.h"
 
 const QStringList FrameSetup::kSettingsGroups = {
@@ -32,26 +36,27 @@ bool FrameSetup::tryLoadingFile(const QString& filename, int num_words_in_minor_
     // One parse, not two. This used to build a QSettings AND separately re-read the
     // file with readGroupsInFileOrder(), because QSettings returns childGroups()
     // sorted while a word map's order is the order the file lists it in.
-    const TomlDocument doc = TomlDocument::load(filename);
+    const TomlDocument doc = TomlDocument::load(toFsPath(filename));
     if (!doc.ok())
     {
         return false;
     }
 
-    const QStringList groups = doc.sectionsInFileOrder();
-    if (groups.isEmpty())
+    const std::vector<std::string>& groups = doc.sectionsInFileOrder();
+    if (groups.empty())
     {
         return false;
     }
 
-    for (const QString& group : groups)
+    for (const std::string& group_utf8 : groups)
     {
+        const QString group = QString::fromStdString(group_utf8);
         if (kSettingsGroups.contains(group))
         {
             continue;
         }
 
-        const QString word_key = group + "/Word";
+        const std::string word_key = group_utf8 + "/Word";
         if (!doc.contains(word_key))
         {
             return false;
@@ -161,7 +166,7 @@ ReceiverParams FrameSetup::readReceiverParams(const QString& path,
                                               const ReceiverParams& defaults)
 {
     ReceiverParams params = defaults;
-    const TomlDocument cfg = TomlDocument::load(path);
+    const TomlDocument cfg = TomlDocument::load(toFsPath(path));
 
     params.polarityIndex = cfg.integer("Parameters/Polarity", params.polarityIndex);
     params.slopeIndex    = cfg.integer("Parameters/Slope", params.slopeIndex);
@@ -214,7 +219,7 @@ bool FrameSetup::writeReceiverParams(const QString& path, const ReceiverParams& 
     cfg.setValue("Receivers/Count",               params.numReceivers);
     cfg.setValue("Receivers/ChannelsPerReceiver", params.receiverChannels);
     writeWordMap(cfg);
-    return cfg.save(path);
+    return cfg.save(toFsPath(path));
 }
 
 bool FrameSetup::saveReceiverParamsFile(const QString& path,
@@ -313,6 +318,6 @@ void FrameSetup::writeWordMap(TomlDocument& doc) const
 {
     for (const auto& param : m_parameters)
     {
-        doc.setValue(param.name + "/Word", param.word + 1);
+        doc.setValue((param.name + "/Word").toStdString(), param.word + 1);
     }
 }

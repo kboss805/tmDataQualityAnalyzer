@@ -9,6 +9,7 @@
 #include <QtTest>
 
 #include "framesetup.h"
+#include "qtbridge.h"
 #include "tomldocument.h"
 
 /// Test frame size: 48 data words + 1 (matches default 16 receivers x 3 channels).
@@ -166,9 +167,9 @@ void TestFrameSetup::writeWordMapWritesCorrectData()
 
     TomlDocument out_doc;
     fs.writeWordMap(out_doc);
-    QVERIFY(out_doc.save(tmp.fileName()));
+    QVERIFY(out_doc.save(toFsPath(tmp.fileName())));
 
-    const TomlDocument in_doc = TomlDocument::load(tmp.fileName());
+    const TomlDocument in_doc = TomlDocument::load(toFsPath(tmp.fileName()));
     QVERIFY(in_doc.ok());
 
     QCOMPARE(in_doc.integer("L_RCVR1/Word"), 1);
@@ -311,9 +312,9 @@ void writeWordMap(const QString& path, const QList<QPair<QString, int>>& words)
     TomlDocument cfg;
     for (const auto& entry : words)
     {
-        cfg.setValue(entry.first + "/Word", entry.second);
+        cfg.setValue((entry.first + "/Word").toStdString(), entry.second);
     }
-    cfg.save(path);
+    cfg.save(toFsPath(path));
 }
 
 } // namespace
@@ -339,7 +340,7 @@ void TestFrameSetup::tryLoadingFileMetadataOnlyFileYieldsNoParameters()
         TomlDocument cfg;
         cfg.setValue("Parameters/Polarity", 1);
         cfg.setValue("Parameters/Slope", 2);
-        QVERIFY(cfg.save(path));
+        QVERIFY(cfg.save(toFsPath(path)));
     }
     QVERIFY(QFileInfo(path).size() > 0);
 
@@ -374,7 +375,7 @@ void TestFrameSetup::readReceiverParamsAcceptsTheOlderParametersKeys()
         TomlDocument cfg;
         cfg.setValue("Parameters/NumReceivers", 4);
         cfg.setValue("Parameters/ReceiverChannels", 2);
-        QVERIFY(cfg.save(path));
+        QVERIFY(cfg.save(toFsPath(path)));
     }
     QVERIFY(QFileInfo(path).size() > 0);
 
