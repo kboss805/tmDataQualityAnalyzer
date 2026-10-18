@@ -7,7 +7,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Qt Version**: 6.12.0 (minimum: Qt 6.0.0)
 - **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, `cl` / `nmake`), Qt `msvc2022_64` kit.
   This is the only supported toolchain (and what CI uses).
-- **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
+- **C++ Standard**: C++20 (moved from C++17 for `std::format`, which the de-Qt string work needs in place of `QString::arg`; `inline constexpr` is used throughout constants.h)
 - **Project Version**: 2.14.2 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
 
 ## User Stories
@@ -418,7 +418,8 @@ Items from `docs/future_plans/dotnet-port-assessment.md` that are worth doing wh
 that port ever happens - the throughput guard, the TOML move off `QSettings`, and now the
 de-Qt of the native core in small steps (QtGui out of the model's headers, then
 `PacketQueue`, then the `QElapsedTimer`s, then the packet bytes, then the first `QVector`s, the processing result and the pipeline's pointer lists) - plus the clean-build regression the TOML change
-caused, and a generated Visual Studio solution. The first `QString` step moves `TomlDocument` to UTF-8 `std::string`. One user-facing fix, found during the
+caused, a generated Visual Studio solution, and C++20. The first `QString` step moves `TomlDocument`
+to UTF-8 `std::string`. One user-facing fix, found during the
 `QString` survey: recordings under a folder with a non-ASCII name can be processed.
 
 #### A Visual Studio solution, generated rather than committed
@@ -561,6 +562,31 @@ Consumers: `FrameSetup` (word map, receiver parameters) and the frame-sync dialo
 `streamsubdialogs.cpp` convert at the call; both are next in the `QString` sweep. Baseline **457 / 0 / 1**
 (was 440 / 0 / 1; 17 new = 15 results + `initTestCase` / `cleanupTestCase`), **458 / 0 / 0** at release.
 24 suites.
+
+#### C++20 (ahead of the de-Qt string work)
+
+The language standard moves from C++17 to **C++20**: `CONFIG += c++20` in both `.pro` files (MSVC
+`/std:c++20`), plus `gen_compile_flags.py` for clangd and `.vscode/c_cpp_properties.json` for
+cpptools. It is its own change so that a standard-related problem cannot hide inside a refactor.
+
+**Why now.** The core builds its log lines and the calibration report with `QString::arg` and
+`QString::number`, and C++17 has no standard replacement. C++20's `std::format` is one, and it is
+Microsoft's own implementation in MSVC's standard library. The `QString` step will hold core
+strings as UTF-8 `std::string`, converting at the Qt boundary, which is consistent with the UTF-8
+process code page that the non-ASCII path fix set.
+
+**Verified on a clean build, because an incremental one cannot verify this.** jom recompiles an
+object when its source or headers change, not when a compiler flag does, so after a standard bump
+an incremental build would relink every C++17 object and report success: the same false pass as
+the deleted-header trap above. Every object in `build/` and `tests/`, Debug and Release, was deleted
+first. Then:
+
+- Debug: app 63 translation units, tests 109, **0 warnings, 0 errors**; suite **440 / 0 / 1**.
+- Release: app 63, tests 109, **0 warnings**; the pinned throughput gate **441 / 0 / 0**, parallel
+  13703 ms against 13596-13614 ms for `main`. No change.
+
+Nothing in the code needed to change. The usual C++20 breakages - aggregates with user-declared
+constructors, `u8` literals becoming `char8_t`, rewritten comparison operators - do not occur here.
 
 #### A recording under a non-ASCII folder could be listed but not processed (US1.0)
 
@@ -3560,7 +3586,7 @@ Order includes in each `.cpp` / `.h` file as follows, with a blank line between 
 
 - Defines source files, headers, resources
 - Configures Qt modules (core, gui, widgets)
-- Sets C++17 standard
+- Sets C++20 standard
 - Includes platform-specific libraries (ws2_32 for Windows sockets)
 
 ### Build Targets
