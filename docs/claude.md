@@ -421,7 +421,7 @@ de-Qt of the native core in small steps (QtGui out of the model's headers, then
 caused, a generated Visual Studio solution, and C++20. The first `QString` steps move `TomlDocument`,
 `FrameSetup` and the step-file parser to UTF-8 `std::string`, and the `QObject` steps take
 Qt out of `FrameProcessor` and `Ch10PacketReader`; the DTOs follow, starting with
-`ProcessingParams` and `ProcessedStreamData`. One user-facing fix, found during the
+`ProcessingParams` and `ProcessedStreamData`, and `FrameSetup` loses its `QObject`. One user-facing fix, found during the
 `QString` survey: recordings under a folder with a non-ASCII name can be processed.
 
 #### A Visual Studio solution, generated rather than committed
@@ -521,6 +521,59 @@ called from our code is reported at **our** call site, so those keep warning exa
 v2.9.0 intended. Every first-party header here is quote-included, so `anglebrackets` covers
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
+
+#### `FrameSetup` is a plain class: no `QObject`, and a `std::unordered_map` for profiles (de-Qt, `QObject` step 3)
+
+The word map and calibration table every stream job owns was a `QObject` for no reason anyone used.
+It had no signals, no properties and no connections; the base class was only for parent
+ownership, and every owner either holds it by `shared_ptr` (the view model's jobs, the tests) or
+deletes it itself (the calibration extractor), always constructed with a null parent. It is now a
+plain class with a defaulted constructor, and `framesetup.h` includes no Qt header.
+
+The one remaining Qt type in its interface went with it: `attachCalibrationProfiles()` took a
+`QHash<int, CalibrationProfile>` and now takes a `std::unordered_map`. The hash it was fed from,
+`StreamConfig::calibrationByWord`, stays a `QHash`: that struct is the dialogs' own form, and
+nothing in the processing pipeline reads one. `MainViewModel::buildStreamJob` copies it across,
+once per run and at most one profile per receiver channel, which is the only conversion.
+
+**`StreamConfig` itself is deliberately not converted.** Scoping this step showed it is the UI form
+(combo-box indices, hex strings for the sync pattern and mask, `QString` paths shown in line edits);
+`buildStreamJob` already turns it into the `std` `ProcessingParams`. Converting it would add a
+`toStdString()` at about 45 dialog and view-model sites and 55 test sites and remove no Qt from the
+pipeline. What is left in the core is `ChannelData`, `Chapter10Reader`, and `CalibrationExtractor`
+with `FrameSyncParams`.
+
+**Tests first, for a function that had none.** `attachCalibrationProfiles` was called from one
+place and tested nowhere. Two new `TestFrameSetup` cases were written against the `QObject` /
+`QHash` version and passed there before the port: only a profile that is **valid** and **matches a
+parameter's word** attaches (an invalid profile stays linear on purpose; a profile for a word the
+map lacks, and a parameter nobody supplied a profile for, are left alone), and nothing to attach
+returns zero. Only the one helper that builds the container changed across the port.
+
+**One test was written after the port, and says so.** `buildStreamJob` (private, and with no test)
+is where the profiles actually reach the word map, so `TestMainViewModelHelpers` is now a friend of
+`MainViewModel` and `buildStreamJobAttachesCalibrationByWord` runs a receiver stream with three
+profiles (one valid and matching, one invalid, one for a word the map lacks) through it, checking
+which parameter received what and the "provided 3 profile(s), attached 1" log line. It could not be
+run against the old code without reverting the port, so it is validated by mutation.
+
+**Validated against five single-defect mutants; each fails the test written for it.** `attach`
+ignoring `valid`; matching the wrong word; not counting what it attached; the view model shifting
+every key by one; and the view model copying nothing across. The first three fail both the unit
+case and the `buildStreamJob` case; the last two only the latter, which is why it exists. Each
+build was checked to have relinked.
+
+**A harness trap, again.** The first run of the new `buildStreamJob` test had two compile errors,
+and the script printed `tests exit 0` and 524 passed: the previous exe, run after a failed build.
+The runner now deletes the exe and results first, and a number is only believed if both exist
+afterwards.
+
+Throughput, pinned release gate: 4-stream parallel 13681 ms, 1.01x the slowest solo stream and
+0.64x all-sequential. That is about 10% under the last two PRs' readings; pinned numbers drift
+between sessions, so it is recorded as not slower rather than as a gain.
+
+Baseline **525 / 0 / 1** (was 522 / 0 / 1; 3 new = the two attach cases and the `buildStreamJob`
+case), **526 / 0 / 0** at release. **26 suites.**
 
 #### `ProcessedStreamData` is plain C++ too (de-Qt, DTOs step 2)
 
@@ -3790,7 +3843,7 @@ not mis-read.
    - Plain C++, no Qt: it reports log lines, errors and completion to a `ProcessingEvents` sink (`include/model/processingevents.h`) on the processing thread; `qtprocessingevents.h` forwards them to a `QObject`'s thread as queued calls
    - Private helpers include `derandomizeBitstream()` and `hasSyncPattern()`; applies linear slope/offset or a non-linear `CalibrationProfile` per channel
 
-5. **FrameSetup** (`src/model/framesetup.cpp`, `include/model/framesetup.h`) — frame configuration / word-map + calibration table built per job
+5. **FrameSetup** (`src/model/framesetup.cpp`, `include/model/framesetup.h`) — frame configuration / word-map + calibration table built per job. Plain C++ (no `QObject`, no Qt in the header); calibration profiles are attached from a `std::unordered_map`
 
 6. **ChannelData** (`src/model/channeldata.cpp`, `include/model/channeldata.h`) — channel metadata value object
 
@@ -4092,8 +4145,8 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestConstants** (`tst_constants`) — Verifies all PCMConstants, UIConstants, PlotConstants, AppVersion, and recent files constants (including kMaxPacketBufferSize, kFrameSyncHexPattern)
 - **TestCh10PacketReader** (`tst_ch10packetreader`) — the single-pass reader, tested directly on the committed `step_cal` recording (it had no tests of its own): each way `prepare()` fails has its own exact message; a full run reports its start, no error, progress that never goes backwards and ends at 100, all 1598 packets (6,539,016 payload bytes) and exactly one end marker; an abort is announced, reports 100 and still posts the end marker; a file cut inside a PCM packet, inside a time packet, or with a damaged header checksum reports the right read error and delivers exactly the packets before the damage; a file that ends inside a packet header is a clean end of file and a damaged sync pattern silently costs one packet (both pinned as the behaviour they are); and two streams on one channel each get every packet sharing one payload buffer. Cut points are found by walking the packet headers. Written against the signal-based reader first; validated against eleven mutants
 - **TestFrameProcessor** (`tst_frameprocessor`) — constructor defaults, abort flag, `derandomizeBitstream` (identity/short and changed/long), invalid time-channel/PCM-channel/file handling, and processing real Ch10 data (receiver-data accumulation, lock-only mode has no channels, monotonic frame-sync errors, slope affects values, shorter period → more samples, calibration round-trip clean steps, off-phase sync after lock-loss not extracted); and `reportsExactlyTheseMessages` (10 rows), the exact text and order of everything it reports - success, a non-ASCII stream label, a bounded window, a masked pattern, sync-but-no-frames, cancel, both internal errors, and the all-odd and mixed byte-swap warnings - written against the signals implementation first
-- **TestMainViewModelHelpers** (`tst_mainviewmodel_helpers`) — `MainViewModel::classifyLogMessage()`, the severity policy the View renders but does not decide. The channel-naming cases that used to live here moved to **TestFrameSetup** with the `MainViewModel` forwarders they called: `FrameSetup` is where that naming lives
-- **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration, `channelPrefix()` naming the known channel positions then falling back to `CH<n+1>`, `receiverParameterName()` combining the two, `receiverIndexFromName()` inverting it (0 for a name with no parseable `_RCVR<N>`), and the receiver-parameters file as a whole: the scalars read from the `[Receivers]` block the shipped files actually use (and the older `[Parameters]` keys still accepted), a save/load round trip that carries the word map with them, the default-map fallback when no file was loaded, nothing written when there is no map to write, and the metadata-only file that parses to zero parameters — the contract `tryLoadingFile()`'s two callers depend on; and `receiverNameParsingMatchesQStringToInt`, which pins how a hand-typed parameter name parses (the last `_RCVR` token wins, whitespace and a leading `+` tolerated, a second sign / negative / trailing junk / overflow reads as no receiver, a name starting with the token has no channel part) - written against the `QString` implementation first
+- **TestMainViewModelHelpers** (`tst_mainviewmodel_helpers`) — `MainViewModel::classifyLogMessage()`, the severity policy the View renders but does not decide. The channel-naming cases that used to live here moved to **TestFrameSetup** with the `MainViewModel` forwarders they called: `FrameSetup` is where that naming lives; and `buildStreamJobAttachesCalibrationByWord`, which runs a receiver stream through the private `buildStreamJob` (the test is a friend) and checks which parameters received which profile and the log line that says so
+- **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration, `channelPrefix()` naming the known channel positions then falling back to `CH<n+1>`, `receiverParameterName()` combining the two, `receiverIndexFromName()` inverting it (0 for a name with no parseable `_RCVR<N>`), and the receiver-parameters file as a whole: the scalars read from the `[Receivers]` block the shipped files actually use (and the older `[Parameters]` keys still accepted), a save/load round trip that carries the word map with them, the default-map fallback when no file was loaded, nothing written when there is no map to write, and the metadata-only file that parses to zero parameters — the contract `tryLoadingFile()`'s two callers depend on; and `receiverNameParsingMatchesQStringToInt`, which pins how a hand-typed parameter name parses (the last `_RCVR` token wins, whitespace and a leading `+` tolerated, a second sign / negative / trailing junk / overflow reads as no receiver, a name starting with the token has no channel part) - written against the `QString` implementation first; and `attachCalibrationProfiles`, which attaches a step-calibration profile only when it is valid and its word matches a parameter (an invalid one stays linear; a word the map lacks is ignored), written against the `QObject`/`QHash` version first
 - **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, the computed Y range and the SNR max override that pins it (the minimum stays automatic, Reset returns it to the data), X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), the left-axis view toggle preserving per-stream selection, and stream-identity regression coverage: two streams sharing a TMATS-derived `streamLabel` but different `streamOrder` must stay independent through reprocess-replace and `renameSeries()`/`recolorSeries()` sibling-sync (pinned after a pre-v2.6.0 cross-contamination bug). Multi-file input: cross-source identity (two different `sourceId`s reusing the same `streamLabel`/`streamOrder` stay independent through reprocess-replace/rename/recolor), time-base re-basing (a later-added source starting earlier shifts existing series right; three successively-earlier sources compound correctly; a later source starting after triggers no shift), the non-overlap warning signal (fires once per newly-arriving non-overlapping source, not for an overlapping range), and `removeSource()` (drops only the target source, re-bases left only when the removed source held the earliest sample, clears all data when the last source is removed, no-ops for an unknown id). US1.1 source view: `setVisibleSource()` isolates a source via `effectiveVisible()` without mutating per-series `visible`, `sourceList()` lists distinct labeled sources, and `exportCsv(path, sourceId)` writes only that source's columns; and `aNonAsciiStreamLabelReachesEverySeries`, which pins that a non-ASCII stream label (arriving as UTF-8 from the core) names the lock and missed-frames series, prefixes the SNR series' name, and is what a re-run matches on to replace the stream
 - **TestProcessingCoordinator** (`tst_processingcoordinator`) — constructor defaults, `reset()` clears state, cancel-with-no-run no-op, `startProcessing()` empty-returns-false and processing-state emission, plus single-vs-multi-stream throughput benchmarks; and `workerReportsPrecedeTheResultAndFinishComesLast`, which checks through a real run that the worker's completion line is relayed before the stream's result and `processingFinished` is last; its end-to-end test also checks the progress bar (0 at the start, then 100 reported twice: once by the reader, once on finish); and `aRecordingUnderANonAsciiFolderProcessesEndToEnd`, which runs the committed `step_cal` recording copied under a non-ASCII folder through the whole pipeline
 - **TestMainView** (`tst_mainview`) — Main window construction, widget wiring, log routing, dock visibility behavior, and the CSV import routing (`openPath`/`importCsv`, valid/invalid). The batch-apply cases moved to **TestBatchController** with the state machine itself; and `aFinishedStreamIsLoggedUnderItsLabel`, the log line quoting a finished stream's (non-ASCII) label

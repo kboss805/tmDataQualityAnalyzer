@@ -8,10 +8,8 @@
 
 #include <filesystem>
 #include <string>
+#include <unordered_map>
 #include <vector>
-
-#include <QHash>
-#include <QObject>
 
 #include "calibrationprofile.h"
 #include "constants.h"
@@ -63,15 +61,14 @@ struct ReceiverParams
  *
  * The text API is UTF-8 `std::string` and paths are `std::filesystem::path` (de-Qt
  * sweep); callers holding a `QString` convert at their own boundary (`qtbridge.h`).
- * It is still a QObject, and takes its calibration profiles in a `QHash` - both are
- * later steps (the QObject step; the associative containers).
+ * A plain class, with no Qt: it was a QObject only for parent ownership, which nobody
+ * used (every owner holds it by `shared_ptr` or deletes it itself), and it takes its
+ * calibration profiles in a `std::unordered_map`.
  */
-class FrameSetup : public QObject
+class FrameSetup
 {
-    Q_OBJECT
-
 public:
-    explicit FrameSetup(QObject* parent = nullptr);
+    FrameSetup() = default;
 
     /**
      * @brief Loads the word map from a receiver-parameters TOML file.
@@ -174,7 +171,7 @@ public:
     /// Attaches non-linear step-calibration profiles (US5.3) by word index; only
     /// profiles flagged valid are attached, others keep their linear slope/scale.
     /// @return how many profiles were attached.
-    int attachCalibrationProfiles(const QHash<int, CalibrationProfile>& by_word);
+    int attachCalibrationProfiles(const std::unordered_map<int, CalibrationProfile>& by_word);
 
 private:
     static const std::vector<std::string> kSettingsGroups; ///< Reserved TOML group names to skip.

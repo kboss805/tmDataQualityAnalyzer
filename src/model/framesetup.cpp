@@ -23,12 +23,6 @@ const std::vector<std::string> FrameSetup::kSettingsGroups = {
     "Defaults", "Frame", "Parameters", "Time", "Receivers", "Bounds", "EMPTY"
 };
 
-FrameSetup::FrameSetup(QObject* parent) :
-    QObject(parent)
-{
-
-}
-
 bool FrameSetup::tryLoadingFile(const std::filesystem::path& filename, int num_words_in_minor_frame)
 {
     clearParameters();
@@ -142,15 +136,15 @@ void FrameSetup::applyLinearCalibration(int polarity_index, int slope_index, dou
     }
 }
 
-int FrameSetup::attachCalibrationProfiles(const QHash<int, CalibrationProfile>& by_word)
+int FrameSetup::attachCalibrationProfiles(const std::unordered_map<int, CalibrationProfile>& by_word)
 {
     int attached = 0;
     for (ParameterInfo& param : m_parameters)
     {
-        const auto it = by_word.constFind(param.word);
-        if (it != by_word.constEnd() && it.value().valid)
+        const auto it = by_word.find(param.word);
+        if (it != by_word.end() && it->second.valid)
         {
-            param.profile = it.value();
+            param.profile = it->second;
             attached++;
         }
     }
