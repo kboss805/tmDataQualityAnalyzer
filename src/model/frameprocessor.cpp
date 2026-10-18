@@ -7,6 +7,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
+#include <vector>
 
 #include <QVector>
 
@@ -176,6 +178,12 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     PacketTimeRef prev_time_ref = {0.0, 0, 0};
     bool has_time_ref = false;
 
+    // This worker's private, mutable copy of the packet in flight. Queue payloads are shared
+    // with every other stream on the channel and are const, but swap / invert / derandomize
+    // modify in place. Reused across packets, so it settles at the largest packet and stops
+    // allocating.
+    std::vector<uint8_t> packet_bytes;
+
     // Derandomization state carried across packets.
     bool needs_derand = is_randomized;
     uint16_t lfsr_state = 0;
@@ -206,9 +214,16 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
             break;
         }
 
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-        auto* raw_data = reinterpret_cast<uint8_t*>(item.payload.data()); // detaches COW copy
-        uint32_t raw_len = static_cast<uint32_t>(item.payload.size());
+        if (item.payload)
+        {
+            packet_bytes.assign(item.payload->begin(), item.payload->end());
+        }
+        else
+        {
+            packet_bytes.clear();
+        }
+        uint8_t* raw_data = packet_bytes.data();
+        uint32_t raw_len = static_cast<uint32_t>(packet_bytes.size());
         uint64_t packet_bits = item.packetBits;
 
         if (needs_swap)

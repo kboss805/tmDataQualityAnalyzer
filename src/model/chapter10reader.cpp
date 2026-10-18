@@ -146,7 +146,7 @@ bool Chapter10Reader::loadChannels(const QString& filename)
         first_packet = false;
 
         // Make sure our buffer is big enough
-        if (m_buffer.size() < static_cast<qsizetype>(uGetDataLen(&m_header)))
+        if (m_buffer.size() < static_cast<std::size_t>(uGetDataLen(&m_header)))
         {
             try {
                 m_buffer.resize(uGetDataLen(&m_header));

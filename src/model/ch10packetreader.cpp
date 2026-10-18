@@ -8,6 +8,8 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
+#include <vector>
 
 #include <QFileInfo>
 
@@ -160,10 +162,10 @@ bool Ch10PacketReader::ensureBufferCapacity(qsizetype required)
 {
     if (required > PCMConstants::kMaxPacketBufferSize)
         return false;
-    if (m_buffer.size() >= required)
+    if (m_buffer.size() >= static_cast<std::size_t>(required))
         return true;
     try {
-        m_buffer.resize(required);
+        m_buffer.resize(static_cast<std::size_t>(required));
         return true;
     } catch (const std::bad_alloc&) {
         return false;
@@ -437,7 +439,7 @@ void Ch10PacketReader::run()
                 continue;
             }
             // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-            const char* raw_data = m_buffer.data() + data_offset;
+            const uint8_t* raw_data = m_buffer.data() + data_offset;
             uint32_t raw_len = m_header.ulDataLen - data_offset;
 
             // Convert this packet's base time to absolute seconds using the
@@ -450,14 +452,14 @@ void Ch10PacketReader::run()
                                       (k100NsToSeconds * static_cast<double>(m_irig_time.ulFrac));
 
             PacketItem item;
-            item.payload       = QByteArray(raw_data, static_cast<qsizetype>(raw_len));
+            item.payload       = std::make_shared<const std::vector<uint8_t>>(raw_data, raw_data + raw_len);
             item.baseAbsSeconds = base_abs_seconds;
             item.packetBits    = static_cast<uint64_t>(raw_len) * 8;
 
             const QVector<PacketQueue*>& queues = route_it.value();
             for (PacketQueue* q : queues)
             {
-                q->enqueue(item); // implicitly-shared copy; worker detaches on write
+                q->enqueue(item); // copies the shared_ptr, not the bytes; each worker copies before it mutates
             }
         }
     }

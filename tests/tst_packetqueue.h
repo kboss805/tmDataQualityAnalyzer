@@ -21,6 +21,7 @@ class TestPacketQueue : public QObject
 private slots:
     void itemsComeOutInTheOrderTheyWentIn();
     void everyFieldOfAnItemSurvivesTheQueue();
+    void oneItemOnSeveralQueuesSharesItsBytes();
     void producerBlocksWhenFullAndResumesAfterADequeue();
     void consumerBlocksWhenEmptyAndResumesAfterAnEnqueue();
     void closeReleasesABlockedProducer();

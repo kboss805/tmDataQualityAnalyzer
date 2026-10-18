@@ -417,7 +417,7 @@ The stories below follow the workflow a first-time user takes through the applic
 Items from `docs/future_plans/dotnet-port-assessment.md` that are worth doing whether or not
 that port ever happens - the throughput guard, the TOML move off `QSettings`, and now the
 de-Qt of the native core in small steps (QtGui out of the model's headers, then
-`PacketQueue`, then the `QElapsedTimer`s) - plus the clean-build regression the TOML change
+`PacketQueue`, then the `QElapsedTimer`s, then the packet bytes) - plus the clean-build regression the TOML change
 caused, and a generated Visual Studio solution. No user-facing
 behaviour changes.
 
@@ -518,6 +518,43 @@ called from our code is reported at **our** call site, so those keep warning exa
 v2.9.0 intended. Every first-party header here is quote-included, so `anglebrackets` covers
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
+
+#### Packet bytes are a shared `std::vector`, not a `QByteArray` (de-Qt, step 4)
+
+`PacketItem::payload` and the two Chapter 10 readers' read buffers were `QByteArray`; they
+are now `std::vector<uint8_t>`. The readers' buffers are a straight swap (the library takes
+a `void*`, and a `uint8_t` buffer removes a `reinterpret_cast` at the worker).
+
+The payload is the part that needed thought, because **`QByteArray` was doing a job nobody
+had written down**. The reader hands the *same* packet to every stream configured on a
+channel with `q->enqueue(item)` in a loop, and it is the pipeline's single bottleneck. With
+`QByteArray` that loop copied a reference count; each worker detached on its first write. A
+`std::vector` member would have turned it into one full deep copy per queue, on the reader
+thread - a throughput regression that no test in the suite would notice, since every copy
+holds the same bytes. So the sharing is now explicit: `PacketPayload` is a
+`std::shared_ptr<const std::vector<uint8_t>>`. The `const` is the point - nothing may modify
+bytes another worker is reading - and a worker copies into its own buffer before it swaps,
+inverts or derandomizes. That buffer lives outside the loop and is reused, so it stops
+allocating once it has seen the largest packet. The cost against the old behaviour is one
+memcpy per packet per worker, including the single-stream case where `QByteArray` never had
+to copy at all.
+
+Measured with the release throughput gate on the full 640 MB PRN recording, unmodified `main`
+against this change: 4-stream parallel **14011 ms -> 14201 ms** (1.3%), ratio against the
+slowest solo stream **1.01x** both times, against all-sequential **0.64x -> 0.65x**; the
+solo runs moved by under 1%. One run each, and run-to-run variance was not measured, so
+this shows no regression large enough to see, not that the cost is zero; the decode work
+dwarfs a packet copy, which is why none was expected.
+
+New case in `TestPacketQueue`, **`oneItemOnSeveralQueuesSharesItsBytes`**: one item enqueued
+to three queues must come out of all three pointing at the same bytes. It guards the
+property above, which is invisible to every value-comparing test. (Changing `payload` back to
+a by-value vector also stops the test compiling, so the guard cannot be defeated quietly.)
+
+Not done, deliberately: `Chapter10Reader` still builds a `QByteArray` from
+`QString::toLocal8Bit()` for a filename. That is the `QString` step, not this one.
+
+Baseline **436 / 0 / 1** (was 435 / 0 / 1), **437 / 0 / 0** at release. 23 suites.
 
 #### `PacketQueue` is `std`, and finally has tests of its own (de-Qt, step 2)
 

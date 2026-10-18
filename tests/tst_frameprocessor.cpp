@@ -7,8 +7,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
+#include <vector>
 
-#include <QByteArray>
 #include <QCoreApplication>
 #include <QDir>
 #include <QEventLoop>
@@ -86,14 +87,15 @@ static bool runWithReader(FrameProcessor& fp, ProcessingParams& p, FrameSetup* s
 
 /// Helper: packs a string of '1'/'0' characters MSB-first into bytes, for
 /// building synthetic PCM bitstreams without a real Chapter 10 file.
-static QByteArray packBitString(const QString& bits)
+static std::vector<uint8_t> packBitString(const QString& bits)
 {
-    QByteArray data((bits.size() + 7) / 8, '\0');
+    std::vector<uint8_t> data(static_cast<std::size_t>((bits.size() + 7) / 8), 0);
     for (int i = 0; i < bits.size(); i++)
     {
         if (bits[i] == QChar('1'))
         {
-            data[i / 8] = static_cast<char>(data[i / 8] | (0x80 >> (i % 8)));
+            auto& byte = data[static_cast<std::size_t>(i / 8)];
+            byte = static_cast<uint8_t>(byte | (0x80 >> (i % 8)));
         }
     }
     return data;
@@ -156,19 +158,19 @@ void TestFrameProcessor::requestAbortSetsFlag()
 
 void TestFrameProcessor::derandomizeShortBufferIdentity()
 {
-    QByteArray data(1, '\xAB');
-    QByteArray original = data;
+    std::vector<uint8_t> data(1, 0xAB);
+    const std::vector<uint8_t> original = data;
     uint16_t lfsr = 0;
-    FrameProcessor::derandomizeBitstream(reinterpret_cast<uint8_t*>(data.data()), 8, lfsr);
+    FrameProcessor::derandomizeBitstream(data.data(), 8, lfsr);
     QCOMPARE(data[0], original[0]);
 }
 
 void TestFrameProcessor::derandomizeLongerBufferChanges()
 {
-    QByteArray data(4, '\xFF');
-    QByteArray original = data;
+    std::vector<uint8_t> data(4, 0xFF);
+    const std::vector<uint8_t> original = data;
     uint16_t lfsr = 0;
-    FrameProcessor::derandomizeBitstream(reinterpret_cast<uint8_t*>(data.data()), 32, lfsr);
+    FrameProcessor::derandomizeBitstream(data.data(), 32, lfsr);
     QVERIFY2(data != original, "32 bits of all-1s should change after derandomization");
 }
 
@@ -641,7 +643,7 @@ void TestFrameProcessor::offPhaseSyncAfterLockLossIsNotExtracted()
     bits += "1111";       // word 0 of frame 2 = 15
     bits += "00001001";   // word 1 filler + genuine sync, boundary-aligned -> confirms frame 2
 
-    QByteArray payload = packBitString(bits);
+    const std::vector<uint8_t> payload = packBitString(bits);
 
     FrameSetup setup;
     setup.addParameter("W0", 0);
@@ -676,7 +678,7 @@ void TestFrameProcessor::offPhaseSyncAfterLockLossIsNotExtracted()
     p.resolvedAttrs.resolved    = true;
 
     PacketItem item;
-    item.payload     = payload;
+    item.payload     = std::make_shared<const std::vector<uint8_t>>(payload);
     item.baseAbsSeconds = 0.0;
     item.packetBits   = static_cast<uint64_t>(bits.size());
     QVERIFY(queue.enqueue(item));
@@ -730,7 +732,7 @@ void TestFrameProcessor::nonLinearCalibrationAveragesRawBeforeInterpolating()
     bits += "0000";       // frame 2, word 1 (unused)
     bits += "1001";       // boundary sync -> extract frame 2 (word 0 = 15)
 
-    QByteArray payload = packBitString(bits);
+    const std::vector<uint8_t> payload = packBitString(bits);
 
     FrameSetup setup;
     setup.addParameter("W0", 0);
@@ -772,7 +774,7 @@ void TestFrameProcessor::nonLinearCalibrationAveragesRawBeforeInterpolating()
     p.resolvedAttrs.resolved    = true;
 
     PacketItem item;
-    item.payload        = payload;
+    item.payload        = std::make_shared<const std::vector<uint8_t>>(payload);
     item.baseAbsSeconds = 0.0;
     item.packetBits     = static_cast<uint64_t>(bits.size());
     QVERIFY(queue.enqueue(item));

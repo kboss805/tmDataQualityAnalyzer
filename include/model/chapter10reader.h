@@ -10,8 +10,9 @@
 #define CHAPTER10READER_H
 
 #include <array>
+#include <cstdint>
+#include <vector>
 
-#include <QByteArray>
 #include <QMap>
 #include <QObject>
 #include <QString>
@@ -107,7 +108,7 @@ private:
     int m_file_handle;                                          ///< irig106 file handle.
 
     Irig106::SuI106Ch10Header m_header;                         ///< Reusable packet header buffer.
-    QByteArray m_buffer;                                        ///< Packet data read buffer.
+    std::vector<uint8_t> m_buffer;                              ///< Packet data read buffer.
     Irig106::SuTmatsInfo m_tmats_info;                          ///< TMATS info structure.
 
     QMap<int, ChannelData*> m_channel_data;  ///< All channels discovered in the file.

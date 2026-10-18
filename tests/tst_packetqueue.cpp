@@ -3,9 +3,10 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <memory>
 #include <thread>
+#include <vector>
 
-#include <QByteArray>
 #include <QtTest>
 
 #include "packetqueue.h"
@@ -29,7 +30,8 @@ PacketItem makeItem(uint64_t seq)
     PacketItem item;
     item.packetBits     = seq;
     item.baseAbsSeconds = static_cast<double>(seq) * 0.5;
-    item.payload        = QByteArray(3, static_cast<char>(seq & 0x7F));
+    item.payload        = std::make_shared<const std::vector<uint8_t>>(
+        std::size_t{3}, static_cast<uint8_t>(seq & 0x7F));
     return item;
 }
 
@@ -119,6 +121,27 @@ void TestPacketQueue::itemsComeOutInTheOrderTheyWentIn()
     }
 }
 
+void TestPacketQueue::oneItemOnSeveralQueuesSharesItsBytes()
+{
+    // The reader hands the same packet to every stream configured on a channel, and it
+    // is the pipeline's single bottleneck. The payload must travel as a shared pointer:
+    // a by-value vector would copy the whole packet once per queue on that thread, and
+    // nothing else in the suite would notice, because every copy holds the same bytes.
+    PacketQueue a;
+    PacketQueue b;
+    PacketQueue c;
+
+    PacketItem item = makeItem(7);
+    const auto* bytes = item.payload.get();
+    QVERIFY(a.enqueue(item));
+    QVERIFY(b.enqueue(item));
+    QVERIFY(c.enqueue(item));
+
+    QCOMPARE(a.dequeue().payload.get(), bytes);
+    QCOMPARE(b.dequeue().payload.get(), bytes);
+    QCOMPARE(c.dequeue().payload.get(), bytes);
+}
+
 void TestPacketQueue::everyFieldOfAnItemSurvivesTheQueue()
 {
     PacketQueue q;
@@ -126,15 +149,17 @@ void TestPacketQueue::everyFieldOfAnItemSurvivesTheQueue()
     PacketItem in;
     // An embedded NUL on purpose: a payload is raw PCM bits, not text, and a copy that
     // went through a C string would stop at the first zero byte.
-    in.payload        = QByteArray("ab\0cd", 5);
+    in.payload        = std::make_shared<const std::vector<uint8_t>>(
+        std::vector<uint8_t>{'a', 'b', 0, 'c', 'd'});
     in.baseAbsSeconds = 1777584474.153;
     in.packetBits     = 40;
     in.endOfStream    = false;
     QVERIFY(q.enqueue(in));
 
     const PacketItem out = q.dequeue();
-    QCOMPARE(out.payload.size(), 5);
-    QCOMPARE(out.payload, in.payload);
+    QVERIFY(out.payload != nullptr);
+    QCOMPARE(out.payload->size(), std::size_t{5});
+    QVERIFY(*out.payload == *in.payload);
     QCOMPARE(out.baseAbsSeconds, in.baseAbsSeconds);
     QCOMPARE(out.packetBits, in.packetBits);
     QVERIFY(!out.endOfStream);
