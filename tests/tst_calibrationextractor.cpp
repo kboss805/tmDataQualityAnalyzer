@@ -25,6 +25,7 @@
 #include "calibrationprofile.h"
 #include "chapter10reader.h"
 #include "framesetup.h"
+#include "qtbridge.h"
 #include "stepdetector.h"
 
 namespace {
@@ -114,10 +115,10 @@ bool buildRealRequest(Chapter10Reader& reader, CalibrationExtractor::Request& re
         return false;
     }
     std::vector<StepDefinition> steps;
-    QString step_error;
-    if (!StepDetector::parseStepConfig(step_toml, steps, step_error) || steps.empty())
+    std::string step_error;
+    if (!StepDetector::parseStepConfig(toFsPath(step_toml), steps, step_error) || steps.empty())
     {
-        skipReason = "Could not parse step config: " + step_error;
+        skipReason = "Could not parse step config: " + QString::fromStdString(step_error);
         return false;
     }
 
@@ -157,10 +158,10 @@ bool buildStepCalRequest(Chapter10Reader& reader, CalibrationExtractor::Request&
         return false;
     }
     std::vector<StepDefinition> steps;
-    QString step_error;
-    if (!StepDetector::parseStepConfig(projectRootPath(stepToml), steps, step_error))
+    std::string step_error;
+    if (!StepDetector::parseStepConfig(toFsPath(projectRootPath(stepToml)), steps, step_error))
     {
-        skipReason = "Could not parse " + stepToml + ": " + step_error;
+        skipReason = "Could not parse " + stepToml + ": " + QString::fromStdString(step_error);
         return false;
     }
     req.calFilename           = filepath;
@@ -355,9 +356,9 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
     QVERIFY(reader.loadChannels(filepath));
 
     std::vector<StepDefinition> steps;
-    QString step_error;
-    QVERIFY2(StepDetector::parseStepConfig(projectRootPath("settings/rcvr_cals/default.toml"),
-                                           steps, step_error), qPrintable(step_error));
+    std::string step_error;
+    QVERIFY2(StepDetector::parseStepConfig(toFsPath(projectRootPath("settings/rcvr_cals/default.toml")),
+                                           steps, step_error), step_error.c_str());
     QCOMPARE(steps.size(), 11);
 
     CalibrationExtractor::Request req;

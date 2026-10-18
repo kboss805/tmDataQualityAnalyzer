@@ -11,6 +11,17 @@ private slots:
     // Step-config TOML parsing
     void parseStepConfigValid();
     void parseStepConfigEmptyFails();
+    void parseStepConfigMatchesAreCaseInsensitive();
+    void parseStepConfigHeaderMustBeExactlyStepToCount();
+    void parseStepConfigIgnoresKeysOutsideAStepAndOtherSections();
+    void parseStepConfigValueRules_data();
+    void parseStepConfigValueRules();
+    void parseStepConfigKeepsFileOrderAndLastDbWins();
+    void parseStepConfigClearsItsOutputFirst();
+    void parseStepConfigReadsBomCrlfAndUtf16_data();
+    void parseStepConfigReadsBomCrlfAndUtf16();
+    void parseStepConfigOpensNonAsciiPaths();
+    void parseStepConfigErrorMessagesNameTheFile();
 
     // Plateau detection
     void detectCleanSteps();
@@ -35,6 +46,7 @@ private slots:
     void detectUnconfirmedDwellIsMeasuredFromTheGrid();
     void detectReportsHowManyLevelsTheSweepHeld();
     void initialStepConfigPrefersTheStreamsFileThenTheDefault();
+    void initialStepConfigPathIgnoresADirectory();
 
     // Interpolation / out-of-range clamping
     void interpolateMidpoint();

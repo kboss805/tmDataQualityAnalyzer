@@ -7,6 +7,7 @@
 #include <QtTest>
 
 #include "containerutil.h"
+#include "qtbridge.h"
 #include "stepdetector.h"
 
 namespace {
@@ -51,11 +52,248 @@ void TestStepDetector::parseStepConfigValid()
         "db = 6.0\n");
 
     std::vector<StepDefinition> steps;
-    QString error;
-    QVERIFY(StepDetector::parseStepConfig(path, steps, error));
+    std::string error;
+    QVERIFY(StepDetector::parseStepConfig(toFsPath(path), steps, error));
     QCOMPARE(steps.size(), 2);
     QCOMPARE(steps[0].db, 0.0);
     QCOMPARE(steps[1].db, 6.0);
+}
+
+namespace {
+
+// Everything below talks to StepDetector::parseStepConfig through these helpers, so the
+// QString-to-std::string port changes them and nothing else: the assertions were
+// written against the QString implementation and kept as they were.
+bool parseSteps(const QString& path, std::vector<StepDefinition>& steps, QString& error)
+{
+    std::string err;
+    const bool ok = StepDetector::parseStepConfig(toFsPath(path), steps, err);
+    error = QString::fromStdString(err);
+    return ok;
+}
+
+/// initialStepConfigPath() takes and returns UTF-8 strings; the assertions compare QStrings.
+QString initialPath(const QString& root, const QString& preferred)
+{
+    return QString::fromStdString(
+        StepDetector::initialStepConfigPath(root.toStdString(), preferred.toStdString()));
+}
+
+/// Writes @p content to a file under @p dir and returns its path (empty on failure).
+QString writeStepFile(const QTemporaryDir& dir, const QString& name, const QByteArray& content)
+{
+    const QString path = dir.filePath(name);
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    {
+        return {};
+    }
+    f.write(content);
+    return path;
+}
+
+/// The db values of a parsed list, for compact comparison.
+QList<double> dbs(const std::vector<StepDefinition>& steps)
+{
+    QList<double> out;
+    for (const StepDefinition& s : steps)
+    {
+        out << s.db;
+    }
+    return out;
+}
+
+} // namespace
+
+void TestStepDetector::parseStepConfigMatchesAreCaseInsensitive()
+{
+    // The header and the key are matched without regard to case, and the whitespace
+    // around '=' and at the ends of the line is ignored.
+    QTemporaryDir dir;
+    const QString path = writeStepFile(dir, "case.toml",
+        "[[STEP]]\n"
+        "  DB   =   3.5  \n"
+        "[[step]]\n"
+        "Db = 7\n");
+    std::vector<StepDefinition> steps;
+    QString error;
+    QVERIFY2(parseSteps(path, steps, error), qPrintable(error));
+    QCOMPARE(dbs(steps), QList<double>({3.5, 7.0}));
+}
+
+void TestStepDetector::parseStepConfigHeaderMustBeExactlyStepToCount()
+{
+    // The header comparison is against the whole trimmed line, so decoration on it
+    // means it is NOT a step header: a trailing comment, inner spaces, a longer name.
+    // Whatever follows then sits in no step and is ignored. Pinned as the current
+    // behaviour - a header with a comment silently losing its step deserves its own
+    // decision, not to be changed as a side effect of a port.
+    QTemporaryDir dir;
+    const QString path = writeStepFile(dir, "headers.toml",
+        "[[Step]] # the first one\n"
+        "db = 1\n"
+        "[[ Step ]]\n"
+        "db = 2\n"
+        "[[Steps]]\n"
+        "db = 3\n"
+        "[[Step]]\n"
+        "db = 4\n");
+    std::vector<StepDefinition> steps;
+    QString error;
+    QVERIFY2(parseSteps(path, steps, error), qPrintable(error));
+    QCOMPARE(dbs(steps), QList<double>({4.0}));
+}
+
+void TestStepDetector::parseStepConfigIgnoresKeysOutsideAStepAndOtherSections()
+{
+    QTemporaryDir dir;
+    const QString path = writeStepFile(dir, "scope.toml",
+        "db = 99\n"                 // before any header: no step to belong to
+        "[Meta]\n"
+        "db = 98\n"                 // an ordinary section is not a step
+        "[[Step]]\n"
+        "db = 5\n"
+        "[Other]\n"                 // ends the step context...
+        "db = 97\n"                 // ...so this is not step 1's
+        "[[Step]]\n"
+        "label = nothing\n"         // a step with no db keeps the default 0
+        "[[Unrelated]]\n"           // another array-of-tables ends the step too
+        "db = 96\n");
+    std::vector<StepDefinition> steps;
+    QString error;
+    QVERIFY2(parseSteps(path, steps, error), qPrintable(error));
+    QCOMPARE(dbs(steps), QList<double>({5.0, 0.0}));
+}
+
+void TestStepDetector::parseStepConfigValueRules_data()
+{
+    QTest::addColumn<QString>("text");
+    QTest::addColumn<double>("expected");
+
+    // QString::toDouble's rules, on the text after '=' with a trailing '#' comment
+    // removed. A value that does not parse is skipped, leaving the step at its default
+    // of 0 - the step itself still exists.
+    QTest::newRow("integer")       << "6"        << 6.0;
+    QTest::newRow("negative")      << "-3.5"     << -3.5;
+    QTest::newRow("plus")          << "+6"       << 6.0;
+    QTest::newRow("exponent")      << "1e1"      << 10.0;
+    QTest::newRow("leading-dot")   << ".5"       << 0.5;
+    QTest::newRow("trailing-dot")  << "5."       << 5.0;
+    QTest::newRow("comment")       << "6 # six"  << 6.0;
+    QTest::newRow("comment-glued") << "6# six"   << 6.0;
+    QTest::newRow("quoted")        << "\"6\""    << 0.0; // quotes are NOT stripped here
+    QTest::newRow("words")         << "abc"      << 0.0;
+    QTest::newRow("trailing-junk") << "6x"       << 0.0;
+    QTest::newRow("comma")         << "1,5"      << 0.0;
+    QTest::newRow("hex")           << "0x10"     << 0.0;
+    QTest::newRow("overflow")      << "1e999"    << 0.0;
+    QTest::newRow("double-sign")   << "+-6"      << 0.0;
+    QTest::newRow("empty")         << ""         << 0.0;
+}
+
+void TestStepDetector::parseStepConfigValueRules()
+{
+    QFETCH(QString, text);
+    QFETCH(double, expected);
+
+    QTemporaryDir dir;
+    const QString path = writeStepFile(dir, "value.toml",
+        ("[[Step]]\ndb = " + text + "\n").toUtf8());
+    std::vector<StepDefinition> steps;
+    QString error;
+    QVERIFY2(parseSteps(path, steps, error), qPrintable(error));
+    QCOMPARE(steps.size(), std::size_t{1});
+    QCOMPARE(steps[0].db, expected);
+}
+
+void TestStepDetector::parseStepConfigKeepsFileOrderAndLastDbWins()
+{
+    QTemporaryDir dir;
+    const QString path = writeStepFile(dir, "order.toml",
+        "[[Step]]\ndb = 30\n"
+        "[[Step]]\ndb = 10\n"
+        "[[Step]]\ndb = 20\ndb = 21\n");
+    std::vector<StepDefinition> steps;
+    QString error;
+    QVERIFY2(parseSteps(path, steps, error), qPrintable(error));
+    QCOMPARE(dbs(steps), QList<double>({30.0, 10.0, 21.0}));
+}
+
+void TestStepDetector::parseStepConfigClearsItsOutputFirst()
+{
+    // A failed parse must not leave the previous file's steps behind.
+    QTemporaryDir dir;
+    std::vector<StepDefinition> steps = {{1.0}, {2.0}};
+    QString error;
+    QVERIFY(!parseSteps(writeStepFile(dir, "none.toml", "# nothing\n"), steps, error));
+    QVERIFY(steps.empty());
+
+    steps = {{1.0}, {2.0}};
+    QVERIFY(!parseSteps(dir.filePath("absent.toml"), steps, error));
+    QVERIFY(steps.empty());
+}
+
+void TestStepDetector::parseStepConfigReadsBomCrlfAndUtf16_data()
+{
+    QTest::addColumn<QByteArray>("bytes");
+    // Files as Notepad saves them. QTextStream detected all of these; a plain byte
+    // reader would see the BOM as part of the first line and silently drop step 1.
+    QTest::newRow("utf8-bom-crlf")
+        << (QByteArray("\xEF\xBB\xBF") + "[[Step]]\r\ndb = 4\r\n[[Step]]\r\ndb = 8\r\n");
+    auto utf16 = [](bool big) {
+        const QString text = QStringLiteral("[[Step]]\r\ndb = 4\r\n[[Step]]\r\ndb = 8\r\n");
+        QByteArray b = big ? QByteArray("\xFE\xFF", 2) : QByteArray("\xFF\xFE", 2);
+        for (const QChar c : text)
+        {
+            const char hi = static_cast<char>(c.unicode() >> 8);
+            const char lo = static_cast<char>(c.unicode() & 0xFF);
+            b.append(big ? hi : lo);
+            b.append(big ? lo : hi);
+        }
+        return b;
+    };
+    QTest::newRow("utf16le") << utf16(false);
+    QTest::newRow("utf16be") << utf16(true);
+}
+
+void TestStepDetector::parseStepConfigReadsBomCrlfAndUtf16()
+{
+    QFETCH(QByteArray, bytes);
+    QTemporaryDir dir;
+    std::vector<StepDefinition> steps;
+    QString error;
+    QVERIFY2(parseSteps(writeStepFile(dir, "enc.toml", bytes), steps, error), qPrintable(error));
+    QCOMPARE(dbs(steps), QList<double>({4.0, 8.0}));
+}
+
+void TestStepDetector::parseStepConfigOpensNonAsciiPaths()
+{
+    // Step files live wherever the operator keeps them, including user folders with
+    // accented or non-Latin names.
+    QTemporaryDir dir;
+    const QString folder = QStringLiteral("omega-") + QChar(0x03A9);
+    QVERIFY(QDir(dir.path()).mkdir(folder));
+    const QString path = writeStepFile(dir, folder + "/caf" + QChar(0x00E9) + ".toml",
+                                       "[[Step]]\ndb = 12\n");
+    QVERIFY(!path.isEmpty());
+    std::vector<StepDefinition> steps;
+    QString error;
+    QVERIFY2(parseSteps(path, steps, error), qPrintable(error));
+    QCOMPARE(dbs(steps), QList<double>({12.0}));
+}
+
+void TestStepDetector::parseStepConfigErrorMessagesNameTheFile()
+{
+    // The message carries the file NAME (not the full path), so the log line reads the
+    // same wherever the file lives.
+    QTemporaryDir dir;
+    std::vector<StepDefinition> steps;
+    QString error;
+    QVERIFY(!parseSteps(dir.filePath("missing_steps.toml"), steps, error));
+    QCOMPARE(error, QStringLiteral("Could not open step-config file 'missing_steps.toml'."));
+
+    QVERIFY(!parseSteps(writeStepFile(dir, "empty_steps.toml", "[Meta]\nx = 1\n"), steps, error));
+    QCOMPARE(error, QStringLiteral("No [[Step]] entries found in 'empty_steps.toml'."));
 }
 
 void TestStepDetector::parseStepConfigEmptyFails()
@@ -64,8 +302,8 @@ void TestStepDetector::parseStepConfigEmptyFails()
     const QString path = writeTempToml(f, "# just a comment, no steps\n");
 
     std::vector<StepDefinition> steps;
-    QString error;
-    QVERIFY(!StepDetector::parseStepConfig(path, steps, error));
+    std::string error;
+    QVERIFY(!StepDetector::parseStepConfig(toFsPath(path), steps, error));
 }
 
 // ---------------------------------------------------------------------------
@@ -843,6 +1081,21 @@ void TestStepDetector::detectReportsHowManyLevelsTheSweepHeld()
     QCOMPARE(exact.sweepLevels, 8);
 }
 
+void TestStepDetector::initialStepConfigPathIgnoresADirectory()
+{
+    // "Is a file", not "exists": a directory sitting where the step file should be (the
+    // preferred path, or the shipped default's own location) must not be offered to the
+    // dialog as a step file to parse.
+    QTemporaryDir root;
+    QVERIFY(root.isValid());
+    const QString rcvr_cals = root.path() + "/settings/rcvr_cals";
+    QVERIFY(QDir().mkpath(rcvr_cals + "/default.toml")); // a directory, named like the file
+    QVERIFY(QDir().mkpath(root.path() + "/somedir"));
+
+    QVERIFY(initialPath(root.path(), root.path() + "/somedir").isEmpty());
+    QVERIFY(initialPath(root.path(), QString()).isEmpty());
+}
+
 void TestStepDetector::initialStepConfigPrefersTheStreamsFileThenTheDefault()
 {
     // The Extract Calibration dialog opens with a step file already loaded, because
@@ -856,20 +1109,20 @@ void TestStepDetector::initialStepConfigPrefersTheStreamsFileThenTheDefault()
     QVERIFY2(QFileInfo(shipped).isFile(), qPrintable(shipped));
 
     // No previous choice: the shipped default.
-    QCOMPARE(StepDetector::initialStepConfigPath(appRoot, QString()), shipped);
+    QCOMPARE(initialPath(appRoot, QString()), shipped);
 
     // A stream that already used a step file keeps it, even when it is not the
     // default - re-opening the dialog must not silently swap the operator's file.
-    QCOMPARE(StepDetector::initialStepConfigPath(appRoot, rasa), rasa);
+    QCOMPARE(initialPath(appRoot, rasa), rasa);
 
     // A stored reference that no longer resolves (a template from another machine)
     // falls back to the default instead of opening on a missing file.
-    QCOMPARE(StepDetector::initialStepConfigPath(appRoot, "C:/nowhere/gone.toml"), shipped);
+    QCOMPARE(initialPath(appRoot, "C:/nowhere/gone.toml"), shipped);
 
     // No settings tree at all (a bare build directory): nothing to preload, and the
     // dialog opens empty as it did before.
     QTemporaryDir bare;
     QVERIFY(bare.isValid());
-    QVERIFY(StepDetector::initialStepConfigPath(bare.path(), QString()).isEmpty());
-    QVERIFY(StepDetector::initialStepConfigPath(QString(), QString()).isEmpty());
+    QVERIFY(initialPath(bare.path(), QString()).isEmpty());
+    QVERIFY(initialPath(QString(), QString()).isEmpty());
 }

@@ -43,6 +43,7 @@ SOURCES += \
     $$PWD/../src/model/streamconfigschema.cpp \
     $$PWD/../src/model/processingtemplateschema.cpp \
     $$PWD/../src/model/templatematcher.cpp \
+    $$PWD/../src/model/textfile.cpp \
     $$PWD/../src/model/tomldocument.cpp \
     $$PWD/../src/viewmodel/mainviewmodel.cpp \
     $$PWD/../src/viewmodel/processingcoordinator.cpp \
@@ -80,6 +81,7 @@ HEADERS += \
     $$PWD/../include/model/streamconfigschema.h \
     $$PWD/../include/model/processingtemplateschema.h \
     $$PWD/../include/model/templatematcher.h \
+    $$PWD/../include/model/textfile.h \
     $$PWD/../include/model/tomldocument.h \
     $$PWD/../include/dto/streamconfig.h \
     $$PWD/../include/dto/framesyncparams.h \

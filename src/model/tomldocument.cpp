@@ -12,10 +12,10 @@
 #include <algorithm>
 #include <charconv>
 #include <fstream>
-#include <iterator>
 #include <sstream>
 #include <system_error>
 
+#include "textfile.h"
 #include "textparse.h"
 
 namespace {
@@ -44,103 +44,6 @@ std::string asciiLower(std::string s)
         }
     }
     return s;
-}
-
-/// Appends one Unicode code point as UTF-8.
-void appendUtf8(std::string& out, char32_t cp)
-{
-    if (cp < 0x80)
-    {
-        out += static_cast<char>(cp);
-    }
-    else if (cp < 0x800)
-    {
-        out += static_cast<char>(0xC0 | (cp >> 6));
-        out += static_cast<char>(0x80 | (cp & 0x3F));
-    }
-    else if (cp < 0x10000)
-    {
-        out += static_cast<char>(0xE0 | (cp >> 12));
-        out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-        out += static_cast<char>(0x80 | (cp & 0x3F));
-    }
-    else
-    {
-        out += static_cast<char>(0xF0 | (cp >> 18));
-        out += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
-        out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-        out += static_cast<char>(0x80 | (cp & 0x3F));
-    }
-}
-
-/// Decodes UTF-16 (after its BOM) into UTF-8. An unpaired surrogate becomes U+FFFD, as
-/// Qt's decoder would make it.
-std::string utf16ToUtf8(const std::string& bytes, std::size_t offset, bool big_endian)
-{
-    std::string out;
-    out.reserve((bytes.size() - offset) / 2);
-    auto unit = [&](std::size_t i) -> char16_t {
-        const auto b0 = static_cast<unsigned char>(bytes[i]);
-        const auto b1 = static_cast<unsigned char>(bytes[i + 1]);
-        return static_cast<char16_t>(big_endian ? (b0 << 8) | b1 : (b1 << 8) | b0);
-    };
-    for (std::size_t i = offset; i + 1 < bytes.size(); i += 2)
-    {
-        const char16_t u = unit(i);
-        if (u >= 0xD800 && u <= 0xDBFF && i + 3 < bytes.size())
-        {
-            const char16_t lo = unit(i + 2);
-            if (lo >= 0xDC00 && lo <= 0xDFFF)
-            {
-                appendUtf8(out, 0x10000 + ((static_cast<char32_t>(u) - 0xD800) << 10)
-                                        + (static_cast<char32_t>(lo) - 0xDC00));
-                i += 2;
-                continue;
-            }
-        }
-        if (u >= 0xD800 && u <= 0xDFFF)
-        {
-            appendUtf8(out, 0xFFFD);
-            continue;
-        }
-        appendUtf8(out, u);
-    }
-    return out;
-}
-
-/// The file's text as UTF-8, with any BOM handled - what QTextStream's Unicode
-/// auto-detection did. Without it a Notepad-saved file's first key carries the BOM
-/// bytes and silently goes missing.
-std::string decodeText(const std::string& bytes)
-{
-    if (bytes.size() >= 3 && static_cast<unsigned char>(bytes[0]) == 0xEF
-        && static_cast<unsigned char>(bytes[1]) == 0xBB
-        && static_cast<unsigned char>(bytes[2]) == 0xBF)
-    {
-        return bytes.substr(3);
-    }
-    if (bytes.size() >= 2)
-    {
-        const auto b0 = static_cast<unsigned char>(bytes[0]);
-        const auto b1 = static_cast<unsigned char>(bytes[1]);
-        if (b0 == 0xFF && b1 == 0xFE)
-        {
-            return utf16ToUtf8(bytes, 2, false);
-        }
-        if (b0 == 0xFE && b1 == 0xFF)
-        {
-            return utf16ToUtf8(bytes, 2, true);
-        }
-    }
-    return bytes;
-}
-
-/// The file name of @p path as UTF-8, for messages. u8string() is std::string in C++17
-/// and std::u8string in C++20; copying through iterators reads either.
-std::string utf8FileName(const std::filesystem::path& path)
-{
-    const auto name = path.filename().u8string();
-    return std::string(name.begin(), name.end());
 }
 
 /// Removes an unquoted trailing `# comment` from a value.
@@ -273,20 +176,16 @@ TomlDocument TomlDocument::load(const std::filesystem::path& path, std::string* 
 {
     TomlDocument doc;
 
-    // Binary, so the bytes arrive exactly as stored: decodeText() handles the BOM and
-    // the line loop below drops each line's '\r' with the rest of its whitespace.
-    std::ifstream file(path, std::ios::in | std::ios::binary);
-    if (!file.is_open())
+    std::string text;
+    if (!textfile::readText(path, text))
     {
         doc.m_ok = false;
         if (error)
         {
-            *error = "Could not open '" + utf8FileName(path) + "'.";
+            *error = "Could not open '" + textfile::utf8FileName(path) + "'.";
         }
         return doc;
     }
-    const std::string text = decodeText(std::string(std::istreambuf_iterator<char>(file),
-                                                    std::istreambuf_iterator<char>()));
 
     std::istringstream in(text);
     std::string raw_line;
@@ -448,7 +347,7 @@ bool TomlDocument::save(const std::filesystem::path& path, std::string* error) c
     {
         if (error)
         {
-            *error = "Could not write '" + utf8FileName(path) + "'.";
+            *error = "Could not write '" + textfile::utf8FileName(path) + "'.";
         }
         return false;
     }
@@ -496,7 +395,7 @@ bool TomlDocument::save(const std::filesystem::path& path, std::string* error) c
     {
         if (error)
         {
-            *error = "Error writing '" + utf8FileName(path) + "'.";
+            *error = "Error writing '" + textfile::utf8FileName(path) + "'.";
         }
         return false;
     }

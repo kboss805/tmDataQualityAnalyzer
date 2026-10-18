@@ -9,14 +9,16 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <filesystem>
+#include <sstream>
+#include <string>
+#include <system_error>
 #include <vector>
-
-#include <QFile>
-#include <QFileInfo>
-#include <QTextStream>
 
 #include "constants.h"
 #include "containerutil.h"
+#include "textfile.h"
+#include "textparse.h"
 
 namespace {
 
@@ -25,15 +27,26 @@ namespace {
 /// rather than a saving.
 using Flags = std::vector<char>;
 
-/// Strips an inline `#` comment (outside quotes) and surrounding whitespace.
-QString stripComment(QString value)
+/// Strips an inline `#` comment and surrounding whitespace. NOT quote-aware, unlike
+/// TomlDocument's: a '#' inside quotes cuts the value here, which no step file has ever
+/// needed (its values are bare numbers).
+std::string stripComment(const std::string& value)
 {
-    const int hash = value.indexOf('#');
-    if (hash >= 0)
+    const std::size_t hash = value.find('#');
+    return textparse::trimmed(hash == std::string::npos ? value : value.substr(0, hash));
+}
+
+/// ASCII lower-casing, enough for the header and key names matched here.
+std::string asciiLower(std::string s)
+{
+    for (char& c : s)
     {
-        value = value.left(hash);
+        if (c >= 'A' && c <= 'Z')
+        {
+            c = static_cast<char>(c - 'A' + 'a');
+        }
     }
-    return value.trimmed();
+    return s;
 }
 
 /// Median of a copy of @p values (returns 0 for an empty input).
@@ -646,20 +659,20 @@ bool calibrateSaturatedTop(const std::vector<double>& rawValues,
 // parseStepConfig
 // ---------------------------------------------------------------------------
 
-bool StepDetector::parseStepConfig(const QString& path,
+bool StepDetector::parseStepConfig(const std::filesystem::path& path,
                                    std::vector<StepDefinition>& out,
-                                   QString& error)
+                                   std::string& error)
 {
     out.clear();
 
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    std::string text;
+    if (!textfile::readText(path, text))
     {
-        error = "Could not open step-config file '" + QFileInfo(path).fileName() + "'.";
+        error = "Could not open step-config file '" + textfile::utf8FileName(path) + "'.";
         return false;
     }
 
-    QTextStream in(&file);
+    std::istringstream in(text);
     bool in_step = false;
     StepDefinition current;
 
@@ -671,23 +684,24 @@ bool StepDetector::parseStepConfig(const QString& path,
         current = StepDefinition{};
     };
 
-    while (!in.atEnd())
+    std::string raw_line;
+    while (std::getline(in, raw_line))
     {
-        const QString line = in.readLine().trimmed();
-        if (line.isEmpty() || line.startsWith('#'))
+        const std::string line = textparse::trimmed(raw_line);
+        if (line.empty() || line.front() == '#')
         {
             continue;
         }
 
         // Array-of-tables header: [[Step]] starts a new step entry.
-        if (line.startsWith("[["))
+        if (line.compare(0, 2, "[[") == 0)
         {
             flush();
-            in_step = line.compare("[[Step]]", Qt::CaseInsensitive) == 0;
+            in_step = asciiLower(line) == "[[step]]";
             continue;
         }
         // Any other section header ends the current step context.
-        if (line.startsWith('['))
+        if (line.front() == '[')
         {
             flush();
             in_step = false;
@@ -698,17 +712,16 @@ bool StepDetector::parseStepConfig(const QString& path,
             continue;
         }
 
-        const int eq = line.indexOf('=');
-        if (eq < 0)
+        const std::size_t eq = line.find('=');
+        if (eq == std::string::npos)
         {
             continue;
         }
-        const QString key = line.left(eq).trimmed().toLower();
-        const QString val = stripComment(line.mid(eq + 1));
+        const std::string key = asciiLower(textparse::trimmed(line.substr(0, eq)));
+        const std::string val = stripComment(line.substr(eq + 1));
 
-        bool ok = false;
-        const double num = val.toDouble(&ok);
-        if (!ok)
+        double num = 0.0;
+        if (!textparse::parseDouble(val, num))
         {
             continue;
         }
@@ -722,29 +735,38 @@ bool StepDetector::parseStepConfig(const QString& path,
 
     if (out.empty())
     {
-        error = "No [[Step]] entries found in '" + QFileInfo(path).fileName() + "'.";
+        error = "No [[Step]] entries found in '" + textfile::utf8FileName(path) + "'.";
         return false;
     }
     return true;
 }
 
-QString StepDetector::initialStepConfigPath(const QString& appRoot, const QString& preferred)
+std::string StepDetector::initialStepConfigPath(const std::string& appRoot,
+                                                const std::string& preferred)
 {
+    // A string-in, string-out function rather than a std::filesystem::path one: the result
+    // is shown to the operator ("<root>/settings/rcvr_cals/default.toml"), and
+    // path / "x" would put a backslash in the middle of that on Windows.
+    auto isFile = [](const std::string& utf8) {
+        std::error_code ec; // the throwing overload would turn a bad path into a crash
+        return std::filesystem::is_regular_file(textfile::pathFromUtf8(utf8), ec);
+    };
+
     // A reference that no longer resolves - a template written on another machine,
     // a moved settings tree - falls through to the default rather than opening
     // the dialog on a file that is not there.
-    if (!preferred.isEmpty() && QFileInfo(preferred).isFile())
+    if (!preferred.empty() && isFile(preferred))
     {
         return preferred;
     }
-    if (appRoot.isEmpty())
+    if (appRoot.empty())
     {
-        return QString();
+        return {};
     }
-    const QString fallback = appRoot + "/" + UIConstants::kSettingsDirName + "/"
-                             + UIConstants::kRcvrCalsDirName + "/"
-                             + UIConstants::kDefaultTomlFilename;
-    return QFileInfo(fallback).isFile() ? fallback : QString();
+    const std::string fallback = appRoot + "/" + UIConstants::kSettingsDirName + "/"
+                                 + UIConstants::kRcvrCalsDirName + "/"
+                                 + UIConstants::kDefaultTomlFilename;
+    return isFile(fallback) ? fallback : std::string();
 }
 
 // ---------------------------------------------------------------------------

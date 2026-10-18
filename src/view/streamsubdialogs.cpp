@@ -546,8 +546,8 @@ CalibrationSetupDialog::CalibrationSetupDialog(const CalibrationExtractor::Reque
     // loaded. The status says it was loaded automatically: a step file that
     // does not match the recording still calibrates, just wrongly, so the
     // operator must be able to see which file is in play without browsing.
-    const QString initialStep =
-        StepDetector::initialStepConfigPath(m_app_root, initialStepPath);
+    const QString initialStep = QString::fromStdString(StepDetector::initialStepConfigPath(
+        m_app_root.toStdString(), initialStepPath.toStdString()));
     if (!initialStep.isEmpty())
     {
         loadStepFile(initialStep, /*automatic=*/true);
@@ -598,8 +598,8 @@ void CalibrationSetupDialog::loadStepFile(const QString& path, bool automatic)
     m_step_path_label->setText(QFileInfo(path).fileName());
 
     std::vector<StepDefinition> steps;
-    QString error;
-    if (StepDetector::parseStepConfig(path, steps, error))
+    std::string error;
+    if (StepDetector::parseStepConfig(toFsPath(path), steps, error))
     {
         m_steps  = steps;
         m_step_ok = true;
@@ -612,7 +612,7 @@ void CalibrationSetupDialog::loadStepFile(const QString& path, bool automatic)
     {
         m_steps.clear();
         m_step_ok = false;
-        setStatus(m_step_status, Fail, error);
+        setStatus(m_step_status, Fail, QString::fromStdString(error));
     }
     updateOk();
     maybeRunExtraction();
