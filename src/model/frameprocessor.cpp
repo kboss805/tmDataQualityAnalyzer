@@ -151,7 +151,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
 
     // Initialize the in-memory result bundle for this run.
     m_result = ProcessedStreamData();
-    m_result.streamLabel  = QString::fromStdString(params.streamLabel);
+    m_result.streamLabel  = params.streamLabel;
     m_result.pcmChannelId = params.pcmChannelId;
     m_result.mode         = params.mode;
 

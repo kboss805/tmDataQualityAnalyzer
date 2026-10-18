@@ -345,6 +345,29 @@ void TestMainView::menuSectionHeadersSurviveTheStylesheet()
     qApp->setStyleSheet(saved);
 }
 
+void TestMainView::aFinishedStreamIsLoggedUnderItsLabel()
+{
+    // The result carries its label as UTF-8 text; the log line quoting it is built where
+    // that text meets Qt, so a non-ASCII label is the case that shows a wrong decoding.
+    MainView view;
+
+    ProcessedStreamData d;
+    d.streamLabel  = QString(QStringLiteral("R") + QChar(0x00E9) + QStringLiteral("cepteur ")
+                             + QChar(0x03A9)).toStdString();
+    d.pcmChannelId = 7;
+    d.mode         = StreamMode::FrameSyncLockStats;
+    d.timesSec     = { 1000000.0, 1000001.0, 1000002.0 };
+    d.lockPercent  = { 90.0, 95.0, 100.0 };
+    d.accumulatedMissedFrames = { 0.0, 0.0, 1.0 };
+    view.onStreamProcessed(d);
+
+    const QString expected = QStringLiteral("  R") + QChar(0x00E9) + QStringLiteral("cepteur ")
+                             + QChar(0x03A9) + QStringLiteral(": 3 samples, 0 channel(s)");
+    const QString shown = view.m_log_preview->toPlainText();
+    QVERIFY2(shown.contains(expected),
+             qPrintable(QStringLiteral("log reads: %1").arg(shown)));
+}
+
 void TestMainView::logPreservesMultiLineMessages()
 {
     // The frame-sync diagnostics are laid out over several aligned lines - "Looking

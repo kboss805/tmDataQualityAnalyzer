@@ -297,7 +297,7 @@ namespace {
 void addLockStream(PlotViewModel& vm, const QString& label, int channel_id)
 {
     ProcessedStreamData d;
-    d.streamLabel  = label;
+    d.streamLabel  = label.toStdString();
     d.pcmChannelId = channel_id;
     d.mode         = StreamMode::FrameSyncLockStats;
     d.timesSec                = { 0.0, 1.0, 2.0 };

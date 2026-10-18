@@ -5,6 +5,9 @@
  * Replaces the old CSV-on-disk output. FrameProcessor accumulates one of these
  * per run; ProcessingCoordinator hands it to PlotViewModel, which appends its
  * series to the (accumulating) plot.
+ *
+ * Plain C++, like ProcessingParams: text is UTF-8 `std::string`. The plot's layers convert
+ * where they build their `QString` series names.
  */
 
 #ifndef PROCESSEDSTREAMDATA_H
@@ -13,9 +16,7 @@
 #include <string>
 #include <vector>
 
-#include <QString>
-
-#include "streamconfig.h"
+#include "streammode.h"
 
 /**
  * @brief One receiver-channel (SNR) series within a processed stream.
@@ -38,7 +39,7 @@ struct ProcessedChannelSeries
  */
 struct ProcessedStreamData
 {
-    QString    streamLabel;         ///< Display label of the source stream, e.g. "Ch 32".
+    std::string streamLabel;        ///< Display label of the source stream, e.g. "Ch 32" (UTF-8).
     int        pcmChannelId = -1;   ///< Source PCM channel ID.
     int        jobIndex     = 0;    ///< 0-based position of this stream in the original job list; used to preserve legend order regardless of parallel completion order.
     int        sourceId     = 0;    ///< Id of the .ch10 file (multi-file session) this stream came from; 0 for the first/only source. Two sources can legitimately reuse the same pcmChannelId, so identity checks that key on pcmChannelId must also key on sourceId to avoid cross-source collisions.

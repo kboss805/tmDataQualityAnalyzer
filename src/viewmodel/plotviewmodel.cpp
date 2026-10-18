@@ -197,6 +197,9 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         return;
     }
 
+    // The core's label is UTF-8 std::string; the plot's series keep QString.
+    const QString stream_label = QString::fromStdString(data.streamLabel);
+
     // Reprocessing a stream (e.g. clicking "Process" again after switching a
     // channel's mode) should replace its prior result, not stack a second copy
     // on top of it. Drop any existing series from a previous run on this same
@@ -214,7 +217,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
     m_series.erase(std::remove_if(m_series.begin(), m_series.end(),
                                    [&](const PlotSeriesData& s) {
                                        return s.sourceId == data.sourceId &&
-                                              s.streamLabel == data.streamLabel &&
+                                              s.streamLabel == stream_label &&
                                               s.streamOrder == data.pcmChannelId;
                                    }),
                    m_series.end());
@@ -296,8 +299,8 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
     if (!data.lockPercent.empty())
     {
         PlotSeriesData lock;
-        lock.name = data.streamLabel;
-        lock.streamLabel = data.streamLabel;
+        lock.name = stream_label;
+        lock.streamLabel = stream_label;
         lock.metricType = PlotSeriesData::MetricType::FrameSyncLock;
         lock.receiverIndex = 0;
         lock.channelIndex = 0;
@@ -317,8 +320,8 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
     if (!data.accumulatedMissedFrames.empty())
     {
         PlotSeriesData errors;
-        errors.name = data.streamLabel;
-        errors.streamLabel = data.streamLabel;
+        errors.name = stream_label;
+        errors.streamLabel = stream_label;
         errors.metricType = PlotSeriesData::MetricType::AccumulatedMissedFrames;
         errors.receiverIndex = 0;
         errors.channelIndex = 0;
@@ -345,8 +348,8 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         // and its inverse for CSV import — is owned by SeriesColumnSchema.
         // The core's channel name is UTF-8 std::string; the plot keeps QString.
         const QString ch_name = QString::fromStdString(ch.name);
-        s.name = SeriesColumnSchema::snrSeriesName(data.pcmChannelId, data.streamLabel, ch_name);
-        s.streamLabel = data.streamLabel;
+        s.name = SeriesColumnSchema::snrSeriesName(data.pcmChannelId, stream_label, ch_name);
+        s.streamLabel = stream_label;
         s.metricType = PlotSeriesData::MetricType::SNR;
         int rcvr_pos = static_cast<int>(ch_name.lastIndexOf("_RCVR"));
         if (rcvr_pos >= 0)
