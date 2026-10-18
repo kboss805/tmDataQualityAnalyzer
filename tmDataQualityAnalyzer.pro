@@ -2,7 +2,7 @@ QT       += core gui printsupport concurrent svg
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-CONFIG += c++17
+CONFIG += c++20
 
 # ---- Single-source version ---------------------------------------------------
 # include/constants.h (AppVersion) is the authoritative version. Parse it here so
