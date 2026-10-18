@@ -13,9 +13,11 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QEventLoop>
+#include <QFile>
 #include <QFileInfo>
 #include <QHash>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QtConcurrent>
 #include <QtTest>
 #include <QVector>
@@ -136,6 +138,43 @@ static bool setupParams(FrameSetup& setup, double slope, double offset)
 ////////////////////////////////////////////////////////////////////////////////
 //                          CONSTRUCTOR / ABORT                               //
 ////////////////////////////////////////////////////////////////////////////////
+
+void TestFrameProcessor::nonAsciiPathOpensInBothReaders_data()
+{
+    QTest::addColumn<QString>("folder");
+    // In the Windows-1252 code page: the ANSI path API can spell it.
+    QTest::newRow("latin") << (QStringLiteral("caf") + QChar(0x00E9));
+    // Outside it: no ANSI code page on a Western system can spell it at all.
+    QTest::newRow("greek") << (QStringLiteral("omega-") + QChar(0x03A9));
+}
+
+void TestFrameProcessor::nonAsciiPathOpensInBothReaders()
+{
+    // Both readers hand the path to irig106's enI106Ch10Open(), which opens it with the
+    // C runtime's narrow open(char*). They used to encode it differently - the metadata
+    // reader with toLocal8Bit(), the packet reader with toUtf8() - so a file under a
+    // folder like C:/Users/Jos<e-acute>/ listed its channels and then failed the moment
+    // processing started. Users' own folders are exactly where recordings get copied.
+    QFETCH(QString, folder);
+    const QString src = testDataPath("test files/step_cal, example.ch10");
+    QVERIFY2(QFileInfo::exists(src), "committed fixture missing");
+
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    QVERIFY(QDir(tmp.path()).mkdir(folder));
+    const QString dst = QDir(tmp.path()).filePath(folder + "/recording.ch10");
+    QVERIFY(QFile::copy(src, dst));
+
+    Chapter10Reader meta;
+    QVERIFY2(meta.loadChannels(dst), "metadata reader could not open the path");
+
+    Ch10PacketReader reader;
+    std::vector<ProcessingParams*> none;
+    QString error;
+    reader.prepare(dst, meta.getCurrentTimeChannelID(), none, error);
+    QVERIFY2(error != QStringLiteral("Error opening data file."),
+             "packet reader could not open a path the metadata reader opened");
+}
 
 void TestFrameProcessor::constructorDefaults()
 {

@@ -198,6 +198,9 @@ HEADERS += \
 # Shared with tests/tests.pro so the two cannot drift - see resources.pri.
 include($$PWD/resources.pri)
 
+# UTF-8 process code page, so irig106 can open any path - see codepage.pri.
+include($$PWD/codepage.pri)
+
 RC_FILE = resources/tmDataQualityAnalyzer_resource.rc
 
 # Default rules for deployment.

@@ -27,6 +27,7 @@ include($$PWD/../thirdparty.pri)
 # The same Qt resources the app compiles in. Widgets under test load their
 # icons from :/resources/..., and without this every one is a null QIcon.
 include($$PWD/../resources.pri)
+include($$PWD/../codepage.pri)
 
 # Application sources (exclude main.cpp to avoid duplicate main), grouped by layer.
 SOURCES += \

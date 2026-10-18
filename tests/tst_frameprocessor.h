@@ -14,6 +14,8 @@ class TestFrameProcessor : public QObject
 
 private slots:
     void constructorDefaults();
+    void nonAsciiPathOpensInBothReaders_data();
+    void nonAsciiPathOpensInBothReaders();
     void requestAbortSetsFlag();
     void derandomizeShortBufferIdentity();
     void derandomizeLongerBufferChanges();
