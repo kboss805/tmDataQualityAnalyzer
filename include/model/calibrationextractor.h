@@ -16,6 +16,7 @@
 #ifndef CALIBRATIONEXTRACTOR_H
 #define CALIBRATIONEXTRACTOR_H
 
+#include <memory>
 #include <vector>
 
 #include <QObject>
@@ -139,7 +140,7 @@ private:
 
     Ch10PacketReader* m_reader        = nullptr;
     QThread*          m_reader_thread = nullptr;
-    FrameProcessor*   m_worker        = nullptr;
+    std::shared_ptr<FrameProcessor> m_worker; ///< Shared with the worker thread's body.
     QThread*          m_worker_thread = nullptr;
     PacketQueue*      m_queue         = nullptr;
     FrameSetup*       m_frame_setup   = nullptr;

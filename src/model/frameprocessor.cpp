@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <format>
 #include <cstdint>
 #include <vector>
 
@@ -76,9 +77,8 @@ void FrameProcessor::invertBits(uint8_t* data, uint32_t length)
 //                       CONSTRUCTOR / DESTRUCTOR                             //
 ////////////////////////////////////////////////////////////////////////////////
 
-FrameProcessor::FrameProcessor(QObject* parent)
-    : QObject(parent),
-      m_abort_requested(false)
+FrameProcessor::FrameProcessor()
+    : m_abort_requested(false)
 {
 }
 
@@ -87,6 +87,35 @@ FrameProcessor::~FrameProcessor() = default;
 void FrameProcessor::requestAbort()
 {
     m_abort_requested.store(true, std::memory_order_relaxed);
+}
+
+void FrameProcessor::setEvents(std::shared_ptr<ProcessingEvents> events)
+{
+    m_events = std::move(events);
+}
+
+void FrameProcessor::reportLog(const std::string& message) const
+{
+    if (m_events)
+    {
+        m_events->logMessage(message);
+    }
+}
+
+void FrameProcessor::reportError(const std::string& message) const
+{
+    if (m_events)
+    {
+        m_events->errorOccurred(message);
+    }
+}
+
+void FrameProcessor::reportFinished(bool success) const
+{
+    if (m_events)
+    {
+        m_events->processingFinished(success);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -104,16 +133,16 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     PacketQueue* queue = params.packetQueue;
     if (queue == nullptr)
     {
-        emit errorOccurred(streamTag(params) + "Internal error: no packet queue for stream.");
-        emit processingFinished(false);
+        reportError(streamTag(params) + "Internal error: no packet queue for stream.");
+        reportFinished(false);
         return false;
     }
 
     const ResolvedPcmAttrs& attrs = params.resolvedAttrs;
     if (!attrs.resolved)
     {
-        emit errorOccurred(streamTag(params) + "Internal error: PCM attributes not resolved.");
-        emit processingFinished(false);
+        reportError(streamTag(params) + "Internal error: PCM attributes not resolved.");
+        reportFinished(false);
         return false;
     }
 
@@ -190,10 +219,9 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     // Only name the window when it is actually bounded; an unset stop prints as
     // 18446744073709551615s, which is noise on every ordinary run.
     const bool bounded = (start_seconds != 0) || (stop_seconds != UINT64_MAX);
-    emit logMessage(streamTag(params)
-                    + (bounded ? QString("processing (%1s to %2s)...")
-                                     .arg(start_seconds).arg(stop_seconds)
-                               : QStringLiteral("processing...")));
+    reportLog(streamTag(params)
+              + (bounded ? std::format("processing ({}s to {}s)...", start_seconds, stop_seconds)
+                         : std::string("processing...")));
 
     // -----------------------------------------------------------------------
     // Consume packets from the queue until the end-of-stream sentinel.
@@ -202,8 +230,8 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     {
         if (m_abort_requested.load(std::memory_order_relaxed))
         {
-            emit logMessage(streamTag(params) + "processing cancelled by user.");
-            emit processingFinished(false);
+            reportLog(streamTag(params) + "processing cancelled by user.");
+            reportFinished(false);
             return false;
         }
 
@@ -275,8 +303,8 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         {
             if ((bit_pos & kAbortCheckMask) == 0 && m_abort_requested.load(std::memory_order_relaxed))
             {
-                emit logMessage(streamTag(params) + "processing cancelled by user.");
-                emit processingFinished(false);
+                reportLog(streamTag(params) + "processing cancelled by user.");
+                reportFinished(false);
                 return false;
             }
 
@@ -317,20 +345,19 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         {
             // Every packet skipped: the setting is inert for this stream, which is
             // worth saying plainly - the operator's choice had no effect at all.
-            emit logMessage(
-                streamTag(params) + QString("all %1 payloads are odd-length and cannot be "
-                        "byte-pair swapped — processed as Legacy Chapter 10 regardless of the "
-                        "setting.")
-                    .arg(swap_skipped_packets));
+            reportLog(streamTag(params)
+                      + std::format("all {} payloads are odd-length and cannot be "
+                                    "byte-pair swapped — processed as Legacy Chapter 10 "
+                                    "regardless of the setting.",
+                                    swap_skipped_packets));
         }
         else
         {
             // The genuinely corrupting case: one stream, two byte orders.
-            emit logMessage(
-                streamTag(params) + QString("warning: byte swap skipped on %1 of %2 packets "
-                        "(odd length) — mixed byte order, sync may be unreliable.")
-                    .arg(swap_skipped_packets)
-                    .arg(total_packets));
+            reportLog(streamTag(params)
+                      + std::format("warning: byte swap skipped on {} of {} packets "
+                                    "(odd length) — mixed byte order, sync may be unreliable.",
+                                    swap_skipped_packets, total_packets));
         }
     }
 
@@ -587,7 +614,7 @@ std::vector<ParameterInfo*> FrameProcessor::buildEnabledParams(FrameSetup* frame
     return enabled_params;
 }
 
-QString FrameProcessor::streamTag(const ProcessingParams& params)
+std::string FrameProcessor::streamTag(const ProcessingParams& params)
 {
     // Every message a worker emits carries this. Streams are processed by parallel
     // workers writing into one shared log, so their output interleaves in an order
@@ -597,13 +624,14 @@ QString FrameProcessor::streamTag(const ProcessingParams& params)
     // The channel ID leads because that is what the operator configured the stream
     // by. The label is appended only when it adds something - MainViewModel falls
     // back to "Ch <id>" when TMATS gives no name, and "[CH 13 Ch 13]" is noise.
-    const QString fallback = QStringLiteral("Ch ") + QString::number(params.pcmChannelId);
-    if (params.streamLabel.isEmpty() || params.streamLabel == fallback)
-        return QStringLiteral("[CH %1] ").arg(params.pcmChannelId);
-    return QStringLiteral("[CH %1 %2] ").arg(params.pcmChannelId).arg(params.streamLabel);
+    const std::string label = params.streamLabel.toStdString();
+    const std::string fallback = "Ch " + std::to_string(params.pcmChannelId);
+    if (label.empty() || label == fallback)
+        return std::format("[CH {}] ", params.pcmChannelId);
+    return std::format("[CH {} {}] ", params.pcmChannelId, label);
 }
 
-QString FrameProcessor::syncSpec(const ScanDiagnostics& d)
+std::string FrameProcessor::syncSpec(const ScanDiagnostics& d)
 {
     // The pattern is worth its characters: PRN-11 and PRN-15 are both 32 bits, so a
     // stream running the wrong one is invisible in a report that prints only the
@@ -614,23 +642,19 @@ QString FrameProcessor::syncSpec(const ScanDiagnostics& d)
 
     if (d.sync_mask == all_ones)
     {
-        return QStringLiteral("pattern 0x%1 (%2 bits)")
-            .arg(QString::number(d.sync_pat, 16).toUpper())
-            .arg(d.sync_pat_len);
+        return std::format("pattern 0x{:X} ({} bits)", d.sync_pat, d.sync_pat_len);
     }
-    return QStringLiteral("pattern 0x%1 (%2 bits, mask 0x%3)")
-        .arg(QString::number(d.sync_pat, 16).toUpper())
-        .arg(d.sync_pat_len)
-        .arg(QString::number(d.sync_mask, 16).toUpper());
+    return std::format("pattern 0x{:X} ({} bits, mask 0x{:X})", d.sync_pat, d.sync_pat_len,
+                       d.sync_mask);
 }
 
 bool FrameProcessor::reportCompletion(const ProcessingParams& params, const ScanDiagnostics& d)
 {
-    const QString tag = streamTag(params);
+    const std::string tag = streamTag(params);
 
-    emit logMessage(tag + QString::number(d.total_bytes_processed) + " bytes processed, "
-                    + QString::number(d.total_syncs_found) + " syncs found, "
-                    + QString::number(d.total_frames_extracted) + " frames extracted.");
+    reportLog(tag + std::format("{} bytes processed, {} syncs found, {} frames extracted.",
+                                d.total_bytes_processed, d.total_syncs_found,
+                                d.total_frames_extracted));
 
     // Both failures report on ONE line. The operators of this application know their
     // own formats, so the log's job is to state what was configured and what came of
@@ -639,30 +663,26 @@ bool FrameProcessor::reportCompletion(const ProcessingParams& params, const Scan
     // otherwise identical-looking configurations (PRN-11 and PRN-15 are both 32 bits).
     if (d.total_syncs_found == 0)
     {
-        emit errorOccurred(tag + QString("no frame sync found — %1, %2 bits/frame.")
-                                     .arg(syncSpec(d)).arg(d.bits_in_frame));
-        emit processingFinished(false);
+        reportError(tag + std::format("no frame sync found — {}, {} bits/frame.",
+                                      syncSpec(d), d.bits_in_frame));
+        reportFinished(false);
         return false;
     }
 
     if (d.total_frames_extracted == 0)
     {
-        emit errorOccurred(
-            tag + QString("sync found but no frames extracted — %1, %2 bits/frame; "
-                          "%3 syncs, %4 boundary-aligned.")
-                      .arg(syncSpec(d))
-                      .arg(d.bits_in_frame)
-                      .arg(d.total_syncs_found)
-                      .arg(d.boundary_syncs));
-        emit processingFinished(false);
+        reportError(tag + std::format("sync found but no frames extracted — {}, {} "
+                                      "bits/frame; {} syncs, {} boundary-aligned.",
+                                      syncSpec(d), d.bits_in_frame, d.total_syncs_found,
+                                      d.boundary_syncs));
+        reportFinished(false);
         return false;
     }
 
-    emit logMessage(tag + QString("complete — %1 samples extracted, elapsed %2s.")
-        .arg(d.rows_written)
-        .arg(d.elapsed_sec, 0, 'f', 1));
+    reportLog(tag + std::format("complete — {} samples extracted, elapsed {:.1f}s.",
+                                d.rows_written, d.elapsed_sec));
 
-    emit processingFinished(true);
+    reportFinished(true);
     return true;
 }
 

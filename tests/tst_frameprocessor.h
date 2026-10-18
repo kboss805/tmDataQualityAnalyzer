@@ -14,6 +14,8 @@ class TestFrameProcessor : public QObject
 
 private slots:
     void constructorDefaults();
+    void reportsExactlyTheseMessages_data();
+    void reportsExactlyTheseMessages();
     void nonAsciiPathOpensInBothReaders_data();
     void nonAsciiPathOpensInBothReaders();
     void requestAbortSetsFlag();

@@ -177,6 +177,78 @@ qint64 runAndTime(QVector<StreamJob> jobs, int timeout_ms = 60000)
 
 } // namespace
 
+void TestProcessingCoordinator::workerReportsPrecedeTheResultAndFinishComesLast()
+{
+    // The worker raises its log lines on its own thread; the coordinator relays them, then
+    // the stream's result, then the end of the run, all on this thread. The result is taken
+    // the moment the worker says it is finished, so every line the worker raised must
+    // already have been relayed - which holds only if the hand-off preserves order across
+    // event kinds. It used to be Qt's queued signals; it is now QtProcessingEvents.
+    const QString filepath = testDataPath("test files/agc_rnrz-l_trc_testfile.ch10");
+    if (!QFileInfo::exists(filepath))
+        QSKIP("RNRZ-L test file not available");
+
+    Chapter10Reader reader;
+    QVERIFY(reader.loadChannels(filepath));
+    const int pcm_id  = reader.getFirstPCMChannelID();
+    const int time_id = reader.getCurrentTimeChannelID();
+    if (pcm_id < 0 || time_id < 0)
+        QSKIP("Missing channels in test file");
+
+    ProcessingCoordinator coord;
+    QStringList order;           // one entry per relayed event, in arrival order
+    bool run_ok = false;
+    QEventLoop loop;
+    QObject::connect(&coord, &ProcessingCoordinator::logMessageReceived,
+                     [&](const QString& m) { order << "log:" + m; });
+    QObject::connect(&coord, &ProcessingCoordinator::errorOccurred,
+                     [&](const QString& m) { order << "error:" + m; });
+    QObject::connect(&coord, &ProcessingCoordinator::streamProcessed,
+                     [&](const ProcessedStreamData&) { order << "result"; });
+    QObject::connect(&coord, &ProcessingCoordinator::processingFinished, &loop,
+                     [&](bool ok) { run_ok = ok; order << "finished"; loop.quit(); });
+
+    QVector<StreamJob> jobs = { makeLockOnlyJob(filepath, time_id, pcm_id, "Ch " + QString::number(pcm_id)) };
+    QVERIFY(coord.startProcessing(std::move(jobs)));
+    QTimer::singleShot(120000, &loop, &QEventLoop::quit);
+    loop.exec();
+    if (order.isEmpty() || order.last() != "finished")
+    {
+        cancelAndDrain(coord);
+        QFAIL("the run did not finish in time");
+    }
+
+    QVERIFY2(run_ok, qPrintable(order.join("\n")));
+    // The run ends with completion, and the result is the event just before it.
+    QCOMPARE(order.last(), QStringLiteral("finished"));
+    QCOMPARE(order.count("result"), 1);
+    QCOMPARE(order.at(order.size() - 2), QStringLiteral("result"));
+    // The coordinator's own opening line, then the worker's (tagged "[CH <id>"), and the
+    // worker's last line - its completion summary - is relayed before the result.
+    QVERIFY2(order.first().startsWith("log:--- Processing 1 stream(s)"), qPrintable(order.first()));
+    const QString tag = QStringLiteral("log:[CH %1] ").arg(pcm_id);
+    const int result_at = order.indexOf("result");
+    int worker_lines = 0;
+    int complete_at = -1;
+    for (int i = 0; i < result_at; ++i)
+    {
+        if (order.at(i).startsWith(tag))
+        {
+            ++worker_lines;
+            if (order.at(i).contains("complete —"))
+                complete_at = i;
+        }
+    }
+    QVERIFY2(worker_lines >= 3, qPrintable(order.join("\n")));       // started, totals, complete
+    QVERIFY2(complete_at >= 0, qPrintable(order.join("\n")));       // its summary came first
+    for (int i = result_at + 1; i < order.size() - 1; ++i)
+    {
+        QVERIFY2(!order.at(i).startsWith(tag), qPrintable("worker line after the result: " + order.at(i)));
+    }
+    QVERIFY(std::none_of(order.begin(), order.end(),
+                         [](const QString& e) { return e.startsWith("error:"); }));
+}
+
 void TestProcessingCoordinator::constructorDefaults()
 {
     ProcessingCoordinator coord;
