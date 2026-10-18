@@ -31,7 +31,7 @@ constexpr double kBaseTime = 1000000.0;
 ProcessedStreamData makeLockStream(const QString& label, int pcmId, int jobIndex)
 {
     ProcessedStreamData d;
-    d.streamLabel  = label;
+    d.streamLabel  = label.toStdString();
     d.pcmChannelId = pcmId;
     d.jobIndex     = jobIndex;
     d.mode         = StreamMode::FrameSyncLockStats;
@@ -47,7 +47,7 @@ ProcessedStreamData makeSnrStream(const QString& label, int pcmId, int jobIndex,
                                   const QStringList& channelNames)
 {
     ProcessedStreamData d;
-    d.streamLabel  = label;
+    d.streamLabel  = label.toStdString();
     d.pcmChannelId = pcmId;
     d.jobIndex     = jobIndex;
     d.mode         = StreamMode::ReceiverChannelInfo;

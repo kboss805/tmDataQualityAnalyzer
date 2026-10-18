@@ -443,8 +443,9 @@ void TestFrameProcessor::reportsExactlyTheseMessages()
     if (scenario == "unicodelabel")
     {
         // The label also travels into the result, where the plot reads it.
-        QCOMPARE(fp.result().streamLabel, QStringLiteral("R") + QChar(0x00E9)
-                                              + QStringLiteral("cepteur ") + QChar(0x03A9));
+        QCOMPARE(QString::fromStdString(fp.result().streamLabel),
+                 QStringLiteral("R") + QChar(0x00E9) + QStringLiteral("cepteur ")
+                     + QChar(0x03A9));
     }
     // Exactly one completion notice per run, and it agrees with the return value.
     QCOMPARE(c.finished, QList<bool>({returned}));
@@ -583,7 +584,7 @@ void TestFrameProcessor::processAccumulatesReceiverData()
     QVERIFY2(r.lockPercent.empty(), "Receiver mode must produce no lock series");
     QVERIFY2(r.accumulatedMissedFrames.empty(), "Receiver mode must produce no missed-frames series");
     QCOMPARE(r.channels.size(), setup.length());
-    QCOMPARE(r.streamLabel, QString("Ch test"));
+    QCOMPARE(QString::fromStdString(r.streamLabel), QString("Ch test"));
     QCOMPARE(r.mode, StreamMode::ReceiverChannelInfo);
 
     // Every channel's value vector is parallel to the time vector.

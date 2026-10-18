@@ -323,7 +323,7 @@ void MainView::onProcessingChanged()
 
 void MainView::onStreamProcessed(const ProcessedStreamData& data)
 {
-    onLogMessage("  " + data.streamLabel + ": " +
+    onLogMessage("  " + QString::fromStdString(data.streamLabel) + ": " +
                  QString::number(data.timesSec.size()) + " samples, " +
                  QString::number(data.channels.size()) + " channel(s)");
     m_plot_view_model->addStreamData(data);

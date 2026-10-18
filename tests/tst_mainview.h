@@ -31,6 +31,7 @@ private slots:
     void lightThemeReachesNativeWindowFrames();
     void openAndSaveTemplateCarryIcons();
     void menuSectionHeadersSurviveTheStylesheet();
+    void aFinishedStreamIsLoggedUnderItsLabel();
     void logPreservesMultiLineMessages();
 };
 

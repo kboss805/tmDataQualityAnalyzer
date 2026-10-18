@@ -19,7 +19,7 @@ namespace {
 void addLockSeries(PlotViewModel& plot, int pcmChannelId, int sourceId)
 {
     ProcessedStreamData d;
-    d.streamLabel             = QString("Ch %1").arg(pcmChannelId);
+    d.streamLabel             = QString("Ch %1").arg(pcmChannelId).toStdString();
     d.pcmChannelId            = pcmChannelId;
     d.sourceId                = sourceId;
     d.mode                    = StreamMode::FrameSyncLockStats;
