@@ -965,9 +965,9 @@ void TestPlotViewModel::addStreamDataEmptyDataNoOp()
 /// are unaffected; multi-source tests pass a distinct id explicitly.
 static ProcessedStreamData makeLockAndErrorStream(const QString& label,
                                                   int pcm_channel_id,
-                                                  const QVector<double>& times,
-                                                  const QVector<double>& lock,
-                                                  const QVector<double>& errors,
+                                                  const std::vector<double>& times,
+                                                  const std::vector<double>& lock,
+                                                  const std::vector<double>& errors,
                                                   int source_id = 0)
 {
     ProcessedStreamData d;
@@ -979,6 +979,21 @@ static ProcessedStreamData makeLockAndErrorStream(const QString& label,
     d.lockPercent = lock;
     d.accumulatedMissedFrames = errors;
     return d;
+}
+
+void TestPlotViewModel::seriesOfOneStreamShareOneTimeAxis()
+{
+    // The processing core hands results over as std::vector, but PlotSeriesData keeps
+    // QVector on purpose (see toPlotVector() in plotviewmodel.cpp): every series of a
+    // stream shares ONE elapsed-time buffer, and TmChart shares the series' buffers in
+    // turn. A plausible tidy-up - building each series its own axis, or a container
+    // without implicit sharing - multiplies memory by the series count and stays
+    // invisible to every value-comparing test, since each copy holds the same times.
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream(
+        "Ch32", 32, {0.0, 1.0, 2.0}, {90.0, 95.0, 100.0}, {0.0, 1.0, 1.0}));
+    QCOMPARE(vm.seriesCount(), 2);
+    QCOMPARE(vm.seriesAt(0).xValues.constData(), vm.seriesAt(1).xValues.constData());
 }
 
 void TestPlotViewModel::addStreamDataErrorSeriesCreated()

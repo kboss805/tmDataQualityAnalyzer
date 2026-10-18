@@ -57,7 +57,7 @@ ProcessedStreamData makeSnrStream(const QString& label, int pcmId, int jobIndex,
         ProcessedChannelSeries ch;
         ch.name   = name;
         ch.values = { -80.0, -79.0, -78.0 };
-        d.channels.append(ch);
+        d.channels.push_back(ch);
     }
     return d;
 }

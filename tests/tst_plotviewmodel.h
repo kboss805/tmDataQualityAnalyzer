@@ -53,6 +53,7 @@ private slots:
 
     // Frame sync error accumulation (US3.1) tests
     void addStreamDataErrorSeriesCreated();
+    void seriesOfOneStreamShareOneTimeAxis();
     void errorSeriesSharesLockColor();
     void setLockAxisViewTogglesVisibility();
     void setLockAxisViewPreservesStreamSelection();

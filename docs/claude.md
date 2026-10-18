@@ -417,7 +417,7 @@ The stories below follow the workflow a first-time user takes through the applic
 Items from `docs/future_plans/dotnet-port-assessment.md` that are worth doing whether or not
 that port ever happens - the throughput guard, the TOML move off `QSettings`, and now the
 de-Qt of the native core in small steps (QtGui out of the model's headers, then
-`PacketQueue`, then the `QElapsedTimer`s, then the packet bytes, then the first `QVector`s) - plus the clean-build regression the TOML change
+`PacketQueue`, then the `QElapsedTimer`s, then the packet bytes, then the first `QVector`s and the processing result) - plus the clean-build regression the TOML change
 caused, and a generated Visual Studio solution. No user-facing
 behaviour changes.
 
@@ -518,6 +518,53 @@ called from our code is reported at **our** call site, so those keep warning exa
 v2.9.0 intended. Every first-party header here is quote-included, so `anglebrackets` covers
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
+
+#### The processing result is `std::vector`; the plot deliberately stays `QVector` (de-Qt, step 6)
+
+`ProcessedStreamData` and `ProcessedChannelSeries` - what `FrameProcessor` produces and the
+coordinator hands over - are now `std::vector`. That removes the seam step 5 left in
+`CalibrationExtractor` and its test: the detector now reads the channel's values directly.
+
+**`PlotSeriesData` and `TmChart` keep `QVector`, and that is the boundary, not unfinished work.**
+The plot relies on implicit sharing in three places. `PlotViewModel::addStreamData` builds one
+`elapsed` time axis per stream and every series of that stream shares it; `TmChart::setSeriesData`
+keeps its own reference to each series' buffers, so a full chart rebuild copies nothing (its comment
+says so, with 48 series over a long recording in mind); and pushing a series onto the list copies a
+reference count. A `std::vector` turns each into a deep copy - every series its own time axis and
+every rebuild a copy of every sample. The view model and the chart are the layers the port replaces
+wholesale, so they keep Qt's containers until then. `toPlotVector()` in `plotviewmodel.cpp` pays
+the one copy, once per series per stream; steady-state memory is unchanged, because the result is
+dropped as soon as the signal returns.
+
+The `streamProcessed` signal chain (coordinator -> main view model -> view) was checked first, because
+a queued hop would copy the whole result: all three hops are direct, on the main thread, and
+`ProcessedStreamData` has no metatype registration, so a queued hop could not have worked anyway.
+
+New case **`seriesOfOneStreamShareOneTimeAxis`** pins the sharing, which no value-comparing test can
+see. Mutation-checked: giving one series its own copy of the axis fails it.
+
+**The release gate's absolute timings are bimodal on this machine, and that was nearly misread as a
+regression.** The first branch run read 26364 ms against about 14000 ms before, with every channel,
+solo runs included, slower by the same ~1.9x and every ratio unchanged. Two A/B pairs followed:
+
+| run | binary | 4-stream parallel | slowest solo |
+|---|---|---|---|
+| branch 1 | branch | 26364 ms | 26710 ms |
+| main 1 | main | 14343 ms | 14193 ms |
+| branch 2 | branch | 14962 ms | 14926 ms |
+| branch 3 | **same binary as branch 2** (0 files compiled) | 26386 ms | 27182 ms |
+| main 2 | main | 14123 ms | 14025 ms |
+
+Branch 2 and branch 3 are one executable, 14962 ms and then 26386 ms, so the slow mode is the machine
+and not the code. The change cannot account for it anyway: the benchmark samples at 1 s, so the
+touched code runs a few hundred times per run against billions of bit operations in the unchanged
+decoder. The likely cause, **not verified**, is the i7-14700KF's hybrid layout (8 performance + 12
+efficiency cores): a single-threaded decoder scheduled onto efficiency cores runs about half speed.
+The guard asserts ratios, which held at 0.97-1.01x in every run, so it is unaffected; **absolute
+milliseconds quoted from single runs in the entries above are less trustworthy than they were
+presented**, and comparisons between runs should be A/B pairs or pinned to the performance cores.
+
+Baseline **438 / 0 / 1** (was 437 / 0 / 1), **439 / 0 / 0** at release. 23 suites.
 
 #### The calibration path uses `std::vector`, not `QVector` (de-Qt, step 5)
 

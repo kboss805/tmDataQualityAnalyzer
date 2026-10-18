@@ -164,7 +164,7 @@ void TestPlotWidget::legendUsesShortNameForSnrSeries()
     ProcessedChannelSeries ch;
     ch.name   = "L_RCVR3";
     ch.values = { -80.0, -79.0, -78.0 };
-    d.channels.append(ch);
+    d.channels.push_back(ch);
     vm.addStreamData(d);
 
     QCOMPARE(widget.m_legend->rowCount(), 1);
@@ -1108,7 +1108,7 @@ ProcessedStreamData snrStream()
     ProcessedChannelSeries ch;
     ch.name   = "L_RCVR3";
     ch.values = { 40.0, 45.0, 50.0 };
-    d.channels.append(ch);
+    d.channels.push_back(ch);
     return d;
 }
 }  // namespace
