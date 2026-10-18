@@ -1,6 +1,6 @@
 QT += core gui widgets printsupport testlib concurrent svg
 
-CONFIG += c++17 console
+CONFIG += c++20 console
 CONFIG -= app_bundle
 
 TARGET = tmDataQualityAnalyzer_tests
