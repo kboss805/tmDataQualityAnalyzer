@@ -15,6 +15,15 @@ private slots:
     void summaryFlagsAShortStepFileAndAMismatchedWordMap();
     void extractionLogsOneLinePerChannelWithData();
     void aNonAsciiChannelNameSurvivesExtractionItsLogAndItsReport();
+    // Lifecycle and early failures: what is reported, in what order, and when nothing starts.
+    void anExtractionWithNoStepsFailsBeforeItStarts();
+    void aWordMapThatCannotBeUsedIsReportedBeforeAnythingRuns();
+    void aWordMapThatCannotBeUsedIsReportedBeforeAnythingRuns_data();
+    void aDefaultWordMapThatDoesNotFitTheFrameIsReported();
+    void aRecordingThatCannotBeOpenedIsReported();
+    void aCancelledExtractionSaysSoAndLeavesNoResults();
+    void startingWhileRunningIsIgnoredAndAnExtractorCanRunAgain();
+    void aRunBeginsWithItsSamplePeriodAndSummarisesWhatItCalibrated();
     void realStepCalWithShortStepFileIsFlagged();
     void realStepCalWithWrongWordMapIsFlagged();
     void extractionReportsItsProgress();

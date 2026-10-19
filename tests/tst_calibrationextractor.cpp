@@ -19,6 +19,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QSet>
+#include <QTimer>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -205,22 +206,80 @@ std::vector<StepDefinition> dummySteps()
 
 /// Drives an extraction to completion, pumping a nested event loop until
 /// finished() fires (mirrors how the production dialog waits). @return success.
+///
+/// Observes one extraction: every report it makes, in the order they arrive, and whether it
+/// finished. The ONE place these tests attach to the extractor's reports or wait for its end, so
+/// a change in how it reports touches this class and nothing else.
+class Recorder
+{
+public:
+    explicit Recorder(CalibrationExtractor& extractor) : m_extractor(extractor)
+    {
+        QObject::connect(&extractor, &CalibrationExtractor::logMessage, &m_context,
+                         [this](const QString& message) { log << message; note("log"); });
+        QObject::connect(&extractor, &CalibrationExtractor::progressChanged, &m_context,
+                         [this](int percent) { progress << percent; note("progress"); });
+        QObject::connect(&extractor, &CalibrationExtractor::finished, &m_context,
+                         [this](bool ok, const QString& message) {
+                             success = ok;
+                             summary = message;
+                             done    = true;
+                             events << "finished";
+                             m_loop.quit();
+                         });
+    }
+
+    void start(const CalibrationExtractor::Request& request) { m_extractor.start(request); }
+
+    /// Pumps events until the extraction finishes, or @p timeout_ms passes. @return whether it finished.
+    bool wait(int timeout_ms = 240000)
+    {
+        if (!done)
+        {
+            QTimer::singleShot(timeout_ms, &m_loop, &QEventLoop::quit);
+            m_loop.exec();
+        }
+        return done;
+    }
+
+    /// Starts and waits. @return true if it finished AND succeeded.
+    bool run(const CalibrationExtractor::Request& request)
+    {
+        start(request);
+        return wait() && success;
+    }
+
+    bool        cancelOnFirstReport = false;  ///< Cancel as soon as the first log or progress report arrives.
+    bool        done    = false;
+    bool        success = false;
+    QString     summary;                      ///< The message that came with the finish.
+    QStringList log;
+    QList<int>  progress;
+    QStringList events;                       ///< "log", "progress" and "finished", in arrival order.
+
+private:
+    void note(const char* kind)
+    {
+        events << kind;
+        if (cancelOnFirstReport && !m_cancelled)
+        {
+            m_cancelled = true;
+            m_extractor.cancel();
+        }
+    }
+
+    CalibrationExtractor& m_extractor;
+    QObject               m_context;
+    QEventLoop            m_loop;
+    bool                  m_cancelled = false;
+};
+
 bool runExtraction(CalibrationExtractor& extractor,
                    const CalibrationExtractor::Request& req, QString& summary)
 {
-    QEventLoop loop;
-    bool ok = false;
-    bool done = false;
-    QObject::connect(&extractor, &CalibrationExtractor::finished, &loop,
-                     [&](bool success, const QString& msg) {
-                         ok = success;
-                         summary = msg;
-                         done = true;
-                         loop.quit();
-                     });
-    extractor.start(req);
-    if (!done)
-        loop.exec();
+    Recorder recorder(extractor);
+    const bool ok = recorder.run(req);
+    summary = recorder.summary;
     return ok;
 }
 
@@ -814,11 +873,9 @@ void TestCalibrationExtractor::extractionLogsOneLinePerChannelWithData()
         QSKIP(qPrintable(skip));
 
     CalibrationExtractor extractor;
-    QStringList log;
-    QObject::connect(&extractor, &CalibrationExtractor::logMessage,
-                     [&](const QString& message) { log << message; });
-    QString summary;
-    QVERIFY2(runExtraction(extractor, req, summary), qPrintable(summary));
+    Recorder recorder(extractor);
+    QVERIFY2(recorder.run(req), qPrintable(recorder.summary));
+    const QStringList& log = recorder.log;
 
     int with_data = 0;
     for (const CalibrationChannelResult& r : extractor.results())
@@ -872,11 +929,9 @@ void TestCalibrationExtractor::aNonAsciiChannelNameSurvivesExtractionItsLogAndIt
     req.receiverParamsToml = toml_path;
 
     CalibrationExtractor extractor;
-    QStringList log;
-    QObject::connect(&extractor, &CalibrationExtractor::logMessage,
-                     [&](const QString& message) { log << message; });
-    QString summary;
-    QVERIFY2(runExtraction(extractor, req, summary), qPrintable(summary));
+    Recorder recorder(extractor);
+    QVERIFY2(recorder.run(req), qPrintable(recorder.summary));
+    const QStringList& log = recorder.log;
 
     const std::vector<CalibrationChannelResult>& results = extractor.results();
     QCOMPARE(int(results.size()), 3);
@@ -896,6 +951,190 @@ void TestCalibrationExtractor::aNonAsciiChannelNameSurvivesExtractionItsLogAndIt
     for (const QString& name : names)
         QVERIFY2(report.contains(name), qPrintable(report));
     QVERIFY2(report.contains("Unnamed receiver"), qPrintable(report));
+}
+
+/// A step_cal request, or skip the test. Shared by the lifecycle tests below.
+static bool stepCalRequestOrSkip(Chapter10Reader& reader, CalibrationExtractor::Request& req, QString& skip)
+{
+    return buildStepCalRequest(reader, req, "settings/rcvr_cals/default.toml",
+                               "settings/receiver_params/default.toml", skip);
+}
+
+void TestCalibrationExtractor::anExtractionWithNoStepsFailsBeforeItStarts()
+{
+    Chapter10Reader reader;
+    CalibrationExtractor::Request req;
+    QString skip;
+    if (!stepCalRequestOrSkip(reader, req, skip))
+        QSKIP(qPrintable(skip));
+    req.steps.clear();
+
+    CalibrationExtractor extractor;
+    Recorder recorder(extractor);
+    QVERIFY(!recorder.run(req));
+    QVERIFY(recorder.done);
+    QCOMPARE(recorder.summary, QString("No calibration steps were provided."));
+    QCOMPARE(extractor.error(), QString("No calibration steps were provided."));
+    QVERIFY(extractor.results().empty());
+    // Nothing was started, so nothing was reported but the end.
+    QCOMPARE(recorder.events, QStringList{"finished"});
+}
+
+void TestCalibrationExtractor::aWordMapThatCannotBeUsedIsReportedBeforeAnythingRuns()
+{
+    QFETCH(QString, scenario);
+    QFETCH(QString, expected);
+
+    Chapter10Reader reader;
+    CalibrationExtractor::Request req;
+    QString skip;
+    if (!stepCalRequestOrSkip(reader, req, skip))
+        QSKIP(qPrintable(skip));
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString toml = dir.filePath("map.toml");
+    if (scenario == "missing")
+    {
+        // no file is written
+    }
+    else
+    {
+        QFile f(toml);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        const QByteArray text = (scenario == "word-outside-frame")
+                                    ? QByteArray("[L_RCVR1]\nWord = 9999\n")
+                                    : QByteArray("[Parameters]\nPolarity = 0\n");   // no word map at all
+        QVERIFY(f.write(text) == text.size());
+    }
+    req.receiverParamsToml = toml;
+
+    CalibrationExtractor extractor;
+    Recorder recorder(extractor);
+    QVERIFY(!recorder.run(req));
+    QCOMPARE(recorder.summary, expected);
+    QCOMPARE(extractor.error(), expected);
+    QCOMPARE(recorder.events, QStringList{"finished"});
+}
+
+void TestCalibrationExtractor::aWordMapThatCannotBeUsedIsReportedBeforeAnythingRuns_data()
+{
+    QTest::addColumn<QString>("scenario");
+    QTest::addColumn<QString>("expected");
+    QTest::newRow("missing")            << "missing" << "Receiver Parameters file 'map.toml' was not found.";
+    QTest::newRow("word-outside-frame") << "word-outside-frame" << "Failed to load Receiver Parameters word map. Check the file.";
+    QTest::newRow("no-parameters")      << "no-parameters" << "Receiver Parameters file contains no parameters.";
+}
+
+void TestCalibrationExtractor::aDefaultWordMapThatDoesNotFitTheFrameIsReported()
+{
+    Chapter10Reader reader;
+    CalibrationExtractor::Request req;
+    QString skip;
+    if (!stepCalRequestOrSkip(reader, req, skip))
+        QSKIP(qPrintable(skip));
+    req.receiverParamsToml.clear();     // no file: the sequential grid is built from the counts
+    req.numReceivers     = 40;
+    req.receiverChannels = 3;           // 120 words into an 800-bit (50-word) frame
+
+    CalibrationExtractor extractor;
+    Recorder recorder(extractor);
+    QVERIFY(!recorder.run(req));
+    QVERIFY2(!recorder.summary.isEmpty(), "a reason is given");
+    QCOMPARE(extractor.error(), recorder.summary);
+    QCOMPARE(recorder.events, QStringList{"finished"});
+    QCOMPARE(recorder.summary,
+             QString("Num Receivers x Receiver Channels exceeds the words available in the minor frame."));
+}
+
+void TestCalibrationExtractor::aRecordingThatCannotBeOpenedIsReported()
+{
+    Chapter10Reader reader;
+    CalibrationExtractor::Request req;
+    QString skip;
+    if (!stepCalRequestOrSkip(reader, req, skip))
+        QSKIP(qPrintable(skip));
+    const QString gone = QDir::tempPath() + "/tst_calext_missing.ch10";
+    QVERIFY(!QFileInfo::exists(gone));
+    req.calFilename = gone;
+
+    CalibrationExtractor extractor;
+    Recorder recorder(extractor);
+    QVERIFY(!recorder.run(req));
+    QVERIFY(extractor.results().empty());
+    QCOMPARE(recorder.summary, QString("Error opening data file."));
+    QCOMPARE(extractor.error(), recorder.summary);
+    QCOMPARE(recorder.events, QStringList{"finished"});
+}
+
+void TestCalibrationExtractor::aCancelledExtractionSaysSoAndLeavesNoResults()
+{
+    // Cancelled from the first report that arrives, which is while the (second-long) extraction
+    // is still reading the recording.
+    Chapter10Reader reader;
+    CalibrationExtractor::Request req;
+    QString skip;
+    if (!stepCalRequestOrSkip(reader, req, skip))
+        QSKIP(qPrintable(skip));
+
+    CalibrationExtractor extractor;
+    Recorder recorder(extractor);
+    recorder.cancelOnFirstReport = true;
+    QVERIFY(!recorder.run(req));
+    QVERIFY(recorder.done);
+    QCOMPARE(recorder.summary, QString("Calibration extraction cancelled."));
+    QVERIFY(extractor.results().empty());
+}
+
+void TestCalibrationExtractor::startingWhileRunningIsIgnoredAndAnExtractorCanRunAgain()
+{
+    Chapter10Reader reader;
+    CalibrationExtractor::Request req;
+    QString skip;
+    if (!stepCalRequestOrSkip(reader, req, skip))
+        QSKIP(qPrintable(skip));
+
+    CalibrationExtractor extractor;
+    Recorder recorder(extractor);
+    recorder.start(req);
+    recorder.start(req);           // already running: ignored, not a second run
+    QVERIFY(recorder.wait());
+    QVERIFY(recorder.success);
+    QCOMPARE(recorder.events.count("finished"), 1);
+    QCOMPARE(recorder.log.filter("Calibration extraction sample period").size(), 1);
+    const size_t first_results = extractor.results().size();
+    QVERIFY(first_results > 0);
+
+    // A finished extractor starts a fresh run, and its results replace the last one's.
+    Recorder again(extractor);
+    QVERIFY2(again.run(req), qPrintable(again.summary));
+    QCOMPARE(extractor.results().size(), first_results);
+    QCOMPARE(again.events.count("finished"), 1);
+}
+
+void TestCalibrationExtractor::aRunBeginsWithItsSamplePeriodAndSummarisesWhatItCalibrated()
+{
+    Chapter10Reader reader;
+    CalibrationExtractor::Request req;
+    QString skip;
+    if (!stepCalRequestOrSkip(reader, req, skip))
+        QSKIP(qPrintable(skip));
+
+    CalibrationExtractor extractor;
+    Recorder recorder(extractor);
+    QVERIFY2(recorder.run(req), qPrintable(recorder.summary));
+
+    // The first thing reported is the extraction window it chose.
+    QVERIFY(!recorder.log.isEmpty());
+    QCOMPARE(recorder.log.first(),
+             QString("Calibration extraction sample period: 100.00 ms (~100 frames/window at 800-bit frames)."));
+
+    // The message that comes with a success counts the channels that calibrated.
+    int calibrated = 0;
+    for (const CalibrationChannelResult& r : extractor.results())
+        calibrated += r.profile.valid ? 1 : 0;
+    QCOMPARE(recorder.summary, QString("Calibrated %1 of %2 channel(s).").arg(calibrated).arg(int(extractor.results().size())));
+    QVERIFY(extractor.error().isEmpty());
 }
 
 void TestCalibrationExtractor::realStepCalWithShortStepFileIsFlagged()
@@ -955,11 +1194,9 @@ void TestCalibrationExtractor::extractionReportsItsProgress()
         QSKIP(qPrintable(skip));
 
     CalibrationExtractor extractor;
-    QList<int> progress;
-    QObject::connect(&extractor, &CalibrationExtractor::progressChanged,
-                     [&](int percent) { progress << percent; });
-    QString summary;
-    QVERIFY2(runExtraction(extractor, req, summary), qPrintable(summary));
+    Recorder recorder(extractor);
+    QVERIFY2(recorder.run(req), qPrintable(recorder.summary));
+    const QList<int>& progress = recorder.progress;
 
     // The reader's last report (100) is queued by a thread that is still ending when the
     // extraction's own finish is delivered, so it may land just after - wait for it.
