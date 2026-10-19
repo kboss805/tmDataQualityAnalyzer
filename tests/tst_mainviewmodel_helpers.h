@@ -9,6 +9,7 @@ class TestMainViewModelHelpers : public QObject
 
 private slots:
     void classifyLogMessageSeverity();
+    void buildStreamJobAttachesCalibrationByWord();
 };
 
 #endif // TST_MAINVIEWMODEL_HELPERS_H

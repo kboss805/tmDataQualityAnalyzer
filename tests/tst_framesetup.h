@@ -36,6 +36,8 @@ private slots:
     void receiverParamsFileRoundTripsScalarsAndWordMap();
     void receiverParamsFileFallsBackToTheDefaultWordMap();
     void receiverParamsFileIsNeverWrittenWithoutAWordMap();
+    void attachCalibrationProfilesAttachesOnlyValidMatchingWords();
+    void attachCalibrationProfilesWithNothingToAttachReturnsZero();
 };
 
 #endif // TST_FRAMESETUP_H

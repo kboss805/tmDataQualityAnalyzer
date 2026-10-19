@@ -371,7 +371,7 @@ bool CalibrationExtractor::buildFrameSetup(const Request& request,
                                            QString& error)
 {
     delete m_frame_setup;
-    m_frame_setup = new FrameSetup(nullptr);
+    m_frame_setup = new FrameSetup();
 
     if (request.receiverParamsToml.isEmpty())
     {

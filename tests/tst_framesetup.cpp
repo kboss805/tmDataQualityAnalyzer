@@ -517,6 +517,80 @@ void TestFrameSetup::receiverParamsFileFallsBackToTheDefaultWordMap()
     QFile::remove(saved);
 }
 
+/// A calibration profile with @p n_points points, valid or not. The raw values differ per
+/// profile so a test can tell which one reached which parameter.
+static CalibrationProfile makeProfile(bool valid, int n_points, double raw_base)
+{
+    CalibrationProfile profile;
+    profile.valid = valid;
+    for (int i = 0; i < n_points; i++)
+        profile.points.push_back({raw_base + i * 100.0, i * 6.0});
+    return profile;
+}
+
+/// Hands profiles to the setup by word index. The one place these tests build the container
+/// attachCalibrationProfiles() takes, so a change of its type touches this helper only.
+static int attachProfiles(FrameSetup& setup,
+                          const std::vector<std::pair<int, CalibrationProfile>>& by_word)
+{
+    std::unordered_map<int, CalibrationProfile> container;
+    for (const auto& entry : by_word)
+        container.emplace(entry.first, entry.second);
+    return setup.attachCalibrationProfiles(container);
+}
+
+void TestFrameSetup::attachCalibrationProfilesAttachesOnlyValidMatchingWords()
+{
+    // The non-linear calibration reaches a parameter by its word index. Three things must
+    // NOT attach, each of which would be invisible in the plot: a profile that is not
+    // valid (the channel falls back to linear on purpose), a profile for a word the map
+    // has no parameter for, and a parameter nobody supplied a profile for.
+    FrameSetup setup;
+    setup.addParameter("L_RCVR1", 1);
+    setup.addParameter("R_RCVR1", 2);
+    setup.addParameter("C_RCVR1", 3);
+    setup.addParameter("L_RCVR2", 4);
+
+    const CalibrationProfile good_a = makeProfile(true, 3, 1000.0);
+    const CalibrationProfile good_b = makeProfile(true, 4, 5000.0);
+
+    const int attached = attachProfiles(setup, {
+        {1, good_a},                     // matches word 1, valid     -> attaches
+        {2, makeProfile(false, 3, 0.0)}, // matches word 2, NOT valid -> stays linear
+        {4, good_b},                     // matches word 4, valid     -> attaches
+        {9, makeProfile(true, 3, 0.0)},  // no parameter at word 9    -> ignored
+    });                                  // word 3 has no profile at all
+
+    QCOMPARE(attached, 2);
+
+    const ParameterInfo* p1 = setup.getParameter(0);
+    QVERIFY(p1->profile.valid);
+    QCOMPARE(p1->profile.points.size(), good_a.points.size());
+    QCOMPARE(p1->profile.points.front().rawAvg, 1000.0);
+
+    QVERIFY(!setup.getParameter(1)->profile.valid);   // invalid profile not attached
+    QVERIFY(setup.getParameter(1)->profile.points.empty());
+    QVERIFY(!setup.getParameter(2)->profile.valid);   // no profile supplied
+
+    const ParameterInfo* p4 = setup.getParameter(3);
+    QVERIFY(p4->profile.valid);
+    QCOMPARE(p4->profile.points.size(), good_b.points.size());
+    QCOMPARE(p4->profile.points.front().rawAvg, 5000.0);
+}
+
+void TestFrameSetup::attachCalibrationProfilesWithNothingToAttachReturnsZero()
+{
+    FrameSetup setup;
+    setup.addParameter("L_RCVR1", 1);
+
+    QCOMPARE(attachProfiles(setup, {}), 0);                                  // nothing supplied
+    QCOMPARE(attachProfiles(setup, {{5, makeProfile(true, 3, 0.0)}}), 0);    // word not in the map
+    QVERIFY(!setup.getParameter(0)->profile.valid);
+
+    FrameSetup empty;                                                        // no parameters
+    QCOMPARE(attachProfiles(empty, {{1, makeProfile(true, 3, 0.0)}}), 0);
+}
+
 void TestFrameSetup::receiverParamsFileIsNeverWrittenWithoutAWordMap()
 {
     // Counts that cannot fit the frame leave no map to write, and a scalars-only

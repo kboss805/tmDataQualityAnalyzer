@@ -10,6 +10,7 @@
 #include "mainviewmodel.h"
 
 #include <algorithm>
+#include <unordered_map>
 
 #include <QCoreApplication>
 #include <QDir>
@@ -586,14 +587,14 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
     if (cfg.mode == StreamMode::FrameSyncLockStats)
     {
         // Lock-only: no receiver parameters needed.
-        out_job.frameSetup = std::make_shared<FrameSetup>(nullptr);
+        out_job.frameSetup = std::make_shared<FrameSetup>();
         return true;
     }
 
     // Built directly into out_job.frameSetup (not a local shared_ptr moved in at
     // the end) — that avoids a live-but-moved-from local sitting in scope after
     // its "last" use, which a future edit could silently dereference as null.
-    out_job.frameSetup = std::make_shared<FrameSetup>(nullptr);
+    out_job.frameSetup = std::make_shared<FrameSetup>();
     if (cfg.receiverParamsToml.isEmpty())
     {
         // No Receiver Parameters TOML provided: fall back to the shipped default
@@ -659,7 +660,11 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
     // Attach non-linear step-calibration profiles (US5.3) by word index (Model side).
     if (!cfg.calibrationByWord.isEmpty())
     {
-        const int attached = out_job.frameSetup->attachCalibrationProfiles(cfg.calibrationByWord);
+        // The dialogs keep the extracted profiles in a QHash; the core takes a std map.
+        std::unordered_map<int, CalibrationProfile> profiles;
+        for (auto it = cfg.calibrationByWord.constBegin(); it != cfg.calibrationByWord.constEnd(); ++it)
+            profiles.emplace(it.key(), it.value());
+        const int attached = out_job.frameSetup->attachCalibrationProfiles(profiles);
         // Surface whether profiles actually reached the word map: provided > 0 but
         // attached == 0 means a word-index mismatch and a silent fall back to linear.
         emit logMessageReceived("  " + stream_desc + ": non-linear calibration — provided "
