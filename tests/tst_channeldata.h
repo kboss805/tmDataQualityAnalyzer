@@ -16,6 +16,8 @@ private slots:
     void setChannelNameSetsName();
     void incrementChannelCountIncrementsOnce();
     void incrementChannelCountAccumulates();
+    void nonAsciiTextRoundTrips();
+    void copiesKeepEveryField();
 };
 
 #endif // TST_CHANNELDATA_H
