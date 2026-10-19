@@ -52,11 +52,11 @@ QString projectRootPath(const QString& rel)
 
 /// A result's name and the report text as QStrings. These helpers are the one place the tests touch
 /// either, so a change of the string type underneath touches them and nothing else.
-QString nameOf(const CalibrationChannelResult& r) { return r.name; }
-void setName(CalibrationChannelResult& r, const QString& name) { r.name = name; }
+QString nameOf(const CalibrationChannelResult& r) { return QString::fromStdString(r.name); }
+void setName(CalibrationChannelResult& r, const QString& name) { r.name = name.toStdString(); }
 QString summarizeReport(const std::vector<CalibrationChannelResult>& results, int expectedSteps)
 {
-    return CalibrationExtractor::summarize(results, expectedSteps);
+    return QString::fromStdString(CalibrationExtractor::summarize(results, expectedSteps));
 }
 
 /// One channel's outcome, with just the fields the report reads.
@@ -802,6 +802,46 @@ void TestCalibrationExtractor::summaryFlagsAShortStepFileAndAMismatchedWordMap()
     QVERIFY2(!absentReport.contains("Check the word map"), qPrintable(absentReport));
 }
 
+void TestCalibrationExtractor::extractionLogsOneLinePerChannelWithData()
+{
+    // The log the dialog shows while it works: one line per channel that had samples, naming the
+    // channel and its word, and saying how many plateaus were found against the steps expected.
+    Chapter10Reader reader;
+    CalibrationExtractor::Request req;
+    QString skip;
+    if (!buildStepCalRequest(reader, req, "settings/rcvr_cals/default.toml",
+                             "settings/receiver_params/default.toml", skip))
+        QSKIP(qPrintable(skip));
+
+    CalibrationExtractor extractor;
+    QStringList log;
+    QObject::connect(&extractor, &CalibrationExtractor::logMessage,
+                     [&](const QString& message) { log << message; });
+    QString summary;
+    QVERIFY2(runExtraction(extractor, req, summary), qPrintable(summary));
+
+    int with_data = 0;
+    for (const CalibrationChannelResult& r : extractor.results())
+    {
+        if (!r.hadData)
+            continue;
+        with_data++;
+        const QString prefix = QString("  %1 (word %2): ").arg(nameOf(r)).arg(r.word);
+        int lines = 0;
+        for (const QString& line : log)
+        {
+            if (line.startsWith(prefix))
+            {
+                lines++;
+                QVERIFY2(line.contains(QString("%1 step(s) expected").arg(intSize(req.steps))), qPrintable(line));
+                QVERIFY2(line.contains(QString("%1 plateau(s) detected").arg(r.detectedPlateaus)), qPrintable(line));
+            }
+        }
+        QVERIFY2(lines == 1, qPrintable(QString("%1: %2 log lines").arg(nameOf(r)).arg(lines)));
+    }
+    QVERIFY(with_data > 0);
+}
+
 void TestCalibrationExtractor::aNonAsciiChannelNameSurvivesExtractionItsLogAndItsReport()
 {
     // A hand-written receiver-parameters TOML may name its channels anything. Here three live words
@@ -856,46 +896,6 @@ void TestCalibrationExtractor::aNonAsciiChannelNameSurvivesExtractionItsLogAndIt
     for (const QString& name : names)
         QVERIFY2(report.contains(name), qPrintable(report));
     QVERIFY2(report.contains("Unnamed receiver"), qPrintable(report));
-}
-
-void TestCalibrationExtractor::extractionLogsOneLinePerChannelWithData()
-{
-    // The log the dialog shows while it works: one line per channel that had samples, naming the
-    // channel and its word, and saying how many plateaus were found against the steps expected.
-    Chapter10Reader reader;
-    CalibrationExtractor::Request req;
-    QString skip;
-    if (!buildStepCalRequest(reader, req, "settings/rcvr_cals/default.toml",
-                             "settings/receiver_params/default.toml", skip))
-        QSKIP(qPrintable(skip));
-
-    CalibrationExtractor extractor;
-    QStringList log;
-    QObject::connect(&extractor, &CalibrationExtractor::logMessage,
-                     [&](const QString& message) { log << message; });
-    QString summary;
-    QVERIFY2(runExtraction(extractor, req, summary), qPrintable(summary));
-
-    int with_data = 0;
-    for (const CalibrationChannelResult& r : extractor.results())
-    {
-        if (!r.hadData)
-            continue;
-        with_data++;
-        const QString prefix = QString("  %1 (word %2): ").arg(nameOf(r)).arg(r.word);
-        int lines = 0;
-        for (const QString& line : log)
-        {
-            if (line.startsWith(prefix))
-            {
-                lines++;
-                QVERIFY2(line.contains(QString("%1 step(s) expected").arg(intSize(req.steps))), qPrintable(line));
-                QVERIFY2(line.contains(QString("%1 plateau(s) detected").arg(r.detectedPlateaus)), qPrintable(line));
-            }
-        }
-        QVERIFY2(lines == 1, qPrintable(QString("%1: %2 log lines").arg(nameOf(r)).arg(lines)));
-    }
-    QVERIFY(with_data > 0);
 }
 
 void TestCalibrationExtractor::realStepCalWithShortStepFileIsFlagged()

@@ -6,10 +6,11 @@
 #include "calibrationextractor.h"
 
 #include <algorithm>
+#include <format>
+#include <map>
+#include <string>
 
 #include <QFileInfo>
-#include <QMap>
-#include <QStringList>
 #include <QThread>
 
 #include "ch10packetreader.h"
@@ -22,6 +23,7 @@
 #include "qtbridge.h"
 #include "qtprocessingevents.h"
 #include "stepdetector.h"
+#include "textformat.h"
 
 namespace {
 
@@ -36,6 +38,21 @@ double topResolvedDb(const CalibrationProfile& profile)
         top = std::max(top, point.trueDb);
     }
     return top;
+}
+
+/// The strings of @p parts separated by @p separator.
+std::string joinStrings(const std::vector<std::string>& parts, const std::string& separator)
+{
+    std::string joined;
+    for (std::size_t i = 0; i < parts.size(); i++)
+    {
+        if (i > 0)
+        {
+            joined += separator;
+        }
+        joined += parts[i];
+    }
+    return joined;
 }
 
 } // namespace
@@ -248,7 +265,7 @@ void CalibrationExtractor::onWorkerFinished(bool success)
         for (const ProcessedChannelSeries& ch : data.channels)
         {
             CalibrationChannelResult res;
-            res.name    = QString::fromStdString(ch.name);
+            res.name    = ch.name;
             res.word    = ch.word;
             res.hadData = !ch.values.empty();
 
@@ -325,7 +342,7 @@ void CalibrationExtractor::onWorkerFinished(bool success)
                 }
                 emit logMessage(QString("  %1 (word %2): %3 plateau(s) detected, "
                                         "%4 step(s) expected%5%6")
-                                    .arg(res.name)
+                                    .arg(QString::fromStdString(res.name))
                                     .arg(res.word)
                                     .arg(res.detectedPlateaus)
                                     .arg(intSize(m_steps))
@@ -455,12 +472,12 @@ void CalibrationExtractor::finishWithError(const QString& error)
 // summarize
 // ---------------------------------------------------------------------------
 
-QString CalibrationExtractor::summarize(const std::vector<CalibrationChannelResult>& results,
-                                        int expectedSteps)
+std::string CalibrationExtractor::summarize(const std::vector<CalibrationChannelResult>& results,
+                                            int expectedSteps)
 {
     if (results.empty())
     {
-        return QStringLiteral("No receiver channels were extracted.");
+        return "No receiver channels were extracted.";
     }
 
     // Group channels by receiver. Receiver 0 collects anything whose name carries
@@ -468,27 +485,24 @@ QString CalibrationExtractor::summarize(const std::vector<CalibrationChannelResu
     // parameters anything); those are reported by name instead of by number.
     struct Group
     {
-        QStringList calibrated;                        ///< Channel parts that succeeded.
-        QStringList relaxed;                           ///< …of those, ones needing a lower threshold.
-        QStringList saturated;                         ///< …of those, ones whose top steps railed.
+        std::vector<std::string> calibrated;           ///< Channel parts that succeeded.
+        std::vector<std::string> relaxed;              ///< …of those, ones needing a lower threshold.
+        std::vector<std::string> saturated;            ///< …of those, ones whose top steps railed.
         int         recordingLevels = 0;               ///< Most levels a calibrated channel's sweep
                                                        ///< held, when well beyond the step file's.
         double      topDb = 0.0;                       ///< Highest dB those actually measured.
-        std::vector<double> unresolved;                    ///< dB no level could be paired with.
-        QMap<CalibrationOutcome, QStringList> failed;  ///< Channel parts per failure reason.
-        QStringList flatLevels;                        ///< Stuck levels of flat channels.
+        std::vector<double> unresolved;                ///< dB no level could be paired with.
+        std::map<CalibrationOutcome, std::vector<std::string>> failed;  ///< Channel parts per failure reason.
+        std::vector<std::string> flatLevels;           ///< Stuck levels of flat channels.
         int minPlateaus = -1;                          ///< Fewest plateaus seen among failures.
     };
-    QMap<int, Group> byReceiver;
+    std::map<int, Group> byReceiver;
 
     int calibratedChannels = 0;
     for (const CalibrationChannelResult& r : results)
     {
-        const std::string name_utf8 = r.name.toStdString();
-        const int receiver = FrameSetup::receiverIndexFromName(name_utf8);
-        const QString part = (receiver > 0)
-            ? QString::fromStdString(FrameSetup::channelPartOfName(name_utf8))
-            : r.name;
+        const int receiver = FrameSetup::receiverIndexFromName(r.name);
+        const std::string part = (receiver > 0) ? FrameSetup::channelPartOfName(r.name) : r.name;
         Group& g = byReceiver[receiver];
 
         if (r.outcome == CalibrationOutcome::Calibrated)
@@ -525,8 +539,8 @@ QString CalibrationExtractor::summarize(const std::vector<CalibrationChannelResu
             }
             if (r.outcome == CalibrationOutcome::FlatNoSignal && !r.plateauLevels.empty())
             {
-                const QString level = QString::number(r.plateauLevels.front(), 'f', 0);
-                if (!g.flatLevels.contains(level))
+                const std::string level = textformat::formatFixed(r.plateauLevels.front(), 0);
+                if (std::find(g.flatLevels.begin(), g.flatLevels.end(), level) == g.flatLevels.end())
                 {
                     g.flatLevels.push_back(level);
                 }
@@ -536,72 +550,65 @@ QString CalibrationExtractor::summarize(const std::vector<CalibrationChannelResu
 
     // Receivers whose every channel calibrated collapse to a bare number list -
     // the common good case should read as one short line, not one line each.
-    QStringList fullyCalibrated;
-    QStringList detailLines;
-    QStringList relaxedLines;
-    QStringList saturatedLines;
-    QStringList stepFileLines;
-    QStringList wordMapLines;
-    for (auto it = byReceiver.constBegin(); it != byReceiver.constEnd(); ++it)
+    std::vector<std::string> fullyCalibrated;
+    std::vector<std::string> detailLines;
+    std::vector<std::string> relaxedLines;
+    std::vector<std::string> saturatedLines;
+    std::vector<std::string> stepFileLines;
+    std::vector<std::string> wordMapLines;
+    for (const auto& [receiver, g] : byReceiver)
     {
-        const int receiver = it.key();
-        const Group& g = it.value();
-        const QString label = (receiver > 0)
-                                  ? QStringLiteral("Receiver %1").arg(receiver)
-                                  : QStringLiteral("Unnamed receiver");
+        const std::string label = (receiver > 0) ? std::format("Receiver {}", receiver)
+                                                 : std::string("Unnamed receiver");
 
         if (g.recordingLevels > 0)
         {
-            stepFileLines.push_back(QStringLiteral("  %1 — %2 levels in the recording, %3 in the step file")
-                                        .arg(label)
-                                        .arg(g.recordingLevels)
-                                        .arg(expectedSteps));
+            stepFileLines.push_back(std::format("  {} — {} levels in the recording, {} in the step file",
+                                                label, g.recordingLevels, expectedSteps));
         }
 
         // One channel swept and another never moved: the signature a word map that
         // does not match the recording leaves, because it files one receiver's words
         // under another's name. A genuinely dead channel looks the same, so this is
         // a prompt to check, not a verdict.
-        const auto flat = g.failed.constFind(CalibrationOutcome::FlatNoSignal);
-        if (receiver > 0 && !g.calibrated.isEmpty() && flat != g.failed.constEnd())
+        const auto flat = g.failed.find(CalibrationOutcome::FlatNoSignal);
+        if (receiver > 0 && !g.calibrated.empty() && flat != g.failed.end())
         {
-            wordMapLines.push_back(QStringLiteral("  %1 — %2 calibrated; %3 never moved")
-                                       .arg(label, g.calibrated.join(", "), flat.value().join(", ")));
+            wordMapLines.push_back(std::format("  {} — {} calibrated; {} never moved",
+                                               label, joinStrings(g.calibrated, ", "),
+                                               joinStrings(flat->second, ", ")));
         }
 
-        if (!g.relaxed.isEmpty())
+        if (!g.relaxed.empty())
         {
-            relaxedLines.push_back(QStringLiteral("  %1 — %2")
-                                       .arg(label, g.relaxed.join(", ")));
+            relaxedLines.push_back(std::format("  {} — {}", label, joinStrings(g.relaxed, ", ")));
         }
 
-        if (!g.saturated.isEmpty())
+        if (!g.saturated.empty())
         {
-            QStringList unresolvedText;
+            std::vector<std::string> unresolvedText;
             for (double db : g.unresolved)
             {
-                unresolvedText << QString::number(db, 'f', 0);
+                unresolvedText.push_back(textformat::formatFixed(db, 0));
             }
-            saturatedLines.push_back(
-                QStringLiteral("  %1 — %2: readings hold at %3 dB%4")
-                    .arg(label, g.saturated.join(", "))
-                    .arg(g.topDb, 0, 'f', 0)
-                    .arg(unresolvedText.isEmpty()
-                             ? QString()
-                             : QStringLiteral(" (no measurement for %1 dB)")
-                                   .arg(unresolvedText.join(", "))));
+            saturatedLines.push_back(std::format(
+                "  {} — {}: readings hold at {} dB{}",
+                label, joinStrings(g.saturated, ", "), textformat::formatFixed(g.topDb, 0),
+                unresolvedText.empty()
+                    ? std::string()
+                    : std::format(" (no measurement for {} dB)", joinStrings(unresolvedText, ", "))));
         }
 
-        if (g.failed.isEmpty())
+        if (g.failed.empty())
         {
             if (receiver > 0)
             {
-                fullyCalibrated.push_back(QString::number(receiver));
+                fullyCalibrated.push_back(std::to_string(receiver));
             }
             else
             {
-                detailLines.push_back(QStringLiteral("  %1 (%2) — calibrated")
-                                          .arg(label, g.calibrated.join(", ")));
+                detailLines.push_back(std::format("  {} ({}) — calibrated", label,
+                                                  joinStrings(g.calibrated, ", ")));
             }
             continue;
         }
@@ -609,73 +616,72 @@ QString CalibrationExtractor::summarize(const std::vector<CalibrationChannelResu
         // Mixed or wholly failed: say which channels fell back and why. A partly
         // calibrated receiver is the case most worth spelling out, because the
         // count alone would let it hide inside "N of M".
-        QStringList reasons;
-        for (auto f = g.failed.constBegin(); f != g.failed.constEnd(); ++f)
+        std::vector<std::string> reasons;
+        for (const auto& [outcome, channels] : g.failed)
         {
-            QString reason = QString("%1: %2")
-                                 .arg(f.value().join(", "),
-                                      QString::fromLatin1(calibrationOutcomeText(f.key())));
-            if (f.key() == CalibrationOutcome::TooFewPlateaus && g.minPlateaus >= 0)
+            std::string reason = std::format("{}: {}", joinStrings(channels, ", "),
+                                             calibrationOutcomeText(outcome));
+            if (outcome == CalibrationOutcome::TooFewPlateaus && g.minPlateaus >= 0)
             {
-                reason += QStringLiteral(" (%1 of %2 steps resolved)")
-                              .arg(g.minPlateaus).arg(expectedSteps);
+                reason += std::format(" ({} of {} steps resolved)", g.minPlateaus, expectedSteps);
             }
-            else if (f.key() == CalibrationOutcome::FlatNoSignal && !g.flatLevels.isEmpty())
+            else if (outcome == CalibrationOutcome::FlatNoSignal && !g.flatLevels.empty())
             {
                 // The level itself is the diagnosis: 0 is a dead input, full
                 // scale is a railed one, and anything between is a stuck DC
                 // level. "Flat" alone would leave the operator guessing which.
-                reason += QStringLiteral(" (held at %1)").arg(g.flatLevels.join(", "));
+                reason += std::format(" (held at {})", joinStrings(g.flatLevels, ", "));
             }
             reasons.push_back(reason);
         }
 
-        const QString calibratedPart =
-            g.calibrated.isEmpty()
-                ? QString()
-                : QStringLiteral("%1 calibrated; ").arg(g.calibrated.join(", "));
-        detailLines.push_back(QStringLiteral("  %1 — %2%3")
-                                  .arg(label, calibratedPart, reasons.join("; ")));
+        const std::string calibratedPart =
+            g.calibrated.empty()
+                ? std::string()
+                : std::format("{} calibrated; ", joinStrings(g.calibrated, ", "));
+        detailLines.push_back(std::format("  {} — {}{}", label, calibratedPart,
+                                          joinStrings(reasons, "; ")));
     }
 
-    QStringList out;
-    out << QStringLiteral("Applied non-linear calibration to %1 of %2 channel(s).")
-               .arg(calibratedChannels).arg(intSize(results));
+    std::vector<std::string> out;
+    out.push_back(std::format("Applied non-linear calibration to {} of {} channel(s).",
+                              calibratedChannels, intSize(results)));
 
-    if (!fullyCalibrated.isEmpty())
+    if (!fullyCalibrated.empty())
     {
-        out << QString();
-        out << QStringLiteral("Calibrated: receiver%1 %2.")
-                   .arg(fullyCalibrated.size() == 1 ? "" : "s", fullyCalibrated.join(", "));
+        out.push_back("");
+        out.push_back(std::format("Calibrated: receiver{} {}.",
+                                  fullyCalibrated.size() == 1 ? "" : "s",
+                                  joinStrings(fullyCalibrated, ", ")));
     }
 
     // The two checks below come before the fallback list on purpose: they flag
     // results that LOOK successful but may be wrong, which the operator would
     // otherwise only discover from the plot.
-    if (!stepFileLines.isEmpty())
+    if (!stepFileLines.empty())
     {
-        out << QString();
-        out << QStringLiteral("Check the step file — these receivers stepped through more levels "
-                              "than it lists, so the lowest were set aside as lead-in. If those "
-                              "are real steps, every step is paired with the wrong level:");
-        out << stepFileLines;
+        out.push_back("");
+        out.push_back("Check the step file — these receivers stepped through more levels "
+                      "than it lists, so the lowest were set aside as lead-in. If those "
+                      "are real steps, every step is paired with the wrong level:");
+        out.insert(out.end(), stepFileLines.begin(), stepFileLines.end());
     }
 
-    if (!wordMapLines.isEmpty())
+    if (!wordMapLines.empty())
     {
-        out << QString();
-        out << QStringLiteral("Check the word map — in these receivers one channel swept and "
-                              "another never moved. A word map that does not match the recording "
-                              "files one receiver's words under another's name; otherwise a "
-                              "channel may be dead:");
-        out << wordMapLines;
+        out.push_back("");
+        out.push_back("Check the word map — in these receivers one channel swept and "
+                      "another never moved. A word map that does not match the recording "
+                      "files one receiver's words under another's name; otherwise a "
+                      "channel may be dead:");
+        out.insert(out.end(), wordMapLines.begin(), wordMapLines.end());
     }
 
-    if (!detailLines.isEmpty())
+    if (!detailLines.empty())
     {
-        out << QString();
-        out << QStringLiteral("Fell back to linear calibration:");
-        out << detailLines;
+        out.push_back("");
+        out.push_back("Fell back to linear calibration:");
+        out.insert(out.end(), detailLines.begin(), detailLines.end());
     }
 
     // Calibrated, but only after loosening the edge threshold: the steps sat close
@@ -686,22 +692,22 @@ QString CalibrationExtractor::summarize(const std::vector<CalibrationChannelResu
     // profile stops there and clamps above it. Reported because the plot then
     // cannot rise past that step no matter how strong the signal gets - which
     // reads as a ceiling in the data rather than as a receiver setting to fix.
-    if (!saturatedLines.isEmpty())
+    if (!saturatedLines.empty())
     {
-        out << QString();
-        out << QStringLiteral("Calibrated only up to a saturated top — these receivers ran out "
-                              "of range partway through the sweep, so their readings hold at "
-                              "the highest step still measurable:");
-        out << saturatedLines;
+        out.push_back("");
+        out.push_back("Calibrated only up to a saturated top — these receivers ran out "
+                      "of range partway through the sweep, so their readings hold at "
+                      "the highest step still measurable:");
+        out.insert(out.end(), saturatedLines.begin(), saturatedLines.end());
     }
 
-    if (!relaxedLines.isEmpty())
+    if (!relaxedLines.empty())
     {
-        out << QString();
-        out << QStringLiteral("Calibrated only with a relaxed threshold — steps are close to "
-                              "the noise floor, so these receivers are worth checking:");
-        out << relaxedLines;
+        out.push_back("");
+        out.push_back("Calibrated only with a relaxed threshold — steps are close to "
+                      "the noise floor, so these receivers are worth checking:");
+        out.insert(out.end(), relaxedLines.begin(), relaxedLines.end());
     }
 
-    return out.join('\n');
+    return joinStrings(out, "\n");
 }
