@@ -63,9 +63,6 @@ MainViewModel::MainViewModel(QObject* parent)
         }
     }
 
-    connect(m_reader, &Chapter10Reader::displayErrorMessage,
-            this, &MainViewModel::errorOccurred);
-
     m_coordinator = new ProcessingCoordinator(this);
     connect(m_coordinator, &ProcessingCoordinator::progressChanged,
             this, [this]() { emit progressPercentChanged(); });
@@ -95,12 +92,12 @@ QString MainViewModel::inputFilename() const { return m_input_filename; }
 
 QStringList MainViewModel::timeChannelList() const
 {
-    return m_reader->getTimeChannelComboBoxList();
+    return toQStringList(m_reader->getTimeChannelComboBoxList());
 }
 
 QStringList MainViewModel::pcmChannelList() const
 {
-    return m_reader->getPCMChannelComboBoxList();
+    return toQStringList(m_reader->getPCMChannelComboBoxList());
 }
 
 int MainViewModel::timeChannelIndex() const { return m_time_channel_index; }
@@ -152,13 +149,13 @@ void MainViewModel::setPcmChannelIndex(int index)
 QVector<StreamConfig> MainViewModel::buildDefaultStreamConfigs() const
 {
     QVector<StreamConfig> configs;
-    const QList<QPair<int, QString>> pcm_channels = m_reader->getPCMChannelList();
+    const std::vector<std::pair<int, std::string>> pcm_channels = m_reader->getPCMChannelList();
     configs.reserve(static_cast<int>(pcm_channels.size()));
     for (const auto& ch : pcm_channels)
     {
         StreamConfig cfg;
         cfg.pcmChannelId = ch.first;
-        cfg.label = ch.second;
+        cfg.label = QString::fromStdString(ch.second);
         cfg.process = false;
         cfg.mode = StreamMode::FrameSyncLockStats;
         cfg.sync.dataRateMbps = 0.0;
@@ -297,14 +294,15 @@ bool MainViewModel::loadFileMetadata(const QString& filename)
     // enumerates every channel, so it runs synchronously on the GUI thread — no
     // worker thread, progress, or cancel machinery (and so no moveToThread races).
     auto* reader = new Chapter10Reader();
-    connect(reader, &Chapter10Reader::displayErrorMessage,
-            this, &MainViewModel::errorOccurred);
 
-    if (!reader->loadChannels(filename))
+    if (!reader->loadChannels(toFsPath(filename)))
     {
         // The attempted load never became the active reader; discard it and leave
-        // m_reader (and whatever file it has loaded, if any) untouched.
+        // m_reader (and whatever file it has loaded, if any) untouched. The reader
+        // reports why through lastError() rather than a signal.
+        const QString reason = QString::fromStdString(reader->lastError());
         delete reader;
+        emit errorOccurred(reason);
         m_input_filename.clear();
         return false;
     }
@@ -321,10 +319,10 @@ bool MainViewModel::loadFileMetadata(const QString& filename)
     emit logMessageReceived("  File size: " + size_str);
 
     // Log channels found
-    QStringList time_list = m_reader->getTimeChannelComboBoxList();
-    QStringList pcm_list = m_reader->getPCMChannelComboBoxList();
-    emit logMessageReceived("  Time channels: " + (time_list.isEmpty() ? "none" : QString::number(time_list.size())));
-    emit logMessageReceived("  PCM channels: " + (pcm_list.isEmpty() ? "none" : QString::number(pcm_list.size())));
+    const int time_count = static_cast<int>(m_reader->getTimeChannelComboBoxList().size());
+    const int pcm_count = static_cast<int>(m_reader->getPCMChannelComboBoxList().size());
+    emit logMessageReceived("  Time channels: " + (time_count == 0 ? QString("none") : QString::number(time_count)));
+    emit logMessageReceived("  PCM channels: " + (pcm_count == 0 ? QString("none") : QString::number(pcm_count)));
 
     m_file_loaded = true;
     m_stream_configs.clear();

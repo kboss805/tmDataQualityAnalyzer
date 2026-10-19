@@ -86,7 +86,7 @@ bool loadFixture(Fixture& f)
         return false;
     }
     Chapter10Reader meta;
-    if (!meta.loadChannels(f.path))
+    if (!meta.loadChannels(toFsPath(f.path)))
     {
         return false;
     }

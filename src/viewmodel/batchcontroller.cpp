@@ -10,6 +10,7 @@
 
 #include "chapter10reader.h"
 #include "plotviewmodel.h"
+#include "qtbridge.h"
 #include "templatematcher.h"
 
 namespace {
@@ -61,7 +62,7 @@ QVector<BatchController::FileCheck> BatchController::validate(const ProcessingTe
         check.filepath = file_path;
 
         Chapter10Reader reader;
-        if (!reader.loadChannels(file_path))
+        if (!reader.loadChannels(toFsPath(file_path)))
         {
             check.ok     = false;
             check.reason = tr("could not read channels");
@@ -69,7 +70,7 @@ QVector<BatchController::FileCheck> BatchController::validate(const ProcessingTe
         else
         {
             const TemplateMatcher::MatchResult match =
-                TemplateMatcher::matchFile(tmpl, reader.getPCMChannelList());
+                TemplateMatcher::matchFile(tmpl, toQPairList(reader.getPCMChannelList()));
             check.ok = match.ok;
             if (!match.ok)
             {
@@ -215,7 +216,7 @@ void BatchController::applySourceConfig()
     // Belt-and-suspenders re-check against the freshly loaded file (the up-front
     // validation could be stale if the file changed on disk since it was picked).
     const TemplateMatcher::MatchResult match =
-        TemplateMatcher::matchFile(m_template, m_view_model->reader()->getPCMChannelList());
+        TemplateMatcher::matchFile(m_template, toQPairList(m_view_model->reader()->getPCMChannelList()));
     if (!match.ok)
     {
         emit message(MainViewModel::LogLevel::Warning,

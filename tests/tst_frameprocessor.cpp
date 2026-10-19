@@ -252,7 +252,7 @@ void TestFrameProcessor::nonAsciiPathOpensInBothReaders()
     QVERIFY(QFile::copy(src, dst));
 
     Chapter10Reader meta;
-    QVERIFY2(meta.loadChannels(dst), "metadata reader could not open the path");
+    QVERIFY2(meta.loadChannels(toFsPath(dst)), "metadata reader could not open the path");
 
     Ch10PacketReader reader;
     std::vector<ProcessingParams*> none;
@@ -553,7 +553,7 @@ void TestFrameProcessor::processAccumulatesReceiverData()
         QSKIP("RNRZ-L test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     int pcm_id = reader.getFirstPCMChannelID();
     int time_id = reader.getCurrentTimeChannelID();
     if (pcm_id < 0 || time_id < 0)
@@ -606,7 +606,7 @@ void TestFrameProcessor::processLockOnlyModeHasNoChannels()
         QSKIP("RNRZ-L test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     int pcm_id = reader.getFirstPCMChannelID();
     int time_id = reader.getCurrentTimeChannelID();
     if (pcm_id < 0 || time_id < 0)
@@ -641,7 +641,7 @@ void TestFrameProcessor::processFrameSyncErrorsMonotonic()
         QSKIP("RNRZ-L test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     int pcm_id = reader.getFirstPCMChannelID();
     int time_id = reader.getCurrentTimeChannelID();
     if (pcm_id < 0 || time_id < 0)
@@ -681,7 +681,7 @@ void TestFrameProcessor::processSlopeAffectsValues()
         QSKIP("RNRZ-L test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     int pcm_id = reader.getFirstPCMChannelID();
     int time_id = reader.getCurrentTimeChannelID();
     if (pcm_id < 0 || time_id < 0)
@@ -721,7 +721,7 @@ void TestFrameProcessor::processShortPeriodMoreSamples()
         QSKIP("RNRZ-L test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     int pcm_id = reader.getFirstPCMChannelID();
     int time_id = reader.getCurrentTimeChannelID();
     if (pcm_id < 0 || time_id < 0)
@@ -772,7 +772,7 @@ void TestFrameProcessor::calibrationRoundTripOnRealFileProducesCleanSteps()
         QSKIP("RNRZ-L test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     int pcm_id = reader.getFirstPCMChannelID();
     int time_id = reader.getCurrentTimeChannelID();
     if (pcm_id < 0 || time_id < 0)
@@ -1131,7 +1131,7 @@ void TestFrameProcessor::swapBytesOffFindsSyncThatTheSwapDestroys()
         QSKIP("Safran test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     const int time_id = reader.getCurrentTimeChannelID();
     if (time_id < 0)
         QSKIP("Missing time channel in test file");
@@ -1220,7 +1220,7 @@ void TestFrameProcessor::oddPayloadSwapSkipIsReported()
         QSKIP("Safran test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     const int time_id = reader.getCurrentTimeChannelID();
     if (time_id < 0)
         QSKIP("Missing time channel in test file");
@@ -1284,7 +1284,7 @@ void TestFrameProcessor::offPhaseSyncsAreNotCountedAsBoundaryAligned()
         QSKIP("RNRZ-L test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     const int pcm_id  = reader.getFirstPCMChannelID();
     const int time_id = reader.getCurrentTimeChannelID();
     if (pcm_id < 0 || time_id < 0)
@@ -1344,7 +1344,7 @@ void TestFrameProcessor::failureReportNamesChannelAndSyncPattern()
         QSKIP("RNRZ-L test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     const int pcm_id  = reader.getFirstPCMChannelID();
     const int time_id = reader.getCurrentTimeChannelID();
     if (pcm_id < 0 || time_id < 0)

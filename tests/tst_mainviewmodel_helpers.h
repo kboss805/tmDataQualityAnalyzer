@@ -10,6 +10,9 @@ class TestMainViewModelHelpers : public QObject
 private slots:
     void classifyLogMessageSeverity();
     void buildStreamJobAttachesCalibrationByWord();
+    void openFileListsItsChannelsAndOffersThemAsStreams();
+    void openFileOnAFileThatCannotBeReadReportsOneErrorAndKeepsNoChannels();
+    void openFileShowsANonAsciiChannelNameIntact();
 };
 
 #endif // TST_MAINVIEWMODEL_HELPERS_H

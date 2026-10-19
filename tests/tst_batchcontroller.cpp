@@ -1,6 +1,9 @@
 #include "tst_batchcontroller.h"
 
 #include <QColor>
+#include <QCoreApplication>
+#include <QDir>
+#include <QFileInfo>
 #include <QSignalSpy>
 #include <QtTest>
 
@@ -116,6 +119,50 @@ void TestBatchController::applyAppearanceRenamesMatchingSeries()
         }
     }
     QVERIFY(found);
+}
+
+void TestBatchController::validateComparesEachFilesChannelsToTheTemplate()
+{
+    // The up-front check reads each file's PCM channel list and compares its id set to the
+    // template's: an exact match passes, and a mismatch is rejected with the ids that differ.
+    QDir dir(QCoreApplication::applicationDirPath());
+    dir.cdUp();
+    const QString prn = dir.filePath("data/test files/prn_testfile, sample.ch10");   // channels 13..16
+    if (!QFileInfo::exists(prn))
+        QSKIP("prn sample fixture not available");
+
+    auto templateOf = [](const QList<int>& ids) {
+        ProcessingTemplate tmpl;
+        for (int id : ids)
+        {
+            TemplateStreamEntry entry;
+            entry.config.pcmChannelId = id;
+            tmpl.entries.append(entry);
+        }
+        return tmpl;
+    };
+    const QString gone = QDir::tempPath() + "/tst_validate_missing.ch10";
+    QVERIFY(!QFileInfo::exists(gone));
+
+    const QVector<BatchController::FileCheck> exact = BatchController::validate(templateOf({13, 14, 15, 16}), {prn});
+    QCOMPARE(exact.size(), 1);
+    QVERIFY(exact[0].ok);
+    QVERIFY(exact[0].reason.isEmpty());
+    QCOMPARE(exact[0].filepath, prn);
+
+    const QVector<BatchController::FileCheck> fewer = BatchController::validate(templateOf({13, 14}), {prn});
+    QVERIFY(!fewer[0].ok);
+    QCOMPARE(fewer[0].reason, QString("extra channel(s): 15, 16"));
+
+    const QVector<BatchController::FileCheck> more = BatchController::validate(templateOf({13, 14, 15, 16, 17}), {prn});
+    QVERIFY(!more[0].ok);
+    QCOMPARE(more[0].reason, QString("missing channel(s): 17"));
+
+    const QVector<BatchController::FileCheck> unreadable = BatchController::validate(templateOf({13}), {gone, prn});
+    QCOMPARE(unreadable.size(), 2);
+    QVERIFY(!unreadable[0].ok);
+    QCOMPARE(unreadable[0].reason, QString("could not read channels"));
+    QVERIFY(!unreadable[1].ok);   // 13 alone is not the file's whole set
 }
 
 void TestBatchController::missingFilesAreSkippedAndReported()

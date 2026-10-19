@@ -18,6 +18,7 @@ private slots:
     void buildTemplateCapturesConfigsAndAppearance();
     void applyAppearanceRenamesMatchingSeries();
     void missingFilesAreSkippedAndReported();
+    void validateComparesEachFilesChannelsToTheTemplate();
     void startWithNoFilesDoesNothing();
 };
 

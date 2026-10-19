@@ -421,7 +421,7 @@ de-Qt of the native core in small steps (QtGui out of the model's headers, then
 caused, a generated Visual Studio solution, and C++20. The first `QString` steps move `TomlDocument`,
 `FrameSetup` and the step-file parser to UTF-8 `std::string`, and the `QObject` steps take
 Qt out of `FrameProcessor` and `Ch10PacketReader`; the DTOs follow, starting with
-`ProcessingParams` and `ProcessedStreamData`, and `FrameSetup` loses its `QObject`. One user-facing fix, found during the
+`ProcessingParams` and `ProcessedStreamData`, and `FrameSetup`, `Chapter10Reader` and `ChannelData` lose their `QObject`s and `QString`s. One user-facing fix, found during the
 `QString` survey: recordings under a folder with a non-ASCII name can be processed.
 
 #### A Visual Studio solution, generated rather than committed
@@ -521,6 +521,95 @@ called from our code is reported at **our** call site, so those keep warning exa
 v2.9.0 intended. Every first-party header here is quote-included, so `anglebrackets` covers
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
+
+#### `Chapter10Reader` and `ChannelData` are plain classes (de-Qt, `QObject` step 4)
+
+The metadata reader, the one that lists a recording's channels in the Configure Streams dialog, was a
+`QObject` with a `displayErrorMessage` signal, `QMap` / `QList` of `new`'d `ChannelData*`, and
+`QString` for the path and every TMATS string. It is now a plain class and `chapter10reader.h` and
+`channeldata.h` contain no Qt: the path is a `std::filesystem::path`, text is UTF-8 `std::string`,
+channels live in a `std::map<int, ChannelData>` in id order, and the time and PCM lists hold channel
+**ids** rather than pointers. The getters keep their names and return `std::vector<std::string>` /
+`std::vector<std::pair<int, std::string>>`; `MainViewModel` and `BatchController` convert at about
+eight sites with two small helpers in `qtbridge.h` (`toQStringList`, `toQPairList`). `TemplateMatcher`
+and `StreamConfig` stay Qt, as scoped.
+
+**Errors are read, not signalled.** Every error path emitted once and then returned false, and loading
+is synchronous on the caller's thread, so the signal carried nothing a return value and a string do
+not. `lastError()` holds the reason of the last `loadChannels()`; `MainViewModel::loadFileMetadata`
+emits `errorOccurred` from it right after a failed load, which keeps "one error, in the same call".
+A `ProcessingEvents`-style sink would have added nothing here.
+
+**Three things changed that are not a pure port, each deliberate:**
+
+- **A latent defect is fixed.** `loadChannels` cleared the channel map but not the time and PCM lists,
+  which held raw pointers into it. Loading a second time on one reader left dangling pointers and
+  appended duplicates. Production never does this (a fresh reader per load), so it never showed; it
+  was undefined behaviour, so there was nothing to pin on the old code. `loadChannels` now replaces
+  everything - channels, lists and selection - once the new file has opened, and a file that fails to
+  open still leaves the old contents alone (`aSecondLoadReplacesWhatTheFirstLeftBehind`,
+  `aFileThatFailsToOpenLeavesThePreviousChannelsAlone`).
+- **Dead code is removed.** `tryLoadingFile()` and the public `closeFile()` had no caller in `src/` or
+  `tests/`, and `m_filename` was set and read only to build one error message.
+- **`path.string()` replaces `toLocal8Bit()`.** Both readers now pass irig106 the path in the process
+  code page the same way; the UTF-8 manifest makes that UTF-8.
+
+**One branch is unreachable and left as it is.** "Failed to find TMATS message (expected as the first
+packet)" sits behind a check irig106's `enI106Ch10Open` has already made: a recording whose first
+packet is not TMATS is refused at open ("Error opening file"), so no file reaches it. Pinned by
+the `no-tmats-first` row.
+
+**Tests first, in four commits, all passing on the `QObject` reader before the port.** The old suite
+asserted "not empty". The new one pins:
+
+- exact channel ids, names and TMATS data rates for each of the five committed recordings (5 rows);
+- the combo-box index to channel mapping, including the placeholder at 0 and indices past the end;
+- each way a file fails to load: message and an empty result (7 rows: missing, empty, text, short
+  header, first packet not TMATS, only TMATS, cut inside TMATS - the last two fail at "Error
+  establishing time sync.");
+- the view model: the combo-box lists, the default stream rows (id, bare label, TMATS rate), the
+  selection through the property setters, and a failed open reporting exactly one error and leaving no
+  channels; `BatchController::validate` against a real file (it had no test with one);
+- a non-ASCII channel name, through the reader and through the view model.
+
+**Reaching the TMATS branches the fixtures don't.** The five recordings have real disabled sources
+(`CHE-2:F`) but no whitespace, numeric type codes, name fallbacks or odd rates. `step_cal` has no data
+checksum and its first packet's header is untouched by a same-length edit, so the tests copy it and
+patch its TMATS text in place (24 rows): the enabled flag (T / Y / 1 either case enable; F / N / 0 /
+anything else disable; missing enables; whitespace ignored), the type (`PCMIN` / `01` / `09`, `TIMEIN` /
+`11`, case-sensitive, anything else unlisted), the name priority (data source id, then channel data
+link name, then PCM link name), an accented letter in a name, and the bit rate read like
+`QString::toDouble` (12 rows: exponent, signs, spaces and a fraction accepted; negative, zero, junk, a
+thousands separator and `nan` mean "not described"). The text-based `QString::toDouble` rules are
+`textparse::parseDouble`'s, which already reproduced them for settings files.
+
+**Validated against 23 single-defect mutants; all caught, after two survivors were closed.** They
+cover the enabled flag (ignored, no upper-casing, no trim), name priority (two orders), type codes
+(`09`, `11`, no trim), the combo-box separator, both selection offsets, the reload, `lastError()`
+(not cleared, wrong text, time-sync text lost), the data-rate guard, the first-PCM accessor, and the
+conversion boundaries (the view model's relay, the label decoding, the path, both `qtbridge.h`
+helpers, the batch check). The first pass left two uncaught: **trimming around the enabled flag** and
+**the `> 0` guard on the data rate** (a negative rate would have been reported as a rate). Neither is
+equivalent. Each was closed with rows run on the unmodified reader first, and both mutants then fail.
+
+**A harness trap, once more, and a new one.** A mutation run started as `cmd &` inside a tool call
+was believed dead after it applied one mutant and was relaunched, which left **two loops running at
+once** colliding on the same files ("Device or resource busy"); the output was garbage (almost every
+mutant "no result"). The sources were byte-compared with saved copies, one loop was run to completion
+alone, and the earlier results discarded. A runner now compares its sources against saved copies at
+the end, and a background job is started as the tool's own command rather than as a detached `&`.
+Separately, a run's `tests exit 0` after a failed build is the previous exe's code; the runners delete
+the exe and results first and refuse a result unless both exist.
+
+Also corrected: `tst_chapter10reader.cpp` said the `.ch10` fixtures are gitignored; they are
+committed, and the suite's skip now says what it actually guards.
+
+Throughput is not touched (one TMATS packet is read, not the stream); the pinned release gate gave
+13754 ms parallel, 1.01x the slowest solo stream and 0.65x all-sequential.
+
+Baseline **583 / 0 / 1** (was 525 / 0 / 1; 58 new: 52 in `TestChapter10Reader`, 2 in
+`TestChannelData`, 3 in `TestMainViewModelHelpers`, 1 in `TestBatchController`), **584 / 0 / 0** at
+release. **26 suites.**
 
 #### `FrameSetup` is a plain class: no `QObject`, and a `std::unordered_map` for profiles (de-Qt, `QObject` step 3)
 
@@ -3830,6 +3919,7 @@ not mis-read.
 
 1. **Chapter10Reader** (`src/model/chapter10reader.cpp`, `include/model/chapter10reader.h`)
    - Reads Ch10 file **metadata** up front: scans TMATS to catalog time and PCM channels, provides channel lists, time accessors, and channel ID resolution. Wraps the irig106utils C library.
+   - Plain C++, no Qt: the path is a `std::filesystem::path`, text is UTF-8 `std::string`, channels are `ChannelData` values in a `std::map` by id, and a failed load leaves its reason in `lastError()` (loading is synchronous, so there is no signal). The view model converts the lists at its boundary (`qtbridge.h`)
 
 2. **Ch10PacketReader** (`src/model/ch10packetreader.cpp`, `include/model/ch10packetreader.h`)
    - The single-pass reader. `prepare()` opens the file, parses TMATS, resolves each stream's PCM attributes, and builds the channel-ID → `PacketQueue` routing; `run()` (on its own thread) reads the file once, tracks IRIG time, and dispatches each PCM packet's payload to the matching queues, then posts end-of-stream sentinels
@@ -4140,8 +4230,8 @@ listed here: the fast, no-fixture suites run first, followed by the four heavy
 `TestProcessingCoordinator`, `TestCalibrationExtractor`), which `--fast`/`TMDQ_FAST_TESTS`
 skip for quick local iteration. The source/header files are listed in `tests/tests.pro`.
 
-- **TestChannelData** (`tst_channeldata`) — ChannelData model object tests
-- **TestChapter10Reader** (`tst_chapter10reader`) — Chapter 10 metadata reader: channel discovery, time/PCM channel lists, channel ID resolution against real Ch10 test data
+- **TestChannelData** (`tst_channeldata`) — ChannelData model object tests, including a non-ASCII name round-tripping and copies keeping every field
+- **TestChapter10Reader** (`tst_chapter10reader`) — Chapter 10 metadata reader, on the five committed recordings: exact channel ids, names and TMATS data rates for each; the combo-box index to channel mapping (placeholder at 0, past the end); each way a file fails to load (missing, empty, text, short header, first packet not TMATS, only TMATS, cut inside TMATS) with its exact message and no channels left; a second load replacing the first and a failed open leaving the old channels alone; and a copy of `step_cal` with same-length edits to its TMATS text (no data checksum, header untouched) that reaches what the fixtures do not - the channel-enabled flag (T / Y / 1 either case enable, F / N / 0 / other disable, missing enables, whitespace ignored), the type codes (`PCMIN` / `01` / `09`, `TIMEIN` / `11`, case-sensitive), the name priority (data source id, channel data link name, PCM link name), a non-ASCII name, and the bit rate read like `QString::toDouble`. Written against the `QObject` reader first; validated against 23 mutants
 - **TestConstants** (`tst_constants`) — Verifies all PCMConstants, UIConstants, PlotConstants, AppVersion, and recent files constants (including kMaxPacketBufferSize, kFrameSyncHexPattern)
 - **TestCh10PacketReader** (`tst_ch10packetreader`) — the single-pass reader, tested directly on the committed `step_cal` recording (it had no tests of its own): each way `prepare()` fails has its own exact message; a full run reports its start, no error, progress that never goes backwards and ends at 100, all 1598 packets (6,539,016 payload bytes) and exactly one end marker; an abort is announced, reports 100 and still posts the end marker; a file cut inside a PCM packet, inside a time packet, or with a damaged header checksum reports the right read error and delivers exactly the packets before the damage; a file that ends inside a packet header is a clean end of file and a damaged sync pattern silently costs one packet (both pinned as the behaviour they are); and two streams on one channel each get every packet sharing one payload buffer. Cut points are found by walking the packet headers. Written against the signal-based reader first; validated against eleven mutants
 - **TestFrameProcessor** (`tst_frameprocessor`) — constructor defaults, abort flag, `derandomizeBitstream` (identity/short and changed/long), invalid time-channel/PCM-channel/file handling, and processing real Ch10 data (receiver-data accumulation, lock-only mode has no channels, monotonic frame-sync errors, slope affects values, shorter period → more samples, calibration round-trip clean steps, off-phase sync after lock-loss not extracted); and `reportsExactlyTheseMessages` (10 rows), the exact text and order of everything it reports - success, a non-ASCII stream label, a bounded window, a masked pattern, sync-but-no-frames, cancel, both internal errors, and the all-odd and mixed byte-swap warnings - written against the signals implementation first

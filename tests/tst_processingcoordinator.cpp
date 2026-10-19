@@ -192,7 +192,7 @@ void TestProcessingCoordinator::workerReportsPrecedeTheResultAndFinishComesLast(
         QSKIP("RNRZ-L test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     const int pcm_id  = reader.getFirstPCMChannelID();
     const int time_id = reader.getCurrentTimeChannelID();
     if (pcm_id < 0 || time_id < 0)
@@ -282,7 +282,7 @@ void TestProcessingCoordinator::aRecordingUnderANonAsciiFolderProcessesEndToEnd(
     QVERIFY(QFile::copy(source, copy));
 
     Chapter10Reader reader;
-    QVERIFY2(reader.loadChannels(copy), "the metadata reader must open the non-ASCII path");
+    QVERIFY2(reader.loadChannels(toFsPath(copy)), "the metadata reader must open the non-ASCII path");
     const int pcm_id  = reader.getFirstPCMChannelID();
     const int time_id = reader.getCurrentTimeChannelID();
     QVERIFY(pcm_id >= 0 && time_id >= 0);
@@ -391,7 +391,7 @@ void TestProcessingCoordinator::benchmarkSingleVsMultiStreamThroughput()
         QSKIP("RNRZ-L test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     int pcm_id = reader.getFirstPCMChannelID();
     int time_id = reader.getCurrentTimeChannelID();
     if (pcm_id < 0 || time_id < 0)
@@ -464,7 +464,7 @@ void TestProcessingCoordinator::benchmarkHeavyWorkloadSingleVsMultiStream()
         QSKIP("PRN test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     int time_id = reader.getCurrentTimeChannelID();
     if (time_id < 0)
         QSKIP("No time channel in PRN test file");

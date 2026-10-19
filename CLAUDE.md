@@ -23,7 +23,7 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   suites**) is dominated by the real-Ch10 integration suites (a few minutes); add `--fast` (or
   `TMDQ_FAST_TESTS=1`) to skip those four `.ch10` suites for ~1 s local iteration — **local only; CI
   and releases run the full suite**. No CLI single-suite filter.
-  Green baseline: **525 passed / 0 failed / 1 skipped** normally, **526 / 0 / 0** at release. The
+  Green baseline: **583 passed / 0 failed / 1 skipped** normally, **584 / 0 / 0** at release. The
   one standing skip is the heavy PRN throughput benchmark, opt-in via `TMDQA_RUN_HEAVY_BENCH=1`
   because it walks a 640 MB recording nine times and takes minutes. At release it is not skipped:
   `scripts\run_throughput_bench.ps1` builds Release, enables it, runs it **pinned to the
@@ -107,8 +107,8 @@ Invoke explicitly (`/build-and-test`) or let them trigger by intent.
 
 ## Domain invariants (silent-bug territory — see `tm-code-review` skill & `docs/*_logic.md`)
 
-- **Ch10 paths:** both readers pass irig106 the path in the process code page (`toLocal8Bit()` /
-  `path.string()`), never UTF-8 from `toUtf8()` - its narrow `open()` reads that code page, which
+- **Ch10 paths:** both readers pass irig106 the path in the process code page (`path.string()`),
+  never UTF-8 from `toUtf8()` - its narrow `open()` reads that code page, which
   `codepage.pri`'s manifest makes UTF-8.
 - **SNR:** average raw counts first, calibrate once per window. Out-of-range interpolation **clamps**,
   never extrapolates. The calibration extractor must mirror the main run's word map + raw-affecting
