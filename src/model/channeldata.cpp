@@ -16,12 +16,12 @@ int ChannelData::channelID() const
     return m_channel_id;
 }
 
-QString ChannelData::channelType() const
+const std::string& ChannelData::channelType() const
 {
     return m_channel_type;
 }
 
-QString ChannelData::channelName() const
+const std::string& ChannelData::channelName() const
 {
     return m_channel_name;
 }
@@ -31,12 +31,12 @@ int ChannelData::channelCount() const
     return m_channel_count;
 }
 
-void ChannelData::setChannelType(const QString& channel_type)
+void ChannelData::setChannelType(const std::string& channel_type)
 {
     m_channel_type = channel_type;
 }
 
-void ChannelData::setChannelName(const QString& channel_name)
+void ChannelData::setChannelName(const std::string& channel_name)
 {
     m_channel_name = channel_name;
 }

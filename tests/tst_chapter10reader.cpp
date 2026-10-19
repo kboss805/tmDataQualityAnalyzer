@@ -7,11 +7,11 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QSignalSpy>
 #include <QTemporaryDir>
 
 #include "chapter10reader.h"
 #include "constants.h"
+#include "qtbridge.h"
 
 static QString testDataPath(const QString& filename)
 {
@@ -39,15 +39,19 @@ struct LoadResult
 /// read its error report, so a change in how either is spelled touches this helper only.
 LoadResult load(Chapter10Reader& reader, const QString& path)
 {
-    QSignalSpy spy(&reader, &Chapter10Reader::displayErrorMessage);
     LoadResult result;
-    result.ok = reader.loadChannels(path);
-    for (const QList<QVariant>& args : spy)
+    result.ok = reader.loadChannels(toFsPath(path));
+    if (!reader.lastError().empty())
     {
-        result.errors << args.at(0).toString();
+        result.errors << QString::fromStdString(reader.lastError());
     }
     return result;
 }
+
+/// The reader's lists as the Qt types the assertions compare against.
+QStringList timeList(const Chapter10Reader& reader) { return toQStringList(reader.getTimeChannelComboBoxList()); }
+QStringList pcmList(const Chapter10Reader& reader) { return toQStringList(reader.getPCMChannelComboBoxList()); }
+QList<QPair<int, QString>> pcmChannels(const Chapter10Reader& reader) { return toQPairList(reader.getPCMChannelList()); }
 
 /// Loads a fixture from tests/data/test files/ and requires it to open.
 void loadFixture(Chapter10Reader& reader, const QString& name)
@@ -55,9 +59,6 @@ void loadFixture(Chapter10Reader& reader, const QString& name)
     const LoadResult result = load(reader, testDataPath("test files/" + name));
     QVERIFY2(result.ok, qPrintable(name + ": " + result.errors.join("; ")));
 }
-
-QStringList timeList(const Chapter10Reader& reader) { return reader.getTimeChannelComboBoxList(); }
-QStringList pcmList(const Chapter10Reader& reader) { return reader.getPCMChannelComboBoxList(); }
 
 QString idNameRate(int id, const QString& name, double bits_per_second)
 {
@@ -92,7 +93,7 @@ void TestChapter10Reader::loadChannelsPopulatesTimeChannels()
     Chapter10Reader reader;
     loadFixture(reader, "agc_nzl_rasa_testfile.ch10");
 
-    QStringList time_list = reader.getTimeChannelComboBoxList();
+    QStringList time_list = timeList(reader);
     QVERIFY2(!time_list.isEmpty(), "Time channel list should not be empty after loading a valid file");
 }
 
@@ -101,7 +102,7 @@ void TestChapter10Reader::loadChannelsPopulatesPcmChannels()
     Chapter10Reader reader;
     loadFixture(reader, "agc_nzl_rasa_testfile.ch10");
 
-    QStringList pcm_list = reader.getPCMChannelComboBoxList();
+    QStringList pcm_list = pcmList(reader);
     QVERIFY2(!pcm_list.isEmpty(), "PCM channel list should not be empty after loading a valid file");
 }
 
@@ -110,7 +111,7 @@ void TestChapter10Reader::comboBoxListsContainChannelIdAndName()
     Chapter10Reader reader;
     loadFixture(reader, "agc_nzl_rasa_testfile.ch10");
 
-    QStringList time_list = reader.getTimeChannelComboBoxList();
+    QStringList time_list = timeList(reader);
     QVERIFY(!time_list.isEmpty());
     // Each entry should be formatted as "ID - Name" where Name is non-empty
     for (const QString& entry : time_list)
@@ -120,7 +121,7 @@ void TestChapter10Reader::comboBoxListsContainChannelIdAndName()
         QVERIFY2(!parts.last().isEmpty(), qPrintable("Time channel has no name label: " + entry));
     }
 
-    QStringList pcm_list = reader.getPCMChannelComboBoxList();
+    QStringList pcm_list = pcmList(reader);
     QVERIFY(!pcm_list.isEmpty());
     for (const QString& entry : pcm_list)
     {
@@ -143,11 +144,11 @@ void TestChapter10Reader::eachFixtureListsItsChannelsExactly()
 
     // The combo-box strings are "<id> - <name>"; the channel list carries the bare name,
     // which labels the stream in the dialog and on the plot.
-    QCOMPARE(reader.getTimeChannelComboBoxList(), time_list);
-    QCOMPARE(reader.getPCMChannelComboBoxList(), pcm_list);
+    QCOMPARE(timeList(reader), time_list);
+    QCOMPARE(pcmList(reader), pcm_list);
 
     QStringList actual;
-    for (const auto& channel : reader.getPCMChannelList())
+    for (const auto& channel : pcmChannels(reader))
     {
         actual << idNameRate(channel.first, channel.second, reader.getTmatsDataRateBps(channel.first));
     }
@@ -245,16 +246,16 @@ void TestChapter10Reader::clearSettingsResetsChannels()
     loadFixture(reader, "agc_nzl_rasa_testfile.ch10");
 
     // Verify channels were loaded
-    QVERIFY(!reader.getTimeChannelComboBoxList().isEmpty());
-    QVERIFY(!reader.getPCMChannelComboBoxList().isEmpty());
+    QVERIFY(!timeList(reader).isEmpty());
+    QVERIFY(!pcmList(reader).isEmpty());
 
     reader.clearSettings();
 
-    QVERIFY2(reader.getTimeChannelComboBoxList().isEmpty(),
+    QVERIFY2(timeList(reader).isEmpty(),
              "Time channel list should be empty after clearSettings");
-    QVERIFY2(reader.getPCMChannelComboBoxList().isEmpty(),
+    QVERIFY2(pcmList(reader).isEmpty(),
              "PCM channel list should be empty after clearSettings");
-    QVERIFY(reader.getPCMChannelList().isEmpty());
+    QVERIFY(pcmChannels(reader).isEmpty());
     QCOMPARE(reader.getCurrentTimeChannelID(), -1);
     QCOMPARE(reader.getFirstPCMChannelID(), -1);
     QCOMPARE(reader.m_current_pcm_channel, -1);
@@ -265,7 +266,7 @@ void TestChapter10Reader::timeChannelChangedUpdatesSelection()
     Chapter10Reader reader;
     loadFixture(reader, "agc_nzl_rasa_testfile.ch10");
 
-    QStringList time_list = reader.getTimeChannelComboBoxList();
+    QStringList time_list = timeList(reader);
     if (time_list.size() < 1)
         QSKIP("Not enough time channels in test file to test selection change");
 
@@ -280,7 +281,7 @@ void TestChapter10Reader::pcmChannelChangedUpdatesSelection()
     Chapter10Reader reader;
     loadFixture(reader, "agc_nzl_rasa_testfile.ch10");
 
-    QStringList pcm_list = reader.getPCMChannelComboBoxList();
+    QStringList pcm_list = pcmList(reader);
     if (pcm_list.size() < 1)
         QSKIP("Not enough PCM channels in test file to test selection change");
 
@@ -317,7 +318,7 @@ void TestChapter10Reader::comboBoxIndexSelectsTheChannelAtThatPosition()
 
     // Selecting does not change what is listed, and the first-PCM accessor is about the
     // list, not the selection.
-    QCOMPARE(reader.getPCMChannelComboBoxList().size(), 4);
+    QCOMPARE(pcmList(reader).size(), 4);
     QCOMPARE(reader.getFirstPCMChannelID(), 13);
 }
 
@@ -368,8 +369,8 @@ void TestChapter10Reader::aFailedLoadReportsItsReasonAndLeavesNoChannels()
     const QString expected = exact_message.isEmpty() ? "Error opening file: " + path + message_suffix
                                                       : exact_message;
     QCOMPARE(result.errors, QStringList{expected});
-    QVERIFY(reader.getTimeChannelComboBoxList().isEmpty());
-    QVERIFY(reader.getPCMChannelComboBoxList().isEmpty());
+    QVERIFY(timeList(reader).isEmpty());
+    QVERIFY(pcmList(reader).isEmpty());
     QCOMPARE(reader.getFirstPCMChannelID(), -1);
     QCOMPARE(reader.getCurrentTimeChannelID(), -1);
 }
@@ -550,6 +551,40 @@ void TestChapter10Reader::aFileThatFailsToOpenLeavesThePreviousChannelsAlone()
     QVERIFY(!failed.ok);
     QCOMPARE(failed.errors.size(), 1);
     QCOMPARE(pcmList(reader), before);
+}
+
+void TestChapter10Reader::aSecondLoadReplacesWhatTheFirstLeftBehind()
+{
+    Chapter10Reader reader;
+    loadFixture(reader, "prn_testfile, sample.ch10");
+    const QStringList prn_pcm = pcmList(reader);
+    QCOMPARE(prn_pcm.size(), 4);
+
+    // Move the selection off its default, then load the same file again: the lists are what
+    // one load gives (not doubled) and the selection is back at its default.
+    reader.pcmChannelChanged(3);
+    QCOMPARE(reader.m_current_pcm_channel, 15);
+    loadFixture(reader, "prn_testfile, sample.ch10");
+    QCOMPARE(pcmList(reader), prn_pcm);
+    QCOMPARE(timeList(reader), QStringList{"1 - IRIG-B"});
+    QCOMPARE(reader.m_current_pcm_channel, 13);
+
+    // A different file replaces the channels outright.
+    loadFixture(reader, "step_cal, example.ch10");
+    QCOMPARE(pcmList(reader), QStringList{"26 - CH-16 AGC STEP CALS 800K"});
+    QCOMPARE(reader.getFirstPCMChannelID(), 26);
+    QCOMPARE(reader.m_current_pcm_channel, 26);
+    QCOMPARE(reader.getPCMChannelList().size(), 1);
+
+    // And after a failure, a load that works reports nothing.
+    const LoadResult failed = load(reader, QDir::tempPath() + "/tst_reader_missing.ch10");
+    QVERIFY(!failed.ok);
+    QVERIFY(!failed.errors.isEmpty());
+
+    // A later success is not reported as an error.
+    const LoadResult again = load(reader, testDataPath("test files/prn_testfile, sample.ch10"));
+    QVERIFY(again.ok);
+    QVERIFY(again.errors.isEmpty());
 }
 
 void TestChapter10Reader::aTmatsDataRateIsReadLikeQStringToDouble()

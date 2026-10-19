@@ -6,12 +6,12 @@
 
 namespace {
 
-// ChannelData's text is a QString today; the helpers below are the one place these tests
-// read or write it, so a change of its string type touches them and nothing else.
-QString typeOf(const ChannelData& cd) { return cd.channelType(); }
-QString nameOf(const ChannelData& cd) { return cd.channelName(); }
-void setType(ChannelData& cd, const QString& type) { cd.setChannelType(type); }
-void setName(ChannelData& cd, const QString& name) { cd.setChannelName(name); }
+// ChannelData holds UTF-8 std::string; the helpers below are the one place these tests read
+// or write its text, so the assertions compare QStrings and print readable values.
+QString typeOf(const ChannelData& cd) { return QString::fromStdString(cd.channelType()); }
+QString nameOf(const ChannelData& cd) { return QString::fromStdString(cd.channelName()); }
+void setType(ChannelData& cd, const QString& type) { cd.setChannelType(type.toStdString()); }
+void setName(ChannelData& cd, const QString& name) { cd.setChannelName(name.toStdString()); }
 
 } // namespace
 

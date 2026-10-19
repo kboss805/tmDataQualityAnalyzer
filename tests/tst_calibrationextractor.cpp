@@ -95,7 +95,7 @@ bool buildRealRequest(Chapter10Reader& reader, CalibrationExtractor::Request& re
         return false;
     }
 
-    if (!reader.loadChannels(filepath))
+    if (!reader.loadChannels(toFsPath(filepath)))
     {
         skipReason = "Could not load channels from test file";
         return false;
@@ -152,7 +152,7 @@ bool buildStepCalRequest(Chapter10Reader& reader, CalibrationExtractor::Request&
         skipReason = "step_cal, example.ch10 not available";
         return false;
     }
-    if (!reader.loadChannels(filepath))
+    if (!reader.loadChannels(toFsPath(filepath)))
     {
         skipReason = "Could not load channels from step_cal, example.ch10";
         return false;
@@ -353,7 +353,7 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
         QSKIP("step_cal, example.ch10 not available");
 
     Chapter10Reader reader; // keep the opened Ch10 file alive across extraction
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
 
     std::vector<StepDefinition> steps;
     std::string step_error;
