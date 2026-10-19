@@ -135,6 +135,7 @@ HEADERS += \
     include/model/intervalgate.h \
     include/model/packetqueue.h \
     include/model/framesetup.h \
+    include/model/framesync.h \
     include/model/frameprocessor.h \
     include/model/stepdetector.h \
     include/model/calibrationextractor.h \

@@ -6,12 +6,12 @@
 #include "calibrationextractor.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <format>
 #include <map>
 #include <string>
-
-#include <QFileInfo>
-#include <QThread>
+#include <system_error>
+#include <utility>
 
 #include "ch10packetreader.h"
 #include "constants.h"
@@ -20,8 +20,6 @@
 #include "framesetup.h"
 #include "packetqueue.h"
 #include "processedstreamdata.h"
-#include "qtbridge.h"
-#include "qtprocessingevents.h"
 #include "stepdetector.h"
 #include "textformat.h"
 
@@ -57,96 +55,138 @@ std::string joinStrings(const std::vector<std::string>& parts, const std::string
 
 } // namespace
 
-CalibrationExtractor::CalibrationExtractor(QObject* parent)
-    : QObject(parent)
+/// What the packet reader and the frame processor report to. Their log lines and errors pass
+/// through to the extractor's own sink; the reader's progress does too; the worker's completion
+/// is only noted, because the driver thread is the one that waits for it and acts on it.
+class CalibrationExtractor::Relay final : public ProcessingEvents
+{
+public:
+    explicit Relay(CalibrationExtractor& owner) : m_owner(owner) {}
+
+    void logMessage(const std::string& message) override
+    {
+        m_owner.log(message);
+    }
+
+    void errorOccurred(const std::string& message) override
+    {
+        // Kept so the end can report the worker's own reason (e.g. "Frame sync pattern was not
+        // found...") instead of a generic one, and passed on as a log line like any other.
+        {
+            std::lock_guard<std::mutex> lock(m_owner.m_mutex);
+            m_owner.m_error = message;
+        }
+        m_owner.log(message);
+    }
+
+    void processingFinished(bool success) override
+    {
+        m_owner.m_worker_ok = success;
+    }
+
+    void progressUpdated(int percent) override
+    {
+        if (m_owner.m_events != nullptr)
+        {
+            m_owner.m_events->progressUpdated(percent);
+        }
+    }
+
+private:
+    CalibrationExtractor& m_owner;
+};
+
+CalibrationExtractor::CalibrationExtractor()
+    : m_relay(std::make_shared<Relay>(*this))
 {
 }
 
 CalibrationExtractor::~CalibrationExtractor()
 {
-    teardown();
-    delete m_frame_setup;
+    cancel();
+    joinDriver();
 }
 
-void CalibrationExtractor::start(const Request& request)
+void CalibrationExtractor::joinDriver()
 {
-    if (m_running)
+    if (m_driver.joinable())
+    {
+        m_driver.join();
+    }
+}
+
+void CalibrationExtractor::log(const std::string& message)
+{
+    if (m_events != nullptr)
+    {
+        m_events->logMessage(message);
+    }
+}
+
+std::string CalibrationExtractor::error() const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_error;
+}
+
+void CalibrationExtractor::start(const Request& request, std::shared_ptr<ProcessingEvents> events)
+{
+    if (m_running.exchange(true))
     {
         return;
     }
-    m_running   = true;
+    // A previous run's driver may still be returning from its last report.
+    joinDriver();
+
+    m_events = std::move(events);
     m_cancelled = false;
-    m_error.clear();
+    m_worker_ok = false;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_error.clear();
+    }
+    m_summary.clear();
     m_results.clear();
     m_steps = request.steps;
-    m_clip_start_sec = qMax(0.0, request.clipStartSec);
-    m_clip_end_sec   = qMax(0.0, request.clipEndSec);
+    m_clip_start_sec = std::max(0.0, request.clipStartSec);
+    m_clip_end_sec   = std::max(0.0, request.clipEndSec);
     m_clip_ignored   = false;
     m_recording_sec  = 0.0;
     m_sample_period_sec = CalibrationConstants::kExtractSamplePeriodSec;
 
+    // A failure before any work starts: record it, release what was built, and report.
+    auto fail = [this](const std::string& reason) {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_error = reason;
+        }
+        finish(false, reason, true);
+    };
+
     if (request.steps.empty())
     {
-        finishWithError("No calibration steps were provided.");
+        fail("No calibration steps were provided.");
         return;
     }
-
-    // ---- Frame sync numeric values ----
-    bool sync_ok = false;
-    const uint64_t frame_sync = request.sync.pattern.toULongLong(&sync_ok, UIConstants::kHexBase);
-    if (!sync_ok || request.sync.pattern.isEmpty())
-    {
-        finishWithError("Invalid frame sync pattern '" + request.sync.pattern + "'.");
-        return;
-    }
-    const int sync_pattern_length = static_cast<int>(request.sync.pattern.length()) * 4;
-
-    uint64_t frame_sync_mask = 0;
-    if (request.sync.mask.isEmpty())
-    {
-        frame_sync_mask = (sync_pattern_length > 0 && sync_pattern_length < 64)
-            ? (1ULL << sync_pattern_length) - 1
-            : 0xFFFFFFFFFFFFFFFFULL;
-    }
-    else
-    {
-        bool mask_ok = false;
-        frame_sync_mask = request.sync.mask.toULongLong(&mask_ok, UIConstants::kHexBase);
-        if (!mask_ok)
-        {
-            finishWithError("Invalid frame sync mask '" + request.sync.mask + "'.");
-            return;
-        }
-    }
-
-    const int words_in_minor_frame =
-        FrameSetup::wordsInMinorFrame(request.sync.bitsInMinorFrame);
 
     // ---- Word map (unit slope, zero offset -> raw counts out) ----
-    QString setup_error;
+    const int words_in_minor_frame = FrameSetup::wordsInMinorFrame(request.acquisition.bitsInMinorFrame);
+    std::string setup_error;
     if (!buildFrameSetup(request, words_in_minor_frame, setup_error))
     {
-        finishWithError(setup_error);
+        fail(setup_error);
         return;
     }
 
     // ---- ProcessingParams ----
     m_params = ProcessingParams{};
-    m_params.filename          = toFsPath(request.calFilename);
+    m_params.filename          = request.calFilename;
     m_params.timeChannelId     = request.timeChannelId;
     m_params.pcmChannelId      = request.pcmChannelId;
-    m_params.frameSync         = frame_sync;
-    m_params.frameSyncMask     = frame_sync_mask;
-    m_params.syncPatternLength = sync_pattern_length;
-    m_params.wordsInMinorFrame = words_in_minor_frame;
-    m_params.bitsInMinorFrame  = request.sync.bitsInMinorFrame;
-    m_params.isRandomized      = request.sync.randomized;
-    m_params.isInverted        = request.sync.inverted;
-    // Raw-affecting, so it belongs with isRandomized/isInverted above: the
-    // extractor must see the same bitstream the main run will.
-    m_params.swapBytes         = request.swapBytes;
+    // Every raw-affecting field, set in the one place the main run also sets them: the extractor
+    // must see the same bitstream the main run will.
+    applyAcquisition(m_params, request.acquisition);
     m_params.mode              = StreamMode::ReceiverChannelInfo;
-    m_params.dataRateBps       = (request.sync.dataRateMbps > 0.0) ? request.sync.dataRateMbps * 1e6 : 0.0;
     m_params.streamLabel       = "Calibration";
     m_params.samplePeriodSec   = m_sample_period_sec;
     m_params.startSeconds      = 0;
@@ -157,15 +197,17 @@ void CalibrationExtractor::start(const Request& request)
     m_params.useDataRateClock  = true;
 
     // ---- Queue + reader ----
-    m_queue = new PacketQueue();
-    m_params.packetQueue = m_queue;
-
-    m_reader = std::make_shared<Ch10PacketReader>();
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_queue = std::make_unique<PacketQueue>();
+        m_params.packetQueue = m_queue.get();
+        m_reader = std::make_shared<Ch10PacketReader>();
+    }
     std::vector<ProcessingParams*> params_list{ &m_params };
     std::string error;
-    if (!m_reader->prepare(toFsPath(request.calFilename), request.timeChannelId, params_list, error))
+    if (!m_reader->prepare(request.calFilename, request.timeChannelId, params_list, error))
     {
-        finishWithError(QString::fromStdString(error));
+        fail(error);
         return;
     }
 
@@ -187,51 +229,23 @@ void CalibrationExtractor::start(const Request& request)
                        CalibrationConstants::kMaxExtractSamplePeriodSec);
         m_sample_period_sec      = period;
         m_params.samplePeriodSec = period;
-        emit logMessage(QString("Calibration extraction sample period: %1 ms "
-                                "(~%2 frames/window at %3-bit frames).")
-                            .arg(period * 1000.0, 0, 'f', 2)
-                            .arg(period / frame_duration_sec, 0, 'f', 0)
-                            .arg(m_params.bitsInMinorFrame));
+        log(std::format("Calibration extraction sample period: {} ms "
+                        "(~{} frames/window at {}-bit frames).",
+                        textformat::formatFixed(period * 1000.0, 2),
+                        textformat::formatFixed(period / frame_duration_sec, 0),
+                        m_params.bitsInMinorFrame));
     }
 
     // ---- Worker ----
-    m_worker = std::make_shared<FrameProcessor>();
-    // What the worker reports reaches this object's thread as queued events, in order -
-    // the delivery the signals it replaced gave.
-    m_worker->setEvents(std::make_shared<QtProcessingEvents>(
-        this,
-        [this](const QString& message) { emit logMessage(message); },
-        // Capture the worker's failure reason (e.g. "Frame sync pattern was not
-        // found...") so finished() reports it instead of the generic fallback.
-        [this](const QString& message) {
-            m_error = message;
-            emit logMessage(message);
-        },
-        [this](bool ok) { onWorkerFinished(ok); }));
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_worker = std::make_shared<FrameProcessor>();
+        m_worker->setEvents(m_relay);
+        m_reader->setEvents(m_relay);
+    }
 
-    ProcessingParams params = m_params;
-    FrameSetup* setup = m_frame_setup;
-    std::shared_ptr<FrameProcessor> worker = m_worker;
-    // QThread::create runs the body on the new thread and ends it when the body returns.
-    m_worker_thread = QThread::create([worker, params, setup]() {
-        worker->process(params, setup);
-    });
-
-    // ---- Reader thread ----
-    m_reader->setEvents(std::make_shared<QtProcessingEvents>(
-        this,
-        [this](const QString& message) { emit logMessage(message); },
-        [this](const QString& message) {
-            m_error = message;
-            emit logMessage(message);
-        },
-        nullptr,
-        [this](int percent) { emit progressChanged(percent); }));
-    std::shared_ptr<Ch10PacketReader> reader = m_reader;
-    m_reader_thread = QThread::create([reader]() { reader->run(); });
-
-    m_worker_thread->start();
-    m_reader_thread->start();
+    // The reader, the worker and the wait for both happen on one driver thread.
+    m_driver = std::thread([this]() { drive(); });
 }
 
 void CalibrationExtractor::cancel()
@@ -241,6 +255,7 @@ void CalibrationExtractor::cancel()
         return;
     }
     m_cancelled = true;
+    std::lock_guard<std::mutex> lock(m_mutex);
     if (m_reader != nullptr)
     {
         m_reader->requestAbort();
@@ -255,158 +270,194 @@ void CalibrationExtractor::cancel()
     }
 }
 
-void CalibrationExtractor::onWorkerFinished(bool success)
+void CalibrationExtractor::drive()
 {
-    if (success && !m_cancelled && m_worker != nullptr)
+    std::shared_ptr<Ch10PacketReader> reader;
+    std::shared_ptr<FrameProcessor> worker;
+    PacketQueue* queue = nullptr;
     {
-        const ProcessedStreamData data = m_worker->takeResult();
+        std::lock_guard<std::mutex> lock(m_mutex);
+        reader = m_reader;
+        worker = m_worker;
+        queue  = m_queue.get();
+    }
+    const ProcessingParams params = m_params;
+    FrameSetup* setup = m_frame_setup.get();
 
-        int calibrated = 0;
-        for (const ProcessedChannelSeries& ch : data.channels)
-        {
-            CalibrationChannelResult res;
-            res.name    = ch.name;
-            res.word    = ch.word;
-            res.hadData = !ch.values.empty();
+    // The worker first, then the reader, as before; each ends when its body returns.
+    std::thread worker_thread([worker, params, setup]() { worker->process(params, setup); });
+    std::thread reader_thread([reader]() { reader->run(); });
 
-            if (res.hadData)
-            {
-                // Clip the user-specified leading/trailing seconds before step
-                // detection, so signal-generator turn-on transients (and any
-                // trailing junk) don't get mistaken for cal plateaus. The series
-                // is sampled every m_sample_period_sec, so seconds -> sample count.
-                const std::vector<double>& full = ch.values;
-                const int count = intSize(full);
-                int lo = 0;
-                int hi = count;
-                if (m_sample_period_sec > 0.0)
-                {
-                    lo = qBound(0, static_cast<int>(m_clip_start_sec / m_sample_period_sec), count);
-                    hi = count - qBound(0, static_cast<int>(m_clip_end_sec / m_sample_period_sec), count);
-                }
-                const std::vector<double> clipped =
-                    (lo < hi) ? std::vector<double>(full.begin() + lo, full.begin() + hi)
-                              : full; // ignore an over-aggressive clip
-                m_recording_sec = count * m_sample_period_sec;
-                if (lo >= hi && (m_clip_start_sec > 0.0 || m_clip_end_sec > 0.0))
-                {
-                    m_clip_ignored = true;
-                }
+    worker_thread.join();
+    if (!m_worker_ok || m_cancelled)
+    {
+        // The worker is done with the queue; a reader still blocked on a full one must be let go.
+        reader->requestAbort();
+        queue->close();
+    }
+    reader_thread.join();
 
-                StepDetector::Result det =
-                    StepDetector::detect(clipped, m_sample_period_sec, m_steps);
-                res.profile          = det.profile;
-                res.detectedPlateaus = det.detectedPlateaus;
-                res.extraPlateaus    = det.extraPlateaus;
-                res.outcome          = det.outcome;
-                res.edgeThreshold    = det.edgeThreshold;
-                res.thresholdRelaxed = det.thresholdRelaxed;
-                res.plateauLevels    = det.plateauLevels;
-                res.saturated        = det.saturated;
-                res.unresolvedDb     = det.unresolvedDb;
-                res.sweepLevels      = det.sweepLevels;
-                if (res.profile.valid)
-                {
-                    calibrated++;
-                }
-
-                // Surface the per-channel plateau count: a channel that detects
-                // fewer plateaus than expected steps (near-saturation receivers
-                // merge adjacent low steps, e.g. 0 dB and 3 dB) builds a profile
-                // whose raw->dB pairing is shifted. Applied to the main run that
-                // mis-mapping makes the channel climb at a different rate, which
-                // shows up as the calibrated steps no longer lining up in time.
-                QString note;
-                if (!res.profile.valid)
-                {
-                    note = QString(" — %1, edge threshold %2 raw counts")
-                               .arg(calibrationOutcomeText(res.outcome))
-                               .arg(res.edgeThreshold, 0, 'f', 1);
-                }
-                else if (res.saturated)
-                {
-                    // Calibrated, but only over part of its sweep. Say which part:
-                    // the profile clamps above it, so a reading at that dB may mean
-                    // "this or anything higher".
-                    note = QString(" — top step(s) railed; calibrated %1 of %2 step(s), "
-                                   "readings hold at %3 dB")
-                               .arg(intSize(res.profile.points))
-                               .arg(intSize(m_steps))
-                               .arg(topResolvedDb(res.profile), 0, 'f', 0);
-                }
-                else if (res.thresholdRelaxed)
-                {
-                    note = QString(" — calibrated with a relaxed edge threshold "
-                                   "(%1 raw counts)")
-                               .arg(res.edgeThreshold, 0, 'f', 1);
-                }
-                emit logMessage(QString("  %1 (word %2): %3 plateau(s) detected, "
-                                        "%4 step(s) expected%5%6")
-                                    .arg(QString::fromStdString(res.name))
-                                    .arg(res.word)
-                                    .arg(res.detectedPlateaus)
-                                    .arg(intSize(m_steps))
-                                    .arg(res.detectedPlateaus != intSize(m_steps)
-                                             ? " — MISMATCH" : "")
-                                    .arg(note));
-            }
-            m_results.push_back(res);
-        }
+    if (m_worker_ok && !m_cancelled)
+    {
+        const ProcessedStreamData data = worker->takeResult();
+        const int calibrated = buildResults(data);
 
         if (m_clip_ignored)
         {
-            emit logMessage(QString("Clip Start + Clip End (%1 s) exceed the recording (%2 s); "
-                                    "both were ignored and the whole recording was used.")
-                                .arg(m_clip_start_sec + m_clip_end_sec, 0, 'f', 1)
-                                .arg(m_recording_sec, 0, 'f', 1));
+            log(std::format("Clip Start + Clip End ({} s) exceed the recording ({} s); "
+                            "both were ignored and the whole recording was used.",
+                            textformat::formatFixed(m_clip_start_sec + m_clip_end_sec, 1),
+                            textformat::formatFixed(m_recording_sec, 1)));
         }
-
-        teardown();
-        m_running = false;
-
-        const int total = intSize(m_results);
-        const QString summary = QString("Calibrated %1 of %2 channel(s).").arg(calibrated).arg(total);
-        emit finished(true, summary);
+        finish(true, std::format("Calibrated {} of {} channel(s).", calibrated, intSize(m_results)),
+               false);
         return;
     }
 
     // Failure or cancellation path.
-    teardown();
-    m_running = false;
     if (m_cancelled)
     {
-        emit finished(false, "Calibration extraction cancelled.");
+        finish(false, "Calibration extraction cancelled.", false);
+        return;
     }
-    else
+    const std::string reason = error();
+    finish(false, reason.empty() ? std::string("Calibration extraction failed.") : reason, true);
+}
+
+int CalibrationExtractor::buildResults(const ProcessedStreamData& data)
+{
+    int calibrated = 0;
+    for (const ProcessedChannelSeries& ch : data.channels)
     {
-        emit finished(false, m_error.isEmpty() ? "Calibration extraction failed." : m_error);
+        CalibrationChannelResult res;
+        res.name    = ch.name;
+        res.word    = ch.word;
+        res.hadData = !ch.values.empty();
+
+        if (res.hadData)
+        {
+            // Clip the user-specified leading/trailing seconds before step
+            // detection, so signal-generator turn-on transients (and any
+            // trailing junk) don't get mistaken for cal plateaus. The series
+            // is sampled every m_sample_period_sec, so seconds -> sample count.
+            const std::vector<double>& full = ch.values;
+            const int count = intSize(full);
+            int lo = 0;
+            int hi = count;
+            if (m_sample_period_sec > 0.0)
+            {
+                lo = std::clamp(static_cast<int>(m_clip_start_sec / m_sample_period_sec), 0, count);
+                hi = count - std::clamp(static_cast<int>(m_clip_end_sec / m_sample_period_sec), 0, count);
+            }
+            const std::vector<double> clipped =
+                (lo < hi) ? std::vector<double>(full.begin() + lo, full.begin() + hi)
+                          : full; // ignore an over-aggressive clip
+            m_recording_sec = count * m_sample_period_sec;
+            if (lo >= hi && (m_clip_start_sec > 0.0 || m_clip_end_sec > 0.0))
+            {
+                m_clip_ignored = true;
+            }
+
+            StepDetector::Result det =
+                StepDetector::detect(clipped, m_sample_period_sec, m_steps);
+            res.profile          = det.profile;
+            res.detectedPlateaus = det.detectedPlateaus;
+            res.extraPlateaus    = det.extraPlateaus;
+            res.outcome          = det.outcome;
+            res.edgeThreshold    = det.edgeThreshold;
+            res.thresholdRelaxed = det.thresholdRelaxed;
+            res.plateauLevels    = det.plateauLevels;
+            res.saturated        = det.saturated;
+            res.unresolvedDb     = det.unresolvedDb;
+            res.sweepLevels      = det.sweepLevels;
+            if (res.profile.valid)
+            {
+                calibrated++;
+            }
+
+            // Surface the per-channel plateau count: a channel that detects
+            // fewer plateaus than expected steps (near-saturation receivers
+            // merge adjacent low steps, e.g. 0 dB and 3 dB) builds a profile
+            // whose raw->dB pairing is shifted. Applied to the main run that
+            // mis-mapping makes the channel climb at a different rate, which
+            // shows up as the calibrated steps no longer lining up in time.
+            std::string note;
+            if (!res.profile.valid)
+            {
+                note = std::format(" — {}, edge threshold {} raw counts",
+                                   calibrationOutcomeText(res.outcome),
+                                   textformat::formatFixed(res.edgeThreshold, 1));
+            }
+            else if (res.saturated)
+            {
+                // Calibrated, but only over part of its sweep. Say which part:
+                // the profile clamps above it, so a reading at that dB may mean
+                // "this or anything higher".
+                note = std::format(" — top step(s) railed; calibrated {} of {} step(s), "
+                                   "readings hold at {} dB",
+                                   intSize(res.profile.points), intSize(m_steps),
+                                   textformat::formatFixed(topResolvedDb(res.profile), 0));
+            }
+            else if (res.thresholdRelaxed)
+            {
+                note = std::format(" — calibrated with a relaxed edge threshold ({} raw counts)",
+                                   textformat::formatFixed(res.edgeThreshold, 1));
+            }
+            log(std::format("  {} (word {}): {} plateau(s) detected, {} step(s) expected{}{}",
+                            res.name, res.word, res.detectedPlateaus, intSize(m_steps),
+                            res.detectedPlateaus != intSize(m_steps) ? " — MISMATCH" : "", note));
+        }
+        m_results.push_back(res);
+    }
+    return calibrated;
+}
+
+void CalibrationExtractor::finish(bool success, const std::string& summary, bool is_error)
+{
+    m_summary = summary;
+    {
+        // Every thread that used the pipeline has been joined, so this is the last reference.
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_worker.reset();
+        m_reader.reset();
+        // m_params.packetQueue aliases the queue freed here; clear it so an early prepare()
+        // failure can't leave a dangling pointer behind in m_params.
+        m_params.packetQueue = nullptr;
+        m_queue.reset();
+    }
+    // Before the report, so a handler that starts the next run is not turned away.
+    m_running = false;
+    if (m_events != nullptr)
+    {
+        if (is_error)
+        {
+            m_events->errorOccurred(summary);
+        }
+        m_events->processingFinished(success);
     }
 }
 
 bool CalibrationExtractor::buildFrameSetup(const Request& request,
                                            int wordsInMinorFrame,
-                                           QString& error)
+                                           std::string& error)
 {
-    delete m_frame_setup;
-    m_frame_setup = new FrameSetup();
+    m_frame_setup = std::make_unique<FrameSetup>();
 
-    if (request.receiverParamsToml.isEmpty())
+    if (request.receiverParamsToml.empty())
     {
-        std::string map_error;
         if (!m_frame_setup->buildDefaultReceiverMap(request.numReceivers, request.receiverChannels,
-                                                    wordsInMinorFrame, map_error))
+                                                    wordsInMinorFrame, error))
         {
-            error = QString::fromStdString(map_error);
             return false;
         }
     }
-    else if (!QFileInfo::exists(request.receiverParamsToml))
+    else if (std::error_code ec; !std::filesystem::exists(request.receiverParamsToml, ec))
     {
-        error = "Receiver Parameters file '" +
-                QFileInfo(request.receiverParamsToml).fileName() + "' was not found.";
+        error = "Receiver Parameters file '" + request.receiverParamsToml.filename().string() +
+                "' was not found.";
         return false;
     }
-    else if (!m_frame_setup->tryLoadingFile(toFsPath(request.receiverParamsToml), wordsInMinorFrame))
+    else if (!m_frame_setup->tryLoadingFile(request.receiverParamsToml, wordsInMinorFrame))
     {
         error = "Failed to load Receiver Parameters word map. Check the file.";
         return false;
@@ -430,42 +481,6 @@ bool CalibrationExtractor::buildFrameSetup(const Request& request,
         p->profile    = CalibrationProfile{}; // ensure linear (raw) extraction
     }
     return true;
-}
-
-void CalibrationExtractor::teardown()
-{
-    if (m_worker_thread != nullptr)
-    {
-        m_worker_thread->quit();
-        m_worker_thread->wait();
-        delete m_worker_thread;
-        m_worker_thread = nullptr;
-    }
-    m_worker.reset(); // the thread is joined, so this is the last reference
-
-    if (m_reader_thread != nullptr)
-    {
-        m_reader_thread->quit();
-        m_reader_thread->wait();
-        delete m_reader_thread;
-        m_reader_thread = nullptr;
-    }
-    m_reader.reset(); // the reader thread is joined above, so this is the last reference
-
-    delete m_queue;
-    m_queue = nullptr;
-    // m_params.packetQueue aliases the queue we just freed; clear it so an early
-    // prepare() failure (which runs teardown before the queue is consumed) can't
-    // leave a dangling pointer behind in m_params.
-    m_params.packetQueue = nullptr;
-}
-
-void CalibrationExtractor::finishWithError(const QString& error)
-{
-    m_error = error;
-    teardown();
-    m_running = false;
-    emit finished(false, error);
 }
 
 // ---------------------------------------------------------------------------

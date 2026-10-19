@@ -73,6 +73,7 @@ HEADERS += \
     $$PWD/../include/model/intervalgate.h \
     $$PWD/../include/model/packetqueue.h \
     $$PWD/../include/model/framesetup.h \
+    $$PWD/../include/model/framesync.h \
     $$PWD/../include/model/frameprocessor.h \
     $$PWD/../include/model/stepdetector.h \
     $$PWD/../include/model/calibrationextractor.h \
@@ -167,6 +168,7 @@ SOURCES += \
     tst_packetqueue.cpp \
     tst_intervalgate.cpp \
     tst_textformat.cpp \
+    tst_framesync.cpp \
     tst_tomldocument.cpp \
     tst_qtprocessingevents.cpp \
     tst_ch10packetreader.cpp \
@@ -197,6 +199,7 @@ HEADERS += \
     tst_packetqueue.h \
     tst_intervalgate.h \
     tst_textformat.h \
+    tst_framesync.h \
     tst_tomldocument.h \
     tst_qtprocessingevents.h \
     tst_ch10packetreader.h \

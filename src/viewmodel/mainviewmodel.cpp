@@ -20,6 +20,7 @@
 #include "chapter10reader.h"
 #include "constants.h"
 #include "framesetup.h"
+#include "framesync.h"
 #include "processingcoordinator.h"
 #include "qtbridge.h"
 
@@ -510,38 +511,23 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
         ? ("Ch " + QString::number(cfg.pcmChannelId)) : cfg.label;
 
     // ---- Validate and decode inline frame sync fields ----
-    const QString& sync_hex = cfg.sync.pattern;
-    if (sync_hex.isEmpty())
+    // The decode and the assignment below are shared with the calibration extraction, which
+    // must read the same bitstream (framesync.h).
+    Acquisition acquisition;
+    switch (resolveFrameSync(cfg.sync.pattern.toStdString(), cfg.sync.mask.toStdString(),
+                             acquisition.sync))
     {
-        error = stream_desc + ": A frame sync pattern is required.";
-        return false;
-    }
-    bool sync_ok = false;
-    uint64_t frame_sync = sync_hex.toULongLong(&sync_ok, UIConstants::kHexBase);
-    if (!sync_ok)
-    {
-        error = stream_desc + ": Invalid frame sync pattern '" + sync_hex + "'.";
-        return false;
-    }
-    int sync_pattern_length = static_cast<int>(sync_hex.length()) * 4;
-
-    uint64_t frame_sync_mask = 0;
-    const QString& mask_hex = cfg.sync.mask;
-    if (mask_hex.isEmpty())
-    {
-        frame_sync_mask = (sync_pattern_length > 0 && sync_pattern_length < 64)
-            ? (1ULL << sync_pattern_length) - 1
-            : 0xFFFFFFFFFFFFFFFFULL;
-    }
-    else
-    {
-        bool mask_ok = false;
-        frame_sync_mask = mask_hex.toULongLong(&mask_ok, UIConstants::kHexBase);
-        if (!mask_ok)
-        {
-            error = stream_desc + ": Invalid frame sync mask '" + mask_hex + "'.";
+        case FrameSyncError::None:
+            break;
+        case FrameSyncError::PatternEmpty:
+            error = stream_desc + ": A frame sync pattern is required.";
             return false;
-        }
+        case FrameSyncError::PatternInvalid:
+            error = stream_desc + ": Invalid frame sync pattern '" + cfg.sync.pattern + "'.";
+            return false;
+        case FrameSyncError::MaskInvalid:
+            error = stream_desc + ": Invalid frame sync mask '" + cfg.sync.mask + "'.";
+            return false;
     }
 
     const int bits_in_minor_frame = cfg.sync.bitsInMinorFrame;
@@ -554,22 +540,20 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
     // Derive word count for the frame-setup word-map loader.
     int words_in_minor_frame = FrameSetup::wordsInMinorFrame(bits_in_minor_frame);
 
-    // ---- Assemble the per-stream ProcessingParams ----
-    out_job.params = base;
-    out_job.params.pcmChannelId       = cfg.pcmChannelId;
-    out_job.params.frameSync          = frame_sync;
-    out_job.params.frameSyncMask      = frame_sync_mask;
-    out_job.params.syncPatternLength  = sync_pattern_length;
-    out_job.params.wordsInMinorFrame  = words_in_minor_frame;
-    out_job.params.bitsInMinorFrame   = bits_in_minor_frame;
-    out_job.params.isRandomized       = cfg.sync.randomized;
-    out_job.params.isInverted         = cfg.sync.inverted;
+    acquisition.bitsInMinorFrame = bits_in_minor_frame;
+    acquisition.randomized       = cfg.sync.randomized;
+    acquisition.inverted         = cfg.sync.inverted;
+    acquisition.dataRateMbps     = cfg.sync.dataRateMbps;
     // File-scoped, so it comes from the view model rather than from cfg: every job
     // built for this recording gets the same value. Sourcing it per stream would
     // allow one file's channels to disagree about their own byte order.
-    out_job.params.swapBytes          = m_swap_bytes;
+    acquisition.swapBytes        = m_swap_bytes;
+
+    // ---- Assemble the per-stream ProcessingParams ----
+    out_job.params = base;
+    out_job.params.pcmChannelId       = cfg.pcmChannelId;
+    applyAcquisition(out_job.params, acquisition);
     out_job.params.mode               = cfg.mode;
-    out_job.params.dataRateBps        = (cfg.sync.dataRateMbps > 0.0) ? cfg.sync.dataRateMbps * 1e6 : 0.0;
     out_job.params.streamLabel        = stream_desc.toStdString();
 
     // Set per-stream sample period.

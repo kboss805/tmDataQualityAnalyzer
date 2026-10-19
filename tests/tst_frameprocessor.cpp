@@ -29,7 +29,9 @@
 #include "constants.h"
 #include "frameprocessor.h"
 #include "framesetup.h"
+#include "framesync.h"
 #include "qtbridge.h"
+#include "qtprocessingevents.h"
 #include "packetqueue.h"
 #include "processedstreamdata.h"
 #include "stepdetector.h"
@@ -794,16 +796,18 @@ void TestFrameProcessor::calibrationRoundTripOnRealFileProducesCleanSteps()
 
     // ---- Extraction pass: build calibration profiles from this same file ----
     CalibrationExtractor::Request req;
-    req.calFilename       = filepath;
+    req.calFilename       = toFsPath(filepath);
     req.timeChannelId      = time_id;
     req.pcmChannelId       = pcm_id;
-    req.sync.pattern       = "FE6B2840";
-    req.sync.bitsInMinorFrame   = 8000; // true minor-frame length for this recording
-    req.sync.randomized         = true; // RNRZ-L
-    req.sync.dataRateMbps       = 0.8;   // 800 kbps -> ~100 frames/s; drives the adaptive extract period
-    // An ordinary Chapter 10 fixture, so it needs the byte swap. Stated rather than
-    // inherited, so a change to the DTO default cannot silently retune it.
-    req.swapBytes          = true;
+    // 8000 bits is this recording's true minor-frame length; RNRZ-L; 0.8 Mbps (800 kbps, ~100
+    // frames/s) drives the adaptive extract period. An ordinary Chapter 10 fixture, so it needs the
+    // byte swap. Stated rather than inherited, so a change to the DTO default cannot silently
+    // retune it.
+    QVERIFY(resolveFrameSync("FE6B2840", std::string(), req.acquisition.sync) == FrameSyncError::None);
+    req.acquisition.bitsInMinorFrame = 8000;
+    req.acquisition.randomized       = true;
+    req.acquisition.dataRateMbps     = 0.8;
+    req.acquisition.swapBytes        = true;
     req.numReceivers       = 16;
     req.receiverChannels   = 3;
     req.steps              = steps;
@@ -813,14 +817,16 @@ void TestFrameProcessor::calibrationRoundTripOnRealFileProducesCleanSteps()
     bool extract_ok = false;
     bool finished_already = false;
     QString summary;
-    connect(&extractor, &CalibrationExtractor::finished, &loop,
-            [&](bool ok, const QString& msg) {
-                extract_ok = ok;
-                summary = msg;
-                finished_already = true;
-                loop.quit();
-            });
-    extractor.start(req);
+    // The extraction reports from its own threads; the adapter delivers the end to this one.
+    auto events = std::make_shared<QtProcessingEvents>(
+        this, nullptr, nullptr,
+        [&](bool ok) {
+            extract_ok = ok;
+            summary = QString::fromStdString(extractor.summary());
+            finished_already = true;
+            loop.quit();
+        });
+    extractor.start(req, events);
     if (!finished_already)
     {
         loop.exec();

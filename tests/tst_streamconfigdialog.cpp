@@ -18,6 +18,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QTemporaryFile>
 #include <QTimer>
@@ -858,7 +859,7 @@ namespace {
 
 /// What the calibration dialog is built from. The one place these tests make it and set its sync
 /// text, so a change in that type touches this and nothing else.
-using DialogBase = CalibrationExtractor::Request;
+using DialogBase = CalibrationSetupDialog::Base;
 
 DialogBase dialogBase(const QString& pattern, const QString& mask = QString())
 {
@@ -945,6 +946,86 @@ void TestStreamConfigDialog::calibrationDialogExtractsThroughItsProgressDialog()
     QVERIFY2(dlg.calibrationReport().contains("Applied non-linear calibration to 12 of 48 channel(s)."),
              qPrintable(dlg.calibrationReport()));
     QVERIFY2(dlg.m_cal_status->text().contains(QString(QChar(0x2713))), qPrintable(dlg.m_cal_status->text()));
+}
+
+void TestStreamConfigDialog::calibrationDialogHandsTheRawAffectingSettingsToTheExtraction()
+{
+    // The extraction must read the same bitstream the main run will, or the profiles it builds are
+    // matched against data it never measured. step_cal needs the byte swap and neither inversion nor
+    // derandomization, so setting any one of the three the other way destroys the sync pattern and
+    // the extraction must visibly fail. If the dialog dropped a setting on the way, the default would
+    // quietly take its place and the failing rows would pass.
+    QFETCH(bool, swap_bytes);
+    QFETCH(bool, inverted);
+    QFETCH(bool, randomized);
+    QFETCH(bool, expect_ok);
+
+    const QString app_root = projectRoot();
+    const QString cal = app_root + "/tests/data/test files/step_cal, example.ch10";
+    if (!QFileInfo::exists(cal))
+        QSKIP("step_cal fixture not available");
+
+    DialogBase base = dialogBase("FE6B2840");
+    base.swapBytes        = swap_bytes;
+    base.sync.inverted    = inverted;
+    base.sync.randomized  = randomized;
+
+    CalibrationSetupDialog dlg(base, QDir::tempPath(), app_root);
+    QVERIFY(dlg.m_step_ok);
+    dlg.m_cal_path = cal;
+    dlg.maybeRunExtraction();
+
+    QVERIFY2(dlg.m_cal_ok == expect_ok, qPrintable(dlg.m_cal_status->text()));
+    if (!expect_ok)
+    {
+        QVERIFY2(dlg.m_cal_status->text().contains(QString(QChar(0x2717))), qPrintable(dlg.m_cal_status->text()));
+        QVERIFY(dlg.calibrationByWord().isEmpty());
+    }
+}
+
+void TestStreamConfigDialog::calibrationDialogHandsTheRawAffectingSettingsToTheExtraction_data()
+{
+    QTest::addColumn<bool>("swap_bytes");
+    QTest::addColumn<bool>("inverted");
+    QTest::addColumn<bool>("randomized");
+    QTest::addColumn<bool>("expect_ok");
+
+    QTest::newRow("as-recorded")        << true  << false << false << true;
+    QTest::newRow("wrong-byte-order")   << false << false << false << false;
+    QTest::newRow("inverted")           << true  << true  << false << false;
+    QTest::newRow("derandomized")       << true  << false << true  << false;
+}
+
+void TestStreamConfigDialog::calibrationDialogHandsTheDataRateToTheExtraction()
+{
+    // The rate sets how long each bit lasts, so how long the recording's windows are, so how long
+    // the recording is reckoned to be: step_cal states 0.8 Mbps itself, so dropping the dialog's
+    // value would change nothing there - except when the dialog's value differs. At half the rate
+    // the same bits take twice as long (the 200 ms window is the longest allowed, exactly twice the
+    // 100 ms one), which the clip warning shows as the recording's length.
+    const QString app_root = projectRoot();
+    const QString cal = app_root + "/tests/data/test files/step_cal, example.ch10";
+    if (!QFileInfo::exists(cal))
+        QSKIP("step_cal fixture not available");
+
+    auto recordingSecondsShown = [&](double rate_mbps) {
+        DialogBase base = dialogBase("FE6B2840");
+        base.sync.dataRateMbps = rate_mbps;
+        CalibrationSetupDialog dlg(base, QDir::tempPath(), app_root);
+        dlg.m_cal_path = cal;
+        dlg.m_clip_end->setValue(1000.0);          // more than any recording here: always ignored
+        dlg.maybeRunExtraction();
+        const QString status = dlg.m_cal_status->text();
+        QRegularExpression pattern("exceed the recording \\(([0-9.]+) s\\)");
+        const QRegularExpressionMatch match = pattern.match(status);
+        return match.hasMatch() ? match.captured(1).toDouble() : -1.0;
+    };
+
+    const double at_full_rate = recordingSecondsShown(0.8);
+    const double at_half_rate = recordingSecondsShown(0.4);
+    QVERIFY2(at_full_rate > 60.0 && at_full_rate < 70.0, qPrintable(QString::number(at_full_rate)));
+    QVERIFY2(qAbs(at_half_rate - 2.0 * at_full_rate) < 0.5,
+             qPrintable(QString("0.8 Mbps: %1 s, 0.4 Mbps: %2 s").arg(at_full_rate).arg(at_half_rate)));
 }
 
 void TestStreamConfigDialog::calibrationDialogPreloadsTheStepFile()

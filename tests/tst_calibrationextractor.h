@@ -24,6 +24,12 @@ private slots:
     void aCancelledExtractionSaysSoAndLeavesNoResults();
     void startingWhileRunningIsIgnoredAndAnExtractorCanRunAgain();
     void aRunBeginsWithItsSamplePeriodAndSummarisesWhatItCalibrated();
+    // Behaviour the plain extractor adds: an end that is truly last, errors reported as errors, a
+    // cancel from any thread, and a destructor that stops a run in flight.
+    void theEndIsAlwaysTheLastReportAndOnlyAFailureIsAnError();
+    void aWorkerFailureIsReportedWithItsOwnReasonAsAnError();
+    void cancelCanComeFromAnotherThread();
+    void destroyingARunningExtractorCancelsItAndWaits();
     void realStepCalWithShortStepFileIsFlagged();
     void realStepCalWithWrongWordMapIsFlagged();
     void extractionReportsItsProgress();
