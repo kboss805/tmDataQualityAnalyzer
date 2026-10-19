@@ -163,3 +163,43 @@ void TestMainViewModelHelpers::openFileOnAFileThatCannotBeReadReportsOneErrorAnd
     QVERIFY(vm.buildDefaultStreamConfigs().isEmpty());
     QVERIFY(vm.inputFilename().isEmpty());
 }
+
+void TestMainViewModelHelpers::openFileShowsANonAsciiChannelNameIntact()
+{
+    // The reader holds a TMATS name as UTF-8; the combo box and the default stream row show it
+    // as text. A copy of step_cal gets an accented letter in its PCM channel's name (two bytes,
+    // traded for "H-" so no length or checksum changes - the recording has no data checksum).
+    const QString source_path = fixturePath("step_cal, example.ch10");
+    if (!QFile::exists(source_path))
+        QSKIP("step_cal fixture not available");
+
+    QFile source(source_path);
+    QVERIFY(source.open(QIODevice::ReadOnly));
+    QByteArray all = source.readAll();
+    const QByteArray needle = "R-1\\DSI-27:CH-16 AGC";
+    const QByteArray patched = QByteArray("R-1\\DSI-27:C") + "\xC3\xA9" + "-1 AGC";
+    QCOMPARE(needle.size(), patched.size());
+    const int at = all.indexOf(needle);
+    QVERIFY(at >= 0 && at < 20000);
+    all.replace(at, patched.size(), patched);
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath("accent.ch10");
+    {
+        QFile out(path);
+        QVERIFY(out.open(QIODevice::WriteOnly));
+        QVERIFY(out.write(all) == all.size());
+    }
+
+    MainViewModel vm;
+    QSignalSpy errors(&vm, &MainViewModel::errorOccurred);
+    vm.openFile(path);
+    QCOMPARE(errors.count(), 0);
+
+    const QString name = QStringLiteral("C") + QChar(0x00E9) + QStringLiteral("-1 AGC STEP CALS 800K");
+    QCOMPARE(vm.pcmChannelList(), QStringList{"26 - " + name});
+    const QVector<StreamConfig> configs = vm.buildDefaultStreamConfigs();
+    QCOMPARE(configs.size(), 1);
+    QCOMPARE(configs[0].label, name);
+}

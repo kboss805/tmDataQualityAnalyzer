@@ -415,8 +415,8 @@ QString writePatchedStepCal(const QTemporaryDir& dir, const QStringList& edits, 
 
     for (int i = 0; i + 1 < edits.size(); i += 2)
     {
-        const QByteArray needle      = edits[i].toLatin1();
-        const QByteArray replacement = edits[i + 1].toLatin1();
+        const QByteArray needle      = edits[i].toUtf8();
+        const QByteArray replacement = edits[i + 1].toUtf8();
         if (needle.size() != replacement.size())
         {
             *why = "edit changes the length: " + edits[i];
@@ -522,6 +522,14 @@ void TestChapter10Reader::tmatsTextDecidesWhichChannelsAreListedAndWhatTheyAreCa
     QTest::newRow("name-cdln-beats-pdln")
         << QStringList{dsi_off, dsi_broken, pdln[0], pdln[1]}
         << QStringList{"26 - MrgStream-16"} << irig;
+
+    // A name outside ASCII is UTF-8 in the file (an accented letter is two bytes, so the edit
+    // trades "H-" for it and keeps the length) and has to come out as the same text.
+    QTest::newRow("name-non-ascii")
+        << QStringList{QStringLiteral(R"(R-1\DSI-27:CH-16 AGC)"),
+                       QStringLiteral(R"(R-1\DSI-27:C)") + QChar(0x00E9) + QStringLiteral("-1 AGC")}
+        << QStringList{QStringLiteral("26 - C") + QChar(0x00E9) + QStringLiteral("-1 AGC STEP CALS 800K")}
+        << irig;
 }
 
 void TestChapter10Reader::aFileThatFailsToOpenLeavesThePreviousChannelsAlone()

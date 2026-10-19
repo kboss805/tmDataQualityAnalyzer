@@ -12,6 +12,7 @@ private slots:
     void buildStreamJobAttachesCalibrationByWord();
     void openFileListsItsChannelsAndOffersThemAsStreams();
     void openFileOnAFileThatCannotBeReadReportsOneErrorAndKeepsNoChannels();
+    void openFileShowsANonAsciiChannelNameIntact();
 };
 
 #endif // TST_MAINVIEWMODEL_HELPERS_H
