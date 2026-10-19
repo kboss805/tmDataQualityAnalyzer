@@ -56,6 +56,9 @@ void loadFixture(Chapter10Reader& reader, const QString& name)
     QVERIFY2(result.ok, qPrintable(name + ": " + result.errors.join("; ")));
 }
 
+QStringList timeList(const Chapter10Reader& reader) { return reader.getTimeChannelComboBoxList(); }
+QStringList pcmList(const Chapter10Reader& reader) { return reader.getPCMChannelComboBoxList(); }
+
 QString idNameRate(int id, const QString& name, double bits_per_second)
 {
     return QString::number(id) + "|" + name + "|" + QString::number(bits_per_second, 'f', 0);
@@ -389,6 +392,148 @@ void TestChapter10Reader::aFailedLoadReportsItsReasonAndLeavesNoChannels_data()
     // These open, and then cannot establish time from what is left of the file.
     QTest::newRow("only-tmats")    << "only-tmats"     << "" << "Error establishing time sync.";
     QTest::newRow("cut-in-tmats")  << "cut-in-tmats"   << "" << "Error establishing time sync.";
+}
+
+namespace {
+
+/// Copies step_cal's recording to a temp file with edits made to its TMATS text. Each edit is
+/// a (needle, replacement) pair of the SAME length, so no packet length or checksum changes
+/// (this recording carries no data checksum, and the header is untouched). Returns an
+/// empty path and says why in @p why when an edit does not apply.
+QString writePatchedStepCal(const QTemporaryDir& dir, const QStringList& edits, QString* why)
+{
+    QFile source(testDataPath("test files/step_cal, example.ch10"));
+    if (!source.open(QIODevice::ReadOnly))
+    {
+        *why = "cannot read step_cal";
+        return QString();
+    }
+    const QByteArray all = source.readAll();
+    quint32 first_packet_length = 0;
+    memcpy(&first_packet_length, all.constData() + 4, 4);
+    QByteArray tmats = all.left(int(first_packet_length));
+
+    for (int i = 0; i + 1 < edits.size(); i += 2)
+    {
+        const QByteArray needle      = edits[i].toLatin1();
+        const QByteArray replacement = edits[i + 1].toLatin1();
+        if (needle.size() != replacement.size())
+        {
+            *why = "edit changes the length: " + edits[i];
+            return QString();
+        }
+        const int at = tmats.indexOf(needle);
+        if (at < 0 || tmats.indexOf(needle, at + 1) >= 0)
+        {
+            *why = "needle not found exactly once: " + edits[i];
+            return QString();
+        }
+        tmats.replace(at, replacement.size(), replacement);
+    }
+
+    const QString path = dir.filePath("patched.ch10");
+    QFile out(path);
+    if (!out.open(QIODevice::WriteOnly))
+    {
+        *why = "cannot write the patched copy";
+        return QString();
+    }
+    out.write(tmats);
+    out.write(all.mid(int(first_packet_length)));
+    return path;
+}
+
+} // namespace
+
+void TestChapter10Reader::tmatsTextDecidesWhichChannelsAreListedAndWhatTheyAreCalled()
+{
+    QFETCH(QStringList, edits);
+    QFETCH(QStringList, pcm_list);
+    QFETCH(QStringList, time_list);
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    QString why;
+    const QString path = writePatchedStepCal(dir, edits, &why);
+    QVERIFY2(!path.isEmpty(), qPrintable(why));
+
+    Chapter10Reader reader;
+    const LoadResult result = load(reader, path);
+    QVERIFY2(result.ok, qPrintable(result.errors.join("; ")));
+
+    QCOMPARE(pcmList(reader), pcm_list);
+    QCOMPARE(timeList(reader), time_list);
+    QCOMPARE(reader.getFirstPCMChannelID(), pcm_list.isEmpty() ? -1 : 26);
+    QCOMPARE(reader.getCurrentTimeChannelID(), time_list.isEmpty() ? -1 : 1);
+}
+
+void TestChapter10Reader::tmatsTextDecidesWhichChannelsAreListedAndWhatTheyAreCalled_data()
+{
+    QTest::addColumn<QStringList>("edits");
+    QTest::addColumn<QStringList>("pcm_list");
+    QTest::addColumn<QStringList>("time_list");
+
+    const QStringList shown   = {"26 - CH-16 AGC STEP CALS 800K"};
+    const QStringList none    = {};
+    const QStringList irig    = {"1 - IRIG-B"};
+    const QString che = R"(R-1\CHE-27:)";
+    const QString cdt = R"(R-1\CDT-27:)";
+
+    // "Channel enabled" (CHE-n): T, Y and 1 enable, in either case; F, N, 0 and anything
+    // else disable, so the channel never appears; no CHE-n at all is treated as enabled.
+    QTest::newRow("che-F")       << QStringList{che + "T;", che + "F;"} << none  << irig;
+    QTest::newRow("che-N")       << QStringList{che + "T;", che + "N;"} << none  << irig;
+    QTest::newRow("che-0")       << QStringList{che + "T;", che + "0;"} << none  << irig;
+    QTest::newRow("che-Q")       << QStringList{che + "T;", che + "Q;"} << none  << irig;
+    QTest::newRow("che-Y")       << QStringList{che + "T;", che + "Y;"} << shown << irig;
+    QTest::newRow("che-1")       << QStringList{che + "T;", che + "1;"} << shown << irig;
+    QTest::newRow("che-t")       << QStringList{che + "T;", che + "t;"} << shown << irig;
+    QTest::newRow("che-y")       << QStringList{che + "T;", che + "y;"} << shown << irig;
+    QTest::newRow("che-missing") << QStringList{R"(R-1\CHE-27:T;)", R"(R-1\CHX-27:T;)"} << shown << irig;
+
+    // Channel type (CDT-n): PCMIN, 01 and 09 are PCM; TIMEIN and 11 are time; the match is
+    // case-sensitive and anything else is some other kind of channel that is not listed.
+    QTest::newRow("type-01")     << QStringList{cdt + "PCMIN;", cdt + "01   ;"} << shown << irig;
+    QTest::newRow("type-09")     << QStringList{cdt + "PCMIN;", cdt + "09   ;"} << shown << irig;
+    QTest::newRow("type-pcmin-lower") << QStringList{cdt + "PCMIN;", cdt + "pcmin;"} << none << irig;
+    QTest::newRow("type-other")  << QStringList{cdt + "PCMIN;", cdt + "XYZ  ;"} << none << irig;
+    QTest::newRow("time-11")     << QStringList{R"(R-1\CDT-1:TIMEIN;)", R"(R-1\CDT-1:11    ;)"} << shown << irig;
+    QTest::newRow("time-lower")  << QStringList{R"(R-1\CDT-1:TIMEIN;)", R"(R-1\CDT-1:timein;)"} << shown << none;
+
+    // The channel's name: the data-source id (DSI-n) first, then the channel data link name
+    // (CDLN-n), then the PCM link name (PDLN-n). The recording has the first two; PDLN is
+    // made by renaming a same-length key (PDTF-27 -> PDLN-27).
+    const QString dsi_off   = R"(R-1\DSI-27:)";
+    const QString dsi_broken = R"(R-1\DSX-27:)";
+    const QString cdln_on   = R"(R-1\CDLN-27:)";
+    const QString cdln_broken = R"(R-1\CDLX-27:)";
+    const QStringList pdln = {R"(R-1\PDTF-27:1;)", R"(R-1\PDLN-27:Q;)"};
+    QTest::newRow("name-cdln-when-no-dsi")
+        << QStringList{dsi_off, dsi_broken}
+        << QStringList{"26 - MrgStream-16"} << irig;
+    QTest::newRow("name-empty-when-neither")
+        << QStringList{dsi_off, dsi_broken, cdln_on, cdln_broken}
+        << QStringList{"26 - "} << irig;
+    QTest::newRow("name-pdln-when-neither")
+        << QStringList{dsi_off, dsi_broken, cdln_on, cdln_broken, pdln[0], pdln[1]}
+        << QStringList{"26 - Q"} << irig;
+    QTest::newRow("name-dsi-beats-pdln")
+        << pdln << shown << irig;
+    QTest::newRow("name-cdln-beats-pdln")
+        << QStringList{dsi_off, dsi_broken, pdln[0], pdln[1]}
+        << QStringList{"26 - MrgStream-16"} << irig;
+}
+
+void TestChapter10Reader::aFileThatFailsToOpenLeavesThePreviousChannelsAlone()
+{
+    Chapter10Reader reader;
+    loadFixture(reader, "prn_testfile, sample.ch10");
+    const QStringList before = pcmList(reader);
+
+    const LoadResult failed = load(reader, QDir::tempPath() + "/tst_reader_missing.ch10");
+    QVERIFY(!failed.ok);
+    QCOMPARE(failed.errors.size(), 1);
+    QCOMPARE(pcmList(reader), before);
 }
 
 void TestChapter10Reader::getFirstPcmChannelIdReturnsValidId()

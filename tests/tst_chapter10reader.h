@@ -35,6 +35,10 @@ private slots:
     // Each way a file can fail to load has its own message and leaves no channels behind.
     void aFailedLoadReportsItsReasonAndLeavesNoChannels();
     void aFailedLoadReportsItsReasonAndLeavesNoChannels_data();
+    // TMATS text decides which channels are listed and what they are called.
+    void tmatsTextDecidesWhichChannelsAreListedAndWhatTheyAreCalled();
+    void tmatsTextDecidesWhichChannelsAreListedAndWhatTheyAreCalled_data();
+    void aFileThatFailsToOpenLeavesThePreviousChannelsAlone();
     void getFirstPcmChannelIdReturnsValidId();
 };
 
