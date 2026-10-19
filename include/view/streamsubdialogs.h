@@ -171,6 +171,8 @@ private:
 /// owner reads calibrationByWord() on accept.
 class CalibrationSetupDialog : public QDialog
 {
+    friend class TestStreamConfigDialog;   ///< Reaches the extraction step and the status line.
+
 public:
     /// @param baseRequest Acquisition + receiver fields already filled by the
     ///        caller (frame sync, channel IDs, word-map source). The dialog adds

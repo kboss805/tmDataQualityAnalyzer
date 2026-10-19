@@ -854,6 +854,99 @@ void TestStreamConfigDialog::subDialogsRoundTripAStreamConfig()
     QVERIFY(!lock.applyToAll());
 }
 
+namespace {
+
+/// What the calibration dialog is built from. The one place these tests make it and set its sync
+/// text, so a change in that type touches this and nothing else.
+using DialogBase = CalibrationExtractor::Request;
+
+DialogBase dialogBase(const QString& pattern, const QString& mask = QString())
+{
+    DialogBase base;
+    base.pcmChannelId          = 26;
+    base.timeChannelId         = 1;
+    base.sync.pattern          = pattern;
+    base.sync.mask             = mask;
+    base.sync.bitsInMinorFrame = 800;
+    base.sync.randomized       = false;
+    base.sync.dataRateMbps     = 0.8;
+    base.swapBytes             = true;
+    return base;
+}
+
+QString projectRoot()
+{
+    QDir root(QCoreApplication::applicationDirPath());
+    root.cdUp();   // tests/
+    root.cdUp();   // project root
+    return root.absolutePath();
+}
+
+} // namespace
+
+void TestStreamConfigDialog::calibrationDialogReportsAnUnusableSyncWithoutExtracting()
+{
+    // The acquisition text comes from the Receiver SNR dialog's own fields. If it cannot be read, or
+    // the recording cannot be opened, the Extract Calibration dialog says so on its status line and
+    // leaves OK disabled - it does not hang waiting for an extraction that never started.
+    QFETCH(QString, pattern);
+    QFETCH(QString, mask);
+    QFETCH(QString, expected);
+
+    const QString app_root = projectRoot();
+    QVERIFY2(QFileInfo(app_root + "/settings/rcvr_cals/default.toml").isFile(), "shipped step file");
+
+    CalibrationSetupDialog dlg(dialogBase(pattern, mask), QDir::tempPath(), app_root);
+    QVERIFY(dlg.m_step_ok);                                       // the default step file preloaded
+    dlg.m_cal_path = QDir::tempPath() + "/tst_dialog_never_there.ch10";
+    dlg.maybeRunExtraction();
+
+    const QString status = dlg.m_cal_status->text();
+    QVERIFY2(status.contains(expected), qPrintable(status));
+    QVERIFY2(status.contains(QString(QChar(0x2717))), qPrintable(status));   // the failure mark
+    QVERIFY(!dlg.m_cal_ok);
+    QVERIFY(dlg.calibrationByWord().isEmpty());
+}
+
+void TestStreamConfigDialog::calibrationDialogReportsAnUnusableSyncWithoutExtracting_data()
+{
+    QTest::addColumn<QString>("pattern");
+    QTest::addColumn<QString>("mask");
+    QTest::addColumn<QString>("expected");
+
+    QTest::newRow("bad-pattern")   << "ZZ" << "" << "Invalid frame sync pattern 'ZZ'.";
+    QTest::newRow("empty-pattern") << "" << "" << "Invalid frame sync pattern ''.";
+    QTest::newRow("bad-mask")      << "FE6B2840" << "XYZ" << "Invalid frame sync mask 'XYZ'.";
+    // A sync that reads, over a recording that is not there: the extractor's own reason is shown.
+    QTest::newRow("unopenable")    << "FE6B2840" << "" << "Error opening data file.";
+}
+
+void TestStreamConfigDialog::calibrationDialogExtractsThroughItsProgressDialog()
+{
+    // The whole path the operator uses: the dialog builds the request from its inputs, runs the
+    // extraction behind a progress dialog, collects the profiles and builds the report. step_cal's
+    // receivers 1, 3, 5 and 6 calibrate (twelve channels), and the shipped default word map is used
+    // because none was named.
+    const QString app_root = projectRoot();
+    const QString cal = app_root + "/tests/data/test files/step_cal, example.ch10";
+    if (!QFileInfo::exists(cal))
+        QSKIP("step_cal fixture not available");
+
+    CalibrationSetupDialog dlg(dialogBase("FE6B2840"), QDir::tempPath(), app_root);
+    QVERIFY(dlg.m_step_ok);
+    dlg.m_cal_path = cal;
+    dlg.maybeRunExtraction();
+
+    QVERIFY2(dlg.m_cal_ok, qPrintable(dlg.m_cal_status->text()));
+    QCOMPARE(dlg.calibrationByWord().size(), 12);
+    QVERIFY2(dlg.calibrationReport().contains("Calibrated only up to a saturated top")
+                 || dlg.calibrationReport().contains("Calibrated: receivers"),
+             qPrintable(dlg.calibrationReport()));
+    QVERIFY2(dlg.calibrationReport().contains("Applied non-linear calibration to 12 of 48 channel(s)."),
+             qPrintable(dlg.calibrationReport()));
+    QVERIFY2(dlg.m_cal_status->text().contains(QString(QChar(0x2713))), qPrintable(dlg.m_cal_status->text()));
+}
+
 void TestStreamConfigDialog::calibrationDialogPreloadsTheStepFile()
 {
     // Extract Calibration opens with a step file already loaded (v2.12.1). Until
@@ -865,9 +958,7 @@ void TestStreamConfigDialog::calibrationDialogPreloadsTheStepFile()
     const QString shipped  = app_root + "/settings/rcvr_cals/default.toml";
     QVERIFY2(QFileInfo(shipped).isFile(), qPrintable(shipped));
 
-    CalibrationExtractor::Request base;
-    base.pcmChannelId = 26;
-    base.timeChannelId = 1;
+    DialogBase base = dialogBase("FE6B2840");
 
     // No previous file: the dialog opens on the shipped default.
     {
