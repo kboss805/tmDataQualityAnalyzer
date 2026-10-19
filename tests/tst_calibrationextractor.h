@@ -17,6 +17,8 @@ private slots:
     void realStepCalWithWrongWordMapIsFlagged();
     void extractionReportsItsProgress();
     void clipsBeyondTheRecordingAreReported();
+    void summarizeProducesExactlyThisReport();
+    void summarizeProducesExactlyThisReport_data();
     void summaryNamesReceiversAndWhyTheyFellBack();
 };
 
