@@ -491,6 +491,14 @@ void TestChapter10Reader::tmatsTextDecidesWhichChannelsAreListedAndWhatTheyAreCa
     QTest::newRow("che-y")       << QStringList{che + "T;", che + "y;"} << shown << irig;
     QTest::newRow("che-missing") << QStringList{R"(R-1\CHE-27:T;)", R"(R-1\CHX-27:T;)"} << shown << irig;
 
+    // Whitespace around the flag is ignored. There is no spare byte, so the unused TK4-27
+    // value gives one up ("27" -> "2"), which keeps the packet's length.
+    const QString tk4 = QStringLiteral(R"(R-1\TK4-27:27;)") + "\r\n";
+    const QString tk4_short = QStringLiteral(R"(R-1\TK4-27:2;)") + "\r\n";
+    QTest::newRow("che-space-before") << QStringList{tk4 + che + "T;", tk4_short + che + " T;"} << shown << irig;
+    QTest::newRow("che-space-after")  << QStringList{tk4 + che + "T;", tk4_short + che + "T ;"} << shown << irig;
+    QTest::newRow("che-space-before-F") << QStringList{tk4 + che + "T;", tk4_short + che + " F;"} << none << irig;
+
     // Channel type (CDT-n): PCMIN, 01 and 09 are PCM; TIMEIN and 11 are time; the match is
     // case-sensitive and anything else is some other kind of channel that is not listed.
     QTest::newRow("type-01")     << QStringList{cdt + "PCMIN;", cdt + "01   ;"} << shown << irig;
@@ -542,6 +550,44 @@ void TestChapter10Reader::aFileThatFailsToOpenLeavesThePreviousChannelsAlone()
     QVERIFY(!failed.ok);
     QCOMPARE(failed.errors.size(), 1);
     QCOMPARE(pcmList(reader), before);
+}
+
+void TestChapter10Reader::aTmatsDataRateIsReadLikeQStringToDouble()
+{
+    QFETCH(QString, value);       // six characters, replacing "800000" in P-16\D2
+    QFETCH(double, expected);
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    QString why;
+    const QString path = writePatchedStepCal(
+        dir, QStringList{QStringLiteral(R"(P-16\D2:800000;)"), QStringLiteral(R"(P-16\D2:)") + value + ";"}, &why);
+    QVERIFY2(!path.isEmpty(), qPrintable(why));
+
+    Chapter10Reader reader;
+    const LoadResult result = load(reader, path);
+    QVERIFY2(result.ok, qPrintable(result.errors.join("; ")));
+    QCOMPARE(reader.getTmatsDataRateBps(26), expected);
+}
+
+void TestChapter10Reader::aTmatsDataRateIsReadLikeQStringToDouble_data()
+{
+    QTest::addColumn<QString>("value");
+    QTest::addColumn<double>("expected");
+
+    QTest::newRow("unchanged")        << "800000" << 800000.0;
+    QTest::newRow("exponent")         << "8e5   " << 800000.0;
+    QTest::newRow("leading-spaces")   << "  4000" << 4000.0;
+    QTest::newRow("trailing-spaces")  << "4000  " << 4000.0;
+    QTest::newRow("leading-plus")     << "+80000" << 80000.0;
+    QTest::newRow("fraction")         << "1234.5" << 1234.5;
+    // A rate that is not a positive number is "not described", not a rate.
+    QTest::newRow("negative")         << "-80000" << 0.0;
+    QTest::newRow("zero")             << "0     " << 0.0;
+    QTest::newRow("junk")             << "80000x" << 0.0;
+    QTest::newRow("word")             << "abcdef" << 0.0;
+    QTest::newRow("group-separator")  << "1,0000" << 0.0;
+    QTest::newRow("nan")              << "nan   " << 0.0;
 }
 
 void TestChapter10Reader::getFirstPcmChannelIdReturnsValidId()

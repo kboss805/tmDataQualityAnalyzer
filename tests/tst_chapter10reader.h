@@ -39,6 +39,9 @@ private slots:
     void tmatsTextDecidesWhichChannelsAreListedAndWhatTheyAreCalled();
     void tmatsTextDecidesWhichChannelsAreListedAndWhatTheyAreCalled_data();
     void aFileThatFailsToOpenLeavesThePreviousChannelsAlone();
+    // The data rate is read from the P record like QString::toDouble would, and only a positive one counts.
+    void aTmatsDataRateIsReadLikeQStringToDouble();
+    void aTmatsDataRateIsReadLikeQStringToDouble_data();
     void getFirstPcmChannelIdReturnsValidId();
 };
 
