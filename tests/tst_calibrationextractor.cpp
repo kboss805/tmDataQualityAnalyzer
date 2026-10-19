@@ -16,8 +16,10 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QEventLoop>
+#include <QFile>
 #include <QFileInfo>
 #include <QSet>
+#include <QTemporaryDir>
 #include <QtTest>
 
 #include "calibrationextractor.h"
@@ -120,6 +122,11 @@ std::vector<CalibrationChannelResult> reportScenario(const QString& scenario, in
     else if (scenario == "unnamed")
     {
         v.push_back(channelResult("AGC_LEFT", O::NoMonotonicSweep, 7));
+        v.push_back(channelResult("AGC_RIGHT", O::Calibrated, 6));
+    }
+    else if (scenario == "unnamed-all-calibrated")
+    {
+        v.push_back(channelResult("AGC_LEFT", O::Calibrated, 6));
         v.push_back(channelResult("AGC_RIGHT", O::Calibrated, 6));
     }
     else if (scenario == "unnamed-non-ascii")
@@ -454,6 +461,16 @@ void TestCalibrationExtractor::summarizeProducesExactlyThisReport_data()
             "Fell back to linear calibration:",
             QString::fromUtf8("  Unnamed receiver — AGC_RIGHT calibrated; AGC_LEFT: no monotonic sweep")};
 
+    // Pinned as the old code printed it: a group of unnamed channels that ALL calibrated is listed
+    // under the "Fell back to linear calibration:" heading, which reads wrongly for channels that did
+    // not fall back. A refactor does not change wording, so it stays until it is fixed on purpose.
+    QTest::newRow("unnamed-all-calibrated") << QStringLiteral("unnamed-all-calibrated")
+        << QStringList{
+            "Applied non-linear calibration to 2 of 2 channel(s).",
+            "",
+            "Fell back to linear calibration:",
+            QString::fromUtf8("  Unnamed receiver (AGC_LEFT, AGC_RIGHT) — calibrated")};
+
     QTest::newRow("unnamed-non-ascii") << QStringLiteral("unnamed-non-ascii")
         << QStringList{
             "Applied non-linear calibration to 1 of 2 channel(s).",
@@ -783,6 +800,102 @@ void TestCalibrationExtractor::summaryFlagsAShortStepFileAndAMismatchedWordMap()
     }
     const QString absentReport = summarizeReport(absent, 11);
     QVERIFY2(!absentReport.contains("Check the word map"), qPrintable(absentReport));
+}
+
+void TestCalibrationExtractor::aNonAsciiChannelNameSurvivesExtractionItsLogAndItsReport()
+{
+    // A hand-written receiver-parameters TOML may name its channels anything. Here three live words
+    // of step_cal are named with an accented letter, a Greek capital sigma and an omega, so the name
+    // goes through the word map, the per-channel log line and the report.
+    Chapter10Reader reader;
+    CalibrationExtractor::Request req;
+    QString skip;
+    if (!buildStepCalRequest(reader, req, "settings/rcvr_cals/default.toml",
+                             "settings/receiver_params/default.toml", skip))
+        QSKIP(qPrintable(skip));
+
+    const QStringList names = {QStringLiteral("R") + QChar(0x00E9) + QStringLiteral("cepteur ") + QChar(0x03A9),
+                               QStringLiteral("Gain ") + QChar(0x03A3),
+                               QStringLiteral("Plain")};
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString toml_path = dir.filePath("accent.toml");
+    {
+        QFile f(toml_path);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        for (int i = 0; i < names.size(); i++)
+        {
+            const QByteArray section = "[" + names[i].toUtf8() + "]\nWord = " + QByteArray::number(i + 1) + "\n";
+            QVERIFY(f.write(section) == section.size());
+        }
+    }
+    req.receiverParamsToml = toml_path;
+
+    CalibrationExtractor extractor;
+    QStringList log;
+    QObject::connect(&extractor, &CalibrationExtractor::logMessage,
+                     [&](const QString& message) { log << message; });
+    QString summary;
+    QVERIFY2(runExtraction(extractor, req, summary), qPrintable(summary));
+
+    const std::vector<CalibrationChannelResult>& results = extractor.results();
+    QCOMPARE(int(results.size()), 3);
+    for (int i = 0; i < 3; i++)
+    {
+        QCOMPARE(nameOf(results[i]), names[i]);
+        QVERIFY(results[i].hadData);
+        const QString prefix = QString("  %1 (word %2): ").arg(names[i]).arg(results[i].word);
+        int lines = 0;
+        for (const QString& line : log)
+            lines += line.startsWith(prefix) ? 1 : 0;
+        QVERIFY2(lines == 1, qPrintable(QString("%1: %2 log lines").arg(names[i]).arg(lines)));
+    }
+
+    // None carries "_RCVR<N>", so the report names them rather than numbering a receiver.
+    const QString report = summarizeReport(results, intSize(req.steps));
+    for (const QString& name : names)
+        QVERIFY2(report.contains(name), qPrintable(report));
+    QVERIFY2(report.contains("Unnamed receiver"), qPrintable(report));
+}
+
+void TestCalibrationExtractor::extractionLogsOneLinePerChannelWithData()
+{
+    // The log the dialog shows while it works: one line per channel that had samples, naming the
+    // channel and its word, and saying how many plateaus were found against the steps expected.
+    Chapter10Reader reader;
+    CalibrationExtractor::Request req;
+    QString skip;
+    if (!buildStepCalRequest(reader, req, "settings/rcvr_cals/default.toml",
+                             "settings/receiver_params/default.toml", skip))
+        QSKIP(qPrintable(skip));
+
+    CalibrationExtractor extractor;
+    QStringList log;
+    QObject::connect(&extractor, &CalibrationExtractor::logMessage,
+                     [&](const QString& message) { log << message; });
+    QString summary;
+    QVERIFY2(runExtraction(extractor, req, summary), qPrintable(summary));
+
+    int with_data = 0;
+    for (const CalibrationChannelResult& r : extractor.results())
+    {
+        if (!r.hadData)
+            continue;
+        with_data++;
+        const QString prefix = QString("  %1 (word %2): ").arg(nameOf(r)).arg(r.word);
+        int lines = 0;
+        for (const QString& line : log)
+        {
+            if (line.startsWith(prefix))
+            {
+                lines++;
+                QVERIFY2(line.contains(QString("%1 step(s) expected").arg(intSize(req.steps))), qPrintable(line));
+                QVERIFY2(line.contains(QString("%1 plateau(s) detected").arg(r.detectedPlateaus)), qPrintable(line));
+            }
+        }
+        QVERIFY2(lines == 1, qPrintable(QString("%1: %2 log lines").arg(nameOf(r)).arg(lines)));
+    }
+    QVERIFY(with_data > 0);
 }
 
 void TestCalibrationExtractor::realStepCalWithShortStepFileIsFlagged()

@@ -13,6 +13,8 @@ private slots:
     void byteOrderReachesTheExtraction();
     void realStepCalRecordingPairsEveryStepCorrectly();
     void summaryFlagsAShortStepFileAndAMismatchedWordMap();
+    void aNonAsciiChannelNameSurvivesExtractionItsLogAndItsReport();
+    void extractionLogsOneLinePerChannelWithData();
     void realStepCalWithShortStepFileIsFlagged();
     void realStepCalWithWrongWordMapIsFlagged();
     void extractionReportsItsProgress();
