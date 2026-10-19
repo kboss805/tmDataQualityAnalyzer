@@ -30,6 +30,12 @@ private slots:
     // Load reads back those same three keys.
     void subDialogsRoundTripAStreamConfig();
     void calibrationDialogPreloadsTheStepFile();
+    void calibrationDialogReportsAnUnusableSyncWithoutExtracting();
+    void calibrationDialogReportsAnUnusableSyncWithoutExtracting_data();
+    void calibrationDialogExtractsThroughItsProgressDialog();
+    void calibrationDialogHandsTheRawAffectingSettingsToTheExtraction();
+    void calibrationDialogHandsTheRawAffectingSettingsToTheExtraction_data();
+    void calibrationDialogHandsTheDataRateToTheExtraction();
     void tomlFrameSyncSaveRoundtrip();
     void tomlFrameSyncLoadPopulatesThreeFields();
     void tomlFrameSyncRoundTripsStreamFormatFlags();

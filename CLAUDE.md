@@ -19,11 +19,11 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   present, else serial `nmake` — ~3.5x faster, so prefer it). Re-run qmake after
   `.pro`/version/`Q_OBJECT` changes. **Zero warnings required.**
 - **Tests:** build **in-source inside `tests/`** (the exe must sit one level under `tests/` or the
-  data-file tests fail), then `.\debug\tmDataQualityAnalyzer_tests.exe`. The full run (all **27
+  data-file tests fail), then `.\debug\tmDataQualityAnalyzer_tests.exe`. The full run (all **28
   suites**) is dominated by the real-Ch10 integration suites (a few minutes); add `--fast` (or
   `TMDQ_FAST_TESTS=1`) to skip those four `.ch10` suites for ~1 s local iteration — **local only; CI
   and releases run the full suite**. No CLI single-suite filter.
-  Green baseline: **606 passed / 0 failed / 1 skipped** normally, **607 / 0 / 0** at release. The
+  Green baseline: **688 passed / 0 failed / 1 skipped** normally, **689 / 0 / 0** at release. The
   one standing skip is the heavy PRN throughput benchmark, opt-in via `TMDQA_RUN_HEAVY_BENCH=1`
   because it walks a 640 MB recording nine times and takes minutes. At release it is not skipped:
   `scripts\run_throughput_bench.ps1` builds Release, enables it, runs it **pinned to the
@@ -112,7 +112,8 @@ Invoke explicitly (`/build-and-test`) or let them trigger by intent.
   `codepage.pri`'s manifest makes UTF-8.
 - **SNR:** average raw counts first, calibrate once per window. Out-of-range interpolation **clamps**,
   never extrapolates. The calibration extractor must mirror the main run's word map + raw-affecting
-  flags exactly.
+  flags exactly: both build them through `applyAcquisition` (`include/model/framesync.h`), so a new
+  raw-affecting field goes there and nowhere else.
 - **Frame sync:** lock % is a **bit-span** quantity, not `time × bitrate`. Reject off-phase syncs
   while locked. Don't double-count missed frames (gap extrapolation only when a window has zero bits).
 - **TOML boundary:** frame-sync Load/Save round-trips the sync pattern, sync mask, words/frame and

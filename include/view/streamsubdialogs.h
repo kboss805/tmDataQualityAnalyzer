@@ -171,14 +171,29 @@ private:
 /// owner reads calibrationByWord() on accept.
 class CalibrationSetupDialog : public QDialog
 {
+    friend class TestStreamConfigDialog;   ///< Reaches the extraction step and the status line.
+
 public:
-    /// @param baseRequest Acquisition + receiver fields already filled by the
-    ///        caller (frame sync, channel IDs, word-map source). The dialog adds
-    ///        the cal file, parsed steps, and clip seconds before extracting.
+    /// What the caller knows before the dialog adds the cal file, the parsed steps and the clip
+    /// seconds: which stream this is, how its bits are acquired (still as the text the Receiver SNR
+    /// dialog holds - it is decoded when the extraction starts, so a field that cannot be read is
+    /// reported on this dialog's status line, as it always was), and where its word map comes from.
+    struct Base
+    {
+        int             timeChannelId = -1;
+        int             pcmChannelId  = -1;
+        FrameSyncParams sync;               ///< Pattern / mask text, frame length, code format, data rate.
+        bool            swapBytes = true;   ///< File-level byte order, mirrored from the main run.
+        QString         receiverParamsToml; ///< Word-map file; empty means the shipped default.
+        int             numReceivers = 0;
+        int             receiverChannels = 0;
+    };
+
+    /// @param base The caller-supplied inputs above.
     /// @param initialStepPath The step file this stream last used, if any. The
     ///        dialog opens with it, or with the shipped default if it is empty or
     ///        gone (StepDetector::initialStepConfigPath).
-    CalibrationSetupDialog(const CalibrationExtractor::Request& baseRequest,
+    CalibrationSetupDialog(const Base& base,
                            const QString& tomlDir,
                            const QString& appRoot,
                            const QString& initialStepPath = QString(),
@@ -223,7 +238,7 @@ private:
 
     // Caller-supplied acquisition + receiver settings forwarded to the extractor;
     // the dialog only adds the cal file, steps, and clip seconds before running.
-    CalibrationExtractor::Request m_base_request;
+    Base m_base;
     QString m_toml_dir;
     QString m_app_root;
 
@@ -270,7 +285,7 @@ public:
     bool    inverted()           const { return m_inverted->isChecked(); }
     int     samplePeriodIndex()    const { return m_fs.sampleRate->currentIndex(); }
     double  dataRateMbps()       const { return m_fs.dataRate->value(); }
-    /// The acquisition fields as a bundle (for building a CalibrationExtractor::Request).
+    /// The acquisition fields as a bundle (for building a CalibrationSetupDialog::Base).
     FrameSyncParams frameSyncParams() const {
         return { frameSyncPattern(), frameSyncMask(), bitsPerFrame(),
                  randomized(), inverted(), dataRateMbps() };

@@ -17,6 +17,7 @@
 #define TEXTPARSE_H
 
 #include <charconv>
+#include <cstdint>
 #include <string>
 #include <system_error>
 
@@ -66,6 +67,37 @@ bool parseInteger(const std::string& text, Int& out)
     }
     Int value{};
     const auto [ptr, ec] = std::from_chars(first, last, value);
+    if (ec != std::errc() || ptr != last)
+    {
+        return false;
+    }
+    out = value;
+    return true;
+}
+
+/// `QString::toULongLong(&ok, 16)`: surrounding whitespace ignored, an optional leading '+', an
+/// optional "0x" / "0X" prefix, then at least one hex digit and nothing else; a '-' is refused
+/// (even "-0"), and more than 64 bits is refused rather than wrapped. @return false (leaving
+/// @p out untouched) on failure.
+inline bool parseUnsignedHex(const std::string& text, std::uint64_t& out)
+{
+    const std::string s = trimmed(text);
+    const char* first = s.data();
+    const char* last  = s.data() + s.size();
+    if (first != last && *first == '+')
+    {
+        ++first;
+    }
+    if (last - first >= 2 && first[0] == '0' && (first[1] == 'x' || first[1] == 'X'))
+    {
+        first += 2;
+    }
+    if (first == last)
+    {
+        return false;
+    }
+    std::uint64_t value = 0;
+    const auto [ptr, ec] = std::from_chars(first, last, value, 16);
     if (ec != std::errc() || ptr != last)
     {
         return false;

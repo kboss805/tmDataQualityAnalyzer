@@ -29,6 +29,221 @@ void TestMainViewModelHelpers::classifyLogMessageSeverity()
              static_cast<int>(LL::Error));
 }
 
+namespace {
+
+/// A lock-only stream configuration with a valid sync, for tests to change one field of.
+StreamConfig validLockConfig()
+{
+    StreamConfig cfg;
+    cfg.pcmChannelId          = 5;
+    cfg.label                 = "Stream";
+    cfg.mode                  = StreamMode::FrameSyncLockStats;
+    cfg.sync.pattern          = "FE6B2840";
+    cfg.sync.mask             = "";
+    cfg.sync.bitsInMinorFrame = 800;
+    return cfg;
+}
+
+} // namespace
+
+void TestMainViewModelHelpers::buildStreamJobDecodesTheSyncPatternAndMask()
+{
+    // The hex fields are decoded the way QString::toULongLong(16) does: surrounding whitespace is
+    // ignored, a leading '+' and a "0x" prefix are accepted, any '-' is refused (even "-0"), and
+    // more than 64 bits is refused. The pattern's length in bits is its CHARACTER count times four,
+    // whatever those characters are, so " FE6B " is 24 bits; and an empty mask means "every bit of
+    // the pattern". Both the main run and the calibration extraction decode this way.
+    QFETCH(QString, pattern);
+    QFETCH(QString, mask);
+    QFETCH(bool, ok);
+    QFETCH(qulonglong, sync);
+    QFETCH(qulonglong, mask_value);
+    QFETCH(int, length);
+
+    StreamConfig cfg = validLockConfig();
+    cfg.sync.pattern = pattern;
+    cfg.sync.mask    = mask;
+
+    MainViewModel vm;
+    ProcessingParams base;
+    StreamJob job;
+    QString error;
+    QCOMPARE(vm.buildStreamJob(cfg, base, job, error), ok);
+    if (!ok)
+    {
+        return;
+    }
+    QCOMPARE(qulonglong(job.params.frameSync), sync);
+    QCOMPARE(qulonglong(job.params.frameSyncMask), mask_value);
+    QCOMPARE(job.params.syncPatternLength, length);
+}
+
+void TestMainViewModelHelpers::buildStreamJobDecodesTheSyncPatternAndMask_data()
+{
+    QTest::addColumn<QString>("pattern");
+    QTest::addColumn<QString>("mask");
+    QTest::addColumn<bool>("ok");
+    QTest::addColumn<qulonglong>("sync");
+    QTest::addColumn<qulonglong>("mask_value");
+    QTest::addColumn<int>("length");
+
+    constexpr qulonglong kAll = 0xFFFFFFFFFFFFFFFFull;
+    auto good = [](const char* name, const QString& pattern, const QString& mask, qulonglong sync, qulonglong mask_value, int length) {
+        QTest::newRow(name) << pattern << mask << true << sync << mask_value << length;
+    };
+    auto bad = [](const char* name, const QString& pattern, const QString& mask) {
+        QTest::newRow(name) << pattern << mask << false << qulonglong(0) << qulonglong(0) << 0;
+    };
+
+    good("plain",            "FE6B2840", "", 0xFE6B2840, 0xFFFFFFFF, 32);
+    good("lower-case",       "fe6b2840", "", 0xFE6B2840, 0xFFFFFFFF, 32);
+    good("spaces-around",    " FE6B ", "", 0xFE6B, 0xFFFFFF, 24);
+    good("space-after",      "FE6B ", "", 0xFE6B, 0xFFFFF, 20);
+    good("space-before",     " FE6B", "", 0xFE6B, 0xFFFFF, 20);
+    good("0x-prefix",        "0xFE6B", "", 0xFE6B, 0xFFFFFF, 24);
+    good("0X-prefix",        "0XFE6B", "", 0xFE6B, 0xFFFFFF, 24);
+    good("plus-sign",        "+FE6B", "", 0xFE6B, 0xFFFFF, 20);
+    good("zero",             "0", "", 0, 0xF, 4);
+    good("leading-zeros",    "00FE", "", 0xFE, 0xFFFF, 16);
+    good("tab-newline",      "\t7\n", "", 7, 0xFFF, 12);
+    good("looks-like-binary","0b1", "", 0xB1, 0xFFF, 12);
+    good("exponent-looking", "1e5", "", 0x1E5, 0xFFF, 12);
+    good("sixty-four-bits",  "FFFFFFFFFFFFFFFF", "", kAll, kAll, 64);
+    good("top-bit-only",     "8000000000000000", "", 0x8000000000000000ull, kAll, 64);
+    bad("negative",          "-FE6B", "");
+    bad("negative-zero",     "-0", "");
+    bad("inner-space",       "FE 6B", "");
+    bad("underscore",        "FE_6B", "");
+    bad("comma",             "FE,6B", "");
+    bad("sixty-five-bits",   "10000000000000000", "");
+    bad("not-hex",           "G", "");
+    bad("blank",             " ", "");
+    bad("bare-0x",           "0x", "");
+    bad("x-first",           "x1", "");
+    bad("trailing-dot",      "FE6B.", "");
+    bad("arabic-indic-digit", QString(QChar(0x0661)), "");
+    bad("bare-plus",         "+", "");
+    bad("bare-minus",        "-", "");
+    bad("double-plus",       "++1", "");
+
+    good("mask-plain",       "FE6B2840", "FE6B2840", 0xFE6B2840, 0xFE6B2840, 32);
+    good("mask-short",       "FE6B2840", "00FE", 0xFE6B2840, 0xFE, 32);
+    good("mask-zero",        "FE6B2840", "0", 0xFE6B2840, 0, 32);
+    good("mask-spaces",      "FE6B2840", " FE6B ", 0xFE6B2840, 0xFE6B, 32);
+    good("mask-0x",          "FE6B2840", "0xFE6B", 0xFE6B2840, 0xFE6B, 32);
+    good("mask-plus",        "FE6B2840", "+FE6B", 0xFE6B2840, 0xFE6B, 32);
+    good("mask-wide",        "FE6B2840", "FFFFFFFFFFFFFFFF", 0xFE6B2840, kAll, 32);
+    bad("mask-negative",     "FE6B2840", "-FE6B");
+    bad("mask-negative-zero","FE6B2840", "-0");
+    bad("mask-inner-space",  "FE6B2840", "FE 6B");
+    bad("mask-overflow",     "FE6B2840", "10000000000000000");
+    bad("mask-blank",        "FE6B2840", " ");
+    bad("mask-not-hex",      "FE6B2840", "G");
+}
+
+void TestMainViewModelHelpers::buildStreamJobBuildsTheAcquisitionParameters()
+{
+    // The remaining fields a stream's configuration contributes to its worker's parameters.
+    MainViewModel vm;
+    vm.setSwapBytes(false);   // file-level, so it comes from the view model and not from the stream
+
+    StreamConfig cfg = validLockConfig();
+    cfg.pcmChannelId          = 17;
+    cfg.label                 = "Rcvr";
+    cfg.sync.bitsInMinorFrame = 8000;
+    cfg.sync.randomized       = true;
+    cfg.sync.inverted         = true;
+    cfg.sync.dataRateMbps     = 0.8;
+    cfg.samplePeriodIndex     = 2;
+
+    ProcessingParams base;
+    base.timeChannelId = 3;                       // set by the view model, carried through
+    StreamJob job;
+    QString error;
+    QVERIFY2(vm.buildStreamJob(cfg, base, job, error), qPrintable(error));
+
+    const ProcessingParams& p = job.params;
+    QCOMPARE(p.timeChannelId, 3);
+    QCOMPARE(p.pcmChannelId, 17);
+    QCOMPARE(p.bitsInMinorFrame, 8000);
+    QCOMPARE(p.wordsInMinorFrame, 500);           // 8000 bits / 16-bit words
+    QVERIFY(p.isRandomized);
+    QVERIFY(p.isInverted);
+    QVERIFY(!p.swapBytes);
+    QCOMPARE(p.dataRateBps, 800000.0);
+    QCOMPARE(p.mode, StreamMode::FrameSyncLockStats);
+    QCOMPARE(p.streamLabel, std::string("Rcvr"));
+    QCOMPARE(p.samplePeriodSec, UIConstants::kSamplePeriod10ms);
+
+    // A data rate of zero means "use the TMATS rate": passed on as zero, not as a rate.
+    cfg.sync.dataRateMbps = 0.0;
+    QVERIFY(vm.buildStreamJob(cfg, base, job, error));
+    QCOMPARE(job.params.dataRateBps, 0.0);
+
+    // The sample-period index picks one of three periods; anything else falls back to 100 ms.
+    const struct { int index; double period; } periods[] = {
+        {0, UIConstants::kSamplePeriod1s}, {1, UIConstants::kSamplePeriod100ms},
+        {2, UIConstants::kSamplePeriod10ms}, {3, UIConstants::kSamplePeriod100ms}, {-1, UIConstants::kSamplePeriod100ms}};
+    for (const auto& c : periods)
+    {
+        cfg.samplePeriodIndex = c.index;
+        QVERIFY(vm.buildStreamJob(cfg, base, job, error));
+        QCOMPARE(job.params.samplePeriodSec, c.period);
+    }
+
+    // The file-level byte order follows the view model.
+    vm.setSwapBytes(true);
+    QVERIFY(vm.buildStreamJob(cfg, base, job, error));
+    QVERIFY(job.params.swapBytes);
+
+    // A stream with no label is described by its channel number.
+    cfg.label.clear();
+    QVERIFY(vm.buildStreamJob(cfg, base, job, error));
+    QCOMPARE(job.params.streamLabel, std::string("Ch 17"));
+}
+
+void TestMainViewModelHelpers::buildStreamJobReportsEachWayAConfigIsRejected()
+{
+    QFETCH(QString, pattern);
+    QFETCH(QString, mask);
+    QFETCH(int, bits);
+    QFETCH(QString, label);
+    QFETCH(QString, expected);
+
+    StreamConfig cfg = validLockConfig();
+    cfg.label                 = label;
+    cfg.sync.pattern          = pattern;
+    cfg.sync.mask             = mask;
+    cfg.sync.bitsInMinorFrame = bits;
+
+    MainViewModel vm;
+    ProcessingParams base;
+    StreamJob job;
+    QString error;
+    QVERIFY(!vm.buildStreamJob(cfg, base, job, error));
+    QCOMPARE(error, expected);
+}
+
+void TestMainViewModelHelpers::buildStreamJobReportsEachWayAConfigIsRejected_data()
+{
+    QTest::addColumn<QString>("pattern");
+    QTest::addColumn<QString>("mask");
+    QTest::addColumn<int>("bits");
+    QTest::addColumn<QString>("label");
+    QTest::addColumn<QString>("expected");
+
+    // Each message leads with the stream's label, or "Ch <id>" when it has none.
+    QTest::newRow("empty-pattern")   << "" << "" << 800 << "Rcvr" << "Rcvr: A frame sync pattern is required.";
+    QTest::newRow("bad-pattern")     << "ZZ" << "" << 800 << "Rcvr" << "Rcvr: Invalid frame sync pattern 'ZZ'.";
+    QTest::newRow("bad-mask")        << "FE6B2840" << "XYZ" << 800 << "Rcvr" << "Rcvr: Invalid frame sync mask 'XYZ'.";
+    QTest::newRow("unlabelled")      << "ZZ" << "" << 800 << "" << "Ch 5: Invalid frame sync pattern 'ZZ'.";
+    QTest::newRow("frame-too-short") << "FE6B2840" << "" << PCMConstants::kMinFrameLengthBits - 1 << "Rcvr"
+                                     << QString("Rcvr: Bits/Frame must be >= %1.").arg(PCMConstants::kMinFrameLengthBits);
+    // The pattern is checked before the mask, and both before the frame length.
+    QTest::newRow("pattern-first")   << "ZZ" << "XYZ" << 1 << "Rcvr" << "Rcvr: Invalid frame sync pattern 'ZZ'.";
+    QTest::newRow("mask-before-frame") << "FE6B2840" << "XYZ" << 1 << "Rcvr" << "Rcvr: Invalid frame sync mask 'XYZ'.";
+}
+
 void TestMainViewModelHelpers::buildStreamJobAttachesCalibrationByWord()
 {
     // The step-calibration profiles live in the stream's config keyed by word index, and
