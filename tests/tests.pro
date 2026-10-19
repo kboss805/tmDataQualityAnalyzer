@@ -166,6 +166,7 @@ SOURCES += \
     tst_templatematcher.cpp \
     tst_packetqueue.cpp \
     tst_intervalgate.cpp \
+    tst_textformat.cpp \
     tst_tomldocument.cpp \
     tst_qtprocessingevents.cpp \
     tst_ch10packetreader.cpp \
@@ -195,6 +196,7 @@ HEADERS += \
     tst_templatematcher.h \
     tst_packetqueue.h \
     tst_intervalgate.h \
+    tst_textformat.h \
     tst_tomldocument.h \
     tst_qtprocessingevents.h \
     tst_ch10packetreader.h \

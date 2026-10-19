@@ -742,8 +742,8 @@ void CalibrationSetupDialog::maybeRunExtraction()
     // Built here, while the per-channel outcomes are still in hand:
     // m_calibration_by_word keeps only the successes (keyed by word), so it
     // cannot say which receivers fell back or why once the extractor is gone.
-    m_calibration_report = CalibrationExtractor::summarize(extractor.results(),
-                                                          intSize(m_steps));
+    m_calibration_report = QString::fromStdString(
+        CalibrationExtractor::summarize(extractor.results(), intSize(m_steps)));
 
     m_cal_ok = (valid > 0);
     if (extractor.clipIgnored())

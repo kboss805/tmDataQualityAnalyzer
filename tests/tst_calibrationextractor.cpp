@@ -16,8 +16,10 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QEventLoop>
+#include <QFile>
 #include <QFileInfo>
 #include <QSet>
+#include <QTemporaryDir>
 #include <QtTest>
 
 #include "calibrationextractor.h"
@@ -46,6 +48,149 @@ QString projectRootPath(const QString& rel)
     dir.cdUp();  // tests/
     dir.cdUp();  // project root
     return dir.filePath(rel);
+}
+
+/// A result's name and the report text as QStrings. These helpers are the one place the tests touch
+/// either, so a change of the string type underneath touches them and nothing else.
+QString nameOf(const CalibrationChannelResult& r) { return QString::fromStdString(r.name); }
+void setName(CalibrationChannelResult& r, const QString& name) { r.name = name.toStdString(); }
+QString summarizeReport(const std::vector<CalibrationChannelResult>& results, int expectedSteps)
+{
+    return QString::fromStdString(CalibrationExtractor::summarize(results, expectedSteps));
+}
+
+/// One channel's outcome, with just the fields the report reads.
+CalibrationChannelResult channelResult(const QString& name, CalibrationOutcome outcome,
+                                       int plateaus = 0, bool hadData = true)
+{
+    CalibrationChannelResult r;
+    setName(r, name);
+    r.outcome          = outcome;
+    r.detectedPlateaus = plateaus;
+    r.hadData          = hadData;
+    r.profile.valid    = (outcome == CalibrationOutcome::Calibrated);
+    return r;
+}
+
+/// A calibrated channel whose profile reaches @p top_db, optionally railed with steps it never measured.
+CalibrationChannelResult railedResult(const QString& name, double top_db, std::vector<double> unresolved)
+{
+    CalibrationChannelResult r = channelResult(name, CalibrationOutcome::Calibrated, 6);
+    r.profile.points = {{1000.0, 0.0}, {2000.0, top_db / 2.0}, {3000.0, top_db}};
+    r.saturated      = true;
+    r.unresolvedDb   = std::move(unresolved);
+    return r;
+}
+
+/// A channel that held one level for the whole recording.
+CalibrationChannelResult flatResult(const QString& name, double level)
+{
+    CalibrationChannelResult r = channelResult(name, CalibrationOutcome::FlatNoSignal, 1);
+    r.plateauLevels = {level};
+    return r;
+}
+
+/// Result sets for the exact-report test, by scenario name. @p expected_steps is the step file's length.
+std::vector<CalibrationChannelResult> reportScenario(const QString& scenario, int& expected_steps)
+{
+    using O = CalibrationOutcome;
+    const QStringList lcr = {QStringLiteral("L"), QStringLiteral("R"), QStringLiteral("C")};
+    std::vector<CalibrationChannelResult> v;
+    expected_steps = 6;
+
+    if (scenario == "empty")
+    {
+        return v;
+    }
+    if (scenario == "one-receiver")
+    {
+        for (const QString& p : lcr)
+            v.push_back(channelResult(p + "_RCVR3", O::Calibrated, 6));
+    }
+    else if (scenario == "mixed")
+    {
+        for (const QString& p : lcr)
+            v.push_back(channelResult(p + "_RCVR1", O::Calibrated, 6));
+        v.push_back(channelResult("L_RCVR2", O::Calibrated, 6));
+        v.push_back(channelResult("R_RCVR2", O::Calibrated, 6));
+        v.push_back(channelResult("C_RCVR2", O::TooFewPlateaus, 4));
+        for (const QString& p : lcr)
+            v.push_back(channelResult(p + "_RCVR3", O::Calibrated, 6));
+        for (const QString& p : lcr)
+            v.push_back(channelResult(p + "_RCVR4", O::NoData, 0, false));
+    }
+    else if (scenario == "unnamed")
+    {
+        v.push_back(channelResult("AGC_LEFT", O::NoMonotonicSweep, 7));
+        v.push_back(channelResult("AGC_RIGHT", O::Calibrated, 6));
+    }
+    else if (scenario == "unnamed-all-calibrated")
+    {
+        v.push_back(channelResult("AGC_LEFT", O::Calibrated, 6));
+        v.push_back(channelResult("AGC_RIGHT", O::Calibrated, 6));
+    }
+    else if (scenario == "unnamed-non-ascii")
+    {
+        v.push_back(channelResult(QStringLiteral("R") + QChar(0x00E9) + QStringLiteral("cepteur ") + QChar(0x03A9),
+                                  O::Calibrated, 6));
+        v.push_back(channelResult(QStringLiteral("Gain ") + QChar(0x03A3), O::TooFewPlateaus, 2));
+    }
+    else if (scenario == "checks")
+    {
+        expected_steps = 8;
+        for (const QString& p : lcr)
+        {
+            CalibrationChannelResult r = channelResult(p + "_RCVR3", O::Calibrated, 8);
+            r.sweepLevels = 11;
+            v.push_back(r);
+        }
+        v.push_back(flatResult("L_RCVR2", 0.0));
+        v.push_back(flatResult("R_RCVR2", 0.0));
+        CalibrationChannelResult swept = channelResult("C_RCVR2", O::Calibrated, 8);
+        swept.sweepLevels = 8;
+        v.push_back(swept);
+    }
+    else if (scenario == "saturated-ties")
+    {
+        // Top dB 37.5 and unresolved dB 42.5 / 2.5 sit exactly halfway between two integers, which is
+        // where Qt's 'f' formatting (away from zero) and a half-to-even formatter disagree.
+        v.push_back(railedResult("L_RCVR1", 37.5, {42.5, 2.5}));
+        v.push_back(railedResult("R_RCVR1", 37.5, {42.5, 60.0}));
+        v.push_back(channelResult("C_RCVR1", O::Calibrated, 6));
+        v.push_back(railedResult("L_RCVR5", 0.5, {}));
+    }
+    else if (scenario == "relaxed")
+    {
+        for (const QString& p : lcr)
+        {
+            CalibrationChannelResult r = channelResult(p + "_RCVR2", O::Calibrated, 6);
+            r.thresholdRelaxed = (p != "R");
+            v.push_back(r);
+        }
+    }
+    else if (scenario == "flat-levels")
+    {
+        // Held levels are printed to the nearest count; 0.5 and 1234.5 are exact ties.
+        v.push_back(flatResult("L_RCVR4", 0.5));
+        v.push_back(flatResult("R_RCVR4", 65472.0));
+        v.push_back(flatResult("C_RCVR4", 0.5));
+        v.push_back(flatResult("L_RCVR6", 1234.5));
+        v.push_back(channelResult("R_RCVR6", O::TooFewPlateaus, 3));
+    }
+    else if (scenario == "several-reasons")
+    {
+        v.push_back(channelResult("L_RCVR7", O::NoMonotonicSweep, 9));
+        v.push_back(channelResult("R_RCVR7", O::NoData, 0, false));
+        v.push_back(channelResult("C_RCVR7", O::TooFewPlateaus, 2));
+        v.push_back(channelResult("L_RCVR8", O::TooFewPlateaus, 5));
+        v.push_back(channelResult("R_RCVR8", O::TooFewPlateaus, 3));
+    }
+    else if (scenario == "twelve-receivers")
+    {
+        for (int rcvr = 1; rcvr <= 12; rcvr++)
+            v.push_back(channelResult(QString("L_RCVR%1").arg(rcvr), O::Calibrated, 6));
+    }
+    return v;
 }
 
 /// A minimal but non-empty step list, so a Request clears the "no steps" guard
@@ -271,13 +416,132 @@ void TestCalibrationExtractor::byteOrderReachesTheExtraction()
     QVERIFY2(runExtraction(extractor_ok, req, summary_ok), qPrintable(summary_ok));
 }
 
+void TestCalibrationExtractor::summarizeProducesExactlyThisReport()
+{
+    // The whole text, not fragments: the report is what the operator reads, and the other summary
+    // tests only look for phrases inside it. Includes the exact halves (37.5, 42.5, 2.5, 0.5, 1234.5)
+    // that Qt rounds away from zero, which a half-to-even formatter would print differently.
+    QFETCH(QString, scenario);
+    QFETCH(QStringList, lines);
+
+    int expected_steps = 0;
+    const std::vector<CalibrationChannelResult> results = reportScenario(scenario, expected_steps);
+    QCOMPARE(summarizeReport(results, expected_steps), lines.join('\n'));
+}
+
+void TestCalibrationExtractor::summarizeProducesExactlyThisReport_data()
+{
+    QTest::addColumn<QString>("scenario");
+    QTest::addColumn<QStringList>("lines");
+
+    QTest::newRow("empty") << QStringLiteral("empty")
+        << QStringList{
+            "No receiver channels were extracted."};
+
+    QTest::newRow("one-receiver") << QStringLiteral("one-receiver")
+        << QStringList{
+            "Applied non-linear calibration to 3 of 3 channel(s).",
+            "",
+            "Calibrated: receiver 3."};
+
+    QTest::newRow("mixed") << QStringLiteral("mixed")
+        << QStringList{
+            "Applied non-linear calibration to 8 of 12 channel(s).",
+            "",
+            "Calibrated: receivers 1, 3.",
+            "",
+            "Fell back to linear calibration:",
+            QString::fromUtf8("  Receiver 2 — L, R calibrated; C: too few plateaus (4 of 6 steps resolved)"),
+            QString::fromUtf8("  Receiver 4 — L, R, C: no data")};
+
+    QTest::newRow("unnamed") << QStringLiteral("unnamed")
+        << QStringList{
+            "Applied non-linear calibration to 1 of 2 channel(s).",
+            "",
+            "Fell back to linear calibration:",
+            QString::fromUtf8("  Unnamed receiver — AGC_RIGHT calibrated; AGC_LEFT: no monotonic sweep")};
+
+    // Pinned as the old code printed it: a group of unnamed channels that ALL calibrated is listed
+    // under the "Fell back to linear calibration:" heading, which reads wrongly for channels that did
+    // not fall back. A refactor does not change wording, so it stays until it is fixed on purpose.
+    QTest::newRow("unnamed-all-calibrated") << QStringLiteral("unnamed-all-calibrated")
+        << QStringList{
+            "Applied non-linear calibration to 2 of 2 channel(s).",
+            "",
+            "Fell back to linear calibration:",
+            QString::fromUtf8("  Unnamed receiver (AGC_LEFT, AGC_RIGHT) — calibrated")};
+
+    QTest::newRow("unnamed-non-ascii") << QStringLiteral("unnamed-non-ascii")
+        << QStringList{
+            "Applied non-linear calibration to 1 of 2 channel(s).",
+            "",
+            "Fell back to linear calibration:",
+            QString::fromUtf8("  Unnamed receiver — Récepteur Ω calibrated; Gain Σ: too few plateaus (2 of 6 steps resolved)")};
+
+    QTest::newRow("checks") << QStringLiteral("checks")
+        << QStringList{
+            "Applied non-linear calibration to 4 of 6 channel(s).",
+            "",
+            "Calibrated: receiver 3.",
+            "",
+            QString::fromUtf8("Check the step file — these receivers stepped through more levels than it lists, so the lowest were set aside as lead-in. If those are real steps, every step is paired with the wrong level:"),
+            QString::fromUtf8("  Receiver 3 — 11 levels in the recording, 8 in the step file"),
+            "",
+            QString::fromUtf8("Check the word map — in these receivers one channel swept and another never moved. A word map that does not match the recording files one receiver's words under another's name; otherwise a channel may be dead:"),
+            QString::fromUtf8("  Receiver 2 — C calibrated; L, R never moved"),
+            "",
+            "Fell back to linear calibration:",
+            QString::fromUtf8("  Receiver 2 — C calibrated; L, R: flat / no signal (held at 0)")};
+
+    QTest::newRow("saturated-ties") << QStringLiteral("saturated-ties")
+        << QStringList{
+            "Applied non-linear calibration to 4 of 4 channel(s).",
+            "",
+            "Calibrated: receivers 1, 5.",
+            "",
+            QString::fromUtf8("Calibrated only up to a saturated top — these receivers ran out of range partway through the sweep, so their readings hold at the highest step still measurable:"),
+            QString::fromUtf8("  Receiver 1 — L, R: readings hold at 38 dB (no measurement for 43, 3, 60 dB)"),
+            QString::fromUtf8("  Receiver 5 — L: readings hold at 1 dB")};
+
+    QTest::newRow("relaxed") << QStringLiteral("relaxed")
+        << QStringList{
+            "Applied non-linear calibration to 3 of 3 channel(s).",
+            "",
+            "Calibrated: receiver 2.",
+            "",
+            QString::fromUtf8("Calibrated only with a relaxed threshold — steps are close to the noise floor, so these receivers are worth checking:"),
+            QString::fromUtf8("  Receiver 2 — L, C")};
+
+    QTest::newRow("flat-levels") << QStringLiteral("flat-levels")
+        << QStringList{
+            "Applied non-linear calibration to 0 of 5 channel(s).",
+            "",
+            "Fell back to linear calibration:",
+            QString::fromUtf8("  Receiver 4 — L, R, C: flat / no signal (held at 1, 65472)"),
+            QString::fromUtf8("  Receiver 6 — L: flat / no signal (held at 1235); R: too few plateaus (1 of 6 steps resolved)")};
+
+    QTest::newRow("several-reasons") << QStringLiteral("several-reasons")
+        << QStringList{
+            "Applied non-linear calibration to 0 of 5 channel(s).",
+            "",
+            "Fell back to linear calibration:",
+            QString::fromUtf8("  Receiver 7 — R: no data; C: too few plateaus (2 of 6 steps resolved); L: no monotonic sweep"),
+            QString::fromUtf8("  Receiver 8 — L, R: too few plateaus (3 of 6 steps resolved)")};
+
+    QTest::newRow("twelve-receivers") << QStringLiteral("twelve-receivers")
+        << QStringList{
+            "Applied non-linear calibration to 12 of 12 channel(s).",
+            "",
+            "Calibrated: receivers 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12."};
+}
+
 void TestCalibrationExtractor::summaryNamesReceiversAndWhyTheyFellBack()
 {
     // summarize() is pure, so this needs no .ch10 fixture and always runs.
     auto channel = [](const QString& name, CalibrationOutcome outcome,
                       int plateaus, bool hadData) {
         CalibrationChannelResult r;
-        r.name             = name;
+        setName(r, name);
         r.outcome          = outcome;
         r.detectedPlateaus = plateaus;
         r.hadData          = hadData;
@@ -304,7 +568,7 @@ void TestCalibrationExtractor::summaryNamesReceiversAndWhyTheyFellBack()
         results.push_back(channel(p + "_RCVR4", CalibrationOutcome::NoData, 0, false));
     }
 
-    const QString summary = CalibrationExtractor::summarize(results, 6);
+    const QString summary = summarizeReport(results, 6);
 
     // The headline count still reports channels, since that is the unit profiles
     // are keyed by.
@@ -332,7 +596,7 @@ void TestCalibrationExtractor::summaryNamesReceiversAndWhyTheyFellBack()
     // they must be reported by name rather than assigned a receiver number.
     std::vector<CalibrationChannelResult> unnamed;
     unnamed.push_back(channel("AGC_LEFT", CalibrationOutcome::NoMonotonicSweep, 7, true));
-    const QString unnamedSummary = CalibrationExtractor::summarize(unnamed, 6);
+    const QString unnamedSummary = summarizeReport(unnamed, 6);
     QVERIFY2(unnamedSummary.contains("AGC_LEFT"), qPrintable(unnamedSummary));
     QVERIFY2(unnamedSummary.contains("no monotonic sweep"), qPrintable(unnamedSummary));
 }
@@ -394,7 +658,7 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
     {
         if (!r.profile.valid)
             continue;
-        calibratedReceivers.insert(FrameSetup::receiverIndexFromName(r.name.toStdString()));
+        calibratedReceivers.insert(FrameSetup::receiverIndexFromName(nameOf(r).toStdString()));
         calibratedChannels++;
 
         // The regression this fixture exists for: every step pairs with its OWN
@@ -407,7 +671,7 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
         const std::vector<CalibrationPoint>& pts = r.profile.points;
         QVERIFY2(pts.front().rawAvg < 1000.0 && pts.front().trueDb == 0.0,
                  qPrintable(QString("%1: 0 dB paired with raw %2, not the pre-sweep level")
-                                .arg(r.name).arg(pts.front().rawAvg)));
+                                .arg(nameOf(r)).arg(pts.front().rawAvg)));
         for (int k = 1; k < pts.size(); k++)
         {
             // Genuine steps here are more than 1000 counts apart (the smallest is
@@ -415,7 +679,7 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
             QVERIFY2(pts[k].rawAvg - pts[k - 1].rawAvg > 1000.0,
                      qPrintable(QString("%1: %2 dB and %3 dB are %4 counts apart - one dwell "
                                         "split in two")
-                                    .arg(r.name).arg(pts[k - 1].trueDb).arg(pts[k].trueDb)
+                                    .arg(nameOf(r)).arg(pts[k - 1].trueDb).arg(pts[k].trueDb)
                                     .arg(pts[k].rawAvg - pts[k - 1].rawAvg)));
         }
 
@@ -425,11 +689,11 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
             // two steps both sit on the 65472 rail and carry no measurement. It is
             // calibrated over the range it could still resolve, and readings hold
             // at the top of that range instead of being extrapolated past it.
-            QCOMPARE(FrameSetup::receiverIndexFromName(r.name.toStdString()), 1);
+            QCOMPARE(FrameSetup::receiverIndexFromName(nameOf(r).toStdString()), 1);
             QCOMPARE(pts.back().trueDb, 48.0);
             QVERIFY2(std::count(r.unresolvedDb.begin(), r.unresolvedDb.end(), 54.0) > 0
                          && std::count(r.unresolvedDb.begin(), r.unresolvedDb.end(), 60.0) > 0,
-                     qPrintable(r.name));
+                     qPrintable(nameOf(r)));
             QCOMPARE(interpolateCalibration(65472.0, r.profile), 48.0);
             // Every step from 0 to 48 dB is measured - including L_RCVR1's 24 dB
             // dwell, whose plateau noise shatters. Left as a hole it was bridged
@@ -454,7 +718,7 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
     // shortfall: receiver 2 holds 0 for the whole recording.
     for (const CalibrationChannelResult& r : results)
     {
-        if (FrameSetup::receiverIndexFromName(r.name.toStdString()) == 2)
+        if (FrameSetup::receiverIndexFromName(nameOf(r).toStdString()) == 2)
         {
             QCOMPARE(r.outcome, CalibrationOutcome::FlatNoSignal);
         }
@@ -462,7 +726,7 @@ void TestCalibrationExtractor::realStepCalRecordingPairsEveryStepCorrectly()
 
     // And the operator-facing report names the receivers, in the unit operators
     // actually talk in, and says where a saturated one stops being trustworthy.
-    const QString report = CalibrationExtractor::summarize(results, intSize(steps));
+    const QString report = summarizeReport(results, intSize(steps));
     QVERIFY2(report.contains("Calibrated: receivers 1, 3, 5, 6."), qPrintable(report));
     QVERIFY2(report.contains("Receiver 1") && report.contains("hold at 48 dB"), qPrintable(report));
 
@@ -478,7 +742,7 @@ void TestCalibrationExtractor::summaryFlagsAShortStepFileAndAMismatchedWordMap()
     // summarize() is pure, so this needs no .ch10 fixture and always runs.
     auto calibrated = [](const QString& name, int sweepLevels) {
         CalibrationChannelResult r;
-        r.name          = name;
+        setName(r, name);
         r.outcome       = CalibrationOutcome::Calibrated;
         r.hadData       = true;
         r.profile.valid = true;
@@ -487,7 +751,7 @@ void TestCalibrationExtractor::summaryFlagsAShortStepFileAndAMismatchedWordMap()
     };
     auto flat = [](const QString& name) {
         CalibrationChannelResult r;
-        r.name          = name;
+        setName(r, name);
         r.outcome       = CalibrationOutcome::FlatNoSignal;
         r.hadData       = true;
         r.plateauLevels = {0.0};
@@ -503,7 +767,7 @@ void TestCalibrationExtractor::summaryFlagsAShortStepFileAndAMismatchedWordMap()
     {
         shortFile.push_back(calibrated(p + "_RCVR3", 11));
     }
-    const QString shortReport = CalibrationExtractor::summarize(shortFile, 8);
+    const QString shortReport = summarizeReport(shortFile, 8);
     QVERIFY2(shortReport.contains("Check the step file"), qPrintable(shortReport));
     QVERIFY2(shortReport.contains("Receiver 3 — 11 levels in the recording, 8 in the step file"),
              qPrintable(shortReport));
@@ -515,14 +779,14 @@ void TestCalibrationExtractor::summaryFlagsAShortStepFileAndAMismatchedWordMap()
     {
         transient.push_back(calibrated(p + "_RCVR3", 9));
     }
-    const QString transientReport = CalibrationExtractor::summarize(transient, 8);
+    const QString transientReport = summarizeReport(transient, 8);
     QVERIFY2(!transientReport.contains("Check the step file"), qPrintable(transientReport));
 
     // One channel swept and two never moved: what a word map that does not match the
     // recording leaves behind, since it files one receiver's words under another's.
     const std::vector<CalibrationChannelResult> mixed{
         flat("L_RCVR2"), flat("R_RCVR2"), calibrated("C_RCVR2", 11)};
-    const QString mixedReport = CalibrationExtractor::summarize(mixed, 11);
+    const QString mixedReport = summarizeReport(mixed, 11);
     QVERIFY2(mixedReport.contains("Check the word map"), qPrintable(mixedReport));
     QVERIFY2(mixedReport.contains("Receiver 2 — C calibrated; L, R never moved"),
              qPrintable(mixedReport));
@@ -534,8 +798,104 @@ void TestCalibrationExtractor::summaryFlagsAShortStepFileAndAMismatchedWordMap()
     {
         absent.push_back(flat(p + "_RCVR4"));
     }
-    const QString absentReport = CalibrationExtractor::summarize(absent, 11);
+    const QString absentReport = summarizeReport(absent, 11);
     QVERIFY2(!absentReport.contains("Check the word map"), qPrintable(absentReport));
+}
+
+void TestCalibrationExtractor::extractionLogsOneLinePerChannelWithData()
+{
+    // The log the dialog shows while it works: one line per channel that had samples, naming the
+    // channel and its word, and saying how many plateaus were found against the steps expected.
+    Chapter10Reader reader;
+    CalibrationExtractor::Request req;
+    QString skip;
+    if (!buildStepCalRequest(reader, req, "settings/rcvr_cals/default.toml",
+                             "settings/receiver_params/default.toml", skip))
+        QSKIP(qPrintable(skip));
+
+    CalibrationExtractor extractor;
+    QStringList log;
+    QObject::connect(&extractor, &CalibrationExtractor::logMessage,
+                     [&](const QString& message) { log << message; });
+    QString summary;
+    QVERIFY2(runExtraction(extractor, req, summary), qPrintable(summary));
+
+    int with_data = 0;
+    for (const CalibrationChannelResult& r : extractor.results())
+    {
+        if (!r.hadData)
+            continue;
+        with_data++;
+        const QString prefix = QString("  %1 (word %2): ").arg(nameOf(r)).arg(r.word);
+        int lines = 0;
+        for (const QString& line : log)
+        {
+            if (line.startsWith(prefix))
+            {
+                lines++;
+                QVERIFY2(line.contains(QString("%1 step(s) expected").arg(intSize(req.steps))), qPrintable(line));
+                QVERIFY2(line.contains(QString("%1 plateau(s) detected").arg(r.detectedPlateaus)), qPrintable(line));
+            }
+        }
+        QVERIFY2(lines == 1, qPrintable(QString("%1: %2 log lines").arg(nameOf(r)).arg(lines)));
+    }
+    QVERIFY(with_data > 0);
+}
+
+void TestCalibrationExtractor::aNonAsciiChannelNameSurvivesExtractionItsLogAndItsReport()
+{
+    // A hand-written receiver-parameters TOML may name its channels anything. Here three live words
+    // of step_cal are named with an accented letter, a Greek capital sigma and an omega, so the name
+    // goes through the word map, the per-channel log line and the report.
+    Chapter10Reader reader;
+    CalibrationExtractor::Request req;
+    QString skip;
+    if (!buildStepCalRequest(reader, req, "settings/rcvr_cals/default.toml",
+                             "settings/receiver_params/default.toml", skip))
+        QSKIP(qPrintable(skip));
+
+    const QStringList names = {QStringLiteral("R") + QChar(0x00E9) + QStringLiteral("cepteur ") + QChar(0x03A9),
+                               QStringLiteral("Gain ") + QChar(0x03A3),
+                               QStringLiteral("Plain")};
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString toml_path = dir.filePath("accent.toml");
+    {
+        QFile f(toml_path);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        for (int i = 0; i < names.size(); i++)
+        {
+            const QByteArray section = "[" + names[i].toUtf8() + "]\nWord = " + QByteArray::number(i + 1) + "\n";
+            QVERIFY(f.write(section) == section.size());
+        }
+    }
+    req.receiverParamsToml = toml_path;
+
+    CalibrationExtractor extractor;
+    QStringList log;
+    QObject::connect(&extractor, &CalibrationExtractor::logMessage,
+                     [&](const QString& message) { log << message; });
+    QString summary;
+    QVERIFY2(runExtraction(extractor, req, summary), qPrintable(summary));
+
+    const std::vector<CalibrationChannelResult>& results = extractor.results();
+    QCOMPARE(int(results.size()), 3);
+    for (int i = 0; i < 3; i++)
+    {
+        QCOMPARE(nameOf(results[i]), names[i]);
+        QVERIFY(results[i].hadData);
+        const QString prefix = QString("  %1 (word %2): ").arg(names[i]).arg(results[i].word);
+        int lines = 0;
+        for (const QString& line : log)
+            lines += line.startsWith(prefix) ? 1 : 0;
+        QVERIFY2(lines == 1, qPrintable(QString("%1: %2 log lines").arg(names[i]).arg(lines)));
+    }
+
+    // None carries "_RCVR<N>", so the report names them rather than numbering a receiver.
+    const QString report = summarizeReport(results, intSize(req.steps));
+    for (const QString& name : names)
+        QVERIFY2(report.contains(name), qPrintable(report));
+    QVERIFY2(report.contains("Unnamed receiver"), qPrintable(report));
 }
 
 void TestCalibrationExtractor::realStepCalWithShortStepFileIsFlagged()
@@ -555,7 +915,7 @@ void TestCalibrationExtractor::realStepCalWithShortStepFileIsFlagged()
     QString summary;
     QVERIFY2(runExtraction(extractor, req, summary), qPrintable(summary));
 
-    const QString report = CalibrationExtractor::summarize(extractor.results(), intSize(req.steps));
+    const QString report = summarizeReport(extractor.results(), intSize(req.steps));
     QVERIFY2(report.contains("Check the step file"), qPrintable(report));
     QVERIFY2(report.contains("Receiver 3 — 11 levels in the recording, 8 in the step file"),
              qPrintable(report));
@@ -578,7 +938,7 @@ void TestCalibrationExtractor::realStepCalWithWrongWordMapIsFlagged()
     QString summary;
     QVERIFY2(runExtraction(extractor, req, summary), qPrintable(summary));
 
-    const QString report = CalibrationExtractor::summarize(extractor.results(), intSize(req.steps));
+    const QString report = summarizeReport(extractor.results(), intSize(req.steps));
     QVERIFY2(report.contains("Check the word map"), qPrintable(report));
 }
 

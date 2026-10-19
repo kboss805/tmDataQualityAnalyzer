@@ -17,6 +17,7 @@
 #define CALIBRATIONEXTRACTOR_H
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <QObject>
@@ -35,7 +36,7 @@ class QThread;
 /// @brief Per-channel outcome of a calibration extraction run.
 struct CalibrationChannelResult
 {
-    QString            name;             ///< Parameter/channel name (e.g. "L_RCVR1").
+    std::string        name;             ///< Parameter/channel name (e.g. "L_RCVR1"), UTF-8.
     int                word = -1;        ///< Zero-based word index within the minor frame.
     CalibrationProfile profile;          ///< Built profile (valid only on success).
     int                detectedPlateaus = 0; ///< Number of plateaus detected.
@@ -118,10 +119,10 @@ public:
      * @param[in] results       Per-channel outcomes, in word order.
      * @param[in] expectedSteps Step count from the step-config TOML, so a
      *                          plateau shortfall can be reported against it.
-     * @return Multi-line report suitable for a message box.
+     * @return Multi-line UTF-8 report suitable for a message box.
      */
-    static QString summarize(const std::vector<CalibrationChannelResult>& results,
-                             int expectedSteps);
+    static std::string summarize(const std::vector<CalibrationChannelResult>& results,
+                                 int expectedSteps);
 
 signals:
     /// File-read completion percentage (0..100).

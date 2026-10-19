@@ -421,7 +421,7 @@ de-Qt of the native core in small steps (QtGui out of the model's headers, then
 caused, a generated Visual Studio solution, and C++20. The first `QString` steps move `TomlDocument`,
 `FrameSetup` and the step-file parser to UTF-8 `std::string`, and the `QObject` steps take
 Qt out of `FrameProcessor` and `Ch10PacketReader`; the DTOs follow, starting with
-`ProcessingParams` and `ProcessedStreamData`, and `FrameSetup`, `Chapter10Reader` and `ChannelData` lose their `QObject`s and `QString`s. One user-facing fix, found during the
+`ProcessingParams` and `ProcessedStreamData`, and `FrameSetup`, `Chapter10Reader` and `ChannelData` lose their `QObject`s and `QString`s, and the calibration report becomes `std::string`. One user-facing fix, found during the
 `QString` survey: recordings under a folder with a non-ASCII name can be processed.
 
 #### A Visual Studio solution, generated rather than committed
@@ -521,6 +521,72 @@ called from our code is reported at **our** call site, so those keep warning exa
 v2.9.0 intended. Every first-party header here is quote-included, so `anglebrackets` covers
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
+
+#### The calibration report is UTF-8 `std::string`, and Qt's rounding is reproduced (de-Qt, `CalibrationExtractor` step A)
+
+The first half of taking Qt out of `CalibrationExtractor`: the text the operator reads after an
+extraction. `CalibrationExtractor::summarize()` now returns a UTF-8 `std::string` built with
+`std::format` (it was a `QString` built with `QString::arg`, a `QMap` and `QStringList`s), and
+`CalibrationChannelResult::name` is a `std::string`. The Extract Calibration dialog decodes the report
+where it shows it. The class itself is still a `QObject`, and its log lines and start-up errors are still
+`QString` - that is the second half, because they leave through the signals that become the event sink.
+
+**`std::format` does not round like Qt, and that was measured before it was assumed.** A probe printed
+both for the same values: an exact tie is rounded away from zero by `QString::number(v, 'f', n)` and to
+the even digit by `std::format`. `0.5` with no decimals is "1" in Qt and "0" in `std::format`; `2.5` is
+"3" and "2"; `0.25` with one decimal is "0.3" and "0.2"; `1234.5` is "1235" and "1234". Every other value
+agrees, because it is decided by the exact binary value, not by a tie. The report prints dB values and raw
+levels with 0 decimals, so a step file with half-dB steps would have printed "2 dB" where it printed
+"3 dB". New `include/textformat.h` has `formatFixed(value, decimals)`, which detects an exact tie from the
+double's exact decimal expansion and nudges it up one step so the correctly-rounded formatter takes it
+away from zero, and keeps the sign Qt keeps on a small negative that rounds to zero.
+
+**New suite `TestTextFormat` checks the helper against Qt itself**: the oracle is `QString::number`, over
+the ties the report prints, every `n/64` for `n` in -4200..4200 at 0 to 6 decimals (exact binary
+fractions, so hundreds of true ties), 20,000 arbitrary doubles from a fixed generator, and the extremes.
+**It found a real difference on its first run**: the helper kept the sign of negative zero ("-0") where Qt
+prints "0", while Qt does print "-0" for `-0.4` rounded to nothing. The sign now comes from `value < 0`,
+not the sign bit, and both facts are pinned.
+
+**Tests first, as before.** Twelve scenarios (eleven at first, and one added below) compare the **whole** report text, where
+the old tests looked for phrases inside it: empty, one receiver, mixed, unnamed, non-ASCII names, both "check" sections, a
+saturated top with exact-half dB values, a relaxed threshold, flat levels, several failure reasons and
+twelve receivers. They were captured from the `QString` implementation, read through for sense, and pass
+on it before anything was ported. Reads and writes of a result's name and the report go through test
+helpers, so the port changed those and nothing else.
+
+**One thing the capture showed, left as it is.** When every channel in an *unnamed* group calibrates, the
+report lists the group under the heading "Fell back to linear calibration:" (`Unnamed receiver
+(AGC_LEFT, AGC_RIGHT) — calibrated`). The wording is wrong for channels that did not fall back. A refactor
+does not change wording, so it is pinned as it was and noted here to be fixed on purpose.
+
+**Validated against 21 single-defect mutants; 18 were caught at once, and the three survivors are
+accounted for.**
+
+- A non-ASCII channel name decoded wrongly in the per-channel log line: the fixtures' names are ASCII,
+  so no test could see it. Closed by a real extraction of `step_cal` with a hand-written word map naming
+  three live words `R<e-acute>cepteur <omega>`, `Gain <sigma>` and `Plain`, checked through the result, the log
+  line and the report.
+- A fully-calibrated unnamed group listed as a numbered receiver: no scenario had such a group. Closed by
+  the `unnamed-all-calibrated` scenario above.
+- The helper looking at only 17 places of the exact expansion instead of 1100: **equivalent over any value
+  the report can print.** A search over 800,000 decimal ties at 0 to 3 decimals found none whose nearest
+  double separates from the tie beyond 17 places. 1100 stays because it is the proven bound (a double's
+  expansion is at most 1074 places), not because anything reachable needs it.
+
+The tests that closed those gaps (the extra scenario, the non-ASCII word-map extraction and the
+per-channel log-line check) were run on the unmodified code first, as were the exact-text scenarios.
+
+**A harness slip, caught by the compiler.** Routing the tests through helpers with a regular expression
+turned two helper bodies into calls to themselves; MSVC warned (C4717), and the run crashed instead of
+failing a test. The helpers were rewritten by hand.
+
+Throughput is unaffected (nothing here is on the decode path); the pinned release gate gave 13846 ms
+parallel, 1.02x the slowest solo stream and 0.65x all-sequential.
+
+Baseline **606 / 0 / 1** (was 583 / 0 / 1; 23 new: 12 exact-report scenarios, the per-channel log line, the
+non-ASCII word-map extraction, and the 9 results of `TestTextFormat`), **607 / 0 / 0** at release.
+**27 suites.**
 
 #### `Chapter10Reader` and `ChannelData` are plain classes (de-Qt, `QObject` step 4)
 
@@ -4247,7 +4313,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestExportDialog** (`tst_exportdialog`) — Export dialog checkbox-to-field enable logic, export-button validation, and the log-export row defaults/accessors and log-only validation
 - **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US5.3): `[[Step]]` TOML parsing (valid / empty-fails), plateau detection (clean, too-few-fails, extra-plateaus uses last of monotonic run, short-blip doesn't steal a pairing slot, long leading transient doesn't shift pairing, inverted-polarity sweep not reversed, non-monotonic pairing rejected, noisy, settling-at-plateau-start excluded, round-trip exact), the calibration-import resilience cases (the outcome code names the gate that rejected, a compressed out-of-tolerance receiver still calibrates via the relaxed threshold while a healthy one does not relax, noise-split plateaus coalesce instead of severing the sweep, a flat channel reports "flat / no signal" rather than a plateau shortfall, samples pinned at the floor or rail kept out of the noise estimate so live dwells neither split nor shatter, a split dwell far above the noise still paired as one step, railed top steps calibrating the range that stayed in scale while the rail clamps rather than extrapolates, an unconfirmed dwell measured from the dwell grid rather than bridged or shifted, the number of levels the sweep held reported so a short step file can be flagged, and which step file the Extract Calibration dialog preloads), and `interpolateCalibration()` (midpoint, below/above clamping, coincident-raw guard); and the step-file parser pinned directly, written against the `QString` implementation first: case-insensitive `[[Step]]` header and `db` key, a header with a trailing comment or inner spaces not counting as a step, keys outside a step or in another section ignored, a step with no parseable `db` kept at 0, `QString::toDouble`'s value rules (quotes are NOT stripped), file order with the last `db` winning, the output cleared on every call, UTF-8 BOM / UTF-16 files, a non-ASCII path, both error messages, and `initialStepConfigPath` ignoring a directory
 - **TestSeriesColumnSchema** (`tst_seriescolumnschema`) — the CSV column-header schema (`SeriesColumnSchema`): SNR name and `columnHeader()` formatting, `parseColumnHeader()` classification (lock/missed suffix vs. SNR `"<id> - "` prefix, multi-word stream labels split at the last space, SNR-shape-wins-over-suffix), the unknown→SNR fallback, and the format→parse round trip that keeps `exportCsv` and `CsvSeriesParser` inverses. Multi-file input: source 0 stays unqualified (byte-identical), source 1+ gets a leading `"S<n>| "` qualifier that round-trips through parse for both SNR and Lock/Missed shapes, an unqualified header still defaults to source 0, and a header merely starting with the letter `'S'` isn't misparsed as a qualifier
-- **TestCalibrationExtractor** (`tst_calibrationextractor`) — US5.3 pipeline orchestration (complements TestStepDetector's pure logic): drives the async extraction end to end (reader + FrameProcessor workers → per-channel StepDetector). A bad file (with non-empty steps, so it clears the empty-steps guard) finishes unsuccessfully with a recorded error and no partial state; over `rnrz-l_testfile.ch10`, exactly words 6/7/8 (RCVR3 L/R/C, the only real stepped SNR sweep) build valid non-linear profiles while every other receiver word falls back to linear; over `step_cal, example.ch10` (receivers far out of alignment, its real 11-step 0–60 dB config, the shipped sequential word map), receivers 1, 3, 5 and 6 calibrate with every step paired to its own dwell (0 dB at the pre-sweep level, 60 dB at the top dwell, no split dwell taking a slot), receiver 1 over only the range that stayed in scale because its top two steps sit on the rail (readings hold at 48 dB), receiver 2 reports flat / no signal, and the report names the receivers; plus the pure `summarize()` report (receivers grouped, partial receivers spelled out with reasons, unnamed channels reported by name) and its two "check" prompts - a step file shorter than the recording and a word map that does not match it - each proven on the real recording with the wrong file, and silent on the correct setup; and clips that exceed the recording being reported rather than silently ignored; and `extractionReportsItsProgress`, which checks the extraction's progress reaches the dialog (non-decreasing, ending at 100)
+- **TestCalibrationExtractor** (`tst_calibrationextractor`) — US5.3 pipeline orchestration (complements TestStepDetector's pure logic): drives the async extraction end to end (reader + FrameProcessor workers → per-channel StepDetector). A bad file (with non-empty steps, so it clears the empty-steps guard) finishes unsuccessfully with a recorded error and no partial state; over `rnrz-l_testfile.ch10`, exactly words 6/7/8 (RCVR3 L/R/C, the only real stepped SNR sweep) build valid non-linear profiles while every other receiver word falls back to linear; over `step_cal, example.ch10` (receivers far out of alignment, its real 11-step 0–60 dB config, the shipped sequential word map), receivers 1, 3, 5 and 6 calibrate with every step paired to its own dwell (0 dB at the pre-sweep level, 60 dB at the top dwell, no split dwell taking a slot), receiver 1 over only the range that stayed in scale because its top two steps sit on the rail (readings hold at 48 dB), receiver 2 reports flat / no signal, and the report names the receivers; plus the pure `summarize()` report (receivers grouped, partial receivers spelled out with reasons, unnamed channels reported by name) and its two "check" prompts - a step file shorter than the recording and a word map that does not match it - each proven on the real recording with the wrong file, and silent on the correct setup; and clips that exceed the recording being reported rather than silently ignored; and `extractionReportsItsProgress`, which checks the extraction's progress reaches the dialog (non-decreasing, ending at 100); and `summarizeProducesExactlyThisReport` (12 scenarios, the **whole** report text each - empty, one receiver, mixed, unnamed, an all-calibrated unnamed group, non-ASCII names, both "check" sections, a saturated top with exact-half dB values, a relaxed threshold, flat levels, several failure reasons, twelve receivers), `extractionLogsOneLinePerChannelWithData`, and `aNonAsciiChannelNameSurvivesExtractionItsLogAndItsReport` (a real `step_cal` extraction with a word map naming channels with non-ASCII text)
 - **TestStreamConfigSchema** (`tst_streamconfigschema`) — `StreamConfigSchema` round trip for both `StreamMode` variants and the calibration input references (`calCh10Path`/`stepTomlPath`/`clipStartSec`/`clipEndSec`), confirms `calibrationByWord` itself never appears in the serialized JSON (and the `calibration` block is omitted entirely when no non-linear calibration was ever extracted), and `fromJson()` rejecting an object missing required fields while leaving in-class defaults for anything else omitted
 - **TestProcessingTemplateSchema** (`tst_processingtemplateschema`) — processing templates / batch apply: `ProcessingTemplateSchema` round trip for both `StreamMode`s, series appearance, calibration input references, and `timeChannelIndex`; that appearance is omitted when empty; that `calibrationByWord` is never serialized (inherited from `StreamConfigSchema`); and `schemaVersion` accept/reject + malformed-document rejection — no `.ch10` fixture, runs in CI
 - **TestBatchController** (`tst_batchcontroller`) — the Apply Template batch loop (US1.1): `buildTemplate()` capturing a source's configs + time channel + byte order + each series' name/color, `applyAppearance()` mapping a template's saved appearance onto the right series (both moved here from TestMainView, and no longer need a window to run), plus two cases the loop's old home made impractical — a queue whose files have all gone missing drains to `finished()` with both counted as skipped rather than stalling on a reader, and `start()` with nothing matched does not clear the session or announce a run
@@ -4256,6 +4322,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestIntervalGate** (`tst_intervalgate`) — the progress throttle that replaced `QElapsedTimer` in `Ch10PacketReader::run()`, pinned with injected time points so nothing depends on a sleep: not due before the interval, due at *exactly* the interval (`>=`, not `>`), due long after without `due()` restarting the interval itself, the interval read as milliseconds rather than seconds or microseconds, `reset()` measuring from the reset, sub-millisecond precision agreeing with `QElapsedTimer`'s truncation on every side of the boundary, and a default-constructed gate starting at *now* rather than the clock's epoch (otherwise it is due the instant it exists and throttles nothing). Validated against seven single-defect mutants, every one of which must fail. Pure logic, runs in CI
 - **TestTomlDocument** (`tst_tomldocument`) — the settings-file reader/writer, pinned directly rather than only through `FrameSetup` and the dialogs: sections and keys in file order (not sorted), an empty `[EMPTY]` section still declared, `[[Step]]` read as a literal section named `[Step]`, quote-aware `#` comments, `\"` and `\\` unescaped, a repeated key overwriting, a UTF-8 BOM with CRLF, UTF-16 LE and BE with a BOM, a non-ASCII value saved to and loaded from a folder outside every Western code page, the integer rule (whitespace and `+` tolerated, junk / fraction / overflow / empty return the caller's fallback with `parsed` false), the double rule (including `inf`), `QVariant::toBool()`'s boolean rule (even `no` is true), the exact bytes `save()` writes (top-level keys first, a blank line between sections, CRLF, no BOM), doubles as `%g` with six digits, `save()` truncating rather than merging, and both error paths naming the file. Written against the Qt implementation first; validated against four mutants of the `std` port. Pure logic, runs in CI
 - **TestQtProcessingEvents** (`tst_qtprocessingevents`) — the hand-off from a processing thread to Qt that replaced `FrameProcessor`'s signals: 300 mixed log / error events raised on a worker thread arrive on the target's thread in the order raised with completion last (and the test really did cross threads); UTF-8 messages decode (an accented letter and an em dash); any handler may be missing; events still queued for a destroyed target are dropped, which is what lets the coordinator and extractor die with events in flight. Validated against mutants that deliver directly instead of queued (the run crashes) and that decode as Latin-1. Pure logic, runs in CI; and progress events (101 values from a worker thread arrive on the target's thread in order)
+- **TestTextFormat** (`tst_textformat`) — `formatFixed()`, which reproduces `QString::number(v, 'f', n)` without Qt, checked against Qt itself: the exact ties the report prints (Qt rounds them away from zero, `std::format` to even), every n/64 at 0 to 6 decimals, 20,000 arbitrary doubles from a fixed generator, signs and negative zero, the extremes, and `isExactTie()` seeing only real ties. Pure logic, runs in CI
 
 ### Running Tests
 
