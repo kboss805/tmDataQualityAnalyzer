@@ -565,7 +565,11 @@ std::string CalibrationExtractor::summarize(const std::vector<CalibrationChannel
 
     // Receivers whose every channel calibrated collapse to a bare number list -
     // the common good case should read as one short line, not one line each.
+    // Channels with no receiver number are one group of their own; when every one of
+    // them calibrated they are listed by name beside that line, not under the fallback
+    // heading (they did not fall back).
     std::vector<std::string> fullyCalibrated;
+    std::vector<std::string> unnamedCalibrated;
     std::vector<std::string> detailLines;
     std::vector<std::string> relaxedLines;
     std::vector<std::string> saturatedLines;
@@ -622,8 +626,7 @@ std::string CalibrationExtractor::summarize(const std::vector<CalibrationChannel
             }
             else
             {
-                detailLines.push_back(std::format("  {} ({}) — calibrated", label,
-                                                  joinStrings(g.calibrated, ", ")));
+                unnamedCalibrated = g.calibrated;
             }
             continue;
         }
@@ -662,12 +665,20 @@ std::string CalibrationExtractor::summarize(const std::vector<CalibrationChannel
     out.push_back(std::format("Applied non-linear calibration to {} of {} channel(s).",
                               calibratedChannels, intSize(results)));
 
-    if (!fullyCalibrated.empty())
+    if (!fullyCalibrated.empty() || !unnamedCalibrated.empty())
     {
         out.push_back("");
-        out.push_back(std::format("Calibrated: receiver{} {}.",
-                                  fullyCalibrated.size() == 1 ? "" : "s",
-                                  joinStrings(fullyCalibrated, ", ")));
+        if (!fullyCalibrated.empty())
+        {
+            out.push_back(std::format("Calibrated: receiver{} {}.",
+                                      fullyCalibrated.size() == 1 ? "" : "s",
+                                      joinStrings(fullyCalibrated, ", ")));
+        }
+        if (!unnamedCalibrated.empty())
+        {
+            out.push_back(std::format("Calibrated (unnamed channels): {}.",
+                                      joinStrings(unnamedCalibrated, ", ")));
+        }
     }
 
     // The two checks below come before the fallback list on purpose: they flag

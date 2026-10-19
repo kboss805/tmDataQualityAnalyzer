@@ -522,6 +522,49 @@ v2.9.0 intended. Every first-party header here is quote-included, so `anglebrack
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
 
+#### A fully calibrated group of unnamed channels is listed as calibrated (US5.3)
+
+The calibration report groups channels by receiver and lists the receivers whose channels all
+calibrated on one line, `Calibrated: receivers 1, 3.` Channels whose names carry no `_RCVR<N>` (a
+hand-written receiver-parameters file may name them anything) have no receiver number, so they are one
+group of their own, reported by name. When **every** channel in that group calibrated, the report put it
+under the heading **"Fell back to linear calibration:"**, as `Unnamed receiver (AGC_LEFT, AGC_RIGHT) —
+calibrated`. It is the only fully-calibrated case that did not go on the calibrated line, and the heading
+is wrong for channels that did not fall back. The manual already describes the intended report
+("Calibrated - the receivers whose channels all calibrated", "Fell back - every other receiver"), so it was
+the report that was wrong. All three shipped word maps name every channel `_RCVR<N>`, so only a custom map
+could show it.
+
+Found while pinning the report text for the move to `std::string`, where it was left alone on purpose (a
+refactor does not change wording) and noted. The wording was then chosen: the unnamed channels go on their
+own line beside the calibrated receivers, so a numbered-only report - every shipped map, and the manual's
+figure - is **byte-for-byte unchanged**:
+
+```
+Calibrated: receivers 1, 3.
+Calibrated (unnamed channels): AGC_LEFT, AGC_RIGHT.
+```
+
+With no numbered receivers the second line stands alone. A group where some unnamed channels *did* fall back
+still reads as a mixed receiver under the fallback heading, which is correct.
+
+**Tests first.** The pinned expectation for the unnamed, all-calibrated group was changed to the corrected
+text and three scenarios were added (unnamed beside a numbered receiver; beside a receiver that failed; with
+a saturated top, which appears in both its sections). Against the unfixed code exactly five tests failed -
+the four report rows and the non-ASCII word-map extraction test - and the other seven report scenarios did
+not move; the fix turned them green.
+
+**Validated against nine single-defect mutants; all caught**: the names dropped; the group also left under
+the fallback heading; the lines in the other order; no blank line before a lone unnamed line; the heading
+reworded; the closing period dropped; a different separator; the line printed for a *partly* calibrated
+group; and the line gated on numbered receivers only.
+
+The manual's calibration walkthrough gains one sentence, in the source (`docs/manual/walkthroughs.html`) and
+the generated `UserManual.html` identically, so the generator splices no change. The end-user release notes
+are written at release time and should mention it then.
+
+Baseline **691 / 0 / 1** (was 688 / 0 / 1; 3 new report scenarios), **692 / 0 / 0** at release. **28 suites.**
+
 #### `CalibrationExtractor` is a plain class on one driver thread, and the sync decode is shared with the main run (de-Qt, `CalibrationExtractor` step B)
 
 The second half of taking Qt out of `CalibrationExtractor`, and the last `QObject` in the processing
@@ -641,10 +684,11 @@ twelve receivers. They were captured from the `QString` implementation, read thr
 on it before anything was ported. Reads and writes of a result's name and the report go through test
 helpers, so the port changed those and nothing else.
 
-**One thing the capture showed, left as it is.** When every channel in an *unnamed* group calibrates, the
-report lists the group under the heading "Fell back to linear calibration:" (`Unnamed receiver
-(AGC_LEFT, AGC_RIGHT) — calibrated`). The wording is wrong for channels that did not fall back. A refactor
-does not change wording, so it is pinned as it was and noted here to be fixed on purpose.
+**One thing the capture showed, fixed in the next change.** When every channel in an *unnamed* group
+calibrated, the report listed the group under the heading "Fell back to linear calibration:"
+(`Unnamed receiver (AGC_LEFT, AGC_RIGHT) — calibrated`), which is wrong for channels that did not fall
+back. It was pinned as it was while the report moved to `std::string`, because a refactor does not change
+wording; see "A fully calibrated group of unnamed channels is listed as calibrated" above.
 
 **Validated against 21 single-defect mutants; 18 were caught at once, and the three survivors are
 accounted for.**
@@ -4399,7 +4443,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestExportDialog** (`tst_exportdialog`) — Export dialog checkbox-to-field enable logic, export-button validation, and the log-export row defaults/accessors and log-only validation
 - **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US5.3): `[[Step]]` TOML parsing (valid / empty-fails), plateau detection (clean, too-few-fails, extra-plateaus uses last of monotonic run, short-blip doesn't steal a pairing slot, long leading transient doesn't shift pairing, inverted-polarity sweep not reversed, non-monotonic pairing rejected, noisy, settling-at-plateau-start excluded, round-trip exact), the calibration-import resilience cases (the outcome code names the gate that rejected, a compressed out-of-tolerance receiver still calibrates via the relaxed threshold while a healthy one does not relax, noise-split plateaus coalesce instead of severing the sweep, a flat channel reports "flat / no signal" rather than a plateau shortfall, samples pinned at the floor or rail kept out of the noise estimate so live dwells neither split nor shatter, a split dwell far above the noise still paired as one step, railed top steps calibrating the range that stayed in scale while the rail clamps rather than extrapolates, an unconfirmed dwell measured from the dwell grid rather than bridged or shifted, the number of levels the sweep held reported so a short step file can be flagged, and which step file the Extract Calibration dialog preloads), and `interpolateCalibration()` (midpoint, below/above clamping, coincident-raw guard); and the step-file parser pinned directly, written against the `QString` implementation first: case-insensitive `[[Step]]` header and `db` key, a header with a trailing comment or inner spaces not counting as a step, keys outside a step or in another section ignored, a step with no parseable `db` kept at 0, `QString::toDouble`'s value rules (quotes are NOT stripped), file order with the last `db` winning, the output cleared on every call, UTF-8 BOM / UTF-16 files, a non-ASCII path, both error messages, and `initialStepConfigPath` ignoring a directory
 - **TestSeriesColumnSchema** (`tst_seriescolumnschema`) — the CSV column-header schema (`SeriesColumnSchema`): SNR name and `columnHeader()` formatting, `parseColumnHeader()` classification (lock/missed suffix vs. SNR `"<id> - "` prefix, multi-word stream labels split at the last space, SNR-shape-wins-over-suffix), the unknown→SNR fallback, and the format→parse round trip that keeps `exportCsv` and `CsvSeriesParser` inverses. Multi-file input: source 0 stays unqualified (byte-identical), source 1+ gets a leading `"S<n>| "` qualifier that round-trips through parse for both SNR and Lock/Missed shapes, an unqualified header still defaults to source 0, and a header merely starting with the letter `'S'` isn't misparsed as a qualifier
-- **TestCalibrationExtractor** (`tst_calibrationextractor`) — US5.3 pipeline orchestration (complements TestStepDetector's pure logic): drives the async extraction end to end (reader + FrameProcessor workers → per-channel StepDetector). A bad file (with non-empty steps, so it clears the empty-steps guard) finishes unsuccessfully with a recorded error and no partial state; over `rnrz-l_testfile.ch10`, exactly words 6/7/8 (RCVR3 L/R/C, the only real stepped SNR sweep) build valid non-linear profiles while every other receiver word falls back to linear; over `step_cal, example.ch10` (receivers far out of alignment, its real 11-step 0–60 dB config, the shipped sequential word map), receivers 1, 3, 5 and 6 calibrate with every step paired to its own dwell (0 dB at the pre-sweep level, 60 dB at the top dwell, no split dwell taking a slot), receiver 1 over only the range that stayed in scale because its top two steps sit on the rail (readings hold at 48 dB), receiver 2 reports flat / no signal, and the report names the receivers; plus the pure `summarize()` report (receivers grouped, partial receivers spelled out with reasons, unnamed channels reported by name) and its two "check" prompts - a step file shorter than the recording and a word map that does not match it - each proven on the real recording with the wrong file, and silent on the correct setup; and clips that exceed the recording being reported rather than silently ignored; and `extractionReportsItsProgress`, which checks the extraction's progress reaches the dialog (non-decreasing, ending at 100); and `summarizeProducesExactlyThisReport` (12 scenarios, the **whole** report text each - empty, one receiver, mixed, unnamed, an all-calibrated unnamed group, non-ASCII names, both "check" sections, a saturated top with exact-half dB values, a relaxed threshold, flat levels, several failure reasons, twelve receivers), `extractionLogsOneLinePerChannelWithData`, and `aNonAsciiChannelNameSurvivesExtractionItsLogAndItsReport` (a real `step_cal` extraction with a word map naming channels with non-ASCII text); the extractor's lifecycle through one `Recorder` helper: failures before anything starts (no steps; a word map that is missing, outside the frame, empty, or too large; an unopenable recording), a cancel from the first report and from another thread, a start while running being ignored, a finished extractor running again, destroying a running one, the end being the last report, a failure being an error and a cancel not, a worker failure reporting its own reason, and the clip-ignored log line
+- **TestCalibrationExtractor** (`tst_calibrationextractor`) — US5.3 pipeline orchestration (complements TestStepDetector's pure logic): drives the async extraction end to end (reader + FrameProcessor workers → per-channel StepDetector). A bad file (with non-empty steps, so it clears the empty-steps guard) finishes unsuccessfully with a recorded error and no partial state; over `rnrz-l_testfile.ch10`, exactly words 6/7/8 (RCVR3 L/R/C, the only real stepped SNR sweep) build valid non-linear profiles while every other receiver word falls back to linear; over `step_cal, example.ch10` (receivers far out of alignment, its real 11-step 0–60 dB config, the shipped sequential word map), receivers 1, 3, 5 and 6 calibrate with every step paired to its own dwell (0 dB at the pre-sweep level, 60 dB at the top dwell, no split dwell taking a slot), receiver 1 over only the range that stayed in scale because its top two steps sit on the rail (readings hold at 48 dB), receiver 2 reports flat / no signal, and the report names the receivers; plus the pure `summarize()` report (receivers grouped, partial receivers spelled out with reasons, unnamed channels reported by name) and its two "check" prompts - a step file shorter than the recording and a word map that does not match it - each proven on the real recording with the wrong file, and silent on the correct setup; and clips that exceed the recording being reported rather than silently ignored; and `extractionReportsItsProgress`, which checks the extraction's progress reaches the dialog (non-decreasing, ending at 100); and `summarizeProducesExactlyThisReport` (15 scenarios, the **whole** report text each - empty, one receiver, mixed, unnamed, an all-calibrated unnamed group alone, beside a numbered receiver, beside a failure and with a saturated top, non-ASCII names, both "check" sections, a saturated top with exact-half dB values, a relaxed threshold, flat levels, several failure reasons, twelve receivers), `extractionLogsOneLinePerChannelWithData`, and `aNonAsciiChannelNameSurvivesExtractionItsLogAndItsReport` (a real `step_cal` extraction with a word map naming channels with non-ASCII text); the extractor's lifecycle through one `Recorder` helper: failures before anything starts (no steps; a word map that is missing, outside the frame, empty, or too large; an unopenable recording), a cancel from the first report and from another thread, a start while running being ignored, a finished extractor running again, destroying a running one, the end being the last report, a failure being an error and a cancel not, a worker failure reporting its own reason, and the clip-ignored log line
 - **TestStreamConfigSchema** (`tst_streamconfigschema`) — `StreamConfigSchema` round trip for both `StreamMode` variants and the calibration input references (`calCh10Path`/`stepTomlPath`/`clipStartSec`/`clipEndSec`), confirms `calibrationByWord` itself never appears in the serialized JSON (and the `calibration` block is omitted entirely when no non-linear calibration was ever extracted), and `fromJson()` rejecting an object missing required fields while leaving in-class defaults for anything else omitted
 - **TestProcessingTemplateSchema** (`tst_processingtemplateschema`) — processing templates / batch apply: `ProcessingTemplateSchema` round trip for both `StreamMode`s, series appearance, calibration input references, and `timeChannelIndex`; that appearance is omitted when empty; that `calibrationByWord` is never serialized (inherited from `StreamConfigSchema`); and `schemaVersion` accept/reject + malformed-document rejection — no `.ch10` fixture, runs in CI
 - **TestBatchController** (`tst_batchcontroller`) — the Apply Template batch loop (US1.1): `buildTemplate()` capturing a source's configs + time channel + byte order + each series' name/color, `applyAppearance()` mapping a template's saved appearance onto the right series (both moved here from TestMainView, and no longer need a window to run), plus two cases the loop's old home made impractical — a queue whose files have all gone missing drains to `finished()` with both counted as skipped rather than stalling on a reader, and `start()` with nothing matched does not clear the session or announce a run

@@ -153,6 +153,25 @@ std::vector<CalibrationChannelResult> reportScenario(const QString& scenario, in
         v.push_back(channelResult("AGC_LEFT", O::Calibrated, 6));
         v.push_back(channelResult("AGC_RIGHT", O::Calibrated, 6));
     }
+    else if (scenario == "unnamed-and-numbered")
+    {
+        for (const QString& p : lcr)
+            v.push_back(channelResult(p + "_RCVR3", O::Calibrated, 6));
+        v.push_back(channelResult("AGC_LEFT", O::Calibrated, 6));
+        v.push_back(channelResult("AGC_RIGHT", O::Calibrated, 6));
+    }
+    else if (scenario == "unnamed-calibrated-beside-a-failure")
+    {
+        for (const QString& p : lcr)
+            v.push_back(channelResult(p + "_RCVR4", O::NoData, 0, false));
+        v.push_back(channelResult("AGC_LEFT", O::Calibrated, 6));
+        v.push_back(channelResult("AGC_RIGHT", O::Calibrated, 6));
+    }
+    else if (scenario == "unnamed-calibrated-saturated")
+    {
+        v.push_back(railedResult("AGC_LEFT", 37.5, {42.5}));
+        v.push_back(channelResult("AGC_RIGHT", O::Calibrated, 6));
+    }
     else if (scenario == "unnamed-non-ascii")
     {
         v.push_back(channelResult(QStringLiteral("R") + QChar(0x00E9) + QStringLiteral("cepteur ") + QChar(0x03A9),
@@ -538,15 +557,39 @@ void TestCalibrationExtractor::summarizeProducesExactlyThisReport_data()
             "Fell back to linear calibration:",
             QString::fromUtf8("  Unnamed receiver — AGC_RIGHT calibrated; AGC_LEFT: no monotonic sweep")};
 
-    // Pinned as the old code printed it: a group of unnamed channels that ALL calibrated is listed
-    // under the "Fell back to linear calibration:" heading, which reads wrongly for channels that did
-    // not fall back. A refactor does not change wording, so it stays until it is fixed on purpose.
+    // Channels with no receiver number are one group. When every one of them calibrated, they are
+    // listed with the calibrated receivers, by name - not under "Fell back to linear calibration:",
+    // which they did not. (A group where some channels did fall back stays below, as above.)
     QTest::newRow("unnamed-all-calibrated") << QStringLiteral("unnamed-all-calibrated")
         << QStringList{
             "Applied non-linear calibration to 2 of 2 channel(s).",
             "",
+            "Calibrated (unnamed channels): AGC_LEFT, AGC_RIGHT."};
+
+    QTest::newRow("unnamed-and-numbered") << QStringLiteral("unnamed-and-numbered")
+        << QStringList{
+            "Applied non-linear calibration to 5 of 5 channel(s).",
+            "",
+            "Calibrated: receiver 3.",
+            "Calibrated (unnamed channels): AGC_LEFT, AGC_RIGHT."};
+
+    QTest::newRow("unnamed-calibrated-beside-a-failure") << QStringLiteral("unnamed-calibrated-beside-a-failure")
+        << QStringList{
+            "Applied non-linear calibration to 2 of 5 channel(s).",
+            "",
+            "Calibrated (unnamed channels): AGC_LEFT, AGC_RIGHT.",
+            "",
             "Fell back to linear calibration:",
-            QString::fromUtf8("  Unnamed receiver (AGC_LEFT, AGC_RIGHT) — calibrated")};
+            "  Receiver 4 — L, R, C: no data"};
+
+    QTest::newRow("unnamed-calibrated-saturated") << QStringLiteral("unnamed-calibrated-saturated")
+        << QStringList{
+            "Applied non-linear calibration to 2 of 2 channel(s).",
+            "",
+            "Calibrated (unnamed channels): AGC_LEFT, AGC_RIGHT.",
+            "",
+            QString::fromUtf8("Calibrated only up to a saturated top — these receivers ran out of range partway through the sweep, so their readings hold at the highest step still measurable:"),
+            QString::fromUtf8("  Unnamed receiver — AGC_LEFT: readings hold at 38 dB (no measurement for 43 dB)")};
 
     QTest::newRow("unnamed-non-ascii") << QStringLiteral("unnamed-non-ascii")
         << QStringList{
@@ -965,6 +1008,9 @@ void TestCalibrationExtractor::aNonAsciiChannelNameSurvivesExtractionItsLogAndIt
     for (const QString& name : names)
         QVERIFY2(report.contains(name), qPrintable(report));
     QVERIFY2(report.contains("Unnamed receiver"), qPrintable(report));
+    // All three calibrated, so they are listed as calibrated, not as having fallen back.
+    QVERIFY2(report.contains("Calibrated (unnamed channels): "), qPrintable(report));
+    QVERIFY2(!report.contains("Fell back to linear calibration"), qPrintable(report));
 }
 
 /// A step_cal request, or skip the test. Shared by the lifecycle tests below.
