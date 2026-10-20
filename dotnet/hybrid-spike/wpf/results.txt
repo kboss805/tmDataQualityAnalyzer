@@ -1,0 +1,55 @@
+adapter: NVIDIA GeForce RTX 4070 SUPER  (hardware)
+runtime: 10.0.13, DPI scale 1
+render tier: 2  (2 = full hardware acceleration)
+
+== empty: D3DImage path only
+   native render (geometry+raster+GPU wait): 0.3 ms median, 0.4 p95, 0.5 max
+   incl. Lock/AddDirtyRect/Unlock:           0.3 ms median, 0.5 p95
+   frame interval: 11.1 ms median, 11.1 p95, 33.4 max;  10 of 389 later than 1.5x the 11.1 ms nominal
+   on-screen marker check, 396 sampled frames: 0 mismatched on first read, 0 still mismatched 2 ms later (persistent tear)
+
+== 3 x 360k, UI thread, fenced
+   native render (geometry+raster+GPU wait): 5.9 ms median, 7.8 p95, 10.5 max
+   incl. Lock/AddDirtyRect/Unlock:           5.9 ms median, 7.8 p95
+   frame interval: 16.7 ms median, 27.8 p95, 39.1 max;  211 of 389 later than 1.5x the 11.1 ms nominal
+   on-screen marker check, 396 sampled frames: 14 mismatched on first read, 0 still mismatched 2 ms later (persistent tear)
+
+== 12 x 360k, UI thread, fenced
+   native render (geometry+raster+GPU wait): 20.9 ms median, 29.2 p95, 32.2 max
+   incl. Lock/AddDirtyRect/Unlock:           21.0 ms median, 29.2 p95
+   frame interval: 33.3 ms median, 44.5 p95, 61.1 max;  289 of 289 later than 1.5x the 11.1 ms nominal
+   on-screen marker check, 296 sampled frames: 13 mismatched on first read, 0 still mismatched 2 ms later (persistent tear)
+
+== 3 x 1M, UI thread, fenced
+   native render (geometry+raster+GPU wait): 6.6 ms median, 6.8 p95, 7.1 max
+   incl. Lock/AddDirtyRect/Unlock:           6.7 ms median, 6.8 p95
+   frame interval: 16.7 ms median, 22.3 p95, 39.0 max;  168 of 289 later than 1.5x the 11.1 ms nominal
+   on-screen marker check, 296 sampled frames: 0 mismatched on first read, 0 still mismatched 2 ms later (persistent tear)
+
+== 3 x 360k, UI thread, NOT fenced
+   native render (geometry+raster+GPU wait): 5.0 ms median, 5.3 p95, 8.2 max
+   incl. Lock/AddDirtyRect/Unlock:           5.2 ms median, 5.5 p95
+   frame interval: 16.7 ms median, 33.4 p95, 39.1 max;  224 of 389 later than 1.5x the 11.1 ms nominal
+   on-screen marker check, 396 sampled frames: 25 mismatched on first read, 13 still mismatched 2 ms later (persistent tear)
+      frame 105: top marker 0068, bottom marker FFFF (blue A5/FF); 2 ms later FFFF / FFFF
+      frame 110: top marker 006D, bottom marker FFFF (blue A5/FF); 2 ms later FFFF / FFFF
+      frame 111: top marker FFFF, bottom marker FFFF (blue FF/FF); 2 ms later FFFF / FFFF
+      frame 114: top marker 0071, bottom marker FFFF (blue A5/FF); 2 ms later FFFF / FFFF
+      frame 117: top marker FFFF, bottom marker FFFF (blue FF/FF); 2 ms later FFFF / FFFF
+      frame 118: top marker FFFF, bottom marker FFFF (blue FF/FF); 2 ms later FFFF / FFFF
+
+== 3 x 360k, worker thread, single buffer
+   worker rendered 786 frames, 5.6 ms median / 6.0 p95 (geometry + raster + GPU), shown by UI 398 times
+   UI thread Lock+AddDirtyRect+Unlock: 0.029 ms median, 0.484 max
+   frame interval: 11.1 ms median, 11.1 p95, 11.1 max;  0 of 389 later than 1.5x the 11.1 ms nominal
+   on-screen marker check, 396 sampled frames: 0 mismatched on first read, 0 still mismatched 2 ms later (persistent tear)
+
+== composition: a WPF legend over the D3DImage
+   pixel under the legend, chart alone: #FFFFFF   with the legend on top: #C5C7CA
+   (RenderTargetBitmap of a tree containing a D3DImage did not reproduce the composition, so it is not used as the judge)
+   same point read from the composed desktop: #272F3D
+   legend is drawn over the live chart on the glass: YES
+   screenshot of the window as composed: C:\Users\kevin\Dev\tmdq-spike\dotnet\hybrid-spike\wpf\bin\Release\net10.0-windows\screenshot.png
+   frame marker read back through WPF's own composition: R=EF G=BE B=A5 (expected EF BE A5)
+   resize to 900x500 and re-attach the back buffer: ok
+   front buffer available: True
