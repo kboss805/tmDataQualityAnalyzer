@@ -2,9 +2,9 @@
  * @file qtbridge.h
  * @brief Conversions at the boundary between Qt types and the de-Qt'd core.
  *
- * The core is moving to UTF-8 `std::string` for text and `std::filesystem::path` for
- * paths (the de-Qt sweep; see docs/future_plans/dotnet-port-assessment.md). Code that
- * still holds a `QString` converts at its own boundary:
+ * The core uses UTF-8 `std::string` for text and `std::filesystem::path` for paths
+ * (see docs/future_plans/dotnet-port-assessment.md). Code that holds a `QString`
+ * converts at its own boundary:
  *
  *   - text:  `QString::toStdString()` / `QString::fromStdString()`, which are UTF-8 in
  *            Qt 6, so no helper is needed;
@@ -12,8 +12,8 @@
  *            on Windows), which is lossless for any name the file system can hold -
  *            unlike a trip through a narrow string in the ANSI code page.
  *
- * This header includes Qt. It is for the View, the ViewModel and model code not yet
- * converted - never for a header the core is meant to be free of Qt in.
+ * This header includes Qt. It is for the View, the ViewModel and tests - never for a
+ * header the core is free of Qt in.
  */
 
 #ifndef QTBRIDGE_H

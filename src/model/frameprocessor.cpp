@@ -91,31 +91,7 @@ void FrameProcessor::requestAbort()
 
 void FrameProcessor::setEvents(std::shared_ptr<ProcessingEvents> events)
 {
-    m_events = std::move(events);
-}
-
-void FrameProcessor::reportLog(const std::string& message) const
-{
-    if (m_events)
-    {
-        m_events->logMessage(message);
-    }
-}
-
-void FrameProcessor::reportError(const std::string& message) const
-{
-    if (m_events)
-    {
-        m_events->errorOccurred(message);
-    }
-}
-
-void FrameProcessor::reportFinished(bool success) const
-{
-    if (m_events)
-    {
-        m_events->processingFinished(success);
-    }
+    m_report.setSink(std::move(events));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -133,16 +109,16 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     PacketQueue* queue = params.packetQueue;
     if (queue == nullptr)
     {
-        reportError(streamTag(params) + "Internal error: no packet queue for stream.");
-        reportFinished(false);
+        m_report.error(streamTag(params) + "Internal error: no packet queue for stream.");
+        m_report.finished(false);
         return false;
     }
 
     const ResolvedPcmAttrs& attrs = params.resolvedAttrs;
     if (!attrs.resolved)
     {
-        reportError(streamTag(params) + "Internal error: PCM attributes not resolved.");
-        reportFinished(false);
+        m_report.error(streamTag(params) + "Internal error: PCM attributes not resolved.");
+        m_report.finished(false);
         return false;
     }
 
@@ -196,8 +172,6 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     // call site below for why a skip is possible at all.
     uint64_t total_packets         = 0;
     uint64_t swap_skipped_packets  = 0;
-    double   first_data_time       = -1.0;
-    double   last_data_time        = 0.0;
     bool     time_seeded           = false;
 
     // Timestamp tracking: keep current and previous packet time references.
@@ -219,9 +193,9 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     // Only name the window when it is actually bounded; an unset stop prints as
     // 18446744073709551615s, which is noise on every ordinary run.
     const bool bounded = (start_seconds != 0) || (stop_seconds != UINT64_MAX);
-    reportLog(streamTag(params)
-              + (bounded ? std::format("processing ({}s to {}s)...", start_seconds, stop_seconds)
-                         : std::string("processing...")));
+    m_report.log(streamTag(params)
+                 + (bounded ? std::format("processing ({}s to {}s)...", start_seconds, stop_seconds)
+                            : std::string("processing...")));
 
     // -----------------------------------------------------------------------
     // Consume packets from the queue until the end-of-stream sentinel.
@@ -230,8 +204,8 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     {
         if (m_abort_requested.load(std::memory_order_relaxed))
         {
-            reportLog(streamTag(params) + "processing cancelled by user.");
-            reportFinished(false);
+            m_report.log(streamTag(params) + "processing cancelled by user.");
+            m_report.finished(false);
             return false;
         }
 
@@ -303,17 +277,14 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         {
             if ((bit_pos & kAbortCheckMask) == 0 && m_abort_requested.load(std::memory_order_relaxed))
             {
-                reportLog(streamTag(params) + "processing cancelled by user.");
-                reportFinished(false);
+                m_report.log(streamTag(params) + "processing cancelled by user.");
+                m_report.finished(false);
                 return false;
             }
 
             double current_time_eval = use_rate_clock
                 ? static_cast<double>(global_bit_offset + bit_pos) * time_per_bit
                 : current_time_ref.base_abs_seconds + (static_cast<double>(bit_pos) * time_per_bit);
-
-            if (first_data_time < 0.0) first_data_time = current_time_eval;
-            last_data_time = current_time_eval;
 
             // Time only delimits the averaging window; all per-bit accounting below
             // is gated on the bit falling inside the selected [start, stop] window.
@@ -345,19 +316,19 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         {
             // Every packet skipped: the setting is inert for this stream, which is
             // worth saying plainly - the operator's choice had no effect at all.
-            reportLog(streamTag(params)
-                      + std::format("all {} payloads are odd-length and cannot be "
-                                    "byte-pair swapped — processed as Legacy Chapter 10 "
-                                    "regardless of the setting.",
-                                    swap_skipped_packets));
+            m_report.log(streamTag(params)
+                         + std::format("all {} payloads are odd-length and cannot be "
+                                       "byte-pair swapped — processed as Legacy Chapter 10 "
+                                       "regardless of the setting.",
+                                       swap_skipped_packets));
         }
         else
         {
             // The genuinely corrupting case: one stream, two byte orders.
-            reportLog(streamTag(params)
-                      + std::format("warning: byte swap skipped on {} of {} packets "
-                                    "(odd length) — mixed byte order, sync may be unreliable.",
-                                    swap_skipped_packets, total_packets));
+            m_report.log(streamTag(params)
+                         + std::format("warning: byte swap skipped on {} of {} packets "
+                                       "(odd length) — mixed byte order, sync may be unreliable.",
+                                       swap_skipped_packets, total_packets));
         }
     }
 
@@ -390,15 +361,9 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     diag.total_syncs_found      = state.total_syncs_found;
     diag.total_frames_extracted = state.total_frames_extracted;
     diag.boundary_syncs         = state.boundary_syncs;
-    diag.max_sync_run           = state.max_sync_run;
-    diag.buffer_ever_filled     = state.buffer_ever_filled;
-    diag.first_data_time        = first_data_time;
-    diag.last_data_time         = last_data_time;
     diag.rows_written           = state.rows_written;
     diag.bits_in_frame          = state.bits_in_frame;
-    diag.words_in_frame         = state.words_in_frame;
     diag.sync_pat_len           = state.sync_pat_len;
-    diag.min_syncs              = state.min_syncs;
     diag.sync_pat               = state.sync_pat;
     diag.sync_mask              = state.sync_mask;
     diag.elapsed_sec            = static_cast<double>(elapsed_ms) / kMsPerSec;
@@ -447,7 +412,6 @@ void FrameProcessor::closeElapsedWindows(ScanState& s, double current_time_eval,
                 uint64_t extrapolated_frames = static_cast<uint64_t>(expected_bits / s.bits_in_frame);
                 s.accumulated_missed_frames += extrapolated_frames;
                 s.sync_count = UINT64_MAX; // Ensure lock is dropped during gap
-                s.current_sync_run = 0;
             }
 
             recordTimeSample(s.current_time_sample, 0, 0.0, // lock_pct is 0.0 during gap
@@ -478,7 +442,6 @@ void FrameProcessor::scanBit(ScanState& s, uint8_t bit_val, bool in_window,
             s.accumulated_missed_frames++;
         }
         s.sync_count = UINT64_MAX; // Loss of lock
-        s.current_sync_run = 0;
         s.minor_frame_bit_count = 1; // Roll over to continuously track missed frames
     }
 
@@ -500,9 +463,6 @@ void FrameProcessor::scanBit(ScanState& s, uint8_t bit_val, bool in_window,
             {
                 s.sync_count++;
                 s.boundary_syncs++;
-                s.current_sync_run++;
-                if (s.current_sync_run > s.max_sync_run)
-                    s.max_sync_run = s.current_sync_run;
             }
             else
             {
@@ -511,9 +471,6 @@ void FrameProcessor::scanBit(ScanState& s, uint8_t bit_val, bool in_window,
                 // which made the failure diagnostic report an off-phase match as
                 // "boundary-aligned" and told operators the opposite of the truth.
                 s.sync_count = 1;
-                s.current_sync_run = 1;
-                if (s.current_sync_run > s.max_sync_run)
-                    s.max_sync_run = s.current_sync_run;
             }
 
             // Only extract a sample once the sync match is boundary-aligned; an
@@ -572,7 +529,6 @@ void FrameProcessor::scanBit(ScanState& s, uint8_t bit_val, bool in_window,
             if (s.minor_frame_word_count >= s.words_in_frame)
             {
                 s.save_data = 2;
-                s.buffer_ever_filled = true;
             }
         }
     }
@@ -637,10 +593,7 @@ std::string FrameProcessor::syncSpec(const ScanDiagnostics& d)
     // stream running the wrong one is invisible in a report that prints only the
     // length. The mask is not - it is all-ones on every ordinary configuration, so
     // it appears only when it is actually constraining something.
-    const uint64_t all_ones = (d.sync_pat_len >= 64)
-        ? ~0ULL : ((1ULL << d.sync_pat_len) - 1);
-
-    if (d.sync_mask == all_ones)
+    if (d.sync_mask == fullSyncMask(static_cast<int>(d.sync_pat_len)))
     {
         return std::format("pattern 0x{:X} ({} bits)", d.sync_pat, d.sync_pat_len);
     }
@@ -652,9 +605,9 @@ bool FrameProcessor::reportCompletion(const ProcessingParams& params, const Scan
 {
     const std::string tag = streamTag(params);
 
-    reportLog(tag + std::format("{} bytes processed, {} syncs found, {} frames extracted.",
-                                d.total_bytes_processed, d.total_syncs_found,
-                                d.total_frames_extracted));
+    m_report.log(tag + std::format("{} bytes processed, {} syncs found, {} frames extracted.",
+                                   d.total_bytes_processed, d.total_syncs_found,
+                                   d.total_frames_extracted));
 
     // Both failures report on ONE line. The operators of this application know their
     // own formats, so the log's job is to state what was configured and what came of
@@ -663,26 +616,26 @@ bool FrameProcessor::reportCompletion(const ProcessingParams& params, const Scan
     // otherwise identical-looking configurations (PRN-11 and PRN-15 are both 32 bits).
     if (d.total_syncs_found == 0)
     {
-        reportError(tag + std::format("no frame sync found — {}, {} bits/frame.",
-                                      syncSpec(d), d.bits_in_frame));
-        reportFinished(false);
+        m_report.error(tag + std::format("no frame sync found — {}, {} bits/frame.",
+                                         syncSpec(d), d.bits_in_frame));
+        m_report.finished(false);
         return false;
     }
 
     if (d.total_frames_extracted == 0)
     {
-        reportError(tag + std::format("sync found but no frames extracted — {}, {} "
-                                      "bits/frame; {} syncs, {} boundary-aligned.",
-                                      syncSpec(d), d.bits_in_frame, d.total_syncs_found,
-                                      d.boundary_syncs));
-        reportFinished(false);
+        m_report.error(tag + std::format("sync found but no frames extracted — {}, {} "
+                                         "bits/frame; {} syncs, {} boundary-aligned.",
+                                         syncSpec(d), d.bits_in_frame, d.total_syncs_found,
+                                         d.boundary_syncs));
+        m_report.finished(false);
         return false;
     }
 
-    reportLog(tag + std::format("complete — {} samples extracted, elapsed {:.1f}s.",
-                                d.rows_written, d.elapsed_sec));
+    m_report.log(tag + std::format("complete — {} samples extracted, elapsed {:.1f}s.",
+                                   d.rows_written, d.elapsed_sec));
 
-    reportFinished(true);
+    m_report.finished(true);
     return true;
 }
 

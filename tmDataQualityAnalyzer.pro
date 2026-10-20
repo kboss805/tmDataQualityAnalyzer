@@ -125,7 +125,12 @@ SOURCES += \
 # Shared / cross-cutting
 HEADERS += \
     include/constants.h \
-    include/plotconstants.h
+    include/containerutil.h \
+    include/plotconstants.h \
+    include/qtbridge.h \
+    include/qtprocessingevents.h \
+    include/textformat.h \
+    include/textparse.h
 
 # Model: data ingestion, processing pipeline, domain logic
 HEADERS += \
@@ -135,6 +140,7 @@ HEADERS += \
     include/model/intervalgate.h \
     include/model/irig106lock.h \
     include/model/packetqueue.h \
+    include/model/processingevents.h \
     include/model/framesetup.h \
     include/model/framesync.h \
     include/model/frameprocessor.h \
@@ -154,6 +160,7 @@ HEADERS += \
     include/dto/framesyncparams.h \
     include/dto/processingparams.h \
     include/dto/processedstreamdata.h \
+    include/dto/streammode.h \
     include/dto/plotseriesdata.h \
     include/dto/calibrationprofile.h \
     include/dto/source.h \

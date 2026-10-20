@@ -68,11 +68,11 @@ public:
      * Must be called (synchronously, before run()) on whichever thread will not
      * race the reader thread. Leaves the file open and positioned just past the
      * TMATS packet so run() can continue the single pass. Populates each entry's
-     * @c resolved_attrs and records its @c packet_queue in the routing table.
+     * @c resolvedAttrs and records its @c packetQueue in the routing table.
      *
      * @param[in]     filename        Path to the .ch10 file.
      * @param[in]     time_channel_id Channel ID of the IRIG time channel.
-     * @param[in,out] params_list     Per-stream params (resolved_attrs filled here).
+     * @param[in,out] params_list     Per-stream params (resolvedAttrs filled here).
      * @param[out]    error           Human-readable failure description.
      * @return true on success.
      */
@@ -102,10 +102,6 @@ private:
 
     /// Grows m_buffer to at least @p required bytes. Returns false on failure.
     bool ensureBufferCapacity(std::size_t required);
-    /// Reports to the sink, if one is set.
-    void reportLog(const std::string& message) const;
-    void reportError(const std::string& message) const;
-    void reportProgress(int percent) const;
     /// Posts an end-of-stream sentinel to every distinct queue.
     void postSentinels();
 
@@ -126,7 +122,7 @@ private:
     std::vector<PacketQueue*> m_all_queues;
 
     std::atomic<bool> m_abort_requested;
-    std::shared_ptr<ProcessingEvents> m_events; ///< Optional report sink; see setEvents().
+    EventReporter m_report; ///< Where progress, log lines and errors go; see setEvents().
 };
 
 #endif // CH10PACKETREADER_H

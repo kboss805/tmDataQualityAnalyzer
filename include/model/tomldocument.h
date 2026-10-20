@@ -24,7 +24,7 @@
  *     calibration, and it deserves its own verifiable step rather than riding along.
  *
  * This class is plain file I/O over a map of UTF-8 `std::string`s, with paths as
- * `std::filesystem::path` - no Qt at all (de-Qt sweep). Callers still holding a `QString`
+ * `std::filesystem::path` - no Qt at all. Callers holding a `QString`
  * convert at their own boundary: `toFsPath()` from `qtbridge.h` for a path, and
  * `toStdString()` / `fromStdString()` for text, which are UTF-8 in Qt 6.
  *

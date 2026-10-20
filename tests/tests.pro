@@ -174,6 +174,7 @@ SOURCES += \
     tst_tomldocument.cpp \
     tst_qtprocessingevents.cpp \
     tst_ch10packetreader.cpp \
+    tst_eventreporter.cpp \
     tst_stepdetector.cpp \
     tst_calibrationextractor.cpp
 
@@ -206,5 +207,6 @@ HEADERS += \
     tst_tomldocument.h \
     tst_qtprocessingevents.h \
     tst_ch10packetreader.h \
+    tst_eventreporter.h \
     tst_stepdetector.h \
     tst_calibrationextractor.h

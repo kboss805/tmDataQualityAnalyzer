@@ -19,6 +19,7 @@ class TestFrameSync : public QObject
 private slots:
     void parseUnsignedHexAgreesWithQtOnAwkwardInputs();
     void parseUnsignedHexAgreesWithQtOnArbitraryText();
+    void fullSyncMaskIsEveryBitOfThePatternAndNeverShiftsBySixtyFour();
     void resolveFrameSyncDecodesPatternMaskAndLength();
     void resolveFrameSyncReportsTheFirstProblemAndLeavesTheResultAlone();
     void applyAcquisitionSetsEveryRawAffectingField();

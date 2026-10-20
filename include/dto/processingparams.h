@@ -14,6 +14,15 @@
 
 class PacketQueue;
 
+/// The mask meaning "every bit of the pattern": @p patternLength ones. Used wherever no mask is
+/// configured, so the reader, the frame sync decode and the failure report agree on it. A
+/// pattern of 64 bits or more, or none, gets all 64: a shift by 64 is undefined.
+inline uint64_t fullSyncMask(int patternLength)
+{
+    return (patternLength > 0 && patternLength < 64) ? (uint64_t{1} << patternLength) - 1
+                                                     : ~uint64_t{0};
+}
+
 /**
  * @brief PCM frame attributes resolved from TMATS + user overrides by the reader.
  *
@@ -65,11 +74,12 @@ struct ProcessingParams {
     /// the recorder that produced the file, so every stream in one recording shares
     /// it. MainViewModel stamps the same value onto every job it builds.
     ///
-    /// Defaults false: the swap is a legacy recorder behaviour, and every production
-    /// path stamps this explicitly (MainViewModel for a run, CalibrationExtractor for
-    /// an extraction). A default of true would mean a caller that forgets to set it
-    /// silently gets the legacy transform - which is how the extractor came to
-    /// disagree with the run it was calibrating.
+    /// Defaults true: the swap is what an ordinary Chapter 10 recording needs (three of
+    /// the four reference recordings; only a "legacy" file goes without it). Every
+    /// production path still stamps it explicitly (MainViewModel for a run,
+    /// CalibrationExtractor for an extraction), because a caller that merely inherits
+    /// the default can silently disagree with the run it is meant to match - which is
+    /// how the extractor once came to disagree with the run it was calibrating.
     bool swapBytes    = true;
 
     StreamMode mode = StreamMode::ReceiverChannelInfo; ///< Processing mode for this stream.

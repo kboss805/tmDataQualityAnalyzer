@@ -11,7 +11,7 @@
  * A plain class, with no Qt. Lifecycle: construct, call start() with a `ProcessingEvents` sink,
  * wait for `processingFinished`, then read results() and summary(). The sink is called from the
  * extraction's own threads - the thread inside start() for a failure before anything runs, the
- * reader or worker thread for their log lines and progress, and the driver thread for the
+ * reader thread for its log lines and progress, and the driver thread for the worker's lines, the
  * channel lines and the end - so it must be safe to call from any of them. `QtProcessingEvents`
  * is: it queues each call to a Qt object's thread. `processingFinished` is always the LAST call,
  * and nothing in the extraction is still running when it arrives except the driver returning.
@@ -36,6 +36,7 @@
 #include "processedstreamdata.h"
 #include "processingevents.h"
 #include "processingparams.h"
+#include "stepdetector.h"
 
 class Ch10PacketReader;
 class FrameProcessor;
@@ -43,24 +44,15 @@ class FrameSetup;
 class PacketQueue;
 
 /// @brief Per-channel outcome of a calibration extraction run.
-struct CalibrationChannelResult
+///
+/// What step detection found is inherited whole from `StepDetector::Result` (the profile, the plateau
+/// counts, the outcome, the thresholds, the saturation and unresolved steps, the sweep length), so the
+/// two cannot drift apart; this adds only which channel it describes and whether it had data.
+struct CalibrationChannelResult : StepDetector::Result
 {
-    std::string        name;             ///< Parameter/channel name (e.g. "L_RCVR1"), UTF-8.
-    int                word = -1;        ///< Zero-based word index within the minor frame.
-    CalibrationProfile profile;          ///< Built profile (valid only on success).
-    int                detectedPlateaus = 0; ///< Number of plateaus detected.
-    bool               extraPlateaus = false; ///< More plateaus than expected steps.
-    bool               hadData = false;  ///< Whether any samples were extracted for this channel.
-    CalibrationOutcome outcome = CalibrationOutcome::NoData; ///< Which gate decided the outcome.
-    double             edgeThreshold = 0.0; ///< Raw-count edge threshold detection used.
-    bool               thresholdRelaxed = false; ///< Calibrated only after loosening the
-                                                  ///< edge threshold (steps near the noise floor).
-    std::vector<double>    plateauLevels;   ///< Settled plateau averages detection found.
-    bool               saturated = false; ///< Calibrated only up to a railed top; readings
-                                          ///< clamp at the highest step still measurable.
-    std::vector<double>    unresolvedDb;    ///< dB of steps no measured level could be paired with.
-    int                sweepLevels = 0; ///< Levels in the sweep run; more than the step
-                                        ///< file lists means some were set aside as lead-in.
+    std::string name;            ///< Parameter/channel name (e.g. "L_RCVR1"), UTF-8.
+    int         word = -1;       ///< Zero-based word index within the minor frame.
+    bool        hadData = false; ///< Whether any samples were extracted for this channel.
 };
 
 /// @brief Extracts non-linear calibration profiles from a calibration Ch10 file.
@@ -160,9 +152,8 @@ private:
     /// Ends the run: records @p summary, releases the pipeline, reports, and is last.
     void finish(bool success, const std::string& summary, bool is_error);
     void joinDriver();
-    void log(const std::string& message);
 
-    std::shared_ptr<ProcessingEvents> m_events;
+    EventReporter                     m_report;    ///< Where reports go; set by start().
     std::shared_ptr<Relay>            m_relay;     ///< What the reader and worker report to.
 
     mutable std::mutex m_mutex;                    ///< Guards the pipeline pointers and m_error.

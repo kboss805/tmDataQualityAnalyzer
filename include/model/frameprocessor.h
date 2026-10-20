@@ -5,7 +5,7 @@
  * Consumes decoded PCM packets from a per-stream PacketQueue (filled by
  * Ch10PacketReader) and accumulates frame-sync lock / receiver-channel results
  * in memory. The PCM encoding type (NRZ-L or RNRZ-L) is specified by the caller
- * via ProcessingParams::is_randomized. The processor no longer opens the Ch10
+ * via ProcessingParams::isRandomized. The processor no longer opens the Ch10
  * file or parses TMATS — that is done once by the reader.
  */
 
@@ -29,7 +29,7 @@ struct ParameterInfo;
  * @brief Extracts PCM minor frames from a queue of decoded packets.
  *
  * Created fresh per processing run and run on a worker thread. Pulls PacketItems from
- * params.packet_queue until the end-of-stream sentinel. It is plain C++: what it has to say
+ * params.packetQueue until the end-of-stream sentinel. It is plain C++: what it has to say
  * goes to a ProcessingEvents sink (setEvents()), called on the processing thread.
  */
 class FrameProcessor
@@ -48,12 +48,12 @@ public:
     /**
      * @brief Processes the stream's packets into an in-memory result.
      *
-     * Reads PacketItems from @c params.packet_queue, derandomizes/byte-swaps as
+     * Reads PacketItems from @c params.packetQueue, derandomizes/byte-swaps as
      * configured, scans for frame sync, and averages samples at the requested
      * rate. Results accumulate in an in-memory ProcessedStreamData (see result()).
      * Reports processingFinished() on completion.
      *
-     * @param[in] params      Validated parameters, including resolved_attrs and packet_queue.
+     * @param[in] params      Validated parameters, including resolvedAttrs and packetQueue.
      * @param[in] frame_setup Frame parameter definitions (word map, calibration). May be
      *                        empty/null for FrameSyncLockStats mode.
      * @return true if processing completed without errors.
@@ -87,15 +87,9 @@ private:
         uint64_t total_syncs_found      = 0;
         uint64_t total_frames_extracted = 0;
         uint64_t boundary_syncs         = 0;
-        uint64_t max_sync_run           = 0;
-        bool     buffer_ever_filled     = false;
-        double   first_data_time        = -1.0;
-        double   last_data_time         = 0.0;
         uint64_t rows_written           = 0;
         uint32_t bits_in_frame          = 0;
-        uint32_t words_in_frame         = 0;
         uint32_t sync_pat_len           = 0;
-        uint32_t min_syncs              = 0;
         // The pattern actually scanned for. Reported because sync_pat_len alone
         // cannot distinguish two configurations: PRN-11 and PRN-15 are both 32-bit
         // patterns, so a stream configured with the wrong one looks identical in the
@@ -129,8 +123,7 @@ private:
         uint64_t accumulated_missed_frames = 0; ///< Monotonic across the run.
         // Run totals / diagnostics.
         uint64_t total_syncs_found = 0, total_frames_extracted = 0, rows_written = 0;
-        uint64_t boundary_syncs = 0, max_sync_run = 0, current_sync_run = 0;
-        bool     buffer_ever_filled = false;
+        uint64_t boundary_syncs = 0;
     };
 
     /// Closes every output window whose end @p current_time_eval has passed, emitting
@@ -151,21 +144,16 @@ private:
     /// in-memory channel series in m_result. @return the enabled-parameter pointers.
     std::vector<ParameterInfo*> buildEnabledParams(FrameSetup* frame_setup, bool receiver_mode);
 
-    /// Emits the completion log (or the no-syncs / no-frames error) for a finished
-    /// scan and reports processingFinished(). @return true on a successful run.
     /// Identity prefix for every message this worker logs, e.g. "[CH 13 PCM03] ".
     /// Parallel workers share one log, so an unlabelled message cannot be traced
     /// back to the stream that produced it.
-    /// Reports to the sink, if one is set. All of a run's reporting goes through these.
-    void reportLog(const std::string& message) const;
-    void reportError(const std::string& message) const;
-    void reportFinished(bool success) const;
-
     static std::string streamTag(const ProcessingParams& params);
 
     /// Human-readable description of the sync pattern actually being scanned for.
     static std::string syncSpec(const ScanDiagnostics& d);
 
+    /// Emits the completion log (or the no-syncs / no-frames error) for a finished
+    /// scan and reports processingFinished(). @return true on a successful run.
     bool reportCompletion(const ProcessingParams& params, const ScanDiagnostics& diag);
 
     /// @name PCM bit-level helpers
@@ -195,7 +183,7 @@ private:
                           const std::vector<ParameterInfo*>& enabled_params);
 
     std::atomic<bool> m_abort_requested; ///< Thread-safe abort flag.
-    std::shared_ptr<ProcessingEvents> m_events; ///< Optional report sink; see setEvents().
+    EventReporter m_report;              ///< All of a run's reporting goes through this; see setEvents().
     ProcessedStreamData m_result;        ///< Accumulated in-memory output of the current run.
 };
 
