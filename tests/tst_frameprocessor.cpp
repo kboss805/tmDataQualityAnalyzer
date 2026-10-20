@@ -7,14 +7,17 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
+#include <vector>
 
-#include <QByteArray>
 #include <QCoreApplication>
 #include <QDir>
 #include <QEventLoop>
+#include <QFile>
 #include <QFileInfo>
 #include <QHash>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QtConcurrent>
 #include <QtTest>
 #include <QVector>
@@ -26,6 +29,9 @@
 #include "constants.h"
 #include "frameprocessor.h"
 #include "framesetup.h"
+#include "framesync.h"
+#include "qtbridge.h"
+#include "qtprocessingevents.h"
 #include "packetqueue.h"
 #include "processedstreamdata.h"
 #include "stepdetector.h"
@@ -53,7 +59,7 @@ static ProcessingParams makeTestParams(const QString& filename = {},
     // this. Set explicitly rather than inherited, so a change to the DTO default
     // cannot silently retune what these tests are decoding.
     p.swapBytes = true;
-    p.filename = filename;
+    p.filename = toFsPath(filename);
     p.timeChannelId = time_channel_id;
     p.pcmChannelId = pcm_channel_id;
     p.frameSync = frame_sync;
@@ -73,8 +79,8 @@ static bool runWithReader(FrameProcessor& fp, ProcessingParams& p, FrameSetup* s
     p.packetQueue = &queue;
 
     Ch10PacketReader reader;
-    QVector<ProcessingParams*> params_list = { &p };
-    QString error;
+    std::vector<ProcessingParams*> params_list = { &p };
+    std::string error;
     if (!reader.prepare(p.filename, p.timeChannelId, params_list, error))
         return false;
 
@@ -86,18 +92,104 @@ static bool runWithReader(FrameProcessor& fp, ProcessingParams& p, FrameSetup* s
 
 /// Helper: packs a string of '1'/'0' characters MSB-first into bytes, for
 /// building synthetic PCM bitstreams without a real Chapter 10 file.
-static QByteArray packBitString(const QString& bits)
+static std::vector<uint8_t> packBitString(const QString& bits)
 {
-    QByteArray data((bits.size() + 7) / 8, '\0');
+    std::vector<uint8_t> data(static_cast<std::size_t>((bits.size() + 7) / 8), 0);
     for (int i = 0; i < bits.size(); i++)
     {
         if (bits[i] == QChar('1'))
         {
-            data[i / 8] = static_cast<char>(data[i / 8] | (0x80 >> (i % 8)));
+            auto& byte = data[static_cast<std::size_t>(i / 8)];
+            byte = static_cast<uint8_t>(byte | (0x80 >> (i % 8)));
         }
     }
     return data;
 }
+
+namespace {
+
+/// Everything a FrameProcessor reports, in order. The only place the tests below touch the
+/// reporting mechanism is captureEvents(), so the Qt-signals-to-event-sink change swaps that
+/// one function and nothing else: the expected text was written against the signals.
+struct Capture
+{
+    QStringList logs;
+    QStringList errors;
+    QList<bool> finished;
+};
+
+/// Records into a Capture. Called on the processing thread, which in every test below is
+/// the test thread, so no locking is needed.
+class CaptureSink final : public ProcessingEvents
+{
+public:
+    explicit CaptureSink(Capture& c) : m_c(c) {}
+    void logMessage(const std::string& m) override { m_c.logs << QString::fromStdString(m); }
+    void errorOccurred(const std::string& m) override { m_c.errors << QString::fromStdString(m); }
+    void processingFinished(bool ok) override { m_c.finished << ok; }
+
+private:
+    Capture& m_c;
+};
+
+void captureEvents(FrameProcessor& fp, Capture& c)
+{
+    fp.setEvents(std::make_shared<CaptureSink>(c));
+}
+
+/// A 4-bit-sync, 12-bit-frame synthetic stream: the same layout the off-phase test uses.
+/// Fills @p p's resolved attributes; the caller sets what it varies (label, window, ...).
+void syntheticParams(ProcessingParams& p, PacketQueue& queue)
+{
+    p.packetQueue      = &queue;
+    p.pcmChannelId     = 7;
+    p.streamLabel      = "Rcvr Bus";
+    p.mode             = StreamMode::FrameSyncLockStats;
+    p.startSeconds     = 0;
+    p.stopSeconds      = UINT64_MAX;
+    p.samplePeriodSec  = 1e9;
+    p.useDataRateClock = true;
+    p.isRandomized     = false;
+    p.isInverted       = false;
+
+    p.resolvedAttrs.syncPat      = 0x9; // 1001b
+    p.resolvedAttrs.syncMask     = 0xF;
+    p.resolvedAttrs.syncPatLen   = 4;
+    p.resolvedAttrs.bitsInFrame  = 12;
+    p.resolvedAttrs.wordsInFrame = 2;
+    p.resolvedAttrs.wordLen      = 4;
+    p.resolvedAttrs.wordMask     = 0xF;
+    p.resolvedAttrs.minSyncs     = 1;
+    p.resolvedAttrs.delta100ns   = 1.0;
+    p.resolvedAttrs.needsSwap    = false;
+    p.resolvedAttrs.resolved     = true;
+}
+
+/// Queues one packet carrying @p bits, MSB first.
+void enqueueBits(PacketQueue& queue, const QString& bits)
+{
+    PacketItem item;
+    item.payload        = std::make_shared<const std::vector<uint8_t>>(packBitString(bits));
+    item.baseAbsSeconds = 0.0;
+    item.packetBits     = static_cast<uint64_t>(bits.size());
+    QVERIFY(queue.enqueue(item));
+}
+
+/// Sets a stream's display label. The one place these tests assign a QString label.
+void setStreamLabel(ProcessingParams& p, const QString& label)
+{
+    p.streamLabel = label.toStdString();
+}
+
+void enqueueEndOfStream(PacketQueue& queue)
+{
+    PacketItem eos;
+    eos.endOfStream = true;
+    QVERIFY(queue.enqueue(eos));
+}
+
+} // namespace
+
 
 /// Helper: loads the default frame setup (word map) from
 /// settings/receiver_params/default.toml.
@@ -112,7 +204,7 @@ static bool loadDefaultFrameSetup(FrameSetup& setup)
         return false;
     }
     // 16 receivers * 3 channels = 48 data words + 1 sync word = 49
-    return setup.tryLoadingFile(toml_path, 49);
+    return setup.tryLoadingFile(toFsPath(toml_path), 49);
 }
 
 /// Helper: enables all params with the given slope/offset calibration.
@@ -135,6 +227,232 @@ static bool setupParams(FrameSetup& setup, double slope, double offset)
 //                          CONSTRUCTOR / ABORT                               //
 ////////////////////////////////////////////////////////////////////////////////
 
+void TestFrameProcessor::nonAsciiPathOpensInBothReaders_data()
+{
+    QTest::addColumn<QString>("folder");
+    // In the Windows-1252 code page: the ANSI path API can spell it.
+    QTest::newRow("latin") << (QStringLiteral("caf") + QChar(0x00E9));
+    // Outside it: no ANSI code page on a Western system can spell it at all.
+    QTest::newRow("greek") << (QStringLiteral("omega-") + QChar(0x03A9));
+}
+
+void TestFrameProcessor::nonAsciiPathOpensInBothReaders()
+{
+    // Both readers hand the path to irig106's enI106Ch10Open(), which opens it with the
+    // C runtime's narrow open(char*). They used to encode it differently - the metadata
+    // reader with toLocal8Bit(), the packet reader with toUtf8() - so a file under a
+    // folder like C:/Users/Jos<e-acute>/ listed its channels and then failed the moment
+    // processing started. Users' own folders are exactly where recordings get copied.
+    QFETCH(QString, folder);
+    const QString src = testDataPath("test files/step_cal, example.ch10");
+    QVERIFY2(QFileInfo::exists(src), "committed fixture missing");
+
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    QVERIFY(QDir(tmp.path()).mkdir(folder));
+    const QString dst = QDir(tmp.path()).filePath(folder + "/recording.ch10");
+    QVERIFY(QFile::copy(src, dst));
+
+    Chapter10Reader meta;
+    QVERIFY2(meta.loadChannels(toFsPath(dst)), "metadata reader could not open the path");
+
+    Ch10PacketReader reader;
+    std::vector<ProcessingParams*> none;
+    std::string error;
+    reader.prepare(toFsPath(dst), meta.getCurrentTimeChannelID(), none, error);
+    QVERIFY2(error != "Error opening data file.",
+             "packet reader could not open a path the metadata reader opened");
+}
+
+void TestFrameProcessor::reportsExactlyTheseMessages_data()
+{
+    QTest::addColumn<QString>("scenario");
+    QTest::addColumn<bool>("returned");
+    QTest::addColumn<QStringList>("logs");
+    QTest::addColumn<QStringList>("errors");
+
+    const QString tag = QStringLiteral("[CH 7 Rcvr Bus] ");
+
+    QTest::newRow("success")
+        << "success" << true
+        << QStringList{tag + "processing...",
+                       tag + "4 bytes processed, 3 syncs found, 2 frames extracted.",
+                       tag + "complete — 1 samples extracted, elapsed N.Ns."}
+        << QStringList{};
+
+    // A bounded window is named; an unbounded one is not (an unset stop would print as
+    // 18446744073709551615s on every ordinary run).
+    // A label outside ASCII (an accented letter and Greek omega) goes in, is quoted in
+    // every message's tag, and comes back out unchanged in the result.
+    const QString unicode_tag = QStringLiteral("[CH 7 R") + QChar(0x00E9) + QStringLiteral("cepteur ")
+                                + QChar(0x03A9) + QStringLiteral("] ");
+    QTest::newRow("non-ascii-label")
+        << "unicodelabel" << true
+        << QStringList{unicode_tag + "processing...",
+                       unicode_tag + "4 bytes processed, 3 syncs found, 2 frames extracted.",
+                       unicode_tag + "complete — 1 samples extracted, elapsed N.Ns."}
+        << QStringList{};
+
+    QTest::newRow("bounded-window")
+        << "bounded" << false
+        << QStringList{tag + "processing (1s to 100s)...",
+                       tag + "2 bytes processed, 2 syncs found, 0 frames extracted."}
+        << QStringList{tag + "sync found but no frames extracted — pattern 0x9 (4 bits), "
+                             "12 bits/frame; 2 syncs, 1 boundary-aligned."};
+
+    // The mask is printed only when it constrains something.
+    QTest::newRow("masked-pattern-no-sync")
+        << "masked" << false
+        << QStringList{tag + "processing...",
+                       tag + "2 bytes processed, 0 syncs found, 0 frames extracted."}
+        << QStringList{tag + "no frame sync found — pattern 0x9 (4 bits, mask 0xE), "
+                             "12 bits/frame."};
+
+    QTest::newRow("sync-but-no-frames")
+        << "noframes" << false
+        << QStringList{tag + "processing...",
+                       tag + "1 bytes processed, 1 syncs found, 0 frames extracted."}
+        << QStringList{tag + "sync found but no frames extracted — pattern 0x9 (4 bits), "
+                             "12 bits/frame; 1 syncs, 0 boundary-aligned."};
+
+    QTest::newRow("cancelled")
+        << "cancelled" << false
+        << QStringList{tag + "processing...", tag + "processing cancelled by user."}
+        << QStringList{};
+
+    // The label "Ch 7" is the fallback MainViewModel uses when TMATS has no name, so the
+    // tag drops it; an empty label drops it too.
+    QTest::newRow("no-packet-queue")
+        << "noqueue" << false << QStringList{}
+        << QStringList{QStringLiteral("[CH 7] Internal error: no packet queue for stream.")};
+    QTest::newRow("attributes-unresolved")
+        << "unresolved" << false << QStringList{}
+        << QStringList{QStringLiteral("[CH 7] Internal error: PCM attributes not resolved.")};
+
+    // Odd-length payloads cannot be byte-pair swapped. Every packet odd: the setting had
+    // no effect at all. Some odd: one stream carrying two byte orders.
+    QTest::newRow("every-payload-odd")
+        << "allodd" << false
+        << QStringList{tag + "processing...",
+                       tag + "all 1 payloads are odd-length and cannot be byte-pair swapped — "
+                             "processed as Legacy Chapter 10 regardless of the setting.",
+                       tag + "3 bytes processed, 2 syncs found, 0 frames extracted."}
+        << QStringList{tag + "sync found but no frames extracted — pattern 0x9 (4 bits), "
+                             "12 bits/frame; 2 syncs, 0 boundary-aligned."};
+    QTest::newRow("some-payloads-odd")
+        << "mixed" << true
+        << QStringList{tag + "processing...",
+                       tag + "warning: byte swap skipped on 1 of 2 packets (odd length) — "
+                             "mixed byte order, sync may be unreliable.",
+                       tag + "5 bytes processed, 4 syncs found, 1 frames extracted.",
+                       tag + "complete — 1 samples extracted, elapsed N.Ns."}
+        << QStringList{};
+}
+
+void TestFrameProcessor::reportsExactlyTheseMessages()
+{
+    // The text of every message FrameProcessor reports, exactly, in order. Written
+    // against the QString/signals implementation and kept as it was across the move to
+    // std::format and an event sink: a format specifier is the kind of thing a port gets
+    // subtly wrong (%1 of %2, 'f' with one decimal) and nothing else would notice.
+    QFETCH(QString, scenario);
+    QFETCH(bool, returned);
+    QFETCH(QStringList, logs);
+    QFETCH(QStringList, errors);
+
+    PacketQueue q;
+    ProcessingParams p;
+    FrameSetup s;
+    syntheticParams(p, q);
+
+    if (scenario == "success" || scenario == "unicodelabel")
+    {
+        if (scenario == "unicodelabel")
+        {
+            setStreamLabel(p, QStringLiteral("R") + QChar(0x00E9) + QStringLiteral("cepteur ")
+                                  + QChar(0x03A9));
+        }
+        enqueueBits(q, "1001" "0000" "00001001" "0000" "00001001");
+        enqueueEndOfStream(q);
+    }
+    else if (scenario == "bounded")
+    {
+        p.startSeconds = 1;
+        p.stopSeconds  = 100;
+        enqueueBits(q, "1001" "0000" "00001001");
+        enqueueEndOfStream(q);
+    }
+    else if (scenario == "masked")
+    {
+        p.resolvedAttrs.syncMask = 0xE;
+        enqueueBits(q, "0000" "0000" "0000");
+        enqueueEndOfStream(q);
+    }
+    else if (scenario == "noframes")
+    {
+        enqueueBits(q, "1001");
+        enqueueEndOfStream(q);
+    }
+    else if (scenario == "cancelled")
+    {
+        enqueueBits(q, "1001");
+        enqueueEndOfStream(q);
+    }
+    else if (scenario == "noqueue")
+    {
+        p.packetQueue = nullptr;
+        p.streamLabel = "Ch 7";
+    }
+    else if (scenario == "unresolved")
+    {
+        p.resolvedAttrs.resolved = false;
+        p.streamLabel = "";
+    }
+    else if (scenario == "allodd")
+    {
+        p.resolvedAttrs.needsSwap = true;
+        enqueueBits(q, "100100000000000000001001"); // 3 bytes
+        enqueueEndOfStream(q);
+    }
+    else if (scenario == "mixed")
+    {
+        p.resolvedAttrs.needsSwap = true;
+        enqueueBits(q, "100100000000000000001001"); // 3 bytes (odd)
+        enqueueBits(q, "1001000000001001");         // 2 bytes (even)
+        enqueueEndOfStream(q);
+    }
+
+    FrameProcessor fp;
+    Capture c;
+    captureEvents(fp, c);
+    if (scenario == "cancelled")
+    {
+        fp.requestAbort();
+    }
+    const bool ok = fp.process(p, &s);
+
+    // The one non-deterministic piece: how long the run took, printed to a tenth.
+    const QRegularExpression elapsed(QStringLiteral("elapsed [0-9]+\\.[0-9]s"));
+    QStringList actual = c.logs;
+    for (QString& m : actual)
+    {
+        m.replace(elapsed, QStringLiteral("elapsed N.Ns"));
+    }
+
+    QCOMPARE(ok, returned);
+    QCOMPARE(actual, logs);
+    QCOMPARE(c.errors, errors);
+    if (scenario == "unicodelabel")
+    {
+        // The label also travels into the result, where the plot reads it.
+        QCOMPARE(QString::fromStdString(fp.result().streamLabel),
+                 QStringLiteral("R") + QChar(0x00E9) + QStringLiteral("cepteur ")
+                     + QChar(0x03A9));
+    }
+    // Exactly one completion notice per run, and it agrees with the return value.
+    QCOMPARE(c.finished, QList<bool>({returned}));
+}
+
 void TestFrameProcessor::constructorDefaults()
 {
     FrameProcessor fp;
@@ -145,7 +463,8 @@ void TestFrameProcessor::constructorDefaults()
 void TestFrameProcessor::requestAbortSetsFlag()
 {
     FrameProcessor fp;
-    QSignalSpy log_spy(&fp, &FrameProcessor::logMessage);
+    Capture cap;
+    captureEvents(fp, cap);
     fp.requestAbort();
     QVERIFY(true);
 }
@@ -156,19 +475,19 @@ void TestFrameProcessor::requestAbortSetsFlag()
 
 void TestFrameProcessor::derandomizeShortBufferIdentity()
 {
-    QByteArray data(1, '\xAB');
-    QByteArray original = data;
+    std::vector<uint8_t> data(1, 0xAB);
+    const std::vector<uint8_t> original = data;
     uint16_t lfsr = 0;
-    FrameProcessor::derandomizeBitstream(reinterpret_cast<uint8_t*>(data.data()), 8, lfsr);
+    FrameProcessor::derandomizeBitstream(data.data(), 8, lfsr);
     QCOMPARE(data[0], original[0]);
 }
 
 void TestFrameProcessor::derandomizeLongerBufferChanges()
 {
-    QByteArray data(4, '\xFF');
-    QByteArray original = data;
+    std::vector<uint8_t> data(4, 0xFF);
+    const std::vector<uint8_t> original = data;
     uint16_t lfsr = 0;
-    FrameProcessor::derandomizeBitstream(reinterpret_cast<uint8_t*>(data.data()), 32, lfsr);
+    FrameProcessor::derandomizeBitstream(data.data(), 32, lfsr);
     QVERIFY2(data != original, "32 bits of all-1s should change after derandomization");
 }
 
@@ -179,8 +498,8 @@ void TestFrameProcessor::derandomizeLongerBufferChanges()
 void TestFrameProcessor::processInvalidTimeChannel()
 {
     FrameProcessor fp;
-    QSignalSpy error_spy(&fp, &FrameProcessor::errorOccurred);
-    QSignalSpy finished_spy(&fp, &FrameProcessor::processingFinished);
+    Capture cap;
+    captureEvents(fp, cap);
 
     FrameSetup setup;
     ProcessingParams p = makeTestParams("dummy.ch10", -1, 1);
@@ -188,16 +507,16 @@ void TestFrameProcessor::processInvalidTimeChannel()
     p.stopSeconds = 100;
     p.samplePeriodSec = 1.0;
     QVERIFY(!fp.process(p, &setup));
-    QVERIFY(!error_spy.isEmpty());
-    QVERIFY(!finished_spy.isEmpty());
-    QCOMPARE(finished_spy.last().at(0).toBool(), false);
+    QVERIFY(!cap.errors.isEmpty());
+    QVERIFY(!cap.finished.isEmpty());
+    QCOMPARE(cap.finished.last(), false);
 }
 
 void TestFrameProcessor::processInvalidPcmChannel()
 {
     FrameProcessor fp;
-    QSignalSpy error_spy(&fp, &FrameProcessor::errorOccurred);
-    QSignalSpy finished_spy(&fp, &FrameProcessor::processingFinished);
+    Capture cap;
+    captureEvents(fp, cap);
 
     FrameSetup setup;
     ProcessingParams p = makeTestParams("dummy.ch10", 1, -1);
@@ -205,15 +524,16 @@ void TestFrameProcessor::processInvalidPcmChannel()
     p.stopSeconds = 100;
     p.samplePeriodSec = 1.0;
     QVERIFY(!fp.process(p, &setup));
-    QVERIFY(!error_spy.isEmpty());
-    QVERIFY(!finished_spy.isEmpty());
-    QCOMPARE(finished_spy.last().at(0).toBool(), false);
+    QVERIFY(!cap.errors.isEmpty());
+    QVERIFY(!cap.finished.isEmpty());
+    QCOMPARE(cap.finished.last(), false);
 }
 
 void TestFrameProcessor::processInvalidFile()
 {
     FrameProcessor fp;
-    QSignalSpy error_spy(&fp, &FrameProcessor::errorOccurred);
+    Capture cap;
+    captureEvents(fp, cap);
 
     FrameSetup setup;
     ProcessingParams p = makeTestParams("nonexistent_file.ch10", 1, 1);
@@ -221,7 +541,7 @@ void TestFrameProcessor::processInvalidFile()
     p.stopSeconds = 100;
     p.samplePeriodSec = 1.0;
     QVERIFY(!fp.process(p, &setup));
-    QVERIFY(!error_spy.isEmpty());
+    QVERIFY(!cap.errors.isEmpty());
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -235,7 +555,7 @@ void TestFrameProcessor::processAccumulatesReceiverData()
         QSKIP("RNRZ-L test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     int pcm_id = reader.getFirstPCMChannelID();
     int time_id = reader.getCurrentTimeChannelID();
     if (pcm_id < 0 || time_id < 0)
@@ -263,10 +583,10 @@ void TestFrameProcessor::processAccumulatesReceiverData()
     QVERIFY2(r.hasSamples(), "Result must contain at least one time sample");
     // Receiver (SNR) streams are always considered locked (they come from a
     // separate piece of equipment), so no lock/error series is produced.
-    QVERIFY2(r.lockPercent.isEmpty(), "Receiver mode must produce no lock series");
-    QVERIFY2(r.accumulatedMissedFrames.isEmpty(), "Receiver mode must produce no missed-frames series");
+    QVERIFY2(r.lockPercent.empty(), "Receiver mode must produce no lock series");
+    QVERIFY2(r.accumulatedMissedFrames.empty(), "Receiver mode must produce no missed-frames series");
     QCOMPARE(r.channels.size(), setup.length());
-    QCOMPARE(r.streamLabel, QString("Ch test"));
+    QCOMPARE(QString::fromStdString(r.streamLabel), QString("Ch test"));
     QCOMPARE(r.mode, StreamMode::ReceiverChannelInfo);
 
     // Every channel's value vector is parallel to the time vector.
@@ -288,7 +608,7 @@ void TestFrameProcessor::processLockOnlyModeHasNoChannels()
         QSKIP("RNRZ-L test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     int pcm_id = reader.getFirstPCMChannelID();
     int time_id = reader.getCurrentTimeChannelID();
     if (pcm_id < 0 || time_id < 0)
@@ -310,7 +630,7 @@ void TestFrameProcessor::processLockOnlyModeHasNoChannels()
 
     const ProcessedStreamData& r = fp.result();
     QVERIFY2(r.hasSamples(), "Lock-only result must contain time samples");
-    QVERIFY2(r.channels.isEmpty(), "Lock-only mode must produce no receiver channels");
+    QVERIFY2(r.channels.empty(), "Lock-only mode must produce no receiver channels");
     QCOMPARE(r.lockPercent.size(), r.timesSec.size());
     QCOMPARE(r.accumulatedMissedFrames.size(), r.timesSec.size());
     QCOMPARE(r.mode, StreamMode::FrameSyncLockStats);
@@ -323,7 +643,7 @@ void TestFrameProcessor::processFrameSyncErrorsMonotonic()
         QSKIP("RNRZ-L test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     int pcm_id = reader.getFirstPCMChannelID();
     int time_id = reader.getCurrentTimeChannelID();
     if (pcm_id < 0 || time_id < 0)
@@ -348,7 +668,7 @@ void TestFrameProcessor::processFrameSyncErrorsMonotonic()
     QCOMPARE(r.accumulatedMissedFrames.size(), r.timesSec.size());
 
     // The accumulated count starts at >= 0 and never decreases.
-    QVERIFY(r.accumulatedMissedFrames.first() >= 0.0);
+    QVERIFY(r.accumulatedMissedFrames.front() >= 0.0);
     for (int i = 1; i < r.accumulatedMissedFrames.size(); i++)
     {
         QVERIFY2(r.accumulatedMissedFrames[i] >= r.accumulatedMissedFrames[i - 1],
@@ -363,7 +683,7 @@ void TestFrameProcessor::processSlopeAffectsValues()
         QSKIP("RNRZ-L test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     int pcm_id = reader.getFirstPCMChannelID();
     int time_id = reader.getCurrentTimeChannelID();
     if (pcm_id < 0 || time_id < 0)
@@ -382,10 +702,10 @@ void TestFrameProcessor::processSlopeAffectsValues()
         p.samplePeriodSec = 1.0;
         p.isRandomized = true;
         FrameProcessor fp;
-        if (!runWithReader(fp, p, &setup) || fp.result().channels.isEmpty()
-            || fp.result().channels[0].values.isEmpty())
+        if (!runWithReader(fp, p, &setup) || fp.result().channels.empty()
+            || fp.result().channels[0].values.empty())
             return 0.0;
-        return fp.result().channels[0].values.first();
+        return fp.result().channels[0].values.front();
     };
 
     double v1 = run(1.0);
@@ -403,7 +723,7 @@ void TestFrameProcessor::processShortPeriodMoreSamples()
         QSKIP("RNRZ-L test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     int pcm_id = reader.getFirstPCMChannelID();
     int time_id = reader.getCurrentTimeChannelID();
     if (pcm_id < 0 || time_id < 0)
@@ -454,7 +774,7 @@ void TestFrameProcessor::calibrationRoundTripOnRealFileProducesCleanSteps()
         QSKIP("RNRZ-L test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     int pcm_id = reader.getFirstPCMChannelID();
     int time_id = reader.getCurrentTimeChannelID();
     if (pcm_id < 0 || time_id < 0)
@@ -468,24 +788,26 @@ void TestFrameProcessor::calibrationRoundTripOnRealFileProducesCleanSteps()
     if (!QFileInfo::exists(step_toml))
         QSKIP("default.toml (rcvr_cals) not available");
 
-    QVector<StepDefinition> steps;
-    QString step_error;
-    QVERIFY2(StepDetector::parseStepConfig(step_toml, steps, step_error),
-             qPrintable(step_error));
-    QVERIFY(!steps.isEmpty());
+    std::vector<StepDefinition> steps;
+    std::string step_error;
+    QVERIFY2(StepDetector::parseStepConfig(toFsPath(step_toml), steps, step_error),
+             step_error.c_str());
+    QVERIFY(!steps.empty());
 
     // ---- Extraction pass: build calibration profiles from this same file ----
     CalibrationExtractor::Request req;
-    req.calFilename       = filepath;
+    req.calFilename       = toFsPath(filepath);
     req.timeChannelId      = time_id;
     req.pcmChannelId       = pcm_id;
-    req.sync.pattern       = "FE6B2840";
-    req.sync.bitsInMinorFrame   = 8000; // true minor-frame length for this recording
-    req.sync.randomized         = true; // RNRZ-L
-    req.sync.dataRateMbps       = 0.8;   // 800 kbps -> ~100 frames/s; drives the adaptive extract period
-    // An ordinary Chapter 10 fixture, so it needs the byte swap. Stated rather than
-    // inherited, so a change to the DTO default cannot silently retune it.
-    req.swapBytes          = true;
+    // 8000 bits is this recording's true minor-frame length; RNRZ-L; 0.8 Mbps (800 kbps, ~100
+    // frames/s) drives the adaptive extract period. An ordinary Chapter 10 fixture, so it needs the
+    // byte swap. Stated rather than inherited, so a change to the DTO default cannot silently
+    // retune it.
+    QVERIFY(resolveFrameSync("FE6B2840", std::string(), req.acquisition.sync) == FrameSyncError::None);
+    req.acquisition.bitsInMinorFrame = 8000;
+    req.acquisition.randomized       = true;
+    req.acquisition.dataRateMbps     = 0.8;
+    req.acquisition.swapBytes        = true;
     req.numReceivers       = 16;
     req.receiverChannels   = 3;
     req.steps              = steps;
@@ -495,14 +817,16 @@ void TestFrameProcessor::calibrationRoundTripOnRealFileProducesCleanSteps()
     bool extract_ok = false;
     bool finished_already = false;
     QString summary;
-    connect(&extractor, &CalibrationExtractor::finished, &loop,
-            [&](bool ok, const QString& msg) {
-                extract_ok = ok;
-                summary = msg;
-                finished_already = true;
-                loop.quit();
-            });
-    extractor.start(req);
+    // The extraction reports from its own threads; the adapter delivers the end to this one.
+    auto events = std::make_shared<QtProcessingEvents>(
+        this, nullptr, nullptr,
+        [&](bool ok) {
+            extract_ok = ok;
+            summary = QString::fromStdString(extractor.summary());
+            finished_already = true;
+            loop.quit();
+        });
+    extractor.start(req, events);
     if (!finished_already)
     {
         loop.exec();
@@ -527,7 +851,7 @@ void TestFrameProcessor::calibrationRoundTripOnRealFileProducesCleanSteps()
     {
         for (int c = 0; c < req.receiverChannels; c++)
         {
-            setup.addParameter(QString(kPrefixes[c]) + "_RCVR" + QString::number(r + 1),
+            setup.addParameter(std::string(kPrefixes[c]) + "_RCVR" + std::to_string(r + 1),
                                r * req.receiverChannels + c);
         }
     }
@@ -584,7 +908,7 @@ void TestFrameProcessor::calibrationRoundTripOnRealFileProducesCleanSteps()
     for (int ci = 0; ci < result.channels.size(); ci++)
     {
         const ProcessedChannelSeries& series = result.channels[ci];
-        if (!calibration_by_word.contains(series.word) || series.values.isEmpty())
+        if (!calibration_by_word.contains(series.word) || series.values.empty())
         {
             continue;
         }
@@ -641,7 +965,7 @@ void TestFrameProcessor::offPhaseSyncAfterLockLossIsNotExtracted()
     bits += "1111";       // word 0 of frame 2 = 15
     bits += "00001001";   // word 1 filler + genuine sync, boundary-aligned -> confirms frame 2
 
-    QByteArray payload = packBitString(bits);
+    const std::vector<uint8_t> payload = packBitString(bits);
 
     FrameSetup setup;
     setup.addParameter("W0", 0);
@@ -676,7 +1000,7 @@ void TestFrameProcessor::offPhaseSyncAfterLockLossIsNotExtracted()
     p.resolvedAttrs.resolved    = true;
 
     PacketItem item;
-    item.payload     = payload;
+    item.payload     = std::make_shared<const std::vector<uint8_t>>(payload);
     item.baseAbsSeconds = 0.0;
     item.packetBits   = static_cast<uint64_t>(bits.size());
     QVERIFY(queue.enqueue(item));
@@ -689,12 +1013,12 @@ void TestFrameProcessor::offPhaseSyncAfterLockLossIsNotExtracted()
     QVERIFY2(fp.process(p, &setup), "Synthetic off-phase-sync stream should process successfully");
 
     const ProcessedStreamData& r = fp.result();
-    QVERIFY2(!r.channels.isEmpty() && !r.channels[0].values.isEmpty(),
+    QVERIFY2(!r.channels.empty() && !r.channels[0].values.empty(),
              "Expected at least one extracted sample");
     // Only the boundary-aligned sync should yield a sample (word B = 15). If the
     // off-phase false positive after lock loss were wrongly extracted, the stale
     // word A (0) would be averaged in, producing 7.5 instead of 15.
-    QCOMPARE(r.channels[0].values.first(), 15.0);
+    QCOMPARE(r.channels[0].values.front(), 15.0);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -730,7 +1054,7 @@ void TestFrameProcessor::nonLinearCalibrationAveragesRawBeforeInterpolating()
     bits += "0000";       // frame 2, word 1 (unused)
     bits += "1001";       // boundary sync -> extract frame 2 (word 0 = 15)
 
-    QByteArray payload = packBitString(bits);
+    const std::vector<uint8_t> payload = packBitString(bits);
 
     FrameSetup setup;
     setup.addParameter("W0", 0);
@@ -772,7 +1096,7 @@ void TestFrameProcessor::nonLinearCalibrationAveragesRawBeforeInterpolating()
     p.resolvedAttrs.resolved    = true;
 
     PacketItem item;
-    item.payload        = payload;
+    item.payload        = std::make_shared<const std::vector<uint8_t>>(payload);
     item.baseAbsSeconds = 0.0;
     item.packetBits     = static_cast<uint64_t>(bits.size());
     QVERIFY(queue.enqueue(item));
@@ -785,13 +1109,13 @@ void TestFrameProcessor::nonLinearCalibrationAveragesRawBeforeInterpolating()
     QVERIFY2(fp.process(p, &setup), "Synthetic non-linear-calibration stream should process successfully");
 
     const ProcessedStreamData& r = fp.result();
-    QVERIFY2(!r.channels.isEmpty() && !r.channels[0].values.isEmpty(),
+    QVERIFY2(!r.channels.empty() && !r.channels[0].values.empty(),
              "Expected at least one extracted sample");
     // Correct (average raw, then calibrate once): interpolate(mean(0,15)=7.5) = 10 dB.
     // Buggy (calibrate each frame, then average): mean(10, 160) = 85 dB.
-    QVERIFY2(qAbs(r.channels[0].values.first() - 10.0) < 1e-9,
+    QVERIFY2(qAbs(r.channels[0].values.front() - 10.0) < 1e-9,
              qPrintable(QString("Expected 10.0 dB (raw averaged before calibration), got %1")
-                            .arg(r.channels[0].values.first())));
+                            .arg(r.channels[0].values.front())));
 }
 
 void TestFrameProcessor::swapBytesOffFindsSyncThatTheSwapDestroys()
@@ -813,7 +1137,7 @@ void TestFrameProcessor::swapBytesOffFindsSyncThatTheSwapDestroys()
         QSKIP("Safran test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     const int time_id = reader.getCurrentTimeChannelID();
     if (time_id < 0)
         QSKIP("Missing time channel in test file");
@@ -848,11 +1172,11 @@ void TestFrameProcessor::swapBytesOffFindsSyncThatTheSwapDestroys()
         PacketQueue queue;
         p.packetQueue = &queue;
         Ch10PacketReader rdr;
-        QVector<ProcessingParams*> params_list = { &p };
-        QString error;
+        std::vector<ProcessingParams*> params_list = { &p };
+        std::string error;
         if (!rdr.prepare(p.filename, p.timeChannelId, params_list, error))
         {
-            qWarning("prepare() failed (swap=%d): %s", int(swap), qPrintable(error));
+            qWarning("prepare() failed (swap=%d): %s", int(swap), error.c_str());
             return {};
         }
 
@@ -902,7 +1226,7 @@ void TestFrameProcessor::oddPayloadSwapSkipIsReported()
         QSKIP("Safran test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     const int time_id = reader.getCurrentTimeChannelID();
     if (time_id < 0)
         QSKIP("Missing time channel in test file");
@@ -924,19 +1248,19 @@ void TestFrameProcessor::oddPayloadSwapSkipIsReported()
     PacketQueue queue;
     p.packetQueue = &queue;
     Ch10PacketReader rdr;
-    QVector<ProcessingParams*> params_list = { &p };
-    QString error;
-    QVERIFY2(rdr.prepare(p.filename, p.timeChannelId, params_list, error), qPrintable(error));
+    std::vector<ProcessingParams*> params_list = { &p };
+    std::string error;
+    QVERIFY2(rdr.prepare(p.filename, p.timeChannelId, params_list, error), error.c_str());
 
     FrameSetup empty_setup;
     FrameProcessor fp;
-    QStringList log;
-    QObject::connect(&fp, &FrameProcessor::logMessage,
-                     [&log](const QString& m) { log << m; });
+    Capture cap;
+    captureEvents(fp, cap);
 
     QFuture<void> future = QtConcurrent::run([&rdr]() { rdr.run(); });
     fp.process(p, &empty_setup);
     future.waitForFinished();
+    const QStringList& log = cap.logs;
 
     const QString joined = log.join(" | ");
     QVERIFY2(joined.contains("odd-length"),
@@ -966,7 +1290,7 @@ void TestFrameProcessor::offPhaseSyncsAreNotCountedAsBoundaryAligned()
         QSKIP("RNRZ-L test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     const int pcm_id  = reader.getFirstPCMChannelID();
     const int time_id = reader.getCurrentTimeChannelID();
     if (pcm_id < 0 || time_id < 0)
@@ -984,19 +1308,19 @@ void TestFrameProcessor::offPhaseSyncsAreNotCountedAsBoundaryAligned()
     PacketQueue queue;
     p.packetQueue = &queue;
     Ch10PacketReader rdr;
-    QVector<ProcessingParams*> params_list = { &p };
-    QString error;
-    QVERIFY2(rdr.prepare(p.filename, p.timeChannelId, params_list, error), qPrintable(error));
+    std::vector<ProcessingParams*> params_list = { &p };
+    std::string error;
+    QVERIFY2(rdr.prepare(p.filename, p.timeChannelId, params_list, error), error.c_str());
 
     FrameSetup empty_setup;
     FrameProcessor fp;
-    QString reported;
-    QObject::connect(&fp, &FrameProcessor::errorOccurred,
-                     [&reported](const QString& m) { reported = m; });
+    Capture cap;
+    captureEvents(fp, cap);
 
     QFuture<void> future = QtConcurrent::run([&rdr]() { rdr.run(); });
     const bool ok = fp.process(p, &empty_setup);
     future.waitForFinished();
+    const QString reported = cap.errors.isEmpty() ? QString() : cap.errors.last();
 
     QVERIFY2(!ok, "a wrong frame length must not yield extracted frames");
     QVERIFY2(reported.contains("no frames extracted"),
@@ -1026,7 +1350,7 @@ void TestFrameProcessor::failureReportNamesChannelAndSyncPattern()
         QSKIP("RNRZ-L test file not available");
 
     Chapter10Reader reader;
-    QVERIFY(reader.loadChannels(filepath));
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
     const int pcm_id  = reader.getFirstPCMChannelID();
     const int time_id = reader.getCurrentTimeChannelID();
     if (pcm_id < 0 || time_id < 0)
@@ -1041,27 +1365,25 @@ void TestFrameProcessor::failureReportNamesChannelAndSyncPattern()
     p.samplePeriodSec = 1.0;
     p.isRandomized    = true;
     p.mode            = StreamMode::FrameSyncLockStats;
-    p.streamLabel     = QStringLiteral("PCM03");
+    p.streamLabel     = "PCM03";
 
     PacketQueue queue;
     p.packetQueue = &queue;
     Ch10PacketReader rdr;
-    QVector<ProcessingParams*> params_list = { &p };
-    QString error;
-    QVERIFY2(rdr.prepare(p.filename, p.timeChannelId, params_list, error), qPrintable(error));
+    std::vector<ProcessingParams*> params_list = { &p };
+    std::string error;
+    QVERIFY2(rdr.prepare(p.filename, p.timeChannelId, params_list, error), error.c_str());
 
     FrameSetup empty_setup;
     FrameProcessor fp;
-    QStringList log;
-    QString reported;
-    QObject::connect(&fp, &FrameProcessor::logMessage,
-                     [&log](const QString& m) { log << m; });
-    QObject::connect(&fp, &FrameProcessor::errorOccurred,
-                     [&reported](const QString& m) { reported = m; });
+    Capture cap;
+    captureEvents(fp, cap);
 
     QFuture<void> future = QtConcurrent::run([&rdr]() { rdr.run(); });
     fp.process(p, &empty_setup);
     future.waitForFinished();
+    const QStringList& log = cap.logs;
+    const QString reported = cap.errors.isEmpty() ? QString() : cap.errors.last();
 
     const QString expected_tag = QStringLiteral("[CH %1 PCM03]").arg(pcm_id);
 

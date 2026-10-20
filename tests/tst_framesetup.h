@@ -27,6 +27,7 @@ private slots:
     void channelPrefixNamesKnownPositionsThenFallsBack();
     void receiverParameterNameCombinesPrefixAndReceiver();
     void receiverIndexFromNameInvertsParameterName();
+    void receiverNameParsingMatchesQStringToInt();
 
     void wordsInMinorFrameRoundsUp();
     void tryLoadingFileMetadataOnlyFileYieldsNoParameters();
@@ -35,6 +36,8 @@ private slots:
     void receiverParamsFileRoundTripsScalarsAndWordMap();
     void receiverParamsFileFallsBackToTheDefaultWordMap();
     void receiverParamsFileIsNeverWrittenWithoutAWordMap();
+    void attachCalibrationProfilesAttachesOnlyValidMatchingWords();
+    void attachCalibrationProfilesWithNothingToAttachReturnsZero();
 };
 
 #endif // TST_FRAMESETUP_H

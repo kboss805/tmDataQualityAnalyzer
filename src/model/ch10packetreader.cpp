@@ -5,16 +5,21 @@
 
 #include "ch10packetreader.h"
 
+#include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
-
-#include <QElapsedTimer>
-#include <QFileInfo>
+#include <filesystem>
+#include <format>
+#include <memory>
+#include <system_error>
+#include <vector>
 
 #include "i106_decode_pcmf1.h"
 #include "i106_decode_time.h"
 
 #include "constants.h"
+#include "intervalgate.h"
 #include "packetqueue.h"
 
 using namespace Irig106;
@@ -30,9 +35,8 @@ namespace {
 //                       CONSTRUCTOR / DESTRUCTOR                             //
 ////////////////////////////////////////////////////////////////////////////////
 
-Ch10PacketReader::Ch10PacketReader(QObject* parent)
-    : QObject(parent),
-      m_status(I106_OK),
+Ch10PacketReader::Ch10PacketReader()
+    : m_status(I106_OK),
       m_header(),
       m_tmats_info(),
       m_irig_time(),
@@ -57,11 +61,40 @@ void Ch10PacketReader::requestAbort()
     m_abort_requested.store(true, std::memory_order_relaxed);
 }
 
+void Ch10PacketReader::setEvents(std::shared_ptr<ProcessingEvents> events)
+{
+    m_events = std::move(events);
+}
+
+void Ch10PacketReader::reportLog(const std::string& message) const
+{
+    if (m_events)
+    {
+        m_events->logMessage(message);
+    }
+}
+
+void Ch10PacketReader::reportError(const std::string& message) const
+{
+    if (m_events)
+    {
+        m_events->errorOccurred(message);
+    }
+}
+
+void Ch10PacketReader::reportProgress(int percent) const
+{
+    if (m_events)
+    {
+        m_events->progressUpdated(percent);
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 //                          IRIG106 HELPERS                                   //
 ////////////////////////////////////////////////////////////////////////////////
 
-void Ch10PacketReader::freeChanInfoTable(QVector<SuChanInfo*>& channel_info)
+void Ch10PacketReader::freeChanInfoTable(std::vector<SuChanInfo*>& channel_info)
 {
     for (auto* info : channel_info)
     {
@@ -85,7 +118,7 @@ void Ch10PacketReader::freeChanInfoTable(QVector<SuChanInfo*>& channel_info)
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 EnI106Status Ch10PacketReader::assembleAttributesFromTMATS(SuTmatsInfo* tmats_info,
-                                                           QVector<SuChanInfo*>& channel_info)
+                                                           std::vector<SuChanInfo*>& channel_info)
 {
     if ((tmats_info->psuFirstGRecord == nullptr) || (tmats_info->psuFirstRRecord == nullptr))
     {
@@ -155,9 +188,9 @@ EnI106Status Ch10PacketReader::assembleAttributesFromTMATS(SuTmatsInfo* tmats_in
     return I106_OK;
 }
 
-bool Ch10PacketReader::ensureBufferCapacity(qsizetype required)
+bool Ch10PacketReader::ensureBufferCapacity(std::size_t required)
 {
-    if (required > PCMConstants::kMaxPacketBufferSize)
+    if (required > static_cast<std::size_t>(PCMConstants::kMaxPacketBufferSize))
         return false;
     if (m_buffer.size() >= required)
         return true;
@@ -174,15 +207,22 @@ bool Ch10PacketReader::ensureBufferCapacity(qsizetype required)
 ////////////////////////////////////////////////////////////////////////////////
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-bool Ch10PacketReader::prepare(const QString& filename,
+bool Ch10PacketReader::prepare(const std::filesystem::path& filename,
                                int time_channel_id,
-                               QVector<ProcessingParams*>& params_list,
-                               QString& error)
+                               std::vector<ProcessingParams*>& params_list,
+                               std::string& error)
 {
     m_time_channel_id = time_channel_id;
-    m_total_file_size = QFileInfo(filename).size(); // qint64, handles >2 GB correctly
+    // 64-bit, so a recording over 2 GB is sized correctly; 0 (no progress) if it cannot be sized.
+    std::error_code size_error;
+    const auto file_size = std::filesystem::file_size(filename, size_error);
+    m_total_file_size = size_error ? 0 : static_cast<int64_t>(file_size);
 
-    m_status = enI106Ch10Open(&m_file_handle, filename.toUtf8().constData(), I106_READ);
+    // The path in the process code page, matching Chapter10Reader: irig106 opens with the
+    // CRT's narrow open(), which reads that code page - UTF-8 under codepage.pri's manifest.
+    // (Once this was toUtf8(), so a path the metadata reader opened could fail here.)
+    const std::string narrow_path = filename.string();
+    m_status = enI106Ch10Open(&m_file_handle, narrow_path.c_str(), I106_READ);
     if (m_status != I106_OK && m_status != I106_OPEN_WARNING)
     {
         error = "Error opening data file.";
@@ -209,7 +249,7 @@ bool Ch10PacketReader::prepare(const QString& filename,
         error = "Failed to find TMATS message.";
         return false;
     }
-    if (!ensureBufferCapacity(static_cast<qsizetype>(m_header.ulPacketLen)))
+    if (!ensureBufferCapacity(static_cast<std::size_t>(m_header.ulPacketLen)))
     {
         error = "Memory allocation failed.";
         return false;
@@ -240,13 +280,13 @@ bool Ch10PacketReader::prepare(const QString& filename,
         const int ch = p->pcmChannelId;
         if (ch < 0 || ch >= PCMConstants::kMaxChannelCount || m_channel_info[ch] == nullptr)
         {
-            error = "Channel info not set up for PCM channel " + QString::number(ch) + ".";
+            error = "Channel info not set up for PCM channel " + std::to_string(ch) + ".";
             return false;
         }
         auto* pcm_attrs = static_cast<SuPcmF1_Attributes*>(m_channel_info[ch]->psuAttributes);
         if (pcm_attrs == nullptr)
         {
-            error = "Unable to load PCM attributes for channel " + QString::number(ch) + ".";
+            error = "Unable to load PCM attributes for channel " + std::to_string(ch) + ".";
             return false;
         }
 
@@ -304,7 +344,7 @@ bool Ch10PacketReader::prepare(const QString& filename,
         if (p->packetQueue != nullptr)
         {
             m_routing[ch].push_back(p->packetQueue);
-            if (!m_all_queues.contains(p->packetQueue))
+            if (std::find(m_all_queues.begin(), m_all_queues.end(), p->packetQueue) == m_all_queues.end())
             {
                 m_all_queues.push_back(p->packetQueue);
             }
@@ -331,11 +371,10 @@ void Ch10PacketReader::postSentinels()
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void Ch10PacketReader::run()
 {
-    emit logMessage("Reading Chapter 10 file...");
+    reportLog("Reading Chapter 10 file...");
 
     int  last_reported_percent = -1;
-    QElapsedTimer progress_timer;
-    progress_timer.start();
+    IntervalGate progress_gate{std::chrono::milliseconds(PCMConstants::kProgressReportIntervalMs)};
     double prev_time_seconds = -1.0;
     int  time_gaps_detected = 0;
 
@@ -348,19 +387,22 @@ void Ch10PacketReader::run()
         }
         if (m_status != I106_OK)
         {
-            emit errorOccurred("File read error during data collection.");
+            reportError("File read error during data collection.");
             break;
         }
 
         if (m_abort_requested.load(std::memory_order_relaxed))
         {
-            emit logMessage("Reading cancelled by user.");
+            reportLog("Reading cancelled by user.");
             break;
         }
 
-        if (m_total_file_size > 0 && progress_timer.elapsed() >= PCMConstants::kProgressReportIntervalMs)
+        // The size test comes first on purpose: it short-circuits, so a file of unknown
+        // size never reads the clock at all, as before. This runs once per packet header,
+        // so the clock read is the per-iteration cost - one monotonic read either way.
+        if (m_total_file_size > 0 && progress_gate.due())
         {
-            progress_timer.restart();
+            progress_gate.reset();
             int64_t current_pos = 0;
             enI106Ch10GetPos(m_file_handle, &current_pos);
             int percent = static_cast<int>(current_pos * kPercent100 / m_total_file_size);
@@ -368,25 +410,25 @@ void Ch10PacketReader::run()
             {
                 if (percent / kPercent10 != last_reported_percent / kPercent10 && percent > 0)
                 {
-                    emit logMessage(QString::number(percent) + "% read...");
+                    reportLog(std::to_string(percent) + "% read...");
                 }
                 last_reported_percent = percent;
-                emit progressUpdated(percent);
+                reportProgress(percent);
             }
         }
 
         // IRIG time packets: keep the file handle's time sync current.
         if (m_header.ubyDataType == I106CH10_DTYPE_IRIG_TIME && m_header.uChID == m_time_channel_id)
         {
-            if (!ensureBufferCapacity(static_cast<qsizetype>(m_header.ulPacketLen)))
+            if (!ensureBufferCapacity(static_cast<std::size_t>(m_header.ulPacketLen)))
             {
-                emit errorOccurred("Memory allocation failed.");
+                reportError("Memory allocation failed.");
                 break;
             }
             m_status = enI106Ch10ReadData(m_file_handle, static_cast<unsigned long>(m_buffer.size()), m_buffer.data());
             if (m_status != I106_OK)
             {
-                emit errorOccurred("File read error; aborting parsing.");
+                reportError("File read error; aborting parsing.");
                 break;
             }
             enI106_Decode_TimeF1(&m_header, m_buffer.data(), &m_irig_time);
@@ -416,15 +458,15 @@ void Ch10PacketReader::run()
                 continue; // No stream is interested in this channel.
             }
 
-            if (!ensureBufferCapacity(static_cast<qsizetype>(m_header.ulPacketLen)))
+            if (!ensureBufferCapacity(static_cast<std::size_t>(m_header.ulPacketLen)))
             {
-                emit errorOccurred("Memory allocation failed.");
+                reportError("Memory allocation failed.");
                 break;
             }
             m_status = enI106Ch10ReadData(m_file_handle, static_cast<unsigned long>(m_buffer.size()), m_buffer.data());
             if (m_status != I106_OK)
             {
-                emit errorOccurred("File read error; aborting parsing.");
+                reportError("File read error; aborting parsing.");
                 break;
             }
 
@@ -434,7 +476,7 @@ void Ch10PacketReader::run()
                 continue;
             }
             // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-            const char* raw_data = m_buffer.data() + data_offset;
+            const uint8_t* raw_data = m_buffer.data() + data_offset;
             uint32_t raw_len = m_header.ulDataLen - data_offset;
 
             // Convert this packet's base time to absolute seconds using the
@@ -447,14 +489,14 @@ void Ch10PacketReader::run()
                                       (k100NsToSeconds * static_cast<double>(m_irig_time.ulFrac));
 
             PacketItem item;
-            item.payload       = QByteArray(raw_data, static_cast<qsizetype>(raw_len));
+            item.payload       = std::make_shared<const std::vector<uint8_t>>(raw_data, raw_data + raw_len);
             item.baseAbsSeconds = base_abs_seconds;
             item.packetBits    = static_cast<uint64_t>(raw_len) * 8;
 
-            const QVector<PacketQueue*>& queues = route_it.value();
+            const std::vector<PacketQueue*>& queues = route_it->second;
             for (PacketQueue* q : queues)
             {
-                q->enqueue(item); // implicitly-shared copy; worker detaches on write
+                q->enqueue(item); // copies the shared_ptr, not the bytes; each worker copies before it mutates
             }
         }
     }
@@ -463,7 +505,7 @@ void Ch10PacketReader::run()
 
     if (time_gaps_detected > 0)
     {
-        emit logMessage(QString("WARNING: %1 time gap(s) detected in recording.").arg(time_gaps_detected));
+        reportLog(std::format("WARNING: {} time gap(s) detected in recording.", time_gaps_detected));
     }
 
     if (m_file_open)
@@ -472,6 +514,5 @@ void Ch10PacketReader::run()
         m_file_open = false;
     }
 
-    emit progressUpdated(kPercent100);
-    emit finished();
+    reportProgress(kPercent100);
 }

@@ -10,6 +10,8 @@
 #include "frameprocessor.h"
 #include "framesetup.h"
 #include "packetqueue.h"
+#include "qtbridge.h"
+#include "qtprocessingevents.h"
 
 ProcessingCoordinator::ProcessingCoordinator(QObject* parent)
     : QObject(parent)
@@ -63,23 +65,22 @@ bool ProcessingCoordinator::startProcessing(QVector<StreamJob> jobs)
     }
 
     // Resolve TMATS-derived attributes once, synchronously, via the reader.
-    m_reader = new Ch10PacketReader;
-    QVector<ProcessingParams*> params_list;
+    m_reader = std::make_shared<Ch10PacketReader>();
+    std::vector<ProcessingParams*> params_list;
     params_list.reserve(m_jobs.size());
     for (StreamJob& job : m_jobs)
     {
         params_list.push_back(&job.params);
     }
 
-    const QString filename       = m_jobs[0].params.filename;
+    const std::filesystem::path filename = m_jobs[0].params.filename;
     const int     time_channel   = m_jobs[0].params.timeChannelId;
 
-    QString error;
+    std::string error;
     if (!m_reader->prepare(filename, time_channel, params_list, error))
     {
-        emit errorOccurred(error);
-        delete m_reader;
-        m_reader = nullptr;
+        emit errorOccurred(QString::fromStdString(error));
+        m_reader.reset();
         for (PacketQueue* q : m_queues) { delete q; }
         m_queues.clear();
         clearJobs();
@@ -95,27 +96,29 @@ bool ProcessingCoordinator::startProcessing(QVector<StreamJob> jobs)
     for (int i = 0; i < m_jobs.size(); ++i)
     {
         Worker w;
-        w.thread    = new QThread;
-        w.processor = new FrameProcessor;
+        w.processor = std::make_shared<FrameProcessor>();
         w.queue     = m_queues[i];
-        w.processor->moveToThread(w.thread);
 
-        FrameProcessor* processor = w.processor;
-        connect(processor, &FrameProcessor::processingFinished, this,
-                [this, processor, i](bool ok) { onWorkerFinished(processor, ok, i); });
-        connect(processor, &FrameProcessor::logMessage,
-                this, &ProcessingCoordinator::logMessageReceived);
-        connect(processor, &FrameProcessor::errorOccurred,
-                this, &ProcessingCoordinator::errorOccurred);
-        connect(w.thread, &QThread::finished, processor, &QObject::deleteLater);
+        // What the processor reports reaches this object's thread as queued events, in
+        // order - the same delivery the signals it replaced gave. The finish handler looks
+        // the processor up by index at delivery time rather than holding a pointer to it,
+        // so an event arriving after teardown finds nothing instead of a dangling object.
+        w.processor->setEvents(std::make_shared<QtProcessingEvents>(
+            this,
+            [this](const QString& message) { emit logMessageReceived(message); },
+            [this](const QString& message) { emit errorOccurred(message); },
+            [this, i](bool ok) { onWorkerFinished(ok, i); }));
 
         ProcessingParams params = m_jobs[i].params; // includes resolvedAttrs + queue
-        // Captured by shared_ptr (not .get()) so the lambda itself keeps FrameSetup
-        // alive for as long as this queued connection exists — enforced by the type
+        // Captured by shared_ptr (not .get()) so the thread's body itself keeps FrameSetup
+        // and the processor alive for as long as it can run — enforced by the type
         // system rather than by relying on teardownAll() always running (and joining
         // every worker thread) before m_jobs is ever cleared/reassigned.
         std::shared_ptr<FrameSetup> setup = m_jobs[i].frameSetup;
-        connect(w.thread, &QThread::started, processor, [processor, params, setup]() {
+        std::shared_ptr<FrameProcessor> processor = w.processor;
+        // QThread::create runs the body on the new thread and ends the thread when it
+        // returns. The processor no longer needs an event loop of its own.
+        w.thread = QThread::create([processor, params, setup]() {
             processor->process(params, setup.get());
         });
 
@@ -123,15 +126,16 @@ bool ProcessingCoordinator::startProcessing(QVector<StreamJob> jobs)
     }
 
     // Reader thread.
-    m_reader_thread = new QThread;
-    m_reader->moveToThread(m_reader_thread);
-    connect(m_reader, &Ch10PacketReader::progressUpdated,
-            this, &ProcessingCoordinator::onReaderProgress);
-    connect(m_reader, &Ch10PacketReader::logMessage,
-            this, &ProcessingCoordinator::logMessageReceived);
-    connect(m_reader, &Ch10PacketReader::errorOccurred,
-            this, &ProcessingCoordinator::errorOccurred);
-    connect(m_reader_thread, &QThread::started, m_reader, &Ch10PacketReader::run);
+    // Its reports reach this object's thread as queued events, in order (the delivery the
+    // signals it replaced gave). No completion handler: the thread is joined at teardown.
+    m_reader->setEvents(std::make_shared<QtProcessingEvents>(
+        this,
+        [this](const QString& message) { emit logMessageReceived(message); },
+        [this](const QString& message) { emit errorOccurred(message); },
+        nullptr,
+        [this](int percent) { onReaderProgress(percent); }));
+    std::shared_ptr<Ch10PacketReader> reader = m_reader;
+    m_reader_thread = QThread::create([reader]() { reader->run(); });
 
     m_processing = true;
     emit processingStateChanged(true);
@@ -196,7 +200,8 @@ void ProcessingCoordinator::clearJobs()
 
 void ProcessingCoordinator::teardownAll()
 {
-    // Stop worker threads (processors auto-delete via deleteLater on finished).
+    // Stop worker threads. Each processor is freed with m_workers, below, once its thread
+    // has been joined.
     for (Worker& w : m_workers)
     {
         if (w.thread != nullptr)
@@ -216,11 +221,7 @@ void ProcessingCoordinator::teardownAll()
         delete m_reader_thread;
         m_reader_thread = nullptr;
     }
-    if (m_reader != nullptr)
-    {
-        delete m_reader;
-        m_reader = nullptr;
-    }
+    m_reader.reset(); // the reader thread is joined above, so this is the last reference
 
     // Queues are safe to delete now that all threads have stopped.
     for (PacketQueue* q : m_queues)
@@ -253,8 +254,11 @@ void ProcessingCoordinator::onReaderProgress(int percent)
     emit progressChanged(percent);
 }
 
-void ProcessingCoordinator::onWorkerFinished(FrameProcessor* processor, bool success, int job_index)
+void ProcessingCoordinator::onWorkerFinished(bool success, int job_index)
 {
+    FrameProcessor* processor = (job_index >= 0 && job_index < m_workers.size())
+        ? m_workers[job_index].processor.get()
+        : nullptr;
     if (success && !m_cancelled && processor != nullptr)
     {
         ProcessedStreamData data = processor->takeResult();

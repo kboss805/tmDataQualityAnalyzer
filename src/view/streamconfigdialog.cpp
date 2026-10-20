@@ -19,7 +19,6 @@
 #include "calibrationextractor.h"
 #include "constants.h"
 #include "stepdetector.h"
-#include "tomlconfighelper.h"
 
 #include "streamsubdialogs.h"
 

@@ -2,7 +2,7 @@ QT       += core gui printsupport concurrent svg
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-CONFIG += c++17
+CONFIG += c++20
 
 # ---- Single-source version ---------------------------------------------------
 # include/constants.h (AppVersion) is the authoritative version. Parse it here so
@@ -79,6 +79,7 @@ SOURCES += \
     src/model/streamconfigschema.cpp \
     src/model/processingtemplateschema.cpp \
     src/model/templatematcher.cpp \
+    src/model/textfile.cpp \
     src/model/tomldocument.cpp
 
 # ViewModel: presentation state + processing orchestration
@@ -123,15 +124,18 @@ SOURCES += \
 # Application headers, grouped by MVVM layer.
 # Shared / cross-cutting
 HEADERS += \
-    include/constants.h
+    include/constants.h \
+    include/plotconstants.h
 
 # Model: data ingestion, processing pipeline, domain logic
 HEADERS += \
     include/model/channeldata.h \
     include/model/chapter10reader.h \
     include/model/ch10packetreader.h \
+    include/model/intervalgate.h \
     include/model/packetqueue.h \
     include/model/framesetup.h \
+    include/model/framesync.h \
     include/model/frameprocessor.h \
     include/model/stepdetector.h \
     include/model/calibrationextractor.h \
@@ -140,6 +144,7 @@ HEADERS += \
     include/model/streamconfigschema.h \
     include/model/processingtemplateschema.h \
     include/model/templatematcher.h \
+    include/model/textfile.h \
     include/model/tomldocument.h
 
 # DTOs: plain data carried across layers
@@ -195,6 +200,9 @@ HEADERS += \
 
 # Shared with tests/tests.pro so the two cannot drift - see resources.pri.
 include($$PWD/resources.pri)
+
+# UTF-8 process code page, so irig106 can open any path - see codepage.pri.
+include($$PWD/codepage.pri)
 
 RC_FILE = resources/tmDataQualityAnalyzer_resource.rc
 

@@ -1,6 +1,6 @@
 QT += core gui widgets printsupport testlib concurrent svg
 
-CONFIG += c++17 console
+CONFIG += c++20 console
 CONFIG -= app_bundle
 
 TARGET = tmDataQualityAnalyzer_tests
@@ -27,6 +27,7 @@ include($$PWD/../thirdparty.pri)
 # The same Qt resources the app compiles in. Widgets under test load their
 # icons from :/resources/..., and without this every one is a null QIcon.
 include($$PWD/../resources.pri)
+include($$PWD/../codepage.pri)
 
 # Application sources (exclude main.cpp to avoid duplicate main), grouped by layer.
 SOURCES += \
@@ -42,6 +43,7 @@ SOURCES += \
     $$PWD/../src/model/streamconfigschema.cpp \
     $$PWD/../src/model/processingtemplateschema.cpp \
     $$PWD/../src/model/templatematcher.cpp \
+    $$PWD/../src/model/textfile.cpp \
     $$PWD/../src/model/tomldocument.cpp \
     $$PWD/../src/viewmodel/mainviewmodel.cpp \
     $$PWD/../src/viewmodel/processingcoordinator.cpp \
@@ -64,11 +66,14 @@ SOURCES += \
 # Application headers, grouped by layer.
 HEADERS += \
     $$PWD/../include/constants.h \
+    $$PWD/../include/plotconstants.h \
     $$PWD/../include/model/channeldata.h \
     $$PWD/../include/model/chapter10reader.h \
     $$PWD/../include/model/ch10packetreader.h \
+    $$PWD/../include/model/intervalgate.h \
     $$PWD/../include/model/packetqueue.h \
     $$PWD/../include/model/framesetup.h \
+    $$PWD/../include/model/framesync.h \
     $$PWD/../include/model/frameprocessor.h \
     $$PWD/../include/model/stepdetector.h \
     $$PWD/../include/model/calibrationextractor.h \
@@ -77,6 +82,7 @@ HEADERS += \
     $$PWD/../include/model/streamconfigschema.h \
     $$PWD/../include/model/processingtemplateschema.h \
     $$PWD/../include/model/templatematcher.h \
+    $$PWD/../include/model/textfile.h \
     $$PWD/../include/model/tomldocument.h \
     $$PWD/../include/dto/streamconfig.h \
     $$PWD/../include/dto/framesyncparams.h \
@@ -159,6 +165,13 @@ SOURCES += \
     tst_streamconfigschema.cpp \
     tst_processingtemplateschema.cpp \
     tst_templatematcher.cpp \
+    tst_packetqueue.cpp \
+    tst_intervalgate.cpp \
+    tst_textformat.cpp \
+    tst_framesync.cpp \
+    tst_tomldocument.cpp \
+    tst_qtprocessingevents.cpp \
+    tst_ch10packetreader.cpp \
     tst_stepdetector.cpp \
     tst_calibrationextractor.cpp
 
@@ -183,5 +196,12 @@ HEADERS += \
     tst_streamconfigschema.h \
     tst_processingtemplateschema.h \
     tst_templatematcher.h \
+    tst_packetqueue.h \
+    tst_intervalgate.h \
+    tst_textformat.h \
+    tst_framesync.h \
+    tst_tomldocument.h \
+    tst_qtprocessingevents.h \
+    tst_ch10packetreader.h \
     tst_stepdetector.h \
     tst_calibrationextractor.h

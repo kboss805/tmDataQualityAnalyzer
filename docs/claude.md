@@ -7,7 +7,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Qt Version**: 6.12.0 (minimum: Qt 6.0.0)
 - **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, `cl` / `nmake`), Qt `msvc2022_64` kit.
   This is the only supported toolchain (and what CI uses).
-- **C++ Standard**: C++17 (required — `inline constexpr` used throughout constants.h)
+- **C++ Standard**: C++20 (moved from C++17 for `std::format`, which the de-Qt string work needs in place of `QString::arg`; `inline constexpr` is used throughout constants.h)
 - **Project Version**: 2.14.2 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
 
 ## User Stories
@@ -414,8 +414,1189 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased
 
-Two items from `docs/future_plans/dotnet-port-assessment.md` that are worth doing whether or
-not that port ever happens. No user-facing behaviour changes.
+Items from `docs/future_plans/dotnet-port-assessment.md` that are worth doing whether or not
+that port ever happens - the throughput guard, the TOML move off `QSettings`, and now the
+de-Qt of the native core in small steps (QtGui out of the model's headers, then
+`PacketQueue`, then the `QElapsedTimer`s, then the packet bytes, then the first `QVector`s, the processing result and the pipeline's pointer lists) - plus the clean-build regression the TOML change
+caused, a generated Visual Studio solution, and C++20. The first `QString` steps move `TomlDocument`,
+`FrameSetup` and the step-file parser to UTF-8 `std::string`, and the `QObject` steps take
+Qt out of `FrameProcessor` and `Ch10PacketReader`; the DTOs follow, starting with
+`ProcessingParams` and `ProcessedStreamData`, and `FrameSetup`, `Chapter10Reader` and `ChannelData` lose their `QObject`s and `QString`s, the calibration report becomes `std::string`, and `CalibrationExtractor` becomes a plain class (the last `QObject` in the core). One user-facing fix, found during the
+`QString` survey: recordings under a folder with a non-ASCII name can be processed.
+
+#### A Visual Studio solution, generated rather than committed
+
+`scripts/gen_vs_project.ps1` produces `tmDataQualityAnalyzer.sln` for developers who want
+Visual Studio Community instead of VS Code + the `env.ps1` shell. It runs `qmake -tp vc`
+on the app and test `.pro` files (so the `.pro` files stay the single source of truth for
+sources, defines and libraries) and writes the solution around the two projects. The
+output is **gitignored**: it carries absolute Qt and repo paths, exactly like
+`compile_flags.txt`, and a committed copy would rot at the next Qt bump. Regenerate after
+a `.pro` change, a Qt bump or a Visual Studio update. Regenerating keeps build products,
+so the build that follows is incremental (0 files recompiled, 3 s, against about 170 s
+for a clean one).
+
+Raw `qmake -tp vc` output does **not** build usefully in Visual Studio. Six things are
+corrected after the fact, each found by building and reading the failure:
+
+1. **Executable location.** The app finds `settings/` relative to its own directory and
+   the tests find `data/` one level above theirs, so the exes must land in
+   `build/<cfg>/` and `tests/<cfg>/`, not under `vs/`. `OutDir` is rewritten.
+2. **Vendored C warnings.** `lib/irig106` raises C4100/C4267 at the project warning
+   level, and the zero-warning gate applies. The library may not be edited, so its
+   `ClCompile` items get `WarningLevel=TurnOffAllWarnings`. The script throws if it finds
+   none, so a layout change cannot silently turn this into a no-op.
+3. **Qt's own deprecation warnings.** `thirdparty.pri` passes `/external:anglebrackets
+   /external:W0`; MSBuild adds `/external:W3` itself, which then collides (D9025,
+   "overriding /external:W3 with /external:W0"). The raw options are stripped and the
+   equivalent properties `TreatAngleIncludeAsExternal` and `ExternalWarningLevel` are
+   set instead.
+4. **Parallel PDB writes.** A solution build compiles both projects at once and fails
+   intermittently with `C1090: PDB API call failed, error code '3'` (about one build in
+   four) because the two compilers race on the PDB service. `ForceSynchronousPDBWrites`
+   (`/FS`) fixes it; three consecutive full `/t:Rebuild` runs were clean after the change.
+5. **Qt runtime.** A post-build step runs `scripts/deploy_qt_local.ps1`, so F5 needs no Qt
+   on `PATH` (the same reason that script exists for IDE launches in general).
+6. **Solution file.** qmake writes only projects. The `.sln` is written directly (UTF-8
+   with BOM, CRLF), app project first so it is the startup project, with the project GUIDs
+   read back out of the generated `.vcxproj` files.
+
+Verified: Debug|x64 and Release|x64 both build with 0 warnings and 0 errors, and the
+Visual Studio-built test exe gives 426 passed / 0 failed / 1 skipped, identical to the
+`jom` baseline. No Qt VS Tools extension is required.
+
+**Toolchain drift, and the pin.** Since Visual Studio Community 2026 was installed,
+`env.ps1` resolved `cl` to its MSVC 14.51 (toolset v145) rather than the Build Tools'
+14.44 (v143): `vswhere -latest` takes whatever is newest, so the "MSVC 2022 only"
+statement in these docs, the Qt `msvc2022_64` kit and CI no longer described what a local
+build used, and a tree built across the install held objects from both compilers.
+`env.ps1` now asks vswhere for `[17.0,18.0)` (override: `TMDQ_VS_RANGE`), and skips its
+2022 path-probe fallback when a range was requested so a failed 2026 lookup cannot quietly
+return 2022. `gen_vs_project.ps1` requests `[18.0,19.0)`, because the projects it writes
+carry the compiler's `PlatformToolset` and VS 2026 builds v145; it warns if the shell
+already holds an older environment. Verified: default resolves 14.44, the override
+resolves 14.51, an unsatisfiable range throws, and a clean Debug rebuild of the app and
+tests under 14.44 gave 0 warnings and 435 passed / 0 failed / 1 skipped.
+
+#### A deleted header broke the clean build, and an incremental one could not see it
+
+CI went red on `main` for one reason: the TOML change below deleted
+`include/model/tomlconfighelper.h` and left a dangling `#include` in
+`src/view/streamconfigdialog.cpp`. The include was **dead** - nothing in that file used
+it - so nothing functional was wrong, but a clean build cannot compile the file.
+
+**Every verification build had been incremental, and that is why it passed.** jom does not
+notice that a header has been *deleted*, so the stale `streamconfigdialog.obj` was relinked
+and the build reported success. The full suite ran **414 / 0 / 0 with zero warnings** against
+that stale object. CI builds clean and failed immediately.
+
+This is the stale-object trap `CLAUDE.md` already documents, arriving from the opposite
+direction: not a crash at a meaningless address, a **false pass**. And grepping for the class
+name `TomlConfigHelper` could not have found it, because what survived the refactor was the
+*filename*. `CLAUDE.md` now says plainly that a change deleting a header is only verified by a
+clean build.
+
+A second stale-artifact trap on the way to fixing it, also now recorded: wiping `tests/debug/`
+removes the Qt runtime that `deploy_qt_local.ps1` had put beside the test exe, so the suite
+dies before its first test with exit **127** and `Qt6Cored.dll: cannot open shared object
+file`. Meanwhile `output/results.txt` still holds the *previous* run's numbers, so reading it
+reports a result for a run that never happened.
+
+#### Qt's own deprecation warnings are suppressed, in the one way v2.9.0 left open
+
+With the compile error gone, a clean build surfaced **13 `warning C4996`** - all from Qt 6.12
+itself, at `qguiapplication.h(169)`, where `QGuiApplication` overrides the deprecated
+`QCoreApplication::compressEvent`. Every translation unit that includes `<QGuiApplication>`
+emits it, this application never calls `compressEvent`, and there is no fix available in our
+code. CI's gate matches `warning [A-Z]\d+`, so a clean build could not go green while they
+were visible.
+
+`thirdparty.pri` now sets **`/external:anglebrackets /external:W0`**.
+
+**Deliberately not `/wd4996`.** That flag used to live in this very file, suppressed
+deprecation warnings for *application* code as collateral, and was removed on purpose in
+v2.9.0 - the file carries a note saying so. `/external:` suppresses warnings whose *location*
+is a non-first-party header while leaving our own files fully warned, and a deprecated API
+called from our code is reported at **our** call site, so those keep warning exactly as
+v2.9.0 intended. Every first-party header here is quote-included, so `anglebrackets` covers
+Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
+19.51.
+
+#### A fully calibrated group of unnamed channels is listed as calibrated (US5.3)
+
+The calibration report groups channels by receiver and lists the receivers whose channels all
+calibrated on one line, `Calibrated: receivers 1, 3.` Channels whose names carry no `_RCVR<N>` (a
+hand-written receiver-parameters file may name them anything) have no receiver number, so they are one
+group of their own, reported by name. When **every** channel in that group calibrated, the report put it
+under the heading **"Fell back to linear calibration:"**, as `Unnamed receiver (AGC_LEFT, AGC_RIGHT) —
+calibrated`. It is the only fully-calibrated case that did not go on the calibrated line, and the heading
+is wrong for channels that did not fall back. The manual already describes the intended report
+("Calibrated - the receivers whose channels all calibrated", "Fell back - every other receiver"), so it was
+the report that was wrong. All three shipped word maps name every channel `_RCVR<N>`, so only a custom map
+could show it.
+
+Found while pinning the report text for the move to `std::string`, where it was left alone on purpose (a
+refactor does not change wording) and noted. The wording was then chosen: the unnamed channels go on their
+own line beside the calibrated receivers, so a numbered-only report - every shipped map, and the manual's
+figure - is **byte-for-byte unchanged**:
+
+```
+Calibrated: receivers 1, 3.
+Calibrated (unnamed channels): AGC_LEFT, AGC_RIGHT.
+```
+
+With no numbered receivers the second line stands alone. A group where some unnamed channels *did* fall back
+still reads as a mixed receiver under the fallback heading, which is correct.
+
+**Tests first.** The pinned expectation for the unnamed, all-calibrated group was changed to the corrected
+text and three scenarios were added (unnamed beside a numbered receiver; beside a receiver that failed; with
+a saturated top, which appears in both its sections). Against the unfixed code exactly five tests failed -
+the four report rows and the non-ASCII word-map extraction test - and the other seven report scenarios did
+not move; the fix turned them green.
+
+**Validated against nine single-defect mutants; all caught**: the names dropped; the group also left under
+the fallback heading; the lines in the other order; no blank line before a lone unnamed line; the heading
+reworded; the closing period dropped; a different separator; the line printed for a *partly* calibrated
+group; and the line gated on numbered receivers only.
+
+The manual's calibration walkthrough gains one sentence, in the source (`docs/manual/walkthroughs.html`) and
+the generated `UserManual.html` identically, so the generator splices no change. The end-user release notes
+are written at release time and should mention it then.
+
+Baseline **691 / 0 / 1** (was 688 / 0 / 1; 3 new report scenarios), **692 / 0 / 0** at release. **28 suites.**
+
+#### `CalibrationExtractor` is a plain class on one driver thread, and the sync decode is shared with the main run (de-Qt, `CalibrationExtractor` step B)
+
+The second half of taking Qt out of `CalibrationExtractor`, and the last `QObject` in the processing
+core. It was a `QObject` with three signals and two `QThread`s; it is now a plain class that
+reports to a `ProcessingEvents` sink (`start(Request, events)`), with no Qt in its header or its
+source. One **driver thread** starts the reader and the worker, waits for both, runs step detection,
+and reports. The Extract Calibration dialog builds a `QtProcessingEvents` adapter around lambdas, as
+the coordinator does; no wrapper class was needed.
+
+`Request` is plain too: paths are `std::filesystem::path`, and how the bits are recovered is an
+**`Acquisition`** (the resolved sync pattern and mask, frame length, the two code-format flags, the
+data rate **and the file-level byte order**). The dialogs still hold the sync as hex text
+(`FrameSyncParams` and `StreamConfig` stay `QString`, as scoped), so `CalibrationSetupDialog` now takes
+a small `Base` struct and decodes the text when the extraction starts - an unreadable field is shown on
+its status line exactly as before.
+
+**One decode, one assignment, for both runs (`include/model/framesync.h`).** The main run
+(`MainViewModel::buildStreamJob`) and the extraction each decoded the hex pattern and mask and each set
+the raw-affecting fields of their `ProcessingParams` by hand. The calibration extractor must read the
+same bitstream the main run will, and that invariant was broken twice by one site setting a field the
+other forgot (the inversion flag, then the byte order). Both now call `resolveFrameSync()` and
+`applyAcquisition()`, so a new raw-affecting field has one place to go. Hex is read by a Qt-free
+`textparse::parseUnsignedHex`, which reproduces `QString::toULongLong(16)`: surrounding whitespace
+ignored, a leading `+` and a `0x` prefix accepted, any `-` refused (even `-0`), 64-bit overflow refused.
+Two quirks are kept on purpose: the pattern's length in bits is its **character** count times four
+(so `" FE6B "` is 24 bits), and an empty mask means every bit of the pattern. Whitespace trimming is
+ASCII only, as the other parsers in `textparse.h` are.
+
+**Behaviour that changes, deliberately, and why:**
+
+- **Step detection runs on the driver thread, not the GUI thread.** It used to run inside the queued
+  completion handler; the progress dialog now stays responsive while 48 channels are detected.
+- **`processingFinished` is truly last.** The old class finished while the reader's last progress report
+  was still queued behind it (a test had to wait for it); the driver now joins both threads before it
+  reports, so every progress and log report precedes the end.
+- **A failure is an error, then the end; a cancel is only the end.** `errorOccurred(reason)` then
+  `processingFinished(false)`. The worker's own reason (e.g. "pattern was not found") is still what a
+  failed run reports, and still appears as a log line.
+- **Completion is always delivered through the event loop, even when a run fails before it starts.** The
+  old shortcut (finish synchronously inside `start()`) is gone; the dialog's `finished` flag remains
+  because a modal progress dialog pumps events itself and can deliver the end before the dialog waits.
+- **`cancel()` can be called from any thread, and the destructor cancels and waits** for a run in flight.
+
+**Tests first.** Two commits pin the QObject version before anything was ported, all passing on it:
+
+- `buildStreamJob`, which had no test of its own: 43 rows of hex decoding (the quirks above), every field
+  a config contributes to the worker's parameters, and each rejection message in the order the checks run;
+- the extractor's lifecycle through one `Recorder` helper: the failures that happen before anything
+  starts (no steps; a word map that is missing, outside the frame, empty, or does not fit; a recording
+  that cannot be opened), a cancel from the first report, a start while running being ignored, a finished
+  extractor running again, the first log line and the success summary;
+- the dialog: an unreadable sync pattern or mask, or an unopenable recording, shown on the status line
+  without extracting, and a real `step_cal` extraction through the progress dialog (twelve profiles).
+
+Written after the port, and labelled as such: `TestFrameSync` (the hex parser against Qt on 40,000
+random strings and a list of awkward ones; the decode; `applyAcquisition` setting every field and no
+other); that the end is last and only a failure is an error; a worker failure reporting its own reason; a
+cancel from another thread; destroying a running extractor; and, at the dialog, that **byte order,
+inversion and derandomization each reach the extraction** (step_cal needs the swap and neither of the
+others, so the wrong value must visibly fail) and that the **data rate** does (at half the rate the same
+bits take twice as long, which the clip warning shows as exactly twice the recording length).
+
+**A crash on the way, and it was the test.** The destruction test deleted the event target before the
+extractor's threads had stopped, so they posted to a dead object. The adapter's contract is that the
+target outlives the events; the test now honours it.
+
+**Validated against 36 single-defect mutants; 34 were caught at once and the two survivors are closed.**
+They cover the decode (all-ones mask, length times eight, empty pattern unchecked, the result written
+before the mask is checked), `applyAcquisition` (each field dropped, the rate in kHz, words truncated),
+the parser (no `+`, no prefix, no trim, wrapping on overflow), the extractor (cancel ignored, running
+never cleared, error not an event, summary arguments swapped, a worker failure ignored, progress not
+relayed, the worker's reason lost, the acquisition not applied, the steps guard, the params-file check,
+the previous driver not joined, a cancel reported as an error), and both callers (raw-affecting fields
+dropped or fixed in the main run and in the dialog, two error texts). The survivors: **the clip-ignored log line**
+(nothing tested the line, only the flags; now it is) and **the dialog dropping the data rate**
+(step_cal states the same 0.8 Mbps itself, so it changed nothing there; the half-rate test above makes it
+visible).
+
+The suite was run five times with threads in play (the clean build, three more, and the release gate),
+all green. Throughput is untouched: pinned release gate 15299 ms parallel, 1.04x the slowest solo
+stream and 0.67x all-sequential.
+
+Baseline **688 / 0 / 1** (was 606 / 0 / 1; 82 new: 51 for `buildStreamJob`, 9 extractor lifecycle, 4 for the
+plain extractor's guarantees, 10 at the dialog, 8 in `TestFrameSync`), **689 / 0 / 0** at release.
+**28 suites.**
+
+#### The calibration report is UTF-8 `std::string`, and Qt's rounding is reproduced (de-Qt, `CalibrationExtractor` step A)
+
+The first half of taking Qt out of `CalibrationExtractor`: the text the operator reads after an
+extraction. `CalibrationExtractor::summarize()` now returns a UTF-8 `std::string` built with
+`std::format` (it was a `QString` built with `QString::arg`, a `QMap` and `QStringList`s), and
+`CalibrationChannelResult::name` is a `std::string`. The Extract Calibration dialog decodes the report
+where it shows it. The class itself is still a `QObject`, and its log lines and start-up errors are still
+`QString` - that is the second half, because they leave through the signals that become the event sink.
+
+**`std::format` does not round like Qt, and that was measured before it was assumed.** A probe printed
+both for the same values: an exact tie is rounded away from zero by `QString::number(v, 'f', n)` and to
+the even digit by `std::format`. `0.5` with no decimals is "1" in Qt and "0" in `std::format`; `2.5` is
+"3" and "2"; `0.25` with one decimal is "0.3" and "0.2"; `1234.5` is "1235" and "1234". Every other value
+agrees, because it is decided by the exact binary value, not by a tie. The report prints dB values and raw
+levels with 0 decimals, so a step file with half-dB steps would have printed "2 dB" where it printed
+"3 dB". New `include/textformat.h` has `formatFixed(value, decimals)`, which detects an exact tie from the
+double's exact decimal expansion and nudges it up one step so the correctly-rounded formatter takes it
+away from zero, and keeps the sign Qt keeps on a small negative that rounds to zero.
+
+**New suite `TestTextFormat` checks the helper against Qt itself**: the oracle is `QString::number`, over
+the ties the report prints, every `n/64` for `n` in -4200..4200 at 0 to 6 decimals (exact binary
+fractions, so hundreds of true ties), 20,000 arbitrary doubles from a fixed generator, and the extremes.
+**It found a real difference on its first run**: the helper kept the sign of negative zero ("-0") where Qt
+prints "0", while Qt does print "-0" for `-0.4` rounded to nothing. The sign now comes from `value < 0`,
+not the sign bit, and both facts are pinned.
+
+**Tests first, as before.** Twelve scenarios (eleven at first, and one added below) compare the **whole** report text, where
+the old tests looked for phrases inside it: empty, one receiver, mixed, unnamed, non-ASCII names, both "check" sections, a
+saturated top with exact-half dB values, a relaxed threshold, flat levels, several failure reasons and
+twelve receivers. They were captured from the `QString` implementation, read through for sense, and pass
+on it before anything was ported. Reads and writes of a result's name and the report go through test
+helpers, so the port changed those and nothing else.
+
+**One thing the capture showed, fixed in the next change.** When every channel in an *unnamed* group
+calibrated, the report listed the group under the heading "Fell back to linear calibration:"
+(`Unnamed receiver (AGC_LEFT, AGC_RIGHT) — calibrated`), which is wrong for channels that did not fall
+back. It was pinned as it was while the report moved to `std::string`, because a refactor does not change
+wording; see "A fully calibrated group of unnamed channels is listed as calibrated" above.
+
+**Validated against 21 single-defect mutants; 18 were caught at once, and the three survivors are
+accounted for.**
+
+- A non-ASCII channel name decoded wrongly in the per-channel log line: the fixtures' names are ASCII,
+  so no test could see it. Closed by a real extraction of `step_cal` with a hand-written word map naming
+  three live words `R<e-acute>cepteur <omega>`, `Gain <sigma>` and `Plain`, checked through the result, the log
+  line and the report.
+- A fully-calibrated unnamed group listed as a numbered receiver: no scenario had such a group. Closed by
+  the `unnamed-all-calibrated` scenario above.
+- The helper looking at only 17 places of the exact expansion instead of 1100: **equivalent over any value
+  the report can print.** A search over 800,000 decimal ties at 0 to 3 decimals found none whose nearest
+  double separates from the tie beyond 17 places. 1100 stays because it is the proven bound (a double's
+  expansion is at most 1074 places), not because anything reachable needs it.
+
+The tests that closed those gaps (the extra scenario, the non-ASCII word-map extraction and the
+per-channel log-line check) were run on the unmodified code first, as were the exact-text scenarios.
+
+**A harness slip, caught by the compiler.** Routing the tests through helpers with a regular expression
+turned two helper bodies into calls to themselves; MSVC warned (C4717), and the run crashed instead of
+failing a test. The helpers were rewritten by hand.
+
+Throughput is unaffected (nothing here is on the decode path); the pinned release gate gave 13846 ms
+parallel, 1.02x the slowest solo stream and 0.65x all-sequential.
+
+Baseline **606 / 0 / 1** (was 583 / 0 / 1; 23 new: 12 exact-report scenarios, the per-channel log line, the
+non-ASCII word-map extraction, and the 9 results of `TestTextFormat`), **607 / 0 / 0** at release.
+**27 suites.**
+
+#### `Chapter10Reader` and `ChannelData` are plain classes (de-Qt, `QObject` step 4)
+
+The metadata reader, the one that lists a recording's channels in the Configure Streams dialog, was a
+`QObject` with a `displayErrorMessage` signal, `QMap` / `QList` of `new`'d `ChannelData*`, and
+`QString` for the path and every TMATS string. It is now a plain class and `chapter10reader.h` and
+`channeldata.h` contain no Qt: the path is a `std::filesystem::path`, text is UTF-8 `std::string`,
+channels live in a `std::map<int, ChannelData>` in id order, and the time and PCM lists hold channel
+**ids** rather than pointers. The getters keep their names and return `std::vector<std::string>` /
+`std::vector<std::pair<int, std::string>>`; `MainViewModel` and `BatchController` convert at about
+eight sites with two small helpers in `qtbridge.h` (`toQStringList`, `toQPairList`). `TemplateMatcher`
+and `StreamConfig` stay Qt, as scoped.
+
+**Errors are read, not signalled.** Every error path emitted once and then returned false, and loading
+is synchronous on the caller's thread, so the signal carried nothing a return value and a string do
+not. `lastError()` holds the reason of the last `loadChannels()`; `MainViewModel::loadFileMetadata`
+emits `errorOccurred` from it right after a failed load, which keeps "one error, in the same call".
+A `ProcessingEvents`-style sink would have added nothing here.
+
+**Three things changed that are not a pure port, each deliberate:**
+
+- **A latent defect is fixed.** `loadChannels` cleared the channel map but not the time and PCM lists,
+  which held raw pointers into it. Loading a second time on one reader left dangling pointers and
+  appended duplicates. Production never does this (a fresh reader per load), so it never showed; it
+  was undefined behaviour, so there was nothing to pin on the old code. `loadChannels` now replaces
+  everything - channels, lists and selection - once the new file has opened, and a file that fails to
+  open still leaves the old contents alone (`aSecondLoadReplacesWhatTheFirstLeftBehind`,
+  `aFileThatFailsToOpenLeavesThePreviousChannelsAlone`).
+- **Dead code is removed.** `tryLoadingFile()` and the public `closeFile()` had no caller in `src/` or
+  `tests/`, and `m_filename` was set and read only to build one error message.
+- **`path.string()` replaces `toLocal8Bit()`.** Both readers now pass irig106 the path in the process
+  code page the same way; the UTF-8 manifest makes that UTF-8.
+
+**One branch is unreachable and left as it is.** "Failed to find TMATS message (expected as the first
+packet)" sits behind a check irig106's `enI106Ch10Open` has already made: a recording whose first
+packet is not TMATS is refused at open ("Error opening file"), so no file reaches it. Pinned by
+the `no-tmats-first` row.
+
+**Tests first, in four commits, all passing on the `QObject` reader before the port.** The old suite
+asserted "not empty". The new one pins:
+
+- exact channel ids, names and TMATS data rates for each of the five committed recordings (5 rows);
+- the combo-box index to channel mapping, including the placeholder at 0 and indices past the end;
+- each way a file fails to load: message and an empty result (7 rows: missing, empty, text, short
+  header, first packet not TMATS, only TMATS, cut inside TMATS - the last two fail at "Error
+  establishing time sync.");
+- the view model: the combo-box lists, the default stream rows (id, bare label, TMATS rate), the
+  selection through the property setters, and a failed open reporting exactly one error and leaving no
+  channels; `BatchController::validate` against a real file (it had no test with one);
+- a non-ASCII channel name, through the reader and through the view model.
+
+**Reaching the TMATS branches the fixtures don't.** The five recordings have real disabled sources
+(`CHE-2:F`) but no whitespace, numeric type codes, name fallbacks or odd rates. `step_cal` has no data
+checksum and its first packet's header is untouched by a same-length edit, so the tests copy it and
+patch its TMATS text in place (24 rows): the enabled flag (T / Y / 1 either case enable; F / N / 0 /
+anything else disable; missing enables; whitespace ignored), the type (`PCMIN` / `01` / `09`, `TIMEIN` /
+`11`, case-sensitive, anything else unlisted), the name priority (data source id, then channel data
+link name, then PCM link name), an accented letter in a name, and the bit rate read like
+`QString::toDouble` (12 rows: exponent, signs, spaces and a fraction accepted; negative, zero, junk, a
+thousands separator and `nan` mean "not described"). The text-based `QString::toDouble` rules are
+`textparse::parseDouble`'s, which already reproduced them for settings files.
+
+**Validated against 23 single-defect mutants; all caught, after two survivors were closed.** They
+cover the enabled flag (ignored, no upper-casing, no trim), name priority (two orders), type codes
+(`09`, `11`, no trim), the combo-box separator, both selection offsets, the reload, `lastError()`
+(not cleared, wrong text, time-sync text lost), the data-rate guard, the first-PCM accessor, and the
+conversion boundaries (the view model's relay, the label decoding, the path, both `qtbridge.h`
+helpers, the batch check). The first pass left two uncaught: **trimming around the enabled flag** and
+**the `> 0` guard on the data rate** (a negative rate would have been reported as a rate). Neither is
+equivalent. Each was closed with rows run on the unmodified reader first, and both mutants then fail.
+
+**A harness trap, once more, and a new one.** A mutation run started as `cmd &` inside a tool call
+was believed dead after it applied one mutant and was relaunched, which left **two loops running at
+once** colliding on the same files ("Device or resource busy"); the output was garbage (almost every
+mutant "no result"). The sources were byte-compared with saved copies, one loop was run to completion
+alone, and the earlier results discarded. A runner now compares its sources against saved copies at
+the end, and a background job is started as the tool's own command rather than as a detached `&`.
+Separately, a run's `tests exit 0` after a failed build is the previous exe's code; the runners delete
+the exe and results first and refuse a result unless both exist.
+
+Also corrected: `tst_chapter10reader.cpp` said the `.ch10` fixtures are gitignored; they are
+committed, and the suite's skip now says what it actually guards.
+
+Throughput is not touched (one TMATS packet is read, not the stream); the pinned release gate gave
+13754 ms parallel, 1.01x the slowest solo stream and 0.65x all-sequential.
+
+Baseline **583 / 0 / 1** (was 525 / 0 / 1; 58 new: 52 in `TestChapter10Reader`, 2 in
+`TestChannelData`, 3 in `TestMainViewModelHelpers`, 1 in `TestBatchController`), **584 / 0 / 0** at
+release. **26 suites.**
+
+#### `FrameSetup` is a plain class: no `QObject`, and a `std::unordered_map` for profiles (de-Qt, `QObject` step 3)
+
+The word map and calibration table every stream job owns was a `QObject` for no reason anyone used.
+It had no signals, no properties and no connections; the base class was only for parent
+ownership, and every owner either holds it by `shared_ptr` (the view model's jobs, the tests) or
+deletes it itself (the calibration extractor), always constructed with a null parent. It is now a
+plain class with a defaulted constructor, and `framesetup.h` includes no Qt header.
+
+The one remaining Qt type in its interface went with it: `attachCalibrationProfiles()` took a
+`QHash<int, CalibrationProfile>` and now takes a `std::unordered_map`. The hash it was fed from,
+`StreamConfig::calibrationByWord`, stays a `QHash`: that struct is the dialogs' own form, and
+nothing in the processing pipeline reads one. `MainViewModel::buildStreamJob` copies it across,
+once per run and at most one profile per receiver channel, which is the only conversion.
+
+**`StreamConfig` itself is deliberately not converted.** Scoping this step showed it is the UI form
+(combo-box indices, hex strings for the sync pattern and mask, `QString` paths shown in line edits);
+`buildStreamJob` already turns it into the `std` `ProcessingParams`. Converting it would add a
+`toStdString()` at about 45 dialog and view-model sites and 55 test sites and remove no Qt from the
+pipeline. What is left in the core is `ChannelData`, `Chapter10Reader`, and `CalibrationExtractor`
+with `FrameSyncParams`.
+
+**Tests first, for a function that had none.** `attachCalibrationProfiles` was called from one
+place and tested nowhere. Two new `TestFrameSetup` cases were written against the `QObject` /
+`QHash` version and passed there before the port: only a profile that is **valid** and **matches a
+parameter's word** attaches (an invalid profile stays linear on purpose; a profile for a word the
+map lacks, and a parameter nobody supplied a profile for, are left alone), and nothing to attach
+returns zero. Only the one helper that builds the container changed across the port.
+
+**One test was written after the port, and says so.** `buildStreamJob` (private, and with no test)
+is where the profiles actually reach the word map, so `TestMainViewModelHelpers` is now a friend of
+`MainViewModel` and `buildStreamJobAttachesCalibrationByWord` runs a receiver stream with three
+profiles (one valid and matching, one invalid, one for a word the map lacks) through it, checking
+which parameter received what and the "provided 3 profile(s), attached 1" log line. It could not be
+run against the old code without reverting the port, so it is validated by mutation.
+
+**Validated against five single-defect mutants; each fails the test written for it.** `attach`
+ignoring `valid`; matching the wrong word; not counting what it attached; the view model shifting
+every key by one; and the view model copying nothing across. The first three fail both the unit
+case and the `buildStreamJob` case; the last two only the latter, which is why it exists. Each
+build was checked to have relinked.
+
+**A harness trap, again.** The first run of the new `buildStreamJob` test had two compile errors,
+and the script printed `tests exit 0` and 524 passed: the previous exe, run after a failed build.
+The runner now deletes the exe and results first, and a number is only believed if both exist
+afterwards.
+
+Throughput, pinned release gate: 4-stream parallel 13681 ms, 1.01x the slowest solo stream and
+0.64x all-sequential. That is about 10% under the last two PRs' readings; pinned numbers drift
+between sessions, so it is recorded as not slower rather than as a gain.
+
+Baseline **525 / 0 / 1** (was 522 / 0 / 1; 3 new = the two attach cases and the `buildStreamJob`
+case), **526 / 0 / 0** at release. **26 suites.**
+
+#### `ProcessedStreamData` is plain C++ too (de-Qt, DTOs step 2)
+
+The core's output struct no longer holds a Qt type: `streamLabel` is a UTF-8 `std::string`, and
+`processedstreamdata.h` includes no Qt header (it now takes `StreamMode` from `streammode.h`
+rather than the whole of `streamconfig.h`). The core is now `std` end to end on both sides: the
+label goes in as `ProcessingParams::streamLabel` and comes out unchanged, so `FrameProcessor` copies
+it instead of converting it.
+
+The conversion sits where the result meets Qt, in two places. `PlotViewModel::addStreamData` decodes
+the label once into a local and uses it for the three things the label does there: it names the
+lock and missed-frames series, prefixes each SNR series' name, and is what reprocessing matches on
+to replace a stream instead of stacking a second copy. `MainView::onStreamProcessed` decodes it for
+the log line. `PlotSeriesData::streamLabel` stays `QString` with the rest of the plot's data.
+
+**Tests first, for the plot half.** New `TestPlotViewModel::aNonAsciiStreamLabelReachesEverySeries`
+was written against the `QString` field and passed there before the port: a label with an accented
+letter and a Greek capital omega names the lock and missed-frames series, appears in the SNR series'
+name, and a second run of the same stream replaces its series (4 stay 4) while a second stream that
+shares the label but not the channel is left alone. (Its first draft expected 3 series; a receiver
+stream also contributes a lock series, and the code was right.) The four test helpers that build a
+`ProcessedStreamData` from a `QString` label now convert with `toStdString()`; no assertion changed
+except two that decode the result's label to compare it.
+
+**One test was written after the port, and says so.** `TestMainView::aFinishedStreamIsLoggedUnderItsLabel`
+covers the log line, which nothing tested. It could not be run against the `QString` version without
+reverting the port, so it is validated by mutation instead: it fails when the label is decoded as
+Latin-1.
+
+**Validated against five single-defect mutants; each fails the test written for it.** The label
+decoded as Latin-1 in the plot (the new plot case); reprocess matching never equal (the new case plus
+two existing reprocess cases); the SNR series losing its label (the new case); `FrameProcessor` not
+copying the label into the result (the non-ASCII message row and `processAccumulatesReceiverData`);
+and the log line decoded as Latin-1 (the new `MainView` case). Each build was checked to have relinked.
+
+Throughput, pinned release gate: 4-stream parallel 15306 ms, 1.04x the slowest solo stream and
+0.67x all-sequential. Nothing here is on the per-bit path.
+
+Baseline **522 / 0 / 1** (was 520 / 0 / 1; 2 new = the plot case and the log-line case),
+**523 / 0 / 0** at release. **26 suites.**
+
+#### `ProcessingParams` is plain C++: UTF-8 label and a `std::filesystem::path` (de-Qt, DTOs step 1)
+
+The core's input struct no longer holds Qt types: `filename` is a `std::filesystem::path` and
+`streamLabel` a UTF-8 `std::string`. `processingparams.h` includes no Qt header at all. The layers
+that still hold `QString` convert where they fill the struct in (`MainViewModel` building a job,
+`CalibrationExtractor` building its request) and where they read it back (`FrameProcessor` copies the
+label into `ProcessedStreamData`, which is still a `QString` until the next slice; the coordinator
+passes the path straight to the reader, which already took one).
+
+**`StreamMode` moved to its own header, `include/dto/streammode.h`.** `ProcessingParams` names the
+mode, and the enum used to live in `streamconfig.h`, which carries Qt types for the dialogs. Pulling
+that header in for one enum would have kept the struct Qt-bound, so the enum moved and
+`streamconfig.h` includes it. Nothing else changed about it. That include had also been the only way
+`calibrationextractor.h` got `FrameSyncParams`; it now includes `framesyncparams.h` itself.
+
+**Tests first, as before, and two of them are new behaviour pinned against the old types.**
+
+- `reportsExactlyTheseMessages` gained a tenth row, **`non-ascii-label`**: a stream labelled
+  `R<e-acute>cepteur <omega>` is quoted in every tag (`[CH 7 R<e-acute>cepteur <omega>] `) and comes
+  back unchanged in the result's `streamLabel`. It passed against the `QString` field before the
+  port, and only the one helper that assigns the label changed afterwards.
+- `TestProcessingCoordinator::aRecordingUnderANonAsciiFolderProcessesEndToEnd` copies the committed
+  `step_cal` recording under a folder named `caf<e-acute>-<omega>`, lists its channels with the
+  metadata reader, then runs the whole pipeline on it through the coordinator and expects samples.
+  The earlier non-ASCII path fix proved each reader opens such a path on its own; this proves the
+  path survives the trip from a job's file name to the reader, which is the hand-off this change
+  rewrote.
+
+**Validated against three single-defect mutants; each fails the test written for it.** The label
+decoded as Latin-1 on its way into the result (the new row, which compares the result's label);
+the label dropped on that path (the new row and `processAccumulatesReceiverData`); and the
+coordinator handing the reader an empty path (the end-to-end test, the throughput benchmark and the
+ordering test). Each build was checked to have relinked.
+
+Throughput, pinned release gate: 4-stream parallel 15561 ms, 1.00x the slowest solo stream and
+0.66x all-sequential. `main` read 15646 ms in the previous session; pinned numbers drift between
+sessions, so this shows nothing slower rather than a gain. Nothing here touches the per-bit path:
+the label is read once per stream and the path once per run.
+
+Baseline **520 / 0 / 1** (was 518 / 0 / 1; 2 new = the label row and the end-to-end case),
+**521 / 0 / 0** at release. **26 suites.**
+
+#### `Ch10PacketReader` has no Qt: the same event sink, plus progress (de-Qt, `QObject` step 2)
+
+The single-pass reader was a `QObject` emitting `progressUpdated`, `logMessage`, `errorOccurred`
+and `finished`. It is now a plain class reporting to the same `ProcessingEvents` interface as
+`FrameProcessor`, which gained one optional method for it, `progressUpdated(int)` (a no-op by
+default, so a sink that shows no progress ignores it). `ch10packetreader.h` and `.cpp` contain no
+Qt: the path is a `std::filesystem::path`, errors are `std::string`, the routing table is a
+`std::unordered_map`, the file size comes from `std::filesystem::file_size`, and messages are
+built with `std::format`. The Qt adapter, `QtProcessingEvents`, takes a fifth optional handler for
+progress and delivers it like the rest: queued to the target, in order.
+
+**`finished()` is gone, not ported.** Nothing connected to it: the coordinator and the extractor
+learn that the reader is done by joining its thread at teardown, and they learn a stream is done
+from its worker. The reader therefore never calls `processingFinished`, and the interface now says
+so instead of implying every source does.
+
+Both consumers changed the way the worker side did: the reader is `shared_ptr`-owned and runs on a
+`QThread::create` thread, the adapter relays its reports into the coordinator's and the
+extractor's existing signals, and the explicit `delete` at teardown becomes a `reset()` once the
+thread is joined. `prepare()` is still synchronous on the caller's thread, before the thread starts.
+
+**The reader had no tests of its own, so the characterisation suite was written from nothing, and
+against the signal-based reader first.** New `TestCh10PacketReader` (6 methods, 15 results) pins what
+the reader reports and what it hands to the queues, on the committed `step_cal` recording:
+
+- each way `prepare()` can fail has its own exact message (a missing file, a text file, an empty
+  file and an unknown PCM channel each read differently, and a stub too short to sync time says so);
+- a full run reports "Reading Chapter 10 file...", never an error, progress that never goes
+  backwards and ends at exactly 100, and delivers all 1598 packets (6,539,016 payload bytes, the
+  4-byte channel header stripped) followed by exactly one end marker;
+- an abort is announced, still reports 100, and still posts the end marker, which is what releases
+  the worker that would otherwise wait on its queue forever;
+- two streams on one channel each get every packet, and **the payload is one shared buffer**: the
+  reason the fan-out is cheap, which nothing could previously see;
+- and the ways a file can go wrong mid-read, with the cut points found by walking the packet
+  headers rather than guessed: a cut **inside a PCM packet's data** and **inside a time packet's data**
+  both report "File read error; aborting parsing." and deliver exactly the packets before the cut; a
+  **damaged header checksum** reports "File read error during data collection" and stops there, with
+  everything after lost.
+
+**Two behaviours this turned up, pinned as they are rather than changed.** A file that ends **inside
+a packet header** is read as a clean end of file: no error, so a copy cut off there looks complete.
+And a damaged **sync pattern** is skipped silently: the library scans on to the next sync, no error
+is reported, and exactly one packet is missing. Either may deserve a warning; that is a separate
+decision from a refactor.
+
+The suite passes unchanged across the port; only three helper functions (listen to the reader,
+prepare it, run it) changed. Its `Drain` consumer gives up after a timeout and closes the queue,
+because a reader that never posts its end marker used to make the test wait for ever instead of
+failing.
+
+Two things it cannot reach, stated rather than glossed: the "N% read..." lines (the fixture reads
+faster than the 100 ms progress throttle, so only the throttle's own suite sees them) and the
+"time gap(s) detected" warning, which needs a recording with a gap in its IRIG time packets. There
+is none in the repository, and building one means hand-writing Chapter 10 packets with checksums.
+
+`TestQtProcessingEvents` gained a progress case (101 values from a worker thread arrive on the
+target's thread in order). The coordinator's end-to-end test now checks the progress bar: 0 at the
+start, then 100 reported **twice**, once by the reader and once by the coordinator when it
+finishes, so a reader whose progress never reached the coordinator would leave exactly one. A new
+`TestCalibrationExtractor::extractionReportsItsProgress` does the same for the Extract Calibration
+dialog's progress, which nothing observed before.
+
+**Validated against eleven single-defect mutants; all caught.**
+
+| mutant | caught by |
+|---|---|
+| final progress (100) never reported | 4 reader cases and the coordinator end-to-end test |
+| abort not announced | `cancelReportsItAndStillEndsTheStream` |
+| only the first queue of a channel gets packets | the fan-out case |
+| each queue gets its own deep copy of the payload | the fan-out case (the pointers differ) |
+| end marker never posted | every reader case, each naming the cause; the pipeline suites then abort |
+| progress delivered directly, not queued | the run crashes |
+| coordinator drops the reader's progress | the coordinator end-to-end test (100 reported once, not twice) |
+| extractor drops the reader's progress | `extractionReportsItsProgress` |
+| header read error not reported | the damaged-checksum row |
+| time-packet read error not reported | the cut-inside-a-time-packet row |
+| PCM-packet read error not reported | the cut-inside-a-PCM-packet row |
+
+**The first pass left one of those uncaught, and it is why the truncation test cuts in three places.**
+The original test cut the file at its midpoint, which always lands in a PCM packet, so the identical
+error on the time-packet read could be silenced without any test noticing. Finding where to cut meant
+walking the file's packet headers in the test (sync `0xEB25`, channel at byte 2, length at byte 4,
+data type at byte 15), with a check that the walk tiles the file exactly. Separately, the first
+mutation run also ran against a mutation script that had been corrupted by shell escaping, which
+would have reported every mutant as a survivor; it was stopped, the script rebuilt, and the runner
+now reports a script failure as "not a result" instead of running the unmutated code.
+
+Throughput, pinned release gate and interleaved with `main` because pinned numbers drift between
+sessions: this branch 14546 / 15277 / 14955 ms, `main` 15646 ms in the same stretch. Not slower. The
+only per-packet cost added is the routing lookup, now a `std::unordered_map`.
+
+Baseline **518 / 0 / 1** (was 501 / 0 / 1; 17 new = 15 reader results + 1 hand-off case + 1 extractor
+case; the coordinator test gained assertions but no result), **519 / 0 / 0** at release. **26 suites.**
+
+#### `FrameProcessor` has no Qt: it reports through an event sink (de-Qt, `QObject` step 1)
+
+`FrameProcessor` was a `QObject` that emitted `logMessage`, `errorOccurred` and
+`processingFinished`. It is now a plain class: what it has to say goes to a
+**`ProcessingEvents`** sink (`include/model/processingevents.h`: three methods, UTF-8
+`std::string` messages) set with `setEvents()`. `frameprocessor.h` and `.cpp` contain no Qt, the
+messages are built with `std::format` (C++20, the reason for that change), and the class needs
+neither `moc` nor a thread with an event loop.
+
+**The Qt side stays Qt.** `include/qtprocessingevents.h` is a `ProcessingEvents` that posts each call
+to a target `QObject` with a queued invocation, which is the delivery the signals gave: events from
+one source arrive on the target's thread in the order they were raised. `ProcessingCoordinator` and
+`CalibrationExtractor` keep their own signals and create the adapter to forward into them. The
+adapter is Qt, so the C# shell will implement the same three-method interface over its own
+mechanism rather than reuse it.
+
+Two consequences in the consumers, both small but not mechanical:
+
+- **The worker thread is a `QThread::create`, not an event-loop thread.** It runs `process()` and
+  ends when that returns. The processor is owned by `shared_ptr` (held by `Worker` and by the thread's
+  body) instead of `deleteLater` on `QThread::finished`, so it is freed when the coordinator clears
+  its workers after the join.
+- **The finish handler looks the processor up by job index at delivery time** rather than holding a
+  pointer to it. An event delivered after teardown then finds nothing, instead of a dangling object.
+  (Qt drops events still queued for a destroyed target, which `TestQtProcessingEvents` checks.)
+
+**Tests first, as before.** `reportsExactlyTheseMessages` (9 rows) was written against the signals
+implementation and passed there before anything was ported. It pins the full text and order of
+everything `FrameProcessor` reports: success, a bounded window (named; an unbounded one is not), a
+masked pattern, sync-but-no-frames, cancel, both "internal error" cases, and the two byte-swap
+warnings. The mixed-byte-order warning had **no test at all** before this. Only its capture function
+changed across the port, and all nine rows pass unchanged.
+
+New suite **`TestQtProcessingEvents`** (4 cases) pins the hand-off itself: 300 mixed events from a
+worker thread arrive on the target's thread in order with completion last; UTF-8 decodes; missing
+handlers are skipped; and events for a destroyed target are dropped. New
+`TestProcessingCoordinator::workerReportsPrecedeTheResultAndFinishComesLast` checks the same
+property through a real run: the worker's completion line is relayed before the stream's result,
+and `processingFinished` is last.
+
+**Validated against eight single-defect mutants; all caught.** Delivered directly instead of queued
+(the run crashes with an access violation: handlers run on the worker thread); completion alone
+delivered directly (it overtakes the log lines; also crashes); the message read as Latin-1; the cancel
+path not reporting completion; elapsed time with two decimals; the label always appended; the pattern
+in lower case (caught only by the real-file test, since the synthetic rows use `0x9`, which has no
+letter); and error reports dropped (11 cases). **Two of them abort the run rather than fail a case,
+which still counts: the race they create is exactly what the queued hand-off exists to prevent.**
+
+Throughput: pinned release gate 13866 ms, 1.01x the slowest solo stream, 0.65x sequential; the
+only per-event cost is one null-checked virtual call.
+
+Baseline **501 / 0 / 1** (was 485 / 0 / 1; 16 new = 9 message rows + 4 hand-off cases + 1
+coordinator case + the new suite's `initTestCase` / `cleanupTestCase`), **502 / 0 / 0** at release.
+**25 suites.**
+
+#### The step-file parser is `std::string` and `std::filesystem::path`, and shares its file reading (de-Qt, `QString` step 3)
+
+`StepDetector::parseStepConfig` (the `[[Step]]` calibration file) and `initialStepConfigPath` no longer
+use Qt: `QFile` / `QTextStream` / `QFileInfo` are gone, the error is a UTF-8 `std::string`, and the
+path is a `std::filesystem::path`. `initialStepConfigPath` stays string-in, string-out on purpose: its
+result is shown in the Extract Calibration dialog, and `path / "x"` would put a backslash in the
+middle of `<root>/settings/rcvr_cals/default.toml`. `stepdetector.h` and `.cpp` now contain no Qt.
+
+**This changed course from "fold it into `TomlDocument`", and the reason is in the tests.** Writing
+down what the parser actually does showed it is not the duplicate it looked like. It matches `[[Step]]`
+and its keys **case-insensitively**, where `TomlDocument` is case-sensitive; it does **not** strip
+quotes, so `db = "6"` is skipped and the step keeps 0, where `TomlDocument` would read 6; and it
+compares the whole header line, so `[[Step]] # first` is not a step header at all. A fold would have
+changed what an existing calibration file means, for no gain in the de-Qt goal. So it is ported in
+place with behaviour unchanged, and what it genuinely shares with `TomlDocument` is shared instead.
+
+**Characterisation tests first, again**: 9 methods, 26 results, written against the `QString`
+implementation and passing there before anything was ported. They pin the quirks above, plus: a key or
+header before any step or inside another section belongs to no step; a step with no parseable `db`
+still exists at 0; the file order and last-`db`-wins; the output cleared on every call, success or not;
+`QString::toDouble`'s rules on the value (`+6`, `.5`, `5.`, `1e1` read; `"6"`, `6x`, `1,5`, `0x10`,
+`1e999`, `+-6`, empty skipped); UTF-8 BOM with CRLF and UTF-16 LE and BE read; a non-ASCII path
+opens; and both error messages name the file. Only a two-line `parseSteps()` helper changed across
+the port.
+
+**One reader, not two.** The BOM / UTF-16 decoding that `TomlDocument` had written moved out into
+**`include/model/textfile.h`** (`readText`, `decodeText`, `utf8FileName`, `pathFromUtf8`), and the
+number rules live in `include/textparse.h` from the previous step. `TomlDocument` and the step
+parser both use them, so a Notepad-saved file behaves the same in either.
+
+**Validated against ten single-defect mutants**; eight fail the test written for them: header
+matched case-sensitively; key matched case-sensitively; a comment allowed on the header; the output
+not cleared; a bad value dropping the step (6 cases fail); no leading `+`; no BOM / UTF-16 handling (6
+cases across two suites); and `exists()` for `is_regular_file()` so a directory counts as a step file
+(caught by a new `initialStepConfigPathIgnoresADirectory`, added because nothing covered it).
+**Two survived, and both are equivalent rather than missed.** Ignoring keys outside a step has no
+observable effect: a stray `db` sets the pending step, and `flush()` discards it unless a step is
+open. And `pathFromUtf8` reading its bytes in the ANSI code page is unobservable in this process,
+because the UTF-8 code-page manifest (the non-ASCII path fix) makes the ANSI page UTF-8; the
+`char8_t` route stays as the correct spelling for any host without that manifest.
+
+**A build-harness trap found along the way, worth knowing**: several mutant runs reported
+`tests exit 0` with no failures when the test exe had not been produced at all. The link was
+failing intermittently with `LNK1201` (error writing the program database), and the runner script
+prints the exit status of the previous exe when `.\debug\...exe` does not exist. Disk space was fine
+(195 GB free). Deleting `tests/debug/*.pdb` and relinking cleared it. Such runs were discarded, the
+runner now deletes the exe, PDB and results first and refuses to report a result unless both exist
+afterwards, and the affected mutants were redone.
+
+Baseline **485 / 0 / 1** (was 458 / 0 / 1; 27 new = 26 step-parser results + the directory case),
+**486 / 0 / 0** at release. 24 suites.
+
+#### `FrameSetup` is UTF-8 `std::string` and `std::filesystem::path` (de-Qt, `QString` step 2)
+
+The word map and receiver-parameters file reader/writer: `ParameterInfo::name`, parameter names, the
+reserved-section list, `channelPrefix()` / `receiverParameterName()` / `receiverIndexFromName()` /
+`channelPartOfName()`, error out-params, and every path are now `std::string` /
+`std::filesystem::path`, and `m_parameters` is a `std::vector`. It is still a `QObject` and still takes
+its calibration profiles in a `QHash`: the QObject step and the associative containers are later.
+
+`ProcessedChannelSeries::name` follows (it is `param->name` copied out), so the core's output is
+`std::string` end to end. The seam moves up a layer: `PlotViewModel` and `CalibrationExtractor` convert
+the name to `QString` where they build a plot series and a report line. `StreamConfig`'s path fields and
+`CalibrationChannelResult::name` stay `QString`, since the report text they feed is built with
+`QString::arg` and is its own step.
+
+**Tests first, again.** `receiverNameParsingMatchesQStringToInt` was written against the `QString`
+implementation and passed there before anything changed. It pins what `QString::toInt` quietly did to a
+name typed by hand into a receiver-parameters TOML: the token is the **last** `_RCVR`; whitespace and a
+leading `+` are tolerated (`"L_RCVR 3"`, `"L_RCVR+4"`); a second sign, a negative, trailing junk and an
+overflow read as "no receiver"; a name that *starts* with the token has no channel part to split off
+(`"_RCVR2"` returns the whole name though its number parses); non-ASCII names pass through.
+
+**One parser, not two.** Those rules are exactly what `TomlDocument` already reproduced for its numbers,
+so they moved out of `tomldocument.cpp` into **`include/textparse.h`** (`trimmed`, `parseInteger`,
+`parseDouble`) and both use it. A second hand-rolled copy would have been a place for them to drift
+apart. `PlotViewModel` has its *own* receiver-number parse with slightly different rules (it accepts 0
+and negatives); it was left alone and now reads a converted copy of the name.
+
+**Validated against four single-defect mutants; each fails the test written for it**: the first
+`_RCVR` instead of the last, a channel part split at index 0, an accepted receiver 0, and `trimmed()`
+disabled. The last also fails 26 other cases across `TestFrameSetup`, `TestStreamConfigDialog` and
+`TestTomlDocument`, which is what sharing the parser buys. The first attempt at the first mutant did
+not apply (a pattern that missed on line endings) and reported a clean pass; it was caught because the
+run printed no failing test, redone, and the source confirmed byte-identical afterwards.
+
+**Throughput, checked rather than assumed**, since `ParameterInfo` is on the decode path and
+`std::string` is 32 bytes against `QString`'s 24: pinned release gate, branch **14035 / 14030 / 14058
+ms** against `main`'s **14989 / 14301 ms** straight after. Not slower. Pinned numbers are stable
+*within* a session but drift about 5% *between* them (the same code read 13.6-13.7 s earlier the same day),
+so only interleaved runs mean anything.
+
+Baseline **458 / 0 / 1** (was 457 / 0 / 1), **459 / 0 / 0** at release. 24 suites.
+
+#### `TomlDocument` is UTF-8 `std::string` and `std::filesystem::path` (de-Qt, `QString` step 1)
+
+The reader/writer behind every settings file no longer uses Qt: keys and values are UTF-8
+`std::string`, paths are `std::filesystem::path`, and `QFile`/`QTextStream` are `std::ifstream` /
+`std::ofstream`. Callers still holding a `QString` convert at their own boundary: the new
+**`include/qtbridge.h`** supplies `toFsPath()` for paths (via UTF-16, lossless for any name the file
+system can hold), and text uses Qt 6's `toStdString()` / `fromStdString()`, which are UTF-8. It is
+C++17 only (`from_chars` / `to_chars`), so it does not depend on the C++20 change.
+
+**The order matters: the suite came first.** `TomlDocument` had no tests of its own. The new
+`TestTomlDocument` (14 cases, 15 results) was written against the **Qt implementation** and passed
+there before anything was ported, so it encodes what the code did, not what the rewrite happens to
+do. Its four helpers are the only lines that touch `TomlDocument`'s string types; across the port only
+those helpers changed, and every assertion passed unchanged against the new code.
+
+What `QFile` + `QTextStream` + `QString` supplied for free, now reproduced and pinned:
+
+- **Encoding:** a UTF-8 BOM is skipped, and UTF-16 LE or BE with a BOM is decoded. That is Qt's
+  Unicode auto-detection, and older Notepad's "Unicode" setting writes UTF-16.
+- **Numbers:** integers and doubles tolerate surrounding whitespace and a leading `+`, which
+  `std::from_chars` does not. Out of range fails rather than saturating.
+- **Writing:** doubles are `%g` with six significant digits (`QString::number`'s spelling: `3.0` writes
+  as a bare `3`, `0.00001` as `"1e-05"`), and the file is written with CRLF and no BOM.
+- **A trap the old API had too:** `setValue("K", "text")` binds a string literal to the `bool` overload,
+  because a pointer-to-bool conversion beats the one to `std::string`. A `const char*` overload now
+  catches it.
+
+Two narrowings, neither reachable from a shipped file: whitespace trimming is ASCII only (Qt also
+trimmed Unicode spaces such as U+00A0), and invalid UTF-8 is kept as bytes rather than replaced.
+
+**Validated against four single-defect mutants of the port; each fails the test written for it**: BOM
+handling removed (the BOM case and both UTF-16 rows), LF instead of CRLF (the exact-file-format case),
+shortest-round-trip doubles instead of `%g` (the doubles case), and no whitespace / `+` tolerance (the
+integer case). **The first mutation run was wrong, and was caught.** Run in a loop, two mutants
+reported exactly the failures of the mutant before them: the loop checked that the source recompiled
+but not that the test exe was relinked, and a stale binary ran. Each mutant was rerun on its own with
+the build checked, and the table above comes from those runs.
+
+Consumers: `FrameSetup` (word map, receiver parameters) and the frame-sync dialog helpers in
+`streamsubdialogs.cpp` convert at the call; both are next in the `QString` sweep. Baseline **457 / 0 / 1**
+(was 440 / 0 / 1; 17 new = 15 results + `initTestCase` / `cleanupTestCase`), **458 / 0 / 0** at release.
+24 suites.
+
+#### C++20 (ahead of the de-Qt string work)
+
+The language standard moves from C++17 to **C++20**: `CONFIG += c++20` in both `.pro` files (MSVC
+`/std:c++20`), plus `gen_compile_flags.py` for clangd and `.vscode/c_cpp_properties.json` for
+cpptools. It is its own change so that a standard-related problem cannot hide inside a refactor.
+
+**Why now.** The core builds its log lines and the calibration report with `QString::arg` and
+`QString::number`, and C++17 has no standard replacement. C++20's `std::format` is one, and it is
+Microsoft's own implementation in MSVC's standard library. The `QString` step will hold core
+strings as UTF-8 `std::string`, converting at the Qt boundary, which is consistent with the UTF-8
+process code page that the non-ASCII path fix set.
+
+**Verified on a clean build, because an incremental one cannot verify this.** jom recompiles an
+object when its source or headers change, not when a compiler flag does, so after a standard bump
+an incremental build would relink every C++17 object and report success: the same false pass as
+the deleted-header trap above. Every object in `build/` and `tests/`, Debug and Release, was deleted
+first. Then:
+
+- Debug: app 63 translation units, tests 109, **0 warnings, 0 errors**; suite **440 / 0 / 1**.
+- Release: app 63, tests 109, **0 warnings**; the pinned throughput gate **441 / 0 / 0**, parallel
+  13703 ms against 13596-13614 ms for `main`. No change.
+
+Nothing in the code needed to change. The usual C++20 breakages - aggregates with user-declared
+constructors, `u8` literals becoming `char8_t`, rewritten comparison operators - do not occur here.
+
+#### A recording under a non-ASCII folder could be listed but not processed (US1.0)
+
+Found while surveying `QString` for the de-Qt sweep, not reported. Both Chapter 10 readers hand the
+path to irig106's `enI106Ch10Open()`, which opens it with the C runtime's narrow `open(char*)` - and
+they encoded it **differently**: `Chapter10Reader` with `toLocal8Bit()` (the ANSI code page, which is
+what that `open()` reads), `Ch10PacketReader` with `toUtf8()`. So a file under `C:\Users\Jos<e-acute>\`
+- users' own folders being exactly where recordings get copied - opened in the Configure Streams
+dialog, listed its channels, and failed with "Error opening data file." the moment Process was
+pressed. A folder name the ANSI code page cannot spell at all (any non-Latin script on a Western
+system) could not be opened by either reader.
+
+**Reproduced before it was fixed.** New `TestFrameProcessor::nonAsciiPathOpensInBothReaders` copies a
+committed fixture into a `caf<e-acute>` folder and an `omega-<Greek capital omega>` folder and opens each with both readers.
+Against the old code: the Latin row failed in the packet reader only, the Greek row in the metadata
+reader already.
+
+**The fix is the process code page, not the string.** `lib/irig106` may not be edited, so its narrow
+`open()` stays; the new **`codepage.pri`** merges an `activeCodePage` = `UTF-8` manifest
+(`resources/utf8codepage.manifest`, Windows 10 1903+) into both executables with `/MANIFESTINPUT`.
+Under it the CRT's narrow file functions take UTF-8, and Qt's `toLocal8Bit()` produces UTF-8, so both
+readers now pass `toLocal8Bit()`: any path opens, and on an older Windows that ignores the setting the
+two readers still agree, which they did not before. Verified with `mt.exe` that both the app and the
+test exe embed the setting alongside the existing Common Controls dependency, and that the generated
+Visual Studio projects carry it. The whole widget suite now runs under the UTF-8 code page; nothing
+else in the application noticed.
+
+Not addressed: a path longer than `MAX_PATH` (260). irig106 stores the name in a `char[MAX_PATH]`
+and the CRT's `open()` needs long-path support enabled machine-wide - a separate change.
+
+Baseline **440 / 0 / 1** (the test is data-driven: two rows), **441 / 0 / 0** at release.
+
+#### The pipeline's internal lists are `std::vector`, and the decoder got 7% faster (de-Qt, step 7)
+
+`FrameProcessor`'s enabled-parameter list and per-frame word buffer, `Ch10PacketReader`'s channel
+table and queue lists, and the `ProcessingParams*` list handed to `Ch10PacketReader::prepare()` move
+from `QVector` to `std::vector`. `ch10packetreader.h` and `frameprocessor.h` no longer include
+`<QVector>` at all. The routing table stays a `QHash` (now of `std::vector`s): replacing Qt's
+associative containers is its own step.
+
+**It is the first step of the sweep to measurably change throughput, and it is faster.** Release
+gate, pinned to the performance cores (previous entry), interleaved with unmodified `main`:
+
+| run | binary | 4-stream parallel | slowest solo |
+|---|---|---|---|
+| main (PR #147's two runs) | main | 14696 / 14594 ms | 14531 / 14535 ms |
+| branch | branch | 13614 ms | 13529 ms |
+| branch | same binary | 13596 ms | 13484 ms |
+| main, straight after | main | 14690 ms | 14455 ms |
+
+About **7%** on every pinned run, reproducible in both directions. The only part of this change on
+the per-bit path is `ScanState::frame_words`: the scanner writes it once per word and reads it once
+per enabled parameter per frame, through a non-const reference. A non-const `QVector` subscript
+checks whether the buffer is shared, and detaches if so, on **every** access; `std::vector`'s is a
+plain index. That is the likely source of the gain, inferred from the code rather than profiled.
+
+Nothing else here touches a hot path - the queue lists are walked once per packet, the channel
+table once at `prepare()` - and the one logic change, `QVector::contains` -> `std::find` when
+de-duplicating the end-of-stream queue list, is covered by the pipeline suites: inverted, it would
+post no sentinels and every worker would wait forever.
+
+Baseline unchanged, **438 / 0 / 1**, **439 / 0 / 0** at release.
+
+#### The throughput gate runs on the performance cores, so its milliseconds mean something
+
+`scripts/run_throughput_bench.ps1` now pins the suite to the CPU's highest efficiency class before it
+runs, restores the affinity afterwards, and prints the mask it used. `-AllCores` opts out.
+
+The cause of the bimodal timings in the entry below was **tested, not assumed**. The same executable,
+pinned each way:
+
+| affinity | 4-stream parallel | slowest solo |
+|---|---|---|
+| efficiency cores only (`0xFFF0000`) | 26112 ms | 24965 ms |
+| performance cores only (`0xFFFF`) | 14189 ms | 14178 ms |
+
+The efficiency-core run reproduces the slow mode exactly, so Windows was sometimes scheduling the
+single-threaded decoder onto efficiency cores. Two pinned runs back to back afterwards - the pattern
+that had produced 14962 ms and then 26386 ms from one binary - measured **14696 ms and 14594 ms**
+(slowest solo 14531 and 14535 ms).
+
+- **The mask is discovered, not hard-coded.** `GetLogicalProcessorInformationEx` reports each
+  physical core's `EfficiencyClass`; the cores in the highest class are the performance cores. On
+  this i7-14700KF that is 8 cores / 16 logical processors (`0xFFFF`), and on another machine it is
+  whatever that machine reports. A CPU with one core class, or more than one processor group, is
+  left unpinned and says so.
+- **It relies on inheritance, not on `Start-Process`.** The script already runs the test exe
+  directly, to avoid Windows PowerShell 5.1's empty-`ExitCode` trap, and a child process inherits
+  its parent's affinity. So the script pins itself and the exe follows.
+- The ratios were never at risk - they held at 0.97-1.01x in every run, pinned or not - but the gate
+  is also the only place this project measures throughput at all, and a measurement that halves
+  depending on the scheduler is not one anybody can compare against.
+
+#### The processing result is `std::vector`; the plot deliberately stays `QVector` (de-Qt, step 6)
+
+`ProcessedStreamData` and `ProcessedChannelSeries` - what `FrameProcessor` produces and the
+coordinator hands over - are now `std::vector`. That removes the seam step 5 left in
+`CalibrationExtractor` and its test: the detector now reads the channel's values directly.
+
+**`PlotSeriesData` and `TmChart` keep `QVector`, and that is the boundary, not unfinished work.**
+The plot relies on implicit sharing in three places. `PlotViewModel::addStreamData` builds one
+`elapsed` time axis per stream and every series of that stream shares it; `TmChart::setSeriesData`
+keeps its own reference to each series' buffers, so a full chart rebuild copies nothing (its comment
+says so, with 48 series over a long recording in mind); and pushing a series onto the list copies a
+reference count. A `std::vector` turns each into a deep copy - every series its own time axis and
+every rebuild a copy of every sample. The view model and the chart are the layers the port replaces
+wholesale, so they keep Qt's containers until then. `toPlotVector()` in `plotviewmodel.cpp` pays
+the one copy, once per series per stream; steady-state memory is unchanged, because the result is
+dropped as soon as the signal returns.
+
+The `streamProcessed` signal chain (coordinator -> main view model -> view) was checked first, because
+a queued hop would copy the whole result: all three hops are direct, on the main thread, and
+`ProcessedStreamData` has no metatype registration, so a queued hop could not have worked anyway.
+
+New case **`seriesOfOneStreamShareOneTimeAxis`** pins the sharing, which no value-comparing test can
+see. Mutation-checked: giving one series its own copy of the axis fails it.
+
+**The release gate's absolute timings are bimodal on this machine, and that was nearly misread as a
+regression.** The first branch run read 26364 ms against about 14000 ms before, with every channel,
+solo runs included, slower by the same ~1.9x and every ratio unchanged. Two A/B pairs followed:
+
+| run | binary | 4-stream parallel | slowest solo |
+|---|---|---|---|
+| branch 1 | branch | 26364 ms | 26710 ms |
+| main 1 | main | 14343 ms | 14193 ms |
+| branch 2 | branch | 14962 ms | 14926 ms |
+| branch 3 | **same binary as branch 2** (0 files compiled) | 26386 ms | 27182 ms |
+| main 2 | main | 14123 ms | 14025 ms |
+
+Branch 2 and branch 3 are one executable, 14962 ms and then 26386 ms, so the slow mode is the machine
+and not the code. The change cannot account for it anyway: the benchmark samples at 1 s, so the
+touched code runs a few hundred times per run against billions of bit operations in the unchanged
+decoder. The cause - the i7-14700KF's efficiency cores - was confirmed afterwards and the gate now
+pins itself to the performance cores; see the entry above.
+The guard asserts ratios, which held at 0.97-1.01x in every run, so it is unaffected; **absolute
+milliseconds quoted from single runs in the entries above are less trustworthy than they were
+presented**, and comparisons between runs should be A/B pairs or pinned to the performance cores.
+
+Baseline **438 / 0 / 1** (was 437 / 0 / 1), **439 / 0 / 0** at release. 23 suites.
+
+#### The calibration path uses `std::vector`, not `QVector` (de-Qt, step 5)
+
+`QVector` is about 500 occurrences across the model, the DTOs, the view model, the view and 12
+test files, and it cannot be swapped in one move: the data flows through it. So this is the first
+of several steps, taken leaf-first like the earlier ones. It covers `StepDetector`,
+`CalibrationExtractor`, `CalibrationProfile::points`, `StepDefinition` lists, and the dialog and
+tests that touch them. The view-only uses (`QTreeWidget*`, `QPolygonF`, `QLineF`, widget lists)
+are Qt-API lists and stay as they are.
+
+**`size()` is the hazard, not `append`.** `QVector::size()` is signed; `std::vector::size()` is
+unsigned. The code indexes with `int` everywhere, and MSVC at `/W3` does **not** warn on
+`int i < v.size()` (it did flag `size_t` -> `int` truncations, C4267, which is how most sites were
+found). Left alone, those comparisons are correct only while the index is non-negative. So every
+`.size()` on a converted container goes through a new `intSize()` (`include/containerutil.h`),
+which returns an `int` and keeps the signed idiom, rather than rewriting each loop to unsigned and
+auditing each subtraction. One site genuinely needed more: `deriv.reserve(size - 1)` on an empty
+series passes -1, which `QVector` ignored and `std::vector` reads as 18 quintillion elements and
+throws. It is guarded, and `detect()` also rejects fewer than two samples before reaching it.
+
+**`QVector<bool>` became `std::vector<char>`, not `std::vector<bool>`.** The latter is a
+bit-packed proxy container (no real references, no `data()`), a trap rather than a saving for
+per-sample flags.
+
+Other `QVector` conveniences with no `std::vector` equivalent were replaced explicitly:
+`first()/last()` -> `front()/back()`, `mid(pos, n)` -> an iterator-range copy, `contains()` ->
+`std::find` (same exact-`==` semantics), `<<` and `append` -> `push_back` or a braced list.
+
+**A temporary seam.** `ProcessedChannelSeries::values` is still a `QVector<double>` (the DTOs convert
+in a later step), so the extractor builds the detector's `std::vector` from it with an iterator
+range, and one test does the same. Both are marked, and both disappear when the DTO converts.
+
+New case **`detectOnATooShortSeriesFailsCleanly`**: an empty and a one-sample series come back
+"not calibrated". Checked by mutation: with `detect()`'s early return and the `reserve` guard both
+removed, the suite dies with an unhandled `std::length_error` (exit `0xE06D7363`); restored, it passes.
+
+Release throughput gate, full 640 MB recording: 4-stream parallel **13987 ms** against 14011 ms
+(unmodified `main`) and 14201 ms (previous step), 1.01x vs the slowest solo stream, 0.64x vs
+sequential. `interpolateCalibration` runs per sample and now reads a `std::vector`; no change
+beyond the earlier runs' spread. Single runs; variance not measured.
+
+Still `QVector`, in the order they will be converted: the DTO series (`ProcessedStreamData`,
+`PlotSeriesData`, which reach the view model and the chart), the pointer lists inside
+`FrameProcessor` / `Ch10PacketReader`, and the configuration lists (`StreamConfig`, `Source`,
+`StreamJob`) in the view model.
+
+Baseline **437 / 0 / 1** (was 436 / 0 / 1), **438 / 0 / 0** at release. 23 suites.
+
+#### Packet bytes are a shared `std::vector`, not a `QByteArray` (de-Qt, step 4)
+
+`PacketItem::payload` and the two Chapter 10 readers' read buffers were `QByteArray`; they
+are now `std::vector<uint8_t>`. The readers' buffers are a straight swap (the library takes
+a `void*`, and a `uint8_t` buffer removes a `reinterpret_cast` at the worker).
+
+The payload is the part that needed thought, because **`QByteArray` was doing a job nobody
+had written down**. The reader hands the *same* packet to every stream configured on a
+channel with `q->enqueue(item)` in a loop, and it is the pipeline's single bottleneck. With
+`QByteArray` that loop copied a reference count; each worker detached on its first write. A
+`std::vector` member would have turned it into one full deep copy per queue, on the reader
+thread - a throughput regression that no test in the suite would notice, since every copy
+holds the same bytes. So the sharing is now explicit: `PacketPayload` is a
+`std::shared_ptr<const std::vector<uint8_t>>`. The `const` is the point - nothing may modify
+bytes another worker is reading - and a worker copies into its own buffer before it swaps,
+inverts or derandomizes. That buffer lives outside the loop and is reused, so it stops
+allocating once it has seen the largest packet. The cost against the old behaviour is one
+memcpy per packet per worker, including the single-stream case where `QByteArray` never had
+to copy at all.
+
+Measured with the release throughput gate on the full 640 MB PRN recording, unmodified `main`
+against this change: 4-stream parallel **14011 ms -> 14201 ms** (1.3%), ratio against the
+slowest solo stream **1.01x** both times, against all-sequential **0.64x -> 0.65x**; the
+solo runs moved by under 1%. One run each, and run-to-run variance was not measured, so
+this shows no regression large enough to see, not that the cost is zero; the decode work
+dwarfs a packet copy, which is why none was expected.
+
+New case in `TestPacketQueue`, **`oneItemOnSeveralQueuesSharesItsBytes`**: one item enqueued
+to three queues must come out of all three pointing at the same bytes. It guards the
+property above, which is invisible to every value-comparing test. (Changing `payload` back to
+a by-value vector also stops the test compiling, so the guard cannot be defeated quietly.)
+
+Not done, deliberately: `Chapter10Reader` still builds a `QByteArray` from
+`QString::toLocal8Bit()` for a filename. That is the `QString` step, not this one.
+
+Baseline **436 / 0 / 1** (was 435 / 0 / 1), **437 / 0 / 0** at release. 23 suites.
+
+#### `PacketQueue` is `std`, and finally has tests of its own (de-Qt, step 2)
+
+`include/model/packetqueue.h` - the bounded hand-off between the single reader and each
+worker - moves from `QMutex` / `QWaitCondition` / `QQueue` to `std::mutex` /
+`std::condition_variable` / `std::deque`. It was the right next step: header-only, pure
+infrastructure with no Qt semantics to preserve, and on the hot path, where the interop
+spike had already shown `std::thread` driving the reader fine. `PacketItem::payload` stays a
+`QByteArray` for now - converting it reaches into both the producer and the consumer, so it
+is its own step.
+
+**The queue had no direct test.** It was only exercised incidentally, through the whole
+reader + `FrameProcessor` pipeline - tolerable on Qt's primitives, not tolerable the moment
+they are swapped, because a lost wakeup or a wrong fullness test shows up there as a hang or
+a silently shortened stream, far from its cause. New suite **`TestPacketQueue`** (11 cases):
+FIFO order; every `PacketItem` field surviving, including an embedded NUL in the payload;
+the producer blocking at *exactly* the configured depth and resuming after one dequeue; the
+consumer blocking when empty and resuming after one enqueue; `close()` releasing a blocked
+producer and a blocked consumer; a closed queue draining what it holds before reporting
+end-of-stream; a non-positive depth falling back to 64; and 20,000 items through a depth-4
+queue in order under constant hand-off.
+
+**The tests were validated, not assumed.** Run in an isolated harness against the original
+Qt-based queue and the rewrite, plus eight single-defect mutants of the rewrite:
+
+| variant | result | caught by |
+| --- | --- | --- |
+| original Qt queue | **pass 13/13** | - (the tests encode existing behaviour) |
+| `std` rewrite | **pass 13/13** | - |
+| full at `depth + 1` | fail | the producer-blocks, depth-bound and fallback tests |
+| LIFO instead of FIFO | fail | ordering and the 20,000-item stress test |
+| `close()` never notifies | fail | `closeReleasesABlockedProducer` |
+| `enqueue()` never notifies | fail | consumer-resumes and the stress test |
+| `dequeue()` never notifies | fail | producer-resumes and the stress test |
+| non-positive depth taken literally | fail | the fallback test |
+| `close()` discards queued items | fail | the drain test |
+
+Passing against the *original* is the stronger half: it shows the suite pins the behaviour
+the pipeline already depended on rather than whatever the rewrite happens to do.
+
+**Two things the mutation run found about the tests themselves.**
+
+- A `close()` that records the flag but never wakes anyone **hung** the validation run past
+  150 s instead of failing. The helper-thread guard closes the queue and then joins - and if
+  `close()` is the broken part, that join waits forever. CI sets no `timeout-minutes`, so a
+  hung suite would hold the self-hosted runner for GitHub's six-hour default. The join is now
+  bounded (5 s) and aborts the process with a message naming the cause; that mutant now fails
+  in about 10 s. The 30 s stress-test watchdog got the same treatment.
+- The first matrix was meaningless: **every variant, including the original, "failed" with
+  empty output.** Qt Test on Windows writes nothing to a piped stdout, so the harness had read
+  nothing and a missing result counted as a failure. It now reads the `-o file,txt` results
+  file, as the project's own harness does. A column of FAILs would have looked like the tests
+  working.
+
+Baseline **426 / 0 / 1** (was 413 / 0 / 1; 13 new lines = 11 cases + the framework's
+`initTestCase` / `cleanupTestCase`), **427 / 0 / 0** at release. 22 suites.
+
+#### The progress throttle is `std::chrono`, behind a tested gate (de-Qt, step 3)
+
+The two `QElapsedTimer`s in the native core are gone. `FrameProcessor` keeps a plain
+`steady_clock` start point and `duration_cast<milliseconds>` for the one-shot duration that
+becomes the completion log's one-decimal seconds (both truncate to whole milliseconds, so the
+printed figure is unchanged). `Ch10PacketReader::run()` gets a small new type,
+**`IntervalGate`** (`include/model/intervalgate.h`, `<chrono>` only).
+
+**Why a type rather than four inline lines.** The throttle is the one place in this change
+that can go wrong *silently*: seconds where milliseconds were meant makes it never fire,
+microseconds makes it fire on every packet, `>` where `>=` was drifts it late - and none of
+those is caught by a build, or by the pipeline tests, because the recordings in the suite
+read faster than the 100 ms interval and a time-based check inside a per-packet loop cannot
+be observed from outside. With the time point injectable, the whole contract is pinned
+deterministically with no sleeps. Same lesson as `PacketQueue`: a swap with no test under it
+is a swap you are trusting rather than checking.
+
+New suite **`TestIntervalGate`** (7 cases): not due before the interval, due at *exactly* the
+interval, `due()` reporting without restarting the interval, milliseconds rather than seconds
+or microseconds, `reset()` measuring from the reset, sub-millisecond agreement on every side
+of the boundary, and a default-constructed gate starting at *now* rather than the clock's
+epoch (which would make it due the instant it exists).
+
+**Validated against seven single-defect mutants; every one fails**, each caught by the test
+written for it: `>=` weakened to `>`; the interval read as seconds; read as microseconds;
+`reset()` a no-op; `due()` restarting the interval itself; an epoch default start; and
+rounding the elapsed time up so it fires up to a millisecond early. The real gate passes 9/9.
+
+**Equivalence with `QElapsedTimer` was measured, not argued.** The injected-time tests pin the
+gate's own contract but cannot show it matches the timer it replaced, because `QElapsedTimer`
+has no injectable clock. So both were run against the real clock side by side, twelve runs,
+reading the timer first and the gate second: the gate was **never late** (zero iterations with
+the timer due and the gate not), and the first-due instants differed by **at most 1.3 us,
+always on the early side**. That residue is the harness constructing the gate a moment before
+calling `timer.start()`, not a property of the gate; at a 100 ms interval it is a relative
+difference of about 1e-5. Stated as measured rather than called identical.
+
+Baseline **435 / 0 / 1** (was 426 / 0 / 1; 9 new lines = 7 cases + the framework's
+`initTestCase` / `cleanupTestCase`), **436 / 0 / 0** at release. 23 suites.
+
+#### The model layer no longer pulls in QtGui (de-Qt, step 1)
+
+`include/constants.h` held `PlotConstants`' `QColor` palettes alongside `PCMConstants`,
+`AppVersion`, `UIConstants` and `CalibrationConstants` - so **every model translation unit
+included `<QColor>`** and pulled in QtGui. Nothing in the model references a colour.
+
+Found by trying to build the model as a standalone native DLL with `QT -= gui` (the interop
+spike on `explore/dotnet-migration`), which died on `constants.h(11): fatal error C1083:
+Cannot open include file: 'QColor'`. Compile-time coupling only - the palettes are
+`inline constexpr` and unreferenced there, so no QtGui code was ever emitted into the model.
+
+- `PlotConstants` moves to the new **`include/plotconstants.h`**, which owns the QtGui
+  dependency and is included only by the View, the ViewModel and their tests.
+- `constants.h` is now QtGui-free: `<array>`, `<cstdint>`, `<QString>`.
+- The three CSV header tokens move into **`SeriesColumnSchema`** as `kTimeHeader`,
+  `kLockSuffix` and `kMissedFramesSuffix`. They are a serialization contract rather than plot
+  presentation, this file already documents itself as the single source of truth for the CSV
+  column format, and their presence in `PlotConstants` is specifically what made the model
+  depend on a QtGui-bearing header. They now sit beside the code that formats and parses them.
+
+**Not finished by this.** Eight `QColor` references remain in the model and DTO layer - a hex
+string round trip in `processingtemplateschema.cpp` and value fields in `plotseriesdata.h` and
+`seriesappearance.h`. The transitive *header* coupling is gone, which is what blocked a
+gui-free build; naming the type in three files is the next step.
 
 #### The decommutation pipeline has a performance guard, and it had none before
 
@@ -2934,24 +4115,27 @@ not mis-read.
 
 1. **Chapter10Reader** (`src/model/chapter10reader.cpp`, `include/model/chapter10reader.h`)
    - Reads Ch10 file **metadata** up front: scans TMATS to catalog time and PCM channels, provides channel lists, time accessors, and channel ID resolution. Wraps the irig106utils C library.
+   - Plain C++, no Qt: the path is a `std::filesystem::path`, text is UTF-8 `std::string`, channels are `ChannelData` values in a `std::map` by id, and a failed load leaves its reason in `lastError()` (loading is synchronous, so there is no signal). The view model converts the lists at its boundary (`qtbridge.h`)
 
 2. **Ch10PacketReader** (`src/model/ch10packetreader.cpp`, `include/model/ch10packetreader.h`)
-   - The single-pass reader. `prepare()` opens the file, parses TMATS, resolves each stream's PCM attributes, and builds the channel-ID → `PacketQueue` routing; `run()` (on its own QThread) reads the file once, tracks IRIG time, and dispatches each PCM packet's payload to the matching queues, then posts end-of-stream sentinels
+   - The single-pass reader. `prepare()` opens the file, parses TMATS, resolves each stream's PCM attributes, and builds the channel-ID → `PacketQueue` routing; `run()` (on its own thread) reads the file once, tracks IRIG time, and dispatches each PCM packet's payload to the matching queues, then posts end-of-stream sentinels
+   - Plain C++, no Qt: it reports progress, log lines and errors to a `ProcessingEvents` sink (`include/model/processingevents.h`) on the reading thread, relayed to the UI thread by `qtprocessingevents.h`
    - Owns the `SuChanInfo` per-channel bookkeeping table
 
 3. **PacketQueue** (`include/model/packetqueue.h`) — bounded, thread-safe per-stream packet queue connecting the reader to one worker (header-only)
 
 4. **FrameProcessor** (`src/model/frameprocessor.cpp`, `include/model/frameprocessor.h`)
    - Per-stream worker: drains its PacketQueue, runs the bit-serial frame-sync scanner (acquire/lock, off-phase rejection, bit-span lock %), accumulates lock %, missed frames, and (SNR mode) calibrated channel values into a `ProcessedStreamData`
+   - Plain C++, no Qt: it reports log lines, errors and completion to a `ProcessingEvents` sink (`include/model/processingevents.h`) on the processing thread; `qtprocessingevents.h` forwards them to a `QObject`'s thread as queued calls
    - Private helpers include `derandomizeBitstream()` and `hasSyncPattern()`; applies linear slope/offset or a non-linear `CalibrationProfile` per channel
 
-5. **FrameSetup** (`src/model/framesetup.cpp`, `include/model/framesetup.h`) — frame configuration / word-map + calibration table built per job
+5. **FrameSetup** (`src/model/framesetup.cpp`, `include/model/framesetup.h`) — frame configuration / word-map + calibration table built per job. Plain C++ (no `QObject`, no Qt in the header); calibration profiles are attached from a `std::unordered_map`
 
 6. **ChannelData** (`src/model/channeldata.cpp`, `include/model/channeldata.h`) — channel metadata value object
 
 7. **StepDetector** (`src/model/stepdetector.cpp`, `include/model/stepdetector.h`) — *US5.3*; pure (UI-free) logic that parses the `[[Step]]` step-config TOML and detects step plateaus in a raw-count series via derivative/edge detection, building a per-channel `CalibrationProfile`
 
-8. **CalibrationExtractor** (`src/model/calibrationextractor.cpp`, `include/model/calibrationextractor.h`) — *US5.3*; drives a raw extraction over a calibration Ch10 file (reusing the Ch10PacketReader + FrameProcessor pipeline with unit slope / zero offset) and runs StepDetector per channel to build session-only profiles
+8. **CalibrationExtractor** (`src/model/calibrationextractor.cpp`, `include/model/calibrationextractor.h`) — *US5.3*; drives a raw extraction over a calibration Ch10 file (reusing the Ch10PacketReader + FrameProcessor pipeline with unit slope / zero offset) and runs StepDetector per channel to build session-only profiles. Plain C++ (no Qt in header or source): one driver thread runs the reader and worker, waits for both, detects and reports through a `ProcessingEvents` sink; its `Request` carries an `Acquisition` built through `framesync.h`, the same description the main run uses
 
 9. **TomlDocument** (`src/model/tomldocument.cpp`, `include/model/tomldocument.h`) — reads and writes the TOML subset every settings file uses, as plain file I/O. Replaced `TomlConfigHelper`, which implemented the same subset as a custom `QSettings::Format`: QSettings sorts its sections (so `FrameSetup` had to re-parse each file to recover word-map order), merges on write (so callers had to delete the file first), and needs process-wide `registerFormat()` before anything can be read. It is the format only: the frame-sync helpers live with the dialogs that use them, and the receiver-parameters file (scalars + word map) is read and written by `FrameSetup` via `writeWordMap()`. **`StepDetector::parseStepConfig` is a second TOML parser**, for `[[Step]]` array-of-tables files, which this class deliberately does not implement; folding the two together is a known follow-up
 
@@ -3071,7 +4255,7 @@ Order includes in each `.cpp` / `.h` file as follows, with a blank line between 
 
 - Defines source files, headers, resources
 - Configures Qt modules (core, gui, widgets)
-- Sets C++17 standard
+- Sets C++20 standard
 - Includes platform-specific libraries (ws2_32 for Windows sockets)
 
 ### Build Targets
@@ -3157,8 +4341,8 @@ that worktrees also need.
 - Central processing function: `FrameProcessor::process()`, driven per stream from its `ProcessingParams` + `FrameSetup`
 - Drains the stream's `PacketQueue` (fed by the single `Ch10PacketReader`) rather than opening the file itself
 - Accumulates results into an in-memory `ProcessedStreamData` (lock %, accumulated missed frames, and SNR channel series) — there is no CSV-on-disk intermediate
-- One `FrameProcessor` per stream runs on its own `QThread`; `ProcessingCoordinator` owns the lifecycle and tears the threads down when each worker finishes
-- Emits progress, completion, log, and error signals consumed by the coordinator
+- One `FrameProcessor` per stream runs on its own `QThread` (`QThread::create`, no event loop); `ProcessingCoordinator` owns the lifecycle and tears the threads down when each worker finishes
+- Reports log, error, and completion through `ProcessingEvents`; the coordinator's adapter relays them as its own signals, on the UI thread and in order
 
 ### Framesync Lock Statistics Calculation
 
@@ -3242,27 +4426,34 @@ listed here: the fast, no-fixture suites run first, followed by the four heavy
 `TestProcessingCoordinator`, `TestCalibrationExtractor`), which `--fast`/`TMDQ_FAST_TESTS`
 skip for quick local iteration. The source/header files are listed in `tests/tests.pro`.
 
-- **TestChannelData** (`tst_channeldata`) — ChannelData model object tests
-- **TestChapter10Reader** (`tst_chapter10reader`) — Chapter 10 metadata reader: channel discovery, time/PCM channel lists, channel ID resolution against real Ch10 test data
+- **TestChannelData** (`tst_channeldata`) — ChannelData model object tests, including a non-ASCII name round-tripping and copies keeping every field
+- **TestChapter10Reader** (`tst_chapter10reader`) — Chapter 10 metadata reader, on the five committed recordings: exact channel ids, names and TMATS data rates for each; the combo-box index to channel mapping (placeholder at 0, past the end); each way a file fails to load (missing, empty, text, short header, first packet not TMATS, only TMATS, cut inside TMATS) with its exact message and no channels left; a second load replacing the first and a failed open leaving the old channels alone; and a copy of `step_cal` with same-length edits to its TMATS text (no data checksum, header untouched) that reaches what the fixtures do not - the channel-enabled flag (T / Y / 1 either case enable, F / N / 0 / other disable, missing enables, whitespace ignored), the type codes (`PCMIN` / `01` / `09`, `TIMEIN` / `11`, case-sensitive), the name priority (data source id, channel data link name, PCM link name), a non-ASCII name, and the bit rate read like `QString::toDouble`. Written against the `QObject` reader first; validated against 23 mutants
 - **TestConstants** (`tst_constants`) — Verifies all PCMConstants, UIConstants, PlotConstants, AppVersion, and recent files constants (including kMaxPacketBufferSize, kFrameSyncHexPattern)
-- **TestFrameProcessor** (`tst_frameprocessor`) — constructor defaults, abort flag, `derandomizeBitstream` (identity/short and changed/long), invalid time-channel/PCM-channel/file handling, and processing real Ch10 data (receiver-data accumulation, lock-only mode has no channels, monotonic frame-sync errors, slope affects values, shorter period → more samples, calibration round-trip clean steps, off-phase sync after lock-loss not extracted)
-- **TestMainViewModelHelpers** (`tst_mainviewmodel_helpers`) — `MainViewModel::classifyLogMessage()`, the severity policy the View renders but does not decide. The channel-naming cases that used to live here moved to **TestFrameSetup** with the `MainViewModel` forwarders they called: `FrameSetup` is where that naming lives
-- **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration, `channelPrefix()` naming the known channel positions then falling back to `CH<n+1>`, `receiverParameterName()` combining the two, `receiverIndexFromName()` inverting it (0 for a name with no parseable `_RCVR<N>`), and the receiver-parameters file as a whole: the scalars read from the `[Receivers]` block the shipped files actually use (and the older `[Parameters]` keys still accepted), a save/load round trip that carries the word map with them, the default-map fallback when no file was loaded, nothing written when there is no map to write, and the metadata-only file that parses to zero parameters — the contract `tryLoadingFile()`'s two callers depend on
-- **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, the computed Y range and the SNR max override that pins it (the minimum stays automatic, Reset returns it to the data), X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), the left-axis view toggle preserving per-stream selection, and stream-identity regression coverage: two streams sharing a TMATS-derived `streamLabel` but different `streamOrder` must stay independent through reprocess-replace and `renameSeries()`/`recolorSeries()` sibling-sync (pinned after a pre-v2.6.0 cross-contamination bug). Multi-file input: cross-source identity (two different `sourceId`s reusing the same `streamLabel`/`streamOrder` stay independent through reprocess-replace/rename/recolor), time-base re-basing (a later-added source starting earlier shifts existing series right; three successively-earlier sources compound correctly; a later source starting after triggers no shift), the non-overlap warning signal (fires once per newly-arriving non-overlapping source, not for an overlapping range), and `removeSource()` (drops only the target source, re-bases left only when the removed source held the earliest sample, clears all data when the last source is removed, no-ops for an unknown id). US1.1 source view: `setVisibleSource()` isolates a source via `effectiveVisible()` without mutating per-series `visible`, `sourceList()` lists distinct labeled sources, and `exportCsv(path, sourceId)` writes only that source's columns
-- **TestProcessingCoordinator** (`tst_processingcoordinator`) — constructor defaults, `reset()` clears state, cancel-with-no-run no-op, `startProcessing()` empty-returns-false and processing-state emission, plus single-vs-multi-stream throughput benchmarks
-- **TestMainView** (`tst_mainview`) — Main window construction, widget wiring, log routing, dock visibility behavior, and the CSV import routing (`openPath`/`importCsv`, valid/invalid). The batch-apply cases moved to **TestBatchController** with the state machine itself
+- **TestCh10PacketReader** (`tst_ch10packetreader`) — the single-pass reader, tested directly on the committed `step_cal` recording (it had no tests of its own): each way `prepare()` fails has its own exact message; a full run reports its start, no error, progress that never goes backwards and ends at 100, all 1598 packets (6,539,016 payload bytes) and exactly one end marker; an abort is announced, reports 100 and still posts the end marker; a file cut inside a PCM packet, inside a time packet, or with a damaged header checksum reports the right read error and delivers exactly the packets before the damage; a file that ends inside a packet header is a clean end of file and a damaged sync pattern silently costs one packet (both pinned as the behaviour they are); and two streams on one channel each get every packet sharing one payload buffer. Cut points are found by walking the packet headers. Written against the signal-based reader first; validated against eleven mutants
+- **TestFrameProcessor** (`tst_frameprocessor`) — constructor defaults, abort flag, `derandomizeBitstream` (identity/short and changed/long), invalid time-channel/PCM-channel/file handling, and processing real Ch10 data (receiver-data accumulation, lock-only mode has no channels, monotonic frame-sync errors, slope affects values, shorter period → more samples, calibration round-trip clean steps, off-phase sync after lock-loss not extracted); and `reportsExactlyTheseMessages` (10 rows), the exact text and order of everything it reports - success, a non-ASCII stream label, a bounded window, a masked pattern, sync-but-no-frames, cancel, both internal errors, and the all-odd and mixed byte-swap warnings - written against the signals implementation first
+- **TestMainViewModelHelpers** (`tst_mainviewmodel_helpers`) — `MainViewModel::classifyLogMessage()`, the severity policy the View renders but does not decide. The channel-naming cases that used to live here moved to **TestFrameSetup** with the `MainViewModel` forwarders they called: `FrameSetup` is where that naming lives; and `buildStreamJobAttachesCalibrationByWord`, which runs a receiver stream through the private `buildStreamJob` (the test is a friend) and checks which parameters received which profile and the log line that says so; and `buildStreamJob` as a whole: 43 rows of how the sync pattern and mask are decoded (whitespace trimmed, `+` and `0x` accepted, any `-` refused, 64-bit overflow refused, the pattern's length counted in characters), every field a config contributes to the worker's parameters, and each rejection message in the order the checks run
+- **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration, `channelPrefix()` naming the known channel positions then falling back to `CH<n+1>`, `receiverParameterName()` combining the two, `receiverIndexFromName()` inverting it (0 for a name with no parseable `_RCVR<N>`), and the receiver-parameters file as a whole: the scalars read from the `[Receivers]` block the shipped files actually use (and the older `[Parameters]` keys still accepted), a save/load round trip that carries the word map with them, the default-map fallback when no file was loaded, nothing written when there is no map to write, and the metadata-only file that parses to zero parameters — the contract `tryLoadingFile()`'s two callers depend on; and `receiverNameParsingMatchesQStringToInt`, which pins how a hand-typed parameter name parses (the last `_RCVR` token wins, whitespace and a leading `+` tolerated, a second sign / negative / trailing junk / overflow reads as no receiver, a name starting with the token has no channel part) - written against the `QString` implementation first; and `attachCalibrationProfiles`, which attaches a step-calibration profile only when it is valid and its word matches a parameter (an invalid one stays linear; a word the map lacks is ignored), written against the `QObject`/`QHash` version first
+- **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, the computed Y range and the SNR max override that pins it (the minimum stays automatic, Reset returns it to the data), X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), the left-axis view toggle preserving per-stream selection, and stream-identity regression coverage: two streams sharing a TMATS-derived `streamLabel` but different `streamOrder` must stay independent through reprocess-replace and `renameSeries()`/`recolorSeries()` sibling-sync (pinned after a pre-v2.6.0 cross-contamination bug). Multi-file input: cross-source identity (two different `sourceId`s reusing the same `streamLabel`/`streamOrder` stay independent through reprocess-replace/rename/recolor), time-base re-basing (a later-added source starting earlier shifts existing series right; three successively-earlier sources compound correctly; a later source starting after triggers no shift), the non-overlap warning signal (fires once per newly-arriving non-overlapping source, not for an overlapping range), and `removeSource()` (drops only the target source, re-bases left only when the removed source held the earliest sample, clears all data when the last source is removed, no-ops for an unknown id). US1.1 source view: `setVisibleSource()` isolates a source via `effectiveVisible()` without mutating per-series `visible`, `sourceList()` lists distinct labeled sources, and `exportCsv(path, sourceId)` writes only that source's columns; and `aNonAsciiStreamLabelReachesEverySeries`, which pins that a non-ASCII stream label (arriving as UTF-8 from the core) names the lock and missed-frames series, prefixes the SNR series' name, and is what a re-run matches on to replace the stream
+- **TestProcessingCoordinator** (`tst_processingcoordinator`) — constructor defaults, `reset()` clears state, cancel-with-no-run no-op, `startProcessing()` empty-returns-false and processing-state emission, plus single-vs-multi-stream throughput benchmarks; and `workerReportsPrecedeTheResultAndFinishComesLast`, which checks through a real run that the worker's completion line is relayed before the stream's result and `processingFinished` is last; its end-to-end test also checks the progress bar (0 at the start, then 100 reported twice: once by the reader, once on finish); and `aRecordingUnderANonAsciiFolderProcessesEndToEnd`, which runs the committed `step_cal` recording copied under a non-ASCII folder through the whole pipeline
+- **TestMainView** (`tst_mainview`) — Main window construction, widget wiring, log routing, dock visibility behavior, and the CSV import routing (`openPath`/`importCsv`, valid/invalid). The batch-apply cases moved to **TestBatchController** with the state machine itself; and `aFinishedStreamIsLoggedUnderItsLabel`, the log line quoting a finished stream's (non-ASCII) label
 - **TestPlotWidget** (`tst_plotwidget`) — Plot widget construction, null/valid ViewModel connection, dark/light theme application, the movable legend overlay populating from data (hidden until data loads, then one row per visible active-metric series), a shown/resized-window regression case asserting the overlay sizes correctly (not a collapsed frame-only box) after a second rebuild adds more rows — a QScrollArea `widgetResizable` sizeHint staleness bug reproduced and fixed post-review — the SNR legend row showing the short `"CH<id> <ch.name>"` form instead of the full TMATS stream title, the legend row layout reserving a right-side gutter matching the style's scrollbar extent, and each legend row carrying an objectName the overlay stylesheet can target to override the app's global `QWidget { background-color: ... }` theme rule (otherwise every row painted as an opaque chip); plus `exportImage()` writing a PNG/SVG/PDF headlessly (the parameterized image-export entry point extracted for batch apply); and the right-click context menu that replaced the external control rows: it lists every expected top-level item, its data-dependent entries are disabled until data loads, the Plot File submenu is disabled for a single source and switches `visibleSource` for a multi-source run, View Mode reflects and sets the active left-axis metric, `X Axis > Reset Span` / `Y Axes > Reset` clear the X window and both Y overrides, plus two structural guards - wheel-zoom/drag-pan stay enabled (horizontal-only) once data arrives, and **no QComboBox / QSpinBox / QLineEdit / QAbstractButton lives outside the chart** - on-chart overlays are allowed, external control rows are not (the machine-checkable form of "no external controls"); plus the legend toggle (shows/hides the overlay and survives a rebuild, appears only once data is loaded, is parented to the chart, and stays in sync with the context menu's checkable Show Legend item); plus Y axis occupancy - a lock-only plot hides the right axis, an SNR-only plot hides the left, an empty chart keeps the left (hiding both would leave a bare box), and hiding the last *visible* SNR series reclaims the right axis just as never loading one would
 - **TestTmChart** (`tst_tmchart`) - the first-party chart replacing QCustomPlot: series bookkeeping across removals and out-of-range access, mismatched x/y lengths truncated (a draw-time overrun), degenerate/non-finite ranges rejected, X and Y coordinate transforms round-tripping with the correct screen orientation, wheel zoom anchoring the value under the cursor and reporting the new range, interactions inert until enabled, and the shared `renderTo()` export path painting real content while omitting the crosshair/zoom-band overlays (cursor state, not data), and that hiding a Y axis reclaims its margin (the measurable consequence) while leaving the coordinate transforms consistent with the new plot area
 - **TestPlotCustomizationDialog** (`tst_plotcustomizationdialog`) — Customize Plot Series dialog: one Frame Sync Lock checkbox per stream, Select All/None, apply → per-stream lock/missed visibility round-trip to the ViewModel; Receiver SNR tree build (receiver grouping), tri-state group cascade, Select All/None, apply → per-channel SNR visibility round-trip, and the Expand/Collapse All button toggle; plus per-stream rename/recolor (lock tab) and per-channel rename/recolor via pending item roles (SNR tab) applied to the ViewModel on OK, and the single batched `seriesAppearanceChanged` emission (reaches private widgets/slots via a friend declaration, same pattern as TestFrameProcessor)
-- **TestStreamConfigDialog** (`tst_streamconfigdialog`) — Per-stream Configure Streams dialog: stream rows, mode selection, gear setup dialogs, TOML load/save round-trips, "Apply to all" fan-out, the Channel column label (short names shown in full, long TMATS-derived names elided on the right with "..." , left-justified, styled via `channelNameCell` to mimic the Mode combo box's border/fill, and the full name always available via tooltip — which is now the only place a truncated name is recoverable), the Mode combo's left-justified closed-box text (via an editable-but-readonly internal line edit) while selection still tracks correctly, and the table header/separator using theme-QSS object names (`streamHeaderLabel` / `streamHeaderSeparator`) rather than hard-coded inline colors
+- **TestStreamConfigDialog** (`tst_streamconfigdialog`) — Per-stream Configure Streams dialog: stream rows, mode selection, gear setup dialogs, TOML load/save round-trips, "Apply to all" fan-out, the Channel column label (short names shown in full, long TMATS-derived names elided on the right with "..." , left-justified, styled via `channelNameCell` to mimic the Mode combo box's border/fill, and the full name always available via tooltip — which is now the only place a truncated name is recoverable), the Mode combo's left-justified closed-box text (via an editable-but-readonly internal line edit) while selection still tracks correctly, and the table header/separator using theme-QSS object names (`streamHeaderLabel` / `streamHeaderSeparator`) rather than hard-coded inline colors; the Extract Calibration dialog: an unreadable sync or an unopenable recording shown on the status line without extracting, a real `step_cal` extraction through the progress dialog (twelve profiles), byte order / inversion / derandomization each reaching the extraction (the wrong value must visibly fail), and the data rate reaching it (half the rate shows exactly twice the recording length)
 - **TestExportDialog** (`tst_exportdialog`) — Export dialog checkbox-to-field enable logic, export-button validation, and the log-export row defaults/accessors and log-only validation
-- **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US5.3): `[[Step]]` TOML parsing (valid / empty-fails), plateau detection (clean, too-few-fails, extra-plateaus uses last of monotonic run, short-blip doesn't steal a pairing slot, long leading transient doesn't shift pairing, inverted-polarity sweep not reversed, non-monotonic pairing rejected, noisy, settling-at-plateau-start excluded, round-trip exact), the calibration-import resilience cases (the outcome code names the gate that rejected, a compressed out-of-tolerance receiver still calibrates via the relaxed threshold while a healthy one does not relax, noise-split plateaus coalesce instead of severing the sweep, a flat channel reports "flat / no signal" rather than a plateau shortfall, samples pinned at the floor or rail kept out of the noise estimate so live dwells neither split nor shatter, a split dwell far above the noise still paired as one step, railed top steps calibrating the range that stayed in scale while the rail clamps rather than extrapolates, an unconfirmed dwell measured from the dwell grid rather than bridged or shifted, the number of levels the sweep held reported so a short step file can be flagged, and which step file the Extract Calibration dialog preloads), and `interpolateCalibration()` (midpoint, below/above clamping, coincident-raw guard)
+- **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US5.3): `[[Step]]` TOML parsing (valid / empty-fails), plateau detection (clean, too-few-fails, extra-plateaus uses last of monotonic run, short-blip doesn't steal a pairing slot, long leading transient doesn't shift pairing, inverted-polarity sweep not reversed, non-monotonic pairing rejected, noisy, settling-at-plateau-start excluded, round-trip exact), the calibration-import resilience cases (the outcome code names the gate that rejected, a compressed out-of-tolerance receiver still calibrates via the relaxed threshold while a healthy one does not relax, noise-split plateaus coalesce instead of severing the sweep, a flat channel reports "flat / no signal" rather than a plateau shortfall, samples pinned at the floor or rail kept out of the noise estimate so live dwells neither split nor shatter, a split dwell far above the noise still paired as one step, railed top steps calibrating the range that stayed in scale while the rail clamps rather than extrapolates, an unconfirmed dwell measured from the dwell grid rather than bridged or shifted, the number of levels the sweep held reported so a short step file can be flagged, and which step file the Extract Calibration dialog preloads), and `interpolateCalibration()` (midpoint, below/above clamping, coincident-raw guard); and the step-file parser pinned directly, written against the `QString` implementation first: case-insensitive `[[Step]]` header and `db` key, a header with a trailing comment or inner spaces not counting as a step, keys outside a step or in another section ignored, a step with no parseable `db` kept at 0, `QString::toDouble`'s value rules (quotes are NOT stripped), file order with the last `db` winning, the output cleared on every call, UTF-8 BOM / UTF-16 files, a non-ASCII path, both error messages, and `initialStepConfigPath` ignoring a directory
 - **TestSeriesColumnSchema** (`tst_seriescolumnschema`) — the CSV column-header schema (`SeriesColumnSchema`): SNR name and `columnHeader()` formatting, `parseColumnHeader()` classification (lock/missed suffix vs. SNR `"<id> - "` prefix, multi-word stream labels split at the last space, SNR-shape-wins-over-suffix), the unknown→SNR fallback, and the format→parse round trip that keeps `exportCsv` and `CsvSeriesParser` inverses. Multi-file input: source 0 stays unqualified (byte-identical), source 1+ gets a leading `"S<n>| "` qualifier that round-trips through parse for both SNR and Lock/Missed shapes, an unqualified header still defaults to source 0, and a header merely starting with the letter `'S'` isn't misparsed as a qualifier
-- **TestCalibrationExtractor** (`tst_calibrationextractor`) — US5.3 pipeline orchestration (complements TestStepDetector's pure logic): drives the async extraction end to end (reader + FrameProcessor workers → per-channel StepDetector). A bad file (with non-empty steps, so it clears the empty-steps guard) finishes unsuccessfully with a recorded error and no partial state; over `rnrz-l_testfile.ch10`, exactly words 6/7/8 (RCVR3 L/R/C, the only real stepped SNR sweep) build valid non-linear profiles while every other receiver word falls back to linear; over `step_cal, example.ch10` (receivers far out of alignment, its real 11-step 0–60 dB config, the shipped sequential word map), receivers 1, 3, 5 and 6 calibrate with every step paired to its own dwell (0 dB at the pre-sweep level, 60 dB at the top dwell, no split dwell taking a slot), receiver 1 over only the range that stayed in scale because its top two steps sit on the rail (readings hold at 48 dB), receiver 2 reports flat / no signal, and the report names the receivers; plus the pure `summarize()` report (receivers grouped, partial receivers spelled out with reasons, unnamed channels reported by name) and its two "check" prompts - a step file shorter than the recording and a word map that does not match it - each proven on the real recording with the wrong file, and silent on the correct setup; and clips that exceed the recording being reported rather than silently ignored
+- **TestCalibrationExtractor** (`tst_calibrationextractor`) — US5.3 pipeline orchestration (complements TestStepDetector's pure logic): drives the async extraction end to end (reader + FrameProcessor workers → per-channel StepDetector). A bad file (with non-empty steps, so it clears the empty-steps guard) finishes unsuccessfully with a recorded error and no partial state; over `rnrz-l_testfile.ch10`, exactly words 6/7/8 (RCVR3 L/R/C, the only real stepped SNR sweep) build valid non-linear profiles while every other receiver word falls back to linear; over `step_cal, example.ch10` (receivers far out of alignment, its real 11-step 0–60 dB config, the shipped sequential word map), receivers 1, 3, 5 and 6 calibrate with every step paired to its own dwell (0 dB at the pre-sweep level, 60 dB at the top dwell, no split dwell taking a slot), receiver 1 over only the range that stayed in scale because its top two steps sit on the rail (readings hold at 48 dB), receiver 2 reports flat / no signal, and the report names the receivers; plus the pure `summarize()` report (receivers grouped, partial receivers spelled out with reasons, unnamed channels reported by name) and its two "check" prompts - a step file shorter than the recording and a word map that does not match it - each proven on the real recording with the wrong file, and silent on the correct setup; and clips that exceed the recording being reported rather than silently ignored; and `extractionReportsItsProgress`, which checks the extraction's progress reaches the dialog (non-decreasing, ending at 100); and `summarizeProducesExactlyThisReport` (15 scenarios, the **whole** report text each - empty, one receiver, mixed, unnamed, an all-calibrated unnamed group alone, beside a numbered receiver, beside a failure and with a saturated top, non-ASCII names, both "check" sections, a saturated top with exact-half dB values, a relaxed threshold, flat levels, several failure reasons, twelve receivers), `extractionLogsOneLinePerChannelWithData`, and `aNonAsciiChannelNameSurvivesExtractionItsLogAndItsReport` (a real `step_cal` extraction with a word map naming channels with non-ASCII text); the extractor's lifecycle through one `Recorder` helper: failures before anything starts (no steps; a word map that is missing, outside the frame, empty, or too large; an unopenable recording), a cancel from the first report and from another thread, a start while running being ignored, a finished extractor running again, destroying a running one, the end being the last report, a failure being an error and a cancel not, a worker failure reporting its own reason, and the clip-ignored log line
 - **TestStreamConfigSchema** (`tst_streamconfigschema`) — `StreamConfigSchema` round trip for both `StreamMode` variants and the calibration input references (`calCh10Path`/`stepTomlPath`/`clipStartSec`/`clipEndSec`), confirms `calibrationByWord` itself never appears in the serialized JSON (and the `calibration` block is omitted entirely when no non-linear calibration was ever extracted), and `fromJson()` rejecting an object missing required fields while leaving in-class defaults for anything else omitted
 - **TestProcessingTemplateSchema** (`tst_processingtemplateschema`) — processing templates / batch apply: `ProcessingTemplateSchema` round trip for both `StreamMode`s, series appearance, calibration input references, and `timeChannelIndex`; that appearance is omitted when empty; that `calibrationByWord` is never serialized (inherited from `StreamConfigSchema`); and `schemaVersion` accept/reject + malformed-document rejection — no `.ch10` fixture, runs in CI
 - **TestBatchController** (`tst_batchcontroller`) — the Apply Template batch loop (US1.1): `buildTemplate()` capturing a source's configs + time channel + byte order + each series' name/color, `applyAppearance()` mapping a template's saved appearance onto the right series (both moved here from TestMainView, and no longer need a window to run), plus two cases the loop's old home made impractical — a queue whose files have all gone missing drains to `finished()` with both counted as skipped rather than stalling on a reader, and `start()` with nothing matched does not clear the session or announce a run
 - **TestTemplateMatcher** (`tst_templatematcher`) — batch apply channel-ID matching: `templateChannelIds()` collection and `matchFile()` exact-set comparison (pass regardless of order; reject with the right `missing`/`extra` sets on a missing channel, an extra channel, and both) — pure logic, runs in CI
+- **TestPacketQueue** (`tst_packetqueue`) — the bounded reader-to-worker hand-off, tested directly rather than only through the pipeline: FIFO order, every `PacketItem` field surviving (including an embedded NUL in the payload), the producer blocking at exactly the configured depth and resuming after one dequeue, the consumer blocking when empty and resuming after one enqueue, `close()` releasing a blocked producer (`enqueue` returns false) and a blocked consumer (end-of-stream sentinel), a closed queue draining what it already holds before reporting end-of-stream, a non-positive depth falling back to the default of 64, and 20,000 items through a depth-4 queue in order under constant hand-off with a watchdog so a lost wakeup fails instead of hanging the suite. Validated against the original Qt-based queue (must pass) and eight single-defect mutants (every one must fail) - see the changelog. Pure logic, runs in CI
+- **TestIntervalGate** (`tst_intervalgate`) — the progress throttle that replaced `QElapsedTimer` in `Ch10PacketReader::run()`, pinned with injected time points so nothing depends on a sleep: not due before the interval, due at *exactly* the interval (`>=`, not `>`), due long after without `due()` restarting the interval itself, the interval read as milliseconds rather than seconds or microseconds, `reset()` measuring from the reset, sub-millisecond precision agreeing with `QElapsedTimer`'s truncation on every side of the boundary, and a default-constructed gate starting at *now* rather than the clock's epoch (otherwise it is due the instant it exists and throttles nothing). Validated against seven single-defect mutants, every one of which must fail. Pure logic, runs in CI
+- **TestTomlDocument** (`tst_tomldocument`) — the settings-file reader/writer, pinned directly rather than only through `FrameSetup` and the dialogs: sections and keys in file order (not sorted), an empty `[EMPTY]` section still declared, `[[Step]]` read as a literal section named `[Step]`, quote-aware `#` comments, `\"` and `\\` unescaped, a repeated key overwriting, a UTF-8 BOM with CRLF, UTF-16 LE and BE with a BOM, a non-ASCII value saved to and loaded from a folder outside every Western code page, the integer rule (whitespace and `+` tolerated, junk / fraction / overflow / empty return the caller's fallback with `parsed` false), the double rule (including `inf`), `QVariant::toBool()`'s boolean rule (even `no` is true), the exact bytes `save()` writes (top-level keys first, a blank line between sections, CRLF, no BOM), doubles as `%g` with six digits, `save()` truncating rather than merging, and both error paths naming the file. Written against the Qt implementation first; validated against four mutants of the `std` port. Pure logic, runs in CI
+- **TestQtProcessingEvents** (`tst_qtprocessingevents`) — the hand-off from a processing thread to Qt that replaced `FrameProcessor`'s signals: 300 mixed log / error events raised on a worker thread arrive on the target's thread in the order raised with completion last (and the test really did cross threads); UTF-8 messages decode (an accented letter and an em dash); any handler may be missing; events still queued for a destroyed target are dropped, which is what lets the coordinator and extractor die with events in flight. Validated against mutants that deliver directly instead of queued (the run crashes) and that decode as Latin-1. Pure logic, runs in CI; and progress events (101 values from a worker thread arrive on the target's thread in order)
+- **TestTextFormat** (`tst_textformat`) — `formatFixed()`, which reproduces `QString::number(v, 'f', n)` without Qt, checked against Qt itself: the exact ties the report prints (Qt rounds them away from zero, `std::format` to even), every n/64 at 0 to 6 decimals, 20,000 arbitrary doubles from a fixed generator, signs and negative zero, the extremes, and `isExactTie()` seeing only real ties. Pure logic, runs in CI
+- **TestFrameSync** (`tst_framesync`) — the shared decode in `framesync.h`: `parseUnsignedHex` against `QString::toULongLong(16)` on a list of awkward inputs and 40,000 random strings, `resolveFrameSync` (the pattern's length counted in characters, an empty mask meaning every bit, the pattern checked before the mask and the result never half-written), and `applyAcquisition` setting every raw-affecting field and no other. Pure logic, runs in CI
 
 ### Running Tests
 

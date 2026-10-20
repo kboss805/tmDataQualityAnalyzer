@@ -12,7 +12,9 @@
 #ifndef CALIBRATIONPROFILE_H
 #define CALIBRATIONPROFILE_H
 
-#include <QVector>
+#include <vector>
+
+#include "containerutil.h"
 
 /**
  * @brief One expected calibration step, read from the step-config TOML.
@@ -94,8 +96,8 @@ struct CalibrationPoint
  */
 struct CalibrationProfile
 {
-    QVector<CalibrationPoint> points; ///< Measured (rawAvg -> trueDb) points, sorted ascending by rawAvg.
-    bool valid = false;               ///< True if this channel was successfully calibrated.
+    std::vector<CalibrationPoint> points; ///< Measured (rawAvg -> trueDb) points, sorted ascending by rawAvg.
+    bool valid = false;                   ///< True if this channel was successfully calibrated.
 };
 
 /**
@@ -113,8 +115,8 @@ struct CalibrationProfile
  */
 inline double interpolateCalibration(double raw, const CalibrationProfile& profile)
 {
-    const QVector<CalibrationPoint>& pts = profile.points;
-    const int n = pts.size();
+    const std::vector<CalibrationPoint>& pts = profile.points;
+    const int n = intSize(pts);
     if (n == 0)
     {
         return raw;

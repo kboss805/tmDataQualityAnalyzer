@@ -6,8 +6,10 @@
 #ifndef FRAMESETUP_H
 #define FRAMESETUP_H
 
-#include <QHash>
-#include <QObject>
+#include <filesystem>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 #include "calibrationprofile.h"
 #include "constants.h"
@@ -23,7 +25,7 @@
  */
 struct ParameterInfo
 {
-    QString name;               ///< Parameter name (e.g., "L_RCVR1").
+    std::string name;           ///< Parameter name (e.g., "L_RCVR1"), UTF-8.
     int word = -1;              ///< Zero-based word index within the minor frame.
     double slope = 0.0;         ///< Calibration slope (dB per raw count).
     double scale = 0.0;         ///< Calibration offset applied before slope.
@@ -56,13 +58,17 @@ struct ReceiverParams
  * Parameters are read from a TOML file that maps receiver/channel names
  * to word positions within the PCM minor frame. The class also supports
  * saving the current parameter configuration back to a TOML file.
+ *
+ * The text API is UTF-8 `std::string` and paths are `std::filesystem::path` (de-Qt
+ * sweep); callers holding a `QString` convert at their own boundary (`qtbridge.h`).
+ * A plain class, with no Qt: it was a QObject only for parent ownership, which nobody
+ * used (every owner holds it by `shared_ptr` or deletes it itself), and it takes its
+ * calibration profiles in a `std::unordered_map`.
  */
-class FrameSetup : public QObject
+class FrameSetup
 {
-    Q_OBJECT
-
 public:
-    explicit FrameSetup(QObject* parent = nullptr);
+    FrameSetup() = default;
 
     /**
      * @brief Loads the word map from a receiver-parameters TOML file.
@@ -77,7 +83,7 @@ public:
      * word map"). saveReceiverParamsFile() refuses to write such a file in the
      * first place.
      */
-    bool tryLoadingFile(const QString& filename, int num_words_in_minor_frame);
+    bool tryLoadingFile(const std::filesystem::path& filename, int num_words_in_minor_frame);
 
     /// Writes the current parameter list into @p doc as one [Name] section per
     /// parameter, each carrying its 1-based Word. The caller owns saving the doc.
@@ -92,12 +98,12 @@ public:
     /// loaded separately by tryLoadingFile()). A key the file does not carry keeps
     /// its value from @p defaults, so a caller can pass what it is already showing
     /// and have a partial file change only what it actually specifies.
-    static ReceiverParams readReceiverParams(const QString& path,
+    static ReceiverParams readReceiverParams(const std::filesystem::path& path,
                                              const ReceiverParams& defaults = ReceiverParams());
 
     /// Writes a complete receiver-parameters TOML — the scalars plus this setup's
     /// word map. Refuses (returns false) when there is no word map to write.
-    bool writeReceiverParams(const QString& path, const ReceiverParams& params) const;
+    bool writeReceiverParams(const std::filesystem::path& path, const ReceiverParams& params) const;
 
     /// Writes a complete receiver-parameters file the way the Receiver SNR dialog
     /// needs it: the word map comes from @p word_map_source when that names a
@@ -105,11 +111,11 @@ public:
     /// counts — i.e. whichever map the stream would actually process with.
     /// @return false with a reason in @p error if no usable map could be built or
     ///         the file could not be written.
-    static bool saveReceiverParamsFile(const QString& path,
+    static bool saveReceiverParamsFile(const std::filesystem::path& path,
                                        const ReceiverParams& params,
-                                       const QString& word_map_source,
+                                       const std::filesystem::path& word_map_source,
                                        int num_words_in_minor_frame,
-                                       QString& error);
+                                       std::string& error);
 
     int length() const; ///< @return Number of parameters.
 
@@ -122,17 +128,17 @@ public:
     void clearParameters();
 
     /// Appends a parameter with the given name and zero-based word index.
-    void addParameter(const QString& name, int word);
+    void addParameter(const std::string& name, int word);
 
     /// Channel-position prefix for a 0-based channel index: "L"/"R"/"C" for the
     /// known positions, "CH<n+1>" beyond them.
-    static QString channelPrefix(int channel_index);
+    static std::string channelPrefix(int channel_index);
 
     /// Canonical default parameter name "<prefix>_RCVR<receiver+1>" for a 0-based
     /// channel and receiver index. The single source of truth shared by the main
     /// processing run and the calibration extractor so their default word maps
     /// agree on names (a divergence silently misattaches calibration profiles).
-    static QString receiverParameterName(int channel_index, int receiver_index);
+    static std::string receiverParameterName(int channel_index, int receiver_index);
 
     /// Inverse of receiverParameterName(): the 1-based receiver number carried by
     /// a parameter name's "_RCVR<N>" suffix, or 0 when the name carries none.
@@ -141,11 +147,11 @@ public:
     /// name its parameters anything at all, so callers that group by receiver
     /// (the calibration summary) must degrade to listing the names themselves
     /// rather than inventing a receiver number.
-    static int receiverIndexFromName(const QString& name);
+    static int receiverIndexFromName(const std::string& name);
 
     /// The channel-position part of a "<prefix>_RCVR<N>" name ("L", "R", "C", …),
     /// or the whole name when it carries no "_RCVR<N>" suffix.
-    static QString channelPartOfName(const QString& name);
+    static std::string channelPartOfName(const std::string& name);
 
     /// Builds the default receiver word map — NumReceivers x ReceiverChannels
     /// parameters named via receiverParameterName(), assigned sequential words —
@@ -153,7 +159,7 @@ public:
     /// with a base message in @p error if the requested parameters don't fit the
     /// frame (the final word slot is the sync word, hence the strict "<" bound).
     bool buildDefaultReceiverMap(int num_receivers, int receiver_channels,
-                                 int num_words_in_minor_frame, QString& error);
+                                 int num_words_in_minor_frame, std::string& error);
 
     /// Applies the linear voltage→dB calibration (slope/scale) to every parameter
     /// and enables it for output. @p polarity_index 0=positive, 1=negative;
@@ -165,11 +171,11 @@ public:
     /// Attaches non-linear step-calibration profiles (US5.3) by word index; only
     /// profiles flagged valid are attached, others keep their linear slope/scale.
     /// @return how many profiles were attached.
-    int attachCalibrationProfiles(const QHash<int, CalibrationProfile>& by_word);
+    int attachCalibrationProfiles(const std::unordered_map<int, CalibrationProfile>& by_word);
 
 private:
-    static const QStringList kSettingsGroups; ///< Reserved TOML group names to skip.
-    QList<ParameterInfo> m_parameters;        ///< Ordered list of frame parameters.
+    static const std::vector<std::string> kSettingsGroups; ///< Reserved TOML group names to skip.
+    std::vector<ParameterInfo> m_parameters;               ///< Ordered list of frame parameters.
 };
 
 #endif // FRAMESETUP_H

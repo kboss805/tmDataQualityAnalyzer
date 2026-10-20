@@ -2,25 +2,59 @@
  * @file tomldocument.cpp
  * @brief Plain reader/writer for the TOML subset the settings files use.
  *
- * See tomldocument.h for why this is not a QSettings::Format any more.
+ * See tomldocument.h for why this is not a QSettings::Format any more, and for what the
+ * port off QString reproduces. TestTomlDocument pins every behaviour below; it was
+ * written against the Qt implementation first and passed there before this replaced it.
  */
 
 #include "tomldocument.h"
 
-#include <QFile>
-#include <QFileInfo>
-#include <QTextStream>
+#include <algorithm>
+#include <charconv>
+#include <fstream>
+#include <sstream>
+#include <system_error>
+
+#include "textfile.h"
+#include "textparse.h"
 
 namespace {
+
+using textparse::parseDouble;
+using textparse::parseInteger;
+using textparse::trimmed;
+
+bool startsWith(const std::string& s, char c)
+{
+    return !s.empty() && s.front() == c;
+}
+
+bool endsWith(const std::string& s, char c)
+{
+    return !s.empty() && s.back() == c;
+}
+
+std::string asciiLower(std::string s)
+{
+    for (char& c : s)
+    {
+        if (c >= 'A' && c <= 'Z')
+        {
+            c = static_cast<char>(c - 'A' + 'a');
+        }
+    }
+    return s;
+}
 
 /// Removes an unquoted trailing `# comment` from a value.
 ///
 /// Quote-aware: a '#' inside a double-quoted string is part of the value, which
-/// matters because sync patterns and scale values are quoted.
-QString stripInlineComment(const QString& value)
+/// matters because sync patterns and scale values are quoted. Safe on UTF-8: the bytes
+/// of a multi-byte sequence are never ASCII, so they cannot be mistaken for '"' or '#'.
+std::string stripInlineComment(const std::string& value)
 {
     bool in_quote = false;
-    for (int i = 0; i < value.length(); ++i)
+    for (std::size_t i = 0; i < value.size(); ++i)
     {
         if (value[i] == '"')
         {
@@ -28,13 +62,13 @@ QString stripInlineComment(const QString& value)
         }
         else if (!in_quote && value[i] == '#')
         {
-            return value.left(i).trimmed();
+            return trimmed(value.substr(0, i));
         }
     }
     return value;
 }
 
-/// Strips surrounding double quotes and unescapes \\" and \\\\ inside them.
+/// Strips surrounding double quotes and unescapes \" and \\ inside them.
 ///
 /// The unescape is new. The QSettings-format writer escaped both on the way out but
 /// its reader only stripped the surrounding quotes, so a value containing either
@@ -42,26 +76,26 @@ QString stripInlineComment(const QString& value)
 /// hold hex patterns, integers, booleans and a scale - so this corrects a latent
 /// asymmetry rather than changing any real file's meaning. Writing fresh code that
 /// reproduced it on purpose seemed worse.
-QString unquote(const QString& value)
+std::string unquote(const std::string& value)
 {
-    if (value.length() < 2 || !value.startsWith('"') || !value.endsWith('"'))
+    if (value.size() < 2 || !startsWith(value, '"') || !endsWith(value, '"'))
     {
         return value;
     }
 
-    const QString inner = value.mid(1, value.length() - 2);
-    QString out;
-    out.reserve(inner.length());
-    for (int i = 0; i < inner.length(); ++i)
+    const std::string inner = value.substr(1, value.size() - 2);
+    std::string out;
+    out.reserve(inner.size());
+    for (std::size_t i = 0; i < inner.size(); ++i)
     {
-        if (inner[i] == '\\' && i + 1 < inner.length() &&
+        if (inner[i] == '\\' && i + 1 < inner.size() &&
             (inner[i + 1] == '"' || inner[i + 1] == '\\'))
         {
-            out.append(inner[++i]);
+            out += inner[++i];
         }
         else
         {
-            out.append(inner[i]);
+            out += inner[i];
         }
     }
     return out;
@@ -69,24 +103,32 @@ QString unquote(const QString& value)
 
 /// Chooses the TOML representation for a stored value, mirroring what the shipped
 /// files look like: bare for booleans and integers, quoted for anything else.
-QString formatValue(const QString& raw)
+std::string formatValue(const std::string& raw)
 {
-    if (raw == QLatin1String("true") || raw == QLatin1String("false"))
+    if (raw == "true" || raw == "false")
     {
         return raw;
     }
 
-    bool is_int = false;
-    raw.toLongLong(&is_int);
-    if (is_int)
+    long long as_int = 0;
+    if (parseInteger(raw, as_int))
     {
         return raw;
     }
 
-    QString escaped = raw;
-    escaped.replace('\\', QLatin1String("\\\\"));
-    escaped.replace('"', QLatin1String("\\\""));
-    return '"' + escaped + '"';
+    std::string escaped;
+    escaped.reserve(raw.size() + 2);
+    escaped += '"';
+    for (const char c : raw)
+    {
+        if (c == '\\' || c == '"')
+        {
+            escaped += '\\';
+        }
+        escaped += c;
+    }
+    escaped += '"';
+    return escaped;
 }
 
 } // namespace
@@ -95,33 +137,34 @@ QString formatValue(const QString& raw)
 // key handling
 // ---------------------------------------------------------------------------
 
-void TomlDocument::splitKey(const QString& key, QString& section, QString& bare)
+void TomlDocument::splitKey(const std::string& key, std::string& section, std::string& bare)
 {
-    const int slash = key.indexOf('/');
-    if (slash < 0)
+    const std::size_t slash = key.find('/');
+    if (slash == std::string::npos)
     {
         section.clear();
         bare = key;
         return;
     }
-    section = key.left(slash);
-    bare    = key.mid(slash + 1);
+    section = key.substr(0, slash);
+    bare    = key.substr(slash + 1);
 }
 
-void TomlDocument::rememberOrder(const QString& section, const QString& bare)
+void TomlDocument::rememberOrder(const std::string& section, const std::string& bare)
 {
     // Only real sections join the file-order list: sectionsInFileOrder() is walked by
     // FrameSetup to find word-map groups, and an unnamed bucket standing for
     // "top-level keys" is not a group anyone is looking for. save() emits that bucket
     // from m_section_keys directly instead.
-    if (!section.isEmpty() && !m_sections.contains(section))
+    if (!section.empty()
+        && std::find(m_sections.begin(), m_sections.end(), section) == m_sections.end())
     {
-        m_sections.append(section);
+        m_sections.push_back(section);
     }
-    QStringList& keys = m_section_keys[section];
-    if (!keys.contains(bare))
+    std::vector<std::string>& keys = m_section_keys[section];
+    if (std::find(keys.begin(), keys.end(), bare) == keys.end())
     {
-        keys.append(bare);
+        keys.push_back(bare);
     }
 }
 
@@ -129,66 +172,69 @@ void TomlDocument::rememberOrder(const QString& section, const QString& bare)
 // load()
 // ---------------------------------------------------------------------------
 
-TomlDocument TomlDocument::load(const QString& path, QString* error)
+TomlDocument TomlDocument::load(const std::filesystem::path& path, std::string* error)
 {
     TomlDocument doc;
 
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    std::string text;
+    if (!textfile::readText(path, text))
     {
         doc.m_ok = false;
         if (error)
         {
-            *error = QStringLiteral("Could not open '%1'.").arg(QFileInfo(path).fileName());
+            *error = "Could not open '" + textfile::utf8FileName(path) + "'.";
         }
         return doc;
     }
 
-    QTextStream in(&file);
-    QString current_section;
+    std::istringstream in(text);
+    std::string raw_line;
+    std::string current_section;
 
-    while (!in.atEnd())
+    while (std::getline(in, raw_line))
     {
-        const QString line = in.readLine().trimmed();
+        const std::string line = trimmed(raw_line);
 
-        if (line.isEmpty() || line.startsWith('#'))
+        if (line.empty() || startsWith(line, '#'))
         {
             continue;
         }
 
-        if (line.startsWith('[') && line.endsWith(']'))
+        if (startsWith(line, '[') && endsWith(line, ']'))
         {
             // One bracket pair is stripped, exactly as the QSettings format did, so a
             // `[[Step]]` header reads as a section literally named "[Step]". This class
             // does NOT implement array-of-tables; StepDetector::parseStepConfig owns
             // that, and pretending otherwise here would invite a caller to rely on it.
-            current_section = line.mid(1, line.length() - 2).trimmed();
+            current_section = trimmed(line.substr(1, line.size() - 2));
             // A section with no keys still counts as declared: the receiver word map's
             // [EMPTY] placeholders exist precisely so the Word numbering reads as
             // contiguous, and tryLoadingFile() walks this list to find them.
-            if (!current_section.isEmpty() && !doc.m_sections.contains(current_section))
+            if (!current_section.empty()
+                && std::find(doc.m_sections.begin(), doc.m_sections.end(), current_section)
+                       == doc.m_sections.end())
             {
-                doc.m_sections.append(current_section);
+                doc.m_sections.push_back(current_section);
             }
             continue;
         }
 
-        const int eq = line.indexOf('=');
-        if (eq < 0)
+        const std::size_t eq = line.find('=');
+        if (eq == std::string::npos)
         {
             continue;  // malformed line - skipped, as before
         }
 
-        const QString bare  = line.left(eq).trimmed();
-        const QString value = unquote(stripInlineComment(line.mid(eq + 1).trimmed()));
-        const QString compound = current_section.isEmpty()
+        const std::string bare  = trimmed(line.substr(0, eq));
+        const std::string value = unquote(stripInlineComment(trimmed(line.substr(eq + 1))));
+        const std::string compound = current_section.empty()
             ? bare
             : current_section + '/' + bare;
 
         // A repeated section's repeated key overwrites, which is what the QSettings
         // map did too. Only [EMPTY] repeats in practice, and tryLoadingFile() skips it
         // by name, so no value anyone reads is lost this way.
-        doc.m_values.insert(compound, value);
+        doc.m_values[compound] = value;
         doc.rememberOrder(current_section, bare);
     }
 
@@ -199,27 +245,27 @@ TomlDocument TomlDocument::load(const QString& path, QString* error)
 // reading
 // ---------------------------------------------------------------------------
 
-bool TomlDocument::contains(const QString& key) const
+bool TomlDocument::contains(const std::string& key) const
 {
-    return m_values.contains(key);
+    return m_values.find(key) != m_values.end();
 }
 
-QString TomlDocument::string(const QString& key, const QString& fallback) const
+std::string TomlDocument::string(const std::string& key, const std::string& fallback) const
 {
-    const auto it = m_values.constFind(key);
-    return it == m_values.constEnd() ? fallback : *it;
+    const auto it = m_values.find(key);
+    return it == m_values.end() ? fallback : it->second;
 }
 
-int TomlDocument::integer(const QString& key, int fallback, bool* parsed) const
+int TomlDocument::integer(const std::string& key, int fallback, bool* parsed) const
 {
-    const auto it = m_values.constFind(key);
-    if (it == m_values.constEnd())
+    const auto it = m_values.find(key);
+    if (it == m_values.end())
     {
         if (parsed) { *parsed = false; }
         return fallback;
     }
-    bool ok = false;
-    const int v = it->toInt(&ok);
+    int v = 0;
+    const bool ok = parseInteger(it->second, v);
     if (parsed) { *parsed = ok; }
     // One DELIBERATE difference from the QSettings implementation: a present but
     // unparseable value returns the caller's fallback, where QVariant::toInt() returned
@@ -228,22 +274,21 @@ int TomlDocument::integer(const QString& key, int fallback, bool* parsed) const
     return ok ? v : fallback;
 }
 
-double TomlDocument::number(const QString& key, double fallback) const
+double TomlDocument::number(const std::string& key, double fallback) const
 {
-    const auto it = m_values.constFind(key);
-    if (it == m_values.constEnd())
+    const auto it = m_values.find(key);
+    if (it == m_values.end())
     {
         return fallback;
     }
-    bool ok = false;
-    const double v = it->toDouble(&ok);
-    return ok ? v : fallback;
+    double v = 0.0;
+    return parseDouble(it->second, v) ? v : fallback;
 }
 
-bool TomlDocument::boolean(const QString& key, bool fallback) const
+bool TomlDocument::boolean(const std::string& key, bool fallback) const
 {
-    const auto it = m_values.constFind(key);
-    if (it == m_values.constEnd())
+    const auto it = m_values.find(key);
+    if (it == m_values.end())
     {
         return fallback;
     }
@@ -253,67 +298,79 @@ bool TomlDocument::boolean(const QString& key, bool fallback) const
     // refactor cannot change how any existing file reads. A stricter rule (unknown
     // text falls back instead of reading as true) would be an improvement, but it is
     // a separate decision from moving off QSettings.
-    const QString v = it->trimmed().toLower();
-    return !(v.isEmpty() || v == QLatin1String("0") || v == QLatin1String("false"));
+    const std::string v = asciiLower(trimmed(it->second));
+    return !(v.empty() || v == "0" || v == "false");
 }
 
 // ---------------------------------------------------------------------------
 // writing
 // ---------------------------------------------------------------------------
 
-void TomlDocument::setValue(const QString& key, const QString& value)
+void TomlDocument::setValue(const std::string& key, const std::string& value)
 {
-    QString section, bare;
+    std::string section, bare;
     splitKey(key, section, bare);
-    m_values.insert(key, value);
+    m_values[key] = value;
     rememberOrder(section, bare);
 }
 
-void TomlDocument::setValue(const QString& key, int value)
+void TomlDocument::setValue(const std::string& key, int value)
 {
-    setValue(key, QString::number(value));
+    setValue(key, std::to_string(value));
 }
 
-void TomlDocument::setValue(const QString& key, double value)
+void TomlDocument::setValue(const std::string& key, double value)
 {
-    setValue(key, QString::number(value));
+    // QString::number(double)'s spelling: %g with six significant digits, so 3.0 is
+    // "3" (and is then written bare, like an integer), 0.00001 is "1e-05".
+    char buf[64];
+    const auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), value,
+                                         std::chars_format::general, 6);
+    setValue(key, ec == std::errc() ? std::string(buf, ptr) : std::string("0"));
 }
 
-void TomlDocument::setValue(const QString& key, bool value)
+void TomlDocument::setValue(const std::string& key, bool value)
 {
-    setValue(key, value ? QStringLiteral("true") : QStringLiteral("false"));
+    setValue(key, std::string(value ? "true" : "false"));
 }
 
-bool TomlDocument::save(const QString& path, QString* error) const
+bool TomlDocument::save(const std::filesystem::path& path, std::string* error) const
 {
     // Truncate rather than merge. The QSettings implementation merged into whatever
     // the file already held, so its callers had to QFile::remove() first or an old
     // word map survived beside the new one.
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
+    //
+    // Text mode on purpose: the CRT writes each '\n' as CRLF, which is what the
+    // QIODevice::Text writer produced and what the shipped files use.
+    std::ofstream out(path, std::ios::out | std::ios::trunc);
+    if (!out.is_open())
     {
         if (error)
         {
-            *error = QStringLiteral("Could not write '%1'.").arg(QFileInfo(path).fileName());
+            *error = "Could not write '" + textfile::utf8FileName(path) + "'.";
         }
         return false;
     }
 
-    QTextStream out(&file);
     bool first = true;
+    auto valueOf = [this](const std::string& compound) -> const std::string& {
+        static const std::string empty;
+        const auto it = m_values.find(compound);
+        return it == m_values.end() ? empty : it->second;
+    };
 
     // Top-level keys first, with no header, so they stay top-level on re-read.
-    const QStringList top_level = m_section_keys.value(QString());
-    if (!top_level.isEmpty())
+    const auto top = m_section_keys.find(std::string());
+    if (top != m_section_keys.end() && !top->second.empty())
     {
-        for (const QString& bare : top_level)
+        for (const std::string& bare : top->second)
         {
-            out << bare << " = " << formatValue(m_values.value(bare)) << "\n";
+            out << bare << " = " << formatValue(valueOf(bare)) << "\n";
         }
         first = false;
     }
 
-    for (const QString& section : m_sections)
+    for (const std::string& section : m_sections)
     {
         if (!first)
         {
@@ -322,21 +379,23 @@ bool TomlDocument::save(const QString& path, QString* error) const
         first = false;
 
         out << '[' << section << "]\n";
-        for (const QString& bare : m_section_keys.value(section))
+        const auto keys = m_section_keys.find(section);
+        if (keys == m_section_keys.end())
         {
-            out << bare << " = " << formatValue(m_values.value(section + '/' + bare)) << "\n";
+            continue;
+        }
+        for (const std::string& bare : keys->second)
+        {
+            out << bare << " = " << formatValue(valueOf(section + '/' + bare)) << "\n";
         }
     }
 
-    out.flush();
-    file.close();
-
-    if (file.error() != QFile::NoError)
+    out.close();
+    if (out.fail())
     {
         if (error)
         {
-            *error = QStringLiteral("Error writing '%1': %2")
-                        .arg(QFileInfo(path).fileName(), file.errorString());
+            *error = "Error writing '" + textfile::utf8FileName(path) + "'.";
         }
         return false;
     }

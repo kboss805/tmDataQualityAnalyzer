@@ -17,8 +17,9 @@
 #ifndef STEPDETECTOR_H
 #define STEPDETECTOR_H
 
-#include <QString>
-#include <QVector>
+#include <filesystem>
+#include <string>
+#include <vector>
 
 #include "calibrationprofile.h"
 
@@ -52,7 +53,7 @@ public:
         /// "found 12 plateaus but no sweep" can only be understood by seeing
         /// whether those 12 levels are 8 real steps plus 4 noise splits, or a
         /// genuine reversal.
-        QVector<double> plateauLevels;
+        std::vector<double> plateauLevels;
         /// True when the sweep ran off an end of the converter and the railed
         /// dwells were dropped: the profile covers the steps below them, and
         /// interpolateCalibration() clamps everything above to the top step that
@@ -62,7 +63,7 @@ public:
         bool saturated = false;
         /// dB of every step no measured level could be paired with: the railed
         /// ones, plus any dwell noise shattered into runs too short to confirm.
-        QVector<double> unresolvedDb;
+        std::vector<double> unresolvedDb;
         /// Levels in the monotonic run the sweep was taken from. More than the step
         /// file's count means leading levels were set aside as lead-in; more than one
         /// extra (CalibrationConstants::kMaxLeadInLevels) suggests the step file is
@@ -73,17 +74,21 @@ public:
     /**
      * @brief Parses an `[[Step]]` array-of-tables step-config TOML file.
      *
-     * The custom QSettings TOML format does not support arrays, so this is a
-     * dedicated line parser. Each `[[Step]]` table must provide `db`.
+     * `TomlDocument` deliberately does not implement arrays, so this is a dedicated line
+     * parser. It reads the file through the same `textfile` helpers, so a BOM or UTF-16 is
+     * handled alike. Each `[[Step]]` table must provide `db`. The header and the key are
+     * matched without regard to case; the header must be exactly `[[Step]]` (a trailing
+     * comment on it means it is not a step header); a value that is not a bare number is
+     * skipped and leaves the step at 0. `TestStepDetector` pins each of these.
      *
      * @param[in]  path  Path to the step-config TOML file.
      * @param[out] out   Parsed steps, in file order.
-     * @param[out] error Human-readable error message on failure.
+     * @param[out] error Human-readable error message on failure (UTF-8).
      * @return true if at least one valid step was parsed.
      */
-    static bool parseStepConfig(const QString& path,
-                                QVector<StepDefinition>& out,
-                                QString& error);
+    static bool parseStepConfig(const std::filesystem::path& path,
+                                std::vector<StepDefinition>& out,
+                                std::string& error);
 
     /**
      * @brief The step-config TOML the Extract Calibration dialog opens with.
@@ -97,8 +102,11 @@ public:
      * @param[in] preferred The stream's previous step file; may be empty.
      * @return @p preferred if it names an existing file; else
      *         `<appRoot>/settings/rcvr_cals/default.toml` if that exists; else empty.
+     *         UTF-8 in and out, and a plain string rather than a path so the displayed
+     *         form keeps its forward slashes.
      */
-    static QString initialStepConfigPath(const QString& appRoot, const QString& preferred);
+    static std::string initialStepConfigPath(const std::string& appRoot,
+                                             const std::string& preferred);
 
     /**
      * @brief Detects confirmed step plateaus in @p rawValues and builds a
@@ -119,9 +127,9 @@ public:
      * @param[in] steps           Expected steps from the step-config TOML.
      * @return Detection result; Result::profile.valid is false on failure.
      */
-    static Result detect(const QVector<double>& rawValues,
+    static Result detect(const std::vector<double>& rawValues,
                          double samplePeriodSec,
-                         const QVector<StepDefinition>& steps);
+                         const std::vector<StepDefinition>& steps);
 };
 
 #endif // STEPDETECTOR_H

@@ -21,3 +21,25 @@
 # with zero effect on application code.
 QMAKE_CFLAGS_WARN_ON =
 QMAKE_CFLAGS += /w
+
+# ---------------------------------------------------------------------------
+# Qt's own headers are third party too.
+#
+# Qt 6.12 deprecated QCoreApplication::compressEvent, and QGuiApplication overrides
+# it — so qguiapplication.h(169) emits C4996 for EVERY translation unit that includes
+# <QGuiApplication>, 13 of them in the app. We never call compressEvent; there is no
+# fix available in our code, only suppression. And CI's gate matches
+# 'warning [A-Z]\d+', so a clean build cannot go green while they are visible.
+#
+# This is NOT /wd4996. That flag lived in this file, suppressed deprecation warnings
+# for APPLICATION code as collateral, and was deliberately removed in v2.9.0 (see the
+# note above). Re-adding it would undo that.
+#
+# /external: is MSVC's purpose-built mechanism instead. It suppresses warnings whose
+# LOCATION is an external header while leaving our own files fully warned — and a
+# deprecated API called from our code is reported at OUR call site, so those keep
+# warning exactly as v2.9.0 intended. anglebrackets covers Qt, the CRT and the Windows
+# SDK in one rule; every first-party header in this project is quote-included.
+#
+# Stable since VS2019 16.10 (no /experimental: needed); this toolchain is 19.51.
+QMAKE_CXXFLAGS += /external:anglebrackets /external:W0

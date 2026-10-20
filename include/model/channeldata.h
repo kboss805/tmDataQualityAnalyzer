@@ -8,13 +8,14 @@
 #ifndef CHANNELDATA_H
 #define CHANNELDATA_H
 
-#include <QString>
+#include <string>
 
 /**
  * @brief Stores metadata for one data channel found in a Chapter 10 file.
  *
  * Each channel has an ID, a type (e.g., "TIMEIN" or "PCMIN"), a human-readable
- * name from the TMATS record, and a packet count.
+ * name from the TMATS record, and a packet count. Text is UTF-8 `std::string`;
+ * the layers that show it convert at their own boundary.
  */
 class ChannelData
 {
@@ -27,23 +28,23 @@ public:
     ChannelData(ChannelData&&) = default;
     ChannelData& operator=(ChannelData&&) = default;
 
-    int channelID() const;       ///< @return The channel identifier.
-    QString channelType() const; ///< @return The TMATS channel type string.
-    QString channelName() const; ///< @return The human-readable channel name.
-    int channelCount() const;    ///< @return Number of packets seen for this channel.
+    int channelID() const;                   ///< @return The channel identifier.
+    const std::string& channelType() const;  ///< @return The TMATS channel type string.
+    const std::string& channelName() const;  ///< @return The human-readable channel name.
+    int channelCount() const;                ///< @return Number of packets seen for this channel.
 
     /// @param[in] channel_type TMATS channel type (e.g., "PCMIN").
-    void setChannelType(const QString& channel_type);
+    void setChannelType(const std::string& channel_type);
     /// @param[in] channel_name Human-readable name from the TMATS data source.
-    void setChannelName(const QString& channel_name);
+    void setChannelName(const std::string& channel_name);
     /// Increments the packet count by one.
     void incrementChannelCount();
 
 private:
-    int m_channel_id;        ///< Numeric channel identifier.
-    QString m_channel_type;  ///< TMATS channel type string.
-    QString m_channel_name;  ///< Human-readable channel name.
-    int m_channel_count;     ///< Number of data packets observed.
+    int m_channel_id;            ///< Numeric channel identifier.
+    std::string m_channel_type;  ///< TMATS channel type string.
+    std::string m_channel_name;  ///< Human-readable channel name.
+    int m_channel_count;         ///< Number of data packets observed.
 };
 
 #endif // CHANNELDATA_H

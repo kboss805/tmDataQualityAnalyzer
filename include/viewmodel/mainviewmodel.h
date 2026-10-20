@@ -33,6 +33,8 @@ class MainViewModel : public QObject
 {
     Q_OBJECT
 
+    friend class TestMainViewModelHelpers;   ///< Reaches buildStreamJob().
+
     Q_PROPERTY(QString inputFilename READ inputFilename NOTIFY inputFilenameChanged)
     Q_PROPERTY(QStringList timeChannelList READ timeChannelList NOTIFY channelListsChanged)
     Q_PROPERTY(QStringList pcmChannelList READ pcmChannelList NOTIFY channelListsChanged)

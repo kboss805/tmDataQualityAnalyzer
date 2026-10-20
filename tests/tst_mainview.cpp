@@ -5,6 +5,7 @@
 
 #include <QStyleHints>
 #include <QGuiApplication>
+#include "seriescolumnschema.h"
 #include "tst_mainview.h"
 
 #include <QColor>
@@ -86,7 +87,7 @@ void TestMainView::openPathImportsCsv()
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     const QString path = dir.filePath("routed.csv");
-    writeCsv(path, QString(PlotConstants::kCsvTimeHeader) + ",Stream1 Lock (%)\n"
+    writeCsv(path, QString(SeriesColumnSchema::kTimeHeader) + ",Stream1 Lock (%)\n"
                    "001:00:00:00.000,100.0\n"
                    "001:00:00:01.000,95.0\n");
 
@@ -104,7 +105,7 @@ void TestMainView::importValidCsvPopulatesPlot()
 
     // A minimal file in the app's own export format: the combined-time column
     // plus one Frame Sync Lock series and one Receiver SNR series.
-    writeCsv(path, QString(PlotConstants::kCsvTimeHeader) + ",Stream1 Lock (%),L_RCVR1\n"
+    writeCsv(path, QString(SeriesColumnSchema::kTimeHeader) + ",Stream1 Lock (%),L_RCVR1\n"
                    "001:00:00:00.000,100.0,3.5\n"
                    "001:00:00:01.000,99.5,3.6\n"
                    "001:00:00:02.000,98.0,3.7\n");
@@ -342,6 +343,29 @@ void TestMainView::menuSectionHeadersSurviveTheStylesheet()
     QCOMPARE(headers, QStringList({ "Process", "Import/Export", "Settings" }));
 
     qApp->setStyleSheet(saved);
+}
+
+void TestMainView::aFinishedStreamIsLoggedUnderItsLabel()
+{
+    // The result carries its label as UTF-8 text; the log line quoting it is built where
+    // that text meets Qt, so a non-ASCII label is the case that shows a wrong decoding.
+    MainView view;
+
+    ProcessedStreamData d;
+    d.streamLabel  = QString(QStringLiteral("R") + QChar(0x00E9) + QStringLiteral("cepteur ")
+                             + QChar(0x03A9)).toStdString();
+    d.pcmChannelId = 7;
+    d.mode         = StreamMode::FrameSyncLockStats;
+    d.timesSec     = { 1000000.0, 1000001.0, 1000002.0 };
+    d.lockPercent  = { 90.0, 95.0, 100.0 };
+    d.accumulatedMissedFrames = { 0.0, 0.0, 1.0 };
+    view.onStreamProcessed(d);
+
+    const QString expected = QStringLiteral("  R") + QChar(0x00E9) + QStringLiteral("cepteur ")
+                             + QChar(0x03A9) + QStringLiteral(": 3 samples, 0 channel(s)");
+    const QString shown = view.m_log_preview->toPlainText();
+    QVERIFY2(shown.contains(expected),
+             qPrintable(QStringLiteral("log reads: %1").arg(shown)));
 }
 
 void TestMainView::logPreservesMultiLineMessages()

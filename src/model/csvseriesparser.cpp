@@ -42,7 +42,7 @@ CsvParseResult CsvSeriesParser::parse(const QString& filepath)
     // Reject anything that isn't this app's export format (e.g. the legacy
     // "Day,Time,..." layout), so an unrecognized file fails cleanly rather than
     // being mis-parsed into garbage series.
-    if (columns[0].trimmed() != QLatin1String(PlotConstants::kCsvTimeHeader))
+    if (columns[0].trimmed() != QLatin1String(SeriesColumnSchema::kTimeHeader))
     {
         return result;
     }

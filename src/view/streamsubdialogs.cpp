@@ -10,6 +10,8 @@
 
 #include "streamsubdialogs.h"
 
+#include <memory>
+
 #include <QDir>
 #include <QEventLoop>
 #include <QFileDialog>
@@ -27,7 +29,11 @@
 #include <QSettings>
 #include <QVBoxLayout>
 
+#include "containerutil.h"
 #include "framesetup.h"
+#include "framesync.h"
+#include "qtbridge.h"
+#include "qtprocessingevents.h"
 #include "tomldocument.h"
 
 namespace {
@@ -225,13 +231,13 @@ void loadFrameSyncFromToml(const QString& filename,
                            QCheckBox* randomizedBox)
 {
     toml_dir = QFileInfo(filename).absolutePath();
-    const TomlDocument cfg = TomlDocument::load(filename);
+    const TomlDocument cfg = TomlDocument::load(toFsPath(filename));
 
-    QString sync = cfg.string("Frame/FrameSync");
+    QString sync = QString::fromStdString(cfg.string("Frame/FrameSync"));
     if (!sync.isEmpty())
         syncEdit->setText(sync.toUpper());
 
-    QString mask = cfg.string("Frame/FrameSyncMask");
+    QString mask = QString::fromStdString(cfg.string("Frame/FrameSyncMask"));
     if (!mask.isEmpty())
         maskEdit->setText(mask.toUpper());
 
@@ -273,12 +279,12 @@ void saveFrameSyncToToml(const QString& filename,
 {
     toml_dir = QFileInfo(filename).absolutePath();
     TomlDocument cfg;
-    cfg.setValue("Frame/FrameSync",     syncPattern);
-    cfg.setValue("Frame/FrameSyncMask", syncMask);
+    cfg.setValue("Frame/FrameSync",     syncPattern.toStdString());
+    cfg.setValue("Frame/FrameSyncMask", syncMask.toStdString());
     cfg.setValue("Frame/BitsPerFrame",  bitsPerFrame);
     cfg.setValue("Frame/Inverted",      inverted);
     cfg.setValue("Frame/Randomized",    randomized);
-    cfg.save(filename);
+    cfg.save(toFsPath(filename));
 }
 
 /// Sizes an icon-only button so its SVG icon fills the button, with a
@@ -299,11 +305,11 @@ ReceiverFrameDefaults loadReceiverFrameDefaults(const QString& app_root)
     if (!QFileInfo::exists(path))
         return d;
 
-    const TomlDocument cfg = TomlDocument::load(path);
-    const QString sync = cfg.string("Frame/FrameSync");
+    const TomlDocument cfg = TomlDocument::load(toFsPath(path));
+    const QString sync = QString::fromStdString(cfg.string("Frame/FrameSync"));
     if (!sync.isEmpty())
         d.pattern = sync.toUpper();
-    const QString mask = cfg.string("Frame/FrameSyncMask");
+    const QString mask = QString::fromStdString(cfg.string("Frame/FrameSyncMask"));
     if (!mask.isEmpty())
         d.mask = mask.toUpper();
     const int bits = cfg.integer("Frame/BitsPerFrame", 0);
@@ -442,13 +448,13 @@ FrameLockSetupDialog::FrameLockSetupDialog(const StreamConfig& cfg,
 // CalibrationSetupDialog
 // --------------------------------------------------------------------------
 
-CalibrationSetupDialog::CalibrationSetupDialog(const CalibrationExtractor::Request& baseRequest,
+CalibrationSetupDialog::CalibrationSetupDialog(const Base& base,
                            const QString& tomlDir,
                            const QString& appRoot,
                            const QString& initialStepPath,
                            QWidget* parent)
     : QDialog(parent)
-    , m_base_request(baseRequest)
+    , m_base(base)
     , m_toml_dir(tomlDir)
     , m_app_root(appRoot)
 {
@@ -544,8 +550,8 @@ CalibrationSetupDialog::CalibrationSetupDialog(const CalibrationExtractor::Reque
     // loaded. The status says it was loaded automatically: a step file that
     // does not match the recording still calibrates, just wrongly, so the
     // operator must be able to see which file is in play without browsing.
-    const QString initialStep =
-        StepDetector::initialStepConfigPath(m_app_root, initialStepPath);
+    const QString initialStep = QString::fromStdString(StepDetector::initialStepConfigPath(
+        m_app_root.toStdString(), initialStepPath.toStdString()));
     if (!initialStep.isEmpty())
     {
         loadStepFile(initialStep, /*automatic=*/true);
@@ -595,9 +601,9 @@ void CalibrationSetupDialog::loadStepFile(const QString& path, bool automatic)
     m_step_path = path;
     m_step_path_label->setText(QFileInfo(path).fileName());
 
-    QVector<StepDefinition> steps;
-    QString error;
-    if (StepDetector::parseStepConfig(path, steps, error))
+    std::vector<StepDefinition> steps;
+    std::string error;
+    if (StepDetector::parseStepConfig(toFsPath(path), steps, error))
     {
         m_steps  = steps;
         m_step_ok = true;
@@ -610,7 +616,7 @@ void CalibrationSetupDialog::loadStepFile(const QString& path, bool automatic)
     {
         m_steps.clear();
         m_step_ok = false;
-        setStatus(m_step_status, Fail, error);
+        setStatus(m_step_status, Fail, QString::fromStdString(error));
     }
     updateOk();
     maybeRunExtraction();
@@ -618,7 +624,7 @@ void CalibrationSetupDialog::loadStepFile(const QString& path, bool automatic)
 
 void CalibrationSetupDialog::onBrowseCal()
 {
-    if (m_base_request.sync.pattern.trimmed().isEmpty())
+    if (m_base.sync.pattern.trimmed().isEmpty())
     {
         QMessageBox::warning(this, tr("Missing Frame Sync"),
             tr("Set a frame sync pattern before loading the calibration file."));
@@ -663,27 +669,60 @@ void CalibrationSetupDialog::maybeRunExtraction()
 
     // Start from the caller-supplied acquisition/receiver fields and add the
     // cal file, parsed steps, and clip seconds the dialog collected.
-    CalibrationExtractor::Request req = m_base_request;
-    req.calFilename        = m_cal_path;
-    req.steps              = m_steps;
-    req.clipStartSec       = m_clip_start ? m_clip_start->value() : 0.0;
-    req.clipEndSec         = m_clip_end ? m_clip_end->value() : 0.0;
+    CalibrationExtractor::Request req;
+    req.calFilename      = toFsPath(m_cal_path);
+    req.timeChannelId    = m_base.timeChannelId;
+    req.pcmChannelId     = m_base.pcmChannelId;
+    req.numReceivers     = m_base.numReceivers;
+    req.receiverChannels = m_base.receiverChannels;
+    req.steps            = m_steps;
+    req.clipStartSec     = m_clip_start ? m_clip_start->value() : 0.0;
+    req.clipEndSec       = m_clip_end ? m_clip_end->value() : 0.0;
+
+    // The sync text is decoded the way the main run decodes it (framesync.h), so the extraction reads
+    // the same bitstream. A field that cannot be read is shown here, before anything starts.
+    Acquisition& acquisition = req.acquisition;
+    switch (resolveFrameSync(m_base.sync.pattern.toStdString(), m_base.sync.mask.toStdString(),
+                             acquisition.sync))
+    {
+        case FrameSyncError::None:
+            break;
+        case FrameSyncError::PatternEmpty:
+        case FrameSyncError::PatternInvalid:
+            setStatus(m_cal_status, Fail,
+                      QString("Invalid frame sync pattern '%1'.").arg(m_base.sync.pattern));
+            updateOk();
+            return;
+        case FrameSyncError::MaskInvalid:
+            setStatus(m_cal_status, Fail,
+                      QString("Invalid frame sync mask '%1'.").arg(m_base.sync.mask));
+            updateOk();
+            return;
+    }
+    acquisition.bitsInMinorFrame = m_base.sync.bitsInMinorFrame;
+    acquisition.randomized       = m_base.sync.randomized;
+    acquisition.inverted         = m_base.sync.inverted;
+    acquisition.dataRateMbps     = m_base.sync.dataRateMbps;
+    acquisition.swapBytes        = m_base.swapBytes;
+
     // Resolve the word map the SAME way the main processing run does
     // (mainviewmodel buildJob): when the user hasn't picked an explicit
     // Receiver Parameters file, fall back to the shipped default.toml rather
     // than letting the extractor synthesize a sequential grid. The two passes
     // MUST agree on word indices, because the resulting profiles are matched
-    // to plot channels by word — a divergent map silently misattaches every
+    // to plot channels by word - a divergent map silently misattaches every
     // profile and the plot falls back to linear calibration.
-    if (req.receiverParamsToml.isEmpty())
+    QString receiver_params = m_base.receiverParamsToml;
+    if (receiver_params.isEmpty())
     {
         const QString defaultRcvrParams = m_app_root + "/" + UIConstants::kSettingsDirName +
             "/" + UIConstants::kReceiverParamsDirName + "/" + UIConstants::kDefaultTomlFilename;
         if (QFileInfo::exists(defaultRcvrParams))
         {
-            req.receiverParamsToml = defaultRcvrParams;
+            receiver_params = defaultRcvrParams;
         }
     }
+    req.receiverParamsToml = toFsPath(receiver_params);
 
     CalibrationExtractor extractor;
     QProgressDialog progress(tr("Processing calibration file…"), tr("Cancel"),
@@ -693,8 +732,6 @@ void CalibrationSetupDialog::maybeRunExtraction()
     progress.setAutoClose(false);
     progress.setAutoReset(false);
 
-    connect(&extractor, &CalibrationExtractor::progressChanged,
-            &progress, &QProgressDialog::setValue);
     connect(&progress, &QProgressDialog::canceled, this, [&]() {
         progress.setLabelText(tr("Cancelling…"));
         progress.setCancelButton(nullptr);
@@ -703,20 +740,28 @@ void CalibrationSetupDialog::maybeRunExtraction()
 
     QEventLoop loop;
     bool success = false;
-    bool finishedAlready = false;
+    bool finished = false;
     QString summary;
-    connect(&extractor, &CalibrationExtractor::finished, this,
-            [&](bool ok, const QString& msg) {
-                success = ok;
-                summary = msg;
-                finishedAlready = true;
-                loop.quit();
-            });
+    // Delivered to this dialog's thread in the order the extraction raised them, the end last. A
+    // modal progress dialog pumps events itself, so the end can be handled before the loop below
+    // starts; the flag is what tells it there is nothing left to wait for.
+    auto events = std::make_shared<QtProcessingEvents>(
+        this, nullptr, nullptr,
+        [&](bool ok) {
+            success  = ok;
+            summary  = QString::fromStdString(extractor.summary());
+            finished = true;
+            loop.quit();
+        },
+        [&](int percent) { progress.setValue(percent); });
 
-    extractor.start(req);
-    if (!finishedAlready)
+    extractor.start(req, events);
+    if (extractor.running())
     {
         progress.show();
+    }
+    if (!finished)
+    {
         loop.exec();
     }
     progress.close();
@@ -740,8 +785,8 @@ void CalibrationSetupDialog::maybeRunExtraction()
     // Built here, while the per-channel outcomes are still in hand:
     // m_calibration_by_word keeps only the successes (keyed by word), so it
     // cannot say which receivers fell back or why once the extractor is gone.
-    m_calibration_report = CalibrationExtractor::summarize(extractor.results(),
-                                                          m_steps.size());
+    m_calibration_report = QString::fromStdString(
+        CalibrationExtractor::summarize(extractor.results(), intSize(m_steps)));
 
     m_cal_ok = (valid > 0);
     if (extractor.clipIgnored())
@@ -946,7 +991,7 @@ ReceiverSNRDialog::ReceiverSNRDialog(const StreamConfig& cfg,
             current.receiverChannels = m_receiver_channels->value();
 
             const ReceiverParams params =
-                FrameSetup::readReceiverParams(filename, current);
+                FrameSetup::readReceiverParams(toFsPath(filename), current);
             m_polarity->setCurrentIndex(params.polarityIndex);
             m_slope->setCurrentIndex(params.slopeIndex);
             m_scale->setValue(params.scaleDdBPerV);
@@ -972,12 +1017,13 @@ ReceiverSNRDialog::ReceiverSNRDialog(const StreamConfig& cfg,
             // rejected for having no parameters, so the word map goes with
             // them: the one this stream loaded, or the default map for these
             // counts. Which map that is, is the Model's rule, not the dialog's.
-            QString error;
+            std::string error;
             if (!FrameSetup::saveReceiverParamsFile(
-                    filename, params, m_receiver_params_toml,
+                    toFsPath(filename), params, toFsPath(m_receiver_params_toml),
                     FrameSetup::wordsInMinorFrame(m_fs.bitsPerFrame->value()), error))
             {
-                QMessageBox::warning(this, tr("Save Receiver Parameters"), error);
+                QMessageBox::warning(this, tr("Save Receiver Parameters"),
+                                     QString::fromStdString(error));
             }
         });
 
@@ -1052,7 +1098,7 @@ void ReceiverSNRDialog::onExtractCalibration()
         return;
     }
 
-    CalibrationExtractor::Request base;
+    CalibrationSetupDialog::Base base;
     base.timeChannelId      = m_time_channel_id;
     base.pcmChannelId       = m_pcm_channel_id;
     base.sync               = frameSyncParams();

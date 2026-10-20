@@ -10,6 +10,7 @@
 #include "mainviewmodel.h"
 
 #include <algorithm>
+#include <unordered_map>
 
 #include <QCoreApplication>
 #include <QDir>
@@ -19,7 +20,9 @@
 #include "chapter10reader.h"
 #include "constants.h"
 #include "framesetup.h"
+#include "framesync.h"
 #include "processingcoordinator.h"
+#include "qtbridge.h"
 
 MainViewModel::MainViewModel(QObject* parent)
     : QObject(parent),
@@ -61,9 +64,6 @@ MainViewModel::MainViewModel(QObject* parent)
         }
     }
 
-    connect(m_reader, &Chapter10Reader::displayErrorMessage,
-            this, &MainViewModel::errorOccurred);
-
     m_coordinator = new ProcessingCoordinator(this);
     connect(m_coordinator, &ProcessingCoordinator::progressChanged,
             this, [this]() { emit progressPercentChanged(); });
@@ -93,12 +93,12 @@ QString MainViewModel::inputFilename() const { return m_input_filename; }
 
 QStringList MainViewModel::timeChannelList() const
 {
-    return m_reader->getTimeChannelComboBoxList();
+    return toQStringList(m_reader->getTimeChannelComboBoxList());
 }
 
 QStringList MainViewModel::pcmChannelList() const
 {
-    return m_reader->getPCMChannelComboBoxList();
+    return toQStringList(m_reader->getPCMChannelComboBoxList());
 }
 
 int MainViewModel::timeChannelIndex() const { return m_time_channel_index; }
@@ -150,13 +150,13 @@ void MainViewModel::setPcmChannelIndex(int index)
 QVector<StreamConfig> MainViewModel::buildDefaultStreamConfigs() const
 {
     QVector<StreamConfig> configs;
-    const QList<QPair<int, QString>> pcm_channels = m_reader->getPCMChannelList();
+    const std::vector<std::pair<int, std::string>> pcm_channels = m_reader->getPCMChannelList();
     configs.reserve(static_cast<int>(pcm_channels.size()));
     for (const auto& ch : pcm_channels)
     {
         StreamConfig cfg;
         cfg.pcmChannelId = ch.first;
-        cfg.label = ch.second;
+        cfg.label = QString::fromStdString(ch.second);
         cfg.process = false;
         cfg.mode = StreamMode::FrameSyncLockStats;
         cfg.sync.dataRateMbps = 0.0;
@@ -295,14 +295,15 @@ bool MainViewModel::loadFileMetadata(const QString& filename)
     // enumerates every channel, so it runs synchronously on the GUI thread — no
     // worker thread, progress, or cancel machinery (and so no moveToThread races).
     auto* reader = new Chapter10Reader();
-    connect(reader, &Chapter10Reader::displayErrorMessage,
-            this, &MainViewModel::errorOccurred);
 
-    if (!reader->loadChannels(filename))
+    if (!reader->loadChannels(toFsPath(filename)))
     {
         // The attempted load never became the active reader; discard it and leave
-        // m_reader (and whatever file it has loaded, if any) untouched.
+        // m_reader (and whatever file it has loaded, if any) untouched. The reader
+        // reports why through lastError() rather than a signal.
+        const QString reason = QString::fromStdString(reader->lastError());
         delete reader;
+        emit errorOccurred(reason);
         m_input_filename.clear();
         return false;
     }
@@ -319,10 +320,10 @@ bool MainViewModel::loadFileMetadata(const QString& filename)
     emit logMessageReceived("  File size: " + size_str);
 
     // Log channels found
-    QStringList time_list = m_reader->getTimeChannelComboBoxList();
-    QStringList pcm_list = m_reader->getPCMChannelComboBoxList();
-    emit logMessageReceived("  Time channels: " + (time_list.isEmpty() ? "none" : QString::number(time_list.size())));
-    emit logMessageReceived("  PCM channels: " + (pcm_list.isEmpty() ? "none" : QString::number(pcm_list.size())));
+    const int time_count = static_cast<int>(m_reader->getTimeChannelComboBoxList().size());
+    const int pcm_count = static_cast<int>(m_reader->getPCMChannelComboBoxList().size());
+    emit logMessageReceived("  Time channels: " + (time_count == 0 ? QString("none") : QString::number(time_count)));
+    emit logMessageReceived("  PCM channels: " + (pcm_count == 0 ? QString("none") : QString::number(pcm_count)));
 
     m_file_loaded = true;
     m_stream_configs.clear();
@@ -440,7 +441,7 @@ void MainViewModel::startProcessing()
     emit logMessageReceived("  Streams: " + QString::number(jobs.size()));
     emit logMessageReceived("  Time range: all");
     for (const StreamJob& job : jobs)
-        emit logMessageReceived("  " + job.params.streamLabel + ": "
+        emit logMessageReceived("  " + QString::fromStdString(job.params.streamLabel) + ": "
                                 + QString::number(job.params.samplePeriodSec * 1000.0) + " ms period");
 
     m_coordinator->startProcessing(std::move(jobs));
@@ -485,7 +486,7 @@ void MainViewModel::cancelProcessing()
 
 bool MainViewModel::buildBaseParams(ProcessingParams& out, QString& error)
 {
-    out.filename = m_input_filename;
+    out.filename = toFsPath(m_input_filename);
     out.sourceId = m_pending_source_id;
 
     out.timeChannelId = m_reader->getCurrentTimeChannelID();
@@ -510,38 +511,23 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
         ? ("Ch " + QString::number(cfg.pcmChannelId)) : cfg.label;
 
     // ---- Validate and decode inline frame sync fields ----
-    const QString& sync_hex = cfg.sync.pattern;
-    if (sync_hex.isEmpty())
+    // The decode and the assignment below are shared with the calibration extraction, which
+    // must read the same bitstream (framesync.h).
+    Acquisition acquisition;
+    switch (resolveFrameSync(cfg.sync.pattern.toStdString(), cfg.sync.mask.toStdString(),
+                             acquisition.sync))
     {
-        error = stream_desc + ": A frame sync pattern is required.";
-        return false;
-    }
-    bool sync_ok = false;
-    uint64_t frame_sync = sync_hex.toULongLong(&sync_ok, UIConstants::kHexBase);
-    if (!sync_ok)
-    {
-        error = stream_desc + ": Invalid frame sync pattern '" + sync_hex + "'.";
-        return false;
-    }
-    int sync_pattern_length = static_cast<int>(sync_hex.length()) * 4;
-
-    uint64_t frame_sync_mask = 0;
-    const QString& mask_hex = cfg.sync.mask;
-    if (mask_hex.isEmpty())
-    {
-        frame_sync_mask = (sync_pattern_length > 0 && sync_pattern_length < 64)
-            ? (1ULL << sync_pattern_length) - 1
-            : 0xFFFFFFFFFFFFFFFFULL;
-    }
-    else
-    {
-        bool mask_ok = false;
-        frame_sync_mask = mask_hex.toULongLong(&mask_ok, UIConstants::kHexBase);
-        if (!mask_ok)
-        {
-            error = stream_desc + ": Invalid frame sync mask '" + mask_hex + "'.";
+        case FrameSyncError::None:
+            break;
+        case FrameSyncError::PatternEmpty:
+            error = stream_desc + ": A frame sync pattern is required.";
             return false;
-        }
+        case FrameSyncError::PatternInvalid:
+            error = stream_desc + ": Invalid frame sync pattern '" + cfg.sync.pattern + "'.";
+            return false;
+        case FrameSyncError::MaskInvalid:
+            error = stream_desc + ": Invalid frame sync mask '" + cfg.sync.mask + "'.";
+            return false;
     }
 
     const int bits_in_minor_frame = cfg.sync.bitsInMinorFrame;
@@ -554,23 +540,21 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
     // Derive word count for the frame-setup word-map loader.
     int words_in_minor_frame = FrameSetup::wordsInMinorFrame(bits_in_minor_frame);
 
-    // ---- Assemble the per-stream ProcessingParams ----
-    out_job.params = base;
-    out_job.params.pcmChannelId       = cfg.pcmChannelId;
-    out_job.params.frameSync          = frame_sync;
-    out_job.params.frameSyncMask      = frame_sync_mask;
-    out_job.params.syncPatternLength  = sync_pattern_length;
-    out_job.params.wordsInMinorFrame  = words_in_minor_frame;
-    out_job.params.bitsInMinorFrame   = bits_in_minor_frame;
-    out_job.params.isRandomized       = cfg.sync.randomized;
-    out_job.params.isInverted         = cfg.sync.inverted;
+    acquisition.bitsInMinorFrame = bits_in_minor_frame;
+    acquisition.randomized       = cfg.sync.randomized;
+    acquisition.inverted         = cfg.sync.inverted;
+    acquisition.dataRateMbps     = cfg.sync.dataRateMbps;
     // File-scoped, so it comes from the view model rather than from cfg: every job
     // built for this recording gets the same value. Sourcing it per stream would
     // allow one file's channels to disagree about their own byte order.
-    out_job.params.swapBytes          = m_swap_bytes;
+    acquisition.swapBytes        = m_swap_bytes;
+
+    // ---- Assemble the per-stream ProcessingParams ----
+    out_job.params = base;
+    out_job.params.pcmChannelId       = cfg.pcmChannelId;
+    applyAcquisition(out_job.params, acquisition);
     out_job.params.mode               = cfg.mode;
-    out_job.params.dataRateBps        = (cfg.sync.dataRateMbps > 0.0) ? cfg.sync.dataRateMbps * 1e6 : 0.0;
-    out_job.params.streamLabel        = stream_desc;
+    out_job.params.streamLabel        = stream_desc.toStdString();
 
     // Set per-stream sample period.
     switch (cfg.samplePeriodIndex)
@@ -585,14 +569,14 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
     if (cfg.mode == StreamMode::FrameSyncLockStats)
     {
         // Lock-only: no receiver parameters needed.
-        out_job.frameSetup = std::make_shared<FrameSetup>(nullptr);
+        out_job.frameSetup = std::make_shared<FrameSetup>();
         return true;
     }
 
     // Built directly into out_job.frameSetup (not a local shared_ptr moved in at
     // the end) — that avoids a live-but-moved-from local sitting in scope after
     // its "last" use, which a future edit could silently dereference as null.
-    out_job.frameSetup = std::make_shared<FrameSetup>(nullptr);
+    out_job.frameSetup = std::make_shared<FrameSetup>();
     if (cfg.receiverParamsToml.isEmpty())
     {
         // No Receiver Parameters TOML provided: fall back to the shipped default
@@ -600,7 +584,7 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
         const QString default_rcvr_params = m_app_root + "/" + UIConstants::kSettingsDirName +
             "/" + UIConstants::kReceiverParamsDirName + "/" + UIConstants::kDefaultTomlFilename;
         if (QFileInfo::exists(default_rcvr_params) &&
-            out_job.frameSetup->tryLoadingFile(default_rcvr_params, words_in_minor_frame))
+            out_job.frameSetup->tryLoadingFile(toFsPath(default_rcvr_params), words_in_minor_frame))
         {
             // Loaded successfully from the default file.
         }
@@ -608,11 +592,11 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
         {
             // Default file missing or unusable: build the default word map
             // (sequential words for NumReceivers x ReceiverChannels parameters).
-            QString map_error;
+            std::string map_error;
             if (!out_job.frameSetup->buildDefaultReceiverMap(cfg.numReceivers, cfg.receiverChannels,
                                                              words_in_minor_frame, map_error))
             {
-                error = stream_desc + ": " + map_error;
+                error = stream_desc + ": " + QString::fromStdString(map_error);
                 return false;
             }
         }
@@ -623,7 +607,7 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
                 QFileInfo(cfg.receiverParamsToml).fileName() + "' was not found.";
         return false;
     }
-    else if (!out_job.frameSetup->tryLoadingFile(cfg.receiverParamsToml, words_in_minor_frame))
+    else if (!out_job.frameSetup->tryLoadingFile(toFsPath(cfg.receiverParamsToml), words_in_minor_frame))
     {
         error = stream_desc + ": Failed to load Receiver Parameters from '" +
                 QFileInfo(cfg.receiverParamsToml).fileName() + "'. Check the word map.";
@@ -658,7 +642,11 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
     // Attach non-linear step-calibration profiles (US5.3) by word index (Model side).
     if (!cfg.calibrationByWord.isEmpty())
     {
-        const int attached = out_job.frameSetup->attachCalibrationProfiles(cfg.calibrationByWord);
+        // The dialogs keep the extracted profiles in a QHash; the core takes a std map.
+        std::unordered_map<int, CalibrationProfile> profiles;
+        for (auto it = cfg.calibrationByWord.constBegin(); it != cfg.calibrationByWord.constEnd(); ++it)
+            profiles.emplace(it.key(), it.value());
+        const int attached = out_job.frameSetup->attachCalibrationProfiles(profiles);
         // Surface whether profiles actually reached the word map: provided > 0 but
         // attached == 0 means a word-index mismatch and a silent fall back to linear.
         emit logMessageReceived("  " + stream_desc + ": non-linear calibration — provided "

@@ -14,6 +14,7 @@
 #include <QWheelEvent>
 
 #include "constants.h"
+#include "plotconstants.h"
 
 namespace
 {

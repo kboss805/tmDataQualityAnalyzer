@@ -3,6 +3,7 @@
  * @brief Implementation of PlotWidget - TmChart chart with controls.
  */
 
+#include "plotconstants.h"
 #include "plotwidget.h"
 
 #include <algorithm>

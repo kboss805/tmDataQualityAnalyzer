@@ -3,6 +3,7 @@
  * @brief Implementation of PlotViewModel — series state, axis ranges, colors.
  */
 
+#include "plotconstants.h"
 #include "plotviewmodel.h"
 
 #include <algorithm>
@@ -19,6 +20,26 @@
 #include "constants.h"
 #include "csvseriesparser.h"
 #include "seriescolumnschema.h"
+
+namespace {
+
+/// The processing core hands its results over as std::vector; the plot keeps QVector.
+///
+/// This is deliberate, and it is the boundary rather than a step not yet taken. The
+/// plot's data relies on QVector's implicit sharing in three places: one `elapsed`
+/// time axis is shared by every series of a stream, TmChart holds its own reference
+/// to each series' buffers so a full chart rebuild copies nothing, and building the
+/// series list copies a reference count rather than the samples. With std::vector
+/// each of those becomes a deep copy - every series its own time axis, and every
+/// rebuild a copy of every sample. The view model and chart are the layers the port
+/// replaces wholesale, so they keep Qt's containers until then, and the one copy is
+/// paid here, once per series per stream.
+QVector<double> toPlotVector(const std::vector<double>& values)
+{
+    return QVector<double>(values.begin(), values.end());
+}
+
+} // namespace
 
 PlotViewModel::PlotViewModel(QObject* parent)
     : QObject(parent)
@@ -176,6 +197,9 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         return;
     }
 
+    // The core's label is UTF-8 std::string; the plot's series keep QString.
+    const QString stream_label = QString::fromStdString(data.streamLabel);
+
     // Reprocessing a stream (e.g. clicking "Process" again after switching a
     // channel's mode) should replace its prior result, not stack a second copy
     // on top of it. Drop any existing series from a previous run on this same
@@ -193,7 +217,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
     m_series.erase(std::remove_if(m_series.begin(), m_series.end(),
                                    [&](const PlotSeriesData& s) {
                                        return s.sourceId == data.sourceId &&
-                                              s.streamLabel == data.streamLabel &&
+                                              s.streamLabel == stream_label &&
                                               s.streamOrder == data.pcmChannelId;
                                    }),
                    m_series.end());
@@ -213,8 +237,8 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         {
             const double existing_min_abs = m_base_abs_seconds;
             const double existing_max_abs = m_base_abs_seconds + m_x_max;
-            const double new_min_abs = data.timesSec.first();
-            const double new_max_abs = data.timesSec.last();
+            const double new_min_abs = data.timesSec.front();
+            const double new_max_abs = data.timesSec.back();
             const bool overlaps = new_min_abs <= existing_max_abs && existing_min_abs <= new_max_abs;
             if (!overlaps)
             {
@@ -231,10 +255,10 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
     // earlier than the first.
     if (m_series.isEmpty())
     {
-        m_base_abs_seconds = data.timesSec.first();
+        m_base_abs_seconds = data.timesSec.front();
         recomputeBaseDayAndOffset();
     }
-    else if (data.timesSec.first() < m_base_abs_seconds)
+    else if (data.timesSec.front() < m_base_abs_seconds)
     {
         // This source's earliest sample precedes everything already loaded.
         // Re-base: shift every existing series' elapsed seconds right by the
@@ -242,7 +266,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         // keeps working unchanged) while every sample's absolute-time
         // correlation across sources is preserved. O(total samples), a
         // one-time cost per add that starts a new earliest source.
-        const double delta = m_base_abs_seconds - data.timesSec.first();
+        const double delta = m_base_abs_seconds - data.timesSec.front();
         for (PlotSeriesData& s : m_series)
         {
             for (double& x : s.xValues)
@@ -250,7 +274,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
                 x += delta;
             }
         }
-        m_base_abs_seconds = data.timesSec.first();
+        m_base_abs_seconds = data.timesSec.front();
         recomputeBaseDayAndOffset();
     }
 
@@ -272,11 +296,11 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
     };
 
     // Frame-sync lock series — present for both lock-only and receiver modes.
-    if (!data.lockPercent.isEmpty())
+    if (!data.lockPercent.empty())
     {
         PlotSeriesData lock;
-        lock.name = data.streamLabel;
-        lock.streamLabel = data.streamLabel;
+        lock.name = stream_label;
+        lock.streamLabel = stream_label;
         lock.metricType = PlotSeriesData::MetricType::FrameSyncLock;
         lock.receiverIndex = 0;
         lock.channelIndex = 0;
@@ -285,7 +309,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         lock.sourceId = data.sourceId;
         lock.id = m_next_series_id++;
         lock.xValues = elapsed;
-        lock.yValues = data.lockPercent;
+        lock.yValues = toPlotVector(data.lockPercent);
         lock.visible = (m_lock_axis_view == LockAxisView::LockPercent);
         fillCaches(lock);
         m_series.push_back(lock);
@@ -293,11 +317,11 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
 
     // Missed frames accumulation series — left-axis sibling of the lock series,
     // shown only when the left-axis view is in MissedFrames mode.
-    if (!data.accumulatedMissedFrames.isEmpty())
+    if (!data.accumulatedMissedFrames.empty())
     {
         PlotSeriesData errors;
-        errors.name = data.streamLabel;
-        errors.streamLabel = data.streamLabel;
+        errors.name = stream_label;
+        errors.streamLabel = stream_label;
         errors.metricType = PlotSeriesData::MetricType::AccumulatedMissedFrames;
         errors.receiverIndex = 0;
         errors.channelIndex = 0;
@@ -306,7 +330,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         errors.sourceId = data.sourceId;
         errors.id = m_next_series_id++;
         errors.xValues = elapsed;
-        errors.yValues = data.accumulatedMissedFrames;
+        errors.yValues = toPlotVector(data.accumulatedMissedFrames);
         errors.visible = (m_lock_axis_view == LockAxisView::MissedFrames);
         fillCaches(errors);
         m_series.push_back(errors);
@@ -322,14 +346,16 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         // otherwise collide in the legend) stay distinct; the Configure Streams dialog
         // and Frame Sync Lock series intentionally drop it. The exact name format —
         // and its inverse for CSV import — is owned by SeriesColumnSchema.
-        s.name = SeriesColumnSchema::snrSeriesName(data.pcmChannelId, data.streamLabel, ch.name);
-        s.streamLabel = data.streamLabel;
+        // The core's channel name is UTF-8 std::string; the plot keeps QString.
+        const QString ch_name = QString::fromStdString(ch.name);
+        s.name = SeriesColumnSchema::snrSeriesName(data.pcmChannelId, stream_label, ch_name);
+        s.streamLabel = stream_label;
         s.metricType = PlotSeriesData::MetricType::SNR;
-        int rcvr_pos = static_cast<int>(ch.name.lastIndexOf("_RCVR"));
+        int rcvr_pos = static_cast<int>(ch_name.lastIndexOf("_RCVR"));
         if (rcvr_pos >= 0)
         {
             bool ok = false;
-            int rcvr_num = ch.name.mid(rcvr_pos + 5).toInt(&ok);
+            int rcvr_num = ch_name.mid(rcvr_pos + 5).toInt(&ok);
             s.receiverIndex = ok ? rcvr_num : 0;
         }
         s.channelIndex = receiver_channel_count.value(s.receiverIndex, 0);
@@ -339,7 +365,7 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         s.sourceId = data.sourceId;
         s.id = m_next_series_id++;
         s.xValues = elapsed;
-        s.yValues = ch.values;
+        s.yValues = toPlotVector(ch.values);
         fillCaches(s);
         m_series.push_back(s);
     }
@@ -521,7 +547,7 @@ bool PlotViewModel::exportCsv(const QString& filepath, int sourceId) const
     // columns are self-describing (a stream's lock and missed-frames series share the
     // same bare name and would otherwise export as two identical headers) and stays
     // the inverse of the import parser.
-    out << PlotConstants::kCsvTimeHeader;
+    out << SeriesColumnSchema::kTimeHeader;
     for (const auto& s : m_series)
     {
         if (included(s))

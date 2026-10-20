@@ -76,7 +76,7 @@ def main() -> int:
         return 1
 
     flags: list[str] = [
-        "-std=c++17",
+        "-std=c++20",
         # clangd parses with clang; target MSVC ABI and enable MS compatibility so
         # Qt's MSVC headers and __declspec/etc. resolve the same way cl sees them.
         "--target=x86_64-pc-windows-msvc",

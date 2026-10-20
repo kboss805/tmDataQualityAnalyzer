@@ -6,15 +6,17 @@
 #include "frameprocessor.h"
 
 #include <algorithm>
-
-#include <QElapsedTimer>
-#include <QVector>
+#include <chrono>
+#include <format>
+#include <cstdint>
+#include <vector>
 
 #include "irig106ch10.h"       // IWYU pragma: keep
 #include "i106_time.h"         // IWYU pragma: keep
 #include "i106_decode_tmats.h" // IWYU pragma: keep
 #include "i106_decode_pcmf1.h"
 
+#include "containerutil.h"
 #include "framesetup.h"
 #include "packetqueue.h"
 
@@ -75,9 +77,8 @@ void FrameProcessor::invertBits(uint8_t* data, uint32_t length)
 //                       CONSTRUCTOR / DESTRUCTOR                             //
 ////////////////////////////////////////////////////////////////////////////////
 
-FrameProcessor::FrameProcessor(QObject* parent)
-    : QObject(parent),
-      m_abort_requested(false)
+FrameProcessor::FrameProcessor()
+    : m_abort_requested(false)
 {
 }
 
@@ -86,6 +87,35 @@ FrameProcessor::~FrameProcessor() = default;
 void FrameProcessor::requestAbort()
 {
     m_abort_requested.store(true, std::memory_order_relaxed);
+}
+
+void FrameProcessor::setEvents(std::shared_ptr<ProcessingEvents> events)
+{
+    m_events = std::move(events);
+}
+
+void FrameProcessor::reportLog(const std::string& message) const
+{
+    if (m_events)
+    {
+        m_events->logMessage(message);
+    }
+}
+
+void FrameProcessor::reportError(const std::string& message) const
+{
+    if (m_events)
+    {
+        m_events->errorOccurred(message);
+    }
+}
+
+void FrameProcessor::reportFinished(bool success) const
+{
+    if (m_events)
+    {
+        m_events->processingFinished(success);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -103,21 +133,21 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     PacketQueue* queue = params.packetQueue;
     if (queue == nullptr)
     {
-        emit errorOccurred(streamTag(params) + "Internal error: no packet queue for stream.");
-        emit processingFinished(false);
+        reportError(streamTag(params) + "Internal error: no packet queue for stream.");
+        reportFinished(false);
         return false;
     }
 
     const ResolvedPcmAttrs& attrs = params.resolvedAttrs;
     if (!attrs.resolved)
     {
-        emit errorOccurred(streamTag(params) + "Internal error: PCM attributes not resolved.");
-        emit processingFinished(false);
+        reportError(streamTag(params) + "Internal error: PCM attributes not resolved.");
+        reportFinished(false);
         return false;
     }
 
-    QElapsedTimer elapsed_timer;
-    elapsed_timer.start();
+    // Monotonic, so a wall-clock adjustment mid-run cannot report a negative duration.
+    const auto run_start = std::chrono::steady_clock::now();
 
     // Initialize the in-memory result bundle for this run.
     m_result = ProcessedStreamData();
@@ -127,7 +157,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
 
     // Cache enabled parameters for the hot loop and build the index-aligned
     // in-memory channel series (see buildEnabledParams).
-    QVector<ParameterInfo*> enabled_params = buildEnabledParams(frame_setup, receiver_mode);
+    std::vector<ParameterInfo*> enabled_params = buildEnabledParams(frame_setup, receiver_mode);
     for (auto* param : enabled_params)
     {
         param->sample_sum = 0;
@@ -152,7 +182,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     state.sample_period       = params.samplePeriodSec;
     state.current_time_sample = static_cast<double>(start_seconds);
     state.next_time_sample    = state.current_time_sample + state.sample_period;
-    state.frame_words = QVector<uint64_t>(state.words_in_frame, 0);
+    state.frame_words = std::vector<uint64_t>(state.words_in_frame, 0);
 
     const double delta_100ns    = attrs.delta100ns;
     const bool   needs_swap     = attrs.needsSwap;
@@ -176,6 +206,12 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     PacketTimeRef prev_time_ref = {0.0, 0, 0};
     bool has_time_ref = false;
 
+    // This worker's private, mutable copy of the packet in flight. Queue payloads are shared
+    // with every other stream on the channel and are const, but swap / invert / derandomize
+    // modify in place. Reused across packets, so it settles at the largest packet and stops
+    // allocating.
+    std::vector<uint8_t> packet_bytes;
+
     // Derandomization state carried across packets.
     bool needs_derand = is_randomized;
     uint16_t lfsr_state = 0;
@@ -183,10 +219,9 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     // Only name the window when it is actually bounded; an unset stop prints as
     // 18446744073709551615s, which is noise on every ordinary run.
     const bool bounded = (start_seconds != 0) || (stop_seconds != UINT64_MAX);
-    emit logMessage(streamTag(params)
-                    + (bounded ? QString("processing (%1s to %2s)...")
-                                     .arg(start_seconds).arg(stop_seconds)
-                               : QStringLiteral("processing...")));
+    reportLog(streamTag(params)
+              + (bounded ? std::format("processing ({}s to {}s)...", start_seconds, stop_seconds)
+                         : std::string("processing...")));
 
     // -----------------------------------------------------------------------
     // Consume packets from the queue until the end-of-stream sentinel.
@@ -195,8 +230,8 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     {
         if (m_abort_requested.load(std::memory_order_relaxed))
         {
-            emit logMessage(streamTag(params) + "processing cancelled by user.");
-            emit processingFinished(false);
+            reportLog(streamTag(params) + "processing cancelled by user.");
+            reportFinished(false);
             return false;
         }
 
@@ -206,9 +241,16 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
             break;
         }
 
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-        auto* raw_data = reinterpret_cast<uint8_t*>(item.payload.data()); // detaches COW copy
-        uint32_t raw_len = static_cast<uint32_t>(item.payload.size());
+        if (item.payload)
+        {
+            packet_bytes.assign(item.payload->begin(), item.payload->end());
+        }
+        else
+        {
+            packet_bytes.clear();
+        }
+        uint8_t* raw_data = packet_bytes.data();
+        uint32_t raw_len = static_cast<uint32_t>(packet_bytes.size());
         uint64_t packet_bits = item.packetBits;
 
         if (needs_swap)
@@ -261,8 +303,8 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         {
             if ((bit_pos & kAbortCheckMask) == 0 && m_abort_requested.load(std::memory_order_relaxed))
             {
-                emit logMessage(streamTag(params) + "processing cancelled by user.");
-                emit processingFinished(false);
+                reportLog(streamTag(params) + "processing cancelled by user.");
+                reportFinished(false);
                 return false;
             }
 
@@ -303,20 +345,19 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         {
             // Every packet skipped: the setting is inert for this stream, which is
             // worth saying plainly - the operator's choice had no effect at all.
-            emit logMessage(
-                streamTag(params) + QString("all %1 payloads are odd-length and cannot be "
-                        "byte-pair swapped — processed as Legacy Chapter 10 regardless of the "
-                        "setting.")
-                    .arg(swap_skipped_packets));
+            reportLog(streamTag(params)
+                      + std::format("all {} payloads are odd-length and cannot be "
+                                    "byte-pair swapped — processed as Legacy Chapter 10 "
+                                    "regardless of the setting.",
+                                    swap_skipped_packets));
         }
         else
         {
             // The genuinely corrupting case: one stream, two byte orders.
-            emit logMessage(
-                streamTag(params) + QString("warning: byte swap skipped on %1 of %2 packets "
-                        "(odd length) — mixed byte order, sync may be unreliable.")
-                    .arg(swap_skipped_packets)
-                    .arg(total_packets));
+            reportLog(streamTag(params)
+                      + std::format("warning: byte swap skipped on {} of {} packets "
+                                    "(odd length) — mixed byte order, sync may be unreliable.",
+                                    swap_skipped_packets, total_packets));
         }
     }
 
@@ -338,7 +379,10 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         state.rows_written++;
     }
 
-    qint64 elapsed_ms = elapsed_timer.elapsed();
+    // duration_cast truncates to whole milliseconds, exactly as QElapsedTimer::elapsed()
+    // did, so the one-decimal seconds this feeds in the completion log are unchanged.
+    const int64_t elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - run_start).count();
     constexpr double kMsPerSec = 1000.0;
 
     ScanDiagnostics diag;
@@ -363,7 +407,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
 
 void FrameProcessor::closeElapsedWindows(ScanState& s, double current_time_eval,
                                          const ProcessingParams& params,
-                                         const QVector<ParameterInfo*>& enabled_params)
+                                         const std::vector<ParameterInfo*>& enabled_params)
 {
     while (s.next_time_sample < current_time_eval)
     {
@@ -421,7 +465,7 @@ void FrameProcessor::closeElapsedWindows(ScanState& s, double current_time_eval,
 }
 
 void FrameProcessor::scanBit(ScanState& s, uint8_t bit_val, bool in_window,
-                             const QVector<ParameterInfo*>& enabled_params)
+                             const std::vector<ParameterInfo*>& enabled_params)
 {
     s.test_word = (s.test_word << 1) | bit_val;
     s.bits_loaded++;
@@ -542,9 +586,9 @@ void FrameProcessor::scanBit(ScanState& s, uint8_t bit_val, bool in_window,
     }
 }
 
-QVector<ParameterInfo*> FrameProcessor::buildEnabledParams(FrameSetup* frame_setup, bool receiver_mode)
+std::vector<ParameterInfo*> FrameProcessor::buildEnabledParams(FrameSetup* frame_setup, bool receiver_mode)
 {
-    QVector<ParameterInfo*> enabled_params;
+    std::vector<ParameterInfo*> enabled_params;
     if (receiver_mode && frame_setup != nullptr)
     {
         enabled_params.reserve(frame_setup->length());
@@ -570,7 +614,7 @@ QVector<ParameterInfo*> FrameProcessor::buildEnabledParams(FrameSetup* frame_set
     return enabled_params;
 }
 
-QString FrameProcessor::streamTag(const ProcessingParams& params)
+std::string FrameProcessor::streamTag(const ProcessingParams& params)
 {
     // Every message a worker emits carries this. Streams are processed by parallel
     // workers writing into one shared log, so their output interleaves in an order
@@ -580,13 +624,14 @@ QString FrameProcessor::streamTag(const ProcessingParams& params)
     // The channel ID leads because that is what the operator configured the stream
     // by. The label is appended only when it adds something - MainViewModel falls
     // back to "Ch <id>" when TMATS gives no name, and "[CH 13 Ch 13]" is noise.
-    const QString fallback = QStringLiteral("Ch ") + QString::number(params.pcmChannelId);
-    if (params.streamLabel.isEmpty() || params.streamLabel == fallback)
-        return QStringLiteral("[CH %1] ").arg(params.pcmChannelId);
-    return QStringLiteral("[CH %1 %2] ").arg(params.pcmChannelId).arg(params.streamLabel);
+    const std::string& label = params.streamLabel;
+    const std::string fallback = "Ch " + std::to_string(params.pcmChannelId);
+    if (label.empty() || label == fallback)
+        return std::format("[CH {}] ", params.pcmChannelId);
+    return std::format("[CH {} {}] ", params.pcmChannelId, label);
 }
 
-QString FrameProcessor::syncSpec(const ScanDiagnostics& d)
+std::string FrameProcessor::syncSpec(const ScanDiagnostics& d)
 {
     // The pattern is worth its characters: PRN-11 and PRN-15 are both 32 bits, so a
     // stream running the wrong one is invisible in a report that prints only the
@@ -597,23 +642,19 @@ QString FrameProcessor::syncSpec(const ScanDiagnostics& d)
 
     if (d.sync_mask == all_ones)
     {
-        return QStringLiteral("pattern 0x%1 (%2 bits)")
-            .arg(QString::number(d.sync_pat, 16).toUpper())
-            .arg(d.sync_pat_len);
+        return std::format("pattern 0x{:X} ({} bits)", d.sync_pat, d.sync_pat_len);
     }
-    return QStringLiteral("pattern 0x%1 (%2 bits, mask 0x%3)")
-        .arg(QString::number(d.sync_pat, 16).toUpper())
-        .arg(d.sync_pat_len)
-        .arg(QString::number(d.sync_mask, 16).toUpper());
+    return std::format("pattern 0x{:X} ({} bits, mask 0x{:X})", d.sync_pat, d.sync_pat_len,
+                       d.sync_mask);
 }
 
 bool FrameProcessor::reportCompletion(const ProcessingParams& params, const ScanDiagnostics& d)
 {
-    const QString tag = streamTag(params);
+    const std::string tag = streamTag(params);
 
-    emit logMessage(tag + QString::number(d.total_bytes_processed) + " bytes processed, "
-                    + QString::number(d.total_syncs_found) + " syncs found, "
-                    + QString::number(d.total_frames_extracted) + " frames extracted.");
+    reportLog(tag + std::format("{} bytes processed, {} syncs found, {} frames extracted.",
+                                d.total_bytes_processed, d.total_syncs_found,
+                                d.total_frames_extracted));
 
     // Both failures report on ONE line. The operators of this application know their
     // own formats, so the log's job is to state what was configured and what came of
@@ -622,30 +663,26 @@ bool FrameProcessor::reportCompletion(const ProcessingParams& params, const Scan
     // otherwise identical-looking configurations (PRN-11 and PRN-15 are both 32 bits).
     if (d.total_syncs_found == 0)
     {
-        emit errorOccurred(tag + QString("no frame sync found — %1, %2 bits/frame.")
-                                     .arg(syncSpec(d)).arg(d.bits_in_frame));
-        emit processingFinished(false);
+        reportError(tag + std::format("no frame sync found — {}, {} bits/frame.",
+                                      syncSpec(d), d.bits_in_frame));
+        reportFinished(false);
         return false;
     }
 
     if (d.total_frames_extracted == 0)
     {
-        emit errorOccurred(
-            tag + QString("sync found but no frames extracted — %1, %2 bits/frame; "
-                          "%3 syncs, %4 boundary-aligned.")
-                      .arg(syncSpec(d))
-                      .arg(d.bits_in_frame)
-                      .arg(d.total_syncs_found)
-                      .arg(d.boundary_syncs));
-        emit processingFinished(false);
+        reportError(tag + std::format("sync found but no frames extracted — {}, {} "
+                                      "bits/frame; {} syncs, {} boundary-aligned.",
+                                      syncSpec(d), d.bits_in_frame, d.total_syncs_found,
+                                      d.boundary_syncs));
+        reportFinished(false);
         return false;
     }
 
-    emit logMessage(tag + QString("complete — %1 samples extracted, elapsed %2s.")
-        .arg(d.rows_written)
-        .arg(d.elapsed_sec, 0, 'f', 1));
+    reportLog(tag + std::format("complete — {} samples extracted, elapsed {:.1f}s.",
+                                d.rows_written, d.elapsed_sec));
 
-    emit processingFinished(true);
+    reportFinished(true);
     return true;
 }
 
@@ -653,7 +690,7 @@ void FrameProcessor::recordTimeSample(double current_time_sample,
                                       int n_samples,
                                       double lock_percentage,
                                       double accumulated_missed_frames,
-                                      const QVector<ParameterInfo*>& enabled_params)
+                                      const std::vector<ParameterInfo*>& enabled_params)
 {
     // Store the absolute IRIG seconds; the plot derives DOY/HH:MM:SS from this.
     m_result.timesSec.push_back(current_time_sample);
@@ -675,7 +712,7 @@ void FrameProcessor::recordTimeSample(double current_time_sample,
     // n_samples can be 0 for a window that produced no extracted frames (a
     // recording gap, or an SNR window entirely out of lock); emit 0 in that case
     // rather than calibrating a meaningless zero average.
-    for (int i = 0; i < enabled_params.size(); i++)
+    for (int i = 0; i < intSize(enabled_params); i++)
     {
         ParameterInfo* param = enabled_params[i];
         double value = 0.0;

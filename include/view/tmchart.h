@@ -13,6 +13,7 @@
 #include <QWidget>
 
 #include "constants.h"
+#include "plotconstants.h"
 
 /// @brief First-party 2D line chart: the rendering engine behind PlotWidget.
 ///

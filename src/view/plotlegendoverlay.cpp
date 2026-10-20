@@ -3,6 +3,7 @@
  * @brief Implementation of the movable legend overlay (US4.0).
  */
 
+#include "plotconstants.h"
 #include "plotlegendoverlay.h"
 
 #include <QApplication>

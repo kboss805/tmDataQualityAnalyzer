@@ -77,10 +77,10 @@ QString SeriesColumnSchema::columnHeader(const PlotSeriesData& series)
     switch (series.metricType)
     {
     case PlotSeriesData::MetricType::FrameSyncLock:
-        base = series.name + PlotConstants::kCsvLockSuffix;
+        base = series.name + SeriesColumnSchema::kLockSuffix;
         break;
     case PlotSeriesData::MetricType::AccumulatedMissedFrames:
-        base = series.name + PlotConstants::kCsvMissedFramesSuffix;
+        base = series.name + SeriesColumnSchema::kMissedFramesSuffix;
         break;
     default: // SNR series names already carry the channel and are unique
         base = series.name;
@@ -106,8 +106,8 @@ SeriesColumnSchema::ParsedColumn SeriesColumnSchema::parseColumnHeader(const QSt
     const auto [source_id, header] = stripSourceQualifier(headerIn);
     out.sourceId = source_id;
 
-    const QString lock_suffix   = QLatin1String(PlotConstants::kCsvLockSuffix);
-    const QString missed_suffix = QLatin1String(PlotConstants::kCsvMissedFramesSuffix);
+    const QString lock_suffix   = QLatin1String(SeriesColumnSchema::kLockSuffix);
+    const QString missed_suffix = QLatin1String(SeriesColumnSchema::kMissedFramesSuffix);
     const bool    looks_like_snr = hasSnrIdPrefix(header);
 
     if (!looks_like_snr && header.endsWith(lock_suffix))

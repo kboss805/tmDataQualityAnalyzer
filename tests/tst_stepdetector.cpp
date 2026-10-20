@@ -1,15 +1,19 @@
 #include "tst_stepdetector.h"
 
+#include <vector>
+
 #include <QTemporaryDir>
 #include <QTemporaryFile>
 #include <QtTest>
 
+#include "containerutil.h"
+#include "qtbridge.h"
 #include "stepdetector.h"
 
 namespace {
 
 /// Appends @p count samples of @p level to @p series.
-void appendRun(QVector<double>& series, double level, int count)
+void appendRun(std::vector<double>& series, double level, int count)
 {
     for (int i = 0; i < count; i++)
     {
@@ -47,12 +51,249 @@ void TestStepDetector::parseStepConfigValid()
         "[[Step]]\n"
         "db = 6.0\n");
 
-    QVector<StepDefinition> steps;
-    QString error;
-    QVERIFY(StepDetector::parseStepConfig(path, steps, error));
+    std::vector<StepDefinition> steps;
+    std::string error;
+    QVERIFY(StepDetector::parseStepConfig(toFsPath(path), steps, error));
     QCOMPARE(steps.size(), 2);
     QCOMPARE(steps[0].db, 0.0);
     QCOMPARE(steps[1].db, 6.0);
+}
+
+namespace {
+
+// Everything below talks to StepDetector::parseStepConfig through these helpers, so the
+// QString-to-std::string port changes them and nothing else: the assertions were
+// written against the QString implementation and kept as they were.
+bool parseSteps(const QString& path, std::vector<StepDefinition>& steps, QString& error)
+{
+    std::string err;
+    const bool ok = StepDetector::parseStepConfig(toFsPath(path), steps, err);
+    error = QString::fromStdString(err);
+    return ok;
+}
+
+/// initialStepConfigPath() takes and returns UTF-8 strings; the assertions compare QStrings.
+QString initialPath(const QString& root, const QString& preferred)
+{
+    return QString::fromStdString(
+        StepDetector::initialStepConfigPath(root.toStdString(), preferred.toStdString()));
+}
+
+/// Writes @p content to a file under @p dir and returns its path (empty on failure).
+QString writeStepFile(const QTemporaryDir& dir, const QString& name, const QByteArray& content)
+{
+    const QString path = dir.filePath(name);
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    {
+        return {};
+    }
+    f.write(content);
+    return path;
+}
+
+/// The db values of a parsed list, for compact comparison.
+QList<double> dbs(const std::vector<StepDefinition>& steps)
+{
+    QList<double> out;
+    for (const StepDefinition& s : steps)
+    {
+        out << s.db;
+    }
+    return out;
+}
+
+} // namespace
+
+void TestStepDetector::parseStepConfigMatchesAreCaseInsensitive()
+{
+    // The header and the key are matched without regard to case, and the whitespace
+    // around '=' and at the ends of the line is ignored.
+    QTemporaryDir dir;
+    const QString path = writeStepFile(dir, "case.toml",
+        "[[STEP]]\n"
+        "  DB   =   3.5  \n"
+        "[[step]]\n"
+        "Db = 7\n");
+    std::vector<StepDefinition> steps;
+    QString error;
+    QVERIFY2(parseSteps(path, steps, error), qPrintable(error));
+    QCOMPARE(dbs(steps), QList<double>({3.5, 7.0}));
+}
+
+void TestStepDetector::parseStepConfigHeaderMustBeExactlyStepToCount()
+{
+    // The header comparison is against the whole trimmed line, so decoration on it
+    // means it is NOT a step header: a trailing comment, inner spaces, a longer name.
+    // Whatever follows then sits in no step and is ignored. Pinned as the current
+    // behaviour - a header with a comment silently losing its step deserves its own
+    // decision, not to be changed as a side effect of a port.
+    QTemporaryDir dir;
+    const QString path = writeStepFile(dir, "headers.toml",
+        "[[Step]] # the first one\n"
+        "db = 1\n"
+        "[[ Step ]]\n"
+        "db = 2\n"
+        "[[Steps]]\n"
+        "db = 3\n"
+        "[[Step]]\n"
+        "db = 4\n");
+    std::vector<StepDefinition> steps;
+    QString error;
+    QVERIFY2(parseSteps(path, steps, error), qPrintable(error));
+    QCOMPARE(dbs(steps), QList<double>({4.0}));
+}
+
+void TestStepDetector::parseStepConfigIgnoresKeysOutsideAStepAndOtherSections()
+{
+    QTemporaryDir dir;
+    const QString path = writeStepFile(dir, "scope.toml",
+        "db = 99\n"                 // before any header: no step to belong to
+        "[Meta]\n"
+        "db = 98\n"                 // an ordinary section is not a step
+        "[[Step]]\n"
+        "db = 5\n"
+        "[Other]\n"                 // ends the step context...
+        "db = 97\n"                 // ...so this is not step 1's
+        "[[Step]]\n"
+        "label = nothing\n"         // a step with no db keeps the default 0
+        "[[Unrelated]]\n"           // another array-of-tables ends the step too
+        "db = 96\n");
+    std::vector<StepDefinition> steps;
+    QString error;
+    QVERIFY2(parseSteps(path, steps, error), qPrintable(error));
+    QCOMPARE(dbs(steps), QList<double>({5.0, 0.0}));
+}
+
+void TestStepDetector::parseStepConfigValueRules_data()
+{
+    QTest::addColumn<QString>("text");
+    QTest::addColumn<double>("expected");
+
+    // QString::toDouble's rules, on the text after '=' with a trailing '#' comment
+    // removed. A value that does not parse is skipped, leaving the step at its default
+    // of 0 - the step itself still exists.
+    QTest::newRow("integer")       << "6"        << 6.0;
+    QTest::newRow("negative")      << "-3.5"     << -3.5;
+    QTest::newRow("plus")          << "+6"       << 6.0;
+    QTest::newRow("exponent")      << "1e1"      << 10.0;
+    QTest::newRow("leading-dot")   << ".5"       << 0.5;
+    QTest::newRow("trailing-dot")  << "5."       << 5.0;
+    QTest::newRow("comment")       << "6 # six"  << 6.0;
+    QTest::newRow("comment-glued") << "6# six"   << 6.0;
+    QTest::newRow("quoted")        << "\"6\""    << 0.0; // quotes are NOT stripped here
+    QTest::newRow("words")         << "abc"      << 0.0;
+    QTest::newRow("trailing-junk") << "6x"       << 0.0;
+    QTest::newRow("comma")         << "1,5"      << 0.0;
+    QTest::newRow("hex")           << "0x10"     << 0.0;
+    QTest::newRow("overflow")      << "1e999"    << 0.0;
+    QTest::newRow("double-sign")   << "+-6"      << 0.0;
+    QTest::newRow("empty")         << ""         << 0.0;
+}
+
+void TestStepDetector::parseStepConfigValueRules()
+{
+    QFETCH(QString, text);
+    QFETCH(double, expected);
+
+    QTemporaryDir dir;
+    const QString path = writeStepFile(dir, "value.toml",
+        ("[[Step]]\ndb = " + text + "\n").toUtf8());
+    std::vector<StepDefinition> steps;
+    QString error;
+    QVERIFY2(parseSteps(path, steps, error), qPrintable(error));
+    QCOMPARE(steps.size(), std::size_t{1});
+    QCOMPARE(steps[0].db, expected);
+}
+
+void TestStepDetector::parseStepConfigKeepsFileOrderAndLastDbWins()
+{
+    QTemporaryDir dir;
+    const QString path = writeStepFile(dir, "order.toml",
+        "[[Step]]\ndb = 30\n"
+        "[[Step]]\ndb = 10\n"
+        "[[Step]]\ndb = 20\ndb = 21\n");
+    std::vector<StepDefinition> steps;
+    QString error;
+    QVERIFY2(parseSteps(path, steps, error), qPrintable(error));
+    QCOMPARE(dbs(steps), QList<double>({30.0, 10.0, 21.0}));
+}
+
+void TestStepDetector::parseStepConfigClearsItsOutputFirst()
+{
+    // A failed parse must not leave the previous file's steps behind.
+    QTemporaryDir dir;
+    std::vector<StepDefinition> steps = {{1.0}, {2.0}};
+    QString error;
+    QVERIFY(!parseSteps(writeStepFile(dir, "none.toml", "# nothing\n"), steps, error));
+    QVERIFY(steps.empty());
+
+    steps = {{1.0}, {2.0}};
+    QVERIFY(!parseSteps(dir.filePath("absent.toml"), steps, error));
+    QVERIFY(steps.empty());
+}
+
+void TestStepDetector::parseStepConfigReadsBomCrlfAndUtf16_data()
+{
+    QTest::addColumn<QByteArray>("bytes");
+    // Files as Notepad saves them. QTextStream detected all of these; a plain byte
+    // reader would see the BOM as part of the first line and silently drop step 1.
+    QTest::newRow("utf8-bom-crlf")
+        << (QByteArray("\xEF\xBB\xBF") + "[[Step]]\r\ndb = 4\r\n[[Step]]\r\ndb = 8\r\n");
+    auto utf16 = [](bool big) {
+        const QString text = QStringLiteral("[[Step]]\r\ndb = 4\r\n[[Step]]\r\ndb = 8\r\n");
+        QByteArray b = big ? QByteArray("\xFE\xFF", 2) : QByteArray("\xFF\xFE", 2);
+        for (const QChar c : text)
+        {
+            const char hi = static_cast<char>(c.unicode() >> 8);
+            const char lo = static_cast<char>(c.unicode() & 0xFF);
+            b.append(big ? hi : lo);
+            b.append(big ? lo : hi);
+        }
+        return b;
+    };
+    QTest::newRow("utf16le") << utf16(false);
+    QTest::newRow("utf16be") << utf16(true);
+}
+
+void TestStepDetector::parseStepConfigReadsBomCrlfAndUtf16()
+{
+    QFETCH(QByteArray, bytes);
+    QTemporaryDir dir;
+    std::vector<StepDefinition> steps;
+    QString error;
+    QVERIFY2(parseSteps(writeStepFile(dir, "enc.toml", bytes), steps, error), qPrintable(error));
+    QCOMPARE(dbs(steps), QList<double>({4.0, 8.0}));
+}
+
+void TestStepDetector::parseStepConfigOpensNonAsciiPaths()
+{
+    // Step files live wherever the operator keeps them, including user folders with
+    // accented or non-Latin names.
+    QTemporaryDir dir;
+    const QString folder = QStringLiteral("omega-") + QChar(0x03A9);
+    QVERIFY(QDir(dir.path()).mkdir(folder));
+    const QString path = writeStepFile(dir, folder + "/caf" + QChar(0x00E9) + ".toml",
+                                       "[[Step]]\ndb = 12\n");
+    QVERIFY(!path.isEmpty());
+    std::vector<StepDefinition> steps;
+    QString error;
+    QVERIFY2(parseSteps(path, steps, error), qPrintable(error));
+    QCOMPARE(dbs(steps), QList<double>({12.0}));
+}
+
+void TestStepDetector::parseStepConfigErrorMessagesNameTheFile()
+{
+    // The message carries the file NAME (not the full path), so the log line reads the
+    // same wherever the file lives.
+    QTemporaryDir dir;
+    std::vector<StepDefinition> steps;
+    QString error;
+    QVERIFY(!parseSteps(dir.filePath("missing_steps.toml"), steps, error));
+    QCOMPARE(error, QStringLiteral("Could not open step-config file 'missing_steps.toml'."));
+
+    QVERIFY(!parseSteps(writeStepFile(dir, "empty_steps.toml", "[Meta]\nx = 1\n"), steps, error));
+    QCOMPARE(error, QStringLiteral("No [[Step]] entries found in 'empty_steps.toml'."));
 }
 
 void TestStepDetector::parseStepConfigEmptyFails()
@@ -60,20 +301,38 @@ void TestStepDetector::parseStepConfigEmptyFails()
     QTemporaryFile f;
     const QString path = writeTempToml(f, "# just a comment, no steps\n");
 
-    QVector<StepDefinition> steps;
-    QString error;
-    QVERIFY(!StepDetector::parseStepConfig(path, steps, error));
+    std::vector<StepDefinition> steps;
+    std::string error;
+    QVERIFY(!StepDetector::parseStepConfig(toFsPath(path), steps, error));
 }
 
 // ---------------------------------------------------------------------------
 // detect
 // ---------------------------------------------------------------------------
 
+void TestStepDetector::detectOnATooShortSeriesFailsCleanly()
+{
+    // A series with fewer than two samples has no derivative and so no edge, and must
+    // come back as "not calibrated". Sizing the derivative takes `size() - 1`: harmless
+    // on a Qt container, but a huge unsigned number on a std::vector, where `reserve`
+    // throws. detect() rejects the input first and sampleDerivative() guards its own
+    // reserve; this pins the outcome whichever of the two a refactor weakens.
+    const std::vector<StepDefinition> steps = {{0.0}, {6.0}};
+
+    const StepDetector::Result none = StepDetector::detect({}, kPeriod, steps);
+    QVERIFY(!none.profile.valid);
+    QVERIFY(none.profile.points.empty());
+
+    const StepDetector::Result one = StepDetector::detect({1000.0}, kPeriod, steps);
+    QVERIFY(!one.profile.valid);
+    QVERIFY(one.profile.points.empty());
+}
+
 void TestStepDetector::detectCleanSteps()
 {
-    QVector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}};
+    std::vector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}};
 
-    QVector<double> raw;
+    std::vector<double> raw;
     appendRun(raw, 1000.0, 150);
     appendRun(raw, 2000.0, 150);
     appendRun(raw, 3000.0, 150);
@@ -92,9 +351,9 @@ void TestStepDetector::detectCleanSteps()
 void TestStepDetector::detectTooFewPlateausFails()
 {
     // Three steps expected, but the data only contains two plateaus.
-    QVector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}};
+    std::vector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}};
 
-    QVector<double> raw;
+    std::vector<double> raw;
     appendRun(raw, 1000.0, 150);
     appendRun(raw, 2000.0, 150);
 
@@ -109,9 +368,9 @@ void TestStepDetector::detectExtraPlateausUsesLastOfMonotonicRun()
     // LAST `expected` plateaus of the first maximal monotonic run (here the run
     // is all three: 1000 < 2000 < 3000), so (2000, 3000) pair with the steps and
     // the lowest plateau (1000) is dropped as leading pre-roll / turn-on transient.
-    QVector<StepDefinition> steps = {{0.0}, {6.0}};
+    std::vector<StepDefinition> steps = {{0.0}, {6.0}};
 
-    QVector<double> raw;
+    std::vector<double> raw;
     appendRun(raw, 1000.0, 150);
     appendRun(raw, 2000.0, 150);
     appendRun(raw, 3000.0, 150);
@@ -134,9 +393,9 @@ void TestStepDetector::detectShortBlipDoesNotStealPairingSlot()
     // be counted as a real plateau and consume pairing slot 0, shifting every
     // subsequent plateau<->step pairing by one. It must be rejected so the
     // three genuine (confirmed) plateaus pair correctly with steps 0/6/12 dB.
-    QVector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}};
+    std::vector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}};
 
-    QVector<double> raw;
+    std::vector<double> raw;
     appendRun(raw, 500.0, 55);   // spurious sub-confirmation blip
     appendRun(raw, 1000.0, 150); // genuine 0 dB plateau
     appendRun(raw, 2000.0, 150); // genuine 6 dB plateau
@@ -170,21 +429,21 @@ void TestStepDetector::detectLongLeadingTransientDoesNotShiftPairing()
     // channels whose transient was too small to register. Selection instead takes
     // the LAST `expected` plateaus of the monotonic run, which drops the leading
     // transient (it extends the run's start) and keeps the pairing correct.
-    QVector<StepDefinition> steps = {{0.0}, {3.0}, {6.0}, {12.0},
+    std::vector<StepDefinition> steps = {{0.0}, {3.0}, {6.0}, {12.0},
                                      {18.0}, {24.0}, {30.0}, {36.0}};
 
     // Raw counts: a leading turn-on transient, the 8 injected levels climbing to
     // the peak, then the optional down-ramp.
-    const QVector<double> up = {1000.0, 1100.0, 1300.0, 1700.0,
+    const std::vector<double> up = {1000.0, 1100.0, 1300.0, 1700.0,
                                 2100.0, 2500.0, 2900.0, 3300.0};
-    QVector<double> raw;
+    std::vector<double> raw;
     appendRun(raw, 600.0, 150); // generator-off / turn-on transient (1.5s, confirmed)
     for (double level : up)
     {
         appendRun(raw, level, 150);
     }
     // Down-ramp (a separate, opposite-direction run; excluded).
-    for (int i = up.size() - 2; i >= 0; i--)
+    for (int i = intSize(up) - 2; i >= 0; i--)
     {
         appendRun(raw, up[i], 150);
     }
@@ -214,14 +473,14 @@ void TestStepDetector::detectInvertedPolaritySweepNotReversed()
     // them with the steps in time order — so step 0 stays paired with the
     // highest-raw plateau and step 7 with the lowest, without locking onto a
     // raw max/min extreme (which would instead latch onto the return ramp).
-    QVector<StepDefinition> steps = {{0.0}, {3.0}, {6.0}, {12.0},
+    std::vector<StepDefinition> steps = {{0.0}, {3.0}, {6.0}, {12.0},
                                      {18.0}, {24.0}, {30.0}, {36.0}};
 
     // Raw counts descend as dB ascends. Leading turn-on transient sits on the
     // low-signal (HIGH raw) side, ahead of the sweep, then a return ramp after.
-    const QVector<double> down = {3300.0, 2900.0, 2500.0, 2100.0,
+    const std::vector<double> down = {3300.0, 2900.0, 2500.0, 2100.0,
                                   1700.0, 1300.0, 1100.0, 1000.0};
-    QVector<double> raw;
+    std::vector<double> raw;
     appendRun(raw, 3500.0, 150); // turn-on transient (highest raw = no signal)
     for (double level : down)
     {
@@ -229,7 +488,7 @@ void TestStepDetector::detectInvertedPolaritySweepNotReversed()
     }
     // Return ramp back up in raw (signal falling away); a separate opposite-
     // direction run, excluded.
-    for (int i = down.size() - 2; i >= 0; i--)
+    for (int i = intSize(down) - 2; i >= 0; i--)
     {
         appendRun(raw, down[i], 150);
     }
@@ -263,9 +522,9 @@ void TestStepDetector::detectNonMonotonicPairingRejected()
     // step pairing, producing two near-adjacent raw values pinned to
     // contradictory dB values. The profile must be rejected (not handed to
     // interpolateCalibration with a near-vertical interpolation slope).
-    QVector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}};
+    std::vector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}};
 
-    QVector<double> raw;
+    std::vector<double> raw;
     appendRun(raw, 2000.0, 150);
     appendRun(raw, 1000.0, 150);
     appendRun(raw, 3000.0, 150);
@@ -277,10 +536,10 @@ void TestStepDetector::detectNonMonotonicPairingRejected()
 
 void TestStepDetector::detectNoisyStepsStillDetected()
 {
-    QVector<StepDefinition> steps = {{0.0}, {6.0}};
+    std::vector<StepDefinition> steps = {{0.0}, {6.0}};
 
     // Small in-plateau ripple (amplitude 2) << the 1000-count step transitions.
-    QVector<double> raw;
+    std::vector<double> raw;
     for (int i = 0; i < 150; i++) raw.push_back(1000.0 + (i % 3 == 0 ? 2.0 : 0.0));
     for (int i = 0; i < 150; i++) raw.push_back(2000.0 + (i % 3 == 0 ? 2.0 : 0.0));
 
@@ -296,9 +555,9 @@ void TestStepDetector::detectSettlingAtPlateauStartExcluded()
     // the confirmation window from the END of the plateau (immediately before
     // the next transition) rather than its start must skip that settling
     // region entirely, so the average equals the clean core value.
-    QVector<StepDefinition> steps = {{0.0}, {3.0}};
+    std::vector<StepDefinition> steps = {{0.0}, {3.0}};
 
-    QVector<double> raw;
+    std::vector<double> raw;
     appendRun(raw, 0.0, 150); // genuine 0 dB baseline plateau
     // Gradual settling ramp at the start of the second plateau.
     for (int v = 991; v <= 1000; v++) raw.push_back(static_cast<double>(v));
@@ -320,10 +579,10 @@ void TestStepDetector::roundTripSameDataIsExact()
     // error between them — interpolating each step's own raw average must return
     // that step's exact dB (6, 12, 18, 24, 30). This is the zero-noise property
     // we get when the calibration file and the measured file are one and the same.
-    QVector<StepDefinition> steps = {{6.0}, {12.0}, {18.0}, {24.0}, {30.0}};
+    std::vector<StepDefinition> steps = {{6.0}, {12.0}, {18.0}, {24.0}, {30.0}};
 
-    const QVector<double> levels = {1000.0, 2000.0, 3000.0, 4000.0, 5000.0};
-    QVector<double> raw;
+    const std::vector<double> levels = {1000.0, 2000.0, 3000.0, 4000.0, 5000.0};
+    std::vector<double> raw;
     for (double level : levels)
     {
         appendRun(raw, level, 150);
@@ -355,16 +614,16 @@ void TestStepDetector::detectMultiChannelSweepStaysTimeAligned()
     // different segment than its peers, so when the profiles are applied on the
     // shared per-stream time axis the staircases visibly stagger. Identical dB per
     // segment across all channels == time-aligned transitions.
-    const QVector<StepDefinition> steps = {{0.0}, {3.0}, {6.0}, {12.0}};
+    const std::vector<StepDefinition> steps = {{0.0}, {3.0}, {6.0}, {12.0}};
     constexpr int kHold = 150; // > the 100-sample (1.0 s) confirmation window
 
     // Per-channel raw plateau level at each of the four sweep segments.
-    const QVector<double> clean    = {1000.0, 1500.0, 2000.0, 3000.0}; // nominal gain
-    const QVector<double> hotGain  = {1300.0, 1900.0, 2500.0, 3700.0}; // higher gain, same sweep
-    const QVector<double> inverted = {3000.0, 2500.0, 2000.0, 1000.0}; // inverted polarity (raw falls as dB climbs)
+    const std::vector<double> clean    = {1000.0, 1500.0, 2000.0, 3000.0}; // nominal gain
+    const std::vector<double> hotGain  = {1300.0, 1900.0, 2500.0, 3700.0}; // higher gain, same sweep
+    const std::vector<double> inverted = {3000.0, 2500.0, 2000.0, 1000.0}; // inverted polarity (raw falls as dB climbs)
 
-    auto buildRaw = [&](const QVector<double>& levels, double leadingTransient) {
-        QVector<double> raw;
+    auto buildRaw = [&](const std::vector<double>& levels, double leadingTransient) {
+        std::vector<double> raw;
         if (leadingTransient >= 0.0)
             appendRun(raw, leadingTransient, kHold); // confirmed transient, must be dropped
         for (double level : levels)
@@ -372,8 +631,8 @@ void TestStepDetector::detectMultiChannelSweepStaysTimeAligned()
         return raw;
     };
 
-    struct Channel { QVector<double> levels; double transient; };
-    const QVector<Channel> channels = {
+    struct Channel { std::vector<double> levels; double transient; };
+    const std::vector<Channel> channels = {
         { clean,    -1.0 },    // nominal, no transient
         { hotGain,  -1.0 },    // different gain
         { inverted, -1.0 },    // opposite polarity
@@ -382,7 +641,7 @@ void TestStepDetector::detectMultiChannelSweepStaysTimeAligned()
 
     for (int c = 0; c < channels.size(); c++)
     {
-        const QVector<double> raw = buildRaw(channels[c].levels, channels[c].transient);
+        const std::vector<double> raw = buildRaw(channels[c].levels, channels[c].transient);
         StepDetector::Result r = StepDetector::detect(raw, kPeriod, steps);
         QVERIFY2(r.profile.valid, qPrintable(QString("channel %1 profile invalid").arg(c)));
         QCOMPARE(r.profile.points.size(), steps.size());
@@ -442,12 +701,12 @@ void TestStepDetector::interpolateCoincidentRawNoCrash()
 
 void TestStepDetector::detectOutcomeNamesTheGateThatRejected()
 {
-    QVector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}};
+    std::vector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}};
 
     // Success carries Calibrated, and reports the threshold it judged edges by -
     // the quantity a merged step is measured against.
     {
-        QVector<double> raw;
+        std::vector<double> raw;
         appendRun(raw, 1000.0, 150);
         appendRun(raw, 2000.0, 150);
         appendRun(raw, 3000.0, 150);
@@ -461,7 +720,7 @@ void TestStepDetector::detectOutcomeNamesTheGateThatRejected()
     // shape a compressed / near-saturation receiver produces, where adjacent
     // steps merge because their separation never clears the edge threshold.
     {
-        QVector<double> raw;
+        std::vector<double> raw;
         appendRun(raw, 1000.0, 150);
         appendRun(raw, 2000.0, 150);
         StepDetector::Result r = StepDetector::detect(raw, kPeriod, steps);
@@ -474,7 +733,7 @@ void TestStepDetector::detectOutcomeNamesTheGateThatRejected()
     // case above and pointing at a different cause, which is exactly why the
     // plateau count alone cannot explain a fallback.
     {
-        QVector<double> raw;
+        std::vector<double> raw;
         appendRun(raw, 1000.0, 150);
         appendRun(raw, 3000.0, 150);
         appendRun(raw, 1000.0, 150);
@@ -493,9 +752,9 @@ void TestStepDetector::detectCompressedOutOfToleranceReceiverStillCalibrates()
     // one sweep can hold both 12-count and 1100-count steps. A single global edge
     // threshold sized for the large steps cannot see the small ones, which is how
     // these channels lose their profile and fall back to linear.
-    QVector<StepDefinition> steps = {{0.0}, {3.0}, {6.0}, {12.0}, {24.0}, {36.0}};
+    std::vector<StepDefinition> steps = {{0.0}, {3.0}, {6.0}, {12.0}, {24.0}, {36.0}};
 
-    const QVector<double> levels = {800.0, 812.0, 826.0, 900.0, 1500.0, 2600.0};
+    const std::vector<double> levels = {800.0, 812.0, 826.0, 900.0, 1500.0, 2600.0};
 
     // Pseudo-random (not periodic) dither, seeded for reproducibility. A periodic
     // pattern would be a poor stand-in for receiver noise: its median absolute
@@ -507,7 +766,7 @@ void TestStepDetector::detectCompressedOutOfToleranceReceiverStillCalibrates()
         return (static_cast<double>((seed >> 16) & 0xFF) / 255.0 - 0.5) * 8.0; // +/- 4 counts
     };
 
-    QVector<double> raw;
+    std::vector<double> raw;
     for (double level : levels)
     {
         for (int i = 0; i < 150; i++)
@@ -527,8 +786,8 @@ void TestStepDetector::detectCompressedOutOfToleranceReceiverStillCalibrates()
 
     // Every step must keep its own dB: a merged pair would shift the pairing and
     // silently mis-map the whole channel rather than fail loudly.
-    QCOMPARE(r.profile.points.first().trueDb, 0.0);
-    QCOMPARE(r.profile.points.last().trueDb, 36.0);
+    QCOMPARE(r.profile.points.front().trueDb, 0.0);
+    QCOMPARE(r.profile.points.back().trueDb, 36.0);
 
     // It only resolved because the threshold was loosened, and that fact is
     // reported rather than swallowed: a channel whose steps sit this close to its
@@ -537,7 +796,7 @@ void TestStepDetector::detectCompressedOutOfToleranceReceiverStillCalibrates()
 
     // A receiver with well-separated steps must NOT be reported as relaxed - the
     // signal is only meaningful if the ordinary case stays quiet.
-    QVector<double> healthy;
+    std::vector<double> healthy;
     appendRun(healthy, 800.0, 150);
     appendRun(healthy, 1200.0, 150);
     appendRun(healthy, 1600.0, 150);
@@ -561,10 +820,10 @@ void TestStepDetector::detectNoiseSplitPlateausDoNotSeverTheSweep()
     // plainly good calibration was discarded and the channel fell back to linear.
     // Adjacent plateaus within the edge threshold are the SAME physical level and
     // must be coalesced before the run is sought.
-    QVector<StepDefinition> steps = {{0.0}, {3.0}, {6.0}, {12.0},
+    std::vector<StepDefinition> steps = {{0.0}, {3.0}, {6.0}, {12.0},
                                      {18.0}, {24.0}, {30.0}, {36.0}};
 
-    const QVector<double> levels = {0.0,     7255.0,  14746.0, 22314.0,
+    const std::vector<double> levels = {0.0,     7255.0,  14746.0, 22314.0,
                                     27315.0, 34752.0, 49892.0, 49895.0,
                                     57310.0, 57309.0, 65472.0, 0.0};
 
@@ -579,7 +838,7 @@ void TestStepDetector::detectNoiseSplitPlateausDoNotSeverTheSweep()
         return (static_cast<double>((seed >> 16) & 0xFF) / 255.0 - 0.5) * 4.0; // +/- 2 counts
     };
 
-    QVector<double> raw;
+    std::vector<double> raw;
     for (double level : levels)
     {
         for (int i = 0; i < 150; i++)
@@ -602,12 +861,12 @@ void TestStepDetector::detectNoiseSplitPlateausDoNotSeverTheSweep()
     // that receiver: its true sweep is 0-60 dB in eleven steps with the top two
     // on the rail - see TestCalibrationExtractor.) Compared with a tolerance
     // because the dither moves each settled average slightly.
-    QVERIFY2(qAbs(r.profile.points.first().rawAvg - 7255.0) < 5.0,
-             qPrintable(QString::number(r.profile.points.first().rawAvg)));
-    QCOMPARE(r.profile.points.first().trueDb, 0.0);
-    QVERIFY2(qAbs(r.profile.points.last().rawAvg - 65472.0) < 5.0,
-             qPrintable(QString::number(r.profile.points.last().rawAvg)));
-    QCOMPARE(r.profile.points.last().trueDb, 36.0);
+    QVERIFY2(qAbs(r.profile.points.front().rawAvg - 7255.0) < 5.0,
+             qPrintable(QString::number(r.profile.points.front().rawAvg)));
+    QCOMPARE(r.profile.points.front().trueDb, 0.0);
+    QVERIFY2(qAbs(r.profile.points.back().rawAvg - 65472.0) < 5.0,
+             qPrintable(QString::number(r.profile.points.back().rawAvg)));
+    QCOMPARE(r.profile.points.back().trueDb, 36.0);
 }
 
 void TestStepDetector::detectFlatChannelReportsNoSignalNotMergedSteps()
@@ -616,9 +875,9 @@ void TestStepDetector::detectFlatChannelReportsNoSignalNotMergedSteps()
     // "too few plateaus" - the same verdict a compressed receiver gets - which
     // sends the operator looking for a detection problem when the sweep simply is
     // not in the recording. The two must read differently.
-    QVector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}};
+    std::vector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}};
 
-    QVector<double> flat;
+    std::vector<double> flat;
     appendRun(flat, 0.0, 600);
     StepDetector::Result r = StepDetector::detect(flat, kPeriod, steps);
     QVERIFY(!r.profile.valid);
@@ -626,18 +885,18 @@ void TestStepDetector::detectFlatChannelReportsNoSignalNotMergedSteps()
     // The stuck level is carried out so the report can name it: 0 is a dead
     // input, full scale is a railed one, and the operator needs to tell them apart.
     QCOMPARE(r.plateauLevels.size(), 1);
-    QCOMPARE(r.plateauLevels.first(), 0.0);
+    QCOMPARE(r.plateauLevels.front(), 0.0);
 
     // A railed channel is equally flat, just at the other end of the range.
-    QVector<double> railed;
+    std::vector<double> railed;
     appendRun(railed, 65535.0, 600);
     StepDetector::Result railedResult = StepDetector::detect(railed, kPeriod, steps);
     QCOMPARE(railedResult.outcome, CalibrationOutcome::FlatNoSignal);
-    QCOMPARE(railedResult.plateauLevels.first(), 65535.0);
+    QCOMPARE(railedResult.plateauLevels.front(), 65535.0);
 
     // Two genuine levels is NOT "flat" - it is a real but incomplete sweep, and
     // still reports as merged steps rather than as a dead channel.
-    QVector<double> twoLevels;
+    std::vector<double> twoLevels;
     appendRun(twoLevels, 1000.0, 300);
     appendRun(twoLevels, 2000.0, 300);
     StepDetector::Result partial = StepDetector::detect(twoLevels, kPeriod, steps);
@@ -656,9 +915,9 @@ void TestStepDetector::detectPinnedSamplesDoNotShrinkTheNoiseEstimate()
     //
     // The pinned share is exaggerated here (a majority) so the failure is
     // deterministic rather than dependent on where a median happens to land.
-    QVector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}, {18.0}, {24.0}};
+    std::vector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}, {18.0}, {24.0}};
 
-    QVector<double> raw;
+    std::vector<double> raw;
     appendRun(raw, 0.0, 1000); // pinned at the floor: the 0 dB level
     for (double level : {1000.0, 2000.0, 3000.0, 4000.0})
     {
@@ -673,10 +932,10 @@ void TestStepDetector::detectPinnedSamplesDoNotShrinkTheNoiseEstimate()
                                              .arg(calibrationOutcomeText(r.outcome))
                                              .arg(r.edgeThreshold)));
     QCOMPARE(r.profile.points.size(), steps.size());
-    QCOMPARE(r.profile.points.first().rawAvg, 0.0);
-    QCOMPARE(r.profile.points.first().trueDb, 0.0);
-    QVERIFY(qAbs(r.profile.points.last().rawAvg - 4000.0) < 6.0);
-    QCOMPARE(r.profile.points.last().trueDb, 24.0);
+    QCOMPARE(r.profile.points.front().rawAvg, 0.0);
+    QCOMPARE(r.profile.points.front().trueDb, 0.0);
+    QVERIFY(qAbs(r.profile.points.back().rawAvg - 4000.0) < 6.0);
+    QCOMPARE(r.profile.points.back().trueDb, 24.0);
 }
 
 void TestStepDetector::detectSplitDwellFarAboveNoiseIsStillOneStep()
@@ -691,9 +950,9 @@ void TestStepDetector::detectSplitDwellFarAboveNoiseIsStillOneStep()
     //
     // Noiseless here, so the edge threshold sits at its 2-count floor and only the
     // step-relative merge can heal the 30-count split.
-    QVector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}, {18.0}, {24.0}};
+    std::vector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}, {18.0}, {24.0}};
 
-    QVector<double> raw;
+    std::vector<double> raw;
     appendRun(raw, 0.0, 150);    // 0 dB
     appendRun(raw, 1000.0, 150); // 6 dB
     appendRun(raw, 2000.0, 150); // 12 dB
@@ -705,12 +964,12 @@ void TestStepDetector::detectSplitDwellFarAboveNoiseIsStillOneStep()
     QVERIFY(r.profile.valid);
     QCOMPARE(r.profile.points.size(), steps.size());
     // The pre-sweep level keeps its 0 dB slot instead of being dropped as pre-roll.
-    QCOMPARE(r.profile.points.first().rawAvg, 0.0);
-    QCOMPARE(r.profile.points.first().trueDb, 0.0);
+    QCOMPARE(r.profile.points.front().rawAvg, 0.0);
+    QCOMPARE(r.profile.points.front().trueDb, 0.0);
     // The split dwell is ONE point at 18 dB, carried by its later, settled half.
     QCOMPARE(r.profile.points[3].rawAvg, 3030.0);
     QCOMPARE(r.profile.points[3].trueDb, 18.0);
-    QCOMPARE(r.profile.points.last().trueDb, 24.0);
+    QCOMPARE(r.profile.points.back().trueDb, 24.0);
 }
 
 void TestStepDetector::detectRailedTopStepsCalibrateWhatStayedInRange()
@@ -723,9 +982,9 @@ void TestStepDetector::detectRailedTopStepsCalibrateWhatStayedInRange()
     // the receiver had no headroom - so they are dropped, the steps below them are
     // calibrated, and interpolateCalibration() clamps above the top measured step
     // rather than inventing values by extrapolating past the data.
-    QVector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}, {18.0}, {24.0}};
+    std::vector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}, {18.0}, {24.0}};
 
-    QVector<double> raw;
+    std::vector<double> raw;
     appendRun(raw, 1000.0, 150);
     appendRun(raw, 2000.0, 150);
     appendRun(raw, 3000.0, 150);
@@ -738,11 +997,11 @@ void TestStepDetector::detectRailedTopStepsCalibrateWhatStayedInRange()
 
     // The three measured dwells keep their own dB - the sweep starts at step 0.
     QCOMPARE(r.profile.points.size(), 3);
-    QCOMPARE(r.profile.points.first().rawAvg, 1000.0);
-    QCOMPARE(r.profile.points.first().trueDb, 0.0);
-    QCOMPARE(r.profile.points.last().rawAvg, 3000.0);
-    QCOMPARE(r.profile.points.last().trueDb, 12.0);
-    QCOMPARE(r.unresolvedDb, QVector<double>({18.0, 24.0}));
+    QCOMPARE(r.profile.points.front().rawAvg, 1000.0);
+    QCOMPARE(r.profile.points.front().trueDb, 0.0);
+    QCOMPARE(r.profile.points.back().rawAvg, 3000.0);
+    QCOMPARE(r.profile.points.back().trueDb, 12.0);
+    QCOMPARE(r.unresolvedDb, std::vector<double>({18.0, 24.0}));
 
     // A raw value at the rail reads the top step that was actually measured. It
     // is not 24 dB: the recording cannot say whether the signal was 18, 24, or
@@ -761,9 +1020,9 @@ void TestStepDetector::detectUnconfirmedDwellIsMeasuredFromTheGrid()
     //    linear there, which is exactly what an out-of-tolerance receiver is not
     //    (L_RCVR1's 24 dB dwell read 23.09 dB that way on the step_cal recording).
     // The dwell grid says where the missing dwell is, so it is measured directly.
-    QVector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}, {18.0}, {24.0}, {30.0}};
+    std::vector<StepDefinition> steps = {{0.0}, {6.0}, {12.0}, {18.0}, {24.0}, {30.0}};
 
-    QVector<double> raw;
+    std::vector<double> raw;
     appendRun(raw, 1000.0, 150);
     appendRun(raw, 2000.0, 150);
     appendRun(raw, 3000.0, 150);
@@ -788,10 +1047,10 @@ void TestStepDetector::detectUnconfirmedDwellIsMeasuredFromTheGrid()
     QCOMPARE(r.profile.points[3].trueDb, 18.0);
     QCOMPARE(interpolateCalibration(3603.0, r.profile), 18.0);
     // ...the step after it keeps ITS own dB rather than sliding down one...
-    QCOMPARE(r.profile.points.last().rawAvg, 5000.0);
-    QCOMPARE(r.profile.points.last().trueDb, 24.0);
+    QCOMPARE(r.profile.points.back().rawAvg, 5000.0);
+    QCOMPARE(r.profile.points.back().trueDb, 24.0);
     // ...and only the railed step is left unresolved.
-    QCOMPARE(r.unresolvedDb, QVector<double>({30.0}));
+    QCOMPARE(r.unresolvedDb, std::vector<double>({30.0}));
 }
 
 void TestStepDetector::detectReportsHowManyLevelsTheSweepHeld()
@@ -800,9 +1059,9 @@ void TestStepDetector::detectReportsHowManyLevelsTheSweepHeld()
     // the last eight levels and sets the lower three aside as lead-in, so every step
     // is paired with the wrong level and nothing fails. sweepLevels is what lets the
     // report notice - the sweep held more levels than the step file describes.
-    QVector<StepDefinition> steps = {{0.0}, {3.0}, {6.0}, {12.0}, {18.0}, {24.0}, {30.0}, {36.0}};
+    std::vector<StepDefinition> steps = {{0.0}, {3.0}, {6.0}, {12.0}, {18.0}, {24.0}, {30.0}, {36.0}};
 
-    QVector<double> eleven;
+    std::vector<double> eleven;
     for (int k = 1; k <= 11; k++)
     {
         appendRun(eleven, 1000.0 * k, 150);
@@ -812,7 +1071,7 @@ void TestStepDetector::detectReportsHowManyLevelsTheSweepHeld()
     QCOMPARE(r.sweepLevels, 11);
 
     // A sweep that matches the step file exactly reports exactly that many.
-    QVector<double> eight;
+    std::vector<double> eight;
     for (int k = 1; k <= 8; k++)
     {
         appendRun(eight, 1000.0 * k, 150);
@@ -820,6 +1079,21 @@ void TestStepDetector::detectReportsHowManyLevelsTheSweepHeld()
     StepDetector::Result exact = StepDetector::detect(eight, kPeriod, steps);
     QVERIFY(exact.profile.valid);
     QCOMPARE(exact.sweepLevels, 8);
+}
+
+void TestStepDetector::initialStepConfigPathIgnoresADirectory()
+{
+    // "Is a file", not "exists": a directory sitting where the step file should be (the
+    // preferred path, or the shipped default's own location) must not be offered to the
+    // dialog as a step file to parse.
+    QTemporaryDir root;
+    QVERIFY(root.isValid());
+    const QString rcvr_cals = root.path() + "/settings/rcvr_cals";
+    QVERIFY(QDir().mkpath(rcvr_cals + "/default.toml")); // a directory, named like the file
+    QVERIFY(QDir().mkpath(root.path() + "/somedir"));
+
+    QVERIFY(initialPath(root.path(), root.path() + "/somedir").isEmpty());
+    QVERIFY(initialPath(root.path(), QString()).isEmpty());
 }
 
 void TestStepDetector::initialStepConfigPrefersTheStreamsFileThenTheDefault()
@@ -835,20 +1109,20 @@ void TestStepDetector::initialStepConfigPrefersTheStreamsFileThenTheDefault()
     QVERIFY2(QFileInfo(shipped).isFile(), qPrintable(shipped));
 
     // No previous choice: the shipped default.
-    QCOMPARE(StepDetector::initialStepConfigPath(appRoot, QString()), shipped);
+    QCOMPARE(initialPath(appRoot, QString()), shipped);
 
     // A stream that already used a step file keeps it, even when it is not the
     // default - re-opening the dialog must not silently swap the operator's file.
-    QCOMPARE(StepDetector::initialStepConfigPath(appRoot, rasa), rasa);
+    QCOMPARE(initialPath(appRoot, rasa), rasa);
 
     // A stored reference that no longer resolves (a template from another machine)
     // falls back to the default instead of opening on a missing file.
-    QCOMPARE(StepDetector::initialStepConfigPath(appRoot, "C:/nowhere/gone.toml"), shipped);
+    QCOMPARE(initialPath(appRoot, "C:/nowhere/gone.toml"), shipped);
 
     // No settings tree at all (a bare build directory): nothing to preload, and the
     // dialog opens empty as it did before.
     QTemporaryDir bare;
     QVERIFY(bare.isValid());
-    QVERIFY(StepDetector::initialStepConfigPath(bare.path(), QString()).isEmpty());
-    QVERIFY(StepDetector::initialStepConfigPath(QString(), QString()).isEmpty());
+    QVERIFY(initialPath(bare.path(), QString()).isEmpty());
+    QVERIFY(initialPath(QString(), QString()).isEmpty());
 }

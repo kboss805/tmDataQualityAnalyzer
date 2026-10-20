@@ -5,14 +5,40 @@
 
 #include "chapter10reader.h"
 
+#include <cstdlib>
+#include <cstring>
+#include <new>
+
 #include "constants.h"
+#include "textparse.h"
 
 using namespace Irig106;
 
-Chapter10Reader::Chapter10Reader(QObject* parent) :
-    QObject(parent),
+namespace {
+
+/// ASCII upper-casing, enough for the TMATS "channel enabled" flag (T / TRUE / Y / 1).
+std::string upperAscii(std::string text)
+{
+    for (char& c : text)
+    {
+        if (c >= 'a' && c <= 'z')
+        {
+            c = static_cast<char>(c - 'a' + 'A');
+        }
+    }
+    return text;
+}
+
+/// A TMATS field as text; a missing field is the empty string.
+std::string fieldText(const char* field)
+{
+    return (field != nullptr) ? std::string(field) : std::string();
+}
+
+} // namespace
+
+Chapter10Reader::Chapter10Reader() :
     m_status(I106_OK),
-    m_filename(""),
     m_file_handle(0),
     m_header(),
     m_tmats_info(),
@@ -22,42 +48,13 @@ Chapter10Reader::Chapter10Reader(QObject* parent) :
     m_buffer.resize(PCMConstants::kDefaultBufferSize);
 }
 
-Chapter10Reader::~Chapter10Reader()
-{
-    qDeleteAll(m_channel_data);
-}
-
-bool Chapter10Reader::tryLoadingFile(const QString& filename)
-{
-    m_status = enI106Ch10Open(&m_file_handle, filename.toLocal8Bit().constData(), I106_READ);
-
-    if (m_status != I106_OK && m_status != I106_OPEN_WARNING)
-    {
-        emit displayErrorMessage(QString("Error opening data file."));
-        return false;
-    }
-
-    m_status = enI106_SyncTime(m_file_handle, bFALSE, 0);
-
-    if (m_status != I106_OK)
-    {
-        emit displayErrorMessage(QString("Error establishing time sync."));
-        return false;
-    }
-
-    m_filename = filename;
-
-    return true;
-}
-
-void Chapter10Reader::closeFile() const
+void Chapter10Reader::closeFile()
 {
     enI106Ch10Close(m_file_handle);
 }
 
 void Chapter10Reader::clearSettings()
 {
-    qDeleteAll(m_channel_data);
     m_channel_data.clear();
     m_time_channels.clear();
     m_pcm_channels.clear();
@@ -67,39 +64,39 @@ void Chapter10Reader::clearSettings()
 
 void Chapter10Reader::inferChannelTypeFromHeader(int channel_id)
 {
-    if (!m_channel_data[channel_id]->channelType().isEmpty())
+    ChannelData& channel = m_channel_data.at(channel_id);
+    if (!channel.channelType().empty())
     {
         return;
     }
     if (m_header.ubyDataType == I106CH10_DTYPE_IRIG_TIME)
     {
-        m_channel_data[channel_id]->setChannelType(PCMConstants::kChannelTypeTime);
-        if (m_channel_data[channel_id]->channelName().isEmpty())
+        channel.setChannelType(PCMConstants::kChannelTypeTime);
+        if (channel.channelName().empty())
         {
-            m_channel_data[channel_id]->setChannelName("Time");
+            channel.setChannelName("Time");
         }
     }
     else if (m_header.ubyDataType == I106CH10_DTYPE_PCM_FMT_1)
     {
-        m_channel_data[channel_id]->setChannelType(PCMConstants::kChannelTypePcm);
-        if (m_channel_data[channel_id]->channelName().isEmpty())
+        channel.setChannelType(PCMConstants::kChannelTypePcm);
+        if (channel.channelName().empty())
         {
-            m_channel_data[channel_id]->setChannelName("PCM");
+            channel.setChannelName("PCM");
         }
     }
 }
 
-bool Chapter10Reader::loadChannels(const QString& filename)
+bool Chapter10Reader::loadChannels(const std::filesystem::path& filename)
 {
-    m_filename = filename;
-    QByteArray ba_filename = m_filename.toLocal8Bit();
-    char* psz_filename = ba_filename.data();
+    m_last_error.clear();
+    const std::string path_text = filename.string();
 
     // Open the file
-    m_status = enI106Ch10Open(&m_file_handle, psz_filename, I106_READ);
+    m_status = enI106Ch10Open(&m_file_handle, path_text.c_str(), I106_READ);
     if (m_status != I106_OK)
     {
-        emit displayErrorMessage("Error opening file: " + m_filename);
+        m_last_error = "Error opening file: " + path_text;
         return false;
     }
 
@@ -108,13 +105,15 @@ bool Chapter10Reader::loadChannels(const QString& filename)
     m_status = enI106_SyncTime(m_file_handle, bFALSE, 0);
     if (m_status != I106_OK)
     {
-        emit displayErrorMessage("Error establishing time sync.");
+        m_last_error = "Error establishing time sync.";
         closeFile();
         return false;
     }
 
-    qDeleteAll(m_channel_data);
-    m_channel_data.clear();
+    // The new file replaces the old contents - channels, the lists that name them, and the
+    // selection. (The lists used to keep pointers into the channels, which dangled and then
+    // doubled up when a reader was loaded a second time.)
+    clearSettings();
 
     // A valid Chapter 10 file's FIRST packet is TMATS, which enumerates every
     // channel — so channel discovery only needs that one packet (no full-file scan,
@@ -139,19 +138,19 @@ bool Chapter10Reader::loadChannels(const QString& filename)
 
         if (first_packet && m_header.ubyDataType != I106CH10_DTYPE_TMATS)
         {
-            emit displayErrorMessage("Failed to find TMATS message (expected as the first packet).");
+            m_last_error = "Failed to find TMATS message (expected as the first packet).";
             closeFile();
             return false;
         }
         first_packet = false;
 
         // Make sure our buffer is big enough
-        if (m_buffer.size() < static_cast<qsizetype>(uGetDataLen(&m_header)))
+        if (m_buffer.size() < static_cast<std::size_t>(uGetDataLen(&m_header)))
         {
             try {
                 m_buffer.resize(uGetDataLen(&m_header));
             } catch (const std::bad_alloc&) {
-                emit displayErrorMessage("Memory allocation failed.");
+                m_last_error = "Memory allocation failed.";
                 closeFile();
                 return false;
             }
@@ -169,11 +168,8 @@ bool Chapter10Reader::loadChannels(const QString& filename)
         int channel_id = m_header.uChID;
 
         // If the channel is not in the map, add it
-        if (!m_channel_data.contains(channel_id))
-        {
-            m_channel_data.insert(channel_id, new ChannelData(channel_id));
-        }
-        m_channel_data[channel_id]->incrementChannelCount();
+        m_channel_data.try_emplace(channel_id, channel_id);
+        m_channel_data.at(channel_id).incrementChannelCount();
 
         // Set channel type and fallback name from packet header when not already set by TMATS
         inferChannelTypeFromHeader(channel_id);
@@ -194,31 +190,32 @@ bool Chapter10Reader::loadChannels(const QString& filename)
     return true;
 }
 
-QStringList Chapter10Reader::buildChannelComboBoxList(const QList<ChannelData*>& channels)
+std::vector<std::string> Chapter10Reader::buildChannelComboBoxList(const std::vector<int>& channel_ids) const
 {
-    QStringList list;
-    for (const auto* channel : channels)
+    std::vector<std::string> list;
+    list.reserve(channel_ids.size());
+    for (int id : channel_ids)
     {
-        list.append(QString::number(channel->channelID()) + " - " + channel->channelName());
+        list.push_back(std::to_string(id) + " - " + m_channel_data.at(id).channelName());
     }
     return list;
 }
 
-QStringList Chapter10Reader::getTimeChannelComboBoxList() const
+std::vector<std::string> Chapter10Reader::getTimeChannelComboBoxList() const
 {
     return buildChannelComboBoxList(m_time_channels);
 }
 
-QStringList Chapter10Reader::getPCMChannelComboBoxList() const
+std::vector<std::string> Chapter10Reader::getPCMChannelComboBoxList() const
 {
     return buildChannelComboBoxList(m_pcm_channels);
 }
 
-QList<QPair<int, QString>> Chapter10Reader::getPCMChannelList() const
+std::vector<std::pair<int, std::string>> Chapter10Reader::getPCMChannelList() const
 {
-    QList<QPair<int, QString>> list;
+    std::vector<std::pair<int, std::string>> list;
     list.reserve(m_pcm_channels.size());
-    for (const auto* channel : m_pcm_channels)
+    for (int id : m_pcm_channels)
     {
         // Bare channel name (no "<id> - " prefix): this drives the per-stream
         // label shown in the Configure Streams dialog and the Frame Sync Lock
@@ -226,12 +223,10 @@ QList<QPair<int, QString>> Chapter10Reader::getPCMChannelList() const
         // SNR plot series re-adds the channel number itself (see
         // PlotViewModel::addStreamData) since multiple SNR streams in one file
         // need it to stay distinguishable.
-        list.append({channel->channelID(), channel->channelName()});
+        list.emplace_back(id, m_channel_data.at(id).channelName());
     }
     return list;
 }
-
-
 
 bool Chapter10Reader::processTmatsPacket(Irig106::SuI106Ch10Header& header)
 {
@@ -242,8 +237,6 @@ bool Chapter10Reader::processTmatsPacket(Irig106::SuI106Ch10Header& header)
     m_status = enI106_Decode_Tmats(&header, m_buffer.data(), &m_tmats_info);
     return m_status == I106_OK;
 }
-
-
 
 void Chapter10Reader::applyTmatsNames()
 {
@@ -261,48 +254,42 @@ void Chapter10Reader::applyTmatsNames()
             // this recording. Skip explicitly-disabled sources so they don't show
             // up as selectable channels; treat a missing CHE-n (common on older
             // TMATS revisions) as enabled, since omission isn't a disable signal.
-            QString che = (data_source->szEnabled != nullptr)
-                          ? QString(data_source->szEnabled).trimmed().toUpper() : QString();
-            bool channel_enabled = che.isEmpty() || che == "T" || che == "TRUE" || che == "Y" || che == "1";
+            const std::string che = upperAscii(textparse::trimmed(fieldText(data_source->szEnabled)));
+            const bool channel_enabled = che.empty() || che == "T" || che == "TRUE" || che == "Y" || che == "1";
 
             if (data_source->szTrackNumber != nullptr && channel_enabled)
             {
                 int track_number = atoi(data_source->szTrackNumber);
-                if (!m_channel_data.contains(track_number))
-                {
-                    m_channel_data.insert(track_number, new ChannelData(track_number));
-                }
+                m_channel_data.try_emplace(track_number, track_number);
+                ChannelData& channel = m_channel_data.at(track_number);
 
                 // Name priority: szDataSourceID (descriptive TMATS R-record identifier)
                 //              → szChanDataLinkName (Ch10 rev 07+ link name, often generic)
                 //              → szPcmDataLinkName (rev -04/-05 link name)
-                QString dsid = (data_source->szDataSourceID != nullptr)
-                               ? QString(data_source->szDataSourceID) : QString();
-                QString cdln = (data_source->szChanDataLinkName != nullptr)
-                               ? QString(data_source->szChanDataLinkName) : QString();
-                QString pdln = (data_source->szPcmDataLinkName != nullptr)
-                               ? QString(data_source->szPcmDataLinkName) : QString();
-                if (!dsid.isEmpty())
+                const std::string dsid = fieldText(data_source->szDataSourceID);
+                const std::string cdln = fieldText(data_source->szChanDataLinkName);
+                const std::string pdln = fieldText(data_source->szPcmDataLinkName);
+                if (!dsid.empty())
                 {
-                    m_channel_data[track_number]->setChannelName(dsid);
+                    channel.setChannelName(dsid);
                 }
-                else if (!cdln.isEmpty())
+                else if (!cdln.empty())
                 {
-                    m_channel_data[track_number]->setChannelName(cdln);
+                    channel.setChannelName(cdln);
                 }
-                else if (!pdln.isEmpty())
+                else if (!pdln.empty())
                 {
-                    m_channel_data[track_number]->setChannelName(pdln);
+                    channel.setChannelName(pdln);
                 }
                 if (data_source->szChannelDataType != nullptr)
                 {
-                    QString cdt = QString(data_source->szChannelDataType).trimmed();
+                    const std::string cdt = textparse::trimmed(data_source->szChannelDataType);
                     if (cdt == "11" || cdt == "TIMEIN") {
-                        m_channel_data[track_number]->setChannelType(PCMConstants::kChannelTypeTime);
+                        channel.setChannelType(PCMConstants::kChannelTypeTime);
                     } else if (cdt == "01" || cdt == "09" || cdt == "PCMIN") {
-                        m_channel_data[track_number]->setChannelType(PCMConstants::kChannelTypePcm);
+                        channel.setChannelType(PCMConstants::kChannelTypePcm);
                     } else {
-                        m_channel_data[track_number]->setChannelType(cdt);
+                        channel.setChannelType(cdt);
                     }
                 }
             }
@@ -316,24 +303,24 @@ void Chapter10Reader::categorizeChannels()
 {
     applyTmatsNames();
 
-    // Go through m_channel_data and sort channels into time and PCM lists
-    for (auto it = m_channel_data.begin(); it != m_channel_data.end(); ++it)
+    // Go through m_channel_data (in id order) and sort channels into time and PCM lists
+    for (const auto& entry : m_channel_data)
     {
-        ChannelData* channel = it.value();
-        if (channel->channelType() == PCMConstants::kChannelTypeTime)
+        const ChannelData& channel = entry.second;
+        if (channel.channelType() == PCMConstants::kChannelTypeTime)
         {
-            m_time_channels.append(channel);
+            m_time_channels.push_back(channel.channelID());
             if (m_current_time_channel == -1)
             {
-                m_current_time_channel = channel->channelID();
+                m_current_time_channel = channel.channelID();
             }
         }
-        if (channel->channelType() == PCMConstants::kChannelTypePcm)
+        if (channel.channelType() == PCMConstants::kChannelTypePcm)
         {
-            m_pcm_channels.append(channel);
+            m_pcm_channels.push_back(channel.channelID());
             if (m_current_pcm_channel == -1)
             {
-                m_current_pcm_channel = channel->channelID();
+                m_current_pcm_channel = channel.channelID();
             }
         }
     }
@@ -343,13 +330,13 @@ void Chapter10Reader::timeChannelChanged(int combobox_index)
 {
     // subtract 1 from the index to account for "Select a Time Stream"
     int list_index = combobox_index - 1;
-    if (list_index < 0 || list_index >= m_time_channels.size())
+    if (list_index < 0 || list_index >= static_cast<int>(m_time_channels.size()))
     {
         m_current_time_channel = -1;
     }
     else
     {
-        m_current_time_channel = m_time_channels[list_index]->channelID();
+        m_current_time_channel = m_time_channels[list_index];
     }
 }
 
@@ -357,17 +344,15 @@ void Chapter10Reader::pcmChannelChanged(int combobox_index)
 {
     // subtract 1 from the index to account for "Select a PCM Stream"
     int list_index = combobox_index - 1;
-    if (list_index < 0 || list_index >= m_pcm_channels.size())
+    if (list_index < 0 || list_index >= static_cast<int>(m_pcm_channels.size()))
     {
         m_current_pcm_channel = -1;
     }
     else
     {
-        m_current_pcm_channel = m_pcm_channels[list_index]->channelID();
+        m_current_pcm_channel = m_pcm_channels[list_index];
     }
 }
-
-
 
 double Chapter10Reader::getTmatsDataRateBps(int channel_id) const
 {
@@ -387,9 +372,8 @@ double Chapter10Reader::getTmatsDataRateBps(int channel_id) const
                     const char* sz = data_source->psuPRecord->szBitsPerSec;
                     if (sz != nullptr && sz[0] != '\0')
                     {
-                        bool ok = false;
-                        double bps = QString(sz).toDouble(&ok);
-                        if (ok && bps > 0.0)
+                        double bps = 0.0;
+                        if (textparse::parseDouble(sz, bps) && bps > 0.0)
                             return bps;
                     }
                 }
@@ -408,9 +392,9 @@ int Chapter10Reader::getCurrentTimeChannelID() const
 
 int Chapter10Reader::getFirstPCMChannelID() const
 {
-    if (m_pcm_channels.isEmpty())
+    if (m_pcm_channels.empty())
     {
         return -1;
     }
-    return m_pcm_channels[0]->channelID();
+    return m_pcm_channels.front();
 }

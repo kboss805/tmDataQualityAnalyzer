@@ -3,6 +3,7 @@
  * @brief Implementation of PlotViewModel unit tests.
  */
 
+#include "plotconstants.h"
 #include "tst_plotviewmodel.h"
 
 #include <QEventLoop>
@@ -850,7 +851,7 @@ void TestPlotViewModel::loadCsvFileAsyncEmitsLoadFailed()
 static ProcessedStreamData makeLockOnlyStream(const QString& label, double time_sec, double lock_pct)
 {
     ProcessedStreamData d;
-    d.streamLabel = label;
+    d.streamLabel = label.toStdString();
     d.mode = StreamMode::FrameSyncLockStats;
     d.timesSec.push_back(time_sec);
     d.lockPercent.push_back(lock_pct);
@@ -861,12 +862,12 @@ static ProcessedStreamData makeLockOnlyStream(const QString& label, double time_
 static ProcessedStreamData makeReceiverStream(const QString& label, double time_sec, double lock_pct, const QString& ch_name, double snr)
 {
     ProcessedStreamData d;
-    d.streamLabel = label;
+    d.streamLabel = label.toStdString();
     d.mode = StreamMode::ReceiverChannelInfo;
     d.timesSec.push_back(time_sec);
     d.lockPercent.push_back(lock_pct);
     ProcessedChannelSeries ch;
-    ch.name = ch_name;
+    ch.name = ch_name.toStdString();
     ch.word = 1;
     ch.values.push_back(snr);
     d.channels.push_back(ch);
@@ -964,13 +965,13 @@ void TestPlotViewModel::addStreamDataEmptyDataNoOp()
 /// are unaffected; multi-source tests pass a distinct id explicitly.
 static ProcessedStreamData makeLockAndErrorStream(const QString& label,
                                                   int pcm_channel_id,
-                                                  const QVector<double>& times,
-                                                  const QVector<double>& lock,
-                                                  const QVector<double>& errors,
+                                                  const std::vector<double>& times,
+                                                  const std::vector<double>& lock,
+                                                  const std::vector<double>& errors,
                                                   int source_id = 0)
 {
     ProcessedStreamData d;
-    d.streamLabel = label;
+    d.streamLabel = label.toStdString();
     d.pcmChannelId = pcm_channel_id;
     d.sourceId = source_id;
     d.mode = StreamMode::FrameSyncLockStats;
@@ -978,6 +979,56 @@ static ProcessedStreamData makeLockAndErrorStream(const QString& label,
     d.lockPercent = lock;
     d.accumulatedMissedFrames = errors;
     return d;
+}
+
+void TestPlotViewModel::seriesOfOneStreamShareOneTimeAxis()
+{
+    // The processing core hands results over as std::vector, but PlotSeriesData keeps
+    // QVector on purpose (see toPlotVector() in plotviewmodel.cpp): every series of a
+    // stream shares ONE elapsed-time buffer, and TmChart shares the series' buffers in
+    // turn. A plausible tidy-up - building each series its own axis, or a container
+    // without implicit sharing - multiplies memory by the series count and stays
+    // invisible to every value-comparing test, since each copy holds the same times.
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream(
+        "Ch32", 32, {0.0, 1.0, 2.0}, {90.0, 95.0, 100.0}, {0.0, 1.0, 1.0}));
+    QCOMPARE(vm.seriesCount(), 2);
+    QCOMPARE(vm.seriesAt(0).xValues.constData(), vm.seriesAt(1).xValues.constData());
+}
+
+void TestPlotViewModel::aNonAsciiStreamLabelReachesEverySeries()
+{
+    // A TMATS label can hold any text. The label is the stream's identity in the plot:
+    // it names the lock and missed-frames series, prefixes the SNR series' name, and is
+    // what reprocessing matches on to replace a stream instead of duplicating it.
+    const QString label = QStringLiteral("R") + QChar(0x00E9) + QStringLiteral("cepteur ")
+                          + QChar(0x03A9);
+
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream(label, 7, {0.0, 1.0}, {90.0, 95.0}, {0.0, 1.0}));
+    ProcessedStreamData snr = makeReceiverStream(label, 0.0, 99.0, "L_RCVR1", 12.5);
+    snr.pcmChannelId = 8;
+    vm.addStreamData(snr);
+
+    // Stream 7: lock + missed frames. Stream 8 (receiver): its own lock series + one SNR channel.
+    QCOMPARE(vm.seriesCount(), 4);
+    int checked = 0;
+    for (int i = 0; i < vm.seriesCount(); i++)
+    {
+        const PlotSeriesData& s = vm.seriesAt(i);
+        QCOMPARE(s.streamLabel, label);
+        if (s.metricType == PlotSeriesData::MetricType::SNR)
+            QCOMPARE(s.name, QString("8 - ") + label + " L_RCVR1");
+        else
+            QCOMPARE(s.name, label);
+        checked++;
+    }
+    QCOMPARE(checked, 4);
+
+    // Reprocessing stream 7 replaces its series rather than adding to them, and leaves
+    // stream 8, which shares the label but not the channel, alone.
+    vm.addStreamData(makeLockAndErrorStream(label, 7, {0.0, 1.0}, {80.0, 85.0}, {0.0, 2.0}));
+    QCOMPARE(vm.seriesCount(), 4);
 }
 
 void TestPlotViewModel::addStreamDataErrorSeriesCreated()

@@ -15,17 +15,19 @@
 #define CH10PACKETREADER_H
 
 #include <atomic>
-
-#include <QByteArray>
-#include <QHash>
-#include <QObject>
-#include <QString>
-#include <QVector>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 #include "irig106ch10.h"
 #include "i106_time.h"
 #include "i106_decode_tmats.h"
 
+#include "processingevents.h"
 #include "processingparams.h"
 
 class PacketQueue;
@@ -45,15 +47,14 @@ typedef struct SuChanInfo
  * @brief Reads a Ch10 file once and dispatches PCM packets to stream queues.
  *
  * Lifecycle: the coordinator constructs the reader, calls prepare() synchronously
- * (opens the file, parses TMATS, resolves attributes, builds routing), then moves
- * the reader to its own QThread and invokes run() via QThread::started.
+ * (opens the file, parses TMATS, resolves attributes, builds routing), then runs run()
+ * on a thread of its own. It is plain C++: progress, log lines and errors go to a
+ * ProcessingEvents sink (setEvents()), called on the thread that runs run().
  */
-class Ch10PacketReader : public QObject
+class Ch10PacketReader
 {
-    Q_OBJECT
-
 public:
-    explicit Ch10PacketReader(QObject* parent = nullptr);
+    Ch10PacketReader();
     ~Ch10PacketReader();
 
     Ch10PacketReader(const Ch10PacketReader&)            = delete;
@@ -75,38 +76,36 @@ public:
      * @param[out]    error           Human-readable failure description.
      * @return true on success.
      */
-    bool prepare(const QString& filename,
+    bool prepare(const std::filesystem::path& filename,
                  int time_channel_id,
-                 QVector<ProcessingParams*>& params_list,
-                 QString& error);
+                 std::vector<ProcessingParams*>& params_list,
+                 std::string& error);
 
     /// Requests a cooperative abort of the read loop.
     void requestAbort();
 
-public slots:
-    /// Runs the single-pass read/dispatch loop. Connected to QThread::started.
+    /// Runs the single-pass read/dispatch loop. Returns when the file is exhausted, a read
+    /// fails, or an abort is requested; every queue has then been given its end marker.
     void run();
 
-signals:
-    /// Emitted periodically with file-position completion percentage (0..100).
-    void progressUpdated(int percent);
-    /// Emitted at key stages / on warnings with a human-readable message.
-    void logMessage(const QString& message);
-    /// Emitted when a fatal read/setup error occurs.
-    void errorOccurred(const QString& message);
-    /// Emitted once when the read loop has finished (clean, EOF, or aborted).
-    void finished();
+    /// Where progress, log lines and errors are reported. Set before run(); not safe to
+    /// change while it is running. Null (the default) reports nowhere.
+    void setEvents(std::shared_ptr<ProcessingEvents> events);
 
 private:
     /// Frees the per-channel attribute table.
-    static void freeChanInfoTable(QVector<SuChanInfo*>& channel_info);
+    static void freeChanInfoTable(std::vector<SuChanInfo*>& channel_info);
     /// Builds per-channel attribute structures from TMATS metadata.
     static Irig106::EnI106Status assembleAttributesFromTMATS(
         Irig106::SuTmatsInfo* tmats_info,
-        QVector<SuChanInfo*>& channel_info);
+        std::vector<SuChanInfo*>& channel_info);
 
     /// Grows m_buffer to at least @p required bytes. Returns false on failure.
-    bool ensureBufferCapacity(qsizetype required);
+    bool ensureBufferCapacity(std::size_t required);
+    /// Reports to the sink, if one is set.
+    void reportLog(const std::string& message) const;
+    void reportError(const std::string& message) const;
+    void reportProgress(int percent) const;
     /// Posts an end-of-stream sentinel to every distinct queue.
     void postSentinels();
 
@@ -114,19 +113,20 @@ private:
     int                   m_file_handle = -1;
     bool                  m_file_open   = false;
     Irig106::SuI106Ch10Header m_header;
-    QByteArray            m_buffer;
+    std::vector<uint8_t>  m_buffer;
     Irig106::SuTmatsInfo  m_tmats_info;
-    QVector<SuChanInfo*>  m_channel_info;
+    std::vector<SuChanInfo*>  m_channel_info;
     Irig106::SuIrig106Time m_irig_time;
     int64_t               m_total_file_size = 0;
     int                   m_time_channel_id = -1;
 
     /// channel ID -> queues that want that channel's PCM packets.
-    QHash<int, QVector<PacketQueue*>> m_routing;
+    std::unordered_map<int, std::vector<PacketQueue*>> m_routing;
     /// All distinct queues (for sentinel fan-out).
-    QVector<PacketQueue*> m_all_queues;
+    std::vector<PacketQueue*> m_all_queues;
 
     std::atomic<bool> m_abort_requested;
+    std::shared_ptr<ProcessingEvents> m_events; ///< Optional report sink; see setEvents().
 };
 
 #endif // CH10PACKETREADER_H

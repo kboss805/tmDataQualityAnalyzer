@@ -3,6 +3,7 @@
 #include <QtTest>
 
 #include "constants.h"
+#include "plotconstants.h"
 
 void TestConstants::pcmMaxChannelCount()
 {

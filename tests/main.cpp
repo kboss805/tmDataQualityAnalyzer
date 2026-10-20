@@ -20,6 +20,7 @@
 #include "tst_processingcoordinator.h"
 #include "tst_stepdetector.h"
 #include "tst_calibrationextractor.h"
+#include "tst_ch10packetreader.h"
 #include "tst_streamconfigdialog.h"
 
 #include "tst_exportdialog.h"
@@ -27,6 +28,12 @@
 #include "tst_streamconfigschema.h"
 #include "tst_processingtemplateschema.h"
 #include "tst_templatematcher.h"
+#include "tst_packetqueue.h"
+#include "tst_intervalgate.h"
+#include "tst_textformat.h"
+#include "tst_framesync.h"
+#include "tst_qtprocessingevents.h"
+#include "tst_tomldocument.h"
 
 /// Runs a single test suite and appends results to the shared log file.
 template<typename T>
@@ -127,6 +134,12 @@ int main(int argc, char* argv[])
     status |= runSuite<TestStreamConfigSchema>(log_path);
     status |= runSuite<TestProcessingTemplateSchema>(log_path);
     status |= runSuite<TestTemplateMatcher>(log_path);
+    status |= runSuite<TestPacketQueue>(log_path);
+    status |= runSuite<TestIntervalGate>(log_path);
+    status |= runSuite<TestTextFormat>(log_path);
+    status |= runSuite<TestFrameSync>(log_path);
+    status |= runSuite<TestTomlDocument>(log_path);
+    status |= runSuite<TestQtProcessingEvents>(log_path);
 
     // Heavy suites — integration over a real .ch10 fixture; TestFrameProcessor alone
     // is ~74 s and dominates the ~85 s run. Skipped in fast mode for quick iteration;
@@ -134,6 +147,7 @@ int main(int argc, char* argv[])
     if (!fast_mode)
     {
         status |= runSuite<TestChapter10Reader>(log_path);
+        status |= runSuite<TestCh10PacketReader>(log_path);
         status |= runSuite<TestFrameProcessor>(log_path);
         status |= runSuite<TestProcessingCoordinator>(log_path);
         status |= runSuite<TestCalibrationExtractor>(log_path);
