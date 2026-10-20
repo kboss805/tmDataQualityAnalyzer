@@ -32,6 +32,7 @@
 #include "tst_intervalgate.h"
 #include "tst_textformat.h"
 #include "tst_framesync.h"
+#include "tst_coreqtfree.h"
 #include "tst_qtprocessingevents.h"
 #include "tst_tomldocument.h"
 
@@ -138,6 +139,7 @@ int main(int argc, char* argv[])
     status |= runSuite<TestIntervalGate>(log_path);
     status |= runSuite<TestTextFormat>(log_path);
     status |= runSuite<TestFrameSync>(log_path);
+    status |= runSuite<TestCoreQtFree>(log_path);
     status |= runSuite<TestTomlDocument>(log_path);
     status |= runSuite<TestQtProcessingEvents>(log_path);
 

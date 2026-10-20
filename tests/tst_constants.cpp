@@ -81,7 +81,7 @@ void TestConstants::appVersionToString()
         .arg(AppVersion::kMajor)
         .arg(AppVersion::kMinor)
         .arg(AppVersion::kPatch);
-    QCOMPARE(AppVersion::toString(), expected);
+    QCOMPARE(QString::fromStdString(AppVersion::toString()), expected);
 }
 
 void TestConstants::pcmMaxRawSampleValue()
@@ -233,7 +233,7 @@ void TestConstants::pcmFrameLengthBoundsConstants()
 void TestConstants::pcmMaxPacketBufferSize()
 {
     // Guard against malformed CH10 headers; 100 MB cap.
-    QCOMPARE(PCMConstants::kMaxPacketBufferSize, static_cast<qsizetype>(100 * 1024 * 1024));
+    QCOMPARE(static_cast<qint64>(PCMConstants::kMaxPacketBufferSize), static_cast<qint64>(100) * 1024 * 1024);
 }
 
 void TestConstants::uiDefaultSamplePeriodIndex()
