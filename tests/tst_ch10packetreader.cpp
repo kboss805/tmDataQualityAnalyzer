@@ -15,8 +15,17 @@
 #include <QThread>
 #include <QtTest>
 
+#ifdef Q_OS_WIN
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
+#  define WIN32_LEAN_AND_MEAN
+#  include <windows.h>
+#endif
+
 #include "ch10packetreader.h"
 #include "chapter10reader.h"
+#include "irig106lock.h"
 #include "packetqueue.h"
 #include "processingparams.h"
 #include "qtbridge.h"
@@ -572,4 +581,163 @@ void TestCh10PacketReader::everyQueueGetsEveryPacketAndTheyShareOneCopy()
     {
         QVERIFY2(da.m_pointers[i] == db.m_pointers[i], qPrintable(QStringLiteral("packet %1").arg(i)));
     }
+}
+
+/// The vendored irig106 library keeps process-wide state (a handle table claimed with an
+/// unsynchronised check-then-set, and the TMATS decoder's static pointers), so two threads
+/// setting up at the same moment can be given the same handle or decode into each other's
+/// tables. Driven from a bare C# host the first concurrent run crashed with an access
+/// violation. The application opens each file once from one thread today; this pins that
+/// doing it from many does not matter.
+void TestCh10PacketReader::manyThreadsSettingUpAtOnceAllSucceedAndAgree()
+{
+    Fixture fx;
+    if (!loadFixture(fx))
+        QSKIP("step_cal fixture not available");
+
+    Chapter10Reader baseline;
+    QVERIFY(baseline.loadChannels(toFsPath(fx.path)));
+    const auto expected_pcm = baseline.getPCMChannelList();
+    QVERIFY(!expected_pcm.empty());
+
+    constexpr int kThreads = 8;
+    constexpr int kRounds = 40;
+    std::atomic<bool> go{false};
+    std::atomic<int> failures{0};
+    std::atomic<int> ready{0};
+    std::vector<std::thread> threads;
+    for (int t = 0; t < kThreads; ++t)
+    {
+        threads.emplace_back([&, t]() {
+            ++ready;
+            while (!go.load()) {}   // release everyone together: the race needs overlap
+            for (int round = 0; round < kRounds; ++round)
+            {
+                if ((round + t) % 2 == 0)
+                {
+                    Chapter10Reader meta;
+                    if (!meta.loadChannels(toFsPath(fx.path)) || meta.getPCMChannelList() != expected_pcm)
+                        ++failures;
+                }
+                else
+                {
+                    PacketQueue q;
+                    ProcessingParams p = paramsFor(fx, &q);
+                    std::vector<ProcessingParams*> list{&p};
+                    Ch10PacketReader r;
+                    std::string err;
+                    if (!r.prepare(toFsPath(fx.path), fx.time_id, list, err) || !p.resolvedAttrs.resolved)
+                        ++failures;
+                }
+            }
+        });
+    }
+    while (ready.load() < kThreads) {}
+    go = true;
+    for (auto& th : threads)
+        th.join();
+
+    QCOMPARE(failures.load(), 0);
+}
+
+namespace {
+
+/// Runs one reader's setup against @p path: the metadata reader's loadChannels(), or the packet
+/// reader's prepare(). Returns whether it succeeded.
+bool runSetup(bool via_prepare, const Fixture& fx, const QString& path)
+{
+    if (via_prepare)
+    {
+        PacketQueue q;
+        ProcessingParams p = paramsFor(fx, &q);
+        std::vector<ProcessingParams*> list{&p};
+        Ch10PacketReader r;
+        std::string err;
+        return r.prepare(toFsPath(path), fx.time_id, list, err);
+    }
+    Chapter10Reader meta;
+    return meta.loadChannels(toFsPath(path));
+}
+
+void addBothReaders()
+{
+    QTest::addColumn<bool>("viaPrepare");
+    QTest::newRow("Chapter10Reader::loadChannels") << false;
+    QTest::newRow("Ch10PacketReader::prepare") << true;
+}
+
+} // namespace
+
+// The stress test shows the symptom when the lock is missing, but a race is only sometimes
+// visible. This one is deterministic: while this thread holds the library lock, a setup on another
+// thread must not get past it, and must succeed once the lock is released.
+//
+// It also sees WHERE the lock is taken. The recording is a copy this test holds open with no
+// sharing, so any attempt to open it fails at once: a setup that reached open() while it should
+// still be waiting - a lock taken after the open, or none - fails, and finishes, while the lock
+// is still held. The handle is closed before the lock is released, so the open then succeeds.
+void TestCh10PacketReader::setupWaitsForTheLockAnotherThreadHolds_data() { addBothReaders(); }
+
+void TestCh10PacketReader::setupWaitsForTheLockAnotherThreadHolds()
+{
+    QFETCH(bool, viaPrepare);
+#ifndef Q_OS_WIN
+    QSKIP("uses a Windows exclusive-share file handle to see where the lock is taken");
+#else
+    Fixture fx;
+    if (!loadFixture(fx))
+        QSKIP("step_cal fixture not available");
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString copy = dir.filePath("recording.ch10");
+    QVERIFY(QFile::copy(fx.path, copy));
+    HANDLE exclusive = CreateFileW(reinterpret_cast<LPCWSTR>(copy.utf16()), GENERIC_READ, 0, nullptr,
+                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    QVERIFY2(exclusive != INVALID_HANDLE_VALUE, "could not hold the copy open exclusively");
+
+    std::atomic<bool> finished{false};
+    std::atomic<bool> succeeded{false};
+    std::thread worker;
+    bool finished_while_held = false;
+    {
+        const auto held = lockIrig106Setup();
+        worker = std::thread([&]() {
+            succeeded = runSetup(viaPrepare, fx, copy);
+            finished = true;
+        });
+        QThread::msleep(500);   // a setup takes milliseconds; this is far longer than it needs
+        finished_while_held = finished.load();
+        CloseHandle(exclusive); // let the open succeed once the worker is let through
+    }                           // lock released here
+    worker.join();
+
+    QVERIFY2(!finished_while_held, "setup ran (or tried to open the file) while another thread held the irig106 lock");
+    QVERIFY2(succeeded.load(), "setup did not succeed once the lock was released");
+#endif
+}
+
+// The lock is held by an object that goes out of scope, so every early return in setup releases
+// it. A setup that fails (a path that does not exist) must not leave the next one waiting forever.
+void TestCh10PacketReader::aFailedSetupStillReleasesTheLock_data() { addBothReaders(); }
+
+void TestCh10PacketReader::aFailedSetupStillReleasesTheLock()
+{
+    QFETCH(bool, viaPrepare);
+    Fixture fx;
+    if (!loadFixture(fx))
+        QSKIP("step_cal fixture not available");
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString missing = dir.filePath("no-such-recording.ch10");
+    // prepare() sizes the file before it takes the lock, then fails to open it; loadChannels()
+    // fails to open it. Either way the failure path is the one under test.
+    QVERIFY(!runSetup(viaPrepare, fx, missing));
+
+    std::unique_lock<std::mutex> probe(irig106SetupMutex(), std::try_to_lock);
+    QVERIFY2(probe.owns_lock(), "a failed setup left the irig106 lock held");
+    probe.unlock();
+
+    QVERIFY2(runSetup(viaPrepare, fx, fx.path), "a setup after a failed one did not succeed");
 }
