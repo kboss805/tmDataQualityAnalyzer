@@ -386,7 +386,10 @@ top to bottom:</p>
 <ul>
   <li><strong>The count</strong> &mdash; how many channels received a measured profile, out of
       every channel in the word map.</li>
-  <li><strong>Calibrated</strong> &mdash; the receivers whose channels all calibrated.</li>
+  <li><strong>Calibrated</strong> &mdash; the receivers whose channels all calibrated. Channels whose
+      names carry no receiver number (a hand-written word map) have no receiver to list, so when
+      all of them calibrated they follow on a second line, <strong>Calibrated (unnamed
+      channels)</strong>, by name.</li>
   <li><strong>Check the step file</strong> / <strong>Check the word map</strong> &mdash; prompts
       that appear only when a result <em>looks</em> successful but may be wrong (see below).</li>
   <li><strong>Fell back to linear calibration</strong> &mdash; every other receiver, with the
