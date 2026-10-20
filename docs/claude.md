@@ -522,6 +522,49 @@ v2.9.0 intended. Every first-party header here is quote-included, so `anglebrack
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
 
+#### irig106 setup is serialised: two threads opening recordings at once no longer crash
+
+The vendored library keeps process-wide state it never locks. `GetNextHandle()` claims a slot in a global
+handle table with a check-then-set, so two simultaneous opens can be given the **same** slot;
+`InitHandles()` resets that table the first time it runs; and `i106_decode_tmats.c` decodes through static
+pointers. Found by driving the core from a bare C# host, where the first concurrent run died with
+`0xC0000005`. The application opens each file once from one thread, so nothing was failing - but batch work,
+calibration beside a main run, or a second window would have met it, as an access violation rather than an
+error. `lib/irig106` may not be edited, so the lock is ours.
+
+- `include/model/irig106lock.h`: one process-wide mutex (`irig106SetupMutex()`, an inline function-local
+  static, so one instance across translation units) and `lockIrig106Setup()`, which returns the held
+  `std::unique_lock`. Qt-free, so the core guard stays satisfied.
+- `Chapter10Reader::loadChannels` holds it for the whole load, and `Ch10PacketReader::prepare` from just
+  before the open to its return, by an object, so every early return releases it. That is the whole of
+  setup: open, time sync, TMATS read and decode. **Not** the packet reads afterwards - a handle that is already
+  open touches only itself, so the parallel decode is untouched.
+
+**Tests first.** `manyThreadsSettingUpAtOnceAllSucceedAndAgree` releases eight threads together to do 40
+setups each, alternating the two readers, and requires every one to succeed and to list the same PCM channels
+as a single-threaded load. **Against the unfixed code the whole test executable crashed** with `0xC0000005`
+inside it. A race is only sometimes visible, so two deterministic cases pin the lock itself, once per reader:
+`setupWaitsForTheLockAnotherThreadHolds` (while the test thread holds the lock, a setup on another thread must
+not finish within half a second, and must succeed once it is released) and `aFailedSetupStillReleasesTheLock`
+(a setup on a missing file must leave the lock free and the next setup working).
+
+**The deterministic case also sees where the lock is taken.** The recording it hands the worker is a copy the
+test holds open with no sharing, so any attempt to open it fails at once: a setup that reached `open()` while
+it should still be waiting finishes - with a failure - while the lock is still held. The handle is closed
+before the lock is released, so the open then succeeds. The first version of this test could not tell a lock
+taken before the open from one taken after it, and two mutants survived; this is what killed them.
+
+**Validated against eight single-defect mutants; all caught.** Either reader unlocked (two); a mutex that is
+per-thread instead of shared; the lock released the instant it is taken (two); the lock taken after the open
+(two, the survivors above); and the lock leaked when the open fails. The first three families and the early
+release are caught by the stress test crashing the run, which it did on every run of the mutation loop; the
+after-open pair by the deterministic case; the leak by a later suite re-locking on the same thread and
+throwing. **The remaining blind spot is a lock released too early *after* the open**, which only the
+stress test can see, and that is probabilistic.
+
+Baseline **702 / 0 / 1** (was 697 / 0 / 1; five new results: the stress test and two cases per reader),
+**703 / 0 / 0** at release. **29 suites.**
+
 #### The core includes no Qt header, and a test says so (de-Qt, `constants.h`)
 
 With the last `QObject` gone, the question was what Qt the core still touched. A compile probe of every core
@@ -4466,7 +4509,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestChannelData** (`tst_channeldata`) — ChannelData model object tests, including a non-ASCII name round-tripping and copies keeping every field
 - **TestChapter10Reader** (`tst_chapter10reader`) — Chapter 10 metadata reader, on the five committed recordings: exact channel ids, names and TMATS data rates for each; the combo-box index to channel mapping (placeholder at 0, past the end); each way a file fails to load (missing, empty, text, short header, first packet not TMATS, only TMATS, cut inside TMATS) with its exact message and no channels left; a second load replacing the first and a failed open leaving the old channels alone; and a copy of `step_cal` with same-length edits to its TMATS text (no data checksum, header untouched) that reaches what the fixtures do not - the channel-enabled flag (T / Y / 1 either case enable, F / N / 0 / other disable, missing enables, whitespace ignored), the type codes (`PCMIN` / `01` / `09`, `TIMEIN` / `11`, case-sensitive), the name priority (data source id, channel data link name, PCM link name), a non-ASCII name, and the bit rate read like `QString::toDouble`. Written against the `QObject` reader first; validated against 23 mutants
 - **TestConstants** (`tst_constants`) — Verifies all PCMConstants, UIConstants, PlotConstants, AppVersion, and recent files constants (including kMaxPacketBufferSize, kFrameSyncHexPattern)
-- **TestCh10PacketReader** (`tst_ch10packetreader`) — the single-pass reader, tested directly on the committed `step_cal` recording (it had no tests of its own): each way `prepare()` fails has its own exact message; a full run reports its start, no error, progress that never goes backwards and ends at 100, all 1598 packets (6,539,016 payload bytes) and exactly one end marker; an abort is announced, reports 100 and still posts the end marker; a file cut inside a PCM packet, inside a time packet, or with a damaged header checksum reports the right read error and delivers exactly the packets before the damage; a file that ends inside a packet header is a clean end of file and a damaged sync pattern silently costs one packet (both pinned as the behaviour they are); and two streams on one channel each get every packet sharing one payload buffer. Cut points are found by walking the packet headers. Written against the signal-based reader first; validated against eleven mutants
+- **TestCh10PacketReader** (`tst_ch10packetreader`) — the single-pass reader, tested directly on the committed `step_cal` recording (it had no tests of its own): each way `prepare()` fails has its own exact message; a full run reports its start, no error, progress that never goes backwards and ends at 100, all 1598 packets (6,539,016 payload bytes) and exactly one end marker; an abort is announced, reports 100 and still posts the end marker; a file cut inside a PCM packet, inside a time packet, or with a damaged header checksum reports the right read error and delivers exactly the packets before the damage; a file that ends inside a packet header is a clean end of file and a damaged sync pattern silently costs one packet (both pinned as the behaviour they are); and two streams on one channel each get every packet sharing one payload buffer. Cut points are found by walking the packet headers. Written against the signal-based reader first; validated against eleven mutants Setup is serialised across threads (the library's own state is not thread-safe): while one thread holds `lockIrig106Setup()` a setup on another cannot even open the file (a copy held open with no sharing makes an early open fail visibly), a failed setup releases the lock, and eight threads setting up 40 times each all succeed and agree
 - **TestFrameProcessor** (`tst_frameprocessor`) — constructor defaults, abort flag, `derandomizeBitstream` (identity/short and changed/long), invalid time-channel/PCM-channel/file handling, and processing real Ch10 data (receiver-data accumulation, lock-only mode has no channels, monotonic frame-sync errors, slope affects values, shorter period → more samples, calibration round-trip clean steps, off-phase sync after lock-loss not extracted); and `reportsExactlyTheseMessages` (10 rows), the exact text and order of everything it reports - success, a non-ASCII stream label, a bounded window, a masked pattern, sync-but-no-frames, cancel, both internal errors, and the all-odd and mixed byte-swap warnings - written against the signals implementation first
 - **TestMainViewModelHelpers** (`tst_mainviewmodel_helpers`) — `MainViewModel::classifyLogMessage()`, the severity policy the View renders but does not decide. The channel-naming cases that used to live here moved to **TestFrameSetup** with the `MainViewModel` forwarders they called: `FrameSetup` is where that naming lives; and `buildStreamJobAttachesCalibrationByWord`, which runs a receiver stream through the private `buildStreamJob` (the test is a friend) and checks which parameters received which profile and the log line that says so; and `buildStreamJob` as a whole: 43 rows of how the sync pattern and mask are decoded (whitespace trimmed, `+` and `0x` accepted, any `-` refused, 64-bit overflow refused, the pattern's length counted in characters), every field a config contributes to the worker's parameters, and each rejection message in the order the checks run
 - **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration, `channelPrefix()` naming the known channel positions then falling back to `CH<n+1>`, `receiverParameterName()` combining the two, `receiverIndexFromName()` inverting it (0 for a name with no parseable `_RCVR<N>`), and the receiver-parameters file as a whole: the scalars read from the `[Receivers]` block the shipped files actually use (and the older `[Parameters]` keys still accepted), a save/load round trip that carries the word map with them, the default-map fallback when no file was loaded, nothing written when there is no map to write, and the metadata-only file that parses to zero parameters — the contract `tryLoadingFile()`'s two callers depend on; and `receiverNameParsingMatchesQStringToInt`, which pins how a hand-typed parameter name parses (the last `_RCVR` token wins, whitespace and a leading `+` tolerated, a second sign / negative / trailing junk / overflow reads as no receiver, a name starting with the token has no channel part) - written against the `QString` implementation first; and `attachCalibrationProfiles`, which attaches a step-calibration profile only when it is valid and its word matches a parameter (an invalid one stays linear; a word the map lacks is ignored), written against the `QObject`/`QHash` version first

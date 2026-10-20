@@ -20,6 +20,7 @@
 
 #include "constants.h"
 #include "intervalgate.h"
+#include "irig106lock.h"
 #include "packetqueue.h"
 
 using namespace Irig106;
@@ -217,6 +218,11 @@ bool Ch10PacketReader::prepare(const std::filesystem::path& filename,
     std::error_code size_error;
     const auto file_size = std::filesystem::file_size(filename, size_error);
     m_total_file_size = size_error ? 0 : static_cast<int64_t>(file_size);
+
+    // Setup is the part of irig106 that is not thread-safe (the handle table, the TMATS decoder's
+    // statics), so it is serialised across every reader in the process. Held to the end of the
+    // function, whichever way it returns; reading packets afterwards needs no lock.
+    const auto setup_lock = lockIrig106Setup();
 
     // The path in the process code page, matching Chapter10Reader: irig106 opens with the
     // CRT's narrow open(), which reads that code page - UTF-8 under codepage.pri's manifest.

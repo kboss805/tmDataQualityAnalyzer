@@ -28,6 +28,11 @@ private slots:
     void aDamagedHeaderStopsTheReadOrCostsOnePacket_data();
     void aDamagedHeaderStopsTheReadOrCostsOnePacket();
     void everyQueueGetsEveryPacketAndTheyShareOneCopy();
+    void setupWaitsForTheLockAnotherThreadHolds_data();
+    void setupWaitsForTheLockAnotherThreadHolds();
+    void aFailedSetupStillReleasesTheLock_data();
+    void aFailedSetupStillReleasesTheLock();
+    void manyThreadsSettingUpAtOnceAllSucceedAndAgree();
 };
 
 #endif // TST_CH10PACKETREADER_H

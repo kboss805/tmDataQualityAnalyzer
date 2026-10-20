@@ -10,6 +10,7 @@
 #include <new>
 
 #include "constants.h"
+#include "irig106lock.h"
 #include "textparse.h"
 
 using namespace Irig106;
@@ -91,6 +92,10 @@ bool Chapter10Reader::loadChannels(const std::filesystem::path& filename)
 {
     m_last_error.clear();
     const std::string path_text = filename.string();
+
+    // The whole load is setup: open, time sync and the TMATS decode all touch irig106's
+    // process-wide state, so it is serialised with every other reader's setup.
+    const auto setup_lock = lockIrig106Setup();
 
     // Open the file
     m_status = enI106Ch10Open(&m_file_handle, path_text.c_str(), I106_READ);

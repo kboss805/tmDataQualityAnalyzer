@@ -23,7 +23,7 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   suites**) is dominated by the real-Ch10 integration suites (a few minutes); add `--fast` (or
   `TMDQ_FAST_TESTS=1`) to skip those four `.ch10` suites for ~1 s local iteration — **local only; CI
   and releases run the full suite**. No CLI single-suite filter.
-  Green baseline: **697 passed / 0 failed / 1 skipped** normally, **698 / 0 / 0** at release. The
+  Green baseline: **702 passed / 0 failed / 1 skipped** normally, **703 / 0 / 0** at release. The
   one standing skip is the heavy PRN throughput benchmark, opt-in via `TMDQA_RUN_HEAVY_BENCH=1`
   because it walks a 640 MB recording nine times and takes minutes. At release it is not skipped:
   `scripts\run_throughput_bench.ps1` builds Release, enables it, runs it **pinned to the
@@ -114,6 +114,10 @@ Invoke explicitly (`/build-and-test`) or let them trigger by intent.
   never extrapolates. The calibration extractor must mirror the main run's word map + raw-affecting
   flags exactly: both build them through `applyAcquisition` (`include/model/framesync.h`), so a new
   raw-affecting field goes there and nowhere else.
+- **irig106 setup is serialised:** the vendored library keeps unlocked process-wide state (the handle
+  table, the TMATS decoder's statics), so two simultaneous setups can crash. `Chapter10Reader::loadChannels`
+  and `Ch10PacketReader::prepare` hold `lockIrig106Setup()` (`include/model/irig106lock.h`) for their whole
+  setup; anything new that opens a recording must too. Reading from an open handle needs no lock.
 - **Frame sync:** lock % is a **bit-span** quantity, not `time × bitrate`. Reject off-phase syncs
   while locked. Don't double-count missed frames (gap extrapolation only when a window has zero bits).
 - **TOML boundary:** frame-sync Load/Save round-trips the sync pattern, sync mask, words/frame and

@@ -71,6 +71,7 @@ HEADERS += \
     $$PWD/../include/model/chapter10reader.h \
     $$PWD/../include/model/ch10packetreader.h \
     $$PWD/../include/model/intervalgate.h \
+    $$PWD/../include/model/irig106lock.h \
     $$PWD/../include/model/packetqueue.h \
     $$PWD/../include/model/framesetup.h \
     $$PWD/../include/model/framesync.h \
