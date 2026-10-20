@@ -102,10 +102,6 @@ private:
 
     /// Grows m_buffer to at least @p required bytes. Returns false on failure.
     bool ensureBufferCapacity(std::size_t required);
-    /// Reports to the sink, if one is set.
-    void reportLog(const std::string& message) const;
-    void reportError(const std::string& message) const;
-    void reportProgress(int percent) const;
     /// Posts an end-of-stream sentinel to every distinct queue.
     void postSentinels();
 
@@ -126,7 +122,7 @@ private:
     std::vector<PacketQueue*> m_all_queues;
 
     std::atomic<bool> m_abort_requested;
-    std::shared_ptr<ProcessingEvents> m_events; ///< Optional report sink; see setEvents().
+    EventReporter m_report; ///< Where progress, log lines and errors go; see setEvents().
 };
 
 #endif // CH10PACKETREADER_H

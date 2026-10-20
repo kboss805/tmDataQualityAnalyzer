@@ -65,7 +65,7 @@ public:
 
     void logMessage(const std::string& message) override
     {
-        m_owner.log(message);
+        m_owner.m_report.log(message);
     }
 
     void errorOccurred(const std::string& message) override
@@ -76,7 +76,7 @@ public:
             std::lock_guard<std::mutex> lock(m_owner.m_mutex);
             m_owner.m_error = message;
         }
-        m_owner.log(message);
+        m_owner.m_report.log(message);
     }
 
     void processingFinished(bool success) override
@@ -86,10 +86,7 @@ public:
 
     void progressUpdated(int percent) override
     {
-        if (m_owner.m_events != nullptr)
-        {
-            m_owner.m_events->progressUpdated(percent);
-        }
+        m_owner.m_report.progress(percent);
     }
 
 private:
@@ -115,14 +112,6 @@ void CalibrationExtractor::joinDriver()
     }
 }
 
-void CalibrationExtractor::log(const std::string& message)
-{
-    if (m_events != nullptr)
-    {
-        m_events->logMessage(message);
-    }
-}
-
 std::string CalibrationExtractor::error() const
 {
     std::lock_guard<std::mutex> lock(m_mutex);
@@ -138,7 +127,7 @@ void CalibrationExtractor::start(const Request& request, std::shared_ptr<Process
     // A previous run's driver may still be returning from its last report.
     joinDriver();
 
-    m_events = std::move(events);
+    m_report.setSink(std::move(events));
     m_cancelled = false;
     m_worker_ok = false;
     {
@@ -229,11 +218,11 @@ void CalibrationExtractor::start(const Request& request, std::shared_ptr<Process
                        CalibrationConstants::kMaxExtractSamplePeriodSec);
         m_sample_period_sec      = period;
         m_params.samplePeriodSec = period;
-        log(std::format("Calibration extraction sample period: {} ms "
-                        "(~{} frames/window at {}-bit frames).",
-                        textformat::formatFixed(period * 1000.0, 2),
-                        textformat::formatFixed(period / frame_duration_sec, 0),
-                        m_params.bitsInMinorFrame));
+        m_report.log(std::format("Calibration extraction sample period: {} ms "
+                                 "(~{} frames/window at {}-bit frames).",
+                                 textformat::formatFixed(period * 1000.0, 2),
+                                 textformat::formatFixed(period / frame_duration_sec, 0),
+                                 m_params.bitsInMinorFrame));
     }
 
     // ---- Worker ----
@@ -284,11 +273,11 @@ void CalibrationExtractor::drive()
     const ProcessingParams params = m_params;
     FrameSetup* setup = m_frame_setup.get();
 
-    // The worker first, then the reader, as before; each ends when its body returns.
-    std::thread worker_thread([worker, params, setup]() { worker->process(params, setup); });
+    // The reader gets a thread of its own; the worker runs here, on the driver thread, which
+    // would otherwise only wait for it.
     std::thread reader_thread([reader]() { reader->run(); });
 
-    worker_thread.join();
+    worker->process(params, setup);
     if (!m_worker_ok || m_cancelled)
     {
         // The worker is done with the queue; a reader still blocked on a full one must be let go.
@@ -304,10 +293,10 @@ void CalibrationExtractor::drive()
 
         if (m_clip_ignored)
         {
-            log(std::format("Clip Start + Clip End ({} s) exceed the recording ({} s); "
-                            "both were ignored and the whole recording was used.",
-                            textformat::formatFixed(m_clip_start_sec + m_clip_end_sec, 1),
-                            textformat::formatFixed(m_recording_sec, 1)));
+            m_report.log(std::format("Clip Start + Clip End ({} s) exceed the recording ({} s); "
+                                     "both were ignored and the whole recording was used.",
+                                     textformat::formatFixed(m_clip_start_sec + m_clip_end_sec, 1),
+                                     textformat::formatFixed(m_recording_sec, 1)));
         }
         finish(true, std::format("Calibrated {} of {} channel(s).", calibrated, intSize(m_results)),
                false);
@@ -358,18 +347,8 @@ int CalibrationExtractor::buildResults(const ProcessedStreamData& data)
                 m_clip_ignored = true;
             }
 
-            StepDetector::Result det =
+            static_cast<StepDetector::Result&>(res) =
                 StepDetector::detect(clipped, m_sample_period_sec, m_steps);
-            res.profile          = det.profile;
-            res.detectedPlateaus = det.detectedPlateaus;
-            res.extraPlateaus    = det.extraPlateaus;
-            res.outcome          = det.outcome;
-            res.edgeThreshold    = det.edgeThreshold;
-            res.thresholdRelaxed = det.thresholdRelaxed;
-            res.plateauLevels    = det.plateauLevels;
-            res.saturated        = det.saturated;
-            res.unresolvedDb     = det.unresolvedDb;
-            res.sweepLevels      = det.sweepLevels;
             if (res.profile.valid)
             {
                 calibrated++;
@@ -403,9 +382,9 @@ int CalibrationExtractor::buildResults(const ProcessedStreamData& data)
                 note = std::format(" — calibrated with a relaxed edge threshold ({} raw counts)",
                                    textformat::formatFixed(res.edgeThreshold, 1));
             }
-            log(std::format("  {} (word {}): {} plateau(s) detected, {} step(s) expected{}{}",
-                            res.name, res.word, res.detectedPlateaus, intSize(m_steps),
-                            res.detectedPlateaus != intSize(m_steps) ? " — MISMATCH" : "", note));
+            m_report.log(std::format("  {} (word {}): {} plateau(s) detected, {} step(s) expected{}{}",
+                                     res.name, res.word, res.detectedPlateaus, intSize(m_steps),
+                                     res.detectedPlateaus != intSize(m_steps) ? " — MISMATCH" : "", note));
         }
         m_results.push_back(res);
     }
@@ -427,14 +406,11 @@ void CalibrationExtractor::finish(bool success, const std::string& summary, bool
     }
     // Before the report, so a handler that starts the next run is not turned away.
     m_running = false;
-    if (m_events != nullptr)
+    if (is_error)
     {
-        if (is_error)
-        {
-            m_events->errorOccurred(summary);
-        }
-        m_events->processingFinished(success);
+        m_report.error(summary);
     }
+    m_report.finished(success);
 }
 
 bool CalibrationExtractor::buildFrameSetup(const Request& request,
