@@ -67,9 +67,7 @@ inline FrameSyncError resolveFrameSync(const std::string& pattern_hex, const std
 
     if (mask_hex.empty())
     {
-        resolved.mask = (resolved.patternLength > 0 && resolved.patternLength < 64)
-                            ? (1ULL << resolved.patternLength) - 1
-                            : 0xFFFFFFFFFFFFFFFFULL;
+        resolved.mask = fullSyncMask(resolved.patternLength);
     }
     else if (!textparse::parseUnsignedHex(mask_hex, resolved.mask))
     {

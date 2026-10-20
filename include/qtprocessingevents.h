@@ -3,14 +3,13 @@
  * @brief Delivers `ProcessingEvents` onto a Qt object's thread.
  *
  * The core calls `ProcessingEvents` on the thread that is processing. The Qt side (the
- * coordinator, the calibration extractor) wants those calls on the UI thread, in order,
+ * coordinator, the calibration dialog) wants those calls on the UI thread, in order,
  * exactly as queued signals delivered them. This posts each one to a target `QObject`
  * with a queued invocation, which is the same mechanism and so the same ordering:
  * events from one source arrive in the order they were raised.
  *
- * Includes Qt, so it belongs to the layers that are staying Qt (ViewModel, and the
- * model classes not yet converted) - never to a header the core is meant to be free of
- * Qt in.
+ * Includes Qt, so it belongs to the layers that are Qt (the View and the ViewModel) -
+ * never to a header the core is free of Qt in; `TestCoreQtFree` guards that.
  *
  * **Lifetime.** The target must outlive the events it has been sent, or at least the
  * thread that raises them. Both users join their worker threads before they are

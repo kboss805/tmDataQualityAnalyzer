@@ -1,5 +1,6 @@
 #include "tst_framesync.h"
 
+#include <bit>
 #include <cstdint>
 #include <string>
 
@@ -86,6 +87,29 @@ void TestFrameSync::parseUnsignedHexAgreesWithQtOnArbitraryText()
             QFAIL(qPrintable(QString("[%1]: Qt %2/%3, helper %4/%5")
                                  .arg(s).arg(qt_ok).arg(qt_value).arg(our_ok).arg(our_value)));
         }
+    }
+}
+
+// The one definition of "every bit of the pattern", shared by the sync decode, the packet reader and
+// the failure report. The edges are the point: 64 bits must not shift by 64 (undefined), and a pattern
+// with no length gets a full mask rather than an empty one that would match everything.
+void TestFrameSync::fullSyncMaskIsEveryBitOfThePatternAndNeverShiftsBySixtyFour()
+{
+    QCOMPARE(qulonglong(fullSyncMask(1)), 0x1ull);
+    QCOMPARE(qulonglong(fullSyncMask(4)), 0xFull);
+    QCOMPARE(qulonglong(fullSyncMask(32)), 0xFFFFFFFFull);
+    QCOMPARE(qulonglong(fullSyncMask(63)), 0x7FFFFFFFFFFFFFFFull);
+    QCOMPARE(qulonglong(fullSyncMask(64)), 0xFFFFFFFFFFFFFFFFull);
+    QCOMPARE(qulonglong(fullSyncMask(65)), 0xFFFFFFFFFFFFFFFFull);
+    QCOMPARE(qulonglong(fullSyncMask(0)), 0xFFFFFFFFFFFFFFFFull);
+    QCOMPARE(qulonglong(fullSyncMask(-3)), 0xFFFFFFFFFFFFFFFFull);
+
+    // Every length from 1 to 63 sets exactly that many bits.
+    for (int bits = 1; bits < 64; ++bits)
+    {
+        const std::uint64_t mask = fullSyncMask(bits);
+        QCOMPARE(std::popcount(mask), bits);
+        QVERIFY2((mask & (mask + 1)) == 0, "a full mask is a run of ones from bit 0");
     }
 }
 

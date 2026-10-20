@@ -298,9 +298,7 @@ bool Ch10PacketReader::prepare(const std::filesystem::path& filename,
 
         const int64_t sync_mask_i64 = (p->frameSyncMask != 0)
             ? static_cast<int64_t>(p->frameSyncMask)
-            : static_cast<int64_t>((p->syncPatternLength > 0 && p->syncPatternLength < 64)
-                ? (1ULL << p->syncPatternLength) - 1
-                : 0xFFFFFFFFFFFFFFFFULL);
+            : static_cast<int64_t>(fullSyncMask(p->syncPatternLength));
 
         Set_Attributes_Ext_PcmF1(pcm_attrs->psuRDataSrc, pcm_attrs,
                                  -1, -1,

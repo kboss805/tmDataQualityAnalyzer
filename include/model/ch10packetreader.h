@@ -68,11 +68,11 @@ public:
      * Must be called (synchronously, before run()) on whichever thread will not
      * race the reader thread. Leaves the file open and positioned just past the
      * TMATS packet so run() can continue the single pass. Populates each entry's
-     * @c resolved_attrs and records its @c packet_queue in the routing table.
+     * @c resolvedAttrs and records its @c packetQueue in the routing table.
      *
      * @param[in]     filename        Path to the .ch10 file.
      * @param[in]     time_channel_id Channel ID of the IRIG time channel.
-     * @param[in,out] params_list     Per-stream params (resolved_attrs filled here).
+     * @param[in,out] params_list     Per-stream params (resolvedAttrs filled here).
      * @param[out]    error           Human-readable failure description.
      * @return true on success.
      */

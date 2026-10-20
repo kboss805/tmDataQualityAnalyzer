@@ -59,8 +59,8 @@ struct ReceiverParams
  * to word positions within the PCM minor frame. The class also supports
  * saving the current parameter configuration back to a TOML file.
  *
- * The text API is UTF-8 `std::string` and paths are `std::filesystem::path` (de-Qt
- * sweep); callers holding a `QString` convert at their own boundary (`qtbridge.h`).
+ * The text API is UTF-8 `std::string` and paths are `std::filesystem::path`; callers
+ * holding a `QString` convert at their own boundary (`qtbridge.h`).
  * A plain class, with no Qt: it was a QObject only for parent ownership, which nobody
  * used (every owner holds it by `shared_ptr` or deletes it itself), and it takes its
  * calibration profiles in a `std::unordered_map`.
