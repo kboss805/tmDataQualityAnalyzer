@@ -35,7 +35,7 @@ $opt = if ($Debug) { @('/Od', '/Zi', '/MDd') } else { @('/O2', '/MD', '/DNDEBUG'
 # The core, exactly the sources the Qt application's decode pipeline is built from.
 $coreSources = @(
     'channeldata', 'chapter10reader', 'ch10packetreader', 'framesetup', 'frameprocessor',
-    'stepdetector', 'tomldocument', 'textfile', 'calibrationextractor'
+    'stepdetector', 'tomldocument', 'textfile', 'calibrationextractor', 'pipelinerunner'
 ) | ForEach-Object { Join-Path $root "src\model\$_.cpp" }
 $abi = Join-Path $PSScriptRoot 'tmdq_core.cpp'
 

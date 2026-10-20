@@ -4,8 +4,12 @@
  *
  * The same contract as dotnet/interop-spike/tmdq_abi.h (that header is used unchanged, so a
  * managed host written against it keeps working), implemented on the plain core the de-Qt sweep
- * produced: std::filesystem paths in, UTF-8 std::string out, std::thread for the reader, and a
- * ProcessingEvents sink in place of the signals the QObject versions emitted.
+ * produced: std::filesystem paths in, UTF-8 std::string out, and the pipeline itself - the reader,
+ * the queues, the worker threads and the order they start and stop in - is `PipelineRunner`, the
+ * same class the Qt application's `ProcessingCoordinator` wraps. This file only translates: a
+ * request struct into a one-stream job, the run's reports into a captured error and result, and the
+ * result into C arrays. (An earlier version of this file carried its own single-stream copy of the
+ * orchestration, and a workaround for a reader left blocked on a dead worker's queue.)
  *
  * What this file does NOT contain, and the interop spike's version did: any Qt header, a
  * QCoreApplication, QElapsedTimer, QVector. The DLL it builds depends on the C runtime and the
@@ -23,16 +27,12 @@
 #include <mutex>
 #include <new>
 #include <string>
-#include <thread>
 #include <vector>
 
-#include "ch10packetreader.h"
 #include "chapter10reader.h"
-#include "frameprocessor.h"
 #include "framesetup.h"
-#include "packetqueue.h"
+#include "pipelinerunner.h"
 #include "processedstreamdata.h"
-#include "processingevents.h"
 #include "processingparams.h"
 
 namespace {
@@ -61,10 +61,10 @@ double* copyToC(const std::vector<double>& src)
     return out;
 }
 
-/// Keeps the first failure the reader or the processor reports, so the host is told WHY a run
-/// failed instead of being given a guess. Called from the reader's thread and the processor's, so
-/// it is locked.
-class CaptureEvents final : public ProcessingEvents
+/// What a one-stream run reports, kept for the caller: the stream's result if it earned one, and the
+/// FIRST failure, so the host is told WHY a run failed instead of being given a guess. Called from
+/// the runner's threads, so it is locked.
+class RunCapture final : public PipelineEvents
 {
 public:
     void logMessage(const std::string&) override {}
@@ -77,16 +77,35 @@ public:
         }
     }
     void processingFinished(bool) override {}
+    void streamProcessed(ProcessedStreamData data) override
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_result = std::move(data);
+        m_have_result = true;
+    }
 
     std::string firstError() const
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         return m_first_error;
     }
+    /// Moves the result out. Call after the runner has ended, when nothing can still be writing it.
+    bool takeResult(ProcessedStreamData& out)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (!m_have_result)
+        {
+            return false;
+        }
+        out = std::move(m_result);
+        return true;
+    }
 
 private:
-    mutable std::mutex m_mutex;
-    std::string m_first_error;
+    mutable std::mutex  m_mutex;
+    std::string         m_first_error;
+    ProcessedStreamData m_result;
+    bool                m_have_result = false;
 };
 
 } // namespace
@@ -188,7 +207,8 @@ int32_t tmdq_run_lock_stream(const tmdq_lock_request* req, tmdq_lock_result* out
 
         const std::u8string utf8(reinterpret_cast<const char8_t*>(req->filename_utf8));
 
-        ProcessingParams params;
+        StreamJob job;
+        ProcessingParams& params = job.params;
         params.filename           = std::filesystem::path(utf8);
         params.timeChannelId      = req->time_channel_id;
         params.pcmChannelId       = req->pcm_channel_id;
@@ -208,52 +228,34 @@ int32_t tmdq_run_lock_stream(const tmdq_lock_request* req, tmdq_lock_result* out
 
         // Lock-only mode reads no receiver words, so an empty FrameSetup is correct - the same
         // thing ProcessingCoordinator and the tests hand a lock-only job.
-        FrameSetup setup;
+        job.frameSetup = std::make_shared<FrameSetup>();
 
-        PacketQueue queue;
-        params.packetQueue = &queue;
-
-        auto events = std::make_shared<CaptureEvents>();
-
-        Ch10PacketReader reader;
-        reader.setEvents(events);
-        std::vector<ProcessingParams*> params_list = { &params };
-        std::string prepare_error;
-        if (!reader.prepare(params.filename, params.timeChannelId, params_list, prepare_error))
-        {
-            setError(prepare_error.empty() ? std::string("Ch10PacketReader::prepare failed")
-                                           : prepare_error);
-            return TMDQ_ERR_PREPARE;
-        }
-
-        FrameProcessor processor;
-        processor.setEvents(events);
+        const auto capture = std::make_shared<RunCapture>();
+        PipelineRunner runner;
 
         const auto started = std::chrono::steady_clock::now();
 
-        // The reader fills the queue; process() drains it on this thread. Joined before anything is
-        // destroyed - a reader still running when its queue goes out of scope is the hazard.
-        std::thread reader_thread([&reader]() { reader.run(); });
-        const bool ok = processor.process(params, &setup);
-        if (!ok)
+        // start() opens the recording and resolves its TMATS before any thread runs, so a file that
+        // cannot be used is a prepare failure, reported with the reader's own reason. Concurrent
+        // hosts are safe: the reader serialises its setup against irig106's unlocked global state.
+        std::string start_error;
+        if (!runner.start({job}, capture, start_error))
         {
-            // Let a reader blocked on a full queue go before joining it.
-            reader.requestAbort();
-            queue.close();
+            setError(start_error.empty() ? std::string("PipelineRunner::start failed") : start_error);
+            return TMDQ_ERR_PREPARE;
         }
-        reader_thread.join();
+        runner.wait();   // every thread has ended, and the pipeline has been released, when this returns
 
         const double elapsed_ms =
             std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
 
-        if (!ok)
+        ProcessedStreamData res;
+        if (!capture->takeResult(res))
         {
-            const std::string why = events->firstError();
-            setError(why.empty() ? std::string("FrameProcessor::process reported failure") : why);
+            const std::string why = capture->firstError();
+            setError(why.empty() ? std::string("the run produced no result") : why);
             return TMDQ_ERR_PROCESS;
         }
-
-        const ProcessedStreamData& res = processor.result();
         if (res.timesSec.empty())
         {
             setError("the run completed but produced no output samples");

@@ -50,6 +50,23 @@ reader, the worker, the DTOs), through a different build system and a different 
 
 **20 of 20 checks pass.**
 
+### The ABI is a translation layer over `PipelineRunner`
+
+`tmdq_core.cpp` used to carry its own single-stream copy of what `ProcessingCoordinator` does: make the
+queue, prepare the reader, start a reader thread, run the processor, abort and close on failure, join. The
+Qt application's version of that arrangement is now `PipelineRunner` (PR #167, no Qt), so the ABI no longer
+carries one. `tmdq_run_lock_stream` builds a one-stream `StreamJob` from the request struct, calls
+`runner.start()`, waits, and reads what a small capture sink kept - the stream's result, or the first error
+- into C arrays. The file lost its hand-rolled threading, its abort workaround and its includes of the
+reader, the processor and the queue.
+
+Same DLL surface, same results: 20 of 20 checks on eight consecutive runs, the recorded numbers unchanged to
+the digit, the same failure reasons, the two-threads-at-once check unchanged, and the same time per run
+(2.11 s against 2.19 s for the 1 s case; one run is not a measurement, only evidence nothing got slower). The
+DLL grew from 361,472 to 376,320 bytes. It still has no Qt imports.
+
+What a multi-stream ABI would add is small: pass several jobs and collect several results. That is not built.
+
 ### Two findings the checks turned up
 
 **1. The vendored irig106 library is not safe to open from two threads at once.**
