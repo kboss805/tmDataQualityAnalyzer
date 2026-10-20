@@ -41,13 +41,6 @@ namespace {
 /// message. Returned as a borrowed pointer, valid until the next call on the same thread.
 thread_local std::string g_last_error;
 
-/// The vendored irig106 library hands out file handles from a global table with an unsynchronised
-/// check-then-set (GetNextHandle in irig106ch10.c), so two threads opening a file at the same moment
-/// can be given the SAME slot and then corrupt each other - an access violation within a few runs.
-/// We may not edit that library, so opens are serialised here. Reads need no lock: each handle owns
-/// its own state afterwards, and the lock is held only for the open, not the run.
-std::mutex g_open_mutex;
-
 void setError(const std::string& msg) { g_last_error = msg; }
 void clearError() { g_last_error.clear(); }
 
@@ -120,12 +113,9 @@ int32_t tmdq_probe_file(const char* filename_utf8, tmdq_file_info* out)
         // The host passes UTF-8; a path is built from it as char8_t so the conversion is the
         // standard's UTF-8 one, not the process code page's.
         const std::u8string utf8(reinterpret_cast<const char8_t*>(filename_utf8));
-        bool loaded;
-        {
-            std::lock_guard<std::mutex> lock(g_open_mutex);
-            loaded = reader.loadChannels(std::filesystem::path(utf8));
-        }
-        if (!loaded)
+        // Concurrent hosts are safe: the reader serialises its own setup (irig106lock.h), because
+        // the vendored irig106 library's handle table and TMATS decoder are not thread-safe.
+        if (!reader.loadChannels(std::filesystem::path(utf8)))
         {
             setError(reader.lastError().empty()
                          ? std::string("Chapter10Reader::loadChannels failed - unreadable file or no TMATS")
@@ -229,12 +219,7 @@ int32_t tmdq_run_lock_stream(const tmdq_lock_request* req, tmdq_lock_result* out
         reader.setEvents(events);
         std::vector<ProcessingParams*> params_list = { &params };
         std::string prepare_error;
-        bool prepared;
-        {
-            std::lock_guard<std::mutex> lock(g_open_mutex);
-            prepared = reader.prepare(params.filename, params.timeChannelId, params_list, prepare_error);
-        }
-        if (!prepared)
+        if (!reader.prepare(params.filename, params.timeChannelId, params_list, prepare_error))
         {
             setError(prepare_error.empty() ? std::string("Ch10PacketReader::prepare failed")
                                            : prepare_error);

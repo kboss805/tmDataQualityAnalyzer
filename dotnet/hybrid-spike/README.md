@@ -28,7 +28,7 @@ Result: `tmdq_core.dll`, **361,472 bytes**, 0 warnings, imports `MSVCP140`, `KER
 Qt Core; this is the build-level result the de-Qt sweep was working toward.
 
 It needed exactly one source change on the Qt side: `include/constants.h` still included `<QString>`
-(for `AppVersion::toString()` and a `qsizetype`). That is its own PR, with a guard test
+(for `AppVersion::toString()` and a `qsizetype`). That was its own PR (#163), with a guard test
 (`TestCoreQtFree`) so the property cannot silently regress.
 
 ### The managed host agrees with the pre-sweep numbers
@@ -55,14 +55,18 @@ reader, the worker, the DTOs), through a different build system and a different 
 **1. The vendored irig106 library is not safe to open from two threads at once.**
 `GetNextHandle()` in `lib/irig106/src/irig106ch10.c` scans a global handle table and then marks a
 slot in use, with no lock. Two simultaneous opens can be given the same slot. The first concurrent
-test crashed the host with an access violation. We may not edit that library, so `tmdq_core.cpp`
-serialises the **open** phase behind a mutex (`g_open_mutex`) and leaves reading concurrent. Six
-consecutive runs then passed, and the 20-check run passes repeatedly.
+test crashed the host with an access violation. The library also decodes TMATS through static
+pointers, so the exposure is the whole of a reader's setup, not just the open.
 
-Is this a bug in the Qt application today? Not as written: the application opens each file once,
-from one coordinating thread. But anything that opens recordings concurrently (a batch worker, a
-second window, calibration running beside a main run) would hit it, and the failure is an access
-violation rather than an error. It is worth a guard in the app's own reader if that ever changes.
+**Fixed in the application, PR #164.** `lib/irig106` may not be edited, so `Chapter10Reader::loadChannels`
+and `Ch10PacketReader::prepare` now hold one process-wide lock (`include/model/irig106lock.h`) for their
+whole setup and leave packet reads concurrent. This spike first worked around it with a mutex of its own in
+`tmdq_core.cpp`; with `main` merged in, that mutex is gone and the DLL relies on the readers' lock alone.
+Rebuilt, the 20-check driver passed eight consecutive runs, including the two-threads-at-once check.
+
+The application did not fail today, because it opens each file once from one thread. Anything that opened
+recordings concurrently (a batch worker, a second window, calibration beside a main run) would have hit it,
+and as an access violation rather than an error.
 
 **2. A non-ASCII path needs the UTF-8 active code page, and `dotnet run` cannot provide it.**
 irig106 opens files with the C runtime's narrow `open()`, which reads the process code page. Under
@@ -185,5 +189,4 @@ dotnet build -c Release dotnet\hybrid-spike\wpf
 ```
 
 The driver needs `tests\data\test files\prn_testfile, sample.ch10` (committed). `tmdq_core.dll`
-needs a `constants.h` without Qt; until the constants PR lands on `main` this branch carries the
-same two-line change.
+builds against `main` as merged: `constants.h` is Qt-free (PR #163).
