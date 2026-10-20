@@ -16,7 +16,7 @@ namespace {
 /// the file readers to the calibration extraction. They must compile with no Qt.
 const QStringList kCoreSources = {
     "calibrationextractor", "ch10packetreader", "channeldata", "chapter10reader", "frameprocessor",
-    "framesetup", "stepdetector", "textfile", "tomldocument",
+    "framesetup", "pipelinerunner", "stepdetector", "textfile", "tomldocument",
 };
 
 /// The model sources that are, on purpose, still Qt: they read and write UI-session state (the CSV
