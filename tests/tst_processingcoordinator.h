@@ -13,6 +13,8 @@ private slots:
     void workerReportsPrecedeTheResultAndFinishComesLast();
     void resetClearsState();
     void cancelProcessingNoRunNoOp();
+    void cancelProcessingEndsTheRunWithoutAResult();
+    void destroyingTheCoordinatorMidRunIsSafe();
     void startProcessingEmptyReturnsFalse();
     void startProcessingEmitsProcessingState();
     void benchmarkSingleVsMultiStreamThroughput();

@@ -1,46 +1,29 @@
 /**
  * @file processingcoordinator.h
- * @brief Orchestrates the single-reader / parallel-worker processing pipeline.
+ * @brief The Qt face of the single-reader / parallel-worker processing pipeline.
  *
- * Owns all transient processing state: one Ch10PacketReader thread that reads the
- * file once and fans PCM packets out to per-stream PacketQueues, and one
- * FrameProcessor worker thread per stream that drains its queue concurrently.
+ * The pipeline itself - the reader, one worker per stream, their queues and threads - is
+ * `PipelineRunner`, which has no Qt. This class wraps it for the application: it delivers the
+ * runner's reports to this object's thread as signals, and keeps the little state the UI asks
+ * about (is a run active, how far along is it).
  * MainViewModel builds a list of fully-formed StreamJob objects (each carrying a
  * validated ProcessingParams plus an owned FrameSetup) and hands them off here.
  * The coordinator emits streamProcessed() with each stream's in-memory result and
- * processingFinished() when every worker has completed.
+ * processingFinished() when the run is over.
  */
 
 #ifndef PROCESSINGCOORDINATOR_H
 #define PROCESSINGCOORDINATOR_H
 
-#include <memory>
-
 #include <QObject>
 #include <QString>
-#include <QThread>
 #include <QVector>
 
-#include "framesetup.h"
+#include "pipelinerunner.h"
 #include "processedstreamdata.h"
-#include "processingparams.h"
-
-class FrameProcessor;
-class Ch10PacketReader;
-class PacketQueue;
 
 /**
- * @brief One unit of work: a stream's parameters plus its frame parameter table.
- */
-struct StreamJob
-{
-    ProcessingParams            params;     ///< Fully-validated parameters for this stream.
-    std::shared_ptr<FrameSetup> frameSetup; ///< Owned word-map/calibration table (moved into the coordinator).
-                                            ///< shared_ptr (not unique_ptr) so StreamJob stays copyable for QVector.
-};
-
-/**
- * @brief Owns the reader + worker thread lifecycle for multi-stream processing.
+ * @brief Owns one pipeline run at a time and reports it as Qt signals.
  */
 class ProcessingCoordinator : public QObject
 {
@@ -81,39 +64,13 @@ signals:
     void errorOccurred(const QString& message);
 
 private:
-    /// Per-stream worker bookkeeping.
-    struct Worker
-    {
-        QThread*                        thread    = nullptr;
-        std::shared_ptr<FrameProcessor> processor; ///< Shared with the thread's body.
-        PacketQueue*                    queue     = nullptr;
-    };
-
-    /// Frees and clears any remaining queued jobs (including frame setups).
-    void clearJobs();
-    /// Tears down all worker threads, the reader thread, and queues.
-    void teardownAll();
-    /// Finalizes the run once all workers have reported completion.
-    void finalize();
+    class Bridge;
 
     // Slots
     void onReaderProgress(int percent);
-    void onWorkerFinished(bool success, int job_index);
+    void onRunFinished(bool success);
 
-    // Reader
-    QThread*          m_reader_thread = nullptr;
-    std::shared_ptr<Ch10PacketReader> m_reader; ///< Shared with the reader thread's body.
-
-    // Workers (one per job)
-    QVector<Worker>   m_workers;
-    QVector<PacketQueue*> m_queues;
-
-    // Job storage (frame setups owned here)
-    QVector<StreamJob> m_jobs;
-
-    int  m_workers_remaining = 0;
-    bool m_any_success       = false;
-    bool m_cancelled         = false;
+    PipelineRunner m_runner;
     bool m_processing        = false;
     int  m_progress_percent  = 0;
 };
