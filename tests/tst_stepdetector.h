@@ -22,6 +22,7 @@ private slots:
     void parseStepConfigReadsBomCrlfAndUtf16();
     void parseStepConfigOpensNonAsciiPaths();
     void parseStepConfigErrorMessagesNameTheFile();
+    void parseStepConfigAgreesWithTheOriginalHandWrittenParserOnGeneratedFiles();
 
     // Plateau detection
     void detectCleanSteps();

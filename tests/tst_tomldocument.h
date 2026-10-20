@@ -20,7 +20,11 @@ class TestTomlDocument : public QObject
 
 private slots:
     void readsSectionsAndKeysInFileOrder();
-    void doubleBracketHeaderIsALiteralSectionName();
+    void doubleBracketHeaderOpensAnArrayTableNotASection();
+    void arrayTablesKeepFileOrderKeysAndValuesAsWritten();
+    void arrayTableNamesMatchWithoutCaseButOtherwiseExactly();
+    void aMalformedArrayHeaderOpensAnEntryNoNameMatches();
+    void aSectionHeaderEndsAnEntryAndSectionsAreUnaffectedByEntries();
     void commentsAreQuoteAwareAndEscapesUnescape();
     void repeatedKeyOverwrites();
     void readsUtf8BomAndCrlf();

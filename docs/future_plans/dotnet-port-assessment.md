@@ -185,8 +185,3 @@ passing is worth recording here, because both were worse than this file assumed:
   for 2 of the 4 channels it times. So it had been unable to produce a number since v2.11.1,
   silently, because being opt-in meant nobody ever saw it fail. It now asserts the
   parallel-vs-solo ratios and runs at every release.
-
-**The remaining TOML follow-up**, left deliberately: `StepDetector::parseStepConfig` is a
-second hand-written TOML parser, which exists precisely because the QSettings format could
-not express `[[Step]]` arrays. Folding it into `TomlDocument` is the obvious consolidation,
-but it feeds calibration and deserves its own verifiable step rather than riding along.
