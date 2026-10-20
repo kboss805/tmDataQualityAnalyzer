@@ -421,7 +421,7 @@ de-Qt of the native core in small steps (QtGui out of the model's headers, then
 caused, a generated Visual Studio solution, and C++20. The first `QString` steps move `TomlDocument`,
 `FrameSetup` and the step-file parser to UTF-8 `std::string`, and the `QObject` steps take
 Qt out of `FrameProcessor` and `Ch10PacketReader`; the DTOs follow, starting with
-`ProcessingParams` and `ProcessedStreamData`, and `FrameSetup`, `Chapter10Reader` and `ChannelData` lose their `QObject`s and `QString`s, the calibration report becomes `std::string`, and `CalibrationExtractor` becomes a plain class (the last `QObject` in the core). One user-facing fix, found during the
+`ProcessingParams` and `ProcessedStreamData`, and `FrameSetup`, `Chapter10Reader` and `ChannelData` lose their `QObject`s and `QString`s, the calibration report becomes `std::string`, and `CalibrationExtractor` becomes a plain class (the last `QObject` in the core); the last Qt header the core reached, in `constants.h`, goes, and a test now guards it. One user-facing fix, found during the
 `QString` survey: recordings under a folder with a non-ASCII name can be processed.
 
 #### A Visual Studio solution, generated rather than committed
@@ -521,6 +521,43 @@ called from our code is reported at **our** call site, so those keep warning exa
 v2.9.0 intended. Every first-party header here is quote-included, so `anglebrackets` covers
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
+
+#### The core includes no Qt header, and a test says so (de-Qt, `constants.h`)
+
+With the last `QObject` gone, the question was what Qt the core still touched. A compile probe of every core
+translation unit with no Qt include path answered it: **one header, `include/constants.h`**, which included
+`<QString>` for `AppVersion::toString()` and used `qsizetype` for `kMaxPacketBufferSize`. Every core source
+reached it through `include/` or a DTO.
+
+- `AppVersion::toString()` returns `std::string`, built with `std::to_string`; the three UI call sites
+  (`mainviewchrome.cpp`, `batchcontroller.cpp`, `mainviewmodel.cpp`) wrap it in `QString::fromStdString`. The
+  `.pro` file and `deploy/build_release.ps1` read only the `kMajor = <n>` lines, so neither is affected.
+- `kMaxPacketBufferSize` is a `std::ptrdiff_t`, the same 100 MiB.
+
+**A guard, not a one-off.** `TestCoreQtFree` walks the `#include "..."` closure of every core source (the
+`.cpp` and everything it reaches through `include/`, `include/dto/` and `include/model/`, recursively, ignoring
+commented-out includes) and fails on two things: any `<Q...>` header (`Q` plus a capital, or `Qt`), and any
+reach into `include/viewmodel` or `include/view`. Every `src/model` source must be classified as core or
+UI-session, so a new file cannot join the model silently unchecked. Its fourth test runs the walker over a
+temporary tree to prove it sees a Qt include hidden behind a shared header, a layering violation, and a
+comment that must not count.
+
+**Proved at link level, on the exploration branch.** Built with plain `cl`/`link` and no Qt include path or
+library, the decode pipeline plus a flat C ABI is a 361 KB DLL whose `dumpbin /dependents` lists the C runtime
+and nothing from Qt; a C# host drives it and reproduces the numbers recorded before the sweep exactly (116
+samples, 93.532 % mean lock and 1,100 missed frames at a 1 s sample period; 11,554 samples and 838 missed at
+10 ms). That lives in `dotnet/hybrid-spike/` on `explore/dotnet-migration`, not here.
+
+**Validated against ten single-defect mutants.** The first run caught nine; **one survived**: a walker that
+recognised only `<QString>`, because the self-test planted exactly one include, a `<QString>`. The self-test now
+plants `<QString>`, `<QtGlobal>` and `<QObject>` plus a look-alike `<Quux.h>` that must not count, and the
+mutant fails. The ten: `<QString>` returning to `constants.h`; the version separator changed; the buffer cap
+changed; a Qt include in a nested DTO; the core including a view-model header; a walker that does not recurse;
+a walker that knows only `<QString>`; a model source left unclassified; the forbidden directories unwatched;
+and commented-out includes counted.
+
+Baseline **697 / 0 / 1** (was 691 / 0 / 1; the new suite's 4 tests and its init/cleanup), **698 / 0 / 0** at
+release. **29 suites.**
 
 #### A fully calibrated group of unnamed channels is listed as calibrated (US5.3)
 
@@ -4454,6 +4491,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestQtProcessingEvents** (`tst_qtprocessingevents`) — the hand-off from a processing thread to Qt that replaced `FrameProcessor`'s signals: 300 mixed log / error events raised on a worker thread arrive on the target's thread in the order raised with completion last (and the test really did cross threads); UTF-8 messages decode (an accented letter and an em dash); any handler may be missing; events still queued for a destroyed target are dropped, which is what lets the coordinator and extractor die with events in flight. Validated against mutants that deliver directly instead of queued (the run crashes) and that decode as Latin-1. Pure logic, runs in CI; and progress events (101 values from a worker thread arrive on the target's thread in order)
 - **TestTextFormat** (`tst_textformat`) — `formatFixed()`, which reproduces `QString::number(v, 'f', n)` without Qt, checked against Qt itself: the exact ties the report prints (Qt rounds them away from zero, `std::format` to even), every n/64 at 0 to 6 decimals, 20,000 arbitrary doubles from a fixed generator, signs and negative zero, the extremes, and `isExactTie()` seeing only real ties. Pure logic, runs in CI
 - **TestFrameSync** (`tst_framesync`) — the shared decode in `framesync.h`: `parseUnsignedHex` against `QString::toULongLong(16)` on a list of awkward inputs and 40,000 random strings, `resolveFrameSync` (the pattern's length counted in characters, an empty mask meaning every bit, the pattern checked before the mask and the result never half-written), and `applyAcquisition` setting every raw-affecting field and no other. Pure logic, runs in CI
+- **TestCoreQtFree** (`tst_coreqtfree`) — the guard that keeps the processing core free of Qt: it walks the `#include "..."` closure of every core source and fails on any `<Q...>` header or any reach into `include/viewmodel` or `include/view`, requires every `src/model` source to be classified as core or UI-session, and proves its own walker on a temporary tree (several spellings of a Qt header seen through a shared header, a look-alike not counted, a layering violation, a commented-out include ignored). Pure file reading, runs in CI
 
 ### Running Tests
 
