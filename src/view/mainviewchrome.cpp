@@ -245,7 +245,7 @@ void MainView::setUpChrome()
             Qt::KeepAspectRatio, Qt::SmoothTransformation));
         about_box.setText(
             "<h3>TM Data Quality Analyzer</h3>"
-            "<p>Version " + AppVersion::toString() + "</p>"
+            "<p>Version " + QString::fromStdString(AppVersion::toString()) + "</p>"
             "<p>Analyzes framesync lock statistics and receiver SNR data from "
             "IRIG 106 Chapter 10 PCM recordings and plots the results over time.</p>");
         about_box.exec();

@@ -85,7 +85,7 @@ QVector<BatchController::FileCheck> BatchController::validate(const ProcessingTe
 ProcessingTemplate BatchController::buildTemplate(const Source& src, const PlotViewModel& plot)
 {
     ProcessingTemplate tmpl;
-    tmpl.appVersion       = AppVersion::toString();
+    tmpl.appVersion       = QString::fromStdString(AppVersion::toString());
     tmpl.name             = QFileInfo(src.filepath).baseName();
     tmpl.timeChannelIndex = src.timeChannelIndex;
     tmpl.swapBytes        = src.swapBytes;

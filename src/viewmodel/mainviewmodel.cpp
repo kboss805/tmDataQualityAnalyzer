@@ -281,7 +281,7 @@ QString MainViewModel::fileMetadataSummary() const
 
 void MainViewModel::logStartupInfo()
 {
-    emit logMessageReceived("tmDataQualityAnalyzer v" + AppVersion::toString());
+    emit logMessageReceived("tmDataQualityAnalyzer v" + QString::fromStdString(AppVersion::toString()));
     emit logMessageReceived("Load a Chapter 10 file to configure per-stream processing.");
 }
 

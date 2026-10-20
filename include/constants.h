@@ -7,8 +7,9 @@
 #define CONSTANTS_H
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
-#include <QString>
+#include <string>
 
 /// @brief Application version information.
 struct AppVersion {
@@ -16,8 +17,12 @@ struct AppVersion {
     static constexpr int kMinor = 14;   ///< Minor version number.
     static constexpr int kPatch = 2;   ///< Patch version number.
 
-    /// @return Version string in "major.minor.patch" format.
-    static QString toString() { return QString("%1.%2.%3").arg(kMajor).arg(kMinor).arg(kPatch); }
+    /// @return Version string in "major.minor.patch" format. UTF-8 `std::string`, so this header -
+    /// which the whole processing core includes - needs no Qt; callers that hold a QString convert.
+    static std::string toString()
+    {
+        return std::to_string(kMajor) + "." + std::to_string(kMinor) + "." + std::to_string(kPatch);
+    }
 };
 
 /// @brief Constants for PCM frame structure and channel type identifiers.
@@ -42,7 +47,7 @@ namespace PCMConstants {
     inline constexpr unsigned long kDefaultBufferSize = 65536;
 
     /// Maximum allowed packet buffer size to guard against malformed file headers (100 MB).
-    inline constexpr qsizetype kMaxPacketBufferSize = 100 * 1024 * 1024;
+    inline constexpr std::ptrdiff_t kMaxPacketBufferSize = 100 * 1024 * 1024;
 
     /// Minimum milliseconds between progress position queries (time-based throttle).
     inline constexpr int kProgressReportIntervalMs = 100;
