@@ -91,31 +91,7 @@ void FrameProcessor::requestAbort()
 
 void FrameProcessor::setEvents(std::shared_ptr<ProcessingEvents> events)
 {
-    m_events = std::move(events);
-}
-
-void FrameProcessor::reportLog(const std::string& message) const
-{
-    if (m_events)
-    {
-        m_events->logMessage(message);
-    }
-}
-
-void FrameProcessor::reportError(const std::string& message) const
-{
-    if (m_events)
-    {
-        m_events->errorOccurred(message);
-    }
-}
-
-void FrameProcessor::reportFinished(bool success) const
-{
-    if (m_events)
-    {
-        m_events->processingFinished(success);
-    }
+    m_report.setSink(std::move(events));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -133,16 +109,16 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     PacketQueue* queue = params.packetQueue;
     if (queue == nullptr)
     {
-        reportError(streamTag(params) + "Internal error: no packet queue for stream.");
-        reportFinished(false);
+        m_report.error(streamTag(params) + "Internal error: no packet queue for stream.");
+        m_report.finished(false);
         return false;
     }
 
     const ResolvedPcmAttrs& attrs = params.resolvedAttrs;
     if (!attrs.resolved)
     {
-        reportError(streamTag(params) + "Internal error: PCM attributes not resolved.");
-        reportFinished(false);
+        m_report.error(streamTag(params) + "Internal error: PCM attributes not resolved.");
+        m_report.finished(false);
         return false;
     }
 
@@ -217,9 +193,9 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     // Only name the window when it is actually bounded; an unset stop prints as
     // 18446744073709551615s, which is noise on every ordinary run.
     const bool bounded = (start_seconds != 0) || (stop_seconds != UINT64_MAX);
-    reportLog(streamTag(params)
-              + (bounded ? std::format("processing ({}s to {}s)...", start_seconds, stop_seconds)
-                         : std::string("processing...")));
+    m_report.log(streamTag(params)
+                 + (bounded ? std::format("processing ({}s to {}s)...", start_seconds, stop_seconds)
+                            : std::string("processing...")));
 
     // -----------------------------------------------------------------------
     // Consume packets from the queue until the end-of-stream sentinel.
@@ -228,8 +204,8 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     {
         if (m_abort_requested.load(std::memory_order_relaxed))
         {
-            reportLog(streamTag(params) + "processing cancelled by user.");
-            reportFinished(false);
+            m_report.log(streamTag(params) + "processing cancelled by user.");
+            m_report.finished(false);
             return false;
         }
 
@@ -301,8 +277,8 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         {
             if ((bit_pos & kAbortCheckMask) == 0 && m_abort_requested.load(std::memory_order_relaxed))
             {
-                reportLog(streamTag(params) + "processing cancelled by user.");
-                reportFinished(false);
+                m_report.log(streamTag(params) + "processing cancelled by user.");
+                m_report.finished(false);
                 return false;
             }
 
@@ -340,19 +316,19 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         {
             // Every packet skipped: the setting is inert for this stream, which is
             // worth saying plainly - the operator's choice had no effect at all.
-            reportLog(streamTag(params)
-                      + std::format("all {} payloads are odd-length and cannot be "
-                                    "byte-pair swapped — processed as Legacy Chapter 10 "
-                                    "regardless of the setting.",
-                                    swap_skipped_packets));
+            m_report.log(streamTag(params)
+                         + std::format("all {} payloads are odd-length and cannot be "
+                                       "byte-pair swapped — processed as Legacy Chapter 10 "
+                                       "regardless of the setting.",
+                                       swap_skipped_packets));
         }
         else
         {
             // The genuinely corrupting case: one stream, two byte orders.
-            reportLog(streamTag(params)
-                      + std::format("warning: byte swap skipped on {} of {} packets "
-                                    "(odd length) — mixed byte order, sync may be unreliable.",
-                                    swap_skipped_packets, total_packets));
+            m_report.log(streamTag(params)
+                         + std::format("warning: byte swap skipped on {} of {} packets "
+                                       "(odd length) — mixed byte order, sync may be unreliable.",
+                                       swap_skipped_packets, total_packets));
         }
     }
 
@@ -629,9 +605,9 @@ bool FrameProcessor::reportCompletion(const ProcessingParams& params, const Scan
 {
     const std::string tag = streamTag(params);
 
-    reportLog(tag + std::format("{} bytes processed, {} syncs found, {} frames extracted.",
-                                d.total_bytes_processed, d.total_syncs_found,
-                                d.total_frames_extracted));
+    m_report.log(tag + std::format("{} bytes processed, {} syncs found, {} frames extracted.",
+                                   d.total_bytes_processed, d.total_syncs_found,
+                                   d.total_frames_extracted));
 
     // Both failures report on ONE line. The operators of this application know their
     // own formats, so the log's job is to state what was configured and what came of
@@ -640,26 +616,26 @@ bool FrameProcessor::reportCompletion(const ProcessingParams& params, const Scan
     // otherwise identical-looking configurations (PRN-11 and PRN-15 are both 32 bits).
     if (d.total_syncs_found == 0)
     {
-        reportError(tag + std::format("no frame sync found — {}, {} bits/frame.",
-                                      syncSpec(d), d.bits_in_frame));
-        reportFinished(false);
+        m_report.error(tag + std::format("no frame sync found — {}, {} bits/frame.",
+                                         syncSpec(d), d.bits_in_frame));
+        m_report.finished(false);
         return false;
     }
 
     if (d.total_frames_extracted == 0)
     {
-        reportError(tag + std::format("sync found but no frames extracted — {}, {} "
-                                      "bits/frame; {} syncs, {} boundary-aligned.",
-                                      syncSpec(d), d.bits_in_frame, d.total_syncs_found,
-                                      d.boundary_syncs));
-        reportFinished(false);
+        m_report.error(tag + std::format("sync found but no frames extracted — {}, {} "
+                                         "bits/frame; {} syncs, {} boundary-aligned.",
+                                         syncSpec(d), d.bits_in_frame, d.total_syncs_found,
+                                         d.boundary_syncs));
+        m_report.finished(false);
         return false;
     }
 
-    reportLog(tag + std::format("complete — {} samples extracted, elapsed {:.1f}s.",
-                                d.rows_written, d.elapsed_sec));
+    m_report.log(tag + std::format("complete — {} samples extracted, elapsed {:.1f}s.",
+                                   d.rows_written, d.elapsed_sec));
 
-    reportFinished(true);
+    m_report.finished(true);
     return true;
 }
 

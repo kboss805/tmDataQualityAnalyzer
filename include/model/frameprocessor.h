@@ -144,11 +144,6 @@ private:
     /// in-memory channel series in m_result. @return the enabled-parameter pointers.
     std::vector<ParameterInfo*> buildEnabledParams(FrameSetup* frame_setup, bool receiver_mode);
 
-    /// Reports to the sink, if one is set. All of a run's reporting goes through these.
-    void reportLog(const std::string& message) const;
-    void reportError(const std::string& message) const;
-    void reportFinished(bool success) const;
-
     /// Identity prefix for every message this worker logs, e.g. "[CH 13 PCM03] ".
     /// Parallel workers share one log, so an unlabelled message cannot be traced
     /// back to the stream that produced it.
@@ -188,7 +183,7 @@ private:
                           const std::vector<ParameterInfo*>& enabled_params);
 
     std::atomic<bool> m_abort_requested; ///< Thread-safe abort flag.
-    std::shared_ptr<ProcessingEvents> m_events; ///< Optional report sink; see setEvents().
+    EventReporter m_report;              ///< All of a run's reporting goes through this; see setEvents().
     ProcessedStreamData m_result;        ///< Accumulated in-memory output of the current run.
 };
 

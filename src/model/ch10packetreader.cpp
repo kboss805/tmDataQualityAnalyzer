@@ -64,31 +64,7 @@ void Ch10PacketReader::requestAbort()
 
 void Ch10PacketReader::setEvents(std::shared_ptr<ProcessingEvents> events)
 {
-    m_events = std::move(events);
-}
-
-void Ch10PacketReader::reportLog(const std::string& message) const
-{
-    if (m_events)
-    {
-        m_events->logMessage(message);
-    }
-}
-
-void Ch10PacketReader::reportError(const std::string& message) const
-{
-    if (m_events)
-    {
-        m_events->errorOccurred(message);
-    }
-}
-
-void Ch10PacketReader::reportProgress(int percent) const
-{
-    if (m_events)
-    {
-        m_events->progressUpdated(percent);
-    }
+    m_report.setSink(std::move(events));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -375,7 +351,7 @@ void Ch10PacketReader::postSentinels()
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void Ch10PacketReader::run()
 {
-    reportLog("Reading Chapter 10 file...");
+    m_report.log("Reading Chapter 10 file...");
 
     int  last_reported_percent = -1;
     IntervalGate progress_gate{std::chrono::milliseconds(PCMConstants::kProgressReportIntervalMs)};
@@ -391,13 +367,13 @@ void Ch10PacketReader::run()
         }
         if (m_status != I106_OK)
         {
-            reportError("File read error during data collection.");
+            m_report.error("File read error during data collection.");
             break;
         }
 
         if (m_abort_requested.load(std::memory_order_relaxed))
         {
-            reportLog("Reading cancelled by user.");
+            m_report.log("Reading cancelled by user.");
             break;
         }
 
@@ -414,10 +390,10 @@ void Ch10PacketReader::run()
             {
                 if (percent / kPercent10 != last_reported_percent / kPercent10 && percent > 0)
                 {
-                    reportLog(std::to_string(percent) + "% read...");
+                    m_report.log(std::to_string(percent) + "% read...");
                 }
                 last_reported_percent = percent;
-                reportProgress(percent);
+                m_report.progress(percent);
             }
         }
 
@@ -426,13 +402,13 @@ void Ch10PacketReader::run()
         {
             if (!ensureBufferCapacity(static_cast<std::size_t>(m_header.ulPacketLen)))
             {
-                reportError("Memory allocation failed.");
+                m_report.error("Memory allocation failed.");
                 break;
             }
             m_status = enI106Ch10ReadData(m_file_handle, static_cast<unsigned long>(m_buffer.size()), m_buffer.data());
             if (m_status != I106_OK)
             {
-                reportError("File read error; aborting parsing.");
+                m_report.error("File read error; aborting parsing.");
                 break;
             }
             enI106_Decode_TimeF1(&m_header, m_buffer.data(), &m_irig_time);
@@ -464,13 +440,13 @@ void Ch10PacketReader::run()
 
             if (!ensureBufferCapacity(static_cast<std::size_t>(m_header.ulPacketLen)))
             {
-                reportError("Memory allocation failed.");
+                m_report.error("Memory allocation failed.");
                 break;
             }
             m_status = enI106Ch10ReadData(m_file_handle, static_cast<unsigned long>(m_buffer.size()), m_buffer.data());
             if (m_status != I106_OK)
             {
-                reportError("File read error; aborting parsing.");
+                m_report.error("File read error; aborting parsing.");
                 break;
             }
 
@@ -509,7 +485,7 @@ void Ch10PacketReader::run()
 
     if (time_gaps_detected > 0)
     {
-        reportLog(std::format("WARNING: {} time gap(s) detected in recording.", time_gaps_detected));
+        m_report.log(std::format("WARNING: {} time gap(s) detected in recording.", time_gaps_detected));
     }
 
     if (m_file_open)
@@ -518,5 +494,5 @@ void Ch10PacketReader::run()
         m_file_open = false;
     }
 
-    reportProgress(kPercent100);
+    m_report.progress(kPercent100);
 }
