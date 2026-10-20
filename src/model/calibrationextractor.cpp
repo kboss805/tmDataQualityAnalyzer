@@ -710,10 +710,6 @@ std::string CalibrationExtractor::summarize(const std::vector<CalibrationChannel
         out.insert(out.end(), detailLines.begin(), detailLines.end());
     }
 
-    // Calibrated, but only after loosening the edge threshold: the steps sat close
-    // to this channel's own noise. Reported because it is the early warning the
-    // count cannot give — these receivers calibrated, yet they are the ones
-    // drifting toward the point where they will stop calibrating at all.
     // Calibrated, but the receiver ran out of range partway up the sweep, so the
     // profile stops there and clamps above it. Reported because the plot then
     // cannot rise past that step no matter how strong the signal gets - which
@@ -727,6 +723,10 @@ std::string CalibrationExtractor::summarize(const std::vector<CalibrationChannel
         out.insert(out.end(), saturatedLines.begin(), saturatedLines.end());
     }
 
+    // Calibrated, but only after loosening the edge threshold: the steps sat close
+    // to this channel's own noise. Reported because it is the early warning the
+    // count cannot give — these receivers calibrated, yet they are the ones
+    // drifting toward the point where they will stop calibrating at all.
     if (!relaxedLines.empty())
     {
         out.push_back("");

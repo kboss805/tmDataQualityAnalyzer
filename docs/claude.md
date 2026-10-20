@@ -522,6 +522,40 @@ v2.9.0 intended. Every first-party header here is quote-included, so `anglebrack
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
 
+#### A review pass over the de-Qt'd core: dead diagnostics, drifted comments, one mask definition
+
+A read of everything the sweep changed, with fresh eyes, found no defect and nothing in the wrong layer -
+the Qt-free guard holds - but some debris. Nothing here changes behaviour.
+
+- **Dead diagnostics in `FrameProcessor`.** When the log was made concise (#103) the "longest run" and
+  related fields stopped being printed, but the scan kept maintaining them bit by bit. Removed:
+  `max_sync_run` and `current_sync_run` (updated on every sync, read by nothing), `buffer_ever_filled`,
+  `first_data_time` / `last_data_time` (a pair of stores on every bit), and the `ScanDiagnostics` copies
+  of `words_in_frame` and `min_syncs`. What the report still prints is untouched: `reportsExactlyTheseMessages`
+  pins its text.
+- **Doc comments that had drifted.** `frameprocessor.h`'s three `report*` declarations sat between the
+  comments of the functions around them; the relaxed-threshold paragraph in the calibration summary sat on
+  top of the saturated-top section's; field names the DTO rewrite renamed (`resolved_attrs`, `packet_queue`,
+  `is_randomized`) survived in comments; `ProcessingEvents::errorOccurred` claimed to be always followed by
+  `processingFinished(false)`, which the packet reader never raises; several headers still described the
+  sweep as in progress; and `ProcessingParams::swapBytes` said "Defaults false" over a `true` that #101
+  deliberately restored.
+- **Seven headers were not in `tmDataQualityAnalyzer.pro`'s `HEADERS`** (`processingevents.h`, `streammode.h`,
+  `containerutil.h`, `qtbridge.h`, `qtprocessingevents.h`, `textformat.h`, `textparse.h`). The build did not
+  need them - none has `Q_OBJECT` - but a generated Visual Studio solution would not list them.
+- **One definition of "every bit of the pattern".** The default sync mask was computed three times - in
+  `resolveFrameSync`, in `Ch10PacketReader::prepare` and in the failure report - and the third differed for a
+  pattern of no length. `fullSyncMask()` (in `processingparams.h`) is now the only one; a zero-length pattern
+  gets a full mask in all three, which cannot occur from a real setup (`resolveFrameSync` refuses an empty
+  pattern).
+
+**Validated against five single-defect mutants of the mask; all caught**: a zero length giving an empty mask; 64
+bits shifting by 64; the off-by-one; the reader ignoring the default; and the report inverting its mask test.
+The dead-diagnostics removal cannot be mutation-checked - it removes work nothing observed - so its evidence is
+the unchanged suite and the Release throughput gate.
+
+Baseline **703 / 0 / 1** (was 702 / 0 / 1; the mask helper's test), **704 / 0 / 0** at release. **29 suites.**
+
 #### irig106 setup is serialised: two threads opening recordings at once no longer crash
 
 The vendored library keeps process-wide state it never locks. `GetNextHandle()` claims a slot in a global
@@ -4533,7 +4567,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestTomlDocument** (`tst_tomldocument`) — the settings-file reader/writer, pinned directly rather than only through `FrameSetup` and the dialogs: sections and keys in file order (not sorted), an empty `[EMPTY]` section still declared, `[[Step]]` read as a literal section named `[Step]`, quote-aware `#` comments, `\"` and `\\` unescaped, a repeated key overwriting, a UTF-8 BOM with CRLF, UTF-16 LE and BE with a BOM, a non-ASCII value saved to and loaded from a folder outside every Western code page, the integer rule (whitespace and `+` tolerated, junk / fraction / overflow / empty return the caller's fallback with `parsed` false), the double rule (including `inf`), `QVariant::toBool()`'s boolean rule (even `no` is true), the exact bytes `save()` writes (top-level keys first, a blank line between sections, CRLF, no BOM), doubles as `%g` with six digits, `save()` truncating rather than merging, and both error paths naming the file. Written against the Qt implementation first; validated against four mutants of the `std` port. Pure logic, runs in CI
 - **TestQtProcessingEvents** (`tst_qtprocessingevents`) — the hand-off from a processing thread to Qt that replaced `FrameProcessor`'s signals: 300 mixed log / error events raised on a worker thread arrive on the target's thread in the order raised with completion last (and the test really did cross threads); UTF-8 messages decode (an accented letter and an em dash); any handler may be missing; events still queued for a destroyed target are dropped, which is what lets the coordinator and extractor die with events in flight. Validated against mutants that deliver directly instead of queued (the run crashes) and that decode as Latin-1. Pure logic, runs in CI; and progress events (101 values from a worker thread arrive on the target's thread in order)
 - **TestTextFormat** (`tst_textformat`) — `formatFixed()`, which reproduces `QString::number(v, 'f', n)` without Qt, checked against Qt itself: the exact ties the report prints (Qt rounds them away from zero, `std::format` to even), every n/64 at 0 to 6 decimals, 20,000 arbitrary doubles from a fixed generator, signs and negative zero, the extremes, and `isExactTie()` seeing only real ties. Pure logic, runs in CI
-- **TestFrameSync** (`tst_framesync`) — the shared decode in `framesync.h`: `parseUnsignedHex` against `QString::toULongLong(16)` on a list of awkward inputs and 40,000 random strings, `resolveFrameSync` (the pattern's length counted in characters, an empty mask meaning every bit, the pattern checked before the mask and the result never half-written), and `applyAcquisition` setting every raw-affecting field and no other. Pure logic, runs in CI
+- **TestFrameSync** (`tst_framesync`) — the shared decode in `framesync.h`: `parseUnsignedHex` against `QString::toULongLong(16)` on a list of awkward inputs and 40,000 random strings, `resolveFrameSync` (the pattern's length counted in characters, an empty mask meaning every bit, the pattern checked before the mask and the result never half-written), `applyAcquisition` setting every raw-affecting field and no other, and `fullSyncMask` (every bit of the pattern, no shift by 64, a full mask for a pattern of no length, exactly N bits set for 1 to 63). Pure logic, runs in CI
 - **TestCoreQtFree** (`tst_coreqtfree`) — the guard that keeps the processing core free of Qt: it walks the `#include "..."` closure of every core source and fails on any `<Q...>` header or any reach into `include/viewmodel` or `include/view`, requires every `src/model` source to be classified as core or UI-session, and proves its own walker on a temporary tree (several spellings of a Qt header seen through a shared header, a look-alike not counted, a layering violation, a commented-out include ignored). Pure file reading, runs in CI
 
 ### Running Tests

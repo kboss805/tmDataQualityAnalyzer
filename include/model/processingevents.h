@@ -2,8 +2,8 @@
  * @file processingevents.h
  * @brief How the processing core reports what it is doing, without Qt.
  *
- * `FrameProcessor` (and, in later steps, the packet readers) used to be `QObject`s that
- * emitted signals: a log line, an error, "finished". Signals meant the core needed
+ * The processing classes used to be `QObject`s that emitted signals: a log line, an
+ * error, "finished". Signals meant the core needed
  * `moc`, a thread with an event loop, and a `QString` for every message. This interface
  * replaces them with a plain callback the core calls, so the core links nothing from Qt
  * and can sit behind a C ABI (the callbacks map onto a table of function pointers).
@@ -32,7 +32,9 @@ public:
     /// A human-readable status line (a stage reached, a warning, a summary).
     virtual void logMessage(const std::string& message) = 0;
 
-    /// A failure report. Always followed by `processingFinished(false)`.
+    /// A failure report. A source that has a completion event (`FrameProcessor`,
+    /// `CalibrationExtractor`) follows it with `processingFinished(false)`; the packet
+    /// reader has none.
     virtual void errorOccurred(const std::string& message) = 0;
 
     /// The run is over. @p success is true only on clean completion.
