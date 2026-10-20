@@ -38,6 +38,7 @@ SOURCES += \
     $$PWD/../src/model/frameprocessor.cpp \
     $$PWD/../src/model/stepdetector.cpp \
     $$PWD/../src/model/calibrationextractor.cpp \
+    $$PWD/../src/model/pipelinerunner.cpp \
     $$PWD/../src/model/csvseriesparser.cpp \
     $$PWD/../src/model/seriescolumnschema.cpp \
     $$PWD/../src/model/streamconfigschema.cpp \
@@ -78,6 +79,7 @@ HEADERS += \
     $$PWD/../include/model/frameprocessor.h \
     $$PWD/../include/model/stepdetector.h \
     $$PWD/../include/model/calibrationextractor.h \
+    $$PWD/../include/model/pipelinerunner.h \
     $$PWD/../include/model/csvseriesparser.h \
     $$PWD/../include/model/seriescolumnschema.h \
     $$PWD/../include/model/streamconfigschema.h \
@@ -175,6 +177,7 @@ SOURCES += \
     tst_qtprocessingevents.cpp \
     tst_ch10packetreader.cpp \
     tst_eventreporter.cpp \
+    tst_pipelinerunner.cpp \
     tst_stepdetector.cpp \
     tst_calibrationextractor.cpp
 
@@ -208,5 +211,6 @@ HEADERS += \
     tst_qtprocessingevents.h \
     tst_ch10packetreader.h \
     tst_eventreporter.h \
+    tst_pipelinerunner.h \
     tst_stepdetector.h \
     tst_calibrationextractor.h

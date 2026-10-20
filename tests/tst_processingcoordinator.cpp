@@ -336,6 +336,89 @@ void TestProcessingCoordinator::cancelProcessingNoRunNoOp()
     QCOMPARE(coord.processing(), false);
 }
 
+// What the Cancel button does: the run ends, unsuccessfully, with no stream's result delivered. This
+// path had no test of its own - the suite only cancelled to clean up after a timeout - so it is
+// pinned here, on the recording the other end-to-end cases use.
+void TestProcessingCoordinator::cancelProcessingEndsTheRunWithoutAResult()
+{
+    const QString source = testDataPath("test files/step_cal, example.ch10");
+    if (!QFileInfo::exists(source))
+        QSKIP("step_cal fixture not available");
+
+    Chapter10Reader reader;
+    QVERIFY(reader.loadChannels(toFsPath(source)));
+    const int pcm_id  = reader.getFirstPCMChannelID();
+    const int time_id = reader.getCurrentTimeChannelID();
+    QVERIFY(pcm_id >= 0 && time_id >= 0);
+
+    StreamJob job = makeLockOnlyJob(source, time_id, pcm_id, "Ch " + QString::number(pcm_id));
+    job.params.isRandomized      = false;
+    job.params.wordsInMinorFrame = 50;
+
+    ProcessingCoordinator coord;
+    QEventLoop loop;
+    bool finished = false;
+    bool finished_ok = true;
+    int results = 0;
+    QList<bool> states;
+    QObject::connect(&coord, &ProcessingCoordinator::streamProcessed,
+                     [&](const ProcessedStreamData&) { ++results; });
+    QObject::connect(&coord, &ProcessingCoordinator::processingStateChanged,
+                     [&](bool active) { states << active; });
+    QObject::connect(&coord, &ProcessingCoordinator::processingFinished, &loop,
+                     [&](bool ok) { finished = true; finished_ok = ok; loop.quit(); });
+
+    QVector<StreamJob> jobs = { job };
+    QVERIFY(coord.startProcessing(std::move(jobs)));
+    QVERIFY(coord.processing());
+    coord.cancelProcessing();               // before the recording can have been read through
+    QTimer::singleShot(kCancelDrainMs, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    QVERIFY2(finished, "a cancelled run never reported its end");
+    QVERIFY(!finished_ok);
+    QCOMPARE(results, 0);
+    QVERIFY(!coord.processing());
+    QCOMPARE(coord.progressPercent(), 100);
+    QCOMPARE(states, (QList<bool>{true, false}));
+}
+
+// Closing the window mid-run destroys the coordinator while its threads are going. They post their
+// reports to it, so they have to be gone before it is; a report delivered to a dead object, or a
+// thread outliving it, would crash here or in whatever test came next.
+void TestProcessingCoordinator::destroyingTheCoordinatorMidRunIsSafe()
+{
+    const QString source = testDataPath("test files/step_cal, example.ch10");
+    if (!QFileInfo::exists(source))
+        QSKIP("step_cal fixture not available");
+
+    Chapter10Reader reader;
+    QVERIFY(reader.loadChannels(toFsPath(source)));
+    const int pcm_id  = reader.getFirstPCMChannelID();
+    const int time_id = reader.getCurrentTimeChannelID();
+    QVERIFY(pcm_id >= 0 && time_id >= 0);
+
+    StreamJob job = makeLockOnlyJob(source, time_id, pcm_id, "Ch " + QString::number(pcm_id));
+    job.params.isRandomized      = false;
+    job.params.wordsInMinorFrame = 50;
+
+    int deliveries = 0;
+    {
+        ProcessingCoordinator coord;
+        QObject::connect(&coord, &ProcessingCoordinator::logMessageReceived,
+                         [&](const QString&) { ++deliveries; });
+        QVector<StreamJob> jobs = { job };
+        QVERIFY(coord.startProcessing(std::move(jobs)));
+    }   // destroyed while the run is going
+
+    // Anything still queued for the dead object must be discarded, not delivered.
+    const int before = deliveries;
+    QCoreApplication::processEvents();
+    QThread::msleep(100);
+    QCoreApplication::processEvents();
+    QCOMPARE(deliveries, before);
+}
+
 void TestProcessingCoordinator::startProcessingEmptyReturnsFalse()
 {
     ProcessingCoordinator coord;

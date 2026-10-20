@@ -522,6 +522,52 @@ v2.9.0 intended. Every first-party header here is quote-included, so `anglebrack
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
 
+#### The pipeline is a Qt-free `PipelineRunner`; the coordinator is a thin wrapper around it
+
+The last piece of non-UI logic that still sat in the Qt layer. `ProcessingCoordinator` owned the whole
+single-reader / parallel-worker arrangement - a `PacketQueue` per stream, the reader's `prepare()`, a
+`QThread` per worker and one for the reader, the start and stop order, and what each stream's result is
+stamped with - in `QVector`, `QThread::create` and signals. The interop spike's `tmdq_core.cpp` had to
+reimplement a single-stream copy of it by hand to put the core behind a C ABI.
+
+- **`PipelineRunner`** (`include/model/pipelinerunner.h`, `src/model/pipelinerunner.cpp`; no Qt, listed in
+  `TestCoreQtFree`'s core sources). `StreamJob` moved into its header. `start(jobs, events, error)` resolves
+  the recording synchronously and returns at once; a failure before anything runs comes back as `false` plus
+  the reason, reporting nothing to the sink. Everything after runs on `std::thread`s: one per stream, and the
+  reader's thread, which also waits for the others and reports the end. A stream's result is stamped with its
+  `jobIndex` and `sourceId` and delivered from that stream's own thread, only for a stream that succeeded in a
+  run that was not cancelled; `processingFinished` is last, after every thread has ended and the pipeline has
+  been released. `cancel()` is safe from any thread. The sink is a `PipelineEvents`: `ProcessingEvents` plus
+  `streamProcessed`.
+- **`ProcessingCoordinator` keeps its public API, its signals and its state flags**, and now only adapts: its
+  private `Bridge` posts each of the runner's reports to the coordinator's thread as a queued call (the four
+  ordinary ones through `QtProcessingEvents`), so the delivery order the UI relied on is the same. It still
+  emits the opening "--- Processing N stream(s) ---" line and the final progress of 100 itself, which is why the
+  progress bar still reads 100 twice - the reader's, and the coordinator's on finish.
+- **No extra thread.** The reader's thread is the runner's driver; the thread count per run is unchanged.
+
+**Tests first, on the old implementation.** The coordinator suite was the oracle, and reading it showed that
+`cancelProcessing()` and destroying a coordinator mid-run - both rewired by this change - had no test (the suite
+only cancelled to clean up after a timeout). Two cases were added and **run against the unchanged coordinator
+first, where they pass**: `cancelProcessingEndsTheRunWithoutAResult` and `destroyingTheCoordinatorMidRunIsSafe`.
+`TestPipelineRunner` (14 cases) pins the runner directly, with a plain recording sink and no event loop.
+
+**Validated against 24 single-defect mutants; the first run caught 19 and five survived**, all of them cancel
+and end-of-run rules that the obvious test cannot see, because cancelling aborts the workers and so a stream
+mostly just fails to finish: a result still delivered for a cancelled run, success reported despite a cancel,
+the cancel not aborting the workers, the cancel not closing the queues, and the running flag cleared after the
+end was reported rather than before. Each was closed with a case that holds the sink at a chosen moment of a
+real run - a thread parked on a log line - instead of racing for it (see `TestPipelineRunner` in the catalog).
+All 24 are now caught.
+
+Carried over unchanged, and noted rather than fixed: a stream whose thread ended early without being cancelled
+would leave the reader blocked on that stream's full queue (cancel closes every queue, which is the only early
+exit there is today). Closing a stream's queue when its thread ends would remove it; it was left out because
+nothing can reach it and nothing could test it.
+
+Baseline **729 / 0 / 1** (was 711 / 0 / 1; the runner's 16 results and the coordinator's 2), **730 / 0 / 0** at
+release. **31 suites.**
+
 #### One event reporter, one result type, one fewer thread (the review pass, part two)
 
 The simplifications the review pass found that were too large to ride along with its mechanical fixes. No
@@ -4236,9 +4282,10 @@ not mis-read.
    - Receives each `ProcessedStreamData` and forwards it to PlotViewModel; on a successful run, `onCoordinatorProcessingFinished()` appends a `Source` record (`include/dto/source.h`) to `sources()` — a failed/cancelled run leaves no phantom entry; `removeSource()` drops one. Manages recent files
 
 2. **ProcessingCoordinator** (`src/viewmodel/processingcoordinator.cpp`, `include/viewmodel/processingcoordinator.h`)
-   - Owns the reader + worker thread lifecycle for multi-stream processing
-   - `startProcessing(QVector<StreamJob>)` takes ownership of each job's FrameSetup, spins up one `Ch10PacketReader` thread plus one `FrameProcessor` worker thread (and a `PacketQueue`) per stream
-   - `cancelProcessing()` requests a cooperative abort of all workers and the reader; `reset()` clears transient state
+   - The Qt face of multi-stream processing; the pipeline itself is `PipelineRunner` (below), which it wraps and reports as signals
+   - `startProcessing(QVector<StreamJob>)` hands the jobs to the runner, which takes ownership of each job's FrameSetup and spins up one `Ch10PacketReader` thread plus one `FrameProcessor` worker thread (and a `PacketQueue`) per stream
+   - `cancelProcessing()` asks the runner for a cooperative abort of all workers and the reader; `reset()` clears transient state
+   - Keeps the opening "--- Processing N stream(s) ---" log line and the final progress of 100 for itself (the reader also reports 100, so the bar reads it twice)
    - Emits `progressChanged(int)`, `processingStateChanged(bool)`, `streamProcessed(ProcessedStreamData)`, `processingFinished(bool)`, `logMessageReceived(QString)`, `errorOccurred(QString)`
 
 3. **BatchController** (`src/viewmodel/batchcontroller.cpp`, `include/viewmodel/batchcontroller.h`)
@@ -4302,7 +4349,7 @@ User opens .ch10 ─► MainView ─► MainViewModel ─► Chapter10Reader (me
                       MainViewModel builds QVector<StreamJob>
                               [ProcessingParams.sourceId stamped]
                                       │
-                             ProcessingCoordinator
+                ProcessingCoordinator (Qt) ─► PipelineRunner (no Qt)
                           ┌───────────┴───────────┐
                   Ch10PacketReader (one pass)      │
                           │  routes packets        │
@@ -4485,7 +4532,7 @@ that worktrees also need.
 - Central processing function: `FrameProcessor::process()`, driven per stream from its `ProcessingParams` + `FrameSetup`
 - Drains the stream's `PacketQueue` (fed by the single `Ch10PacketReader`) rather than opening the file itself
 - Accumulates results into an in-memory `ProcessedStreamData` (lock %, accumulated missed frames, and SNR channel series) — there is no CSV-on-disk intermediate
-- One `FrameProcessor` per stream runs on its own `QThread` (`QThread::create`, no event loop); `ProcessingCoordinator` owns the lifecycle and tears the threads down when each worker finishes
+- One `FrameProcessor` per stream runs on its own `std::thread` (no event loop); `PipelineRunner` owns the lifecycle - the queues, the reader and the threads - and joins them all before it reports the end
 - Reports log, error, and completion through `ProcessingEvents`; the coordinator's adapter relays them as its own signals, on the UI thread and in order
 
 ### Framesync Lock Statistics Calculation
@@ -4565,9 +4612,9 @@ the runner machine's setup and recovery procedure is in
 ### Test Suites
 
 The suites below are registered in `tests/main.cpp`, in a different order than they're
-listed here: the fast, no-fixture suites run first, followed by the four heavy
-`.ch10`-integration suites (`TestChapter10Reader`, `TestFrameProcessor`,
-`TestProcessingCoordinator`, `TestCalibrationExtractor`), which `--fast`/`TMDQ_FAST_TESTS`
+listed here: the fast, no-fixture suites run first, followed by the heavy
+`.ch10`-integration suites (`TestChapter10Reader`, `TestCh10PacketReader`, `TestFrameProcessor`,
+`TestProcessingCoordinator`, `TestPipelineRunner`, `TestCalibrationExtractor`), which `--fast`/`TMDQ_FAST_TESTS`
 skip for quick local iteration. The source/header files are listed in `tests/tests.pro`.
 
 - **TestChannelData** (`tst_channeldata`) — ChannelData model object tests, including a non-ASCII name round-tripping and copies keeping every field
@@ -4578,7 +4625,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestMainViewModelHelpers** (`tst_mainviewmodel_helpers`) — `MainViewModel::classifyLogMessage()`, the severity policy the View renders but does not decide. The channel-naming cases that used to live here moved to **TestFrameSetup** with the `MainViewModel` forwarders they called: `FrameSetup` is where that naming lives; and `buildStreamJobAttachesCalibrationByWord`, which runs a receiver stream through the private `buildStreamJob` (the test is a friend) and checks which parameters received which profile and the log line that says so; and `buildStreamJob` as a whole: 43 rows of how the sync pattern and mask are decoded (whitespace trimmed, `+` and `0x` accepted, any `-` refused, 64-bit overflow refused, the pattern's length counted in characters), every field a config contributes to the worker's parameters, and each rejection message in the order the checks run
 - **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration, `channelPrefix()` naming the known channel positions then falling back to `CH<n+1>`, `receiverParameterName()` combining the two, `receiverIndexFromName()` inverting it (0 for a name with no parseable `_RCVR<N>`), and the receiver-parameters file as a whole: the scalars read from the `[Receivers]` block the shipped files actually use (and the older `[Parameters]` keys still accepted), a save/load round trip that carries the word map with them, the default-map fallback when no file was loaded, nothing written when there is no map to write, and the metadata-only file that parses to zero parameters — the contract `tryLoadingFile()`'s two callers depend on; and `receiverNameParsingMatchesQStringToInt`, which pins how a hand-typed parameter name parses (the last `_RCVR` token wins, whitespace and a leading `+` tolerated, a second sign / negative / trailing junk / overflow reads as no receiver, a name starting with the token has no channel part) - written against the `QString` implementation first; and `attachCalibrationProfiles`, which attaches a step-calibration profile only when it is valid and its word matches a parameter (an invalid one stays linear; a word the map lacks is ignored), written against the `QObject`/`QHash` version first
 - **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, the computed Y range and the SNR max override that pins it (the minimum stays automatic, Reset returns it to the data), X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), the left-axis view toggle preserving per-stream selection, and stream-identity regression coverage: two streams sharing a TMATS-derived `streamLabel` but different `streamOrder` must stay independent through reprocess-replace and `renameSeries()`/`recolorSeries()` sibling-sync (pinned after a pre-v2.6.0 cross-contamination bug). Multi-file input: cross-source identity (two different `sourceId`s reusing the same `streamLabel`/`streamOrder` stay independent through reprocess-replace/rename/recolor), time-base re-basing (a later-added source starting earlier shifts existing series right; three successively-earlier sources compound correctly; a later source starting after triggers no shift), the non-overlap warning signal (fires once per newly-arriving non-overlapping source, not for an overlapping range), and `removeSource()` (drops only the target source, re-bases left only when the removed source held the earliest sample, clears all data when the last source is removed, no-ops for an unknown id). US1.1 source view: `setVisibleSource()` isolates a source via `effectiveVisible()` without mutating per-series `visible`, `sourceList()` lists distinct labeled sources, and `exportCsv(path, sourceId)` writes only that source's columns; and `aNonAsciiStreamLabelReachesEverySeries`, which pins that a non-ASCII stream label (arriving as UTF-8 from the core) names the lock and missed-frames series, prefixes the SNR series' name, and is what a re-run matches on to replace the stream
-- **TestProcessingCoordinator** (`tst_processingcoordinator`) — constructor defaults, `reset()` clears state, cancel-with-no-run no-op, `startProcessing()` empty-returns-false and processing-state emission, plus single-vs-multi-stream throughput benchmarks; and `workerReportsPrecedeTheResultAndFinishComesLast`, which checks through a real run that the worker's completion line is relayed before the stream's result and `processingFinished` is last; its end-to-end test also checks the progress bar (0 at the start, then 100 reported twice: once by the reader, once on finish); and `aRecordingUnderANonAsciiFolderProcessesEndToEnd`, which runs the committed `step_cal` recording copied under a non-ASCII folder through the whole pipeline
+- **TestProcessingCoordinator** (`tst_processingcoordinator`) — constructor defaults, `reset()` clears state, cancel-with-no-run no-op, `cancelProcessingEndsTheRunWithoutAResult` (Cancel ends the run unsuccessfully, delivers no result, and the state goes true then false) and `destroyingTheCoordinatorMidRunIsSafe` (nothing queued for the dead object is delivered), `startProcessing()` empty-returns-false and processing-state emission, plus single-vs-multi-stream throughput benchmarks; and `workerReportsPrecedeTheResultAndFinishComesLast`, which checks through a real run that the worker's completion line is relayed before the stream's result and `processingFinished` is last; its end-to-end test also checks the progress bar (0 at the start, then 100 reported twice: once by the reader, once on finish); and `aRecordingUnderANonAsciiFolderProcessesEndToEnd`, which runs the committed `step_cal` recording copied under a non-ASCII folder through the whole pipeline
 - **TestMainView** (`tst_mainview`) — Main window construction, widget wiring, log routing, dock visibility behavior, and the CSV import routing (`openPath`/`importCsv`, valid/invalid). The batch-apply cases moved to **TestBatchController** with the state machine itself; and `aFinishedStreamIsLoggedUnderItsLabel`, the log line quoting a finished stream's (non-ASCII) label
 - **TestPlotWidget** (`tst_plotwidget`) — Plot widget construction, null/valid ViewModel connection, dark/light theme application, the movable legend overlay populating from data (hidden until data loads, then one row per visible active-metric series), a shown/resized-window regression case asserting the overlay sizes correctly (not a collapsed frame-only box) after a second rebuild adds more rows — a QScrollArea `widgetResizable` sizeHint staleness bug reproduced and fixed post-review — the SNR legend row showing the short `"CH<id> <ch.name>"` form instead of the full TMATS stream title, the legend row layout reserving a right-side gutter matching the style's scrollbar extent, and each legend row carrying an objectName the overlay stylesheet can target to override the app's global `QWidget { background-color: ... }` theme rule (otherwise every row painted as an opaque chip); plus `exportImage()` writing a PNG/SVG/PDF headlessly (the parameterized image-export entry point extracted for batch apply); and the right-click context menu that replaced the external control rows: it lists every expected top-level item, its data-dependent entries are disabled until data loads, the Plot File submenu is disabled for a single source and switches `visibleSource` for a multi-source run, View Mode reflects and sets the active left-axis metric, `X Axis > Reset Span` / `Y Axes > Reset` clear the X window and both Y overrides, plus two structural guards - wheel-zoom/drag-pan stay enabled (horizontal-only) once data arrives, and **no QComboBox / QSpinBox / QLineEdit / QAbstractButton lives outside the chart** - on-chart overlays are allowed, external control rows are not (the machine-checkable form of "no external controls"); plus the legend toggle (shows/hides the overlay and survives a rebuild, appears only once data is loaded, is parented to the chart, and stays in sync with the context menu's checkable Show Legend item); plus Y axis occupancy - a lock-only plot hides the right axis, an SNR-only plot hides the left, an empty chart keeps the left (hiding both would leave a bare box), and hiding the last *visible* SNR series reclaims the right axis just as never loading one would
 - **TestTmChart** (`tst_tmchart`) - the first-party chart replacing QCustomPlot: series bookkeeping across removals and out-of-range access, mismatched x/y lengths truncated (a draw-time overrun), degenerate/non-finite ranges rejected, X and Y coordinate transforms round-tripping with the correct screen orientation, wheel zoom anchoring the value under the cursor and reporting the new range, interactions inert until enabled, and the shared `renderTo()` export path painting real content while omitting the crosshair/zoom-band overlays (cursor state, not data), and that hiding a Y axis reclaims its margin (the measurable consequence) while leaving the coordinate transforms consistent with the new plot area
@@ -4600,6 +4647,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestFrameSync** (`tst_framesync`) — the shared decode in `framesync.h`: `parseUnsignedHex` against `QString::toULongLong(16)` on a list of awkward inputs and 40,000 random strings, `resolveFrameSync` (the pattern's length counted in characters, an empty mask meaning every bit, the pattern checked before the mask and the result never half-written), `applyAcquisition` setting every raw-affecting field and no other, and `fullSyncMask` (every bit of the pattern, no shift by 64, a full mask for a pattern of no length, exactly N bits set for 1 to 63). Pure logic, runs in CI
 - **TestCoreQtFree** (`tst_coreqtfree`) — the guard that keeps the processing core free of Qt: it walks the `#include "..."` closure of every core source and fails on any `<Q...>` header or any reach into `include/viewmodel` or `include/view`, requires every `src/model` source to be classified as core or UI-session, and proves its own walker on a temporary tree (several spellings of a Qt header seen through a shared header, a look-alike not counted, a layering violation, a commented-out include ignored). Pure file reading, runs in CI
 - **TestEventReporter** (`tst_eventreporter`) — `EventReporter`, the null-safe forwarder every processing source reports through: every call harmless with no sink, each of log / error / finished / progress reaching its own sink method with its argument, calls arriving in order, a replaced sink receiving later calls and the old one none, a cleared sink going silent, and the reporter (not a borrowed pointer) keeping a shared sink alive. Pure logic, runs in CI
+- **TestPipelineRunner** (`tst_pipelinerunner`) — the Qt-free pipeline, with a plain recording sink and no event loop, on the committed `step_cal` recording: a single stream delivers its result (stamped with `jobIndex` and the job's `sourceId`) and then the end, with every worker line before the result, the end last, and exactly one progress of 100 (the runner adds none of its own); several streams on one channel each deliver their own result; a stream that finds no sync does not stop the others, and says why; a run in which every stream fails ends unsuccessfully; a recording that cannot be opened (or no jobs) fails before anything runs, with a reason and nothing reported, and leaves the runner usable; a second start while running is refused and does not disturb the first; cancel ends the run unsuccessfully with no result and is a no-op with nothing running, and four cases hold the sink at a chosen moment of a real run (a thread parked on a log line) to pin what a race cannot: a stream that finished after the cancel was asked for delivers nothing and the run fails even though another stream had delivered, a worker waiting on an empty queue is woken by the cancel while the reader is still stuck, a worker that has not started reading is stopped by its own abort flag, and `running()` is already false inside the end report; the runner runs again after a run ends, without waiting for the thread that reported it; and destroying a running runner stops it and has reported the end by the time the destructor returns
 
 ### Running Tests
 
