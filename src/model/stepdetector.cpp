@@ -10,7 +10,6 @@
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
-#include <sstream>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -19,6 +18,7 @@
 #include "containerutil.h"
 #include "textfile.h"
 #include "textparse.h"
+#include "tomldocument.h"
 
 namespace {
 
@@ -27,16 +27,7 @@ namespace {
 /// rather than a saving.
 using Flags = std::vector<char>;
 
-/// Strips an inline `#` comment and surrounding whitespace. NOT quote-aware, unlike
-/// TomlDocument's: a '#' inside quotes cuts the value here, which no step file has ever
-/// needed (its values are bare numbers).
-std::string stripComment(const std::string& value)
-{
-    const std::size_t hash = value.find('#');
-    return textparse::trimmed(hash == std::string::npos ? value : value.substr(0, hash));
-}
-
-/// ASCII lower-casing, enough for the header and key names matched here.
+/// ASCII lower-casing, enough for the key name matched here.
 std::string asciiLower(std::string s)
 {
     for (char& c : s)
@@ -665,73 +656,30 @@ bool StepDetector::parseStepConfig(const std::filesystem::path& path,
 {
     out.clear();
 
-    std::string text;
-    if (!textfile::readText(path, text))
+    const TomlDocument doc = TomlDocument::load(path);
+    if (!doc.ok())
     {
         error = "Could not open step-config file '" + textfile::utf8FileName(path) + "'.";
         return false;
     }
 
-    std::istringstream in(text);
-    bool in_step = false;
-    StepDefinition current;
-
-    auto flush = [&]() {
-        if (in_step)
-        {
-            out.push_back(current);
-        }
-        current = StepDefinition{};
-    };
-
-    std::string raw_line;
-    while (std::getline(in, raw_line))
+    // Each `[[Step]]` entry is one step, whatever keys it holds: one with no usable `db` keeps the
+    // default of 0 and still counts. The key is matched without regard to case, a value that does
+    // not read as a number is skipped (so an earlier good one stands), and the last good one wins.
+    // Values arrive as written, quotes included, so `db = "6"` is not a number here.
+    for (const TomlDocument::Table* table : doc.tables("step"))
     {
-        const std::string line = textparse::trimmed(raw_line);
-        if (line.empty() || line.front() == '#')
+        StepDefinition step;
+        for (const auto& [key, value] : table->entries)
         {
-            continue;
+            double num = 0.0;
+            if (asciiLower(key) == "db" && textparse::parseDouble(value, num))
+            {
+                step.db = num;
+            }
         }
-
-        // Array-of-tables header: [[Step]] starts a new step entry.
-        if (line.compare(0, 2, "[[") == 0)
-        {
-            flush();
-            in_step = asciiLower(line) == "[[step]]";
-            continue;
-        }
-        // Any other section header ends the current step context.
-        if (line.front() == '[')
-        {
-            flush();
-            in_step = false;
-            continue;
-        }
-        if (!in_step)
-        {
-            continue;
-        }
-
-        const std::size_t eq = line.find('=');
-        if (eq == std::string::npos)
-        {
-            continue;
-        }
-        const std::string key = asciiLower(textparse::trimmed(line.substr(0, eq)));
-        const std::string val = stripComment(line.substr(eq + 1));
-
-        double num = 0.0;
-        if (!textparse::parseDouble(val, num))
-        {
-            continue;
-        }
-        if (key == "db")
-        {
-            current.db = num;
-        }
-        // Each step is pushed on the next [[Step]] header or at EOF by flush().
+        out.push_back(step);
     }
-    flush();
 
     if (out.empty())
     {

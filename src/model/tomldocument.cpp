@@ -190,6 +190,7 @@ TomlDocument TomlDocument::load(const std::filesystem::path& path, std::string* 
     std::istringstream in(text);
     std::string raw_line;
     std::string current_section;
+    bool in_table = false;   // keys go to the last array-of-tables entry, not to a section
 
     while (std::getline(in, raw_line))
     {
@@ -200,12 +201,26 @@ TomlDocument TomlDocument::load(const std::filesystem::path& path, std::string* 
             continue;
         }
 
+        // `[[...]]` opens an entry of an array of tables, well formed or not. The name is what
+        // lies between the brackets, as written, and only when the line is nothing else: a line
+        // with a comment after it, or a missing bracket, still opens an entry (so the keys under
+        // it are not read as the previous entry's) but one no name matches.
+        if (line.compare(0, 2, "[[") == 0)
+        {
+            Table table;
+            if (line.size() >= 4 && line.compare(line.size() - 2, 2, "]]") == 0)
+            {
+                table.name = line.substr(2, line.size() - 4);
+            }
+            doc.m_tables.push_back(std::move(table));
+            in_table = true;
+            continue;
+        }
+
         if (startsWith(line, '[') && endsWith(line, ']'))
         {
-            // One bracket pair is stripped, exactly as the QSettings format did, so a
-            // `[[Step]]` header reads as a section literally named "[Step]". This class
-            // does NOT implement array-of-tables; StepDetector::parseStepConfig owns
-            // that, and pretending otherwise here would invite a caller to rely on it.
+            // One bracket pair is stripped, exactly as the QSettings format did.
+            in_table = false;
             current_section = trimmed(line.substr(1, line.size() - 2));
             // A section with no keys still counts as declared: the receiver word map's
             // [EMPTY] placeholders exist precisely so the Word numbering reads as
@@ -219,13 +234,27 @@ TomlDocument TomlDocument::load(const std::filesystem::path& path, std::string* 
             continue;
         }
 
+        // A line that starts a header but is not one (`[Meta] # note`) still ends an entry: its
+        // keys are not the last entry's. Outside an entry it is read as before, as a key line.
+        if (in_table && startsWith(line, '['))
+        {
+            in_table = false;
+            continue;
+        }
+
         const std::size_t eq = line.find('=');
         if (eq == std::string::npos)
         {
             continue;  // malformed line - skipped, as before
         }
 
-        const std::string bare  = trimmed(line.substr(0, eq));
+        const std::string bare = trimmed(line.substr(0, eq));
+        if (in_table)
+        {
+            doc.m_tables.back().entries.emplace_back(bare, stripInlineComment(trimmed(line.substr(eq + 1))));
+            continue;
+        }
+
         const std::string value = unquote(stripInlineComment(trimmed(line.substr(eq + 1))));
         const std::string compound = current_section.empty()
             ? bare
@@ -300,6 +329,20 @@ bool TomlDocument::boolean(const std::string& key, bool fallback) const
     // a separate decision from moving off QSettings.
     const std::string v = asciiLower(trimmed(it->second));
     return !(v.empty() || v == "0" || v == "false");
+}
+
+std::vector<const TomlDocument::Table*> TomlDocument::tables(const std::string& name) const
+{
+    const std::string wanted = asciiLower(name);
+    std::vector<const Table*> found;
+    for (const Table& table : m_tables)
+    {
+        if (asciiLower(table.name) == wanted)
+        {
+            found.push_back(&table);
+        }
+    }
+    return found;
 }
 
 // ---------------------------------------------------------------------------
