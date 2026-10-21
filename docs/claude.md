@@ -522,6 +522,31 @@ v2.9.0 intended. Every first-party header here is quote-included, so `anglebrack
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
 
+#### A stream that ends early closes its own queue, so it cannot strand the reader
+
+The hazard `PipelineRunner` carried over from the coordinator. The reader hands every packet to every stream's
+bounded queue (64 deep) and blocks while one is full. A stream whose thread stopped early - its processor
+aborted, with the run not cancelled - stops draining its queue; the queue fills and stays full, the reader waits
+on it forever, and every OTHER stream, perfectly healthy, starves. The coordinator had the same property.
+Cancelling the whole run was the only early exit anyone knew of, and it closes every queue, which is why it never
+showed.
+
+The fix is one line in `PipelineRunner::runStream`: when a stream's `process()` returns, however it ended, the
+thread closes its own queue (`enqueue` on a closed queue discards and returns at once). Closing a drained queue
+after a normal end changes nothing.
+
+**It could be reached after all, and tested.** I had said nothing could trigger it, because nothing in the
+runner's API can end one stream on its own. The test is a friend of the runner and aborts ONE stream's processor
+mid-run (`aStreamThatEndsEarlyDoesNotLeaveTheReaderBlockedOnItsQueue`): job 1 stops, its queue fills, and the
+healthy job 0 has to finish, be delivered and make the run succeed. **Against the unfixed code the run never
+ended** (the test waits 30 s, then fails); with the fix it passes. No timing is involved: the dead stream's queue
+fills whenever the file has more than 64 packets, which the committed recording has.
+
+**Validated against two single-defect mutants; both caught**: the close removed (the failure above), and the
+close aimed at job 0's queue instead of the stream's own.
+
+Baseline **735 / 0 / 1** (was 734 / 0 / 1), **736 / 0 / 0** at release. **31 suites.**
+
 #### The step-file parser reads through `TomlDocument`: one TOML reader, not two
 
 The follow-up v2.14.2 left open on purpose. `StepDetector::parseStepConfig` was a second, hand-written TOML
@@ -603,10 +628,8 @@ end was reported rather than before. Each was closed with a case that holds the 
 real run - a thread parked on a log line - instead of racing for it (see `TestPipelineRunner` in the catalog).
 All 24 are now caught.
 
-Carried over unchanged, and noted rather than fixed: a stream whose thread ended early without being cancelled
-would leave the reader blocked on that stream's full queue (cancel closes every queue, which is the only early
-exit there is today). Closing a stream's queue when its thread ends would remove it; it was left out because
-nothing can reach it and nothing could test it.
+Carried over from the coordinator unchanged when this landed, and fixed straight after (the entry above): a
+stream whose thread ended early without a cancel would leave the reader blocked on that stream's full queue.
 
 Baseline **729 / 0 / 1** (was 711 / 0 / 1; the runner's 16 results and the coordinator's 2), **730 / 0 / 0** at
 release. **31 suites.**
@@ -4690,7 +4713,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestFrameSync** (`tst_framesync`) — the shared decode in `framesync.h`: `parseUnsignedHex` against `QString::toULongLong(16)` on a list of awkward inputs and 40,000 random strings, `resolveFrameSync` (the pattern's length counted in characters, an empty mask meaning every bit, the pattern checked before the mask and the result never half-written), `applyAcquisition` setting every raw-affecting field and no other, and `fullSyncMask` (every bit of the pattern, no shift by 64, a full mask for a pattern of no length, exactly N bits set for 1 to 63). Pure logic, runs in CI
 - **TestCoreQtFree** (`tst_coreqtfree`) — the guard that keeps the processing core free of Qt: it walks the `#include "..."` closure of every core source and fails on any `<Q...>` header or any reach into `include/viewmodel` or `include/view`, requires every `src/model` source to be classified as core or UI-session, and proves its own walker on a temporary tree (several spellings of a Qt header seen through a shared header, a look-alike not counted, a layering violation, a commented-out include ignored). Pure file reading, runs in CI
 - **TestEventReporter** (`tst_eventreporter`) — `EventReporter`, the null-safe forwarder every processing source reports through: every call harmless with no sink, each of log / error / finished / progress reaching its own sink method with its argument, calls arriving in order, a replaced sink receiving later calls and the old one none, a cleared sink going silent, and the reporter (not a borrowed pointer) keeping a shared sink alive. Pure logic, runs in CI
-- **TestPipelineRunner** (`tst_pipelinerunner`) — the Qt-free pipeline, with a plain recording sink and no event loop, on the committed `step_cal` recording: a single stream delivers its result (stamped with `jobIndex` and the job's `sourceId`) and then the end, with every worker line before the result, the end last, and exactly one progress of 100 (the runner adds none of its own); several streams on one channel each deliver their own result; a stream that finds no sync does not stop the others, and says why; a run in which every stream fails ends unsuccessfully; a recording that cannot be opened (or no jobs) fails before anything runs, with a reason and nothing reported, and leaves the runner usable; a second start while running is refused and does not disturb the first; cancel ends the run unsuccessfully with no result and is a no-op with nothing running, and four cases hold the sink at a chosen moment of a real run (a thread parked on a log line) to pin what a race cannot: a stream that finished after the cancel was asked for delivers nothing and the run fails even though another stream had delivered, a worker waiting on an empty queue is woken by the cancel while the reader is still stuck, a worker that has not started reading is stopped by its own abort flag, and `running()` is already false inside the end report; the runner runs again after a run ends, without waiting for the thread that reported it; and destroying a running runner stops it and has reported the end by the time the destructor returns
+- **TestPipelineRunner** (`tst_pipelinerunner`) — the Qt-free pipeline, with a plain recording sink and no event loop, on the committed `step_cal` recording: a single stream delivers its result (stamped with `jobIndex` and the job's `sourceId`) and then the end, with every worker line before the result, the end last, and exactly one progress of 100 (the runner adds none of its own); several streams on one channel each deliver their own result; a stream that finds no sync does not stop the others, and says why; a run in which every stream fails ends unsuccessfully; a recording that cannot be opened (or no jobs) fails before anything runs, with a reason and nothing reported, and leaves the runner usable; a second start while running is refused and does not disturb the first; cancel ends the run unsuccessfully with no result and is a no-op with nothing running, and four cases hold the sink at a chosen moment of a real run (a thread parked on a log line) to pin what a race cannot: a stream that finished after the cancel was asked for delivers nothing and the run fails even though another stream had delivered, a worker waiting on an empty queue is woken by the cancel while the reader is still stuck, a worker that has not started reading is stopped by its own abort flag, and `running()` is already false inside the end report; the runner runs again after a run ends, without waiting for the thread that reported it; a stream that ends early without a cancel (its processor aborted, reached through the test being a friend) closes its own queue so the reader is not left blocked on it and the healthy stream still finishes, and destroying a running runner stops it and has reported the end by the time the destructor returns
 
 ### Running Tests
 

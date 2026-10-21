@@ -29,6 +29,7 @@ private slots:
     void cancelWakesAWorkerThatIsWaitingForPackets();
     void cancelStopsAWorkerThatHasNotStartedReading();
     void theRunnerIsNotRunningByTheTimeItReportsTheEnd();
+    void aStreamThatEndsEarlyDoesNotLeaveTheReaderBlockedOnItsQueue();
     void theRunnerRunsAgainAfterARunEnds();
     void destroyingARunningRunnerStopsItAndReportsTheEnd();
 };
