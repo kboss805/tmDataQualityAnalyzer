@@ -30,6 +30,8 @@ if which == 'avalonia':
         ('drag maps x by the height', C, 'double w = plot.Bounds.Width,', 'double w = plot.Bounds.Height,', 'DraggingABandZoomsToIt'),
         ('legend background transparent', X, 'Background="#E6101828"', 'Background="#00101828"', 'ARenderedFrameShowsTheLegendOverThePlotWithText'),
         ('legend label text not drawn', X, '<TextBlock Text="{Binding}"', '<TextBlock Text=""', 'ARenderedFrameShowsTheLegendOverThePlotWithText'),
+        ('Skia draw operation draws nothing', ROOT + '/avalonia/PlotViewTests.cs',
+         'if (feature == null) { return; }', 'if (feature != null) { return; }', 'ASkiaDrawnChartRendersHeadless'),
     ]
 else:
     proj = ROOT + '/wpf/WpfUiTests.csproj'
@@ -51,7 +53,10 @@ else:
 def run():
     if os.path.exists(exe):
         os.remove(exe)
-    b = subprocess.run(['dotnet', 'build', proj, '-c', 'Release', '-nologo', '-v', 'q'], capture_output=True, text=True)
+    # No build servers and no node reuse: a reused MSBuild worker kept Avalonia's obj\...\resources open
+    # and every later build failed with MSB4018 (file in use), which would read as "no result" throughout.
+    b = subprocess.run(['dotnet', 'build', proj, '-c', 'Release', '-nologo', '-v', 'q',
+                        '--disable-build-servers', '-nodeReuse:false'], capture_output=True, text=True)
     if b.returncode != 0 or not os.path.exists(exe):
         return None, 'BUILD FAILED: ' + (b.stdout + b.stderr)[-400:]
     r = subprocess.run([exe], capture_output=True, text=True, timeout=600)
@@ -74,9 +79,11 @@ for name, path, old, new, expect in mutants:
     finally:
         io.open(path, 'w', encoding='utf-8', newline='').write(src)
         os.utime(path, None)
-    ok = failed is not None and expect in failed
-    caught += ok
-    print('%-50s %s  failed=%s  %s' % (name, 'CAUGHT' if ok else 'SURVIVED', failed, s))
+    # A build that failed tested nothing: that is "no result", never a survivor (MSB4018 task crashes
+    # happen transiently here, likely a file lock).
+    verdict = 'NO RESULT (build failed)' if failed is None else ('CAUGHT' if expect in failed else 'SURVIVED')
+    caught += verdict == 'CAUGHT'
+    print('%-50s %s  failed=%s  %s' % (name, verdict, failed, s))
 failed, s = run()
 print('restored:', s, failed)
 print('caught %d of %d' % (caught, len(mutants)))

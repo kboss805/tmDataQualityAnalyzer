@@ -20,7 +20,13 @@ namespace Tmdq.AvaloniaSpike
         /// <summary>Keyed-mutex D3D11 sharing and no D3D9 device: what Avalonia's GPU interop imports.</summary>
         public const int KeyedMutex = 1;
 
+        /// <summary>No devices, no target: data and geometry only, for the Skia chart to draw.</summary>
+        public const int GeometryOnly = 2;
+
         [DllImport(Dll)] public static extern IntPtr tmdq_chart_create_ex(int w, int h, int flags);
+        [DllImport(Dll)] public static extern int tmdq_chart_build(IntPtr chart, double xl, double xu, double yl, double yu, out double geometryMs);
+        [DllImport(Dll)] public static extern IntPtr tmdq_chart_segments(IntPtr chart, int series, out int count);
+        [DllImport(Dll)] public static extern IntPtr tmdq_chart_band(IntPtr chart, int series, out int count);
         [DllImport(Dll)] public static extern IntPtr tmdq_chart_shared_handle(IntPtr chart);
         [DllImport(Dll)] public static extern int tmdq_chart_set_buffers(IntPtr chart, int n);
         [DllImport(Dll)] public static extern IntPtr tmdq_chart_shared_handle_at(IntPtr chart, int i);

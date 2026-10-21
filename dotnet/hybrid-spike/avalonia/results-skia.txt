@@ -1,0 +1,60 @@
+avalonia: 12.1.4.0, skiasharp 3.119.0.0, runtime 10.0.13, render scaling 1
+frame hand-over: a new frame every tick
+
+== empty: the Skia path only
+   chart frames drawn: 401 in 2.31 s = 173.9 per second
+   UI thread  - native geometry: 0.0 ms median, 0.0 p95;  copy into Skia types: 0.0 ms median, 0.0 p95
+   render thread - Skia draw calls: 0.0 ms median, 0.0 p95, 0.0 max;  GPU wait: 0.2 ms median, 0.4 p95
+   UI tick interval: 5.6 ms median, 5.8 p95;  draw interval (render thread): 5.5 ms median, 5.8 p95
+   frames built: 401;  ticks skipped while a frame was in flight: 0, dropped: 0
+
+== 3 x 360k, waits for the GPU
+   chart frames drawn: 400 in 4.35 s = 92.0 per second
+   UI thread  - native geometry: 0.5 ms median, 0.5 p95;  copy into Skia types: 0.2 ms median, 0.2 p95
+   render thread - Skia draw calls: 3.1 ms median, 3.3 p95, 5.2 max;  GPU wait: 1.4 ms median, 1.5 p95
+   UI tick interval: 11.1 ms median, 11.3 p95;  draw interval (render thread): 11.1 ms median, 11.5 p95
+   frames built: 401;  ticks skipped while a frame was in flight: 0, dropped: 0
+
+== 12 x 360k, waits for the GPU
+   chart frames drawn: 300 in 6.65 s = 45.1 per second
+   UI thread  - native geometry: 2.0 ms median, 2.2 p95;  copy into Skia types: 0.7 ms median, 0.7 p95
+   render thread - Skia draw calls: 12.4 ms median, 13.1 p95, 14.8 max;  GPU wait: 5.4 ms median, 6.0 p95
+   UI tick interval: 22.2 ms median, 22.5 p95;  draw interval (render thread): 22.2 ms median, 23.7 p95
+   frames built: 300;  ticks skipped while a frame was in flight: 0, dropped: 0
+
+== 3 x 1M, waits for the GPU
+   chart frames drawn: 300 in 3.33 s = 90.0 per second
+   UI thread  - native geometry: 1.2 ms median, 1.4 p95;  copy into Skia types: 0.2 ms median, 0.2 p95
+   render thread - Skia draw calls: 3.3 ms median, 3.5 p95, 3.8 max;  GPU wait: 1.7 ms median, 1.9 p95
+   UI tick interval: 11.1 ms median, 11.3 p95;  draw interval (render thread): 11.1 ms median, 11.5 p95
+   frames built: 300;  ticks skipped while a frame was in flight: 0, dropped: 0
+
+== 3 x 360k, does NOT wait for the GPU
+   chart frames drawn: 400 in 3.91 s = 102.3 per second
+   UI thread  - native geometry: 0.5 ms median, 0.6 p95;  copy into Skia types: 0.2 ms median, 0.2 p95
+   render thread - Skia draw calls: 3.0 ms median, 3.2 p95, 4.7 max;  GPU wait: 0.0 ms median, 0.0 p95
+   UI tick interval: 11.1 ms median, 11.4 p95;  draw interval (render thread): 11.0 ms median, 11.5 p95
+   frames built: 400;  ticks skipped while a frame was in flight: 0, dropped: 0
+
+== 12 x 360k, does NOT wait for the GPU
+   chart frames drawn: 300 in 6.65 s = 45.1 per second
+   UI thread  - native geometry: 2.0 ms median, 2.1 p95;  copy into Skia types: 0.7 ms median, 0.7 p95
+   render thread - Skia draw calls: 12.5 ms median, 13.3 p95, 14.0 max;  GPU wait: 0.0 ms median, 0.0 p95
+   UI tick interval: 22.2 ms median, 22.4 p95;  draw interval (render thread): 22.2 ms median, 23.1 p95
+   frames built: 300;  ticks skipped while a frame was in flight: 0, dropped: 0
+
+Skia backend on screen: GPU (OpenGL)
+
+== CPU raster (no GPU), the check view 0..72000
+   3 x 360k: 4.7 ms median, 5.0 p95 to draw (geometry 0.5 ms)
+   12 x 360k: 19.1 ms median, 19.7 p95 to draw (geometry 2.2 ms)
+
+== export of the check view, from the same drawing code
+   3 x 360k:  PNG   30.6 ms  255,681 bytes   PDF   11.8 ms   139,616 bytes   SVG    6.8 ms    259,791 bytes
+   12 x 360k:  PNG   66.8 ms  675,489 bytes   PDF   37.9 ms   557,020 bytes   SVG   25.8 ms  1,037,550 bytes
+
+== offscreen render of the whole window (RenderTargetBitmap): skia-window.png
+
+== startup and memory
+   process start to the first chart frame drawn: 615 ms
+   working set 200 MB, private bytes 194 MB, managed heap 10 MB

@@ -8,10 +8,14 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Rendering.Composition;
+using Avalonia.Rendering.SceneGraph;
+using Avalonia.Skia;
 using Avalonia.Threading;
+using SkiaSharp;
 using Xunit;
 
 namespace Tmdq.UiSpike.Ava
@@ -176,6 +180,55 @@ namespace Tmdq.UiSpike.Ava
             window.Close();
         }
 
+        /// <summary>Draws straight onto Skia's canvas through a custom draw operation - the way the chart draws
+        /// when D1 of avalonia-plan.md is Skia - and records whether Skia's canvas was offered at all.</summary>
+        private sealed class SkiaDrawn : Control
+        {
+            public bool CanvasOffered;
+
+            public override void Render(DrawingContext context) => context.Custom(new Op(this));
+
+            private sealed class Op : ICustomDrawOperation
+            {
+                private readonly SkiaDrawn _owner;
+                public Op(SkiaDrawn owner) { _owner = owner; }
+                public Rect Bounds => new Rect(0, 0, 200, 120);
+                public bool HitTest(Point p) => false;
+                public bool Equals(ICustomDrawOperation other) => ReferenceEquals(this, other);
+                public void Dispose() { }
+
+                public void Render(ImmediateDrawingContext context)
+                {
+                    var feature = context.TryGetFeature<ISkiaSharpApiLeaseFeature>();
+                    if (feature == null) { return; }
+                    using ISkiaSharpApiLease lease = feature.Lease();
+                    _owner.CanvasOffered = true;
+                    lease.SkCanvas.Clear(SKColors.White);
+                    using var red = new SKPaint { Color = new SKColor(220, 30, 30), Style = SKPaintStyle.Fill };
+                    lease.SkCanvas.DrawRect(new SKRect(50, 30, 150, 90), red);
+                }
+            }
+        }
+
+        [AvaloniaFact]
+        public void ASkiaDrawnChartRendersHeadless()
+        {
+            // The case for drawing the chart with Skia (avalonia-plan.md, D1): unlike a native GPU surface,
+            // which the headless platform cannot import, a Skia draw operation reaches the headless frame -
+            // so chart rendering can be asserted in tests, in Session 0, with no GPU.
+            var control = new SkiaDrawn { Width = 200, Height = 120 };
+            var window = new Window { Content = control, SizeToContent = SizeToContent.WidthAndHeight };
+            window.Show();
+            Settle();
+
+            WriteableBitmap frame = window.CaptureRenderedFrame();
+            Assert.True(control.CanvasOffered, "the headless platform did not offer a Skia canvas to the draw operation");
+            uint inside = Pixel(frame, new Point(100, 60)), outside = Pixel(frame, new Point(10, 10));
+            Assert.Equal(0xDC1E1Eu, inside);
+            Assert.Equal(0xFFFFFFu, outside);
+            window.Close();
+        }
+
         [AvaloniaFact]
         public void TheHeadlessPlatformCreatesNoWin32Window()
         {
@@ -220,8 +273,11 @@ namespace Tmdq.UiSpike.Ava
         {
             using ILockedFramebuffer fb = bmp.Lock();
             int x = (int)p.X, y = (int)p.Y;
-            int bgra = Marshal.ReadInt32(fb.Address, y * fb.RowBytes + x * 4);
-            return (uint)bgra & 0xFFFFFF;   // 0x00RRGGBB for Bgra8888
+            uint v = (uint)Marshal.ReadInt32(fb.Address, y * fb.RowBytes + x * 4);
+            // The headless frame is RGBA here, not BGRA: honour the format, or red and blue swap silently
+            // (the colour-sum checks above could not notice; an exact colour does).
+            if (fb.Format == PixelFormat.Rgba8888) { v = (v & 0xFF00FF00) | ((v & 0xFF) << 16) | ((v >> 16) & 0xFF); }
+            return v & 0xFFFFFF;   // 0x00RRGGBB
         }
 
         private static int Sum(uint rgb) => (int)((rgb >> 16) & 0xFF) + (int)((rgb >> 8) & 0xFF) + (int)(rgb & 0xFF);
