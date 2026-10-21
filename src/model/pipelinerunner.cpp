@@ -184,6 +184,13 @@ void PipelineRunner::runStream(std::size_t index)
     // process() reports its own log lines and errors through the relay; its return value is the
     // outcome it would have reported as "finished".
     const bool ok = processor.process(job.params, job.frameSetup.get());
+
+    // However it ended, nothing more will be read from this stream's queue. The reader hands every
+    // packet to every stream and blocks while a queue is full, so a stream that stopped early (its
+    // processor aborted, not the run cancelled) must close its queue or the reader waits on it forever
+    // and every other stream starves. Closing a drained queue after a normal end changes nothing.
+    job.params.packetQueue->close();
+
     if (ok && !m_cancelled)
     {
         ProcessedStreamData data = processor.takeResult();
