@@ -20,6 +20,7 @@
 #include <QtTest>
 
 #include "chapter10reader.h"
+#include "frameprocessor.h"
 #include "pipelinerunner.h"
 #include "qtbridge.h"
 
@@ -535,6 +536,40 @@ void TestPipelineRunner::theRunnerIsNotRunningByTheTimeItReportsTheEnd()
 
     QVERIFY(reported.load());
     QVERIFY2(!running_at_the_end.load(), "the runner still said it was running while it reported the end");
+}
+
+// The one way a stream can end before the recording does without anyone cancelling the run is that its
+// own processor stops early. Nothing in the runner's API can cause that, so this reaches in (the test
+// is a friend) and aborts ONE stream's processor. That stream stops reading, its queue fills to its
+// depth, and nobody will ever drain it - so the reader, which hands every packet to every stream, has
+// to be let go by the stream's thread closing its own queue. Without that the reader blocks forever on
+// the dead stream's full queue and the OTHER stream, which is perfectly healthy, never finishes.
+void TestPipelineRunner::aStreamThatEndsEarlyDoesNotLeaveTheReaderBlockedOnItsQueue()
+{
+    Fixture fx;
+    if (!loadFixture(fx))
+        QSKIP("step_cal fixture not available");
+
+    auto rec = std::make_shared<Recorder>();
+    StreamJob doomed = lockJob(fx, 1);
+    doomed.params.streamLabel = "doomed";     // so its log lines are tagged apart from job 0's
+
+    PipelineRunner runner;
+    std::string error;
+    QVERIFY2(runner.start({lockJob(fx, 0), doomed}, rec, error), error.c_str());
+    runner.m_workers[1]->requestAbort();      // job 1 ends early; the run itself is NOT cancelled
+
+    const bool ended = rec->waitFinished(30000);
+    QVERIFY2(ended, ("the run never ended - the reader is stuck on the dead stream's queue: " + rec->joined()).c_str());
+    runner.wait();
+
+    // The healthy stream finished and was delivered; the run succeeded; the doomed one said why it stopped.
+    QVERIFY2(rec->success(), rec->joined().c_str());
+    const auto results = rec->results();
+    QCOMPARE(results.size(), std::size_t{1});
+    QCOMPARE(results[0].jobIndex, 0);
+    QVERIFY2(rec->anyStartsWith("log:[CH " + std::to_string(fx.pcm_id) + " doomed] processing cancelled by user."),
+             rec->joined().c_str());
 }
 
 void TestPipelineRunner::theRunnerRunsAgainAfterARunEnds()

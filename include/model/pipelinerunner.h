@@ -76,6 +76,8 @@ public:
  */
 class PipelineRunner
 {
+    friend class TestPipelineRunner;   ///< Reaches a stream's processor to end it without a cancel.
+
 public:
     PipelineRunner();
     /// Cancels a run still in flight and waits for it to end.
