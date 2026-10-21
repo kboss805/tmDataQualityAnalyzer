@@ -19,7 +19,7 @@ Everything here is additive. Nothing in `src/`, `include/` or the Qt build chang
 | `wpf/results.txt`, `wpf/screenshot.png` | The final run's output, and the window as the desktop composed it. |
 | `avalonia/` | The Avalonia 12 twin of `wpf/`: the same chart DLL, imported through `ICompositionGpuInterop`, the same phases and checks (section 3). Its own `results.txt` and `screenshot.png`. |
 | `common/ScreenProbe.cs` | Reads the composed desktop through DXGI Desktop Duplication. Linked into both apps, so they are judged by the same code. |
-| `uitest/` | One view built in Avalonia and in WPF over a shared view model, with the same UI tests in each (section 4), a mutation runner, and a script that runs a test exe on a desktop that is never shown. |
+| `uitest/` | One view built in Avalonia and in WPF over a shared view model, with the same UI tests in each (section 4), a mutation runner, a script that runs a test exe on a desktop that is never shown, and `uitest/sandbox/`, which runs them in Windows Sandbox including as SYSTEM in Session 0. |
 
 ## 1. Is the core really Qt-free? Yes, and it is proven at link level
 
@@ -365,6 +365,29 @@ script falls back to a hidden desktop on the interactive window station, and say
 **What WPF does on the real runner is the one open question here, and only the runner can answer
 it:** add a step to `ci.yml` that runs the two exes. Avalonia's result does not depend on it.
 
+### A clean Windows Sandbox: Session 0 reached, tests blocked
+
+`uitest/sandbox/run_sandbox_ui_tests.ps1` publishes both suites self-contained (a clean Sandbox has no
+.NET), launches a Sandbox from a generated `.wsb`, and inside it runs each suite twice: in the logon
+session, and as SYSTEM through a scheduled task, which runs in Session 0 with no desktop (the
+Sandbox user is an administrator, so it can register one). A wrapper records the session each run
+really executed in, so "Session 0" is observed:
+
+- **The mechanism works.** The SYSTEM runs reported `SESSION=0` and the interactive ones `SESSION=1`.
+  This is the way to put a process in Session 0 on a machine that refuses a window station of its own.
+- **No test ran, in either framework or either session.** Every run exited with 4551 ("blocked by
+  your organization's Device Guard policy") before reaching test code. A fresh Sandbox reports
+  Smart App Control **on** and user-mode code integrity **enforced**, and these test executables and
+  their DLLs are unsigned. This host has Smart App Control off, which is why they run here. The
+  installer harness passes in the same Sandbox because `setup.exe` is signed.
+- **It was not worked around.** Turning Smart App Control off is a security setting, and signing the
+  test binaries would use the release certificate. So **WPF in Session 0 is still unverified**. The
+  block says nothing about either framework.
+
+To finish it: run `run_sandbox_ui_tests.ps1 -Keep`, turn Smart App Control off inside that Sandbox by
+hand (Windows Security, App and browser control), and run `C:\tmdqa\run_in_sandbox.ps1` there. That
+path is untested. A Sandbox is discarded afterwards, so the setting does not persist.
+
 ### Reading it
 
 - **Avalonia's headless platform is the stronger testing story, in three specific ways:**
@@ -385,7 +408,8 @@ it:** add a step to `ci.yml` that runs the two exes. Avalonia's result does not 
   one gave a legend pixel of `#C5C7CA` where the real desktop shows `#272F3D`. Not understood. For the
   headless UI-testing story this matters: UI tests of this stack cannot lean on `RenderTargetBitmap`
   for pixels over the chart, and a real-desktop read like this one needs an interactive session.
-- **Session 0 itself.** The UI tests ran on a hidden desktop, not on the CI runner (section 4).
+- **Session 0 itself.** The UI tests ran on a hidden desktop, not on the CI runner. A clean Sandbox
+  reached Session 0 but Smart App Control blocked the unsigned test builds (section 4).
 - **Other GPUs.** One adapter, one monitor refresh, one driver. WARP (software) cannot share a surface
   with a D3D9 device, so a machine without a working hardware adapter would fail at surface creation
   with an HRESULT and a message; there is no fallback built.
