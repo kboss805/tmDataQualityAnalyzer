@@ -1,5 +1,10 @@
 #include "tst_stepdetector.h"
 
+#include <bit>
+#include <cstdint>
+#include <random>
+#include <sstream>
+#include <string>
 #include <vector>
 
 #include <QTemporaryDir>
@@ -9,6 +14,8 @@
 #include "containerutil.h"
 #include "qtbridge.h"
 #include "stepdetector.h"
+#include "textfile.h"
+#include "textparse.h"
 
 namespace {
 
@@ -34,6 +41,109 @@ QString writeTempToml(QTemporaryFile& file, const QString& content)
 }
 
 const double kPeriod = 0.01; // 10 ms -> a 1.0s confirmation window is 100 samples.
+
+// ---------------------------------------------------------------------------
+// The original hand-written step-file parser, kept as an oracle.
+//
+// StepDetector::parseStepConfig was a second TOML parser of its own; it now reads through
+// TomlDocument. This is the code it had before, copied here unchanged, so the two can be run side
+// by side over files nobody wrote by hand. It is a test fixture: nothing else calls it.
+// ---------------------------------------------------------------------------
+
+std::string referenceStripComment(const std::string& value)
+{
+    const std::size_t hash = value.find('#');
+    return textparse::trimmed(hash == std::string::npos ? value : value.substr(0, hash));
+}
+
+std::string referenceLower(std::string s)
+{
+    for (char& c : s)
+    {
+        if (c >= 'A' && c <= 'Z')
+        {
+            c = static_cast<char>(c - 'A' + 'a');
+        }
+    }
+    return s;
+}
+
+bool referenceParseStepConfig(const std::filesystem::path& path, std::vector<StepDefinition>& out,
+                              std::string& error)
+{
+    out.clear();
+
+    std::string text;
+    if (!textfile::readText(path, text))
+    {
+        error = "Could not open step-config file '" + textfile::utf8FileName(path) + "'.";
+        return false;
+    }
+
+    std::istringstream in(text);
+    bool in_step = false;
+    StepDefinition current;
+
+    auto flush = [&]() {
+        if (in_step)
+        {
+            out.push_back(current);
+        }
+        current = StepDefinition{};
+    };
+
+    std::string raw_line;
+    while (std::getline(in, raw_line))
+    {
+        const std::string line = textparse::trimmed(raw_line);
+        if (line.empty() || line.front() == '#')
+        {
+            continue;
+        }
+        if (line.compare(0, 2, "[[") == 0)
+        {
+            flush();
+            in_step = referenceLower(line) == "[[step]]";
+            continue;
+        }
+        if (line.front() == '[')
+        {
+            flush();
+            in_step = false;
+            continue;
+        }
+        if (!in_step)
+        {
+            continue;
+        }
+
+        const std::size_t eq = line.find('=');
+        if (eq == std::string::npos)
+        {
+            continue;
+        }
+        const std::string key = referenceLower(textparse::trimmed(line.substr(0, eq)));
+        const std::string val = referenceStripComment(line.substr(eq + 1));
+
+        double num = 0.0;
+        if (!textparse::parseDouble(val, num))
+        {
+            continue;
+        }
+        if (key == "db")
+        {
+            current.db = num;
+        }
+    }
+    flush();
+
+    if (out.empty())
+    {
+        error = "No [[Step]] entries found in '" + textfile::utf8FileName(path) + "'.";
+        return false;
+    }
+    return true;
+}
 
 } // namespace
 
@@ -294,6 +404,73 @@ void TestStepDetector::parseStepConfigErrorMessagesNameTheFile()
 
     QVERIFY(!parseSteps(writeStepFile(dir, "empty_steps.toml", "[Meta]\nx = 1\n"), steps, error));
     QCOMPARE(error, QStringLiteral("No [[Step]] entries found in 'empty_steps.toml'."));
+}
+
+// The hand-written parser and TomlDocument agree on files neither author imagined. Every line comes
+// from a pool of the shapes a step file has, and the awkward ones near them - headers with
+// comments, spaces, other names, a missing bracket; keys in every case, quoted, commented, empty,
+// repeated, outside any step - shuffled into files of up to a dozen lines. Whatever the original
+// made of a file, the parser must make the same: whether it succeeded, the steps and their dB to
+// the bit, and the message when it did not.
+void TestStepDetector::parseStepConfigAgreesWithTheOriginalHandWrittenParserOnGeneratedFiles()
+{
+    const std::vector<std::string> pool = {
+        // headers
+        "[[Step]]", "[[Step]]", "[[Step]]", "[[STEP]]", "[[step]]", "[[Step]]  ", "  [[Step]]",
+        "[[Step]] # the first one", "[[ Step ]]", "[[Steps]]", "[[Unrelated]]", "[[Step", "[[", "[[]]",
+        "[Meta]", "[Other]", "[Meta] # note", "[Meta", "[]", "]", "[[Step]] db = 3", "[Meta] x = 1",
+        // keys
+        "db = 6", "db = 6", "db=7", "DB = 8", "  db  =  9  ", "Db = 10", "db = \"6\"", "db = 6 # c",
+        "db = 6# c", "db = abc", "db = ", "db", "db = +3", "db = -2.5", "db = 1e1", "db = 0x10",
+        "db = .5", "db = 5.", "db = 1e999", "db = +-6", "db = nan", "db = inf", "db = 1,5",
+        "db = \"5 # x\"", "db = 5 # \"x\"", "db = 6 \"", "db = 1 = 2", "label = nothing", "foo=bar",
+        "= 3", "# db = 1", "", "   ", "\tdb = 4\t",
+    };
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath("generated.toml");
+
+    std::mt19937 rng(20261020u);
+    int agreed_ok = 0;
+    int agreed_fail = 0;
+    for (int n = 0; n < 4000; ++n)
+    {
+        std::string content;
+        const int lines = static_cast<int>(rng() % 13);
+        for (int i = 0; i < lines; ++i)
+        {
+            content += pool[rng() % pool.size()];
+            content += (rng() % 4 == 0) ? "\r\n" : "\n";
+        }
+        {
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+            f.write(content.data(), static_cast<qint64>(content.size()));
+        }
+
+        std::vector<StepDefinition> want, got;
+        std::string want_error, got_error;
+        const bool want_ok = referenceParseStepConfig(toFsPath(path), want, want_error);
+        const bool got_ok = StepDetector::parseStepConfig(toFsPath(path), got, got_error);
+
+        const QString why = QStringLiteral("file #%1:\n%2").arg(n).arg(QString::fromStdString(content));
+        QVERIFY2(want_ok == got_ok, qPrintable(why + " (success differs)"));
+        QVERIFY2(want_error == got_error, qPrintable(why + " (message differs: '" +
+                                                      QString::fromStdString(got_error) + "')"));
+        QVERIFY2(want.size() == got.size(), qPrintable(why + QStringLiteral(" (%1 steps, wanted %2)")
+                                                             .arg(got.size()).arg(want.size())));
+        for (std::size_t i = 0; i < want.size(); ++i)
+        {
+            QVERIFY2(std::bit_cast<std::uint64_t>(want[i].db) == std::bit_cast<std::uint64_t>(got[i].db),
+                     qPrintable(why + QStringLiteral(" (step %1: %2, wanted %3)")
+                                          .arg(i).arg(got[i].db).arg(want[i].db)));
+        }
+        (want_ok ? agreed_ok : agreed_fail)++;
+    }
+    // The generator must reach both outcomes in volume, or the comparison proves little.
+    QVERIFY2(agreed_ok > 1000, qPrintable(QString::number(agreed_ok)));
+    QVERIFY2(agreed_fail > 300, qPrintable(QString::number(agreed_fail)));
 }
 
 void TestStepDetector::parseStepConfigEmptyFails()

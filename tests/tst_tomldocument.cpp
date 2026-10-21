@@ -109,18 +109,130 @@ void TestTomlDocument::readsSectionsAndKeysInFileOrder()
     QVERIFY(!doc.contains("EMPTY/Word"));
 }
 
-void TestTomlDocument::doubleBracketHeaderIsALiteralSectionName()
+// `[[Step]]` used to read as a section literally named "[Step]": the class did not implement
+// arrays of tables, and that was pinned so nobody would rely on it. It does now (step files are read
+// through it), so the same file reads as an array of tables and has no sections at all.
+void TestTomlDocument::doubleBracketHeaderOpensAnArrayTableNotASection()
 {
-    // TomlDocument does NOT implement array-of-tables (StepDetector::parseStepConfig
-    // owns [[Step]] files). One bracket pair is stripped, so the section reads as
-    // "[Step]" - pinned so nobody starts relying on something it does not do.
     QTemporaryDir tmp;
     const QString path = tmp.filePath("steps.toml");
     writeBytes(path, "[[Step]]\ndb = 6\n");
 
     const TomlDocument doc = loadDoc(path);
-    QCOMPARE(q(doc.sectionsInFileOrder()), QStringList({"[Step]"}));
-    QCOMPARE(doc.integer("[Step]/db"), 6);
+    QVERIFY(doc.sectionsInFileOrder().empty());
+    QVERIFY(!doc.contains("[Step]/db"));
+    QVERIFY(!doc.contains("Step/db"));
+    QCOMPARE(doc.arrayTables().size(), std::size_t{1});
+    QCOMPARE(QString::fromStdString(doc.arrayTables()[0].name), QStringLiteral("Step"));
+    QCOMPARE(doc.arrayTables()[0].entries.size(), std::size_t{1});
+}
+
+void TestTomlDocument::arrayTablesKeepFileOrderKeysAndValuesAsWritten()
+{
+    QTemporaryDir tmp;
+    const QString path = tmp.filePath("tables.toml");
+    writeBytes(path, "[[Item]]\n"
+                     "Name = \"first one\"   # kept with its quotes\n"
+                     "  Count   =   3  # trailing comment\n"
+                     "Count = 4\n"
+                     "Hash = \"a # b\"\n"
+                     "\n"
+                     "[[Item]]\n"
+                     "Name = second\n");
+
+    const TomlDocument doc = loadDoc(path);
+    const auto items = doc.tables("item");
+    QCOMPARE(items.size(), std::size_t{2});
+
+    // Keys in file order, repeats included, trimmed; values as written - quotes kept, an unquoted
+    // trailing comment and the whitespace around the value removed, a '#' inside quotes left alone.
+    const auto& first = items[0]->entries;
+    QCOMPARE(first.size(), std::size_t{4});
+    QCOMPARE(QString::fromStdString(first[0].first), QStringLiteral("Name"));
+    QCOMPARE(QString::fromStdString(first[0].second), QStringLiteral("\"first one\""));
+    QCOMPARE(QString::fromStdString(first[1].first), QStringLiteral("Count"));
+    QCOMPARE(QString::fromStdString(first[1].second), QStringLiteral("3"));
+    QCOMPARE(QString::fromStdString(first[2].second), QStringLiteral("4"));
+    QCOMPARE(QString::fromStdString(first[3].second), QStringLiteral("\"a # b\""));
+
+    QCOMPARE(items[1]->entries.size(), std::size_t{1});
+    QCOMPARE(QString::fromStdString(items[1]->entries[0].second), QStringLiteral("second"));
+}
+
+void TestTomlDocument::arrayTableNamesMatchWithoutCaseButOtherwiseExactly()
+{
+    QTemporaryDir tmp;
+    const QString path = tmp.filePath("names.toml");
+    writeBytes(path, "[[Step]]\nk = 1\n"
+                     "[[STEP]]\nk = 2\n"
+                     "[[step]]\nk = 3\n"
+                     "[[ Step ]]\nk = 4\n"      // inner spaces are part of the name
+                     "[[Steps]]\nk = 5\n"       // so is a longer name
+                     "[[Other]]\nk = 6\n");
+
+    const TomlDocument doc = loadDoc(path);
+    QCOMPARE(doc.arrayTables().size(), std::size_t{6});
+
+    QStringList got;
+    for (const TomlDocument::Table* t : doc.tables("StEp"))
+        got << QString::fromStdString(t->entries.at(0).second);
+    QCOMPARE(got, QStringList({"1", "2", "3"}));
+    QCOMPARE(doc.tables("steps").size(), std::size_t{1});
+    QVERIFY(doc.tables("missing").empty());
+}
+
+// A `[[` line that is not just `[[Name]]` still opens an entry, so what follows is not mistaken for
+// the entry before it - but no name matches it. This is the rule the step-file parser always had.
+void TestTomlDocument::aMalformedArrayHeaderOpensAnEntryNoNameMatches()
+{
+    QTemporaryDir tmp;
+    const QString path = tmp.filePath("malformed.toml");
+    writeBytes(path, "[[Step]] # the first one\nk = 1\n"
+                     "[[Step\nk = 2\n"
+                     "[[\nk = 3\n"
+                     "[[Step]]\nk = 4\n");
+
+    const TomlDocument doc = loadDoc(path);
+    QCOMPARE(doc.arrayTables().size(), std::size_t{4});
+    QCOMPARE(QString::fromStdString(doc.arrayTables()[0].name), QString());
+    QCOMPARE(QString::fromStdString(doc.arrayTables()[1].name), QString());
+    QCOMPARE(QString::fromStdString(doc.arrayTables()[2].name), QString());
+
+    const auto steps = doc.tables("step");
+    QCOMPARE(steps.size(), std::size_t{1});
+    QCOMPARE(QString::fromStdString(steps[0]->entries.at(0).second), QStringLiteral("4"));
+}
+
+void TestTomlDocument::aSectionHeaderEndsAnEntryAndSectionsAreUnaffectedByEntries()
+{
+    QTemporaryDir tmp;
+    const QString path = tmp.filePath("mixed.toml");
+    writeBytes(path, "Top = 1\n"
+                     "[Before]\nA = 10\n"
+                     "[[Item]]\nin_item = 20\n"
+                     "[After]\nB = 30\n"                 // a section header ends the entry
+                     "[[Item]]\nin_second = 40\n"
+                     "[Meta] # not a well-formed header\n"
+                     "stray = 50\n");                    // still ends the entry: not the second item's
+
+    const TomlDocument doc = loadDoc(path);
+
+    // The sections read as they always did, and no key from an entry leaks into one.
+    QCOMPARE(q(doc.sectionsInFileOrder()), QStringList({"Before", "After"}));
+    QCOMPARE(doc.integer("Top"), 1);
+    QCOMPARE(doc.integer("Before/A"), 10);
+    QCOMPARE(doc.integer("After/B"), 30);
+    QVERIFY(!doc.contains("in_item"));
+    QVERIFY(!doc.contains("Item/in_item"));
+    QVERIFY(!doc.contains("After/in_second"));
+
+    // Each entry holds only what was under its own header.
+    const auto items = doc.tables("item");
+    QCOMPARE(items.size(), std::size_t{2});
+    QCOMPARE(items[0]->entries.size(), std::size_t{1});
+    QCOMPARE(QString::fromStdString(items[0]->entries[0].first), QStringLiteral("in_item"));
+    QCOMPARE(items[1]->entries.size(), std::size_t{1});
+    QCOMPARE(QString::fromStdString(items[1]->entries[0].first), QStringLiteral("in_second"));
 }
 
 void TestTomlDocument::commentsAreQuoteAwareAndEscapesUnescape()

@@ -18,10 +18,9 @@
  *   - **It writes through a rename**, which on Windows silently does nothing when the
  *     target path is held by a live `QTemporaryFile` - a trap this project hit and had
  *     to write a memory note about.
- *   - **It cannot express arrays**, which is why `StepDetector::parseStepConfig` is a
- *     second, hand-written TOML parser for `[[Step]]` files. Unifying the two is the
- *     obvious next step and is deliberately NOT part of this change: that parser feeds
- *     calibration, and it deserves its own verifiable step rather than riding along.
+ *   - **It cannot express arrays**, which is why `StepDetector::parseStepConfig` used to be a
+ *     second, hand-written TOML parser for `[[Step]]` files. This class now reads arrays of
+ *     tables itself (`arrayTables()`), and that parser went through it - see below.
  *
  * This class is plain file I/O over a map of UTF-8 `std::string`s, with paths as
  * `std::filesystem::path` - no Qt at all. Callers holding a `QString`
@@ -46,6 +45,8 @@
  *   - Bare strings:       Key = some text        (tolerated for compatibility)
  *   - Comments:           # to end of line, honoured outside quotes
  *   - Blank lines
+ *   - Arrays of tables:   [[Name]] opens an entry; the keys under it, up to the next header,
+ *                         belong to it (READ ONLY: save() does not write them)
  *
  * Keys are addressed as "Section/Key", the same compound spelling the call sites
  * already used, so this is a drop-in at every one of them. A key outside any section
@@ -63,6 +64,7 @@
 #include <filesystem>
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 class TomlDocument
@@ -102,6 +104,30 @@ public:
     /// numbering read as contiguous.
     const std::vector<std::string>& sectionsInFileOrder() const { return m_sections; }
 
+    /// One entry of an array of tables: the keys under a `[[Name]]` header, up to the next header.
+    ///
+    /// Read from a file only; `save()` does not write them, and `contains()` / `string()` and the
+    /// other lookups do not see them (a `[[Step]]` file has no "Step/db").
+    struct Table
+    {
+        /// The text between the brackets exactly as written, so `[[ Step ]]` is " Step ". Empty for a
+        /// `[[` line that is not just `[[Name]]` on its own - a trailing comment, a missing bracket.
+        /// Such a line still OPENS an entry, so the keys under it are not taken for the previous
+        /// entry's, but one that no name matches.
+        std::string name;
+        /// (key, value) in file order, repeats included. The key is trimmed. The value is as written
+        /// after the '=': an unquoted trailing `# comment` and the surrounding whitespace removed, and
+        /// the quotes KEPT - unlike a section's values - so a caller can tell "6" from 6.
+        std::vector<std::pair<std::string, std::string>> entries;
+    };
+
+    /// Every `[[...]]` entry in the file, in order, whatever it is named.
+    const std::vector<Table>& arrayTables() const { return m_tables; }
+
+    /// The entries whose header names @p name, in file order. ASCII case is ignored; nothing else is,
+    /// so `[[Step]]` and `[[STEP]]` match "step" but `[[Steps]]` and `[[ Step ]]` do not.
+    std::vector<const Table*> tables(const std::string& name) const;
+
     void setValue(const std::string& key, const std::string& value);
     /// Without this, a string literal would bind to setValue(key, bool): a pointer
     /// converts to bool by a standard conversion, which beats the user-defined one to
@@ -129,6 +155,7 @@ private:
     /// Per-section key order. Keyed by section name; the writer coalesces a repeated
     /// section, which only affects [EMPTY]-style placeholders with no distinct values.
     std::map<std::string, std::vector<std::string>> m_section_keys;
+    std::vector<Table>                              m_tables;   ///< `[[...]]` entries, file order
     bool m_ok = true;
 };
 
