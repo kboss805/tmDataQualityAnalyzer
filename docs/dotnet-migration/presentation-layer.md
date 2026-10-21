@@ -104,10 +104,40 @@ child HWND.** It has two ways to host a native surface:
 - **`D3DImage`:** composes properly with WPF content on top, but it speaks Direct3D 9. A D3D11
   renderer reaches it through a shared surface with D3D9Ex. Microsoft has published a helper for
   this (the `Microsoft.Wpf.Interop.DirectX` sample library), but it is old, it adds a copy and a
-  synchronisation point per frame, and **nobody here has measured it.**
+  synchronisation point per frame, and **nobody here had measured it** (since done: see
+  "Measured since" below).
 
 The airspace issue is the real comparison: **Avalonia (shared texture) and WinUI (`SwapChainPanel`)
 both compose XAML over native GPU content natively, and WPF does not.**
+
+## Measured since: WPF and Avalonia hosting the same chart (2026-10-20)
+
+Both halves of the GPU-hosting question were spiked; details and every number are in
+[`dotnet/hybrid-spike/README.md`](../../dotnet/hybrid-spike/README.md), sections 2 and 3.
+
+- **WPF `D3DImage` works and composes XAML over the chart**, with no airspace problem. The path costs
+  0.2 ms per frame. It needs a D3D9Ex device and a CPU-side GPU fence: without the fence it tore in
+  one run of four.
+- **Avalonia's `ICompositionGpuInterop` works too.** It imports the D3D11 texture directly, with a
+  keyed mutex that synchronises on the GPU, so it needs no fence and showed 0 tears in every run.
+  The host must rotate at least two textures, or the frame rate halves.
+- **Performance is close; neither framework is ruled out by it.** On a 180 Hz display:
+  - **WPF leads:**
+    - rendering on the UI thread: 152 against 90 frames/s. Avalonia's frame clock drops to every
+      second refresh once the render overruns the 5.6 ms budget;
+    - the heaviest load: 40 against 32, from a longer GPU wait under Avalonia, not yet isolated;
+    - startup: about 190 ms faster.
+  - **Avalonia leads:**
+    - rendering on a worker thread: 162 against 119;
+    - unfenced UI-thread rendering: 147, and safe;
+    - a smaller self-contained deployment: 104 against 140 MB.
+  - **No difference:** an empty chart (both at the refresh rate) and memory.
+
+So the measured performance does not decide between them. The deciding questions are still:
+
+- the "Microsoft-only" rule;
+- the tooling licence;
+- the two Avalonia items below that remain unverified (headless tests, snap layouts).
 
 ## Recommendation
 
@@ -130,7 +160,9 @@ both compose XAML over native GPU content natively, and WPF does not.**
 
 - Avalonia's headless test platform against this codebase's measured-widget style of test.
 - Avalonia custom chrome with Windows 11 snap layouts.
-- The cost of WPF `D3DImage` with a D3D11 shared surface on this hardware.
 - Which parts of the Avalonia Visual Studio experience need the paid tooling licence.
+
+(The cost of WPF `D3DImage` with a D3D11 shared surface, and its Avalonia equivalent, were measured
+afterwards: see the section above.)
 
 Dates and version numbers above come from the linked pages as of 2026-10-18.

@@ -1,0 +1,37 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Tmdq.AvaloniaSpike"
+        x:Class="Tmdq.AvaloniaSpike.MainWindow"
+        Title="Avalonia chart spike" Width="1260" Height="800" Background="#FF202020"
+        WindowStartupLocation="CenterScreen">
+  <DockPanel>
+    <TextBlock x:Name="Status" DockPanel.Dock="Bottom" Foreground="White" Margin="8,4" FontFamily="Consolas"
+               Text="starting..."/>
+
+    <!-- The chart is a control whose content is an imported GPU image. Everything inside this Grid
+         that comes after it is drawn ON TOP of it by Avalonia's compositor - the same arrangement as
+         the WPF spike's Image + D3DImage. -->
+    <Grid x:Name="Stage" Width="1200" Height="700" HorizontalAlignment="Center" VerticalAlignment="Center">
+      <local:ChartHost x:Name="Chart" Width="1200" Height="700" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+
+      <Border x:Name="Legend" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,24,24,0"
+              Background="#E6101828" CornerRadius="6" Padding="10,8" BorderBrush="#FF6C63E6" BorderThickness="1">
+        <StackPanel>
+          <TextBlock Text="Receiver SNR" Foreground="White" FontWeight="SemiBold" Margin="0,0,0,4"/>
+          <StackPanel Orientation="Horizontal">
+            <Rectangle Width="14" Height="3" Fill="#FF6C63E6" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <TextBlock Text="Ch 13 L" Foreground="White"/>
+          </StackPanel>
+          <StackPanel Orientation="Horizontal">
+            <Rectangle Width="14" Height="3" Fill="#FF2E9E6B" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <TextBlock Text="Ch 13 R" Foreground="White"/>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <Line x:Name="Crosshair" Stroke="#99FFFFFF" StrokeThickness="1" StartPoint="0,0" EndPoint="0,700" IsVisible="False"/>
+      <TextBlock x:Name="Readout" Foreground="White" Background="#CC000000" Padding="4,2" IsVisible="False"
+                 HorizontalAlignment="Left" VerticalAlignment="Top" FontFamily="Consolas"/>
+    </Grid>
+  </DockPanel>
+</Window>

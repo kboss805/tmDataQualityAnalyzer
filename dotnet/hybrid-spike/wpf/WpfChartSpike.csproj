@@ -23,6 +23,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\common\ScreenProbe.cs" Link="ScreenProbe.cs" />
     <None Include="..\native\out\tmdq_chart.dll" Link="tmdq_chart.dll" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

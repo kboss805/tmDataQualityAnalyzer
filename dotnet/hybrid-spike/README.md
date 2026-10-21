@@ -1,8 +1,9 @@
-# Hybrid-port spike: a Qt-free native core, and a WPF shell over a native chart
+# Hybrid-port spike: a Qt-free native core, and a WPF or Avalonia shell over a native chart
 
-Two questions, answered by running code rather than by argument. Both come from
+Three questions, answered by running code rather than by argument. The first two come from
 `docs/dotnet-migration/`: the README's plan (native MSVC core behind a flat C ABI, C# shell, native
 Direct2D chart) and `presentation-layer.md`'s open item (can WPF host the chart *and* draw over it).
+The third is whether Avalonia, which the team knows, performs differently from WPF in that role.
 
 Everything here is additive. Nothing in `src/`, `include/` or the Qt build changes.
 
@@ -15,6 +16,8 @@ Everything here is additive. Nothing in `src/`, `include/` or the Qt build chang
 | `native/build_chart.ps1`, `native/tmdq_chart.cpp` | The Direct2D chart renderer, drawing into a D3D11 texture shared with a D3D9Ex surface. |
 | `wpf/` | A WPF window that shows that surface through `D3DImage`, with a WPF legend and crosshair over it, and runs a scripted benchmark. |
 | `wpf/results.txt`, `wpf/screenshot.png` | The final run's output, and the window as the desktop composed it. |
+| `avalonia/` | The Avalonia 12 twin of `wpf/`: the same chart DLL, imported through `ICompositionGpuInterop`, the same phases and checks (section 3). Its own `results.txt` and `screenshot.png`. |
+| `common/ScreenProbe.cs` | Reads the composed desktop through DXGI Desktop Duplication. Linked into both apps, so they are judged by the same code. |
 
 ## 1. Is the core really Qt-free? Yes, and it is proven at link level
 
@@ -124,55 +127,171 @@ chart alone is `#FFFFFF`. The legend is on top, with its alpha applied.
 
 ### Measurements (RTX 4070 SUPER, hardware, WPF render tier 2, Release, 1200x700 plot, 1.5 px pen)
 
-Native render time is geometry (cull + per-pixel-column envelope) + Direct2D issue + a GPU fence.
-The chart-spike's Direct2D draw alone ranged 5.4-15.4 ms (3 x 360k) and 18-31 ms (12 x 360k).
+The display is a **180 Hz** panel, so a frame that keeps up arrives every 5.56 ms. Native render
+time is geometry (cull + per-pixel-column envelope) + Direct2D issue + a GPU fence. The
+chart-spike's Direct2D draw alone ranged 5.4-15.4 ms (3 x 360k) and 18-31 ms (12 x 360k).
 
-| scenario | native render, median / p95 | frame interval, median / p95 |
-|---|---|---|
-| nothing drawn (cost of the `D3DImage` path itself) | 0.3 / 0.4 ms | 11.1 / 11.1 ms |
-| 3 x 360k, rendered on the UI thread | 5.9 / 7.8 ms | 16.7 / 27.8 ms |
-| 12 x 360k, rendered on the UI thread | 20.9 / 29.2 ms | 33.3 / 44.5 ms |
-| 3 x 1M, rendered on the UI thread | 6.6 / 6.8 ms | 16.7 / 22.3 ms |
-| 3 x 360k, rendered on a worker thread | 5.6 / 6.0 ms | **11.1 / 11.1 ms** |
+Medians of three runs with the screen probe off (`--no-sample`), re-measured 2026-10-20. The first
+version of this table was taken with a GDI `GetPixel` probe and showed an 11.1 ms cadence
+throughout; it is superseded.
+
+| scenario | chart frames / s | native render, median | frame interval, median / p95 |
+|---|---|---|---|
+| nothing drawn (cost of the `D3DImage` path itself) | 180 | 0.2 ms | 5.6 / 5.6 ms |
+| 3 x 360k, rendered on the UI thread | 152 | 5.7 ms | 5.6 / 11.1 ms |
+| 12 x 360k, rendered on the UI thread | 40 | 22.3 ms | 22.2 / 33.4 ms |
+| 3 x 1M, rendered on the UI thread | 127 | 6.8 ms | 5.6 / 11.1 ms |
+| 3 x 360k, UI thread, **no** GPU fence (unsafe, see Tearing) | 158 | 5.2 ms | 5.6 / 11.1 ms |
+| 3 x 360k, rendered on a worker thread, one shared surface | 119 | 5.8 ms | 5.6 / 16.8 ms |
 
 What the table says:
 
-- **The `D3DImage` path itself is essentially free:** 0.3 ms for Lock + AddDirtyRect + Unlock. The
-  display here runs frames in 11.1 ms steps (intervals are multiples of 5.56 ms), and an empty
-  chart holds that.
-- **The shared texture adds nothing visible to the render time.** 5.9 ms for 3 x 360k, geometry included,
-  through WPF is the same order as chart-spike's offscreen figures; Qt's baseline for the same case
-  is an 8 ms repaint.
-- **Rendering on the UI thread costs frame rate**: the render time lands inside the UI thread's
-  frame, so 5.9 ms of drawing turned an 11.1 ms cadence into 16.7 ms, and 12 series (21 ms) into
-  33 ms. That is a design consequence, not a `D3DImage` defect.
-- **Rendering on a worker thread removes the cost.** The worker produced 786 frames while the UI
-  presented 398; the UI thread's whole contribution was **0.029 ms** per frame, and the interval
-  stayed at 11.1 ms with **0 of 389** frames late. This is the design to use: the chart renders on
-  its own thread, the UI thread only swaps.
+- **The `D3DImage` path itself is essentially free:** 0.2 ms, and an empty chart holds the full
+  180 Hz.
+- **The shared texture adds nothing visible to the render time.** 5.7 ms for 3 x 360k, geometry
+  included, is the same order as chart-spike's offscreen figures; Qt's baseline for the same case is
+  an 8 ms repaint.
+- **Rendering on the UI thread costs frame rate only once the render outgrows the refresh.** 5.7 ms
+  against a 5.56 ms budget gives about 150 frames a second, roughly one frame in five a refresh
+  late; 22 ms gives 40.
+- **The single-surface worker is not the win it looked like.** It renders 480-550 frames while the
+  UI shows 340-370 of them, so about a third of the GPU work is thrown away, and about one frame in
+  five is late. The earlier claim here ("0 of 389 late") came from the superseded GDI-era run. A
+  worker that renders on request into a second surface was not built; this row is a lower bound.
 
 ### Tearing
 
 Each frame stamps a colour-coded marker into the top and the bottom of the image. The harness reads
-both back from the **composed desktop** (`GetPixel` on the screen DC), so what is checked is what
-the compositor produced, not what the renderer intended. Two separate reads are not atomic against
-the desktop compositor, so any mismatch is re-read 2 ms later; one that resolves was a sampling
-race, one that persists is a tear that stayed on screen.
+both back from the **composed desktop** through DXGI Desktop Duplication, both pixels from the
+**same** desktop frame, so a mismatch is a tear on the glass and not a sampling race. (The first
+version used two GDI `GetPixel` calls, which are not atomic, and needed a re-read to tell a race from
+a tear; the desktop here is also HDR, which the probe has to undo - see section 3.)
 
-- **With the GPU fence: 0 persistent tears** across the five fenced phases, about 1,780 sampled
-  frames per run, in the two runs that used the re-read check. The first-read mismatches (a few
-  percent of frames, always bottom = top + 1) all resolved on the re-read: they are the sampling
-  race. My first reading of them as tears was wrong, which is why the re-read exists.
-- **Without the fence: not safe, but not deterministic.** One run showed 0 persistent tears and the
-  next showed **13 persistent tears of 396** frames, every one of them a cleared white surface
-  (marker `FFFF`) - WPF composing the texture after `Clear()` and before the draw calls had
-  finished. A fence is mandatory, and the fact that two of three unfenced runs looked fine is
-  exactly the way this would have shipped. (Two earlier runs, before the re-read existed, counted
-  8 and 10 first-read mismatches in the unfenced phase, which cannot be told apart from the race.)
-- **Single buffer on a worker thread: 0 of 396**, with the fence. The worker is rendering the same
-  texture WPF is composing from, and that was clean. This is one 400-frame run on one GPU, so it is
-  evidence the design works, not a proof. **Double buffering (two textures, swap on `Unlock`)
-  was not built**, and would be the next hardening step if a field report ever shows a tear.
+- **With the GPU fence: 0 tears** in every fenced phase of every run, about 1,800 desktop frames per
+  run.
+- **Without the fence: not safe, and not deterministic.** One sampled run in four showed **2 tears**,
+  both with a **white top** and the previous frame's marker at the bottom: WPF composed the
+  texture after `Clear()` and before the draw calls had finished. The GDI-era runs found the same
+  signature (13 of 396 in one run, 0 in another). `D3DImage`'s D3D9 shared surface has no GPU-side
+  hand-over, so the CPU-side fence is mandatory, and the fact that most unfenced runs look fine is
+  exactly the way this would have shipped.
+- **Single buffer on a worker thread: 0 tears**, with the fence, in every run.
+
+## 3. Avalonia against WPF: is there a performance difference?
+
+Asked because the team knows Avalonia. `avalonia/` is the WPF app's twin: Avalonia 12.1.4 on its
+default Windows backend (ANGLE over D3D11, composed through DirectComposition), the **same**
+`tmdq_chart.dll`, the same window and overlay, the same six phases and the same checks. Both apps
+run on .NET 10 on the same machine, alternated run by run.
+
+### The shape
+
+```
+Direct2D  ->  D3D11 texture (keyed mutex)  ==(shared handle)==  ICompositionGpuInterop.ImportImage  ->  Avalonia compositor
+```
+
+No D3D9: Avalonia imports the D3D11 texture directly. The hand-over is a **keyed mutex**: the
+renderer draws under key 0 and releases key 1; `CompositionDrawingSurface.UpdateWithKeyedMutexAsync`
+acquires 1 and gives 0 back once the compositor has read it. That is a GPU-side synchronisation
+between the two devices, which `D3DImage` does not have.
+
+The host has to **rotate at least two textures**. The compositor keeps a texture for about one
+composition (3-5 ms measured), and with only one the renderer could draw every other refresh at
+best: an empty chart ran at **89 frames/s with one texture, 179 with two** (`--buffers 1` reproduces
+it). WPF never shows this, because `D3DImage` copies the surface into its own front buffer on
+`Unlock`. So it is a design obligation of the Avalonia path, not a defect, but it has to be built.
+
+The legend is an ordinary Avalonia `Border` over the chart: on the glass `#272F3D` over `#FFFFFF`,
+the same pixel as WPF. The import needs `TopLeftOrigin = true`, and the orientation block confirms
+the image is the right way up. Resize (dispose the imports, recreate, re-import) works.
+
+### Results
+
+Medians of three runs each, screen probe off; per-run values were within a few percent of each
+other. "Late" means later than 1.5 x the 5.56 ms refresh.
+
+| scenario | WPF frames / s | Avalonia frames / s | what the intervals look like |
+|---|---|---|---|
+| nothing drawn | **180** | **179** | both at every refresh |
+| 3 x 360k, UI thread, fenced | **152** | 90 | WPF: mostly 5.6 ms, about 1 in 5 late. Avalonia: a steady 11.1 ms, every second refresh |
+| 12 x 360k, UI thread, fenced | **40** | 32 | WPF 22.2 ms, Avalonia 33.2 ms |
+| 3 x 1M, UI thread, fenced | **127** | 84 | as 3 x 360k |
+| 3 x 360k, UI thread, no fence | 158 (**unsafe**: tears) | **147** (safe) | both mostly 5.6 ms, about 1 in 5 late |
+| 3 x 360k, worker thread | 119 | **162** | WPF about 1 in 5 late; Avalonia none late, every rendered frame shown |
+| process start to first chart frame | **531-586 ms** | 721-758 ms | |
+| working set / private bytes at exit | 201 / 187 MB | 190 / 219 MB | the chart's data dominates both |
+| self-contained win-x64 publish | 140 MB, 400 files | **104 MB, 221 files** | framework-dependent: WPF 0.2 MB but needs the Windows Desktop runtime; Avalonia 27 MB on the base runtime |
+
+0 tears in every Avalonia phase of every run, fenced or not. The worker phase is shorter in the
+Avalonia run (about 190 frames, because its frame clock ticks faster while the worker posts), so
+that row rests on fewer frames than the others.
+
+### Why the numbers differ
+
+- **The path itself costs the same.** An empty chart runs at the refresh rate in both, 0.2 ms of
+  native work, 0.01 ms for the hand-over call on Avalonia's UI thread.
+- **Avalonia's frame clock is quantised to whole refreshes; WPF's is not.** In the UI-thread phases
+  the native render (5.7-6.1 ms) is just over the 5.56 ms budget. Avalonia's
+  `RequestAnimationFrame` then lands on every second refresh, a steady 90; WPF's `Rendering` event
+  catches up and averages about 150 with uneven pacing. On a 60 Hz display (a 16.7 ms budget) every
+  UI-thread case except 12 x 360k would fit in both; that is inferred from the budgets, **not
+  measured** - the display was not switched.
+- **The keyed mutex makes the fence unnecessary on Avalonia, and dropping it is what lets the
+  UI-thread render fit the budget.** Unfenced, Avalonia ran at 147 with 0 tears in every run; WPF
+  unfenced tore in one run of four (section 2). On WPF the fence is mandatory.
+- **The worker pattern favours Avalonia** because the hand-over paces it: the worker renders only
+  into a texture the compositor has released, so every frame it renders is shown (190 of 190), and
+  the UI thread's cost is 0.011 ms. WPF's single-surface worker free-runs and throws a third of its
+  frames away. A paced, double-buffered WPF worker was not built, so this compares each framework's
+  straightforward pattern, not each one's best.
+- **At the heavy load the same native code waits longer for the GPU under Avalonia.** The render-time
+  split at 12 x 360k (two runs each):
+
+  | | CPU geometry | Direct2D issue | GPU fence wait |
+  |---|---|---|---|
+  | WPF | 2.1 ms | 18.6-19.9 ms | **1.6-1.7 ms** |
+  | Avalonia | 2.0 ms | 18.4-18.5 ms | **7.0-7.8 ms** |
+
+  The CPU work is identical; the GPU finishes later when Avalonia hosts the chart. The likely
+  causes are Avalonia's own GPU compositor (ANGLE on D3D11) sharing the GPU, or the keyed-mutex
+  texture itself. **Not isolated.** Lighter loads show the same direction at a smaller size
+  (0.5 against 0.8 ms at 3 x 360k).
+- **Startup:** Avalonia reaches its first chart frame about 190 ms later. Memory is the same order.
+
+### Reading the comparison
+
+There is **no performance case against Avalonia** for this chart. Each framework has its own way of
+staying smooth:
+
+- **WPF** tolerates UI-thread rendering better, but needs a CPU fence.
+- **Avalonia** needs rotated textures, but gets GPU-side synchronisation for free, and its worker
+  pattern is the better of the two as built.
+
+With each framework's straightforward safe pattern, the steady states are close:
+
+- **WPF:** 152 frames/s, rendering on the UI thread with the fence.
+- **Avalonia:** 162 frames/s, rendering on a worker.
+
+Where WPF leads is the heaviest load (40 against 32), which traces to GPU wait rather than to
+anything on the CPU, and startup (about 190 ms).
+
+### Measuring this on an HDR desktop
+
+This desktop is HDR (PQ / BT.2020, SDR content at 240 nits), which cost two false starts worth
+recording for anyone re-running it:
+
+- **GDI reads black for Avalonia.** `GetPixel`/`BitBlt` on the screen DC see WPF's output but
+  return black for a DirectComposition window, so both apps now read the desktop through DXGI Desktop
+  Duplication (`common/ScreenProbe.cs`).
+- **8-bit duplication of an HDR desktop clips.** Asking for (or falling back to) 8-bit BGRA gives the
+  desktop clamped at 80 nits. SDR content sits at 3.0 in scRGB here, so every channel above about
+  `#9C` read `#FF`: the marker `#EFBEA5` read back as white. The probe now asks `DuplicateOutput1`
+  for FP16 and divides out the SDR white level from `DisplayConfigGetDeviceInfo`. Readback is then
+  exact (`#4200A5` reads `#4200A5`, the marker reads `EF BE A5`).
+- **`DuplicateOutput1` needs per-monitor-v2 DPI awareness.** WPF is not by default, and silently
+  fell back to the legacy 8-bit call. The probe sets the thread's awareness for the call.
+- A fresh duplication's first frame carries **no image**. Reading a still window means draining,
+  presenting again, and reading the frame that present produced (`ReadStill`).
 
 ## Not done, and what could not be checked
 
@@ -182,6 +301,8 @@ race, one that persists is a tear that stayed on screen.
   one gave a legend pixel of `#C5C7CA` where the real desktop shows `#272F3D`. Not understood. For the
   headless UI-testing story this matters: UI tests of this stack cannot lean on `RenderTargetBitmap`
   for pixels over the chart, and a real-desktop read like this one needs an interactive session.
+- **Avalonia's headless test platform** against a measured-widget test, the other half of
+  `presentation-layer.md`'s recommendation 3. Only the GPU-hosting half was run.
 - **Other GPUs.** One adapter, one monitor refresh, one driver. WARP (software) cannot share a surface
   with a D3D9 device, so a machine without a working hardware adapter would fail at surface creation
   with an HRESULT and a message; there is no fallback built.
@@ -203,7 +324,16 @@ dotnet build -c Release dotnet\hybrid-spike\driver -p:Utf8Manifest=true
 powershell -ExecutionPolicy Bypass -File dotnet\hybrid-spike\native\build_chart.ps1
 dotnet build -c Release dotnet\hybrid-spike\wpf
 .\dotnet\hybrid-spike\wpf\bin\Release\net10.0-windows\WpfChartSpike.exe
+
+# the same in Avalonia (restores the Avalonia 12.1.4 packages from NuGet on first build)
+dotnet build -c Release dotnet\hybrid-spike\avalonia
+.\dotnet\hybrid-spike\avalonia\bin\Release\net10.0\AvaloniaChartSpike.exe
 ```
+
+Both take `--no-sample` (no screen probe, so pacing carries no capture cost; the composition checks
+then cannot run). The Avalonia app also takes `--buffers N` (shared textures rotated, default 2) and
+`--bottom-left` (import with a bottom-left origin, to see the image flip). Do not move the mouse
+over the window during a run: the crosshair is live.
 
 The driver needs `tests\data\test files\prn_testfile, sample.ch10` (committed). `tmdq_core.dll`
 builds against `main` as merged: `constants.h` is Qt-free (PR #163).

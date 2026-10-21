@@ -1,22 +1,27 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Tmdq.Spike;
 
 namespace Tmdq.WpfSpike
 {
     /// <summary>
     /// Runs a scripted benchmark of the native chart shown through D3DImage, then writes
     /// results.txt next to the exe and exits. Pass --interactive to keep the window open instead
-    /// (the legend and crosshair then react to the mouse).
+    /// (the legend and crosshair then react to the mouse), --no-sample to measure pacing with no
+    /// screen capture running.
+    ///
+    /// Its twin is ..\avalonia: the same phases, the same pan, the same checks, the same ScreenProbe.
     /// </summary>
     public partial class MainWindow : Window
     {
@@ -39,35 +44,32 @@ namespace Tmdq.WpfSpike
             new Phase { Name = "3 x 360k, worker thread, single buffer", Series = 3,  Samples = 360000,  Frames = 400, Fence = true, Worker = true },
         };
 
-        [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hwnd);
-        [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hwnd, IntPtr dc);
-        [DllImport("gdi32.dll")] private static extern uint GetPixel(IntPtr dc, int x, int y);
-        [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleDC(IntPtr dc);
-        [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleBitmap(IntPtr dc, int w, int h);
-        [DllImport("gdi32.dll")] private static extern IntPtr SelectObject(IntPtr dc, IntPtr obj);
-        [DllImport("gdi32.dll")] private static extern bool BitBlt(IntPtr dst, int x, int y, int w, int h, IntPtr src, int sx, int sy, uint rop);
-        [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr obj);
-        [DllImport("gdi32.dll")] private static extern bool DeleteDC(IntPtr dc);
-
         private readonly D3DImage _image = new D3DImage();
         private IntPtr _chart;
         private readonly StringBuilder _report = new StringBuilder();
         private readonly bool _interactive = Environment.GetCommandLineArgs().Contains("--interactive");
+        private readonly bool _sample = !Environment.GetCommandLineArgs().Contains("--no-sample");
+        private ScreenProbe _probe;
+        private bool _firstFrameLogged;
+        private string _startupLine = "";
 
         // per-phase measurement state
         private Phase _phase;
         private int _phaseIndex = -1, _frame;
         private readonly List<double> _renderMs = new List<double>();
+        private readonly List<ChartTiming> _split = new List<ChartTiming>();   ///< the parts of _renderMs
         private readonly List<double> _lockMs = new List<double>();
         private readonly List<double> _intervalMs = new List<double>();
         private TimeSpan _lastRenderingTime = TimeSpan.MinValue;
-        private int _tornOrBad, _transient, _sampled;
+        private int _torn, _inspected;
+        private readonly HashSet<uint> _seen = new HashSet<uint>();
         private readonly List<string> _badDetail = new List<string>();
         private double _nominalIntervalMs = 16.7;
         private Thread _worker;
         private volatile bool _workerStop;
         private long _workerFrame, _shownWorkerFrame;
         private readonly List<double> _workerMs = new List<double>();
+        private readonly Stopwatch _phaseClock = new Stopwatch();
 
         public MainWindow()
         {
@@ -83,7 +85,7 @@ namespace Tmdq.WpfSpike
 
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
-            Topmost = true;   // the screen-pixel tear check reads what is actually composed
+            Topmost = true;   // the screen check reads what is actually composed
             _chart = ChartNative.tmdq_chart_create(PlotW, PlotH);
             IntPtr surface = _chart == IntPtr.Zero ? IntPtr.Zero : ChartNative.tmdq_chart_surface(_chart);
             if (surface == IntPtr.Zero)
@@ -98,9 +100,20 @@ namespace Tmdq.WpfSpike
             _image.Unlock();
             Chart.Source = _image;
 
-            Log("adapter: " + ChartNative.Adapter(_chart) + (ChartNative.tmdq_chart_is_hardware(_chart) == 1 ? "  (hardware)" : "  (WARP software)"));
-            Log("runtime: " + Environment.Version + ", DPI scale " + VisualTreeHelper.GetDpi(this).DpiScaleX);
+            Log("wpf: " + typeof(Window).Assembly.GetName().Version + ", runtime " + Environment.Version +
+                ", DPI scale " + VisualTreeHelper.GetDpi(this).DpiScaleX);
             Log("render tier: " + (RenderCapability.Tier >> 16) + "  (2 = full hardware acceleration)");
+            Log("adapter: " + ChartNative.Adapter(_chart) + (ChartNative.tmdq_chart_is_hardware(_chart) == 1 ? "  (hardware)" : "  (WARP software)"));
+            if (_sample)
+            {
+                Point o = Chart.PointToScreen(new Point(20, 5));
+                _probe = ScreenProbe.Open((int)o.X, (int)o.Y, out string probeError);
+                Log("screen probe: " + (_probe != null ? "DXGI Desktop Duplication - " + _probe.Describe : "UNAVAILABLE - " + probeError));
+            }
+            else
+            {
+                Log("screen probe: off (--no-sample), so frame pacing carries no capture cost");
+            }
             Log("");
 
             MouseMove += OnMouseMove;
@@ -142,11 +155,12 @@ namespace Tmdq.WpfSpike
             StopWorker();
             _phase = p;
             _frame = 0;
-            _renderMs.Clear(); _lockMs.Clear(); _intervalMs.Clear(); _workerMs.Clear();
-            _tornOrBad = 0; _transient = 0; _sampled = 0; _badDetail.Clear();
+            _renderMs.Clear(); _split.Clear(); _lockMs.Clear(); _intervalMs.Clear(); _workerMs.Clear();
+            _torn = 0; _inspected = 0; _seen.Clear(); _badDetail.Clear();
             _lastRenderingTime = TimeSpan.MinValue;
             ChartNative.tmdq_chart_generate(_chart, p.Series, p.Samples);
             _workerFrame = 0; _shownWorkerFrame = 0;
+            _phaseClock.Restart();
             if (p.Worker) { StartWorker(); }
             Status.Text = "running: " + p.Name;
         }
@@ -192,6 +206,14 @@ namespace Tmdq.WpfSpike
             _worker = null;
         }
 
+        private void NoteFirstFrame()
+        {
+            if (_firstFrameLogged) { return; }
+            _firstFrameLogged = true;
+            _startupLine = string.Format("process start to the first chart frame handed to WPF: {0:F0} ms",
+                (DateTime.Now - Process.GetCurrentProcess().StartTime).TotalMilliseconds);
+        }
+
         private void OnRendering(object sender, EventArgs args)
         {
             if (_phase == null) { return; }
@@ -204,7 +226,7 @@ namespace Tmdq.WpfSpike
             if (_frame > 3) { SampleOnScreen(); }
 
             _frame++;
-            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var sw = Stopwatch.StartNew();
 
             if (_phase.Worker)
             {
@@ -218,16 +240,17 @@ namespace Tmdq.WpfSpike
             }
             else
             {
-                double xl, xu;
-                ViewWindow(_frame, out xl, out xu);
+                ViewWindow(_frame, out double xl, out double xu);
                 _image.Lock();
                 ChartTiming t;
                 ChartNative.tmdq_chart_render(_chart, xl, xu, 5, 35, (uint)(_frame & 0xFFFF), _phase.Fence ? 1 : 0, out t);
                 _image.AddDirtyRect(new Int32Rect(0, 0, PlotW, PlotH));
                 _image.Unlock();
                 _renderMs.Add(t.GeometryMs + t.RasterMs + t.GpuWaitMs);
+                _split.Add(t);
                 _lockMs.Add(sw.Elapsed.TotalMilliseconds);
             }
+            NoteFirstFrame();
 
             if (_interactive) { Status.Text = "interactive - frame " + _frame; return; }
             if (_frame >= _phase.Frames) { EndPhase(); }
@@ -236,41 +259,25 @@ namespace Tmdq.WpfSpike
         // ---- checks -------------------------------------------------------------------------
 
         /// <summary>
-        /// Reads the top and bottom marker strips back from the composed desktop. Two GetPixel calls
-        /// are not atomic against the desktop compositor, so a mismatch is re-read about 2 ms later:
-        /// one that resolves is a sampling race (the desktop updated between the two reads), one that
-        /// is still there is a tear that stayed on the glass for at least a couple of milliseconds.
+        /// Reads the top and bottom marker strips of the chart from ONE desktop frame, if the desktop
+        /// has shown a new frame since the last look. They must name the same chart frame; if they do
+        /// not, that desktop frame showed the top of one chart frame and the bottom of another - a tear.
         /// </summary>
         private void SampleOnScreen()
         {
+            if (_probe == null) { return; }
             Point top = Chart.PointToScreen(new Point(20, 5));
             Point bot = Chart.PointToScreen(new Point(20, PlotH - 5));
-            IntPtr dc = GetDC(IntPtr.Zero);
-            try
+            var rgb = new uint[2];
+            if (_probe.Pixels(new[] { (int)top.X, (int)top.Y, (int)bot.X, (int)bot.Y }, rgb, 0) != 1) { return; }
+            _inspected++;
+            _seen.Add(rgb[0] & 0xFFFFFF);
+            if (ScreenProbe.SameFrame(rgb[0], rgb[1])) { return; }
+            _torn++;
+            if (_badDetail.Count < 6)
             {
-                _sampled++;
-                uint a, b;
-                if (Consistent(dc, top, bot, out a, out b)) { return; }
-                _transient++;
-                Thread.Sleep(2);
-                uint a2, b2;
-                if (Consistent(dc, top, bot, out a2, out b2)) { return; }
-                _tornOrBad++;
-                if (_badDetail.Count < 6)
-                {
-                    _badDetail.Add(string.Format("frame {0}: top marker {1:X4}, bottom marker {2:X4} (blue {3:X2}/{4:X2}); 2 ms later {5:X4} / {6:X4}",
-                        _frame, a & 0xFFFF, b & 0xFFFF, (a >> 16) & 0xFF, (b >> 16) & 0xFF, a2 & 0xFFFF, b2 & 0xFFFF));
-                }
+                _badDetail.Add(string.Format("frame {0}: top {1}, bottom {2}", _frame, ScreenProbe.Hex(rgb[0]), ScreenProbe.Hex(rgb[1])));
             }
-            finally { ReleaseDC(IntPtr.Zero, dc); }
-        }
-
-        private static bool Consistent(IntPtr dc, Point top, Point bot, out uint a, out uint b)
-        {
-            a = GetPixel(dc, (int)top.X, (int)top.Y);
-            b = GetPixel(dc, (int)bot.X, (int)bot.Y);
-            // COLORREF is 0x00BBGGRR. B = 0xA5 marks a marker pixel at all.
-            return ((a >> 16) & 0xFF) == 0xA5 && ((b >> 16) & 0xFF) == 0xA5 && (a & 0xFFFF) == (b & 0xFFFF);
         }
 
         private static double Pct(List<double> v, double p)
@@ -283,13 +290,15 @@ namespace Tmdq.WpfSpike
         private void EndPhase()
         {
             StopWorker();
-            // Discard warm-up.
+            double seconds = _phaseClock.Elapsed.TotalSeconds;
             List<double> render = _renderMs.Skip(10).ToList();
             List<double> intervals = _intervalMs.Skip(10).ToList();
             if (_phaseIndex == 0 && intervals.Count > 0) { _nominalIntervalMs = Pct(intervals, 0.5); }
             int late = intervals.Count(x => x > _nominalIntervalMs * 1.5);
+            int shown = _phase.Worker ? _lockMs.Count : _frame;
 
             Log("== " + _phase.Name);
+            Log(string.Format("   chart frames presented: {0} in {1:F2} s = {2:F1} per second", shown, seconds, shown / seconds));
             if (_phase.Worker)
             {
                 List<double> w;
@@ -303,48 +312,83 @@ namespace Tmdq.WpfSpike
             {
                 Log(string.Format("   native render (geometry+raster+GPU wait): {0:F1} ms median, {1:F1} p95, {2:F1} max",
                                   Pct(render, 0.5), Pct(render, 0.95), render.Count == 0 ? 0 : render.Max()));
+                List<ChartTiming> parts = _split.Skip(10).ToList();
+                Log(string.Format("     of which CPU geometry {0:F1}, Direct2D issue {1:F1}, GPU fence wait {2:F1} ms (medians)",
+                                  Pct(parts.Select(x => x.GeometryMs).ToList(), 0.5), Pct(parts.Select(x => x.RasterMs).ToList(), 0.5),
+                                  Pct(parts.Select(x => x.GpuWaitMs).ToList(), 0.5)));
                 Log(string.Format("   incl. Lock/AddDirtyRect/Unlock:           {0:F1} ms median, {1:F1} p95",
                                   Pct(_lockMs.Skip(10).ToList(), 0.5), Pct(_lockMs.Skip(10).ToList(), 0.95)));
             }
             Log(string.Format("   frame interval: {0:F1} ms median, {1:F1} p95, {2:F1} max;  {3} of {4} later than 1.5x the {5:F1} ms nominal",
                               Pct(intervals, 0.5), Pct(intervals, 0.95), intervals.Count == 0 ? 0 : intervals.Max(),
                               late, intervals.Count, _nominalIntervalMs));
-            Log(string.Format("   on-screen marker check, {0} sampled frames: {1} mismatched on first read, {2} still mismatched 2 ms later (persistent tear)",
-                              _sampled, _transient, _tornOrBad));
+            Log(_probe == null
+                ? "   on-screen marker check: not sampled"
+                : string.Format("   on-screen marker check: {0} desktop frames inspected, {1} showed a tear (top and bottom from different chart frames); {2} distinct marker colours seen{3}",
+                                _inspected, _torn, _seen.Count,
+                                _seen.Count * 2 < Math.Min(_inspected, shown) ? " - TOO FEW: the probe is not reading the markers, so this check proves nothing" : ""));
             foreach (string d in _badDetail) { Log("      " + d); }
             Log("");
             NextPhase();
         }
 
-        private void Conclude()
+        private static int R(uint c) => (int)((c >> 16) & 0xFF);
+        private static int G(uint c) => (int)((c >> 8) & 0xFF);
+        private static int B(uint c) => (int)(c & 0xFF);
+        private static (int X, int Y) Glass(Visual relativeTo, Point p)
         {
-            // Composition: does a WPF element draw OVER the D3DImage?
-            _phase = null;
-            ChartNative.tmdq_chart_generate(_chart, 3, 360000);
-            ChartNative.tmdq_chart_render(_chart, 0, 72000, 5, 35, 0xBEEF, 1, out ChartTiming ignored);
-            _image.Lock(); _image.AddDirtyRect(new Int32Rect(0, 0, PlotW, PlotH)); _image.Unlock();
-            Stage.UpdateLayout();
+            Point s = relativeTo.PointToScreen(p);
+            return ((int)s.X, (int)s.Y);
+        }
 
-            DpiScale dpi = VisualTreeHelper.GetDpi(this);
-            Point inLegend = Legend.TranslatePoint(new Point(Legend.ActualWidth - 5, Legend.ActualHeight / 2), Stage);   // right padding: not a corner, not text
-            Color overlaid = PixelAt(Stage, inLegend, dpi);
-            Color chartOnly = PixelAt(Chart, inLegend, dpi);
-            Color markerTop = PixelAt(Chart, new Point(20, 5), dpi);
+        /// <summary>Presents the check frame again, so the desktop composes a frame showing the window as it is now.</summary>
+        private Task RepaintCheckFrame()
+        {
+            _image.Lock();
+            ChartNative.tmdq_chart_render(_chart, 0, 72000, 5, 35, 0xBEEF, 1, out ChartTiming _);
+            _image.AddDirtyRect(new Int32Rect(0, 0, PlotW, PlotH));
+            _image.Unlock();
+            return Task.Delay(1);
+        }
+
+        private async Task<uint[]> ReadGlass(params (int X, int Y)[] points)
+        {
+            if (_probe != null) { return await _probe.ReadStill(RepaintCheckFrame, points); }
+            var none = new uint[points.Length];
+            Array.Fill(none, 0xFFFFFFFFu);
+            return none;
+        }
+
+        private async void Conclude()
+        {
+            _phase = null;
+            StopWorker();
+            // The phase probe stays open: the checks below read the still window through it (ReadStill).
+            ChartNative.tmdq_chart_generate(_chart, 3, 360000);
+            await RepaintCheckFrame();
+            await Task.Delay(300);   // let the frame reach the glass
+
             Log("== composition: a WPF legend over the D3DImage");
-            Log(string.Format("   pixel under the legend, chart alone: #{0:X2}{1:X2}{2:X2}   with the legend on top: #{3:X2}{4:X2}{5:X2}",
-                              chartOnly.R, chartOnly.G, chartOnly.B, overlaid.R, overlaid.G, overlaid.B));
-            Log("   (RenderTargetBitmap of a tree containing a D3DImage did not reproduce the composition, so it is not used as the judge)");
-            Point sp = Stage.PointToScreen(inLegend);
-            IntPtr dc = GetDC(IntPtr.Zero);
-            uint scr = GetPixel(dc, (int)sp.X, (int)sp.Y);
-            ReleaseDC(IntPtr.Zero, dc);
-            uint sr = scr & 0xFF, sg = (scr >> 8) & 0xFF, sb = (scr >> 16) & 0xFF;
-            Log(string.Format("   same point read from the composed desktop: #{0:X2}{1:X2}{2:X2}", sr, sg, sb));
-            bool legendDrawn = sr < 90 && sg < 90 && sb < 90 && chartOnly.R > 200;
+            Log("   screen probe, as used: " + (_probe?.Describe ?? "none"));
+            Point inLegend = Legend.TranslatePoint(new Point(Legend.ActualWidth - 5, Legend.ActualHeight / 2), Stage);   // right padding: not a corner, not text
+            uint overlaid = (await ReadGlass(Glass(Stage, inLegend)))[0];
+            Legend.Visibility = Visibility.Hidden;
+            await Task.Delay(300);
+            uint chartOnly = (await ReadGlass(Glass(Stage, inLegend)))[0];
+            Legend.Visibility = Visibility.Visible;
+            await Task.Delay(300);
+            Log("   desktop pixel under the legend, chart alone: " + ScreenProbe.Hex(chartOnly) + "   with the legend on top: " + ScreenProbe.Hex(overlaid));
+            bool legendDrawn = R(overlaid) < 90 && G(overlaid) < 90 && B(overlaid) < 90 && R(chartOnly) > 200;
             Log("   legend is drawn over the live chart on the glass: " + (legendDrawn ? "YES" : "NO"));
-            SaveScreenshot();
-            Log(string.Format("   frame marker read back through WPF's own composition: R={0:X2} G={1:X2} B={2:X2} (expected EF BE A5)",
-                              markerTop.R, markerTop.G, markerTop.B));
+
+            uint[] px = await ReadGlass(Glass(Chart, new Point(PlotW - 20, 5)), Glass(Chart, new Point(PlotW - 20, PlotH - 5)), Glass(Chart, new Point(20, 5)));
+            uint topRight = px[0], bottomRight = px[1], marker = px[2];
+            bool green(uint c) => c != 0xFFFFFFFF && R(c) < 80 && G(c) > 180 && B(c) < 80;
+            Log("   orientation block (green, top right only): top right " + ScreenProbe.Hex(topRight) + ", bottom right " + ScreenProbe.Hex(bottomRight) +
+                " - image is the right way up: " + (green(topRight) && !green(bottomRight) ? "YES" : "NO"));
+            Log(string.Format("   frame marker read back from the desktop: R={0:X2} G={1:X2} B={2:X2} (written EF BE A5)",
+                              R(marker), G(marker), B(marker)));
+            await SaveScreenshot();
 
             // Resize: the target is recreated and the back buffer re-attached.
             bool resized = ChartNative.tmdq_chart_resize(_chart, 900, 500) == 0;
@@ -357,43 +401,39 @@ namespace Tmdq.WpfSpike
             }
             Log("   resize to 900x500 and re-attach the back buffer: " + (resized ? "ok" : "FAILED " + ChartNative.Error(_chart)));
             Log("   front buffer available: " + _image.IsFrontBufferAvailable);
+
+            Log("");
+            Log("== startup and memory");
+            Log("   " + _startupLine);
+            var me = Process.GetCurrentProcess();
+            me.Refresh();
+            Log(string.Format("   working set {0:F0} MB, private bytes {1:F0} MB, managed heap {2:F0} MB",
+                              me.WorkingSet64 / 1048576.0, me.PrivateMemorySize64 / 1048576.0, GC.GetTotalMemory(false) / 1048576.0));
             Finish(0);
         }
 
-        /// <summary>Captures the window as the desktop shows it (not as WPF would render it offscreen).</summary>
-        private void SaveScreenshot()
+        /// <summary>Captures the window as the desktop shows it, through Desktop Duplication.</summary>
+        private async Task SaveScreenshot()
         {
-            Point o = PointToScreen(new Point(0, 0));
-            int w = (int)Math.Ceiling(ActualWidth), h = (int)Math.Ceiling(ActualHeight);
-            IntPtr screen = GetDC(IntPtr.Zero);
-            IntPtr mem = CreateCompatibleDC(screen);
-            IntPtr bmp = CreateCompatibleBitmap(screen, w, h);
-            IntPtr old = SelectObject(mem, bmp);
-            BitBlt(mem, 0, 0, w, h, screen, (int)o.X, (int)o.Y, 0x00CC0020 /* SRCCOPY */);
-            SelectObject(mem, old);
-            BitmapSource src = Imaging.CreateBitmapSourceFromHBitmap(bmp, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+            DpiScale dpi = VisualTreeHelper.GetDpi(this);
+            var client = (FrameworkElement)Content;   // the client area; the Window's own size includes the frame
+            Point o = client.PointToScreen(new Point(0, 0));
+            int w = (int)Math.Ceiling(client.ActualWidth * dpi.DpiScaleX), h = (int)Math.Ceiling(client.ActualHeight * dpi.DpiScaleY);
+            byte[] pixels = _probe == null ? null : await _probe.ReadStillRegion(RepaintCheckFrame, (int)o.X, (int)o.Y, w, h);
+            if (pixels == null) { Log("   screenshot FAILED: " + (_probe?.Error ?? "no screen probe")); return; }
+            BitmapSource src = BitmapSource.Create(w, h, 96, 96, PixelFormats.Bgr32, null, pixels, w * 4);
             var enc = new PngBitmapEncoder();
             enc.Frames.Add(BitmapFrame.Create(src));
             string path = Path.Combine(AppContext.BaseDirectory, "screenshot.png");
             using (var f = File.Create(path)) { enc.Save(f); }
-            DeleteObject(bmp); DeleteDC(mem); ReleaseDC(IntPtr.Zero, screen);
             Log("   screenshot of the window as composed: " + path);
-        }
-
-        private static Color PixelAt(System.Windows.Media.Visual v, Point p, DpiScale dpi)
-        {
-            var el = (FrameworkElement)v;
-            int pw = (int)Math.Ceiling(el.ActualWidth * dpi.DpiScaleX), ph = (int)Math.Ceiling(el.ActualHeight * dpi.DpiScaleY);
-            var rtb = new RenderTargetBitmap(pw, ph, 96 * dpi.DpiScaleX, 96 * dpi.DpiScaleY, PixelFormats.Pbgra32);
-            rtb.Render(v);
-            var px = new byte[4];
-            rtb.CopyPixels(new Int32Rect((int)(p.X * dpi.DpiScaleX), (int)(p.Y * dpi.DpiScaleY), 1, 1), px, 4, 0);
-            return Color.FromRgb(px[2], px[1], px[0]);
         }
 
         private void Finish(int code)
         {
             StopWorker();
+            _probe?.Dispose();
+            _probe = null;
             CompositionTarget.Rendering -= OnRendering;
             string path = Path.Combine(AppContext.BaseDirectory, "results.txt");
             File.WriteAllText(path, _report.ToString());
