@@ -142,8 +142,9 @@ Both halves of the GPU-hosting question were spiked; details and every number ar
   - WPF can measure, render (`RenderTargetBitmap`) and raise key events. But it needs a hidden
     window per test and a hand-written STA harness, and it has no supported way to inject pointer
     input at a position.
-  - Both passed on a desktop that is never shown. **Session 0 itself, where the CI runner lives,
-    is unverified for WPF**; Avalonia does not depend on it.
+  - Both passed in Session 0 with no desktop, as SYSTEM in a clean Windows Sandbox (24 of 24 tests
+    across the two suites). The runner's own account, NETWORK SERVICE, was not tried. Avalonia
+    does not depend on the session at all; WPF does, and passed.
   - Neither can render the native chart in a test, so the chart host needs a seam either way.
 
 So the measured performance does not decide between them, and testability leans to Avalonia. The
@@ -174,7 +175,8 @@ deciding questions are still:
 
 - Avalonia custom chrome with Windows 11 snap layouts.
 - Which parts of the Avalonia Visual Studio experience need the paid tooling licence.
-- WPF UI tests in Session 0 on the CI runner (they pass on a hidden desktop).
+- WPF UI tests on the CI runner itself, as NETWORK SERVICE (they pass in Session 0 as SYSTEM in a
+  clean Sandbox).
 
 (The cost of WPF `D3DImage` with a D3D11 shared surface, its Avalonia equivalent, and Avalonia's
 headless test platform against this codebase's measured-widget style of test were measured

@@ -1,0 +1,20 @@
+UI tests on a clean machine
+time     : 2026-10-20 21:19:13
+windows  : Microsoft Windows 11 Enterprise 26100
+user     : 942A09AD-E34F-4\WDAGUtilityAccount
+session  : 1
+display  : Microsoft Remote Display Adapter
+smart app control : 1  (0 off, 1 on, 2 evaluation)
+code integrity    : policy enforcement 2, user mode 2  (0 off, 1 audit, 2 enforce)
+dotnet   : NOT installed (the suites are self-contained)
+
+[AvaloniaUiTests] interactive session
+  SESSION=1  exit=0  AvaloniaUiTests  Total: 7, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0.864s
+[AvaloniaUiTests] as SYSTEM (scheduled task, Session 0, no desktop)
+  SESSION=0  task result=0  AvaloniaUiTests  Total: 7, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0.746s
+
+[WpfUiTests] interactive session
+  SESSION=1  exit=0  WpfUiTests  Total: 5, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0.551s
+[WpfUiTests] as SYSTEM (scheduled task, Session 0, no desktop)
+  SESSION=0  task result=0  WpfUiTests  Total: 5, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0.405s
+

@@ -358,35 +358,52 @@ Both suites were also run on a **desktop that is never displayed and gets no inp
 - **Avalonia:** 7 of 7, which is unsurprising since it never touches Win32 windowing.
 - **WPF:** 5 of 5, hidden window included.
 
-**This is not Session 0.** The script tries to give the tests a window station of their own, which
-is a service's situation. This account is refused (error 5, also outside the tool sandbox), so the
-script falls back to a hidden desktop on the interactive window station, and says so in its output.
+**That hidden desktop is not Session 0.** The script tries to give the tests a window station of
+their own, which is a service's situation. This account is refused (error 5, also outside the tool
+sandbox), so the script falls back to a hidden desktop on the interactive window station, and says so
+in its output. The Sandbox run below is the stronger evidence.
 
-**What WPF does on the real runner is the one open question here, and only the runner can answer
-it:** add a step to `ci.yml` that runs the two exes. Avalonia's result does not depend on it.
-
-### A clean Windows Sandbox: Session 0 reached, tests blocked
+### A clean Windows Sandbox: both suites pass in Session 0
 
 `uitest/sandbox/run_sandbox_ui_tests.ps1` publishes both suites self-contained (a clean Sandbox has no
 .NET), launches a Sandbox from a generated `.wsb`, and inside it runs each suite twice: in the logon
 session, and as SYSTEM through a scheduled task, which runs in Session 0 with no desktop (the
 Sandbox user is an administrator, so it can register one). A wrapper records the session each run
-really executed in, so "Session 0" is observed:
+really executed in, so "Session 0" is observed rather than assumed.
 
-- **The mechanism works.** The SYSTEM runs reported `SESSION=0` and the interactive ones `SESSION=1`.
-  This is the way to put a process in Session 0 on a machine that refuses a window station of its own.
-- **No test ran, in either framework or either session.** Every run exited with 4551 ("blocked by
-  your organization's Device Guard policy") before reaching test code. A fresh Sandbox reports
-  Smart App Control **on** and user-mode code integrity **enforced**, and these test executables and
-  their DLLs are unsigned. This host has Smart App Control off, which is why they run here. The
-  installer harness passes in the same Sandbox because `setup.exe` is signed.
-- **It was not worked around.** Turning Smart App Control off is a security setting, and signing the
-  test binaries would use the release certificate. So **WPF in Session 0 is still unverified**. The
-  block says nothing about either framework.
+| suite | logon session (1) | SYSTEM, Session 0 |
+|---|---|---|
+| Avalonia | 7 of 7 | **7 of 7** |
+| WPF | 5 of 5 | **5 of 5** |
 
-To finish it: run `run_sandbox_ui_tests.ps1 -Keep`, turn Smart App Control off inside that Sandbox by
-hand (Windows Security, App and browser control), and run `C:\tmdqa\run_in_sandbox.ps1` there. That
-path is untested. A Sandbox is discarded afterwards, so the setting does not persist.
+All 24 tests passed, including the rendered-pixel test, and in WPF's case the hidden `HwndSource`
+window in a session that has no desktop. The Sandbox reported Windows 11 Enterprise 26100, no .NET
+installed, no GPU (a remote display adapter, so software rendering), and an administrator user.
+
+**What it does not prove:**
+
+- **The account is SYSTEM, not NETWORK SERVICE.** The CI runner's service uses the lower-privileged
+  NETWORK SERVICE. Both are non-interactive Session 0 accounts, but this was not run as NETWORK SERVICE.
+- **A scheduled task is not a service host.** The process is in Session 0 with no desktop, as a
+  service's is, but it was not started by the Service Control Manager.
+- **One machine image, one run.** The pass was not repeated, and the rendering was software only.
+- The one thing it does not touch is the real runner, so the cheapest remaining confirmation is a
+  step in `ci.yml` that runs the two exes there.
+
+**Smart App Control, and signing.** The first Sandbox attempt ran nothing: every run exited 4551
+("blocked by your organization's Device Guard policy") before reaching test code. A fresh Sandbox
+reports Smart App Control **on** and user-mode code integrity **enforced**, and these builds were
+unsigned. This host has Smart App Control off, which is why they run here, and the installer harness
+passes in the same Sandbox because `setup.exe` is signed.
+
+Only 23 of the 711 PE files in the two self-contained publishes are unsigned (the other 688 are
+signed by Microsoft, .NET or xUnit): 21 Avalonia assemblies and the two test executables with their DLLs.
+`-SignCertSha1 <thumbprint>` signs exactly those, in the staged copy under `.work` only, then
+verifies each signature. It signs nothing unless passed. **The Avalonia assemblies are third-party
+files, so signing them with the project's certificate puts the project's publisher identity on code it
+did not write.** That is acceptable for a throwaway staged copy and not for anything shipped. The
+certificate is token-backed, so unlock SimplySign first or signtool waits on the PIN prompt. Turning
+Smart App Control off was deliberately not used instead: it is a security setting.
 
 ### Reading it
 
@@ -396,7 +413,8 @@ path is untested. A Sandbox is discarded afterwards, so the setting does not per
   - it needs no window system at all, so Session 0 is a non-issue rather than a risk.
 - **WPF is workable for everything the Qt suite does today except positioned pointer input.** The
   Qt tests mostly bypass that anyway, by calling the handler. Its harness is not a supported headless
-  mode, so its behaviour in Session 0 is the open risk.
+  mode, but it passed in Session 0 as SYSTEM, so the risk is narrower than it looked: NETWORK SERVICE
+  and the real runner are the remaining differences.
 - **Neither can put the native chart in a test.** The chart host needs a seam (a stub surface), and
   the chart's own pixels stay tested at the native level, as `TmChart`'s are now.
 
@@ -408,8 +426,8 @@ path is untested. A Sandbox is discarded afterwards, so the setting does not per
   one gave a legend pixel of `#C5C7CA` where the real desktop shows `#272F3D`. Not understood. For the
   headless UI-testing story this matters: UI tests of this stack cannot lean on `RenderTargetBitmap`
   for pixels over the chart, and a real-desktop read like this one needs an interactive session.
-- **Session 0 itself.** The UI tests ran on a hidden desktop, not on the CI runner. A clean Sandbox
-  reached Session 0 but Smart App Control blocked the unsigned test builds (section 4).
+- **The real CI runner.** The UI tests passed in Session 0 as SYSTEM in a clean Sandbox, not as
+  NETWORK SERVICE on the runner (section 4).
 - **Other GPUs.** One adapter, one monitor refresh, one driver. WARP (software) cannot share a surface
   with a D3D9 device, so a machine without a working hardware adapter would fail at surface creation
   with an HRESULT and a message; there is no fallback built.

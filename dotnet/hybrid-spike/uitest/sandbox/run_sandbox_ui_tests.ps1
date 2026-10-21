@@ -10,7 +10,16 @@
 # a running Sandbox is never killed - close its window and re-run.
 # =============================================================================
 
-param([int]$TimeoutSeconds = 900, [switch]$Keep)
+param(
+    [int]$TimeoutSeconds = 900,
+    [switch]$Keep,
+    # A code-signing certificate thumbprint (in CurrentUser\My). When given, every UNSIGNED exe/dll in the
+    # staged copy is signed with it, which is what lets the binaries run under the Sandbox's Smart App
+    # Control (it blocks unsigned code, error 4551, before any test runs). Only the staged copies under
+    # .work are touched, never the project's own build output. Nothing is signed unless this is passed.
+    # The certificate here is token-backed: unlock it first, or signtool hangs on the PIN prompt.
+    [string]$SignCertSha1
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -37,6 +46,28 @@ foreach ($p in @(@('avalonia', 'AvaloniaUiTests.csproj'), @('wpf', 'WpfUiTests.c
     Write-Host ("Publishing " + $p[0] + " self-contained...")
     dotnet publish (Join-Path $uitest "$($p[0])\$($p[1])") -c Release -r win-x64 --self-contained true -o (Join-Path $inDir $p[0]) -nologo -v q
     if ($LASTEXITCODE -ne 0) { throw "publish failed for $($p[0])" }
+}
+if ($SignCertSha1) {
+    $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+                 Sort-Object FullName | Select-Object -Last 1).FullName
+    if (-not $signtool) { throw "signtool.exe not found; install the Windows SDK signing tools." }
+    $todo = @(Get-ChildItem $inDir -Recurse -File | Where-Object { $_.Extension -in '.exe', '.dll' } |
+              Where-Object { (Get-AuthenticodeSignature $_.FullName).Status -eq 'NotSigned' })
+    Write-Host ("Signing " + $todo.Count + " unsigned file(s) in the staged copy with certificate " + $SignCertSha1 + "...")
+    if ($todo.Count -gt 0) {
+        $signArgs = @('sign', '/sha1', $SignCertSha1, '/tr', 'http://timestamp.digicert.com', '/td', 'sha256', '/fd', 'sha256') +
+                    @($todo | ForEach-Object { $_.FullName })
+        $sp = Start-Process $signtool -ArgumentList $signArgs -NoNewWindow -PassThru
+        $null = $sp.Handle      # Windows PowerShell 5.1 caches no handle otherwise; ExitCode reads empty
+        if (-not $sp.WaitForExit(240000)) {
+            $sp.Kill()
+            throw "Signing timed out after 240 s. The signing token is probably locked (log in to SimplySign), or the timestamp server is unreachable."
+        }
+        # Verify rather than trust signtool's exit code.
+        $bad = @($todo | Where-Object { (Get-AuthenticodeSignature $_.FullName).Status -ne 'Valid' })
+        if ($sp.ExitCode -ne 0 -or $bad.Count -gt 0) { throw ("Signing failed (exit " + $sp.ExitCode + "); not valid: " + (($bad | ForEach-Object { $_.Name }) -join ', ')) }
+        Write-Host ("  signed and verified: " + ($todo | ForEach-Object { $_.Name } | Sort-Object | Out-String).Trim().Replace("`r`n", ', '))
+    }
 }
 Copy-Item (Join-Path $here 'run_in_sandbox.ps1') $inDir -Force
 if ($Keep) { New-Item -ItemType File -Path (Join-Path $inDir 'keep') | Out-Null }   # leave the Sandbox open afterwards
