@@ -1,171 +1,64 @@
-# `explore/dotnet-migration`
+# .NET migration
 
-Exploring a **Microsoft-only** stack - MSVC C++ core, C# shell - while keeping the
-measured performance of the current build. See
-`docs/future_plans/dotnet-port-assessment.md` on `main` for the costed assessment that
-led here, including why the full C# rewrite is **not** recommended.
+**Status: committed (2026-10-20).** The UI moves to **Avalonia 12 on .NET 10**, over the processing
+core as a Qt-free native C++ DLL behind a flat C ABI, and Qt leaves the application, the core and the
+tests completely.
 
-**This is an exploration, not a committed direction.** `main` stays shippable and is
-where maintenance happens. Nothing here blocks a release.
+| document | what it is |
+|---|---|
+| **[avalonia-plan.md](avalonia-plan.md)** | **The work plan.** Numbered steps, one PR each, ticked as they merge, with the rules every step follows and the decisions (D1-D5). Start here. |
+| [presentation-layer.md](presentation-layer.md) | Why Avalonia: the shell options (WPF, Avalonia, MAUI, WinUI) assessed against this application's needs, then measured. |
+| this file | The architecture the plan builds on, what the spikes answered, and the earlier decisions this one replaced. |
+| [`../future_plans/dotnet-port-assessment.md`](../future_plans/dotnet-port-assessment.md) | The original costed assessment of leaving Qt, which first argued for the hybrid below. |
 
-## The one rule that keeps this branch mergeable
+The exploration that led here was merged to `main` in #170; `explore/dotnet-migration` is no longer
+where work happens. Every step now lands on `main`, with the Qt application building and shipping until
+the plan's switch-over (plan rule 1).
 
-> **If a change keeps the Qt application building and shipping, it belongs on `main`,
-> not here.**
+## The architecture, and why it still holds
 
-Drift is proportional to how many *existing* files this branch modifies. A branch that
-only **adds** files merges from `main` forever; a branch that rewrites the model layer
-conflicts with every maintenance fix, because the model layer is exactly what
-maintenance touches.
+- **The performance-critical core stays native C++.** The bit-serial frame-sync scanner, the
+  derandomizer and the calibration maths are never rewritten; they become a framework-free MSVC DLL.
+  The full C# rewrite including the decommutation loop was costed and argued against in the
+  assessment, and nothing since has changed that.
+- **Only results cross the boundary.** `ProcessedStreamData` is flat `double` arrays; the worst
+  realistic case (12 channels, one hour at 10 ms) is about 34 MB once per run. The 640 MB recording is
+  read and scanned entirely on the native side.
+- **A flat C ABI with P/Invoke, not C++/CLI.** For pointer-plus-length arrays, C++/CLI's marshalling
+  convenience does not pay for its toolchain oddity. Keep the structs blittable, and the `Pack` hazard
+  stays confined to the Ch10 headers, which never leave the native side.
+- **The core is already Qt-free**, and `TestCoreQtFree` keeps it so. The de-Qt sweep that made it so
+  ran on `main` through ordinary PRs, which is the pattern the plan keeps.
+- **The core computes; the UI draws** (plan decision D3). The chart's geometry, the culling and
+  per-pixel-column envelope, is built natively; Avalonia draws it with Skia (D1).
 
-So the split is:
+## What the spikes answered
 
-| Work | Where | Why |
-| --- | --- | --- |
-| De-Qt the native core (431 Qt occurrences over ~4,170 lines) | **`main`** | Keeps the Qt app working at every step, is independently valuable, and touches the files maintenance touches. Putting it here is the maximum-conflict choice. |
-| Throughput guard (`scripts/run_throughput_bench.ps1`) | **`main`** | Already landed. It is how every claim below gets measured. |
-| C# solution, projects, XAML shell | here | New files |
-| Flat `extern "C"` ABI + P/Invoke interop | here | New files |
-| Win2D / Direct2D chart | here | New files |
-| `.sln` alongside the existing `.pro` | here | Coexistence is branch-only |
+| spike | question | answer |
+|---|---|---|
+| [`dotnet/interop-spike/`](../../dotnet/interop-spike/README.md) | Can the core run behind a flat C ABI driven from C#? | **Yes.** Struct layout agrees (72/72, 40/40, 136/136), a real stream runs through it, the boundary costs 0.4% of the run and marshalling 0.005%. .NET 10 and .NET Framework agree exactly. |
+| [`dotnet/chart-spike/`](../../dotnet/chart-spike/README.md) | Can the chart be drawn as fast outside Qt? | **Yes.** Direct2D redraws the 12-series case in 18.1 ms against Qt's 34 ms; Direct3D needs 24 draw calls where Direct2D needs ~14,400 and runs in microseconds; Win2D works but is pinned to a 1.x line with no successor. This project's `drawLines()`-not-`drawPath()` rule is a Qt workaround, not a general truth: on Direct2D the two are near-equivalent. |
+| [`dotnet/hybrid-spike/`](../../dotnet/hybrid-spike/README.md) section 1 | Is the core really Qt-free? | **Yes, at link level:** a 361 KB DLL with no Qt import, and a C# host reproduces the pre-sweep numbers exactly. |
+| hybrid-spike sections 2 and 3 | Can WPF and Avalonia host the chart and draw over it, and does either perform better? | **Both can**; performance is close and decides nothing. |
+| hybrid-spike section 4 | Can each framework's UI be tested on the CI runner? | **Both pass in Session 0**; Avalonia's headless platform needs no window system and drives positioned input, which WPF cannot. |
+| hybrid-spike section 5 | Should the chart be drawn by Skia in Avalonia or by native Direct2D? | **Skia** (D1): faster where the chart is the bottleneck, PNG/SVG/PDF from one routine, renders in headless tests. |
 
-That is deliberate: the long pole (de-Qt) runs on `main` through ordinary PRs, and this
-branch accumulates almost entirely new code.
+## Decisions this replaced
 
-## Why native C++ stays, and why that is still "Microsoft-only"
+Kept so nobody re-derives them, and so the old documents can be read in context. Each was right
+under the constraints of its time.
 
-**MSVC is Microsoft.** Qt is the only non-Microsoft *framework* in the tree (`irig106`
-is a third-party C library and is irreplaceable either way - it is also deny-listed from
-editing). So "Microsoft-only" means dropping Qt, not dropping C++ - which is what makes
-the performance answer possible:
+| earlier decision | replaced by | why |
+|---|---|---|
+| A **Microsoft-only** stack (MSVC + .NET + XAML), so a **WPF** shell | **Avalonia** | The team knows Avalonia, and the rule was dropped (2026-10-20). Measured, Avalonia matches WPF and tests better. |
+| A **native Direct2D chart** behind our own interface, Direct3D as the escape hatch | **Skia in Avalonia** over native geometry (D1) | Measured faster where it matters, no GPU interop, one renderer for every export format, testable headless. Direct3D stays the escape hatch if a future workload needs it. |
+| Core tests on **MSTest for C++ (`CppUnitTest`)** | **D2, open**: doctest recommended | CppUnitTest ties the tests to Visual Studio; a vendored header framework builds the same under qmake now and MSBuild later. |
+| A **hand-written PDF writer**, since Windows has none | **SkiaSharp's PDF and SVG** | The Skia chart draws to a PDF or SVG document from the same routine as the screen. |
+| **Branch discipline**: C# on `explore/dotnet-migration`, everything else on `main` | **Everything on `main`** (plan rule 1) | The branch was merged in #170; new code lands beside the Qt app on `main` instead of on a long-lived branch. |
 
-- The bit-serial frame-sync scanner, the derandomizer and the calibration maths are
-  **never rewritten**. They become a framework-free MSVC DLL.
-- Only **results** cross the boundary. `ProcessedStreamData` is flat `double` arrays;
-  the worst realistic case (12 channels, one hour at 10 ms) is ~34 MB crossing **once
-  per run**. The 640 MB recording is read and scanned entirely on the native side.
-- The hot files already use a short, mechanical list of Qt Core types: `QString`,
-  `QVector`, `QByteArray`, `QObject`, `QElapsedTimer`. Signals become `std::function`
-  callbacks; `QThread`/`QMutex`/`QWaitCondition` become `std::thread`/`mutex`/
-  `condition_variable`.
+## What is not being attempted
 
-Use a **flat C ABI with P/Invoke**, not C++/CLI: for a boundary that passes
-pointer-plus-length arrays, C++/CLI's marshalling convenience does not pay for its
-toolchain oddity. Keep the structs blittable and the `Pack` hazard stays confined to the
-Ch10 headers, which never leave the native side.
-
-## The two spikes that decide this - BOTH DONE
-
-Neither was a rewrite. Both passed; details in their own READMEs.
-
-1. **Interop spike** - `dotnet/interop-spike/`. **Passed.** Struct layout agrees
-   (72/72, 40/40, 136/136), a real stream runs through a flat C ABI, and the boundary
-   costs 0.4% with marshalling at 0.005% of the run. .NET 10 and .NET Framework agree
-   exactly on the results, which rules out the layout agreement being a runtime
-   artifact.
-2. **Chart spike** - `dotnet/chart-spike/`. **Passed, with one surprise.** Direct2D
-   redraws the 12-series case in **18.1 ms against Qt's 34 ms**, and 26.4 ms against
-   157 ms including the geometry build. The envelope and culling are pure arithmetic and
-   ported unchanged.
-
-   **The surprise: this project's `drawLines()`-not-`drawPath()` rule does not carry
-   over.** On Qt that choice was worth 1423 ms vs 27 ms, because a non-cosmetic pen goes
-   through Qt's stroker. On Direct2D the two are near-equivalent and the batched path is
-   marginally *faster*. It is a Qt workaround, not a general truth - do not carry it
-   across as gospel.
-
-   **Direct3D is faster again by three orders of magnitude** - 1 to 5 **microseconds**
-   per frame, against Direct2D's 18-30 ms for the same picture. Not because the GPU beat
-   the GPU (Direct2D already runs on Direct3D) but because Direct2D needs **~14,424 draw
-   calls** where Direct3D needs **24**. Direct2D's cost here is CPU-side tessellation and
-   call overhead. With Direct3D the renderer stops being the bottleneck at all and the
-   geometry build becomes ~2000x the cost of drawing it.
-
-   **Win2D now builds and runs**, after VS Community 2026 supplied the AppxPackage
-   MSBuild tooling that VS BuildTools lacks - and after calling `Bootstrap.TryInitialize`
-   explicitly, because the auto-initializer kills the process silently (exit 22) with no
-   indication of why. **Both are real prerequisites of the chart-in-C# option.**
-
-## The chart decision, now that it is measured
-
-**Every Microsoft option beats the Qt baseline.** The choice is no longer about speed.
-
-- **Direct2D** - 18-31 ms for the 12-series redraw against Qt's 34 ms, text free via
-  DirectWrite, no version trap. **The recommended starting point**: lowest risk. But note
-  the margin over Qt is *not* large and the figure swings 3x between runs, because
-  Direct2D's cost here is CPU-side - so "comfortably faster" overstates it.
-- **Direct3D** - 1-5 us/frame. Costs you text (needs a glyph atlas, or the standard
-  hybrid: D3D for the data, Direct2D/DirectWrite for the chrome) and explicit AA. **Keep
-  it as the escape hatch**, not the starting point - the measurement says it is there and
-  it is enormous, so its complexity can wait until something needs it.
-- **Win2D** - works, but **pins you to the 1.x line with no announced successor**:
-  `Microsoft.Graphics.Win2D` has 28 versions, newest 1.4.0, and **zero 2.x**, while
-  WindowsAppSDK 2.5.1 ships no graphics component at all (`.DWrite` and
-  `.InteractiveExperiences` exist as 2.x components; `.Graphics`, `.Canvas`, `.Direct2D`
-  and `.Win2D` do not). Native Direct2D and Direct3D have no such exposure - they are
-  Windows **SDK**, not Windows **App** SDK.
-
-**That reverses the earlier starting point.** WinUI 3 + Win2D was the pick for keeping
-everything in C#; the 1.x binding is now the strongest argument against it, and it is an
-architectural risk rather than a performance one. **WPF + a native renderer** behind the
-flat ABI is the option with measured numbers, no extra Visual Studio workload, and no
-exposure to the 2.x restructuring. Its cost is keeping C++ in the UI path and
-`HwndSourceHook` rather than `SetDragRectangles` for the frameless chrome - which is the
-*better* side of that trade anyway, since the current `WM_NCHITTEST` code transfers
-literally.
-
-Either way: **keep the renderer behind your own interface** so the backend stays
-swappable. That is the lesson all three options point at.
-
-**Shell framework.** Avalonia and .NET MAUI were assessed against this plan in
-[presentation-layer.md](presentation-layer.md): MAUI is ruled out, Avalonia fails the
-Microsoft-only rule, and WPF stays - but with an **airspace** gap to close first (WPF cannot
-draw over a hosted native surface, and the legend, chips and crosshair sit on the chart).
-
-## Testing
-
-- **Domain suites stay C++** on **MSTest for C++ (`CppUnitTest`)**, which ships with
-  Visual Studio. `tst_framesetup`, `tst_stepdetector`, `tst_frameprocessor`,
-  `tst_calibrationextractor` carry the invariants that each cost a debugging session -
-  off-phase sync rejection, calibration pairing, the missed-frames double-count.
-  `QCOMPARE` to `Assert::AreEqual` is close to mechanical.
-- **Render tests get easier.** Direct2D and Win2D both render to an off-screen bitmap
-  with no display and no platform plugin - simpler than today's
-  `QT_QPA_PLATFORM=offscreen`.
-- The widget-measurement suites (`tst_plotwidget`, `tst_streamconfigdialog`) are the
-  genuine loss and get rewritten against XAML. **Headless WinUI for non-chart widgets is
-  the one area expected to be worse than today**, and it is load-bearing for the
-  `verify-ui-change` method - verify it early.
-
-## Export
-
-PNG is trivial (WIC). There is **no Microsoft programmatic PDF writer** -
-`Windows.Data.Pdf` renders PDF, it does not create it, and XPS is not what users want.
-
-But SVG and PDF are both just **serializations of geometry the renderer already has**,
-and one `renderTo()` already produces all three formats. Emitting SVG is XML; a minimal
-PDF for line art plus text is a few hundred lines of a text-based format. No Microsoft
-API and no third-party library - and it keeps the one-renderer property that fixed the
-silently-dropped PDF legend in v2.9.0.
-
-## Staying current with `main`
-
-Merge `main` **into** this branch regularly - never the other way until a phase is
-genuinely ready:
-
-```powershell
-git checkout explore/dotnet-migration
-git merge main
-```
-
-If a change here turns out to keep the Qt app working, move it to `main` instead. That
-is not a detour; it is the rule at the top of this file.
-
-## What is NOT being attempted
-
-- A full C# rewrite including the decommutation loop. The assessment costs it as a
-  view-layer plus test-suite rewrite with two measured performance results re-derived
-  from scratch, and argues against it.
-- Cross-platform anything. This application is Windows-only today and that is not
-  changing.
-- Replacing `irig106`.
+- **A full C# rewrite including the decommutation loop.** See the architecture above.
+- **Cross-platform.** The application is Windows-only, and so are its users. Avalonia and Skia would
+  leave that door open, but nothing in the plan aims at it.
+- **Replacing `irig106`.** It is third-party, deny-listed from editing, and stays native.

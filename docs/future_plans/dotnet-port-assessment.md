@@ -1,13 +1,21 @@
 # Porting to a Microsoft-only native stack (.NET)
 
-**Status: ACTIVE on `explore/dotnet-migration`, under a Microsoft-only goal.** The full
-C# rewrite is still not recommended; the hybrid below is the path being explored. Both
-standalone phases are done and landed on `main`.
+**Status: DECIDED (2026-10-20) - the hybrid below, with an Avalonia shell.** The work plan
+is [`docs/dotnet-migration/avalonia-plan.md`](../dotnet-migration/avalonia-plan.md), and
+the exploration it rests on was merged to `main` in #170.
 
-See `docs/dotnet-migration/README.md` **on that branch** for the working plan - the
-phase split, the two deciding spikes, and the rule that keeps the branch mergeable
-(anything that keeps the Qt app shipping goes to `main`, not the branch). This file stays
-the costed assessment; it is not the work plan.
+This file is the costed assessment that came first, and it is kept as written. Two things
+in it have since changed, and both are marked where they appear:
+
+- **"Microsoft-only", and so WPF:** the rule was dropped, and the shell is **Avalonia**
+  (see [`presentation-layer.md`](../dotnet-migration/presentation-layer.md)).
+- **The chart as a from-scratch re-derivation on WPF:** it is drawn by **Skia inside
+  Avalonia** from geometry the native core builds, measured faster than the Direct2D
+  alternative where the chart is the bottleneck (`dotnet/hybrid-spike/README.md`,
+  section 5).
+
+What still stands is the central argument: **the full C# rewrite is not recommended**, and
+the performance-critical core stays native.
 
 The question was whether the application could move to a native Windows stack built
 only with Microsoft tools — .NET, XAML — and what that would cost. This file records
@@ -39,6 +47,12 @@ problem than depending on Qt Widgets.
 
 ## Stack choice: WPF on .NET 9, not WinUI 3
 
+> **Superseded (2026-10-20): the shell is Avalonia 12 on .NET 10.** This section's reasoning
+> held under the Microsoft-only rule that was later dropped. Its three points were then
+> measured for Avalonia: the frameless chrome (still to verify, plan step 4.8), offscreen
+> rendering (Avalonia's headless platform, which tests better than `RenderTargetBitmap`), and
+> deployment (self-contained .NET, no extra runtime).
+
 Three reasons specific to what this application does:
 
 1. **The frameless chrome transfers almost literally.** `mainviewchrome.cpp:447` handles
@@ -69,6 +83,12 @@ WPF's cost, stated plainly: it is in maintenance mode, and NativeAOT does not su
    painter — which works against the per-pixel-column approach; the likely landing place is
    drawing into a `WriteableBitmap` by hand, which means re-deriving the whole optimisation
    story on a different substrate. The 102 s to 34 ms result is not inherited.
+
+   *Since measured (2026-10-21): less of it had to be re-derived than this feared. The
+   envelope and culling are arithmetic, not QPainter findings: they moved into the native
+   core unchanged, and Skia draws the result inside Avalonia faster than Direct2D does where
+   the chart is the bottleneck. The `drawLines()` rule turned out to be a Qt workaround. See
+   `dotnet/hybrid-spike/README.md`, section 5.*
 
 2. **The bit-level hot loop in a GC language.** `frameprocessor.cpp`, `stepdetector.cpp`
    and `ch10packetreader.cpp` walk a 640 MB recording doing bit-span arithmetic and
@@ -133,7 +153,7 @@ per run, against a 640 MB recording read and scanned entirely on the native side
 **If the gains are wanted without that risk, the hybrid is the honest answer:** keep
 `src/model` as a native DLL behind a flat `extern "C"` ABI — it is already GUI-free, it is
 where the performance lives, and it is where the hard-won tests are — and rewrite only the
-view in WPF. That preserves the decommutation loop's measured behaviour and the domain
+view in WPF *(in Avalonia, as decided on 2026-10-20)*. That preserves the decommutation loop's measured behaviour and the domain
 test suite, and still yields self-contained .NET deployment for the shell. The cost is two
 toolchains and one marshalling boundary, which is strictly less than two re-derivations
 plus 11k lines of rewritten tests.

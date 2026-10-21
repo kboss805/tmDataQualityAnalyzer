@@ -14,34 +14,25 @@ what was built is worse than no plan at all.
 
 ## Open items
 
-**[Moving to a Microsoft-only stack](dotnet-port-assessment.md)** - **ACTIVE**, on the
-branch `explore/dotnet-migration`. The working plan lives in
-`docs/dotnet-migration/README.md` **on that branch**; the file here is the costed
-assessment behind it.
+**[Moving off Qt to Avalonia](dotnet-port-assessment.md)** - **COMMITTED (2026-10-20), in
+progress.** The work plan is
+[`docs/dotnet-migration/avalonia-plan.md`](../dotnet-migration/avalonia-plan.md): numbered
+steps, one PR each on `main`, ticked as they merge. The file here is the costed assessment
+that came first.
 
-The full C# rewrite is still **not recommended** - it is a view-layer plus test-suite
-rebuild (~7k of view, 11.3k of tests) that re-derives two measured performance results
-from scratch. What is being explored instead is the **hybrid**: the performance-critical
-core stays native MSVC C++ with no framework, and the whole developer-facing surface
-becomes C#. That satisfies "Microsoft-only" because **MSVC is Microsoft** - Qt is the only
-non-Microsoft framework in the tree - so the bit-serial scanner, the derandomizer and the
-calibration maths are never rewritten. Only results cross the boundary: ~34 MB once per
-run against a 640 MB recording.
+The shape is the **hybrid** the assessment argued for: the performance-critical core stays
+native C++ with no framework (the bit-serial scanner, the derandomizer and the calibration
+maths are never rewritten), behind a flat C ABI, and the UI becomes **Avalonia 12 on .NET 10**
+with the chart drawn by Skia. Qt leaves the application, the core and the tests. The full C#
+rewrite is still **not recommended**.
 
-Two spikes decide it, neither a rewrite: the interop boundary, and the chart on Win2D
-measured against the current 34 ms / sub-1 ms repaints.
+Already done on `main`: the throughput guard, the TOML move off `QSettings`, the Qt-free
+native core (guarded by `TestCoreQtFree`), the exploration spikes (#170), the plan (#171) and
+the chart decision (#172). The Qt application keeps building and shipping until the plan's
+switch-over.
 
-**Both standalone phases are done and on `main`**: the throughput guard (which is how
-every performance claim now gets measured rather than argued) and the TOML move off
-`QSettings`. **One item moved from "dropped" to "required"** by the Microsoft-only goal -
-the `QString`/`QVector` sweep of the native core, re-measured at 431 mechanical
-substitutions over ~4,170 lines. It belongs on `main`, not the branch, because it keeps
-the Qt app shipping at every step.
-
-**Branch discipline:** anything that keeps the Qt application building and shipping goes
-to `main`. The branch holds only what cannot - the C# solution, the interop layer, the
-Win2D chart, the XAML shell - so it stays almost entirely new files and keeps merging
-cleanly while maintenance continues on `main`.
+Unlike the other entries here, this one is not deleted when its first PR lands: it graduates
+when the plan's last step does, and the plan file goes with it.
 
 Add an entry here when something is scoped and not yet started, and give it its own file
 once it needs more than a paragraph. An empty list is the normal resting state, not a

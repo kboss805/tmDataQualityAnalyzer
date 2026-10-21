@@ -91,6 +91,13 @@ builds with VS's own MSBuild (no Qt VS Tools needed); the Qt runtime is deployed
 post-build step. The qmake build stays the supported/CI one; the `.pro` files remain the
 source of truth. Rationale for each correction: `docs/CLAUDE.md` → Unreleased.
 
+## Migration in progress: Qt to Avalonia
+
+The UI is moving to **Avalonia 12 on .NET 10** over a Qt-free native core, and Qt is leaving the app,
+the core and the tests. **Read `docs/dotnet-migration/avalonia-plan.md` before migration work**: one
+PR per numbered step, ticked as it merges. Until its switch-over the Qt app stays the shipping product,
+so everything in this file still applies. The new code lives in `dotnet/`.
+
 ## Project skills (`.claude/skills/`)
 
 `build-and-test` · `tm-code-review` · `write-qt-test` · `add-stream-setting` · `cut-release` ·

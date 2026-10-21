@@ -4734,7 +4734,8 @@ nmake -f Makefile.Debug
 
 ## Future Feature Candidates
 
-All identified items have been implemented. No outstanding candidates at this time.
+All identified feature items have been implemented. The one initiative in progress is the move off Qt
+to Avalonia; its work plan is `docs/dotnet-migration/avalonia-plan.md`.
 
 ## Additional Resources
 

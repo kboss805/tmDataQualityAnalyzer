@@ -1,5 +1,8 @@
 # Hybrid-port spike: a Qt-free native core, and a WPF or Avalonia shell over a native chart
 
+**Outcome:** Avalonia was chosen, and the chart is drawn by Skia (section 5). The work plan built on
+these results is `docs/dotnet-migration/avalonia-plan.md`.
+
 Five questions, answered by running code rather than by argument. The first two come from
 `docs/dotnet-migration/`: the README's plan (native MSVC core behind a flat C ABI, C# shell, native
 Direct2D chart) and `presentation-layer.md`'s open item (can WPF host the chart *and* draw over it).
