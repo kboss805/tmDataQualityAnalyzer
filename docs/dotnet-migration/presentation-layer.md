@@ -110,7 +110,7 @@ child HWND.** It has two ways to host a native surface:
 The airspace issue is the real comparison: **Avalonia (shared texture) and WinUI (`SwapChainPanel`)
 both compose XAML over native GPU content natively, and WPF does not.**
 
-## Measured since: WPF and Avalonia hosting the same chart (2026-10-20)
+## Measured since: hosting the chart, and testing the UI, in WPF and Avalonia (2026-10-20)
 
 Both halves of the GPU-hosting question were spiked; details and every number are in
 [`dotnet/hybrid-spike/README.md`](../../dotnet/hybrid-spike/README.md), sections 2 and 3.
@@ -133,11 +133,25 @@ Both halves of the GPU-hosting question were spiked; details and every number ar
     - a smaller self-contained deployment: 104 against 140 MB.
   - **No difference:** an empty chart (both at the refresh rate) and memory.
 
-So the measured performance does not decide between them. The deciding questions are still:
+- **Headless UI tests favour Avalonia** (section 4 of the same README). The same five tests are
+  ported from `tst_plotwidget` and the PR #60 sizing trap, written in both frameworks, and each test
+  catches all seven of its mutants in both.
+  - `Avalonia.Headless` needs no window system (it creates no HWND, tested). It drives
+    keyboard and pointer input through the real pipeline at coordinates. It renders real text
+    through Skia, which Qt's offscreen platform cannot.
+  - WPF can measure, render (`RenderTargetBitmap`) and raise key events. But it needs a hidden
+    window per test and a hand-written STA harness, and it has no supported way to inject pointer
+    input at a position.
+  - Both passed on a desktop that is never shown. **Session 0 itself, where the CI runner lives,
+    is unverified for WPF**; Avalonia does not depend on it.
+  - Neither can render the native chart in a test, so the chart host needs a seam either way.
+
+So the measured performance does not decide between them, and testability leans to Avalonia. The
+deciding questions are still:
 
 - the "Microsoft-only" rule;
 - the tooling licence;
-- the two Avalonia items below that remain unverified (headless tests, snap layouts).
+- custom chrome with snap layouts, which remains unverified.
 
 ## Recommendation
 
@@ -158,11 +172,12 @@ So the measured performance does not decide between them. The deciding questions
 
 ## Facts that could not be verified here
 
-- Avalonia's headless test platform against this codebase's measured-widget style of test.
 - Avalonia custom chrome with Windows 11 snap layouts.
 - Which parts of the Avalonia Visual Studio experience need the paid tooling licence.
+- WPF UI tests in Session 0 on the CI runner (they pass on a hidden desktop).
 
-(The cost of WPF `D3DImage` with a D3D11 shared surface, and its Avalonia equivalent, were measured
+(The cost of WPF `D3DImage` with a D3D11 shared surface, its Avalonia equivalent, and Avalonia's
+headless test platform against this codebase's measured-widget style of test were measured
 afterwards: see the section above.)
 
 Dates and version numbers above come from the linked pages as of 2026-10-18.

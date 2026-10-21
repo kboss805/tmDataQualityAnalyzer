@@ -1,9 +1,10 @@
 # Hybrid-port spike: a Qt-free native core, and a WPF or Avalonia shell over a native chart
 
-Three questions, answered by running code rather than by argument. The first two come from
+Four questions, answered by running code rather than by argument. The first two come from
 `docs/dotnet-migration/`: the README's plan (native MSVC core behind a flat C ABI, C# shell, native
 Direct2D chart) and `presentation-layer.md`'s open item (can WPF host the chart *and* draw over it).
-The third is whether Avalonia, which the team knows, performs differently from WPF in that role.
+The third is whether Avalonia, which the team knows, performs differently from WPF in that role, and
+the fourth is how each one's UI can be tested on this project's CI runner.
 
 Everything here is additive. Nothing in `src/`, `include/` or the Qt build changes.
 
@@ -18,6 +19,7 @@ Everything here is additive. Nothing in `src/`, `include/` or the Qt build chang
 | `wpf/results.txt`, `wpf/screenshot.png` | The final run's output, and the window as the desktop composed it. |
 | `avalonia/` | The Avalonia 12 twin of `wpf/`: the same chart DLL, imported through `ICompositionGpuInterop`, the same phases and checks (section 3). Its own `results.txt` and `screenshot.png`. |
 | `common/ScreenProbe.cs` | Reads the composed desktop through DXGI Desktop Duplication. Linked into both apps, so they are judged by the same code. |
+| `uitest/` | One view built in Avalonia and in WPF over a shared view model, with the same UI tests in each (section 4), a mutation runner, and a script that runs a test exe on a desktop that is never shown. |
 
 ## 1. Is the core really Qt-free? Yes, and it is proven at link level
 
@@ -293,6 +295,88 @@ recording for anyone re-running it:
 - A fresh duplication's first frame carries **no image**. Reading a still window means draining,
   presenting again, and reading the frame that present produced (`ReadStill`).
 
+## 4. Headless UI tests: Avalonia.Headless against WPF
+
+The other half of `presentation-layer.md`'s recommendation 3. The question is narrower than "can it
+be tested": can each framework run **this project's** style of UI test - measure widgets, drive
+input, render and read pixels (the `verify-ui-change` skill's two halves) - on the CI runner. That
+runner is a service in **Session 0 with no interactive desktop** (`docs/ci_runner.md`); the Qt suite
+gets through only because `QT_QPA_PLATFORM=offscreen` needs no window system.
+
+### What was built
+
+`uitest/` holds one small view built twice, `avalonia/PlotView.axaml` and `wpf/PlotView.xaml`: a
+title strip with a 30x26 button, the plot surface, and a translucent legend capped at 120 px that
+scrolls beyond that. Both versions bind to one shared view model, `common/PlotVm.cs`. Each project
+holds the same five tests, ported from `tst_plotwidget` and the project's history:
+
+| test | ported from |
+|---|---|
+| `LegendGrowsWithItsRowsAndScrollsOnceItIsFull` | `legendOverlaySizesCorrectlyAfterRebuild` (the collapsed-legend regression) |
+| `TitleButtonKeepsTheSizeSetInCode` | the PR #60 trap: a theme minimum overriding a size set in code |
+| `KeyboardShortcutsDriveTheView` | `keyboardShortcutsDriveTheView` (L, arrows, Home) |
+| `DraggingABandZoomsToIt` | `bandZoomAppliesDraggedRange` (both directions; a click does not collapse the view) |
+| `ARenderedFrameShowsTheLegendOverThePlotWithText` | the skill's "render and look", as an assertion: legend pixel dark over a white plot, and real glyphs in the label |
+
+Avalonia adds two fact-finding tests: `TheNativeChartSurfaceIsNotAvailableHeadless` and
+`TheHeadlessPlatformCreatesNoWin32Window`. Both projects run on xunit v3 3.2.2. Avalonia uses
+`Avalonia.Headless.XUnit` 12.1.4 with Skia rendering and the Fluent theme it ships with, so the
+size test measures what a user would get.
+
+**Each test is validated against seven single-defect mutants, in each framework, and all 14 runs
+caught theirs:**
+
+- a theme style setting `MinHeight` on the title button;
+- the legend's height cap removed;
+- the L key ignored;
+- the legend's visibility not bound;
+- the drag mapping x through the plot's height;
+- the legend made transparent;
+- the label text emptied.
+
+`uitest/run_mutants.py` runs them. It deletes the exe before each rebuild, so a failed build cannot
+run the previous binary, restores the source with a fresh mtime, and counts a mutant as caught only
+when the test written for it fails, not merely some test.
+
+### Results
+
+| capability | Qt today (offscreen) | Avalonia.Headless | WPF |
+|---|---|---|---|
+| Runs with no window system | yes | **yes: creates no HWND at all** (tested, with the counter proven able to see one) | no: needs a real, if hidden, window (`HwndSource`) per test |
+| Measure geometry, min/max, scroll extent | yes | yes (`Bounds`, `Extent`) | yes (`ActualWidth`, `ExtentHeight`) |
+| Catches a theme minimum overriding a code size | yes | yes | yes |
+| Keyboard input | `QTest::keyClick` | through the real pipeline: focus, routing, a QWERTY key map | raised on the element (`RaiseEvent`), bypassing focus routing |
+| Pointer input at a position | `QTest::mouseClick(pos)` | **yes**: press, move and release at window coordinates, through hit-testing and capture | **no supported way**: a synthesised event reads the real cursor, so the test calls the view's handler (`ApplyBand`), as the Qt test calls `applyBandZoom` |
+| Rendered pixels | yes, but **text draws as empty boxes** | yes, Skia, **real text** | yes, `RenderTargetBitmap`, real text |
+| The native chart surface in a test | n/a (`TmChart` is `QPainter`) | no: GPU interop is null headless (tested) | no: `RenderTargetBitmap` does not reproduce a `D3DImage` (section 2) |
+| Test harness | Qt Test | an attribute (`[AvaloniaFact]`) and a five-line app builder | hand-written: an STA thread per test, dispatcher pumping, an `HwndSource` (about 40 lines) |
+| Run time, this suite | - | 0.69-0.74 s for 7 tests | 1.03-1.07 s for 5 tests |
+
+Both suites were also run on a **desktop that is never displayed and gets no input**
+(`uitest/run_without_desktop.ps1`), and both passed:
+
+- **Avalonia:** 7 of 7, which is unsurprising since it never touches Win32 windowing.
+- **WPF:** 5 of 5, hidden window included.
+
+**This is not Session 0.** The script tries to give the tests a window station of their own, which
+is a service's situation. This account is refused (error 5, also outside the tool sandbox), so the
+script falls back to a hidden desktop on the interactive window station, and says so in its output.
+
+**What WPF does on the real runner is the one open question here, and only the runner can answer
+it:** add a step to `ci.yml` that runs the two exes. Avalonia's result does not depend on it.
+
+### Reading it
+
+- **Avalonia's headless platform is the stronger testing story, in three specific ways:**
+  - it drives pointer input through the real pipeline at coordinates, which WPF cannot and Qt can;
+  - it renders real text, which Qt's offscreen platform cannot and WPF's `RenderTargetBitmap` can;
+  - it needs no window system at all, so Session 0 is a non-issue rather than a risk.
+- **WPF is workable for everything the Qt suite does today except positioned pointer input.** The
+  Qt tests mostly bypass that anyway, by calling the handler. Its harness is not a supported headless
+  mode, so its behaviour in Session 0 is the open risk.
+- **Neither can put the native chart in a test.** The chart host needs a seam (a stub surface), and
+  the chart's own pixels stay tested at the native level, as `TmChart`'s are now.
+
 ## Not done, and what could not be checked
 
 - **Interactive behaviour.** The crosshair and readout exist (`--interactive` leaves the window open)
@@ -301,8 +385,7 @@ recording for anyone re-running it:
   one gave a legend pixel of `#C5C7CA` where the real desktop shows `#272F3D`. Not understood. For the
   headless UI-testing story this matters: UI tests of this stack cannot lean on `RenderTargetBitmap`
   for pixels over the chart, and a real-desktop read like this one needs an interactive session.
-- **Avalonia's headless test platform** against a measured-widget test, the other half of
-  `presentation-layer.md`'s recommendation 3. Only the GPU-hosting half was run.
+- **Session 0 itself.** The UI tests ran on a hidden desktop, not on the CI runner (section 4).
 - **Other GPUs.** One adapter, one monitor refresh, one driver. WARP (software) cannot share a surface
   with a D3D9 device, so a machine without a working hardware adapter would fail at surface creation
   with an HRESULT and a message; there is no fallback built.
@@ -330,7 +413,20 @@ dotnet build -c Release dotnet\hybrid-spike\avalonia
 .\dotnet\hybrid-spike\avalonia\bin\Release\net10.0\AvaloniaChartSpike.exe
 ```
 
-Both take `--no-sample` (no screen probe, so pacing carries no capture cost; the composition checks
+The UI tests (section 4) are xunit v3 executables:
+
+```powershell
+dotnet build -c Release dotnet\hybrid-spike\uitest\avalonia
+dotnet build -c Release dotnet\hybrid-spike\uitest\wpf
+.\dotnet\hybrid-spike\uitest\avalonia\bin\Release\net10.0\AvaloniaUiTests.exe
+.\dotnet\hybrid-spike\uitest\wpf\bin\Release\net10.0-windows\WpfUiTests.exe
+# the same, on a desktop that is never shown
+powershell -ExecutionPolicy Bypass -File dotnet\hybrid-spike\uitest\run_without_desktop.ps1 dotnet\hybrid-spike\uitest\wpf\bin\Release\net10.0-windows\WpfUiTests.exe
+# the mutation check
+python dotnet\hybrid-spike\uitest\run_mutants.py avalonia
+```
+
+The chart apps both take `--no-sample` (no screen probe, so pacing carries no capture cost; the composition checks
 then cannot run). The Avalonia app also takes `--buffers N` (shared textures rotated, default 2) and
 `--bottom-left` (import with a bottom-left origin, to see the image flip). Do not move the mouse
 over the window during a run: the crosshair is live.
