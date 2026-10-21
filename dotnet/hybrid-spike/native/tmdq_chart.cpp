@@ -64,6 +64,9 @@ struct tmdq_chart_timing
 namespace {
 
 struct Seg { float x1, y1, x2, y2; };
+// tmdq_chart_segments / tmdq_chart_band hand these vectors out as flat float arrays.
+static_assert(sizeof(Seg) == 4 * sizeof(float), "Seg must be four packed floats");
+static_assert(sizeof(D2D1_POINT_2F) == 2 * sizeof(float), "D2D1_POINT_2F must be two packed floats");
 
 struct Series
 {
@@ -345,13 +348,22 @@ struct Chart
 extern "C" {
 
 /// Flags for tmdq_chart_create_ex.
-constexpr int TMDQ_CHART_KEYED_MUTEX = 1;
+constexpr int TMDQ_CHART_KEYED_MUTEX   = 1;
+/// No devices and no target: the chart only holds data and builds geometry (tmdq_chart_build), for a
+/// host that draws the geometry itself - the Skia chart, which is compared against Direct2D drawing
+/// the very same segments and bands.
+constexpr int TMDQ_CHART_GEOMETRY_ONLY = 2;
 
 __declspec(dllexport) void* tmdq_chart_create_ex(int w, int h, int flags)
 {
     std::unique_ptr<Chart> c(new (std::nothrow) Chart());
     if (!c) { return nullptr; }
     c->keyed = (flags & TMDQ_CHART_KEYED_MUTEX) != 0;
+    if (flags & TMDQ_CHART_GEOMETRY_ONLY)
+    {
+        c->w = w; c->h = h;
+        return c.release();
+    }
     if (!c->initDevices() || !c->createTarget(w, h))
     {
         // Keep the object so the caller can read the reason; flag it unusable by a null surface.
@@ -409,6 +421,41 @@ __declspec(dllexport) void tmdq_chart_generate(void* p, int series, int samples)
     for (int i = 0; i < series; ++i) { c->series.push_back(makeSeries(samples, 7u + i)); }
     c->segs.assign(series, {});
     c->bands.assign(series, {});
+}
+
+/// Builds every series' geometry for the view (xl..xu, yl..yu) exactly as tmdq_chart_render does - the
+/// culling and the per-pixel-column envelope - without drawing it. Returns the series count and, in
+/// geometry_ms, how long the build took. Read the result with tmdq_chart_segments / tmdq_chart_band.
+__declspec(dllexport) int tmdq_chart_build(void* p, double xl, double xu, double yl, double yu, double* geometry_ms)
+{
+    Chart* c = static_cast<Chart*>(p);
+    const auto g0 = std::chrono::steady_clock::now();
+    for (size_t i = 0; i < c->series.size(); ++i)
+    {
+        buildGeometry(c->series[i], c->w, c->h, xl, xu, yl, yu, c->segs[i], c->bands[i]);
+    }
+    if (geometry_ms) { *geometry_ms = msSince(g0); }
+    return static_cast<int>(c->series.size());
+}
+
+/// Series i's line segments from the last build, as x1, y1, x2, y2 floats; *count is the segment count.
+/// Valid until the next build or generate.
+__declspec(dllexport) const float* tmdq_chart_segments(void* p, int i, int* count)
+{
+    Chart* c = static_cast<Chart*>(p);
+    if (i < 0 || i >= static_cast<int>(c->segs.size())) { *count = 0; return nullptr; }
+    *count = static_cast<int>(c->segs[i].size());
+    return c->segs[i].empty() ? nullptr : &c->segs[i][0].x1;
+}
+
+/// Series i's min-max band polygon from the last build, as x, y floats (empty when the series was not
+/// decimated); *count is the point count. Valid until the next build or generate.
+__declspec(dllexport) const float* tmdq_chart_band(void* p, int i, int* count)
+{
+    Chart* c = static_cast<Chart*>(p);
+    if (i < 0 || i >= static_cast<int>(c->bands.size())) { *count = 0; return nullptr; }
+    *count = static_cast<int>(c->bands[i].size());
+    return c->bands[i].empty() ? nullptr : &c->bands[i][0].x;
 }
 
 /// Draws one frame. `marker` is painted as a 10 px strip at the top and again at the bottom of the

@@ -1,10 +1,11 @@
 # Hybrid-port spike: a Qt-free native core, and a WPF or Avalonia shell over a native chart
 
-Four questions, answered by running code rather than by argument. The first two come from
+Five questions, answered by running code rather than by argument. The first two come from
 `docs/dotnet-migration/`: the README's plan (native MSVC core behind a flat C ABI, C# shell, native
 Direct2D chart) and `presentation-layer.md`'s open item (can WPF host the chart *and* draw over it).
-The third is whether Avalonia, which the team knows, performs differently from WPF in that role, and
-the fourth is how each one's UI can be tested on this project's CI runner.
+The third is whether Avalonia, which the team knows, performs differently from WPF in that role, the
+fourth is how each one's UI can be tested on this project's CI runner, and the fifth is whether the
+chart should be drawn by Skia inside Avalonia rather than by Direct2D.
 
 Everything here is additive. Nothing in `src/`, `include/` or the Qt build changes.
 
@@ -17,7 +18,7 @@ Everything here is additive. Nothing in `src/`, `include/` or the Qt build chang
 | `native/build_chart.ps1`, `native/tmdq_chart.cpp` | The Direct2D chart renderer, drawing into a D3D11 texture shared with a D3D9Ex surface. |
 | `wpf/` | A WPF window that shows that surface through `D3DImage`, with a WPF legend and crosshair over it, and runs a scripted benchmark. |
 | `wpf/results.txt`, `wpf/screenshot.png` | The final run's output, and the window as the desktop composed it. |
-| `avalonia/` | The Avalonia 12 twin of `wpf/`: the same chart DLL, imported through `ICompositionGpuInterop`, the same phases and checks (section 3). Its own `results.txt` and `screenshot.png`. |
+| `avalonia/` | The Avalonia 12 twin of `wpf/`: the same chart DLL, imported through `ICompositionGpuInterop`, the same phases and checks (section 3). Its own `results.txt` and `screenshot.png`. With `--skia`, the chart drawn by Skia instead (`SkiaWindow`, `SkiaChart.cs`; section 5), with `results-skia.txt` and `screenshot-skia.png`. |
 | `common/ScreenProbe.cs` | Reads the composed desktop through DXGI Desktop Duplication. Linked into both apps, so they are judged by the same code. |
 | `uitest/` | One view built in Avalonia and in WPF over a shared view model, with the same UI tests in each (section 4), a mutation runner, a script that runs a test exe on a desktop that is never shown, and `uitest/sandbox/`, which runs them in Windows Sandbox including as SYSTEM in Session 0. |
 
@@ -418,6 +419,94 @@ Smart App Control off was deliberately not used instead: it is a security settin
 - **Neither can put the native chart in a test.** The chart host needs a seam (a stub surface), and
   the chart's own pixels stay tested at the native level, as `TmChart`'s are now.
 
+## 5. Skia or Direct2D for the chart (decision D1 of `avalonia-plan.md`)
+
+Step 0.2 of `docs/dotnet-migration/avalonia-plan.md`. `avalonia/SkiaWindow.axaml`
+(`AvaloniaChartSpike.exe --skia`) is the native chart's window with one change: the chart is drawn by
+Skia, in an Avalonia custom draw operation on Avalonia's render thread, instead of by Direct2D into a
+texture the compositor imports. **Both draw the same geometry.** `tmdq_chart.dll` builds it for both
+(`tmdq_chart_build`, with a new `GeometryOnly` flag that skips the devices): the same culling and
+per-pixel-column envelope, so the drawing backend is the only variable. Skia runs on the GPU here,
+through OpenGL (ANGLE over Direct3D 11).
+
+### Results
+
+Three runs of each, alternated, screen capture off, 180 Hz display. Per-run values were within a few
+percent except one Direct2D 3 x 1M run.
+
+| scenario | Direct2D via GPU interop | Skia in Avalonia |
+|---|---|---|
+| nothing drawn | 179 fps | 173 fps |
+| 3 x 360k, waiting for the GPU | 92 | 92 |
+| 12 x 360k, waiting for the GPU | 31 | **45** |
+| 3 x 1M, waiting for the GPU | 70 | **90** |
+| 3 x 360k, not waiting for the GPU | **166** | 102 |
+| 12 x 360k, not waiting for the GPU | (not a Direct2D phase) | 45 |
+
+Where the time goes at 12 x 360k, per frame:
+
+| | geometry (native) | hand-over | drawing | GPU wait |
+|---|---|---|---|---|
+| Direct2D | 2.0 ms | - | 18.5 ms (UI thread) | 7-8 ms |
+| Skia | 2.0 ms | 0.7 ms (copy into Skia types) | **12.4 ms** (render thread) | 5.2 ms |
+
+**Without a GPU at all**, Skia's CPU rasteriser draws 3 x 360k in **4.7 ms** and 12 x 360k in
+**19.4 ms**. That is what headless tests, and a machine with no usable GPU, would get.
+
+**Export comes from the same drawing routine** (`ChartPainter.Draw`) as the screen:
+
+| | PNG | PDF | SVG |
+|---|---|---|---|
+| 3 x 360k | 32 ms, 256 KB | 12 ms, 140 KB | 7 ms, 260 KB |
+| 12 x 360k | 66 ms, 675 KB | 40 ms, 557 KB | 27 ms, 1.0 MB |
+
+All three were checked by looking, not just by size:
+- the PNG matches the native chart's frame;
+- the PDF shows all 12 series as vectors;
+- the SVG parses (three paths per series, plus the markers) and renders in a browser.
+
+This keeps the property v2.9.0 fixed: one renderer for screen, PNG, SVG and PDF. Neither the
+Direct2D chart nor Windows offers a PDF writer.
+
+**It renders where the native surface cannot.** Avalonia's offscreen render of the whole window
+(`RenderTargetBitmap`, `screenshot-skia.png`) contains the chart with the legend over it. A new
+headless test, `ASkiaDrawnChartRendersHeadless`, proves the headless platform offers Skia's canvas
+to a draw operation and that its pixels reach the frame, checked by exact colour. Its mutant (a draw
+operation that draws nothing) is caught; the suite now catches 8 of 8 mutants in Avalonia and 7 of 7
+in WPF.
+
+### Where Skia loses, and why it does not decide
+
+- **Light load, not waiting for the GPU, at 180 Hz:** 102 against 166 fps. Skia draws on Avalonia's
+  single render thread, so the chart's drawing adds to the compositor's own frame. Direct2D drew on
+  the UI thread into a texture that the compositor only composes. Not investigated further. On a
+  60 Hz display both exceed the refresh rate in every case except the heaviest, where Skia leads
+  (45 against 31).
+- **The chart stays C# drawing code** over native geometry. That is the intended split (D3): the
+  core computes, the UI draws.
+
+### Two traps found on the way
+
+- **Waiting for the previous frame before handing over the next starves Avalonia's render loop.**
+  The first version of the harness did that. A tick that invalidates nothing lets the loop go idle,
+  and it wakes about 15 ms later, so the chart ran at 33 fps even when it drew **nothing**. Handing
+  a frame over on every tick, as a real app invalidates, drew every frame built, none superseded, at
+  the refresh rate. `--serial` keeps the old behaviour as a diagnostic.
+- **A reused MSBuild worker held `obj\...\Avalonia\resources` open.** Every later build of the UI
+  tests then failed with MSB4018 (file in use). The mutation runner now builds with
+  `--disable-build-servers -nodeReuse:false`, and reports a failed build as "no result", never as a
+  surviving mutant. It had counted two such builds as survivors.
+
+The headless suite also failed once in about 60 runs: `ARenderedFrameShowsTheLegendOverThePlotWithText`.
+Its message was lost to an output filter, and the failure did not recur in 59 further runs,
+including after rebuilds. It is recorded rather than explained.
+
+### Decision
+
+**D1 is Skia.** It is equal or faster wherever the chart is the bottleneck. It exports PNG, SVG and
+PDF from one routine. It renders in headless tests and with no GPU. And it removes the Direct3D
+interop, the keyed mutex, the texture rotation and the second native DLL from the plan.
+
 ## Not done, and what could not be checked
 
 - **Interactive behaviour.** The crosshair and readout exist (`--interactive` leaves the window open)
@@ -472,6 +561,10 @@ The chart apps both take `--no-sample` (no screen probe, so pacing carries no ca
 then cannot run). The Avalonia app also takes `--buffers N` (shared textures rotated, default 2) and
 `--bottom-left` (import with a bottom-left origin, to see the image flip). Do not move the mouse
 over the window during a run: the crosshair is live.
+
+`--skia` runs the Skia-drawn chart instead (section 5): it writes `results-skia.txt`, the
+`skia-*.png/.pdf/.svg` exports and `skia-window.png` next to the exe, then exits. `--serial` with it
+reproduces the starved-render-loop trap described there.
 
 The driver needs `tests\data\test files\prn_testfile, sample.ch10` (committed). `tmdq_core.dll`
 builds against `main` as merged: `constants.h` is Qt-free (PR #163).

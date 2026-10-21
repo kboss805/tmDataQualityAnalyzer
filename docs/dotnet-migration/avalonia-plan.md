@@ -49,18 +49,18 @@ rate; UI tests run headless in Session 0; a clean machine runs the result.
 
 Each has a recommendation. Steps that depend on a decision say so.
 
-- **D1. How the chart draws.**
-  - *Recommended: draw it in Avalonia with Skia* (`ICustomDrawOperation`), with the envelope and culling
-    geometry computed in the native core. Decimation means at most ~4 points per pixel column, so
-    12 series is about 60,000 segments per frame, which Skia handles comfortably (to be measured in
-    step 0.2). It removes the D3D11 interop, the keyed mutex, the texture rotation and the second
-    native DLL; it renders in headless tests (the native surface cannot); and SkiaSharp writes **PNG,
-    SVG and PDF** from the same drawing code, which keeps the one-renderer export property that fixed
-    the dropped PDF legend in v2.9.0.
-  - *Alternative: the native Direct2D chart over `ICompositionGpuInterop`.* Measured and working, but
-    needs a test seam, a hand-written PDF writer, and keeps C++ in the UI path.
-  - The step 0.2 measurement decides it. If Skia cannot redraw 12 x 360k inside ~30 ms, take the
-    native chart.
+- **D1. How the chart draws. DECIDED (step 0.2): Skia in Avalonia**, drawing geometry that the native
+  core builds (culling and the per-pixel-column envelope). Measured in `dotnet/hybrid-spike/README.md`
+  section 5, against the Direct2D chart drawing the very same geometry:
+  - **Where the chart is the bottleneck, Skia is faster:** 12 x 360k at 45 fps against 31, and 3 x 1M
+    at 90 against 70.
+  - **Light loads are equal** (92 against 92), except when the GPU is not waited for at 180 Hz (102
+    against 166). Both exceed 60 Hz everywhere except the heaviest case.
+  - **Software rendering, with no GPU, draws 12 x 360k in 19.4 ms.**
+  - **PNG, SVG and PDF all come from the one drawing routine,** each verified by looking.
+  - **It renders in headless tests**; a new test proves it.
+  - It removes the Direct3D interop, the keyed mutex, the texture rotation and the second native DLL
+    from the plan.
 - **D2. The native test framework that replaces Qt Test for the core.** *Recommended: doctest*, a
   single vendored header, so it needs no package manager and builds the same under qmake now and
   MSBuild later. GoogleTest is the alternative if the team already knows it.
@@ -79,9 +79,10 @@ Each has a recommendation. Steps that depend on a decision say so.
 ## Step 0: groundwork
 
 - [x] **0.1 Merge the exploration** (PR #170, merged as `9d5e6c8`) so the spikes are on `main`.
-- [ ] **0.2 Measure a Skia chart (decides D1).** Add a Skia-drawn chart to the Avalonia spike beside
+- [x] **0.2 Measure a Skia chart (decides D1).** Add a Skia-drawn chart to the Avalonia spike beside
   the native one, same phases, same machine: redraw time for 3 x 360k, 12 x 360k and 3 x 1M, and a
   PDF and SVG export of the same frame. Done when the README records both and D1 is settled.
+  *Done: `dotnet/hybrid-spike/README.md` section 5; D1 is Skia.*
 - [ ] **0.3 Bring the docs in line with the decision.** `README.md` and `presentation-layer.md` stop
   describing WPF as the plan; `docs/future_plans/dotnet-port-assessment.md` gets its status updated
   (it still argues for WPF); `CLAUDE.md` gains a short "migration in progress" note pointing here.
