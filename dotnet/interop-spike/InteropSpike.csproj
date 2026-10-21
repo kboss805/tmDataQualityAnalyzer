@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    NOT BUILDABLE ON THE CURRENT DEV MACHINE. The .NET runtimes (6, 8, 10) are
+    installed but there is no SDK - no C:\Program Files\dotnet\sdk, and only VS
+    BuildTools, so no .NET workload either. Committed so `dotnet run` works the moment
+    an SDK is installed; until then run_spike.ps1 drives the identical ABI through
+    PowerShell's Add-Type.
+
+    TargetFramework is net10.0. It was briefly net8.0, chosen as the newest LTS runtime
+    already on the machine - but the per-user SDK install brings its OWN runtime
+    (10.0.13) under %LOCALAPPDATA%\Microsoft\dotnet\shared, and `dotnet run` resolves
+    against that root, not C:\Program Files\dotnet. So a net8.0 build failed with
+    "You must install or update .NET to run this application ... The following
+    frameworks were found: 10.0.13". .NET 10 is LTS, so targeting it is both the fix and
+    the right long-term choice.
+
+    AllowUnsafeBlocks is for the zero-copy ReadOnlySpan path in Program.cs - the one
+    thing the PowerShell route cannot exercise and the main reason this project exists.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>InteropSpike</AssemblyName>
+    <RootNamespace>Tmdq.InteropSpike</RootNamespace>
+    <!-- x64 only: tmdq_core.dll is built by the msvc2022_64 kit, and an x86 host
+         would fail to load it with a BadImageFormatException. -->
+    <PlatformTarget>x64</PlatformTarget>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <!--
+    No explicit <Compile> items: the SDK globs *.cs from the project directory by
+    default, and listing them as well is error NETSDK1022 (duplicate Compile items).
+    TmdqCore.cs and Program.cs are picked up automatically.
+  -->
+
+</Project>

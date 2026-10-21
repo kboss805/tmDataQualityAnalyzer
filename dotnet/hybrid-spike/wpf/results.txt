@@ -1,0 +1,67 @@
+wpf: 10.0.0.0, runtime 10.0.13, DPI scale 1
+render tier: 2  (2 = full hardware acceleration)
+adapter: NVIDIA GeForce RTX 4070 SUPER  (hardware)
+screen probe: DXGI Desktop Duplication - DuplicateOutput1, desktop HDR (PQ / BT.2020), 10 bits per colour, SDR white 240 nits, no frame read yet
+
+== empty: D3DImage path only
+   chart frames presented: 400 in 2.23 s = 179.4 per second
+   native render (geometry+raster+GPU wait): 0.2 ms median, 0.2 p95, 0.4 max
+     of which CPU geometry 0.0, Direct2D issue 0.1, GPU fence wait 0.1 ms (medians)
+   incl. Lock/AddDirtyRect/Unlock:           0.4 ms median, 0.4 p95
+   frame interval: 5.6 ms median, 5.6 p95, 5.6 max;  0 of 389 later than 1.5x the 5.6 ms nominal
+   on-screen marker check: 395 desktop frames inspected, 0 showed a tear (top and bottom from different chart frames); 395 distinct marker colours seen
+
+== 3 x 360k, UI thread, fenced
+   chart frames presented: 400 in 2.69 s = 148.8 per second
+   native render (geometry+raster+GPU wait): 5.7 ms median, 6.5 p95, 10.1 max
+     of which CPU geometry 0.5, Direct2D issue 4.7, GPU fence wait 0.5 ms (medians)
+   incl. Lock/AddDirtyRect/Unlock:           5.9 ms median, 6.8 p95
+   frame interval: 5.6 ms median, 11.1 p95, 11.1 max;  81 of 389 later than 1.5x the 5.6 ms nominal
+   on-screen marker check: 395 desktop frames inspected, 0 showed a tear (top and bottom from different chart frames); 389 distinct marker colours seen
+
+== 12 x 360k, UI thread, fenced
+   chart frames presented: 300 in 7.28 s = 41.2 per second
+   native render (geometry+raster+GPU wait): 22.2 ms median, 24.7 p95, 32.3 max
+     of which CPU geometry 2.1, Direct2D issue 18.3, GPU fence wait 1.5 ms (medians)
+   incl. Lock/AddDirtyRect/Unlock:           22.5 ms median, 24.9 p95
+   frame interval: 22.2 ms median, 27.9 p95, 55.6 max;  289 of 289 later than 1.5x the 5.6 ms nominal
+   on-screen marker check: 296 desktop frames inspected, 0 showed a tear (top and bottom from different chart frames); 284 distinct marker colours seen
+
+== 3 x 1M, UI thread, fenced
+   chart frames presented: 300 in 2.77 s = 108.2 per second
+   native render (geometry+raster+GPU wait): 7.6 ms median, 9.9 p95, 11.5 max
+     of which CPU geometry 1.3, Direct2D issue 5.1, GPU fence wait 0.7 ms (medians)
+   incl. Lock/AddDirtyRect/Unlock:           8.0 ms median, 10.2 p95
+   frame interval: 11.1 ms median, 11.1 p95, 33.4 max;  182 of 289 later than 1.5x the 5.6 ms nominal
+   on-screen marker check: 295 desktop frames inspected, 0 showed a tear (top and bottom from different chart frames); 242 distinct marker colours seen
+
+== 3 x 360k, UI thread, NOT fenced
+   chart frames presented: 400 in 2.81 s = 142.5 per second
+   native render (geometry+raster+GPU wait): 5.4 ms median, 6.8 p95, 8.5 max
+     of which CPU geometry 0.5, Direct2D issue 4.8, GPU fence wait 0.0 ms (medians)
+   incl. Lock/AddDirtyRect/Unlock:           5.8 ms median, 7.3 p95
+   frame interval: 5.6 ms median, 11.1 p95, 11.1 max;  103 of 389 later than 1.5x the 5.6 ms nominal
+   on-screen marker check: 396 desktop frames inspected, 2 showed a tear (top and bottom from different chart frames); 379 distinct marker colours seen
+      frame 169: top #FFFFFF, bottom #A800A5
+      frame 170: top #FFFFFF, bottom #A800A5
+
+== 3 x 360k, worker thread, single buffer
+   chart frames presented: 343 in 3.09 s = 111.0 per second
+   worker rendered 501 frames, 5.9 ms median / 7.4 p95 (geometry + raster + GPU), shown by UI 343 times
+   UI thread Lock+AddDirtyRect+Unlock: 0.017 ms median, 5.901 max
+   frame interval: 5.6 ms median, 16.8 p95, 33.5 max;  96 of 389 later than 1.5x the 5.6 ms nominal
+   on-screen marker check: 396 desktop frames inspected, 0 showed a tear (top and bottom from different chart frames); 287 distinct marker colours seen
+
+== composition: a WPF legend over the D3DImage
+   screen probe, as used: DuplicateOutput1, desktop HDR (PQ / BT.2020), 10 bits per colour, SDR white 240 nits, frames read as FP16 scRGB (lossless)
+   desktop pixel under the legend, chart alone: #FFFFFF   with the legend on top: #272F3D
+   legend is drawn over the live chart on the glass: YES
+   orientation block (green, top right only): top right #00FF00, bottom right #FFFFFF - image is the right way up: YES
+   frame marker read back from the desktop: R=EF G=BE B=A5 (written EF BE A5)
+   screenshot of the window as composed: C:\Users\kevin\Dev\tmdq-spike\dotnet\hybrid-spike\wpf\bin\Release\net10.0-windows\screenshot.png
+   resize to 900x500 and re-attach the back buffer: ok
+   front buffer available: True
+
+== startup and memory
+   process start to the first chart frame handed to WPF: 578 ms
+   working set 230 MB, private bytes 218 MB, managed heap 18 MB

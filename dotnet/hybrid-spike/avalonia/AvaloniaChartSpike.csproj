@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The Avalonia twin of ..\wpf: the same native Direct2D chart (native\out\tmdq_chart.dll), shown
+    through Avalonia's compositor instead of WPF's D3DImage, with the same XAML legend over it and the
+    same scripted measurements, so the two can be compared on the same machine, back to back.
+
+    WPF needs the chart in a Direct3D 9Ex surface (D3DImage speaks D3D9). Avalonia's GPU interop
+    imports the D3D11 texture itself, through its shared handle - no D3D9 step.
+
+    Build native\build_chart.ps1 first. The DLL is copied beside the exe.
+  -->
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PlatformTarget>x64</PlatformTarget>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AssemblyName>AvaloniaChartSpike</AssemblyName>
+    <RootNamespace>Tmdq.AvaloniaSpike</RootNamespace>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\common\ScreenProbe.cs" Link="ScreenProbe.cs" />
+    <None Include="..\native\out\tmdq_chart.dll" Link="tmdq_chart.dll" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

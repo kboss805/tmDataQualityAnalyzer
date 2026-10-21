@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The plot's measured-widget tests against WPF, the twin of ..\avalonia. WPF has no headless platform:
+    each test runs on its own STA thread with the view in an HwndSource that is never shown.
+    An xunit v3 test project is an executable: run bin\Release\net10.0-windows\WpfUiTests.exe directly.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <PlatformTarget>x64</PlatformTarget>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AssemblyName>WpfUiTests</AssemblyName>
+    <RootNamespace>Tmdq.UiSpike.Wpf</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="3.2.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\common\PlotVm.cs" Link="PlotVm.cs" />
+  </ItemGroup>
+
+</Project>

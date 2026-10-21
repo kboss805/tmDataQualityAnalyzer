@@ -1,0 +1,44 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:s="clr-namespace:Tmdq.UiSpike"
+             x:Class="Tmdq.UiSpike.Ava.PlotView"
+             x:DataType="s:PlotVm"
+             Width="900" Height="560">
+  <!-- The same tree as wpf/PlotView.xaml: a title strip with a fixed-size button, the plot surface,
+       and a translucent legend over it that scrolls once it is taller than its cap. -->
+  <UserControl.Styles>
+    <!-- Paint only. Size lives on the element, which is the rule this project learned from the QSS
+         min-size trap; the test measures whether the theme respects it. -->
+    <Style Selector="Button.titleButton">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="White"/>
+    </Style>
+  </UserControl.Styles>
+  <DockPanel Background="#FF202020">
+    <DockPanel x:Name="TitleBar" DockPanel.Dock="Top" Height="32" Background="#FF2B2B2B">
+      <Button x:Name="CloseButton" Classes="titleButton" DockPanel.Dock="Right" Content="X"
+              Width="30" Height="26" Margin="0,3,3,3" Padding="0"
+              HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
+      <TextBlock Text="Plot" Foreground="White" VerticalAlignment="Center" Margin="10,0"/>
+    </DockPanel>
+    <Grid>
+      <Border x:Name="Plot" Background="White" Focusable="True"/>
+      <Border x:Name="Legend" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,12,12,0"
+              Background="#E6101828" CornerRadius="6" Padding="10,8" BorderBrush="#FF6C63E6" BorderThickness="1"
+              IsVisible="{Binding LegendVisible}" IsHitTestVisible="False">
+        <ScrollViewer x:Name="LegendScroll" MaxHeight="120" VerticalScrollBarVisibility="Auto">
+          <ItemsControl x:Name="LegendRows" ItemsSource="{Binding Series}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="x:String">
+                <StackPanel Orientation="Horizontal" Margin="0,1">
+                  <Rectangle Width="14" Height="3" Fill="#FF6C63E6" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                  <TextBlock Text="{Binding}" Foreground="White" FontSize="13"/>
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+  </DockPanel>
+</UserControl>
