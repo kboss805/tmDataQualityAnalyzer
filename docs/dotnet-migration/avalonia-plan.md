@@ -107,10 +107,14 @@ sweep.
   it) into the core, taking a plain `StreamConfig` value. Its 51 existing cases move with it. PR #178, merged as `24226d5`.
 - [x] **1.6 Series construction and time re-basing** (the data half of `PlotViewModel::addStreamData`:
   building series from `ProcessedStreamData`, identity keys, the shared elapsed axis across sources)
-  into the core. The presentation half (colours, visibility, ranges) stays for C#.
-- [ ] **1.7 DTO cleanup:** whatever the moved code needs (`StreamConfig`, `FrameSyncParams`,
+  into the core. The presentation half (colours, visibility, ranges) stays for C#. PR #179, merged as `40d8481`.
+- [x] **1.7 DTO cleanup:** whatever the moved code needs (`StreamConfig`, `FrameSyncParams`,
   `SeriesAppearance` colour as a plain RGB value) becomes `std`; the Qt-only DTOs that remain are
-  presentation types, rewritten in C# in step 4.
+  presentation types, rewritten in C# in step 4. *Nothing the moved code needs was left Qt (1.1-1.6 take plain
+  copies), so the DTOs stay as the UI's own types; the step instead makes the end state a guard:
+  `TestCoreQtFree` fails on any file outside the View that uses Qt and is not on a named list, and on any other
+  header that reaches Qt or a higher layer. The list is longer than "Done when" below says: it also holds the UI-form
+  DTOs and the Qt bridges.*
 
 **Done when** the only Qt left outside `src/view` is the four ViewModels and `StreamConfigSchema` /
 `ProcessingTemplateSchema`, and `TestCoreQtFree` lists everything else as core.

@@ -1,13 +1,13 @@
 /**
  * @file framesyncparams.h
- * @brief Frame-sync / acquisition parameter bundle shared by the UI-layer
- *        StreamConfig and the CalibrationExtractor::Request.
+ * @brief Frame-sync / acquisition parameter bundle used by the UI-layer
+ *        StreamConfig and its sub-dialogs.
  *
- * These six fields recur together everywhere a PCM stream's bit-level extraction
+ * These six fields recur together wherever a PCM stream's bit-level extraction
  * is described in its user-facing (hex/Mbps) form: the stream config captured in
- * the dialogs, and the calibration extraction request. Bundling them keeps the
- * two in step and collapses long parameter lists into one value. (The worker-layer
- * ProcessingParams deliberately keeps the *resolved numeric* form separate.)
+ * the dialogs. Bundling them keeps the dialogs in step and collapses long
+ * parameter lists into one value. (The worker-layer ProcessingParams deliberately
+ * keeps the *resolved numeric* form separate.)
  */
 
 #ifndef FRAMESYNCPARAMS_H

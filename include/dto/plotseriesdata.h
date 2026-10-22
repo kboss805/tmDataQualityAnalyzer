@@ -3,9 +3,10 @@
  * @brief Plain data type (DTO) for a single plot series.
  *
  * Shared by the plot ViewModel (PlotViewModel), the View (PlotWidget,
- * PlotCustomizationDialog), and the Model-layer CSV parser (CsvSeriesParser).
- * Kept in its own header so none of those layers has to include another's
- * header just to name this struct.
+ * PlotCustomizationDialog). Kept in its own header so none of those layers
+ * has to include another's header just to name this struct. The Qt-free core
+ * (CsvSeriesParser, SeriesBuilder) works on its own types; the ViewModel
+ * converts at the boundary.
  */
 
 #ifndef PLOTSERIESDATA_H
@@ -22,8 +23,8 @@
 /**
  * @brief Data for a single plot series (one receiver channel or lock statistic).
  *
- * Built by CsvSeriesParser from CSV output, or by PlotViewModel::addStreamData()
- * from in-memory processed stream results.
+ * Built by PlotViewModel from a parsed CSV file or from in-memory processed
+ * stream results (PlotViewModel::addStreamData()).
  */
 struct PlotSeriesData
 {

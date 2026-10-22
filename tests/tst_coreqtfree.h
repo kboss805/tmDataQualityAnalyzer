@@ -29,6 +29,11 @@ private slots:
     void theProcessingCoreDoesNotReachIntoTheViewModelOrView();
     void everyModelSourceIsClassifiedAsCoreOrUiSession();
     void theGuardSeesQtThroughSharedHeaders();
+
+    // The end state of stage 1 of the Avalonia plan: outside the View, Qt is confined to a named list.
+    void outsideTheViewQtIsConfinedToTheListedFiles();
+    void everyOtherHeaderIsQtFreeThroughAndThrough();
+    void theConfinementGuardSeesAnUnlistedAndAStaleFile();
 };
 
 #endif // TST_CORE_QT_FREE_H

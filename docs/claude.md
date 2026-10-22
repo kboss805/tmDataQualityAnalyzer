@@ -522,6 +522,53 @@ v2.9.0 intended. Every first-party header here is quote-included, so `anglebrack
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
 
+#### Outside the View, Qt is confined to a named list, and the guard enforces it (plan step 1.7, end of stage 1)
+
+Last step of stage 1 of `docs/dotnet-migration/avalonia-plan.md`: "DTO cleanup". Steps 1.1-1.6 had already
+moved every piece of logic the DTOs fed - the core takes plain copies (`StreamJobConfig`, `CsvSeries`,
+`ImportedSeries`, `SeriesSpec` ...), so nothing in it reaches `StreamConfig`, `FrameSyncParams`, `SeriesAppearance`
+or `PlotSeriesData`. Converting those DTOs themselves to `std` would change nothing the core depends on and would
+mean rewriting every dialog and the plot twice, once now and once in C# in step 4. **They stay Qt on purpose**: they
+are the UI's own types, and step 4 replaces them. (The plan item's wording, "`SeriesAppearance` colour as a plain RGB
+value", would also have left `QString`/`QHash` in the same header.)
+
+What the step does instead is make the end state of stage 1 **a thing the suite enforces rather than a thing
+that happens to be true.** `TestCoreQtFree` grew three tests:
+
+- **`outsideTheViewQtIsConfinedToTheListedFiles`** - every `.cpp` and `.h` under `src/` and `include/` outside
+  `src/view` and `include/view` is searched for a Qt include (`<Q...>`, `<Qt...>`) **or a forward declaration of a Qt
+  class** (`class QThing;` / `struct QThing;` - the two schema headers reach Qt that way, with no include). A file that
+  does it must be on `kQtOutsideTheView`; a file on the list that no longer does fails as stale, so **the list can only
+  shrink.** It holds `main.cpp`, the four ViewModels, the two JSON serialisers (`processingtemplateschema`,
+  `streamconfigschema`), six UI-form DTOs and three Qt bridges (`plotconstants.h`, `qtbridge.h`,
+  `qtprocessingevents.h`).
+- **`everyOtherHeaderIsQtFreeThroughAndThrough`** - a header can reach Qt through a DTO it includes, which the direct
+  search cannot see. Every header outside the View that is not on the list must have no Qt and no ViewModel or View
+  header anywhere in its include closure.
+- **`theConfinementGuardSeesAnUnlistedAndAStaleFile`** - proves the guard on a temporary tree: an unlisted file, a
+  stale entry, a View file (exempt), a look-alike (`<Quux.h>`, `class Quark;`), a comment, a forward declaration in a
+  header, and a header that has no Qt but reaches up into the View.
+
+The existing shared-header self-test also gained class and struct forward declarations.
+
+**Where this differs from the plan's "Done when".** The plan says the only Qt left outside `src/view` is the four
+ViewModels and the two schemas. The list is longer: the UI-form DTOs and the bridges are Qt too, because the dialogs,
+the plot and the schemas are written in terms of them. They are presentation types; nothing below them depends on them.
+
+**Validated against 25 single-defect mutants.** Six plant a violation in the real tree (a Qt include in a model header,
+Qt reached through a DTO, a forward declaration in a header and in a core source, a plain DTO that starts using Qt, a
+top-level helper header that includes Qt); fourteen break the guard (a weakened Qt-header test, the View's exemptions,
+headers, sources or subfolders not searched, forward declarations or structs ignored, an unlisted or stale file not
+reported, the closure test skipped or neutered, layer violations not looked for); five edit the list. **22 were caught
+at once; the three survivors were holes in the guard's own self-test** (struct forward declarations, forward
+declarations in the walk, the header layer check - each unproven because no test tree contained one) and are closed.
+It also corrected two stale header comments (`framesyncparams.h` and `plotseriesdata.h` named users that moved off them
+in earlier steps).
+
+Stage 1 is complete: the core is Qt-free, the list of what is not is short, named and cannot grow unnoticed.
+
+Baseline **1131 / 0 / 1** (was 1128 / 0 / 1; `TestCoreQtFree` adds 3 results), **1132 / 0 / 0** at release. **35 suites.**
+
 #### Series construction and the shared time axis are in the Qt-free core (plan step 1.6)
 
 Sixth step of stage 1 of `docs/dotnet-migration/avalonia-plan.md`: the data half of `PlotViewModel::addStreamData`,
@@ -5107,7 +5154,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestQtProcessingEvents** (`tst_qtprocessingevents`) — the hand-off from a processing thread to Qt that replaced `FrameProcessor`'s signals: 300 mixed log / error events raised on a worker thread arrive on the target's thread in the order raised with completion last (and the test really did cross threads); UTF-8 messages decode (an accented letter and an em dash); any handler may be missing; events still queued for a destroyed target are dropped, which is what lets the coordinator and extractor die with events in flight. Validated against mutants that deliver directly instead of queued (the run crashes) and that decode as Latin-1. Pure logic, runs in CI; and progress events (101 values from a worker thread arrive on the target's thread in order)
 - **TestTextFormat** (`tst_textformat`) — `formatFixed()`, which reproduces `QString::number(v, 'f', n)` without Qt, checked against Qt itself: the exact ties the report prints (Qt rounds them away from zero, `std::format` to even), every n/64 at 0 to 6 decimals, 20,000 arbitrary doubles from a fixed generator, signs and negative zero, the extremes, and `isExactTie()` seeing only real ties. Pure logic, runs in CI
 - **TestFrameSync** (`tst_framesync`) — the shared decode in `framesync.h`: `parseUnsignedHex` against `QString::toULongLong(16)` on a list of awkward inputs and 40,000 random strings, `resolveFrameSync` (the pattern's length counted in characters, an empty mask meaning every bit, the pattern checked before the mask and the result never half-written), `applyAcquisition` setting every raw-affecting field and no other, and `fullSyncMask` (every bit of the pattern, no shift by 64, a full mask for a pattern of no length, exactly N bits set for 1 to 63). Pure logic, runs in CI
-- **TestCoreQtFree** (`tst_coreqtfree`) — the guard that keeps the processing core free of Qt: it walks the `#include "..."` closure of every core source and fails on any `<Q...>` header or any reach into `include/viewmodel` or `include/view`, requires every `src/model` source to be classified as core or UI-session, and proves its own walker on a temporary tree (several spellings of a Qt header seen through a shared header, a look-alike not counted, a layering violation, a commented-out include ignored). Pure file reading, runs in CI
+- **TestCoreQtFree** (`tst_coreqtfree`) — the guard that keeps the processing core free of Qt: it walks the `#include "..."` closure of every core source and fails on any `<Q...>` header or any reach into `include/viewmodel` or `include/view`, requires every `src/model` source to be classified as core or UI-session, and proves its own walker on a temporary tree (several spellings of a Qt header and class and struct forward declarations seen through a shared header, a look-alike not counted, a layering violation, a commented-out include ignored). Since plan step 1.7 it also **confines Qt outside the View**: every file under `src/` and `include/` other than `src/view` / `include/view` that includes a Qt header or forward-declares a Qt class must be on `kQtOutsideTheView` (and a listed file that no longer does fails as stale, so the list only shrinks), and every other header must be Qt-free and layer-clean through its whole include closure; that guard is proven on a second temporary tree (unlisted, stale, exempt, look-alike, forward declaration, a header reaching up into the View). Pure file reading, runs in CI
 - **TestEventReporter** (`tst_eventreporter`) — `EventReporter`, the null-safe forwarder every processing source reports through: every call harmless with no sink, each of log / error / finished / progress reaching its own sink method with its argument, calls arriving in order, a replaced sink receiving later calls and the old one none, a cleared sink going silent, and the reporter (not a borrowed pointer) keeping a shared sink alive. Pure logic, runs in CI
 - **TestPipelineRunner** (`tst_pipelinerunner`) — the Qt-free pipeline, with a plain recording sink and no event loop, on the committed `step_cal` recording: a single stream delivers its result (stamped with `jobIndex` and the job's `sourceId`) and then the end, with every worker line before the result, the end last, and exactly one progress of 100 (the runner adds none of its own); several streams on one channel each deliver their own result; a stream that finds no sync does not stop the others, and says why; a run in which every stream fails ends unsuccessfully; a recording that cannot be opened (or no jobs) fails before anything runs, with a reason and nothing reported, and leaves the runner usable; a second start while running is refused and does not disturb the first; cancel ends the run unsuccessfully with no result and is a no-op with nothing running, and four cases hold the sink at a chosen moment of a real run (a thread parked on a log line) to pin what a race cannot: a stream that finished after the cancel was asked for delivers nothing and the run fails even though another stream had delivered, a worker waiting on an empty queue is woken by the cancel while the reader is still stuck, a worker that has not started reading is stopped by its own abort flag, and `running()` is already false inside the end report; the runner runs again after a run ends, without waiting for the thread that reported it; a stream that ends early without a cancel (its processor aborted, reached through the test being a friend) closes its own queue so the reader is not left blocked on it and the healthy stream still finishes, and destroying a running runner stops it and has reported the end by the time the destructor returns
 
