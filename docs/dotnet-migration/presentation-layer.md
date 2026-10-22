@@ -1,6 +1,11 @@
 # Presentation layer: Avalonia or .NET MAUI?
 
-Assessed 2026-10-18 against the plan already recorded in [README.md](README.md): a native MSVC
+**Decided 2026-10-20: Avalonia.** The "Microsoft-only" rule this assessment was written under was
+dropped, and the measurements below found nothing against Avalonia and its testing better. The work
+plan is [avalonia-plan.md](avalonia-plan.md). What follows is kept as the record of how the choice was
+made; where it still recommends WPF, that was the answer under the old rule.
+
+Assessed 2026-10-18 against the plan then recorded in [README.md](README.md): a native MSVC
 core behind a flat C ABI, a C# shell, and the chart drawn by a **native** Direct2D renderer with
 Direct3D as the escape hatch, behind our own interface. That README picked **WPF** for the shell.
 The question here is whether Avalonia or MAUI would be a better shell than WPF.
@@ -15,8 +20,10 @@ The question here is whether Avalonia or MAUI would be a better shell than WPF.
   Microsoft technology. If "Microsoft-only" is a hard rule, it is out. If the real goal is
   "C#, XAML, long-lived, and fast", it deserves a spike, because it solves the two problems the
   WPF plan has not solved yet: drawing UI **over** a native GPU surface, and headless UI testing.
+  *Outcome: the rule was relaxed, the spike was run, and Avalonia was chosen.*
 - **WPF stays the recommendation under the current rule**, with one issue that this assessment
   surfaced and the README did not: **airspace**. See below, and the spike proposed at the end.
+  *Outcome: superseded by the decision above.*
 
 ## What this application needs from a shell
 
@@ -24,7 +31,7 @@ These come from the code and the history on `main`, not from a generic checklist
 
 | need | why it matters here |
 |---|---|
-| Host a native D3D11 / Direct2D surface | The chart is the product. The renderer is native, behind the ABI. |
+| Host a native D3D11 / Direct2D surface | The chart is the product. The renderer is native, behind the ABI. *(No longer needed: decision D1 draws the chart with Skia inside Avalonia, from geometry the native core builds.)* |
 | Draw UI **over** that surface | The movable legend, the on-chart chip bar, the crosshair readout and the zoom band all sit on top of the plot today. |
 | Desktop-shaped UI | Frameless window with custom chrome (the `WM_NCHITTEST` code), menus, modal dialogs, a dockable sidebar, right-click menus, drag-and-drop of files. |
 | Headless, measurable UI tests | The `verify-ui-change` method and suites like `tst_plotwidget` measure widgets rather than look at them. The README already flags headless UI testing as "expected to be worse than today". |
@@ -147,36 +154,44 @@ Both halves of the GPU-hosting question were spiked; details and every number ar
     does not depend on the session at all; WPF does, and passed.
   - Neither can render the native chart in a test, so the chart host needs a seam either way.
 
+- **Then the chart moved off the native surface altogether** (section 5 of the same README, decision
+  D1). Drawn by Skia inside Avalonia from the same native geometry, it is faster than Direct2D where
+  the chart is the bottleneck (12 x 360k at 45 fps against 31), exports PNG, SVG and PDF from one
+  routine, and renders in headless tests, which removes the seam the bullet above called for.
+
 So the measured performance does not decide between them, and testability leans to Avalonia. The
-deciding questions are still:
+deciding questions were:
 
-- the "Microsoft-only" rule;
-- the tooling licence;
-- custom chrome with snap layouts, which remains unverified.
+- the "Microsoft-only" rule: **dropped on 2026-10-20**, which decided it;
+- the tooling licence: **still open**, decision D5 of the plan;
+- custom chrome with snap layouts: **still unverified**, to be proven early in plan step 4.8.
 
-## Recommendation
+## Recommendation, and what happened
 
-1. **Rule out MAUI.**
+1. **Rule out MAUI.** *Done; nothing since has argued for it.*
 2. **Keep WPF as the plan while "Microsoft-only" is a hard rule**, but close the airspace gap
    before anything is built on top of it, with a short spike: the existing D3D11 renderer from
    `dotnet/chart-spike/` hosted in WPF through `D3DImage`, with a WPF legend over it. Measure the
    frame time and look for tearing. If it fails, the fallback is `HwndHost` with the overlays drawn
-   natively, which is known to work.
+   natively, which is known to work. *Spiked: it works, with a mandatory GPU fence. Then the rule
+   was dropped.*
 3. **Consider Avalonia only if the rule is relaxed** to "C# and XAML". If it is, run the same
    spike in Avalonia (the shared-texture import), plus its headless test platform against one of
    our measured widget tests, before choosing. It would likely win on both, but that should be
-   measured, the way the chart decision was.
+   measured, the way the chart decision was. *The rule was relaxed, both were measured, and
+   Avalonia was chosen.*
 4. **WinUI directly, not through MAUI**, remains the one Microsoft option with native
    composition over the chart. Its cost is the Windows App SDK versioning the README already
    weighed. If the WPF `D3DImage` spike disappoints, WinUI is the next Microsoft option to test,
-   ahead of anything MAUI offers.
+   ahead of anything MAUI offers. *Not pursued: the WPF spike did not disappoint, and the rule
+   that made WinUI the fallback is gone.*
 
 ## Facts that could not be verified here
 
-- Avalonia custom chrome with Windows 11 snap layouts.
-- Which parts of the Avalonia Visual Studio experience need the paid tooling licence.
-- WPF UI tests on the CI runner itself, as NETWORK SERVICE (they pass in Session 0 as SYSTEM in a
-  clean Sandbox).
+- Avalonia custom chrome with Windows 11 snap layouts (plan step 4.8).
+- Which parts of the Avalonia Visual Studio experience need the paid tooling licence (plan D5).
+- The UI tests on the CI runner itself, as NETWORK SERVICE (they pass in Session 0 as SYSTEM in a
+  clean Sandbox; plan step 3.2 runs them there).
 
 (The cost of WPF `D3DImage` with a D3D11 shared surface, its Avalonia equivalent, and Avalonia's
 headless test platform against this codebase's measured-widget style of test were measured

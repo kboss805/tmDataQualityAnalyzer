@@ -83,7 +83,7 @@ Each has a recommendation. Steps that depend on a decision say so.
   the native one, same phases, same machine: redraw time for 3 x 360k, 12 x 360k and 3 x 1M, and a
   PDF and SVG export of the same frame. Done when the README records both and D1 is settled.
   *Done: `dotnet/hybrid-spike/README.md` section 5; D1 is Skia.*
-- [ ] **0.3 Bring the docs in line with the decision.** `README.md` and `presentation-layer.md` stop
+- [x] **0.3 Bring the docs in line with the decision.** `README.md` and `presentation-layer.md` stop
   describing WPF as the plan; `docs/future_plans/dotnet-port-assessment.md` gets its status updated
   (it still argues for WPF); `CLAUDE.md` gains a short "migration in progress" note pointing here.
 
