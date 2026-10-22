@@ -61,10 +61,11 @@ Each has a recommendation. Steps that depend on a decision say so.
   - **It renders in headless tests**; a new test proves it.
   - It removes the Direct3D interop, the keyed mutex, the texture rotation and the second native DLL
     from the plan.
-- **D2. The native test framework that replaces Qt Test for the core.** *Recommended: doctest*, a
+- **D2. The native test framework that replaces Qt Test for the core.** **Decided: doctest**, a
   single vendored header, so it needs no package manager and builds the same under qmake now and
-  MSBuild later. GoogleTest is the alternative if the team already knows it.
-- **D3. Where session logic lives.** *Recommended rule:* anything that **defines a file format or
+  MSBuild later. The project is public and GPL-3.0, so MIT, BSD and BSL licences are all
+  compatible and licensing does not separate the options.
+- **D3. Where session logic lives.** **Decided:** anything that **defines a file format or
   computes data** moves into the native core (CSV columns, CSV parse and export, stream-config to job
   conversion, template channel matching, series construction and time re-basing); anything that is
   **presentation state** is C# (palette, visibility, axis ranges, zoom history, recent files,
@@ -98,8 +99,8 @@ sweep.
 - [x] **1.2 `CsvSeriesParser`** to the core, plus the CSV **export** that today lives in
   `PlotViewModel::exportCsv`, so both directions of the format live in one place. Oracle: the Qt
   export over every fixture must be byte-identical before and after. PR #175, merged as `5224a22`.
-- [x] **1.3 `TemplateMatcher`** to the core (pure set logic, smallest step).
-- [ ] **1.4 The frame-sync and receiver-parameter TOML helpers** out of `streamsubdialogs.cpp` (a view
+- [x] **1.3 `TemplateMatcher`** to the core (pure set logic, smallest step). PR #176, merged as `0f18eb4`.
+- [x] **1.4 The frame-sync and receiver-parameter TOML helpers** out of `streamsubdialogs.cpp` (a view
   file today) into the core, beside `TomlDocument`. Keeps the US1.0 / US5.1 TOML boundaries exactly as
   they are; `tomlFrameSyncRoundTripsStreamFormatFlags` and its siblings are the oracle.
 - [ ] **1.5 Stream-config to job conversion** (`MainViewModel::buildStreamJob` and the validation in

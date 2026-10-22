@@ -35,6 +35,7 @@ SOURCES += \
     $$PWD/../src/model/chapter10reader.cpp \
     $$PWD/../src/model/ch10packetreader.cpp \
     $$PWD/../src/model/framesetup.cpp \
+    $$PWD/../src/model/framesyncfile.cpp \
     $$PWD/../src/model/frameprocessor.cpp \
     $$PWD/../src/model/stepdetector.cpp \
     $$PWD/../src/model/calibrationextractor.cpp \
@@ -77,6 +78,7 @@ HEADERS += \
     $$PWD/../include/model/irig106lock.h \
     $$PWD/../include/model/packetqueue.h \
     $$PWD/../include/model/framesetup.h \
+    $$PWD/../include/model/framesyncfile.h \
     $$PWD/../include/model/framesync.h \
     $$PWD/../include/model/frameprocessor.h \
     $$PWD/../include/model/stepdetector.h \
@@ -170,6 +172,7 @@ SOURCES += \
     tst_exportdialog.cpp \
     tst_seriescolumnschema.cpp \
     tst_csvseries.cpp \
+    tst_framesyncfile.cpp \
     tst_streamconfigschema.cpp \
     tst_processingtemplateschema.cpp \
     tst_templatematcher.cpp \
@@ -205,6 +208,7 @@ HEADERS += \
     tst_exportdialog.h \
     tst_seriescolumnschema.h \
     tst_csvseries.h \
+    tst_framesyncfile.h \
     tst_streamconfigschema.h \
     tst_processingtemplateschema.h \
     tst_templatematcher.h \

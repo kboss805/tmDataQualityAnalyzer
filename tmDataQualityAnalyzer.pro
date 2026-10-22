@@ -71,6 +71,7 @@ SOURCES += \
     src/model/chapter10reader.cpp \
     src/model/ch10packetreader.cpp \
     src/model/framesetup.cpp \
+    src/model/framesyncfile.cpp \
     src/model/frameprocessor.cpp \
     src/model/stepdetector.cpp \
     src/model/calibrationextractor.cpp \
@@ -145,6 +146,7 @@ HEADERS += \
     include/model/packetqueue.h \
     include/model/processingevents.h \
     include/model/framesetup.h \
+    include/model/framesyncfile.h \
     include/model/framesync.h \
     include/model/frameprocessor.h \
     include/model/stepdetector.h \
