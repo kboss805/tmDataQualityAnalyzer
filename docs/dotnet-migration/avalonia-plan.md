@@ -104,8 +104,8 @@ sweep.
   file today) into the core, beside `TomlDocument`. Keeps the US1.0 / US5.1 TOML boundaries exactly as
   they are; `tomlFrameSyncRoundTripsStreamFormatFlags` and its siblings are the oracle. PR #177, merged as `0b71c85`.
 - [x] **1.5 Stream-config to job conversion** (`MainViewModel::buildStreamJob` and the validation in
-  it) into the core, taking a plain `StreamConfig` value. Its 51 existing cases move with it.
-- [ ] **1.6 Series construction and time re-basing** (the data half of `PlotViewModel::addStreamData`:
+  it) into the core, taking a plain `StreamConfig` value. Its 51 existing cases move with it. PR #178, merged as `24226d5`.
+- [x] **1.6 Series construction and time re-basing** (the data half of `PlotViewModel::addStreamData`:
   building series from `ProcessedStreamData`, identity keys, the shared elapsed axis across sources)
   into the core. The presentation half (colours, visibility, ranges) stays for C#.
 - [ ] **1.7 DTO cleanup:** whatever the moved code needs (`StreamConfig`, `FrameSyncParams`,

@@ -18,6 +18,7 @@
 #include "plotconstants.h"
 #include "plotseriesdata.h"
 #include "processedstreamdata.h"
+#include "seriesbuilder.h"
 
 /**
  * @brief A parsed CSV in the plot's own types.
@@ -245,10 +246,6 @@ private:
                                    int sourceId, const PlotSeriesData& candidate);
     /// Computes Y axis range from visible series data with margin.
     void computeYRange();
-    /// Recomputes m_base_day/m_base_time_offset from the current m_base_abs_seconds
-    /// via a reentrant gmtime conversion. Shared by the first-stream case and the
-    /// re-base path in addStreamData() (multi-file input, docs/multi-file-input-design.md §3).
-    void recomputeBaseDayAndOffset();
     /// Commits a parsed CSV into member state and emits dataChanged().
     void commitParseResult(LoadedCsv&& result);
 
@@ -292,9 +289,9 @@ private:
     bool m_has_missed_frames_series = false;       ///< True if any AccumulatedMissedFrames series are present.
     LockAxisView m_lock_axis_view = LockAxisView::LockPercent; ///< Active left-axis metric.
 
-    int m_base_day = 0;                            ///< DOY of the first sample (for display).
-    double m_base_time_offset = 0.0;               ///< Seconds-since-midnight of first sample.
-    double m_base_abs_seconds = 0.0;               ///< Absolute IRIG seconds of the first accumulated sample.
+    /// The clock the shared elapsed axis hangs from (earliest absolute sample across every source, and its
+    /// day and time of day). Qt-free; see seriesbuilder.h.
+    SeriesTimeBase m_time_base;
 
     QFutureWatcher<LoadedCsv>* m_parse_watcher = nullptr; ///< Watcher for async parse future.
     bool m_loading = false;                        ///< True while an async parse is in flight.
