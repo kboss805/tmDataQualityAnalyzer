@@ -32,9 +32,9 @@
 #include "containerutil.h"
 #include "framesetup.h"
 #include "framesync.h"
+#include "framesyncfile.h"
 #include "qtbridge.h"
 #include "qtprocessingevents.h"
-#include "tomldocument.h"
 
 namespace {
 
@@ -219,9 +219,9 @@ void addCheckboxRow(QVBoxLayout* layout, QWidget* parent, QCheckBox* box, const 
 
 } // namespace
 
-/// Loads frame sync fields from a TOML file into the provided widgets.
-/// Handles both the new BitsPerFrame key and the old WordsInMinorFrame key for
-/// backward compatibility with previously saved files.
+/// Loads frame sync fields from a TOML file into the provided widgets. The file format - the keys, the
+/// older WordsInMinorFrame fallback, Randomized applying only when the file carries it - is the core's
+/// (readFrameSyncFile); this puts the result into the editors, normalising the pattern and mask to upper case.
 void loadFrameSyncFromToml(const QString& filename,
                            QLineEdit* syncEdit,
                            QLineEdit* maskEdit,
@@ -231,41 +231,22 @@ void loadFrameSyncFromToml(const QString& filename,
                            QCheckBox* randomizedBox)
 {
     toml_dir = QFileInfo(filename).absolutePath();
-    const TomlDocument cfg = TomlDocument::load(toFsPath(filename));
+    const FrameSyncFile file = readFrameSyncFile(toFsPath(filename));
 
-    QString sync = QString::fromStdString(cfg.string("Frame/FrameSync"));
-    if (!sync.isEmpty())
-        syncEdit->setText(sync.toUpper());
+    if (!file.pattern.empty())
+        syncEdit->setText(QString::fromStdString(file.pattern).toUpper());
 
-    QString mask = QString::fromStdString(cfg.string("Frame/FrameSyncMask"));
-    if (!mask.isEmpty())
-        maskEdit->setText(mask.toUpper());
+    if (!file.mask.empty())
+        maskEdit->setText(QString::fromStdString(file.mask).toUpper());
 
-    int bits = cfg.integer("Frame/BitsPerFrame", 0);
-    if (bits < PCMConstants::kMinFrameLengthBits)
-    {
-        // Fall back to old WordsInMinorFrame key (words × 16 bits)
-        int words = cfg.integer("Frame/WordsInMinorFrame", 0);
-        if (words >= 2)
-            bits = words * PCMConstants::kCommonWordLen;
-    }
-    if (bits >= PCMConstants::kMinFrameLengthBits)
-        bitsSpinBox->setValue(bits);
+    if (file.bitsPerFrame)
+        bitsSpinBox->setValue(*file.bitsPerFrame);
 
     if (invertedBox)
-    {
-        bool inv = cfg.boolean("Frame/Inverted", false);
-        invertedBox->setChecked(inv);
-    }
+        invertedBox->setChecked(file.inverted);
 
-    // Only applied when the file actually carries the key. Every frame-sync TOML
-    // written before this field was persisted - including the shipped PRN files -
-    // has no Randomized entry, and defaulting those to false would silently clear
-    // a setting the operator had already made.
-    if (randomizedBox && cfg.contains("Frame/Randomized"))
-    {
-        randomizedBox->setChecked(cfg.boolean("Frame/Randomized"));
-    }
+    if (randomizedBox && file.randomized)
+        randomizedBox->setChecked(*file.randomized);
 }
 
 /// Saves frame sync fields to a TOML file.
@@ -278,13 +259,8 @@ void saveFrameSyncToToml(const QString& filename,
                          QString&       toml_dir)
 {
     toml_dir = QFileInfo(filename).absolutePath();
-    TomlDocument cfg;
-    cfg.setValue("Frame/FrameSync",     syncPattern.toStdString());
-    cfg.setValue("Frame/FrameSyncMask", syncMask.toStdString());
-    cfg.setValue("Frame/BitsPerFrame",  bitsPerFrame);
-    cfg.setValue("Frame/Inverted",      inverted);
-    cfg.setValue("Frame/Randomized",    randomized);
-    cfg.save(toFsPath(filename));
+    writeFrameSyncFile(toFsPath(filename), syncPattern.toStdString(), syncMask.toStdString(),
+                       bitsPerFrame, inverted, randomized);
 }
 
 /// Sizes an icon-only button so its SVG icon fills the button, with a
@@ -305,16 +281,14 @@ ReceiverFrameDefaults loadReceiverFrameDefaults(const QString& app_root)
     if (!QFileInfo::exists(path))
         return d;
 
-    const TomlDocument cfg = TomlDocument::load(toFsPath(path));
-    const QString sync = QString::fromStdString(cfg.string("Frame/FrameSync"));
-    if (!sync.isEmpty())
-        d.pattern = sync.toUpper();
-    const QString mask = QString::fromStdString(cfg.string("Frame/FrameSyncMask"));
-    if (!mask.isEmpty())
-        d.mask = mask.toUpper();
-    const int bits = cfg.integer("Frame/BitsPerFrame", 0);
-    if (bits >= PCMConstants::kMinFrameLengthBits)
-        d.bits = bits;
+    const FrameSyncFile file = readFrameSyncFile(toFsPath(path));
+    if (!file.pattern.empty())
+        d.pattern = QString::fromStdString(file.pattern).toUpper();
+    if (!file.mask.empty())
+        d.mask = QString::fromStdString(file.mask).toUpper();
+    // This file states BitsPerFrame only: the older WordsInMinorFrame key is a pattern-file fallback.
+    if (file.bitsPerFrame && !file.bitsFromLegacyKey)
+        d.bits = *file.bitsPerFrame;
     return d;
 }
 
