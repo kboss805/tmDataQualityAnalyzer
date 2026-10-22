@@ -93,7 +93,7 @@ Each item moves one piece into the Qt-free core with `std::` types, extends `Tes
 list, and keeps the Qt app calling the moved code through a thin conversion. Same method as the de-Qt
 sweep.
 
-- [ ] **1.1 `SeriesColumnSchema`** to the core: the CSV column header format and its parse (the
+- [x] **1.1 `SeriesColumnSchema`** to the core: the CSV column header format and its parse (the
   export/import inverse pair, already round-trip tested).
 - [ ] **1.2 `CsvSeriesParser`** to the core, plus the CSV **export** that today lives in
   `PlotViewModel::exportCsv`, so both directions of the format live in one place. Oracle: the Qt

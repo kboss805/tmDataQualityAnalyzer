@@ -522,6 +522,80 @@ v2.9.0 intended. Every first-party header here is quote-included, so `anglebrack
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
 
+#### The CSV column schema is in the Qt-free core (plan step 1.1)
+
+First step of stage 1 of `docs/dotnet-migration/avalonia-plan.md`: the code that defines and parses the
+CSV column-header format moves into the core, so the future C# application and the Qt one read and write
+the same format through one implementation.
+
+- **`SeriesColumnSchema` is plain C++.** UTF-8 `std::string` in and out, no Qt include, listed as core in
+  `TestCoreQtFree`. `columnHeader()` now takes the three fields a header is made of (metric, name, source
+  id) rather than a `PlotSeriesData`, which carries Qt types. Numbers are read with `textparse::parseInteger`,
+  which already reproduces `QString::toInt` (whitespace and a leading `+` tolerated, junk and overflow read
+  as "not a number").
+- **`MetricType` has its own header,** `include/dto/metrictype.h`, so the schema can name it;
+  `PlotSeriesData::MetricType` is an alias of it, so the 43 existing spellings compile unchanged.
+- **Callers convert at the call.** `CsvSeriesParser` decodes the header it parses and `PlotViewModel`
+  encodes the headers it exports and the SNR series names it builds; nothing else changed in them.
+- **One deliberate narrowing:** digits are ASCII only. `QChar::isDigit()` also accepted Unicode digits as the
+  start of an SNR id, so a header such as `<Arabic digits> - A B Lock (%)` would have read as SNR where it now
+  reads as a lock series. No export of this application contains one; the same narrowing `textparse.h`
+  already documents.
+
+**Tests first, on the old code.** `TestSeriesColumnSchema` had 17 cases. Before anything moved, a
+data-driven table of 35 parse and 8 format edge cases was written against the `QString` implementation and
+passed there on its first run (empty headers; ids and receiver numbers with signs, spaces and overflow; a
+qualifier with no space or with an overflowing number; non-ASCII labels). Every call in the file then went
+through four helpers, so only their bodies changed with the schema's string type.
+
+**A differential oracle.** The old `QString` implementation is kept in the test, verbatim apart from its
+names, and compared with the Qt-free one over 40,000 generated headers and every combination of formatter
+inputs. The generator is asserted to reach each outcome in volume (lock, missed, SNR; a source, an id, a
+receiver, a label), so "no mismatch" cannot be vacuous. **No header read differently.** Each pinned row
+also asserts that the oracle gives the recorded answer, which ties the oracle to the old behaviour and not
+only to my copy of it.
+
+**A limitation of the format, found on the way and not caused by it:** source 0 is written with no
+qualifier, so a series whose own NAME begins with `S<n>| ` reads back as source `<n>`. The old code did the
+same. It needs a recording whose stream label looks like that, so it is pinned
+(`aNameThatLooksLikeASourceQualifierDoesNotRoundTrip`) rather than fixed here; a change to the format is a
+decision.
+
+**Validated against 31 single-defect mutants; 30 are caught and one is equivalent.** They cover the digit
+test, the SNR-shape test, every branch of the qualifier parser, both suffixes, the label split (first space
+against last, position zero), the receiver token (first against last) and its number, the stream order, the
+source id, the formatters (separator, suffix swap, qualifier for source 0, field order), the Qt-free guard
+(a Qt include in the header, the Qt DTO included by the source), the enum order, and each of the three
+callers. **Three survived the first complete run, and they were a real gap:** import decoding a non-ASCII
+name as Latin-1, export encoding one as Latin-1, and export dropping the source id all passed, because the
+schema's tests cannot see its callers. Three `TestPlotViewModel` cases now pin them
+(`csvImportKeepsNonAsciiSeriesNames`, `csvExportWritesNonAsciiNamesAsUtf8`,
+`csvExportQualifiesEverySeriesOfALaterSource`), **run first against a checkout of the old code, where they
+pass**, and each mutant is now caught by exactly the test written for it. The one survivor, removing the
+`digits == 1` early return in the qualifier parser, is **equivalent**: with no digits the number parse fails
+and returns the same `{0, header}`. It mirrors the original's guard and is kept for that reason.
+
+**Two build traps this step found, worth knowing:**
+
+- **A new header needs a qmake re-run, or jom cannot see changes to it.** `metrictype.h` was new, and the
+  generated Makefile's dependency lists predate it. A mutation of that header was neither rebuilt nor, worse,
+  un-rebuilt on restore, and the "restored" tree stayed broken (66 failing tests) until qmake was re-run and
+  the tree rebuilt clean. Re-run qmake whenever a change adds a header or a new `#include` relationship.
+- **The compiler and linker PDB locks fail far more often right after the test exe has run** (`C1041`,
+  `LNK1201`): after running it, the next build failed seven times in a row, and without running it about one
+  in four. A pause and a retry cure it, and the loop needed both.
+
+**The mutation loop itself had to be made trustworthy first.** A restore that silently failed once left a
+mutation in the file, so every later verdict was measured against a broken baseline: three caller mutants were
+"caught" only by a test that never touches callers. The loop now restores from pristine byte copies and
+verifies the bytes, self-heals before each mutant, refuses to start unless the baseline is completely green,
+stops outright if a restore fails, and counts a crash exit (an unhandled exception) as a catch.
+
+Throughput is untouched (the schema is on no decode path), so the Release gate was not rerun.
+
+Baseline **784 / 0 / 1** (was 735 / 0 / 1; the schema suite goes from 19 results to 65 and
+`TestPlotViewModel` gains 3), **785 / 0 / 0** at release. **31 suites.**
+
 #### A stream that ends early closes its own queue, so it cannot strand the reader
 
 The hazard `PipelineRunner` carried over from the coordinator. The reader hands every packet to every stream's
@@ -4398,7 +4472,7 @@ not mis-read.
 
 10. **CsvSeriesParser** (`src/model/csvseriesparser.cpp`, `include/model/csvseriesparser.h`) — pure (UI-free) static parser that turns a FrameProcessor `Day,Time,param…` CSV into `PlotSeriesData` (returned as a `CsvParseResult`). Extracted out of PlotViewModel so file parsing lives in the Model layer; thread-safe, so PlotViewModel runs `parse()` on a worker thread via `loadCsvFileAsync()`
 
-11. **SeriesColumnSchema** (`src/model/seriescolumnschema.cpp`, `include/model/seriescolumnschema.h`) — single source of truth for the CSV column-header format: builds each series' column header and the SNR series name, and parses a header back to its identity fields (metric type, name, stream label/order, receiver, source id). Shared by `PlotViewModel::exportCsv`/`addStreamData` and `CsvSeriesParser` so export and import stay inverses (pinned by `tst_seriescolumnschema`'s round-trip). Multi-file input: a series from source 0 exports with the unqualified, byte-identical-since-v2.6 header format; source 1+ gets a leading `"S<n>| "` qualifier that `parseColumnHeader()` strips back off before recovering identity
+11. **SeriesColumnSchema** (`src/model/seriescolumnschema.cpp`, `include/model/seriescolumnschema.h`) — single source of truth for the CSV column-header format: builds each series' column header and the SNR series name, and parses a header back to its identity fields (metric type, name, stream label/order, receiver, source id). Shared by `PlotViewModel::exportCsv`/`addStreamData` and `CsvSeriesParser` so export and import stay inverses (pinned by `tst_seriescolumnschema`'s round-trip). Multi-file input: a series from source 0 exports with the unqualified, byte-identical-since-v2.6 header format; source 1+ gets a leading `"S<n>| "` qualifier that `parseColumnHeader()` strips back off before recovering identity. **Part of the Qt-free core** (UTF-8 `std::string`, listed in `TestCoreQtFree`): `columnHeader()` takes the metric, name and source id rather than a `PlotSeriesData`, and the callers that hold `QString`s convert at the call. `MetricType` lives in `include/dto/metrictype.h` so the schema can name it; `PlotSeriesData::MetricType` is an alias of it, so every existing spelling still compiles
 
 12. **StreamConfigSchema** (`src/model/streamconfigschema.cpp`, `include/model/streamconfigschema.h`) — single source of truth for `StreamConfig`'s JSON representation (`toJson()`/`fromJson()`), so no field list is hand-mapped twice. Excludes `calibrationByWord` (extracted profiles are session-only, never serialized) but includes the calibration *input references* (`calCh10Path`, `stepTomlPath`, `clipStartSec`, `clipEndSec`). Used by `ProcessingTemplateSchema`
 13. **ProcessingTemplateSchema** (`src/model/processingtemplateschema.cpp`, `include/model/processingtemplateschema.h`) — *processing templates / batch apply*; serializes/parses a `ProcessingTemplate` (`schemaVersion`, `appVersion`, `name`, `timeChannelIndex`, and a list of `TemplateStreamEntry`). Delegates each entry's config to `StreamConfigSchema` and adds the per-entry `SeriesAppearance` array; no file paths (a template is location-independent); a `schemaVersion` newer than `kCurrentSchemaVersion` is rejected
@@ -4699,7 +4773,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestStreamConfigDialog** (`tst_streamconfigdialog`) — Per-stream Configure Streams dialog: stream rows, mode selection, gear setup dialogs, TOML load/save round-trips, "Apply to all" fan-out, the Channel column label (short names shown in full, long TMATS-derived names elided on the right with "..." , left-justified, styled via `channelNameCell` to mimic the Mode combo box's border/fill, and the full name always available via tooltip — which is now the only place a truncated name is recoverable), the Mode combo's left-justified closed-box text (via an editable-but-readonly internal line edit) while selection still tracks correctly, and the table header/separator using theme-QSS object names (`streamHeaderLabel` / `streamHeaderSeparator`) rather than hard-coded inline colors; the Extract Calibration dialog: an unreadable sync or an unopenable recording shown on the status line without extracting, a real `step_cal` extraction through the progress dialog (twelve profiles), byte order / inversion / derandomization each reaching the extraction (the wrong value must visibly fail), and the data rate reaching it (half the rate shows exactly twice the recording length)
 - **TestExportDialog** (`tst_exportdialog`) — Export dialog checkbox-to-field enable logic, export-button validation, and the log-export row defaults/accessors and log-only validation
 - **TestStepDetector** (`tst_stepdetector`) — Non-linear calibration (US5.3): `[[Step]]` TOML parsing (valid / empty-fails), plateau detection (clean, too-few-fails, extra-plateaus uses last of monotonic run, short-blip doesn't steal a pairing slot, long leading transient doesn't shift pairing, inverted-polarity sweep not reversed, non-monotonic pairing rejected, noisy, settling-at-plateau-start excluded, round-trip exact), the calibration-import resilience cases (the outcome code names the gate that rejected, a compressed out-of-tolerance receiver still calibrates via the relaxed threshold while a healthy one does not relax, noise-split plateaus coalesce instead of severing the sweep, a flat channel reports "flat / no signal" rather than a plateau shortfall, samples pinned at the floor or rail kept out of the noise estimate so live dwells neither split nor shatter, a split dwell far above the noise still paired as one step, railed top steps calibrating the range that stayed in scale while the rail clamps rather than extrapolates, an unconfirmed dwell measured from the dwell grid rather than bridged or shifted, the number of levels the sweep held reported so a short step file can be flagged, and which step file the Extract Calibration dialog preloads), and `interpolateCalibration()` (midpoint, below/above clamping, coincident-raw guard); and the step-file parser pinned directly, written against the `QString` implementation first: case-insensitive `[[Step]]` header and `db` key, a header with a trailing comment or inner spaces not counting as a step, keys outside a step or in another section ignored, a step with no parseable `db` kept at 0, `QString::toDouble`'s value rules (quotes are NOT stripped), file order with the last `db` winning, the output cleared on every call, UTF-8 BOM / UTF-16 files, a non-ASCII path, both error messages, and `initialStepConfigPath` ignoring a directory The step-file parser (`parseStepConfig`, now a reader over `TomlDocument`'s arrays of tables) is also run against a verbatim copy of the hand-written parser it replaced, kept in the test as an oracle, over 4,000 generated files - headers with comments, spaces, other names and missing brackets; keys in every case, quoted, commented, empty, repeated and outside any step - and must agree on success, on every step's dB to the bit, and on the message
-- **TestSeriesColumnSchema** (`tst_seriescolumnschema`) — the CSV column-header schema (`SeriesColumnSchema`): SNR name and `columnHeader()` formatting, `parseColumnHeader()` classification (lock/missed suffix vs. SNR `"<id> - "` prefix, multi-word stream labels split at the last space, SNR-shape-wins-over-suffix), the unknown→SNR fallback, and the format→parse round trip that keeps `exportCsv` and `CsvSeriesParser` inverses. Multi-file input: source 0 stays unqualified (byte-identical), source 1+ gets a leading `"S<n>| "` qualifier that round-trips through parse for both SNR and Lock/Missed shapes, an unqualified header still defaults to source 0, and a header merely starting with the letter `'S'` isn't misparsed as a qualifier
+- **TestSeriesColumnSchema** (`tst_seriescolumnschema`) — the CSV column-header schema (`SeriesColumnSchema`): SNR name and `columnHeader()` formatting, `parseColumnHeader()` classification (lock/missed suffix vs. SNR `"<id> - "` prefix, multi-word stream labels split at the last space, SNR-shape-wins-over-suffix), the unknown→SNR fallback, and the format→parse round trip that keeps `exportCsv` and `CsvSeriesParser` inverses. Multi-file input: source 0 stays unqualified (byte-identical), source 1+ gets a leading `"S<n>| "` qualifier that round-trips through parse for both SNR and Lock/Missed shapes, an unqualified header still defaults to source 0, and a header merely starting with the letter `'S'` isn't misparsed as a qualifier. Written in layers: the original round-trip cases; a data-driven table of 35 parse and 8 format edge cases recorded against the `QString` implementation BEFORE it moved (empty headers, ids and receiver numbers with signs, spaces, overflow, a qualifier with no space or a literal overflow, non-ASCII labels); and a **differential test** that keeps the old `QString` implementation in the test as an oracle and compares the Qt-free one over 40,000 generated headers and every combination of formatter inputs, asserting the generator reaches each outcome in volume. Every call goes through four helpers at the top of the file, so only their bodies changed with the schema's string type. It also pins a limitation of the FORMAT: a series NAMED `S1| A` at source 0 reads back as source 1 (`aNameThatLooksLikeASourceQualifierDoesNotRoundTrip`)
 - **TestCalibrationExtractor** (`tst_calibrationextractor`) — US5.3 pipeline orchestration (complements TestStepDetector's pure logic): drives the async extraction end to end (reader + FrameProcessor workers → per-channel StepDetector). A bad file (with non-empty steps, so it clears the empty-steps guard) finishes unsuccessfully with a recorded error and no partial state; over `rnrz-l_testfile.ch10`, exactly words 6/7/8 (RCVR3 L/R/C, the only real stepped SNR sweep) build valid non-linear profiles while every other receiver word falls back to linear; over `step_cal, example.ch10` (receivers far out of alignment, its real 11-step 0–60 dB config, the shipped sequential word map), receivers 1, 3, 5 and 6 calibrate with every step paired to its own dwell (0 dB at the pre-sweep level, 60 dB at the top dwell, no split dwell taking a slot), receiver 1 over only the range that stayed in scale because its top two steps sit on the rail (readings hold at 48 dB), receiver 2 reports flat / no signal, and the report names the receivers; plus the pure `summarize()` report (receivers grouped, partial receivers spelled out with reasons, unnamed channels reported by name) and its two "check" prompts - a step file shorter than the recording and a word map that does not match it - each proven on the real recording with the wrong file, and silent on the correct setup; and clips that exceed the recording being reported rather than silently ignored; and `extractionReportsItsProgress`, which checks the extraction's progress reaches the dialog (non-decreasing, ending at 100); and `summarizeProducesExactlyThisReport` (15 scenarios, the **whole** report text each - empty, one receiver, mixed, unnamed, an all-calibrated unnamed group alone, beside a numbered receiver, beside a failure and with a saturated top, non-ASCII names, both "check" sections, a saturated top with exact-half dB values, a relaxed threshold, flat levels, several failure reasons, twelve receivers), `extractionLogsOneLinePerChannelWithData`, and `aNonAsciiChannelNameSurvivesExtractionItsLogAndItsReport` (a real `step_cal` extraction with a word map naming channels with non-ASCII text); the extractor's lifecycle through one `Recorder` helper: failures before anything starts (no steps; a word map that is missing, outside the frame, empty, or too large; an unopenable recording), a cancel from the first report and from another thread, a start while running being ignored, a finished extractor running again, destroying a running one, the end being the last report, a failure being an error and a cancel not, a worker failure reporting its own reason, and the clip-ignored log line
 - **TestStreamConfigSchema** (`tst_streamconfigschema`) — `StreamConfigSchema` round trip for both `StreamMode` variants and the calibration input references (`calCh10Path`/`stepTomlPath`/`clipStartSec`/`clipEndSec`), confirms `calibrationByWord` itself never appears in the serialized JSON (and the `calibration` block is omitted entirely when no non-linear calibration was ever extracted), and `fromJson()` rejecting an object missing required fields while leaving in-class defaults for anything else omitted
 - **TestProcessingTemplateSchema** (`tst_processingtemplateschema`) — processing templates / batch apply: `ProcessingTemplateSchema` round trip for both `StreamMode`s, series appearance, calibration input references, and `timeChannelIndex`; that appearance is omitted when empty; that `calibrationByWord` is never serialized (inherited from `StreamConfigSchema`); and `schemaVersion` accept/reject + malformed-document rejection — no `.ch10` fixture, runs in CI

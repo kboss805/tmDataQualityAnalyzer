@@ -346,9 +346,11 @@ void PlotViewModel::addStreamData(const ProcessedStreamData& data)
         // otherwise collide in the legend) stay distinct; the Configure Streams dialog
         // and Frame Sync Lock series intentionally drop it. The exact name format —
         // and its inverse for CSV import — is owned by SeriesColumnSchema.
-        // The core's channel name is UTF-8 std::string; the plot keeps QString.
+        // The core's channel name is UTF-8 std::string; the plot keeps QString. The schema is Qt-free
+        // too, so the name is built from std::string and converted once.
         const QString ch_name = QString::fromStdString(ch.name);
-        s.name = SeriesColumnSchema::snrSeriesName(data.pcmChannelId, stream_label, ch_name);
+        s.name = QString::fromStdString(SeriesColumnSchema::snrSeriesName(
+            data.pcmChannelId, stream_label.toStdString(), ch.name));
         s.streamLabel = stream_label;
         s.metricType = PlotSeriesData::MetricType::SNR;
         int rcvr_pos = static_cast<int>(ch_name.lastIndexOf("_RCVR"));
@@ -551,7 +553,8 @@ bool PlotViewModel::exportCsv(const QString& filepath, int sourceId) const
     for (const auto& s : m_series)
     {
         if (included(s))
-            out << "," << SeriesColumnSchema::columnHeader(s);
+            out << "," << QString::fromStdString(
+                SeriesColumnSchema::columnHeader(s.metricType, s.name.toStdString(), s.sourceId));
     }
     out << "\n";
 
