@@ -34,6 +34,7 @@ class MainViewModel : public QObject
     Q_OBJECT
 
     friend class TestMainViewModelHelpers;   ///< Reaches buildStreamJob().
+    friend class TestStreamJob;              ///< Reaches buildStreamJob() and the app root.
 
     Q_PROPERTY(QString inputFilename READ inputFilename NOTIFY inputFilenameChanged)
     Q_PROPERTY(QStringList timeChannelList READ timeChannelList NOTIFY channelListsChanged)
@@ -186,6 +187,8 @@ signals:
 
 private:
     /// Builds one StreamJob (params + owned FrameSetup) from a stream config. Returns false on error.
+    /// Converts the config and calls the Qt-free buildStreamJob (streamjobbuilder.h), which owns the
+    /// validation and every message; this relays its log lines as logMessageReceived().
     bool buildStreamJob(const StreamConfig& cfg,
                         const ProcessingParams& base,
                         StreamJob& out_job,

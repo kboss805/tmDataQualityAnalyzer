@@ -522,6 +522,71 @@ v2.9.0 intended. Every first-party header here is quote-included, so `anglebrack
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
 
+#### Turning a stream's settings into a job is in the Qt-free core (plan step 1.5)
+
+Fifth step of stage 1 of `docs/dotnet-migration/avalonia-plan.md`, and the largest: the validation and
+construction that `MainViewModel::buildStreamJob` did, between the user's per-stream settings and the job the
+pipeline runs.
+
+- **`buildStreamJob(StreamJobConfig, base, StreamJobContext, StreamJob&, StreamJobReport&)`**
+  (`include/model/streamjobbuilder.h`, `src/model/streamjobbuilder.cpp`) takes plain values - UTF-8 text, a
+  `std::filesystem::path`, a `std::unordered_map` of calibration profiles - and returns the job, or the reason for
+  rejecting it, plus the lines for the processing log. It reports instead of emitting, so it needs no signal. The
+  context carries what is true of the whole recording and installation rather than of one stream: the application
+  root (where `settings/receiver_params/default.toml` is looked for) and the file-scoped byte order. Listed in
+  `TestCoreQtFree`'s core list.
+- **`MainViewModel::buildStreamJob` is the adapter**: it copies a `StreamConfig` into a `StreamJobConfig`,
+  calls the core, and relays the error and log lines. Everything else stays where it was; the plan's wording
+  ("taking a plain `StreamConfig` value") is met by a plain copy of it, because `StreamConfig` itself still
+  carries `QString` and `QHash` for the dialogs and templates.
+- **The checks and their order are unchanged:** the sync pattern, then the mask, then the frame length; for a
+  Receiver SNR stream the receiver-parameters file (named, else the shipped default, else a default word map),
+  then the scale, then the slope index. Every message leads with the stream's label, or `Ch <id>`.
+
+**A defect found and fixed on purpose.** When no receiver-parameters file is named, a job uses the shipped
+`default.toml`, and falls back to a default word map if that file will not load. A rejected load can leave the
+words it did read in the table, and the fallback **appended** to them: a `default.toml` that was readable up to a
+word outside the frame produced a job with seven parameters, `L_RCVR1` twice. It would run, with a word map nobody
+wrote. `FrameSetup::saveReceiverParamsFile` already cleared the table first (its comment says why); building a job
+did not. It now does. The pin that recorded the old behaviour (`default-file-partly-outside-the-frame`) carries a
+comment naming the change, and the oracle in the test is the old code with that one line marked.
+
+**Tests first, on the old code.** A new suite, `TestStreamJob`, pins 59 cases through
+`MainViewModel::buildStreamJob`, each as one line saying whether a job was built, the message, the log, every
+worker parameter the settings decide, and the whole frame-parameter table with its calibration. The existing
+`TestMainViewModelHelpers` cases covered the lock-only path and one explicit receiver file; these cover what they
+did not: every valid and invalid slope index and the arithmetic each gives, both polarities, the scale at its
+edges, an explicit file that is missing, a folder, outside the frame, empty, metadata-only or not TOML, the word
+boundary and the rounding up of the frame's word count (800 bits rejects word 50, 801 bits accepts it), the default
+file and the default word map in each state (good, partly usable, metadata-only, garbage, absent, too big, no
+receivers, a product that overflows), the profiles attached, unattached and invalid, the order the checks run
+in, and non-ASCII labels and file names. They passed on the old code before anything moved, and **58 of the 59
+held after the port unchanged**; the other is the fix above. The 51 existing cases were not touched.
+
+**An oracle for the rest.** The old function is kept in the test, verbatim apart from its inputs and the one marked
+line, and compared with the adapter over 1,500 generated configurations (modes, patterns, masks and frame lengths
+good and bad, every receiver-file fixture, every default-file state, counts that do and do not make a map, profiles,
+non-ASCII labels), the generator asserted to reach each outcome in volume. **No difference.** Two direct tests of the
+core check that the application root, which arrives as UTF-8, finds the default file under a non-ASCII folder, and
+that a rejection leaves the log empty and a success the error.
+
+**Validated against 76 single-defect mutants; all 76 were caught.** They cover the description and every message, the
+frame-length boundary and the word count, every acquisition field and the byte order (taken as on, and inverted),
+each of the four sample periods, lock-only taking the receiver path or having no setup, every wrong default path,
+the partial map kept (the defect above), a named file ignored or its absence not noticed, the wrong frame size to the
+loaders, an empty map accepted, the default map's arguments swapped, the scale and slope boundaries, the calibration
+arguments, the profile attach, test and log lines, every field the adapter copies, the error and log relayed or decoded
+as Latin-1, and the Qt-free guard.
+
+**Left as it was, worth knowing:** a scale of NaN passes the `<= 0` check and fills the table with NaN slopes (pinned as
+`scale-not-a-number`); no setting can produce one today, since the dialog's spin box cannot and the template format cannot
+encode it. A slope index outside the table is rejected here, but `applyLinearCalibration` itself
+indexes by it unchecked, so a new caller has to validate first.
+
+Throughput is untouched (building a job is not on the decode path), so the Release gate was not rerun.
+
+Baseline **1045 / 0 / 1** (was 981 / 0 / 1; `TestStreamJob` adds 64 results), **1046 / 0 / 0** at release. **34 suites.**
+
 #### The frame-sync pattern file is in the Qt-free core (plan step 1.4)
 
 Fourth step of stage 1 of `docs/dotnet-migration/avalonia-plan.md`. The plan named the "frame-sync and
@@ -4651,7 +4716,8 @@ not mis-read.
 12. **StreamConfigSchema** (`src/model/streamconfigschema.cpp`, `include/model/streamconfigschema.h`) — single source of truth for `StreamConfig`'s JSON representation (`toJson()`/`fromJson()`), so no field list is hand-mapped twice. Excludes `calibrationByWord` (extracted profiles are session-only, never serialized) but includes the calibration *input references* (`calCh10Path`, `stepTomlPath`, `clipStartSec`, `clipEndSec`). Used by `ProcessingTemplateSchema`
 13. **ProcessingTemplateSchema** (`src/model/processingtemplateschema.cpp`, `include/model/processingtemplateschema.h`) — *processing templates / batch apply*; serializes/parses a `ProcessingTemplate` (`schemaVersion`, `appVersion`, `name`, `timeChannelIndex`, and a list of `TemplateStreamEntry`). Delegates each entry's config to `StreamConfigSchema` and adds the per-entry `SeriesAppearance` array; no file paths (a template is location-independent); a `schemaVersion` newer than `kCurrentSchemaVersion` is rejected
 14. **TemplateMatcher** (`src/model/templatematcher.cpp`, `include/model/templatematcher.h`) - *processing templates / batch apply*; pure, disk-free validator that a target file's PCM channel-ID set matches a template's **exactly** (`match(templateIds, fileIds)` -> `MatchResult{ok, missing, extra}`, sorted, each id once). **Part of the Qt-free core** (`std::vector<int>` in and out, listed in `TestCoreQtFree`); `BatchController::matchFile` reads the ids out of a `ProcessingTemplate` and the reader's channel list and calls it. Exact-set matching is what lets the batch loop feed the template's stored `pcmChannelId`s straight to processing
-15. **IRIG 106 Library** (`lib/irig106/`) — third-party C library for the Chapter 10 file format (see Protected Files)
+15. **StreamJobBuilder** (`src/model/streamjobbuilder.cpp`, `include/model/streamjobbuilder.h`) - turns one stream's settings into a processing job: `buildStreamJob(StreamJobConfig, ProcessingParams base, StreamJobContext, StreamJob&, StreamJobReport&)` validates the sync pattern, mask and frame length, then (Receiver SNR) builds the frame-parameter table from the named receiver-parameters file, else the shipped `settings/receiver_params/default.toml`, else a default word map, applies the linear calibration and attaches any step-calibration profiles, returning the job or the reason for refusing it plus the log lines. **Part of the Qt-free core** (UTF-8 text, `std::filesystem::path`, `std::unordered_map`; listed in `TestCoreQtFree`); `MainViewModel::buildStreamJob` copies a `StreamConfig` into a `StreamJobConfig`, supplies the application root and the file-scoped byte order, and relays the report as `logMessageReceived`. Pinned by `TestStreamJob`
+16. **IRIG 106 Library** (`lib/irig106/`) — third-party C library for the Chapter 10 file format (see Protected Files)
 
 ### Data Flow
 
@@ -4937,6 +5003,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestCh10PacketReader** (`tst_ch10packetreader`) — the single-pass reader, tested directly on the committed `step_cal` recording (it had no tests of its own): each way `prepare()` fails has its own exact message; a full run reports its start, no error, progress that never goes backwards and ends at 100, all 1598 packets (6,539,016 payload bytes) and exactly one end marker; an abort is announced, reports 100 and still posts the end marker; a file cut inside a PCM packet, inside a time packet, or with a damaged header checksum reports the right read error and delivers exactly the packets before the damage; a file that ends inside a packet header is a clean end of file and a damaged sync pattern silently costs one packet (both pinned as the behaviour they are); and two streams on one channel each get every packet sharing one payload buffer. Cut points are found by walking the packet headers. Written against the signal-based reader first; validated against eleven mutants Setup is serialised across threads (the library's own state is not thread-safe): while one thread holds `lockIrig106Setup()` a setup on another cannot even open the file (a copy held open with no sharing makes an early open fail visibly), a failed setup releases the lock, and eight threads setting up 40 times each all succeed and agree
 - **TestFrameProcessor** (`tst_frameprocessor`) — constructor defaults, abort flag, `derandomizeBitstream` (identity/short and changed/long), invalid time-channel/PCM-channel/file handling, and processing real Ch10 data (receiver-data accumulation, lock-only mode has no channels, monotonic frame-sync errors, slope affects values, shorter period → more samples, calibration round-trip clean steps, off-phase sync after lock-loss not extracted); and `reportsExactlyTheseMessages` (10 rows), the exact text and order of everything it reports - success, a non-ASCII stream label, a bounded window, a masked pattern, sync-but-no-frames, cancel, both internal errors, and the all-odd and mixed byte-swap warnings - written against the signals implementation first
 - **TestMainViewModelHelpers** (`tst_mainviewmodel_helpers`) — `MainViewModel::classifyLogMessage()`, the severity policy the View renders but does not decide. The channel-naming cases that used to live here moved to **TestFrameSetup** with the `MainViewModel` forwarders they called: `FrameSetup` is where that naming lives; and `buildStreamJobAttachesCalibrationByWord`, which runs a receiver stream through the private `buildStreamJob` (the test is a friend) and checks which parameters received which profile and the log line that says so; and `buildStreamJob` as a whole: 43 rows of how the sync pattern and mask are decoded (whitespace trimmed, `+` and `0x` accepted, any `-` refused, 64-bit overflow refused, the pattern's length counted in characters), every field a config contributes to the worker's parameters, and each rejection message in the order the checks run
+- **TestStreamJob** (`tst_streamjob`) - building a job from a stream's settings, read through `MainViewModel::buildStreamJob` so the same cases hold on either side of the move into the core: 59 cases, each one line (built or not, the message, the log, every worker parameter, the whole frame-parameter table with its calibration) - the slope indices and their arithmetic, polarity, the scale at its edges, an explicit receiver file that is missing, a folder, outside the frame, empty, metadata-only or not TOML, the word-count rounding, the default file and the default word map in each state, profiles attached and not, the order of the checks, non-ASCII labels and names. The old view-model code is kept as an oracle (with one marked line, the fix for an appended default map) and compared over 1,500 generated configurations; two direct tests of the core (a UTF-8 application root with non-ASCII folder names; error and log as plain text). Validated against 76 mutants, all caught
 - **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration, `channelPrefix()` naming the known channel positions then falling back to `CH<n+1>`, `receiverParameterName()` combining the two, `receiverIndexFromName()` inverting it (0 for a name with no parseable `_RCVR<N>`), and the receiver-parameters file as a whole: the scalars read from the `[Receivers]` block the shipped files actually use (and the older `[Parameters]` keys still accepted), a save/load round trip that carries the word map with them, the default-map fallback when no file was loaded, nothing written when there is no map to write, and the metadata-only file that parses to zero parameters — the contract `tryLoadingFile()`'s two callers depend on; and `receiverNameParsingMatchesQStringToInt`, which pins how a hand-typed parameter name parses (the last `_RCVR` token wins, whitespace and a leading `+` tolerated, a second sign / negative / trailing junk / overflow reads as no receiver, a name starting with the token has no channel part) - written against the `QString` implementation first; and `attachCalibrationProfiles`, which attaches a step-calibration profile only when it is valid and its word matches a parameter (an invalid one stays linear; a word the map lacks is ignored), written against the `QObject`/`QHash` version first
 - **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, the computed Y range and the SNR max override that pins it (the minimum stays automatic, Reset returns it to the data), X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), the left-axis view toggle preserving per-stream selection, and stream-identity regression coverage: two streams sharing a TMATS-derived `streamLabel` but different `streamOrder` must stay independent through reprocess-replace and `renameSeries()`/`recolorSeries()` sibling-sync (pinned after a pre-v2.6.0 cross-contamination bug). Multi-file input: cross-source identity (two different `sourceId`s reusing the same `streamLabel`/`streamOrder` stay independent through reprocess-replace/rename/recolor), time-base re-basing (a later-added source starting earlier shifts existing series right; three successively-earlier sources compound correctly; a later source starting after triggers no shift), the non-overlap warning signal (fires once per newly-arriving non-overlapping source, not for an overlapping range), and `removeSource()` (drops only the target source, re-bases left only when the removed source held the earliest sample, clears all data when the last source is removed, no-ops for an unknown id). US1.1 source view: `setVisibleSource()` isolates a source via `effectiveVisible()` without mutating per-series `visible`, `sourceList()` lists distinct labeled sources, and `exportCsv(path, sourceId)` writes only that source's columns; and `aNonAsciiStreamLabelReachesEverySeries`, which pins that a non-ASCII stream label (arriving as UTF-8 from the core) names the lock and missed-frames series, prefixes the SNR series' name, and is what a re-run matches on to replace the stream
 - **TestProcessingCoordinator** (`tst_processingcoordinator`) — constructor defaults, `reset()` clears state, cancel-with-no-run no-op, `cancelProcessingEndsTheRunWithoutAResult` (Cancel ends the run unsuccessfully, delivers no result, and the state goes true then false) and `destroyingTheCoordinatorMidRunIsSafe` (nothing queued for the dead object is delivered), `startProcessing()` empty-returns-false and processing-state emission, plus single-vs-multi-stream throughput benchmarks; and `workerReportsPrecedeTheResultAndFinishComesLast`, which checks through a real run that the worker's completion line is relayed before the stream's result and `processingFinished` is last; its end-to-end test also checks the progress bar (0 at the start, then 100 reported twice: once by the reader, once on finish); and `aRecordingUnderANonAsciiFolderProcessesEndToEnd`, which runs the committed `step_cal` recording copied under a non-ASCII folder through the whole pipeline
