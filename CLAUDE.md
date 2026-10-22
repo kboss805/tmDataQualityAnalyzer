@@ -19,11 +19,11 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   present, else serial `nmake` — ~3.5x faster, so prefer it). Re-run qmake after
   `.pro`/version/`Q_OBJECT` changes. **Zero warnings required.**
 - **Tests:** build **in-source inside `tests/`** (the exe must sit one level under `tests/` or the
-  data-file tests fail), then `.\debug\tmDataQualityAnalyzer_tests.exe`. The full run (all **31
+  data-file tests fail), then `.\debug\tmDataQualityAnalyzer_tests.exe`. The full run (all **32
   suites**) is dominated by the real-Ch10 integration suites (a few minutes); add `--fast` (or
   `TMDQ_FAST_TESTS=1`) to skip the real-`.ch10` integration suites for ~1 s local iteration — **local only; CI
   and releases run the full suite**. No CLI single-suite filter.
-  Green baseline: **784 passed / 0 failed / 1 skipped** normally, **785 / 0 / 0** at release. The
+  Green baseline: **878 passed / 0 failed / 1 skipped** normally, **879 / 0 / 0** at release. The
   one standing skip is the heavy PRN throughput benchmark, opt-in via `TMDQA_RUN_HEAVY_BENCH=1`
   because it walks a 640 MB recording nine times and takes minutes. At release it is not skipped:
   `scripts\run_throughput_bench.ps1` builds Release, enables it, runs it **pinned to the

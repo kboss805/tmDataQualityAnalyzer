@@ -94,8 +94,8 @@ list, and keeps the Qt app calling the moved code through a thin conversion. Sam
 sweep.
 
 - [x] **1.1 `SeriesColumnSchema`** to the core: the CSV column header format and its parse (the
-  export/import inverse pair, already round-trip tested).
-- [ ] **1.2 `CsvSeriesParser`** to the core, plus the CSV **export** that today lives in
+  export/import inverse pair, already round-trip tested). PR #174, merged as `9c05056`.
+- [x] **1.2 `CsvSeriesParser`** to the core, plus the CSV **export** that today lives in
   `PlotViewModel::exportCsv`, so both directions of the format live in one place. Oracle: the Qt
   export over every fixture must be byte-identical before and after.
 - [ ] **1.3 `TemplateMatcher`** to the core (pure set logic, smallest step).

@@ -8,17 +8,20 @@
 
 #include <algorithm>
 #include <ctime>
+#include <span>
+#include <vector>
 
 #include <QtConcurrent/QtConcurrent>
 #include <QtMath>
 
-#include <QFile>
 #include <QMap>
 #include <QSet>
-#include <QTextStream>
 
+#include "clocktime.h"
 #include "constants.h"
 #include "csvseriesparser.h"
+#include "csvserieswriter.h"
+#include "qtbridge.h"
 #include "seriescolumnschema.h"
 
 namespace {
@@ -39,6 +42,39 @@ QVector<double> toPlotVector(const std::vector<double>& values)
     return QVector<double>(values.begin(), values.end());
 }
 
+/// Parses a CSV with the core's parser and hands it over in the plot's types. Runs on the worker
+/// thread for an async load, so the copy into QVector (a CSV's series are separate buffers, not shared
+/// ones) is not paid on the UI thread.
+LoadedCsv loadCsv(const QString& filepath)
+{
+    CsvParseResult parsed = CsvSeriesParser::parse(toFsPath(filepath));
+
+    LoadedCsv loaded;
+    loaded.success = parsed.success;
+    loaded.baseDay = parsed.baseDay;
+    loaded.baseTimeOffset = parsed.baseTimeOffset;
+    loaded.xMax = parsed.xMax;
+    loaded.skippedRows = parsed.skippedRows;
+    loaded.series.reserve(static_cast<qsizetype>(parsed.series.size()));
+    for (const CsvSeries& c : parsed.series)
+    {
+        PlotSeriesData s;
+        s.name          = QString::fromStdString(c.name);
+        s.streamLabel   = QString::fromStdString(c.streamLabel);
+        s.metricType    = c.metricType;
+        s.receiverIndex = c.receiverIndex;
+        s.channelIndex  = c.channelIndex;
+        s.streamOrder   = c.streamOrder;
+        s.sourceId      = c.sourceId;
+        s.xValues       = toPlotVector(c.xValues);
+        s.yValues       = toPlotVector(c.yValues);
+        s.yMinCached    = c.yMin;
+        s.yMaxCached    = c.yMax;
+        loaded.series.append(std::move(s));
+    }
+    return loaded;
+}
+
 } // namespace
 
 PlotViewModel::PlotViewModel(QObject* parent)
@@ -51,7 +87,7 @@ PlotViewModel::PlotViewModel(QObject* parent)
 // Commit helper — shared by loadCsvFile and onParseFinished
 // ---------------------------------------------------------------------------
 
-void PlotViewModel::commitParseResult(CsvParseResult&& result)
+void PlotViewModel::commitParseResult(LoadedCsv&& result)
 {
     const int skipped_rows = result.skippedRows;
     m_series            = std::move(result.series);
@@ -140,7 +176,7 @@ void PlotViewModel::commitParseResult(CsvParseResult&& result)
 
 bool PlotViewModel::loadCsvFile(const QString& filepath)
 {
-    CsvParseResult result = CsvSeriesParser::parse(filepath);
+    LoadedCsv result = loadCsv(filepath);
     if (!result.success)
     {
         return false;
@@ -160,17 +196,17 @@ void PlotViewModel::loadCsvFileAsync(const QString& filepath)
 
     if (m_parse_watcher == nullptr)
     {
-        m_parse_watcher = new QFutureWatcher<CsvParseResult>(this);
-        connect(m_parse_watcher, &QFutureWatcher<CsvParseResult>::finished,
+        m_parse_watcher = new QFutureWatcher<LoadedCsv>(this);
+        connect(m_parse_watcher, &QFutureWatcher<LoadedCsv>::finished,
                 this, &PlotViewModel::onParseFinished);
     }
 
-    m_parse_watcher->setFuture(QtConcurrent::run(&CsvSeriesParser::parse, filepath));
+    m_parse_watcher->setFuture(QtConcurrent::run(&loadCsv, filepath));
 }
 
 void PlotViewModel::onParseFinished()
 {
-    CsvParseResult result = m_parse_watcher->result();
+    LoadedCsv result = m_parse_watcher->result();
     m_loading = false;
 
     if (!result.success)
@@ -521,83 +557,23 @@ void PlotViewModel::clearData()
 
 bool PlotViewModel::exportCsv(const QString& filepath, int sourceId) const
 {
-    if (m_series.isEmpty()) return false;
-
     // sourceId < 0 exports every series; otherwise only the given source's columns
-    // (per-file batch export from a retain-all run).
-    auto included = [sourceId](const PlotSeriesData& s) {
-        return sourceId < 0 || s.sourceId == sourceId;
-    };
-
-    bool any_included = false;
-    for (const auto& s : m_series)
+    // (per-file batch export from a retain-all run). The writer owns the format; this hands it
+    // the series it holds, viewing their buffers rather than copying them.
+    std::vector<CsvColumn> columns;
+    for (const PlotSeriesData& s : m_series)
     {
-        if (included(s)) { any_included = true; break; }
+        if (sourceId >= 0 && s.sourceId != sourceId)
+            continue;
+        CsvColumn column;
+        column.metricType = s.metricType;
+        column.name       = s.name.toStdString();
+        column.sourceId   = s.sourceId;
+        column.xValues    = std::span<const double>(s.xValues.constData(), static_cast<std::size_t>(s.xValues.size()));
+        column.yValues    = std::span<const double>(s.yValues.constData(), static_cast<std::size_t>(s.yValues.size()));
+        columns.push_back(std::move(column));
     }
-    if (!any_included) return false;
-
-    QFile file(filepath);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
-    {
-        return false;
-    }
-
-    QTextStream out(&file);
-
-    // Write header. Frame-sync series names are stored bare (no metric suffix) for
-    // the plot legend; SeriesColumnSchema::columnHeader() qualifies them so the CSV
-    // columns are self-describing (a stream's lock and missed-frames series share the
-    // same bare name and would otherwise export as two identical headers) and stays
-    // the inverse of the import parser.
-    out << SeriesColumnSchema::kTimeHeader;
-    for (const auto& s : m_series)
-    {
-        if (included(s))
-            out << "," << QString::fromStdString(
-                SeriesColumnSchema::columnHeader(s.metricType, s.name.toStdString(), s.sourceId));
-    }
-    out << "\n";
-
-    // Map each rounded millisecond timestamp to a map of series index -> value
-    QMap<qint64, QMap<int, double>> rows;
-
-    for (int i = 0; i < m_series.size(); ++i)
-    {
-        if (!included(m_series[i])) continue;
-        const auto& s = m_series[i];
-        for (int j = 0; j < s.xValues.size(); ++j)
-        {
-            qint64 ms = qRound(s.xValues[j] * 1000.0);
-            rows[ms][i] = s.yValues[j];
-        }
-    }
-
-    // Write rows
-    for (auto it = rows.begin(); it != rows.end(); ++it)
-    {
-        qint64 ms = it.key();
-        double elapsed = ms / 1000.0;
-
-        out << formatTime(elapsed, /*includeMilliseconds=*/true);
-
-        const auto& vals = it.value();
-        for (int i = 0; i < m_series.size(); ++i)
-        {
-            if (!included(m_series[i])) continue;
-            if (vals.contains(i))
-            {
-                out << "," << QString::number(vals[i], 'f', 6);
-            }
-            else
-            {
-                out << ",";
-            }
-        }
-        out << "\n";
-    }
-
-    file.close();
-    return true;
+    return CsvSeriesWriter::write(toFsPath(filepath), columns, CsvTimeBase{m_base_day, m_base_time_offset});
 }
 
 bool PlotViewModel::effectiveVisible(const PlotSeriesData& s) const
@@ -1239,38 +1215,9 @@ void PlotViewModel::setLockAxisView(LockAxisView view)
     emit lockAxisViewChanged();
 }
 
-QString PlotViewModel::formatTime(double elapsed, bool includeMilliseconds) const
+QString PlotViewModel::formatTime(double elapsed) const
 {
-    double total = m_base_time_offset + elapsed;
-
-    int day = m_base_day + static_cast<int>(total / UIConstants::kSecondsPerDay);
-    total = fmod(total, static_cast<double>(UIConstants::kSecondsPerDay));
-    if (total < 0.0)
-    {
-        total += UIConstants::kSecondsPerDay;
-        day--;
-    }
-
-    int hours   = static_cast<int>(total) / UIConstants::kSecondsPerHour;
-    int minutes = (static_cast<int>(total) % UIConstants::kSecondsPerHour) / UIConstants::kSecondsPerMinute;
-    int seconds = static_cast<int>(total) % UIConstants::kSecondsPerMinute;
-
-    constexpr int kBase10 = 10;
-    QString result = QString("%1:%2:%3:%4")
-        .arg(day, 3, kBase10, QChar('0'))
-        .arg(hours, 2, kBase10, QChar('0'))
-        .arg(minutes, 2, kBase10, QChar('0'))
-        .arg(seconds, 2, kBase10, QChar('0'));
-
-    if (includeMilliseconds)
-    {
-        // total's fractional part (below one second) survived the day/hour/minute/
-        // second extraction above untouched, so it can be pulled out independently
-        // without disturbing that (tested) integer-field logic.
-        const int msec = static_cast<int>((total - qFloor(total)) * 1000.0 + 0.5);
-        result += QString(".%1").arg(msec, 3, kBase10, QChar('0'));
-    }
-    return result;
+    return QString::fromStdString(clocktime::format(m_base_day, m_base_time_offset, elapsed, /*includeMilliseconds=*/false));
 }
 
 double PlotViewModel::parseTime(const QString& text) const

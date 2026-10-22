@@ -24,6 +24,7 @@
 #include "tst_streamconfigdialog.h"
 
 #include "tst_exportdialog.h"
+#include "tst_csvseries.h"
 #include "tst_seriescolumnschema.h"
 #include "tst_streamconfigschema.h"
 #include "tst_processingtemplateschema.h"
@@ -134,6 +135,7 @@ int main(int argc, char* argv[])
     status |= runSuite<TestExportDialog>(log_path);
     status |= runSuite<TestStepDetector>(log_path);
     status |= runSuite<TestSeriesColumnSchema>(log_path);
+    status |= runSuite<TestCsvSeries>(log_path);
     status |= runSuite<TestStreamConfigSchema>(log_path);
     status |= runSuite<TestProcessingTemplateSchema>(log_path);
     status |= runSuite<TestTemplateMatcher>(log_path);

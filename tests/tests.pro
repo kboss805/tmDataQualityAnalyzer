@@ -39,7 +39,9 @@ SOURCES += \
     $$PWD/../src/model/stepdetector.cpp \
     $$PWD/../src/model/calibrationextractor.cpp \
     $$PWD/../src/model/pipelinerunner.cpp \
+    $$PWD/../src/model/clocktime.cpp \
     $$PWD/../src/model/csvseriesparser.cpp \
+    $$PWD/../src/model/csvserieswriter.cpp \
     $$PWD/../src/model/seriescolumnschema.cpp \
     $$PWD/../src/model/streamconfigschema.cpp \
     $$PWD/../src/model/processingtemplateschema.cpp \
@@ -80,7 +82,9 @@ HEADERS += \
     $$PWD/../include/model/stepdetector.h \
     $$PWD/../include/model/calibrationextractor.h \
     $$PWD/../include/model/pipelinerunner.h \
+    $$PWD/../include/model/clocktime.h \
     $$PWD/../include/model/csvseriesparser.h \
+    $$PWD/../include/model/csvserieswriter.h \
     $$PWD/../include/model/seriescolumnschema.h \
     $$PWD/../include/model/streamconfigschema.h \
     $$PWD/../include/model/processingtemplateschema.h \
@@ -165,6 +169,7 @@ SOURCES += \
     tst_streamconfigdialog.cpp \
     tst_exportdialog.cpp \
     tst_seriescolumnschema.cpp \
+    tst_csvseries.cpp \
     tst_streamconfigschema.cpp \
     tst_processingtemplateschema.cpp \
     tst_templatematcher.cpp \
@@ -199,6 +204,7 @@ HEADERS += \
     tst_streamconfigdialog.h \
     tst_exportdialog.h \
     tst_seriescolumnschema.h \
+    tst_csvseries.h \
     tst_streamconfigschema.h \
     tst_processingtemplateschema.h \
     tst_templatematcher.h \
