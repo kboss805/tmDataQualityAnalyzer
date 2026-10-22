@@ -38,6 +38,7 @@ SOURCES += \
     $$PWD/../src/model/framesyncfile.cpp \
     $$PWD/../src/model/frameprocessor.cpp \
     $$PWD/../src/model/stepdetector.cpp \
+    $$PWD/../src/model/streamjobbuilder.cpp \
     $$PWD/../src/model/calibrationextractor.cpp \
     $$PWD/../src/model/pipelinerunner.cpp \
     $$PWD/../src/model/clocktime.cpp \
@@ -82,6 +83,7 @@ HEADERS += \
     $$PWD/../include/model/framesync.h \
     $$PWD/../include/model/frameprocessor.h \
     $$PWD/../include/model/stepdetector.h \
+    $$PWD/../include/model/streamjobbuilder.h \
     $$PWD/../include/model/calibrationextractor.h \
     $$PWD/../include/model/pipelinerunner.h \
     $$PWD/../include/model/clocktime.h \
@@ -173,6 +175,7 @@ SOURCES += \
     tst_seriescolumnschema.cpp \
     tst_csvseries.cpp \
     tst_framesyncfile.cpp \
+    tst_streamjob.cpp \
     tst_streamconfigschema.cpp \
     tst_processingtemplateschema.cpp \
     tst_templatematcher.cpp \
@@ -209,6 +212,7 @@ HEADERS += \
     tst_seriescolumnschema.h \
     tst_csvseries.h \
     tst_framesyncfile.h \
+    tst_streamjob.h \
     tst_streamconfigschema.h \
     tst_processingtemplateschema.h \
     tst_templatematcher.h \

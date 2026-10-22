@@ -10,7 +10,6 @@
 #include "mainviewmodel.h"
 
 #include <algorithm>
-#include <unordered_map>
 
 #include <QCoreApplication>
 #include <QDir>
@@ -19,10 +18,9 @@
 
 #include "chapter10reader.h"
 #include "constants.h"
-#include "framesetup.h"
-#include "framesync.h"
 #include "processingcoordinator.h"
 #include "qtbridge.h"
+#include "streamjobbuilder.h"
 
 MainViewModel::MainViewModel(QObject* parent)
     : QObject(parent),
@@ -507,157 +505,49 @@ bool MainViewModel::buildStreamJob(const StreamConfig& cfg,
                                    StreamJob& out_job,
                                    QString& error)
 {
-    const QString stream_desc = cfg.label.isEmpty()
-        ? ("Ch " + QString::number(cfg.pcmChannelId)) : cfg.label;
-
-    // ---- Validate and decode inline frame sync fields ----
-    // The decode and the assignment below are shared with the calibration extraction, which
-    // must read the same bitstream (framesync.h).
-    Acquisition acquisition;
-    switch (resolveFrameSync(cfg.sync.pattern.toStdString(), cfg.sync.mask.toStdString(),
-                             acquisition.sync))
+    // The user's settings are Qt types; the job builder (the core) reads plain ones.
+    StreamJobConfig job_cfg;
+    job_cfg.pcmChannelId      = cfg.pcmChannelId;
+    job_cfg.label             = cfg.label.toStdString();
+    job_cfg.mode              = cfg.mode;
+    job_cfg.syncPattern       = cfg.sync.pattern.toStdString();
+    job_cfg.syncMask          = cfg.sync.mask.toStdString();
+    job_cfg.bitsInMinorFrame  = cfg.sync.bitsInMinorFrame;
+    job_cfg.randomized        = cfg.sync.randomized;
+    job_cfg.inverted          = cfg.sync.inverted;
+    job_cfg.dataRateMbps      = cfg.sync.dataRateMbps;
+    job_cfg.samplePeriodIndex = cfg.samplePeriodIndex;
+    job_cfg.polarityIndex     = cfg.polarityIndex;
+    job_cfg.slopeIndex        = cfg.slopeIndex;
+    job_cfg.scaleDdBPerV      = cfg.scaleDdBPerV;
+    job_cfg.numReceivers      = cfg.numReceivers;
+    job_cfg.receiverChannels  = cfg.receiverChannels;
+    if (!cfg.receiverParamsToml.isEmpty())
     {
-        case FrameSyncError::None:
-            break;
-        case FrameSyncError::PatternEmpty:
-            error = stream_desc + ": A frame sync pattern is required.";
-            return false;
-        case FrameSyncError::PatternInvalid:
-            error = stream_desc + ": Invalid frame sync pattern '" + cfg.sync.pattern + "'.";
-            return false;
-        case FrameSyncError::MaskInvalid:
-            error = stream_desc + ": Invalid frame sync mask '" + cfg.sync.mask + "'.";
-            return false;
+        job_cfg.receiverParamsToml = toFsPath(cfg.receiverParamsToml);
+    }
+    // The dialogs keep the extracted profiles in a QHash; the core takes a std map.
+    for (auto it = cfg.calibrationByWord.constBegin(); it != cfg.calibrationByWord.constEnd(); ++it)
+    {
+        job_cfg.calibrationByWord.emplace(it.key(), it.value());
     }
 
-    const int bits_in_minor_frame = cfg.sync.bitsInMinorFrame;
-    if (bits_in_minor_frame < PCMConstants::kMinFrameLengthBits)
+    // File-scoped, so it comes from the view model rather than from cfg: every job built for this
+    // recording gets the same value. Sourcing it per stream would allow one file's channels to
+    // disagree about their own byte order.
+    StreamJobContext context;
+    context.appRoot   = m_app_root.toStdString();
+    context.swapBytes = m_swap_bytes;
+
+    StreamJobReport report;
+    if (!::buildStreamJob(job_cfg, base, context, out_job, report))
     {
-        error = stream_desc + ": Bits/Frame must be >= " +
-                QString::number(PCMConstants::kMinFrameLengthBits) + ".";
+        error = QString::fromStdString(report.error);
         return false;
     }
-    // Derive word count for the frame-setup word-map loader.
-    int words_in_minor_frame = FrameSetup::wordsInMinorFrame(bits_in_minor_frame);
-
-    acquisition.bitsInMinorFrame = bits_in_minor_frame;
-    acquisition.randomized       = cfg.sync.randomized;
-    acquisition.inverted         = cfg.sync.inverted;
-    acquisition.dataRateMbps     = cfg.sync.dataRateMbps;
-    // File-scoped, so it comes from the view model rather than from cfg: every job
-    // built for this recording gets the same value. Sourcing it per stream would
-    // allow one file's channels to disagree about their own byte order.
-    acquisition.swapBytes        = m_swap_bytes;
-
-    // ---- Assemble the per-stream ProcessingParams ----
-    out_job.params = base;
-    out_job.params.pcmChannelId       = cfg.pcmChannelId;
-    applyAcquisition(out_job.params, acquisition);
-    out_job.params.mode               = cfg.mode;
-    out_job.params.streamLabel        = stream_desc.toStdString();
-
-    // Set per-stream sample period.
-    switch (cfg.samplePeriodIndex)
+    for (const std::string& line : report.log)
     {
-        case 0: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod1s;    break;
-        case 1: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod100ms; break;
-        case 2: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod10ms;  break;
-        default: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod100ms; break;
+        emit logMessageReceived(QString::fromStdString(line));
     }
-
-    // ---- Frame parameter table (word map + calibration) ----
-    if (cfg.mode == StreamMode::FrameSyncLockStats)
-    {
-        // Lock-only: no receiver parameters needed.
-        out_job.frameSetup = std::make_shared<FrameSetup>();
-        return true;
-    }
-
-    // Built directly into out_job.frameSetup (not a local shared_ptr moved in at
-    // the end) — that avoids a live-but-moved-from local sitting in scope after
-    // its "last" use, which a future edit could silently dereference as null.
-    out_job.frameSetup = std::make_shared<FrameSetup>();
-    if (cfg.receiverParamsToml.isEmpty())
-    {
-        // No Receiver Parameters TOML provided: fall back to the shipped default
-        // Receiver Parameters file rather than synthesizing a sequential word map.
-        const QString default_rcvr_params = m_app_root + "/" + UIConstants::kSettingsDirName +
-            "/" + UIConstants::kReceiverParamsDirName + "/" + UIConstants::kDefaultTomlFilename;
-        if (QFileInfo::exists(default_rcvr_params) &&
-            out_job.frameSetup->tryLoadingFile(toFsPath(default_rcvr_params), words_in_minor_frame))
-        {
-            // Loaded successfully from the default file.
-        }
-        else
-        {
-            // Default file missing or unusable: build the default word map
-            // (sequential words for NumReceivers x ReceiverChannels parameters).
-            std::string map_error;
-            if (!out_job.frameSetup->buildDefaultReceiverMap(cfg.numReceivers, cfg.receiverChannels,
-                                                             words_in_minor_frame, map_error))
-            {
-                error = stream_desc + ": " + QString::fromStdString(map_error);
-                return false;
-            }
-        }
-    }
-    else if (!QFileInfo::exists(cfg.receiverParamsToml))
-    {
-        error = stream_desc + ": Receiver Parameters file '" +
-                QFileInfo(cfg.receiverParamsToml).fileName() + "' was not found.";
-        return false;
-    }
-    else if (!out_job.frameSetup->tryLoadingFile(toFsPath(cfg.receiverParamsToml), words_in_minor_frame))
-    {
-        error = stream_desc + ": Failed to load Receiver Parameters from '" +
-                QFileInfo(cfg.receiverParamsToml).fileName() + "'. Check the word map.";
-        return false;
-    }
-    if (out_job.frameSetup->length() == 0)
-    {
-        error = stream_desc + ": Receiver Parameters file contains no parameters.";
-        return false;
-    }
-
-    // Read calibration directly from the StreamConfig (set via the Receiver SNR sub-dialog).
-    int polarity_idx      = cfg.polarityIndex;
-    int slope_idx         = cfg.slopeIndex;
-    double scale_dB_per_V = cfg.scaleDdBPerV;
-
-    if (scale_dB_per_V <= 0)
-    {
-        error = stream_desc + ": Scale (dB/V) must be a positive number.";
-        return false;
-    }
-    if (slope_idx < 0 || slope_idx > UIConstants::kMaxSlopeIndex)
-    {
-        error = stream_desc + ": Slope index is invalid.";
-        return false;
-    }
-
-    // The linear voltage→dB math lives in the Model (FrameSetup) so it is
-    // single-sourced and unit-testable rather than inline in the ViewModel.
-    out_job.frameSetup->applyLinearCalibration(polarity_idx, slope_idx, scale_dB_per_V);
-
-    // Attach non-linear step-calibration profiles (US5.3) by word index (Model side).
-    if (!cfg.calibrationByWord.isEmpty())
-    {
-        // The dialogs keep the extracted profiles in a QHash; the core takes a std map.
-        std::unordered_map<int, CalibrationProfile> profiles;
-        for (auto it = cfg.calibrationByWord.constBegin(); it != cfg.calibrationByWord.constEnd(); ++it)
-            profiles.emplace(it.key(), it.value());
-        const int attached = out_job.frameSetup->attachCalibrationProfiles(profiles);
-        // Surface whether profiles actually reached the word map: provided > 0 but
-        // attached == 0 means a word-index mismatch and a silent fall back to linear.
-        emit logMessageReceived("  " + stream_desc + ": non-linear calibration — provided "
-                    + QString::number(cfg.calibrationByWord.size())
-                    + " profile(s), attached " + QString::number(attached) + " to word map.");
-    }
-    else
-    {
-        emit logMessageReceived("  " + stream_desc
-            + ": no non-linear calibration profiles configured — using linear calibration.");
-    }
-
     return true;
 }

@@ -17,7 +17,7 @@ namespace {
 const QStringList kCoreSources = {
     "calibrationextractor", "ch10packetreader", "channeldata", "chapter10reader", "clocktime",
     "csvseriesparser", "csvserieswriter", "frameprocessor", "framesetup", "framesyncfile", "pipelinerunner",
-    "seriescolumnschema", "stepdetector", "templatematcher", "textfile", "tomldocument",
+    "seriescolumnschema", "stepdetector", "streamjobbuilder", "templatematcher", "textfile", "tomldocument",
 };
 
 /// The model sources that are, on purpose, still Qt: they read and write UI-session state (processing

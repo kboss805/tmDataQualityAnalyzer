@@ -26,6 +26,7 @@
 #include "tst_exportdialog.h"
 #include "tst_csvseries.h"
 #include "tst_framesyncfile.h"
+#include "tst_streamjob.h"
 #include "tst_seriescolumnschema.h"
 #include "tst_streamconfigschema.h"
 #include "tst_processingtemplateschema.h"
@@ -138,6 +139,7 @@ int main(int argc, char* argv[])
     status |= runSuite<TestSeriesColumnSchema>(log_path);
     status |= runSuite<TestCsvSeries>(log_path);
     status |= runSuite<TestFrameSyncFile>(log_path);
+    status |= runSuite<TestStreamJob>(log_path);
     status |= runSuite<TestStreamConfigSchema>(log_path);
     status |= runSuite<TestProcessingTemplateSchema>(log_path);
     status |= runSuite<TestTemplateMatcher>(log_path);

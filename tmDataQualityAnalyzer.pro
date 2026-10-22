@@ -74,6 +74,7 @@ SOURCES += \
     src/model/framesyncfile.cpp \
     src/model/frameprocessor.cpp \
     src/model/stepdetector.cpp \
+    src/model/streamjobbuilder.cpp \
     src/model/calibrationextractor.cpp \
     src/model/pipelinerunner.cpp \
     src/model/clocktime.cpp \
@@ -150,6 +151,7 @@ HEADERS += \
     include/model/framesync.h \
     include/model/frameprocessor.h \
     include/model/stepdetector.h \
+    include/model/streamjobbuilder.h \
     include/model/calibrationextractor.h \
     include/model/pipelinerunner.h \
     include/model/clocktime.h \
