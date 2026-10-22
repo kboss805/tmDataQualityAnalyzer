@@ -35,6 +35,18 @@ private slots:
     void parseUnqualifiedHeaderDefaultsToSourceZero();
     void headerStartingWithLetterSButNotAQualifierIsUnaffected();
     void roundTripPreservesSourceId();
+
+    // Edge cases pinned against the QString implementation BEFORE it moved to std::string (de-Qt,
+    // plan step 1.1): what a hand-edited or third-party CSV header resolves to.
+    void parseEdgeCasesKeepTheirRecordedBehaviour_data();
+    void parseEdgeCasesKeepTheirRecordedBehaviour();
+    void formatEdgeCasesKeepTheirRecordedBehaviour_data();
+    void formatEdgeCasesKeepTheirRecordedBehaviour();
+
+    // The Qt-free implementation against the QString one it replaced, kept in the test as an oracle.
+    void theStdImplementationReadsEveryGeneratedHeaderLikeTheQStringOne();
+    void theStdFormattersAgreeWithTheQStringOnes();
+    void aNameThatLooksLikeASourceQualifierDoesNotRoundTrip();
 };
 
 #endif // TST_SERIESCOLUMNSCHEMA_H

@@ -67,10 +67,11 @@ CsvParseResult CsvSeriesParser::parse(const QString& filepath)
         // Column identity (metric type, name, stream label/order, source, receiver)
         // comes from the shared schema — the exact inverse of the column headers
         // written by PlotViewModel::exportCsv().
+        // The schema is Qt-free (UTF-8 std::string); the series keeps QString.
         const SeriesColumnSchema::ParsedColumn col =
-            SeriesColumnSchema::parseColumnHeader(columns[i + 1].trimmed());
-        s.name          = col.name;
-        s.streamLabel   = col.streamLabel;
+            SeriesColumnSchema::parseColumnHeader(columns[i + 1].trimmed().toStdString());
+        s.name          = QString::fromStdString(col.name);
+        s.streamLabel   = QString::fromStdString(col.streamLabel);
         s.metricType    = col.metricType;
         s.streamOrder   = col.streamOrder;
         s.receiverIndex = col.receiverIndex;

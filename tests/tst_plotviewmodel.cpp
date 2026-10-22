@@ -1784,3 +1784,90 @@ void TestPlotViewModel::exportCsvRoundTripsThroughLoad()
     QFile::remove(out_path);
 }
 
+// ---------------------------------------------------------------------------
+// The CSV column header, as the plot's callers use it (de-Qt, plan step 1.1).
+//
+// SeriesColumnSchema is tested thoroughly on its own (tst_seriescolumnschema), but it is Qt-free and
+// the two layers that call it hold QStrings and convert at the call. These pin what the CALLERS do
+// with it - found missing when a mutation run changed each of them and nothing failed: import decoding
+// a non-ASCII name as Latin-1, export encoding one as Latin-1, and export dropping the source id.
+// ---------------------------------------------------------------------------
+
+/// The first line of a file, as raw bytes (no decoding in the way).
+static QByteArray firstLineOf(const QString& path)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly))
+        return {};
+    return f.readLine().trimmed();
+}
+
+void TestPlotViewModel::csvImportKeepsNonAsciiSeriesNames()
+{
+    const QString label = QStringLiteral("R") + QChar(0x00E9) + QStringLiteral("cepteur ") + QChar(0x03A9);
+    const QString csv = QString("Time (DOY:HH:MM:SS.mmm),") + label + " Lock (%),40 - " + label + " L_RCVR2\n"
+                        "1:00:00:00.000,100.0,-80.0\n"
+                        "1:00:00:01.000,99.0,-79.0\n";
+
+    PlotViewModel vm;
+    QVERIFY(vm.loadCsvFile(writeTempCsv(csv)));
+    QCOMPARE(vm.seriesCount(), 2);
+
+    const PlotSeriesData& lock = vm.seriesAt(0);
+    QVERIFY(lock.metricType == PlotSeriesData::MetricType::FrameSyncLock);
+    QCOMPARE(lock.name, label);
+    QCOMPARE(lock.streamLabel, label);
+
+    const PlotSeriesData& snr = vm.seriesAt(1);
+    QVERIFY(snr.metricType == PlotSeriesData::MetricType::SNR);
+    QCOMPARE(snr.name, QString("40 - ") + label + " L_RCVR2");
+    QCOMPARE(snr.streamLabel, label);
+    QCOMPARE(snr.streamOrder, 40);
+    QCOMPARE(snr.receiverIndex, 2);
+}
+
+void TestPlotViewModel::csvExportWritesNonAsciiNamesAsUtf8()
+{
+    const QString label = QStringLiteral("R") + QChar(0x00E9) + QStringLiteral("cepteur ") + QChar(0x03A9);
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream(label, 7, {0.0, 1.0}, {90.0, 95.0}, {0.0, 1.0}));
+
+    const QString path = writeTempCsv("");   // mint a unique path; exportCsv overwrites it
+    QVERIFY(vm.exportCsv(path));
+
+    // Compared as bytes: the header must be UTF-8 on disk, whatever the platform's code page.
+    const QByteArray utf8_label = "R\xC3\xA9" "cepteur \xCE\xA9";
+    QCOMPARE(firstLineOf(path),
+             QByteArray("Time (DOY:HH:MM:SS.mmm),") + utf8_label + " Lock (%),"
+                 + utf8_label + " Accumulated Missed Frames");
+}
+
+void TestPlotViewModel::csvExportQualifiesEverySeriesOfALaterSource()
+{
+    // Two sources that reuse the same channel and label (a batch of recordings of one layout) must not
+    // export as identical, ambiguous columns: source 0 stays unqualified, a later source gets "S<n>| ".
+    PlotViewModel vm;
+    vm.addStreamData(makeLockAndErrorStream("Ch 5", 5, {0.0, 1.0}, {90.0, 95.0}, {0.0, 1.0}, /*source_id=*/0));
+    vm.addStreamData(makeLockAndErrorStream("Ch 5", 5, {0.0, 1.0}, {80.0, 85.0}, {0.0, 2.0}, /*source_id=*/2));
+    QCOMPARE(vm.seriesCount(), 4);
+
+    const QString path = writeTempCsv("");
+    QVERIFY(vm.exportCsv(path));
+    QCOMPARE(firstLineOf(path),
+             QByteArray("Time (DOY:HH:MM:SS.mmm),Ch 5 Lock (%),Ch 5 Accumulated Missed Frames,"
+                        "S2| Ch 5 Lock (%),S2| Ch 5 Accumulated Missed Frames"));
+
+    // And it reads back as the same two sources.
+    PlotViewModel reloaded;
+    QVERIFY(reloaded.loadCsvFile(path));
+    QCOMPARE(reloaded.seriesCount(), 4);
+    int source_zero = 0, source_two = 0;
+    for (int i = 0; i < reloaded.seriesCount(); ++i)
+    {
+        source_zero += reloaded.seriesAt(i).sourceId == 0;
+        source_two  += reloaded.seriesAt(i).sourceId == 2;
+        QCOMPARE(reloaded.seriesAt(i).name, QString("Ch 5"));   // the qualifier never leaks into the name
+    }
+    QCOMPARE(source_zero, 2);
+    QCOMPARE(source_two, 2);
+}

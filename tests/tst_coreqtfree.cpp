@@ -16,16 +16,15 @@ namespace {
 /// the file readers to the calibration extraction. They must compile with no Qt.
 const QStringList kCoreSources = {
     "calibrationextractor", "ch10packetreader", "channeldata", "chapter10reader", "frameprocessor",
-    "framesetup", "pipelinerunner", "stepdetector", "textfile", "tomldocument",
+    "framesetup", "pipelinerunner", "seriescolumnschema", "stepdetector", "textfile", "tomldocument",
 };
 
 /// The model sources that are, on purpose, still Qt: they read and write UI-session state (the CSV
-/// import for the plot, processing templates, stream-config JSON, the series column header
-/// format) and are not part of the decode pipeline. Listing them is what makes a new model file
+/// import for the plot, processing templates, stream-config JSON) and are not part of the decode
+/// pipeline. Listing them is what makes a new model file
 /// have to be classified.
 const QStringList kUiSessionSources = {
-    "csvseriesparser", "processingtemplateschema", "seriescolumnschema", "streamconfigschema",
-    "templatematcher",
+    "csvseriesparser", "processingtemplateschema", "streamconfigschema", "templatematcher",
 };
 
 QString projectRoot()

@@ -162,6 +162,7 @@ HEADERS += \
     include/dto/framesyncparams.h \
     include/dto/processingparams.h \
     include/dto/processedstreamdata.h \
+    include/dto/metrictype.h \
     include/dto/streammode.h \
     include/dto/plotseriesdata.h \
     include/dto/calibrationprofile.h \

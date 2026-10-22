@@ -8,14 +8,17 @@
  * (CsvSeriesParser) MUST stay inverses — historically they lived apart with a
  * "keep in lockstep" comment. This module owns both sides so they can't drift,
  * and is covered by a round-trip test (tst_seriescolumnschema).
+ *
+ * Part of the Qt-free core: text is UTF-8 `std::string`, and `TestCoreQtFree`
+ * keeps it so. The callers that hold QStrings convert at the call.
  */
 
 #ifndef SERIESCOLUMNSCHEMA_H
 #define SERIESCOLUMNSCHEMA_H
 
-#include <QString>
+#include <string>
 
-#include "plotseriesdata.h"
+#include "metrictype.h"
 
 namespace SeriesColumnSchema
 {
@@ -39,21 +42,21 @@ namespace SeriesColumnSchema
     /// walking columns left to right, not something a single header carries.
     struct ParsedColumn
     {
-        PlotSeriesData::MetricType metricType = PlotSeriesData::MetricType::SNR;
-        QString name;            ///< Presentation name (metric suffix AND source qualifier stripped).
-        QString streamLabel;     ///< Owning stream's label.
-        int     streamOrder   = 0; ///< Source PCM channel id (SNR only; 0 otherwise).
-        int     receiverIndex = 0; ///< 1-based receiver from "_RCVR<N>" (SNR only; 0 otherwise).
-        int     sourceId      = 0; ///< Multi-file session source id recovered from a leading "S<n>| "
-                                    ///< qualifier (see columnHeader()); 0 if the header carries none.
+        MetricType  metricType = MetricType::SNR;
+        std::string name;            ///< Presentation name (metric suffix AND source qualifier stripped).
+        std::string streamLabel;     ///< Owning stream's label.
+        int         streamOrder   = 0; ///< Source PCM channel id (SNR only; 0 otherwise).
+        int         receiverIndex = 0; ///< 1-based receiver from "_RCVR<N>" (SNR only; 0 otherwise).
+        int         sourceId      = 0; ///< Multi-file session source id recovered from a leading "S<n>| "
+                                       ///< qualifier (see columnHeader()); 0 if the header carries none.
     };
 
     /// The in-memory display name for one Receiver-SNR channel series:
     /// "<pcmChannelId> - <streamLabel> <channelName>". The leading channel id keeps
     /// multiple SNR streams distinct in the legend and across a CSV round-trip.
     /// Used by PlotViewModel::addStreamData().
-    QString snrSeriesName(int pcmChannelId, const QString& streamLabel,
-                          const QString& channelName);
+    std::string snrSeriesName(int pcmChannelId, const std::string& streamLabel,
+                              const std::string& channelName);
 
     /// The CSV column header for a series: its name, plus a metric suffix for the
     /// left-axis metrics (Frame Sync Lock / Accumulated Missed Frames) whose bare
@@ -68,8 +71,9 @@ namespace SeriesColumnSchema
     /// sources sharing a channel id/label never export as identical, ambiguous
     /// columns; parseColumnHeader() strips it back off before recovering identity.
     ///
-    /// Used by PlotViewModel::exportCsv().
-    QString columnHeader(const PlotSeriesData& series);
+    /// Takes the three fields that make up a header rather than the plot's series
+    /// struct, which carries Qt types. Used by PlotViewModel::exportCsv().
+    std::string columnHeader(MetricType metricType, const std::string& name, int sourceId);
 
     /// Inverse of columnHeader(): classify a data-column header and recover its
     /// identity fields, including sourceId from a leading "S<n>| " qualifier if
@@ -77,7 +81,12 @@ namespace SeriesColumnSchema
     /// every other case). An SNR-shaped header ("<digits> - …") always resolves as
     /// SNR; otherwise a recognized metric suffix picks Lock/MissedFrames; anything
     /// else resolves as SNR with a bare name. Used by CsvSeriesParser::parse().
-    ParsedColumn parseColumnHeader(const QString& header);
+    ///
+    /// Numbers are read with `QString::toInt()`'s rules (textparse.h): surrounding
+    /// whitespace and a leading '+' are tolerated, junk or overflow reads as "not a
+    /// number". Digits are ASCII only: Qt also treated Unicode digits as the start
+    /// of an SNR id, which no export of this application produces.
+    ParsedColumn parseColumnHeader(const std::string& header);
 }
 
 #endif // SERIESCOLUMNSCHEMA_H

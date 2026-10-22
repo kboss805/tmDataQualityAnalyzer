@@ -17,6 +17,8 @@
 #include <QString>
 #include <QVector>
 
+#include "metrictype.h"
+
 /**
  * @brief Data for a single plot series (one receiver channel or lock statistic).
  *
@@ -25,10 +27,10 @@
  */
 struct PlotSeriesData
 {
-    /// Distinguishes SNR series (right axis) from the left-axis frame-sync metrics.
-    /// FrameSyncLock and AccumulatedMissedFrames share the left axis and are shown one at a
-    /// time per the active LockAxisView.
-    enum class MetricType { SNR, FrameSyncLock, AccumulatedMissedFrames };
+    /// Distinguishes SNR series (right axis) from the left-axis frame-sync metrics (see metrictype.h,
+    /// where it lives so the Qt-free CSV schema can name it). Kept as a member alias so every
+    /// PlotSeriesData::MetricType::X still spells the same.
+    using MetricType = ::MetricType;
 
     QString name;             ///< Column header, e.g., "L_RCVR1" or "Framesync Lock (%)".
     QString streamLabel;      ///< Source stream's label (ProcessedStreamData::streamLabel); identifies

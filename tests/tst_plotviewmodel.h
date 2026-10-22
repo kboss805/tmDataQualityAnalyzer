@@ -55,6 +55,11 @@ private slots:
     void addStreamDataErrorSeriesCreated();
     void seriesOfOneStreamShareOneTimeAxis();
     void aNonAsciiStreamLabelReachesEverySeries();
+
+    // The CSV column header as the plot's callers use it (schema moved into the Qt-free core)
+    void csvImportKeepsNonAsciiSeriesNames();
+    void csvExportWritesNonAsciiNamesAsUtf8();
+    void csvExportQualifiesEverySeriesOfALaterSource();
     void errorSeriesSharesLockColor();
     void setLockAxisViewTogglesVisibility();
     void setLockAxisViewPreservesStreamSelection();
