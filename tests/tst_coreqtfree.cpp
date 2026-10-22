@@ -17,14 +17,14 @@ namespace {
 const QStringList kCoreSources = {
     "calibrationextractor", "ch10packetreader", "channeldata", "chapter10reader", "clocktime",
     "csvseriesparser", "csvserieswriter", "frameprocessor", "framesetup", "pipelinerunner",
-    "seriescolumnschema", "stepdetector", "textfile", "tomldocument",
+    "seriescolumnschema", "stepdetector", "templatematcher", "textfile", "tomldocument",
 };
 
 /// The model sources that are, on purpose, still Qt: they read and write UI-session state (processing
 /// templates, stream-config JSON) and are not part of the decode pipeline. Listing them is what makes a
 /// new model file have to be classified.
 const QStringList kUiSessionSources = {
-    "processingtemplateschema", "streamconfigschema", "templatematcher",
+    "processingtemplateschema", "streamconfigschema",
 };
 
 QString projectRoot()

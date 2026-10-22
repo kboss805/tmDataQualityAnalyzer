@@ -215,6 +215,54 @@ void TestBatchController::missingFilesAreSkippedAndReported()
     QVERIFY2(summary.contains("0 processed") && summary.contains("2 skipped"), qPrintable(summary));
 }
 
+void TestBatchController::aFileWhoseChannelsNoLongerMatchIsSkippedAtItsTurn()
+{
+    // The up-front check can be stale by the time a file's turn comes (it may have changed on disk), so
+    // the loop compares the freshly loaded file with the template once more and skips a mismatch instead
+    // of feeding it configs for channels it does not have. start() does not validate, so handing it a
+    // file the template does not describe reaches that second check.
+    QDir dir(QCoreApplication::applicationDirPath());
+    dir.cdUp();
+    const QString prn = dir.filePath("data/test files/prn_testfile, sample.ch10");   // channels 13..16
+    if (!QFileInfo::exists(prn))
+        QSKIP("prn sample fixture not available");
+
+    MainViewModel view_model;
+    PlotViewModel plot;
+    BatchController batch(&view_model, &plot);
+    QSignalSpy finished(&batch, &BatchController::finished);
+    QSignalSpy messages(&batch, &BatchController::message);
+
+    ProcessingTemplate tmpl;
+    for (int id : { 13, 14 })   // the file also has 15 and 16
+    {
+        TemplateStreamEntry entry;
+        entry.config.pcmChannelId = id;
+        tmpl.entries.append(entry);
+    }
+
+    batch.start(tmpl, { prn }, BatchController::Options{});
+    QCOMPARE(finished.count(), 0);   // waiting for the file to be reported open
+    QVERIFY(batch.active());
+
+    batch.onSourceReady();           // what the View does when the source has loaded
+
+    QCOMPARE(finished.count(), 1);
+    QVERIFY(!batch.active());
+
+    bool skipped_warning = false;
+    QString summary;
+    for (const QList<QVariant>& call : messages)
+    {
+        const QString text = call.at(1).toString();
+        skipped_warning |= text.startsWith("Skipped (channels no longer match template)");
+        if (text.startsWith("Batch complete"))
+            summary = text;
+    }
+    QVERIFY(skipped_warning);
+    QVERIFY2(summary.contains("0 processed") && summary.contains("1 skipped"), qPrintable(summary));
+}
+
 void TestBatchController::startWithNoFilesDoesNothing()
 {
     // Nothing matched the template, so there is no run: no session is cleared and

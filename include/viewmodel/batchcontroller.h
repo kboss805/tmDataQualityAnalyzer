@@ -17,6 +17,9 @@
 #define BATCHCONTROLLER_H
 
 #include <functional>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include <QObject>
 #include <QString>
@@ -26,6 +29,7 @@
 #include "mainviewmodel.h"
 #include "processingtemplate.h"
 #include "source.h"
+#include "templatematcher.h"
 
 class PlotViewModel;
 
@@ -65,6 +69,12 @@ public:
     /// which files will run and which are rejected, and why. Reads each file's
     /// channels, so it is the slow part of starting a batch.
     static QVector<FileCheck> validate(const ProcessingTemplate& tmpl, const QStringList& files);
+
+    /// Exact-set comparison of @p tmpl's PCM channel ids against a file's channels (the reader's
+    /// getPCMChannelList() form: (id, name) pairs; the names play no part). The comparison itself is the
+    /// Qt-free TemplateMatcher; this reads the ids out of the Qt template.
+    static TemplateMatcher::MatchResult matchFile(const ProcessingTemplate& tmpl,
+                                                  const std::vector<std::pair<int, std::string>>& fileChannels);
 
     /// Captures a processed source as a template: its per-stream configs, time
     /// channel and byte order, plus each plot series' current name and color.

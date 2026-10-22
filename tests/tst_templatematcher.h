@@ -13,13 +13,25 @@ class TestTemplateMatcher : public QObject
     Q_OBJECT
 
 private slots:
-    void templateChannelIdsCollectsEveryEntry();
+    void everyTemplateEntryCountsAsAChannel();
     void matchesWhenChannelSetsIdentical();
     void matchesRegardlessOfChannelOrder();
     void rejectsWhenFileMissingAChannel();
     void rejectsWhenFileHasExtraChannel();
     void rejectsAndReportsBothMissingAndExtra();
-    void fileMatchesTemplatePredicateAgrees();
+    void okMeansNothingMissingAndNothingExtra();
+
+    // Edge cases pinned against the QSet implementation BEFORE it moved to the core (de-Qt, plan
+    // step 1.3).
+    void aTemplateAndAFileWithNoChannelsMatch();
+    void anEmptyTemplateFindsEveryFileChannelExtra();
+    void repeatedChannelsCountOnce();
+    void missingAndExtraComeBackSorted();
+    void anyIntegerCanBeAChannelId();
+    void channelNamesPlayNoPart();
+
+    // The implementation the core replaced, kept in the test and compared over generated input.
+    void matchesLikeTheQSetImplementationOverGeneratedInputs();
 };
 
 #endif // TST_TEMPLATEMATCHER_H

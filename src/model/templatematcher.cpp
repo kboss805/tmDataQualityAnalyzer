@@ -6,47 +6,31 @@
 #include "templatematcher.h"
 
 #include <algorithm>
+#include <iterator>
 
-#include "processingtemplate.h"
+namespace {
 
-QSet<int> TemplateMatcher::templateChannelIds(const ProcessingTemplate& tmpl)
+/// @p ids as a sorted set: ascending, each once.
+std::vector<int> asSet(std::vector<int> ids)
 {
-    QSet<int> ids;
-    for (const TemplateStreamEntry& entry : tmpl.entries)
-        ids.insert(entry.config.pcmChannelId);
+    std::sort(ids.begin(), ids.end());
+    ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
     return ids;
 }
 
-TemplateMatcher::MatchResult TemplateMatcher::matchFile(
-    const ProcessingTemplate& tmpl,
-    const QList<QPair<int, QString>>& fileChannels)
-{
-    const QSet<int> templateIds = templateChannelIds(tmpl);
+} // namespace
 
-    QSet<int> fileIds;
-    for (const QPair<int, QString>& ch : fileChannels)
-        fileIds.insert(ch.first);
+TemplateMatcher::MatchResult TemplateMatcher::match(const std::vector<int>& templateIds,
+                                                    const std::vector<int>& fileIds)
+{
+    const std::vector<int> wanted = asSet(templateIds);
+    const std::vector<int> present = asSet(fileIds);
 
     MatchResult result;
-    for (int id : templateIds)
-    {
-        if (!fileIds.contains(id))
-            result.missing.append(id);
-    }
-    for (int id : fileIds)
-    {
-        if (!templateIds.contains(id))
-            result.extra.append(id);
-    }
-
-    std::sort(result.missing.begin(), result.missing.end());
-    std::sort(result.extra.begin(), result.extra.end());
-    result.ok = result.missing.isEmpty() && result.extra.isEmpty();
+    std::set_difference(wanted.begin(), wanted.end(), present.begin(), present.end(),
+                        std::back_inserter(result.missing));
+    std::set_difference(present.begin(), present.end(), wanted.begin(), wanted.end(),
+                        std::back_inserter(result.extra));
+    result.ok = result.missing.empty() && result.extra.empty();
     return result;
-}
-
-bool TemplateMatcher::fileMatchesTemplate(const ProcessingTemplate& tmpl,
-                                          const QList<QPair<int, QString>>& fileChannels)
-{
-    return matchFile(tmpl, fileChannels).ok;
 }
