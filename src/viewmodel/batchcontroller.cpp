@@ -11,7 +11,6 @@
 #include "chapter10reader.h"
 #include "plotviewmodel.h"
 #include "qtbridge.h"
-#include "templatematcher.h"
 
 namespace {
 
@@ -20,7 +19,7 @@ namespace {
 QString describeMismatch(const TemplateMatcher::MatchResult& match)
 {
     QStringList parts;
-    if (!match.missing.isEmpty())
+    if (!match.missing.empty())
     {
         QStringList ids;
         for (int id : match.missing)
@@ -29,7 +28,7 @@ QString describeMismatch(const TemplateMatcher::MatchResult& match)
         }
         parts << QObject::tr("missing channel(s): %1").arg(ids.join(", "));
     }
-    if (!match.extra.isEmpty())
+    if (!match.extra.empty())
     {
         QStringList ids;
         for (int id : match.extra)
@@ -69,8 +68,7 @@ QVector<BatchController::FileCheck> BatchController::validate(const ProcessingTe
         }
         else
         {
-            const TemplateMatcher::MatchResult match =
-                TemplateMatcher::matchFile(tmpl, toQPairList(reader.getPCMChannelList()));
+            const TemplateMatcher::MatchResult match = matchFile(tmpl, reader.getPCMChannelList());
             check.ok = match.ok;
             if (!match.ok)
             {
@@ -80,6 +78,24 @@ QVector<BatchController::FileCheck> BatchController::validate(const ProcessingTe
         checks.append(check);
     }
     return checks;
+}
+
+TemplateMatcher::MatchResult BatchController::matchFile(const ProcessingTemplate& tmpl,
+                                                       const std::vector<std::pair<int, std::string>>& fileChannels)
+{
+    std::vector<int> template_ids;
+    template_ids.reserve(static_cast<std::size_t>(tmpl.entries.size()));
+    for (const TemplateStreamEntry& entry : tmpl.entries)
+    {
+        template_ids.push_back(entry.config.pcmChannelId);
+    }
+    std::vector<int> file_ids;
+    file_ids.reserve(fileChannels.size());
+    for (const auto& channel : fileChannels)
+    {
+        file_ids.push_back(channel.first);
+    }
+    return TemplateMatcher::match(template_ids, file_ids);
 }
 
 ProcessingTemplate BatchController::buildTemplate(const Source& src, const PlotViewModel& plot)
@@ -215,8 +231,7 @@ void BatchController::applySourceConfig()
 {
     // Belt-and-suspenders re-check against the freshly loaded file (the up-front
     // validation could be stale if the file changed on disk since it was picked).
-    const TemplateMatcher::MatchResult match =
-        TemplateMatcher::matchFile(m_template, toQPairList(m_view_model->reader()->getPCMChannelList()));
+    const TemplateMatcher::MatchResult match = matchFile(m_template, m_view_model->reader()->getPCMChannelList());
     if (!match.ok)
     {
         emit message(MainViewModel::LogLevel::Warning,
