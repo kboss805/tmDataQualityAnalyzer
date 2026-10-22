@@ -44,6 +44,7 @@ SOURCES += \
     $$PWD/../src/model/clocktime.cpp \
     $$PWD/../src/model/csvseriesparser.cpp \
     $$PWD/../src/model/csvserieswriter.cpp \
+    $$PWD/../src/model/seriesbuilder.cpp \
     $$PWD/../src/model/seriescolumnschema.cpp \
     $$PWD/../src/model/streamconfigschema.cpp \
     $$PWD/../src/model/processingtemplateschema.cpp \
@@ -89,6 +90,7 @@ HEADERS += \
     $$PWD/../include/model/clocktime.h \
     $$PWD/../include/model/csvseriesparser.h \
     $$PWD/../include/model/csvserieswriter.h \
+    $$PWD/../include/model/seriesbuilder.h \
     $$PWD/../include/model/seriescolumnschema.h \
     $$PWD/../include/model/streamconfigschema.h \
     $$PWD/../include/model/processingtemplateschema.h \
@@ -176,6 +178,7 @@ SOURCES += \
     tst_csvseries.cpp \
     tst_framesyncfile.cpp \
     tst_streamjob.cpp \
+    tst_seriesbuild.cpp \
     tst_streamconfigschema.cpp \
     tst_processingtemplateschema.cpp \
     tst_templatematcher.cpp \
@@ -213,6 +216,7 @@ HEADERS += \
     tst_csvseries.h \
     tst_framesyncfile.h \
     tst_streamjob.h \
+    tst_seriesbuild.h \
     tst_streamconfigschema.h \
     tst_processingtemplateschema.h \
     tst_templatematcher.h \

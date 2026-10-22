@@ -80,6 +80,7 @@ SOURCES += \
     src/model/clocktime.cpp \
     src/model/csvseriesparser.cpp \
     src/model/csvserieswriter.cpp \
+    src/model/seriesbuilder.cpp \
     src/model/seriescolumnschema.cpp \
     src/model/streamconfigschema.cpp \
     src/model/processingtemplateschema.cpp \
@@ -157,6 +158,7 @@ HEADERS += \
     include/model/clocktime.h \
     include/model/csvseriesparser.h \
     include/model/csvserieswriter.h \
+    include/model/seriesbuilder.h \
     include/model/seriescolumnschema.h \
     include/model/streamconfigschema.h \
     include/model/processingtemplateschema.h \

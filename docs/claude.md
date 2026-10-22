@@ -522,6 +522,83 @@ v2.9.0 intended. Every first-party header here is quote-included, so `anglebrack
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
 
+#### Series construction and the shared time axis are in the Qt-free core (plan step 1.6)
+
+Sixth step of stage 1 of `docs/dotnet-migration/avalonia-plan.md`: the data half of `PlotViewModel::addStreamData`,
+`removeSource` and the CSV import's commit.
+
+**What moved** (`include/model/seriesbuilder.h`, `src/model/seriesbuilder.cpp`, no Qt, listed in `TestCoreQtFree`):
+
+- **`buildStreamSeries(data, baseAbsSeconds)`** turns a processed stream into the series it yields: lock %, then
+  accumulated missed frames, then one per receiver channel, each with its name (the stream label, or the SNR name),
+  its receiver number (the number after the last `_RCVR`, 0 when there is none or it is not a number), its channel
+  index within its receiver, its stream order, job index and source, and its cached value range (with `qMin`'s
+  treatment of NaN). It also returns the elapsed axis. The series' values are `std::span` views of the processed
+  stream, not copies.
+- **`SeriesTimeBase`** is the clock the shared elapsed axis hangs from: `adopt` (a stream arrives: the base is its
+  first sample if nothing is loaded, else it moves only earlier, and the call returns how far existing series must
+  shift right), `advance` (a source was removed: the base moves up to the earliest remaining sample, and the call
+  returns how far to shift left), `overlaps` (whether a new source touches what is loaded; touching at one instant
+  counts), `setClock` (a CSV states its own day and time of day), and the day and time of day of the base.
+- **`assignImportedStreamOrders`** gives an imported CSV's lock and missed-frames series the order of their stream:
+  that of the SNR series with the same label in the same source, else a fresh one above every order in the file.
+- **`StreamKey`** (`streamKeyOf`) is the identity rule for "this stream run again": source, label and channel
+  together.
+
+**What did not move, and why.** The sample storage stays in `PlotViewModel`'s `QVector<PlotSeriesData>`. The plot
+and the chart rely on `QVector`'s implicit sharing - one elapsed array per stream, referenced by each of its series
+and by the chart - and putting the samples in the core would copy every one. So the core works on views and returns
+values; the plot converts them once, building ONE elapsed buffer per stream and sharing it, and keeps colours,
+visibility, axis ranges, sorting by job index and the signals. How the C# application holds its series is for
+stage 3 to decide; this is the logic it will call. The plan's wording ("building series ... into the core") is met
+for the logic, not for the container.
+
+**Tests first, on the old code.** A new suite, `TestSeriesBuild`, pins 77 scenarios through `PlotViewModel`, each as
+one line: the time base, the span, the flags, the warnings, and every series' identity, indices, cached range and
+samples. They cover what a stream becomes (lock only, with missed frames, a receiver stream with and without lock
+series, empty and non-ASCII labels); the receiver number in every spelling that has come up (`X_RCVR2_RCVR3`,
+`L_RCVR 7`, `L_RCVR+4`, `L_RCVR-2`, no number, overflow, non-ASCII); channel index counting; sample arrays that do not
+line up; NaN and infinity; unsorted and repeated times; legend order by job index; running a stream again (what
+replaces what, and that the base can move later when everything is replaced); re-basing across sources, including
+by fractions of a second; the overlap rule at every boundary; the base day and time of day at the epoch, before it,
+across a year and a leap day and far in the future; removing the earliest, a later and the only source; ids
+continuing after a removal or a clear; and the order given to an imported CSV's streams. They passed on the old code
+before anything was ported, and **all 77 held after the port with no change.**
+
+**An oracle for the rest.** The old data logic is kept in the test as a small class, verbatim, and run beside the new
+`PlotViewModel` over 700 random sequences of adds, removals and clears (streams from a pool of labels, channels,
+sources and job indices; times at the epoch, a day boundary, a leap day, far in the future and in fractions;
+mismatched array lengths; the awkward receiver names; NaN and infinity in the frame-sync series), comparing the whole
+state after every step. A second oracle compares the old import ordering with the core's over 4,000 generated series
+lists. **No difference.** Direct tests check that a spec's values are views of the processed data (the same pointer),
+and walk the time base through a first stream, a later one, an earlier one, a replacement, the overlap boundary, a
+removal and a reset.
+
+**A trap the generator found.** Qt 6.12 asserts in a debug build when `qFloor` gets a non-finite or enormous number, and
+`computeYRange` rounds an SNR range to whole decibels. Infinite or 1e300 values in a receiver channel therefore crash a
+debug test run. Nothing real produces them (a calibrated value comes from a 16-bit count), so the generator keeps
+channel values finite and puts the odd ones in the frame-sync series, whose range that code skips. The code is as it was.
+
+**Validated against 101 single-defect mutants; 100 were caught at once and the survivor is closed.** They cover the
+elapsed axis, which series exist, every field of a series, the metric swaps, the range, the SNR name, the receiver
+parsing (first or last token, the offset, the failure value), the channel index, every branch of the clock (the
+overlap boundaries and the `&&`, adopting later or earlier or never, the shift's sign, the clock recomputed or not,
+advancing, each term of the day and time of day, reset), the import ordering (SNR series left alone, unlabelled series,
+the source in each key, first or last label winning, how fresh orders start and advance), the stream key, the plot's
+side (what a re-run replaces, the base judged before or after the replaced stream goes, the warning, the shift,
+sharing the elapsed buffer, each field copied, the visible metric, removal, clearing, the import) and the Qt-free guard.
+**The survivor** was `SeriesSpec::streamLabel`: the plot set a series' label from the stream data directly, so the
+core's copy of it was never read. The plot now takes it from the spec, which left a local variable unused and removed.
+
+**Left as it was, worth knowing:** the base never moves later when a stream is replaced - only when every series is
+gone, or a source is removed - so a re-run that starts later leaves the axis starting at the old base (pinned as
+`reprocessing-the-first-stream-can-move-the-base-later`); an import sets the day and time of day but leaves the absolute
+base alone; and sample arrays that do not line up with the times are kept as they are, not trimmed.
+
+Throughput is untouched (the plot is not on the decode path), so the Release gate was not rerun.
+
+Baseline **1128 / 0 / 1** (was 1045 / 0 / 1; `TestSeriesBuild` adds 83 results), **1129 / 0 / 0** at release. **35 suites.**
+
 #### Turning a stream's settings into a job is in the Qt-free core (plan step 1.5)
 
 Fifth step of stage 1 of `docs/dotnet-migration/avalonia-plan.md`, and the largest: the validation and
@@ -4676,7 +4753,7 @@ not mis-read.
 
 4. **PlotViewModel** (`src/viewmodel/plotviewmodel.cpp`, `include/viewmodel/plotviewmodel.h`)
    - Converts each `ProcessedStreamData` into in-memory `PlotSeriesData` vectors (name, receiver/channel indices, x/y values, cached Y min/max, color), carrying its `sourceId` through so cross-source identity checks (reprocess-replace, rename/recolor sibling-sync) never cross a source boundary
-   - Converts absolute IRIG seconds to elapsed seconds against a shared base that tracks the **earliest absolute sample across every source** (not just the first-added one): `addStreamData()` re-bases — shifting every existing series right — when a later-added source started earlier; `removeSource()` is the mirror, shifting left only if the removed source held the earliest sample. Emits `nonOverlappingSourceWarning(sourceId)` (informational) the first time a newly added source's absolute range doesn't intersect what's already loaded
+   - (The logic - the series a stream yields, the shared base and its re-basing, the overlap rule, the import's stream ordering - is the core's `seriesbuilder.h`; this class keeps the storage and the presentation.) Converts absolute IRIG seconds to elapsed seconds against a shared base that tracks the **earliest absolute sample across every source** (not just the first-added one): `addStreamData()` re-bases — shifting every existing series right — when a later-added source started earlier; `removeSource()` is the mirror, shifting left only if the removed source held the earliest sample. Emits `nonOverlappingSourceWarning(sourceId)` (informational) the first time a newly added source's absolute range doesn't intersect what's already loaded
    - Assigns the purple/blue/green (lock) and red/orange/yellow (SNR) palette
    - Manages axis ranges (auto Y with margin, manual Y override, X time window), the left-axis view toggle (lock % vs accumulated missed frames), and per-series visibility
    - Signals `dataChanged()`, `axisRangeChanged()`, `seriesVisibilityChanged()`, `nonOverlappingSourceWarning(int)`; `computeYRange()` uses per-series cached min/max
@@ -4717,7 +4794,8 @@ not mis-read.
 13. **ProcessingTemplateSchema** (`src/model/processingtemplateschema.cpp`, `include/model/processingtemplateschema.h`) — *processing templates / batch apply*; serializes/parses a `ProcessingTemplate` (`schemaVersion`, `appVersion`, `name`, `timeChannelIndex`, and a list of `TemplateStreamEntry`). Delegates each entry's config to `StreamConfigSchema` and adds the per-entry `SeriesAppearance` array; no file paths (a template is location-independent); a `schemaVersion` newer than `kCurrentSchemaVersion` is rejected
 14. **TemplateMatcher** (`src/model/templatematcher.cpp`, `include/model/templatematcher.h`) - *processing templates / batch apply*; pure, disk-free validator that a target file's PCM channel-ID set matches a template's **exactly** (`match(templateIds, fileIds)` -> `MatchResult{ok, missing, extra}`, sorted, each id once). **Part of the Qt-free core** (`std::vector<int>` in and out, listed in `TestCoreQtFree`); `BatchController::matchFile` reads the ids out of a `ProcessingTemplate` and the reader's channel list and calls it. Exact-set matching is what lets the batch loop feed the template's stored `pcmChannelId`s straight to processing
 15. **StreamJobBuilder** (`src/model/streamjobbuilder.cpp`, `include/model/streamjobbuilder.h`) - turns one stream's settings into a processing job: `buildStreamJob(StreamJobConfig, ProcessingParams base, StreamJobContext, StreamJob&, StreamJobReport&)` validates the sync pattern, mask and frame length, then (Receiver SNR) builds the frame-parameter table from the named receiver-parameters file, else the shipped `settings/receiver_params/default.toml`, else a default word map, applies the linear calibration and attaches any step-calibration profiles, returning the job or the reason for refusing it plus the log lines. **Part of the Qt-free core** (UTF-8 text, `std::filesystem::path`, `std::unordered_map`; listed in `TestCoreQtFree`); `MainViewModel::buildStreamJob` copies a `StreamConfig` into a `StreamJobConfig`, supplies the application root and the file-scoped byte order, and relays the report as `logMessageReceived`. Pinned by `TestStreamJob`
-16. **IRIG 106 Library** (`lib/irig106/`) — third-party C library for the Chapter 10 file format (see Protected Files)
+16. **SeriesBuilder** (`src/model/seriesbuilder.cpp`, `include/model/seriesbuilder.h`) - the data logic behind the plot's series: `buildStreamSeries` turns a `ProcessedStreamData` into the series it yields (lock %, missed frames, one per receiver channel, with names, receiver numbers, channel indices, cached ranges and the elapsed axis; values are views, not copies); `SeriesTimeBase` is the clock the shared elapsed axis hangs from (earliest absolute sample across every source, its day and time of day, `adopt` / `advance` for re-basing, `overlaps` for the non-overlap warning); `assignImportedStreamOrders` orders an imported CSV's streams; `StreamKey` is the "same stream run again" identity. **Part of the Qt-free core** (listed in `TestCoreQtFree`); `PlotViewModel` keeps the sample storage (`QVector`s the chart shares) and the presentation, and calls it. Pinned by `TestSeriesBuild`
+17. **IRIG 106 Library** (`lib/irig106/`) — third-party C library for the Chapter 10 file format (see Protected Files)
 
 ### Data Flow
 
@@ -5006,6 +5084,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestStreamJob** (`tst_streamjob`) - building a job from a stream's settings, read through `MainViewModel::buildStreamJob` so the same cases hold on either side of the move into the core: 59 cases, each one line (built or not, the message, the log, every worker parameter, the whole frame-parameter table with its calibration) - the slope indices and their arithmetic, polarity, the scale at its edges, an explicit receiver file that is missing, a folder, outside the frame, empty, metadata-only or not TOML, the word-count rounding, the default file and the default word map in each state, profiles attached and not, the order of the checks, non-ASCII labels and names. The old view-model code is kept as an oracle (with one marked line, the fix for an appended default map) and compared over 1,500 generated configurations; two direct tests of the core (a UTF-8 application root with non-ASCII folder names; error and log as plain text). Validated against 76 mutants, all caught
 - **TestFrameSetup** (`tst_framesetup`) — Frame parameter loading, word map, calibration, `channelPrefix()` naming the known channel positions then falling back to `CH<n+1>`, `receiverParameterName()` combining the two, `receiverIndexFromName()` inverting it (0 for a name with no parseable `_RCVR<N>`), and the receiver-parameters file as a whole: the scalars read from the `[Receivers]` block the shipped files actually use (and the older `[Parameters]` keys still accepted), a save/load round trip that carries the word map with them, the default-map fallback when no file was loaded, nothing written when there is no map to write, and the metadata-only file that parses to zero parameters — the contract `tryLoadingFile()`'s two callers depend on; and `receiverNameParsingMatchesQStringToInt`, which pins how a hand-typed parameter name parses (the last `_RCVR` token wins, whitespace and a leading `+` tolerated, a second sign / negative / trailing junk / overflow reads as no receiver, a name starting with the token has no channel part) - written against the `QString` implementation first; and `attachCalibrationProfiles`, which attaches a step-calibration profile only when it is valid and its word matches a parameter (an invalid one stays linear; a word the map lacks is ignored), written against the `QObject`/`QHash` version first
 - **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, the computed Y range and the SNR max override that pins it (the minimum stays automatic, Reset returns it to the data), X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), the left-axis view toggle preserving per-stream selection, and stream-identity regression coverage: two streams sharing a TMATS-derived `streamLabel` but different `streamOrder` must stay independent through reprocess-replace and `renameSeries()`/`recolorSeries()` sibling-sync (pinned after a pre-v2.6.0 cross-contamination bug). Multi-file input: cross-source identity (two different `sourceId`s reusing the same `streamLabel`/`streamOrder` stay independent through reprocess-replace/rename/recolor), time-base re-basing (a later-added source starting earlier shifts existing series right; three successively-earlier sources compound correctly; a later source starting after triggers no shift), the non-overlap warning signal (fires once per newly-arriving non-overlapping source, not for an overlapping range), and `removeSource()` (drops only the target source, re-bases left only when the removed source held the earliest sample, clears all data when the last source is removed, no-ops for an unknown id). US1.1 source view: `setVisibleSource()` isolates a source via `effectiveVisible()` without mutating per-series `visible`, `sourceList()` lists distinct labeled sources, and `exportCsv(path, sourceId)` writes only that source's columns; and `aNonAsciiStreamLabelReachesEverySeries`, which pins that a non-ASCII stream label (arriving as UTF-8 from the core) names the lock and missed-frames series, prefixes the SNR series' name, and is what a re-run matches on to replace the stream
+- **TestSeriesBuild** (`tst_seriesbuild`) - how processed streams become plot series on one shared time axis, read through `PlotViewModel` so the same cases hold on either side of the move of the logic into the core: 77 scenarios, each one line (time base, span, flags, warnings, every series' identity, indices, cached range and samples) - what a stream becomes, the receiver number in every spelling, channel indices, mismatched arrays, NaN and infinity, legend order, running a stream again, re-basing across sources, the overlap rule at every boundary, the base day and time of day across the epoch, a year, a leap day and the far future, removing sources, ids across removals and clears, and the order given to an imported CSV's streams. The old data logic is kept as a small class and compared with the new `PlotViewModel` over 700 random add/remove/clear sequences (whole state after every step) and the old import ordering over 4,000 generated lists; direct tests of views-not-copies and of `SeriesTimeBase`. Validated against 101 mutants (100 caught, 1 dead field removed)
 - **TestProcessingCoordinator** (`tst_processingcoordinator`) — constructor defaults, `reset()` clears state, cancel-with-no-run no-op, `cancelProcessingEndsTheRunWithoutAResult` (Cancel ends the run unsuccessfully, delivers no result, and the state goes true then false) and `destroyingTheCoordinatorMidRunIsSafe` (nothing queued for the dead object is delivered), `startProcessing()` empty-returns-false and processing-state emission, plus single-vs-multi-stream throughput benchmarks; and `workerReportsPrecedeTheResultAndFinishComesLast`, which checks through a real run that the worker's completion line is relayed before the stream's result and `processingFinished` is last; its end-to-end test also checks the progress bar (0 at the start, then 100 reported twice: once by the reader, once on finish); and `aRecordingUnderANonAsciiFolderProcessesEndToEnd`, which runs the committed `step_cal` recording copied under a non-ASCII folder through the whole pipeline
 - **TestMainView** (`tst_mainview`) — Main window construction, widget wiring, log routing, dock visibility behavior, and the CSV import routing (`openPath`/`importCsv`, valid/invalid). The batch-apply cases moved to **TestBatchController** with the state machine itself; and `aFinishedStreamIsLoggedUnderItsLabel`, the log line quoting a finished stream's (non-ASCII) label
 - **TestPlotWidget** (`tst_plotwidget`) — Plot widget construction, null/valid ViewModel connection, dark/light theme application, the movable legend overlay populating from data (hidden until data loads, then one row per visible active-metric series), a shown/resized-window regression case asserting the overlay sizes correctly (not a collapsed frame-only box) after a second rebuild adds more rows — a QScrollArea `widgetResizable` sizeHint staleness bug reproduced and fixed post-review — the SNR legend row showing the short `"CH<id> <ch.name>"` form instead of the full TMATS stream title, the legend row layout reserving a right-side gutter matching the style's scrollbar extent, and each legend row carrying an objectName the overlay stylesheet can target to override the app's global `QWidget { background-color: ... }` theme rule (otherwise every row painted as an opaque chip); plus `exportImage()` writing a PNG/SVG/PDF headlessly (the parameterized image-export entry point extracted for batch apply); and the right-click context menu that replaced the external control rows: it lists every expected top-level item, its data-dependent entries are disabled until data loads, the Plot File submenu is disabled for a single source and switches `visibleSource` for a multi-source run, View Mode reflects and sets the active left-axis metric, `X Axis > Reset Span` / `Y Axes > Reset` clear the X window and both Y overrides, plus two structural guards - wheel-zoom/drag-pan stay enabled (horizontal-only) once data arrives, and **no QComboBox / QSpinBox / QLineEdit / QAbstractButton lives outside the chart** - on-chart overlays are allowed, external control rows are not (the machine-checkable form of "no external controls"); plus the legend toggle (shows/hides the overlay and survives a rebuild, appears only once data is loaded, is parented to the chart, and stays in sync with the context menu's checkable Show Legend item); plus Y axis occupancy - a lock-only plot hides the right axis, an SNR-only plot hides the left, an empty chart keeps the left (hiding both would leave a bare box), and hiding the last *visible* SNR series reclaims the right axis just as never loading one would
