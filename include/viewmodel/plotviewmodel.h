@@ -15,10 +15,25 @@
 #include <QVector>
 
 #include "constants.h"
-#include "csvseriesparser.h"
 #include "plotconstants.h"
 #include "plotseriesdata.h"
 #include "processedstreamdata.h"
+
+/**
+ * @brief A parsed CSV in the plot's own types.
+ *
+ * `CsvSeriesParser` (Qt-free) returns UTF-8 strings and std::vectors; the worker thread that parses
+ * converts them to this, so the UI thread only moves the result into place.
+ */
+struct LoadedCsv
+{
+    bool success = false;
+    QVector<PlotSeriesData> series;
+    int baseDay = 0;
+    double baseTimeOffset = 0.0;
+    double xMax = 0.0;
+    int skippedRows = 0;   ///< Malformed data rows skipped (too few columns or an unparseable timestamp).
+};
 
 /**
  * @brief ViewModel for the AGC signal plot window.
@@ -140,9 +155,9 @@ public:
 
     int baseDay() const;                           ///< @return DOY of the first sample.
     double baseTimeOffset() const;                 ///< @return Seconds-since-midnight of first sample.
-    /// Converts elapsed seconds to "DDD:HH:MM:SS" (or "DDD:HH:MM:SS.mmm" if
-    /// includeMilliseconds) using the file's base time.
-    QString formatTime(double elapsed, bool includeMilliseconds = false) const;
+    /// Converts elapsed seconds to "DDD:HH:MM:SS" using the file's base time (the CSV export writes the
+    /// millisecond form itself, through clocktime::format).
+    QString formatTime(double elapsed) const;
     /// Inverse of formatTime: parses "DDD:HH:MM:SS" to elapsed seconds against the
     /// file's base time. Returns 0.0 when the text is not in that 4-field format.
     double parseTime(const QString& text) const;
@@ -234,8 +249,8 @@ private:
     /// via a reentrant gmtime conversion. Shared by the first-stream case and the
     /// re-base path in addStreamData() (multi-file input, docs/multi-file-input-design.md §3).
     void recomputeBaseDayAndOffset();
-    /// Commits a CsvParseResult into member state and emits dataChanged().
-    void commitParseResult(CsvParseResult&& result);
+    /// Commits a parsed CSV into member state and emits dataChanged().
+    void commitParseResult(LoadedCsv&& result);
 
     /// Positional (index-based) appearance edits — the private implementation the
     /// id-based public methods delegate to after resolving indexOfSeriesId(). Kept
@@ -281,7 +296,7 @@ private:
     double m_base_time_offset = 0.0;               ///< Seconds-since-midnight of first sample.
     double m_base_abs_seconds = 0.0;               ///< Absolute IRIG seconds of the first accumulated sample.
 
-    QFutureWatcher<CsvParseResult>* m_parse_watcher = nullptr; ///< Watcher for async parse future.
+    QFutureWatcher<LoadedCsv>* m_parse_watcher = nullptr; ///< Watcher for async parse future.
     bool m_loading = false;                        ///< True while an async parse is in flight.
 };
 

@@ -18,6 +18,7 @@
 
 #include <charconv>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <system_error>
 
@@ -106,11 +107,38 @@ inline bool parseUnsignedHex(const std::string& text, std::uint64_t& out)
     return true;
 }
 
-/// `QString::toDouble()`, as far as a settings file can reach: surrounding whitespace
-/// ignored, an optional leading '+', decimal or exponent form, "inf" / "nan".
+/// `QString::toDouble()`, as far as a settings file or a CSV cell can reach: surrounding whitespace
+/// ignored, an optional leading '+', decimal or exponent form, and the special values spelled the way
+/// Qt takes them - "nan", "inf", "+inf" and "-inf", in any case. `std::from_chars` also takes
+/// "infinity", "nan(...)" and a signed "nan"; Qt reads those as not a number, so they are refused here
+/// (`TestCsvSeries::numbersReadLikeQt` compares the two over tens of thousands of strings).
 inline bool parseDouble(const std::string& text, double& out)
 {
     const std::string s = trimmed(text);
+    if (!s.empty())
+    {
+        const std::size_t sign = (s[0] == '+' || s[0] == '-') ? 1 : 0;
+        const char c = s[sign];
+        if (c == 'n' || c == 'N' || c == 'i' || c == 'I')
+        {
+            std::string word;
+            for (char ch : s)
+            {
+                word += (ch >= 'A' && ch <= 'Z') ? static_cast<char>(ch - 'A' + 'a') : ch;
+            }
+            if (word == "nan")
+            {
+                out = std::numeric_limits<double>::quiet_NaN();
+                return true;
+            }
+            if (word == "inf" || word == "+inf" || word == "-inf")
+            {
+                out = word[0] == '-' ? -std::numeric_limits<double>::infinity() : std::numeric_limits<double>::infinity();
+                return true;
+            }
+            return false;
+        }
+    }
     const char* first = s.data();
     const char* last  = s.data() + s.size();
     if (first != last && *first == '+')
