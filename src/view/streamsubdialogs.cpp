@@ -31,6 +31,7 @@
 
 #include "containerutil.h"
 #include "framesetup.h"
+#include "calibrationrequest.h"
 #include "framesync.h"
 #include "framesyncfile.h"
 #include "qtbridge.h"
@@ -641,62 +642,39 @@ void CalibrationSetupDialog::maybeRunExtraction()
     setStatus(m_cal_status, Pending, tr("Processing calibration file…"));
     updateOk();
 
-    // Start from the caller-supplied acquisition/receiver fields and add the
-    // cal file, parsed steps, and clip seconds the dialog collected.
+    // What the dialog knows; the core turns it into the extractor's request (decoding the sync text the
+    // way the main run does, and resolving the default word map the way the main run does - the two passes
+    // MUST agree on word indices, or the profiles attach to the wrong channels).
+    CalibrationInputs setup;
+    setup.calFilename        = toFsPath(m_cal_path);
+    setup.timeChannelId      = m_base.timeChannelId;
+    setup.pcmChannelId       = m_base.pcmChannelId;
+    setup.syncPattern        = m_base.sync.pattern.toStdString();
+    setup.syncMask           = m_base.sync.mask.toStdString();
+    setup.bitsInMinorFrame   = m_base.sync.bitsInMinorFrame;
+    setup.randomized         = m_base.sync.randomized;
+    setup.inverted           = m_base.sync.inverted;
+    setup.dataRateMbps       = m_base.sync.dataRateMbps;
+    setup.swapBytes          = m_base.swapBytes;
+    if (!m_base.receiverParamsToml.isEmpty())
+    {
+        setup.receiverParamsToml = toFsPath(m_base.receiverParamsToml);
+    }
+    setup.numReceivers       = m_base.numReceivers;
+    setup.receiverChannels   = m_base.receiverChannels;
+    setup.steps              = m_steps;
+    setup.clipStartSec       = m_clip_start ? m_clip_start->value() : 0.0;
+    setup.clipEndSec         = m_clip_end ? m_clip_end->value() : 0.0;
+
     CalibrationExtractor::Request req;
-    req.calFilename      = toFsPath(m_cal_path);
-    req.timeChannelId    = m_base.timeChannelId;
-    req.pcmChannelId     = m_base.pcmChannelId;
-    req.numReceivers     = m_base.numReceivers;
-    req.receiverChannels = m_base.receiverChannels;
-    req.steps            = m_steps;
-    req.clipStartSec     = m_clip_start ? m_clip_start->value() : 0.0;
-    req.clipEndSec       = m_clip_end ? m_clip_end->value() : 0.0;
-
-    // The sync text is decoded the way the main run decodes it (framesync.h), so the extraction reads
-    // the same bitstream. A field that cannot be read is shown here, before anything starts.
-    Acquisition& acquisition = req.acquisition;
-    switch (resolveFrameSync(m_base.sync.pattern.toStdString(), m_base.sync.mask.toStdString(),
-                             acquisition.sync))
+    std::string request_error;
+    if (!buildCalibrationRequest(setup, m_app_root.toStdString(), req, request_error))
     {
-        case FrameSyncError::None:
-            break;
-        case FrameSyncError::PatternEmpty:
-        case FrameSyncError::PatternInvalid:
-            setStatus(m_cal_status, Fail,
-                      QString("Invalid frame sync pattern '%1'.").arg(m_base.sync.pattern));
-            updateOk();
-            return;
-        case FrameSyncError::MaskInvalid:
-            setStatus(m_cal_status, Fail,
-                      QString("Invalid frame sync mask '%1'.").arg(m_base.sync.mask));
-            updateOk();
-            return;
+        // A field that cannot be read is shown here, before anything starts.
+        setStatus(m_cal_status, Fail, QString::fromStdString(request_error));
+        updateOk();
+        return;
     }
-    acquisition.bitsInMinorFrame = m_base.sync.bitsInMinorFrame;
-    acquisition.randomized       = m_base.sync.randomized;
-    acquisition.inverted         = m_base.sync.inverted;
-    acquisition.dataRateMbps     = m_base.sync.dataRateMbps;
-    acquisition.swapBytes        = m_base.swapBytes;
-
-    // Resolve the word map the SAME way the main processing run does
-    // (mainviewmodel buildJob): when the user hasn't picked an explicit
-    // Receiver Parameters file, fall back to the shipped default.toml rather
-    // than letting the extractor synthesize a sequential grid. The two passes
-    // MUST agree on word indices, because the resulting profiles are matched
-    // to plot channels by word - a divergent map silently misattaches every
-    // profile and the plot falls back to linear calibration.
-    QString receiver_params = m_base.receiverParamsToml;
-    if (receiver_params.isEmpty())
-    {
-        const QString defaultRcvrParams = m_app_root + "/" + UIConstants::kSettingsDirName +
-            "/" + UIConstants::kReceiverParamsDirName + "/" + UIConstants::kDefaultTomlFilename;
-        if (QFileInfo::exists(defaultRcvrParams))
-        {
-            receiver_params = defaultRcvrParams;
-        }
-    }
-    req.receiverParamsToml = toFsPath(receiver_params);
 
     CalibrationExtractor extractor;
     QProgressDialog progress(tr("Processing calibration file…"), tr("Cancel"),

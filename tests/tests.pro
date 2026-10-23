@@ -40,6 +40,7 @@ SOURCES += \
     $$PWD/../src/model/stepdetector.cpp \
     $$PWD/../src/model/streamjobbuilder.cpp \
     $$PWD/../src/model/calibrationextractor.cpp \
+    $$PWD/../src/model/calibrationrequest.cpp \
     $$PWD/../src/model/pipelinerunner.cpp \
     $$PWD/../src/model/clocktime.cpp \
     $$PWD/../src/model/csvseriesparser.cpp \
@@ -86,6 +87,7 @@ HEADERS += \
     $$PWD/../include/model/stepdetector.h \
     $$PWD/../include/model/streamjobbuilder.h \
     $$PWD/../include/model/calibrationextractor.h \
+    $$PWD/../include/model/calibrationrequest.h \
     $$PWD/../include/model/pipelinerunner.h \
     $$PWD/../include/model/clocktime.h \
     $$PWD/../include/model/csvseriesparser.h \
@@ -129,10 +131,12 @@ INCLUDEPATH += $$PWD/../native/tmdq_core
 SOURCES += \
     $$PWD/../native/tmdq_core/tmdq_core.cpp \
     $$PWD/../native/tmdq_core/abi_file.cpp \
-    $$PWD/../native/tmdq_core/abi_run.cpp
+    $$PWD/../native/tmdq_core/abi_run.cpp \
+    $$PWD/../native/tmdq_core/abi_calibration.cpp
 HEADERS += \
     $$PWD/../native/tmdq_core/tmdq_abi.h \
-    $$PWD/../native/tmdq_core/abi_internal.h
+    $$PWD/../native/tmdq_core/abi_internal.h \
+    $$PWD/../native/tmdq_core/abi_events.h
 
 # irig106 library sources
 SOURCES += \
@@ -207,7 +211,8 @@ SOURCES += \
     tst_eventreporter.cpp \
     tst_pipelinerunner.cpp \
     tst_stepdetector.cpp \
-    tst_calibrationextractor.cpp
+    tst_calibrationextractor.cpp \
+    tst_calibrationrequest.cpp
 
 # Test headers (needed for MOC processing)
 HEADERS += \
@@ -246,4 +251,5 @@ HEADERS += \
     tst_eventreporter.h \
     tst_pipelinerunner.h \
     tst_stepdetector.h \
-    tst_calibrationextractor.h
+    tst_calibrationextractor.h \
+    tst_calibrationrequest.h

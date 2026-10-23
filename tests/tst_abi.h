@@ -51,6 +51,19 @@ private slots:
     void theLinesBuildingJobsProducedReachLogFirst();
     void everySettingOfAStreamReachesTheJob();
     void readingAHostStructNeverStraysBeyondTheKnownOne();
+
+    // --- step files and calibration (revision 2)
+    void theStepFileIsReadLikeTheCore();
+    void theInitialStepFilePathIsWrittenSnprintfStyle();
+    void aCalibrationMatchesWhatTheExtractorMakes();
+    void everySettingOfACalibrationReachesTheExtractor();
+    void aCalibrationSettingTheExtractorCannotUseIsRefused();
+    void badArgumentsToTheCalibrationFunctionsAreRefused();
+    void aCalibrationThatCannotStartReportsThroughTheSink();
+    void resultsAreRefusedWhileACalibrationRunsAndCancelEndsIt();
+    void freeingACalibrationInFlightCancelsAndWaits();
+    void waitAloneIsEnoughToSeeACalibrationEnd();
+    void aThresholdThatHadToBeRelaxedIsReported();
 };
 
 #endif // TST_ABI_H

@@ -1,5 +1,6 @@
 #include "tst_abi.h"
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstddef>
@@ -22,11 +23,15 @@
 
 #include "../native/tmdq_core/abi_internal.h"
 #include "../native/tmdq_core/tmdq_abi.h"
+#include "calibrationextractor.h"
+#include "calibrationrequest.h"
 #include "chapter10reader.h"
 #include "constants.h"
 #include "pipelinerunner.h"
 #include "processedstreamdata.h"
 #include "qtbridge.h"
+#include "framesync.h"
+#include "stepdetector.h"
 #include "streamjobbuilder.h"
 
 namespace {
@@ -482,6 +487,219 @@ QString differences(tmdq_stream_result* r, const ProcessedStreamData& want)
     return diff.join(", ");
 }
 
+
+// ---------------------------------------------------------------------------
+// Calibration
+// ---------------------------------------------------------------------------
+
+/// A sink for the direct extraction: remembers the end.
+class CalSink final : public ProcessingEvents
+{
+public:
+    void logMessage(const std::string&) override {}
+    void errorOccurred(const std::string&) override {}
+    void processingFinished(bool ok) override { m_ok = ok; }
+    bool ok() const { return m_ok; }
+private:
+    std::atomic<bool> m_ok{false};
+};
+
+struct DirectCalibration
+{
+    std::vector<CalibrationChannelResult> results;
+    std::string summary, error, report;
+    double      seconds = 0.0;
+    bool        clipIgnored = false;
+    bool        ok = false;
+    bool        built = false;   ///< the request could be built (the sync text was readable)
+};
+
+std::vector<double> shippedSteps()
+{
+    std::vector<StepDefinition> steps;
+    std::string error;
+    if (!StepDetector::parseStepConfig(toFsPath(projectRoot() + "/settings/rcvr_cals/default.toml"), steps, error))
+        return {};
+    std::vector<double> db;
+    for (const StepDefinition& s : steps)
+        db.push_back(s.db);
+    return db;
+}
+
+/// One calibration: what the dialog gathers, with the application root. Held in the core's own terms, and
+/// given to the ABI as the wire struct, so a field the ABI forgets to carry shows up as a difference.
+struct CalCase
+{
+    CalibrationInputs in;
+    std::string       appRoot;
+
+    explicit CalCase(const StepCal& f, std::vector<double> stepDb = shippedSteps())
+        : appRoot(projectRoot().toStdString())
+    {
+        in.calFilename      = toFsPath(QString::fromStdString(f.path));
+        in.timeChannelId    = f.timeId;
+        in.pcmChannelId     = f.pcmId;
+        in.syncPattern      = "FE6B2840";
+        in.bitsInMinorFrame = 800;
+        in.dataRateMbps     = 0.8;
+        in.swapBytes        = true;
+        in.numReceivers     = 16;
+        in.receiverChannels = 3;
+        for (double db : stepDb)
+            in.steps.push_back({db});
+    }
+};
+
+/// The extraction run directly through the core: the request built by the (separately tested)
+/// buildCalibrationRequest, then CalibrationExtractor.
+DirectCalibration runDirectCalibration(const CalCase& c)
+{
+    DirectCalibration out;
+    CalibrationExtractor::Request req;
+    std::string why;
+    out.built = buildCalibrationRequest(c.in, c.appRoot, req, why);
+    if (!out.built)
+    {
+        out.error = why;
+        return out;
+    }
+    CalibrationExtractor extractor;
+    auto sink = std::make_shared<CalSink>();
+    extractor.start(req, sink);
+    extractor.wait();
+    out.ok          = sink->ok();
+    out.results     = extractor.results();
+    out.summary     = extractor.summary();
+    out.error       = extractor.error();
+    out.seconds     = extractor.recordingSeconds();
+    out.clipIgnored = extractor.clipIgnored();
+    out.report      = CalibrationExtractor::summarize(out.results, int(c.in.steps.size()));
+    return out;
+}
+
+/// The wire form of a CalCase, with the text and the steps kept alive beside it.
+struct CalRequest
+{
+    CalCase                 source;
+    std::string             file, appRoot, pattern, mask, params;
+    std::vector<double>     steps;
+    tmdq_calibration_request req{};
+
+    explicit CalRequest(const CalCase& c)
+        : source(c), file(c.in.calFilename.string()), appRoot(c.appRoot), pattern(c.in.syncPattern),
+          mask(c.in.syncMask), params(c.in.receiverParamsToml.string())
+    {
+        for (const StepDefinition& s : c.in.steps)
+            steps.push_back(s.db);
+        req.struct_size               = sizeof(req);
+        req.time_channel_id           = c.in.timeChannelId;
+        req.cal_filename_utf8         = file.c_str();
+        req.app_root_utf8             = appRoot.c_str();
+        req.sync_pattern_utf8         = pattern.c_str();
+        req.sync_mask_utf8            = mask.c_str();
+        req.receiver_params_toml_utf8 = params.c_str();
+        req.step_db                   = steps.data();
+        req.data_rate_mbps            = c.in.dataRateMbps;
+        req.clip_start_sec            = c.in.clipStartSec;
+        req.clip_end_sec              = c.in.clipEndSec;
+        req.pcm_channel_id            = c.in.pcmChannelId;
+        req.bits_in_minor_frame       = c.in.bitsInMinorFrame;
+        req.randomized                = c.in.randomized ? 1 : 0;
+        req.inverted                  = c.in.inverted ? 1 : 0;
+        req.swap_bytes                = c.in.swapBytes ? 1 : 0;
+        req.num_receivers             = c.in.numReceivers;
+        req.receiver_channels         = c.in.receiverChannels;
+        req.step_count                = static_cast<int32_t>(steps.size());
+    }
+};
+
+struct CalGuard
+{
+    tmdq_calibration* handle = nullptr;
+    ~CalGuard() { tmdq_calibration_free(handle); }
+};
+
+/// What differs between a finished calibration and the core's own run; empty if nothing.
+QString calibrationDifferences(const tmdq_calibration* cal, const DirectCalibration& want)
+{
+    QStringList diff;
+    tmdq_calibration_info info{};
+    info.struct_size = sizeof(info);
+    if (tmdq_calibration_result(cal, &info) != TMDQ_OK)
+        return "tmdq_calibration_result failed";
+    if (std::string(info.summary_utf8) != want.summary) diff << "summary";
+    if (std::string(info.error_utf8) != want.error) diff << "error";
+    if (std::string(info.report_utf8) != want.report) diff << "report";
+    if (info.recording_seconds != want.seconds) diff << "recording seconds";
+    if ((info.clip_ignored != 0) != want.clipIgnored) diff << "clip ignored";
+    if (std::size_t(info.channel_count) != want.results.size())
+        return diff.join(", ") + (diff.isEmpty() ? "" : ", ") + "channel count";
+    for (int32_t i = 0; i < info.channel_count; ++i)
+    {
+        tmdq_calibration_channel ch{};
+        ch.struct_size = sizeof(ch);
+        if (tmdq_calibration_channel_result(cal, i, &ch) != TMDQ_OK) { diff << "channel call"; continue; }
+        const CalibrationChannelResult& r = want.results[std::size_t(i)];
+        const QString at = QString::number(i) + ":";
+        if (std::string(ch.name_utf8) != r.name) diff << at + "name";
+        if (ch.word_index != r.word) diff << at + "word";
+        if ((ch.valid != 0) != r.profile.valid) diff << at + "valid";
+        if ((ch.had_data != 0) != r.hadData) diff << at + "had data";
+        if (ch.outcome != int(r.outcome)) diff << at + "outcome";
+        if (ch.detected_plateaus != r.detectedPlateaus) diff << at + "plateaus";
+        if ((ch.extra_plateaus != 0) != r.extraPlateaus) diff << at + "extra";
+        if (ch.edge_threshold != r.edgeThreshold) diff << at + "threshold";
+        if ((ch.threshold_relaxed != 0) != r.thresholdRelaxed) diff << at + "relaxed";
+        if ((ch.saturated != 0) != r.saturated) diff << at + "saturated";
+        if (ch.sweep_levels != r.sweepLevels) diff << at + "sweep levels";
+        if (std::size_t(ch.point_count) != r.profile.points.size()) { diff << at + "point count"; }
+        else
+            for (int32_t p = 0; p < ch.point_count; ++p)
+                if (ch.points[p].raw_avg != r.profile.points[std::size_t(p)].rawAvg ||
+                    ch.points[p].true_db != r.profile.points[std::size_t(p)].trueDb)
+                    diff << at + "point " + QString::number(p);
+        if (std::size_t(ch.plateau_level_count) != r.plateauLevels.size() ||
+            !sameDoubles(ch.plateau_levels, std::size_t(ch.plateau_level_count), r.plateauLevels)) diff << at + "levels";
+        if (std::size_t(ch.unresolved_count) != r.unresolvedDb.size() ||
+            !sameDoubles(ch.unresolved_db, std::size_t(ch.unresolved_count), r.unresolvedDb)) diff << at + "unresolved";
+    }
+    return diff.join(", ");
+}
+
+/// Runs a calibration request to its end and returns whether it finished successfully.
+bool calibrateToTheEnd(CalRequest& request, Seen& seen, CalGuard& guard)
+{
+    const tmdq_callbacks callbacks = seen.callbacks();
+    if (tmdq_calibration_start(&request.req, &callbacks, &guard.handle) != TMDQ_OK)
+        return false;
+    if (!seen.waitFinished(kTimeoutMs))
+        return false;
+    tmdq_calibration_wait(guard.handle);
+    return seen.finishedSuccess == 1;
+}
+
+/// Whether two direct runs say the same thing (so a setting that changes nothing is noticed).
+bool sameCalibration(const DirectCalibration& a, const DirectCalibration& b)
+{
+    if (a.ok != b.ok || a.summary != b.summary || a.error != b.error || a.report != b.report ||
+        a.clipIgnored != b.clipIgnored || a.seconds != b.seconds || a.results.size() != b.results.size())
+        return false;
+    for (std::size_t i = 0; i < a.results.size(); ++i)
+    {
+        const CalibrationChannelResult& x = a.results[i];
+        const CalibrationChannelResult& y = b.results[i];
+        if (x.name != y.name || x.word != y.word || x.profile.valid != y.profile.valid ||
+            x.hadData != y.hadData || x.detectedPlateaus != y.detectedPlateaus ||
+            x.plateauLevels != y.plateauLevels || x.edgeThreshold != y.edgeThreshold ||
+            x.profile.points.size() != y.profile.points.size())
+            return false;
+        for (std::size_t p = 0; p < x.profile.points.size(); ++p)
+            if (x.profile.points[p].rawAvg != y.profile.points[p].rawAvg)
+                return false;
+    }
+    return true;
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -560,6 +778,65 @@ void TestAbi::theStructLayoutsArePinned()
     QCOMPARE(int(offsetof(tmdq_channel_series, name_utf8)), 8);
     QCOMPARE(int(offsetof(tmdq_channel_series, values)), 16);
 
+    QCOMPARE(int(sizeof(tmdq_calibration_request)), 112);
+    QCOMPARE(int(offsetof(tmdq_calibration_request, time_channel_id)), 4);
+    QCOMPARE(int(offsetof(tmdq_calibration_request, cal_filename_utf8)), 8);
+    QCOMPARE(int(offsetof(tmdq_calibration_request, app_root_utf8)), 16);
+    QCOMPARE(int(offsetof(tmdq_calibration_request, sync_pattern_utf8)), 24);
+    QCOMPARE(int(offsetof(tmdq_calibration_request, sync_mask_utf8)), 32);
+    QCOMPARE(int(offsetof(tmdq_calibration_request, receiver_params_toml_utf8)), 40);
+    QCOMPARE(int(offsetof(tmdq_calibration_request, step_db)), 48);
+    QCOMPARE(int(offsetof(tmdq_calibration_request, data_rate_mbps)), 56);
+    QCOMPARE(int(offsetof(tmdq_calibration_request, clip_start_sec)), 64);
+    QCOMPARE(int(offsetof(tmdq_calibration_request, clip_end_sec)), 72);
+    QCOMPARE(int(offsetof(tmdq_calibration_request, pcm_channel_id)), 80);
+    QCOMPARE(int(offsetof(tmdq_calibration_request, bits_in_minor_frame)), 84);
+    QCOMPARE(int(offsetof(tmdq_calibration_request, randomized)), 88);
+    QCOMPARE(int(offsetof(tmdq_calibration_request, inverted)), 92);
+    QCOMPARE(int(offsetof(tmdq_calibration_request, swap_bytes)), 96);
+    QCOMPARE(int(offsetof(tmdq_calibration_request, num_receivers)), 100);
+    QCOMPARE(int(offsetof(tmdq_calibration_request, receiver_channels)), 104);
+    QCOMPARE(int(offsetof(tmdq_calibration_request, step_count)), 108);
+
+    QCOMPARE(int(sizeof(tmdq_calibration_info)), 48);
+    QCOMPARE(int(offsetof(tmdq_calibration_info, channel_count)), 4);
+    QCOMPARE(int(offsetof(tmdq_calibration_info, summary_utf8)), 8);
+    QCOMPARE(int(offsetof(tmdq_calibration_info, error_utf8)), 16);
+    QCOMPARE(int(offsetof(tmdq_calibration_info, report_utf8)), 24);
+    QCOMPARE(int(offsetof(tmdq_calibration_info, recording_seconds)), 32);
+    QCOMPARE(int(offsetof(tmdq_calibration_info, clip_ignored)), 40);
+
+    QCOMPARE(int(sizeof(tmdq_calibration_channel)), 96);
+    QCOMPARE(int(offsetof(tmdq_calibration_channel, word_index)), 4);
+    QCOMPARE(int(offsetof(tmdq_calibration_channel, name_utf8)), 8);
+    QCOMPARE(int(offsetof(tmdq_calibration_channel, points)), 16);
+    QCOMPARE(int(offsetof(tmdq_calibration_channel, plateau_levels)), 24);
+    QCOMPARE(int(offsetof(tmdq_calibration_channel, unresolved_db)), 32);
+    QCOMPARE(int(offsetof(tmdq_calibration_channel, edge_threshold)), 40);
+    QCOMPARE(int(offsetof(tmdq_calibration_channel, point_count)), 48);
+    QCOMPARE(int(offsetof(tmdq_calibration_channel, plateau_level_count)), 52);
+    QCOMPARE(int(offsetof(tmdq_calibration_channel, unresolved_count)), 56);
+    QCOMPARE(int(offsetof(tmdq_calibration_channel, valid)), 60);
+    QCOMPARE(int(offsetof(tmdq_calibration_channel, had_data)), 64);
+    QCOMPARE(int(offsetof(tmdq_calibration_channel, outcome)), 68);
+    QCOMPARE(int(offsetof(tmdq_calibration_channel, detected_plateaus)), 72);
+    QCOMPARE(int(offsetof(tmdq_calibration_channel, extra_plateaus)), 76);
+    QCOMPARE(int(offsetof(tmdq_calibration_channel, threshold_relaxed)), 80);
+    QCOMPARE(int(offsetof(tmdq_calibration_channel, saturated)), 84);
+    QCOMPARE(int(offsetof(tmdq_calibration_channel, sweep_levels)), 88);
+
+    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CALIBRATION_REQUEST), 112);
+    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CALIBRATION_INFO), 48);
+    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CALIBRATION_CHANNEL), 96);
+    QCOMPARE(int(TMDQ_STRUCT_CALIBRATION_REQUEST), 9);
+    QCOMPARE(int(TMDQ_STRUCT_CALIBRATION_CHANNEL), 11);
+    QCOMPARE(int(TMDQ_ERR_STATE), 7);
+    QCOMPARE(int(TMDQ_CAL_CALIBRATED), int(CalibrationOutcome::Calibrated));
+    QCOMPARE(int(TMDQ_CAL_NO_DATA), int(CalibrationOutcome::NoData));
+    QCOMPARE(int(TMDQ_CAL_FLAT_NO_SIGNAL), int(CalibrationOutcome::FlatNoSignal));
+    QCOMPARE(int(TMDQ_CAL_TOO_FEW_PLATEAUS), int(CalibrationOutcome::TooFewPlateaus));
+    QCOMPARE(int(TMDQ_CAL_NO_MONOTONIC_SWEEP), int(CalibrationOutcome::NoMonotonicSweep));
+
     // And the library reports the same sizes, for the managed side to compare with Marshal.SizeOf.
     QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CHANNEL_INFO), 24);
     QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CAL_POINT), 16);
@@ -598,7 +875,7 @@ void TestAbi::theStructLayoutsArePinned()
 void TestAbi::theVersionAndRevisionAreReported()
 {
     QCOMPARE(tmdq_abi_version(), 1);
-    QCOMPARE(tmdq_abi_revision(), 1);
+    QCOMPARE(tmdq_abi_revision(), 2);
     QCOMPARE(int(TMDQ_ABI_VERSION), tmdq_abi_version());
     QCOMPARE(int(TMDQ_ABI_REVISION), tmdq_abi_revision());
     QVERIFY(tmdq_last_error() != nullptr);
@@ -1662,4 +1939,458 @@ void TestAbi::readingAHostStructNeverStraysBeyondTheKnownOne()
     source.info.struct_size = sizeof(tmdq_channel_info) - 1;
     QVERIFY(!tmdq::readStruct(&source.info, sizeof(tmdq_channel_info), dest.info));
     QVERIFY(!tmdq::readStruct(static_cast<const tmdq_channel_info*>(nullptr), sizeof(tmdq_channel_info), dest.info));
+}
+
+void TestAbi::theStepFileIsReadLikeTheCore()
+{
+    const std::string path = (projectRoot() + "/settings/rcvr_cals/default.toml").toStdString();
+    std::vector<StepDefinition> want;
+    std::string error;
+    QVERIFY2(StepDetector::parseStepConfig(toFsPath(QString::fromStdString(path)), want, error), error.c_str());
+    QVERIFY(want.size() > 5);
+
+    tmdq_steps* steps = nullptr;
+    QCOMPARE(tmdq_steps_parse(path.c_str(), &steps), int(TMDQ_OK));
+    QVERIFY(steps != nullptr);
+    QCOMPARE(tmdq_steps_count(steps), int(want.size()));
+    const double* db = tmdq_steps_db(steps);
+    QVERIFY(db != nullptr);
+    for (std::size_t i = 0; i < want.size(); ++i)
+        QCOMPARE(db[i], want[i].db);
+    tmdq_steps_free(steps);
+
+    // A file that is not there says what the parser says; a file with no step in it is the same.
+    tmdq_steps* none = reinterpret_cast<tmdq_steps*>(std::uintptr_t{1});
+    std::vector<StepDefinition> ignored;
+    const std::string missing = (QDir::tempPath() + "/tst_abi_no_such_steps.toml").toStdString();
+    QVERIFY(!StepDetector::parseStepConfig(toFsPath(QString::fromStdString(missing)), ignored, error));
+    QCOMPARE(tmdq_steps_parse(missing.c_str(), &none), int(TMDQ_ERR_PREPARE));
+    QVERIFY(none == nullptr);
+    QCOMPARE(std::string(tmdq_last_error()), error);
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    QFile empty(dir.filePath("empty.toml"));
+    QVERIFY(empty.open(QIODevice::WriteOnly));
+    empty.write("# no steps here\n");
+    empty.close();
+    const std::string emptyPath = dir.filePath("empty.toml").toStdString();
+    QVERIFY(!StepDetector::parseStepConfig(toFsPath(QString::fromStdString(emptyPath)), ignored, error));
+    QCOMPARE(tmdq_steps_parse(emptyPath.c_str(), &none), int(TMDQ_ERR_PREPARE));
+    QCOMPARE(std::string(tmdq_last_error()), error);
+
+    // Arguments.
+    QCOMPARE(tmdq_steps_parse(nullptr, &none), int(TMDQ_ERR_BADARG));
+    QVERIFY(none == nullptr);
+    QCOMPARE(tmdq_steps_parse(path.c_str(), nullptr), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_steps_count(nullptr), -1);
+    QVERIFY(tmdq_steps_db(nullptr) == nullptr);
+    tmdq_steps_free(nullptr);
+}
+
+void TestAbi::theInitialStepFilePathIsWrittenSnprintfStyle()
+{
+    const std::string root = projectRoot().toStdString();
+    const std::string want = StepDetector::initialStepConfigPath(root, std::string());
+    QVERIFY2(!want.empty(), "the shipped default step file should be found under the project root");
+
+    // Measuring, then writing exactly, then writing into a buffer that is too small.
+    QCOMPARE(tmdq_step_config_initial_path(root.c_str(), nullptr, nullptr, 0), int(want.size()));
+    std::vector<char> exact(want.size() + 1, 'x');
+    QCOMPARE(tmdq_step_config_initial_path(root.c_str(), nullptr, exact.data(), int(exact.size())), int(want.size()));
+    QCOMPARE(std::string(exact.data()), want);
+
+    std::vector<char> tight(8, 'x');
+    QCOMPARE(tmdq_step_config_initial_path(root.c_str(), "", tight.data(), int(tight.size())), int(want.size()));
+    QCOMPARE(std::string(tight.data()), want.substr(0, 7));   // truncated, and terminated
+    QCOMPARE(int(tight[7]), 0);
+
+    // A preferred file that exists wins; one that does not is passed over.
+    const std::string preferred = root + "/settings/rcvr_cals/TRC.toml";
+    std::vector<char> big(512, 'x');
+    QVERIFY(tmdq_step_config_initial_path(root.c_str(), preferred.c_str(), big.data(), int(big.size())) > 0);
+    QCOMPARE(std::string(big.data()), StepDetector::initialStepConfigPath(root, preferred));
+    QCOMPARE(std::string(big.data()), preferred);
+    std::fill(big.begin(), big.end(), 'x');
+    tmdq_step_config_initial_path(root.c_str(), (root + "/no/such.toml").c_str(), big.data(), int(big.size()));
+    QCOMPARE(std::string(big.data()), want);
+
+    // No app root and nothing preferred: empty.
+    std::fill(big.begin(), big.end(), 'x');
+    QCOMPARE(tmdq_step_config_initial_path(nullptr, nullptr, big.data(), int(big.size())),
+             int(StepDetector::initialStepConfigPath(std::string(), std::string()).size()));
+
+    // A buffer and capacity that do not make sense are an error, not a write.
+    QCOMPARE(tmdq_step_config_initial_path(root.c_str(), nullptr, nullptr, 10), -1);
+    QCOMPARE(tmdq_step_config_initial_path(root.c_str(), nullptr, big.data(), -1), -1);
+}
+
+void TestAbi::aCalibrationMatchesWhatTheExtractorMakes()
+{
+    const StepCal f = loadStepCal();
+    if (!f.ok || shippedSteps().empty())
+        QSKIP("step_cal fixture or the shipped step file not available");
+
+    const CalCase c(f);
+    const DirectCalibration want = runDirectCalibration(c);
+    QVERIFY2(want.ok, want.summary.c_str());
+    QCOMPARE(want.results.size(), std::size_t{48});
+    int calibrated = 0;
+    for (const CalibrationChannelResult& r : want.results)
+        calibrated += r.profile.valid ? 1 : 0;
+    QVERIFY2(calibrated >= 3, "the fixture should calibrate some channels, or the comparison proves little");
+
+    CalRequest request(c);
+    Seen seen;
+    CalGuard guard;
+    QVERIFY2(calibrateToTheEnd(request, seen, guard), seen.joined().c_str());
+    const QString diff = calibrationDifferences(guard.handle, want);
+    QVERIFY2(diff.isEmpty(), qPrintable(diff));
+
+    // The documented order: finished last and once, progress from a single thread, never a stream result.
+    const std::vector<std::string> events = seen.snapshot();
+    QCOMPARE(events.back(), std::string("finished:1"));
+    QCOMPARE(seen.finishedCount, 1);
+    QVERIFY(!seen.any("stream:"));
+    QCOMPARE(seen.progressThreads.size(), std::size_t{1});
+    QVERIFY(seen.any("log:"));
+    QCOMPARE(tmdq_calibration_running(guard.handle), 0);
+
+    // The profiles it found feed a run: the same receiver stream, through the ABI and directly.
+    Case calibrated_case = receiverCase(f);
+    for (int32_t i = 0; i < int(want.results.size()); ++i)
+    {
+        tmdq_calibration_channel ch{};
+        ch.struct_size = sizeof(ch);
+        QCOMPARE(tmdq_calibration_channel_result(guard.handle, i, &ch), int(TMDQ_OK));
+        if (ch.valid)
+            calibrated_case.calibration[ch.word_index] = std::vector<tmdq_cal_point>(ch.points, ch.points + ch.point_count);
+    }
+    QVERIFY(!calibrated_case.calibration.empty());
+    bool ok = false;
+    const auto direct = runCore(f, 0, { calibrated_case }, projectRoot().toStdString(), ok);
+    QVERIFY(ok);
+    Request run(f, { calibrated_case });
+    Seen runSeen;
+    QVERIFY(runToTheEnd(run, runSeen));
+    QVERIFY2(differences(runSeen.byJob().at(0), direct.at(0)).isEmpty(), qPrintable(differences(runSeen.byJob().at(0), direct.at(0))));
+}
+
+void TestAbi::everySettingOfACalibrationReachesTheExtractor()
+{
+    const StepCal f = loadStepCal();
+    if (!f.ok || shippedSteps().empty())
+        QSKIP("step_cal fixture or the shipped step file not available");
+
+    // One setting changed at a time. For each, the core's result for the changed calibration must differ from
+    // its result for the unchanged one (or the row proves nothing), and the run through the ABI must equal the
+    // core's. A setting the ABI forgot to carry would give the unchanged calibration's result.
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    auto write = [](const QString& path, const char* text) {
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(text);
+    };
+    write(dir.filePath("one.toml"), "[L_RCVR1]\nWord = 1\n");
+    QVERIFY(QDir().mkpath(dir.filePath("root/settings/receiver_params")));
+    write(dir.filePath("root/settings/receiver_params/default.toml"), "[C_RCVR1]\nWord = 2\n[R_RCVR1]\nWord = 3\n");
+
+    struct Row { const char* name; CalCase base; CalCase variant; };
+    std::vector<Row> rows;
+    auto addWith = [&](const char* name, auto change, const CalCase& base) {
+        CalCase variant = base;
+        change(variant);
+        rows.push_back({name, base, variant});
+    };
+    auto add = [&](const char* name, auto change) { addWith(name, change, CalCase(f)); };
+    // The grid fallback only applies when no word map is resolved: an application root with no default file.
+    CalCase noMap(f);
+    noMap.appRoot = dir.filePath("empty-root").toStdString();
+
+    add("randomized", [](CalCase& c) { c.in.randomized = true; });
+    add("inverted", [](CalCase& c) { c.in.inverted = true; });
+    add("byte order", [](CalCase& c) { c.in.swapBytes = false; });
+    add("frame length", [](CalCase& c) { c.in.bitsInMinorFrame = 1600; });
+    add("data rate", [](CalCase& c) { c.in.dataRateMbps = 0.2; });
+    add("sync mask", [](CalCase& c) { c.in.syncMask = "FFFF0000"; });
+    add("pcm channel", [](CalCase& c) { c.in.pcmChannelId += 1000; });
+    add("clip start", [](CalCase& c) { c.in.clipStartSec = 3.0; });
+    add("clip end", [](CalCase& c) { c.in.clipEndSec = 3.0; });
+    add("clips beyond the recording", [](CalCase& c) { c.in.clipStartSec = 1.0e6; c.in.clipEndSec = 1.0e6; });
+    add("steps", [](CalCase& c) { c.in.steps.pop_back(); });
+    addWith("receiver count", [](CalCase& c) { c.in.numReceivers = 2; }, noMap);
+    addWith("receiver channels", [](CalCase& c) { c.in.receiverChannels = 1; }, noMap);
+    add("word-map file", [&](CalCase& c) { c.in.receiverParamsToml = toFsPath(dir.filePath("one.toml")); });
+    add("application root", [&](CalCase& c) { c.appRoot = dir.filePath("root").toStdString(); });
+
+    for (Row& row : rows)
+    {
+        const QString name = QString::fromLatin1(row.name);
+        const DirectCalibration base = runDirectCalibration(row.base);
+        const DirectCalibration variant = runDirectCalibration(row.variant);
+        QVERIFY2(base.built && base.ok, qPrintable(name + ": the unchanged calibration must run: " + QString::fromStdString(base.summary)));
+        QVERIFY2(variant.built, qPrintable(name + ": the changed calibration must build"));
+        QVERIFY2(!sameCalibration(base, variant), qPrintable(name + ": changing it should change the core's result, or the row proves nothing"));
+
+        CalRequest request(row.variant);
+        Seen seen;
+        CalGuard guard;
+        const bool ended = calibrateToTheEnd(request, seen, guard);
+        QVERIFY2(guard.handle != nullptr, qPrintable(name + ": the calibration should start"));
+        if (variant.ok)
+            QVERIFY2(ended, qPrintable(name + ": the calibration should complete"));
+        else
+            QVERIFY2(!ended, qPrintable(name + ": the core fails, so must the ABI"));
+        const QString diff = calibrationDifferences(guard.handle, variant);
+        QVERIFY2(diff.isEmpty(), qPrintable(name + " differs in: " + diff));
+    }
+}
+
+void TestAbi::aCalibrationSettingTheExtractorCannotUseIsRefused()
+{
+    const StepCal f = loadStepCal();
+    if (!f.ok || shippedSteps().empty())
+        QSKIP("step_cal fixture or the shipped step file not available");
+
+    Seen seen;
+    const tmdq_callbacks callbacks = seen.callbacks();
+    tmdq_calibration* handle = reinterpret_cast<tmdq_calibration*>(std::uintptr_t{1});
+
+    CalCase badPattern(f);
+    badPattern.in.syncPattern = "zz";
+    CalRequest r1(badPattern);
+    QCOMPARE(tmdq_calibration_start(&r1.req, &callbacks, &handle), int(TMDQ_ERR_JOB));
+    QVERIFY(handle == nullptr);
+    QCOMPARE(std::string(tmdq_last_error()), std::string("Invalid frame sync pattern 'zz'."));
+
+    CalCase emptyPattern(f);
+    emptyPattern.in.syncPattern.clear();
+    CalRequest r2(emptyPattern);
+    r2.req.sync_pattern_utf8 = nullptr;
+    QCOMPARE(tmdq_calibration_start(&r2.req, &callbacks, &handle), int(TMDQ_ERR_JOB));
+    QCOMPARE(std::string(tmdq_last_error()), std::string("Invalid frame sync pattern ''."));
+
+    CalCase badMask(f);
+    badMask.in.syncMask = "xyz";
+    CalRequest r3(badMask);
+    QCOMPARE(tmdq_calibration_start(&r3.req, &callbacks, &handle), int(TMDQ_ERR_JOB));
+    QCOMPARE(std::string(tmdq_last_error()), std::string("Invalid frame sync mask 'xyz'."));
+
+    // Nothing was started, so nothing was reported.
+    QVERIFY(seen.snapshot().empty());
+}
+
+void TestAbi::badArgumentsToTheCalibrationFunctionsAreRefused()
+{
+    const StepCal f = loadStepCal();
+    if (!f.ok || shippedSteps().empty())
+        QSKIP("step_cal fixture or the shipped step file not available");
+
+    Seen seen;
+    const tmdq_callbacks callbacks = seen.callbacks();
+    CalRequest good{CalCase(f)};
+    tmdq_calibration* handle = reinterpret_cast<tmdq_calibration*>(std::uintptr_t{1});
+
+    QCOMPARE(tmdq_calibration_start(nullptr, &callbacks, &handle), int(TMDQ_ERR_BADARG));
+    QVERIFY(handle == nullptr);
+    QCOMPARE(tmdq_calibration_start(&good.req, &callbacks, nullptr), int(TMDQ_ERR_BADARG));
+
+    tmdq_calibration_request r = good.req;
+    r.struct_size = sizeof(tmdq_calibration_request) - 1;
+    QCOMPARE(tmdq_calibration_start(&r, &callbacks, &handle), int(TMDQ_ERR_BADARG));
+    r = good.req;
+    r.cal_filename_utf8 = nullptr;
+    QCOMPARE(tmdq_calibration_start(&r, &callbacks, &handle), int(TMDQ_ERR_BADARG));
+    r.cal_filename_utf8 = "";
+    QCOMPARE(tmdq_calibration_start(&r, &callbacks, &handle), int(TMDQ_ERR_BADARG));
+    r = good.req;
+    r.step_count = -1;
+    QCOMPARE(tmdq_calibration_start(&r, &callbacks, &handle), int(TMDQ_ERR_BADARG));
+    r = good.req;
+    r.step_db = nullptr;
+    QCOMPARE(tmdq_calibration_start(&r, &callbacks, &handle), int(TMDQ_ERR_BADARG));
+    tmdq_callbacks shortCallbacks = callbacks;
+    shortCallbacks.struct_size = sizeof(tmdq_callbacks) - 1;
+    QCOMPARE(tmdq_calibration_start(&good.req, &shortCallbacks, &handle), int(TMDQ_ERR_BADARG));
+    QVERIFY(handle == nullptr);
+    QVERIFY(seen.snapshot().empty());
+
+    // NULL is tolerated where it makes sense.
+    tmdq_calibration_cancel(nullptr);
+    QCOMPARE(tmdq_calibration_running(nullptr), 0);
+    tmdq_calibration_wait(nullptr);
+    tmdq_calibration_free(nullptr);
+    tmdq_calibration_info info{};
+    info.struct_size = sizeof(info);
+    QCOMPARE(tmdq_calibration_result(nullptr, &info), int(TMDQ_ERR_BADARG));
+    tmdq_calibration_channel ch{};
+    ch.struct_size = sizeof(ch);
+    QCOMPARE(tmdq_calibration_channel_result(nullptr, 0, &ch), int(TMDQ_ERR_BADARG));
+
+    // A run with no callbacks at all just runs; and a finished one refuses a bad index, a short struct, no output.
+    CalGuard guard;
+    QCOMPARE(tmdq_calibration_start(&good.req, nullptr, &guard.handle), int(TMDQ_OK));
+    tmdq_calibration_wait(guard.handle);
+    QCOMPARE(tmdq_calibration_running(guard.handle), 0);
+    QCOMPARE(tmdq_calibration_channel_result(guard.handle, 48, &ch), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_calibration_channel_result(guard.handle, -1, &ch), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_calibration_channel_result(guard.handle, 0, nullptr), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_calibration_result(guard.handle, nullptr), int(TMDQ_ERR_BADARG));
+    tmdq_calibration_info shortInfo{};
+    shortInfo.struct_size = sizeof(shortInfo) - 1;
+    QCOMPARE(tmdq_calibration_result(guard.handle, &shortInfo), int(TMDQ_ERR_BADARG));
+    tmdq_calibration_channel shortChannel{};
+    shortChannel.struct_size = sizeof(shortChannel) - 1;
+    QCOMPARE(tmdq_calibration_channel_result(guard.handle, 0, &shortChannel), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_calibration_channel_result(guard.handle, 0, &ch), int(TMDQ_OK));
+}
+
+void TestAbi::aCalibrationThatCannotStartReportsThroughTheSink()
+{
+    const StepCal f = loadStepCal();
+    if (!f.ok || shippedSteps().empty())
+        QSKIP("step_cal fixture or the shipped step file not available");
+
+    // A recording that is not there: the extractor reports it before any thread starts, so by the time
+    // start returns the error and the end have been delivered, and the handle is already finished.
+    CalCase missing(f);
+    missing.in.calFilename = toFsPath(QDir::tempPath() + "/tst_abi_no_such_cal.ch10");
+    const DirectCalibration want = runDirectCalibration(missing);
+    QVERIFY(!want.ok);
+    QVERIFY(!want.error.empty());
+
+    CalRequest request(missing);
+    Seen seen;
+    const tmdq_callbacks callbacks = seen.callbacks();
+    CalGuard guard;
+    QCOMPARE(tmdq_calibration_start(&request.req, &callbacks, &guard.handle), int(TMDQ_OK));
+    QVERIFY(guard.handle != nullptr);
+    QCOMPARE(seen.finishedCount, 1);
+    QCOMPARE(seen.finishedSuccess, 0);
+    QVERIFY(seen.any("error:"));
+    QCOMPARE(seen.snapshot().back(), std::string("finished:0"));
+    QCOMPARE(tmdq_calibration_running(guard.handle), 0);
+    const QString diff = calibrationDifferences(guard.handle, want);
+    QVERIFY2(diff.isEmpty(), qPrintable(diff));
+
+    // No steps at all is refused the same way, with the extractor's own words.
+    const CalCase none(f, {});
+    const DirectCalibration noSteps = runDirectCalibration(none);
+    QVERIFY(!noSteps.ok);
+    CalRequest empty(none);
+    Seen seen2;
+    const tmdq_callbacks callbacks2 = seen2.callbacks();
+    CalGuard guard2;
+    QCOMPARE(tmdq_calibration_start(&empty.req, &callbacks2, &guard2.handle), int(TMDQ_OK));
+    QCOMPARE(seen2.finishedSuccess, 0);
+    QVERIFY2(calibrationDifferences(guard2.handle, noSteps).isEmpty(), qPrintable(calibrationDifferences(guard2.handle, noSteps)));
+}
+
+void TestAbi::resultsAreRefusedWhileACalibrationRunsAndCancelEndsIt()
+{
+    const StepCal f = loadStepCal();
+    if (!f.ok || shippedSteps().empty())
+        QSKIP("step_cal fixture or the shipped step file not available");
+
+    CalRequest request{CalCase(f)};
+    Seen seen;
+    const tmdq_callbacks callbacks = seen.callbacks();
+    CalGuard guard;
+    QCOMPARE(tmdq_calibration_start(&request.req, &callbacks, &guard.handle), int(TMDQ_OK));
+    QCOMPARE(tmdq_calibration_running(guard.handle), 1);
+
+    tmdq_calibration_info info{};
+    info.struct_size = sizeof(info);
+    QCOMPARE(tmdq_calibration_result(guard.handle, &info), int(TMDQ_ERR_STATE));
+    QVERIFY(!std::string(tmdq_last_error()).empty());
+    tmdq_calibration_channel ch{};
+    ch.struct_size = sizeof(ch);
+    QCOMPARE(tmdq_calibration_channel_result(guard.handle, 0, &ch), int(TMDQ_ERR_STATE));
+
+    tmdq_calibration_cancel(guard.handle);
+    tmdq_calibration_cancel(guard.handle);   // twice is as good as once
+    QVERIFY2(seen.waitFinished(kTimeoutMs), seen.joined().c_str());
+    tmdq_calibration_wait(guard.handle);
+    QCOMPARE(seen.finishedCount, 1);
+    QCOMPARE(seen.finishedSuccess, 0);
+    QCOMPARE(tmdq_calibration_running(guard.handle), 0);
+    QCOMPARE(tmdq_calibration_result(guard.handle, &info), int(TMDQ_OK));
+    QCOMPARE(std::string(info.summary_utf8), std::string("Calibration extraction cancelled."));
+    QCOMPARE(std::string(info.error_utf8), std::string());
+}
+
+void TestAbi::freeingACalibrationInFlightCancelsAndWaits()
+{
+    const StepCal f = loadStepCal();
+    if (!f.ok || shippedSteps().empty())
+        QSKIP("step_cal fixture or the shipped step file not available");
+
+    CalRequest request{CalCase(f)};
+    auto seen = std::make_unique<Seen>();
+    const tmdq_callbacks callbacks = seen->callbacks();
+    tmdq_calibration* handle = nullptr;
+    QCOMPARE(tmdq_calibration_start(&request.req, &callbacks, &handle), int(TMDQ_OK));
+    tmdq_calibration_free(handle);   // no cancel, no wait: free does both
+
+    QCOMPARE(seen->finishedCount, 1);
+    QCOMPARE(seen->finishedSuccess, 0);
+    QCOMPARE(seen->snapshot().back(), std::string("finished:0"));
+    seen.reset();
+}
+
+void TestAbi::waitAloneIsEnoughToSeeACalibrationEnd()
+{
+    const StepCal f = loadStepCal();
+    if (!f.ok || shippedSteps().empty())
+        QSKIP("step_cal fixture or the shipped step file not available");
+
+    CalRequest request{CalCase(f)};
+    Seen seen;
+    const tmdq_callbacks callbacks = seen.callbacks();
+    CalGuard guard;
+    QCOMPARE(tmdq_calibration_start(&request.req, &callbacks, &guard.handle), int(TMDQ_OK));
+    tmdq_calibration_wait(guard.handle);
+    QCOMPARE(tmdq_calibration_running(guard.handle), 0);
+    QCOMPARE(seen.finishedCount, 1);
+    QCOMPARE(seen.finishedSuccess, 1);
+    tmdq_calibration_info info{};
+    info.struct_size = sizeof(info);
+    QCOMPARE(tmdq_calibration_result(guard.handle, &info), int(TMDQ_OK));
+    QCOMPARE(info.channel_count, 48);
+    tmdq_calibration_wait(guard.handle);   // and again is harmless
+}
+
+void TestAbi::aThresholdThatHadToBeRelaxedIsReported()
+{
+    const StepCal f = loadStepCal();
+    if (!f.ok || shippedSteps().empty())
+        QSKIP("step_cal fixture or the shipped step file not available");
+
+    // Four expected steps against a recording that sweeps eleven: the nominal edge threshold cannot resolve
+    // so few levels and some channels only pair after it is lowered. The flag says so, and it is the one
+    // per-channel flag the ordinary eleven-step run never sets.
+    const CalCase c(f, { 0.0, 6.0, 12.0, 18.0 });
+    const DirectCalibration want = runDirectCalibration(c);
+    QVERIFY(want.ok);
+    int relaxed = 0;
+    for (const CalibrationChannelResult& r : want.results)
+        relaxed += r.thresholdRelaxed ? 1 : 0;
+    QVERIFY2(relaxed > 0, "the fixture should need a relaxed threshold with four steps, or this proves nothing");
+
+    CalRequest request(c);
+    Seen seen;
+    CalGuard guard;
+    QVERIFY2(calibrateToTheEnd(request, seen, guard), seen.joined().c_str());
+    const QString diff = calibrationDifferences(guard.handle, want);
+    QVERIFY2(diff.isEmpty(), qPrintable(diff));
+    int reported = 0;
+    for (int32_t i = 0; i < int(want.results.size()); ++i)
+    {
+        tmdq_calibration_channel ch{};
+        ch.struct_size = sizeof(ch);
+        QCOMPARE(tmdq_calibration_channel_result(guard.handle, i, &ch), int(TMDQ_OK));
+        reported += ch.threshold_relaxed;
+    }
+    QCOMPARE(reported, relaxed);
 }

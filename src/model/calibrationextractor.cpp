@@ -112,6 +112,11 @@ void CalibrationExtractor::joinDriver()
     }
 }
 
+void CalibrationExtractor::wait()
+{
+    joinDriver();
+}
+
 std::string CalibrationExtractor::error() const
 {
     std::lock_guard<std::mutex> lock(m_mutex);

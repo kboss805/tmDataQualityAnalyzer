@@ -8,6 +8,7 @@ class TestCalibrationExtractor : public QObject
     Q_OBJECT
 
 private slots:
+    void waitReturnsOnceTheDriverHasEnded();
     void missingFileFailsCleanly();
     void realFileCalibratesRcvr3Only();
     void byteOrderReachesTheExtraction();

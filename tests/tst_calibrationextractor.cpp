@@ -423,6 +423,65 @@ bool buildStepCalRequest(Chapter10Reader& reader, CalibrationExtractor::Request&
 
 } // namespace
 
+namespace {
+
+/// A sink that says nothing: for tests that only care about the extractor's own state.
+class QuietEvents final : public ProcessingEvents
+{
+public:
+    void logMessage(const std::string&) override {}
+    void errorOccurred(const std::string&) override {}
+    void processingFinished(bool) override {}
+};
+
+} // namespace
+
+void TestCalibrationExtractor::waitReturnsOnceTheDriverHasEnded()
+{
+    // An extractor that was never started has nothing to wait for.
+    {
+        CalibrationExtractor idle;
+        idle.wait();
+        QVERIFY(!idle.running());
+    }
+
+    // One that failed before any thread started has none either.
+    {
+        CalibrationExtractor::Request req;
+        req.calFilename = "definitely_not_a_real_file.ch10";
+        req.timeChannelId = 1;
+        req.pcmChannelId = 1;
+        setAcquisition(req, "FE6B2840", 800, false, 0.8, true);
+        req.steps = dummySteps();
+        CalibrationExtractor failed;
+        failed.start(req, std::make_shared<QuietEvents>());
+        failed.wait();
+        QVERIFY(!failed.running());
+        QVERIFY(!failed.error().empty());
+    }
+
+    // And a real run: when wait() returns the driver is over and the results are all there.
+    Chapter10Reader reader;
+    CalibrationExtractor::Request req;
+    QString skip;
+    if (!buildStepCalRequest(reader, req, "settings/rcvr_cals/default.toml",
+                             "settings/receiver_params/default.toml", skip))
+        QSKIP(qPrintable(skip));
+    CalibrationExtractor extractor;
+    extractor.start(req, std::make_shared<QuietEvents>());
+    extractor.wait();
+    QVERIFY(!extractor.running());
+    QCOMPARE(extractor.results().size(), req.numReceivers * req.receiverChannels);
+    extractor.wait();   // and again is harmless
+
+    // A cancelled one is waited for the same way.
+    CalibrationExtractor cancelled;
+    cancelled.start(req, std::make_shared<QuietEvents>());
+    cancelled.cancel();
+    cancelled.wait();
+    QVERIFY(!cancelled.running());
+}
+
 void TestCalibrationExtractor::missingFileFailsCleanly()
 {
     CalibrationExtractor::Request req;

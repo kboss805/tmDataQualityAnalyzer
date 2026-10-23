@@ -63,7 +63,8 @@ extern "C" {
 /// needs a feature checks `version == TMDQ_ABI_VERSION && revision >= N`.
 ///   0  the interop spike's contract: probe a file, run one Frame Sync Lock stream.
 ///   1  plan step 2.2a: the file handle, and runs of N streams with callbacks and cancel.
-#define TMDQ_ABI_REVISION 1
+///   2  plan step 2.2b: step files, and calibration extraction.
+#define TMDQ_ABI_REVISION 2
 
 typedef enum tmdq_status
 {
@@ -73,7 +74,8 @@ typedef enum tmdq_status
     TMDQ_ERR_PROCESS   = 3,  ///< The run failed - usually no frame sync found.
     TMDQ_ERR_NOSAMPLES = 4,  ///< The run succeeded but produced no output samples.
     TMDQ_ERR_INTERNAL  = 5,  ///< An exception was caught at the boundary.
-    TMDQ_ERR_JOB       = 6   ///< A stream's configuration was rejected; tmdq_last_error() says why.
+    TMDQ_ERR_JOB       = 6,  ///< A stream's (or a calibration's) settings were rejected; tmdq_last_error() says why.
+    TMDQ_ERR_STATE     = 7   ///< The call is not valid yet: a result was asked for while its run is still going.
 } tmdq_status;
 
 /// How a stream is processed (the values of the core's StreamMode).
@@ -175,6 +177,9 @@ TMDQ_API const char* tmdq_last_error(void);
  *  - Arrays out are views into the handle they came from (no copy), valid until it is released.
  *  - Nothing throws across the boundary. A failure returns a tmdq_status and sets
  *    tmdq_last_error() for the calling thread.
+ *  - Text a function returns with no handle to own it is written into a buffer the caller provides,
+ *    snprintf-style: the return value is the length needed (not counting the NUL), and a buffer that is
+ *    too small receives a truncated, terminated copy. A negative return is an error.
  * ======================================================================================== */
 
 /// Which struct tmdq_sizeof() measures.
@@ -187,7 +192,10 @@ typedef enum tmdq_struct_id
     TMDQ_STRUCT_RUN_REQUEST    = 5,
     TMDQ_STRUCT_CALLBACKS      = 6,
     TMDQ_STRUCT_STREAM_INFO    = 7,
-    TMDQ_STRUCT_CHANNEL_SERIES = 8
+    TMDQ_STRUCT_CHANNEL_SERIES = 8,
+    TMDQ_STRUCT_CALIBRATION_REQUEST = 9,
+    TMDQ_STRUCT_CALIBRATION_INFO    = 10,
+    TMDQ_STRUCT_CALIBRATION_CHANNEL = 11
 } tmdq_struct_id;
 
 #pragma pack(push, 8)
@@ -361,6 +369,131 @@ TMDQ_API int32_t tmdq_stream_result_info(const tmdq_stream_result* result, tmdq_
 /// Describes the @p index'th receiver series of @p result. TMDQ_ERR_BADARG if @p index is out of range.
 TMDQ_API int32_t tmdq_stream_result_channel(const tmdq_stream_result* result, int32_t index, tmdq_channel_series* out);
 TMDQ_API void    tmdq_stream_result_free(tmdq_stream_result* result);   ///< Safe on NULL, and from any thread.
+
+/* ===========================================================================================
+ * Revision 2: step files and calibration extraction.
+ * ======================================================================================== */
+
+#pragma pack(push, 8)
+
+/// How a channel's calibration came out (the core's CalibrationOutcome, numbered the same).
+typedef enum tmdq_calibration_outcome
+{
+    TMDQ_CAL_CALIBRATED         = 0,   ///< A valid profile was built.
+    TMDQ_CAL_NO_DATA            = 1,   ///< No samples for this channel (absent or disabled word).
+    TMDQ_CAL_FLAT_NO_SIGNAL     = 2,   ///< Samples never moved: one level for the whole recording.
+    TMDQ_CAL_TOO_FEW_PLATEAUS   = 3,   ///< Fewer confirmed plateaus than expected steps.
+    TMDQ_CAL_NO_MONOTONIC_SWEEP = 4    ///< Enough plateaus, but no run of consecutive levels moving one way.
+} tmdq_calibration_outcome;
+
+/// One calibration to extract: the recording, the stream's settings as typed (which must be the values the
+/// main run uses), the expected steps and the clips. The same fields the Extract Calibration dialog gathers.
+typedef struct tmdq_calibration_request
+{
+    uint32_t    struct_size;
+    int32_t     time_channel_id;
+    const char* cal_filename_utf8;           ///< The calibration .ch10 file.
+    const char* app_root_utf8;               ///< Where settings/receiver_params/default.toml is looked for; NULL = none.
+    const char* sync_pattern_utf8;           ///< Hex text.
+    const char* sync_mask_utf8;              ///< Hex text; NULL or empty = every bit of the pattern.
+    const char* receiver_params_toml_utf8;   ///< NULL or empty = the shipped default word map, if the app root has one.
+    const double* step_db;                   ///< step_count expected steps, in order (see tmdq_steps_parse).
+    double      data_rate_mbps;              ///< 0 = use the TMATS rate.
+    double      clip_start_sec;              ///< Seconds of the recording to ignore at the start.
+    double      clip_end_sec;                ///< ... and at the end.
+    int32_t     pcm_channel_id;
+    int32_t     bits_in_minor_frame;
+    int32_t     randomized;                  ///< 0/1.
+    int32_t     inverted;                    ///< 0/1.
+    int32_t     swap_bytes;                  ///< 0/1, file-scoped.
+    int32_t     num_receivers;               ///< Sequential-grid fallback, used only when no word-map file is resolved.
+    int32_t     receiver_channels;
+    int32_t     step_count;
+} tmdq_calibration_request;
+
+/// What a finished calibration says overall.
+typedef struct tmdq_calibration_info
+{
+    uint32_t    struct_size;
+    int32_t     channel_count;
+    const char* summary_utf8;      ///< The status line: "Calibrated N of M channel(s).", the failure's reason, or the cancel notice.
+    const char* error_utf8;        ///< Why the run failed; empty on success and on a cancel.
+    const char* report_utf8;       ///< The operator-facing report: which receivers calibrated and why the others did not.
+    double      recording_seconds; ///< Length of the extracted recording.
+    int32_t     clip_ignored;      ///< 0/1: the clips would have left nothing, so both were ignored.
+    int32_t     reserved;
+} tmdq_calibration_info;
+
+/// One channel's outcome. The arrays are views into the calibration.
+typedef struct tmdq_calibration_channel
+{
+    uint32_t              struct_size;
+    int32_t               word_index;           ///< Zero-based word within the minor frame.
+    const char*           name_utf8;            ///< e.g. "L_RCVR1".
+    const tmdq_cal_point* points;               ///< The profile's points (point_count of them), sorted by raw_avg.
+    const double*         plateau_levels;       ///< Settled averages of the plateaus found, in time order.
+    const double*         unresolved_db;        ///< dB of every step no measured level could be paired with.
+    double                edge_threshold;       ///< Raw-count edge threshold used to split plateaus.
+    int32_t               point_count;
+    int32_t               plateau_level_count;
+    int32_t               unresolved_count;
+    int32_t               valid;                ///< 0/1: the profile is usable. Pass such profiles to tmdq_run_start.
+    int32_t               had_data;             ///< 0/1: any samples were extracted for this channel.
+    int32_t               outcome;              ///< tmdq_calibration_outcome.
+    int32_t               detected_plateaus;
+    int32_t               extra_plateaus;       ///< 0/1: more plateaus than expected steps were found.
+    int32_t               threshold_relaxed;    ///< 0/1: the nominal threshold could not resolve the sweep.
+    int32_t               saturated;            ///< 0/1: the sweep ran off an end of the converter.
+    int32_t               sweep_levels;
+    int32_t               reserved;
+} tmdq_calibration_channel;
+
+#pragma pack(pop)
+
+/* --- step files ------------------------------------------------------------------------- */
+
+typedef struct tmdq_steps tmdq_steps;   ///< The expected steps read from a step-config TOML.
+
+/// Parses an `[[Step]]` step-config file. @return TMDQ_OK, TMDQ_ERR_BADARG for a NULL, or TMDQ_ERR_PREPARE
+/// when the file cannot be read or holds no valid step (tmdq_last_error has the parser's reason).
+TMDQ_API int32_t       tmdq_steps_parse(const char* path_utf8, tmdq_steps** out);
+TMDQ_API int32_t       tmdq_steps_count(const tmdq_steps* steps);   ///< -1 for NULL.
+/// The step_count dB values, in file order; a view valid until tmdq_steps_free. NULL for NULL.
+TMDQ_API const double* tmdq_steps_db(const tmdq_steps* steps);
+TMDQ_API void          tmdq_steps_free(tmdq_steps* steps);          ///< Safe on NULL.
+
+/// The step file the Extract Calibration dialog opens with: @p preferred if it names an existing file, else
+/// `<app_root>/settings/rcvr_cals/default.toml` if that exists, else empty. Written into @p buffer as text
+/// (see the conventions above); NULL strings read as empty.
+TMDQ_API int32_t       tmdq_step_config_initial_path(const char* app_root_utf8, const char* preferred_utf8,
+                                                     char* buffer, int32_t capacity);
+
+/* --- calibration extraction ------------------------------------------------------------- */
+
+typedef struct tmdq_calibration tmdq_calibration;   ///< An extraction in flight, or just ended.
+
+/// Checks the request (decoding the sync text and resolving the word map exactly as the main run does) and
+/// starts the extraction on the library's own threads; returns at once. @p callbacks is used as for a run,
+/// except that `stream_done` is never called: `log` and `error` from the reader or worker or driver thread,
+/// `progress` 0..100, and `finished` once, LAST. A failure the extractor can see before any work starts (no
+/// steps, a word map it cannot use, a recording it cannot open) is reported through `error` then
+/// `finished(0)` before this returns, and the handle is returned in its finished state.
+/// @return TMDQ_OK with *@p out set; TMDQ_ERR_BADARG for a NULL, a short struct_size, no filename or a bad
+/// step_count; TMDQ_ERR_JOB when the sync pattern or mask cannot be read ("Invalid frame sync pattern '...'.").
+TMDQ_API int32_t tmdq_calibration_start(const tmdq_calibration_request* request, const tmdq_callbacks* callbacks,
+                                        tmdq_calibration** out);
+TMDQ_API void    tmdq_calibration_cancel(tmdq_calibration* calibration);          ///< Ends with finished(0).
+TMDQ_API int32_t tmdq_calibration_running(const tmdq_calibration* calibration);  ///< 1 until just before `finished`.
+TMDQ_API void    tmdq_calibration_wait(tmdq_calibration* calibration);           ///< Not from a callback.
+TMDQ_API void    tmdq_calibration_free(tmdq_calibration* calibration);           ///< Cancels, waits, releases. Safe on NULL.
+
+/// The overall outcome. Valid once `finished` has been delivered (or tmdq_calibration_wait returned);
+/// TMDQ_ERR_STATE while the extraction is still running.
+TMDQ_API int32_t tmdq_calibration_result(const tmdq_calibration* calibration, tmdq_calibration_info* out);
+/// The @p index'th channel's outcome, in word order. TMDQ_ERR_STATE while running; TMDQ_ERR_BADARG for an
+/// index out of range.
+TMDQ_API int32_t tmdq_calibration_channel_result(const tmdq_calibration* calibration, int32_t index,
+                                                 tmdq_calibration_channel* out);
 
 #ifdef __cplusplus
 }

@@ -20,6 +20,7 @@
 #include "tst_processingcoordinator.h"
 #include "tst_stepdetector.h"
 #include "tst_calibrationextractor.h"
+#include "tst_calibrationrequest.h"
 #include "tst_ch10packetreader.h"
 #include "tst_streamconfigdialog.h"
 
@@ -151,6 +152,7 @@ int main(int argc, char* argv[])
     status |= runSuite<TestTextFormat>(log_path);
     status |= runSuite<TestFrameSync>(log_path);
     status |= runSuite<TestCoreQtFree>(log_path);
+    status |= runSuite<TestCalibrationRequest>(log_path);
     status |= runSuite<TestAbi>(log_path);
     status |= runSuite<TestEventReporter>(log_path);
     status |= runSuite<TestTomlDocument>(log_path);
