@@ -117,6 +117,7 @@
     <ClCompile Include="abi_file.cpp" />
     <ClCompile Include="abi_run.cpp" />
     <ClCompile Include="abi_calibration.cpp" />
+    <ClCompile Include="abi_formats.cpp" />
   </ItemGroup>
 
   <!-- The core: src\model\<name>.cpp for every name in TestCoreQtFree's kCoreSources. -->
