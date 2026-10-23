@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The managed side of the native core: a typed, disposable wrapper over the flat C ABI in
+    native/tmdq_core/tmdq_abi.h, which tmdq_core.dll implements. No UI, no application logic - what it
+    adds to the DLL is lifetime (handles that cannot leak or be used after they are released), text
+    (UTF-8 in and out), callbacks (native threads delivered to a managed observer) and errors
+    (a status becomes an exception carrying the library's own message).
+
+    The DLL is found by Library.Load(path); nothing here searches PATH.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>TmDq.Core</AssemblyName>
+    <RootNamespace>TmDq.Core</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PlatformTarget>x64</PlatformTarget>
+    <AppendPlatformToOutputPath>false</AppendPlatformToOutputPath>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>

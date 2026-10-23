@@ -198,6 +198,16 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "tmdq_core.dll ($cfg) failed the build or the no-Qt check" }
           }
 
+      - name: Managed tests (TmDq.Core against the native DLL)
+        shell: powershell
+        run: |
+          # The C# library over the ABI and its xunit tests, run against the Release tmdq_core.dll built by the
+          # previous step. The script builds with warnings as errors and merges the UTF-8 code-page manifest
+          # into the test exe (mt.exe; it sources env.ps1 when mt is not already on PATH).
+          $ErrorActionPreference = 'Continue'
+          powershell -ExecutionPolicy Bypass -File scripts\test_dotnet.ps1 -Configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "the managed tests failed" }
+
       - name: Run full test suite
         env:
           # Qt's offscreen platform: the self-hosted runner runs as a Windows
@@ -288,6 +298,11 @@ jobs:
         with:
           arch: x64
 
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
       - name: Toolchain versions
         shell: powershell
         run: |
@@ -369,6 +384,16 @@ jobs:
             powershell -ExecutionPolicy Bypass -File scripts\build_core_dll.ps1 -Configuration $cfg
             if ($LASTEXITCODE -ne 0) { throw "tmdq_core.dll ($cfg) failed the build or the no-Qt check" }
           }
+
+      - name: Managed tests (TmDq.Core against the native DLL)
+        shell: powershell
+        run: |
+          # The C# library over the ABI and its xunit tests, run against the Release tmdq_core.dll built by the
+          # previous step. The script builds with warnings as errors and merges the UTF-8 code-page manifest
+          # into the test exe (mt.exe; it sources env.ps1 when mt is not already on PATH).
+          $ErrorActionPreference = 'Continue'
+          powershell -ExecutionPolicy Bypass -File scripts\test_dotnet.ps1 -Configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "the managed tests failed" }
 
       - name: Run test suite
         env:

@@ -41,6 +41,14 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   the same core sources as the qmake build; `TestCoreQtFree` fails if the two lists drift, so **a new core
   source goes in `kCoreSources` AND `tmdq_core.vcxproj`**, and a new ABI source (`native/tmdq_core/*.cpp`) goes in the project AND `tests/tests.pro` (`TestAbi` compiles the ABI into the test executable and calls it as a host would). `tmdq.sln` is the committed solution; the
   root's `tmDataQualityAnalyzer.sln` is the generated, gitignored Qt one.
+- **Managed library and its tests (.NET 10):** `powershell -ExecutionPolicy Bypass -File scripts\test_dotnet.ps1
+  [-Configuration Debug|Release] [-NoBuild]` builds `dotnet/TmDq.Core` (the C# binding of the DLL's C ABI) and
+  `dotnet/TmDq.Core.Tests` (xunit v3, warnings are errors) and runs the test exe against
+  `native/out/<config>/tmdq_core.dll` (build that first; `TMDQ_CORE_DLL` overrides). The tests run the
+  committed recordings through the library and compare with numbers the Qt pipeline produces. An xunit v3
+  project is an executable; the build merges a UTF-8 code-page manifest into it with `mt.exe`, because the vendored
+  irig106 opens files with a narrow `open()` that reads the active code page. Green baseline **122 passed / 0
+  failed / 1 skipped** (the skip is the probe `IsolatedLoadTests` runs in a child process). CI runs it in both jobs.
 
 **After a Qt version bump, CLEAN every build directory** — `build/` *and* `tests/`, Debug and
 Release: `& $env:TMDQ_MAKE -f Makefile.<Config> clean` then rebuild. jom rebuilds an object only

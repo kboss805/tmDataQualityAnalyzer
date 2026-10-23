@@ -246,8 +246,9 @@ int32_t tmdq_stream_result_info(const tmdq_stream_result* result, tmdq_stream_in
     info.pcm_channel_id = d.pcmChannelId;
     info.label_utf8     = d.streamLabel.c_str();
     info.times_sec      = d.timesSec.data();
-    info.lock_percent   = d.lockPercent.data();
-    info.missed_frames  = d.accumulatedMissedFrames.data();
+    // NULL, not an empty vector's data(), when the stream has none (a receiver stream has no lock series).
+    info.lock_percent   = d.lockPercent.empty() ? nullptr : d.lockPercent.data();
+    info.missed_frames  = d.accumulatedMissedFrames.empty() ? nullptr : d.accumulatedMissedFrames.data();
     info.job_index      = d.jobIndex;
     info.source_id      = d.sourceId;
     info.mode           = d.mode == StreamMode::FrameSyncLockStats ? TMDQ_MODE_FRAME_SYNC_LOCK
