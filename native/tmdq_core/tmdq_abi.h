@@ -64,7 +64,8 @@ extern "C" {
 ///   0  the interop spike's contract: probe a file, run one Frame Sync Lock stream.
 ///   1  plan step 2.2a: the file handle, and runs of N streams with callbacks and cancel.
 ///   2  plan step 2.2b: step files, and calibration extraction.
-#define TMDQ_ABI_REVISION 2
+///   3  plan step 2.2c: the frame-sync pattern file, template matching, CSV import and export, clock stamps.
+#define TMDQ_ABI_REVISION 3
 
 typedef enum tmdq_status
 {
@@ -75,7 +76,8 @@ typedef enum tmdq_status
     TMDQ_ERR_NOSAMPLES = 4,  ///< The run succeeded but produced no output samples.
     TMDQ_ERR_INTERNAL  = 5,  ///< An exception was caught at the boundary.
     TMDQ_ERR_JOB       = 6,  ///< A stream's (or a calibration's) settings were rejected; tmdq_last_error() says why.
-    TMDQ_ERR_STATE     = 7   ///< The call is not valid yet: a result was asked for while its run is still going.
+    TMDQ_ERR_STATE     = 7,  ///< The call is not valid yet: a result was asked for while its run is still going.
+    TMDQ_ERR_IO        = 8   ///< A file could not be written.
 } tmdq_status;
 
 /// How a stream is processed (the values of the core's StreamMode).
@@ -195,7 +197,12 @@ typedef enum tmdq_struct_id
     TMDQ_STRUCT_CHANNEL_SERIES = 8,
     TMDQ_STRUCT_CALIBRATION_REQUEST = 9,
     TMDQ_STRUCT_CALIBRATION_INFO    = 10,
-    TMDQ_STRUCT_CALIBRATION_CHANNEL = 11
+    TMDQ_STRUCT_CALIBRATION_CHANNEL = 11,
+    TMDQ_STRUCT_FRAME_SYNC_FILE_INFO = 12,
+    TMDQ_STRUCT_MATCH_INFO           = 13,
+    TMDQ_STRUCT_CSV_INFO             = 14,
+    TMDQ_STRUCT_CSV_SERIES_INFO      = 15,
+    TMDQ_STRUCT_CSV_COLUMN           = 16
 } tmdq_struct_id;
 
 #pragma pack(push, 8)
@@ -494,6 +501,144 @@ TMDQ_API int32_t tmdq_calibration_result(const tmdq_calibration* calibration, tm
 /// index out of range.
 TMDQ_API int32_t tmdq_calibration_channel_result(const tmdq_calibration* calibration, int32_t index,
                                                  tmdq_calibration_channel* out);
+
+/* ===========================================================================================
+ * Revision 3: the formats.
+ * ======================================================================================== */
+
+#pragma pack(push, 8)
+
+/// What a frame-sync pattern file says. The strings are views into the tmdq_frame_sync_file.
+typedef struct tmdq_frame_sync_file_info
+{
+    uint32_t    struct_size;
+    int32_t     has_bits_per_frame;     ///< 0/1: the file gives a usable frame length.
+    int32_t     bits_per_frame;         ///< Meaningful only if has_bits_per_frame.
+    int32_t     bits_from_legacy_key;   ///< 0/1: the length came from the older WordsInMinorFrame key.
+    int32_t     inverted;               ///< 0/1; 0 when the key is absent.
+    int32_t     has_randomized;         ///< 0/1: the file carries a Randomized key (older files do not).
+    int32_t     randomized;             ///< Meaningful only if has_randomized.
+    int32_t     reserved;
+    const char* pattern_utf8;           ///< FrameSync as written; empty if absent.
+    const char* mask_utf8;              ///< FrameSyncMask as written; empty if absent.
+} tmdq_frame_sync_file_info;
+
+/// The outcome of matching a template's channel ids against a file's.
+typedef struct tmdq_match_info
+{
+    uint32_t       struct_size;
+    int32_t        ok;                  ///< 0/1: the two sets are identical.
+    int32_t        missing_count;
+    int32_t        extra_count;
+    const int32_t* missing;             ///< Ids the template needs and the file lacks (sorted, each once).
+    const int32_t* extra;               ///< Ids the file has and the template does not (sorted, each once).
+} tmdq_match_info;
+
+/// Which kind of measurement a CSV series carries (the core's MetricType, numbered the same).
+typedef enum tmdq_metric_type
+{
+    TMDQ_METRIC_SNR                      = 0,
+    TMDQ_METRIC_FRAME_SYNC_LOCK          = 1,
+    TMDQ_METRIC_ACCUMULATED_MISSED_FRAMES = 2
+} tmdq_metric_type;
+
+/// A parsed CSV as a whole.
+typedef struct tmdq_csv_info
+{
+    uint32_t struct_size;
+    int32_t  series_count;
+    int32_t  base_day;                  ///< Day of the first parsed row.
+    int32_t  skipped_rows;              ///< Malformed data rows skipped.
+    double   base_time_offset;          ///< Seconds after midnight of the first parsed row.
+    double   x_max;
+} tmdq_csv_info;
+
+/// One column of a parsed CSV. The arrays are views into the tmdq_csv, point_count long.
+typedef struct tmdq_csv_series_info
+{
+    uint32_t       struct_size;
+    int32_t        metric_type;         ///< tmdq_metric_type.
+    const char*    name_utf8;           ///< Column header, with any source qualifier removed.
+    const char*    stream_label_utf8;   ///< Empty if the header names no stream.
+    const double*  x_values;            ///< Elapsed seconds from the first row.
+    const double*  y_values;
+    double         y_min;
+    double         y_max;
+    int32_t        receiver_index;      ///< 1-based, from "_RCVR<N>"; 0 for the frame-sync metrics.
+    int32_t        channel_index;
+    int32_t        stream_order;
+    int32_t        source_id;
+    int32_t        point_count;
+    int32_t        reserved;
+} tmdq_csv_series_info;
+
+/// One column to write to a CSV: the series' identity (which decides its header) and its samples. The arrays
+/// only need to outlive the call.
+typedef struct tmdq_csv_column
+{
+    uint32_t       struct_size;
+    int32_t        metric_type;         ///< tmdq_metric_type.
+    const char*    name_utf8;           ///< The series' name as the plot shows it.
+    const double*  x_values;            ///< Elapsed seconds from the recording's first sample.
+    const double*  y_values;
+    int32_t        source_id;           ///< 0 is written unqualified.
+    int32_t        x_count;
+    int32_t        y_count;
+    int32_t        reserved;
+} tmdq_csv_column;
+
+#pragma pack(pop)
+
+/* --- the frame-sync pattern file -------------------------------------------------------- */
+
+typedef struct tmdq_frame_sync_file tmdq_frame_sync_file;
+
+/// Reads a pattern file. A file that is missing, empty or unreadable reads as a file that says nothing (every
+/// field empty or 0), as in the application, so this fails only for a NULL argument (TMDQ_ERR_BADARG).
+TMDQ_API int32_t tmdq_frame_sync_file_read(const char* path_utf8, tmdq_frame_sync_file** out);
+TMDQ_API int32_t tmdq_frame_sync_file_info_get(const tmdq_frame_sync_file* file, tmdq_frame_sync_file_info* out);
+TMDQ_API void    tmdq_frame_sync_file_free(tmdq_frame_sync_file* file);   ///< Safe on NULL.
+/// Writes a pattern file: the pattern and mask as given, the frame length and the two flags (Data Rate and
+/// Sample Rate are deliberately not written). @return TMDQ_OK, TMDQ_ERR_BADARG for a NULL path, or TMDQ_ERR_IO.
+TMDQ_API int32_t tmdq_frame_sync_file_write(const char* path_utf8, const char* pattern_utf8, const char* mask_utf8,
+                                            int32_t bits_per_frame, int32_t inverted, int32_t randomized);
+
+/* --- template matching ------------------------------------------------------------------ */
+
+typedef struct tmdq_match tmdq_match;
+
+/// Compares a processing template's PCM channel ids with a file's as exact sets (order and repeats do not
+/// matter; two empty sets match). @return TMDQ_OK with *@p out set; TMDQ_ERR_BADARG for a negative count or a
+/// NULL array with a positive count.
+TMDQ_API int32_t tmdq_template_match(const int32_t* template_ids, int32_t template_count, const int32_t* file_ids,
+                                     int32_t file_count, tmdq_match** out);
+TMDQ_API int32_t tmdq_match_info_get(const tmdq_match* match, tmdq_match_info* out);
+TMDQ_API void    tmdq_match_free(tmdq_match* match);   ///< Safe on NULL.
+
+/* --- CSV import and export -------------------------------------------------------------- */
+
+typedef struct tmdq_csv tmdq_csv;
+
+/// Parses the application's CSV export. @return TMDQ_OK with *@p out set; TMDQ_ERR_BADARG for a NULL;
+/// TMDQ_ERR_PREPARE when the file is unreadable, has the wrong header or holds no parseable sample.
+TMDQ_API int32_t tmdq_csv_parse(const char* path_utf8, tmdq_csv** out);
+TMDQ_API int32_t tmdq_csv_info_get(const tmdq_csv* csv, tmdq_csv_info* out);
+TMDQ_API int32_t tmdq_csv_series_get(const tmdq_csv* csv, int32_t index, tmdq_csv_series_info* out);
+TMDQ_API void    tmdq_csv_free(tmdq_csv* csv);   ///< Safe on NULL.
+/// Writes @p count columns as the CSV the parser reads (CR LF, UTF-8 without a BOM, six decimals, one row per
+/// distinct millisecond). @p columns is @p count pointers to structs that carry their own struct_size; the time
+/// column reads as a day and time of day from @p base_day and @p base_time_offset.
+/// @return TMDQ_OK; TMDQ_ERR_BADARG for no columns, a NULL or short struct, a bad metric or counts that do not
+/// match their arrays; TMDQ_ERR_IO when the file cannot be created or fully written.
+TMDQ_API int32_t tmdq_csv_write(const char* path_utf8, const tmdq_csv_column* const* columns, int32_t count,
+                                int32_t base_day, double base_time_offset);
+
+/* --- clock stamps ----------------------------------------------------------------------- */
+
+/// @p elapsed seconds after the first sample as "DDD:HH:MM:SS" (with ".mmm" if @p include_milliseconds), the
+/// first sample being at @p base_day, @p base_time_offset seconds after midnight. Text out, snprintf-style.
+TMDQ_API int32_t tmdq_clock_time_format(int32_t base_day, double base_time_offset, double elapsed,
+                                        int32_t include_milliseconds, char* buffer, int32_t capacity);
 
 #ifdef __cplusplus
 }

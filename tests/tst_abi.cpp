@@ -8,6 +8,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <random>
 #include <mutex>
 #include <set>
 #include <stdexcept>
@@ -26,6 +27,11 @@
 #include "calibrationextractor.h"
 #include "calibrationrequest.h"
 #include "chapter10reader.h"
+#include "clocktime.h"
+#include "csvseriesparser.h"
+#include "csvserieswriter.h"
+#include "framesyncfile.h"
+#include "templatematcher.h"
 #include "constants.h"
 #include "pipelinerunner.h"
 #include "processedstreamdata.h"
@@ -416,6 +422,134 @@ struct Request
         req.stream_count    = static_cast<int32_t>(pointers.size());
         req.source_id       = sourceId;
         req.swap_bytes      = 1;
+    }
+};
+
+
+// ---------------------------------------------------------------------------
+// The formats
+// ---------------------------------------------------------------------------
+
+bool sameDoubles(const double* a, std::size_t na, const std::vector<double>& b);
+
+QByteArray slurp(const QString& path)
+{
+    QFile f(path);
+    return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray("<unreadable>");
+}
+
+QString writeFile(const QString& path, const QByteArray& bytes)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly))
+        return QString();
+    f.write(bytes);
+    return path;
+}
+
+/// A pattern file as text, from the core and from the ABI, so two compare in one line.
+QString describeSyncFile(const FrameSyncFile& f)
+{
+    // An absent optional reads as 0 beside a "has" flag of 0, which is what the ABI promises.
+    return QString("pattern=[%1] mask=[%2] has_bits=%3 bits=%4 legacy=%5 inverted=%6 has_randomized=%7 randomized=%8")
+        .arg(QString::fromStdString(f.pattern), QString::fromStdString(f.mask))
+        .arg(f.bitsPerFrame.has_value() ? 1 : 0).arg(f.bitsPerFrame.value_or(0))
+        .arg(f.bitsFromLegacyKey ? 1 : 0).arg(f.inverted ? 1 : 0)
+        .arg(f.randomized.has_value() ? 1 : 0).arg(f.randomized.value_or(false) ? 1 : 0);
+}
+
+QString describeSyncFile(const tmdq_frame_sync_file* file)
+{
+    tmdq_frame_sync_file_info i{};
+    i.struct_size = sizeof(i);
+    if (tmdq_frame_sync_file_info_get(file, &i) != TMDQ_OK)
+        return "info failed";
+    return QString("pattern=[%1] mask=[%2] has_bits=%3 bits=%4 legacy=%5 inverted=%6 has_randomized=%7 randomized=%8")
+        .arg(QString::fromUtf8(i.pattern_utf8), QString::fromUtf8(i.mask_utf8))
+        .arg(i.has_bits_per_frame).arg(i.bits_per_frame)
+        .arg(i.bits_from_legacy_key).arg(i.inverted)
+        .arg(i.has_randomized).arg(i.randomized);
+}
+
+/// What differs between a parsed CSV through the ABI and the core's own parse; empty if nothing.
+QString csvDifferences(const tmdq_csv* csv, const CsvParseResult& want)
+{
+    QStringList diff;
+    tmdq_csv_info info{};
+    info.struct_size = sizeof(info);
+    if (tmdq_csv_info_get(csv, &info) != TMDQ_OK)
+        return "info failed";
+    if (std::size_t(info.series_count) != want.series.size()) return "series count";
+    if (info.base_day != want.baseDay) diff << "base day";
+    if (info.skipped_rows != want.skippedRows) diff << "skipped rows";
+    if (info.base_time_offset != want.baseTimeOffset) diff << "base time offset";
+    if (info.x_max != want.xMax) diff << "x max";
+    for (int32_t i = 0; i < info.series_count; ++i)
+    {
+        tmdq_csv_series_info s{};
+        s.struct_size = sizeof(s);
+        if (tmdq_csv_series_get(csv, i, &s) != TMDQ_OK) { diff << "series call"; continue; }
+        const CsvSeries& w = want.series[std::size_t(i)];
+        const QString at = QString::number(i) + ":";
+        if (s.metric_type != int(w.metricType)) diff << at + "metric";
+        if (std::string(s.name_utf8) != w.name) diff << at + "name";
+        if (std::string(s.stream_label_utf8) != w.streamLabel) diff << at + "label";
+        if (s.receiver_index != w.receiverIndex) diff << at + "receiver";
+        if (s.channel_index != w.channelIndex) diff << at + "channel";
+        if (s.stream_order != w.streamOrder) diff << at + "order";
+        if (s.source_id != w.sourceId) diff << at + "source";
+        if (s.y_min != w.yMin) diff << at + "ymin";
+        if (s.y_max != w.yMax) diff << at + "ymax";
+        if (std::size_t(s.point_count) != w.xValues.size() || !sameDoubles(s.x_values, std::size_t(s.point_count), w.xValues)) diff << at + "x";
+        if (std::size_t(s.point_count) != w.yValues.size() || !sameDoubles(s.y_values, std::size_t(s.point_count), w.yValues)) diff << at + "y";
+    }
+    return diff.join(", ");
+}
+
+/// Columns that own their samples, with the wire form pointing into them.
+struct CsvColumns
+{
+    struct Owned
+    {
+        int         metric = TMDQ_METRIC_SNR;
+        std::string name;
+        int         source = 0;
+        std::vector<double> x, y;
+    };
+    std::vector<Owned>                 owned;
+    std::vector<tmdq_csv_column>       wire;
+    std::vector<const tmdq_csv_column*> pointers;
+    std::vector<CsvColumn>             core;
+
+    void add(int metric, const std::string& name, int source, std::vector<double> x, std::vector<double> y)
+    {
+        owned.push_back({metric, name, source, std::move(x), std::move(y)});
+    }
+    void finish()
+    {
+        wire.clear(); pointers.clear(); core.clear();
+        wire.reserve(owned.size());
+        for (const Owned& o : owned)
+        {
+            tmdq_csv_column c{};
+            c.struct_size = sizeof(c);
+            c.metric_type = o.metric;
+            c.name_utf8   = o.name.c_str();
+            c.x_values    = o.x.data();
+            c.y_values    = o.y.data();
+            c.source_id   = o.source;
+            c.x_count     = int(o.x.size());
+            c.y_count     = int(o.y.size());
+            wire.push_back(c);
+            CsvColumn k;
+            k.metricType = MetricType(o.metric);
+            k.name       = o.name;
+            k.sourceId   = o.source;
+            k.xValues    = std::span<const double>(o.x);
+            k.yValues    = std::span<const double>(o.y);
+            core.push_back(k);
+        }
+        for (const tmdq_csv_column& c : wire) pointers.push_back(&c);
     }
 };
 
@@ -837,6 +971,65 @@ void TestAbi::theStructLayoutsArePinned()
     QCOMPARE(int(TMDQ_CAL_TOO_FEW_PLATEAUS), int(CalibrationOutcome::TooFewPlateaus));
     QCOMPARE(int(TMDQ_CAL_NO_MONOTONIC_SWEEP), int(CalibrationOutcome::NoMonotonicSweep));
 
+    QCOMPARE(int(sizeof(tmdq_frame_sync_file_info)), 48);
+    QCOMPARE(int(offsetof(tmdq_frame_sync_file_info, has_bits_per_frame)), 4);
+    QCOMPARE(int(offsetof(tmdq_frame_sync_file_info, bits_per_frame)), 8);
+    QCOMPARE(int(offsetof(tmdq_frame_sync_file_info, bits_from_legacy_key)), 12);
+    QCOMPARE(int(offsetof(tmdq_frame_sync_file_info, inverted)), 16);
+    QCOMPARE(int(offsetof(tmdq_frame_sync_file_info, has_randomized)), 20);
+    QCOMPARE(int(offsetof(tmdq_frame_sync_file_info, randomized)), 24);
+    QCOMPARE(int(offsetof(tmdq_frame_sync_file_info, pattern_utf8)), 32);
+    QCOMPARE(int(offsetof(tmdq_frame_sync_file_info, mask_utf8)), 40);
+
+    QCOMPARE(int(sizeof(tmdq_match_info)), 32);
+    QCOMPARE(int(offsetof(tmdq_match_info, ok)), 4);
+    QCOMPARE(int(offsetof(tmdq_match_info, missing_count)), 8);
+    QCOMPARE(int(offsetof(tmdq_match_info, extra_count)), 12);
+    QCOMPARE(int(offsetof(tmdq_match_info, missing)), 16);
+    QCOMPARE(int(offsetof(tmdq_match_info, extra)), 24);
+
+    QCOMPARE(int(sizeof(tmdq_csv_info)), 32);
+    QCOMPARE(int(offsetof(tmdq_csv_info, series_count)), 4);
+    QCOMPARE(int(offsetof(tmdq_csv_info, base_day)), 8);
+    QCOMPARE(int(offsetof(tmdq_csv_info, skipped_rows)), 12);
+    QCOMPARE(int(offsetof(tmdq_csv_info, base_time_offset)), 16);
+    QCOMPARE(int(offsetof(tmdq_csv_info, x_max)), 24);
+
+    QCOMPARE(int(sizeof(tmdq_csv_series_info)), 80);
+    QCOMPARE(int(offsetof(tmdq_csv_series_info, metric_type)), 4);
+    QCOMPARE(int(offsetof(tmdq_csv_series_info, name_utf8)), 8);
+    QCOMPARE(int(offsetof(tmdq_csv_series_info, stream_label_utf8)), 16);
+    QCOMPARE(int(offsetof(tmdq_csv_series_info, x_values)), 24);
+    QCOMPARE(int(offsetof(tmdq_csv_series_info, y_values)), 32);
+    QCOMPARE(int(offsetof(tmdq_csv_series_info, y_min)), 40);
+    QCOMPARE(int(offsetof(tmdq_csv_series_info, y_max)), 48);
+    QCOMPARE(int(offsetof(tmdq_csv_series_info, receiver_index)), 56);
+    QCOMPARE(int(offsetof(tmdq_csv_series_info, channel_index)), 60);
+    QCOMPARE(int(offsetof(tmdq_csv_series_info, stream_order)), 64);
+    QCOMPARE(int(offsetof(tmdq_csv_series_info, source_id)), 68);
+    QCOMPARE(int(offsetof(tmdq_csv_series_info, point_count)), 72);
+
+    QCOMPARE(int(sizeof(tmdq_csv_column)), 48);
+    QCOMPARE(int(offsetof(tmdq_csv_column, metric_type)), 4);
+    QCOMPARE(int(offsetof(tmdq_csv_column, name_utf8)), 8);
+    QCOMPARE(int(offsetof(tmdq_csv_column, x_values)), 16);
+    QCOMPARE(int(offsetof(tmdq_csv_column, y_values)), 24);
+    QCOMPARE(int(offsetof(tmdq_csv_column, source_id)), 32);
+    QCOMPARE(int(offsetof(tmdq_csv_column, x_count)), 36);
+    QCOMPARE(int(offsetof(tmdq_csv_column, y_count)), 40);
+
+    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_FRAME_SYNC_FILE_INFO), 48);
+    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_MATCH_INFO), 32);
+    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CSV_INFO), 32);
+    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CSV_SERIES_INFO), 80);
+    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CSV_COLUMN), 48);
+    QCOMPARE(int(TMDQ_STRUCT_FRAME_SYNC_FILE_INFO), 12);
+    QCOMPARE(int(TMDQ_STRUCT_CSV_COLUMN), 16);
+    QCOMPARE(int(TMDQ_ERR_IO), 8);
+    QCOMPARE(int(TMDQ_METRIC_SNR), int(MetricType::SNR));
+    QCOMPARE(int(TMDQ_METRIC_FRAME_SYNC_LOCK), int(MetricType::FrameSyncLock));
+    QCOMPARE(int(TMDQ_METRIC_ACCUMULATED_MISSED_FRAMES), int(MetricType::AccumulatedMissedFrames));
+
     // And the library reports the same sizes, for the managed side to compare with Marshal.SizeOf.
     QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CHANNEL_INFO), 24);
     QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CAL_POINT), 16);
@@ -875,7 +1068,7 @@ void TestAbi::theStructLayoutsArePinned()
 void TestAbi::theVersionAndRevisionAreReported()
 {
     QCOMPARE(tmdq_abi_version(), 1);
-    QCOMPARE(tmdq_abi_revision(), 2);
+    QCOMPARE(tmdq_abi_revision(), 3);
     QCOMPARE(int(TMDQ_ABI_VERSION), tmdq_abi_version());
     QCOMPARE(int(TMDQ_ABI_REVISION), tmdq_abi_revision());
     QVERIFY(tmdq_last_error() != nullptr);
@@ -2393,4 +2586,386 @@ void TestAbi::aThresholdThatHadToBeRelaxedIsReported()
         reported += ch.threshold_relaxed;
     }
     QCOMPARE(reported, relaxed);
+}
+
+void TestAbi::aFrameSyncFileIsReadLikeTheCore()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    QStringList paths;
+    for (const char* name : { "framesync_PRN11.toml", "framesync_PRN15.toml", "framesync_rcvr_default.toml" })
+        paths << projectRoot() + "/settings/framesync_patterns/" + name;
+    // Each way a file can be odd.
+    const std::vector<std::pair<const char*, QByteArray>> odd = {
+        {"legacy", "[Frame]\nFrameSync = \"FE6B2840\"\nWordsInMinorFrame = 50\n"},
+        {"legacy-too-small", "[Frame]\nFrameSync = \"FE6B2840\"\nWordsInMinorFrame = 1\n"},
+        {"bits-too-small", "[Frame]\nBitsPerFrame = 3\nFrameSync = \"AB\"\n"},
+        {"bits-and-legacy", "[Frame]\nBitsPerFrame = 800\nWordsInMinorFrame = 50\n"},
+        {"no-randomized", "[Frame]\nBitsPerFrame = 800\nFrameSync = \"FE6B2840\"\nInverted = true\n"},
+        {"randomized", "[Frame]\nBitsPerFrame = 800\nFrameSync = \"FE6B2840\"\nFrameSyncMask = \"FFFF0000\"\nRandomized = true\nInverted = false\n"},
+        {"empty-values", "[Frame]\nFrameSync = \"\"\nFrameSyncMask = \"\"\n"},
+        {"bom", QByteArray("\xEF\xBB\xBF[Frame]\nBitsPerFrame = 8000\nFrameSync = \"334AABBF\"\n")},
+        {"non-ascii", QByteArray("[Frame]\nFrameSync = \"\xC3\xA9\xC3\xA8\"\nBitsPerFrame = 800\n")},
+        {"empty-file", QByteArray()},
+        {"junk", "this is {{ not toml\n"},
+    };
+    for (const auto& [name, bytes] : odd)
+        paths << writeFile(dir.filePath(QString::fromLatin1(name) + ".toml"), bytes);
+    paths << dir.filePath("does-not-exist.toml");
+
+    for (const QString& path : paths)
+    {
+        QVERIFY2(!path.isEmpty(), "a fixture could not be written");
+        const std::string utf8 = path.toStdString();
+        const FrameSyncFile want = readFrameSyncFile(toFsPath(path));
+        tmdq_frame_sync_file* file = nullptr;
+        QCOMPARE(tmdq_frame_sync_file_read(utf8.c_str(), &file), int(TMDQ_OK));
+        QVERIFY(file != nullptr);
+        QCOMPARE(describeSyncFile(file), describeSyncFile(want));
+        tmdq_frame_sync_file_free(file);
+    }
+
+    // The shipped PRN15 file is not "nothing": the comparison above is not vacuous.
+    const FrameSyncFile prn = readFrameSyncFile(toFsPath(paths[1]));
+    QCOMPARE(prn.pattern, std::string("334AABBF"));
+    QVERIFY(prn.bitsPerFrame.has_value());
+    QVERIFY(prn.randomized.has_value());
+
+    // Arguments.
+    tmdq_frame_sync_file* none = reinterpret_cast<tmdq_frame_sync_file*>(std::uintptr_t{1});
+    QCOMPARE(tmdq_frame_sync_file_read(nullptr, &none), int(TMDQ_ERR_BADARG));
+    QVERIFY(none == nullptr);
+    QCOMPARE(tmdq_frame_sync_file_read("x", nullptr), int(TMDQ_ERR_BADARG));
+    tmdq_frame_sync_file_info info{};
+    info.struct_size = sizeof(info);
+    QCOMPARE(tmdq_frame_sync_file_info_get(nullptr, &info), int(TMDQ_ERR_BADARG));
+    const std::string good = paths[1].toStdString();
+    tmdq_frame_sync_file* file = nullptr;
+    QCOMPARE(tmdq_frame_sync_file_read(good.c_str(), &file), int(TMDQ_OK));
+    QCOMPARE(tmdq_frame_sync_file_info_get(file, nullptr), int(TMDQ_ERR_BADARG));
+    info.struct_size = sizeof(info) - 1;
+    QCOMPARE(tmdq_frame_sync_file_info_get(file, &info), int(TMDQ_ERR_BADARG));
+    tmdq_frame_sync_file_free(file);
+    tmdq_frame_sync_file_free(nullptr);
+}
+
+void TestAbi::aFrameSyncFileIsWrittenLikeTheCore()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    struct Args { const char* pattern; const char* mask; int bits; int inverted; int randomized; };
+    const Args cases[] = {
+        {"FE6B2840", "", 800, 0, 0},
+        {"334AABBF", "FFFFFFFF", 32767, 0, 1},
+        {"A345CA5C", "FFFF0000", 2047, 1, 0},
+        {"\xC3\xA9", "", 8000, 1, 1},
+        {"", "", 0, 0, 0},
+    };
+    int n = 0;
+    for (const Args& a : cases)
+    {
+        const QString viaAbi = dir.filePath(QString("abi%1.toml").arg(n));
+        const QString viaCore = dir.filePath(QString("core%1.toml").arg(n));
+        ++n;
+        const std::string utf8 = viaAbi.toStdString();
+        QCOMPARE(tmdq_frame_sync_file_write(utf8.c_str(), a.pattern, a.mask, a.bits, a.inverted, a.randomized), int(TMDQ_OK));
+        QVERIFY(writeFrameSyncFile(toFsPath(viaCore), a.pattern, a.mask, a.bits, a.inverted != 0, a.randomized != 0));
+        QCOMPARE(slurp(viaAbi), slurp(viaCore));
+
+        // And it reads back as what was written.
+        tmdq_frame_sync_file* file = nullptr;
+        QCOMPARE(tmdq_frame_sync_file_read(utf8.c_str(), &file), int(TMDQ_OK));
+        QCOMPARE(describeSyncFile(file), describeSyncFile(readFrameSyncFile(toFsPath(viaCore))));
+        tmdq_frame_sync_file_free(file);
+    }
+
+    // NULL text reads as empty; a path that cannot be written is an I/O error, not a crash.
+    const QString viaNull = dir.filePath("null.toml");
+    const std::string nullUtf8 = viaNull.toStdString();
+    QCOMPARE(tmdq_frame_sync_file_write(nullUtf8.c_str(), nullptr, nullptr, 800, 0, 0), int(TMDQ_OK));
+    const QString viaEmpty = dir.filePath("empty.toml");
+    QVERIFY(writeFrameSyncFile(toFsPath(viaEmpty), "", "", 800, false, false));
+    QCOMPARE(slurp(viaNull), slurp(viaEmpty));
+
+    const std::string dirPath = dir.path().toStdString();   // a directory is not a file
+    QCOMPARE(tmdq_frame_sync_file_write(dirPath.c_str(), "AB", "", 800, 0, 0), int(TMDQ_ERR_IO));
+    QVERIFY(!std::string(tmdq_last_error()).empty());
+    QCOMPARE(tmdq_frame_sync_file_write(nullptr, "AB", "", 800, 0, 0), int(TMDQ_ERR_BADARG));
+}
+
+void TestAbi::templateMatchingAgreesWithTheCore()
+{
+    auto run = [](const std::vector<int>& t, const std::vector<int>& f) {
+        tmdq_match* match = nullptr;
+        const int32_t status = tmdq_template_match(t.empty() ? nullptr : t.data(), int(t.size()),
+                                                   f.empty() ? nullptr : f.data(), int(f.size()), &match);
+        return std::pair<int32_t, tmdq_match*>{status, match};
+    };
+    auto same = [](tmdq_match* m, const TemplateMatcher::MatchResult& want) {
+        tmdq_match_info info{};
+        info.struct_size = sizeof(info);
+        if (tmdq_match_info_get(m, &info) != TMDQ_OK) return false;
+        if ((info.ok != 0) != want.ok || std::size_t(info.missing_count) != want.missing.size() ||
+            std::size_t(info.extra_count) != want.extra.size())
+            return false;
+        for (int32_t i = 0; i < info.missing_count; ++i) if (info.missing[i] != want.missing[std::size_t(i)]) return false;
+        for (int32_t i = 0; i < info.extra_count; ++i) if (info.extra[i] != want.extra[std::size_t(i)]) return false;
+        return true;
+    };
+
+    // Fixed cases first: equal sets, order and repeats, missing, extra, both, empty.
+    const std::vector<std::pair<std::vector<int>, std::vector<int>>> fixed = {
+        {{13, 14, 15}, {15, 14, 13}}, {{13, 13, 14}, {14, 13}}, {{13, 14, 15}, {13, 14}}, {{13}, {13, 14, 15}},
+        {{1, 2, 3}, {3, 4, 5}}, {{}, {}}, {{}, {7}}, {{7}, {}},
+    };
+    for (const auto& [t, f] : fixed)
+    {
+        auto [status, match] = run(t, f);
+        QCOMPARE(status, int(TMDQ_OK));
+        QVERIFY(same(match, TemplateMatcher::match(t, f)));
+        tmdq_match_free(match);
+    }
+    // The comparison is not vacuous: one of those really is a mismatch, another really matches.
+    QVERIFY(!TemplateMatcher::match({1, 2, 3}, {3, 4, 5}).ok);
+    QVERIFY(TemplateMatcher::match({13, 13, 14}, {14, 13}).ok);
+
+    // Random sets, with repeats.
+    std::mt19937 rng(20261023);
+    int matched = 0, mismatched = 0;
+    for (int i = 0; i < 2000; ++i)
+    {
+        std::vector<int> t, f;
+        const int nt = int(rng() % 6), nf = int(rng() % 6);
+        for (int k = 0; k < nt; ++k) t.push_back(int(rng() % 8));
+        for (int k = 0; k < nf; ++k) f.push_back(int(rng() % 8));
+        auto [status, match] = run(t, f);
+        QCOMPARE(status, int(TMDQ_OK));
+        const auto want = TemplateMatcher::match(t, f);
+        QVERIFY2(same(match, want), qPrintable(QString("case %1").arg(i)));
+        (want.ok ? matched : mismatched)++;
+        tmdq_match_free(match);
+    }
+    QVERIFY2(matched > 20 && mismatched > 500, qPrintable(QString("%1 matched, %2 mismatched").arg(matched).arg(mismatched)));
+
+    // Arguments.
+    tmdq_match* none = reinterpret_cast<tmdq_match*>(std::uintptr_t{1});
+    const int32_t ids[] = {1, 2};
+    QCOMPARE(tmdq_template_match(ids, -1, ids, 2, &none), int(TMDQ_ERR_BADARG));
+    QVERIFY(none == nullptr);
+    QCOMPARE(tmdq_template_match(ids, 2, ids, -1, &none), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_template_match(nullptr, 2, ids, 2, &none), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_template_match(ids, 2, nullptr, 2, &none), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_template_match(ids, 2, ids, 2, nullptr), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_template_match(nullptr, 0, nullptr, 0, &none), int(TMDQ_OK));   // two empty sets
+    tmdq_match_info info{};
+    info.struct_size = sizeof(info);
+    QCOMPARE(tmdq_match_info_get(none, &info), int(TMDQ_OK));
+    QCOMPARE(info.ok, 1);
+    QCOMPARE(tmdq_match_info_get(none, nullptr), int(TMDQ_ERR_BADARG));
+    info.struct_size = sizeof(info) - 1;
+    QCOMPARE(tmdq_match_info_get(none, &info), int(TMDQ_ERR_BADARG));
+    tmdq_match_free(none);
+    QCOMPARE(tmdq_match_info_get(nullptr, &info), int(TMDQ_ERR_BADARG));
+    tmdq_match_free(nullptr);
+}
+
+void TestAbi::aCsvIsParsedLikeTheCore()
+{
+    QStringList files;
+    for (const char* name : { "Framesync_SNR Plot.csv", "PRN_TEST_FILE0001 - Copy.csv" })
+        if (QFileInfo::exists(dataPath(name)))
+            files << dataPath(name);
+    QVERIFY2(!files.isEmpty(), "the CSV fixtures are not available");
+
+    // One written by the writer too, with every metric and a second source.
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    CsvColumns cols;
+    cols.add(TMDQ_METRIC_FRAME_SYNC_LOCK, "Ch 13", 0, {0.0, 1.0, 2.5}, {99.5, 100.0, 12.25});
+    cols.add(TMDQ_METRIC_ACCUMULATED_MISSED_FRAMES, "Ch 13", 0, {0.0, 1.0, 2.5}, {0.0, 3.0, 7.0});
+    cols.add(TMDQ_METRIC_SNR, "13 - Prn L_RCVR2", 2, {0.0, 1.0, 2.5}, {-3.5, 10.0, 22.125});
+    cols.finish();
+    const QString generated = dir.filePath("generated.csv");
+    QVERIFY(CsvSeriesWriter::write(toFsPath(generated), cols.core, CsvTimeBase{120, 77125.5}));
+    files << generated;
+
+    // One with a malformed row in it, which the parser skips and counts.
+    const QString skipping = writeFile(dir.filePath("skipping.csv"),
+        "Time (DOY:HH:MM:SS.mmm),A Lock (%),B Accumulated Missed Frames\n"
+        "120:00:00:00.000,5,1\n"
+        "not-a-time,6,2\n"
+        "120:00:00:01.000\n"
+        "120:00:00:02.000,7,3\n");
+    files << skipping;
+
+    bool sawSkipped = false, sawStreamOrder = false;
+    for (const QString& path : files)
+    {
+        const std::string utf8 = path.toStdString();
+        const CsvParseResult want = CsvSeriesParser::parse(toFsPath(path));
+        QVERIFY2(want.success, qPrintable(path));
+        QVERIFY(want.series.size() >= 2);
+        sawSkipped = sawSkipped || want.skippedRows > 0;
+        for (const CsvSeries& series : want.series)
+            sawStreamOrder = sawStreamOrder || series.streamOrder == 13;
+        tmdq_csv* csv = nullptr;
+        QCOMPARE(tmdq_csv_parse(utf8.c_str(), &csv), int(TMDQ_OK));
+        QVERIFY(csv != nullptr);
+        const QString diff = csvDifferences(csv, want);
+        QVERIFY2(diff.isEmpty(), qPrintable(path + ": " + diff));
+        tmdq_csv_free(csv);
+    }
+    QVERIFY2(sawSkipped && sawStreamOrder, "the files should include a skipped row and a stream order, or the comparison proves little");
+
+    // Files the parser refuses: not there, junk, the wrong header, a header and no data.
+    const QString junk = writeFile(dir.filePath("junk.csv"), "this is not a series file\n1,2,3\n");
+    const QString wrongHeader = writeFile(dir.filePath("wrong.csv"), "Day,Time,A Lock (%)\n1,00:00:00,5\n");
+    const QString noData = writeFile(dir.filePath("nodata.csv"), "Time (DOY:HH:MM:SS.mmm),A Lock (%)\n");
+    for (const QString& path : { QDir::tempPath() + "/tst_abi_no_such.csv", junk, wrongHeader, noData })
+    {
+        QVERIFY(!CsvSeriesParser::parse(toFsPath(path)).success);
+        const std::string utf8 = path.toStdString();
+        tmdq_csv* csv = reinterpret_cast<tmdq_csv*>(std::uintptr_t{1});
+        QCOMPARE(tmdq_csv_parse(utf8.c_str(), &csv), int(TMDQ_ERR_PREPARE));
+        QVERIFY(csv == nullptr);
+        QVERIFY(!std::string(tmdq_last_error()).empty());
+    }
+
+    // Arguments and indices.
+    tmdq_csv* csv = nullptr;
+    QCOMPARE(tmdq_csv_parse(nullptr, &csv), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_csv_parse("x", nullptr), int(TMDQ_ERR_BADARG));
+    const std::string good = generated.toStdString();
+    QCOMPARE(tmdq_csv_parse(good.c_str(), &csv), int(TMDQ_OK));
+    tmdq_csv_info info{};
+    info.struct_size = sizeof(info);
+    QCOMPARE(tmdq_csv_info_get(csv, &info), int(TMDQ_OK));
+    tmdq_csv_series_info series{};
+    series.struct_size = sizeof(series);
+    QCOMPARE(tmdq_csv_series_get(csv, info.series_count, &series), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_csv_series_get(csv, -1, &series), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_csv_series_get(csv, 0, nullptr), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_csv_info_get(csv, nullptr), int(TMDQ_ERR_BADARG));
+    tmdq_csv_info shortInfo{};
+    shortInfo.struct_size = sizeof(shortInfo) - 1;
+    QCOMPARE(tmdq_csv_info_get(csv, &shortInfo), int(TMDQ_ERR_BADARG));
+    tmdq_csv_series_info shortSeries{};
+    shortSeries.struct_size = sizeof(shortSeries) - 1;
+    QCOMPARE(tmdq_csv_series_get(csv, 0, &shortSeries), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_csv_info_get(nullptr, &info), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_csv_series_get(nullptr, 0, &series), int(TMDQ_ERR_BADARG));
+    tmdq_csv_free(csv);
+    tmdq_csv_free(nullptr);
+}
+
+void TestAbi::aCsvIsWrittenLikeTheCore()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+
+    // Columns that exercise the writer: every metric, two sources, a name with non-ASCII text (a comma cannot be written: the format has no quoting),
+    // times that fall in the same millisecond, a column with more times than values, and an empty one.
+    CsvColumns cols;
+    cols.add(TMDQ_METRIC_FRAME_SYNC_LOCK, "Ch 13", 0, {0.0, 1.0, 2.0, 2.0004}, {99.5, 100.0, 12.25, 13.5});
+    cols.add(TMDQ_METRIC_ACCUMULATED_MISSED_FRAMES, "Ch 13", 0, {0.0, 1.0, 2.0}, {0.0, 3.0, 7.0});
+    cols.add(TMDQ_METRIC_SNR, "Ch 13 L_RCVR2", 0, {0.0, 1.5}, {-3.5, 10.0});
+    cols.add(TMDQ_METRIC_SNR, "S\xC3\xA9rie 2 L_RCVR1", 2, {0.5, 1.5, 2.5}, {1.0, 2.0, 3.0});
+    cols.add(TMDQ_METRIC_FRAME_SYNC_LOCK, "uneven", 3, {0.0, 1.0, 2.0}, {5.0, 6.0});
+    cols.add(TMDQ_METRIC_FRAME_SYNC_LOCK, "empty", 3, {}, {});
+    cols.finish();
+
+    const QString viaAbi = dir.filePath("abi.csv");
+    const QString viaCore = dir.filePath("core.csv");
+    const std::string utf8 = viaAbi.toStdString();
+    QCOMPARE(tmdq_csv_write(utf8.c_str(), cols.pointers.data(), int(cols.pointers.size()), 120, 77125.5), int(TMDQ_OK));
+    QVERIFY(CsvSeriesWriter::write(toFsPath(viaCore), cols.core, CsvTimeBase{120, 77125.5}));
+    QCOMPARE(slurp(viaAbi), slurp(viaCore));
+    QVERIFY(slurp(viaAbi).size() > 200);
+
+    // The time base reaches the stamps.
+    const QString viaOtherBase = dir.filePath("other.csv");
+    const std::string otherUtf8 = viaOtherBase.toStdString();
+    QCOMPARE(tmdq_csv_write(otherUtf8.c_str(), cols.pointers.data(), int(cols.pointers.size()), 7, 100.25), int(TMDQ_OK));
+    QVERIFY(CsvSeriesWriter::write(toFsPath(dir.filePath("other-core.csv")), cols.core, CsvTimeBase{7, 100.25}));
+    QCOMPARE(slurp(viaOtherBase), slurp(dir.filePath("other-core.csv")));
+    QVERIFY(slurp(viaOtherBase) != slurp(viaAbi));
+
+    // And what the ABI wrote parses back, through the ABI, as the core parses it.
+    tmdq_csv* csv = nullptr;
+    QCOMPARE(tmdq_csv_parse(utf8.c_str(), &csv), int(TMDQ_OK));
+    const QString diff = csvDifferences(csv, CsvSeriesParser::parse(toFsPath(viaAbi)));
+    QVERIFY2(diff.isEmpty(), qPrintable(diff));
+    tmdq_csv_free(csv);
+
+    // Refusals.
+    QCOMPARE(tmdq_csv_write(nullptr, cols.pointers.data(), 1, 0, 0.0), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_csv_write(utf8.c_str(), cols.pointers.data(), 0, 0, 0.0), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_csv_write(utf8.c_str(), cols.pointers.data(), -1, 0, 0.0), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_csv_write(utf8.c_str(), nullptr, 1, 0, 0.0), int(TMDQ_ERR_BADARG));
+    const tmdq_csv_column* withNull[] = { cols.pointers[0], nullptr };
+    QCOMPARE(tmdq_csv_write(utf8.c_str(), withNull, 2, 0, 0.0), int(TMDQ_ERR_BADARG));
+    QVERIFY(std::string(tmdq_last_error()).find("column 1") != std::string::npos);
+    tmdq_csv_column shortColumn = cols.wire[0];
+    shortColumn.struct_size = sizeof(shortColumn) - 1;
+    const tmdq_csv_column* withShort[] = { &shortColumn };
+    QCOMPARE(tmdq_csv_write(utf8.c_str(), withShort, 1, 0, 0.0), int(TMDQ_ERR_BADARG));
+    tmdq_csv_column badMetric = cols.wire[0];
+    badMetric.metric_type = 9;
+    const tmdq_csv_column* withBadMetric[] = { &badMetric };
+    QCOMPARE(tmdq_csv_write(utf8.c_str(), withBadMetric, 1, 0, 0.0), int(TMDQ_ERR_BADARG));
+    QVERIFY(std::string(tmdq_last_error()).find("metric") != std::string::npos);
+    tmdq_csv_column negativeCount = cols.wire[0];
+    negativeCount.x_count = -1;
+    const tmdq_csv_column* withNegative[] = { &negativeCount };
+    QCOMPARE(tmdq_csv_write(utf8.c_str(), withNegative, 1, 0, 0.0), int(TMDQ_ERR_BADARG));
+    tmdq_csv_column noArray = cols.wire[0];
+    noArray.y_values = nullptr;
+    const tmdq_csv_column* withNoArray[] = { &noArray };
+    QCOMPARE(tmdq_csv_write(utf8.c_str(), withNoArray, 1, 0, 0.0), int(TMDQ_ERR_BADARG));
+    tmdq_csv_column noName = cols.wire[0];
+    noName.name_utf8 = nullptr;
+    const tmdq_csv_column* withNoName[] = { &noName };
+    QCOMPARE(tmdq_csv_write(dir.filePath("noname.csv").toStdString().c_str(), withNoName, 1, 0, 0.0), int(TMDQ_OK));   // a NULL name reads as empty
+
+    // A path that cannot be created is an I/O error.
+    const std::string dirPath = dir.path().toStdString();
+    QCOMPARE(tmdq_csv_write(dirPath.c_str(), cols.pointers.data(), 1, 0, 0.0), int(TMDQ_ERR_IO));
+    QVERIFY(!std::string(tmdq_last_error()).empty());
+}
+
+void TestAbi::clockStampsAgreeWithTheCore()
+{
+    std::mt19937 rng(20261023);
+    int checked = 0;
+    for (int i = 0; i < 3000; ++i)
+    {
+        const int day = int(rng() % 400) - 5;
+        const double base = double(rng() % 86400) + double(rng() % 1000) / 1000.0;
+        const double elapsed = (double(int(rng() % 400000)) - 20000.0) / 7.0;
+        const bool ms = rng() % 2;
+        const std::string want = clocktime::format(day, base, elapsed, ms);
+
+        char exact[64] = {};
+        QCOMPARE(tmdq_clock_time_format(day, base, elapsed, ms ? 1 : 0, exact, sizeof(exact)), int(want.size()));
+        QCOMPARE(std::string(exact), want);
+        QCOMPARE(tmdq_clock_time_format(day, base, elapsed, ms ? 1 : 0, nullptr, 0), int(want.size()));
+        ++checked;
+    }
+    QCOMPARE(checked, 3000);
+
+    // A known stamp, so the oracle is not the only witness: 1 day, 1 h, 1 min, 1.5 s after 120:00:00:00.
+    char buf[64] = {};
+    QVERIFY(tmdq_clock_time_format(120, 0.0, 86400.0 + 3600.0 + 60.0 + 1.5, 1, buf, sizeof(buf)) > 0);
+    QCOMPARE(std::string(buf), std::string("121:01:01:01.500"));
+    QVERIFY(tmdq_clock_time_format(120, 0.0, 86400.0 + 3600.0 + 60.0 + 1.5, 0, buf, sizeof(buf)) > 0);
+    QCOMPARE(std::string(buf), std::string("121:01:01:01"));
+
+    // Truncation and refusals.
+    char tight[6];
+    std::memset(tight, 'x', sizeof(tight));
+    QCOMPARE(tmdq_clock_time_format(120, 0.0, 0.0, 1, tight, sizeof(tight)), 16);
+    QCOMPARE(std::string(tight), std::string("120:0"));
+    QCOMPARE(int(tight[5]), 0);
+    QCOMPARE(tmdq_clock_time_format(120, 0.0, 0.0, 1, nullptr, 10), -1);
+    QCOMPARE(tmdq_clock_time_format(120, 0.0, 0.0, 1, buf, -1), -1);
 }

@@ -138,6 +138,11 @@ int32_t tmdq_sizeof(int32_t which)
         case TMDQ_STRUCT_CALIBRATION_REQUEST: return static_cast<int32_t>(sizeof(tmdq_calibration_request));
         case TMDQ_STRUCT_CALIBRATION_INFO:    return static_cast<int32_t>(sizeof(tmdq_calibration_info));
         case TMDQ_STRUCT_CALIBRATION_CHANNEL: return static_cast<int32_t>(sizeof(tmdq_calibration_channel));
+        case TMDQ_STRUCT_FRAME_SYNC_FILE_INFO: return static_cast<int32_t>(sizeof(tmdq_frame_sync_file_info));
+        case TMDQ_STRUCT_MATCH_INFO:          return static_cast<int32_t>(sizeof(tmdq_match_info));
+        case TMDQ_STRUCT_CSV_INFO:            return static_cast<int32_t>(sizeof(tmdq_csv_info));
+        case TMDQ_STRUCT_CSV_SERIES_INFO:     return static_cast<int32_t>(sizeof(tmdq_csv_series_info));
+        case TMDQ_STRUCT_CSV_COLUMN:          return static_cast<int32_t>(sizeof(tmdq_csv_column));
         default:                         return 0;
     }
 }

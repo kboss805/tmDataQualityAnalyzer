@@ -64,6 +64,14 @@ private slots:
     void freeingACalibrationInFlightCancelsAndWaits();
     void waitAloneIsEnoughToSeeACalibrationEnd();
     void aThresholdThatHadToBeRelaxedIsReported();
+
+    // --- the formats (revision 3)
+    void aFrameSyncFileIsReadLikeTheCore();
+    void aFrameSyncFileIsWrittenLikeTheCore();
+    void templateMatchingAgreesWithTheCore();
+    void aCsvIsParsedLikeTheCore();
+    void aCsvIsWrittenLikeTheCore();
+    void clockStampsAgreeWithTheCore();
 };
 
 #endif // TST_ABI_H

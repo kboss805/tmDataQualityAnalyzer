@@ -139,12 +139,13 @@ sweep.
     error, progress, per-stream-result and finished callbacks, cancel, and result accessors that view the
     result's arrays without copying. *The app has no time-range selection (its summary says "Time range: all"),
     so none is exposed; the request's struct can grow one.*
-  - [x] **2.2b Calibration.** Step-file parsing (already in the core) and calibration extraction with its
+  - [x] **2.2b Calibration.** PR #183, merged as `3da4cb6`. Step-file parsing (already in the core) and calibration extraction with its
     callbacks, cancel and per-channel results. *What the dialog did inline - decoding the sync text and resolving the
     default word map when assembling the extractor's request - moved into the core first
     (`buildCalibrationRequest`), pinned against the old code.*
-  - [ ] **2.2c The formats.** The frame-sync pattern file (read and write), CSV import and export, and template
-    channel matching.
+  - [x] **2.2c The formats.** The frame-sync pattern file (read and write), CSV import and export, and template
+    channel matching, plus clock stamps. *Pure translation of core code stage 1 moved; tested against the core
+    called directly, with written files compared byte for byte.*
   - [ ] **2.2d Series construction.** `buildStreamSeries`, the shared time base and the import ordering.
 - [ ] **2.3 A C# interop library** (`TmDq.Core`) over the ABI, with a test project that runs the
   committed fixtures through it and compares against numbers the Qt app produces today (the spike
