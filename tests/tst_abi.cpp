@@ -2771,11 +2771,13 @@ void TestAbi::templateMatchingAgreesWithTheCore()
 
 void TestAbi::aCsvIsParsedLikeTheCore()
 {
+    // The CSV exports kept in tests/data are not committed (that folder is ignored apart from the recordings), so
+    // they are extra coverage where they exist and nothing is skipped or required where they do not. The files
+    // written below are what the comparison stands on.
     QStringList files;
     for (const char* name : { "Framesync_SNR Plot.csv", "PRN_TEST_FILE0001 - Copy.csv" })
         if (QFileInfo::exists(dataPath(name)))
             files << dataPath(name);
-    QVERIFY2(!files.isEmpty(), "the CSV fixtures are not available");
 
     // One written by the writer too, with every metric and a second source.
     QTemporaryDir dir;
