@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  tmdq_core.dll - the processing core behind the flat C ABI in tmdq_abi.h, built with NO Qt.
+
+  There is no Qt include path and no Qt library on this project, so a core source that reached for a Qt
+  header would fail to compile. scripts\build_core_dll.ps1 builds it and then reads the DLL's imports.
+
+  The Qt application keeps compiling these same sources through qmake until plan step 6. This project's
+  source list is checked against kCoreSources and the application's .pro by TestCoreQtFree, so the two
+  builds cannot drift apart.
+
+  Compiler switches mirror what qmake gives the application (see tmDataQualityAnalyzer.pro and the
+  generated Makefile): C++20, /utf-8, /permissive-, warning level 3, the same warnings promoted, and
+  UNICODE. The vendored irig106 C library is compiled with warnings off, as thirdparty.pri does.
+
+  The toolset is whatever MSBuild brings: v143 from the Visual Studio 2022 tools that scripts\env.ps1 pins, v145
+  from Visual Studio 2026. Intermediates go in a folder per toolset, so objects from two compilers never share
+  a directory (the stale-object trap CLAUDE.md describes).
+-->
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{6A1F4C2E-8B3D-4E57-9C0A-2D7E5B1F3A94}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>tmdq_core</RootNamespace>
+    <ProjectName>tmdq_core</ProjectName>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <UseDebugLibraries Condition="'$(Configuration)' == 'Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)' != 'Debug'">false</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+
+  <PropertyGroup>
+    <!-- Next to the project, in the ignored native\out and native\obj. -->
+    <OutDir>$(MSBuildThisFileDirectory)..\out\$(Configuration)\</OutDir>
+    <IntDir>$(MSBuildThisFileDirectory)..\obj\$(PlatformToolset)\$(Configuration)\</IntDir>
+    <TargetName>tmdq_core</TargetName>
+    <LinkIncremental Condition="'$(Configuration)' == 'Debug'">true</LinkIncremental>
+    <LinkIncremental Condition="'$(Configuration)' != 'Debug'">false</LinkIncremental>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <SDLCheck>false</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <ProgramDataBaseFileName>$(IntDir)tmdq_core.pdb</ProgramDataBaseFileName>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory);$(MSBuildThisFileDirectory)..\..\include;$(MSBuildThisFileDirectory)..\..\include\dto;$(MSBuildThisFileDirectory)..\..\include\model;$(MSBuildThisFileDirectory)..\..\lib\irig106\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>TMDQ_ABI_BUILD;UNICODE;_UNICODE;WIN32;WIN64;_ENABLE_EXTENDED_ALIGNED_STORAGE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <!-- The application's switches, from its generated Makefile: strict conformance, the same
+           warnings raised to level 3, and the two that are off because Qt's headers trip them. -->
+      <AdditionalOptions>/FS /utf-8 /Zc:__cplusplus /Zc:throwingNew /Zc:externConstexpr /w34100 /w34189 /w44456 /w44457 /w44458 /wd4577 /wd4467 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>ws2_32.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <ImportLibrary>$(OutDir)tmdq_core.lib</ImportLibrary>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)' == 'Debug'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)' != 'Debug'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <ClInclude Include="tmdq_abi.h" />
+  </ItemGroup>
+
+  <!-- The ABI itself. -->
+  <ItemGroup>
+    <ClCompile Include="tmdq_core.cpp" />
+  </ItemGroup>
+
+  <!-- The core: src\model\<name>.cpp for every name in TestCoreQtFree's kCoreSources. -->
+  <ItemGroup>
+    <ClCompile Include="..\..\src\model\calibrationextractor.cpp" />
+    <ClCompile Include="..\..\src\model\ch10packetreader.cpp" />
+    <ClCompile Include="..\..\src\model\channeldata.cpp" />
+    <ClCompile Include="..\..\src\model\chapter10reader.cpp" />
+    <ClCompile Include="..\..\src\model\clocktime.cpp" />
+    <ClCompile Include="..\..\src\model\csvseriesparser.cpp" />
+    <ClCompile Include="..\..\src\model\csvserieswriter.cpp" />
+    <ClCompile Include="..\..\src\model\frameprocessor.cpp" />
+    <ClCompile Include="..\..\src\model\framesetup.cpp" />
+    <ClCompile Include="..\..\src\model\framesyncfile.cpp" />
+    <ClCompile Include="..\..\src\model\pipelinerunner.cpp" />
+    <ClCompile Include="..\..\src\model\seriesbuilder.cpp" />
+    <ClCompile Include="..\..\src\model\seriescolumnschema.cpp" />
+    <ClCompile Include="..\..\src\model\stepdetector.cpp" />
+    <ClCompile Include="..\..\src\model\streamjobbuilder.cpp" />
+    <ClCompile Include="..\..\src\model\templatematcher.cpp" />
+    <ClCompile Include="..\..\src\model\textfile.cpp" />
+    <ClCompile Include="..\..\src\model\tomldocument.cpp" />
+  </ItemGroup>
+
+  <!-- The vendored irig106 library: plain C, third-party, no warnings (thirdparty.pri does the same).
+       The list is the one tmDataQualityAnalyzer.pro compiles, in dependency order. -->
+  <ItemGroup>
+    <ClCompile Include="..\..\lib\irig106\src\irig106ch10.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_time.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_data_stream.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_decode_time.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_decode_tmats.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_decode_tmats_g.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_decode_tmats_r.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_decode_tmats_m.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_decode_tmats_p.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_decode_tmats_b.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_decode_tmats_c.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_decode_tmats_d.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_decode_pcmf1.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Update="..\..\lib\irig106\src\*.c">
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

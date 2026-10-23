@@ -23,7 +23,7 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   suites**) is dominated by the real-Ch10 integration suites (a few minutes); add `--fast` (or
   `TMDQ_FAST_TESTS=1`) to skip the real-`.ch10` integration suites for ~1 s local iteration — **local only; CI
   and releases run the full suite**. No CLI single-suite filter.
-  Green baseline: **1131 passed / 0 failed / 1 skipped** normally, **1132 / 0 / 0** at release. The
+  Green baseline: **1134 passed / 0 failed / 1 skipped** normally, **1135 / 0 / 0** at release. The
   one standing skip is the heavy PRN throughput benchmark, opt-in via `TMDQA_RUN_HEAVY_BENCH=1`
   because it walks a 640 MB recording nine times and takes minutes. At release it is not skipped:
   `scripts\run_throughput_bench.ps1` builds Release, enables it, runs it **pinned to the
@@ -33,6 +33,14 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   `tests/data/test files/prn_testfile, full.ch10` (gitignored); the committed sample carries data
   for 2 of the 4 channels it times and cannot stand in. In a worktree, junction
   `tests/data` to the main checkout's or the fixture tests skip.
+
+- **Native core DLL (no Qt):** `powershell -ExecutionPolicy Bypass -File scripts\build_core_dll.ps1
+  [-Configuration Debug|Release] [-Rebuild]` builds `tmdq.sln` (MSBuild, `native/tmdq_core/`) into
+  `native/out/<config>/tmdq_core.dll`, then fails on any compiler warning or on an import outside a short
+  allow-list (the C runtime, `KERNEL32`, `WS2_32`, `USER32`). CI runs it for Debug and Release. It compiles
+  the same core sources as the qmake build; `TestCoreQtFree` fails if the two lists drift, so **a new core
+  source goes in `kCoreSources` AND `tmdq_core.vcxproj`**. `tmdq.sln` is the committed solution; the
+  root's `tmDataQualityAnalyzer.sln` is the generated, gitignored Qt one.
 
 **After a Qt version bump, CLEAN every build directory** — `build/` *and* `tests/`, Debug and
 Release: `& $env:TMDQ_MAKE -f Makefile.<Config> clean` then rebuild. jom rebuilds an object only

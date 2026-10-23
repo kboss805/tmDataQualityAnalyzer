@@ -268,6 +268,105 @@ void checkQtConfinement(const QString& root, const QStringList& allowed, QString
             stale << file;
 }
 
+// ---------------------------------------------------------------------------
+// The native project (native/tmdq_core) builds the same core the Qt build does
+// ---------------------------------------------------------------------------
+
+/// The MSBuild project that builds tmdq_core.dll. Its source list is a second copy of kCoreSources (and of the
+/// .pro's irig106 files) that a compiler cannot cross-check, so the test does.
+const char* const kNativeProject  = "native/tmdq_core/tmdq_core.vcxproj";
+const char* const kNativeSolution = "tmdq.sln";
+
+/// The files a project compiles: every `<ClCompile Include="...">`, backslashes read as slashes. An `Update=`
+/// item changes the metadata of files already listed and is not a source.
+QStringList projectCompiledFiles(const QString& vcxproj)
+{
+    static const QRegularExpression include(QStringLiteral("<ClCompile\\s+Include=\"([^\"]+)\""));
+    QStringList files;
+    QRegularExpressionMatchIterator it = include.globalMatch(vcxproj);
+    while (it.hasNext())
+        files << QString(it.next().captured(1)).replace('\\', '/');
+    return files;
+}
+
+/// The names (no folder, no extension) of the sources a project compiles from @p folder, sorted.
+QStringList compiledNamesIn(const QStringList& files, const QString& folder, const QString& extension)
+{
+    QStringList names;
+    for (const QString& file : files)
+        if (file.contains(folder) && file.endsWith(extension))
+            names << QFileInfo(file).completeBaseName();
+    names.sort();
+    return names;
+}
+
+/// The vendored C sources the application's .pro compiles.
+QStringList proIrigSources(const QString& pro)
+{
+    static const QRegularExpression source(QStringLiteral("lib/irig106/src/([A-Za-z0-9_]+)\\.c\\b"));
+    QStringList names;
+    QRegularExpressionMatchIterator it = source.globalMatch(pro);
+    while (it.hasNext())
+        names << it.next().captured(1);
+    names.sort();
+    return names;
+}
+
+/// A project file with its XML comments removed, so what is left is configuration.
+QString withoutXmlComments(QString text)
+{
+    static const QRegularExpression comment(QStringLiteral("<!--.*?-->"), QRegularExpression::DotMatchesEverythingOption);
+    return text.remove(comment);
+}
+
+QString fileText(const QString& path)
+{
+    QFile f(path);
+    return f.open(QIODevice::ReadOnly | QIODevice::Text) ? QString::fromUtf8(f.readAll()) : QString();
+}
+
+/// What is wrong with the native project under @p root, compared with @p coreSources, the application's .pro
+/// and the solution. Empty when the two builds compile the same core.
+QStringList nativeProjectProblems(const QString& root, const QStringList& coreSources)
+{
+    QStringList problems;
+    const QString project = fileText(root + "/" + kNativeProject);
+    if (project.isEmpty())
+        return { QString("cannot read ") + kNativeProject };
+    const QStringList files = projectCompiledFiles(project);
+
+    // The core: exactly the sources the Qt build treats as core.
+    QStringList expected = coreSources;
+    expected.sort();
+    const QStringList compiled = compiledNamesIn(files, "/src/model/", ".cpp");
+    for (const QString& name : expected)
+        if (!compiled.contains(name))
+            problems << "the project does not compile the core source " + name;
+    for (const QString& name : compiled)
+        if (!expected.contains(name))
+            problems << "the project compiles " + name + ", which is not a core source";
+
+    // Nothing from another layer ("/src/view" is also the prefix of "/src/viewmodel").
+    for (const QString& file : files)
+        if (file.contains("/src/view") || file.contains("/src/dto"))
+            problems << "the project compiles a file from another layer: " + file;
+
+    // The vendored library: the files the application compiles, and some of them.
+    const QStringList irig = compiledNamesIn(files, "/lib/irig106/src/", ".c");
+    const QStringList inPro = proIrigSources(fileText(root + "/tmDataQualityAnalyzer.pro"));
+    if (irig.isEmpty() || irig != inPro)
+        problems << "the project's irig106 sources (" + irig.join(",") + ") are not the .pro's (" + inPro.join(",") + ")";
+
+    // No Qt in the configuration: outside the comments, the project never says the word.
+    if (withoutXmlComments(project).contains("Qt", Qt::CaseInsensitive))
+        problems << "the project mentions Qt outside its comments";
+
+    // And it is part of the solution CI builds.
+    if (!fileText(root + "/" + kNativeSolution).contains("native\\tmdq_core\\tmdq_core.vcxproj"))
+        problems << QString(kNativeSolution) + " does not build the native project";
+    return problems;
+}
+
 } // namespace
 
 void TestCoreQtFree::theProcessingCoreIncludesNoQtHeader()
@@ -456,4 +555,123 @@ void TestCoreQtFree::theConfinementGuardSeesAnUnlistedAndAStaleFile()
     QVERIFY2(problems.join(";").contains("include/dto/fwd.h reaches Qt: include/dto/fwd.h: forward declaration of QJsonObject"),
              qPrintable(problems.join(";")));
     QVERIFY2(!problems.join(";").contains("old.h"), qPrintable(problems.join(";")));
+}
+
+void TestCoreQtFree::theNativeProjectCompilesExactlyTheCoreSources()
+{
+    // tmdq_core.dll is built by MSBuild from its own source list, and the Qt application by qmake from
+    // another. They are one set of files, and a new core source added to one build and not the other would
+    // compile in the app and be missing from the DLL (or the reverse) with nothing to say so.
+    const QStringList problems = nativeProjectProblems(projectRoot(), kCoreSources);
+    QVERIFY2(problems.isEmpty(), qPrintable(problems.join("\n  ")));
+}
+
+void TestCoreQtFree::theNativeProjectGuardReadsProjectFilesCorrectly()
+{
+    // The readers: an Include in either slash style but not an Update; the right folder and extension; a
+    // comment that mentions Qt is not configuration.
+    const QString project =
+        "<!-- built with no Qt, see TestCoreQtFree -->\n"
+        "<ItemGroup>\n"
+        "  <ClCompile Include=\"tmdq_core.cpp\" />\n"
+        "  <ClCompile Include=\"..\\..\\src\\model\\alpha.cpp\" />\n"
+        "  <ClCompile Include=\"../../src/model/beta.cpp\"/>\n"
+        "  <ClCompile Include=\"..\\..\\src\\view\\gamma.cpp\" />\n"
+        "  <ClCompile Include=\"..\\..\\lib\\irig106\\src\\i106_time.c\" />\n"
+        "  <ClCompile Update=\"..\\..\\lib\\irig106\\src\\*.c\"><WarningLevel>Off</WarningLevel></ClCompile>\n"
+        "  <ClCompile Include=\"..\\..\\src\\model\\notasource.h\" />\n"
+        "</ItemGroup>\n";
+    const QStringList files = projectCompiledFiles(project);
+    QCOMPARE(files.size(), 6);
+    QCOMPARE(compiledNamesIn(files, "/src/model/", ".cpp"), (QStringList{ "alpha", "beta" }));
+    QCOMPARE(compiledNamesIn(files, "/lib/irig106/src/", ".c"), QStringList{ "i106_time" });
+    QVERIFY(withoutXmlComments(project).contains("ClCompile"));
+    QVERIFY(!withoutXmlComments(project).contains("Qt"));
+    QVERIFY(project.contains("Qt"));
+
+    // The .pro's list: only the C sources under lib/irig106/src, names sorted, headers and comments not counted.
+    const QString pro =
+        "# Compile the vendored third-party lib (lib/irig106) without warnings\n"
+        "SOURCES += \\\n    lib/irig106/src/zeta.c \\\n    lib/irig106/src/i106_time.c \\\n    lib/irig106/src/notc.cc \\\n"
+        "HEADERS += lib/irig106/include/irig106ch10.h\n";
+    QCOMPARE(proIrigSources(pro), (QStringList{ "i106_time", "zeta" }));
+}
+
+void TestCoreQtFree::theNativeProjectGuardSeesEveryKindOfDrift()
+{
+    // The check itself, on a miniature tree: one that agrees, then one fault at a time.
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString root = dir.path();
+    QVERIFY(QDir().mkpath(root + "/native/tmdq_core"));
+    auto write = [](const QString& path, const QString& text) {
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(text.toUtf8());
+    };
+    const QStringList core = { "alpha", "beta" };
+    const QString pro = "SOURCES += lib/irig106/src/one.c \\\n    lib/irig106/src/two.c \\\n";
+    const QString solution = "Project(\"{x}\") = \"tmdq_core\", \"native\\tmdq_core\\tmdq_core.vcxproj\", \"{y}\"\n";
+    auto project = [](const QStringList& items, const QString& config = "<RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>") {
+        QString text = "<!-- no Qt here -->\n<Project>\n  " + config + "\n";
+        for (const QString& item : items)
+            text += "  <ClCompile Include=\"" + item + "\" />\n";
+        return text + "</Project>\n";
+    };
+    const QStringList good = { "tmdq_core.cpp", "..\\..\\src\\model\\alpha.cpp", "..\\..\\src\\model\\beta.cpp",
+                               "..\\..\\lib\\irig106\\src\\one.c", "..\\..\\lib\\irig106\\src\\two.c" };
+    auto check = [&](const QString& proj, const QString& proText, const QString& slnText) {
+        write(root + "/native/tmdq_core/tmdq_core.vcxproj", proj);
+        write(root + "/tmDataQualityAnalyzer.pro", proText);
+        write(root + "/tmdq.sln", slnText);
+        return nativeProjectProblems(root, core);
+    };
+    auto only = [](const QStringList& problems, const QString& needle) {
+        return problems.size() == 1 && problems.first().contains(needle);
+    };
+
+    QStringList clean = check(project(good), pro, solution);
+    QVERIFY2(clean.isEmpty(), qPrintable(clean.join(";")));
+
+    QStringList missing = good;
+    missing.removeAt(2);
+    QStringList p = check(project(missing), pro, solution);
+    QVERIFY2(only(p, "does not compile the core source beta"), qPrintable(p.join(";")));
+
+    p = check(project(good + QStringList{ "..\\..\\src\\model\\gamma.cpp" }), pro, solution);
+    QVERIFY2(only(p, "compiles gamma, which is not a core source"), qPrintable(p.join(";")));
+
+    p = check(project(good + QStringList{ "..\\..\\src\\viewmodel\\vm.cpp" }), pro, solution);
+    QVERIFY2(p.join(";").contains("a file from another layer: ../../src/viewmodel/vm.cpp"), qPrintable(p.join(";")));
+    p = check(project(good + QStringList{ "..\\..\\src\\view\\v.cpp" }), pro, solution);
+    QVERIFY2(p.join(";").contains("another layer: ../../src/view/v.cpp"), qPrintable(p.join(";")));
+    p = check(project(good + QStringList{ "..\\..\\src\\dto\\d.cpp" }), pro, solution);
+    QVERIFY2(p.join(";").contains("another layer: ../../src/dto/d.cpp"), qPrintable(p.join(";")));
+
+    // The vendored library: one missing, one extra, and none at all (where the .pro has none either).
+    QStringList noTwo = good;
+    noTwo.removeLast();
+    p = check(project(noTwo), pro, solution);
+    QVERIFY2(only(p, "irig106 sources (one) are not the .pro's (one,two)"), qPrintable(p.join(";")));
+    p = check(project(good + QStringList{ "..\\..\\lib\\irig106\\src\\three.c" }), pro, solution);
+    QVERIFY2(only(p, "irig106 sources (one,three,two) are not the .pro's (one,two)"), qPrintable(p.join(";")));
+    p = check(project({ "tmdq_core.cpp", "..\\..\\src\\model\\alpha.cpp", "..\\..\\src\\model\\beta.cpp" }), "SOURCES += a.cpp\n", solution);
+    QVERIFY2(only(p, "irig106 sources () are not the .pro's ()"), qPrintable(p.join(";")));
+
+    // Qt in the configuration, in any case; a comment does not count.
+    p = check(project(good, "<AdditionalDependencies>qt6core.lib</AdditionalDependencies>"), pro, solution);
+    QVERIFY2(only(p, "mentions Qt outside its comments"), qPrintable(p.join(";")));
+    p = check(project(good, "<PreprocessorDefinitions>QT_CORE_LIB</PreprocessorDefinitions>"), pro, solution);
+    QVERIFY2(only(p, "mentions Qt outside its comments"), qPrintable(p.join(";")));
+    p = check(project(good, "<AdditionalIncludeDirectories>C:\\Qt\\6.12.0\\include</AdditionalIncludeDirectories>"), pro, solution);
+    QVERIFY2(only(p, "mentions Qt outside its comments"), qPrintable(p.join(";")));
+
+    // The solution.
+    p = check(project(good), pro, "Project(\"{x}\") = \"other\", \"other.vcxproj\", \"{y}\"\n");
+    QVERIFY2(only(p, "tmdq.sln does not build the native project"), qPrintable(p.join(";")));
+
+    // And a project that is not there says so rather than passing.
+    QVERIFY(QFile::remove(root + "/native/tmdq_core/tmdq_core.vcxproj"));
+    p = nativeProjectProblems(root, core);
+    QVERIFY2(only(p, "cannot read"), qPrintable(p.join(";")));
 }
