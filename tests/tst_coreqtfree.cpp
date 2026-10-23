@@ -197,7 +197,7 @@ const QStringList kQtOutsideTheView = {
 QStringList filesOutsideTheView(const QString& root)
 {
     QStringList files;
-    for (const QString& top : { QStringLiteral("src"), QStringLiteral("include") })
+    for (const QString& top : { QStringLiteral("src"), QStringLiteral("include"), QStringLiteral("native") })
     {
         QDirIterator it(root + "/" + top, {"*.cpp", "*.h"}, QDir::Files, QDirIterator::Subdirectories);
         while (it.hasNext())
@@ -300,6 +300,18 @@ QStringList compiledNamesIn(const QStringList& files, const QString& folder, con
     return names;
 }
 
+/// The ABI sources `tests.pro` compiles straight into the test executable.
+QStringList testsProAbiSources(const QString& pro)
+{
+    static const QRegularExpression source(QStringLiteral("native/tmdq_core/([A-Za-z0-9_]+)\\.cpp"));
+    QStringList names;
+    QRegularExpressionMatchIterator it = source.globalMatch(pro);
+    while (it.hasNext())
+        names << it.next().captured(1);
+    names.sort();
+    return names;
+}
+
 /// The vendored C sources the application's .pro compiles.
 QStringList proIrigSources(const QString& pro)
 {
@@ -325,6 +337,25 @@ QString fileText(const QString& path)
     return f.open(QIODevice::ReadOnly | QIODevice::Text) ? QString::fromUtf8(f.readAll()) : QString();
 }
 
+/// What is wrong with the ABI sources under @p root: Qt, or a ViewModel or View header, anywhere in the
+/// include closure of any `native/tmdq_core/*.cpp`, or a source whose walk found nothing to follow.
+QStringList abiSourceProblems(const QString& root)
+{
+    QStringList problems;
+    const QStringList sources = QDir(root + "/native/tmdq_core").entryList({"*.cpp"}, QDir::Files, QDir::Name);
+    for (const QString& name : sources)
+    {
+        const Closure closure = walk(root + "/native/tmdq_core/" + name, root);
+        if (closure.filesVisited <= 1)
+            problems << name + ": include walk found nothing to visit";
+        for (const QString& q : closure.qtIncludes)
+            problems << name + " reaches " + q;
+        for (const QString& v : closure.layerViolations)
+            problems << name + ": " + v;
+    }
+    return problems;
+}
+
 /// What is wrong with the native project under @p root, compared with @p coreSources, the application's .pro
 /// and the solution. Empty when the two builds compile the same core.
 QStringList nativeProjectProblems(const QString& root, const QStringList& coreSources)
@@ -345,6 +376,30 @@ QStringList nativeProjectProblems(const QString& root, const QStringList& coreSo
     for (const QString& name : compiled)
         if (!expected.contains(name))
             problems << "the project compiles " + name + ", which is not a core source";
+
+    // The ABI's own sources: every .cpp in native/tmdq_core is built by the project and by the test executable
+    // (which is how TestAbi can call it), and neither builds anything that is not there.
+    QStringList present;
+    for (const QString& file : QDir(root + "/native/tmdq_core").entryList({"*.cpp"}, QDir::Files, QDir::Name))
+        present << QFileInfo(file).completeBaseName();
+    QStringList inProject;
+    for (const QString& file : files)
+        if (!file.contains('/') && file.endsWith(".cpp"))
+            inProject << QFileInfo(file).completeBaseName();
+    const QStringList inTests = testsProAbiSources(fileText(root + "/tests/tests.pro"));
+    for (const QString& name : present)
+    {
+        if (!inProject.contains(name))
+            problems << "the project does not compile the ABI source " + name;
+        if (!inTests.contains(name))
+            problems << "tests.pro does not compile the ABI source " + name;
+    }
+    for (const QString& name : inProject)
+        if (!present.contains(name))
+            problems << "the project compiles " + name + ".cpp, which is not in native/tmdq_core";
+    for (const QString& name : inTests)
+        if (!present.contains(name))
+            problems << "tests.pro compiles " + name + ".cpp, which is not in native/tmdq_core";
 
     // Nothing from another layer ("/src/view" is also the prefix of "/src/viewmodel").
     for (const QString& file : files)
@@ -523,7 +578,7 @@ void TestCoreQtFree::theConfinementGuardSeesAnUnlistedAndAStaleFile()
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     const QString root = dir.path();
-    for (const QString& sub : { "src/model", "src/view", "src/viewmodel", "include/dto", "include/view" })
+    for (const QString& sub : { "src/model", "src/view", "src/viewmodel", "include/dto", "include/view", "native/tmdq_core" })
         QVERIFY(QDir().mkpath(root + "/" + sub));
     auto write = [](const QString& path, const QString& text) {
         QFile f(path);
@@ -531,6 +586,7 @@ void TestCoreQtFree::theConfinementGuardSeesAnUnlistedAndAStaleFile()
         f.write(text.toUtf8());
     };
     write(root + "/src/viewmodel/vm.cpp", "#include <QObject>\n");
+    write(root + "/native/tmdq_core/abi_sneaky.cpp", "#include <QString>\n");
     write(root + "/src/model/sneaky.cpp", "#include <string>\n#include <QString>\n");
     write(root + "/src/model/lookalike.cpp", "#include <Quux.h>\nclass Quark;\nclass QuxLike;\n");
     write(root + "/include/dto/fwd.h", "struct Plain;\nclass QJsonObject;\n");
@@ -544,7 +600,7 @@ void TestCoreQtFree::theConfinementGuardSeesAnUnlistedAndAStaleFile()
 
     QStringList unlisted, stale;
     checkQtConfinement(root, { "src/viewmodel/vm.cpp", "include/dto/old.h" }, unlisted, stale);
-    QCOMPARE(unlisted, (QStringList{ "include/dto/fwd.h", "src/model/sneaky.cpp" }));
+    QCOMPARE(unlisted, (QStringList{ "include/dto/fwd.h", "native/tmdq_core/abi_sneaky.cpp", "src/model/sneaky.cpp" }));
     QCOMPARE(stale, QStringList{ "include/dto/old.h" });
 
     // And the header check: uppity.h has no Qt but reaches the View; fwd.h forward-declares a Qt class.
@@ -604,11 +660,17 @@ void TestCoreQtFree::theNativeProjectGuardSeesEveryKindOfDrift()
     QVERIFY(dir.isValid());
     const QString root = dir.path();
     QVERIFY(QDir().mkpath(root + "/native/tmdq_core"));
+    QVERIFY(QDir().mkpath(root + "/tests"));
     auto write = [](const QString& path, const QString& text) {
         QFile f(path);
         QVERIFY(f.open(QIODevice::WriteOnly));
         f.write(text.toUtf8());
     };
+    write(root + "/native/tmdq_core/tmdq_core.cpp", "");
+    write(root + "/native/tmdq_core/abi_extra.cpp", "");
+    write(root + "/native/tmdq_core/notes.txt", "not a source");
+    const QString testsPro = "SOURCES += $$PWD/../native/tmdq_core/tmdq_core.cpp " + QString(1, QChar(92)) +
+                             "\n    $$PWD/../native/tmdq_core/abi_extra.cpp\n";
     const QStringList core = { "alpha", "beta" };
     const QString pro = "SOURCES += lib/irig106/src/one.c \\\n    lib/irig106/src/two.c \\\n";
     const QString solution = "Project(\"{x}\") = \"tmdq_core\", \"native\\tmdq_core\\tmdq_core.vcxproj\", \"{y}\"\n";
@@ -618,12 +680,14 @@ void TestCoreQtFree::theNativeProjectGuardSeesEveryKindOfDrift()
             text += "  <ClCompile Include=\"" + item + "\" />\n";
         return text + "</Project>\n";
     };
-    const QStringList good = { "tmdq_core.cpp", "..\\..\\src\\model\\alpha.cpp", "..\\..\\src\\model\\beta.cpp",
+    const QStringList good = { "tmdq_core.cpp", "abi_extra.cpp", "..\\..\\src\\model\\alpha.cpp", "..\\..\\src\\model\\beta.cpp",
                                "..\\..\\lib\\irig106\\src\\one.c", "..\\..\\lib\\irig106\\src\\two.c" };
-    auto check = [&](const QString& proj, const QString& proText, const QString& slnText) {
+    auto check = [&](const QString& proj, const QString& proText, const QString& slnText,
+                     const QString& testsText = QString()) {
         write(root + "/native/tmdq_core/tmdq_core.vcxproj", proj);
         write(root + "/tmDataQualityAnalyzer.pro", proText);
         write(root + "/tmdq.sln", slnText);
+        write(root + "/tests/tests.pro", testsText.isNull() ? testsPro : testsText);
         return nativeProjectProblems(root, core);
     };
     auto only = [](const QStringList& problems, const QString& needle) {
@@ -634,7 +698,7 @@ void TestCoreQtFree::theNativeProjectGuardSeesEveryKindOfDrift()
     QVERIFY2(clean.isEmpty(), qPrintable(clean.join(";")));
 
     QStringList missing = good;
-    missing.removeAt(2);
+    missing.removeAt(3);   // beta
     QStringList p = check(project(missing), pro, solution);
     QVERIFY2(only(p, "does not compile the core source beta"), qPrintable(p.join(";")));
 
@@ -655,8 +719,22 @@ void TestCoreQtFree::theNativeProjectGuardSeesEveryKindOfDrift()
     QVERIFY2(only(p, "irig106 sources (one) are not the .pro's (one,two)"), qPrintable(p.join(";")));
     p = check(project(good + QStringList{ "..\\..\\lib\\irig106\\src\\three.c" }), pro, solution);
     QVERIFY2(only(p, "irig106 sources (one,three,two) are not the .pro's (one,two)"), qPrintable(p.join(";")));
-    p = check(project({ "tmdq_core.cpp", "..\\..\\src\\model\\alpha.cpp", "..\\..\\src\\model\\beta.cpp" }), "SOURCES += a.cpp\n", solution);
+    p = check(project({ "tmdq_core.cpp", "abi_extra.cpp", "..\\..\\src\\model\\alpha.cpp", "..\\..\\src\\model\\beta.cpp" }), "SOURCES += a.cpp\n", solution);
     QVERIFY2(only(p, "irig106 sources () are not the .pro's ()"), qPrintable(p.join(";")));
+
+    // The ABI's own sources: one the project forgets, one it invents, and the same for the test executable.
+    QStringList noAbiExtra = good;
+    noAbiExtra.removeAt(1);
+    p = check(project(noAbiExtra), pro, solution);
+    QVERIFY2(only(p, "the project does not compile the ABI source abi_extra"), qPrintable(p.join(";")));
+    p = check(project(good + QStringList{ "ghost.cpp" }), pro, solution);
+    QVERIFY2(only(p, "the project compiles ghost.cpp, which is not in native/tmdq_core"), qPrintable(p.join(";")));
+    p = check(project(good), pro, solution, "SOURCES += $$PWD/../native/tmdq_core/tmdq_core.cpp\n");
+    QVERIFY2(only(p, "tests.pro does not compile the ABI source abi_extra"), qPrintable(p.join(";")));
+    p = check(project(good), pro, solution, testsPro + "SOURCES += $$PWD/../native/tmdq_core/ghost.cpp\n");
+    QVERIFY2(only(p, "tests.pro compiles ghost.cpp, which is not in native/tmdq_core"), qPrintable(p.join(";")));
+    p = check(project(good), pro, solution, "# nothing here\n");
+    QVERIFY2(p.size() == 2 && p.join(";").contains("tmdq_core") && p.join(";").contains("abi_extra"), qPrintable(p.join(";")));
 
     // Qt in the configuration, in any case; a comment does not count.
     p = check(project(good, "<AdditionalDependencies>qt6core.lib</AdditionalDependencies>"), pro, solution);
@@ -674,4 +752,47 @@ void TestCoreQtFree::theNativeProjectGuardSeesEveryKindOfDrift()
     QVERIFY(QFile::remove(root + "/native/tmdq_core/tmdq_core.vcxproj"));
     p = nativeProjectProblems(root, core);
     QVERIFY2(only(p, "cannot read"), qPrintable(p.join(";")));
+}
+
+void TestCoreQtFree::theAbiSourcesIncludeNoQtAndReachNoHigherLayer()
+{
+    // The C ABI is the one door into the core, so it is held to the core's own rule: nothing it includes,
+    // directly or through a header, is Qt, a ViewModel or a View.
+    const QString root = projectRoot();
+    QVERIFY2(QDir(root + "/native/tmdq_core").entryList({"*.cpp"}, QDir::Files).size() >= 3, "the ABI sources are not where expected");
+    const QStringList problems = abiSourceProblems(root);
+    QVERIFY2(problems.isEmpty(), qPrintable(problems.join("\n  ")));
+}
+
+void TestCoreQtFree::theAbiGuardSeesQtAndHigherLayers()
+{
+    // The check above, on a miniature tree: a source that includes Qt, one that forward-declares it through a
+    // header, one that reaches the View, one with nothing to follow, and one that is clean.
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString root = dir.path();
+    QVERIFY(QDir().mkpath(root + "/native/tmdq_core"));
+    QVERIFY(QDir().mkpath(root + "/include/view"));
+    auto write = [](const QString& path, const QString& text) {
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(text.toUtf8());
+    };
+    write(root + "/include/view/panel.h", "#include <vector>\n");
+    write(root + "/native/tmdq_core/shared.h", "#include <string>\n");
+    write(root + "/native/tmdq_core/leaky.h", "class QObject;\n");
+    write(root + "/native/tmdq_core/clean.cpp", "#include \"shared.h\"\n");
+    write(root + "/native/tmdq_core/qt.cpp", "#include \"shared.h\"\n#include <QString>\n");
+    write(root + "/native/tmdq_core/fwd.cpp", "#include \"leaky.h\"\n");
+    write(root + "/native/tmdq_core/up.cpp", "#include \"shared.h\"\n#include \"panel.h\"\n");
+    write(root + "/native/tmdq_core/alone.cpp", "// includes nothing of ours\n#include <vector>\n");
+
+    const QStringList problems = abiSourceProblems(root);
+    const QString all = problems.join("\n");
+    QVERIFY2(all.contains("qt.cpp reaches native/tmdq_core/qt.cpp: #include <QString>"), qPrintable(all));
+    QVERIFY2(all.contains("fwd.cpp reaches native/tmdq_core/leaky.h: forward declaration of QObject"), qPrintable(all));
+    QVERIFY2(all.contains("up.cpp: native/tmdq_core/up.cpp: includes \"panel.h\""), qPrintable(all));
+    QVERIFY2(all.contains("alone.cpp: include walk found nothing to visit"), qPrintable(all));
+    QVERIFY2(!all.contains("clean.cpp"), qPrintable(all));
+    QCOMPARE(problems.size(), 4);
 }

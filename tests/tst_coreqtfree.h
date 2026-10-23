@@ -39,6 +39,8 @@ private slots:
     void theNativeProjectCompilesExactlyTheCoreSources();
     void theNativeProjectGuardReadsProjectFilesCorrectly();
     void theNativeProjectGuardSeesEveryKindOfDrift();
+    void theAbiSourcesIncludeNoQtAndReachNoHigherLayer();
+    void theAbiGuardSeesQtAndHigherLayers();
 };
 
 #endif // TST_CORE_QT_FREE_H

@@ -38,7 +38,9 @@
 
 #include <stdint.h>
 
-#if defined(_WIN32)
+#if defined(TMDQ_ABI_STATIC)
+#  define TMDQ_API   /* compiled straight into a test executable, not loaded as a DLL */
+#elif defined(_WIN32)
 #  if defined(TMDQ_ABI_BUILD)
 #    define TMDQ_API __declspec(dllexport)
 #  else
@@ -57,6 +59,12 @@ extern "C" {
 /// being misread.
 #define TMDQ_ABI_VERSION 1
 
+/// Bumped when functions or struct fields are ADDED (nothing existing changes meaning). A host that
+/// needs a feature checks `version == TMDQ_ABI_VERSION && revision >= N`.
+///   0  the interop spike's contract: probe a file, run one Frame Sync Lock stream.
+///   1  plan step 2.2a: the file handle, and runs of N streams with callbacks and cancel.
+#define TMDQ_ABI_REVISION 1
+
 typedef enum tmdq_status
 {
     TMDQ_OK            = 0,
@@ -64,8 +72,16 @@ typedef enum tmdq_status
     TMDQ_ERR_PREPARE   = 2,  ///< The file would not open, or TMATS did not resolve.
     TMDQ_ERR_PROCESS   = 3,  ///< The run failed - usually no frame sync found.
     TMDQ_ERR_NOSAMPLES = 4,  ///< The run succeeded but produced no output samples.
-    TMDQ_ERR_INTERNAL  = 5   ///< An exception was caught at the boundary.
+    TMDQ_ERR_INTERNAL  = 5,  ///< An exception was caught at the boundary.
+    TMDQ_ERR_JOB       = 6   ///< A stream's configuration was rejected; tmdq_last_error() says why.
 } tmdq_status;
+
+/// How a stream is processed (the values of the core's StreamMode).
+typedef enum tmdq_stream_mode
+{
+    TMDQ_MODE_RECEIVER_CHANNEL_INFO = 0,   ///< Calibrated receiver-channel (SNR) values.
+    TMDQ_MODE_FRAME_SYNC_LOCK       = 1    ///< Frame-sync lock percentage only.
+} tmdq_stream_mode;
 
 /* Explicit packing on both sides of the boundary. x64 MSVC and the CLR both default to
  * natural alignment, so this changes nothing today - it is stated so that a future
@@ -141,6 +157,210 @@ TMDQ_API void tmdq_free_lock_result(tmdq_lock_result* r);
 
 /// Last error on the calling thread, UTF-8, owned by the library. Empty if none.
 TMDQ_API const char* tmdq_last_error(void);
+
+/* ===========================================================================================
+ * Revision 1: files and runs.
+ *
+ * CONVENTIONS FOR EVERYTHING BELOW
+ *
+ *  - Handles are opaque pointers, created by a function that returns them through an out
+ *    parameter and released by the matching *_free / *_close. A handle is never shared between
+ *    two owners.
+ *  - A struct a HOST fills in begins with `uint32_t struct_size`, set to sizeof the struct as the
+ *    host was compiled. Fields are only ever appended, so a library newer than the host reads the
+ *    fields the host knows about and defaults the rest. A struct the LIBRARY fills in has the same
+ *    first field, set by the library.
+ *  - Strings in are UTF-8, NUL-terminated, copied by the library before the call returns. A NULL
+ *    string means "not given". Strings out are UTF-8 and owned by the handle they came from.
+ *  - Arrays out are views into the handle they came from (no copy), valid until it is released.
+ *  - Nothing throws across the boundary. A failure returns a tmdq_status and sets
+ *    tmdq_last_error() for the calling thread.
+ * ======================================================================================== */
+
+/// Which struct tmdq_sizeof() measures.
+typedef enum tmdq_struct_id
+{
+    TMDQ_STRUCT_CHANNEL_INFO   = 1,
+    TMDQ_STRUCT_CAL_POINT      = 2,
+    TMDQ_STRUCT_CAL_PROFILE    = 3,
+    TMDQ_STRUCT_STREAM_CONFIG  = 4,
+    TMDQ_STRUCT_RUN_REQUEST    = 5,
+    TMDQ_STRUCT_CALLBACKS      = 6,
+    TMDQ_STRUCT_STREAM_INFO    = 7,
+    TMDQ_STRUCT_CHANNEL_SERIES = 8
+} tmdq_struct_id;
+
+#pragma pack(push, 8)
+
+/// One channel of a recording.
+typedef struct tmdq_channel_info
+{
+    uint32_t    struct_size;
+    int32_t     channel_id;
+    double      tmats_data_rate_bps;  ///< PCM channels: the rate TMATS declares, 0 if it declares none. 0 for time channels.
+    const char* name_utf8;            ///< The TMATS name, without the channel number. Owned by the file.
+} tmdq_channel_info;
+
+/// One measured calibration point: a raw count average and the true dB it stands for.
+typedef struct tmdq_cal_point
+{
+    double raw_avg;
+    double true_db;
+} tmdq_cal_point;
+
+/// A non-linear calibration profile for one receiver word.
+typedef struct tmdq_cal_profile
+{
+    const tmdq_cal_point* points;     ///< point_count points, sorted ascending by raw_avg.
+    int32_t               word_index; ///< Zero-based word within the minor frame.
+    int32_t               point_count;
+    int32_t               valid;      ///< 0/1. An invalid profile is ignored and the word is calibrated linearly.
+    int32_t               reserved;
+} tmdq_cal_profile;
+
+/// One stream's settings, as the user gives them. The fields are those of the core's StreamJobConfig.
+typedef struct tmdq_stream_config
+{
+    uint32_t    struct_size;
+    int32_t     pcm_channel_id;
+    const char* label_utf8;                 ///< Display label; NULL or empty = "Ch <id>".
+    const char* sync_pattern_utf8;          ///< Frame-sync pattern as hex text.
+    const char* sync_mask_utf8;             ///< Hex text; NULL or empty = every bit of the pattern.
+    const char* receiver_params_toml_utf8;  ///< Receiver SNR: the word-map file; NULL or empty = the shipped default.
+    const tmdq_cal_profile* calibration;    ///< calibration_count profiles (an array, stride sizeof(tmdq_cal_profile)); may be NULL. If two name the same word the first is used.
+    double      data_rate_mbps;             ///< 0 = use the rate TMATS declares.
+    double      scale_d_db_per_v;           ///< Receiver SNR: dB per volt.
+    int32_t     mode;                       ///< tmdq_stream_mode.
+    int32_t     bits_in_minor_frame;
+    int32_t     randomized;                 ///< 0/1.
+    int32_t     inverted;                   ///< 0/1.
+    int32_t     sample_period_index;        ///< Index into the application's list of sample periods.
+    int32_t     polarity_index;             ///< Receiver SNR.
+    int32_t     slope_index;                ///< Receiver SNR.
+    int32_t     num_receivers;              ///< Receiver SNR, used only when no word-map file is found.
+    int32_t     receiver_channels;          ///< Receiver SNR, used only when no word-map file is found.
+    int32_t     calibration_count;
+} tmdq_stream_config;
+
+/// One run: a recording, and the streams to process over it, concurrently, with one read of the file.
+typedef struct tmdq_run_request
+{
+    uint32_t    struct_size;
+    int32_t     time_channel_id;            ///< Required, >= 0 (see tmdq_file_default_time_channel).
+    const char* filename_utf8;
+    const char* app_root_utf8;              ///< Where settings/receiver_params/default.toml is looked for; NULL = none.
+    const tmdq_stream_config* const* streams;   ///< stream_count pointers, each to a struct that carries its own struct_size.
+    int32_t     stream_count;               ///< At least 1.
+    int32_t     source_id;                  ///< Id of this file within a multi-file session; carried into every result.
+    int32_t     swap_bytes;                 ///< 0/1, file-scoped. An ordinary Chapter 10 recording needs 1.
+    int32_t     reserved;
+} tmdq_run_request;
+
+typedef struct tmdq_run tmdq_run;                       ///< A run in flight (or just ended).
+typedef struct tmdq_stream_result tmdq_stream_result;   ///< One stream's finished result.
+
+/// Where a run reports to. Any member may be NULL. The functions are called from the library's own
+/// threads (see tmdq_run_start for which) and must not throw. A callback must NOT call tmdq_run_free
+/// or tmdq_run_wait on its own run (they wait for the thread the callback is running on).
+typedef struct tmdq_callbacks
+{
+    uint32_t struct_size;
+    void*    user;                                                    ///< Passed back as the first argument of every call.
+    void (*log)(void* user, const char* message_utf8);
+    void (*error)(void* user, const char* message_utf8);
+    void (*progress)(void* user, int32_t percent);                    ///< 0..100, from the reader thread only.
+    /// A stream completed. Ownership of @p result passes to the host: release it with
+    /// tmdq_stream_result_free (from any thread, at any time). Called only for a stream that
+    /// completed successfully in a run that was not cancelled.
+    void (*stream_done)(void* user, tmdq_stream_result* result);
+    void (*finished)(void* user, int32_t success);                    ///< Once, last. success = at least one stream completed and no cancel.
+} tmdq_callbacks;
+
+/// A finished stream, as the library describes it. The arrays are views into the result, each
+/// sample_count long and parallel.
+typedef struct tmdq_stream_info
+{
+    uint32_t       struct_size;
+    int32_t        pcm_channel_id;
+    const char*    label_utf8;
+    const double*  times_sec;           ///< Absolute IRIG seconds per sample.
+    const double*  lock_percent;        ///< 0..100.
+    const double*  missed_frames;       ///< Cumulative, monotonic.
+    int32_t        job_index;           ///< Position of this stream in the request.
+    int32_t        source_id;
+    int32_t        mode;                ///< tmdq_stream_mode.
+    int32_t        sample_count;
+    int32_t        channel_count;       ///< Receiver series; 0 for a lock-only stream.
+    int32_t        reserved;
+} tmdq_stream_info;
+
+/// One receiver-channel series of a finished stream.
+typedef struct tmdq_channel_series
+{
+    uint32_t       struct_size;
+    int32_t        word_index;          ///< Zero-based word within the minor frame.
+    const char*    name_utf8;           ///< e.g. "L_RCVR1".
+    const double*  values;              ///< sample_count of the stream; calibrated.
+} tmdq_channel_series;
+
+#pragma pack(pop)
+
+/// @return TMDQ_ABI_REVISION as compiled into this DLL.
+TMDQ_API int32_t tmdq_abi_revision(void);
+
+/// @return The size, as the C compiler laid it out, of the struct @p which names; 0 for an unknown id.
+TMDQ_API int32_t tmdq_sizeof(int32_t which);
+
+/* --- the file --------------------------------------------------------------------------- */
+
+typedef struct tmdq_file tmdq_file;   ///< A recording whose channels have been read.
+
+/// Opens @p path_utf8 and reads its TMATS. Safe to call from several threads.
+/// @return TMDQ_OK, TMDQ_ERR_BADARG or TMDQ_ERR_PREPARE (the file would not open; tmdq_last_error says why).
+TMDQ_API int32_t tmdq_file_open(const char* path_utf8, tmdq_file** out);
+TMDQ_API void    tmdq_file_close(tmdq_file* file);   ///< Safe on NULL.
+
+TMDQ_API int32_t tmdq_file_time_channel_count(const tmdq_file* file);   ///< -1 for a NULL file.
+TMDQ_API int32_t tmdq_file_pcm_channel_count(const tmdq_file* file);    ///< -1 for a NULL file.
+/// The time channel the application selects first, or -1 if the file has none (or the file is NULL).
+TMDQ_API int32_t tmdq_file_default_time_channel(const tmdq_file* file);
+/// Fills @p out for the @p index'th time / PCM channel, in the order the application lists them.
+/// @return TMDQ_OK, or TMDQ_ERR_BADARG for a NULL argument, an index out of range or a short struct_size.
+TMDQ_API int32_t tmdq_file_time_channel(const tmdq_file* file, int32_t index, tmdq_channel_info* out);
+TMDQ_API int32_t tmdq_file_pcm_channel(const tmdq_file* file, int32_t index, tmdq_channel_info* out);
+
+/* --- runs ------------------------------------------------------------------------------- */
+
+/// Builds a job for every stream (checking each, exactly as the application does), opens the
+/// recording, and starts processing on the library's own threads; returns at once.
+///
+/// @p callbacks is copied. During this call `log` may be called, on the calling thread, with the
+/// lines building the jobs produced. After a successful start: `log` and `error` come from the reader
+/// thread or any stream's thread, in order per source; `progress` from the reader thread only;
+/// `stream_done` from the thread of the stream it describes, after that stream's last log line;
+/// `finished` from the reader thread, exactly once, LAST - after every other call and after every
+/// thread has ended.
+///
+/// @return TMDQ_OK with *@p out set. TMDQ_ERR_BADARG for a NULL, an empty stream list or a short
+/// struct_size; TMDQ_ERR_JOB when a stream's settings are rejected (the message names the stream and
+/// the setting); TMDQ_ERR_PREPARE when the recording cannot be used. On any failure nothing is running,
+/// *@p out is NULL and no callback but `log` has been called.
+TMDQ_API int32_t tmdq_run_start(const tmdq_run_request* request, const tmdq_callbacks* callbacks, tmdq_run** out);
+
+/// Asks the run to stop; it ends with `finished(0)`. Safe from any thread, including a callback.
+TMDQ_API void    tmdq_run_cancel(tmdq_run* run);
+/// 1 from a successful start until just before `finished` is delivered, else 0.
+TMDQ_API int32_t tmdq_run_running(const tmdq_run* run);
+/// Blocks until every thread of the run has ended (so every callback has returned). Not from a callback.
+TMDQ_API void    tmdq_run_wait(tmdq_run* run);
+/// Cancels a run still in flight, waits for it, and releases it. Safe on NULL. Not from a callback.
+TMDQ_API void    tmdq_run_free(tmdq_run* run);
+
+/// Describes @p result. @return TMDQ_OK, or TMDQ_ERR_BADARG for a NULL argument or a short struct_size.
+TMDQ_API int32_t tmdq_stream_result_info(const tmdq_stream_result* result, tmdq_stream_info* out);
+/// Describes the @p index'th receiver series of @p result. TMDQ_ERR_BADARG if @p index is out of range.
+TMDQ_API int32_t tmdq_stream_result_channel(const tmdq_stream_result* result, int32_t index, tmdq_channel_series* out);
+TMDQ_API void    tmdq_stream_result_free(tmdq_stream_result* result);   ///< Safe on NULL, and from any thread.
 
 #ifdef __cplusplus
 }

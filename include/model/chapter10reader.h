@@ -75,6 +75,8 @@ public:
 
     /// @return (channel ID, bare name) for every PCM channel, in list order.
     std::vector<std::pair<int, std::string>> getPCMChannelList() const;
+    /// @return (channel ID, bare name) for every time channel, in channel-id order.
+    std::vector<std::pair<int, std::string>> getTimeChannelList() const;
 
     /**
      * @brief Returns the TMATS-declared bit rate for a PCM channel.
