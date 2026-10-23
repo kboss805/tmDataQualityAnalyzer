@@ -126,13 +126,24 @@ sweep.
   with no Qt include path; `dumpbin /dependents` shows no Qt. The Qt app keeps compiling the same
   sources through qmake until step 6. CI builds both. *The solution is `tmdq.sln`, because
   `tmDataQualityAnalyzer.sln` is the gitignored, generated Visual Studio solution. The ABI is still the spike's
-  version 1; the spike's 20-check driver passes against the new DLL.*
+  version 1; the spike's 20-check driver passes against the new DLL.* PR #181, merged as `698bcfc`.
 - [ ] **2.2 The full C ABI** (`tmdq_abi.h`), grown from the spike's `probe` and `run_lock_stream` to
-  everything the app needs: open and probe a file (channels, TMATS rates, time range); run N streams
-  of either mode with calibration profiles; progress, log and error callbacks; cancel; results
-  (lock %, missed frames, SNR channel series); calibration extraction and step-file parsing; the
-  TOML helpers; CSV import and export; job building; series construction. Blittable structs, an ABI
-  version, and the size-of checks from the interop spike.
+  everything the app needs. Blittable structs, an ABI version and revision, and the size-of checks from the
+  interop spike. It is the largest step of stage 2 (every capability the app uses crosses the boundary), so it
+  lands as four PRs, each tested in-process by a `TestAbi` suite that compiles the ABI sources into the test
+  executable and mutation-checked like any other step:
+  - [x] **2.2a Conventions, the file, and runs.** Opaque handles, versioned structs (`struct_size` first, fields
+    only appended), UTF-8 strings, one error per thread, no exception across the boundary. Open a file and list
+    its time and PCM channels with their TMATS rates; run N streams of either mode over one read of the file
+    (settings in, the core's own `buildStreamJob` and `PipelineRunner` behind), with calibration profiles, log,
+    error, progress, per-stream-result and finished callbacks, cancel, and result accessors that view the
+    result's arrays without copying. *The app has no time-range selection (its summary says "Time range: all"),
+    so none is exposed; the request's struct can grow one.*
+  - [ ] **2.2b Calibration.** Step-file parsing (today in `streamsubdialogs.cpp`, a view file, so it moves into
+    the core first) and calibration extraction with its callbacks, cancel and per-channel results.
+  - [ ] **2.2c The formats.** The frame-sync pattern file (read and write), CSV import and export, and template
+    channel matching.
+  - [ ] **2.2d Series construction.** `buildStreamSeries`, the shared time base and the import ordering.
 - [ ] **2.3 A C# interop library** (`TmDq.Core`) over the ABI, with a test project that runs the
   committed fixtures through it and compares against numbers the Qt app produces today (the spike
   driver's 20/20 check, made permanent and widened to every fixture and both modes).

@@ -587,6 +587,30 @@ void TestChapter10Reader::aSecondLoadReplacesWhatTheFirstLeftBehind()
     QVERIFY(again.errors.isEmpty());
 }
 
+void TestChapter10Reader::theTimeChannelListNamesTheTimeChannels()
+{
+    // The list a C ABI hands a host: the same channels the combo box shows, as (id, bare name) pairs.
+    Chapter10Reader reader;
+    QCOMPARE(reader.getTimeChannelList().size(), std::size_t{0});   // nothing loaded, nothing listed
+
+    loadFixture(reader, "prn_testfile, sample.ch10");
+    const auto times = reader.getTimeChannelList();
+    QCOMPARE(times.size(), std::size_t{1});
+    QCOMPARE(times[0].first, 1);
+    QCOMPARE(QString::fromStdString(times[0].second), QString("IRIG-B"));
+    QCOMPARE(times[0].first, reader.getCurrentTimeChannelID());
+
+    // The combo box is this list, spelled "<id> - <name>".
+    QStringList spelled;
+    for (const auto& entry : times)
+        spelled << QString::number(entry.first) + " - " + QString::fromStdString(entry.second);
+    QCOMPARE(timeList(reader), spelled);
+
+    // And a different file replaces it, as it replaces the PCM list.
+    loadFixture(reader, "step_cal, example.ch10");
+    QCOMPARE(reader.getTimeChannelList().size(), toQStringList(reader.getTimeChannelComboBoxList()).size());
+}
+
 void TestChapter10Reader::aTmatsDataRateIsReadLikeQStringToDouble()
 {
     QFETCH(QString, value);       // six characters, replacing "800000" in P-16\D2

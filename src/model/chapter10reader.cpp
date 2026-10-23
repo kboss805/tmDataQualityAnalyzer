@@ -233,6 +233,17 @@ std::vector<std::pair<int, std::string>> Chapter10Reader::getPCMChannelList() co
     return list;
 }
 
+std::vector<std::pair<int, std::string>> Chapter10Reader::getTimeChannelList() const
+{
+    std::vector<std::pair<int, std::string>> list;
+    list.reserve(m_time_channels.size());
+    for (int id : m_time_channels)
+    {
+        list.emplace_back(id, m_channel_data.at(id).channelName());
+    }
+    return list;
+}
+
 bool Chapter10Reader::processTmatsPacket(Irig106::SuI106Ch10Header& header)
 {
     // Decode TMATS metadata into m_tmats_info for later use by applyTmatsNames().

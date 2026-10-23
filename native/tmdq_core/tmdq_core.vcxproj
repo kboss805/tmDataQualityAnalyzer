@@ -107,11 +107,14 @@
 
   <ItemGroup>
     <ClInclude Include="tmdq_abi.h" />
+    <ClInclude Include="abi_internal.h" />
   </ItemGroup>
 
   <!-- The ABI itself. -->
   <ItemGroup>
     <ClCompile Include="tmdq_core.cpp" />
+    <ClCompile Include="abi_file.cpp" />
+    <ClCompile Include="abi_run.cpp" />
   </ItemGroup>
 
   <!-- The core: src\model\<name>.cpp for every name in TestCoreQtFree's kCoreSources. -->
