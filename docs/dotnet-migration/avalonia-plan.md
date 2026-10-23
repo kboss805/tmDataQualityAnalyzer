@@ -127,7 +127,7 @@ sweep.
   sources through qmake until step 6. CI builds both. *The solution is `tmdq.sln`, because
   `tmDataQualityAnalyzer.sln` is the gitignored, generated Visual Studio solution. The ABI is still the spike's
   version 1; the spike's 20-check driver passes against the new DLL.* PR #181, merged as `698bcfc`.
-- [ ] **2.2 The full C ABI** (`tmdq_abi.h`), grown from the spike's `probe` and `run_lock_stream` to
+- [x] **2.2 The full C ABI** (`tmdq_abi.h`), grown from the spike's `probe` and `run_lock_stream` to
   everything the app needs. Blittable structs, an ABI version and revision, and the size-of checks from the
   interop spike. It is the largest step of stage 2 (every capability the app uses crosses the boundary), so it
   lands as four PRs, each tested in-process by a `TestAbi` suite that compiles the ABI sources into the test
@@ -143,10 +143,11 @@ sweep.
     callbacks, cancel and per-channel results. *What the dialog did inline - decoding the sync text and resolving the
     default word map when assembling the extractor's request - moved into the core first
     (`buildCalibrationRequest`), pinned against the old code.*
-  - [x] **2.2c The formats.** The frame-sync pattern file (read and write), CSV import and export, and template
+  - [x] **2.2c The formats.** PR #184, merged as `d7cb61f`. The frame-sync pattern file (read and write), CSV import and export, and template
     channel matching, plus clock stamps. *Pure translation of core code stage 1 moved; tested against the core
     called directly, with written files compared byte for byte.*
-  - [ ] **2.2d Series construction.** `buildStreamSeries`, the shared time base and the import ordering.
+  - [x] **2.2d Series construction.** `buildStreamSeries`, the shared time base, stream identity and the import
+    ordering. *With this the ABI covers everything 2.2 listed.*
 - [ ] **2.3 A C# interop library** (`TmDq.Core`) over the ABI, with a test project that runs the
   committed fixtures through it and compares against numbers the Qt app produces today (the spike
   driver's 20/20 check, made permanent and widened to every fixture and both modes).
