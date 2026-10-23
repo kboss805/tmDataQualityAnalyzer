@@ -34,6 +34,11 @@ private slots:
     void outsideTheViewQtIsConfinedToTheListedFiles();
     void everyOtherHeaderIsQtFreeThroughAndThrough();
     void theConfinementGuardSeesAnUnlistedAndAStaleFile();
+
+    // The MSBuild project that builds tmdq_core.dll (plan step 2.1) compiles the same core as qmake does.
+    void theNativeProjectCompilesExactlyTheCoreSources();
+    void theNativeProjectGuardReadsProjectFilesCorrectly();
+    void theNativeProjectGuardSeesEveryKindOfDrift();
 };
 
 #endif // TST_CORE_QT_FREE_H

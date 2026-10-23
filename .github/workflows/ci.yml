@@ -185,6 +185,19 @@ jobs:
           if ($dirty) { throw "Build is not warning-clean" }
           Write-Host "No warnings (app + tests)."
 
+      - name: Build native core (tmdq_core.dll, no Qt)
+        shell: powershell
+        run: |
+          # The same core sources the Qt build compiles, built by MSBuild (tmdq.sln) with no Qt
+          # include path, then checked: zero warnings, and the DLL's imports on an allow-list.
+          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError, so failures
+          # are gated by explicit $LASTEXITCODE checks.
+          $ErrorActionPreference = 'Continue'
+          foreach ($cfg in 'Debug', 'Release') {
+            powershell -ExecutionPolicy Bypass -File scripts\build_core_dll.ps1 -Configuration $cfg
+            if ($LASTEXITCODE -ne 0) { throw "tmdq_core.dll ($cfg) failed the build or the no-Qt check" }
+          }
+
       - name: Run full test suite
         env:
           # Qt's offscreen platform: the self-hosted runner runs as a Windows
@@ -343,6 +356,19 @@ jobs:
           }
           if ($dirty) { throw "Build is not warning-clean" }
           Write-Host "No warnings (app + tests)."
+
+      - name: Build native core (tmdq_core.dll, no Qt)
+        shell: powershell
+        run: |
+          # The same core sources the Qt build compiles, built by MSBuild (tmdq.sln) with no Qt
+          # include path, then checked: zero warnings, and the DLL's imports on an allow-list.
+          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError, so failures
+          # are gated by explicit $LASTEXITCODE checks.
+          $ErrorActionPreference = 'Continue'
+          foreach ($cfg in 'Debug', 'Release') {
+            powershell -ExecutionPolicy Bypass -File scripts\build_core_dll.ps1 -Configuration $cfg
+            if ($LASTEXITCODE -ne 0) { throw "tmdq_core.dll ($cfg) failed the build or the no-Qt check" }
+          }
 
       - name: Run test suite
         env:

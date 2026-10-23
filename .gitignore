@@ -119,3 +119,7 @@ docs/manual_images/processed/
 # Python bytecode cache (scripts/ helpers)
 __pycache__/
 *.pyc
+
+# The native core project (native/): build output
+/native/out/
+/native/obj/

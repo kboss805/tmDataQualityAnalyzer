@@ -114,17 +114,19 @@ sweep.
   copies), so the DTOs stay as the UI's own types; the step instead makes the end state a guard:
   `TestCoreQtFree` fails on any file outside the View that uses Qt and is not on a named list, and on any other
   header that reaches Qt or a higher layer. The list is longer than "Done when" below says: it also holds the UI-form
-  DTOs and the Qt bridges.*
+  DTOs and the Qt bridges.* PR #180, merged as `e637e2e`.
 
 **Done when** the only Qt left outside `src/view` is the four ViewModels and `StreamConfigSchema` /
 `ProcessingTemplateSchema`, and `TestCoreQtFree` lists everything else as core.
 
 ## Step 2: the core as a product, and its tests off Qt
 
-- [ ] **2.1 Build `tmdq_core.dll` from `main`.** A native project (MSBuild `.vcxproj` in a new
+- [x] **2.1 Build `tmdq_core.dll` from `main`.** A native project (MSBuild `.vcxproj` in a new
   `tmDataQualityAnalyzer.sln`, the long-term build) compiles the core sources and `irig106` into a DLL
   with no Qt include path; `dumpbin /dependents` shows no Qt. The Qt app keeps compiling the same
-  sources through qmake until step 6. CI builds both.
+  sources through qmake until step 6. CI builds both. *The solution is `tmdq.sln`, because
+  `tmDataQualityAnalyzer.sln` is the gitignored, generated Visual Studio solution. The ABI is still the spike's
+  version 1; the spike's 20-check driver passes against the new DLL.*
 - [ ] **2.2 The full C ABI** (`tmdq_abi.h`), grown from the spike's `probe` and `run_lock_stream` to
   everything the app needs: open and probe a file (channels, TMATS rates, time range); run N streams
   of either mode with calibration profiles; progress, log and error callbacks; cancel; results

@@ -522,6 +522,70 @@ v2.9.0 intended. Every first-party header here is quote-included, so `anglebrack
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
 
+#### The core builds as `tmdq_core.dll` with no Qt, in CI (plan step 2.1)
+
+First step of stage 2 of `docs/dotnet-migration/avalonia-plan.md`: the Qt-free core, which stage 1 finished, is now
+also built as a product, by a build that has no Qt to reach for.
+
+- **`native/tmdq_core/tmdq_core.vcxproj`** (MSBuild, in the new committed **`tmdq.sln`** at the repository root)
+  compiles every `src/model` source in `TestCoreQtFree`'s `kCoreSources` (18 files), the ABI
+  (`native/tmdq_core/tmdq_core.cpp`, `tmdq_abi.h`) and the 13 vendored irig106 C files, into a DLL. It has no Qt
+  include path and no Qt library, so a core source that reached for a Qt header would not compile - the thing
+  `TestCoreQtFree` infers from the include closure is here a property of the build. The compiler switches mirror
+  what qmake gives the app (C++20, `/utf-8`, `/permissive-`, level 3 with the same promoted warnings, `UNICODE`;
+  irig106 with warnings off, as `thirdparty.pri` does), plus `/FS`, which parallel compiles into one PDB need
+  (without it the build failed intermittently with C1041). The toolset is whatever MSBuild brings (v143 from the
+  VS 2022 tools `env.ps1` pins, v145 from VS 2026); intermediates go in `native/obj/<toolset>/<config>/` so two
+  compilers never share objects. Output is `native/out/<config>/tmdq_core.dll` (both gitignored).
+- **`scripts/build_core_dll.ps1 [-Configuration Debug|Release] [-Rebuild]`** builds the solution and then checks
+  it: **zero compiler warnings**, and the DLL's imports (`dumpbin /dependents`) must all be on an **allow-list**
+  (the C runtime, `KERNEL32`, `WS2_32`, `USER32`). An allow-list rather than "no Qt", so any new dependency has to
+  be added on purpose. It deletes the DLL first, so a stale one cannot pass. Release is 377,344 bytes importing
+  `MSVCP140`, `VCRUNTIME140`, `VCRUNTIME140_1`, `KERNEL32` and the UCRT forwarders; Debug is 2.5 MB. Works under
+  Windows PowerShell 5.1 (CI's shell) and 7; dot-sources `env.ps1` itself when `msbuild` is not on PATH.
+- **CI builds both** (`ci.yml`, both the self-hosted and the hosted job, after the app and test builds): Debug and
+  Release through that script. The Qt app still compiles the same sources through qmake until step 6.
+- **The two source lists cannot drift.** `TestCoreQtFree::theNativeProjectCompilesExactlyTheCoreSources` compares the
+  project's `src/model` sources with `kCoreSources`, its irig106 files with the ones `tmDataQualityAnalyzer.pro`
+  compiles, rejects any file from another layer, requires that the project never says "Qt" outside its comments
+  (in any case: `qt6core.lib`, `QT_CORE_LIB`, `C:\Qt\...`), and that `tmdq.sln` builds it. The check is one function
+  (`nativeProjectProblems`), proved on temporary trees by `theNativeProjectGuardSeesEveryKindOfDrift` (a missing
+  core source, an extra one, three other layers, a missing/extra/absent irig106 file, Qt three ways, a solution
+  without the project, an unreadable project) and its readers by `theNativeProjectGuardReadsProjectFilesCorrectly`.
+- **The ABI is the spike's, unchanged** (version 1, one Frame Sync Lock stream per call), moved here from
+  `dotnet/hybrid-spike/native/tmdq_core.cpp` and `dotnet/interop-spike/tmdq_abi.h`; step 2.2 grows it. The spike
+  directories keep their own copies and are frozen as the record of what was measured. **Their driver is the
+  numeric check for this step:** `dotnet/hybrid-spike/driver` (20 checks against the numbers recorded before the
+  de-Qt sweep: 116 samples / 1,100 missed at 1 s, 11,554 / 838 at 10 ms, two streams at once, a non-ASCII folder)
+  passes 20 of 20 against the MSBuild-built DLL in both Debug and Release. Step 2.3 makes that check permanent.
+
+**Why not the plan's `tmDataQualityAnalyzer.sln`.** That name belongs to the gitignored, generated Visual Studio
+solution (`scripts\gen_vs_project.ps1`, which regenerates it on demand and would overwrite a committed one), so the
+long-term solution is **`tmdq.sln`**. Later steps add the C# projects to it.
+
+**Validated against 26 single-defect mutants, all caught:** nine plant drift in the project or solution (a core source
+dropped, a UI-session source and a ViewModel source added, an irig106 file dropped and one added, a Qt include
+directory, a lower-case `qt6core.lib`, a Qt define, the project dropped from the solution) and seventeen break the
+guard itself (an `Update=` item counted, backslashes not read, extension or folder not checked, comments not
+stripped, Qt matched case-sensitively, `.cc` taken for `.c`, each report removed, each layer, the irig106 list,
+the solution check, an unreadable project passing). The first run had **five survivors, all the same kind**: a check
+that no test exercised on its own (the `.pro` comparison, the core-list comparison, the solution, the Qt-free
+rule, and the case-insensitive match), because the only tests ran on a tree that was already correct. Folding the
+checks into one function and driving it over a tree with each fault fixed all of them. The build script's gates were
+checked by hand: an allow-list missing `KERNEL32` fails, a planted C4101 warning fails with "1 compiler warning(s)".
+
+**Left as it was, worth knowing:**
+
+- The DLL is built `/MD`, so a host needs the Visual C++ runtime installed (or beside it). Whether to link it
+  statically is a deployment decision for step 5.
+- A managed host must run with the **UTF-8 active code page** or a non-ASCII recording path cannot reach irig106
+  (the vendored library opens files with a narrow `fopen`). `dotnet.exe` and the test host do not carry that
+  manifest; the Qt app's exe does (`codepage.pri`). The hybrid driver merges one into its exe; step 2.3's test host and
+  step 3's app must do the same.
+- The hosted CI job builds with whatever Visual Studio `windows-latest` has; the toolset follows it.
+
+Baseline **1134 / 0 / 1** (was 1131 / 0 / 1; `TestCoreQtFree` adds 3 results), **1135 / 0 / 0** at release. **35 suites.**
+
 #### Outside the View, Qt is confined to a named list, and the guard enforces it (plan step 1.7, end of stage 1)
 
 Last step of stage 1 of `docs/dotnet-migration/avalonia-plan.md`: "DTO cleanup". Steps 1.1-1.6 had already
@@ -5154,7 +5218,7 @@ skip for quick local iteration. The source/header files are listed in `tests/tes
 - **TestQtProcessingEvents** (`tst_qtprocessingevents`) — the hand-off from a processing thread to Qt that replaced `FrameProcessor`'s signals: 300 mixed log / error events raised on a worker thread arrive on the target's thread in the order raised with completion last (and the test really did cross threads); UTF-8 messages decode (an accented letter and an em dash); any handler may be missing; events still queued for a destroyed target are dropped, which is what lets the coordinator and extractor die with events in flight. Validated against mutants that deliver directly instead of queued (the run crashes) and that decode as Latin-1. Pure logic, runs in CI; and progress events (101 values from a worker thread arrive on the target's thread in order)
 - **TestTextFormat** (`tst_textformat`) — `formatFixed()`, which reproduces `QString::number(v, 'f', n)` without Qt, checked against Qt itself: the exact ties the report prints (Qt rounds them away from zero, `std::format` to even), every n/64 at 0 to 6 decimals, 20,000 arbitrary doubles from a fixed generator, signs and negative zero, the extremes, and `isExactTie()` seeing only real ties. Pure logic, runs in CI
 - **TestFrameSync** (`tst_framesync`) — the shared decode in `framesync.h`: `parseUnsignedHex` against `QString::toULongLong(16)` on a list of awkward inputs and 40,000 random strings, `resolveFrameSync` (the pattern's length counted in characters, an empty mask meaning every bit, the pattern checked before the mask and the result never half-written), `applyAcquisition` setting every raw-affecting field and no other, and `fullSyncMask` (every bit of the pattern, no shift by 64, a full mask for a pattern of no length, exactly N bits set for 1 to 63). Pure logic, runs in CI
-- **TestCoreQtFree** (`tst_coreqtfree`) — the guard that keeps the processing core free of Qt: it walks the `#include "..."` closure of every core source and fails on any `<Q...>` header or any reach into `include/viewmodel` or `include/view`, requires every `src/model` source to be classified as core or UI-session, and proves its own walker on a temporary tree (several spellings of a Qt header and class and struct forward declarations seen through a shared header, a look-alike not counted, a layering violation, a commented-out include ignored). Since plan step 1.7 it also **confines Qt outside the View**: every file under `src/` and `include/` other than `src/view` / `include/view` that includes a Qt header or forward-declares a Qt class must be on `kQtOutsideTheView` (and a listed file that no longer does fails as stale, so the list only shrinks), and every other header must be Qt-free and layer-clean through its whole include closure; that guard is proven on a second temporary tree (unlisted, stale, exempt, look-alike, forward declaration, a header reaching up into the View). Pure file reading, runs in CI
+- **TestCoreQtFree** (`tst_coreqtfree`) — the guard that keeps the processing core free of Qt: it walks the `#include "..."` closure of every core source and fails on any `<Q...>` header or any reach into `include/viewmodel` or `include/view`, requires every `src/model` source to be classified as core or UI-session, and proves its own walker on a temporary tree (several spellings of a Qt header and class and struct forward declarations seen through a shared header, a look-alike not counted, a layering violation, a commented-out include ignored). Since plan step 1.7 it also **confines Qt outside the View**: every file under `src/` and `include/` other than `src/view` / `include/view` that includes a Qt header or forward-declares a Qt class must be on `kQtOutsideTheView` (and a listed file that no longer does fails as stale, so the list only shrinks), and every other header must be Qt-free and layer-clean through its whole include closure; that guard is proven on a second temporary tree (unlisted, stale, exempt, look-alike, forward declaration, a header reaching up into the View). Since plan step 2.1 it also **keeps the MSBuild project that builds `tmdq_core.dll` (`native/tmdq_core/tmdq_core.vcxproj`) in step with the Qt build**: the same `src/model` sources as `kCoreSources`, the same irig106 files as the `.pro`, nothing from another layer, no mention of Qt outside its comments, and `tmdq.sln` builds it (one function, `nativeProjectProblems`, proved on a temporary tree with each kind of drift). Pure file reading, runs in CI
 - **TestEventReporter** (`tst_eventreporter`) — `EventReporter`, the null-safe forwarder every processing source reports through: every call harmless with no sink, each of log / error / finished / progress reaching its own sink method with its argument, calls arriving in order, a replaced sink receiving later calls and the old one none, a cleared sink going silent, and the reporter (not a borrowed pointer) keeping a shared sink alive. Pure logic, runs in CI
 - **TestPipelineRunner** (`tst_pipelinerunner`) — the Qt-free pipeline, with a plain recording sink and no event loop, on the committed `step_cal` recording: a single stream delivers its result (stamped with `jobIndex` and the job's `sourceId`) and then the end, with every worker line before the result, the end last, and exactly one progress of 100 (the runner adds none of its own); several streams on one channel each deliver their own result; a stream that finds no sync does not stop the others, and says why; a run in which every stream fails ends unsuccessfully; a recording that cannot be opened (or no jobs) fails before anything runs, with a reason and nothing reported, and leaves the runner usable; a second start while running is refused and does not disturb the first; cancel ends the run unsuccessfully with no result and is a no-op with nothing running, and four cases hold the sink at a chosen moment of a real run (a thread parked on a log line) to pin what a race cannot: a stream that finished after the cancel was asked for delivers nothing and the run fails even though another stream had delivered, a worker waiting on an empty queue is woken by the cancel while the reader is still stuck, a worker that has not started reading is stopped by its own abort flag, and `running()` is already false inside the end report; the runner runs again after a run ends, without waiting for the thread that reported it; a stream that ends early without a cancel (its processor aborted, reached through the test being a friend) closes its own queue so the reader is not left blocked on it and the healthy stream still finishes, and destroying a running runner stops it and has reported the end by the time the destructor returns
 
