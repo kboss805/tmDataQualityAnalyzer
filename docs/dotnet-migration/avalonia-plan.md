@@ -132,15 +132,17 @@ sweep.
   interop spike. It is the largest step of stage 2 (every capability the app uses crosses the boundary), so it
   lands as four PRs, each tested in-process by a `TestAbi` suite that compiles the ABI sources into the test
   executable and mutation-checked like any other step:
-  - [x] **2.2a Conventions, the file, and runs.** Opaque handles, versioned structs (`struct_size` first, fields
+  - [x] **2.2a Conventions, the file, and runs.** PR #182, merged as `fa5ca1a`. Opaque handles, versioned structs (`struct_size` first, fields
     only appended), UTF-8 strings, one error per thread, no exception across the boundary. Open a file and list
     its time and PCM channels with their TMATS rates; run N streams of either mode over one read of the file
     (settings in, the core's own `buildStreamJob` and `PipelineRunner` behind), with calibration profiles, log,
     error, progress, per-stream-result and finished callbacks, cancel, and result accessors that view the
     result's arrays without copying. *The app has no time-range selection (its summary says "Time range: all"),
     so none is exposed; the request's struct can grow one.*
-  - [ ] **2.2b Calibration.** Step-file parsing (today in `streamsubdialogs.cpp`, a view file, so it moves into
-    the core first) and calibration extraction with its callbacks, cancel and per-channel results.
+  - [x] **2.2b Calibration.** Step-file parsing (already in the core) and calibration extraction with its
+    callbacks, cancel and per-channel results. *What the dialog did inline - decoding the sync text and resolving the
+    default word map when assembling the extractor's request - moved into the core first
+    (`buildCalibrationRequest`), pinned against the old code.*
   - [ ] **2.2c The formats.** The frame-sync pattern file (read and write), CSV import and export, and template
     channel matching.
   - [ ] **2.2d Series construction.** `buildStreamSeries`, the shared time base and the import ordering.

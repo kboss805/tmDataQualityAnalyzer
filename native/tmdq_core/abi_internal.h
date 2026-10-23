@@ -46,6 +46,25 @@ int32_t guarded(const char* what, Body&& body)
 /// @p text as a string; a NULL pointer reads as empty.
 inline std::string textOf(const char* text) { return text ? std::string(text) : std::string(); }
 
+/// Writes @p text into the caller's @p buffer, snprintf-style: returns its length (not counting the NUL), and
+/// a buffer that is too small gets a truncated, terminated copy. A NULL buffer with a capacity of zero just
+/// measures. @return -1 if the buffer and capacity do not make sense.
+inline int32_t copyText(const std::string& text, char* buffer, int32_t capacity)
+{
+    if (capacity < 0 || (capacity > 0 && !buffer))
+    {
+        return -1;
+    }
+    if (capacity > 0)
+    {
+        const std::size_t room = static_cast<std::size_t>(capacity) - 1;
+        const std::size_t count = std::min(room, text.size());
+        std::memcpy(buffer, text.data(), count);
+        buffer[count] = '\0';
+    }
+    return static_cast<int32_t>(text.size());
+}
+
 /// A path from UTF-8 text by the standard's UTF-8 conversion, not the process code page's.
 inline std::filesystem::path pathFromUtf8(const char* utf8)
 {

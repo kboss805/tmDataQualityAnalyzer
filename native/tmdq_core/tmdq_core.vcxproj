@@ -108,6 +108,7 @@
   <ItemGroup>
     <ClInclude Include="tmdq_abi.h" />
     <ClInclude Include="abi_internal.h" />
+    <ClInclude Include="abi_events.h" />
   </ItemGroup>
 
   <!-- The ABI itself. -->
@@ -115,11 +116,13 @@
     <ClCompile Include="tmdq_core.cpp" />
     <ClCompile Include="abi_file.cpp" />
     <ClCompile Include="abi_run.cpp" />
+    <ClCompile Include="abi_calibration.cpp" />
   </ItemGroup>
 
   <!-- The core: src\model\<name>.cpp for every name in TestCoreQtFree's kCoreSources. -->
   <ItemGroup>
     <ClCompile Include="..\..\src\model\calibrationextractor.cpp" />
+    <ClCompile Include="..\..\src\model\calibrationrequest.cpp" />
     <ClCompile Include="..\..\src\model\ch10packetreader.cpp" />
     <ClCompile Include="..\..\src\model\channeldata.cpp" />
     <ClCompile Include="..\..\src\model\chapter10reader.cpp" />

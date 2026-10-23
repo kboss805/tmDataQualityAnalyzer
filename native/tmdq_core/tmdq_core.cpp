@@ -135,6 +135,9 @@ int32_t tmdq_sizeof(int32_t which)
         case TMDQ_STRUCT_CALLBACKS:      return static_cast<int32_t>(sizeof(tmdq_callbacks));
         case TMDQ_STRUCT_STREAM_INFO:    return static_cast<int32_t>(sizeof(tmdq_stream_info));
         case TMDQ_STRUCT_CHANNEL_SERIES: return static_cast<int32_t>(sizeof(tmdq_channel_series));
+        case TMDQ_STRUCT_CALIBRATION_REQUEST: return static_cast<int32_t>(sizeof(tmdq_calibration_request));
+        case TMDQ_STRUCT_CALIBRATION_INFO:    return static_cast<int32_t>(sizeof(tmdq_calibration_info));
+        case TMDQ_STRUCT_CALIBRATION_CHANNEL: return static_cast<int32_t>(sizeof(tmdq_calibration_channel));
         default:                         return 0;
     }
 }

@@ -105,6 +105,10 @@ public:
     /// @return True from start() until just before `processingFinished` is reported.
     bool running() const { return m_running; }
 
+    /// Blocks until the extraction's driver thread has ended (at once if there is none). Not from a sink
+    /// call: those arrive on that thread.
+    void wait();
+
     /// @return Per-channel results (valid once `processingFinished` has been reported).
     const std::vector<CalibrationChannelResult>& results() const { return m_results; }
     /// @return Error message if the run failed (empty on success and on a cancel).

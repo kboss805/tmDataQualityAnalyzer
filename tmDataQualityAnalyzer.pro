@@ -76,6 +76,7 @@ SOURCES += \
     src/model/stepdetector.cpp \
     src/model/streamjobbuilder.cpp \
     src/model/calibrationextractor.cpp \
+    src/model/calibrationrequest.cpp \
     src/model/pipelinerunner.cpp \
     src/model/clocktime.cpp \
     src/model/csvseriesparser.cpp \
@@ -154,6 +155,7 @@ HEADERS += \
     include/model/stepdetector.h \
     include/model/streamjobbuilder.h \
     include/model/calibrationextractor.h \
+    include/model/calibrationrequest.h \
     include/model/pipelinerunner.h \
     include/model/clocktime.h \
     include/model/csvseriesparser.h \
