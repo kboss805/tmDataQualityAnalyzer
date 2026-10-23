@@ -143,6 +143,11 @@ int32_t tmdq_sizeof(int32_t which)
         case TMDQ_STRUCT_CSV_INFO:            return static_cast<int32_t>(sizeof(tmdq_csv_info));
         case TMDQ_STRUCT_CSV_SERIES_INFO:     return static_cast<int32_t>(sizeof(tmdq_csv_series_info));
         case TMDQ_STRUCT_CSV_COLUMN:          return static_cast<int32_t>(sizeof(tmdq_csv_column));
+        case TMDQ_STRUCT_SERIES_SET_INFO:     return static_cast<int32_t>(sizeof(tmdq_series_set_info));
+        case TMDQ_STRUCT_SERIES_SPEC:         return static_cast<int32_t>(sizeof(tmdq_series_spec));
+        case TMDQ_STRUCT_STREAM_KEY:          return static_cast<int32_t>(sizeof(tmdq_stream_key));
+        case TMDQ_STRUCT_TIME_BASE_INFO:      return static_cast<int32_t>(sizeof(tmdq_time_base_info));
+        case TMDQ_STRUCT_IMPORTED_SERIES:     return static_cast<int32_t>(sizeof(tmdq_imported_series));
         default:                         return 0;
     }
 }

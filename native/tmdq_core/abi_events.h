@@ -8,6 +8,7 @@
 #define TMDQ_ABI_EVENTS_H
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -15,10 +16,11 @@
 #include "processedstreamdata.h"
 #include "tmdq_abi.h"
 
-/// One finished stream. The host owns it from `stream_done` until tmdq_stream_result_free.
+/// One finished stream. The host owns it from `stream_done` until tmdq_stream_result_free. The data is
+/// shared: a series set built from the result keeps it alive after the host has freed the result.
 struct tmdq_stream_result
 {
-    ProcessedStreamData data;
+    std::shared_ptr<const ProcessedStreamData> data;
 };
 
 namespace tmdq {
@@ -60,7 +62,7 @@ public:
         {
             return;   // nobody to hand it to
         }
-        auto* result = new tmdq_stream_result{std::move(data)};
+        auto* result = new tmdq_stream_result{std::make_shared<const ProcessedStreamData>(std::move(data))};
         deliver([&] { m_callbacks.stream_done(m_callbacks.user, result); });
     }
 

@@ -133,7 +133,8 @@ SOURCES += \
     $$PWD/../native/tmdq_core/abi_file.cpp \
     $$PWD/../native/tmdq_core/abi_run.cpp \
     $$PWD/../native/tmdq_core/abi_calibration.cpp \
-    $$PWD/../native/tmdq_core/abi_formats.cpp
+    $$PWD/../native/tmdq_core/abi_formats.cpp \
+    $$PWD/../native/tmdq_core/abi_series.cpp
 HEADERS += \
     $$PWD/../native/tmdq_core/tmdq_abi.h \
     $$PWD/../native/tmdq_core/abi_internal.h \

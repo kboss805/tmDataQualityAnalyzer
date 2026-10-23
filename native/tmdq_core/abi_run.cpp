@@ -241,7 +241,7 @@ int32_t tmdq_stream_result_info(const tmdq_stream_result* result, tmdq_stream_in
         tmdq::setError("null result");
         return TMDQ_ERR_BADARG;
     }
-    const ProcessedStreamData& d = result->data;
+    const ProcessedStreamData& d = *result->data;
     tmdq_stream_info info{};
     info.pcm_channel_id = d.pcmChannelId;
     info.label_utf8     = d.streamLabel.c_str();
@@ -271,12 +271,12 @@ int32_t tmdq_stream_result_channel(const tmdq_stream_result* result, int32_t ind
         return TMDQ_ERR_BADARG;
     }
     // A negative index wraps to a huge size_t, so the one comparison refuses both ends.
-    if (static_cast<std::size_t>(index) >= result->data.channels.size())
+    if (static_cast<std::size_t>(index) >= result->data->channels.size())
     {
         tmdq::setError("channel index out of range");
         return TMDQ_ERR_BADARG;
     }
-    const ProcessedChannelSeries& s = result->data.channels[static_cast<std::size_t>(index)];
+    const ProcessedChannelSeries& s = result->data->channels[static_cast<std::size_t>(index)];
     tmdq_channel_series series{};
     series.word_index = s.word;
     series.name_utf8  = s.name.c_str();

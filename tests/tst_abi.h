@@ -72,6 +72,12 @@ private slots:
     void aCsvIsParsedLikeTheCore();
     void aCsvIsWrittenLikeTheCore();
     void clockStampsAgreeWithTheCore();
+
+    // --- series construction (revision 4)
+    void aStreamBecomesTheSeriesTheCoreBuilds();
+    void theTimeBaseMovesLikeTheCore();
+    void streamKeysIdentifyTheSameStream();
+    void importedStreamOrdersAreAssignedLikeTheCore();
 };
 
 #endif // TST_ABI_H

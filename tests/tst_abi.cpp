@@ -5,6 +5,7 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstring>
+#include <cmath>
 #include <limits>
 #include <map>
 #include <memory>
@@ -22,6 +23,7 @@
 #include <QFileInfo>
 #include <QtTest>
 
+#include "../native/tmdq_core/abi_events.h"
 #include "../native/tmdq_core/abi_internal.h"
 #include "../native/tmdq_core/tmdq_abi.h"
 #include "calibrationextractor.h"
@@ -34,6 +36,7 @@
 #include "templatematcher.h"
 #include "constants.h"
 #include "pipelinerunner.h"
+#include "seriesbuilder.h"
 #include "processedstreamdata.h"
 #include "qtbridge.h"
 #include "framesync.h"
@@ -553,6 +556,89 @@ struct CsvColumns
     }
 };
 
+
+// ---------------------------------------------------------------------------
+// Series construction
+// ---------------------------------------------------------------------------
+
+/// A finished stream the host holds, made the way the run's callback makes one.
+tmdq_stream_result* makeResult(const ProcessedStreamData& data)
+{
+    return new tmdq_stream_result{std::make_shared<const ProcessedStreamData>(data)};
+}
+
+/// A processed stream with names and values that exercise the builder.
+ProcessedStreamData randomStream(std::mt19937& rng)
+{
+    static const char* const labels[] = { "A", "Ch 13", "R\xC3\xA9""cepteur", "", "Prn 15 5M", "same" };
+    static const char* const names[] = { "L_RCVR1", "R_RCVR1", "C_RCVR1", "L_RCVR2", "X_RCVR2_RCVR3", "_RCVR5", "L_RCVR",
+                                         "L_RCVRx", "L_RCVR 7", "L_RCVR+4", "L_RCVR-2", "L_RCVR0", "L_RCVR+-3",
+                                         "L_RCVR2147483647", "L_RCVR2147483648", "L_RCVR99999999999" };
+    static const double specials[] = { 0.0, -0.0, 1.0, -80.5, 99.9, 1e300,
+                                       std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity() };
+    ProcessedStreamData d;
+    d.streamLabel = labels[rng() % 6];
+    d.pcmChannelId = int(rng() % 40);
+    d.jobIndex = int(rng() % 5);
+    d.sourceId = int(rng() % 3);
+    const std::size_t n = rng() % 5;
+    auto values = [&](std::size_t count) {
+        std::vector<double> v;
+        for (std::size_t i = 0; i < count; ++i)
+            v.push_back(rng() % 6 == 0 ? specials[rng() % 8] : double(int(rng() % 2000) - 1000) / 8.0);
+        return v;
+    };
+    for (std::size_t i = 0; i < n; ++i)
+        d.timesSec.push_back(1.7e9 + double(rng() % 1000) / 4.0);
+    if (rng() % 4 != 0) d.lockPercent = values(n);
+    if (rng() % 3 != 0) d.accumulatedMissedFrames = values(n);
+    const int channels = int(rng() % 5);
+    for (int i = 0; i < channels; ++i)
+    {
+        ProcessedChannelSeries ch;
+        ch.name = names[rng() % 16];
+        ch.word = int(rng() % 50);
+        ch.values = values(n);
+        d.channels.push_back(std::move(ch));
+    }
+    d.mode = channels > 0 ? StreamMode::ReceiverChannelInfo : StreamMode::FrameSyncLockStats;
+    return d;
+}
+
+/// What differs between a series set through the ABI and the core's own StreamSeries; empty if nothing.
+QString seriesDifferences(const tmdq_series_set* set, const StreamSeries& want)
+{
+    QStringList diff;
+    tmdq_series_set_info info{};
+    info.struct_size = sizeof(info);
+    if (tmdq_series_set_info_get(set, &info) != TMDQ_OK)
+        return "info failed";
+    if (std::size_t(info.series_count) != want.series.size()) return "series count";
+    if (!sameDoubles(info.elapsed, std::size_t(info.elapsed_count), want.elapsed)) diff << "elapsed";
+    for (int32_t i = 0; i < info.series_count; ++i)
+    {
+        tmdq_series_spec s{};
+        s.struct_size = sizeof(s);
+        if (tmdq_series_set_spec(set, i, &s) != TMDQ_OK) { diff << "spec call"; continue; }
+        const SeriesSpec& w = want.series[std::size_t(i)];
+        const QString at = QString::number(i) + ":";
+        if (s.metric_type != int(w.metricType)) diff << at + "metric";
+        if (std::string(s.name_utf8) != w.name) diff << at + "name";
+        if (std::string(s.stream_label_utf8) != w.streamLabel) diff << at + "label";
+        if (s.receiver_index != w.receiverIndex) diff << at + "receiver";
+        if (s.channel_index != w.channelIndex) diff << at + "channel";
+        if (s.stream_order != w.streamOrder) diff << at + "order";
+        if (s.stream_sequence != w.streamSequence) diff << at + "sequence";
+        if (s.source_id != w.sourceId) diff << at + "source";
+        if (std::memcmp(&s.y_min, &w.yMin, sizeof(double)) != 0) diff << at + "ymin";
+        if (std::memcmp(&s.y_max, &w.yMax, sizeof(double)) != 0) diff << at + "ymax";
+        if (std::size_t(s.y_count) != w.yValues.size() ||
+            (s.y_count > 0 && std::memcmp(s.y_values, w.yValues.data(), w.yValues.size() * sizeof(double)) != 0))
+            diff << at + "values";
+    }
+    return diff.join(", ");
+}
+
 /// Starts @p request, waits for the end, and says whether it ended successfully.
 bool runToTheEnd(Request& request, Seen& seen)
 {
@@ -1030,6 +1116,52 @@ void TestAbi::theStructLayoutsArePinned()
     QCOMPARE(int(TMDQ_METRIC_FRAME_SYNC_LOCK), int(MetricType::FrameSyncLock));
     QCOMPARE(int(TMDQ_METRIC_ACCUMULATED_MISSED_FRAMES), int(MetricType::AccumulatedMissedFrames));
 
+    QCOMPARE(int(sizeof(tmdq_series_set_info)), 24);
+    QCOMPARE(int(offsetof(tmdq_series_set_info, series_count)), 4);
+    QCOMPARE(int(offsetof(tmdq_series_set_info, elapsed_count)), 8);
+    QCOMPARE(int(offsetof(tmdq_series_set_info, elapsed)), 16);
+
+    QCOMPARE(int(sizeof(tmdq_series_spec)), 72);
+    QCOMPARE(int(offsetof(tmdq_series_spec, metric_type)), 4);
+    QCOMPARE(int(offsetof(tmdq_series_spec, name_utf8)), 8);
+    QCOMPARE(int(offsetof(tmdq_series_spec, stream_label_utf8)), 16);
+    QCOMPARE(int(offsetof(tmdq_series_spec, y_values)), 24);
+    QCOMPARE(int(offsetof(tmdq_series_spec, y_min)), 32);
+    QCOMPARE(int(offsetof(tmdq_series_spec, y_max)), 40);
+    QCOMPARE(int(offsetof(tmdq_series_spec, receiver_index)), 48);
+    QCOMPARE(int(offsetof(tmdq_series_spec, channel_index)), 52);
+    QCOMPARE(int(offsetof(tmdq_series_spec, stream_order)), 56);
+    QCOMPARE(int(offsetof(tmdq_series_spec, stream_sequence)), 60);
+    QCOMPARE(int(offsetof(tmdq_series_spec, source_id)), 64);
+    QCOMPARE(int(offsetof(tmdq_series_spec, y_count)), 68);
+
+    QCOMPARE(int(sizeof(tmdq_stream_key)), 24);
+    QCOMPARE(int(offsetof(tmdq_stream_key, source_id)), 4);
+    QCOMPARE(int(offsetof(tmdq_stream_key, label_utf8)), 8);
+    QCOMPARE(int(offsetof(tmdq_stream_key, channel)), 16);
+
+    QCOMPARE(int(sizeof(tmdq_time_base_info)), 24);
+    QCOMPARE(int(offsetof(tmdq_time_base_info, base_day)), 4);
+    QCOMPARE(int(offsetof(tmdq_time_base_info, base_abs_seconds)), 8);
+    QCOMPARE(int(offsetof(tmdq_time_base_info, base_time_offset)), 16);
+
+    QCOMPARE(int(sizeof(tmdq_imported_series)), 24);
+    QCOMPARE(int(offsetof(tmdq_imported_series, metric_type)), 4);
+    QCOMPARE(int(offsetof(tmdq_imported_series, stream_label_utf8)), 8);
+    QCOMPARE(int(offsetof(tmdq_imported_series, source_id)), 16);
+    QCOMPARE(int(offsetof(tmdq_imported_series, stream_order)), 20);
+
+    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_SERIES_SET_INFO), 24);
+    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_SERIES_SPEC), 72);
+    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_STREAM_KEY), 24);
+    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_TIME_BASE_INFO), 24);
+    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_IMPORTED_SERIES), 24);
+    QCOMPARE(int(TMDQ_STRUCT_SERIES_SET_INFO), 17);
+    QCOMPARE(int(TMDQ_STRUCT_SERIES_SPEC), 18);
+    QCOMPARE(int(TMDQ_STRUCT_STREAM_KEY), 19);
+    QCOMPARE(int(TMDQ_STRUCT_TIME_BASE_INFO), 20);
+    QCOMPARE(int(TMDQ_STRUCT_IMPORTED_SERIES), 21);
+
     // And the library reports the same sizes, for the managed side to compare with Marshal.SizeOf.
     QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CHANNEL_INFO), 24);
     QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CAL_POINT), 16);
@@ -1068,7 +1200,7 @@ void TestAbi::theStructLayoutsArePinned()
 void TestAbi::theVersionAndRevisionAreReported()
 {
     QCOMPARE(tmdq_abi_version(), 1);
-    QCOMPARE(tmdq_abi_revision(), 3);
+    QCOMPARE(tmdq_abi_revision(), 4);
     QCOMPARE(int(TMDQ_ABI_VERSION), tmdq_abi_version());
     QCOMPARE(int(TMDQ_ABI_REVISION), tmdq_abi_revision());
     QVERIFY(tmdq_last_error() != nullptr);
@@ -2970,4 +3102,337 @@ void TestAbi::clockStampsAgreeWithTheCore()
     QCOMPARE(int(tight[5]), 0);
     QCOMPARE(tmdq_clock_time_format(120, 0.0, 0.0, 1, nullptr, 10), -1);
     QCOMPARE(tmdq_clock_time_format(120, 0.0, 0.0, 1, buf, -1), -1);
+}
+
+void TestAbi::aStreamBecomesTheSeriesTheCoreBuilds()
+{
+    std::mt19937 rng(20261024);
+    int withLock = 0, withMissed = 0, withChannels = 0, empty = 0, nan = 0;
+    for (int i = 0; i < 1500; ++i)
+    {
+        const ProcessedStreamData data = randomStream(rng);
+        const double base = (rng() % 3 == 0) ? 0.0 : 1.7e9 + double(rng() % 400) / 4.0;
+        const StreamSeries want = buildStreamSeries(data, base);
+
+        tmdq_stream_result* result = makeResult(data);
+        tmdq_series_set* set = nullptr;
+        QCOMPARE(tmdq_stream_result_series(result, base, &set), int(TMDQ_OK));
+        QVERIFY(set != nullptr);
+        const QString diff = seriesDifferences(set, want);
+        QVERIFY2(diff.isEmpty(), qPrintable(QString("case %1: ").arg(i) + diff));
+        tmdq_series_set_free(set);
+        tmdq_stream_result_free(result);
+
+        withLock += !data.lockPercent.empty();
+        withMissed += !data.accumulatedMissedFrames.empty();
+        withChannels += !data.channels.empty();
+        empty += want.series.empty();
+        for (const SeriesSpec& s : want.series)
+            nan += std::isnan(s.yMin) || std::isinf(s.yMax);
+    }
+    // The generator really reached each kind of stream.
+    QVERIFY2(withLock > 800 && withMissed > 700 && withChannels > 900 && empty > 20 && nan > 20,
+             qPrintable(QString("%1 %2 %3 %4 %5").arg(withLock).arg(withMissed).arg(withChannels).arg(empty).arg(nan)));
+
+    // A known stream, so the oracle is not the only witness: lock %, missed frames and two receiver channels.
+    ProcessedStreamData known;
+    known.streamLabel = "Rcvr";
+    known.pcmChannelId = 40;
+    known.jobIndex = 2;
+    known.sourceId = 1;
+    known.timesSec = { 1000.0, 1001.0 };
+    known.lockPercent = { 99.0, 98.0 };
+    known.accumulatedMissedFrames = { 0.0, 4.0 };
+    known.channels.push_back({"L_RCVR1", 1, {-80.0, -79.0}});
+    known.channels.push_back({"R_RCVR2", 2, {-70.0, -71.0}});
+    tmdq_stream_result* result = makeResult(known);
+    tmdq_series_set* set = nullptr;
+    QCOMPARE(tmdq_stream_result_series(result, 990.0, &set), int(TMDQ_OK));
+    tmdq_series_set_info info{};
+    info.struct_size = sizeof(info);
+    QCOMPARE(tmdq_series_set_info_get(set, &info), int(TMDQ_OK));
+    QCOMPARE(info.series_count, 4);
+    QCOMPARE(info.elapsed_count, 2);
+    QCOMPARE(info.elapsed[0], 10.0);
+    QCOMPARE(info.elapsed[1], 11.0);
+    tmdq_series_spec spec{};
+    spec.struct_size = sizeof(spec);
+    QCOMPARE(tmdq_series_set_spec(set, 3, &spec), int(TMDQ_OK));
+    QCOMPARE(spec.receiver_index, 2);
+    QCOMPARE(spec.stream_order, 40);
+    QCOMPARE(spec.stream_sequence, 2);
+    QCOMPARE(spec.source_id, 1);
+    QCOMPARE(spec.y_min, -71.0);
+    QCOMPARE(spec.y_max, -70.0);
+
+    // The set keeps the stream's data alive after the host has freed the result.
+    tmdq_stream_result_free(result);
+    QCOMPARE(spec.y_values[0], -70.0);
+    QCOMPARE(tmdq_series_set_spec(set, 2, &spec), int(TMDQ_OK));
+    QCOMPARE(spec.y_values[1], -79.0);
+    QCOMPARE(std::string(spec.name_utf8).empty(), false);
+    tmdq_series_set_free(set);
+
+    // Arguments.
+    tmdq_series_set* none = reinterpret_cast<tmdq_series_set*>(std::uintptr_t{1});
+    QCOMPARE(tmdq_stream_result_series(nullptr, 0.0, &none), int(TMDQ_ERR_BADARG));
+    QVERIFY(none == nullptr);
+    tmdq_stream_result* again = makeResult(known);
+    QCOMPARE(tmdq_stream_result_series(again, 0.0, nullptr), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_stream_result_series(again, 0.0, &set), int(TMDQ_OK));
+    QCOMPARE(tmdq_series_set_info_get(nullptr, &info), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_series_set_info_get(set, nullptr), int(TMDQ_ERR_BADARG));
+    info.struct_size = sizeof(info) - 1;
+    QCOMPARE(tmdq_series_set_info_get(set, &info), int(TMDQ_ERR_BADARG));
+    spec.struct_size = sizeof(spec);
+    QCOMPARE(tmdq_series_set_spec(set, 4, &spec), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_series_set_spec(set, -1, &spec), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_series_set_spec(set, 0, nullptr), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_series_set_spec(nullptr, 0, &spec), int(TMDQ_ERR_BADARG));
+    spec.struct_size = sizeof(spec) - 1;
+    QCOMPARE(tmdq_series_set_spec(set, 0, &spec), int(TMDQ_ERR_BADARG));
+    tmdq_series_set_free(set);
+    tmdq_series_set_free(nullptr);
+    tmdq_stream_result_free(again);
+}
+
+void TestAbi::theTimeBaseMovesLikeTheCore()
+{
+    std::mt19937 rng(20261024);
+    auto info = [](const tmdq_time_base* b) {
+        tmdq_time_base_info i{};
+        i.struct_size = sizeof(i);
+        tmdq_time_base_info_get(b, &i);
+        return i;
+    };
+    int adopted = 0, shifted = 0, advanced = 0, moved = 0, overlapped = 0, apart = 0;
+    for (int run = 0; run < 700; ++run)
+    {
+        tmdq_time_base* abi = nullptr;
+        QCOMPARE(tmdq_time_base_create(&abi), int(TMDQ_OK));
+        SeriesTimeBase core;
+        for (int step = 0; step < 14; ++step)
+        {
+            const int op = int(rng() % 6);
+            if (op == 0)
+            {
+                QCOMPARE(tmdq_time_base_reset(abi), int(TMDQ_OK));
+                core.reset();
+            }
+            else if (op == 1)
+            {
+                const int day = int(rng() % 400) - 5;
+                const double offset = double(rng() % 86400) / 3.0;
+                QCOMPARE(tmdq_time_base_set_clock(abi, day, offset), int(TMDQ_OK));
+                core.setClock(day, offset);
+            }
+            else if (op == 2 || op == 3)
+            {
+                const double first = (rng() % 5 == 0) ? 0.0 : 1.7e9 + double(rng() % 100000) / 8.0 + (rng() % 2) * 86400.0 * 400;
+                const bool has = rng() % 2;
+                double shift = -1.0;
+                QCOMPARE(tmdq_time_base_adopt(abi, first, has ? 1 : 0, &shift), int(TMDQ_OK));
+                const double want = core.adopt(first, has);
+                QCOMPARE(shift, want);
+                ++adopted;
+                shifted += want != 0.0;
+            }
+            else if (op == 4)
+            {
+                const bool has = rng() % 3 != 0;
+                const double earliest = double(int(rng() % 4000) - 500) / 8.0;
+                double shift = -1.0;
+                QCOMPARE(tmdq_time_base_advance(abi, has ? 1 : 0, earliest, &shift), int(TMDQ_OK));
+                const double want = core.advance(has ? std::optional<double>(earliest) : std::nullopt);
+                QCOMPARE(shift, want);
+                ++advanced;
+                moved += want != 0.0;
+            }
+            else
+            {
+                // Around the base, so the new source sometimes touches what is loaded and sometimes does not.
+                const double lo = core.baseAbsSeconds() + double(int(rng() % 600) - 200) / 4.0;
+                const double hi = lo + double(rng() % 200) / 4.0;
+                const double existing = double(rng() % 200) / 4.0;
+                int32_t out = -1;
+                QCOMPARE(tmdq_time_base_overlaps(abi, lo, hi, existing, &out), int(TMDQ_OK));
+                QCOMPARE(out != 0, core.overlaps(lo, hi, existing));
+                ++(out ? overlapped : apart);
+            }
+            const tmdq_time_base_info i = info(abi);
+            QCOMPARE(i.base_day, core.baseDay());
+            QCOMPARE(i.base_abs_seconds, core.baseAbsSeconds());
+            QCOMPARE(i.base_time_offset, core.baseTimeOffset());
+        }
+        tmdq_time_base_free(abi);
+    }
+    QVERIFY2(adopted > 2000 && shifted > 200 && advanced > 1000 && moved > 100 && overlapped > 100 && apart > 100,
+             qPrintable(QString("%1 %2 %3 %4 %5 %6").arg(adopted).arg(shifted).arg(advanced).arg(moved).arg(overlapped).arg(apart)));
+
+    // Arguments.
+    tmdq_time_base* base = reinterpret_cast<tmdq_time_base*>(std::uintptr_t{1});
+    QCOMPARE(tmdq_time_base_create(nullptr), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_time_base_create(&base), int(TMDQ_OK));
+    tmdq_time_base_info bi{};
+    bi.struct_size = sizeof(bi);
+    QCOMPARE(tmdq_time_base_info_get(base, &bi), int(TMDQ_OK));
+    QCOMPARE(bi.base_day, 0);
+    QCOMPARE(bi.base_abs_seconds, 0.0);
+    QCOMPARE(bi.base_time_offset, 0.0);
+    double shift = 0.0;
+    int32_t out = 0;
+    QCOMPARE(tmdq_time_base_info_get(nullptr, &bi), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_time_base_info_get(base, nullptr), int(TMDQ_ERR_BADARG));
+    bi.struct_size = sizeof(bi) - 1;
+    QCOMPARE(tmdq_time_base_info_get(base, &bi), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_time_base_reset(nullptr), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_time_base_set_clock(nullptr, 1, 2.0), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_time_base_adopt(nullptr, 1.0, 1, &shift), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_time_base_adopt(base, 1.0, 1, nullptr), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_time_base_advance(nullptr, 1, 1.0, &shift), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_time_base_advance(base, 1, 1.0, nullptr), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_time_base_overlaps(nullptr, 0.0, 1.0, 1.0, &out), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_time_base_overlaps(base, 0.0, 1.0, 1.0, nullptr), int(TMDQ_ERR_BADARG));
+    tmdq_time_base_free(base);
+    tmdq_time_base_free(nullptr);
+}
+
+void TestAbi::streamKeysIdentifyTheSameStream()
+{
+    ProcessedStreamData a;
+    a.sourceId = 1;
+    a.streamLabel = "Ch 13";
+    a.pcmChannelId = 13;
+    tmdq_stream_result* ra = makeResult(a);
+    tmdq_stream_key ka{};
+    ka.struct_size = sizeof(ka);
+    QCOMPARE(tmdq_stream_result_key(ra, &ka), int(TMDQ_OK));
+    QCOMPARE(ka.source_id, 1);
+    QCOMPARE(std::string(ka.label_utf8), std::string("Ch 13"));
+    QCOMPARE(ka.channel, 13);
+
+    // Every difference of one field is a different stream; none is the same one.
+    auto keyOf = [](ProcessedStreamData d, tmdq_stream_result** keep) {
+        *keep = makeResult(d);
+        tmdq_stream_key k{};
+        k.struct_size = sizeof(k);
+        tmdq_stream_result_key(*keep, &k);
+        return k;
+    };
+    tmdq_stream_result *r1 = nullptr, *r2 = nullptr, *r3 = nullptr, *r4 = nullptr;
+    ProcessedStreamData same = a;
+    ProcessedStreamData otherSource = a; otherSource.sourceId = 2;
+    ProcessedStreamData otherLabel = a; otherLabel.streamLabel = "Ch 14";
+    ProcessedStreamData otherChannel = a; otherChannel.pcmChannelId = 14;
+    const tmdq_stream_key ksame = keyOf(same, &r1), ksource = keyOf(otherSource, &r2), klabel = keyOf(otherLabel, &r3),
+                          kchannel = keyOf(otherChannel, &r4);
+    QCOMPARE(tmdq_stream_key_equal(&ka, &ksame), 1);
+    QCOMPARE(tmdq_stream_key_equal(&ka, &ka), 1);
+    QCOMPARE(tmdq_stream_key_equal(&ka, &ksource), 0);
+    QCOMPARE(tmdq_stream_key_equal(&ka, &klabel), 0);
+    QCOMPARE(tmdq_stream_key_equal(&ka, &kchannel), 0);
+    QCOMPARE(tmdq_stream_key_equal(&ksource, &ka), 0);
+    // The same answers as the core's own key.
+    QVERIFY(streamKeyOf(a) == streamKeyOf(same));
+    QVERIFY(!(streamKeyOf(a) == streamKeyOf(otherSource)));
+
+    // A NULL label reads as empty; arguments.
+    tmdq_stream_key nolabel = ka;
+    nolabel.label_utf8 = nullptr;
+    tmdq_stream_key emptyLabel = ka;
+    emptyLabel.label_utf8 = "";
+    QCOMPARE(tmdq_stream_key_equal(&nolabel, &emptyLabel), 1);
+    QCOMPARE(tmdq_stream_key_equal(nullptr, &ka), -1);
+    QCOMPARE(tmdq_stream_key_equal(&ka, nullptr), -1);
+    tmdq_stream_key shortKey = ka;
+    shortKey.struct_size = sizeof(shortKey) - 1;
+    QCOMPARE(tmdq_stream_key_equal(&shortKey, &ka), -1);
+    QCOMPARE(tmdq_stream_key_equal(&ka, &shortKey), -1);
+    QCOMPARE(tmdq_stream_result_key(nullptr, &ka), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_stream_result_key(ra, nullptr), int(TMDQ_ERR_BADARG));
+    ka.struct_size = sizeof(ka) - 1;
+    QCOMPARE(tmdq_stream_result_key(ra, &ka), int(TMDQ_ERR_BADARG));
+    for (tmdq_stream_result* r : { ra, r1, r2, r3, r4 })
+        tmdq_stream_result_free(r);
+}
+
+void TestAbi::importedStreamOrdersAreAssignedLikeTheCore()
+{
+    std::mt19937 rng(20261024);
+    static const char* const labels[] = { "A", "B", "", "R\xC3\xA9", "same" };
+    int lockWithSibling = 0, lockWithoutSibling = 0, snr = 0;
+    for (int run = 0; run < 1500; ++run)
+    {
+        const int n = int(rng() % 9);
+        std::vector<ImportedSeries> want;
+        for (int i = 0; i < n; ++i)
+        {
+            ImportedSeries s;
+            s.metricType = MetricType(rng() % 3);
+            s.sourceId = int(rng() % 3);
+            s.streamLabel = labels[rng() % 5];
+            s.streamOrder = s.metricType == MetricType::SNR ? int(rng() % 30) : int(rng() % 4);
+            want.push_back(s);
+        }
+        std::vector<tmdq_imported_series> wire(want.size());
+        std::vector<tmdq_imported_series*> pointers;
+        for (std::size_t i = 0; i < want.size(); ++i)
+        {
+            wire[i].struct_size = sizeof(tmdq_imported_series);
+            wire[i].metric_type = int(want[i].metricType);
+            wire[i].stream_label_utf8 = want[i].streamLabel.c_str();
+            wire[i].source_id = want[i].sourceId;
+            wire[i].stream_order = want[i].streamOrder;
+            pointers.push_back(&wire[i]);
+        }
+        const std::vector<ImportedSeries> before = want;
+        assignImportedStreamOrders(want);
+        QCOMPARE(tmdq_assign_imported_stream_orders(pointers.empty() ? nullptr : pointers.data(), int(pointers.size())), int(TMDQ_OK));
+        for (std::size_t i = 0; i < want.size(); ++i)
+        {
+            QVERIFY2(wire[i].stream_order == want[i].streamOrder, qPrintable(QString("run %1 series %2").arg(run).arg(i)));
+            // Only the order is written.
+            QCOMPARE(wire[i].metric_type, int(before[i].metricType));
+            QCOMPARE(wire[i].source_id, before[i].sourceId);
+            QCOMPARE(std::string(wire[i].stream_label_utf8), before[i].streamLabel);
+            if (before[i].metricType == MetricType::SNR)
+            {
+                ++snr;
+                continue;
+            }
+            // Whether a lock or missed-frames series has an SNR series of the same label in the same source.
+            bool sibling = false;
+            for (const ImportedSeries& other : before)
+                sibling = sibling || (other.metricType == MetricType::SNR && other.sourceId == before[i].sourceId &&
+                                      other.streamLabel == before[i].streamLabel);
+            ++(sibling ? lockWithSibling : lockWithoutSibling);
+        }
+    }
+    QVERIFY2(snr > 1000 && lockWithSibling > 300 && lockWithoutSibling > 500,
+             qPrintable(QString("%1 %2 %3").arg(snr).arg(lockWithSibling).arg(lockWithoutSibling)));
+
+    // Arguments.
+    tmdq_imported_series one{};
+    one.struct_size = sizeof(one);
+    one.metric_type = TMDQ_METRIC_FRAME_SYNC_LOCK;
+    one.stream_label_utf8 = "x";
+    tmdq_imported_series* list[] = { &one };
+    QCOMPARE(tmdq_assign_imported_stream_orders(list, 1), int(TMDQ_OK));
+    QCOMPARE(tmdq_assign_imported_stream_orders(nullptr, 0), int(TMDQ_OK));   // nothing to order
+    QCOMPARE(tmdq_assign_imported_stream_orders(list, -1), int(TMDQ_ERR_BADARG));
+    QCOMPARE(tmdq_assign_imported_stream_orders(nullptr, 1), int(TMDQ_ERR_BADARG));
+    tmdq_imported_series* withNull[] = { &one, nullptr };
+    QCOMPARE(tmdq_assign_imported_stream_orders(withNull, 2), int(TMDQ_ERR_BADARG));
+    QVERIFY(std::string(tmdq_last_error()).find("series 1") != std::string::npos);
+    tmdq_imported_series shortOne = one;
+    shortOne.struct_size = sizeof(shortOne) - 1;
+    tmdq_imported_series* withShort[] = { &shortOne };
+    QCOMPARE(tmdq_assign_imported_stream_orders(withShort, 1), int(TMDQ_ERR_BADARG));
+    tmdq_imported_series badMetric = one;
+    badMetric.metric_type = 7;
+    tmdq_imported_series* withBad[] = { &one, &badMetric };
+    const int before = one.stream_order;
+    QCOMPARE(tmdq_assign_imported_stream_orders(withBad, 2), int(TMDQ_ERR_BADARG));
+    QCOMPARE(one.stream_order, before);   // a refused list is left alone
+    QVERIFY(std::string(tmdq_last_error()).find("metric") != std::string::npos);
 }
