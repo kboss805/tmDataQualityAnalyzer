@@ -1,6 +1,4 @@
 using System;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace TmDq.Core;
@@ -13,12 +11,11 @@ namespace TmDq.Core;
 public sealed unsafe class ProcessingRun : IDisposable
 {
     private IntPtr _handle;
-    private GCHandle _context;
-    private readonly Context _state;
+    private readonly ObserverBridge _bridge;
 
-    private ProcessingRun(Context state)
+    private ProcessingRun(ObserverBridge bridge)
     {
-        _state = state;
+        _bridge = bridge;
     }
 
     /// <summary>
@@ -35,33 +32,21 @@ public sealed unsafe class ProcessingRun : IDisposable
         Library.RequireLoaded();
         ArgumentNullException.ThrowIfNull(request);
 
-        var run = new ProcessingRun(new Context(observer));
-        run._context = GCHandle.Alloc(run._state);
+        var run = new ProcessingRun(new ObserverBridge(observer));
         try
         {
             using var arena = new Arena();
             RunRequestNative native = ToNative(request, arena);
 
-            CallbacksNative callbacks = default;
-            CallbacksNative* callbacksPointer = null;
-            if (observer is not null)
-            {
-                callbacks.StructSize = (uint)sizeof(CallbacksNative);
-                callbacks.User = (void*)GCHandle.ToIntPtr(run._context);
-                callbacks.Log = &OnLog;
-                callbacks.Error = &OnError;
-                callbacks.Progress = &OnProgress;
-                callbacks.StreamDone = &OnStreamDone;
-                callbacks.Finished = &OnFinished;
-                callbacksPointer = &callbacks;
-            }
+            CallbacksNative callbacks;
+            CallbacksNative* callbacksPointer = run._bridge.Fill(&callbacks, observer is not null);
 
             Library.Check(Native.tmdq_run_start(&native, callbacksPointer, out run._handle));
             return run;
         }
         catch
         {
-            run._context.Free();
+            run._bridge.Dispose();
             throw;
         }
     }
@@ -70,7 +55,7 @@ public sealed unsafe class ProcessingRun : IDisposable
     public bool IsRunning => _handle != IntPtr.Zero && Native.tmdq_run_running(_handle) != 0;
 
     /// <summary>The first exception an observer method threw, or null. It was caught, not allowed to unwind the native thread.</summary>
-    public Exception? ObserverException => _state.ObserverException;
+    public Exception? ObserverException => _bridge.ObserverException;
 
     /// <summary>Asks the run to stop; it ends with <see cref="IRunObserver.OnFinished"/>(false). Safe from any thread.</summary>
     public void Cancel()
@@ -99,7 +84,7 @@ public sealed unsafe class ProcessingRun : IDisposable
         if (handle != IntPtr.Zero)
         {
             Native.tmdq_run_free(handle);   // cancels and waits, so no native thread can still hold the context
-            _context.Free();
+            _bridge.Dispose();
         }
         GC.SuppressFinalize(this);
     }
@@ -173,75 +158,5 @@ public sealed unsafe class ProcessingRun : IDisposable
             ReceiverChannels = s.ReceiverChannels,
             CalibrationCount = profileCount,
         };
-    }
-
-    // --- what the native threads call. Static, unmanaged-callable, and never allowed to throw.
-
-    private sealed class Context
-    {
-        private Exception? _observerException;
-
-        public Context(IRunObserver? observer)
-        {
-            Observer = observer;
-        }
-
-        public IRunObserver? Observer { get; }
-
-        public Exception? ObserverException => Volatile.Read(ref _observerException);
-
-        public void Remember(Exception e) => Interlocked.CompareExchange(ref _observerException, e, null);
-    }
-
-    private static Context? From(void* user) => user is null ? null : GCHandle.FromIntPtr((IntPtr)user).Target as Context;
-
-    [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-    private static void OnLog(void* user, byte* message)
-    {
-        Context? c = From(user);
-        try { c?.Observer?.OnLog(Text.Read(message)); } catch (Exception e) { c?.Remember(e); }
-    }
-
-    [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-    private static void OnError(void* user, byte* message)
-    {
-        Context? c = From(user);
-        try { c?.Observer?.OnError(Text.Read(message)); } catch (Exception e) { c?.Remember(e); }
-    }
-
-    [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-    private static void OnProgress(void* user, int percent)
-    {
-        Context? c = From(user);
-        try { c?.Observer?.OnProgress(percent); } catch (Exception e) { c?.Remember(e); }
-    }
-
-    [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-    private static void OnStreamDone(void* user, void* result)
-    {
-        Context? c = From(user);
-        // Ownership of the native result has passed to this callback: it is wrapped first, so it is released
-        // whatever happens next.
-        StreamResult? wrapped = null;
-        try
-        {
-            wrapped = new StreamResult((IntPtr)result);
-            c?.Observer?.OnStreamCompleted(wrapped);
-        }
-        catch (Exception e)
-        {
-            c?.Remember(e);
-            if (wrapped is null)
-            {
-                Native.tmdq_stream_result_free((IntPtr)result);
-            }
-        }
-    }
-
-    [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-    private static void OnFinished(void* user, int success)
-    {
-        Context? c = From(user);
-        try { c?.Observer?.OnFinished(success != 0); } catch (Exception e) { c?.Remember(e); }
     }
 }

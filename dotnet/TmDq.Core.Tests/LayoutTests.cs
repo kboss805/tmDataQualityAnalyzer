@@ -52,6 +52,9 @@ public class LayoutTests
         new object[] { typeof(CallbacksNative), 56 },
         new object[] { typeof(StreamInfoNative), 64 },
         new object[] { typeof(ChannelSeriesNative), 24 },
+        new object[] { typeof(CalibrationRequestNative), 112 },
+        new object[] { typeof(CalibrationInfoNative), 48 },
+        new object[] { typeof(CalibrationChannelNative), 96 },
     };
 
     [Theory]
@@ -102,6 +105,30 @@ public class LayoutTests
 
             Row(typeof(ChannelSeriesNative), "WordIndex", 4), Row(typeof(ChannelSeriesNative), "NameUtf8", 8),
             Row(typeof(ChannelSeriesNative), "Values", 16),
+
+            Row(typeof(CalibrationRequestNative), "TimeChannelId", 4), Row(typeof(CalibrationRequestNative), "CalFileNameUtf8", 8),
+            Row(typeof(CalibrationRequestNative), "AppRootUtf8", 16), Row(typeof(CalibrationRequestNative), "SyncPatternUtf8", 24),
+            Row(typeof(CalibrationRequestNative), "SyncMaskUtf8", 32), Row(typeof(CalibrationRequestNative), "ReceiverParamsTomlUtf8", 40),
+            Row(typeof(CalibrationRequestNative), "StepDb", 48), Row(typeof(CalibrationRequestNative), "DataRateMbps", 56),
+            Row(typeof(CalibrationRequestNative), "ClipStartSec", 64), Row(typeof(CalibrationRequestNative), "ClipEndSec", 72),
+            Row(typeof(CalibrationRequestNative), "PcmChannelId", 80), Row(typeof(CalibrationRequestNative), "BitsInMinorFrame", 84),
+            Row(typeof(CalibrationRequestNative), "Randomized", 88), Row(typeof(CalibrationRequestNative), "Inverted", 92),
+            Row(typeof(CalibrationRequestNative), "SwapBytes", 96), Row(typeof(CalibrationRequestNative), "NumReceivers", 100),
+            Row(typeof(CalibrationRequestNative), "ReceiverChannels", 104), Row(typeof(CalibrationRequestNative), "StepCount", 108),
+
+            Row(typeof(CalibrationInfoNative), "ChannelCount", 4), Row(typeof(CalibrationInfoNative), "SummaryUtf8", 8),
+            Row(typeof(CalibrationInfoNative), "ErrorUtf8", 16), Row(typeof(CalibrationInfoNative), "ReportUtf8", 24),
+            Row(typeof(CalibrationInfoNative), "RecordingSeconds", 32), Row(typeof(CalibrationInfoNative), "ClipIgnored", 40),
+
+            Row(typeof(CalibrationChannelNative), "WordIndex", 4), Row(typeof(CalibrationChannelNative), "NameUtf8", 8),
+            Row(typeof(CalibrationChannelNative), "Points", 16), Row(typeof(CalibrationChannelNative), "PlateauLevels", 24),
+            Row(typeof(CalibrationChannelNative), "UnresolvedDb", 32), Row(typeof(CalibrationChannelNative), "EdgeThreshold", 40),
+            Row(typeof(CalibrationChannelNative), "PointCount", 48), Row(typeof(CalibrationChannelNative), "PlateauLevelCount", 52),
+            Row(typeof(CalibrationChannelNative), "UnresolvedCount", 56), Row(typeof(CalibrationChannelNative), "Valid", 60),
+            Row(typeof(CalibrationChannelNative), "HadData", 64), Row(typeof(CalibrationChannelNative), "Outcome", 68),
+            Row(typeof(CalibrationChannelNative), "DetectedPlateaus", 72), Row(typeof(CalibrationChannelNative), "ExtraPlateaus", 76),
+            Row(typeof(CalibrationChannelNative), "ThresholdRelaxed", 80), Row(typeof(CalibrationChannelNative), "Saturated", 84),
+            Row(typeof(CalibrationChannelNative), "SweepLevels", 88),
         };
         return rows;
     }
@@ -125,6 +152,16 @@ public class LayoutTests
         Assert.Equal(6, (int)Status.Job);
         Assert.Equal(7, (int)Status.State);
         Assert.Equal(8, (int)Status.Io);
+    }
+
+    [Fact]
+    public void TheOutcomeNumbersAreTheCoresNumbers()
+    {
+        Assert.Equal(0, (int)CalibrationOutcome.Calibrated);
+        Assert.Equal(1, (int)CalibrationOutcome.NoData);
+        Assert.Equal(2, (int)CalibrationOutcome.FlatNoSignal);
+        Assert.Equal(3, (int)CalibrationOutcome.TooFewPlateaus);
+        Assert.Equal(4, (int)CalibrationOutcome.NoMonotonicSweep);
     }
 
     [Fact]

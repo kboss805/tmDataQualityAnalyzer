@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 using TmDq.Core;
@@ -8,6 +9,11 @@ namespace TmDq.Core.Tests;
 
 public unsafe class ArenaTests
 {
+    public ArenaTests()
+    {
+        Env.EnsureLoaded();     // Text.Snprintf asks the library for its last error
+    }
+
     [Fact]
     public void ANullStringIsNullAndAnEmptyOneIsJustATerminator()
     {
@@ -57,6 +63,71 @@ public unsafe class ArenaTests
     public void NothingReadIsMadeUpForAMissingString()
     {
         Assert.Equal(string.Empty, Text.Read(null));
+    }
+
+    // --- text a function writes into a buffer the caller provides, snprintf-style
+
+    /// <summary>A function that writes <paramref name="text"/> the way the native ones do, reporting <paramref name="reported"/> as its length.</summary>
+    private static Func<IntPtr, int, int> Writes(string text, Func<int, int>? reported = null, List<(IntPtr, int)>? calls = null)
+    {
+        byte[] bytes = Encoding.UTF8.GetBytes(text);
+        return (buffer, capacity) =>
+        {
+            calls?.Add((buffer, capacity));
+            if (buffer != IntPtr.Zero)
+            {
+                int n = Math.Min(bytes.Length, capacity - 1);
+                System.Runtime.InteropServices.Marshal.Copy(bytes, 0, buffer, n);
+                System.Runtime.InteropServices.Marshal.WriteByte(buffer, n, 0);
+            }
+            return reported is null ? bytes.Length : reported(bytes.Length);
+        };
+    }
+
+    [Fact]
+    public void TextIsMeasuredThenWrittenIntoABufferOfExactlyThatSize()
+    {
+        var calls = new List<(IntPtr, int)>();
+        Assert.Equal("café Ω", Text.Snprintf(Writes("café Ω", calls: calls)));
+
+        int bytes = Encoding.UTF8.GetByteCount("café Ω");
+        Assert.Equal(2, calls.Count);
+        Assert.Equal((IntPtr.Zero, 0), calls[0]);                  // first: no buffer, how long is it?
+        Assert.NotEqual(IntPtr.Zero, calls[1].Item1);
+        Assert.Equal(bytes + 1, calls[1].Item2);                   // then: room for the text and its terminator
+    }
+
+    [Fact]
+    public void NothingToWriteIsAskedOnceAndIsAnEmptyString()
+    {
+        var calls = new List<(IntPtr, int)>();
+        Assert.Equal(string.Empty, Text.Snprintf(Writes("", calls: calls)));
+        Assert.Single(calls);
+    }
+
+    [Fact]
+    public void ALengthThatChangesBetweenTheCallsIsReadAsFarAsWasWritten()
+    {
+        // The second call reports more than fits: only what fits is read (the library truncated it).
+        Assert.Equal("hello", Text.Snprintf(Writes("hello", reported: n => n == 5 ? 5 : 99)) );
+        int call = 0;
+        string grew = Text.Snprintf(Writes("hello", reported: n => ++call == 1 ? n : n + 10));
+        Assert.Equal("hello", grew);
+
+        // The second call reports less: only that much is read.
+        call = 0;
+        Assert.Equal("he", Text.Snprintf(Writes("hello", reported: n => ++call == 1 ? n : 2)));
+    }
+
+    [Fact]
+    public void AnErrorFromEitherCallIsAnException()
+    {
+        TmdqException first = Assert.Throws<TmdqException>(() => Text.Snprintf((buffer, capacity) => -1));
+        Assert.Equal(Status.BadArgument, first.Status);
+
+        int call = 0;
+        TmdqException second = Assert.Throws<TmdqException>(() => Text.Snprintf((buffer, capacity) => ++call == 1 ? 3 : -1));
+        Assert.Equal(Status.BadArgument, second.Status);
     }
 
     [Fact]

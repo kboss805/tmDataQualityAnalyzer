@@ -661,6 +661,41 @@ public class RunTests
     }
 
     [Fact]
+    public void AWordMapFileNamedOnTheStreamIsTheOneUsed()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "tmdq-wordmap-" + Guid.NewGuid().ToString("N") + ".toml");
+        File.WriteAllText(path, "[L_RCVR1]\nWord = 2\n[R_RCVR1]\nWord = 5\n");
+        try
+        {
+            StreamConfig named = StepCal(StreamMode.ReceiverChannelInfo) with { ReceiverParamsToml = path };
+            ProcessedStream s = Assert.Single(RunToTheEnd(Request(Env.StepCal, named)).Results);
+
+            // Not the shipped map's 48 channels: the two this file names, at the words it names (one-based in the file).
+            Assert.Equal(new[] { "L_RCVR1", "R_RCVR1" }, s.Channels.Select(c => c.Name));
+            Assert.Equal(new[] { 1, 4 }, s.Channels.Select(c => c.WordIndex));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    private sealed class OnlyTheDefaults : IRunObserver
+    {
+    }
+
+    [Fact]
+    public void AnObserverThatDoesNotOverrideCompletionStillReleasesTheResult()
+    {
+        StreamResult result = KeepOneOf(StepCal());
+        Assert.Equal(66, result.TimesSec.Length);
+
+        ((IRunObserver)new OnlyTheDefaults()).OnStreamCompleted(result);      // the interface's own default
+
+        Assert.Throws<ObjectDisposedException>(() => result.TimesSec.Length);
+    }
+
+    [Fact]
     public void TheDefaultsAreTheApplicationsDefaults()
     {
         var d = new StreamConfig { PcmChannelId = 1, SyncPattern = "AB" };

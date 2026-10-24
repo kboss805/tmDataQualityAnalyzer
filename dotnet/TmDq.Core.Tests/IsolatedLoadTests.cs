@@ -75,6 +75,13 @@ public class NotLoadedProbe
         Assert.Contains("Library.Load", Assert.Throws<InvalidOperationException>(() => Ch10File.Open(Env.StepCal)).Message);
         var request = new RunRequest(Env.StepCal, 1, new[] { new StreamConfig { PcmChannelId = 26, SyncPattern = "FE6B2840", BitsInMinorFrame = 800 } });
         Assert.Contains("Library.Load", Assert.Throws<InvalidOperationException>(() => ProcessingRun.Start(request)).Message);
+        Assert.Contains("Library.Load", Assert.Throws<InvalidOperationException>(() => StepFile.Parse(good)).Message);
+        Assert.Contains("Library.Load", Assert.Throws<InvalidOperationException>(() => StepFile.InitialPath(null, null)).Message);
+        var calibration = new CalibrationRequest
+        {
+            FileName = Env.StepCal, TimeChannelId = 1, PcmChannelId = 26, SyncPattern = "FE6B2840", BitsInMinorFrame = 800, Steps = new[] { 0.0, 6.0 },
+        };
+        Assert.Contains("Library.Load", Assert.Throws<InvalidOperationException>(() => CalibrationRun.Start(calibration)).Message);
         Assert.Null(Library.LoadedPath);
 
         // A file that is not a library is refused, and leaves nothing loaded...
