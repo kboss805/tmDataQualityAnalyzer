@@ -16,8 +16,8 @@ Everything here is additive. Nothing in `src/`, `include/` or the Qt build chang
 
 | path | what |
 |---|---|
-| `native/build_core.ps1`, `native/tmdq_core.cpp` | The decommutation core as a framework-free DLL. Plain `cl`/`link`, no Qt anywhere. |
-| `driver/` | A console host (C#, net10.0) that drives that DLL through the interop spike's unchanged `TmdqCore.cs` and checks it against recorded numbers. |
+| ~~`native/build_core.ps1`, `native/tmdq_core.cpp`~~ | *Retired in plan step 2.3.* The decommutation core as a framework-free DLL, plain `cl`/`link`, no Qt anywhere. It is now `native/tmdq_core` (built by `scripts/build_core_dll.ps1` from `tmdq.sln`), with the full ABI. |
+| ~~`driver/`~~ | *Retired in plan step 2.3.* A console host that drove that DLL through the interop spike's `TmdqCore.cs` and checked it against recorded numbers. Its 20 checks live on, widened, in `dotnet/TmDq.Core.Tests`. |
 | `native/build_chart.ps1`, `native/tmdq_chart.cpp` | The Direct2D chart renderer, drawing into a D3D11 texture shared with a D3D9Ex surface. |
 | `wpf/` | A WPF window that shows that surface through `D3DImage`, with a WPF legend and crosshair over it, and runs a scripted benchmark. |
 | `wpf/results.txt`, `wpf/screenshot.png` | The final run's output, and the window as the desktop composed it. |
@@ -531,11 +531,8 @@ interop, the keyed mutex, the texture rotation and the second native DLL from th
 ## Running it
 
 ```powershell
-# the Qt-free core, then the managed host that checks it
-powershell -ExecutionPolicy Bypass -File dotnet\hybrid-spike\native\build_core.ps1
-. .\scripts\env.ps1
-dotnet build -c Release dotnet\hybrid-spike\driver -p:Utf8Manifest=true
-.\dotnet\hybrid-spike\driver\bin\Release\net10.0\HybridDriver.exe
+# (the Qt-free core and the managed host that checks it moved out of the spike in plan step 2.3:
+#  scripts\build_core_dll.ps1, then scripts\test_dotnet.ps1)
 
 # the chart in WPF (opens a topmost window for about 30 s, then writes results.txt and exits)
 powershell -ExecutionPolicy Bypass -File dotnet\hybrid-spike\native\build_chart.ps1
@@ -569,5 +566,4 @@ over the window during a run: the crosshair is live.
 `skia-*.png/.pdf/.svg` exports and `skia-window.png` next to the exe, then exits. `--serial` with it
 reproduces the starved-render-loop trap described there.
 
-The driver needs `tests\data\test files\prn_testfile, sample.ch10` (committed). `tmdq_core.dll`
-builds against `main` as merged: `constants.h` is Qt-free (PR #163).
+*(The core build and the driver this paragraph described were retired in plan step 2.3; see the layout table.)*

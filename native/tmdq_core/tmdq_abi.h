@@ -19,18 +19,15 @@
  *      case ~34 MB once per run against a 640 MB recording that is read and scanned
  *      entirely on this side.
  *
- * STATE: this is the interop spike's version-1 contract, unchanged - one Frame Sync
- * Lock stream per call. Plan step 2.2 grows it to everything the application needs.
- * The spike (dotnet/interop-spike) keeps its own copy of this header and stays frozen
- * at version 1 as the record of what was measured.
+ * STATE: version 2, the full ABI of plan step 2.2 (files, runs, calibration, the file
+ * formats, series construction). Version 1 was the interop spike's two calls (probe a
+ * file, run one lock stream); they were retired in plan step 2.3 when the C# library
+ * (dotnet/TmDq.Core) and its tests replaced the spike's driver. The spike
+ * (dotnet/interop-spike) keeps its own copy of the version-1 header as the record of
+ * what was measured.
  *
- * CONVENTIONS
- *
- * - Strings in are UTF-8, NUL-terminated, owned by the caller for the duration.
- * - Results are allocated by this library and must be released with
- *   tmdq_free_lock_result(). The managed side copies out, then frees - no pinning.
- * - No function throws. Failures return a tmdq_status and set tmdq_last_error().
- * - tmdq_last_error() is per-thread.
+ * The conventions every function follows are written out below, at the head of the
+ * "files and runs" section. tmdq_last_error() is per-thread.
  */
 
 #ifndef TMDQ_ABI_H
@@ -57,24 +54,23 @@ extern "C" {
 /// Bumped on any incompatible change to the structs or the function set. The managed
 /// side checks it before doing anything else, so a stale DLL fails loudly instead of
 /// being misread.
-#define TMDQ_ABI_VERSION 1
+#define TMDQ_ABI_VERSION 2
 
 /// Bumped when functions or struct fields are ADDED (nothing existing changes meaning). A host that
-/// needs a feature checks `version == TMDQ_ABI_VERSION && revision >= N`.
-///   0  the interop spike's contract: probe a file, run one Frame Sync Lock stream.
-///   1  plan step 2.2a: the file handle, and runs of N streams with callbacks and cancel.
-///   2  plan step 2.2b: step files, and calibration extraction.
-///   3  plan step 2.2c: the frame-sync pattern file, template matching, CSV import and export, clock stamps.
-///   4  plan step 2.2d: series construction, the shared time base, stream identity, imported stream orders.
-#define TMDQ_ABI_REVISION 4
+/// needs a feature checks `version == TMDQ_ABI_VERSION && revision >= N`. Revisions restart at 0 with each
+/// version.
+///   0  version 2: the file handle, runs of N streams, step files and
+///      calibration extraction, the frame-sync pattern file, template matching, CSV import and export,
+///      clock stamps, series construction, the shared time base, stream identity, imported stream orders.
+#define TMDQ_ABI_REVISION 0
 
 typedef enum tmdq_status
 {
     TMDQ_OK            = 0,
     TMDQ_ERR_BADARG    = 1,  ///< Null pointer, or a request field outside its range.
     TMDQ_ERR_PREPARE   = 2,  ///< The file would not open, or TMATS did not resolve.
-    TMDQ_ERR_PROCESS   = 3,  ///< The run failed - usually no frame sync found.
-    TMDQ_ERR_NOSAMPLES = 4,  ///< The run succeeded but produced no output samples.
+    TMDQ_ERR_PROCESS   = 3,  ///< Reserved: no function returns it (a run that fails says so through its callbacks).
+    TMDQ_ERR_NOSAMPLES = 4,  ///< Reserved: no function returns it.
     TMDQ_ERR_INTERNAL  = 5,  ///< An exception was caught at the boundary.
     TMDQ_ERR_JOB       = 6,  ///< A stream's (or a calibration's) settings were rejected; tmdq_last_error() says why.
     TMDQ_ERR_STATE     = 7,  ///< The call is not valid yet: a result was asked for while its run is still going.
@@ -88,83 +84,18 @@ typedef enum tmdq_stream_mode
     TMDQ_MODE_FRAME_SYNC_LOCK       = 1    ///< Frame-sync lock percentage only.
 } tmdq_stream_mode;
 
-/* Explicit packing on both sides of the boundary. x64 MSVC and the CLR both default to
- * natural alignment, so this changes nothing today - it is stated so that a future
- * change to either side is a compile-time decision rather than a silent offset shift. */
-#pragma pack(push, 8)
-
-/// One Frame Sync Lock stream to process. Mirrors the subset of ProcessingParams that a
-/// lock-only run actually reads; everything else is defaulted on the native side.
-typedef struct tmdq_lock_request
-{
-    const char* filename_utf8;        ///< Path to the .ch10 file, UTF-8.
-    int32_t     time_channel_id;
-    int32_t     pcm_channel_id;
-    uint64_t    frame_sync;           ///< Sync pattern as a numeric value.
-    uint64_t    frame_sync_mask;      ///< 0 = derive all-ones from sync_pattern_length.
-    int32_t     sync_pattern_length;  ///< Bits.
-    int32_t     words_in_minor_frame;
-    int32_t     bits_in_minor_frame;
-    double      sample_period_sec;    ///< Output sample period.
-    int32_t     swap_bytes;           ///< 0/1. An ordinary Chapter 10 recording needs 1.
-    int32_t     is_randomized;        ///< 0/1. RNRZ-L.
-    int32_t     is_inverted;          ///< 0/1.
-} tmdq_lock_request;
-
-/// Output of one run. The three arrays are parallel and each holds sample_count
-/// doubles. Owned by the library until tmdq_free_lock_result().
-typedef struct tmdq_lock_result
-{
-    int32_t sample_count;
-    double* times_sec;      ///< Absolute IRIG seconds per sample.
-    double* lock_percent;   ///< Frame-sync lock percentage, 0..100.
-    double* missed_frames;  ///< Cumulative missed frames (monotonic).
-    double  elapsed_ms;     ///< Wall time of the native run, excluding marshalling.
-} tmdq_lock_result;
-
-/// Upper bound on channels tmdq_probe_file() will report. A fixed inline array is the
-/// simplest blittable shape across the boundary - no ownership question, and it
-/// exercises MarshalAs(ByValArray) on the managed side, which is a pattern any real
-/// shell will need. The application itself enforces no channel cap; a file with more
-/// than this many PCM channels is reported truncated, with pcm_channel_count set to
-/// what was actually written.
-#define TMDQ_MAX_PCM_CHANNELS 32
-
-/// What a .ch10 file offers, so a host can pick a stream without reimplementing TMATS.
-typedef struct tmdq_file_info
-{
-    int32_t time_channel_id;                                ///< -1 if none resolved.
-    int32_t pcm_channel_count;                              ///< Entries written below.
-    int32_t pcm_channel_ids[TMDQ_MAX_PCM_CHANNELS];
-} tmdq_file_info;
-
-#pragma pack(pop)
+/// Last error on the calling thread, UTF-8, owned by the library. Empty if none.
+TMDQ_API const char* tmdq_last_error(void);
 
 /// @return TMDQ_ABI_VERSION as compiled into this DLL.
 TMDQ_API int32_t tmdq_abi_version(void);
 
-/// Struct sizes as the C compiler laid them out, for the managed side to assert
-/// against Marshal.SizeOf. The whole point of the spike's layout check.
-TMDQ_API int32_t tmdq_sizeof_lock_request(void);
-TMDQ_API int32_t tmdq_sizeof_lock_result(void);
-TMDQ_API int32_t tmdq_sizeof_file_info(void);
-
-/// Reads @p filename_utf8's TMATS and reports its time channel and PCM channels.
-/// Cheap - metadata only, it does not walk the packet stream.
-TMDQ_API int32_t tmdq_probe_file(const char* filename_utf8, tmdq_file_info* out);
-
-/// Reads @p req->filename_utf8 once and processes the one PCM channel in Frame Sync
-/// Lock mode, synchronously. Fills @p out on TMDQ_OK.
-TMDQ_API int32_t tmdq_run_lock_stream(const tmdq_lock_request* req, tmdq_lock_result* out);
-
-/// Releases the arrays in @p r and zeroes it. Safe on an all-zero struct.
-TMDQ_API void tmdq_free_lock_result(tmdq_lock_result* r);
-
-/// Last error on the calling thread, UTF-8, owned by the library. Empty if none.
-TMDQ_API const char* tmdq_last_error(void);
+/* Explicit packing on both sides of the boundary. x64 MSVC and the CLR both default to
+ * natural alignment, so this changes nothing today - it is stated so that a future
+ * change to either side is a compile-time decision rather than a silent offset shift. */
 
 /* ===========================================================================================
- * Revision 1: files and runs.
+ * Files and runs.
  *
  * CONVENTIONS FOR EVERYTHING BELOW
  *
@@ -305,8 +236,8 @@ typedef struct tmdq_stream_info
     int32_t        pcm_channel_id;
     const char*    label_utf8;
     const double*  times_sec;           ///< Absolute IRIG seconds per sample.
-    const double*  lock_percent;        ///< 0..100.
-    const double*  missed_frames;       ///< Cumulative, monotonic.
+    const double*  lock_percent;        ///< 0..100; NULL when the stream has none (a receiver stream).
+    const double*  missed_frames;       ///< Cumulative, monotonic; NULL when the stream has none.
     int32_t        job_index;           ///< Position of this stream in the request.
     int32_t        source_id;
     int32_t        mode;                ///< tmdq_stream_mode.
@@ -384,7 +315,7 @@ TMDQ_API int32_t tmdq_stream_result_channel(const tmdq_stream_result* result, in
 TMDQ_API void    tmdq_stream_result_free(tmdq_stream_result* result);   ///< Safe on NULL, and from any thread.
 
 /* ===========================================================================================
- * Revision 2: step files and calibration extraction.
+ * Step files and calibration extraction.
  * ======================================================================================== */
 
 #pragma pack(push, 8)
@@ -509,7 +440,7 @@ TMDQ_API int32_t tmdq_calibration_channel_result(const tmdq_calibration* calibra
                                                  tmdq_calibration_channel* out);
 
 /* ===========================================================================================
- * Revision 3: the formats.
+ * The formats.
  * ======================================================================================== */
 
 #pragma pack(push, 8)
@@ -647,7 +578,7 @@ TMDQ_API int32_t tmdq_clock_time_format(int32_t base_day, double base_time_offse
                                         int32_t include_milliseconds, char* buffer, int32_t capacity);
 
 /* ===========================================================================================
- * Revision 4: series construction.
+ * Series construction.
  *
  * The data half of what the plot does with a processed stream: which series it yields and what they are
  * called, the elapsed-time axis they share and the clock it hangs from, and the order an imported CSV's

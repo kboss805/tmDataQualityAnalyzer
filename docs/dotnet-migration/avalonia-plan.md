@@ -146,11 +146,17 @@ sweep.
   - [x] **2.2c The formats.** PR #184, merged as `d7cb61f`. The frame-sync pattern file (read and write), CSV import and export, and template
     channel matching, plus clock stamps. *Pure translation of core code stage 1 moved; tested against the core
     called directly, with written files compared byte for byte.*
-  - [x] **2.2d Series construction.** `buildStreamSeries`, the shared time base, stream identity and the import
+  - [x] **2.2d Series construction.** PR #185, merged as `4f880b3`. `buildStreamSeries`, the shared time base, stream identity and the import
     ordering. *With this the ABI covers everything 2.2 listed.*
-- [ ] **2.3 A C# interop library** (`TmDq.Core`) over the ABI, with a test project that runs the
+- [ ] **2.3 A C# interop library** (`TmDq.Core`) over the ABI, with a test project (xunit v3) that runs the
   committed fixtures through it and compares against numbers the Qt app produces today (the spike
-  driver's 20/20 check, made permanent and widened to every fixture and both modes).
+  driver's 20/20 check, made permanent and widened to every fixture and both modes). Two PRs:
+  - [ ] **2.3a The library and its tests, for what the walking skeleton needs:** loading and verifying the DLL
+    (ABI version, every mirrored struct's size against `tmdq_sizeof`), the file's channels, and runs of N
+    streams with callbacks, cancel and results. The spike driver and the version-1 calls are retired; the ABI
+    becomes version 2. The managed tests run in CI (`scripts/test_dotnet.ps1`).
+  - [ ] **2.3b The rest of the ABI:** calibration, step files, the formats (pattern file, CSV, template
+    matching, clock stamps) and series construction, each wrapped and tested against the same numbers.
 - [ ] **2.4 Port the core test suites off Qt Test** (D2), one suite per PR, old and new running side
   by side until the new one has every case. Order, smallest first: `TestTomlDocument`,
   `TestTextFormat`, `TestFrameSync`, `TestEventReporter`, `TestPacketQueue`, `TestIntervalGate`,

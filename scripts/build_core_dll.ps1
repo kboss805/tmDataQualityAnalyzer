@@ -1,9 +1,10 @@
 <#
 .SYNOPSIS
-    Builds tmdq_core.dll (native\tmdq_core, via tmdq.sln) and proves it has no Qt in it.
+    Builds tmdq_core.dll (native\tmdq_core) and proves it has no Qt in it.
 
 .DESCRIPTION
-    1. MSBuild builds the solution for x64 in the chosen configuration. The project has no Qt include
+    1. MSBuild builds the native project (native\tmdq_core\tmdq_core.vcxproj, which tmdq.sln also holds beside
+       the C# projects, so this script never needs the .NET SDK) for x64 in the chosen configuration. The project has no Qt include
        path or library, so a core source that reached for a Qt header would not compile.
     2. The build log is scanned: any compiler warning fails the script (the project's zero-warning rule).
     3. `dumpbin /dependents` lists the DLL's imports, and every one must be on a short allow-list (the C
@@ -44,7 +45,7 @@ $target = if ($Rebuild) { '/t:Rebuild' } else { '/t:Build' }
 Write-Host "Building tmdq_core ($Configuration, x64) ..."
 $prev = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'   # 5.1 turns native stderr into a terminating error
-& msbuild (Join-Path $root 'tmdq.sln') $target /m /nologo /v:minimal "/p:Configuration=$Configuration" /p:Platform=x64 2>&1 |
+& msbuild (Join-Path $root 'native\tmdq_core\tmdq_core.vcxproj') $target /m /nologo /v:minimal "/p:Configuration=$Configuration" /p:Platform=x64 2>&1 |
     Tee-Object -FilePath $log | Out-Host
 $code = $LASTEXITCODE
 $ErrorActionPreference = $prev

@@ -1174,10 +1174,6 @@ void TestAbi::theStructLayoutsArePinned()
     QCOMPARE(tmdq_sizeof(0), 0);
     QCOMPARE(tmdq_sizeof(99), 0);
 
-    // The spike's structs, which this revision leaves alone.
-    QCOMPARE(tmdq_sizeof_lock_request(), 72);
-    QCOMPARE(tmdq_sizeof_lock_result(), 40);
-    QCOMPARE(tmdq_sizeof_file_info(), 136);
 
     // The numbers a host writes in its own copies of the enums.
     QCOMPARE(int(TMDQ_OK), 0);
@@ -1199,8 +1195,8 @@ void TestAbi::theStructLayoutsArePinned()
 
 void TestAbi::theVersionAndRevisionAreReported()
 {
-    QCOMPARE(tmdq_abi_version(), 1);
-    QCOMPARE(tmdq_abi_revision(), 4);
+    QCOMPARE(tmdq_abi_version(), 2);
+    QCOMPARE(tmdq_abi_revision(), 0);
     QCOMPARE(int(TMDQ_ABI_VERSION), tmdq_abi_version());
     QCOMPARE(int(TMDQ_ABI_REVISION), tmdq_abi_revision());
     QVERIFY(tmdq_last_error() != nullptr);
@@ -1465,9 +1461,13 @@ void TestAbi::aRunOfSeveralStreamsMatchesWhatTheCoreMakes()
     QCOMPARE(tmdq_stream_result_info(got.at(0), &info), int(TMDQ_OK));
     QCOMPARE(info.source_id, 7);
     QCOMPARE(std::string(info.label_utf8), std::string("lock stream"));
+    QVERIFY(info.lock_percent != nullptr && info.missed_frames != nullptr);   // a lock stream has both series
     QCOMPARE(tmdq_stream_result_info(got.at(1), &info), int(TMDQ_OK));
     QCOMPARE(std::string(info.label_utf8), std::string("receiver stream"));
     QCOMPARE(info.mode, int(TMDQ_MODE_RECEIVER_CHANNEL_INFO));
+    // A receiver stream has neither: the header promises NULL, not whatever an empty vector's data() is.
+    QVERIFY(info.lock_percent == nullptr);
+    QVERIFY(info.missed_frames == nullptr);
 }
 
 void TestAbi::aRunReportsInTheDocumentedOrder()

@@ -95,24 +95,6 @@ jobs:
           powershell -ExecutionPolicy Bypass -File scripts\check_release_consistency.ps1
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
-      - name: Overlay full-size PRN fixture
-        shell: powershell
-        run: |
-          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError
-          # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
-          $ErrorActionPreference = 'Continue'
-          # The small PRN sample is committed (used by the hosted CI). On this
-          # runner, overlay the full-size recording so the heavy throughput
-          # benchmark runs the complete data. TMDQA_CH10_FULL is set in the runner's
-          # .env; it lives OUTSIDE the checkout, so the copy only reads it. If unset,
-          # the committed sample stays (that one benchmark just skips).
-          if ($env:TMDQA_CH10_FULL -and (Test-Path $env:TMDQA_CH10_FULL)) {
-            Copy-Item $env:TMDQA_CH10_FULL 'tests\data\test files\prn_testfile, sample.ch10' -Force
-            Write-Host "Overlaid full PRN from $env:TMDQA_CH10_FULL"
-          } else {
-            Write-Host "::warning::TMDQA_CH10_FULL not set/found - using the committed sample PRN (heavy benchmark will skip)."
-          }
-
       - name: Toolchain versions
         shell: powershell
         run: |
@@ -196,6 +178,37 @@ jobs:
           foreach ($cfg in 'Debug', 'Release') {
             powershell -ExecutionPolicy Bypass -File scripts\build_core_dll.ps1 -Configuration $cfg
             if ($LASTEXITCODE -ne 0) { throw "tmdq_core.dll ($cfg) failed the build or the no-Qt check" }
+          }
+
+      - name: Managed tests (TmDq.Core against the native DLL)
+        shell: powershell
+        run: |
+          # The C# library over the ABI and its xunit tests, run against the Release tmdq_core.dll built by the
+          # previous step. The script builds with warnings as errors and merges the UTF-8 code-page manifest
+          # into the test exe (mt.exe; it sources env.ps1 when mt is not already on PATH).
+          $ErrorActionPreference = 'Continue'
+          powershell -ExecutionPolicy Bypass -File scripts\test_dotnet.ps1 -Configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "the managed tests failed" }
+
+      - name: Overlay full-size PRN fixture
+        shell: powershell
+        run: |
+          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError
+          # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
+          $ErrorActionPreference = 'Continue'
+          # This step runs AFTER the managed tests on purpose: they pin the committed
+          # sample's numbers (116 samples, 1,100 missed frames, ...), and the full
+          # recording would change them (and take minutes).
+          # The small PRN sample is committed (used by the hosted CI). On this
+          # runner, overlay the full-size recording so the heavy throughput
+          # benchmark runs the complete data. TMDQA_CH10_FULL is set in the runner's
+          # .env; it lives OUTSIDE the checkout, so the copy only reads it. If unset,
+          # the committed sample stays (that one benchmark just skips).
+          if ($env:TMDQA_CH10_FULL -and (Test-Path $env:TMDQA_CH10_FULL)) {
+            Copy-Item $env:TMDQA_CH10_FULL 'tests\data\test files\prn_testfile, sample.ch10' -Force
+            Write-Host "Overlaid full PRN from $env:TMDQA_CH10_FULL"
+          } else {
+            Write-Host "::warning::TMDQA_CH10_FULL not set/found - using the committed sample PRN (heavy benchmark will skip)."
           }
 
       - name: Run full test suite
@@ -288,6 +301,11 @@ jobs:
         with:
           arch: x64
 
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
       - name: Toolchain versions
         shell: powershell
         run: |
@@ -369,6 +387,16 @@ jobs:
             powershell -ExecutionPolicy Bypass -File scripts\build_core_dll.ps1 -Configuration $cfg
             if ($LASTEXITCODE -ne 0) { throw "tmdq_core.dll ($cfg) failed the build or the no-Qt check" }
           }
+
+      - name: Managed tests (TmDq.Core against the native DLL)
+        shell: powershell
+        run: |
+          # The C# library over the ABI and its xunit tests, run against the Release tmdq_core.dll built by the
+          # previous step. The script builds with warnings as errors and merges the UTF-8 code-page manifest
+          # into the test exe (mt.exe; it sources env.ps1 when mt is not already on PATH).
+          $ErrorActionPreference = 'Continue'
+          powershell -ExecutionPolicy Bypass -File scripts\test_dotnet.ps1 -Configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "the managed tests failed" }
 
       - name: Run test suite
         env:

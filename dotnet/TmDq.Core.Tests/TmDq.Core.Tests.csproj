@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tests of TmDq.Core against the real native core: they load tmdq_core.dll and run the committed recordings
+    through it. An xunit v3 test project is an executable: run bin\<Configuration>\net10.0\TmDq.Core.Tests.exe
+    directly (scripts\test_dotnet.ps1 builds and runs it).
+
+    The exe carries a manifest selecting the UTF-8 active code page (app.manifest), because the vendored irig106
+    library opens files with the C runtime's NARROW open(), which reads that code page: without it a non-ASCII
+    path cannot reach the core from managed code. The SDK's ApplicationManifest property embeds a manifest in the
+    managed assembly, NOT in the apphost exe that is the actual process, so it is merged into the exe after the
+    build with mt.exe (the Windows SDK; on PATH after scripts\env.ps1). A test asserts the code page, so a missing
+    manifest fails loudly instead of quietly skipping the non-ASCII check.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>TmDq.Core.Tests</AssemblyName>
+    <RootNamespace>TmDq.Core.Tests</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PlatformTarget>x64</PlatformTarget>
+    <AppendPlatformToOutputPath>false</AppendPlatformToOutputPath>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="3.2.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TmDq.Core\TmDq.Core.csproj" />
+  </ItemGroup>
+
+  <Target Name="EmbedUtf8Manifest" AfterTargets="Build">
+    <Exec Command="mt -nologo -manifest &quot;$(MSBuildProjectDirectory)\app.manifest&quot; -outputresource:&quot;$(OutDir)$(AssemblyName).exe;#1&quot;"
+          ContinueOnError="false" />
+  </Target>
+
+</Project>
