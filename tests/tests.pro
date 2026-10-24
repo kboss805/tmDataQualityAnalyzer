@@ -203,7 +203,6 @@ SOURCES += \
     tst_templatematcher.cpp \
     tst_packetqueue.cpp \
     tst_intervalgate.cpp \
-    tst_textformat.cpp \
     tst_framesync.cpp \
     tst_coreqtfree.cpp \
     tst_abi.cpp \
@@ -242,7 +241,6 @@ HEADERS += \
     tst_templatematcher.h \
     tst_packetqueue.h \
     tst_intervalgate.h \
-    tst_textformat.h \
     tst_framesync.h \
     tst_coreqtfree.h \
     tst_abi.h \

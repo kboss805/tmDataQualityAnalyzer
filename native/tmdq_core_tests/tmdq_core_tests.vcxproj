@@ -101,6 +101,7 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="test_textfile.cpp" />
+    <ClCompile Include="test_textformat.cpp" />
     <ClCompile Include="test_tomldocument.cpp" />
   </ItemGroup>
 
