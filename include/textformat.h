@@ -45,10 +45,9 @@ inline bool isExactTie(double magnitude, int decimals)
 /// sign kept on a negative value that rounds to zero ("-0"), though not on negative zero itself.
 inline std::string formatFixed(double value, int decimals)
 {
-    if (!std::isfinite(value))
-    {
-        return std::format("{}", value);
-    }
+    // A not-a-number or an infinity needs no branch of its own: the magnitude has no sign bit left, so a
+    // not-a-number prints as "nan" whatever its sign (as Qt prints it; std::format would say "-nan"), and
+    // an infinity gets its sign from the comparison below.
     // Not the sign bit: Qt prints negative zero as "0" but -0.4 rounded to nothing as "-0".
     const bool negative = value < 0.0;
     const double magnitude = std::fabs(value);
