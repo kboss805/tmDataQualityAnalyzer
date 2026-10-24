@@ -175,6 +175,11 @@ public static unsafe class Library
         (StructId.CsvInfo, typeof(CsvInfoNative)),
         (StructId.CsvSeriesInfo, typeof(CsvSeriesInfoNative)),
         (StructId.CsvColumn, typeof(CsvColumnNative)),
+        (StructId.SeriesSetInfo, typeof(SeriesSetInfoNative)),
+        (StructId.SeriesSpec, typeof(SeriesSpecNative)),
+        (StructId.StreamKey, typeof(StreamKeyNative)),
+        (StructId.TimeBaseInfo, typeof(TimeBaseInfoNative)),
+        (StructId.ImportedSeries, typeof(ImportedSeriesNative)),
     };
 
     internal static void RequireLoaded()

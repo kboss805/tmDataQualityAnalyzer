@@ -42,6 +42,11 @@ internal enum StructId
     CsvInfo = 14,
     CsvSeriesInfo = 15,
     CsvColumn = 16,
+    SeriesSetInfo = 17,
+    SeriesSpec = 18,
+    StreamKey = 19,
+    TimeBaseInfo = 20,
+    ImportedSeries = 21,
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 8)]
@@ -277,6 +282,63 @@ internal unsafe struct CsvColumnNative
     public int Reserved;
 }
 
+[StructLayout(LayoutKind.Sequential, Pack = 8)]
+internal unsafe struct SeriesSetInfoNative
+{
+    public uint StructSize;
+    public int SeriesCount;
+    public int ElapsedCount;
+    public int Reserved;
+    public double* Elapsed;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 8)]
+internal unsafe struct SeriesSpecNative
+{
+    public uint StructSize;
+    public int MetricType;
+    public byte* NameUtf8;
+    public byte* StreamLabelUtf8;
+    public double* YValues;
+    public double YMin;
+    public double YMax;
+    public int ReceiverIndex;
+    public int ChannelIndex;
+    public int StreamOrder;
+    public int StreamSequence;
+    public int SourceId;
+    public int YCount;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 8)]
+internal unsafe struct StreamKeyNative
+{
+    public uint StructSize;
+    public int SourceId;
+    public byte* LabelUtf8;
+    public int Channel;
+    public int Reserved;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 8)]
+internal struct TimeBaseInfoNative
+{
+    public uint StructSize;
+    public int BaseDay;
+    public double BaseAbsSeconds;
+    public double BaseTimeOffset;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 8)]
+internal unsafe struct ImportedSeriesNative
+{
+    public uint StructSize;
+    public int MetricType;
+    public byte* StreamLabelUtf8;
+    public int SourceId;
+    public int StreamOrder;
+}
+
 internal static unsafe partial class Native
 {
     private const string Dll = "tmdq_core";
@@ -460,4 +522,65 @@ internal static unsafe partial class Native
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
     internal static partial int tmdq_clock_time_format(int baseDay, double baseTimeOffset, double elapsed, int includeMilliseconds, byte* buffer, int capacity);
+
+    // --- series construction
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_stream_result_series(IntPtr result, double baseAbsSeconds, out IntPtr set);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_series_set_info_get(IntPtr set, SeriesSetInfoNative* info);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_series_set_spec(IntPtr set, int index, SeriesSpecNative* spec);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial void tmdq_series_set_free(IntPtr set);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_stream_result_key(IntPtr result, StreamKeyNative* key);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_stream_key_equal(StreamKeyNative* a, StreamKeyNative* b);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_time_base_create(out IntPtr timeBase);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial void tmdq_time_base_free(IntPtr timeBase);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_time_base_info_get(IntPtr timeBase, TimeBaseInfoNative* info);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_time_base_reset(IntPtr timeBase);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_time_base_set_clock(IntPtr timeBase, int day, double offset);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_time_base_overlaps(IntPtr timeBase, double newMinAbs, double newMaxAbs, double existingMaxElapsed, out int overlaps);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_time_base_adopt(IntPtr timeBase, double firstAbsSeconds, int hasSeries, out double shift);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_time_base_advance(IntPtr timeBase, int hasEarliest, double earliestElapsed, out double shift);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_assign_imported_stream_orders(ImportedSeriesNative** series, int count);
 }
