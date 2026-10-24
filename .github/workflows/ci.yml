@@ -61,13 +61,24 @@ jobs:
           RUNNER_ADMIN_TOKEN: ${{ secrets.RUNNER_ADMIN_TOKEN }}
         run: |
           target=hosted
-          if [ -n "$RUNNER_ADMIN_TOKEN" ]; then
-            online=$(curl -sf \
+          if [ -z "$RUNNER_ADMIN_TOKEN" ]; then
+            echo "::notice title=Runner routing::RUNNER_ADMIN_TOKEN is not set, so the hosted fallback is used."
+          else
+            # Keep the HTTP status and GitHub's own message (never the token), so a fallback says WHY:
+            # 401 or 403 usually means the token has expired or lacks "Administration: read" on this repository.
+            status=$(curl -s -o runners.json -w '%{http_code}' \
               -H "Authorization: Bearer $RUNNER_ADMIN_TOKEN" \
               -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/repos/${{ github.repository }}/actions/runners" \
-              | jq '[.runners[]? | select(.status == "online") | select(any(.labels[].name; . == "tmdqa"))] | length' 2>/dev/null) || online=0
-            if [ "${online:-0}" -ge 1 ]; then target=self-hosted; fi
+              "https://api.github.com/repos/${{ github.repository }}/actions/runners" || true)
+            if [ "$status" = "200" ]; then
+              online=$(jq '[.runners[]? | select(.status == "online") | select(any(.labels[].name; . == "tmdqa"))] | length' runners.json 2>/dev/null) || online=0
+              echo "Runner API answered HTTP 200; ${online:-0} runner(s) with the tmdqa label are online."
+              if [ "${online:-0}" -ge 1 ]; then target=self-hosted; fi
+            else
+              echo "::warning title=Runner routing::The runner API answered HTTP ${status:-none}, so the hosted fallback is used. 401 or 403 usually means RUNNER_ADMIN_TOKEN has expired or lacks Administration: read on this repository."
+              if [ -s runners.json ]; then echo "GitHub says: $(jq -r '.message // empty' runners.json 2>/dev/null)"; fi
+            fi
+            rm -f runners.json
           fi
           echo "target=$target" >> "$GITHUB_OUTPUT"
           echo "Selected CI runner: $target"
