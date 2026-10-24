@@ -82,6 +82,12 @@ public class NotLoadedProbe
             FileName = Env.StepCal, TimeChannelId = 1, PcmChannelId = 26, SyncPattern = "FE6B2840", BitsInMinorFrame = 800, Steps = new[] { 0.0, 6.0 },
         };
         Assert.Contains("Library.Load", Assert.Throws<InvalidOperationException>(() => CalibrationRun.Start(calibration)).Message);
+        Assert.Contains("Library.Load", Assert.Throws<InvalidOperationException>(() => FrameSyncFile.Read(good)).Message);
+        Assert.Contains("Library.Load", Assert.Throws<InvalidOperationException>(() => FrameSyncFile.Write(good, "AB", "", 64, false, false)).Message);
+        Assert.Contains("Library.Load", Assert.Throws<InvalidOperationException>(() => TemplateMatcher.Match(new[] { 1 }, new[] { 1 })).Message);
+        Assert.Contains("Library.Load", Assert.Throws<InvalidOperationException>(() => CsvFile.Parse(good)).Message);
+        Assert.Contains("Library.Load", Assert.Throws<InvalidOperationException>(() => CsvFile.Write(good, new[] { new CsvColumn(MetricType.Snr, "A", 0, new[] { 0.0 }, new[] { 0.0 }) }, 1, 0)).Message);
+        Assert.Contains("Library.Load", Assert.Throws<InvalidOperationException>(() => ClockTime.Format(1, 0, 0)).Message);
         Assert.Null(Library.LoadedPath);
 
         // A file that is not a library is refused, and leaves nothing loaded...

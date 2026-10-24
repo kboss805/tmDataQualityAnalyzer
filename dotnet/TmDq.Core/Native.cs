@@ -37,6 +37,11 @@ internal enum StructId
     CalibrationRequest = 9,
     CalibrationInfo = 10,
     CalibrationChannel = 11,
+    FrameSyncFileInfo = 12,
+    MatchInfo = 13,
+    CsvInfo = 14,
+    CsvSeriesInfo = 15,
+    CsvColumn = 16,
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 8)]
@@ -202,6 +207,76 @@ internal unsafe struct CalibrationChannelNative
     public int Reserved;
 }
 
+[StructLayout(LayoutKind.Sequential, Pack = 8)]
+internal unsafe struct FrameSyncFileInfoNative
+{
+    public uint StructSize;
+    public int HasBitsPerFrame;
+    public int BitsPerFrame;
+    public int BitsFromLegacyKey;
+    public int Inverted;
+    public int HasRandomized;
+    public int Randomized;
+    public int Reserved;
+    public byte* PatternUtf8;
+    public byte* MaskUtf8;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 8)]
+internal unsafe struct MatchInfoNative
+{
+    public uint StructSize;
+    public int Ok;
+    public int MissingCount;
+    public int ExtraCount;
+    public int* Missing;
+    public int* Extra;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 8)]
+internal struct CsvInfoNative
+{
+    public uint StructSize;
+    public int SeriesCount;
+    public int BaseDay;
+    public int SkippedRows;
+    public double BaseTimeOffset;
+    public double XMax;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 8)]
+internal unsafe struct CsvSeriesInfoNative
+{
+    public uint StructSize;
+    public int MetricType;
+    public byte* NameUtf8;
+    public byte* StreamLabelUtf8;
+    public double* XValues;
+    public double* YValues;
+    public double YMin;
+    public double YMax;
+    public int ReceiverIndex;
+    public int ChannelIndex;
+    public int StreamOrder;
+    public int SourceId;
+    public int PointCount;
+    public int Reserved;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 8)]
+internal unsafe struct CsvColumnNative
+{
+    public uint StructSize;
+    public int MetricType;
+    public byte* NameUtf8;
+    public double* XValues;
+    public double* YValues;
+    public int SourceId;
+    public int XCount;
+    public int YCount;
+    public int Reserved;
+}
+
 internal static unsafe partial class Native
 {
     private const string Dll = "tmdq_core";
@@ -332,4 +407,57 @@ internal static unsafe partial class Native
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
     internal static partial int tmdq_calibration_channel_result(IntPtr calibration, int index, CalibrationChannelNative* channel);
+
+    // --- the formats
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_frame_sync_file_read(byte* pathUtf8, out IntPtr file);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_frame_sync_file_info_get(IntPtr file, FrameSyncFileInfoNative* info);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial void tmdq_frame_sync_file_free(IntPtr file);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_frame_sync_file_write(byte* pathUtf8, byte* patternUtf8, byte* maskUtf8, int bitsPerFrame, int inverted, int randomized);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_template_match(int* templateIds, int templateCount, int* fileIds, int fileCount, out IntPtr match);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_match_info_get(IntPtr match, MatchInfoNative* info);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial void tmdq_match_free(IntPtr match);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_csv_parse(byte* pathUtf8, out IntPtr csv);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_csv_info_get(IntPtr csv, CsvInfoNative* info);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_csv_series_get(IntPtr csv, int index, CsvSeriesInfoNative* info);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial void tmdq_csv_free(IntPtr csv);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_csv_write(byte* pathUtf8, CsvColumnNative** columns, int count, int baseDay, double baseTimeOffset);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_clock_time_format(int baseDay, double baseTimeOffset, double elapsed, int includeMilliseconds, byte* buffer, int capacity);
 }

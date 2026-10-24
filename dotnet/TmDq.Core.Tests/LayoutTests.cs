@@ -55,6 +55,11 @@ public class LayoutTests
         new object[] { typeof(CalibrationRequestNative), 112 },
         new object[] { typeof(CalibrationInfoNative), 48 },
         new object[] { typeof(CalibrationChannelNative), 96 },
+        new object[] { typeof(FrameSyncFileInfoNative), 48 },
+        new object[] { typeof(MatchInfoNative), 32 },
+        new object[] { typeof(CsvInfoNative), 32 },
+        new object[] { typeof(CsvSeriesInfoNative), 80 },
+        new object[] { typeof(CsvColumnNative), 48 },
     };
 
     [Theory]
@@ -129,6 +134,31 @@ public class LayoutTests
             Row(typeof(CalibrationChannelNative), "DetectedPlateaus", 72), Row(typeof(CalibrationChannelNative), "ExtraPlateaus", 76),
             Row(typeof(CalibrationChannelNative), "ThresholdRelaxed", 80), Row(typeof(CalibrationChannelNative), "Saturated", 84),
             Row(typeof(CalibrationChannelNative), "SweepLevels", 88),
+
+            Row(typeof(FrameSyncFileInfoNative), "HasBitsPerFrame", 4), Row(typeof(FrameSyncFileInfoNative), "BitsPerFrame", 8),
+            Row(typeof(FrameSyncFileInfoNative), "BitsFromLegacyKey", 12), Row(typeof(FrameSyncFileInfoNative), "Inverted", 16),
+            Row(typeof(FrameSyncFileInfoNative), "HasRandomized", 20), Row(typeof(FrameSyncFileInfoNative), "Randomized", 24),
+            Row(typeof(FrameSyncFileInfoNative), "PatternUtf8", 32), Row(typeof(FrameSyncFileInfoNative), "MaskUtf8", 40),
+
+            Row(typeof(MatchInfoNative), "Ok", 4), Row(typeof(MatchInfoNative), "MissingCount", 8),
+            Row(typeof(MatchInfoNative), "ExtraCount", 12), Row(typeof(MatchInfoNative), "Missing", 16),
+            Row(typeof(MatchInfoNative), "Extra", 24),
+
+            Row(typeof(CsvInfoNative), "SeriesCount", 4), Row(typeof(CsvInfoNative), "BaseDay", 8),
+            Row(typeof(CsvInfoNative), "SkippedRows", 12), Row(typeof(CsvInfoNative), "BaseTimeOffset", 16),
+            Row(typeof(CsvInfoNative), "XMax", 24),
+
+            Row(typeof(CsvSeriesInfoNative), "MetricType", 4), Row(typeof(CsvSeriesInfoNative), "NameUtf8", 8),
+            Row(typeof(CsvSeriesInfoNative), "StreamLabelUtf8", 16), Row(typeof(CsvSeriesInfoNative), "XValues", 24),
+            Row(typeof(CsvSeriesInfoNative), "YValues", 32), Row(typeof(CsvSeriesInfoNative), "YMin", 40),
+            Row(typeof(CsvSeriesInfoNative), "YMax", 48), Row(typeof(CsvSeriesInfoNative), "ReceiverIndex", 56),
+            Row(typeof(CsvSeriesInfoNative), "ChannelIndex", 60), Row(typeof(CsvSeriesInfoNative), "StreamOrder", 64),
+            Row(typeof(CsvSeriesInfoNative), "SourceId", 68), Row(typeof(CsvSeriesInfoNative), "PointCount", 72),
+
+            Row(typeof(CsvColumnNative), "MetricType", 4), Row(typeof(CsvColumnNative), "NameUtf8", 8),
+            Row(typeof(CsvColumnNative), "XValues", 16), Row(typeof(CsvColumnNative), "YValues", 24),
+            Row(typeof(CsvColumnNative), "SourceId", 32), Row(typeof(CsvColumnNative), "XCount", 36),
+            Row(typeof(CsvColumnNative), "YCount", 40),
         };
         return rows;
     }
@@ -152,6 +182,14 @@ public class LayoutTests
         Assert.Equal(6, (int)Status.Job);
         Assert.Equal(7, (int)Status.State);
         Assert.Equal(8, (int)Status.Io);
+    }
+
+    [Fact]
+    public void TheMetricNumbersAreTheCoresNumbers()
+    {
+        Assert.Equal(0, (int)MetricType.Snr);
+        Assert.Equal(1, (int)MetricType.FrameSyncLock);
+        Assert.Equal(2, (int)MetricType.AccumulatedMissedFrames);
     }
 
     [Fact]
