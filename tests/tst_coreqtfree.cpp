@@ -422,6 +422,68 @@ QStringList nativeProjectProblems(const QString& root, const QStringList& coreSo
     return problems;
 }
 
+
+/// The folder and project of the native tests (plan step 2.4): doctest, built by MSBuild with no Qt.
+const char* const kNativeTestsDir     = "native/tmdq_core_tests";
+const char* const kNativeTestsProject = "native/tmdq_core_tests/tmdq_core_tests.vcxproj";
+
+/// What is wrong with the native tests under @p root: a core source that is not core, or a project and a folder
+/// that disagree about which test sources there are, a file from another layer, Qt in the configuration or in
+/// anything a test source includes, or a solution that does not build it. Empty when the tests are Qt-free.
+QStringList nativeTestsProblems(const QString& root, const QStringList& coreSources)
+{
+    QStringList problems;
+    const QString project = fileText(root + "/" + kNativeTestsProject);
+    if (project.isEmpty())
+        return { QString("cannot read ") + kNativeTestsProject };
+    const QStringList files = projectCompiledFiles(project);
+
+    // The core it exercises: some of it, and all of it core. (It grows as suites are ported.)
+    const QStringList compiled = compiledNamesIn(files, "/src/model/", ".cpp");
+    if (compiled.isEmpty())
+        problems << "the tests project compiles no core source";
+    for (const QString& name : compiled)
+        if (!coreSources.contains(name))
+            problems << "the tests project compiles " + name + ", which is not a core source";
+
+    // Its own sources: every .cpp in the folder is built, and nothing else is claimed.
+    QStringList present;
+    for (const QString& file : QDir(root + "/" + kNativeTestsDir).entryList({"*.cpp"}, QDir::Files, QDir::Name))
+        present << QFileInfo(file).completeBaseName();
+    QStringList inProject;
+    for (const QString& file : files)
+        if (!file.contains('/') && file.endsWith(".cpp"))
+            inProject << QFileInfo(file).completeBaseName();
+    for (const QString& name : present)
+        if (!inProject.contains(name))
+            problems << "the tests project does not compile " + name + ".cpp";
+    for (const QString& name : inProject)
+        if (!present.contains(name))
+            problems << "the tests project compiles " + name + ".cpp, which is not in " + kNativeTestsDir;
+
+    // Nothing from another layer, and the project never says Qt outside its comments.
+    for (const QString& file : files)
+        if (file.contains("/src/view") || file.contains("/src/dto"))
+            problems << "the tests project compiles a file from another layer: " + file;
+    if (withoutXmlComments(project).contains("Qt", Qt::CaseInsensitive))
+        problems << "the tests project mentions Qt outside its comments";
+
+    // Nothing a test source includes - directly or through a header of ours - is Qt, a ViewModel or a View.
+    // (A source that includes only a third-party header, like doctest's main, has nothing of ours to follow.)
+    for (const QString& name : present)
+    {
+        const Closure closure = walk(root + "/" + kNativeTestsDir + "/" + name + ".cpp", root);
+        for (const QString& q : closure.qtIncludes)
+            problems << name + ".cpp reaches " + q;
+        for (const QString& v : closure.layerViolations)
+            problems << name + ".cpp: " + v;
+    }
+
+    if (!fileText(root + "/" + kNativeSolution).contains("native\\tmdq_core_tests\\tmdq_core_tests.vcxproj"))
+        problems << QString(kNativeSolution) + " does not build the native tests";
+    return problems;
+}
+
 } // namespace
 
 void TestCoreQtFree::theProcessingCoreIncludesNoQtHeader()
@@ -795,4 +857,101 @@ void TestCoreQtFree::theAbiGuardSeesQtAndHigherLayers()
     QVERIFY2(all.contains("alone.cpp: include walk found nothing to visit"), qPrintable(all));
     QVERIFY2(!all.contains("clean.cpp"), qPrintable(all));
     QCOMPARE(problems.size(), 4);
+}
+
+void TestCoreQtFree::theNativeTestsAreQtFreeAndCompileOnlyCoreSources()
+{
+    // The doctest executable (plan step 2.4) is built by MSBuild with no Qt on any path, so a Qt include in a test
+    // would fail its build; this says so here too, in the Qt suite, where a Qt-less CI would not be looking.
+    const QString root = projectRoot();
+    QVERIFY2(QDir(root + "/" + kNativeTestsDir).entryList({"test_*.cpp"}, QDir::Files).size() >= 1, "the native tests are not where expected");
+    const QStringList problems = nativeTestsProblems(root, kCoreSources);
+    QVERIFY2(problems.isEmpty(), qPrintable(problems.join("\n  ")));
+}
+
+void TestCoreQtFree::theNativeTestsGuardSeesEveryKindOfDrift()
+{
+    // The check above, on a miniature tree: one that agrees, then one fault at a time.
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString root = dir.path();
+    QVERIFY(QDir().mkpath(root + "/native/tmdq_core_tests"));
+    QVERIFY(QDir().mkpath(root + "/include/view"));
+    auto write = [](const QString& path, const QString& text) {
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(text.toUtf8());
+    };
+    write(root + "/include/view/panel.h", "#include <vector>\n");
+    write(root + "/include/shared.h", "#include <string>\n");
+    write(root + "/native/tmdq_core_tests/main.cpp", "#include \"doctest.h\"\n");
+    write(root + "/native/tmdq_core_tests/test_a.cpp", "#include \"doctest.h\"\n#include \"shared.h\"\n");
+    const QStringList core = { "alpha", "beta" };
+    const QString solution = "Project(\"{x}\") = \"t\", \"native\\tmdq_core_tests\\tmdq_core_tests.vcxproj\", \"{y}\"\n";
+    auto project = [](const QStringList& items, const QString& config = "<RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>") {
+        QString text = "<!-- no Qt here -->\n<Project>\n  " + config + "\n";
+        for (const QString& item : items)
+            text += "  <ClCompile Include=\"" + item + "\" />\n";
+        return text + "</Project>\n";
+    };
+    const QStringList good = { "main.cpp", "test_a.cpp", "..\\..\\src\\model\\alpha.cpp" };
+    auto check = [&](const QString& proj, const QString& slnText) {
+        write(root + "/native/tmdq_core_tests/tmdq_core_tests.vcxproj", proj);
+        write(root + "/tmdq.sln", slnText);
+        return nativeTestsProblems(root, core);
+    };
+    auto only = [](const QStringList& problems, const QString& needle) {
+        return problems.size() == 1 && problems.first().contains(needle);
+    };
+
+    QStringList clean = check(project(good), solution);
+    QVERIFY2(clean.isEmpty(), qPrintable(clean.join(";")));
+
+    QStringList notCore = good;
+    notCore << "..\\..\\src\\model\\gamma.cpp";
+    QStringList p = check(project(notCore), solution);
+    QVERIFY2(only(p, "gamma, which is not a core source"), qPrintable(p.join(";")));
+
+    QStringList noCore = { "main.cpp", "test_a.cpp" };
+    p = check(project(noCore), solution);
+    QVERIFY2(only(p, "compiles no core source"), qPrintable(p.join(";")));
+
+    QStringList unlisted = { "main.cpp", "..\\..\\src\\model\\alpha.cpp" };
+    p = check(project(unlisted), solution);
+    QVERIFY2(only(p, "does not compile test_a.cpp"), qPrintable(p.join(";")));
+
+    QStringList ghost = good;
+    ghost << "test_b.cpp";
+    p = check(project(ghost), solution);
+    QVERIFY2(only(p, "test_b.cpp, which is not in"), qPrintable(p.join(";")));
+
+    QStringList view = good;
+    view << "..\\..\\src\\view\\widget.cpp";
+    p = check(project(view), solution);
+    QVERIFY2(p.join(";").contains("a file from another layer: ../../src/view/widget.cpp"), qPrintable(p.join(";")));
+
+    p = check(project(good, "<IncludePath>C:\\Qt\\6.12.0\\include</IncludePath>"), solution);
+    QVERIFY2(only(p, "mentions Qt outside its comments"), qPrintable(p.join(";")));
+
+    p = check(project(good), "Project(\"{x}\") = \"t\", \"native\\other.vcxproj\", \"{y}\"\n");
+    QVERIFY2(only(p, "tmdq.sln does not build the native tests"), qPrintable(p.join(";")));
+
+    // And what a test source includes: Qt directly, Qt behind a header of ours, the View behind another.
+    write(root + "/native/tmdq_core_tests/test_a.cpp", "#include \"doctest.h\"\n#include <QString>\n");
+    p = check(project(good), solution);
+    QVERIFY2(only(p, "test_a.cpp reaches native/tmdq_core_tests/test_a.cpp: #include <QString>"), qPrintable(p.join(";")));
+
+    write(root + "/include/leaky.h", "class QObject;\n");
+    write(root + "/native/tmdq_core_tests/test_a.cpp", "#include \"leaky.h\"\n");
+    p = check(project(good), solution);
+    QVERIFY2(only(p, "test_a.cpp reaches include/leaky.h: forward declaration of QObject"), qPrintable(p.join(";")));
+
+    write(root + "/native/tmdq_core_tests/test_a.cpp", "#include \"shared.h\"\n#include \"panel.h\"\n");
+    p = check(project(good), solution);
+    QVERIFY2(only(p, "test_a.cpp: native/tmdq_core_tests/test_a.cpp: includes \"panel.h\""), qPrintable(p.join(";")));
+
+    QVERIFY(QFile::remove(root + "/native/tmdq_core_tests/tmdq_core_tests.vcxproj"));
+    write(root + "/tmdq.sln", solution);
+    p = nativeTestsProblems(root, core);
+    QVERIFY2(only(p, "cannot read"), qPrintable(p.join(";")));
 }

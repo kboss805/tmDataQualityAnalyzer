@@ -41,6 +41,10 @@ private slots:
     void theNativeProjectGuardSeesEveryKindOfDrift();
     void theAbiSourcesIncludeNoQtAndReachNoHigherLayer();
     void theAbiGuardSeesQtAndHigherLayers();
+
+    // The doctest executable of plan step 2.4 (native/tmdq_core_tests) is Qt-free and compiles only core sources.
+    void theNativeTestsAreQtFreeAndCompileOnlyCoreSources();
+    void theNativeTestsGuardSeesEveryKindOfDrift();
 };
 
 #endif // TST_CORE_QT_FREE_H

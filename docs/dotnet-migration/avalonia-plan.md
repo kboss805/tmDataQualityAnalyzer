@@ -148,7 +148,7 @@ sweep.
     called directly, with written files compared byte for byte.*
   - [x] **2.2d Series construction.** PR #185, merged as `4f880b3`. `buildStreamSeries`, the shared time base, stream identity and the import
     ordering. *With this the ABI covers everything 2.2 listed.*
-- [ ] **2.3 A C# interop library** (`TmDq.Core`) over the ABI, with a test project (xunit v3) that runs the
+- [x] **2.3 A C# interop library** (`TmDq.Core`) over the ABI, with a test project (xunit v3) that runs the
   committed fixtures through it and compares against numbers the Qt app produces today (the spike
   driver's 20/20 check, made permanent and widened to every fixture and both modes). Four PRs:
   - [x] **2.3a The library and its tests, for what the walking skeleton needs:** PR #186, merged as `36f1ecb`.
@@ -162,7 +162,7 @@ sweep.
   - [x] **2.3c The file formats:** PR #188, merged as `87729d7`. The frame-sync pattern file (read and write), template matching, CSV import
     and export, and clock stamps. *Tested over a corpus (58 pattern files, 56 CSV files, writes, matches,
     stamps) against what the core's own functions answer for the same inputs.*
-  - [ ] **2.3d Series construction:** `buildStreamSeries`, the shared time base, stream keys and the import
+  - [x] **2.3d Series construction:** PR #189, merged as `125afe4`. `buildStreamSeries`, the shared time base, stream keys and the import
     ordering, each wrapped and tested against the same numbers. *Split from 2.3c because the surface is as
     large again.*
 - [ ] **2.4 Port the core test suites off Qt Test** (D2), one suite per PR, old and new running side
@@ -172,6 +172,9 @@ sweep.
   `TestFrameProcessor`, `TestPipelineRunner`, `TestCalibrationExtractor`, and the suites for the code
   moved in step 1. Each ported suite is mutation-checked against the same mutants as the original;
   then the Qt Test version is deleted. The throughput benchmark moves with `TestPipelineRunner`.
+  The tests live in `native/tmdq_core_tests` (doctest, vendored in `lib/doctest`; MSBuild, no Qt;
+  `scripts/test_native.ps1`; a CI step in both jobs), and `TestCoreQtFree` holds the project to core
+  sources and no Qt. **Ported so far:** `TestTomlDocument` (the first PR, which also brought the framework).
 
 **Done when** the core and its tests build and pass with no Qt installed, and CI runs them.
 

@@ -42,7 +42,6 @@
 #include "tst_eventreporter.h"
 #include "tst_pipelinerunner.h"
 #include "tst_qtprocessingevents.h"
-#include "tst_tomldocument.h"
 
 /// Runs a single test suite and appends results to the shared log file.
 template<typename T>
@@ -155,7 +154,6 @@ int main(int argc, char* argv[])
     status |= runSuite<TestCalibrationRequest>(log_path);
     status |= runSuite<TestAbi>(log_path);
     status |= runSuite<TestEventReporter>(log_path);
-    status |= runSuite<TestTomlDocument>(log_path);
     status |= runSuite<TestQtProcessingEvents>(log_path);
 
     // Heavy suites — integration over a real .ch10 fixture; TestFrameProcessor alone

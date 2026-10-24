@@ -191,6 +191,15 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "tmdq_core.dll ($cfg) failed the build or the no-Qt check" }
           }
 
+      - name: Native tests (doctest, no Qt)
+        shell: powershell
+        run: |
+          # The core's own tests, ported off Qt Test one suite at a time (plan step 2.4): doctest, built by MSBuild
+          # with no Qt on any path. The script requires zero compiler warnings and no Qt import, then runs them.
+          $ErrorActionPreference = 'Continue'
+          powershell -ExecutionPolicy Bypass -File scripts\test_native.ps1 -Configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "the native tests failed" }
+
       - name: Managed tests (TmDq.Core against the native DLL)
         shell: powershell
         run: |
@@ -398,6 +407,15 @@ jobs:
             powershell -ExecutionPolicy Bypass -File scripts\build_core_dll.ps1 -Configuration $cfg
             if ($LASTEXITCODE -ne 0) { throw "tmdq_core.dll ($cfg) failed the build or the no-Qt check" }
           }
+
+      - name: Native tests (doctest, no Qt)
+        shell: powershell
+        run: |
+          # The core's own tests, ported off Qt Test one suite at a time (plan step 2.4): doctest, built by MSBuild
+          # with no Qt on any path. The script requires zero compiler warnings and no Qt import, then runs them.
+          $ErrorActionPreference = 'Continue'
+          powershell -ExecutionPolicy Bypass -File scripts\test_native.ps1 -Configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "the native tests failed" }
 
       - name: Managed tests (TmDq.Core against the native DLL)
         shell: powershell
