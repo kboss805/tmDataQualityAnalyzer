@@ -88,6 +88,9 @@ public class NotLoadedProbe
         Assert.Contains("Library.Load", Assert.Throws<InvalidOperationException>(() => CsvFile.Parse(good)).Message);
         Assert.Contains("Library.Load", Assert.Throws<InvalidOperationException>(() => CsvFile.Write(good, new[] { new CsvColumn(MetricType.Snr, "A", 0, new[] { 0.0 }, new[] { 0.0 }) }, 1, 0)).Message);
         Assert.Contains("Library.Load", Assert.Throws<InvalidOperationException>(() => ClockTime.Format(1, 0, 0)).Message);
+        Assert.Contains("Library.Load", Assert.Throws<InvalidOperationException>(() => new TimeBase()).Message);
+        Assert.Contains("Library.Load", Assert.Throws<InvalidOperationException>(() => new StreamKey(0, "A", 1).IsSameStream(new StreamKey(0, "A", 1))).Message);
+        Assert.Contains("Library.Load", Assert.Throws<InvalidOperationException>(() => ImportedStreams.AssignOrders(new[] { new ImportedSeriesInfo(MetricType.Snr, "A", 0, 1) })).Message);
         Assert.Null(Library.LoadedPath);
 
         // A file that is not a library is refused, and leaves nothing loaded...

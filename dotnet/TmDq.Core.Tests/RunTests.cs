@@ -655,6 +655,12 @@ public class RunTests
         {
             using StreamResult result = KeepOneOf(big);
             Assert.True(result.TimesSec.Length > 6000);
+
+            // A series set pins the stream's data until it is disposed: one never disposed would keep it alive past the result.
+            using (SeriesSet set = result.BuildSeries(0.0))
+            {
+                Assert.Equal(result.ChannelCount, set.Count);
+            }
         }
         long grown = System.Diagnostics.Process.GetCurrentProcess().PrivateMemorySize64 - before;
         Assert.True(grown < 40L * 1024 * 1024, $"private memory grew by {grown / (1024 * 1024)} MiB over thirty disposed results");
