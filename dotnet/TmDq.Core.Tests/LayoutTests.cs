@@ -60,6 +60,11 @@ public class LayoutTests
         new object[] { typeof(CsvInfoNative), 32 },
         new object[] { typeof(CsvSeriesInfoNative), 80 },
         new object[] { typeof(CsvColumnNative), 48 },
+        new object[] { typeof(SeriesSetInfoNative), 24 },
+        new object[] { typeof(SeriesSpecNative), 72 },
+        new object[] { typeof(StreamKeyNative), 24 },
+        new object[] { typeof(TimeBaseInfoNative), 24 },
+        new object[] { typeof(ImportedSeriesNative), 24 },
     };
 
     [Theory]
@@ -159,6 +164,25 @@ public class LayoutTests
             Row(typeof(CsvColumnNative), "XValues", 16), Row(typeof(CsvColumnNative), "YValues", 24),
             Row(typeof(CsvColumnNative), "SourceId", 32), Row(typeof(CsvColumnNative), "XCount", 36),
             Row(typeof(CsvColumnNative), "YCount", 40),
+
+            Row(typeof(SeriesSetInfoNative), "SeriesCount", 4), Row(typeof(SeriesSetInfoNative), "ElapsedCount", 8),
+            Row(typeof(SeriesSetInfoNative), "Elapsed", 16),
+
+            Row(typeof(SeriesSpecNative), "MetricType", 4), Row(typeof(SeriesSpecNative), "NameUtf8", 8),
+            Row(typeof(SeriesSpecNative), "StreamLabelUtf8", 16), Row(typeof(SeriesSpecNative), "YValues", 24),
+            Row(typeof(SeriesSpecNative), "YMin", 32), Row(typeof(SeriesSpecNative), "YMax", 40),
+            Row(typeof(SeriesSpecNative), "ReceiverIndex", 48), Row(typeof(SeriesSpecNative), "ChannelIndex", 52),
+            Row(typeof(SeriesSpecNative), "StreamOrder", 56), Row(typeof(SeriesSpecNative), "StreamSequence", 60),
+            Row(typeof(SeriesSpecNative), "SourceId", 64), Row(typeof(SeriesSpecNative), "YCount", 68),
+
+            Row(typeof(StreamKeyNative), "SourceId", 4), Row(typeof(StreamKeyNative), "LabelUtf8", 8),
+            Row(typeof(StreamKeyNative), "Channel", 16),
+
+            Row(typeof(TimeBaseInfoNative), "BaseDay", 4), Row(typeof(TimeBaseInfoNative), "BaseAbsSeconds", 8),
+            Row(typeof(TimeBaseInfoNative), "BaseTimeOffset", 16),
+
+            Row(typeof(ImportedSeriesNative), "MetricType", 4), Row(typeof(ImportedSeriesNative), "StreamLabelUtf8", 8),
+            Row(typeof(ImportedSeriesNative), "SourceId", 16), Row(typeof(ImportedSeriesNative), "StreamOrder", 20),
         };
         return rows;
     }

@@ -110,6 +110,28 @@ public sealed unsafe class StreamResult : IDisposable
             TimesSec.ToArray(), LockPercent.ToArray(), MissedFrames.ToArray(), channels);
     }
 
+    /// <summary>
+    /// The series this stream yields against a shared time base at <paramref name="baseAbsSeconds"/> absolute IRIG
+    /// seconds. The set keeps this stream's data alive, so this result may be disposed first.
+    /// </summary>
+    public SeriesSet BuildSeries(double baseAbsSeconds)
+    {
+        Library.Check(Native.tmdq_stream_result_series(Handle, baseAbsSeconds, out IntPtr set));
+        return new SeriesSet(set);
+    }
+
+    /// <summary>Which stream this is: the same stream run again is the same only if source, label and channel all agree.</summary>
+    public StreamKey Key
+    {
+        get
+        {
+            StreamKeyNative key = default;
+            key.StructSize = (uint)sizeof(StreamKeyNative);
+            Library.Check(Native.tmdq_stream_result_key(Handle, &key));
+            return new StreamKey(key.SourceId, Text.Read(key.LabelUtf8), key.Channel);
+        }
+    }
+
     private ChannelSeriesNative Fetch(int index)
     {
         ThrowIfDisposed();

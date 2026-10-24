@@ -159,7 +159,7 @@ sweep.
     and the managed copy of its result, whose profiles feed a run. The callbacks both runs use move into one
     shared bridge. *Tested against the numbers the core's own `CalibrationExtractor` makes: all 48 channels, the
     report, and a run with the profiles it found.*
-  - [ ] **2.3c The file formats:** the frame-sync pattern file (read and write), template matching, CSV import
+  - [x] **2.3c The file formats:** PR #188, merged as `87729d7`. The frame-sync pattern file (read and write), template matching, CSV import
     and export, and clock stamps. *Tested over a corpus (58 pattern files, 56 CSV files, writes, matches,
     stamps) against what the core's own functions answer for the same inputs.*
   - [ ] **2.3d Series construction:** `buildStreamSeries`, the shared time base, stream keys and the import
