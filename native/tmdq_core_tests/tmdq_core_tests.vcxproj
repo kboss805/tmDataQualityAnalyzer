@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  tmdq_core_tests.exe - the native core's tests, written with doctest (lib\doctest) and built with NO Qt.
+
+  Plan step 2.4 ports the core's test suites off Qt Test one suite per pull request. A suite is ported when this
+  project has every case of the Qt one and a mutation check has been run against it; then the Qt version is
+  deleted. The project compiles only the core sources the ported suites need (each is a src\model\<name>.cpp that
+  tmdq_core.vcxproj also builds), so it grows with them.
+
+  There is no Qt include path and no Qt library here, so a test that reached for Qt would not compile.
+  scripts\test_native.ps1 builds it, requires zero compiler warnings, and runs it.
+
+  Compiler switches are the ones tmdq_core.vcxproj uses, so the sources are compiled the same way here as in the
+  DLL. Intermediates go in a folder per toolset, as there.
+-->
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{B7C3E9A1-52D4-4F68-8A0E-3C9D1F5B7E26}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>tmdq_core_tests</RootNamespace>
+    <ProjectName>tmdq_core_tests</ProjectName>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <UseDebugLibraries Condition="'$(Configuration)' == 'Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)' != 'Debug'">false</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+
+  <PropertyGroup>
+    <!-- Next to the project, in the ignored native\out and native\obj (a folder of its own for the objects). -->
+    <OutDir>$(MSBuildThisFileDirectory)..\out\$(Configuration)\</OutDir>
+    <IntDir>$(MSBuildThisFileDirectory)..\obj\$(PlatformToolset)\$(Configuration)\tests\</IntDir>
+    <TargetName>tmdq_core_tests</TargetName>
+    <LinkIncremental Condition="'$(Configuration)' == 'Debug'">true</LinkIncremental>
+    <LinkIncremental Condition="'$(Configuration)' != 'Debug'">false</LinkIncremental>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <SDLCheck>false</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <ProgramDataBaseFileName>$(IntDir)tmdq_core_tests.pdb</ProgramDataBaseFileName>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\lib\doctest;$(MSBuildThisFileDirectory)..\..\include;$(MSBuildThisFileDirectory)..\..\include\dto;$(MSBuildThisFileDirectory)..\..\include\model;$(MSBuildThisFileDirectory)..\..\lib\irig106\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>UNICODE;_UNICODE;WIN32;WIN64;_ENABLE_EXTENDED_ALIGNED_STORAGE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/FS /utf-8 /Zc:__cplusplus /Zc:throwingNew /Zc:externConstexpr /w34100 /w34189 /w44456 /w44457 /w44458 /wd4577 /wd4467 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)' == 'Debug'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)' != 'Debug'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <!-- doctest's main (compiled once, here) and one test_<suite>.cpp for each ported suite. -->
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="test_textfile.cpp" />
+    <ClCompile Include="test_tomldocument.cpp" />
+  </ItemGroup>
+
+  <!-- The core the ported suites exercise: src\model\<name>.cpp, each also built by tmdq_core.vcxproj. -->
+  <ItemGroup>
+    <ClCompile Include="..\..\src\model\textfile.cpp" />
+    <ClCompile Include="..\..\src\model\tomldocument.cpp" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

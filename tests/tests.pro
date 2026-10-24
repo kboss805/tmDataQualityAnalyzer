@@ -207,7 +207,6 @@ SOURCES += \
     tst_framesync.cpp \
     tst_coreqtfree.cpp \
     tst_abi.cpp \
-    tst_tomldocument.cpp \
     tst_qtprocessingevents.cpp \
     tst_ch10packetreader.cpp \
     tst_eventreporter.cpp \
@@ -247,7 +246,6 @@ HEADERS += \
     tst_framesync.h \
     tst_coreqtfree.h \
     tst_abi.h \
-    tst_tomldocument.h \
     tst_qtprocessingevents.h \
     tst_ch10packetreader.h \
     tst_eventreporter.h \
