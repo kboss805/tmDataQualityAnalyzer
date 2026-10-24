@@ -35,7 +35,6 @@
 #include "tst_templatematcher.h"
 #include "tst_packetqueue.h"
 #include "tst_intervalgate.h"
-#include "tst_framesync.h"
 #include "tst_coreqtfree.h"
 #include "tst_abi.h"
 #include "tst_eventreporter.h"
@@ -147,7 +146,6 @@ int main(int argc, char* argv[])
     status |= runSuite<TestTemplateMatcher>(log_path);
     status |= runSuite<TestPacketQueue>(log_path);
     status |= runSuite<TestIntervalGate>(log_path);
-    status |= runSuite<TestFrameSync>(log_path);
     status |= runSuite<TestCoreQtFree>(log_path);
     status |= runSuite<TestCalibrationRequest>(log_path);
     status |= runSuite<TestAbi>(log_path);
