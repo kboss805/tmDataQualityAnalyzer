@@ -47,7 +47,7 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   `native/out/<config>/tmdq_core.dll` (build that first; `TMDQ_CORE_DLL` overrides). The tests run the
   committed recordings through the library and compare with numbers the Qt pipeline produces. An xunit v3
   project is an executable; the build merges a UTF-8 code-page manifest into it with `mt.exe`, because the vendored
-  irig106 opens files with a narrow `open()` that reads the active code page. Green baseline **194 passed / 0
+  irig106 opens files with a narrow `open()` that reads the active code page. Green baseline **256 passed / 0
   failed / 1 skipped** (the skip is the probe `IsolatedLoadTests` runs in a child process). CI runs it in both jobs.
 
 **After a Qt version bump, CLEAN every build directory** — `build/` *and* `tests/`, Debug and

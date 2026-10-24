@@ -170,6 +170,11 @@ public static unsafe class Library
         (StructId.CalibrationRequest, typeof(CalibrationRequestNative)),
         (StructId.CalibrationInfo, typeof(CalibrationInfoNative)),
         (StructId.CalibrationChannel, typeof(CalibrationChannelNative)),
+        (StructId.FrameSyncFileInfo, typeof(FrameSyncFileInfoNative)),
+        (StructId.MatchInfo, typeof(MatchInfoNative)),
+        (StructId.CsvInfo, typeof(CsvInfoNative)),
+        (StructId.CsvSeriesInfo, typeof(CsvSeriesInfoNative)),
+        (StructId.CsvColumn, typeof(CsvColumnNative)),
     };
 
     internal static void RequireLoaded()
