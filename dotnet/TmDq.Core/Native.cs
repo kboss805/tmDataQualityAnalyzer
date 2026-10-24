@@ -34,6 +34,9 @@ internal enum StructId
     Callbacks = 6,
     StreamInfo = 7,
     ChannelSeries = 8,
+    CalibrationRequest = 9,
+    CalibrationInfo = 10,
+    CalibrationChannel = 11,
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 8)]
@@ -138,6 +141,67 @@ internal unsafe struct ChannelSeriesNative
     public double* Values;
 }
 
+[StructLayout(LayoutKind.Sequential, Pack = 8)]
+internal unsafe struct CalibrationRequestNative
+{
+    public uint StructSize;
+    public int TimeChannelId;
+    public byte* CalFileNameUtf8;
+    public byte* AppRootUtf8;
+    public byte* SyncPatternUtf8;
+    public byte* SyncMaskUtf8;
+    public byte* ReceiverParamsTomlUtf8;
+    public double* StepDb;
+    public double DataRateMbps;
+    public double ClipStartSec;
+    public double ClipEndSec;
+    public int PcmChannelId;
+    public int BitsInMinorFrame;
+    public int Randomized;
+    public int Inverted;
+    public int SwapBytes;
+    public int NumReceivers;
+    public int ReceiverChannels;
+    public int StepCount;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 8)]
+internal unsafe struct CalibrationInfoNative
+{
+    public uint StructSize;
+    public int ChannelCount;
+    public byte* SummaryUtf8;
+    public byte* ErrorUtf8;
+    public byte* ReportUtf8;
+    public double RecordingSeconds;
+    public int ClipIgnored;
+    public int Reserved;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 8)]
+internal unsafe struct CalibrationChannelNative
+{
+    public uint StructSize;
+    public int WordIndex;
+    public byte* NameUtf8;
+    public CalPointNative* Points;
+    public double* PlateauLevels;
+    public double* UnresolvedDb;
+    public double EdgeThreshold;
+    public int PointCount;
+    public int PlateauLevelCount;
+    public int UnresolvedCount;
+    public int Valid;
+    public int HadData;
+    public int Outcome;
+    public int DetectedPlateaus;
+    public int ExtraPlateaus;
+    public int ThresholdRelaxed;
+    public int Saturated;
+    public int SweepLevels;
+    public int Reserved;
+}
+
 internal static unsafe partial class Native
 {
     private const string Dll = "tmdq_core";
@@ -219,4 +283,53 @@ internal static unsafe partial class Native
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
     internal static partial void tmdq_stream_result_free(IntPtr result);
+
+    // --- step files and calibration
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_steps_parse(byte* pathUtf8, out IntPtr steps);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_steps_count(IntPtr steps);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial double* tmdq_steps_db(IntPtr steps);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial void tmdq_steps_free(IntPtr steps);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_step_config_initial_path(byte* appRootUtf8, byte* preferredUtf8, byte* buffer, int capacity);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_calibration_start(CalibrationRequestNative* request, CallbacksNative* callbacks, out IntPtr calibration);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial void tmdq_calibration_cancel(IntPtr calibration);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_calibration_running(IntPtr calibration);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial void tmdq_calibration_wait(IntPtr calibration);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial void tmdq_calibration_free(IntPtr calibration);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_calibration_result(IntPtr calibration, CalibrationInfoNative* info);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_calibration_channel_result(IntPtr calibration, int index, CalibrationChannelNative* channel);
 }

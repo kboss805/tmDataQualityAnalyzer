@@ -167,6 +167,9 @@ public static unsafe class Library
         (StructId.Callbacks, typeof(CallbacksNative)),
         (StructId.StreamInfo, typeof(StreamInfoNative)),
         (StructId.ChannelSeries, typeof(ChannelSeriesNative)),
+        (StructId.CalibrationRequest, typeof(CalibrationRequestNative)),
+        (StructId.CalibrationInfo, typeof(CalibrationInfoNative)),
+        (StructId.CalibrationChannel, typeof(CalibrationChannelNative)),
     };
 
     internal static void RequireLoaded()
