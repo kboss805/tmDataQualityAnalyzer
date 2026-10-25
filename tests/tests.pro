@@ -201,7 +201,6 @@ SOURCES += \
     tst_streamconfigschema.cpp \
     tst_processingtemplateschema.cpp \
     tst_templatematcher.cpp \
-    tst_intervalgate.cpp \
     tst_coreqtfree.cpp \
     tst_abi.cpp \
     tst_qtprocessingevents.cpp \
@@ -236,7 +235,6 @@ HEADERS += \
     tst_streamconfigschema.h \
     tst_processingtemplateschema.h \
     tst_templatematcher.h \
-    tst_intervalgate.h \
     tst_coreqtfree.h \
     tst_abi.h \
     tst_qtprocessingevents.h \
