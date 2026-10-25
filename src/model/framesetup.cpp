@@ -298,8 +298,11 @@ std::string FrameSetup::channelPartOfName(const std::string& name)
 bool FrameSetup::buildDefaultReceiverMap(int num_receivers, int receiver_channels,
                                          int num_words_in_minor_frame, std::string& error)
 {
+    // Each count on its own as well as the product: two negative counts make a positive product, and the loops below
+    // would then build nothing and report success.
     const int total_params = num_receivers * receiver_channels;
-    if (total_params <= 0 || total_params >= num_words_in_minor_frame)
+    if (num_receivers <= 0 || receiver_channels <= 0 || total_params <= 0
+        || total_params >= num_words_in_minor_frame)
     {
         error = "Num Receivers x Receiver Channels exceeds the words available "
                 "in the minor frame.";

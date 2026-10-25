@@ -184,7 +184,6 @@ SOURCES += \
     tst_batchcontroller.cpp \
     tst_mainview.cpp \
     tst_mainviewmodel_helpers.cpp \
-    tst_framesetup.cpp \
     tst_plotviewmodel.cpp \
     tst_plotwidget.cpp \
     tst_tmchart.cpp \
@@ -218,7 +217,6 @@ HEADERS += \
     tst_batchcontroller.h \
     tst_mainview.h \
     tst_mainviewmodel_helpers.h \
-    tst_framesetup.h \
     tst_plotviewmodel.h \
     tst_plotwidget.h \
     tst_tmchart.h \

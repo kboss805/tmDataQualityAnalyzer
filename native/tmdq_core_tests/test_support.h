@@ -79,6 +79,39 @@ inline std::string utf8(const char8_t* text)
     return std::string(reinterpret_cast<const char*>(text));
 }
 
+/// The repository root: the first folder above the working directory, or above this header's own location, that
+/// holds `tmdq.sln`. The second is what makes the committed fixtures (`tests/fixtures`, `settings/`) reachable however
+/// the executable is started; MSBuild hands the compiler absolute paths, so `__FILE__` is one. Empty if neither finds it.
+inline fs::path repoRoot()
+{
+    std::error_code ec;
+    for (fs::path start : {fs::current_path(ec), fs::path(__FILE__).parent_path()})
+    {
+        for (fs::path dir = fs::absolute(start, ec); !dir.empty(); dir = dir.parent_path())
+        {
+            if (fs::exists(dir / "tmdq.sln", ec))
+            {
+                return dir;
+            }
+            if (dir == dir.parent_path())
+            {
+                break;
+            }
+        }
+    }
+    return {};
+}
+
+/// A committed file under the repository, required to exist: a missing fixture is a broken checkout, not a skip.
+inline fs::path repoFile(const fs::path& relative)
+{
+    const fs::path root = repoRoot();
+    REQUIRE_MESSAGE(!root.empty(), "the repository root (the folder holding tmdq.sln) was not found");
+    const fs::path file = root / relative;
+    REQUIRE_MESSAGE(fs::exists(file), "missing committed file: " << file.string());
+    return file;
+}
+
 } // namespace tmdq_test
 
 #endif // TMDQ_TEST_SUPPORT_H

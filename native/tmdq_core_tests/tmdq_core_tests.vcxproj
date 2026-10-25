@@ -101,6 +101,7 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="test_eventreporter.cpp" />
+    <ClCompile Include="test_framesetup.cpp" />
     <ClCompile Include="test_framesync.cpp" />
     <ClCompile Include="test_intervalgate.cpp" />
     <ClCompile Include="test_packetqueue.cpp" />
