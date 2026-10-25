@@ -705,10 +705,10 @@ TEST_CASE("Ch10PacketReader: prepare resolves every attribute a worker reads")
     CHECK(a.bitsInFrame == 790u);
     CHECK(a.wordsInFrame == 50u);
     CHECK(a.wordLen == 16u);
-    // NOT asserted for this stream: wordMask. irig106's Set_Attributes_Ext_PcmF1 ANDs the common word mask with the
-    // frame-sync mask, so with this sync mask the word mask comes out 0xFF and FrameProcessor masks every receiver word
-    // to its low byte. That is a defect (recorded in docs/claude.md, plan step 2.4, TestCh10PacketReader), not the
-    // behaviour this suite should pin. The unmasked stream below has the word mask it should.
+    // Every bit of a word, whatever the sync mask. irig106's Set_Attributes_Ext_PcmF1 ANDs its word mask with the
+    // sync mask, so read back from the library this stream's would be 0xFF and every receiver word would lose its high
+    // byte; the reader builds it from the word length instead.
+    CHECK(a.wordMask == 0xFFFFu);
     CHECK(a.minSyncs >= 1u);
     CHECK(!a.needsSwap);                       // the operator's byte order, not the library's
     // step_cal declares 0.8 Mbps in its TMATS (TestChapter10Reader pins that), so a bit is 12.5 x 100 ns.

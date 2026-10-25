@@ -28,6 +28,7 @@ private slots:
     void processLockOnlyModeHasNoChannels();
     void processFrameSyncErrorsMonotonic();
     void processSlopeAffectsValues();
+    void aSyncMaskDoesNotMaskReceiverWords();
     void processShortPeriodMoreSamples();
     void calibrationRoundTripOnRealFileProducesCleanSteps();
     void offPhaseSyncAfterLockLossIsNotExtracted();

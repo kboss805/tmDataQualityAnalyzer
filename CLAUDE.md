@@ -23,7 +23,7 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   suites**) is dominated by the real-Ch10 integration suites (a few minutes); add `--fast` (or
   `TMDQ_FAST_TESTS=1`) to skip the real-`.ch10` integration suites for ~1 s local iteration — **local only; CI
   and releases run the full suite**. No CLI single-suite filter.
-  Green baseline: **1021 passed / 0 failed / 1 skipped** normally, **1022 / 0 / 0** at release. The
+  Green baseline: **1022 passed / 0 failed / 1 skipped** normally, **1023 / 0 / 0** at release. The
   one standing skip is the heavy PRN throughput benchmark, opt-in via `TMDQA_RUN_HEAVY_BENCH=1`
   because it walks a 640 MB recording nine times and takes minutes. At release it is not skipped:
   `scripts\run_throughput_bench.ps1` builds Release, enables it, runs it **pinned to the
