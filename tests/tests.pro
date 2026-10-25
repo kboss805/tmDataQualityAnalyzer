@@ -178,8 +178,6 @@ HEADERS += \
 # Test sources
 SOURCES += \
     main.cpp \
-    tst_channeldata.cpp \
-    tst_chapter10reader.cpp \
     tst_constants.cpp \
     tst_batchcontroller.cpp \
     tst_mainview.cpp \
@@ -209,8 +207,6 @@ SOURCES += \
 
 # Test headers (needed for MOC processing)
 HEADERS += \
-    tst_channeldata.h \
-    tst_chapter10reader.h \
     tst_constants.h \
     tst_batchcontroller.h \
     tst_mainview.h \

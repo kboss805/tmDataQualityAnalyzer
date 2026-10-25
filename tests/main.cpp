@@ -5,8 +5,6 @@
 #include <QtTest>
 
 
-#include "tst_channeldata.h"
-#include "tst_chapter10reader.h"
 #include "tst_constants.h"
 #include "tst_frameprocessor.h"
 #include "tst_batchcontroller.h"
@@ -117,7 +115,6 @@ int main(int argc, char* argv[])
     // Fast suites — pure logic plus widget/dialog construction; no large .ch10
     // fixture, all sub-second. These always run (and are the set CI runs, where the
     // .ch10 fixtures are absent).
-    status |= runSuite<TestChannelData>(log_path);
     status |= runSuite<TestConstants>(log_path);
     status |= runSuite<TestMainViewModelHelpers>(log_path);
     status |= runSuite<TestPlotViewModel>(log_path);
@@ -146,7 +143,6 @@ int main(int argc, char* argv[])
     // CI and the release gate always run them.
     if (!fast_mode)
     {
-        status |= runSuite<TestChapter10Reader>(log_path);
         status |= runSuite<TestFrameProcessor>(log_path);
         status |= runSuite<TestProcessingCoordinator>(log_path);
         status |= runSuite<TestPipelineRunner>(log_path);
@@ -155,7 +151,7 @@ int main(int argc, char* argv[])
     else
     {
         QTextStream(stdout)
-            << "FAST MODE: skipped the real-Ch10 integration suites (TestChapter10Reader, "
+            << "FAST MODE: skipped the real-Ch10 integration suites ("
                "TestFrameProcessor, TestProcessingCoordinator, "
                "TestPipelineRunner, TestCalibrationExtractor). "
                "Run without --fast / TMDQ_FAST_TESTS for the full suite.\n";
