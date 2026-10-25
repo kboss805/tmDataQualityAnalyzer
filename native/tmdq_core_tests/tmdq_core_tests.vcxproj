@@ -100,6 +100,7 @@
   <!-- doctest's main (compiled once, here) and one test_<suite>.cpp for each ported suite. -->
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="test_eventreporter.cpp" />
     <ClCompile Include="test_framesync.cpp" />
     <ClCompile Include="test_textfile.cpp" />
     <ClCompile Include="test_textformat.cpp" />

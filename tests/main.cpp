@@ -37,7 +37,6 @@
 #include "tst_intervalgate.h"
 #include "tst_coreqtfree.h"
 #include "tst_abi.h"
-#include "tst_eventreporter.h"
 #include "tst_pipelinerunner.h"
 #include "tst_qtprocessingevents.h"
 
@@ -149,7 +148,6 @@ int main(int argc, char* argv[])
     status |= runSuite<TestCoreQtFree>(log_path);
     status |= runSuite<TestCalibrationRequest>(log_path);
     status |= runSuite<TestAbi>(log_path);
-    status |= runSuite<TestEventReporter>(log_path);
     status |= runSuite<TestQtProcessingEvents>(log_path);
 
     // Heavy suites — integration over a real .ch10 fixture; TestFrameProcessor alone
