@@ -173,7 +173,9 @@ for (int i = 0; i + 1 < intSize(boundaries); i++)
         continue;
     }
     const int slot = boundary_slot[i] + 1;
-    if (slot >= top_slot || paired[slot])
+    // Slots are counted from the run's first level, so a transition before the
+    // run has a negative one: that dwell is not part of the sweep.
+    if (slot < 0 || slot >= top_slot || paired[slot])
     {
         continue;
     }
@@ -578,23 +580,33 @@ bool calibrateSaturatedTop(const std::vector<double>& rawValues,
     {
         return false;
     }
-    const std::vector<int>& boundaries    = grid.boundaries;
-    const std::vector<int>& boundary_slot = grid.slot;
     // Each level belongs to the dwell its first sample sits in. The run's
     // first level is taken to be step 0: unlike the full-sweep path there is
     // no spare level to drop as a turn-on transient, because the whole reason
     // this path runs is that levels are MISSING.
+    //
+    // The grid counts dwells from the first transition in the RECORDING, which
+    // need not be the run's: a turn-on transient above the 0 dB level, before
+    // the sweep reverses into it, adds a transition of its own. So every slot is
+    // taken relative to the run's first level - otherwise that transient shifts
+    // the whole numbering up one step (5000, 1000, 2000, 3000, rail read 1000 as
+    // 6 dB and left 0 dB unresolved).
     auto slotOf = [&](int begin_sample) {
         int slot = 0;
-        for (int i = 0; i < intSize(boundaries); i++)
+        for (int i = 0; i < intSize(grid.boundaries); i++)
         {
-            if (begin_sample > boundaries[i])
+            if (begin_sample > grid.boundaries[i])
             {
-                slot = boundary_slot[i] + 1;
+                slot = grid.slot[i] + 1;
             }
         }
         return slot;
     };
+    const int run_first_slot = slotOf(levels[run_begin].begin);
+    for (int& slot : grid.slot)
+    {
+        slot -= run_first_slot;
+    }
     std::vector<int> step_slots;
     for (int k = run_begin; k <= last; k++)
     {
