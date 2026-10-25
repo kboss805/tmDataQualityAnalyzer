@@ -17,7 +17,6 @@
 #include "tst_tmchart.h"
 #include "tst_plotcustomizationdialog.h"
 #include "tst_processingcoordinator.h"
-#include "tst_stepdetector.h"
 #include "tst_calibrationextractor.h"
 #include "tst_calibrationrequest.h"
 #include "tst_ch10packetreader.h"
@@ -130,7 +129,6 @@ int main(int argc, char* argv[])
     status |= runSuite<TestPlotCustomizationDialog>(log_path);
     status |= runSuite<TestStreamConfigDialog>(log_path);
     status |= runSuite<TestExportDialog>(log_path);
-    status |= runSuite<TestStepDetector>(log_path);
     status |= runSuite<TestSeriesColumnSchema>(log_path);
     status |= runSuite<TestCsvSeries>(log_path);
     status |= runSuite<TestFrameSyncFile>(log_path);

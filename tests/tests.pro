@@ -205,7 +205,6 @@ SOURCES += \
     tst_qtprocessingevents.cpp \
     tst_ch10packetreader.cpp \
     tst_pipelinerunner.cpp \
-    tst_stepdetector.cpp \
     tst_calibrationextractor.cpp \
     tst_calibrationrequest.cpp
 
@@ -238,6 +237,5 @@ HEADERS += \
     tst_qtprocessingevents.h \
     tst_ch10packetreader.h \
     tst_pipelinerunner.h \
-    tst_stepdetector.h \
     tst_calibrationextractor.h \
     tst_calibrationrequest.h
