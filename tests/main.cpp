@@ -19,7 +19,6 @@
 #include "tst_processingcoordinator.h"
 #include "tst_calibrationextractor.h"
 #include "tst_calibrationrequest.h"
-#include "tst_ch10packetreader.h"
 #include "tst_streamconfigdialog.h"
 
 #include "tst_exportdialog.h"
@@ -148,7 +147,6 @@ int main(int argc, char* argv[])
     if (!fast_mode)
     {
         status |= runSuite<TestChapter10Reader>(log_path);
-        status |= runSuite<TestCh10PacketReader>(log_path);
         status |= runSuite<TestFrameProcessor>(log_path);
         status |= runSuite<TestProcessingCoordinator>(log_path);
         status |= runSuite<TestPipelineRunner>(log_path);
@@ -158,7 +156,7 @@ int main(int argc, char* argv[])
     {
         QTextStream(stdout)
             << "FAST MODE: skipped the real-Ch10 integration suites (TestChapter10Reader, "
-               "TestCh10PacketReader, TestFrameProcessor, TestProcessingCoordinator, "
+               "TestFrameProcessor, TestProcessingCoordinator, "
                "TestPipelineRunner, TestCalibrationExtractor). "
                "Run without --fast / TMDQ_FAST_TESTS for the full suite.\n";
     }

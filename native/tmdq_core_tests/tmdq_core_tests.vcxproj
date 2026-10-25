@@ -73,6 +73,8 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <!-- irig106 uses ntohs and friends; the DLL links the same. -->
+      <AdditionalDependencies>ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)' == 'Debug'">
@@ -100,6 +102,7 @@
   <!-- doctest's main (compiled once, here) and one test_<suite>.cpp for each ported suite. -->
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="test_ch10packetreader.cpp" />
     <ClCompile Include="test_eventreporter.cpp" />
     <ClCompile Include="test_framesetup.cpp" />
     <ClCompile Include="test_framesync.cpp" />
@@ -113,10 +116,38 @@
 
   <!-- The core the ported suites exercise: src\model\<name>.cpp, each also built by tmdq_core.vcxproj. -->
   <ItemGroup>
+    <ClCompile Include="..\..\src\model\ch10packetreader.cpp" />
+    <ClCompile Include="..\..\src\model\channeldata.cpp" />
+    <ClCompile Include="..\..\src\model\chapter10reader.cpp" />
     <ClCompile Include="..\..\src\model\framesetup.cpp" />
     <ClCompile Include="..\..\src\model\stepdetector.cpp" />
     <ClCompile Include="..\..\src\model\textfile.cpp" />
     <ClCompile Include="..\..\src\model\tomldocument.cpp" />
+  </ItemGroup>
+
+  <!-- The vendored irig106 library, for the suites that read recordings: plain C, third-party, no warnings, exactly as
+       tmdq_core.vcxproj compiles it. -->
+  <ItemGroup>
+    <ClCompile Include="..\..\lib\irig106\src\irig106ch10.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_time.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_data_stream.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_decode_time.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_decode_tmats.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_decode_tmats_g.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_decode_tmats_r.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_decode_tmats_m.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_decode_tmats_p.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_decode_tmats_b.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_decode_tmats_c.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_decode_tmats_d.c" />
+    <ClCompile Include="..\..\lib\irig106\src\i106_decode_pcmf1.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Update="..\..\lib\irig106\src\*.c">
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
