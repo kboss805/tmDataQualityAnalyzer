@@ -105,6 +105,7 @@
     <ClCompile Include="test_framesync.cpp" />
     <ClCompile Include="test_intervalgate.cpp" />
     <ClCompile Include="test_packetqueue.cpp" />
+    <ClCompile Include="test_stepdetector.cpp" />
     <ClCompile Include="test_textfile.cpp" />
     <ClCompile Include="test_textformat.cpp" />
     <ClCompile Include="test_tomldocument.cpp" />
@@ -113,6 +114,7 @@
   <!-- The core the ported suites exercise: src\model\<name>.cpp, each also built by tmdq_core.vcxproj. -->
   <ItemGroup>
     <ClCompile Include="..\..\src\model\framesetup.cpp" />
+    <ClCompile Include="..\..\src\model\stepdetector.cpp" />
     <ClCompile Include="..\..\src\model\textfile.cpp" />
     <ClCompile Include="..\..\src\model\tomldocument.cpp" />
   </ItemGroup>
