@@ -1550,3 +1550,76 @@ TEST_CASE("StepDetector: interpolate across several segments uses the one the va
     CHECK(fuzzy(interpolateCalibration(3500.0, p), 15.0));
     CHECK(interpolateCalibration(4500.0, p) == 18.0);
 }
+
+TEST_CASE("StepDetector: a turn-on transient before a saturated sweep does not shift the numbering")
+{
+    // The transient sits above the 0 dB level and the sweep reverses into it, so the run the saturated path takes
+    // starts at 1000 - its first level is step 0. The transient's own transition is in the dwell grid, and counting
+    // from it numbered every step one too high (1000 read 6 dB and 0 dB was left unresolved).
+    std::vector<double> raw;
+    for (double level : {5000.0, 1000.0, 2000.0, 3000.0})
+    {
+        appendRun(raw, level, 150);
+    }
+    appendRun(raw, 65535.0, 300);
+
+    const StepDetector::Result r = StepDetector::detect(raw, kPeriod, sixDbSteps(5));
+    REQUIRE_MESSAGE(r.profile.valid, std::string(calibrationOutcomeText(r.outcome)));
+    CHECK(r.saturated);
+    REQUIRE(r.profile.points.size() == 3);
+    CHECK(r.profile.points[0].rawAvg == 1000.0);
+    CHECK(r.profile.points[0].trueDb == 0.0);
+    CHECK(r.profile.points[1].trueDb == 6.0);
+    CHECK(r.profile.points[2].rawAvg == 3000.0);
+    CHECK(r.profile.points[2].trueDb == 12.0);
+    CHECK(r.unresolvedDb == std::vector<double>({18.0, 24.0}));
+}
+
+TEST_CASE("StepDetector: an inverted receiver's transient before a floor-railed sweep does not shift the numbering")
+{
+    // Mirrored: the raw count falls as dB climbs, the transient sits BELOW the 0 dB level, and the sweep rails at zero.
+    std::vector<double> raw;
+    for (double level : {1500.0, 4000.0, 3000.0, 2000.0})
+    {
+        appendRun(raw, level, 150);
+    }
+    appendRun(raw, 0.0, 300);
+
+    const StepDetector::Result r = StepDetector::detect(raw, kPeriod, sixDbSteps(5));
+    REQUIRE_MESSAGE(r.profile.valid, std::string(calibrationOutcomeText(r.outcome)));
+    CHECK(r.saturated);
+    REQUIRE(r.profile.points.size() == 3);
+    CHECK(r.profile.points.back().rawAvg == 4000.0);   // highest raw is the 0 dB step on an inverted receiver
+    CHECK(r.profile.points.back().trueDb == 0.0);
+    CHECK(r.profile.points.front().rawAvg == 2000.0);
+    CHECK(r.profile.points.front().trueDb == 12.0);
+    CHECK(r.unresolvedDb == std::vector<double>({18.0, 24.0}));
+}
+
+TEST_CASE("StepDetector: an unconfirmed dwell after a turn-on transient is still measured at its own step")
+{
+    // The transient's transition must not shift the slots the unconfirmed-dwell measurement works in either: the
+    // jittering 18 dB dwell is measured at 18 dB, and the step after it keeps its own 24 dB.
+    std::vector<double> raw;
+    for (double level : {8000.0, 1000.0, 2000.0, 3000.0})
+    {
+        appendRun(raw, level, 150);
+    }
+    for (int i = 0; i < 150; i++)
+    {
+        raw.push_back(3600.0 + ((i % 2 == 0) ? 0.0 : 6.0));
+    }
+    appendRun(raw, 5000.0, 150);
+    appendRun(raw, 65535.0, 150);
+
+    const StepDetector::Result r = StepDetector::detect(raw, kPeriod, sixDbSteps(6));
+    REQUIRE_MESSAGE(r.profile.valid, std::string(calibrationOutcomeText(r.outcome)));
+    REQUIRE(r.profile.points.size() == 5);
+    CHECK(r.profile.points[0].rawAvg == 1000.0);
+    CHECK(r.profile.points[0].trueDb == 0.0);
+    CHECK(r.profile.points[3].rawAvg == 3603.0);
+    CHECK(r.profile.points[3].trueDb == 18.0);
+    CHECK(r.profile.points[4].rawAvg == 5000.0);
+    CHECK(r.profile.points[4].trueDb == 24.0);
+    CHECK(r.unresolvedDb == std::vector<double>({30.0}));
+}
