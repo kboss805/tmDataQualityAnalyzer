@@ -297,7 +297,11 @@ bool Ch10PacketReader::prepare(const std::filesystem::path& filename,
         ra.bitsInFrame   = p->bitsInMinorFrame;
         ra.wordsInFrame  = p->wordsInMinorFrame;
         ra.wordLen       = pcm_attrs->ulCommonWordLen;
-        ra.wordMask      = pcm_attrs->ullCommonWordMask;
+        // Every bit of a word, built from the word length. NOT the library's ullCommonWordMask: Set_Attributes_Ext_PcmF1
+        // ends with `ullCommonWordMask &= ullMinorFrameSyncMask`, tying a receiver word's bits to which SYNC bits the
+        // operator marked significant - a sync mask of 0x00FF00FF left every AGC word 8 bits wide, and 0xFFFF0000 would
+        // have zeroed them all. lib/irig106 is not ours to change, so the mask is not read back from it.
+        ra.wordMask      = (ra.wordLen >= 64) ? ~uint64_t{0} : ((uint64_t{1} << ra.wordLen) - 1);
         // ulMinSyncs == 0 means the TMATS field was not set; treat as 1 (at minimum
         // one confirmed boundary-aligned sync is required before extracting frames).
         ra.minSyncs      = std::max(1u, pcm_attrs->ulMinSyncs);

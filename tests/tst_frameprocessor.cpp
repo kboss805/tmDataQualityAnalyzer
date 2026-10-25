@@ -716,6 +716,70 @@ void TestFrameProcessor::processSlopeAffectsValues()
              qPrintable(QString("Expected v2 (%1) = 2 * v1 (%2)").arg(v2).arg(v1)));
 }
 
+void TestFrameProcessor::aSyncMaskDoesNotMaskReceiverWords()
+{
+    // The sync mask says which bits of the SYNC PATTERN must match; it has nothing to do with the receiver words that
+    // follow it. irig106's Set_Attributes_Ext_PcmF1 ANDs its word mask with the sync mask, and the reader used to pass
+    // that on, so a mask that ignored even the lowest sync bit cleared the lowest bit of every AGC sample (0x00FF00FF
+    // kept only the low byte; 0xFFFF0000 would have zeroed them all). Ignoring sync bits must change no value.
+    const QString filepath = testDataPath("test files/agc_rnrz-l_trc_testfile.ch10");
+    if (!QFileInfo::exists(filepath))
+        QSKIP("RNRZ-L test file not available");
+
+    Chapter10Reader reader;
+    QVERIFY(reader.loadChannels(toFsPath(filepath)));
+    const int pcm_id = reader.getFirstPCMChannelID();
+    const int time_id = reader.getCurrentTimeChannelID();
+    QVERIFY(pcm_id >= 0 && time_id >= 0);
+
+    auto run = [&](uint64_t sync_pattern, uint64_t sync_mask, ProcessedStreamData& out) -> bool {
+        FrameSetup setup;
+        if (!setupParams(setup, 1.0, 0.0))   // slope 1, offset 0: the values are the averaged raw counts
+            return false;
+        ProcessingParams p = makeTestParams(filepath, time_id, pcm_id);
+        p.startSeconds = 0;
+        p.stopSeconds = UINT64_MAX;
+        p.samplePeriodSec = 1.0;
+        p.isRandomized = true;
+        p.mode = StreamMode::ReceiverChannelInfo;
+        p.frameSync = sync_pattern;
+        p.frameSyncMask = sync_mask;
+        FrameProcessor fp;
+        if (!runWithReader(fp, p, &setup))
+            return false;
+        out = fp.result();
+        return true;
+    };
+
+    ProcessedStreamData full;
+    ProcessedStreamData masked;
+    QVERIFY(run(0xFE6B2840ull, 0, full));      // every bit of the pattern
+    // Sync bits 8-15 ignored: the other 24 still find every frame of this recording, and the old code's word mask
+    // would have been 0x00FF, keeping only each word's low byte. The pattern carries zeros where the mask ignores - the
+    // matcher compares the MASKED stream with the pattern as written, as irig106's own decoder does, so a pattern with
+    // ones there could never match. (Ignoring only the lowest sync bit shows nothing: this fixture's raw words never
+    // set their lowest bit.)
+    QVERIFY(run(0xFE6B0040ull, 0xFFFF00FFull, masked));
+    QVERIFY(full.hasSamples());
+    QCOMPARE(masked.timesSec.size(), full.timesSec.size());
+    QCOMPARE(masked.channels.size(), full.channels.size());
+
+    // The fixture's averaged counts reach far above 255, so a cleared high byte would show.
+    bool any_above_a_byte = false;
+    for (std::size_t c = 0; c < full.channels.size(); c++)
+    {
+        QCOMPARE(masked.channels[c].values.size(), full.channels[c].values.size());
+        for (std::size_t i = 0; i < full.channels[c].values.size(); i++)
+        {
+            QVERIFY2(masked.channels[c].values[i] == full.channels[c].values[i],
+                     qPrintable(QString("channel %1 sample %2: %3 with the mask, %4 without")
+                                    .arg(c).arg(i).arg(masked.channels[c].values[i]).arg(full.channels[c].values[i])));
+            any_above_a_byte = any_above_a_byte || full.channels[c].values[i] > 255.0;
+        }
+    }
+    QVERIFY2(any_above_a_byte, "no value exceeded 255, so this fixture could not show a cleared high byte");
+}
+
 void TestFrameProcessor::processShortPeriodMoreSamples()
 {
     const QString filepath = testDataPath("test files/agc_rnrz-l_trc_testfile.ch10");
