@@ -174,7 +174,7 @@ sweep.
   then the Qt Test version is deleted. The throughput benchmark moves with `TestPipelineRunner`.
   The tests live in `native/tmdq_core_tests` (doctest, vendored in `lib/doctest`; MSBuild, no Qt;
   `scripts/test_native.ps1`; a CI step in both jobs), and `TestCoreQtFree` holds the project to core
-  sources and no Qt. **Ported so far:** `TestTomlDocument` (#190 `10af53e`, which also brought the framework), `TestTextFormat` (#191 `9e70e44`), `TestFrameSync` (#192 `67752db`), `TestEventReporter` (#193 `8da2345`), `TestPacketQueue` (#194 `64c9cb5`), `TestIntervalGate` (#195 `9405758`), `TestFrameSetup` (#196 `9701d54`), `TestStepDetector` (#197 `e7edd88`), `TestCh10PacketReader` (#198 `f2bedfd`), and `TestChapter10Reader` with `TestChannelData`.
+  sources and no Qt. **Ported so far:** `TestTomlDocument` (#190 `10af53e`, which also brought the framework), `TestTextFormat` (#191 `9e70e44`), `TestFrameSync` (#192 `67752db`), `TestEventReporter` (#193 `8da2345`), `TestPacketQueue` (#194 `64c9cb5`), `TestIntervalGate` (#195 `9405758`), `TestFrameSetup` (#196 `9701d54`), `TestStepDetector` (#197 `e7edd88`), `TestCh10PacketReader` (#198 `f2bedfd`), `TestChapter10Reader` with `TestChannelData` (#200 `3912bf8`), and `TestFrameProcessor`.
 
 **Done when** the core and its tests build and pass with no Qt installed, and CI runs them.
 

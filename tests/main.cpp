@@ -6,7 +6,6 @@
 
 
 #include "tst_constants.h"
-#include "tst_frameprocessor.h"
 #include "tst_batchcontroller.h"
 #include "tst_mainview.h"
 #include "tst_mainviewmodel_helpers.h"
@@ -138,12 +137,10 @@ int main(int argc, char* argv[])
     status |= runSuite<TestAbi>(log_path);
     status |= runSuite<TestQtProcessingEvents>(log_path);
 
-    // Heavy suites — integration over a real .ch10 fixture; TestFrameProcessor alone
-    // is ~74 s and dominates the ~85 s run. Skipped in fast mode for quick iteration;
-    // CI and the release gate always run them.
+    // Heavy suites — integration over a real .ch10 fixture. Skipped in fast mode for
+    // quick iteration; CI and the release gate always run them.
     if (!fast_mode)
     {
-        status |= runSuite<TestFrameProcessor>(log_path);
         status |= runSuite<TestProcessingCoordinator>(log_path);
         status |= runSuite<TestPipelineRunner>(log_path);
         status |= runSuite<TestCalibrationExtractor>(log_path);
@@ -152,7 +149,7 @@ int main(int argc, char* argv[])
     {
         QTextStream(stdout)
             << "FAST MODE: skipped the real-Ch10 integration suites ("
-               "TestFrameProcessor, TestProcessingCoordinator, "
+               "TestProcessingCoordinator, "
                "TestPipelineRunner, TestCalibrationExtractor). "
                "Run without --fast / TMDQ_FAST_TESTS for the full suite.\n";
     }
