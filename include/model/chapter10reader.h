@@ -38,7 +38,8 @@
  */
 class Chapter10Reader
 {
-    friend class TestChapter10Reader;
+    /// The native tests read the PCM selection, which no production caller reads back.
+    friend struct Chapter10ReaderTestAccess;
 
 public:
     Chapter10Reader();

@@ -103,6 +103,7 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="test_ch10packetreader.cpp" />
+    <ClCompile Include="test_chapter10reader.cpp" />
     <ClCompile Include="test_eventreporter.cpp" />
     <ClCompile Include="test_framesetup.cpp" />
     <ClCompile Include="test_framesync.cpp" />
