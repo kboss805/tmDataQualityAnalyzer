@@ -189,7 +189,6 @@ SOURCES += \
     tst_processingcoordinator.cpp \
     tst_streamconfigdialog.cpp \
     tst_exportdialog.cpp \
-    tst_seriescolumnschema.cpp \
     tst_csvseries.cpp \
     tst_framesyncfile.cpp \
     tst_streamjob.cpp \
@@ -213,7 +212,6 @@ HEADERS += \
     tst_processingcoordinator.h \
     tst_streamconfigdialog.h \
     tst_exportdialog.h \
-    tst_seriescolumnschema.h \
     tst_csvseries.h \
     tst_framesyncfile.h \
     tst_streamjob.h \

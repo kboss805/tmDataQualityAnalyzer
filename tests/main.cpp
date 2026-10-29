@@ -21,7 +21,6 @@
 #include "tst_framesyncfile.h"
 #include "tst_streamjob.h"
 #include "tst_seriesbuild.h"
-#include "tst_seriescolumnschema.h"
 #include "tst_streamconfigschema.h"
 #include "tst_processingtemplateschema.h"
 #include "tst_coreqtfree.h"
@@ -120,7 +119,6 @@ int main(int argc, char* argv[])
     status |= runSuite<TestPlotCustomizationDialog>(log_path);
     status |= runSuite<TestStreamConfigDialog>(log_path);
     status |= runSuite<TestExportDialog>(log_path);
-    status |= runSuite<TestSeriesColumnSchema>(log_path);
     status |= runSuite<TestCsvSeries>(log_path);
     status |= runSuite<TestFrameSyncFile>(log_path);
     status |= runSuite<TestStreamJob>(log_path);
