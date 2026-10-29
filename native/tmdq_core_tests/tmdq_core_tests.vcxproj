@@ -118,6 +118,7 @@
     <ClCompile Include="test_intervalgate.cpp" />
     <ClCompile Include="test_packetqueue.cpp" />
     <ClCompile Include="test_pipelinerunner.cpp" />
+    <ClCompile Include="test_seriescolumnschema.cpp" />
     <ClCompile Include="test_stepdetector.cpp" />
     <ClCompile Include="test_templatematcher.cpp" />
     <ClCompile Include="test_textfile.cpp" />
@@ -135,6 +136,7 @@
     <ClCompile Include="..\..\src\model\frameprocessor.cpp" />
     <ClCompile Include="..\..\src\model\framesetup.cpp" />
     <ClCompile Include="..\..\src\model\pipelinerunner.cpp" />
+    <ClCompile Include="..\..\src\model\seriescolumnschema.cpp" />
     <ClCompile Include="..\..\src\model\stepdetector.cpp" />
     <ClCompile Include="..\..\src\model\templatematcher.cpp" />
     <ClCompile Include="..\..\src\model\textfile.cpp" />
