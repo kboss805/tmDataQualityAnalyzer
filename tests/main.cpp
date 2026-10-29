@@ -29,7 +29,6 @@
 #include "tst_templatematcher.h"
 #include "tst_coreqtfree.h"
 #include "tst_abi.h"
-#include "tst_pipelinerunner.h"
 #include "tst_qtprocessingevents.h"
 
 /// Runs a single test suite and appends results to the shared log file.
@@ -142,15 +141,13 @@ int main(int argc, char* argv[])
     if (!fast_mode)
     {
         status |= runSuite<TestProcessingCoordinator>(log_path);
-        status |= runSuite<TestPipelineRunner>(log_path);
         status |= runSuite<TestCalibrationExtractor>(log_path);
     }
     else
     {
         QTextStream(stdout)
             << "FAST MODE: skipped the real-Ch10 integration suites ("
-               "TestProcessingCoordinator, "
-               "TestPipelineRunner, TestCalibrationExtractor). "
+               "TestProcessingCoordinator, TestCalibrationExtractor). "
                "Run without --fast / TMDQ_FAST_TESTS for the full suite.\n";
     }
 

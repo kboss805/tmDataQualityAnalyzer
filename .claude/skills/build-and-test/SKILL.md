@@ -78,25 +78,25 @@ nmake -f Makefile.Debug
 
 - Results are written to `tests\output\results.txt` (gitignored) AND printed to the console. A
   non-zero process exit code means at least one suite failed.
-- Green baseline across 20 suites: **357 / 0 / 1**, in about 35 s. The one skip is the heavy PRN
-  throughput benchmark: it walks a 640 MB recording nine times and takes minutes, so it is opt-in —
-  run it deliberately with `$env:TMDQA_RUN_HEAVY_BENCH=1` when you want throughput numbers.
+- Green baseline: see `CLAUDE.md` (it moves with every suite that ports to doctest). There are **no
+  standing skips**: a skip is a missing fixture, and CI fails on one. The heavy PRN throughput
+  benchmark is not in this executable any more; it is a native doctest case, opt-in via
+  `$env:TMDQA_RUN_HEAVY_BENCH=1`, and `scripts\run_throughput_bench.ps1` runs it at release.
 - A convenience wrapper exists: `powershell -ExecutionPolicy Bypass -File scripts\build_ide.ps1`
   builds the tests (Debug) using the active toolchain from `env.ps1`. It builds but does not run.
 
 ### Fast mode and the no-single-suite-filter reality
 
-The full run is dominated by the real-Ch10 integration suites — `TestProcessingCoordinator`,
-`TestPipelineRunner` and `TestCalibrationExtractor` process real Chapter 10 fixtures and take a few
-minutes between them.
+The full run is dominated by the real-Ch10 integration suites — `TestProcessingCoordinator` and
+`TestCalibrationExtractor` process real Chapter 10 fixtures and take a few minutes between them.
 For quick local iteration, pass **`--fast`** (or set **`TMDQ_FAST_TESTS=1`**):
 
 ```powershell
-.\debug\tmDataQualityAnalyzer_tests.exe --fast   # ~1 s: skips the 4 .ch10 integration suites
+.\debug\tmDataQualityAnalyzer_tests.exe --fast   # ~1 s: skips the 2 .ch10 integration suites
 ```
 
 Fast mode runs the 12 pure-logic + widget/dialog suites (the same set CI runs, where the `.ch10`
-fixtures are absent) and skips `TestProcessingCoordinator`, `TestPipelineRunner` and
+fixtures are absent) and skips `TestProcessingCoordinator` and
 `TestCalibrationExtractor`. It is a **local convenience only** — always do a final **full** run
 (no `--fast`) before declaring tests green, and never rely on it for CI or a release gate. This is the
 built-in replacement for hand-trimming `main.cpp` (which must never be committed). The harness still

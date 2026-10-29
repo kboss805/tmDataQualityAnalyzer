@@ -76,7 +76,7 @@ public:
  */
 class PipelineRunner
 {
-    friend class TestPipelineRunner;   ///< Reaches a stream's processor to end it without a cancel.
+    friend struct PipelineRunnerTestAccess;   ///< Reaches a stream's processor to end it without a cancel.
 
 public:
     PipelineRunner();
