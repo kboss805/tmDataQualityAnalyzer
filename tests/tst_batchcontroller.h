@@ -19,6 +19,7 @@ private slots:
     void applyAppearanceRenamesMatchingSeries();
     void missingFilesAreSkippedAndReported();
     void validateComparesEachFilesChannelsToTheTemplate();
+    void matchFileComparesChannelIdsAndNothingElse();
     void aFileWhoseChannelsNoLongerMatchIsSkippedAtItsTurn();
     void startWithNoFilesDoesNothing();
 };

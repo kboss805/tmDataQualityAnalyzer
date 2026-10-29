@@ -165,6 +165,48 @@ void TestBatchController::validateComparesEachFilesChannelsToTheTemplate()
     QVERIFY(!unreadable[1].ok);   // 13 alone is not the file's whole set
 }
 
+void TestBatchController::matchFileComparesChannelIdsAndNothingElse()
+{
+    // matchFile only turns a template and a reader's channel list into ids; the comparison itself is
+    // TemplateMatcher's (native/tmdq_core_tests/test_templatematcher.cpp). What it must get right is
+    // which fields it reads, and that it reads every entry.
+    auto templateOf = [](const QList<int>& ids) {
+        ProcessingTemplate tmpl;
+        for (int id : ids)
+        {
+            TemplateStreamEntry entry;
+            entry.config.pcmChannelId = id;
+            entry.config.label        = QString("Ch %1").arg(id);
+            tmpl.entries.append(entry);
+        }
+        return tmpl;
+    };
+    auto channelsOf = [](const QList<int>& ids) {
+        std::vector<std::pair<int, std::string>> channels;
+        for (int id : ids)
+            channels.push_back({ id, "Ch " + std::to_string(id) });
+        return channels;
+    };
+
+    // Every template entry counts, not only the first; every file channel counts, not only the first.
+    const TemplateMatcher::MatchResult none = BatchController::matchFile(templateOf({ 48, 32, 40 }), {});
+    QVERIFY(!none.ok);
+    QCOMPARE(none.missing, (std::vector<int>{ 32, 40, 48 }));
+    QVERIFY(none.extra.empty());
+
+    const TemplateMatcher::MatchResult all = BatchController::matchFile(templateOf({ 32, 40 }), channelsOf({ 40, 32 }));
+    QVERIFY(all.ok);
+    const TemplateMatcher::MatchResult both = BatchController::matchFile(templateOf({ 32, 40 }), channelsOf({ 40, 48 }));
+    QCOMPARE(both.missing, std::vector<int>{ 32 });
+    QCOMPARE(both.extra, std::vector<int>{ 48 });
+
+    // The key is the id: a file may name the same channel differently, or not at all.
+    std::vector<std::pair<int, std::string>> renamed;
+    renamed.push_back({ 32, "Something else" });
+    renamed.push_back({ 40, std::string() });
+    QVERIFY(BatchController::matchFile(templateOf({ 32, 40 }), renamed).ok);
+}
+
 void TestBatchController::missingFilesAreSkippedAndReported()
 {
     // A queued file that is gone by the time its turn comes is skipped rather
