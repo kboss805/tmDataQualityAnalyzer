@@ -111,6 +111,7 @@
     <ClCompile Include="test_calibrationrequest.cpp" />
     <ClCompile Include="test_ch10packetreader.cpp" />
     <ClCompile Include="test_chapter10reader.cpp" />
+    <ClCompile Include="test_csvseries.cpp" />
     <ClCompile Include="test_eventreporter.cpp" />
     <ClCompile Include="test_frameprocessor.cpp" />
     <ClCompile Include="test_framesetup.cpp" />
@@ -134,10 +135,14 @@
     <ClCompile Include="..\..\src\model\ch10packetreader.cpp" />
     <ClCompile Include="..\..\src\model\channeldata.cpp" />
     <ClCompile Include="..\..\src\model\chapter10reader.cpp" />
+    <ClCompile Include="..\..\src\model\clocktime.cpp" />
+    <ClCompile Include="..\..\src\model\csvseriesparser.cpp" />
+    <ClCompile Include="..\..\src\model\csvserieswriter.cpp" />
     <ClCompile Include="..\..\src\model\frameprocessor.cpp" />
     <ClCompile Include="..\..\src\model\framesetup.cpp" />
     <ClCompile Include="..\..\src\model\framesyncfile.cpp" />
     <ClCompile Include="..\..\src\model\pipelinerunner.cpp" />
+    <ClCompile Include="..\..\src\model\seriesbuilder.cpp" />
     <ClCompile Include="..\..\src\model\seriescolumnschema.cpp" />
     <ClCompile Include="..\..\src\model\stepdetector.cpp" />
     <ClCompile Include="..\..\src\model\templatematcher.cpp" />
