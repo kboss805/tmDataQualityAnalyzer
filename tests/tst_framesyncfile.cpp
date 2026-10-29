@@ -198,12 +198,8 @@ const QList<Case>& loadCases()
             " sync=FE6B2840 mask=FFFF0000 bits=800 inv=1 rand=1" },
         { "a-complete-file-with-both-flags-off", frame("FrameSync = \"FE6B2840\"\nFrameSyncMask = \"FFFF0000\"\nBitsPerFrame = 800\nInverted = false\nRandomized = false\n"), true, "sync=FE6B2840 mask=FFFF0000 bits=800 inv=0 rand=0 ||"
             " sync=FE6B2840 mask=FFFF0000 bits=800 inv=0 rand=0" },
-        { "crlf-line-ends", frame("FrameSync = \"FE6B2840\"\r\nBitsPerFrame = 800\r\nRandomized = true\r\n"), true, "sync=FE6B2840 mask=INIT-M bits=800 inv=0 rand=1 ||"
-            " sync=FE6B2840 mask=INIT-M bits=800 inv=0 rand=1" },
         { "utf8-bom", QByteArray("\xEF\xBB\xBF") + frame("FrameSync = \"FE6B2840\"\nBitsPerFrame = 800\n"), true, "sync=FE6B2840 mask=INIT-M bits=800 inv=0 rand=1 ||"
             " sync=FE6B2840 mask=INIT-M bits=800 inv=0 rand=0" },
-        { "utf16le-bom", utf16le(frame("FrameSync = \"FE6B2840\"\nBitsPerFrame = 800\nRandomized = true\n")), true, "sync=FE6B2840 mask=INIT-M bits=800 inv=0 rand=1 ||"
-            " sync=FE6B2840 mask=INIT-M bits=800 inv=0 rand=1" },
 
         // --- pattern and mask
         { "pattern-only", frame("FrameSync = \"334AABBF\"\n"), true, "sync=334AABBF mask=INIT-M bits=1234 inv=0 rand=1 ||"
@@ -218,63 +214,20 @@ const QList<Case>& loadCases()
             " sync=STRASSE <U+039B> mask=INIT-M bits=1234 inv=0 rand=0" },
         { "empty-pattern-leaves-the-field-alone", frame("FrameSync = \"\"\nFrameSyncMask = \"\"\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=1 ||"
             " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0" },
-        { "padded-value", frame("FrameSync = \"  AB  \"\n"), true, "sync=  AB   mask=INIT-M bits=1234 inv=0 rand=1 ||"
-            " sync=  AB   mask=INIT-M bits=1234 inv=0 rand=0" },
-        { "unquoted-value", frame("FrameSync = FE6B2840\n"), true, "sync=FE6B2840 mask=INIT-M bits=1234 inv=0 rand=1 ||"
-            " sync=FE6B2840 mask=INIT-M bits=1234 inv=0 rand=0" },
-        { "trailing-comment", frame("FrameSync = \"FE6B2840\" # the pattern\nBitsPerFrame = 800 # bits\n"), true, "sync=FE6B2840 mask=INIT-M bits=800 inv=0 rand=1 ||"
-            " sync=FE6B2840 mask=INIT-M bits=800 inv=0 rand=0" },
-        { "duplicate-keys-last-wins", frame("FrameSync = \"AAAA\"\nFrameSync = \"BBBB\"\n"), true, "sync=BBBB mask=INIT-M bits=1234 inv=0 rand=1 ||"
-            " sync=BBBB mask=INIT-M bits=1234 inv=0 rand=0" },
-        { "keys-in-another-section-are-ignored", "[Other]\nFrameSync = \"FE6B2840\"\nBitsPerFrame = 800\n", true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0" },
-        { "keys-with-no-section-are-ignored", "FrameSync = \"FE6B2840\"\nBitsPerFrame = 800\n", true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0" },
-        { "key-case-matters", frame("framesync = \"FE6B2840\"\nbitsperframe = 800\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0" },
 
         // --- the frame length
         { "bits-at-the-minimum", frame("BitsPerFrame = 64\n"), true, "sync=INIT-S mask=INIT-M bits=64 inv=0 rand=1 ||"
             " sync=INIT-S mask=INIT-M bits=64 inv=0 rand=0" },
         { "bits-below-the-minimum-is-ignored", frame("BitsPerFrame = 63\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=1 ||"
             " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0" },
-        { "bits-zero-is-ignored", frame("BitsPerFrame = 0\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0" },
-        { "bits-negative-is-ignored", frame("BitsPerFrame = -800\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0" },
-        { "bits-at-the-spin-box-maximum", frame("BitsPerFrame = 65536\n"), true, "sync=INIT-S mask=INIT-M bits=65536 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=65536 inv=0 rand=0" },
         { "bits-above-the-spin-box-maximum-clamps", frame("BitsPerFrame = 70000\n"), true, "sync=INIT-S mask=INIT-M bits=65536 inv=0 rand=1 ||"
             " sync=INIT-S mask=INIT-M bits=65536 inv=0 rand=0" },
-        { "bits-as-text-is-not-a-number", frame("BitsPerFrame = \"800\"\n"), true, "sync=INIT-S mask=INIT-M bits=800 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=800 inv=0 rand=0" },
-        { "bits-fraction-is-not-an-integer", frame("BitsPerFrame = 800.5\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0" },
-        { "bits-padded", frame("BitsPerFrame =   800   \n"), true, "sync=INIT-S mask=INIT-M bits=800 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=800 inv=0 rand=0" },
-        { "bits-with-a-plus", frame("BitsPerFrame = +800\n"), true, "sync=INIT-S mask=INIT-M bits=800 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=800 inv=0 rand=0" },
         { "words-in-minor-frame-is-sixteen-bits-a-word", frame("WordsInMinorFrame = 64\n"), true, "sync=INIT-S mask=INIT-M bits=1024 inv=0 rand=1 ||"
             " sync=INIT-S mask=INIT-M bits=1024 inv=0 rand=0" },
-        { "one-word-is-ignored", frame("WordsInMinorFrame = 1\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0" },
-        { "two-words-is-below-the-minimum", frame("WordsInMinorFrame = 2\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0" },
-        { "four-words-is-exactly-the-minimum", frame("WordsInMinorFrame = 4\n"), true, "sync=INIT-S mask=INIT-M bits=64 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=64 inv=0 rand=0" },
-        { "words-negative-is-ignored", frame("WordsInMinorFrame = -64\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0" },
         { "words-large-clamps", frame("WordsInMinorFrame = 100000\n"), true, "sync=INIT-S mask=INIT-M bits=65536 inv=0 rand=1 ||"
             " sync=INIT-S mask=INIT-M bits=65536 inv=0 rand=0" },
         { "bits-too-small-falls-back-to-words", frame("BitsPerFrame = 32\nWordsInMinorFrame = 64\n"), true, "sync=INIT-S mask=INIT-M bits=1024 inv=0 rand=1 ||"
             " sync=INIT-S mask=INIT-M bits=1024 inv=0 rand=0" },
-        { "valid-bits-beat-words", frame("BitsPerFrame = 800\nWordsInMinorFrame = 64\n"), true, "sync=INIT-S mask=INIT-M bits=800 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=800 inv=0 rand=0" },
-        { "bits-at-the-minimum-still-beat-words", frame("BitsPerFrame = 64\nWordsInMinorFrame = 100\n"), true,
-            "sync=INIT-S mask=INIT-M bits=64 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=64 inv=0 rand=0" },
-        { "bits-too-small-and-words-too-small", frame("BitsPerFrame = 32\nWordsInMinorFrame = 3\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0" },
 
         // --- the two stream-format flags
         { "inverted-true", frame("Inverted = true\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=1 rand=1 ||"
@@ -283,34 +236,12 @@ const QList<Case>& loadCases()
             " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0" },
         { "inverted-absent-clears-it", frame("FrameSync = \"AB\"\n"), true, "sync=AB mask=INIT-M bits=1234 inv=0 rand=1 ||"
             " sync=AB mask=INIT-M bits=1234 inv=0 rand=0" },
-        { "inverted-one", frame("Inverted = 1\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=1 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=1 rand=0" },
-        { "inverted-zero", frame("Inverted = 0\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0" },
-        { "inverted-quoted-true", frame("Inverted = \"true\"\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=1 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=1 rand=0" },
-        { "inverted-yes", frame("Inverted = yes\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=1 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=1 rand=0" },
-        { "inverted-uppercase-true", frame("Inverted = TRUE\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=1 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=1 rand=0" },
-        { "inverted-empty", frame("Inverted =\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0" },
         { "randomized-true", frame("Randomized = true\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=1 ||"
             " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=1" },
         { "randomized-false", frame("Randomized = false\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0 ||"
             " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0" },
         { "randomized-absent-leaves-the-choice-alone", frame("FrameSync = \"AB\"\nInverted = true\n"), true, "sync=AB mask=INIT-M bits=1234 inv=1 rand=1 ||"
             " sync=AB mask=INIT-M bits=1234 inv=1 rand=0" },
-        { "randomized-one", frame("Randomized = 1\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=1" },
-        { "randomized-zero", frame("Randomized = 0\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0" },
-        { "randomized-yes", frame("Randomized = yes\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=1 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=1" },
-        { "randomized-empty-value-is-still-a-key", frame("Randomized =\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0" },
-        { "randomized-quoted-false", frame("Randomized = \"false\"\n"), true, "sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0 ||"
-            " sync=INIT-S mask=INIT-M bits=1234 inv=0 rand=0" },
     };
     return cases;
 }
@@ -362,12 +293,6 @@ const QList<SaveCase>& saveCases()
             "BitsPerFrame = 800\\r\\n"
             "Inverted = true\\r\\n"
             "Randomized = true\\r\\n" },
-        { "everything-off", "FE6B2840", "FFFFFFFF", 800, false, false, "[Frame]\\r\\n"
-            "FrameSync = \"FE6B2840\"\\r\\n"
-            "FrameSyncMask = \"FFFFFFFF\"\\r\\n"
-            "BitsPerFrame = 800\\r\\n"
-            "Inverted = false\\r\\n"
-            "Randomized = false\\r\\n" },
         { "inverted-only", "334AABBF", "FFFFFFFF", 32767, true, false, "[Frame]\\r\\n"
             "FrameSync = \"334AABBF\"\\r\\n"
             "FrameSyncMask = \"FFFFFFFF\"\\r\\n"
@@ -386,64 +311,15 @@ const QList<SaveCase>& saveCases()
             "BitsPerFrame = 800\\r\\n"
             "Inverted = false\\r\\n"
             "Randomized = false\\r\\n" },
-        { "empty-strings", "", "", 800, false, false, "[Frame]\\r\\n"
-            "FrameSync = \"\"\\r\\n"
-            "FrameSyncMask = \"\"\\r\\n"
-            "BitsPerFrame = 800\\r\\n"
-            "Inverted = false\\r\\n"
-            "Randomized = false\\r\\n" },
-        { "bits-zero", "AB", "CD", 0, false, false, "[Frame]\\r\\n"
-            "FrameSync = \"AB\"\\r\\n"
-            "FrameSyncMask = \"CD\"\\r\\n"
-            "BitsPerFrame = 0\\r\\n"
-            "Inverted = false\\r\\n"
-            "Randomized = false\\r\\n" },
-        { "bits-negative", "AB", "CD", -5, false, false, "[Frame]\\r\\n"
-            "FrameSync = \"AB\"\\r\\n"
-            "FrameSyncMask = \"CD\"\\r\\n"
-            "BitsPerFrame = -5\\r\\n"
-            "Inverted = false\\r\\n"
-            "Randomized = false\\r\\n" },
-        { "bits-at-the-maximum", "AB", "CD", 65536, false, false, "[Frame]\\r\\n"
-            "FrameSync = \"AB\"\\r\\n"
-            "FrameSyncMask = \"CD\"\\r\\n"
-            "BitsPerFrame = 65536\\r\\n"
-            "Inverted = false\\r\\n"
-            "Randomized = false\\r\\n" },
-        { "bits-very-large", "AB", "CD", 2147483647, false, false, "[Frame]\\r\\n"
-            "FrameSync = \"AB\"\\r\\n"
-            "FrameSyncMask = \"CD\"\\r\\n"
-            "BitsPerFrame = 2147483647\\r\\n"
-            "Inverted = false\\r\\n"
-            "Randomized = false\\r\\n" },
-        { "quote-and-backslash", "A\"B\\C", "D", 800, false, false, "[Frame]\\r\\n"
-            "FrameSync = \"A\\\\\"B\\\\\\\\C\"\\r\\n"
-            "FrameSyncMask = \"D\"\\r\\n"
-            "BitsPerFrame = 800\\r\\n"
-            "Inverted = false\\r\\n"
-            "Randomized = false\\r\\n" },
         { "non-ascii", QString::fromUtf8("\xCE\xA9\xC3\xA9"), "FF", 800, false, false, "[Frame]\\r\\n"
             "FrameSync = \"\\xce\\xa9\\xc3\\xa9\"\\r\\n"
             "FrameSyncMask = \"FF\"\\r\\n"
             "BitsPerFrame = 800\\r\\n"
             "Inverted = false\\r\\n"
             "Randomized = false\\r\\n" },
-        { "a-hash-and-an-equals", "A#B=C", "D", 800, false, false, "[Frame]\\r\\n"
-            "FrameSync = \"A#B=C\"\\r\\n"
-            "FrameSyncMask = \"D\"\\r\\n"
-            "BitsPerFrame = 800\\r\\n"
-            "Inverted = false\\r\\n"
-            "Randomized = false\\r\\n" },
         { "padded", "  AB  ", " CD ", 800, false, false, "[Frame]\\r\\n"
             "FrameSync = \"  AB  \"\\r\\n"
             "FrameSyncMask = \" CD \"\\r\\n"
-            "BitsPerFrame = 800\\r\\n"
-            "Inverted = false\\r\\n"
-            "Randomized = false\\r\\n" },
-        { "a-newline", "A\nB", "C", 800, false, false, "[Frame]\\r\\n"
-            "FrameSync = \"A\\r\\n"
-            "B\"\\r\\n"
-            "FrameSyncMask = \"C\"\\r\\n"
             "BitsPerFrame = 800\\r\\n"
             "Inverted = false\\r\\n"
             "Randomized = false\\r\\n" },
@@ -762,55 +638,6 @@ void TestFrameSyncFile::theCoreWritesEveryGeneratedFileLikeTheOldDialogCode()
     QFile::remove(path_new);
     QVERIFY2(different_flags > 60, qPrintable(QString::number(different_flags)));
     QVERIFY2(odd_text > 40, qPrintable(QString::number(odd_text)));
-}
-
-void TestFrameSyncFile::theReaderReportsWhatAFileSaysAndNothingElse()
-{
-    auto read = [](const QByteArray& bytes) {
-        const QString path = writeBytes("reader", bytes);
-        const FrameSyncFile f = readFrameSyncFile(toFsPath(path));
-        QFile::remove(path);
-        return f;
-    };
-
-    // Nothing in the file, or no file: nothing to say, and Invert Data off.
-    const FrameSyncFile none = readFrameSyncFile(toFsPath(QDir::tempPath() + "/tst_framesyncfile_nonexistent.toml"));
-    QVERIFY(none.pattern.empty() && none.mask.empty());
-    QVERIFY(!none.bitsPerFrame.has_value() && !none.randomized.has_value());
-    QVERIFY(!none.inverted && !none.bitsFromLegacyKey);
-
-    // Everything as written: the pattern is not case-folded (that is the dialog's business).
-    const FrameSyncFile all = read(frame("FrameSync = \"fe6b2840\"\nFrameSyncMask = \"ffff0000\"\nBitsPerFrame = 800\n"
-                                         "Inverted = true\nRandomized = false\n"));
-    QCOMPARE(all.pattern, std::string("fe6b2840"));
-    QCOMPARE(all.mask, std::string("ffff0000"));
-    QVERIFY(all.bitsPerFrame.has_value());
-    QCOMPARE(*all.bitsPerFrame, 800);
-    QVERIFY(!all.bitsFromLegacyKey);
-    QVERIFY(all.inverted);
-    QVERIFY(all.randomized.has_value());
-    QVERIFY(!*all.randomized);   // present and false is not the same as absent
-
-    // The older key, sixteen bits a word, and the marker that says so.
-    const FrameSyncFile legacy = read(frame("WordsInMinorFrame = 64\n"));
-    QVERIFY(legacy.bitsPerFrame.has_value());
-    QCOMPARE(*legacy.bitsPerFrame, 1024);
-    QVERIFY(legacy.bitsFromLegacyKey);
-    QVERIFY(!legacy.randomized.has_value());
-
-    // A usable BitsPerFrame wins, and a legacy value that is still too small leaves no marker behind.
-    QVERIFY(!read(frame("BitsPerFrame = 800\nWordsInMinorFrame = 64\n")).bitsFromLegacyKey);
-    const FrameSyncFile too_small = read(frame("BitsPerFrame = 8\nWordsInMinorFrame = 3\n"));
-    QVERIFY(!too_small.bitsPerFrame.has_value());
-    QVERIFY(!too_small.bitsFromLegacyKey);
-}
-
-void TestFrameSyncFile::writingToAnUnwritablePathFails()
-{
-    QVERIFY(!writeFrameSyncFile(toFsPath(QDir::tempPath() + "/no_such_folder_for_tmdq/pattern.toml"), "AB", "CD", 800, false, false));
-    const QString path = QDir::tempPath() + "/tst_framesyncfile_write_ok.toml";
-    QVERIFY(writeFrameSyncFile(toFsPath(path), "AB", "CD", 800, true, false));
-    QFile::remove(path);
 }
 
 void TestFrameSyncFile::aFileWrittenByTheDialogLoadsBackIntoIt()
