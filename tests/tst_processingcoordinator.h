@@ -18,7 +18,6 @@ private slots:
     void startProcessingEmptyReturnsFalse();
     void startProcessingEmitsProcessingState();
     void benchmarkSingleVsMultiStreamThroughput();
-    void benchmarkHeavyWorkloadSingleVsMultiStream();
 };
 
 #endif // TST_PROCESSINGCOORDINATOR_H

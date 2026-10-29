@@ -5,27 +5,40 @@
 #
 # The processing pipeline - one reader, N parallel workers, a bit-serial frame-sync
 # scanner over every bit of the recording - had NO performance regression guard.
-# TestProcessingCoordinator::benchmarkHeavyWorkloadSingleVsMultiStream measured it,
-# but it was opt-in behind TMDQA_RUN_HEAVY_BENCH, nothing set that variable, and the
-# test asserted nothing anyway: it printed timings through qWarning() and passed
+# A benchmark measured it, but it was opt-in behind TMDQA_RUN_HEAVY_BENCH, nothing set
+# that variable, and the test asserted nothing anyway: it printed timings and passed
 # regardless. So the guard existed on paper only, twice over.
 #
 # Two things were wrong and are now fixed:
 #   - The benchmark asserts its RATIOS (see the thresholds in
-#     tests/tst_processingcoordinator.cpp). Reporting is not guarding.
+#     native/tmdq_core_tests/test_pipelinerunner.cpp). Reporting is not guarding.
 #   - It runs at every release, from here, instead of waiting to be remembered.
+#
+# WHERE IT LIVES NOW
+#
+# It was the Qt TestProcessingCoordinator's benchmarkHeavyWorkloadSingleVsMultiStream.
+# It measures PipelineRunner - the single reader and the parallel workers - and that is
+# Qt-free, so it moved to the native doctest suite (plan step 2.4) as
+# "PipelineRunner throughput: ...". It needs no Qt to build or to run, so this script
+# no longer builds the Qt tests at all; the full Qt suite is run separately, by the
+# build-and-test skill, at release.
+#
+# ONCE ASKED FOR, IT CANNOT SKIP QUIETLY
+#
+# Unset, the case is skipped and listed as skipped. With TMDQA_RUN_HEAVY_BENCH set (this
+# script sets it) it runs, and a recording that cannot satisfy it is a FAILURE, not a
+# skip: a guard that passes by not running is the failure this exists to close. This
+# script also refuses to pass unless doctest reports that exactly that case ran and
+# passed.
 #
 # IT WAS ALSO POINTED AT A FIXTURE THAT COULD NOT SATISFY IT
 #
 # The test read 'prn_testfile, sample.ch10' - the committed 77 MB excerpt - but it
 # times FOUR channels, and that file carries PCM packets for channels 13 and 15
 # only; 14 and 16 are in its TMATS with no data behind them. So enabling the
-# variable did not produce a number: the benchmark probed four channels, recognized
-# two, and skipped blaming channel identification. Being opt-in hid that, so "nobody
-# sets the variable" was never the whole story.
-#
-# It now requires 'prn_testfile, full.ch10' (~640 MB, gitignored, present on the
-# development box and the self-hosted runner) and says so plainly when it is absent.
+# variable did not produce a number. It now requires 'prn_testfile, full.ch10'
+# (~640 MB, gitignored, present on the development box and the self-hosted runner)
+# and says so plainly when it is absent.
 #
 # WHY RELEASE AND NOT CI
 #
@@ -33,16 +46,7 @@
 # so it would more than triple every PR for a property that is not correctness. A
 # release is the right gate: it is where check_release_consistency.ps1 already runs,
 # and a release must come from a green full-suite build regardless. CI therefore
-# still leaves the benchmark skipped, and its "exactly one skip" gate still expects
-# exactly that one.
-#
-# NOTE ON THE FULL SUITE
-#
-# The harness has no single-suite or single-test CLI filter (multiple qExec calls,
-# so a test-function argument would be rejected by every other suite). This
-# therefore runs the WHOLE suite in Release with the benchmark enabled, which is
-# exactly what a release needs anyway - it replaces the by-hand Step 5 run rather
-# than adding to it.
+# leaves the benchmark off.
 #
 # THE RUN IS PINNED TO THE PERFORMANCE CORES
 #
@@ -53,12 +57,12 @@
 # the same binary measured 26112 ms on the efficiency cores alone and 14189 ms on the
 # performance cores alone. Windows was sometimes scheduling the single-threaded
 # decoder onto efficiency cores. The guard asserts ratios, so it held throughout, but
-# the milliseconds were useless as before/after evidence. So the suite now runs
+# the milliseconds were useless as before/after evidence. So the benchmark now runs
 # pinned to the highest efficiency class, discovered from Windows at run time
 # (GetLogicalProcessorInformationEx) rather than hard-coded, and the mask is printed
 # so a result says what it measured. On a CPU with one core class nothing is pinned.
 #
-# Usage (exits 1 if any test fails):
+# Usage (exits 1 if anything fails):
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\run_throughput_bench.ps1
 #   powershell -ExecutionPolicy Bypass -File scripts\run_throughput_bench.ps1 -SkipBuild
@@ -66,7 +70,7 @@
 # =============================================================================
 
 param(
-    # Reuse whatever is already in tests\release\. Only safe when nothing has been
+    # Reuse whatever is already in native\out\<config>\. Only safe when nothing has been
     # rebuilt since - a stale test exe is exactly how a Qt bump produced a crash in
     # an unrelated suite three times (see CLAUDE.md).
     [switch]$SkipBuild,
@@ -86,24 +90,26 @@ $ErrorActionPreference = 'Stop'
 
 $ScriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectDir = Split-Path -Parent $ScriptDir
-$TestsDir   = Join-Path $ProjectDir 'tests'
 
-$Config  = if ($DebugBuild) { 'debug' } else { 'release' }
-$Makefile = if ($DebugBuild) { 'Makefile.Debug' } else { 'Makefile.Release' }
+$Config = if ($DebugBuild) { 'Debug' } else { 'Release' }
+$TestExe = Join-Path $ProjectDir "native\out\$Config\tmdq_core_tests.exe"
+$CaseFilter = 'PipelineRunner throughput*'
+
+# A variable left in the caller's environment would make the build step below run the
+# benchmark too, unpinned, which is exactly the measurement this script exists to avoid.
+Remove-Item Env:\TMDQA_RUN_HEAVY_BENCH -ErrorAction SilentlyContinue
 
 Write-Host ''
 Write-Host "=== Decommutation throughput guard ($Config) ===" -ForegroundColor Cyan
 
 # --- the fixture -------------------------------------------------------------
-# Checked before spending minutes on a build. The benchmark itself QSKIPs when this
-# is missing, and a skip is indistinguishable from a pass in the totals - which is
-# the failure mode this whole script exists to close, so do not rely on it.
-# Mirrors the test's own choice: the full recording beside the sample if it is there,
-# otherwise the sample path, which on the self-hosted runner has been overlaid with the
-# full recording from $TMDQA_CH10_FULL. A fixture under ~600 MB is the committed sample,
-# which carries PCM data for 2 of the 4 channels the benchmark times - it cannot produce
-# a number, so say so here rather than after a build and a multi-minute run.
-$FixtureDir = Join-Path $TestsDir 'data\test files'
+# Checked before spending minutes on a build. Mirrors the test's own choice: the full
+# recording beside the sample if it is there, otherwise the sample path, which on the
+# self-hosted runner has been overlaid with the full recording from $TMDQA_CH10_FULL. A
+# fixture under ~600 MB is the committed sample, which carries PCM data for 2 of the 4
+# channels the benchmark times - it cannot produce a number, so say so here rather than
+# after a build and a multi-minute run.
+$FixtureDir = Join-Path $ProjectDir 'tests\data\test files'
 $Fixture    = Join-Path $FixtureDir 'prn_testfile, full.ch10'
 if (-not (Test-Path -LiteralPath $Fixture)) {
     $Fixture = Join-Path $FixtureDir 'prn_testfile, sample.ch10'
@@ -120,47 +126,30 @@ if ($FixtureMB -lt 600) {
     Write-Host ''
     Write-Host "FAILED - that is the committed sample, not the full recording." -ForegroundColor Red
     Write-Host "It holds PCM data for channels 13 and 15 only; 14 and 16 are in its TMATS" -ForegroundColor Red
-    Write-Host "with nothing behind them, so the benchmark cannot time four streams and will" -ForegroundColor Red
-    Write-Host "skip. Put 'prn_testfile, full.ch10' (~640 MB, gitignored) beside it, or set" -ForegroundColor Red
+    Write-Host "with nothing behind them, so the benchmark cannot time four streams and would" -ForegroundColor Red
+    Write-Host "fail. Put 'prn_testfile, full.ch10' (~640 MB, gitignored) beside it, or set" -ForegroundColor Red
     Write-Host "TMDQA_CH10_FULL and overlay it onto the sample path as CI does." -ForegroundColor Red
     exit 1
 }
 Write-Host ("  cores     {0}" -f [Environment]::ProcessorCount)
 
-# --- toolchain ---------------------------------------------------------------
-. (Join-Path $ScriptDir 'env.ps1')
-
-# --- build -------------------------------------------------------------------
-# Built in-source under tests\ on purpose: the exe resolves its fixtures with
-# applicationDirPath() -> cdUp() -> data\, so it must sit exactly one level below
-# tests\ or every data-file test fails for reasons unrelated to the code.
-Set-Location $TestsDir
+# --- build, and run everything else ------------------------------------------
+# test_native.ps1 builds the native tests (zero warnings, no Qt import) and runs the whole
+# suite, unpinned and with the benchmark off: a release needs those green as well.
 if ($SkipBuild) {
     Write-Host "  build     skipped (-SkipBuild)"
 } else {
-    Write-Host "  build     qmake + $env:TMDQ_MAKE ($Config)"
-    & qmake tests.pro -spec win32-msvc "CONFIG+=$Config"
-    if ($LASTEXITCODE -ne 0) { throw "qmake failed" }
-    & $env:TMDQ_MAKE -f $Makefile
-    if ($LASTEXITCODE -ne 0) { throw "Test build failed" }
+    Write-Host "  build     native tests ($Config), and the rest of the native suite"
+    & powershell -ExecutionPolicy Bypass -File (Join-Path $ScriptDir 'test_native.ps1') -Configuration $Config
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "FAILED - the native tests did not build or did not pass." -ForegroundColor Red
+        exit 1
+    }
 }
-
-$TestExe = Join-Path $TestsDir "$Config\tmDataQualityAnalyzer_tests.exe"
 if (-not (Test-Path -LiteralPath $TestExe)) {
     Write-Host "FAILED - test executable not found: $TestExe" -ForegroundColor Red
     exit 1
 }
-
-# --- run ---------------------------------------------------------------------
-New-Item -ItemType Directory -Force -Path (Join-Path $TestsDir 'output') | Out-Null
-$Results = Join-Path $TestsDir 'output\results.txt'
-if (Test-Path -LiteralPath $Results) { Remove-Item -LiteralPath $Results -Force }
-
-Write-Host ''
-Write-Host "Running the full suite with the throughput benchmark enabled." -ForegroundColor Cyan
-Write-Host "This takes several minutes - four channel probes, four solo runs, one"
-Write-Host "parallel run, plus the four .ch10 integration suites."
-Write-Host ''
 
 # --- pin to the performance cores (see the header) ----------------------------
 function Get-PerformanceCoreMask {
@@ -221,85 +210,78 @@ if ($AllCores) {
     }
 }
 
+# --- run ---------------------------------------------------------------------
+Write-Host ''
+Write-Host "Running the throughput benchmark." -ForegroundColor Cyan
+Write-Host "This takes several minutes - four channel probes, four solo runs, one parallel run."
+Write-Host ''
+
+$OutDir = Join-Path $ProjectDir 'native\out'
+New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+$Log = Join-Path $OutDir "throughput_$Config.txt"
+if (Test-Path -LiteralPath $Log) { Remove-Item -LiteralPath $Log -Force }
+
 $env:TMDQA_RUN_HEAVY_BENCH = '1'
 try {
     # Invoked directly rather than through Start-Process: under Windows PowerShell
     # 5.1 a -PassThru process has not cached its handle, so $p.ExitCode reads back
     # EMPTY once it exits. That reported a successful signing as a failure in
     # build_release.ps1 and is not worth re-learning here.
-    & $TestExe
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'   # 5.1 turns native stderr into a terminating error
+    & $TestExe "-tc=$CaseFilter" 2>&1 | Tee-Object -FilePath $Log | Out-Host
     $code = $LASTEXITCODE
+    $ErrorActionPreference = $prev
 } finally {
     Remove-Item Env:\TMDQA_RUN_HEAVY_BENCH -ErrorAction SilentlyContinue
     if ($pinned) { $self.ProcessorAffinity = $originalAffinity }
 }
 
 # --- report ------------------------------------------------------------------
-$pass = 0; $fail = 0; $skip = 0
-if (Test-Path -LiteralPath $Results) {
-    $pass = @(Select-String -Path $Results -Pattern '^PASS').Count
-    $fail = @(Select-String -Path $Results -Pattern '^FAIL').Count
-    $skip = @(Select-String -Path $Results -Pattern '^SKIP').Count
-} else {
-    Write-Host "FAILED - no results file was written ($Results)." -ForegroundColor Red
-    Write-Host "The run died before reporting; the exit code was $code." -ForegroundColor Red
+if (-not (Test-Path -LiteralPath $Log)) {
+    Write-Host "FAILED - no output was captured ($Log); the exit code was $code." -ForegroundColor Red
     exit 1
 }
 
 Write-Host ''
 Write-Host "--- throughput numbers ---" -ForegroundColor Cyan
-$benchLines = @(Select-String -Path $Results -Pattern 'benchmark-heavy' |
-                ForEach-Object { $_.Line })
+$benchLines = @(Select-String -Path $Log -Pattern '\[benchmark-heavy\]' | ForEach-Object { $_.Line })
 if ($benchLines.Count -eq 0) {
     Write-Host "FAILED - the benchmark produced no output at all." -ForegroundColor Red
     Write-Host "It was enabled, so it should at minimum have printed its channel probes." -ForegroundColor Red
     exit 1
 }
-foreach ($l in $benchLines) {
-    # Strip the Qt Test "QWARN  : Suite::test() " prefix so the numbers read cleanly.
-    Write-Host ("  " + ($l -replace '^\s*QWARN\s*:\s*\S+\s*', ''))
-}
+foreach ($l in $benchLines) { Write-Host ("  " + ($l -replace '^\s*\[benchmark-heavy\]\s*', '')) }
 
-# A benchmark that SKIPPED is the quiet failure this script exists to prevent: the
-# totals look healthy and nothing was measured. Name it rather than letting the
-# aggregate hide it.
-$benchSkip = @(Select-String -Path $Results -Pattern '^SKIP.*benchmarkHeavyWorkload')
-if ($benchSkip.Count -gt 0) {
-    Write-Host ''
-    Write-Host "FAILED - the throughput benchmark SKIPPED, so nothing was measured:" -ForegroundColor Red
-    $benchSkip | ForEach-Object { Write-Host "  $($_.Line)" -ForegroundColor Red }
+# A benchmark that did not RUN is the quiet failure this script exists to prevent: the
+# totals look healthy and nothing was measured. Require doctest to say that exactly the
+# benchmark case ran and passed, rather than trusting an exit code.
+$summary = Select-String -Path $Log -Pattern 'test cases:\s+(\d+)\s+\|\s+(\d+) passed\s+\|\s+(\d+) failed' | Select-Object -Last 1
+if (-not $summary) {
+    Write-Host "FAILED - doctest printed no summary; the run died before reporting (exit $code)." -ForegroundColor Red
     exit 1
 }
-if (@(Select-String -Path $Results -Pattern 'NOT GUARDED').Count -gt 0) {
+$m = $summary.Matches[0]
+$ran = [int]$m.Groups[1].Value; $passed = [int]$m.Groups[2].Value; $failed = [int]$m.Groups[3].Value
+Write-Host ''
+Write-Host "Results: $passed passed, $failed failed (exit $code)"
+if ($passed -ne 1 -or $failed -ne 0) {
+    Write-Host "FAILED - expected exactly the one benchmark case to run and pass." -ForegroundColor Red
+    if ($passed -eq 0 -and $failed -eq 0) {
+        Write-Host "It did not run at all: it is skipped unless TMDQA_RUN_HEAVY_BENCH is set." -ForegroundColor Red
+    }
+    exit 1
+}
+if (@(Select-String -Path $Log -Pattern 'NOT GUARDED').Count -gt 0) {
     Write-Host ''
     Write-Host "FAILED - the benchmark ran but did not assert (too few cores)." -ForegroundColor Red
     Write-Host "Its ratios describe this machine rather than the architecture." -ForegroundColor Red
     exit 1
 }
-
-Write-Host ''
-Write-Host "Results: $pass passed, $fail failed, $skip skipped (exit $code)"
-
 if ($code -ne 0) {
-    Write-Host "FAILED - the suite exited non-zero." -ForegroundColor Red
-    exit 1
-}
-if ($fail -gt 0) {
-    Write-Host "FAILED - $fail test(s) failed:" -ForegroundColor Red
-    Select-String -Path $Results -Pattern '^FAIL' | ForEach-Object {
-        Write-Host "  $($_.Line)" -ForegroundColor Red
-    }
-    exit 1
-}
-# With the benchmark enabled it is no longer the suite's one standing skip, so a
-# release run should have none at all. Anything left is a missing fixture.
-if ($skip -gt 0) {
-    Write-Host "FAILED - $skip unexpected skip(s); with the benchmark on there should be none:" -ForegroundColor Red
-    Select-String -Path $Results -Pattern '^SKIP' | ForEach-Object {
-        Write-Host "  $($_.Line)" -ForegroundColor Red
-    }
+    Write-Host "FAILED - the benchmark exited non-zero." -ForegroundColor Red
     exit 1
 }
 
-Write-Host "Throughput guard passed, and the full suite is green ($pass tests)." -ForegroundColor Green
+Write-Host "Throughput guard passed." -ForegroundColor Green
 exit 0

@@ -5,11 +5,12 @@ name: CI
 # Runner selection with fallback:
 #   - Preferred: a SELF-HOSTED Windows runner (label: tmdqa) that has the MSVC 2022
 #     toolchain + Qt msvc2022_64 kit and the FULL-SIZE .ch10 recordings on disk, so
-#     there is no per-run Qt download and the integration suites run (357).
+#     there is no per-run Qt download and the integration suites run.
 #   - Fallback: the GitHub-hosted windows-latest runner (provisions Qt + MSVC per
 #     run). The small .ch10 fixtures are committed to the repo, so the integration
-#     suites run here too, so both runners report the same 357. The heavy PRN
-#     throughput benchmark is opt-in (TMDQA_RUN_HEAVY_BENCH) and skips on both.
+#     suites run here too, so both runners report the same totals, with no skips.
+#     The heavy PRN throughput benchmark lives in the native doctest suite, is
+#     opt-in (TMDQA_RUN_HEAVY_BENCH) and is run at release, not here.
 #
 # Windows steps use `shell: powershell` (Windows PowerShell 5.1), NOT `pwsh`.
 # The self-hosted runner runs as a Windows service under NT AUTHORITY\NETWORK
@@ -262,20 +263,21 @@ jobs:
           if ($fail -gt 0)  { throw "$fail test(s) failed" }
           # --- Fixture-loss guard -------------------------------------------
           # A skipped test is indistinguishable from a passing one in the totals,
-          # and the suite has dozens of QSKIP sites: all but one are "fixture not
-          # available" guards, ONE is a deliberate opt-in. So an unpinned skip count is how
-          # four integration suites could quietly stop testing anything while CI
-          # still reported success. Every .ch10 fixture the suite reads is committed, so
-          # both runners must land on exactly that one skip.
-          $expectedSkip = 'benchmarkHeavyWorkloadSingleVsMultiStream'
+          # and the suite has dozens of QSKIP sites, nearly all of them "fixture not
+          # available" guards. So an unpinned skip count is how four integration
+          # suites could quietly stop testing anything while CI still reported
+          # success. Every .ch10 fixture the suite reads is committed, so both
+          # runners must land on NO skips. (The heavy PRN throughput benchmark was
+          # the one standing skip; it now lives in the native doctest suite, where
+          # it is opt-in and the release script runs it.)
           $skips = @(Select-String -Path output/results.txt -Pattern '^SKIP')
-          if ($skips.Count -ne 1 -or $skips[0].Line -notmatch $expectedSkip) {
+          if ($skips.Count -ne 0) {
             Write-Host "Skipped tests:"
             $skips | ForEach-Object { Write-Host "  $($_.Line)" }
-            throw ("Expected exactly one skip ($expectedSkip, the opt-in heavy PRN " +
-                   "benchmark) but got $($skips.Count) - a test fixture is probably missing")
+            throw ("Expected no skips but got $($skips.Count) - a test fixture is " +
+                   "probably missing")
           }
-          Write-Host "Skips: 1 (the opt-in $expectedSkip) - as expected."
+          Write-Host "Skips: 0 - as expected."
           # Coarse backstop against a run that died partway through.
           if ($pass -lt 350) { throw "Only $pass tests passed - the suite likely aborted partway" }
 
@@ -455,20 +457,21 @@ jobs:
           if ($fail -gt 0)  { throw "$fail test(s) failed" }
           # --- Fixture-loss guard -------------------------------------------
           # A skipped test is indistinguishable from a passing one in the totals,
-          # and the suite has dozens of QSKIP sites: all but one are "fixture not
-          # available" guards, ONE is a deliberate opt-in. So an unpinned skip count is how
-          # four integration suites could quietly stop testing anything while CI
-          # still reported success. Every .ch10 fixture the suite reads is committed, so
-          # both runners must land on exactly that one skip.
-          $expectedSkip = 'benchmarkHeavyWorkloadSingleVsMultiStream'
+          # and the suite has dozens of QSKIP sites, nearly all of them "fixture not
+          # available" guards. So an unpinned skip count is how four integration
+          # suites could quietly stop testing anything while CI still reported
+          # success. Every .ch10 fixture the suite reads is committed, so both
+          # runners must land on NO skips. (The heavy PRN throughput benchmark was
+          # the one standing skip; it now lives in the native doctest suite, where
+          # it is opt-in and the release script runs it.)
           $skips = @(Select-String -Path output/results.txt -Pattern '^SKIP')
-          if ($skips.Count -ne 1 -or $skips[0].Line -notmatch $expectedSkip) {
+          if ($skips.Count -ne 0) {
             Write-Host "Skipped tests:"
             $skips | ForEach-Object { Write-Host "  $($_.Line)" }
-            throw ("Expected exactly one skip ($expectedSkip, the opt-in heavy PRN " +
-                   "benchmark) but got $($skips.Count) - a test fixture is probably missing")
+            throw ("Expected no skips but got $($skips.Count) - a test fixture is " +
+                   "probably missing")
           }
-          Write-Host "Skips: 1 (the opt-in $expectedSkip) - as expected."
+          Write-Host "Skips: 0 - as expected."
           # Coarse backstop against a run that died partway through.
           if ($pass -lt 350) { throw "Only $pass tests passed - the suite likely aborted partway" }
 

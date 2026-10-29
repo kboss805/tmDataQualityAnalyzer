@@ -88,29 +88,32 @@ it deliberately every release rather than assuming the figures are fine.
 
 ## Step 5 — Verify before building
 
-Build the app clean (0 warnings) with the **build-and-test** skill, then run the release
-verification, which is the full suite **with the throughput guard enabled**:
+Build the app clean (0 warnings) and run the **full Qt suite** with the **build-and-test** skill:
+the baseline is in the root `CLAUDE.md` and there are **no skips**. Then run the throughput guard:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_throughput_bench.ps1
 ```
 
-This replaces the by-hand full-suite run rather than adding to it: it builds the tests in
-**Release** and runs every suite, and the benchmark is only meaningful against an optimised
-build. Expect **736 passed / 0 failed / 0 skipped** and a printed ratio block.
+It builds the native tests in **Release** (the benchmark is only meaningful against an optimised
+build), runs the whole native suite, then runs the one benchmark case **pinned to the performance
+cores** and prints a ratio block. It fails unless doctest reports that exactly that case ran and
+passed.
 
-**"0 skipped" is now literally true, and was not before.** This step has always asked for it,
-but the heavy PRN throughput benchmark skipped on every run — it was opt-in behind
-`TMDQA_RUN_HEAVY_BENCH`, nothing set that variable, and *it asserted nothing even when it ran*.
-So the decommutation pipeline had no performance guard at all, and the suite's standing
-"413/0/1" baseline was that hole. The script sets the variable, the benchmark now asserts its
-ratios, and **any** remaining skip is a missing fixture rather than business as usual.
+**The benchmark is a native doctest case now**, "PipelineRunner throughput: ..." in
+`native/tmdq_core_tests/test_pipelinerunner.cpp`; it measures `PipelineRunner`, which has no Qt, so
+the script no longer builds or runs the Qt suite (that is the step above). It used to be the Qt
+suite's one standing skip — opt-in behind `TMDQA_RUN_HEAVY_BENCH`, nothing set that variable, and
+*it asserted nothing even when it ran*, so the decommutation pipeline had no performance guard at
+all and the suite's "413/0/1" baseline was that hole. The script sets the variable, the benchmark
+asserts its ratios, and once asked for it cannot skip: a recording that cannot satisfy it is a
+failure.
 
 It needs `tests/data/test files/prn_testfile, full.ch10` (~640 MB, gitignored). The committed
 sample is **not** a substitute — it carries PCM data for 2 of the 4 channels the benchmark
-times — and the script says so up front instead of letting the benchmark skip quietly.
+times — and the script says so up front instead of letting the benchmark fail late.
 
-CI deliberately still leaves the benchmark off, so its "exactly one skip" gate is unchanged.
+CI leaves the benchmark off (the case is skipped there), and its Qt skip gate expects **none**.
 
 Do not package a release over a red or warning-laden build. Confirm `git status` is clean
 except for the intended version/notes changes.
