@@ -76,6 +76,11 @@
       <!-- irig106 uses ntohs and friends; the DLL links the same. -->
       <AdditionalDependencies>ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <!-- The UTF-8 active code page, as the application has (codepage.pri): the readers hand irig106 the path in the
+         process code page, which its narrow open() reads, so without this a non-ASCII folder could not be opened. -->
+    <Manifest>
+      <AdditionalManifestFiles>$(MSBuildThisFileDirectory)..\..\resources\utf8codepage.manifest;%(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)' == 'Debug'">
     <ClCompile>
@@ -105,6 +110,7 @@
     <ClCompile Include="test_ch10packetreader.cpp" />
     <ClCompile Include="test_chapter10reader.cpp" />
     <ClCompile Include="test_eventreporter.cpp" />
+    <ClCompile Include="test_frameprocessor.cpp" />
     <ClCompile Include="test_framesetup.cpp" />
     <ClCompile Include="test_framesync.cpp" />
     <ClCompile Include="test_intervalgate.cpp" />
@@ -117,9 +123,11 @@
 
   <!-- The core the ported suites exercise: src\model\<name>.cpp, each also built by tmdq_core.vcxproj. -->
   <ItemGroup>
+    <ClCompile Include="..\..\src\model\calibrationextractor.cpp" />
     <ClCompile Include="..\..\src\model\ch10packetreader.cpp" />
     <ClCompile Include="..\..\src\model\channeldata.cpp" />
     <ClCompile Include="..\..\src\model\chapter10reader.cpp" />
+    <ClCompile Include="..\..\src\model\frameprocessor.cpp" />
     <ClCompile Include="..\..\src\model\framesetup.cpp" />
     <ClCompile Include="..\..\src\model\stepdetector.cpp" />
     <ClCompile Include="..\..\src\model\textfile.cpp" />

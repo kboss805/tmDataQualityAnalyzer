@@ -34,7 +34,8 @@ struct ParameterInfo;
  */
 class FrameProcessor
 {
-    friend class TestFrameProcessor;
+    /// The native tests reach the private bit-level helpers (derandomizeBitstream) through this.
+    friend struct FrameProcessorTestAccess;
 
 public:
     FrameProcessor();
