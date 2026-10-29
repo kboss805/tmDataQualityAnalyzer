@@ -123,6 +123,7 @@
     <ClCompile Include="test_seriesbuild.cpp" />
     <ClCompile Include="test_seriescolumnschema.cpp" />
     <ClCompile Include="test_stepdetector.cpp" />
+    <ClCompile Include="test_streamjob.cpp" />
     <ClCompile Include="test_templatematcher.cpp" />
     <ClCompile Include="test_textfile.cpp" />
     <ClCompile Include="test_textformat.cpp" />
@@ -146,6 +147,7 @@
     <ClCompile Include="..\..\src\model\seriesbuilder.cpp" />
     <ClCompile Include="..\..\src\model\seriescolumnschema.cpp" />
     <ClCompile Include="..\..\src\model\stepdetector.cpp" />
+    <ClCompile Include="..\..\src\model\streamjobbuilder.cpp" />
     <ClCompile Include="..\..\src\model\templatematcher.cpp" />
     <ClCompile Include="..\..\src\model\textfile.cpp" />
     <ClCompile Include="..\..\src\model\tomldocument.cpp" />
