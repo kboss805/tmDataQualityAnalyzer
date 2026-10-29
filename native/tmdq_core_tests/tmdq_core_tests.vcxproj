@@ -108,6 +108,7 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="test_calibrationextractor.cpp" />
+    <ClCompile Include="test_calibrationrequest.cpp" />
     <ClCompile Include="test_ch10packetreader.cpp" />
     <ClCompile Include="test_chapter10reader.cpp" />
     <ClCompile Include="test_eventreporter.cpp" />
@@ -127,6 +128,7 @@
   <!-- The core the ported suites exercise: src\model\<name>.cpp, each also built by tmdq_core.vcxproj. -->
   <ItemGroup>
     <ClCompile Include="..\..\src\model\calibrationextractor.cpp" />
+    <ClCompile Include="..\..\src\model\calibrationrequest.cpp" />
     <ClCompile Include="..\..\src\model\ch10packetreader.cpp" />
     <ClCompile Include="..\..\src\model\channeldata.cpp" />
     <ClCompile Include="..\..\src\model\chapter10reader.cpp" />

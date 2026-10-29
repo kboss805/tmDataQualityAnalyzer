@@ -14,7 +14,6 @@
 #include "tst_tmchart.h"
 #include "tst_plotcustomizationdialog.h"
 #include "tst_processingcoordinator.h"
-#include "tst_calibrationrequest.h"
 #include "tst_streamconfigdialog.h"
 
 #include "tst_exportdialog.h"
@@ -129,7 +128,6 @@ int main(int argc, char* argv[])
     status |= runSuite<TestStreamConfigSchema>(log_path);
     status |= runSuite<TestProcessingTemplateSchema>(log_path);
     status |= runSuite<TestCoreQtFree>(log_path);
-    status |= runSuite<TestCalibrationRequest>(log_path);
     status |= runSuite<TestAbi>(log_path);
     status |= runSuite<TestQtProcessingEvents>(log_path);
 
