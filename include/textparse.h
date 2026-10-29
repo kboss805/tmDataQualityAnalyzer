@@ -111,7 +111,7 @@ inline bool parseUnsignedHex(const std::string& text, std::uint64_t& out)
 /// ignored, an optional leading '+', decimal or exponent form, and the special values spelled the way
 /// Qt takes them - "nan", "inf", "+inf" and "-inf", in any case. `std::from_chars` also takes
 /// "infinity", "nan(...)" and a signed "nan"; Qt reads those as not a number, so they are refused here
-/// (`TestCsvSeries::numbersReadLikeQt` compares the two over tens of thousands of strings).
+/// (the native `csvseries` test compares the two over tens of thousands of strings, against what Qt answered).
 inline bool parseDouble(const std::string& text, double& out)
 {
     const std::string s = trimmed(text);
