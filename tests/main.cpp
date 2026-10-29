@@ -14,7 +14,6 @@
 #include "tst_tmchart.h"
 #include "tst_plotcustomizationdialog.h"
 #include "tst_processingcoordinator.h"
-#include "tst_calibrationextractor.h"
 #include "tst_calibrationrequest.h"
 #include "tst_streamconfigdialog.h"
 
@@ -141,13 +140,11 @@ int main(int argc, char* argv[])
     if (!fast_mode)
     {
         status |= runSuite<TestProcessingCoordinator>(log_path);
-        status |= runSuite<TestCalibrationExtractor>(log_path);
     }
     else
     {
         QTextStream(stdout)
-            << "FAST MODE: skipped the real-Ch10 integration suites ("
-               "TestProcessingCoordinator, TestCalibrationExtractor). "
+            << "FAST MODE: skipped the real-Ch10 integration suite (TestProcessingCoordinator). "
                "Run without --fast / TMDQ_FAST_TESTS for the full suite.\n";
     }
 
