@@ -120,6 +120,7 @@
     <ClCompile Include="test_intervalgate.cpp" />
     <ClCompile Include="test_packetqueue.cpp" />
     <ClCompile Include="test_pipelinerunner.cpp" />
+    <ClCompile Include="test_seriesbuild.cpp" />
     <ClCompile Include="test_seriescolumnschema.cpp" />
     <ClCompile Include="test_stepdetector.cpp" />
     <ClCompile Include="test_templatematcher.cpp" />

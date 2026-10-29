@@ -1,9 +1,12 @@
 /**
  * @file tst_seriesbuild.h
- * @brief Unit tests for how processed streams become plot series and share one time axis: the series a
- *        stream yields, their names and indices, the elapsed axis, re-basing across sources, and the order
- *        an imported CSV's streams are given. Pinned through PlotViewModel so the same cases hold on both
- *        sides of the move of that logic into the core (plan step 1.6).
+ * @brief Unit tests for what the PlotViewModel does with processed streams and imported files: dropping a stream's
+ *        earlier series, judging overlap, moving the shared time base, ordering the legend, removing a source and taking
+ *        an import in, pinned as one digest of its data layer per scenario.
+ *
+ * The functions behind it - the series a stream yields, the time base, the order an import's streams are given - are the
+ * core's, and every scenario and the generated sequences are tested on them without Qt in
+ * native/tmdq_core_tests/test_seriesbuild.cpp.
  */
 
 #ifndef TST_SERIESBUILD_H
@@ -18,13 +21,6 @@ class TestSeriesBuild : public QObject
 private slots:
     void scenariosKeepTheirRecordedBehaviour_data();
     void scenariosKeepTheirRecordedBehaviour();
-
-    // The old view-model code kept in the test as an oracle and compared over generated input, and the
-    // core's own interface.
-    void theCoreBuildsEveryGeneratedSequenceLikeTheOldViewModelCode();
-    void theCoreOrdersImportedStreamsLikeTheOldViewModelCode();
-    void theCoreSpecsViewTheProcessedDataWithoutCopyingIt();
-    void theTimeBaseReportsHowFarTheSeriesMustShift();
 };
 
 #endif // TST_SERIESBUILD_H
