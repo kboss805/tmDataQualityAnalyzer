@@ -198,8 +198,7 @@ SOURCES += \
     tst_processingtemplateschema.cpp \
     tst_coreqtfree.cpp \
     tst_abi.cpp \
-    tst_qtprocessingevents.cpp \
-    tst_calibrationrequest.cpp
+    tst_qtprocessingevents.cpp
 
 # Test headers (needed for MOC processing)
 HEADERS += \
@@ -223,5 +222,4 @@ HEADERS += \
     tst_processingtemplateschema.h \
     tst_coreqtfree.h \
     tst_abi.h \
-    tst_qtprocessingevents.h \
-    tst_calibrationrequest.h
+    tst_qtprocessingevents.h
