@@ -107,6 +107,7 @@
   <!-- doctest's main (compiled once, here) and one test_<suite>.cpp for each ported suite. -->
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="test_calibrationextractor.cpp" />
     <ClCompile Include="test_ch10packetreader.cpp" />
     <ClCompile Include="test_chapter10reader.cpp" />
     <ClCompile Include="test_eventreporter.cpp" />

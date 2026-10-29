@@ -65,7 +65,7 @@ The test executable resolves its data fixtures with `applicationDirPath()` → `
 (see `testDataPath()` in `tests/tst_processingcoordinator.cpp`). That means **the test exe must live exactly
 one level below `tests/`** — i.e. `tests/debug/` or `tests/release/`. Build *in-source inside
 `tests/`*; do NOT build into a nested or out-of-tree directory, or every ProcessingCoordinator /
-PipelineRunner / CalibrationExtractor data-file test fails or skips with no obvious cause. (The
+StreamConfigDialog data-file test fails or skips with no obvious cause. (The
 native doctest suite finds the repository from `tmdq.sln` instead, so it has no such rule.)
 
 ```powershell
@@ -87,17 +87,17 @@ nmake -f Makefile.Debug
 
 ### Fast mode and the no-single-suite-filter reality
 
-The full run is dominated by the real-Ch10 integration suites — `TestProcessingCoordinator` and
-`TestCalibrationExtractor` process real Chapter 10 fixtures and take a few minutes between them.
+The full run is dominated by the real-Ch10 integration suite — `TestProcessingCoordinator`
+processes a real Chapter 10 fixture and takes a few minutes. The rest of the core's integration
+tests (the pipeline, the frame processor, the calibration extractor) are native doctest cases now.
 For quick local iteration, pass **`--fast`** (or set **`TMDQ_FAST_TESTS=1`**):
 
 ```powershell
-.\debug\tmDataQualityAnalyzer_tests.exe --fast   # ~1 s: skips the 2 .ch10 integration suites
+.\debug\tmDataQualityAnalyzer_tests.exe --fast   # ~1 s: skips the .ch10 integration suite
 ```
 
-Fast mode runs the 12 pure-logic + widget/dialog suites (the same set CI runs, where the `.ch10`
-fixtures are absent) and skips `TestProcessingCoordinator` and
-`TestCalibrationExtractor`. It is a **local convenience only** — always do a final **full** run
+Fast mode runs the pure-logic + widget/dialog suites (the same set CI runs, where the `.ch10`
+fixtures are absent) and skips `TestProcessingCoordinator`. It is a **local convenience only** — always do a final **full** run
 (no `--fast`) before declaring tests green, and never rely on it for CI or a release gate. This is the
 built-in replacement for hand-trimming `main.cpp` (which must never be committed). The harness still
 does not honor a `ClassName::testCase` single-suite filter.
