@@ -1,8 +1,11 @@
 /**
  * @file tst_streamjob.h
- * @brief Unit tests for turning a stream's configuration into a processing job (validation, the
- *        frame-parameter table and its calibration), pinned through MainViewModel::buildStreamJob so
- *        the same cases hold on both sides of the move into the core (plan step 1.5).
+ * @brief Unit tests for what MainViewModel::buildStreamJob does around the core's job builder: it carries the
+ *        user's Qt settings across, reads the application root and byte order it holds, and reports what the
+ *        builder found as a QString and as signals.
+ *
+ * The builder itself - the validation, the frame-parameter table and its calibration (plan step 1.5) - is the
+ * core's and is tested without Qt in native/tmdq_core_tests/test_streamjob.cpp.
  */
 
 #ifndef TST_STREAMJOB_H
@@ -30,12 +33,6 @@ public:
 private slots:
     void jobsKeepTheirRecordedBehaviour_data();
     void jobsKeepTheirRecordedBehaviour();
-
-    // The old view-model code kept in the test as an oracle and compared over generated configurations,
-    // and the core's own interface.
-    void theCoreBuildsEveryGeneratedJobLikeTheOldViewModelCode();
-    void theCoreReadsTheDefaultFileUnderANonAsciiApplicationRoot();
-    void theCoreReportsErrorsAndLogLinesAsPlainText();
 };
 
 #endif // TST_STREAMJOB_H
