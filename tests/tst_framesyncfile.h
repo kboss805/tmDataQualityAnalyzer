@@ -1,8 +1,11 @@
 /**
  * @file tst_framesyncfile.h
- * @brief Unit tests for the frame-sync pattern file (US1.0 / US2.0): what loading and saving one does,
- *        pinned through the dialog's own load/save functions so the same cases hold on both sides of
- *        the move of the file format into the core (plan step 1.4).
+ * @brief Unit tests for what the dialogs do with a frame-sync pattern file (US1.0 / US2.0): loading one
+ *        into the widgets (upper-casing, the spin box's range, leaving a field alone) and saving the
+ *        widgets' values, through the dialog's own load/save functions.
+ *
+ * The file format itself - what a file says and what writing puts in it - is the core's (readFrameSyncFile /
+ * writeFrameSyncFile) and is tested without Qt in native/tmdq_core_tests/test_framesyncfile.cpp.
  */
 
 #ifndef TST_FRAMESYNCFILE_H
@@ -27,10 +30,8 @@ private slots:
     void receiverDefaultsEdgeCasesKeepTheirRecordedBehaviour_data();
     void receiverDefaultsEdgeCasesKeepTheirRecordedBehaviour();
 
-    // The core's reader and writer, and the implementations they replaced (kept in the test) compared
+    // The dialog's load and save, and the implementations they replaced (kept in the test) compared
     // over generated files.
-    void theReaderReportsWhatAFileSaysAndNothingElse();
-    void writingToAnUnwritablePathFails();
     void theCoreReadsEveryGeneratedFileLikeTheOldDialogCode();
     void theCoreWritesEveryGeneratedFileLikeTheOldDialogCode();
     void aFileWrittenByTheDialogLoadsBackIntoIt();
