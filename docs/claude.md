@@ -522,6 +522,18 @@ v2.9.0 intended. Every first-party header here is quote-included, so `anglebrack
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
 
+#### The core is built and tested on a machine with no Qt at all (plan step 2.4)
+
+Step 2.4 is done when "the core and its tests build and pass with no Qt installed, and CI runs them". Both build jobs have Qt on the machine (the self-hosted runner's kit; `install-qt-action` on hosted), so all they could show was that the core does not *reach* for it: no Qt include path, no Qt import.
+
+**A third CI job, `core-without-qt`,** runs on every push and PR on a plain `windows-latest` runner whichever runner the Qt build picked. It never installs Qt, sets up only MSVC (`msvc-dev-cmd`) and .NET 10, and builds `tmdq_core.dll` (Debug and Release), the doctest suite and the managed library, and runs both test suites. Its first step **fails if it finds Qt**: `qmake`, `qmake6`, `qtpaths` or `windeployqt` on PATH, a `Qt6Core*.dll` in any PATH folder, a `QTDIR` / `QT_ROOT` / `QT_ROOT_DIR` / `QT_PLUGIN_PATH` / `Qt6_DIR` variable, or an install folder in the usual places, so the proof cannot quietly lapse if the image ever gains a Qt. The `ci` status now needs this job **and** the selected Qt build. The scripts dot-source `env.ps1` only when `msbuild` or `mt` is missing, so nothing in this job touches its Qt half.
+
+The check was run locally both ways: on this machine it finds the Qt kit (2 traces in a plain shell, 12 after `env.ps1`), and with the Qt folder, variables and PATH entries hidden it passes. Running it first found one bug of its own: an unset `RUNNER_WORKSPACE` made the candidate `\Qt`, which resolves to the root of the current drive.
+
+**2.4 is not ticked, and the note that said the core's suites were all ported was wrong.** It listed `TestConstants` and `TestAbi` as "deliberately Qt". `TestConstants` is mixed (the Qt-free `constants.h` beside the Qt `plotconstants.h`), so it is split like the four before it; `TestAbi` tests the C ABI, which is core, with Qt only as its harness, so it is ported. The plan note now says so. Qt on purpose: `TestStreamConfigSchema`, `TestProcessingTemplateSchema` (template JSON goes to C#, D3), `TestQtProcessingEvents` and `TestCoreQtFree`.
+
+No code changed; the baselines are unchanged.
+
 #### `TestStreamJob` is split: its core half moves to doctest, the wrapper half stays (plan step 2.4)
 
 The fourth and last of the suites that drove the core through a Qt object (#207 `28b8e5c`, #208 `af48cb9`, #209 `73719cc` before it); **every core suite is now either ported or deliberately Qt**. `TestStreamJob` pinned the job builder through `MainViewModel::buildStreamJob`, which converts the user's Qt settings (`QString`, `QHash`, the sync fields) into `StreamJobConfig`, reads the application root and byte order it holds, and turns the builder's report into a `QString` and signals. No core code changed; the project now also compiles `streamjobbuilder.cpp`.
