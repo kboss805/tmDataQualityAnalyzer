@@ -67,7 +67,12 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <ProgramDataBaseFileName>$(IntDir)tmdq_core_tests.pdb</ProgramDataBaseFileName>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\lib\doctest;$(MSBuildThisFileDirectory)..\..\include;$(MSBuildThisFileDirectory)..\..\include\dto;$(MSBuildThisFileDirectory)..\..\include\model;$(MSBuildThisFileDirectory)..\..\lib\irig106\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>UNICODE;_UNICODE;WIN32;WIN64;_ENABLE_EXTENDED_ALIGNED_STORAGE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <!-- DOCTEST_CONFIG_USE_STD_HEADERS: doctest's documented switch to include <tuple> and friends instead of
+           forward-declaring them in namespace std. MSVC 14.51 (Visual Studio 2026, the hosted CI image) rejects the
+           forward declaration with C5285 ("specializing this standard library template is forbidden"); 14.44 does
+           not. Set for the whole project, because the vendored header must not be edited and every translation unit
+           has to see the same doctest. -->
+      <PreprocessorDefinitions>UNICODE;_UNICODE;WIN32;WIN64;_ENABLE_EXTENDED_ALIGNED_STORAGE;DOCTEST_CONFIG_USE_STD_HEADERS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/FS /utf-8 /Zc:__cplusplus /Zc:throwingNew /Zc:externConstexpr /w34100 /w34189 /w44456 /w44457 /w44458 /wd4577 /wd4467 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
