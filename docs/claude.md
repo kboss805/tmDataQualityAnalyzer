@@ -522,6 +522,15 @@ v2.9.0 intended. Every first-party header here is quote-included, so `anglebrack
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
 
+#### Two dead constants go, and a test helper that was never called gets its case
+
+Cleanup after the splits; no behaviour changed.
+
+- **`PCMConstants::kSecondsPerMinute` and `UIConstants::kHexBase` are deleted.** The `TestConstants` mutation check found them: nothing in the app, the core, the tests or the C# library reads either (the one in use is `UIConstants::kSecondsPerMinute`). The app, the tests, the DLL and the native tests all build without them.
+- **`loadWithoutFlagBoxesDigest` in `tst_framesyncfile.cpp` had been dead since it was written** (#177, `0b71c85`): defined, never called. It was meant to cover `loadFrameSyncFromToml` with its two optional boxes (Invert Data, Derandomize) left out, and both production callers pass them, so the two null checks in that function had no test. The new case `loadingWithoutTheFlagBoxesFillsTheEditorsTheSame` runs every recorded load row without the boxes and requires the editors filled exactly as the recorded row has them and the boxes left alone (at least three rows carry a flag that would otherwise have changed a box). **Mutation check:** removing either null check crashes the suite (access violation) in the new case; both survived before it.
+
+Qt baseline **507 / 0 / 0** (was 506: one case), **20 suites**. Native baseline unchanged (**429 cases / 90,223 assertions**).
+
 #### `TestConstants` is split: `constants.h` moves to doctest, `plotconstants.h` stays (plan step 2.4)
 
 The fifth split, and one of the two core suites the 2.4 note had wrongly called "deliberately Qt" (the other, `TestAbi`, is the last suite of the step). `TestConstants` pinned two headers: `constants.h`, which the whole core includes and which has had no Qt since the de-Qt sweep, and `plotconstants.h`, which is the view's (`QColor`, `QString`). No product code changed.
@@ -531,7 +540,7 @@ The fifth split, and one of the two core suites the 2.4 note had wrongly called 
 **Mutation check: every constant in the header, in three rounds.**
 - **Round 1, against the constants cases:** each of the header's 104 definitions altered (a number plus one, a string with a letter added, an array's first element), plus the version string's separator and its patch. **64 caught, 42 survived.** Three are the version numbers, left alone on purpose: the version case builds its expectation from them, and `check_release_consistency.ps1` pins the version across the shipped files.
 - **Round 2, the other 39 against the whole native suite**, to see which some behaviour test already holds: **16 caught** (the receiver defaults by `FrameSetup`; the calibration tuning by the extractor and the step detector), **23 survived**.
-- **Two of the 23 are dead constants**, used nowhere: `PCMConstants::kSecondsPerMinute` (UIConstants has its own) and `UIConstants::kHexBase`. Reported, not pinned; deleting them is a separate change.
+- **Two of the 23 are dead constants**, used nowhere: `PCMConstants::kSecondsPerMinute` (UIConstants has its own) and `UIConstants::kHexBase`. Reported, not pinned; the entry above deletes them.
 - **The other 21 are now pinned**, by the new cases. Where a shipped file carries the same value the case reads the file, so the two cannot drift apart unseen:
   - the Receiver SNR fallback constants (`FE6B2840`, 800 bits, the mask) are what `settings/framesync_patterns/framesync_rcvr_default.toml` says - the dialog falls back to them when the file is missing, so a difference would change the defaults silently - and the Frame Sync Lock default is what `framesync_PRN15.toml` says;
   - the receiver-parameter and step-calibration folders ship `default.toml` under the default name;

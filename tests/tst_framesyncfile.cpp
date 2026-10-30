@@ -267,6 +267,30 @@ void TestFrameSyncFile::loadEdgeCasesKeepTheirRecordedBehaviour()
     QCOMPARE(got, QString::fromLatin1(c.expect));
 }
 
+void TestFrameSyncFile::loadingWithoutTheFlagBoxesFillsTheEditorsTheSame()
+{
+    // The two box parameters are optional (both production callers pass them, so nothing else reaches the null
+    // checks). Without them every load row must fill the editors exactly as its recorded row does, and leave the boxes
+    // as they were - checked, as Fields(true) sets them - whatever the file says about Inverted and Randomized.
+    static const QRegularExpression flags(" inv=\\d rand=\\d$");
+    int carryingAFlag = 0;
+    for (const Case& c : loadCases())
+    {
+        if (!c.present)
+            continue;
+        const QString path = writeBytes("load", c.bytes);
+        const QString got = loadWithoutFlagBoxesDigest(path);
+        QFile::remove(path);
+        QString expected = QString::fromLatin1(c.expect).section(" || ", 0, 0);
+        if (!expected.endsWith(" inv=1 rand=1"))
+            ++carryingAFlag;
+        expected.replace(flags, " inv=1 rand=1");
+        QVERIFY2(got == expected, qPrintable(QString("%1: %2 != %3").arg(c.name, got, expected)));
+    }
+    // A row whose file sets a box would have changed it, so these rows are the ones that show the boxes left alone.
+    QVERIFY(carryingAFlag >= 3);
+}
+
 // ---------------------------------------------------------------------------
 // Save cases
 // ---------------------------------------------------------------------------

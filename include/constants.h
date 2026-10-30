@@ -28,7 +28,6 @@ struct AppVersion {
 /// @brief Constants for PCM frame structure and channel type identifiers.
 namespace PCMConstants {
     inline constexpr int kCommonWordLen        = 16;    ///< Bits per word.
-    inline constexpr int kSecondsPerMinute     = 60;    ///< Seconds in a minute.
     inline constexpr int kNumMinorFrames       = 1;     ///< Minor frames per major frame.
     inline constexpr int kMaxChannelCount      = 0x10000; ///< Maximum channel ID range.
     inline constexpr const char* kDefaultFrameSyncMask          = "FFFFFFFF"; ///< Default frame sync mask (all bits active).
@@ -207,7 +206,6 @@ namespace UIConstants {
     inline constexpr int kSidebarMinWidth                 = 400;                          ///< Minimum width for the sidebar panel (file name column + margins).
     inline constexpr int kInitialWindowWidth              = 1920;                         ///< Initial main window width at launch (px).
     inline constexpr int kInitialWindowHeight             = 1080;                         ///< Initial main window height at launch (px).
-    inline constexpr int kHexBase                        = 16;                           ///< Hexadecimal (base-16) radix for string parsing.
     inline constexpr int kBytesPerKB                     = 1024;                         ///< Bytes per kilobyte.
     inline constexpr int kBytesPerMB                     = 1048576;                      ///< Bytes per megabyte.
     /// @}
