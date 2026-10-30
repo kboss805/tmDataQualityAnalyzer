@@ -11,6 +11,9 @@ name: CI
 #     suites run here too, so both runners report the same totals, with no skips.
 #     The heavy PRN throughput benchmark lives in the native doctest suite, is
 #     opt-in (TMDQA_RUN_HEAVY_BENCH) and is run at release, not here.
+#   - Always, beside whichever of those runs: core-without-qt, a hosted job that never
+#     installs Qt and builds and tests the native core, its doctest suite and the C#
+#     library there (plan step 2.4). The `ci` status needs both.
 #
 # Windows steps use `shell: powershell` (Windows PowerShell 5.1), NOT `pwsh`.
 # The self-hosted runner runs as a Windows service under NT AUTHORITY\NETWORK
@@ -195,7 +198,7 @@ jobs:
       - name: Native tests (doctest, no Qt)
         shell: powershell
         run: |
-          # The core's own tests, ported off Qt Test one suite at a time (plan step 2.4): doctest, built by MSBuild
+          # The core's own tests, ported off Qt Test in plan step 2.4: doctest, built by MSBuild
           # with no Qt on any path. The script requires zero compiler warnings and no Qt import, then runs them.
           $ErrorActionPreference = 'Continue'
           powershell -ExecutionPolicy Bypass -File scripts\test_native.ps1 -Configuration Release
@@ -413,7 +416,7 @@ jobs:
       - name: Native tests (doctest, no Qt)
         shell: powershell
         run: |
-          # The core's own tests, ported off Qt Test one suite at a time (plan step 2.4): doctest, built by MSBuild
+          # The core's own tests, ported off Qt Test in plan step 2.4: doctest, built by MSBuild
           # with no Qt on any path. The script requires zero compiler warnings and no Qt import, then runs them.
           $ErrorActionPreference = 'Continue'
           powershell -ExecutionPolicy Bypass -File scripts\test_native.ps1 -Configuration Release
@@ -483,16 +486,99 @@ jobs:
           path: tests/output/results.txt
           if-no-files-found: ignore
 
-  # --- Single stable status: passes iff the selected build job passed --------
+  # --- The core on a machine that has never had Qt (plan step 2.4) ------------
+  # Both build jobs above have Qt on the machine (the self-hosted kit; install-qt-action on
+  # hosted), so all they can show is that the core does not REACH for it: no Qt include path,
+  # no Qt import. This job is the other half of step 2.4's "done when": the core, its native
+  # tests and the managed library build and pass where Qt is not installed at all. It runs on
+  # every push and PR whichever runner the Qt build picked, and its first step fails if the
+  # image ever gains a Qt, so the proof cannot quietly lapse.
+  core-without-qt:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up MSVC (msbuild / dumpbin / mt)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Prove there is no Qt on this machine
+        shell: powershell
+        run: |
+          # Runs after the toolchain steps, so the PATH they built is the one checked. Looks for
+          # Qt the ways a build could find it: a qmake or a Qt DLL on PATH, a Qt variable, an
+          # install in the usual places.
+          $ErrorActionPreference = 'Continue'
+          $found = @()
+          foreach ($tool in 'qmake', 'qmake6', 'qtpaths', 'windeployqt') {
+            $c = Get-Command $tool -ErrorAction SilentlyContinue
+            if ($c) { $found += "$tool on PATH: $($c.Source)" }
+          }
+          foreach ($dir in ($env:PATH -split ';' | Where-Object { $_ -and (Test-Path -LiteralPath $_) })) {
+            Get-ChildItem -LiteralPath $dir -Filter 'Qt6Core*.dll' -ErrorAction SilentlyContinue |
+              ForEach-Object { $found += "Qt DLL on PATH: $($_.FullName)" }
+          }
+          # (Not QT_VERSION: the workflow sets it for the Qt jobs, and it installs nothing.)
+          Get-ChildItem env: | Where-Object { $_.Name -match '^(QTDIR|QT_ROOT|QT_ROOT_DIR|QT_PLUGIN_PATH|Qt6_DIR)$' } |
+            ForEach-Object { $found += "variable $($_.Name)=$($_.Value)" }
+          # Each base must be set: an empty one would make "\Qt", which resolves to the drive's root.
+          $roots = @('C:\Qt', 'D:\a\Qt')
+          foreach ($base in $env:USERPROFILE, $env:RUNNER_WORKSPACE) { if ($base) { $roots += (Join-Path $base 'Qt') } }
+          foreach ($root in $roots) {
+            if (Test-Path -LiteralPath $root) { $found += "install folder: $root" }
+          }
+          if ($found.Count -gt 0) {
+            $found | ForEach-Object { Write-Host "  $_" }
+            throw "This job must run where Qt is not installed, and found $($found.Count) trace(s) of it"
+          }
+          Write-Host 'No Qt on this machine: no qmake or Qt DLL on PATH, no Qt variable, no install folder.'
+
+      - name: Build native core (tmdq_core.dll)
+        shell: powershell
+        run: |
+          # The scripts dot-source env.ps1 only when msbuild / mt are missing; msvc-dev-cmd put
+          # them on PATH, so nothing here touches the Qt half of env.ps1.
+          $ErrorActionPreference = 'Continue'
+          foreach ($cfg in 'Debug', 'Release') {
+            powershell -ExecutionPolicy Bypass -File scripts\build_core_dll.ps1 -Configuration $cfg
+            if ($LASTEXITCODE -ne 0) { throw "tmdq_core.dll ($cfg) failed the build or the no-Qt check" }
+          }
+
+      - name: Native tests (doctest)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          powershell -ExecutionPolicy Bypass -File scripts\test_native.ps1 -Configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "the native tests failed" }
+
+      - name: Managed tests (TmDq.Core against the native DLL)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          powershell -ExecutionPolicy Bypass -File scripts\test_dotnet.ps1 -Configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "the managed tests failed" }
+
+  # --- Single stable status: the selected Qt build job AND the Qt-free core both passed ---
   ci:
-    needs: [pick-runner, build-self-hosted, build-hosted]
+    needs: [pick-runner, build-self-hosted, build-hosted, core-without-qt]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - run: |
           sh='${{ needs.build-self-hosted.result }}'
           ho='${{ needs.build-hosted.result }}'
-          echo "target=${{ needs.pick-runner.outputs.target }}  self-hosted=$sh  hosted=$ho"
+          nq='${{ needs.core-without-qt.result }}'
+          echo "target=${{ needs.pick-runner.outputs.target }}  self-hosted=$sh  hosted=$ho  core-without-qt=$nq"
+          if [ "$nq" != "success" ]; then
+            echo "CI failed - the core did not build and pass without Qt"; exit 1
+          fi
           if [ "$sh" = "success" ] || [ "$ho" = "success" ]; then
             echo "CI passed"; exit 0
           fi

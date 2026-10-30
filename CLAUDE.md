@@ -48,7 +48,8 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   (MSBuild; the framework is the single header in `lib/doctest`) with **zero warnings and no Qt import**, then runs it.
   Plan step 2.4 ports the Qt Test suites here one at a time and deletes each Qt version once every case is in;
   a new test file goes in the project and `TestCoreQtFree` checks the project compiles only core sources and no Qt.
-  CI runs it in both jobs. Run it **filtered** while iterating: `-tc="TomlDocument*"`.
+  CI runs it in every job, including `core-without-qt`, which builds the DLL and runs these and the managed tests on a
+  hosted runner that has never had Qt (and fails if it finds any). Run it **filtered** while iterating: `-tc="TomlDocument*"`.
 - **Managed library and its tests (.NET 10):** `powershell -ExecutionPolicy Bypass -File scripts\test_dotnet.ps1
   [-Configuration Debug|Release] [-NoBuild]` builds `dotnet/TmDq.Core` (the C# binding of the DLL's C ABI) and
   `dotnet/TmDq.Core.Tests` (xunit v3, warnings are errors) and runs the test exe against
