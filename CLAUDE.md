@@ -19,11 +19,11 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   present, else serial `nmake` — ~3.5x faster, so prefer it). Re-run qmake after
   `.pro`/version/`Q_OBJECT` changes. **Zero warnings required.**
 - **Tests:** build **in-source inside `tests/`** (the exe must sit one level under `tests/` or the
-  data-file tests fail), then `.\debug\tmDataQualityAnalyzer_tests.exe`. The full run (all **20
+  data-file tests fail), then `.\debug\tmDataQualityAnalyzer_tests.exe`. The full run (all **19
   suites**) is dominated by the real-Ch10 integration suites (a few minutes); add `--fast` (or
   `TMDQ_FAST_TESTS=1`) to skip the real-`.ch10` integration suites for ~1 s local iteration — **local only; CI
   and releases run the full suite**. No CLI single-suite filter.
-  Green baseline: **507 passed / 0 failed / 0 skipped**, always: there is **no standing skip**, and
+  Green baseline: **457 passed / 0 failed / 0 skipped**, always: there is **no standing skip**, and
   CI fails on any (a skip is a missing fixture). The heavy PRN throughput benchmark is a **native
   doctest case** now ("PipelineRunner throughput", `native/tmdq_core_tests/test_pipelinerunner.cpp`),
   skipped unless `TMDQA_RUN_HEAVY_BENCH=1` because it walks a 640 MB recording nine times and takes
@@ -41,13 +41,13 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   `native/out/<config>/tmdq_core.dll`, then fails on any compiler warning or on an import outside a short
   allow-list (the C runtime, `KERNEL32`, `WS2_32`, `USER32`). CI runs it for Debug and Release. It compiles
   the same core sources as the qmake build; `TestCoreQtFree` fails if the two lists drift, so **a new core
-  source goes in `kCoreSources` AND `tmdq_core.vcxproj`**, and a new ABI source (`native/tmdq_core/*.cpp`) goes in the project AND `tests/tests.pro` (`TestAbi` compiles the ABI into the test executable and calls it as a host would). `tmdq.sln` is the committed solution; the
+  source goes in `kCoreSources` AND `tmdq_core.vcxproj`**, and a new ABI source (`native/tmdq_core/*.cpp`) goes in the project AND `native/tmdq_core_tests/tmdq_core_tests.vcxproj` (`test_abi.cpp` compiles the ABI into the native test executable and calls it as a host would). `tmdq.sln` is the committed solution; the
   root's `tmDataQualityAnalyzer.sln` is the generated, gitignored Qt one.
 - **Native core tests (doctest, no Qt):** `powershell -ExecutionPolicy Bypass -File scripts\test_native.ps1
   [-Configuration Debug|Release] [-Rebuild] [-NoBuild] [<doctest args>]` builds `native/tmdq_core_tests`
   (MSBuild; the framework is the single header in `lib/doctest`) with **zero warnings and no Qt import**, then runs it.
-  Plan step 2.4 ports the Qt Test suites here one at a time and deletes each Qt version once every case is in;
-  a new test file goes in the project and `TestCoreQtFree` checks the project compiles only core sources and no Qt.
+  Plan step 2.4 ported every core Qt Test suite here (the last, `TestAbi`, compiles the C ABI in); a new test file
+  goes in the project and `TestCoreQtFree` checks the project compiles only core and ABI sources and no Qt.
   CI runs it in every job, including `core-without-qt`, which builds the DLL and runs these and the managed tests on a
   hosted runner that has never had Qt (and fails if it finds any). Run it **filtered** while iterating: `-tc="TomlDocument*"`.
 - **Managed library and its tests (.NET 10):** `powershell -ExecutionPolicy Bypass -File scripts\test_dotnet.ps1

@@ -24,7 +24,6 @@
 #include "tst_streamconfigschema.h"
 #include "tst_processingtemplateschema.h"
 #include "tst_coreqtfree.h"
-#include "tst_abi.h"
 #include "tst_qtprocessingevents.h"
 
 /// Runs a single test suite and appends results to the shared log file.
@@ -126,7 +125,6 @@ int main(int argc, char* argv[])
     status |= runSuite<TestStreamConfigSchema>(log_path);
     status |= runSuite<TestProcessingTemplateSchema>(log_path);
     status |= runSuite<TestCoreQtFree>(log_path);
-    status |= runSuite<TestAbi>(log_path);
     status |= runSuite<TestQtProcessingEvents>(log_path);
 
     // Heavy suites — integration over a real .ch10 fixture. Skipped in fast mode for
