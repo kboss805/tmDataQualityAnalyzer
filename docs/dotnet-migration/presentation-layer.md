@@ -163,7 +163,8 @@ So the measured performance does not decide between them, and testability leans 
 deciding questions were:
 
 - the "Microsoft-only" rule: **dropped on 2026-10-20**, which decided it;
-- the tooling licence: **still open**, decision D5 of the plan;
+- the tooling licence: **decided 2026-10-29** (plan D5): no licensed tooling and no Accelerate
+  components, so the project stays GPL-3.0 on the MIT framework;
 - custom chrome with snap layouts: **still unverified**, to be proven early in plan step 4.8.
 
 ## Recommendation, and what happened
@@ -189,7 +190,6 @@ deciding questions were:
 ## Facts that could not be verified here
 
 - Avalonia custom chrome with Windows 11 snap layouts (plan step 4.8).
-- Which parts of the Avalonia Visual Studio experience need the paid tooling licence (plan D5).
 - The UI tests on the CI runner itself, as NETWORK SERVICE (they pass in Session 0 as SYSTEM in a
   clean Sandbox; plan step 3.2 runs them there).
 
