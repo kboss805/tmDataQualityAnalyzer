@@ -116,6 +116,7 @@
     <ClCompile Include="test_calibrationrequest.cpp" />
     <ClCompile Include="test_ch10packetreader.cpp" />
     <ClCompile Include="test_chapter10reader.cpp" />
+    <ClCompile Include="test_constants.cpp" />
     <ClCompile Include="test_csvseries.cpp" />
     <ClCompile Include="test_eventreporter.cpp" />
     <ClCompile Include="test_frameprocessor.cpp" />
