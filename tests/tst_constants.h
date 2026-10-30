@@ -3,58 +3,14 @@
 
 #include <QObject>
 
+/// plotconstants.h, pinned by value. constants.h is Qt-free and pinned by the native suite
+/// (native/tmdq_core_tests/test_constants.cpp, plan step 2.4).
 class TestConstants : public QObject
 {
     Q_OBJECT
 
 private slots:
-    void pcmMaxChannelCount();
-    void pcmDefaultFrameSync();
-    void pcmCommonWordLen();
-    void pcmNumMinorFrames();
-    void pcmChannelTypeIdentifiers();
-    void uiDefaultSlopeIndex();
-    void uiSamplePeriods();
-    void uiMaxSamplePeriodIndex();
-    void uiChannelPrefixes();
-    void uiNumKnownPrefixes();
-
-    // v2.0 additions
-    void appVersionValues();
-    void appVersionToString();
-    void pcmMaxRawSampleValue();
-    void pcmDefaultBufferSize();
-    void pcmProgressReportInterval();
-    void uiQSettingsKeys();
-    void uiThemeIdentifiers();
-    void uiLayoutConstants();
-    void uiTimeConversionConstants();
-    void uiPolarityConstants();
-
-    // v2.2 additions
-    void uiRecentFilesConstants();
-
-    // v2.3 additions
-    void uiDeploymentConstants();
-
-    // v2.4 additions
-    void uiOutputFilenameConstants();
-
-    // v3.0 additions
     void plotConstants();
-
-    // v3.2 additions
-    void pcmFrameSyncHexPattern();
-
-    // v3.3 additions (US2.1 / US2.0 — frame sync mask)
-    void pcmFrameSyncMaskConstants();
-    void pcmFrameLengthBoundsConstants();
-
-    // v3.4 additions — previously untested constants
-    void pcmMaxPacketBufferSize();
-    void uiDefaultSamplePeriodIndex();
-    void uiMaxSlopeIndex();
-    void uiSlopeVoltageBounds();
 };
 
 #endif // TST_CONSTANTS_H
