@@ -77,9 +77,13 @@ Each has a recommendation. Steps that depend on a decision say so.
   framework is MIT, and MIT combines with this project's GPL-3.0, so the licence stays GPL-3.0. The
   licensed part is the tooling (the new Visual Studio extension with its previewer, DevTools, Parcel,
   Hot Reload) and the Accelerate UI components. We use neither:
-  - **Editing** is done with Avalonia's free VS Code extension, Rider, or the legacy open-source
-    Visual Studio extension (`AvaloniaUI/AvaloniaVS`, built from source; its Avalonia 12 support is
-    unchecked). The build needs no tooling at all, so CI is unaffected either way.
+  - **Editing** is done in VS Code with Avalonia's free extension, or in Rider (which understands
+    `.axaml` itself; the MIT-licensed AvaloniaRider plugin adds a live previewer). Avalonia's own FAQ
+    says both "remain freely available". **Not** the legacy open-source Visual Studio extension: its
+    repository (`AvaloniaUI/AvaloniaVS`) was archived on 2026-09-24 and points to Accelerate, so it
+    can still be built from source but will not follow Avalonia 12. Visual Studio stays usable as an
+    editor and debugger, without an Avalonia previewer. The build needs no tooling at all, so CI is
+    unaffected either way.
   - **No Accelerate component is ever referenced** (its TreeDataGrid, media player, Markdown viewer,
     rich-text editor, PDF viewer, charts). They are proprietary, a GPL-3.0 application cannot ship
     them, and the free Community tier gives no right to redistribute them anyway. The chart is our
