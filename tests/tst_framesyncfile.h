@@ -21,6 +21,7 @@ private slots:
     // Loading, pinned against the widget-bound implementation BEFORE the format moved to the core.
     void loadEdgeCasesKeepTheirRecordedBehaviour_data();
     void loadEdgeCasesKeepTheirRecordedBehaviour();
+    void loadingWithoutTheFlagBoxesFillsTheEditorsTheSame();
 
     // Saving: the exact bytes written.
     void saveEdgeCasesKeepTheirRecordedBehaviour_data();
