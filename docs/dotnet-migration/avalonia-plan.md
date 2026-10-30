@@ -73,9 +73,19 @@ Each has a recommendation. Steps that depend on a decision say so.
   tested against templates written by the Qt app.
 - **D4. Release numbering.** *Recommended:* the first Avalonia release is **v3.0.0**, and the last Qt
   release stays downloadable as the fallback for one release cycle.
-- **D5. Avalonia's tooling licence** (yours to check): the framework is MIT, but the paid tooling tier
-  applies above five developers or to enterprises. Check what the team's Visual Studio workflow needs
-  before step 3.
+- **D5. Avalonia's tooling licence. DECIDED (2026-10-29): no licensed Avalonia tooling.** The
+  framework is MIT, and MIT combines with this project's GPL-3.0, so the licence stays GPL-3.0. The
+  licensed part is the tooling (the new Visual Studio extension with its previewer, DevTools, Parcel,
+  Hot Reload) and the Accelerate UI components. We use neither:
+  - **Editing** is done with Avalonia's free VS Code extension, Rider, or the legacy open-source
+    Visual Studio extension (`AvaloniaUI/AvaloniaVS`, built from source; its Avalonia 12 support is
+    unchecked). The build needs no tooling at all, so CI is unaffected either way.
+  - **No Accelerate component is ever referenced** (its TreeDataGrid, media player, Markdown viewer,
+    rich-text editor, PDF viewer, charts). They are proprietary, a GPL-3.0 application cannot ship
+    them, and the free Community tier gives no right to redistribute them anyway. The chart is our
+    own Skia drawing (D1), so nothing in the plan needs one. Step 3.1 adds a check that enforces this.
+  - Rejected: the free Community licence (account, always-on telemetry, workstation-only, re-attested
+    yearly; terms Schedule 1D v1.2, 30 October 2025) and Plus (EUR 299 per seat per year).
 
 ## Step 0: groundwork
 
@@ -184,7 +194,8 @@ sweep.
   `TmDq.App.Tests` (`Avalonia.Headless.XUnit`), `TmDq.Core` from 2.3, all in the solution. Version
   single-sourced from `AppVersion` (generated into the assembly, never typed twice). The UTF-8
   code-page manifest merged into the exe with `mt.exe` (the SDK's own manifest setting does not reach
-  an apphost; found in the spike).
+  an apphost; found in the spike). A build check (D5) fails on any package outside an allow-list of
+  open-source licences, so an Accelerate component cannot arrive through a NuGet suggestion.
 - [ ] **3.2 CI for the new app:** build and test on the self-hosted runner (NETWORK SERVICE, Session 0)
   and the hosted fallback. This is where the one open question from the spike closes: the UI tests
   run as the runner's own account.
@@ -192,7 +203,8 @@ sweep.
   signed. **Every unsigned assembly must be signed** (21 Avalonia DLLs plus our own): a user machine
   with Smart App Control on blocks unsigned code with error 4551, exactly as the Sandbox did. Test a
   single-file publish as the alternative. Verified with `deploy/sandbox/` on a clean machine with
-  Smart App Control on.
+  Smart App Control on. Both packages carry the third-party licence notices (Avalonia, SkiaSharp,
+  Skia, CommunityToolkit.Mvvm, the .NET runtime), which the GPL-3.0 distribution owes them.
 - [ ] **3.4 A walking skeleton:** open a `.ch10`, process one stream with defaults, show the lock %
   series. Ugly is fine; it proves the whole path end to end in the new app, in CI, and in the
   installer.
