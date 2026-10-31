@@ -155,6 +155,46 @@ namespace TmDq.App.Tests
         }
 
         [AvaloniaFact]
+        public async Task ARecordingWithNoPcmChannelSaysSo()
+        {
+            // step_cal with its one PCM channel disabled in TMATS (R-1\CHE-27:T -> F), a same-length edit, so no packet
+            // length or checksum moves (the native reader's tests make the same edit). The file still opens: it simply
+            // offers nothing to process, which must be said, not crash the app on an empty channel list.
+            byte[] bytes = File.ReadAllBytes(Repo.Recording("step_cal, example.ch10"));
+            byte[] from = System.Text.Encoding.ASCII.GetBytes(@"R-1\CHE-27:T;"), to = System.Text.Encoding.ASCII.GetBytes(@"R-1\CHE-27:F;");
+            int at = IndexOf(bytes, from);
+            Assert.True(at >= 0 && IndexOf(bytes, from, at + 1) < 0, "the channel-enabled key is not in the recording exactly once");
+            to.CopyTo(bytes, at);
+            string copy = Path.Combine(Path.GetTempPath(), "tmdq-app-nopcm-" + Guid.NewGuid().ToString("N") + ".ch10");
+            File.WriteAllBytes(copy, bytes);
+            try
+            {
+                NativeCore.EnsureLoaded();
+                Assert.Empty(Ch10File.Open(copy).PcmChannels);
+                var vm = new MainWindowViewModel();
+                await vm.LoadAsync(copy);
+                Assert.Null(vm.Series);
+                Assert.False(vm.IsBusy);
+                Assert.Equal(Path.GetFileName(copy) + " has no PCM channel to process.", vm.Status);
+            }
+            finally
+            {
+                File.Delete(copy);
+            }
+        }
+
+        private static int IndexOf(byte[] haystack, byte[] needle, int start = 0)
+        {
+            for (int i = start; i <= haystack.Length - needle.Length; i++)
+            {
+                int j = 0;
+                while (j < needle.Length && haystack[i + j] == needle[j]) j++;
+                if (j == needle.Length) return i;
+            }
+            return -1;
+        }
+
+        [AvaloniaFact]
         public async Task AFailedLoadClearsThePreviousRecordingsSeries()
         {
             // Nothing of the last recording may stay on screen under a status that says this one failed.
