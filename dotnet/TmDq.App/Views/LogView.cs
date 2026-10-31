@@ -33,12 +33,8 @@ namespace TmDq.App.Views
         public LogView()
         {
             _text = new SelectableTextBlock { Name = "LogText", TextWrapping = TextWrapping.Wrap, FontSize = 12, Margin = new Thickness(4) };
-            _scroll = new ScrollViewer
-            {
-                Name = "LogScroll",
-                Content = _text,
-                HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
-            };
+            // No horizontal scrolling (the default): a long line wraps.
+            _scroll = new ScrollViewer { Name = "LogScroll", Content = _text };
             Content = _scroll;
         }
 

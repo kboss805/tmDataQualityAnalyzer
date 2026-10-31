@@ -266,7 +266,7 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
     settings (`StreamSetup`), the defaults a row and a mode change start from (`StreamDefaults`), the dialog's rules
     (`StreamRules`: readiness, Process, a Mode change, what the dialog opens with and what OK keeps, Apply to all, the
     field checks, the run) and the Load and Save buttons (`StreamFiles`).
-  - [ ] **4.1b The dialogs:** Configure Streams, the Frame Sync Lock and Receiver SNR setup dialogs, wired into the
+  - [x] **4.1b The dialogs** (PR #225, merged as `d87ba23`): Configure Streams, the Frame Sync Lock and Receiver SNR setup dialogs, wired into the
     app's Open in place of the walking skeleton's first-channel defaults.
     **Done:** Open (or a recording on the command line) now asks through Configure Streams (`configure-streams.png`,
     `receiver-snr-setup.png`, beside this plan), processes every checked stream in one run, and draws every Frame Sync

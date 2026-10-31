@@ -14,7 +14,7 @@ namespace TmDq.App.Views
         {
             AvaloniaXamlLoader.Load(this);
             // The owner closing, or the application or Windows shutting down, still takes it with them.
-            Closing += (_, e) => e.Cancel = !_done && e.CloseReason is WindowCloseReason.Undefined or WindowCloseReason.WindowClosing;
+            Closing += (_, e) => e.Cancel = !_done && e.CloseReason == WindowCloseReason.WindowClosing;
         }
 
         /// <summary>Closes the window; the only close it accepts.</summary>

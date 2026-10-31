@@ -424,6 +424,28 @@ namespace TmDq.App.Tests
             Assert.Equal(116, vm.Series?.LockPercent.Length);
         }
 
+        /// <summary>The run a test gives, whatever the recording.</summary>
+        private sealed class Given : IStreamConfigurator
+        {
+            private readonly RunRequest _request;
+            public Given(RunRequest request) => _request = request;
+            public Task<RunRequest?> ConfigureAsync(string path, Ch10File file) => Task.FromResult<RunRequest?>(_request);
+        }
+
+        [AvaloniaFact]
+        public async Task TheProgressDialogFollowsAReceiverSnrRunToo()
+        {
+            // US3.2 asks for the progress bar while SNR data is processed, as US3.0 does for lock statistics.
+            var dialog = new FakeProcessingDialog();
+            var vm = new MainWindowViewModel(configurator: new Given(StepCalRequest(StepCalSnr())), processingDialog: dialog);
+            await vm.LoadAsync(StepCal);
+            Assert.Single(dialog.Shown);
+            Assert.Equal(1, dialog.Closed);
+            Assert.NotEmpty(dialog.Progress);
+            Assert.Equal(100, dialog.Progress[^1]);
+            Assert.Equal("step_cal, example.ch10: 1 stream processed (0 Frame Sync Lock, 1 Receiver SNR)", vm.Status);
+        }
+
         [AvaloniaFact]
         public async Task NoProgressDialogWhenNothingIsProcessed()
         {
@@ -526,6 +548,7 @@ namespace TmDq.App.Tests
             ProcessingWindow w = Assert.IsType<ProcessingWindow>(owner.OwnedWindows.Single());
             Assert.Same(vm, w.DataContext);
             Assert.True(w.IsVisible);
+            Assert.True(w.IsDialog, "the progress dialog is not modal");
             dialog.Close();
             Dispatcher.UIThread.RunJobs();
             Assert.Empty(owner.OwnedWindows);
@@ -623,7 +646,10 @@ namespace TmDq.App.Tests
             var (view, text, _, window) = ShowLog(first.Entries);
             view.Entries = second.Entries;
             Dispatcher.UIThread.RunJobs();
+            // The old log first, alone: a line the view drew from it could not be hidden by a redraw of the new one.
             first.Add("added to the first log later");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("13:05:09  from the second log", Shown(text));
             second.Add("added to the second log later");
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("13:05:09  from the second log\n13:05:09  added to the second log later", Shown(text));
