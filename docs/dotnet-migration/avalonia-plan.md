@@ -220,7 +220,7 @@ sweep.
   single-file publish as the alternative. Verified with `deploy/sandbox/` on a clean machine with
   Smart App Control on. Both packages carry the third-party licence notices (Avalonia, SkiaSharp,
   Skia, CommunityToolkit.Mvvm, the .NET runtime), which the GPL-3.0 distribution owes them.
-  **Done, and single-file is the answer, not the alternative.** Measured: a self-contained folder publish ships 27
+  PR #222. **Done, and single-file is the answer, not the alternative.** Measured: a self-contained folder publish ships 27
   unsigned PE files (22 Avalonia assemblies, MicroCom.Runtime, Tmds.DBus.Protocol, our 3), and signing them would put
   this project's publisher identity on third-party code. A single-file publish bundles every managed assembly into our
   exe, and the three native libraries beside it are already signed by their publishers (Microsoft for SkiaSharp and
