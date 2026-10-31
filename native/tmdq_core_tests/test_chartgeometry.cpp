@@ -698,9 +698,13 @@ TEST_CASE("ChartGeometry: time ticks land on round times of the clock")
     CHECK(multiplesOf(chart::timeTickValues(0.0, 600.0, 5, 37812.0), 37812.0, 300.0));
     CHECK(chart::timeTickValues(0.0, 116.0, 5, 0.0) == chart::timeTickValues(0.0, 116.0, 5));
 
-    // A tick on the upper end counts, despite the rounding of a long sum of steps.
-    t = chart::timeTickValues(0.0, 120.0, 5);
-    CHECK(t.back() == 120.0);
+    // A span that is exactly a step of the ladder takes that step, not the next (120 s over 5 ticks is 30 s).
+    CHECK(chart::timeTickValues(0.0, 120.0, 5) == std::vector<double>{0.0, 30.0, 60.0, 90.0, 120.0});
+    // A tick a hair past the upper end (within a billionth of a step) still counts, so rounding cannot drop the last.
+    CHECK(chart::timeTickValues(0.0, 120.0 - 1e-10, 5) == std::vector<double>{0.0, 30.0, 60.0, 90.0, 120.0});
+    CHECK(chart::timeTickValues(0.0, 120.0 - 1e-6, 5) == std::vector<double>{0.0, 30.0, 60.0, 90.0});
+    // Exactly a second a tick is snapped, not divided evenly: 0.5 to 4.5 s gives the whole seconds inside it.
+    CHECK(chart::timeTickValues(0.5, 4.5, 5) == std::vector<double>{1.0, 2.0, 3.0, 4.0});
     CHECK(chart::timeTickValues(5.0, 5.0, 5).empty());
     CHECK(chart::timeTickValues(kNaN, 5.0, 5).empty());
 }

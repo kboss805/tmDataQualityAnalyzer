@@ -3856,6 +3856,17 @@ TEST_CASE("Abi: badArgumentsToTheChartFunctionsAreRefused")
     CHECK(tmdq_chart_ticks(0.0, 1.0, 3, nullptr, 2) == -1);
     CHECK(tmdq_chart_time_ticks(0.0, 100.0, 3, 0.0, nullptr, 2) == -1);
 
+    // A dense series of nothing but gaps is drawn from the envelope and has no line: no segments, and no pointer.
+    const std::vector<double> gapsX(1000, std::numeric_limits<double>::quiet_NaN());
+    const std::vector<double> gapsY(1000, 1.0);
+    REQUIRE(tmdq_chart_geometry(gapsX.data(), gapsY.data(), 1000, 0, &view, &g) == int(TMDQ_OK));
+    info.struct_size = sizeof(info);
+    REQUIRE(tmdq_geometry_info_get(g, &info) == int(TMDQ_OK));
+    CHECK(info.decimated == 1);
+    CHECK(info.segment_count == 0);
+    CHECK(info.segments == nullptr);
+    tmdq_geometry_free(g);
+
     // A view from a newer host (bigger) is read no further than this library knows.
     struct Bigger { tmdq_chart_view v; double extra[2]; };
     Bigger big{};
