@@ -214,6 +214,16 @@ jobs:
           powershell -ExecutionPolicy Bypass -File scripts\test_dotnet.ps1 -Configuration Release
           if ($LASTEXITCODE -ne 0) { throw "the managed tests failed" }
 
+      - name: App tests (Avalonia, headless)
+        shell: powershell
+        run: |
+          # The Avalonia application (dotnet/TmDq.App) and its tests on the headless platform, which needs no
+          # window system: on the self-hosted runner they run as its service account in Session 0 with no
+          # desktop, and the script prints the account and session so the log records it. No native DLL needed.
+          $ErrorActionPreference = 'Continue'
+          powershell -ExecutionPolicy Bypass -File scripts\test_app.ps1 -Configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "the app tests failed" }
+
       - name: Overlay full-size PRN fixture
         shell: powershell
         run: |
@@ -432,6 +442,16 @@ jobs:
           powershell -ExecutionPolicy Bypass -File scripts\test_dotnet.ps1 -Configuration Release
           if ($LASTEXITCODE -ne 0) { throw "the managed tests failed" }
 
+      - name: App tests (Avalonia, headless)
+        shell: powershell
+        run: |
+          # The Avalonia application (dotnet/TmDq.App) and its tests on the headless platform, which needs no
+          # window system: on the self-hosted runner they run as its service account in Session 0 with no
+          # desktop, and the script prints the account and session so the log records it. No native DLL needed.
+          $ErrorActionPreference = 'Continue'
+          powershell -ExecutionPolicy Bypass -File scripts\test_app.ps1 -Configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "the app tests failed" }
+
       - name: Run test suite
         env:
           # Qt's offscreen platform: the self-hosted runner runs as a Windows
@@ -492,7 +512,8 @@ jobs:
   # no Qt import. This job is the other half of step 2.4's "done when": the core, its native
   # tests and the managed library build and pass where Qt is not installed at all. It runs on
   # every push and PR whichever runner the Qt build picked, and its first step fails if the
-  # image ever gains a Qt, so the proof cannot quietly lapse.
+  # image ever gains a Qt, so the proof cannot quietly lapse. Since plan step 3.2 it also builds
+  # and tests the Avalonia application, which must never need Qt either.
   core-without-qt:
     runs-on: windows-latest
     steps:
@@ -564,6 +585,16 @@ jobs:
           $ErrorActionPreference = 'Continue'
           powershell -ExecutionPolicy Bypass -File scripts\test_dotnet.ps1 -Configuration Release
           if ($LASTEXITCODE -ne 0) { throw "the managed tests failed" }
+
+      - name: App tests (Avalonia, headless)
+        shell: powershell
+        run: |
+          # The Avalonia application (dotnet/TmDq.App) and its tests on the headless platform, which needs no
+          # window system: on the self-hosted runner they run as its service account in Session 0 with no
+          # desktop, and the script prints the account and session so the log records it. No native DLL needed.
+          $ErrorActionPreference = 'Continue'
+          powershell -ExecutionPolicy Bypass -File scripts\test_app.ps1 -Configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "the app tests failed" }
 
   # --- Single stable status: the selected Qt build job AND the Qt-free core both passed ---
   ci:
