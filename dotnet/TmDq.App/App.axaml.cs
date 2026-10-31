@@ -22,7 +22,7 @@ namespace TmDq.App
                 IStreamConfigurator configurator = Startup.SmokeReportPath() is null
                     ? new DialogConfigurator(new WindowStreamDialogs(window), new StorageSettingsFilePicker(window), AppContext.BaseDirectory)
                     : new FirstChannelRun();
-                var vm = new MainWindowViewModel(new StorageRecordingPicker(window), configurator);
+                var vm = new MainWindowViewModel(new StorageRecordingPicker(window), configurator, new WindowProcessingDialog(window));
                 window.DataContext = vm;
                 desktop.MainWindow = window;
 

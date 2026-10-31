@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using TmDq.App.Logging;
 using TmDq.App.Processing;
 using TmDq.App.Services;
 using TmDq.Core;
@@ -13,11 +16,14 @@ namespace TmDq.App.ViewModels
 {
     /// <summary>The main window's state: open a recording, ask what to process (Configure Streams, plan step 4.1; with no
     /// one to ask, the first PCM channel with the Frame Sync Lock defaults, as the walking skeleton did), process it and
-    /// show the lock percentage. The chart is still the skeleton's; plan step 4.3 builds the real one.</summary>
+    /// show the lock percentage, with the progress dialog up for the run and every step in the log (plan step 4.2). The
+    /// chart is still the skeleton's; plan step 4.3 builds the real one.</summary>
     public sealed partial class MainWindowViewModel : ObservableObject
     {
         private readonly IRecordingPicker? _picker;
         private readonly IStreamConfigurator _configurator;
+        private readonly IProcessingDialog? _processingDialog;
+        private ProcessingViewModel? _processing;
         private string _status = "Open a Chapter 10 recording.";
         private int _progress;
         private bool _isBusy;
@@ -26,14 +32,31 @@ namespace TmDq.App.ViewModels
 
         /// <param name="configurator">What a recording is processed with; null means the first PCM channel with the
         /// Frame Sync Lock defaults (<see cref="FirstChannelRun"/>).</param>
-        public MainWindowViewModel(IRecordingPicker? picker = null, IStreamConfigurator? configurator = null)
+        /// <param name="processingDialog">The progress dialog shown while a run goes on; null shows none.</param>
+        /// <param name="clock">The log's clock; null is the system's.</param>
+        public MainWindowViewModel(IRecordingPicker? picker = null, IStreamConfigurator? configurator = null,
+                                   IProcessingDialog? processingDialog = null, TimeProvider? clock = null)
         {
             _picker = picker;
             _configurator = configurator ?? new FirstChannelRun();
+            _processingDialog = processingDialog;
+            Log = new SessionLog(clock);
             OpenCommand = new AsyncRelayCommand(OpenAsync, () => !IsBusy && _picker is not null);
+            Log.Add("tmDataQualityAnalyzer v" + AppInfo.Version);
+            Log.Add("Load a Chapter 10 file to configure per-stream processing.");
         }
 
         public string Title => AppInfo.Title;
+
+        /// <summary>The log sidebar's contents.</summary>
+        public SessionLog Log { get; }
+
+        /// <summary>The progress dialog's state while a recording is processed; null otherwise.</summary>
+        public ProcessingViewModel? Processing
+        {
+            get => _processing;
+            private set => SetProperty(ref _processing, value);
+        }
 
         public string VersionText => "Version " + AppInfo.Version;
 
@@ -84,7 +107,8 @@ namespace TmDq.App.ViewModels
         }
 
         /// <summary>Opens <paramref name="path"/>, asks what to process, processes it and shows the result or the reason it
-        /// failed. Cancelling Configure Streams leaves the last result on screen. Ignored while busy.</summary>
+        /// failed, logging each step as the Qt application does. The progress dialog is up for the run, and its Cancel
+        /// stops every stream. Cancelling Configure Streams leaves the last result on screen. Ignored while busy.</summary>
         public async Task LoadAsync(string path)
         {
             if (IsBusy) return;
@@ -94,7 +118,11 @@ namespace TmDq.App.ViewModels
             try
             {
                 Status = $"Opening {name} ...";
+                Log.Add("Opening: " + name);
                 Ch10File file = await StreamsRun.OpenAsync(path);
+                Log.Add("  File size: " + SizeText(new FileInfo(path).Length));
+                Log.Add("  Time channels: " + CountText(file.TimeChannels.Count));
+                Log.Add("  PCM channels: " + CountText(file.PcmChannels.Count));
                 RunRequest? request = await _configurator.ConfigureAsync(path, file);
                 if (request is null)
                 {
@@ -103,26 +131,80 @@ namespace TmDq.App.ViewModels
                 }
                 Show(Array.Empty<LockSeries>());
                 Status = $"Processing {name} ...";
-                // Progress<T> made here posts each report back to this (the UI) thread.
-                RunOutcome outcome = await StreamsRun.RunAsync(request, new Progress<int>(p => Progress = p));
+                RunOutcome outcome = await RunWithDialogAsync(request);
                 Progress = 100;
                 Show(outcome.Streams.Where(s => s.Mode == StreamMode.FrameSyncLock).Select(LockSeries.Of).ToList());
                 Status = Describe(name, outcome);
+                Log.Success("Processing complete — results plotted from memory.");
+            }
+            catch (OperationCanceledException)
+            {
+                Show(Array.Empty<LockSeries>());
+                Status = $"{name}: processing was cancelled.";
             }
             catch (RecordingException e)
             {
                 Show(Array.Empty<LockSeries>());
                 Status = e.Message;
+                // A run with nothing processed has logged the core's own reasons already.
+                if (e is not NothingProcessedException) Log.Error(e.Message);
             }
             catch (Exception e) when (e is FileNotFoundException or InvalidOperationException)
             {
                 // The native core is missing or does not match this build.
                 Show(Array.Empty<LockSeries>());
                 Status = "The processing core could not be loaded: " + e.Message;
+                Log.Error(Status);
             }
             finally
             {
                 IsBusy = false;
+            }
+        }
+
+        /// <summary>Runs <paramref name="request"/> with the progress dialog up until it has stopped.</summary>
+        private async Task<RunOutcome> RunWithDialogAsync(RunRequest request)
+        {
+            var processing = new ProcessingViewModel();
+            Processing = processing;
+            _processingDialog?.Show(processing);
+            try
+            {
+                // Made here, both post each report back to this (the UI) thread, in order.
+                var progress = new Progress<int>(p => Progress = processing.Progress = p);
+                return await StreamsRun.RunAsync(request, progress, new UiRunLog(Log), processing.Token);
+            }
+            finally
+            {
+                _processingDialog?.Close();
+                Processing = null;
+            }
+        }
+
+        /// <summary>A file size as the Qt log gives it: megabytes from 1 MiB, kilobytes below, one decimal.</summary>
+        public static string SizeText(long bytes) => bytes >= 1048576
+            ? (bytes / 1048576.0).ToString("F1", CultureInfo.InvariantCulture) + " MB"
+            : (bytes / 1024.0).ToString("F1", CultureInfo.InvariantCulture) + " KB";
+
+        private static string CountText(int count) => count == 0 ? "none" : count.ToString(CultureInfo.InvariantCulture);
+
+        /// <summary>Passes a run's log lines, which come on the core's threads, to the session log on the thread that made
+        /// it, in order.</summary>
+        private sealed class UiRunLog : IRunLog
+        {
+            private readonly SessionLog _log;
+            private readonly SynchronizationContext? _ui = SynchronizationContext.Current;
+
+            public UiRunLog(SessionLog log) => _log = log;
+
+            public void Line(string message) => OnUi(() => _log.Add(message));
+
+            public void Error(string message) => OnUi(() => _log.Error(message));
+
+            private void OnUi(Action add)
+            {
+                if (_ui is null) lock (_log) add();
+                else _ui.Post(_ => add(), null);
             }
         }
 

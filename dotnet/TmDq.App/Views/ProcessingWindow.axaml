@@ -1,0 +1,19 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:TmDq.App.ViewModels"
+        x:Class="TmDq.App.Views.ProcessingWindow"
+        x:DataType="vm:ProcessingViewModel"
+        Title="Processing"
+        MinWidth="360" Width="360"
+        SizeToContent="Height"
+        CanResize="False" CanMinimize="False" CanMaximize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner">
+  <StackPanel Margin="12" Spacing="8">
+    <TextBlock x:Name="StatusText" Text="{Binding Text}" />
+    <ProgressBar x:Name="Progress" Minimum="0" Maximum="100" Value="{Binding Progress}" />
+    <!-- Not IsCancel: Escape must not stop a run, as in the Qt dialog. Cancel is the only way out. -->
+    <Button x:Name="CancelButton" Content="Cancel" HorizontalAlignment="Right" MinWidth="80"
+            HorizontalContentAlignment="Center" Command="{Binding CancelCommand}" />
+  </StackPanel>
+</Window>

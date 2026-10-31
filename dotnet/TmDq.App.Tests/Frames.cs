@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Xunit;
@@ -34,6 +35,25 @@ namespace TmDq.App.Tests
             for (int y = (int)area.Top; y < (int)area.Bottom; y++)
                 for (int x = (int)area.Left; x < (int)area.Right; x++)
                     if (Pixel(fb, x, y) != background) count++;
+            return count;
+        }
+
+        /// <summary>Pixels of <paramref name="area"/> drawn in <paramref name="colour"/> over a white background. An
+        /// antialiased line or glyph is the colour blended with white, so a pixel is counted when its departure from white
+        /// points the same way as the colour's (within a few degrees), not when it is the colour itself.</summary>
+        public static int Near(ILockedFramebuffer fb, Rect area, Color colour)
+        {
+            double cr = 255 - colour.R, cg = 255 - colour.G, cb = 255 - colour.B;
+            double cn = Math.Sqrt(cr * cr + cg * cg + cb * cb);
+            int count = 0;
+            for (int y = (int)area.Top; y < (int)area.Bottom; y++)
+                for (int x = (int)area.Left; x < (int)area.Right; x++)
+                {
+                    uint p = Pixel(fb, x, y);
+                    double r = 255 - (int)((p >> 16) & 0xFF), g = 255 - (int)((p >> 8) & 0xFF), b = 255 - (int)(p & 0xFF);
+                    double n = Math.Sqrt(r * r + g * g + b * b);
+                    if (n > 40 && (r * cr + g * cg + b * cb) / (n * cn) > 0.995) count++;
+                }
             return count;
         }
 
