@@ -54,7 +54,7 @@ namespace TmDq.App.Processing
         public static async Task<LockSeries> RunAsync(string path, IProgress<int>? progress = null)
         {
             Ch10File file = await StreamsRun.OpenAsync(path);
-            RunOutcome outcome = await StreamsRun.RunAsync(Request(path, file), progress);
+            using RunOutcome outcome = await StreamsRun.RunAsync(Request(path, file), progress);
             return LockSeries.Of(outcome.Streams[0]);
         }
     }

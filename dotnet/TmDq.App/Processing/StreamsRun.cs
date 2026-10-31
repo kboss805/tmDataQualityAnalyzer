@@ -9,8 +9,16 @@ using TmDq.Core;
 
 namespace TmDq.App.Processing
 {
-    /// <summary>What a run produced: every stream that completed, in table order, and every error reported.</summary>
-    public sealed record RunOutcome(IReadOnlyList<ProcessedStream> Streams, IReadOnlyList<string> Errors);
+    /// <summary>What a run produced: every stream that completed, in table order (a copy, and the core's own result, which
+    /// the plot builds its series from), and every error reported. Disposing it releases the core's results.</summary>
+    public sealed record RunOutcome(IReadOnlyList<ProcessedStream> Streams, IReadOnlyList<StreamResult> Results,
+                                    IReadOnlyList<string> Errors) : IDisposable
+    {
+        public void Dispose()
+        {
+            foreach (StreamResult r in Results) r.Dispose();
+        }
+    }
 
     /// <summary>Where a run's log goes, a line at a time, in the order the lines happen. Called on the core's threads,
     /// never two calls at once.</summary>
@@ -95,7 +103,8 @@ namespace TmDq.App.Processing
                     run.Wait();
                 }
             }
-            List<ProcessedStream> streams = observer.Results.OrderBy(s => s.JobIndex).ToList();
+            var completed = observer.Results.OrderBy(r => r.Copy.JobIndex).ToList();
+            List<ProcessedStream> streams = completed.Select(r => r.Copy).ToList();
             if (streams.Count == 0)
             {
                 cancel.ThrowIfCancellationRequested();
@@ -105,7 +114,7 @@ namespace TmDq.App.Processing
                     : Path.GetFileName(request.FileName);
                 throw new NothingProcessedException($"{what}: {why}");
             }
-            return new RunOutcome(streams, observer.Errors.ToList());
+            return new RunOutcome(streams, completed.Select(r => r.Result).ToList(), observer.Errors.ToList());
         }
 
         /// <summary>The lines the Qt application logs when a run starts (<c>MainViewModel::startProcessing</c> and the
@@ -157,7 +166,8 @@ namespace TmDq.App.Processing
 
             public List<string> Errors { get; } = new();
 
-            public List<ProcessedStream> Results { get; } = new();
+            /// <summary>Each completed stream: a managed copy, and the core's result, kept for the plot.</summary>
+            public List<(ProcessedStream Copy, StreamResult Result)> Results { get; } = new();
 
             public void OnLog(string message) => Log.Line(message);
 
@@ -171,12 +181,9 @@ namespace TmDq.App.Processing
 
             public void OnStreamCompleted(StreamResult result)
             {
-                using (result)
-                {
-                    ProcessedStream p = result.ToProcessed();
-                    lock (Results) Results.Add(p);
-                    Log.Line(Completed(p));
-                }
+                ProcessedStream p = result.ToProcessed();
+                lock (Results) Results.Add((p, result));
+                Log.Line(Completed(p));
             }
         }
     }

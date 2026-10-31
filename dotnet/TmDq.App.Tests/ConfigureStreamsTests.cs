@@ -326,9 +326,9 @@ namespace TmDq.App.Tests
             var lockStream = new ProcessedStream(13, "A", 0, 0, StreamMode.FrameSyncLock, new[] { 0.0 }, new[] { 50.0 }, new[] { 0.0 }, Array.Empty<ChannelData>());
             var snr = lockStream with { Mode = StreamMode.ReceiverChannelInfo, PcmChannelId = 14 };
             Assert.Equal("f.ch10: A (channel 13), 1 samples, mean lock 50.0 %",
-                         MainWindowViewModel.Describe("f.ch10", new RunOutcome(new[] { lockStream }, Array.Empty<string>())));
+                         MainWindowViewModel.Describe("f.ch10", new RunOutcome(new[] { lockStream }, Array.Empty<StreamResult>(), Array.Empty<string>())));
             Assert.Equal("f.ch10: 2 streams processed (1 Frame Sync Lock, 1 Receiver SNR). Not processed: B: no sync.",
-                         MainWindowViewModel.Describe("f.ch10", new RunOutcome(new[] { lockStream, snr }, new[] { "B: no sync." })));
+                         MainWindowViewModel.Describe("f.ch10", new RunOutcome(new[] { lockStream, snr }, Array.Empty<StreamResult>(), new[] { "B: no sync." })));
         }
     }
 }
