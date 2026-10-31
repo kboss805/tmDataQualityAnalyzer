@@ -35,6 +35,11 @@
     <ProjectReference Include="..\TmDq.App\TmDq.App.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The library tests' retrying delete, for the temporary files these tests write too. -->
+    <Compile Include="..\TmDq.Core.Tests\TempFiles.cs" Link="TempFiles.cs" />
+  </ItemGroup>
+
   <Import Project="..\build\PackageLicences.targets" />
 
 </Project>

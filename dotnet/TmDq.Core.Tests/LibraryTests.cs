@@ -42,6 +42,16 @@ public class LibraryTests
     }
 
     [Fact]
+    public void ADllWithoutTheReceiverParameterFunctionsIsRefused()
+    {
+        // Revision 0 of version 2 has no tmdq_receiver_params_* (revision 1, plan step 4.1a): a binding that loaded it
+        // would fail at the first Receiver SNR Load or Save instead of at start-up.
+        InvalidOperationException e = Assert.Throws<InvalidOperationException>(() => Library.CheckVersion("old.dll", 2, 0));
+        Assert.Contains("old.dll", e.Message);
+        Library.CheckVersion("new.dll", 2, 1);
+    }
+
+    [Fact]
     public void TheLoadedDllPassesItsOwnChecks()
     {
         Assert.Equal(Library.ExpectedVersion, Library.AbiVersion);

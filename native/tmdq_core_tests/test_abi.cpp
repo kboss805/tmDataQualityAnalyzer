@@ -3539,6 +3539,32 @@ TEST_CASE("Abi: aReceiverParametersFileIsSavedLikeTheCore")
     CHECK(saved >= 4);
     CHECK(refused >= 2);
 
+    // The frame's word count reaches the core as given: swept across the edge where the default 16 x 3 map and RASA's
+    // stop fitting, every count gives the core's verdict, and both sides of each edge are reached.
+    for (const std::string& source : {std::string(), rasa})
+    {
+        bool fits = false, tooBig = false;
+        for (int words = 40; words <= 60; ++words)
+        {
+            INFO("source " << (source.empty() ? "default" : "RASA") << ", words " << words);
+            const tmdq_receiver_params p = abiParams(0, 3, 20.0, 16, 3);
+            const std::string viaAbi = s.filePath("edge-abi.toml");
+            const std::string viaCore = s.filePath("edge-core.toml");
+            std::error_code ignored;
+            fs::remove(textfile::pathFromUtf8(viaAbi), ignored);
+            fs::remove(textfile::pathFromUtf8(viaCore), ignored);
+            const bool abiOk = tmdq_receiver_params_save(viaAbi.c_str(), &p, source.c_str(), words) == int(TMDQ_OK);
+            std::string coreError;
+            const bool coreOk = FrameSetup::saveReceiverParamsFile(textfile::pathFromUtf8(viaCore), coreParams(p),
+                                                                   textfile::pathFromUtf8(source), words, coreError);
+            CHECK(abiOk == coreOk);
+            CHECK(slurp(viaAbi) == slurp(viaCore));
+            (coreOk ? fits : tooBig) = true;
+        }
+        CHECK(fits);
+        CHECK(tooBig);
+    }
+
     // The map is the source's when it loads: RASA's word map, not the default one, is what the file now carries.
     const std::string text = slurp(s.filePath("rasa-map-abi.toml"));
     FrameSetup back;
