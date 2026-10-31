@@ -233,9 +233,18 @@ sweep.
   blocked. Found on the way: a single-file publish had shipped without the UTF-8 manifest (it bundles its own host from
   `obj\`), and `tmdq_core.dll` needs the VC++ runtime beside it (`MSVCP140`, `VCRUNTIME140*`), which a clean Windows
   lacks. Statically linking the CRT into the DLL would drop those three files; that is a core-build decision left open.
-- [ ] **3.4 A walking skeleton:** open a `.ch10`, process one stream with defaults, show the lock %
+- [x] **3.4 A walking skeleton:** open a `.ch10`, process one stream with defaults, show the lock %
   series. Ugly is fine; it proves the whole path end to end in the new app, in CI, and in the
   installer.
+  PR #223. **Done, in all three.** The app opens a recording (Open, or a path on the command line), processes its first PCM
+  channel with the Qt app's Frame Sync Lock defaults (PRN15: `334AABBF`, 32767 bits, 1 s) through `TmDq.Core` and
+  `tmdq_core.dll`, and draws the lock % series (`walking-skeleton.png`, beside this plan). The committed PRN sample's
+  channel 13 gives 116 windows, mean 93.531893 %, the numbers the managed tests already pin, and the app's series is
+  compared with the core's own run of the same settings. **In the app:** 74 headless tests. **In CI:** the same tests in
+  all three jobs, `tmdq_core.dll` beside the test exe. **In the installer:** with `TMDQ_SMOKE_REPORT` set, the app writes
+  one line for a recording on its command line and exits; the packaging script runs the staged app that way, and the
+  clean Windows 11 Sandbox (Smart App Control on) has both the installed and the portable app report
+  `ok samples=116 mean=93.532 channel=13`.
 
 ## Step 4: feature parity, in the order a user meets the features
 

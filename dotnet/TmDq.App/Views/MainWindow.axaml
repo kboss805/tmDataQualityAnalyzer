@@ -1,13 +1,24 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:TmDq.App.ViewModels"
+        xmlns:views="using:TmDq.App.Views"
         x:Class="TmDq.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding Title}"
         Width="1280" Height="800"
         MinWidth="640" MinHeight="400">
-  <TextBlock x:Name="VersionLabel"
-             Text="{Binding VersionText}"
-             HorizontalAlignment="Center"
-             VerticalAlignment="Center" />
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12" Margin="8">
+      <Button x:Name="OpenButton" Content="Open..." Command="{Binding OpenCommand}" />
+      <ProgressBar x:Name="Progress" Width="240" Minimum="0" Maximum="100"
+                   Value="{Binding Progress}" IsVisible="{Binding IsBusy}" VerticalAlignment="Center" />
+    </StackPanel>
+    <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="8,4">
+      <TextBlock x:Name="StatusText" Grid.Column="0" Text="{Binding Status}" TextTrimming="CharacterEllipsis"
+                 VerticalAlignment="Center" />
+      <TextBlock x:Name="VersionLabel" Grid.Column="1" Text="{Binding VersionText}" Margin="16,0,0,0"
+                 VerticalAlignment="Center" />
+    </Grid>
+    <views:LockChart x:Name="Chart" Series="{Binding Series}" />
+  </DockPanel>
 </Window>

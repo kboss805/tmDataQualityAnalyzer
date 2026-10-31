@@ -12,7 +12,8 @@
        Session 0, no desktop), and this line is the record that the UI tests pass there.
     3. Runs the test exe directly (an xunit v3 test project is an executable) and fails on a non-zero exit.
 
-    The tests need no native core DLL. Works under Windows PowerShell 5.1 and PowerShell 7.
+    The walking-skeleton tests process a committed recording through native\out\<Configuration>\tmdq_core.dll (build it
+    with scripts\build_core_dll.ps1; TMDQ_CORE_DLL overrides). Works under Windows PowerShell 5.1 and PowerShell 7.
 
     Usage:
         powershell -ExecutionPolicy Bypass -File scripts\test_app.ps1 [-Configuration Debug|Release] [-NoBuild]
@@ -30,6 +31,13 @@ if (-not (Get-Command mt -ErrorAction SilentlyContinue)) {
 }
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { throw 'dotnet not found (install the .NET 10 SDK)' }
 if (-not (Get-Command mt -ErrorAction SilentlyContinue)) { throw 'mt.exe not found (it ships with the Windows SDK; use a developer prompt or scripts\env.ps1)' }
+
+# The walking-skeleton tests process a recording through the native core, which the app finds beside itself: the
+# build copies native\out\<Configuration>\tmdq_core.dll there when it exists. Say so here rather than let a dozen
+# tests fail with "the processing core could not be loaded".
+if (-not $env:TMDQ_CORE_DLL -and -not (Test-Path (Join-Path $root "native\out\$Configuration\tmdq_core.dll"))) {
+    throw "tmdq_core.dll has not been built for $Configuration`: run scripts\build_core_dll.ps1 -Configuration $Configuration"
+}
 
 $project = Join-Path $root 'dotnet\TmDq.App.Tests'
 $exe = Join-Path $project "bin\$Configuration\net10.0\TmDq.App.Tests.exe"

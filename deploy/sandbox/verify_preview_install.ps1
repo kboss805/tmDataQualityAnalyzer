@@ -3,7 +3,9 @@
 # (plan step 3.3) under Smart App Control.
 #
 # Runs INSIDE Windows Sandbox, launched by
-#   run_sandbox_test.ps1 -Verifier verify_preview_install.ps1 -Setup <preview setup.exe> -Payload <zip>, <unsigned exe>
+#   run_sandbox_test.ps1 -Verifier verify_preview_install.ps1 -Setup <preview setup.exe>
+#                        -Payload "<zip>;deploy\avalonia\staging\unsigned;tests\data\test files\prn_testfile, sample.ch10"
+# (the list is separated by semicolons: the committed recordings' names contain commas)
 # Do not run it on a developer machine: it installs to Program Files and uninstalls again.
 #
 # What it proves: on a machine that has never seen the application, with Smart App
@@ -38,6 +40,25 @@ function Wait-Window($process, [int]$seconds) {
         if ($p.MainWindowTitle) { return $p.MainWindowTitle }
     }
     return ''
+}
+function Process-Recording($exePath, $label) {
+    # The walking skeleton end to end (plan step 3.4): the app opens the recording on its command line, processes its
+    # first PCM channel with the defaults through the native core, writes one line to TMDQ_SMOKE_REPORT and exits.
+    $rec = Join-Path $IN 'prn_testfile, sample.ch10'
+    if (-not (Test-Path $rec)) { Check "$label processes a recording" $false 'the PRN sample is not in the payload'; return }
+    $report = Join-Path $env:TEMP ('tmdq-smoke-' + [guid]::NewGuid().ToString('N') + '.txt')
+    $env:TMDQ_SMOKE_REPORT = $report
+    try {
+        $sp = Start-Process $exePath -ArgumentList ('"' + $rec + '"') -PassThru
+        $null = $sp.Handle
+        $done = $sp.WaitForExit(180000)
+        if (-not $done) { Stop-Process -Id $sp.Id -Force }
+    } finally {
+        Remove-Item Env:\TMDQ_SMOKE_REPORT -ErrorAction SilentlyContinue
+    }
+    $line = if (Test-Path $report) { (Get-Content $report -Raw).Trim() } else { '(no report)' }
+    # The committed PRN sample's known answer: channel 13, 116 one-second windows, mean lock 93.532 %.
+    Check "$label processes the PRN sample through the native core" ($done -and $sp.ExitCode -eq 0 -and $line.StartsWith('ok samples=116 mean=93.532 channel=13 ')) ("exit " + $sp.ExitCode + ": " + $line)
 }
 function Signatures($dir) {
     Get-ChildItem $dir -File | Where-Object { $_.Extension -in '.exe', '.dll' } | ForEach-Object {
@@ -127,6 +148,7 @@ if ($live) {
     Stop-Process -Id $ap.Id -Force
     Start-Sleep -Seconds 2
 }
+Process-Recording $exe 'the installed app'
 
 # --- 4. The native core DLL loads (the app does not call it until plan step 3.4). ---
 Say ''
@@ -167,6 +189,7 @@ if ($pexe) {
     $ptitle = Wait-Window $pp 30
     Check 'portable app opened its window' ($ptitle -eq 'TM Data Quality Analyzer') ("title '" + $ptitle + "'")
     if (Get-Process -Id $pp.Id -ErrorAction SilentlyContinue) { Stop-Process -Id $pp.Id -Force }
+    Process-Recording $pexe 'the portable app'
 }
 
 # --- 6. What Code Integrity blocked while this ran. ---

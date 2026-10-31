@@ -63,8 +63,8 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
 - **The Avalonia app (plan step 3):** `dotnet/TmDq.App` (Avalonia 12, CommunityToolkit.Mvvm) and
   `dotnet/TmDq.App.Tests` (xunit v3 on `Avalonia.Headless.XUnit`), both in `tmdq.sln`, which VS Code opens by default
   (`dotnet.defaultSolution`). `powershell -ExecutionPolicy Bypass -File scripts\test_app.ps1 [-Configuration
-  Debug|Release] [-NoBuild]` builds the app with its tests and runs them (no native DLL needed); CI runs it in all three
-  jobs. Green baseline **50 passed / 0 failed / 0 skipped**. **Never type a version in a .csproj**: import
+  Debug|Release] [-NoBuild]` builds the app with its tests and runs them; the walking-skeleton tests process the PRN sample through `native\out\<cfg>\tmdq_core.dll` (build it first; `TMDQ_CORE_DLL` overrides). The app: Open, or a recording path on the command line; with `TMDQ_SMOKE_REPORT=<file>` it writes one result line and exits. CI runs it in all three
+  jobs. Green baseline **74 passed / 0 failed / 0 skipped**. **Never type a version in a .csproj**: import
   `dotnet/build/AppVersion.props`, which reads `AppVersion`. **Every .NET project imports
   `dotnet/build/PackageLicences.targets`** (plan D5): a package (transitive ones too) outside the open-source allow-list
   in `scripts/check_package_licences.ps1` fails the build, and a licence *file* passes only when its SHA-256 is in that
@@ -77,7 +77,7 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   (`scripts\gen_third_party_notices.ps1`, from the publish's deps file), and builds the portable ZIP and the Inno
   installer (`tmDataQualityAnalyzer-preview.iss`: its own AppId and folder, no `.ch10` association). **Unlock
   SimplySign first.** Clean-machine test under Smart App Control: `deploy\sandbox\run_sandbox_test.ps1 -Verifier
-  verify_preview_install.ps1 -Setup <setup.exe> -Payload "<zip>,deploy\avalonia\staging\unsigned"` (an unsigned build
+  verify_preview_install.ps1 -Setup <setup.exe> -Payload "<zip>;deploy\avalonia\staging\unsigned;tests\data\test files\prn_testfile, sample.ch10"` (semicolons: recording names contain commas) (an unsigned build
   must be BLOCKED, or the pass means nothing). The UTF-8 manifest is merged into every SDK host (`apphost`,
   `singlefilehost`, `apphost_publish`): patching `bin\` misses a single-file publish.
 
