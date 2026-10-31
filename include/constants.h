@@ -366,4 +366,16 @@ namespace CalibrationConstants {
 }
 
 
+/// @brief Constants for the plot's geometry (chartgeometry.h), shared by the Qt and the Avalonia chart.
+namespace ChartConstants {
+    /// Samples per pixel column above which a series is drawn from its envelope
+    /// rather than sample by sample. One column can only show one vertical run of
+    /// pixels, so beyond a couple of samples per column the extra points cost time
+    /// and change nothing on screen. Measured on a 1200 px plot: 12 channels of one
+    /// hour at 10 ms (360k samples each) took 102 s per repaint drawing every
+    /// point.
+    inline constexpr int kMaxSamplesPerPixelColumn = 2;
+}
+
+
 #endif // CONSTANTS_H

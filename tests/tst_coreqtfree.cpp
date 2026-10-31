@@ -16,7 +16,8 @@ namespace {
 /// The model sources that make up the processing core: everything the decode pipeline runs, from
 /// the file readers to the calibration extraction. They must compile with no Qt.
 const QStringList kCoreSources = {
-    "calibrationextractor", "calibrationrequest", "ch10packetreader", "channeldata", "chapter10reader", "clocktime",
+    "calibrationextractor", "calibrationrequest", "ch10packetreader", "channeldata", "chapter10reader", "chartgeometry",
+    "clocktime",
     "csvseriesparser", "csvserieswriter", "frameprocessor", "framesetup", "framesyncfile", "pipelinerunner",
     "seriesbuilder", "seriescolumnschema", "stepdetector", "streamjobbuilder", "templatematcher", "textfile", "tomldocument",
 };

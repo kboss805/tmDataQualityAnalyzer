@@ -48,6 +48,8 @@ internal enum StructId
     TimeBaseInfo = 20,
     ImportedSeries = 21,
     ReceiverParams = 22,
+    ChartView = 23,
+    GeometryInfo = 24,
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 8)]
@@ -238,6 +240,31 @@ internal struct ReceiverParamsNative
     public int ReceiverChannels;
     public int Reserved;
     public double ScaleDbPerV;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 8)]
+internal struct ChartViewNative
+{
+    public uint StructSize;
+    public int Reserved;
+    public double XLower;
+    public double XUpper;
+    public double YLower;
+    public double YUpper;
+    public double Left;
+    public double Top;
+    public double Width;
+    public double Height;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 8)]
+internal unsafe struct GeometryInfoNative
+{
+    public uint StructSize;
+    public int SegmentCount;
+    public double* Segments;
+    public int BandCount;
+    public int Decimated;
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 8)]
@@ -607,4 +634,41 @@ internal static unsafe partial class Native
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
     internal static partial int tmdq_assign_imported_stream_orders(ImportedSeriesNative** series, int count);
+
+    // --- the chart's geometry (revision 2)
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_chart_geometry(double* xs, double* ys, int count, int sortedX, ChartViewNative* view, out IntPtr geometry);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_geometry_info_get(IntPtr geometry, GeometryInfoNative* info);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_geometry_band(IntPtr geometry, int index, out double* points, out int pointCount);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial void tmdq_geometry_free(IntPtr geometry);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_chart_sorted_x(double* xs, int count);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_chart_usable_range(double lower, double upper);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_chart_transform(ChartViewNative* view, int kind, double value, out double result);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_chart_ticks(double lower, double upper, int count, double* ticks, int capacity);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_chart_time_ticks(double lower, double upper, int count, double origin, double* ticks, int capacity);
 }

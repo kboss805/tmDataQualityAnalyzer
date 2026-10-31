@@ -25,7 +25,7 @@ public class LayoutTests
     {
         Assert.Equal(2, Library.ExpectedVersion);
         Assert.Equal(2, Library.AbiVersion);
-        Assert.Equal(1, Library.AbiRevision);   // 1: the receiver-parameters file (plan step 4.1a)
+        Assert.Equal(2, Library.AbiRevision);   // 1: the receiver-parameters file (4.1a); 2: the chart's geometry (4.3a)
         Assert.True(Library.AbiRevision >= Library.MinimumRevision);
         Assert.Equal(Path.GetFullPath(Env.DllPath()), Library.LoadedPath, ignoreCase: true);
     }
@@ -66,6 +66,8 @@ public class LayoutTests
         new object[] { typeof(TimeBaseInfoNative), 24 },
         new object[] { typeof(ImportedSeriesNative), 24 },
         new object[] { typeof(ReceiverParamsNative), 32 },
+        new object[] { typeof(ChartViewNative), 72 },
+        new object[] { typeof(GeometryInfoNative), 24 },
     };
 
     [Theory]
@@ -148,6 +150,12 @@ public class LayoutTests
             Row(typeof(ReceiverParamsNative), "PolarityIndex", 4), Row(typeof(ReceiverParamsNative), "SlopeIndex", 8),
             Row(typeof(ReceiverParamsNative), "NumReceivers", 12), Row(typeof(ReceiverParamsNative), "ReceiverChannels", 16),
             Row(typeof(ReceiverParamsNative), "ScaleDbPerV", 24),
+            Row(typeof(ChartViewNative), "XLower", 8), Row(typeof(ChartViewNative), "XUpper", 16),
+            Row(typeof(ChartViewNative), "YLower", 24), Row(typeof(ChartViewNative), "YUpper", 32),
+            Row(typeof(ChartViewNative), "Left", 40), Row(typeof(ChartViewNative), "Top", 48),
+            Row(typeof(ChartViewNative), "Width", 56), Row(typeof(ChartViewNative), "Height", 64),
+            Row(typeof(GeometryInfoNative), "SegmentCount", 4), Row(typeof(GeometryInfoNative), "Segments", 8),
+            Row(typeof(GeometryInfoNative), "BandCount", 16), Row(typeof(GeometryInfoNative), "Decimated", 20),
 
             Row(typeof(MatchInfoNative), "Ok", 4), Row(typeof(MatchInfoNative), "MissingCount", 8),
             Row(typeof(MatchInfoNative), "ExtraCount", 12), Row(typeof(MatchInfoNative), "Missing", 16),

@@ -35,6 +35,7 @@
 #include "calibrationextractor.h"
 #include "calibrationrequest.h"
 #include "chapter10reader.h"
+#include "chartgeometry.h"
 #include "clocktime.h"
 #include "csvseriesparser.h"
 #include "csvserieswriter.h"
@@ -1179,6 +1180,30 @@ TEST_CASE("Abi: theStructLayoutsArePinned")
     CHECK(int(offsetof(tmdq_receiver_params, scale_db_per_v)) == 24);
     CHECK(tmdq_sizeof(TMDQ_STRUCT_RECEIVER_PARAMS) == 32);
     CHECK(int(TMDQ_STRUCT_RECEIVER_PARAMS) == 22);
+
+    // Revision 2.
+    CHECK(int(sizeof(tmdq_chart_view)) == 72);
+    CHECK(int(offsetof(tmdq_chart_view, x_lower)) == 8);
+    CHECK(int(offsetof(tmdq_chart_view, x_upper)) == 16);
+    CHECK(int(offsetof(tmdq_chart_view, y_lower)) == 24);
+    CHECK(int(offsetof(tmdq_chart_view, y_upper)) == 32);
+    CHECK(int(offsetof(tmdq_chart_view, left)) == 40);
+    CHECK(int(offsetof(tmdq_chart_view, top)) == 48);
+    CHECK(int(offsetof(tmdq_chart_view, width)) == 56);
+    CHECK(int(offsetof(tmdq_chart_view, height)) == 64);
+    CHECK(int(sizeof(tmdq_geometry_info)) == 24);
+    CHECK(int(offsetof(tmdq_geometry_info, segment_count)) == 4);
+    CHECK(int(offsetof(tmdq_geometry_info, segments)) == 8);
+    CHECK(int(offsetof(tmdq_geometry_info, band_count)) == 16);
+    CHECK(int(offsetof(tmdq_geometry_info, decimated)) == 20);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_CHART_VIEW) == 72);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_GEOMETRY_INFO) == 24);
+    CHECK(int(TMDQ_STRUCT_CHART_VIEW) == 23);
+    CHECK(int(TMDQ_STRUCT_GEOMETRY_INFO) == 24);
+    CHECK(int(TMDQ_X_TO_PIXEL) == 0);
+    CHECK(int(TMDQ_PIXEL_TO_X) == 1);
+    CHECK(int(TMDQ_Y_TO_PIXEL) == 2);
+    CHECK(int(TMDQ_PIXEL_TO_Y) == 3);
     CHECK(int(TMDQ_ERR_IO) == 8);
     CHECK(int(TMDQ_METRIC_SNR) == int(MetricType::SNR));
     CHECK(int(TMDQ_METRIC_FRAME_SYNC_LOCK) == int(MetricType::FrameSyncLock));
@@ -1264,7 +1289,7 @@ TEST_CASE("Abi: theStructLayoutsArePinned")
 TEST_CASE("Abi: theVersionAndRevisionAreReported")
 {
     CHECK(tmdq_abi_version() == 2);
-    CHECK(tmdq_abi_revision() == 1);   // 1: the receiver-parameters file (plan step 4.1a)
+    CHECK(tmdq_abi_revision() == 2);   // 1: the receiver-parameters file (4.1a); 2: the chart's geometry (4.3a)
     CHECK(int(TMDQ_ABI_VERSION) == tmdq_abi_version());
     CHECK(int(TMDQ_ABI_REVISION) == tmdq_abi_revision());
     REQUIRE(tmdq_last_error() != nullptr);
@@ -3638,4 +3663,205 @@ TEST_CASE("Abi: badArgumentsToTheReceiverParameterFunctionsAreRefused")
     CHECK(tmdq_receiver_params_read(nullptr, nullptr, nullptr) == int(TMDQ_ERR_BADARG));
     REQUIRE(tmdq_receiver_params_read(path.c_str(), nullptr, &out) == int(TMDQ_OK));
     CHECK(std::string(tmdq_last_error()).empty());
+}
+// ---------------------------------------------------------------------------
+// The chart's geometry (revision 2)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+tmdq_chart_view abiView(const chart::View& v)
+{
+    tmdq_chart_view out{};
+    out.struct_size = sizeof(out);
+    out.x_lower = v.xLower;
+    out.x_upper = v.xUpper;
+    out.y_lower = v.yLower;
+    out.y_upper = v.yUpper;
+    out.left = v.left;
+    out.top = v.top;
+    out.width = v.width;
+    out.height = v.height;
+    return out;
+}
+
+bool bitsEqual(double a, double b) { return std::memcmp(&a, &b, sizeof a) == 0; }
+
+} // namespace
+
+TEST_CASE("Abi: aSeriesGeometryIsTheCores")
+{
+    // Generated series and views, through the ABI and straight through the core: the segments, every band's points
+    // and the decimation flag, bit for bit, and each transform.
+    std::mt19937 rng(426);
+    auto uniform = [&](double a, double b) { return std::uniform_real_distribution<double>(a, b)(rng); };
+    int decimated = 0, banded = 0, sparse = 0;
+    for (int trial = 0; trial < 400; ++trial)
+    {
+        const int n = trial % 5 == 0 ? trial % 3 : 3 + static_cast<int>(uniform(0.0, 4000.0));
+        std::vector<double> xs(static_cast<std::size_t>(n)), ys(static_cast<std::size_t>(n));
+        double x = 0.0;
+        for (int i = 0; i < n; ++i)
+        {
+            x += uniform(0.01, 1.0);
+            xs[i] = x;
+            ys[i] = uniform(-5.0, 105.0);
+        }
+        if (n > 10 && trial % 4 == 0) ys[static_cast<std::size_t>(n / 2)] = std::numeric_limits<double>::quiet_NaN();
+        if (n > 10 && trial % 7 == 0) std::swap(xs[1], xs[static_cast<std::size_t>(n - 2)]);
+        chart::View v;
+        v.xLower = uniform(-10.0, x * 0.5);
+        v.xUpper = v.xLower + uniform(0.5, x + 10.0);
+        v.yLower = uniform(-10.0, 10.0);
+        v.yUpper = v.yLower + uniform(1.0, 120.0);
+        v.left = uniform(0.0, 80.0);
+        v.top = uniform(0.0, 40.0);
+        v.width = uniform(10.0, 1400.0);
+        v.height = uniform(10.0, 800.0);
+        const bool sorted = chart::isSortedX(xs);
+        CHECK(tmdq_chart_sorted_x(xs.data(), n) == (sorted ? 1 : 0));
+
+        const chart::SeriesGeometry expected = chart::buildSeriesGeometry(xs, ys, sorted, v);
+        const tmdq_chart_view view = abiView(v);
+        tmdq_geometry* g = nullptr;
+        REQUIRE(tmdq_chart_geometry(xs.data(), ys.data(), n, sorted ? 1 : 0, &view, &g) == int(TMDQ_OK));
+        tmdq_geometry_info info{};
+        info.struct_size = sizeof(info);
+        REQUIRE(tmdq_geometry_info_get(g, &info) == int(TMDQ_OK));
+        CHECK(info.struct_size == sizeof(info));
+        CHECK(info.decimated == (expected.decimated ? 1 : 0));
+        REQUIRE(info.segment_count == int(expected.segments.size()));
+        bool same = true;
+        for (std::size_t i = 0; i < expected.segments.size(); ++i)
+        {
+            const chart::Segment& e = expected.segments[i];
+            const double* a = info.segments + 4 * i;
+            same = same && bitsEqual(a[0], e.from.x) && bitsEqual(a[1], e.from.y) && bitsEqual(a[2], e.to.x) &&
+                   bitsEqual(a[3], e.to.y);
+        }
+        CHECK(same);
+        REQUIRE(info.band_count == int(expected.bands.size()));
+        for (int b = 0; b < info.band_count; ++b)
+        {
+            const double* points = nullptr;
+            int32_t count = -1;
+            REQUIRE(tmdq_geometry_band(g, b, &points, &count) == int(TMDQ_OK));
+            const std::vector<chart::Point>& e = expected.bands[static_cast<std::size_t>(b)];
+            REQUIRE(count == int(e.size()));
+            for (std::size_t i = 0; i < e.size(); ++i)
+                CHECK((bitsEqual(points[2 * i], e[i].x) && bitsEqual(points[2 * i + 1], e[i].y)));
+        }
+        tmdq_geometry_free(g);
+
+        const double value = uniform(-50.0, 1500.0);
+        double out = 0.0;
+        REQUIRE(tmdq_chart_transform(&view, TMDQ_X_TO_PIXEL, value, &out) == int(TMDQ_OK));
+        CHECK(bitsEqual(out, chart::xToPixel(v, value)));
+        REQUIRE(tmdq_chart_transform(&view, TMDQ_PIXEL_TO_X, value, &out) == int(TMDQ_OK));
+        CHECK(bitsEqual(out, chart::pixelToX(v, value)));
+        REQUIRE(tmdq_chart_transform(&view, TMDQ_Y_TO_PIXEL, value, &out) == int(TMDQ_OK));
+        CHECK(bitsEqual(out, chart::yToPixel(v, value)));
+        REQUIRE(tmdq_chart_transform(&view, TMDQ_PIXEL_TO_Y, value, &out) == int(TMDQ_OK));
+        CHECK(bitsEqual(out, chart::pixelToY(v, value)));
+
+        (expected.decimated ? decimated : sparse)++;
+        if (!expected.bands.empty()) ++banded;
+    }
+    CHECK(decimated > 100);
+    CHECK(sparse > 100);
+    CHECK(banded > 100);
+}
+
+TEST_CASE("Abi: theTicksAndTheRangeCheckAreTheCores")
+{
+    std::mt19937 rng(17);
+    auto uniform = [&](double a, double b) { return std::uniform_real_distribution<double>(a, b)(rng); };
+    for (int trial = 0; trial < 2000; ++trial)
+    {
+        const double lower = uniform(-1e4, 1e5);
+        const double upper = trial % 25 == 0 ? lower : lower + std::pow(10.0, uniform(-2.0, 6.5));
+        const int count = static_cast<int>(uniform(0.0, 20.0));
+        const double origin = uniform(0.0, 86400.0);
+        CHECK(tmdq_chart_usable_range(lower, upper) == (chart::usableRange(lower, upper) ? 1 : 0));
+
+        const std::vector<double> plain = chart::tickValues(lower, upper, count);
+        const std::vector<double> timed = chart::timeTickValues(lower, upper, count, origin);
+        std::vector<double> got(64, -1.0);
+        REQUIRE(tmdq_chart_ticks(lower, upper, count, got.data(), int32_t(got.size())) == int(plain.size()));
+        CHECK(std::equal(plain.begin(), plain.end(), got.begin()));
+        CHECK(got[plain.size()] == -1.0);   // nothing past what there is
+        std::fill(got.begin(), got.end(), -1.0);
+        REQUIRE(tmdq_chart_time_ticks(lower, upper, count, origin, got.data(), int32_t(got.size())) == int(timed.size()));
+        CHECK(std::equal(timed.begin(), timed.end(), got.begin()));
+        CHECK(got[timed.size()] == -1.0);
+    }
+    CHECK(tmdq_chart_usable_range(0.0, std::numeric_limits<double>::infinity()) == 0);
+
+    // A buffer too small for them: how many there are, and only as many written as fit.
+    double two[3] = {-1.0, -1.0, -1.0};
+    CHECK(tmdq_chart_ticks(0.0, 100.0, 5, two, 2) == 5);
+    CHECK(two[0] == 0.0);
+    CHECK(two[1] == 25.0);
+    CHECK(two[2] == -1.0);
+    CHECK(tmdq_chart_time_ticks(0.0, 116.0, 5, 0.0, nullptr, 0) == 4);   // measuring only
+}
+
+TEST_CASE("Abi: badArgumentsToTheChartFunctionsAreRefused")
+{
+    const double xs[] = {0.0, 1.0, 2.0};
+    const double ys[] = {1.0, 2.0, 3.0};
+    tmdq_chart_view view = abiView(chart::View{0.0, 2.0, 0.0, 3.0, 0.0, 0.0, 100.0, 100.0});
+    tmdq_geometry* g = reinterpret_cast<tmdq_geometry*>(0x1);
+
+    CHECK(tmdq_chart_geometry(xs, ys, 3, 1, &view, nullptr) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_chart_geometry(xs, ys, 3, 1, nullptr, &g) == int(TMDQ_ERR_BADARG));
+    CHECK(g == nullptr);   // the output is cleared on a refusal
+    tmdq_chart_view small = view;
+    small.struct_size = sizeof(small) - 1;
+    CHECK(tmdq_chart_geometry(xs, ys, 3, 1, &small, &g) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_chart_geometry(xs, ys, -1, 1, &view, &g) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_chart_geometry(nullptr, ys, 3, 1, &view, &g) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_chart_geometry(xs, nullptr, 3, 1, &view, &g) == int(TMDQ_ERR_BADARG));
+    REQUIRE(tmdq_chart_geometry(nullptr, nullptr, 0, 1, &view, &g) == int(TMDQ_OK));   // no samples is no line
+    tmdq_geometry_info info{};
+    info.struct_size = sizeof(info);
+    REQUIRE(tmdq_geometry_info_get(g, &info) == int(TMDQ_OK));
+    CHECK(info.segment_count == 0);
+    CHECK(info.segments == nullptr);
+    CHECK(info.band_count == 0);
+    const double* points = nullptr;
+    int32_t count = 0;
+    CHECK(tmdq_geometry_band(g, 0, &points, &count) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_geometry_band(g, -1, &points, &count) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_geometry_band(g, 0, nullptr, &count) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_geometry_band(nullptr, 0, &points, &count) == int(TMDQ_ERR_BADARG));
+    tmdq_geometry_info shortInfo{};
+    shortInfo.struct_size = sizeof(shortInfo) - 1;
+    CHECK(tmdq_geometry_info_get(g, &shortInfo) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_geometry_info_get(nullptr, &info) == int(TMDQ_ERR_BADARG));
+    tmdq_geometry_free(g);
+    tmdq_geometry_free(nullptr);
+
+    double out = 0.0;
+    CHECK(tmdq_chart_transform(&view, 4, 1.0, &out) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_chart_transform(&view, -1, 1.0, &out) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_chart_transform(nullptr, TMDQ_X_TO_PIXEL, 1.0, &out) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_chart_transform(&small, TMDQ_X_TO_PIXEL, 1.0, &out) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_chart_transform(&view, TMDQ_X_TO_PIXEL, 1.0, nullptr) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_chart_sorted_x(nullptr, 2) == -1);
+    CHECK(tmdq_chart_sorted_x(xs, -1) == -1);
+    CHECK(tmdq_chart_sorted_x(nullptr, 0) == 1);
+    double buffer[4];
+    CHECK(tmdq_chart_ticks(0.0, 1.0, 3, buffer, -1) == -1);
+    CHECK(tmdq_chart_ticks(0.0, 1.0, 3, nullptr, 2) == -1);
+    CHECK(tmdq_chart_time_ticks(0.0, 100.0, 3, 0.0, nullptr, 2) == -1);
+
+    // A view from a newer host (bigger) is read no further than this library knows.
+    struct Bigger { tmdq_chart_view v; double extra[2]; };
+    Bigger big{};
+    big.v = view;
+    big.v.struct_size = sizeof(Bigger);
+    REQUIRE(tmdq_chart_transform(&big.v, TMDQ_X_TO_PIXEL, 1.0, &out) == int(TMDQ_OK));
+    CHECK(out == 50.0);
+    CHECK(std::string(tmdq_last_error()).empty());   // a successful call clears an earlier error
 }

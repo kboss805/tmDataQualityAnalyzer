@@ -55,6 +55,8 @@ int32_t tmdq_sizeof(int32_t which)
         case TMDQ_STRUCT_TIME_BASE_INFO:      return static_cast<int32_t>(sizeof(tmdq_time_base_info));
         case TMDQ_STRUCT_IMPORTED_SERIES:     return static_cast<int32_t>(sizeof(tmdq_imported_series));
         case TMDQ_STRUCT_RECEIVER_PARAMS:     return static_cast<int32_t>(sizeof(tmdq_receiver_params));
+        case TMDQ_STRUCT_CHART_VIEW:          return static_cast<int32_t>(sizeof(tmdq_chart_view));
+        case TMDQ_STRUCT_GEOMETRY_INFO:       return static_cast<int32_t>(sizeof(tmdq_geometry_info));
         default:                         return 0;
     }
 }
