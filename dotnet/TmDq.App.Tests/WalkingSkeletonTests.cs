@@ -128,14 +128,62 @@ namespace TmDq.App.Tests
         }
 
         [AvaloniaFact]
-        public async Task DefaultsThatFindNoSyncSayWhichStreamAndShowNothing()
+        public async Task DefaultsThatFindNoSyncSayWhichStreamAndWhyAndShowNothing()
         {
             // step_cal's PCM channel is a Receiver SNR stream (FE6B2840, 800-bit frames): the PRN15 defaults find nothing.
+            string stepCal = Repo.Recording("step_cal, example.ch10");
             var vm = new MainWindowViewModel();
-            await vm.LoadAsync(Repo.Recording("step_cal, example.ch10"));
+            await vm.LoadAsync(stepCal);
             Assert.Null(vm.Series);
             Assert.False(vm.IsBusy);
-            Assert.Matches(@"\(channel 26\): \S", vm.Status);
+
+            // The reason is the core's own, as the core gives it for the same run.
+            NativeCore.EnsureLoaded();
+            Ch10File file = Ch10File.Open(stepCal);
+            var errors = new ErrorCollector();
+            using (ProcessingRun run = ProcessingRun.Start(new RunRequest(stepCal, file.DefaultTimeChannel,
+                       new[] { FirstChannelRun.DefaultStream(file.PcmChannels[0]) }), errors))
+                run.Wait();
+            Assert.NotEmpty(errors.Errors);
+            Assert.Equal($"{file.PcmChannels[0].Name} (channel 26): {string.Join(" ", errors.Errors)}", vm.Status);
+        }
+
+        private sealed class ErrorCollector : IRunObserver
+        {
+            public List<string> Errors { get; } = new();
+            public void OnError(string message) { lock (Errors) Errors.Add(message); }
+        }
+
+        [AvaloniaFact]
+        public async Task AFailedLoadClearsThePreviousRecordingsSeries()
+        {
+            // Nothing of the last recording may stay on screen under a status that says this one failed.
+            var vm = new MainWindowViewModel();
+            await vm.LoadAsync(Prn);
+            Assert.NotNull(vm.Series);
+            await vm.LoadAsync(Repo.Recording("step_cal, example.ch10"));
+            Assert.Null(vm.Series);
+        }
+
+        [Fact]
+        public async Task TheRunReportsTheCoresProgressToTheCaller()
+        {
+            // A recorder that keeps every report as it arrives (Progress<T> would post them to a context instead).
+            var reports = new List<int>();
+            var recorder = new SyncProgress(p => { lock (reports) reports.Add(p); });
+            LockSeries s = await FirstChannelRun.RunAsync(Prn, recorder);
+            Assert.Equal(116, s.LockPercent.Length);
+            // The core's reader reports 100 once at the end of every run; the view model sets 100 itself as well, so
+            // only this shows the core's reports reach the caller.
+            Assert.Contains(100, reports);
+            Assert.All(reports, p => Assert.InRange(p, 0, 100));
+        }
+
+        private sealed class SyncProgress : IProgress<int>
+        {
+            private readonly Action<int> _report;
+            public SyncProgress(Action<int> report) => _report = report;
+            public void Report(int value) => _report(value);
         }
 
         [AvaloniaFact]
@@ -249,6 +297,48 @@ namespace TmDq.App.Tests
             using (ILockedFramebuffer fb = Frames.Capture(window).Lock())
                 Assert.Equal(0, Frames.CountDifferent(fb, area, background));
             window.Close();
+        }
+
+        [AvaloniaFact]
+        public void OneHundredPercentIsDrawnAtTheTopAndZeroAtTheBottom()
+        {
+            // The line's own colour, found in a band at the top of the plot and not at the bottom, and the other way
+            // round: counting drawn pixels alone could not tell the chart is upside down.
+            var chart = new LockChart { Width = 400, Height = 300 };
+            var window = new Window { Content = chart, SizeToContent = SizeToContent.WidthAndHeight };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            Rect area = Frames.InWindow(chart, window);
+            Rect plot = area.Deflate(LockChart.PlotInset);
+            Rect top = new Rect(plot.Left + 10, plot.Top - 3, plot.Width - 20, 6);
+            Rect bottom = new Rect(plot.Left + 10, plot.Bottom - 3, plot.Width - 20, 6);
+
+            (int Top, int Bottom) LineIn(double percent)
+            {
+                chart.Series = new LockSeries("flat", 1, new[] { 0.0, 1.0, 2.0 }, new[] { percent, percent, percent });
+                Dispatcher.UIThread.RunJobs();
+                using ILockedFramebuffer fb = Frames.Capture(window).Lock();
+                return (Purple(fb, top), Purple(fb, bottom));
+            }
+            var full = LineIn(100);
+            var none = LineIn(0);
+            Assert.True(full.Top > 100 && full.Bottom == 0, $"100 %: {full.Top} line pixels at the top, {full.Bottom} at the bottom");
+            Assert.True(none.Bottom > 100 && none.Top == 0, $"0 %: {none.Top} line pixels at the top, {none.Bottom} at the bottom");
+            window.Close();
+        }
+
+        /// <summary>Pixels in <paramref name="area"/> clearly of the line's purple (strong blue, more red than green).</summary>
+        private static int Purple(ILockedFramebuffer fb, Rect area)
+        {
+            int count = 0;
+            for (int y = (int)area.Top; y < (int)area.Bottom; y++)
+                for (int x = (int)area.Left; x < (int)area.Right; x++)
+                {
+                    uint p = Frames.Pixel(fb, x, y);
+                    int r = (int)(p >> 16) & 0xFF, g = (int)(p >> 8) & 0xFF, b = (int)p & 0xFF;
+                    if (b > 150 && r > g + 30) count++;
+                }
+            return count;
         }
 
         [Fact]
