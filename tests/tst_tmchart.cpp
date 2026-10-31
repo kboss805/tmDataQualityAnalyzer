@@ -574,19 +574,21 @@ void TestTmChart::drawsTheCoresGeometryForEveryKindOfSeries()
     QVERIFY2(inkIn(img, 0.55, 0.95, 0.0, 0.10) > 0, "the band does not reach the series' maximum");
     QVERIFY2(inkIn(img, 0.55, 0.95, 0.90, 1.0) > 0, "the band does not reach the series' minimum");
 
-    // A descending series (unordered, so walked whole) in a view of its middle: the line still crosses the view.
-    // Walked as if it were ordered, the search for the view would find no sample in it, and nothing would be drawn.
+    // A series whose times run 50 to 99 and then 0 to 49 (unordered, so walked whole), in a view of 40 to 60: the line
+    // crosses the whole view. Searched as if it were ordered, the view would be found to hold only the times 39 to 49,
+    // and its right half would be blank.
     xs.clear();
     ys.clear();
-    for (int i = 99; i >= 0; --i)
+    for (int i = 0; i < 100; ++i)
     {
-        xs.push_back(i);
+        xs.push_back((i + 50) % 100);
         ys.push_back(50);
     }
     only(TmChart::Axis::Left, xs, ys);
     chart.setXRange(40, 60);
     img = render();
-    QVERIFY2(inkIn(img, 0.1, 0.9, 0.4, 0.6) > 100, "an unordered series in a zoomed view was not drawn");
+    QVERIFY2(inkIn(img, 0.05, 0.45, 0.4, 0.6) > 50, "an unordered series is missing from the left of a zoomed view");
+    QVERIFY2(inkIn(img, 0.55, 0.95, 0.4, 0.6) > 50, "an unordered series is missing from the right of a zoomed view");
 }
 
 void TestTmChart::linePersistsWhenNoSampleIsInsideTheView()
