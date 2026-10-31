@@ -82,7 +82,9 @@ namespace TmDq.App.Tests
             window.Close();
         }
 
-        [Fact]
+        // An Avalonia fact, though it draws nothing: a control built on an xunit thread can claim the UI thread before
+        // the headless session does, and every headless test after it then fails (seen on the 2-core hosted runner).
+        [AvaloniaFact]
         public void TheChartDrawsTheListWhenItHasOneAndTheSingleSeriesOtherwise()
         {
             var one = new LockSeries("one", 1, new[] { 0.0, 1.0 }, new[] { 50.0, 50.0 });
