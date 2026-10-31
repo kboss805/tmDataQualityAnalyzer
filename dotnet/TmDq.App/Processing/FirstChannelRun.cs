@@ -17,7 +17,7 @@ namespace TmDq.App.Processing
     }
 
     /// <summary>A recording the core could not process, with the reason in words for the user.</summary>
-    public sealed class RecordingException : Exception
+    public class RecordingException : Exception
     {
         public RecordingException(string message) : base(message) { }
 

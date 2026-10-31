@@ -10,8 +10,6 @@
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12" Margin="8">
       <Button x:Name="OpenButton" Content="Open..." Command="{Binding OpenCommand}" />
-      <ProgressBar x:Name="Progress" Width="240" Minimum="0" Maximum="100"
-                   Value="{Binding Progress}" IsVisible="{Binding IsBusy}" VerticalAlignment="Center" />
     </StackPanel>
     <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="8,4">
       <TextBlock x:Name="StatusText" Grid.Column="0" Text="{Binding Status}" TextTrimming="CharacterEllipsis"
@@ -19,6 +17,15 @@
       <TextBlock x:Name="VersionLabel" Grid.Column="1" Text="{Binding VersionText}" Margin="16,0,0,0"
                  VerticalAlignment="Center" />
     </Grid>
-    <views:LockChart x:Name="Chart" Series="{Binding Series}" AllSeries="{Binding AllSeries}" />
+    <!-- The log sidebar on the left (the Qt dock's place and minimum width), the chart beside it. Progress is in the
+         modal progress dialog while a run goes on, as in Qt. -->
+    <Grid ColumnDefinitions="400,4,*">
+      <Border x:Name="LogPanel" Grid.Column="0" MinWidth="400" Margin="2,4,0,4" BorderThickness="1" CornerRadius="4"
+              BorderBrush="#E5E5E5" Background="#FFFFFF">
+        <views:LogView x:Name="Log" Entries="{Binding Log.Entries}" />
+      </Border>
+      <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="Transparent" />
+      <views:LockChart x:Name="Chart" Grid.Column="2" Series="{Binding Series}" AllSeries="{Binding AllSeries}" />
+    </Grid>
   </DockPanel>
 </Window>

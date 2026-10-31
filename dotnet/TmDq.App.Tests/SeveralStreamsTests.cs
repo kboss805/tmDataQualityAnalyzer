@@ -20,25 +20,6 @@ namespace TmDq.App.Tests
     /// </summary>
     public sealed class SeveralStreamsTests
     {
-        /// <summary>Pixels of <paramref name="area"/> drawn in <paramref name="colour"/> over the white background. An
-        /// antialiased line is the colour blended with white, so a pixel is counted when its departure from white points
-        /// the same way as the colour's (within a few degrees), not when it is the colour itself.</summary>
-        private static int Near(ILockedFramebuffer fb, Rect area, Color colour)
-        {
-            double cr = 255 - colour.R, cg = 255 - colour.G, cb = 255 - colour.B;
-            double cn = Math.Sqrt(cr * cr + cg * cg + cb * cb);
-            int count = 0;
-            for (int y = (int)area.Top; y < (int)area.Bottom; y++)
-                for (int x = (int)area.Left; x < (int)area.Right; x++)
-                {
-                    uint p = Frames.Pixel(fb, x, y);
-                    double r = 255 - (int)((p >> 16) & 0xFF), g = 255 - (int)((p >> 8) & 0xFF), b = 255 - (int)(p & 0xFF);
-                    double n = Math.Sqrt(r * r + g * g + b * b);
-                    if (n > 40 && (r * cr + g * cg + b * cb) / (n * cn) > 0.995) count++;
-                }
-            return count;
-        }
-
         /// <summary>The commonest colours in an area, for a failure message.</summary>
         private static string Seen(ILockedFramebuffer fb, Rect area)
         {
@@ -73,12 +54,12 @@ namespace TmDq.App.Tests
 
             using ILockedFramebuffer fb = Frames.Capture(window).Lock();
             Color first = LockChart.Colors[0], second = LockChart.Colors[1];
-            Assert.True(Near(fb, Band(y75, 0.05, 0.45), first) > 80, "the first stream, in the first colour, over its first half: " + Seen(fb, Band(y75, 0.05, 0.45)));
-            Assert.Equal(0, Near(fb, Band(y75, 0.55, 0.95), first));     // it ends at 10 s, half way
-            Assert.Equal(0, Near(fb, Band(y75, 0.05, 0.45), second));
-            Assert.True(Near(fb, Band(y25, 0.30, 0.95), second) > 80, "the second stream, in the second colour, from a quarter in");
-            Assert.Equal(0, Near(fb, Band(y25, 0.02, 0.20), second));    // it starts at 5 s, a quarter of the way
-            Assert.Equal(0, Near(fb, Band(y25, 0.30, 0.95), first));
+            Assert.True(Frames.Near(fb, Band(y75, 0.05, 0.45), first) > 80, "the first stream, in the first colour, over its first half: " + Seen(fb, Band(y75, 0.05, 0.45)));
+            Assert.Equal(0, Frames.Near(fb, Band(y75, 0.55, 0.95), first));     // it ends at 10 s, half way
+            Assert.Equal(0, Frames.Near(fb, Band(y75, 0.05, 0.45), second));
+            Assert.True(Frames.Near(fb, Band(y25, 0.30, 0.95), second) > 80, "the second stream, in the second colour, from a quarter in");
+            Assert.Equal(0, Frames.Near(fb, Band(y25, 0.02, 0.20), second));    // it starts at 5 s, a quarter of the way
+            Assert.Equal(0, Frames.Near(fb, Band(y25, 0.30, 0.95), first));
             window.Close();
         }
 
