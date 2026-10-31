@@ -10,8 +10,8 @@ namespace TmDq.Core.Tests;
 /// <summary>
 /// The seam between the native and the managed side. A wrong offset reads plausible garbage at the wrong place
 /// and fails nowhere else, so the layout is checked two ways: against the sizes the DLL itself reports, and
-/// against the field offsets pinned here - the same numbers TestAbi::theStructLayoutsArePinned pins on the
-/// C++ side, so a change to either side alone fails one of the two.
+/// against the field offsets pinned here - the same numbers "Abi: theStructLayoutsArePinned" (native/tmdq_core_tests)
+/// pins on the C++ side, so a change to either side alone fails one of the two.
 /// </summary>
 public class LayoutTests
 {

@@ -1,11 +1,21 @@
-#include "tst_abi.h"
+// The C ABI of tmdq_core.dll (native/tmdq_core), exercised in-process. No Qt; ported from the Qt TestAbi, whose cases
+// are all here under the same names.
+//
+// The ABI sources are compiled straight into this executable (TMDQ_ABI_STATIC), so these tests call `tmdq_*` exactly
+// as a host would, from C++ rather than through P/Invoke. What they pin is the contract in `tmdq_abi.h`: the layout of
+// every struct, what a run reports and in what order, what a bad argument returns, who owns what and when, and that a
+// run through the ABI is the run the core itself makes. (The managed side repeats the layout and numeric checks from
+// C#, in dotnet/TmDq.Core.Tests.)
 
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <cmath>
+#include <filesystem>
+#include <format>
 #include <limits>
 #include <map>
 #include <memory>
@@ -18,14 +28,10 @@
 #include <unordered_map>
 #include <vector>
 
-#include <QCoreApplication>
-#include <QDir>
-#include <QFileInfo>
-#include <QtTest>
-
-#include "../native/tmdq_core/abi_events.h"
-#include "../native/tmdq_core/abi_internal.h"
-#include "../native/tmdq_core/tmdq_abi.h"
+#include "doctest.h"
+#include "abi_events.h"
+#include "abi_internal.h"
+#include "tmdq_abi.h"
 #include "calibrationextractor.h"
 #include "calibrationrequest.h"
 #include "chapter10reader.h"
@@ -38,10 +44,13 @@
 #include "pipelinerunner.h"
 #include "seriesbuilder.h"
 #include "processedstreamdata.h"
-#include "qtbridge.h"
 #include "framesync.h"
 #include "stepdetector.h"
 #include "streamjobbuilder.h"
+#include "textfile.h"
+#include "test_support.h"
+
+using namespace tmdq_test;
 
 namespace {
 
@@ -49,15 +58,39 @@ namespace {
 // Fixtures
 // ---------------------------------------------------------------------------
 
-QString projectRoot()
+/// A path as UTF-8 text, the form the ABI takes it in.
+std::string utf8Of(const fs::path& path)
 {
-    QDir dir(QCoreApplication::applicationDirPath());
-    dir.cdUp();   // tests/
-    dir.cdUp();   // project root
-    return dir.absolutePath();
+    const std::u8string text = path.generic_u8string();
+    return std::string(text.begin(), text.end());
 }
 
-QString dataPath(const QString& name) { return projectRoot() + "/tests/data/" + name; }
+/// The repository root, where `settings/` and the committed recordings are.
+std::string rootUtf8() { return utf8Of(repoRoot()); }
+
+/// The system temp folder, for paths that must NOT exist (nothing is ever written there).
+std::string tempUtf8()
+{
+    std::string temp = utf8Of(fs::temp_directory_path());
+    while (!temp.empty() && temp.back() == '/')
+        temp.pop_back();
+    return temp;
+}
+
+/// A file under tests/data. The recordings there are committed and required; the CSV exports are not committed, so a
+/// caller asks whether one exists.
+std::string dataPath(const std::string& name) { return rootUtf8() + "/tests/data/" + name; }
+
+/// A committed recording under tests/data/test files, required to exist.
+std::string recording(const char* name) { return utf8Of(repoFile(fs::path("tests/data/test files") / name)); }
+
+/// A scratch folder whose paths come back as UTF-8 text.
+struct Scratch
+{
+    TempDir dir;
+    std::string filePath(const std::string& name) const { return utf8Of(dir.file(name)); }
+    std::string path() const { return utf8Of(dir.path()); }
+};
 
 /// The small committed recording the pipeline tests use: one PCM channel, 800-bit frames, sync FE6B2840.
 struct StepCal
@@ -71,17 +104,31 @@ struct StepCal
 StepCal loadStepCal()
 {
     StepCal f;
-    const QString path = dataPath("test files/step_cal, example.ch10");
-    if (!QFileInfo::exists(path))
-        return f;
+    f.path = recording("step_cal, example.ch10");
     Chapter10Reader reader;
-    if (!reader.loadChannels(toFsPath(path)))
-        return f;
-    f.path   = path.toStdString();
+    REQUIRE(reader.loadChannels(textfile::pathFromUtf8(f.path)));
     f.timeId = reader.getCurrentTimeChannelID();
     f.pcmId  = reader.getFirstPCMChannelID();
     f.ok     = f.timeId >= 0 && f.pcmId >= 0;
+    REQUIRE(f.ok);
     return f;
+}
+
+/// The committed PRN sample, as a recording to run: its default time channel and first PCM channel.
+StepCal loadPrnSample()
+{
+    StepCal prn;
+    prn.path = recording("prn_testfile, sample.ch10");
+    tmdq_file* file = nullptr;
+    REQUIRE(tmdq_file_open(prn.path.c_str(), &file) == int(TMDQ_OK));
+    prn.timeId = tmdq_file_default_time_channel(file);
+    tmdq_channel_info info{};
+    info.struct_size = sizeof(info);
+    REQUIRE(tmdq_file_pcm_channel(file, 0, &info) == int(TMDQ_OK));
+    prn.pcmId = info.channel_id;
+    prn.ok = true;
+    tmdq_file_close(file);
+    return prn;
 }
 
 constexpr int kTimeoutMs = 180000;
@@ -242,7 +289,7 @@ std::map<int, ProcessedStreamData> runCore(const StepCal& f, int sourceId, const
                                            const std::string& appRoot, bool& ok, bool swapBytes = true)
 {
     ProcessingParams base;
-    base.filename      = toFsPath(QString::fromStdString(f.path));
+    base.filename      = textfile::pathFromUtf8(f.path);
     base.sourceId      = sourceId;
     base.timeChannelId = f.timeId;
     base.startSeconds  = 0;
@@ -412,7 +459,7 @@ struct Request
     tmdq_run_request req{};
 
     Request(const StepCal& f, std::vector<Case> streams, int sourceId = 0)
-        : cases(std::move(streams)), file(f.path), appRoot(projectRoot().toStdString())
+        : cases(std::move(streams)), file(f.path), appRoot(rootUtf8())
     {
         configs.reserve(cases.size());
         for (const Case& c : cases) configs.push_back(c.wire());
@@ -435,49 +482,60 @@ struct Request
 
 bool sameDoubles(const double* a, std::size_t na, const std::vector<double>& b);
 
-QByteArray slurp(const QString& path)
+/// The names of what differs, joined into one message.
+class Diff
 {
-    QFile f(path);
-    return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray("<unreadable>");
+public:
+    Diff& operator<<(const std::string& what) { m_items.push_back(what); return *this; }
+    bool empty() const { return m_items.empty(); }
+    std::string join(const std::string& separator) const
+    {
+        std::string all;
+        for (const std::string& item : m_items)
+            all += (all.empty() ? "" : separator) + item;
+        return all;
+    }
+private:
+    std::vector<std::string> m_items;
+};
+
+/// A file's bytes, or a marker that cannot be confused with any file's when it cannot be read.
+std::string slurp(const std::string& path)
+{
+    return fs::exists(textfile::pathFromUtf8(path)) ? readBytes(textfile::pathFromUtf8(path)) : std::string("<unreadable>");
 }
 
-QString writeFile(const QString& path, const QByteArray& bytes)
+std::string writeFile(const std::string& path, const std::string& bytes)
 {
-    QFile f(path);
-    if (!f.open(QIODevice::WriteOnly))
-        return QString();
-    f.write(bytes);
+    writeBytes(textfile::pathFromUtf8(path), bytes);
     return path;
 }
 
 /// A pattern file as text, from the core and from the ABI, so two compare in one line.
-QString describeSyncFile(const FrameSyncFile& f)
+std::string describeSyncFile(const FrameSyncFile& f)
 {
     // An absent optional reads as 0 beside a "has" flag of 0, which is what the ABI promises.
-    return QString("pattern=[%1] mask=[%2] has_bits=%3 bits=%4 legacy=%5 inverted=%6 has_randomized=%7 randomized=%8")
-        .arg(QString::fromStdString(f.pattern), QString::fromStdString(f.mask))
-        .arg(f.bitsPerFrame.has_value() ? 1 : 0).arg(f.bitsPerFrame.value_or(0))
-        .arg(f.bitsFromLegacyKey ? 1 : 0).arg(f.inverted ? 1 : 0)
-        .arg(f.randomized.has_value() ? 1 : 0).arg(f.randomized.value_or(false) ? 1 : 0);
+    return std::format("pattern=[{}] mask=[{}] has_bits={} bits={} legacy={} inverted={} has_randomized={} randomized={}",
+                       f.pattern, f.mask, f.bitsPerFrame.has_value() ? 1 : 0, f.bitsPerFrame.value_or(0),
+                       f.bitsFromLegacyKey ? 1 : 0, f.inverted ? 1 : 0, f.randomized.has_value() ? 1 : 0,
+                       f.randomized.value_or(false) ? 1 : 0);
 }
 
-QString describeSyncFile(const tmdq_frame_sync_file* file)
+std::string describeSyncFile(const tmdq_frame_sync_file* file)
 {
     tmdq_frame_sync_file_info i{};
     i.struct_size = sizeof(i);
     if (tmdq_frame_sync_file_info_get(file, &i) != TMDQ_OK)
         return "info failed";
-    return QString("pattern=[%1] mask=[%2] has_bits=%3 bits=%4 legacy=%5 inverted=%6 has_randomized=%7 randomized=%8")
-        .arg(QString::fromUtf8(i.pattern_utf8), QString::fromUtf8(i.mask_utf8))
-        .arg(i.has_bits_per_frame).arg(i.bits_per_frame)
-        .arg(i.bits_from_legacy_key).arg(i.inverted)
-        .arg(i.has_randomized).arg(i.randomized);
+    return std::format("pattern=[{}] mask=[{}] has_bits={} bits={} legacy={} inverted={} has_randomized={} randomized={}",
+                       i.pattern_utf8, i.mask_utf8, i.has_bits_per_frame, i.bits_per_frame, i.bits_from_legacy_key,
+                       i.inverted, i.has_randomized, i.randomized);
 }
 
 /// What differs between a parsed CSV through the ABI and the core's own parse; empty if nothing.
-QString csvDifferences(const tmdq_csv* csv, const CsvParseResult& want)
+std::string csvDifferences(const tmdq_csv* csv, const CsvParseResult& want)
 {
-    QStringList diff;
+    Diff diff;
     tmdq_csv_info info{};
     info.struct_size = sizeof(info);
     if (tmdq_csv_info_get(csv, &info) != TMDQ_OK)
@@ -493,7 +551,7 @@ QString csvDifferences(const tmdq_csv* csv, const CsvParseResult& want)
         s.struct_size = sizeof(s);
         if (tmdq_csv_series_get(csv, i, &s) != TMDQ_OK) { diff << "series call"; continue; }
         const CsvSeries& w = want.series[std::size_t(i)];
-        const QString at = QString::number(i) + ":";
+        const std::string at = std::to_string(i) + ":";
         if (s.metric_type != int(w.metricType)) diff << at + "metric";
         if (std::string(s.name_utf8) != w.name) diff << at + "name";
         if (std::string(s.stream_label_utf8) != w.streamLabel) diff << at + "label";
@@ -606,9 +664,9 @@ ProcessedStreamData randomStream(std::mt19937& rng)
 }
 
 /// What differs between a series set through the ABI and the core's own StreamSeries; empty if nothing.
-QString seriesDifferences(const tmdq_series_set* set, const StreamSeries& want)
+std::string seriesDifferences(const tmdq_series_set* set, const StreamSeries& want)
 {
-    QStringList diff;
+    Diff diff;
     tmdq_series_set_info info{};
     info.struct_size = sizeof(info);
     if (tmdq_series_set_info_get(set, &info) != TMDQ_OK)
@@ -621,7 +679,7 @@ QString seriesDifferences(const tmdq_series_set* set, const StreamSeries& want)
         s.struct_size = sizeof(s);
         if (tmdq_series_set_spec(set, i, &s) != TMDQ_OK) { diff << "spec call"; continue; }
         const SeriesSpec& w = want.series[std::size_t(i)];
-        const QString at = QString::number(i) + ":";
+        const std::string at = std::to_string(i) + ":";
         if (s.metric_type != int(w.metricType)) diff << at + "metric";
         if (std::string(s.name_utf8) != w.name) diff << at + "name";
         if (std::string(s.stream_label_utf8) != w.streamLabel) diff << at + "label";
@@ -671,13 +729,13 @@ bool sameDoubles(const double* a, std::size_t na, const std::vector<double>& b)
 }
 
 /// What differs between a result the ABI delivered and the one the core made; empty if nothing.
-QString differences(tmdq_stream_result* r, const ProcessedStreamData& want)
+std::string differences(tmdq_stream_result* r, const ProcessedStreamData& want)
 {
     tmdq_stream_info info{};
     info.struct_size = sizeof(info);
     if (tmdq_stream_result_info(r, &info) != TMDQ_OK)
         return "tmdq_stream_result_info failed";
-    QStringList diff;
+    Diff diff;
     if (info.pcm_channel_id != want.pcmChannelId) diff << "pcm channel";
     if (std::string(info.label_utf8) != want.streamLabel) diff << "label";
     if (info.job_index != want.jobIndex) diff << "job index";
@@ -699,9 +757,9 @@ QString differences(tmdq_stream_result* r, const ProcessedStreamData& want)
             s.struct_size = sizeof(s);
             if (tmdq_stream_result_channel(r, i, &s) != TMDQ_OK) { diff << "channel call"; continue; }
             const ProcessedChannelSeries& w = want.channels[static_cast<std::size_t>(i)];
-            if (std::string(s.name_utf8) != w.name) diff << "channel name " + QString::number(i);
-            if (s.word_index != w.word) diff << "channel word " + QString::number(i);
-            if (!sameDoubles(s.values, n, w.values)) diff << "channel values " + QString::number(i);
+            if (std::string(s.name_utf8) != w.name) diff << "channel name " + std::to_string(i);
+            if (s.word_index != w.word) diff << "channel word " + std::to_string(i);
+            if (!sameDoubles(s.values, n, w.values)) diff << "channel values " + std::to_string(i);
         }
     }
     return diff.join(", ");
@@ -738,8 +796,7 @@ std::vector<double> shippedSteps()
 {
     std::vector<StepDefinition> steps;
     std::string error;
-    if (!StepDetector::parseStepConfig(toFsPath(projectRoot() + "/settings/rcvr_cals/default.toml"), steps, error))
-        return {};
+    REQUIRE_MESSAGE(StepDetector::parseStepConfig(repoFile("settings/rcvr_cals/default.toml"), steps, error), error);
     std::vector<double> db;
     for (const StepDefinition& s : steps)
         db.push_back(s.db);
@@ -754,9 +811,9 @@ struct CalCase
     std::string       appRoot;
 
     explicit CalCase(const StepCal& f, std::vector<double> stepDb = shippedSteps())
-        : appRoot(projectRoot().toStdString())
+        : appRoot(rootUtf8())
     {
-        in.calFilename      = toFsPath(QString::fromStdString(f.path));
+        in.calFilename      = textfile::pathFromUtf8(f.path);
         in.timeChannelId    = f.timeId;
         in.pcmChannelId     = f.pcmId;
         in.syncPattern      = "FE6B2840";
@@ -840,9 +897,9 @@ struct CalGuard
 };
 
 /// What differs between a finished calibration and the core's own run; empty if nothing.
-QString calibrationDifferences(const tmdq_calibration* cal, const DirectCalibration& want)
+std::string calibrationDifferences(const tmdq_calibration* cal, const DirectCalibration& want)
 {
-    QStringList diff;
+    Diff diff;
     tmdq_calibration_info info{};
     info.struct_size = sizeof(info);
     if (tmdq_calibration_result(cal, &info) != TMDQ_OK)
@@ -853,14 +910,14 @@ QString calibrationDifferences(const tmdq_calibration* cal, const DirectCalibrat
     if (info.recording_seconds != want.seconds) diff << "recording seconds";
     if ((info.clip_ignored != 0) != want.clipIgnored) diff << "clip ignored";
     if (std::size_t(info.channel_count) != want.results.size())
-        return diff.join(", ") + (diff.isEmpty() ? "" : ", ") + "channel count";
+        return diff.join(", ") + (diff.empty() ? "" : ", ") + "channel count";
     for (int32_t i = 0; i < info.channel_count; ++i)
     {
         tmdq_calibration_channel ch{};
         ch.struct_size = sizeof(ch);
         if (tmdq_calibration_channel_result(cal, i, &ch) != TMDQ_OK) { diff << "channel call"; continue; }
         const CalibrationChannelResult& r = want.results[std::size_t(i)];
-        const QString at = QString::number(i) + ":";
+        const std::string at = std::to_string(i) + ":";
         if (std::string(ch.name_utf8) != r.name) diff << at + "name";
         if (ch.word_index != r.word) diff << at + "word";
         if ((ch.valid != 0) != r.profile.valid) diff << at + "valid";
@@ -877,7 +934,7 @@ QString calibrationDifferences(const tmdq_calibration* cal, const DirectCalibrat
             for (int32_t p = 0; p < ch.point_count; ++p)
                 if (ch.points[p].raw_avg != r.profile.points[std::size_t(p)].rawAvg ||
                     ch.points[p].true_db != r.profile.points[std::size_t(p)].trueDb)
-                    diff << at + "point " + QString::number(p);
+                    diff << at + "point " + std::to_string(p);
         if (std::size_t(ch.plateau_level_count) != r.plateauLevels.size() ||
             !sameDoubles(ch.plateau_levels, std::size_t(ch.plateau_level_count), r.plateauLevels)) diff << at + "levels";
         if (std::size_t(ch.unresolved_count) != r.unresolvedDb.size() ||
@@ -926,287 +983,285 @@ bool sameCalibration(const DirectCalibration& a, const DirectCalibration& b)
 // The shape of the contract
 // ---------------------------------------------------------------------------
 
-void TestAbi::theStructLayoutsArePinned()
+TEST_CASE("Abi: theStructLayoutsArePinned")
 {
     // What the managed side must reproduce, field by field (Pack = 8, natural alignment). An offset moving
     // here is an ABI break, so it is a deliberate edit to this test and a new revision, never a side effect.
-    QCOMPARE(int(sizeof(tmdq_channel_info)), 24);
-    QCOMPARE(int(offsetof(tmdq_channel_info, struct_size)), 0);
-    QCOMPARE(int(offsetof(tmdq_channel_info, channel_id)), 4);
-    QCOMPARE(int(offsetof(tmdq_channel_info, tmats_data_rate_bps)), 8);
-    QCOMPARE(int(offsetof(tmdq_channel_info, name_utf8)), 16);
+    CHECK(int(sizeof(tmdq_channel_info)) == 24);
+    CHECK(int(offsetof(tmdq_channel_info, struct_size)) == 0);
+    CHECK(int(offsetof(tmdq_channel_info, channel_id)) == 4);
+    CHECK(int(offsetof(tmdq_channel_info, tmats_data_rate_bps)) == 8);
+    CHECK(int(offsetof(tmdq_channel_info, name_utf8)) == 16);
 
-    QCOMPARE(int(sizeof(tmdq_cal_point)), 16);
-    QCOMPARE(int(offsetof(tmdq_cal_point, true_db)), 8);
+    CHECK(int(sizeof(tmdq_cal_point)) == 16);
+    CHECK(int(offsetof(tmdq_cal_point, true_db)) == 8);
 
-    QCOMPARE(int(sizeof(tmdq_cal_profile)), 24);
-    QCOMPARE(int(offsetof(tmdq_cal_profile, word_index)), 8);
-    QCOMPARE(int(offsetof(tmdq_cal_profile, point_count)), 12);
-    QCOMPARE(int(offsetof(tmdq_cal_profile, valid)), 16);
+    CHECK(int(sizeof(tmdq_cal_profile)) == 24);
+    CHECK(int(offsetof(tmdq_cal_profile, word_index)) == 8);
+    REQUIRE(int(offsetof(tmdq_cal_profile, point_count)) == 12);
+    CHECK(int(offsetof(tmdq_cal_profile, valid)) == 16);
 
-    QCOMPARE(int(sizeof(tmdq_stream_config)), 104);
-    QCOMPARE(int(offsetof(tmdq_stream_config, pcm_channel_id)), 4);
-    QCOMPARE(int(offsetof(tmdq_stream_config, label_utf8)), 8);
-    QCOMPARE(int(offsetof(tmdq_stream_config, sync_pattern_utf8)), 16);
-    QCOMPARE(int(offsetof(tmdq_stream_config, sync_mask_utf8)), 24);
-    QCOMPARE(int(offsetof(tmdq_stream_config, receiver_params_toml_utf8)), 32);
-    QCOMPARE(int(offsetof(tmdq_stream_config, calibration)), 40);
-    QCOMPARE(int(offsetof(tmdq_stream_config, data_rate_mbps)), 48);
-    QCOMPARE(int(offsetof(tmdq_stream_config, scale_d_db_per_v)), 56);
-    QCOMPARE(int(offsetof(tmdq_stream_config, mode)), 64);
-    QCOMPARE(int(offsetof(tmdq_stream_config, bits_in_minor_frame)), 68);
-    QCOMPARE(int(offsetof(tmdq_stream_config, randomized)), 72);
-    QCOMPARE(int(offsetof(tmdq_stream_config, inverted)), 76);
-    QCOMPARE(int(offsetof(tmdq_stream_config, sample_period_index)), 80);
-    QCOMPARE(int(offsetof(tmdq_stream_config, polarity_index)), 84);
-    QCOMPARE(int(offsetof(tmdq_stream_config, slope_index)), 88);
-    QCOMPARE(int(offsetof(tmdq_stream_config, num_receivers)), 92);
-    QCOMPARE(int(offsetof(tmdq_stream_config, receiver_channels)), 96);
-    QCOMPARE(int(offsetof(tmdq_stream_config, calibration_count)), 100);
+    CHECK(int(sizeof(tmdq_stream_config)) == 104);
+    CHECK(int(offsetof(tmdq_stream_config, pcm_channel_id)) == 4);
+    CHECK(int(offsetof(tmdq_stream_config, label_utf8)) == 8);
+    CHECK(int(offsetof(tmdq_stream_config, sync_pattern_utf8)) == 16);
+    CHECK(int(offsetof(tmdq_stream_config, sync_mask_utf8)) == 24);
+    CHECK(int(offsetof(tmdq_stream_config, receiver_params_toml_utf8)) == 32);
+    CHECK(int(offsetof(tmdq_stream_config, calibration)) == 40);
+    CHECK(int(offsetof(tmdq_stream_config, data_rate_mbps)) == 48);
+    CHECK(int(offsetof(tmdq_stream_config, scale_d_db_per_v)) == 56);
+    CHECK(int(offsetof(tmdq_stream_config, mode)) == 64);
+    CHECK(int(offsetof(tmdq_stream_config, bits_in_minor_frame)) == 68);
+    CHECK(int(offsetof(tmdq_stream_config, randomized)) == 72);
+    CHECK(int(offsetof(tmdq_stream_config, inverted)) == 76);
+    CHECK(int(offsetof(tmdq_stream_config, sample_period_index)) == 80);
+    CHECK(int(offsetof(tmdq_stream_config, polarity_index)) == 84);
+    CHECK(int(offsetof(tmdq_stream_config, slope_index)) == 88);
+    CHECK(int(offsetof(tmdq_stream_config, num_receivers)) == 92);
+    CHECK(int(offsetof(tmdq_stream_config, receiver_channels)) == 96);
+    REQUIRE(int(offsetof(tmdq_stream_config, calibration_count)) == 100);
 
-    QCOMPARE(int(sizeof(tmdq_run_request)), 48);
-    QCOMPARE(int(offsetof(tmdq_run_request, time_channel_id)), 4);
-    QCOMPARE(int(offsetof(tmdq_run_request, filename_utf8)), 8);
-    QCOMPARE(int(offsetof(tmdq_run_request, app_root_utf8)), 16);
-    QCOMPARE(int(offsetof(tmdq_run_request, streams)), 24);
-    QCOMPARE(int(offsetof(tmdq_run_request, stream_count)), 32);
-    QCOMPARE(int(offsetof(tmdq_run_request, source_id)), 36);
-    QCOMPARE(int(offsetof(tmdq_run_request, swap_bytes)), 40);
+    CHECK(int(sizeof(tmdq_run_request)) == 48);
+    CHECK(int(offsetof(tmdq_run_request, time_channel_id)) == 4);
+    CHECK(int(offsetof(tmdq_run_request, filename_utf8)) == 8);
+    CHECK(int(offsetof(tmdq_run_request, app_root_utf8)) == 16);
+    CHECK(int(offsetof(tmdq_run_request, streams)) == 24);
+    REQUIRE(int(offsetof(tmdq_run_request, stream_count)) == 32);
+    CHECK(int(offsetof(tmdq_run_request, source_id)) == 36);
+    CHECK(int(offsetof(tmdq_run_request, swap_bytes)) == 40);
 
-    QCOMPARE(int(sizeof(tmdq_callbacks)), 56);
-    QCOMPARE(int(offsetof(tmdq_callbacks, user)), 8);
-    QCOMPARE(int(offsetof(tmdq_callbacks, log)), 16);
-    QCOMPARE(int(offsetof(tmdq_callbacks, error)), 24);
-    QCOMPARE(int(offsetof(tmdq_callbacks, progress)), 32);
-    QCOMPARE(int(offsetof(tmdq_callbacks, stream_done)), 40);
-    QCOMPARE(int(offsetof(tmdq_callbacks, finished)), 48);
+    CHECK(int(sizeof(tmdq_callbacks)) == 56);
+    CHECK(int(offsetof(tmdq_callbacks, user)) == 8);
+    CHECK(int(offsetof(tmdq_callbacks, log)) == 16);
+    CHECK(int(offsetof(tmdq_callbacks, error)) == 24);
+    CHECK(int(offsetof(tmdq_callbacks, progress)) == 32);
+    CHECK(int(offsetof(tmdq_callbacks, stream_done)) == 40);
+    CHECK(int(offsetof(tmdq_callbacks, finished)) == 48);
 
-    QCOMPARE(int(sizeof(tmdq_stream_info)), 64);
-    QCOMPARE(int(offsetof(tmdq_stream_info, pcm_channel_id)), 4);
-    QCOMPARE(int(offsetof(tmdq_stream_info, label_utf8)), 8);
-    QCOMPARE(int(offsetof(tmdq_stream_info, times_sec)), 16);
-    QCOMPARE(int(offsetof(tmdq_stream_info, lock_percent)), 24);
-    QCOMPARE(int(offsetof(tmdq_stream_info, missed_frames)), 32);
-    QCOMPARE(int(offsetof(tmdq_stream_info, job_index)), 40);
-    QCOMPARE(int(offsetof(tmdq_stream_info, source_id)), 44);
-    QCOMPARE(int(offsetof(tmdq_stream_info, mode)), 48);
-    QCOMPARE(int(offsetof(tmdq_stream_info, sample_count)), 52);
-    QCOMPARE(int(offsetof(tmdq_stream_info, channel_count)), 56);
+    CHECK(int(sizeof(tmdq_stream_info)) == 64);
+    CHECK(int(offsetof(tmdq_stream_info, pcm_channel_id)) == 4);
+    CHECK(int(offsetof(tmdq_stream_info, label_utf8)) == 8);
+    CHECK(int(offsetof(tmdq_stream_info, times_sec)) == 16);
+    CHECK(int(offsetof(tmdq_stream_info, lock_percent)) == 24);
+    CHECK(int(offsetof(tmdq_stream_info, missed_frames)) == 32);
+    CHECK(int(offsetof(tmdq_stream_info, job_index)) == 40);
+    CHECK(int(offsetof(tmdq_stream_info, source_id)) == 44);
+    CHECK(int(offsetof(tmdq_stream_info, mode)) == 48);
+    REQUIRE(int(offsetof(tmdq_stream_info, sample_count)) == 52);
+    REQUIRE(int(offsetof(tmdq_stream_info, channel_count)) == 56);
 
-    QCOMPARE(int(sizeof(tmdq_channel_series)), 24);
-    QCOMPARE(int(offsetof(tmdq_channel_series, word_index)), 4);
-    QCOMPARE(int(offsetof(tmdq_channel_series, name_utf8)), 8);
-    QCOMPARE(int(offsetof(tmdq_channel_series, values)), 16);
+    CHECK(int(sizeof(tmdq_channel_series)) == 24);
+    CHECK(int(offsetof(tmdq_channel_series, word_index)) == 4);
+    CHECK(int(offsetof(tmdq_channel_series, name_utf8)) == 8);
+    CHECK(int(offsetof(tmdq_channel_series, values)) == 16);
 
-    QCOMPARE(int(sizeof(tmdq_calibration_request)), 112);
-    QCOMPARE(int(offsetof(tmdq_calibration_request, time_channel_id)), 4);
-    QCOMPARE(int(offsetof(tmdq_calibration_request, cal_filename_utf8)), 8);
-    QCOMPARE(int(offsetof(tmdq_calibration_request, app_root_utf8)), 16);
-    QCOMPARE(int(offsetof(tmdq_calibration_request, sync_pattern_utf8)), 24);
-    QCOMPARE(int(offsetof(tmdq_calibration_request, sync_mask_utf8)), 32);
-    QCOMPARE(int(offsetof(tmdq_calibration_request, receiver_params_toml_utf8)), 40);
-    QCOMPARE(int(offsetof(tmdq_calibration_request, step_db)), 48);
-    QCOMPARE(int(offsetof(tmdq_calibration_request, data_rate_mbps)), 56);
-    QCOMPARE(int(offsetof(tmdq_calibration_request, clip_start_sec)), 64);
-    QCOMPARE(int(offsetof(tmdq_calibration_request, clip_end_sec)), 72);
-    QCOMPARE(int(offsetof(tmdq_calibration_request, pcm_channel_id)), 80);
-    QCOMPARE(int(offsetof(tmdq_calibration_request, bits_in_minor_frame)), 84);
-    QCOMPARE(int(offsetof(tmdq_calibration_request, randomized)), 88);
-    QCOMPARE(int(offsetof(tmdq_calibration_request, inverted)), 92);
-    QCOMPARE(int(offsetof(tmdq_calibration_request, swap_bytes)), 96);
-    QCOMPARE(int(offsetof(tmdq_calibration_request, num_receivers)), 100);
-    QCOMPARE(int(offsetof(tmdq_calibration_request, receiver_channels)), 104);
-    QCOMPARE(int(offsetof(tmdq_calibration_request, step_count)), 108);
+    CHECK(int(sizeof(tmdq_calibration_request)) == 112);
+    CHECK(int(offsetof(tmdq_calibration_request, time_channel_id)) == 4);
+    CHECK(int(offsetof(tmdq_calibration_request, cal_filename_utf8)) == 8);
+    CHECK(int(offsetof(tmdq_calibration_request, app_root_utf8)) == 16);
+    CHECK(int(offsetof(tmdq_calibration_request, sync_pattern_utf8)) == 24);
+    CHECK(int(offsetof(tmdq_calibration_request, sync_mask_utf8)) == 32);
+    CHECK(int(offsetof(tmdq_calibration_request, receiver_params_toml_utf8)) == 40);
+    CHECK(int(offsetof(tmdq_calibration_request, step_db)) == 48);
+    CHECK(int(offsetof(tmdq_calibration_request, data_rate_mbps)) == 56);
+    CHECK(int(offsetof(tmdq_calibration_request, clip_start_sec)) == 64);
+    CHECK(int(offsetof(tmdq_calibration_request, clip_end_sec)) == 72);
+    CHECK(int(offsetof(tmdq_calibration_request, pcm_channel_id)) == 80);
+    CHECK(int(offsetof(tmdq_calibration_request, bits_in_minor_frame)) == 84);
+    CHECK(int(offsetof(tmdq_calibration_request, randomized)) == 88);
+    CHECK(int(offsetof(tmdq_calibration_request, inverted)) == 92);
+    CHECK(int(offsetof(tmdq_calibration_request, swap_bytes)) == 96);
+    CHECK(int(offsetof(tmdq_calibration_request, num_receivers)) == 100);
+    CHECK(int(offsetof(tmdq_calibration_request, receiver_channels)) == 104);
+    REQUIRE(int(offsetof(tmdq_calibration_request, step_count)) == 108);
 
-    QCOMPARE(int(sizeof(tmdq_calibration_info)), 48);
-    QCOMPARE(int(offsetof(tmdq_calibration_info, channel_count)), 4);
-    QCOMPARE(int(offsetof(tmdq_calibration_info, summary_utf8)), 8);
-    QCOMPARE(int(offsetof(tmdq_calibration_info, error_utf8)), 16);
-    QCOMPARE(int(offsetof(tmdq_calibration_info, report_utf8)), 24);
-    QCOMPARE(int(offsetof(tmdq_calibration_info, recording_seconds)), 32);
-    QCOMPARE(int(offsetof(tmdq_calibration_info, clip_ignored)), 40);
+    CHECK(int(sizeof(tmdq_calibration_info)) == 48);
+    REQUIRE(int(offsetof(tmdq_calibration_info, channel_count)) == 4);
+    CHECK(int(offsetof(tmdq_calibration_info, summary_utf8)) == 8);
+    CHECK(int(offsetof(tmdq_calibration_info, error_utf8)) == 16);
+    CHECK(int(offsetof(tmdq_calibration_info, report_utf8)) == 24);
+    CHECK(int(offsetof(tmdq_calibration_info, recording_seconds)) == 32);
+    CHECK(int(offsetof(tmdq_calibration_info, clip_ignored)) == 40);
 
-    QCOMPARE(int(sizeof(tmdq_calibration_channel)), 96);
-    QCOMPARE(int(offsetof(tmdq_calibration_channel, word_index)), 4);
-    QCOMPARE(int(offsetof(tmdq_calibration_channel, name_utf8)), 8);
-    QCOMPARE(int(offsetof(tmdq_calibration_channel, points)), 16);
-    QCOMPARE(int(offsetof(tmdq_calibration_channel, plateau_levels)), 24);
-    QCOMPARE(int(offsetof(tmdq_calibration_channel, unresolved_db)), 32);
-    QCOMPARE(int(offsetof(tmdq_calibration_channel, edge_threshold)), 40);
-    QCOMPARE(int(offsetof(tmdq_calibration_channel, point_count)), 48);
-    QCOMPARE(int(offsetof(tmdq_calibration_channel, plateau_level_count)), 52);
-    QCOMPARE(int(offsetof(tmdq_calibration_channel, unresolved_count)), 56);
-    QCOMPARE(int(offsetof(tmdq_calibration_channel, valid)), 60);
-    QCOMPARE(int(offsetof(tmdq_calibration_channel, had_data)), 64);
-    QCOMPARE(int(offsetof(tmdq_calibration_channel, outcome)), 68);
-    QCOMPARE(int(offsetof(tmdq_calibration_channel, detected_plateaus)), 72);
-    QCOMPARE(int(offsetof(tmdq_calibration_channel, extra_plateaus)), 76);
-    QCOMPARE(int(offsetof(tmdq_calibration_channel, threshold_relaxed)), 80);
-    QCOMPARE(int(offsetof(tmdq_calibration_channel, saturated)), 84);
-    QCOMPARE(int(offsetof(tmdq_calibration_channel, sweep_levels)), 88);
+    CHECK(int(sizeof(tmdq_calibration_channel)) == 96);
+    CHECK(int(offsetof(tmdq_calibration_channel, word_index)) == 4);
+    CHECK(int(offsetof(tmdq_calibration_channel, name_utf8)) == 8);
+    CHECK(int(offsetof(tmdq_calibration_channel, points)) == 16);
+    CHECK(int(offsetof(tmdq_calibration_channel, plateau_levels)) == 24);
+    CHECK(int(offsetof(tmdq_calibration_channel, unresolved_db)) == 32);
+    CHECK(int(offsetof(tmdq_calibration_channel, edge_threshold)) == 40);
+    REQUIRE(int(offsetof(tmdq_calibration_channel, point_count)) == 48);
+    REQUIRE(int(offsetof(tmdq_calibration_channel, plateau_level_count)) == 52);
+    REQUIRE(int(offsetof(tmdq_calibration_channel, unresolved_count)) == 56);
+    CHECK(int(offsetof(tmdq_calibration_channel, valid)) == 60);
+    CHECK(int(offsetof(tmdq_calibration_channel, had_data)) == 64);
+    CHECK(int(offsetof(tmdq_calibration_channel, outcome)) == 68);
+    CHECK(int(offsetof(tmdq_calibration_channel, detected_plateaus)) == 72);
+    CHECK(int(offsetof(tmdq_calibration_channel, extra_plateaus)) == 76);
+    CHECK(int(offsetof(tmdq_calibration_channel, threshold_relaxed)) == 80);
+    CHECK(int(offsetof(tmdq_calibration_channel, saturated)) == 84);
+    CHECK(int(offsetof(tmdq_calibration_channel, sweep_levels)) == 88);
 
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CALIBRATION_REQUEST), 112);
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CALIBRATION_INFO), 48);
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CALIBRATION_CHANNEL), 96);
-    QCOMPARE(int(TMDQ_STRUCT_CALIBRATION_REQUEST), 9);
-    QCOMPARE(int(TMDQ_STRUCT_CALIBRATION_CHANNEL), 11);
-    QCOMPARE(int(TMDQ_ERR_STATE), 7);
-    QCOMPARE(int(TMDQ_CAL_CALIBRATED), int(CalibrationOutcome::Calibrated));
-    QCOMPARE(int(TMDQ_CAL_NO_DATA), int(CalibrationOutcome::NoData));
-    QCOMPARE(int(TMDQ_CAL_FLAT_NO_SIGNAL), int(CalibrationOutcome::FlatNoSignal));
-    QCOMPARE(int(TMDQ_CAL_TOO_FEW_PLATEAUS), int(CalibrationOutcome::TooFewPlateaus));
-    QCOMPARE(int(TMDQ_CAL_NO_MONOTONIC_SWEEP), int(CalibrationOutcome::NoMonotonicSweep));
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_CALIBRATION_REQUEST) == 112);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_CALIBRATION_INFO) == 48);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_CALIBRATION_CHANNEL) == 96);
+    CHECK(int(TMDQ_STRUCT_CALIBRATION_REQUEST) == 9);
+    CHECK(int(TMDQ_STRUCT_CALIBRATION_CHANNEL) == 11);
+    CHECK(int(TMDQ_ERR_STATE) == 7);
+    CHECK(int(TMDQ_CAL_CALIBRATED) == int(CalibrationOutcome::Calibrated));
+    CHECK(int(TMDQ_CAL_NO_DATA) == int(CalibrationOutcome::NoData));
+    CHECK(int(TMDQ_CAL_FLAT_NO_SIGNAL) == int(CalibrationOutcome::FlatNoSignal));
+    CHECK(int(TMDQ_CAL_TOO_FEW_PLATEAUS) == int(CalibrationOutcome::TooFewPlateaus));
+    CHECK(int(TMDQ_CAL_NO_MONOTONIC_SWEEP) == int(CalibrationOutcome::NoMonotonicSweep));
 
-    QCOMPARE(int(sizeof(tmdq_frame_sync_file_info)), 48);
-    QCOMPARE(int(offsetof(tmdq_frame_sync_file_info, has_bits_per_frame)), 4);
-    QCOMPARE(int(offsetof(tmdq_frame_sync_file_info, bits_per_frame)), 8);
-    QCOMPARE(int(offsetof(tmdq_frame_sync_file_info, bits_from_legacy_key)), 12);
-    QCOMPARE(int(offsetof(tmdq_frame_sync_file_info, inverted)), 16);
-    QCOMPARE(int(offsetof(tmdq_frame_sync_file_info, has_randomized)), 20);
-    QCOMPARE(int(offsetof(tmdq_frame_sync_file_info, randomized)), 24);
-    QCOMPARE(int(offsetof(tmdq_frame_sync_file_info, pattern_utf8)), 32);
-    QCOMPARE(int(offsetof(tmdq_frame_sync_file_info, mask_utf8)), 40);
+    CHECK(int(sizeof(tmdq_frame_sync_file_info)) == 48);
+    CHECK(int(offsetof(tmdq_frame_sync_file_info, has_bits_per_frame)) == 4);
+    CHECK(int(offsetof(tmdq_frame_sync_file_info, bits_per_frame)) == 8);
+    CHECK(int(offsetof(tmdq_frame_sync_file_info, bits_from_legacy_key)) == 12);
+    CHECK(int(offsetof(tmdq_frame_sync_file_info, inverted)) == 16);
+    CHECK(int(offsetof(tmdq_frame_sync_file_info, has_randomized)) == 20);
+    CHECK(int(offsetof(tmdq_frame_sync_file_info, randomized)) == 24);
+    CHECK(int(offsetof(tmdq_frame_sync_file_info, pattern_utf8)) == 32);
+    CHECK(int(offsetof(tmdq_frame_sync_file_info, mask_utf8)) == 40);
 
-    QCOMPARE(int(sizeof(tmdq_match_info)), 32);
-    QCOMPARE(int(offsetof(tmdq_match_info, ok)), 4);
-    QCOMPARE(int(offsetof(tmdq_match_info, missing_count)), 8);
-    QCOMPARE(int(offsetof(tmdq_match_info, extra_count)), 12);
-    QCOMPARE(int(offsetof(tmdq_match_info, missing)), 16);
-    QCOMPARE(int(offsetof(tmdq_match_info, extra)), 24);
+    CHECK(int(sizeof(tmdq_match_info)) == 32);
+    CHECK(int(offsetof(tmdq_match_info, ok)) == 4);
+    REQUIRE(int(offsetof(tmdq_match_info, missing_count)) == 8);
+    REQUIRE(int(offsetof(tmdq_match_info, extra_count)) == 12);
+    CHECK(int(offsetof(tmdq_match_info, missing)) == 16);
+    CHECK(int(offsetof(tmdq_match_info, extra)) == 24);
 
-    QCOMPARE(int(sizeof(tmdq_csv_info)), 32);
-    QCOMPARE(int(offsetof(tmdq_csv_info, series_count)), 4);
-    QCOMPARE(int(offsetof(tmdq_csv_info, base_day)), 8);
-    QCOMPARE(int(offsetof(tmdq_csv_info, skipped_rows)), 12);
-    QCOMPARE(int(offsetof(tmdq_csv_info, base_time_offset)), 16);
-    QCOMPARE(int(offsetof(tmdq_csv_info, x_max)), 24);
+    CHECK(int(sizeof(tmdq_csv_info)) == 32);
+    REQUIRE(int(offsetof(tmdq_csv_info, series_count)) == 4);
+    CHECK(int(offsetof(tmdq_csv_info, base_day)) == 8);
+    CHECK(int(offsetof(tmdq_csv_info, skipped_rows)) == 12);
+    CHECK(int(offsetof(tmdq_csv_info, base_time_offset)) == 16);
+    CHECK(int(offsetof(tmdq_csv_info, x_max)) == 24);
 
-    QCOMPARE(int(sizeof(tmdq_csv_series_info)), 80);
-    QCOMPARE(int(offsetof(tmdq_csv_series_info, metric_type)), 4);
-    QCOMPARE(int(offsetof(tmdq_csv_series_info, name_utf8)), 8);
-    QCOMPARE(int(offsetof(tmdq_csv_series_info, stream_label_utf8)), 16);
-    QCOMPARE(int(offsetof(tmdq_csv_series_info, x_values)), 24);
-    QCOMPARE(int(offsetof(tmdq_csv_series_info, y_values)), 32);
-    QCOMPARE(int(offsetof(tmdq_csv_series_info, y_min)), 40);
-    QCOMPARE(int(offsetof(tmdq_csv_series_info, y_max)), 48);
-    QCOMPARE(int(offsetof(tmdq_csv_series_info, receiver_index)), 56);
-    QCOMPARE(int(offsetof(tmdq_csv_series_info, channel_index)), 60);
-    QCOMPARE(int(offsetof(tmdq_csv_series_info, stream_order)), 64);
-    QCOMPARE(int(offsetof(tmdq_csv_series_info, source_id)), 68);
-    QCOMPARE(int(offsetof(tmdq_csv_series_info, point_count)), 72);
+    CHECK(int(sizeof(tmdq_csv_series_info)) == 80);
+    CHECK(int(offsetof(tmdq_csv_series_info, metric_type)) == 4);
+    CHECK(int(offsetof(tmdq_csv_series_info, name_utf8)) == 8);
+    CHECK(int(offsetof(tmdq_csv_series_info, stream_label_utf8)) == 16);
+    CHECK(int(offsetof(tmdq_csv_series_info, x_values)) == 24);
+    CHECK(int(offsetof(tmdq_csv_series_info, y_values)) == 32);
+    CHECK(int(offsetof(tmdq_csv_series_info, y_min)) == 40);
+    CHECK(int(offsetof(tmdq_csv_series_info, y_max)) == 48);
+    CHECK(int(offsetof(tmdq_csv_series_info, receiver_index)) == 56);
+    CHECK(int(offsetof(tmdq_csv_series_info, channel_index)) == 60);
+    CHECK(int(offsetof(tmdq_csv_series_info, stream_order)) == 64);
+    CHECK(int(offsetof(tmdq_csv_series_info, source_id)) == 68);
+    REQUIRE(int(offsetof(tmdq_csv_series_info, point_count)) == 72);
 
-    QCOMPARE(int(sizeof(tmdq_csv_column)), 48);
-    QCOMPARE(int(offsetof(tmdq_csv_column, metric_type)), 4);
-    QCOMPARE(int(offsetof(tmdq_csv_column, name_utf8)), 8);
-    QCOMPARE(int(offsetof(tmdq_csv_column, x_values)), 16);
-    QCOMPARE(int(offsetof(tmdq_csv_column, y_values)), 24);
-    QCOMPARE(int(offsetof(tmdq_csv_column, source_id)), 32);
-    QCOMPARE(int(offsetof(tmdq_csv_column, x_count)), 36);
-    QCOMPARE(int(offsetof(tmdq_csv_column, y_count)), 40);
+    CHECK(int(sizeof(tmdq_csv_column)) == 48);
+    CHECK(int(offsetof(tmdq_csv_column, metric_type)) == 4);
+    CHECK(int(offsetof(tmdq_csv_column, name_utf8)) == 8);
+    CHECK(int(offsetof(tmdq_csv_column, x_values)) == 16);
+    CHECK(int(offsetof(tmdq_csv_column, y_values)) == 24);
+    CHECK(int(offsetof(tmdq_csv_column, source_id)) == 32);
+    REQUIRE(int(offsetof(tmdq_csv_column, x_count)) == 36);
+    REQUIRE(int(offsetof(tmdq_csv_column, y_count)) == 40);
 
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_FRAME_SYNC_FILE_INFO), 48);
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_MATCH_INFO), 32);
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CSV_INFO), 32);
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CSV_SERIES_INFO), 80);
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CSV_COLUMN), 48);
-    QCOMPARE(int(TMDQ_STRUCT_FRAME_SYNC_FILE_INFO), 12);
-    QCOMPARE(int(TMDQ_STRUCT_CSV_COLUMN), 16);
-    QCOMPARE(int(TMDQ_ERR_IO), 8);
-    QCOMPARE(int(TMDQ_METRIC_SNR), int(MetricType::SNR));
-    QCOMPARE(int(TMDQ_METRIC_FRAME_SYNC_LOCK), int(MetricType::FrameSyncLock));
-    QCOMPARE(int(TMDQ_METRIC_ACCUMULATED_MISSED_FRAMES), int(MetricType::AccumulatedMissedFrames));
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_FRAME_SYNC_FILE_INFO) == 48);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_MATCH_INFO) == 32);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_CSV_INFO) == 32);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_CSV_SERIES_INFO) == 80);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_CSV_COLUMN) == 48);
+    CHECK(int(TMDQ_STRUCT_FRAME_SYNC_FILE_INFO) == 12);
+    CHECK(int(TMDQ_STRUCT_CSV_COLUMN) == 16);
+    CHECK(int(TMDQ_ERR_IO) == 8);
+    CHECK(int(TMDQ_METRIC_SNR) == int(MetricType::SNR));
+    CHECK(int(TMDQ_METRIC_FRAME_SYNC_LOCK) == int(MetricType::FrameSyncLock));
+    CHECK(int(TMDQ_METRIC_ACCUMULATED_MISSED_FRAMES) == int(MetricType::AccumulatedMissedFrames));
 
-    QCOMPARE(int(sizeof(tmdq_series_set_info)), 24);
-    QCOMPARE(int(offsetof(tmdq_series_set_info, series_count)), 4);
-    QCOMPARE(int(offsetof(tmdq_series_set_info, elapsed_count)), 8);
-    QCOMPARE(int(offsetof(tmdq_series_set_info, elapsed)), 16);
+    CHECK(int(sizeof(tmdq_series_set_info)) == 24);
+    REQUIRE(int(offsetof(tmdq_series_set_info, series_count)) == 4);
+    REQUIRE(int(offsetof(tmdq_series_set_info, elapsed_count)) == 8);
+    CHECK(int(offsetof(tmdq_series_set_info, elapsed)) == 16);
 
-    QCOMPARE(int(sizeof(tmdq_series_spec)), 72);
-    QCOMPARE(int(offsetof(tmdq_series_spec, metric_type)), 4);
-    QCOMPARE(int(offsetof(tmdq_series_spec, name_utf8)), 8);
-    QCOMPARE(int(offsetof(tmdq_series_spec, stream_label_utf8)), 16);
-    QCOMPARE(int(offsetof(tmdq_series_spec, y_values)), 24);
-    QCOMPARE(int(offsetof(tmdq_series_spec, y_min)), 32);
-    QCOMPARE(int(offsetof(tmdq_series_spec, y_max)), 40);
-    QCOMPARE(int(offsetof(tmdq_series_spec, receiver_index)), 48);
-    QCOMPARE(int(offsetof(tmdq_series_spec, channel_index)), 52);
-    QCOMPARE(int(offsetof(tmdq_series_spec, stream_order)), 56);
-    QCOMPARE(int(offsetof(tmdq_series_spec, stream_sequence)), 60);
-    QCOMPARE(int(offsetof(tmdq_series_spec, source_id)), 64);
-    QCOMPARE(int(offsetof(tmdq_series_spec, y_count)), 68);
+    CHECK(int(sizeof(tmdq_series_spec)) == 72);
+    CHECK(int(offsetof(tmdq_series_spec, metric_type)) == 4);
+    CHECK(int(offsetof(tmdq_series_spec, name_utf8)) == 8);
+    CHECK(int(offsetof(tmdq_series_spec, stream_label_utf8)) == 16);
+    CHECK(int(offsetof(tmdq_series_spec, y_values)) == 24);
+    CHECK(int(offsetof(tmdq_series_spec, y_min)) == 32);
+    CHECK(int(offsetof(tmdq_series_spec, y_max)) == 40);
+    CHECK(int(offsetof(tmdq_series_spec, receiver_index)) == 48);
+    CHECK(int(offsetof(tmdq_series_spec, channel_index)) == 52);
+    CHECK(int(offsetof(tmdq_series_spec, stream_order)) == 56);
+    CHECK(int(offsetof(tmdq_series_spec, stream_sequence)) == 60);
+    CHECK(int(offsetof(tmdq_series_spec, source_id)) == 64);
+    REQUIRE(int(offsetof(tmdq_series_spec, y_count)) == 68);
 
-    QCOMPARE(int(sizeof(tmdq_stream_key)), 24);
-    QCOMPARE(int(offsetof(tmdq_stream_key, source_id)), 4);
-    QCOMPARE(int(offsetof(tmdq_stream_key, label_utf8)), 8);
-    QCOMPARE(int(offsetof(tmdq_stream_key, channel)), 16);
+    CHECK(int(sizeof(tmdq_stream_key)) == 24);
+    CHECK(int(offsetof(tmdq_stream_key, source_id)) == 4);
+    CHECK(int(offsetof(tmdq_stream_key, label_utf8)) == 8);
+    CHECK(int(offsetof(tmdq_stream_key, channel)) == 16);
 
-    QCOMPARE(int(sizeof(tmdq_time_base_info)), 24);
-    QCOMPARE(int(offsetof(tmdq_time_base_info, base_day)), 4);
-    QCOMPARE(int(offsetof(tmdq_time_base_info, base_abs_seconds)), 8);
-    QCOMPARE(int(offsetof(tmdq_time_base_info, base_time_offset)), 16);
+    CHECK(int(sizeof(tmdq_time_base_info)) == 24);
+    CHECK(int(offsetof(tmdq_time_base_info, base_day)) == 4);
+    CHECK(int(offsetof(tmdq_time_base_info, base_abs_seconds)) == 8);
+    CHECK(int(offsetof(tmdq_time_base_info, base_time_offset)) == 16);
 
-    QCOMPARE(int(sizeof(tmdq_imported_series)), 24);
-    QCOMPARE(int(offsetof(tmdq_imported_series, metric_type)), 4);
-    QCOMPARE(int(offsetof(tmdq_imported_series, stream_label_utf8)), 8);
-    QCOMPARE(int(offsetof(tmdq_imported_series, source_id)), 16);
-    QCOMPARE(int(offsetof(tmdq_imported_series, stream_order)), 20);
+    CHECK(int(sizeof(tmdq_imported_series)) == 24);
+    CHECK(int(offsetof(tmdq_imported_series, metric_type)) == 4);
+    CHECK(int(offsetof(tmdq_imported_series, stream_label_utf8)) == 8);
+    CHECK(int(offsetof(tmdq_imported_series, source_id)) == 16);
+    CHECK(int(offsetof(tmdq_imported_series, stream_order)) == 20);
 
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_SERIES_SET_INFO), 24);
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_SERIES_SPEC), 72);
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_STREAM_KEY), 24);
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_TIME_BASE_INFO), 24);
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_IMPORTED_SERIES), 24);
-    QCOMPARE(int(TMDQ_STRUCT_SERIES_SET_INFO), 17);
-    QCOMPARE(int(TMDQ_STRUCT_SERIES_SPEC), 18);
-    QCOMPARE(int(TMDQ_STRUCT_STREAM_KEY), 19);
-    QCOMPARE(int(TMDQ_STRUCT_TIME_BASE_INFO), 20);
-    QCOMPARE(int(TMDQ_STRUCT_IMPORTED_SERIES), 21);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_SERIES_SET_INFO) == 24);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_SERIES_SPEC) == 72);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_STREAM_KEY) == 24);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_TIME_BASE_INFO) == 24);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_IMPORTED_SERIES) == 24);
+    CHECK(int(TMDQ_STRUCT_SERIES_SET_INFO) == 17);
+    CHECK(int(TMDQ_STRUCT_SERIES_SPEC) == 18);
+    CHECK(int(TMDQ_STRUCT_STREAM_KEY) == 19);
+    CHECK(int(TMDQ_STRUCT_TIME_BASE_INFO) == 20);
+    CHECK(int(TMDQ_STRUCT_IMPORTED_SERIES) == 21);
 
     // And the library reports the same sizes, for the managed side to compare with Marshal.SizeOf.
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CHANNEL_INFO), 24);
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CAL_POINT), 16);
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CAL_PROFILE), 24);
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_STREAM_CONFIG), 104);
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_RUN_REQUEST), 48);
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CALLBACKS), 56);
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_STREAM_INFO), 64);
-    QCOMPARE(tmdq_sizeof(TMDQ_STRUCT_CHANNEL_SERIES), 24);
-    QCOMPARE(tmdq_sizeof(0), 0);
-    QCOMPARE(tmdq_sizeof(99), 0);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_CHANNEL_INFO) == 24);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_CAL_POINT) == 16);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_CAL_PROFILE) == 24);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_STREAM_CONFIG) == 104);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_RUN_REQUEST) == 48);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_CALLBACKS) == 56);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_STREAM_INFO) == 64);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_CHANNEL_SERIES) == 24);
+    CHECK(tmdq_sizeof(0) == 0);
+    CHECK(tmdq_sizeof(99) == 0);
 
 
     // The numbers a host writes in its own copies of the enums.
-    QCOMPARE(int(TMDQ_OK), 0);
-    QCOMPARE(int(TMDQ_ERR_BADARG), 1);
-    QCOMPARE(int(TMDQ_ERR_PREPARE), 2);
-    QCOMPARE(int(TMDQ_ERR_PROCESS), 3);
-    QCOMPARE(int(TMDQ_ERR_NOSAMPLES), 4);
-    QCOMPARE(int(TMDQ_ERR_INTERNAL), 5);
-    QCOMPARE(int(TMDQ_ERR_JOB), 6);
-    QCOMPARE(int(TMDQ_STRUCT_CHANNEL_INFO), 1);
-    QCOMPARE(int(TMDQ_STRUCT_CHANNEL_SERIES), 8);
-    QCOMPARE(int(TMDQ_MODE_RECEIVER_CHANNEL_INFO), 0);
-    QCOMPARE(int(TMDQ_MODE_FRAME_SYNC_LOCK), 1);
+    CHECK(int(TMDQ_OK) == 0);
+    CHECK(int(TMDQ_ERR_BADARG) == 1);
+    CHECK(int(TMDQ_ERR_PREPARE) == 2);
+    CHECK(int(TMDQ_ERR_PROCESS) == 3);
+    CHECK(int(TMDQ_ERR_NOSAMPLES) == 4);
+    CHECK(int(TMDQ_ERR_INTERNAL) == 5);
+    CHECK(int(TMDQ_ERR_JOB) == 6);
+    CHECK(int(TMDQ_STRUCT_CHANNEL_INFO) == 1);
+    CHECK(int(TMDQ_STRUCT_CHANNEL_SERIES) == 8);
+    CHECK(int(TMDQ_MODE_RECEIVER_CHANNEL_INFO) == 0);
+    CHECK(int(TMDQ_MODE_FRAME_SYNC_LOCK) == 1);
 
     // The values a host writes in its own enums.
-    QCOMPARE(int(TMDQ_MODE_RECEIVER_CHANNEL_INFO), int(StreamMode::ReceiverChannelInfo));
-    QCOMPARE(int(TMDQ_MODE_FRAME_SYNC_LOCK), int(StreamMode::FrameSyncLockStats));
+    CHECK(int(TMDQ_MODE_RECEIVER_CHANNEL_INFO) == int(StreamMode::ReceiverChannelInfo));
+    CHECK(int(TMDQ_MODE_FRAME_SYNC_LOCK) == int(StreamMode::FrameSyncLockStats));
 }
 
-void TestAbi::theVersionAndRevisionAreReported()
+TEST_CASE("Abi: theVersionAndRevisionAreReported")
 {
-    QCOMPARE(tmdq_abi_version(), 2);
-    QCOMPARE(tmdq_abi_revision(), 0);
-    QCOMPARE(int(TMDQ_ABI_VERSION), tmdq_abi_version());
-    QCOMPARE(int(TMDQ_ABI_REVISION), tmdq_abi_revision());
-    QVERIFY(tmdq_last_error() != nullptr);
+    CHECK(tmdq_abi_version() == 2);
+    CHECK(tmdq_abi_revision() == 0);
+    CHECK(int(TMDQ_ABI_VERSION) == tmdq_abi_version());
+    CHECK(int(TMDQ_ABI_REVISION) == tmdq_abi_revision());
+    REQUIRE(tmdq_last_error() != nullptr);
 }
 
-void TestAbi::aStructFromANewerHostIsAcceptedAndOneFromAnOlderHostIsRefused()
+TEST_CASE("Abi: aStructFromANewerHostIsAcceptedAndOneFromAnOlderHostIsRefused")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok)
-        QSKIP("step_cal fixture not available");
 
     // A host built against a LATER revision passes a longer struct: the fields this library knows are
     // read, and the rest is ignored. Here the request, its stream and the callbacks are all longer.
@@ -1226,7 +1281,7 @@ void TestAbi::aStructFromANewerHostIsAcceptedAndOneFromAnOlderHostIsRefused()
     callbacks.c = seen.callbacks();
     callbacks.c.struct_size = sizeof(BigCallbacks);
 
-    const std::string root = projectRoot().toStdString();
+    const std::string root = rootUtf8();
     BigRequest request{};
     request.r.struct_size     = sizeof(BigRequest);
     request.r.time_channel_id = f.timeId;
@@ -1237,19 +1292,19 @@ void TestAbi::aStructFromANewerHostIsAcceptedAndOneFromAnOlderHostIsRefused()
     request.r.swap_bytes      = 1;
 
     tmdq_run* run = nullptr;
-    QCOMPARE(tmdq_run_start(&request.r, &callbacks.c, &run), int(TMDQ_OK));
+    REQUIRE(tmdq_run_start(&request.r, &callbacks.c, &run) == int(TMDQ_OK));
     RunGuard guard{run};
-    QVERIFY2(seen.waitFinished(kTimeoutMs), seen.joined().c_str());
-    QCOMPARE(seen.finishedSuccess, 1);
+    REQUIRE_MESSAGE(seen.waitFinished(kTimeoutMs), seen.joined());
+    CHECK(seen.finishedSuccess == 1);
 
     // A host built against an EARLIER revision passes a shorter struct, which this library cannot read
     // safely: it is refused, with the reason, not guessed at.
     tmdq_run_request shortRequest = request.r;
     shortRequest.struct_size = sizeof(tmdq_run_request) - 1;
     tmdq_run* none = nullptr;
-    QCOMPARE(tmdq_run_start(&shortRequest, &callbacks.c, &none), int(TMDQ_ERR_BADARG));
-    QVERIFY(none == nullptr);
-    QVERIFY(std::string(tmdq_last_error()).find("struct_size") != std::string::npos);
+    CHECK(tmdq_run_start(&shortRequest, &callbacks.c, &none) == int(TMDQ_ERR_BADARG));
+    REQUIRE(none == nullptr);
+    REQUIRE(std::string(tmdq_last_error()).find("struct_size") != std::string::npos);
 
     tmdq_stream_config shortStream = stream.c;
     shortStream.struct_size = sizeof(tmdq_stream_config) - 1;
@@ -1257,29 +1312,29 @@ void TestAbi::aStructFromANewerHostIsAcceptedAndOneFromAnOlderHostIsRefused()
     tmdq_run_request withShortStream = request.r;
     withShortStream.struct_size = sizeof(tmdq_run_request);
     withShortStream.streams = shortStreams;
-    QCOMPARE(tmdq_run_start(&withShortStream, &callbacks.c, &none), int(TMDQ_ERR_BADARG));
-    QVERIFY(std::string(tmdq_last_error()).find("stream 0") != std::string::npos);
+    CHECK(tmdq_run_start(&withShortStream, &callbacks.c, &none) == int(TMDQ_ERR_BADARG));
+    REQUIRE(std::string(tmdq_last_error()).find("stream 0") != std::string::npos);
 
     tmdq_callbacks shortCallbacks = seen.callbacks();
     shortCallbacks.struct_size = sizeof(tmdq_callbacks) - 1;
     withShortStream.streams = streams;
-    QCOMPARE(tmdq_run_start(&withShortStream, &shortCallbacks, &none), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_run_start(&withShortStream, &shortCallbacks, &none) == int(TMDQ_ERR_BADARG));
 
     // A struct the LIBRARY fills in: a longer one is written no further than the library's own size,
     // and what lies beyond is left alone; a shorter one is refused.
     tmdq_file* file = nullptr;
-    QCOMPARE(tmdq_file_open(f.path.c_str(), &file), int(TMDQ_OK));
+    REQUIRE(tmdq_file_open(f.path.c_str(), &file) == int(TMDQ_OK));
     struct BigInfo { tmdq_channel_info i; unsigned char tail[16]; };
     BigInfo big;
     std::memset(&big, 0xAB, sizeof(big));
     big.i.struct_size = sizeof(BigInfo);
-    QCOMPARE(tmdq_file_pcm_channel(file, 0, &big.i), int(TMDQ_OK));
-    QCOMPARE(big.i.channel_id, f.pcmId);
+    REQUIRE(tmdq_file_pcm_channel(file, 0, &big.i) == int(TMDQ_OK));
+    CHECK(big.i.channel_id == f.pcmId);
     for (unsigned char b : big.tail)
-        QCOMPARE(int(b), 0xAB);
+        CHECK(int(b) == 0xAB);
     tmdq_channel_info small{};
     small.struct_size = sizeof(small) - 1;
-    QCOMPARE(tmdq_file_pcm_channel(file, 0, &small), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_file_pcm_channel(file, 0, &small) == int(TMDQ_ERR_BADARG));
     tmdq_file_close(file);
 }
 
@@ -1287,133 +1342,118 @@ void TestAbi::aStructFromANewerHostIsAcceptedAndOneFromAnOlderHostIsRefused()
 // The file
 // ---------------------------------------------------------------------------
 
-void TestAbi::aFileListsItsChannelsLikeTheReader()
+TEST_CASE("Abi: aFileListsItsChannelsLikeTheReader")
 {
-    for (const QString& name : { QString("test files/prn_testfile, sample.ch10"), QString("test files/step_cal, example.ch10") })
+    for (const char* name : { "prn_testfile, sample.ch10", "step_cal, example.ch10" })
     {
-        const QString path = dataPath(name);
-        if (!QFileInfo::exists(path))
-            QSKIP(qPrintable(name + " not available"));
+        INFO(name);
+        const std::string path = recording(name);
         Chapter10Reader reader;
-        QVERIFY(reader.loadChannels(toFsPath(path)));
+        REQUIRE(reader.loadChannels(textfile::pathFromUtf8(path)));
 
-        const std::string utf8 = path.toStdString();
         tmdq_file* file = nullptr;
-        QCOMPARE(tmdq_file_open(utf8.c_str(), &file), int(TMDQ_OK));
-        QVERIFY(file != nullptr);
+        REQUIRE(tmdq_file_open(path.c_str(), &file) == int(TMDQ_OK));
+        REQUIRE(file != nullptr);
 
         const auto pcm = reader.getPCMChannelList();
         const auto times = reader.getTimeChannelList();
-        QCOMPARE(tmdq_file_pcm_channel_count(file), int(pcm.size()));
-        QCOMPARE(tmdq_file_time_channel_count(file), int(times.size()));
-        QVERIFY(pcm.size() >= 1);
-        QVERIFY(times.size() >= 1);
-        QCOMPARE(tmdq_file_default_time_channel(file), reader.getCurrentTimeChannelID());
+        REQUIRE(tmdq_file_pcm_channel_count(file) == int(pcm.size()));
+        REQUIRE(tmdq_file_time_channel_count(file) == int(times.size()));
+        REQUIRE(pcm.size() >= 1);
+        REQUIRE(times.size() >= 1);
+        CHECK(tmdq_file_default_time_channel(file) == reader.getCurrentTimeChannelID());
 
         for (int i = 0; i < int(pcm.size()); ++i)
         {
             tmdq_channel_info info{};
             info.struct_size = sizeof(info);
-            QCOMPARE(tmdq_file_pcm_channel(file, i, &info), int(TMDQ_OK));
-            QCOMPARE(info.channel_id, pcm[std::size_t(i)].first);
-            QCOMPARE(std::string(info.name_utf8), pcm[std::size_t(i)].second);
-            QCOMPARE(info.tmats_data_rate_bps, reader.getTmatsDataRateBps(pcm[std::size_t(i)].first));
+            REQUIRE(tmdq_file_pcm_channel(file, i, &info) == int(TMDQ_OK));
+            CHECK(info.channel_id == pcm[std::size_t(i)].first);
+            CHECK(std::string(info.name_utf8) == pcm[std::size_t(i)].second);
+            CHECK(info.tmats_data_rate_bps == reader.getTmatsDataRateBps(pcm[std::size_t(i)].first));
         }
         for (int i = 0; i < int(times.size()); ++i)
         {
             tmdq_channel_info info{};
             info.struct_size = sizeof(info);
-            QCOMPARE(tmdq_file_time_channel(file, i, &info), int(TMDQ_OK));
-            QCOMPARE(info.channel_id, times[std::size_t(i)].first);
-            QCOMPARE(std::string(info.name_utf8), times[std::size_t(i)].second);
-            QCOMPARE(info.tmats_data_rate_bps, 0.0);
+            REQUIRE(tmdq_file_time_channel(file, i, &info) == int(TMDQ_OK));
+            CHECK(info.channel_id == times[std::size_t(i)].first);
+            CHECK(std::string(info.name_utf8) == times[std::size_t(i)].second);
+            CHECK(info.tmats_data_rate_bps == 0.0);
         }
         tmdq_file_close(file);
     }
 
     // The step-cal recording declares an 800 kbit/s rate in its TMATS; that is not nothing.
-    const QString stepCal = dataPath("test files/step_cal, example.ch10");
-    if (QFileInfo::exists(stepCal))
-    {
-        const std::string utf8 = stepCal.toStdString();
-        tmdq_file* file = nullptr;
-        QCOMPARE(tmdq_file_open(utf8.c_str(), &file), int(TMDQ_OK));
-        tmdq_channel_info info{};
-        info.struct_size = sizeof(info);
-        QCOMPARE(tmdq_file_pcm_channel(file, 0, &info), int(TMDQ_OK));
-        QCOMPARE(info.tmats_data_rate_bps, 800000.0);
-        tmdq_file_close(file);
-    }
+    const std::string stepCal = recording("step_cal, example.ch10");
+    tmdq_file* file = nullptr;
+    REQUIRE(tmdq_file_open(stepCal.c_str(), &file) == int(TMDQ_OK));
+    tmdq_channel_info info{};
+    info.struct_size = sizeof(info);
+    REQUIRE(tmdq_file_pcm_channel(file, 0, &info) == int(TMDQ_OK));
+    CHECK(info.tmats_data_rate_bps == 800000.0);
+    tmdq_file_close(file);
 }
 
-void TestAbi::aFileThatCannotBeOpenedSaysWhy()
+TEST_CASE("Abi: aFileThatCannotBeOpenedSaysWhy")
 {
     tmdq_file* file = reinterpret_cast<tmdq_file*>(std::uintptr_t{1});   // must be overwritten
-    const QString missing = QDir::tempPath() + "/tst_abi_no_such_recording.ch10";
-    const std::string utf8 = missing.toStdString();
-    QCOMPARE(tmdq_file_open(utf8.c_str(), &file), int(TMDQ_ERR_PREPARE));
-    QVERIFY(file == nullptr);
-    QVERIFY2(std::string(tmdq_last_error()).size() > 5, tmdq_last_error());
+    const std::string missing = tempUtf8() + "/tst_abi_no_such_recording.ch10";
+    const std::string utf8 = missing;
+    CHECK(tmdq_file_open(utf8.c_str(), &file) == int(TMDQ_ERR_PREPARE));
+    REQUIRE(file == nullptr);
+    REQUIRE_MESSAGE(std::string(tmdq_last_error()).size() > 5, tmdq_last_error());
     {
         // And the reason is the reader's own, word for word.
         Chapter10Reader reader;
-        QVERIFY(!reader.loadChannels(toFsPath(missing)));
-        QVERIFY(!reader.lastError().empty());
-        QCOMPARE(std::string(tmdq_last_error()), reader.lastError());
+        REQUIRE(!reader.loadChannels(textfile::pathFromUtf8(missing)));
+        REQUIRE(!reader.lastError().empty());
+        CHECK(std::string(tmdq_last_error()) == reader.lastError());
     }
 
     // A file that exists but is not a recording.
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
-    const QString junk = dir.filePath("junk.ch10");
-    QFile f(junk);
-    QVERIFY(f.open(QIODevice::WriteOnly));
-    f.write(QByteArray(4096, 'x'));
-    f.close();
-    const std::string junkUtf8 = junk.toStdString();
-    QCOMPARE(tmdq_file_open(junkUtf8.c_str(), &file), int(TMDQ_ERR_PREPARE));
-    QVERIFY(file == nullptr);
-    QVERIFY(!std::string(tmdq_last_error()).empty());
+    Scratch dir;
+    const std::string junk = dir.filePath("junk.ch10");
+    writeFile(junk, std::string(4096, 'x'));
+    CHECK(tmdq_file_open(junk.c_str(), &file) == int(TMDQ_ERR_PREPARE));
+    REQUIRE(file == nullptr);
+    REQUIRE(!std::string(tmdq_last_error()).empty());
 
     // The error belongs to the calling thread: another thread's success does not erase it.
     tmdq_file* other = nullptr;
-    const std::string good = dataPath("test files/step_cal, example.ch10").toStdString();
-    if (QFileInfo::exists(QString::fromStdString(good)))
-    {
-        std::thread t([&] { tmdq_file_open(good.c_str(), &other); });
-        t.join();
-        QVERIFY(!std::string(tmdq_last_error()).empty());
-        tmdq_file_close(other);
-    }
+    const std::string good = recording("step_cal, example.ch10");
+    std::thread t([&] { tmdq_file_open(good.c_str(), &other); });
+    t.join();
+    REQUIRE(other != nullptr);
+    REQUIRE(!std::string(tmdq_last_error()).empty());
+    tmdq_file_close(other);
 }
 
-void TestAbi::badArgumentsToTheFileFunctionsAreRefused()
+TEST_CASE("Abi: badArgumentsToTheFileFunctionsAreRefused")
 {
     tmdq_file* file = reinterpret_cast<tmdq_file*>(std::uintptr_t{1});   // must be overwritten, even by a refusal
-    QCOMPARE(tmdq_file_open(nullptr, &file), int(TMDQ_ERR_BADARG));
-    QVERIFY(file == nullptr);
-    QCOMPARE(tmdq_file_open("whatever", nullptr), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_file_open(nullptr, &file) == int(TMDQ_ERR_BADARG));
+    REQUIRE(file == nullptr);
+    CHECK(tmdq_file_open("whatever", nullptr) == int(TMDQ_ERR_BADARG));
 
     tmdq_file_close(nullptr);   // safe
-    QCOMPARE(tmdq_file_time_channel_count(nullptr), -1);
-    QCOMPARE(tmdq_file_pcm_channel_count(nullptr), -1);
-    QCOMPARE(tmdq_file_default_time_channel(nullptr), -1);
+    REQUIRE(tmdq_file_time_channel_count(nullptr) == -1);
+    REQUIRE(tmdq_file_pcm_channel_count(nullptr) == -1);
+    CHECK(tmdq_file_default_time_channel(nullptr) == -1);
     tmdq_channel_info info{};
     info.struct_size = sizeof(info);
-    QCOMPARE(tmdq_file_pcm_channel(nullptr, 0, &info), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_file_time_channel(nullptr, 0, &info), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_file_pcm_channel(nullptr, 0, &info) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_file_time_channel(nullptr, 0, &info) == int(TMDQ_ERR_BADARG));
 
-    const std::string good = dataPath("test files/step_cal, example.ch10").toStdString();
-    if (!QFileInfo::exists(QString::fromStdString(good)))
-        QSKIP("step_cal fixture not available");
-    QCOMPARE(tmdq_file_open(good.c_str(), &file), int(TMDQ_OK));
+    const std::string good = recording("step_cal, example.ch10");
+    REQUIRE(tmdq_file_open(good.c_str(), &file) == int(TMDQ_OK));
     const int n = tmdq_file_pcm_channel_count(file);
-    QCOMPARE(tmdq_file_pcm_channel(file, n, &info), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_file_pcm_channel(file, -1, &info), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_file_pcm_channel(file, 0, nullptr), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_file_pcm_channel(file, n, &info) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_file_pcm_channel(file, -1, &info) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_file_pcm_channel(file, 0, nullptr) == int(TMDQ_ERR_BADARG));
     const int t = tmdq_file_time_channel_count(file);
-    QCOMPARE(tmdq_file_time_channel(file, t, &info), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_file_time_channel(file, -1, &info), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_file_time_channel(file, t, &info) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_file_time_channel(file, -1, &info) == int(TMDQ_ERR_BADARG));
     tmdq_file_close(file);
 }
 
@@ -1421,111 +1461,105 @@ void TestAbi::badArgumentsToTheFileFunctionsAreRefused()
 // Runs
 // ---------------------------------------------------------------------------
 
-void TestAbi::aRunOfSeveralStreamsMatchesWhatTheCoreMakes()
+TEST_CASE("Abi: aRunOfSeveralStreamsMatchesWhatTheCoreMakes")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok)
-        QSKIP("step_cal fixture not available");
 
     // Two streams over the one channel, one in each mode, with the source id the host chose.
     const std::vector<Case> cases = { lockCase(f), receiverCase(f) };
     bool coreOk = false;
-    const auto want = runCore(f, 7, cases, projectRoot().toStdString(), coreOk);
-    QVERIFY(coreOk);
-    QCOMPARE(want.size(), std::size_t{2});
-    QVERIFY(want.at(0).hasSamples());
-    QVERIFY(want.at(1).hasSamples());
-    QVERIFY(!want.at(1).channels.empty());   // the receiver stream really has series to compare
+    const auto want = runCore(f, 7, cases, rootUtf8(), coreOk);
+    REQUIRE(coreOk);
+    REQUIRE(want.size() == std::size_t{2});
+    REQUIRE(want.at(0).hasSamples());
+    REQUIRE(want.at(1).hasSamples());
+    REQUIRE(!want.at(1).channels.empty());   // the receiver stream really has series to compare
 
     Request request(f, cases, 7);
     Seen seen;
     const tmdq_callbacks callbacks = seen.callbacks();
     tmdq_run* run = nullptr;
-    QCOMPARE(tmdq_run_start(&request.req, &callbacks, &run), int(TMDQ_OK));
-    QVERIFY(run != nullptr);
+    REQUIRE(tmdq_run_start(&request.req, &callbacks, &run) == int(TMDQ_OK));
+    REQUIRE(run != nullptr);
     RunGuard guard{run};
-    QVERIFY2(seen.waitFinished(kTimeoutMs), seen.joined().c_str());
+    REQUIRE_MESSAGE(seen.waitFinished(kTimeoutMs), seen.joined());
     tmdq_run_wait(run);
 
-    QCOMPARE(seen.finishedSuccess, 1);
+    CHECK(seen.finishedSuccess == 1);
     const auto got = seen.byJob();
-    QCOMPARE(got.size(), std::size_t{2});
+    REQUIRE(got.size() == std::size_t{2});
     for (int job = 0; job < 2; ++job)
     {
-        const QString diff = differences(got.at(job), want.at(job));
-        QVERIFY2(diff.isEmpty(), qPrintable("job " + QString::number(job) + " differs in: " + diff));
+        const std::string diff = differences(got.at(job), want.at(job));
+        REQUIRE_MESSAGE(diff.empty(), ("job " + std::to_string(job) + " differs in: " + diff));
     }
     // The source id and the labels came through the request.
     tmdq_stream_info info{};
     info.struct_size = sizeof(info);
-    QCOMPARE(tmdq_stream_result_info(got.at(0), &info), int(TMDQ_OK));
-    QCOMPARE(info.source_id, 7);
-    QCOMPARE(std::string(info.label_utf8), std::string("lock stream"));
-    QVERIFY(info.lock_percent != nullptr && info.missed_frames != nullptr);   // a lock stream has both series
-    QCOMPARE(tmdq_stream_result_info(got.at(1), &info), int(TMDQ_OK));
-    QCOMPARE(std::string(info.label_utf8), std::string("receiver stream"));
-    QCOMPARE(info.mode, int(TMDQ_MODE_RECEIVER_CHANNEL_INFO));
+    REQUIRE(tmdq_stream_result_info(got.at(0), &info) == int(TMDQ_OK));
+    CHECK(info.source_id == 7);
+    CHECK(std::string(info.label_utf8) == std::string("lock stream"));
+    REQUIRE((info.lock_percent != nullptr && info.missed_frames != nullptr));   // a lock stream has both series
+    REQUIRE(tmdq_stream_result_info(got.at(1), &info) == int(TMDQ_OK));
+    CHECK(std::string(info.label_utf8) == std::string("receiver stream"));
+    CHECK(info.mode == int(TMDQ_MODE_RECEIVER_CHANNEL_INFO));
     // A receiver stream has neither: the header promises NULL, not whatever an empty vector's data() is.
-    QVERIFY(info.lock_percent == nullptr);
-    QVERIFY(info.missed_frames == nullptr);
+    REQUIRE(info.lock_percent == nullptr);
+    REQUIRE(info.missed_frames == nullptr);
 }
 
-void TestAbi::aRunReportsInTheDocumentedOrder()
+TEST_CASE("Abi: aRunReportsInTheDocumentedOrder")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok)
-        QSKIP("step_cal fixture not available");
 
     Request request(f, { lockCase(f), receiverCase(f) });
     Seen seen;
     const tmdq_callbacks callbacks = seen.callbacks();
     const std::thread::id caller = std::this_thread::get_id();
     tmdq_run* run = nullptr;
-    QCOMPARE(tmdq_run_start(&request.req, &callbacks, &run), int(TMDQ_OK));
+    REQUIRE(tmdq_run_start(&request.req, &callbacks, &run) == int(TMDQ_OK));
     RunGuard guard{run};
-    QVERIFY2(seen.waitFinished(kTimeoutMs), seen.joined().c_str());
+    REQUIRE_MESSAGE(seen.waitFinished(kTimeoutMs), seen.joined());
     tmdq_run_wait(run);
-    QCOMPARE(tmdq_run_running(run), 0);
+    CHECK(tmdq_run_running(run) == 0);
 
     const std::vector<std::string> events = seen.snapshot();
-    QVERIFY(!events.empty());
-    QCOMPARE(events.back(), std::string("finished:1"));           // LAST
-    QCOMPARE(seen.count("finished:1"), 1);                         // and once
-    QCOMPARE(seen.finishedCount, 1);
-    QVERIFY(!seen.any("error:"));
+    REQUIRE(!events.empty());
+    CHECK(events.back() == std::string("finished:1"));           // LAST
+    REQUIRE(seen.count("finished:1") == 1);                         // and once
+    REQUIRE(seen.finishedCount == 1);
+    REQUIRE(!seen.any("error:"));
 
     // Both streams are delivered, each once, before the end, and not from the thread that started the run.
-    QCOMPARE(seen.count("stream:0"), 1);
-    QCOMPARE(seen.count("stream:1"), 1);
-    QVERIFY(seen.streamThreads.at(0) != caller);
-    QVERIFY(seen.streamThreads.at(1) != caller);
-    QVERIFY(seen.streamThreads.at(0) != seen.streamThreads.at(1));   // each on its own stream's thread
-    QVERIFY(seen.finishedThread != caller);
+    REQUIRE(seen.count("stream:0") == 1);
+    REQUIRE(seen.count("stream:1") == 1);
+    REQUIRE(seen.streamThreads.at(0) != caller);
+    REQUIRE(seen.streamThreads.at(1) != caller);
+    REQUIRE(seen.streamThreads.at(0) != seen.streamThreads.at(1));   // each on its own stream's thread
+    REQUIRE(seen.finishedThread != caller);
 
     // Progress comes from one thread only (the reader's), reaches 100 once, and never goes backwards.
-    QCOMPARE(seen.progressThreads.size(), std::size_t{1});
-    QVERIFY(*seen.progressThreads.begin() != caller);
-    QCOMPARE(seen.count("progress:100"), 1);
+    REQUIRE(seen.progressThreads.size() == std::size_t{1});
+    REQUIRE(*seen.progressThreads.begin() != caller);
+    REQUIRE(seen.count("progress:100") == 1);
     int last = -1;
     for (const std::string& e : events)
     {
         if (e.rfind("progress:", 0) != 0) continue;
         const int p = std::stoi(e.substr(9));
-        QVERIFY(p >= last);
+        REQUIRE(p >= last);
         last = p;
     }
-    QCOMPARE(last, 100);
+    CHECK(last == 100);
 
     // The lines the job builder produced reach `log` first, on the calling thread (before start returned),
     // and the workers' lines follow.
-    QVERIFY2(seen.any("log:"), events.front().c_str());
+    REQUIRE_MESSAGE(seen.any("log:"), events.front());
 }
 
-void TestAbi::aNonLinearProfileReachesTheJob()
+TEST_CASE("Abi: aNonLinearProfileReachesTheJob")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok)
-        QSKIP("step_cal fixture not available");
 
     // The receiver stream with a profile on one word, and without. The default word map reads words 1..3;
     // a profile on word 1 changes that word's calibrated values and nothing else.
@@ -1534,28 +1568,28 @@ void TestAbi::aNonLinearProfileReachesTheJob()
     profiled.calibration[1] = { {0.0, -10.0}, {1000.0, 0.0}, {30000.0, 40.0}, {65535.0, 60.0} };
 
     bool coreOk = false;
-    const auto want = runCore(f, 0, { plain, profiled }, projectRoot().toStdString(), coreOk);
-    QVERIFY(coreOk);
+    const auto want = runCore(f, 0, { plain, profiled }, rootUtf8(), coreOk);
+    REQUIRE(coreOk);
     const ProcessedStreamData& a = want.at(0);
     const ProcessedStreamData& b = want.at(1);
-    QCOMPARE(a.channels.size(), b.channels.size());
+    REQUIRE(a.channels.size() == b.channels.size());
     bool someDiffer = false, someSame = false;
     for (std::size_t i = 0; i < a.channels.size(); ++i)
         (a.channels[i].values == b.channels[i].values ? someSame : someDiffer) = true;
-    QVERIFY2(someDiffer && someSame, "the fixture should be changed by the profile on one word and not on the others");
+    REQUIRE_MESSAGE((someDiffer && someSame), "the fixture should be changed by the profile on one word and not on the others");
 
     Request request(f, { plain, profiled });
     Seen seen;
     const tmdq_callbacks callbacks = seen.callbacks();
     tmdq_run* run = nullptr;
-    QCOMPARE(tmdq_run_start(&request.req, &callbacks, &run), int(TMDQ_OK));
+    REQUIRE(tmdq_run_start(&request.req, &callbacks, &run) == int(TMDQ_OK));
     RunGuard guard{run};
-    QVERIFY2(seen.waitFinished(kTimeoutMs), seen.joined().c_str());
+    REQUIRE_MESSAGE(seen.waitFinished(kTimeoutMs), seen.joined());
     tmdq_run_wait(run);
     const auto got = seen.byJob();
-    QCOMPARE(got.size(), std::size_t{2});
-    QVERIFY2(differences(got.at(0), a).isEmpty(), qPrintable(differences(got.at(0), a)));
-    QVERIFY2(differences(got.at(1), b).isEmpty(), qPrintable(differences(got.at(1), b)));
+    REQUIRE(got.size() == std::size_t{2});
+    REQUIRE_MESSAGE(differences(got.at(0), a).empty(), differences(got.at(0), a));
+    REQUIRE_MESSAGE(differences(got.at(1), b).empty(), differences(got.at(1), b));
 
     // An invalid profile is ignored: the word is calibrated linearly, as without one.
     Request ignoredRequest(f, { profiled });
@@ -1565,175 +1599,155 @@ void TestAbi::aNonLinearProfileReachesTheJob()
     Seen seen2;
     const tmdq_callbacks callbacks2 = seen2.callbacks();
     tmdq_run* run2 = nullptr;
-    QCOMPARE(tmdq_run_start(&ignoredRequest.req, &callbacks2, &run2), int(TMDQ_OK));
+    REQUIRE(tmdq_run_start(&ignoredRequest.req, &callbacks2, &run2) == int(TMDQ_OK));
     RunGuard guard2{run2};
-    QVERIFY2(seen2.waitFinished(kTimeoutMs), seen2.joined().c_str());
+    REQUIRE_MESSAGE(seen2.waitFinished(kTimeoutMs), seen2.joined());
     tmdq_run_wait(run2);
-    QVERIFY2(differences(seen2.byJob().at(0), a).isEmpty(), "an invalid profile must leave the word linear");
+    REQUIRE_MESSAGE(differences(seen2.byJob().at(0), a).empty(), "an invalid profile must leave the word linear");
 }
 
-void TestAbi::settingsTheCoreRejectsAreRefusedWithTheCoresMessage()
+TEST_CASE("Abi: settingsTheCoreRejectsAreRefusedWithTheCoresMessage")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok)
-        QSKIP("step_cal fixture not available");
 
     Case bad = lockCase(f);
     bad.pattern = "not hex";
 
     // What the core says about it, directly.
     ProcessingParams base;
-    base.filename = toFsPath(QString::fromStdString(f.path));
+    base.filename = textfile::pathFromUtf8(f.path);
     base.timeChannelId = f.timeId;
     StreamJobContext ctx;
-    ctx.appRoot = projectRoot().toStdString();
+    ctx.appRoot = rootUtf8();
     StreamJob job;
     StreamJobReport report;
-    QVERIFY(!buildStreamJob(bad.core(), base, ctx, job, report));
-    QVERIFY(!report.error.empty());
+    REQUIRE(!buildStreamJob(bad.core(), base, ctx, job, report));
+    REQUIRE(!report.error.empty());
 
     Request request(f, { lockCase(f), bad });   // the second stream is the bad one
     Seen seen;
     const tmdq_callbacks callbacks = seen.callbacks();
     tmdq_run* run = reinterpret_cast<tmdq_run*>(std::uintptr_t{1});
-    QCOMPARE(tmdq_run_start(&request.req, &callbacks, &run), int(TMDQ_ERR_JOB));
-    QVERIFY(run == nullptr);
-    QCOMPARE(std::string(tmdq_last_error()), report.error);
+    CHECK(tmdq_run_start(&request.req, &callbacks, &run) == int(TMDQ_ERR_JOB));
+    REQUIRE(run == nullptr);
+    CHECK(std::string(tmdq_last_error()) == report.error);
     // Nothing was started, so nothing but `log` can have been called.
-    QVERIFY(!seen.any("error:"));
-    QVERIFY(!seen.any("progress:"));
-    QVERIFY(!seen.any("stream:"));
-    QVERIFY(!seen.any("finished:"));
+    REQUIRE(!seen.any("error:"));
+    REQUIRE(!seen.any("progress:"));
+    REQUIRE(!seen.any("stream:"));
+    REQUIRE(!seen.any("finished:"));
 }
 
-void TestAbi::aRecordingThatCannotBeUsedFailsToPrepare()
+TEST_CASE("Abi: aRecordingThatCannotBeUsedFailsToPrepare")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok)
-        QSKIP("step_cal fixture not available");
 
     // A file that is not there.
     StepCal missing = f;
-    missing.path = (QDir::tempPath() + "/tst_abi_no_such_recording.ch10").toStdString();
+    missing.path = tempUtf8() + "/tst_abi_no_such_recording.ch10";
     Request request(missing, { lockCase(f) });
     Seen seen;
     const tmdq_callbacks callbacks = seen.callbacks();
     tmdq_run* run = reinterpret_cast<tmdq_run*>(std::uintptr_t{1});
-    QCOMPARE(tmdq_run_start(&request.req, &callbacks, &run), int(TMDQ_ERR_PREPARE));
-    QVERIFY(run == nullptr);
-    QVERIFY(!std::string(tmdq_last_error()).empty());
-    QVERIFY(!seen.any("finished:"));
+    CHECK(tmdq_run_start(&request.req, &callbacks, &run) == int(TMDQ_ERR_PREPARE));
+    REQUIRE(run == nullptr);
+    REQUIRE(!std::string(tmdq_last_error()).empty());
+    REQUIRE(!seen.any("finished:"));
 
     // A channel the recording does not have.
     Case ghost = lockCase(f);
     ghost.pcmId = f.pcmId + 1000;
     Request ghostRequest(f, { ghost });
-    QCOMPARE(tmdq_run_start(&ghostRequest.req, &callbacks, &run), int(TMDQ_ERR_PREPARE));
-    QVERIFY(run == nullptr);
-    QVERIFY(!std::string(tmdq_last_error()).empty());
+    CHECK(tmdq_run_start(&ghostRequest.req, &callbacks, &run) == int(TMDQ_ERR_PREPARE));
+    REQUIRE(run == nullptr);
+    REQUIRE(!std::string(tmdq_last_error()).empty());
 }
 
-void TestAbi::badArgumentsToTheRunFunctionsAreRefused()
+TEST_CASE("Abi: badArgumentsToTheRunFunctionsAreRefused")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok)
-        QSKIP("step_cal fixture not available");
 
     Seen seen;
     const tmdq_callbacks callbacks = seen.callbacks();
     tmdq_run* run = nullptr;
     Request good(f, { lockCase(f) });
 
-    QCOMPARE(tmdq_run_start(nullptr, &callbacks, &run), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_run_start(&good.req, &callbacks, nullptr), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_run_start(nullptr, &callbacks, &run) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_run_start(&good.req, &callbacks, nullptr) == int(TMDQ_ERR_BADARG));
 
     tmdq_run_request r = good.req;
     r.filename_utf8 = nullptr;
-    QCOMPARE(tmdq_run_start(&r, &callbacks, &run), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_run_start(&r, &callbacks, &run) == int(TMDQ_ERR_BADARG));
     r = good.req;
     r.filename_utf8 = "";
-    QCOMPARE(tmdq_run_start(&r, &callbacks, &run), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_run_start(&r, &callbacks, &run) == int(TMDQ_ERR_BADARG));
     r = good.req;
     r.time_channel_id = -1;
-    QCOMPARE(tmdq_run_start(&r, &callbacks, &run), int(TMDQ_ERR_BADARG));
-    QCOMPARE(std::string(tmdq_last_error()), std::string("Invalid time channel."));
+    CHECK(tmdq_run_start(&r, &callbacks, &run) == int(TMDQ_ERR_BADARG));
+    CHECK(std::string(tmdq_last_error()) == std::string("Invalid time channel."));
     r = good.req;
     r.stream_count = 0;
-    QCOMPARE(tmdq_run_start(&r, &callbacks, &run), int(TMDQ_ERR_BADARG));
-    QCOMPARE(std::string(tmdq_last_error()), std::string("No streams selected for processing. Configure streams first."));
+    CHECK(tmdq_run_start(&r, &callbacks, &run) == int(TMDQ_ERR_BADARG));
+    CHECK(std::string(tmdq_last_error()) == std::string("No streams selected for processing. Configure streams first."));
     r = good.req;
     r.streams = nullptr;
-    QCOMPARE(tmdq_run_start(&r, &callbacks, &run), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_run_start(&r, &callbacks, &run) == int(TMDQ_ERR_BADARG));
 
     // A null stream pointer, an unknown mode, a calibration count with no array, a profile with no points.
     const tmdq_stream_config* nullStream[] = { nullptr };
     r = good.req;
     r.streams = nullStream;
-    QCOMPARE(tmdq_run_start(&r, &callbacks, &run), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_run_start(&r, &callbacks, &run) == int(TMDQ_ERR_BADARG));
 
     tmdq_stream_config c = good.configs[0];
     const tmdq_stream_config* one[] = { &c };
     r = good.req;
     r.streams = one;
     c.mode = 9;
-    QCOMPARE(tmdq_run_start(&r, &callbacks, &run), int(TMDQ_ERR_BADARG));
-    QVERIFY(std::string(tmdq_last_error()).find("mode") != std::string::npos);
+    CHECK(tmdq_run_start(&r, &callbacks, &run) == int(TMDQ_ERR_BADARG));
+    REQUIRE(std::string(tmdq_last_error()).find("mode") != std::string::npos);
     c = good.configs[0];
     c.calibration_count = 2;
     c.calibration = nullptr;
-    QCOMPARE(tmdq_run_start(&r, &callbacks, &run), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_run_start(&r, &callbacks, &run) == int(TMDQ_ERR_BADARG));
     c = good.configs[0];
     c.calibration_count = -1;
-    QCOMPARE(tmdq_run_start(&r, &callbacks, &run), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_run_start(&r, &callbacks, &run) == int(TMDQ_ERR_BADARG));
     c = good.configs[0];
     tmdq_cal_profile profile{};
     profile.point_count = 3;
     profile.points = nullptr;
     c.calibration = &profile;
     c.calibration_count = 1;
-    QCOMPARE(tmdq_run_start(&r, &callbacks, &run), int(TMDQ_ERR_BADARG));
-    QVERIFY(run == nullptr);
-    QVERIFY(!seen.any("finished:"));
+    CHECK(tmdq_run_start(&r, &callbacks, &run) == int(TMDQ_ERR_BADARG));
+    REQUIRE(run == nullptr);
+    REQUIRE(!seen.any("finished:"));
 
     // The remaining functions tolerate NULL.
     tmdq_run_cancel(nullptr);
-    QCOMPARE(tmdq_run_running(nullptr), 0);
+    CHECK(tmdq_run_running(nullptr) == 0);
     tmdq_run_wait(nullptr);
     tmdq_run_free(nullptr);
     tmdq_stream_result_free(nullptr);
     tmdq_stream_info info{};
     info.struct_size = sizeof(info);
-    QCOMPARE(tmdq_stream_result_info(nullptr, &info), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_stream_result_info(nullptr, &info) == int(TMDQ_ERR_BADARG));
     tmdq_channel_series series{};
     series.struct_size = sizeof(series);
-    QCOMPARE(tmdq_stream_result_channel(nullptr, 0, &series), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_stream_result_channel(nullptr, 0, &series) == int(TMDQ_ERR_BADARG));
 
     // A run with no callbacks at all is allowed: it just runs.
     tmdq_run* quiet = nullptr;
-    QCOMPARE(tmdq_run_start(&good.req, nullptr, &quiet), int(TMDQ_OK));
-    QVERIFY(quiet != nullptr);
+    REQUIRE(tmdq_run_start(&good.req, nullptr, &quiet) == int(TMDQ_OK));
+    REQUIRE(quiet != nullptr);
     tmdq_run_wait(quiet);
-    QCOMPARE(tmdq_run_running(quiet), 0);
+    CHECK(tmdq_run_running(quiet) == 0);
     tmdq_run_free(quiet);
 }
 
-void TestAbi::cancellingEndsARunUnsuccessfully()
+TEST_CASE("Abi: cancellingEndsARunUnsuccessfully")
 {
-    const QString path = dataPath("test files/prn_testfile, sample.ch10");
-    if (!QFileInfo::exists(path))
-        QSKIP("PRN sample fixture not available");
-    const std::string utf8 = path.toStdString();
-    tmdq_file* file = nullptr;
-    QCOMPARE(tmdq_file_open(utf8.c_str(), &file), int(TMDQ_OK));
-    StepCal prn;
-    prn.path   = utf8;
-    prn.timeId = tmdq_file_default_time_channel(file);
-    tmdq_channel_info info{};
-    info.struct_size = sizeof(info);
-    QCOMPARE(tmdq_file_pcm_channel(file, 0, &info), int(TMDQ_OK));
-    prn.pcmId = info.channel_id;
-    prn.ok = true;
-    tmdq_file_close(file);
+    const StepCal prn = loadPrnSample();
 
     Case c;
     c.pcmId   = prn.pcmId;
@@ -1744,37 +1758,24 @@ void TestAbi::cancellingEndsARunUnsuccessfully()
     Seen seen;
     const tmdq_callbacks callbacks = seen.callbacks();
     tmdq_run* run = nullptr;
-    QCOMPARE(tmdq_run_start(&request.req, &callbacks, &run), int(TMDQ_OK));
+    REQUIRE(tmdq_run_start(&request.req, &callbacks, &run) == int(TMDQ_OK));
     RunGuard guard{run};
-    QCOMPARE(tmdq_run_running(run), 1);
+    CHECK(tmdq_run_running(run) == 1);
     tmdq_run_cancel(run);
     tmdq_run_cancel(run);   // twice is as good as once
-    QVERIFY2(seen.waitFinished(kTimeoutMs), seen.joined().c_str());
+    REQUIRE_MESSAGE(seen.waitFinished(kTimeoutMs), seen.joined());
     tmdq_run_wait(run);
 
-    QCOMPARE(seen.finishedCount, 1);
-    QCOMPARE(seen.finishedSuccess, 0);
-    QVERIFY2(!seen.any("stream:"), seen.joined().c_str());   // a cancelled run delivers nothing
-    QCOMPARE(seen.snapshot().back(), std::string("finished:0"));
-    QCOMPARE(tmdq_run_running(run), 0);
+    REQUIRE(seen.finishedCount == 1);
+    CHECK(seen.finishedSuccess == 0);
+    REQUIRE_MESSAGE(!seen.any("stream:"), seen.joined());   // a cancelled run delivers nothing
+    CHECK(seen.snapshot().back() == std::string("finished:0"));
+    CHECK(tmdq_run_running(run) == 0);
 }
 
-void TestAbi::freeingARunInFlightCancelsAndWaits()
+TEST_CASE("Abi: freeingARunInFlightCancelsAndWaits")
 {
-    const QString path = dataPath("test files/prn_testfile, sample.ch10");
-    if (!QFileInfo::exists(path))
-        QSKIP("PRN sample fixture not available");
-    const std::string utf8 = path.toStdString();
-    tmdq_file* file = nullptr;
-    QCOMPARE(tmdq_file_open(utf8.c_str(), &file), int(TMDQ_OK));
-    StepCal prn;
-    prn.path   = utf8;
-    prn.timeId = tmdq_file_default_time_channel(file);
-    tmdq_channel_info info{};
-    info.struct_size = sizeof(info);
-    QCOMPARE(tmdq_file_pcm_channel(file, 0, &info), int(TMDQ_OK));
-    prn.pcmId = info.channel_id;
-    tmdq_file_close(file);
+    const StepCal prn = loadPrnSample();
 
     Case c;
     c.pcmId   = prn.pcmId;
@@ -1784,89 +1785,83 @@ void TestAbi::freeingARunInFlightCancelsAndWaits()
     auto seen = std::make_unique<Seen>();
     const tmdq_callbacks callbacks = seen->callbacks();
     tmdq_run* run = nullptr;
-    QCOMPARE(tmdq_run_start(&request.req, &callbacks, &run), int(TMDQ_OK));
+    REQUIRE(tmdq_run_start(&request.req, &callbacks, &run) == int(TMDQ_OK));
     tmdq_run_free(run);   // no cancel, no wait: free does both
 
     // Every thread has ended by the time free returns, so `finished` has been delivered, once, last, and
     // the callback target can be destroyed straight away without a callback landing on it.
-    QCOMPARE(seen->finishedCount, 1);
-    QCOMPARE(seen->finishedSuccess, 0);
-    QCOMPARE(seen->snapshot().back(), std::string("finished:0"));
+    REQUIRE(seen->finishedCount == 1);
+    CHECK(seen->finishedSuccess == 0);
+    CHECK(seen->snapshot().back() == std::string("finished:0"));
     seen.reset();
 }
 
-void TestAbi::aResultOutlivesItsRunAndIsFreedFromAnyThread()
+TEST_CASE("Abi: aResultOutlivesItsRunAndIsFreedFromAnyThread")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok)
-        QSKIP("step_cal fixture not available");
 
     Request request(f, { receiverCase(f) });
     Seen seen;
     const tmdq_callbacks callbacks = seen.callbacks();
     tmdq_run* run = nullptr;
-    QCOMPARE(tmdq_run_start(&request.req, &callbacks, &run), int(TMDQ_OK));
-    QVERIFY2(seen.waitFinished(kTimeoutMs), seen.joined().c_str());
+    REQUIRE(tmdq_run_start(&request.req, &callbacks, &run) == int(TMDQ_OK));
+    REQUIRE_MESSAGE(seen.waitFinished(kTimeoutMs), seen.joined());
     tmdq_run_free(run);   // the run is gone
 
-    QCOMPARE(seen.results.size(), std::size_t{1});
+    REQUIRE(seen.results.size() == std::size_t{1});
     tmdq_stream_result* result = seen.results[0];
     tmdq_stream_info info{};
     info.struct_size = sizeof(info);
-    QCOMPARE(tmdq_stream_result_info(result, &info), int(TMDQ_OK));
-    QVERIFY(info.sample_count > 0);
-    QVERIFY(info.channel_count > 0);
+    REQUIRE(tmdq_stream_result_info(result, &info) == int(TMDQ_OK));
+    REQUIRE(info.sample_count > 0);
+    REQUIRE(info.channel_count > 0);
     // The views are still good: read every value, then free the result on a different thread.
     double sum = 0.0;
     for (int i = 0; i < info.sample_count; ++i)
         sum += info.times_sec[i];
     tmdq_channel_series series{};
     series.struct_size = sizeof(series);
-    QCOMPARE(tmdq_stream_result_channel(result, info.channel_count - 1, &series), int(TMDQ_OK));
+    REQUIRE(tmdq_stream_result_channel(result, info.channel_count - 1, &series) == int(TMDQ_OK));
     for (int i = 0; i < info.sample_count; ++i)
         sum += series.values[i];
-    QVERIFY(sum == sum);   // not NaN: they were all readable
-    QCOMPARE(tmdq_stream_result_channel(result, info.channel_count, &series), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_stream_result_channel(result, -1, &series), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_stream_result_channel(result, 0, nullptr), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_stream_result_info(result, nullptr), int(TMDQ_ERR_BADARG));
+    REQUIRE(sum == sum);   // not NaN: they were all readable
+    REQUIRE(tmdq_stream_result_channel(result, info.channel_count, &series) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_stream_result_channel(result, -1, &series) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_stream_result_channel(result, 0, nullptr) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_stream_result_info(result, nullptr) == int(TMDQ_ERR_BADARG));
 
     seen.results.clear();
     std::thread([result] { tmdq_stream_result_free(result); }).join();
 }
 
-void TestAbi::aCallbackThatThrowsDoesNotBreakTheRun()
+TEST_CASE("Abi: aCallbackThatThrowsDoesNotBreakTheRun")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok)
-        QSKIP("step_cal fixture not available");
 
     Request request(f, { lockCase(f), receiverCase(f) });
     Seen seen;
     seen.throwing = true;
     const tmdq_callbacks callbacks = seen.callbacks();
     tmdq_run* run = nullptr;
-    QCOMPARE(tmdq_run_start(&request.req, &callbacks, &run), int(TMDQ_OK));
+    REQUIRE(tmdq_run_start(&request.req, &callbacks, &run) == int(TMDQ_OK));
     RunGuard guard{run};
-    QVERIFY2(seen.waitFinished(kTimeoutMs), seen.joined().c_str());
+    REQUIRE_MESSAGE(seen.waitFinished(kTimeoutMs), seen.joined());
     tmdq_run_wait(run);
 
     // Every callback threw, and the run neither died nor stopped reporting.
-    QCOMPARE(seen.finishedCount, 1);
-    QCOMPARE(seen.finishedSuccess, 1);
-    QCOMPARE(seen.count("stream:0"), 1);
-    QCOMPARE(seen.count("stream:1"), 1);
+    REQUIRE(seen.finishedCount == 1);
+    CHECK(seen.finishedSuccess == 1);
+    REQUIRE(seen.count("stream:0") == 1);
+    REQUIRE(seen.count("stream:1") == 1);
 }
 
-void TestAbi::twoRunsAtOnceAgreeWithOneAlone()
+TEST_CASE("Abi: twoRunsAtOnceAgreeWithOneAlone")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok)
-        QSKIP("step_cal fixture not available");
 
     bool coreOk = false;
-    const auto want = runCore(f, 0, { lockCase(f), receiverCase(f) }, projectRoot().toStdString(), coreOk);
-    QVERIFY(coreOk);
+    const auto want = runCore(f, 0, { lockCase(f), receiverCase(f) }, rootUtf8(), coreOk);
+    REQUIRE(coreOk);
 
     Request a(f, { lockCase(f), receiverCase(f) });
     Request b(f, { lockCase(f), receiverCase(f) });
@@ -1875,49 +1870,47 @@ void TestAbi::twoRunsAtOnceAgreeWithOneAlone()
     const tmdq_callbacks cb = seenB.callbacks();
     tmdq_run* runA = nullptr;
     tmdq_run* runB = nullptr;
-    QCOMPARE(tmdq_run_start(&a.req, &ca, &runA), int(TMDQ_OK));
+    REQUIRE(tmdq_run_start(&a.req, &ca, &runA) == int(TMDQ_OK));
     RunGuard guardA{runA};
-    QCOMPARE(tmdq_run_start(&b.req, &cb, &runB), int(TMDQ_OK));
+    REQUIRE(tmdq_run_start(&b.req, &cb, &runB) == int(TMDQ_OK));
     RunGuard guardB{runB};
-    QVERIFY2(seenA.waitFinished(kTimeoutMs), seenA.joined().c_str());
-    QVERIFY2(seenB.waitFinished(kTimeoutMs), seenB.joined().c_str());
+    REQUIRE_MESSAGE(seenA.waitFinished(kTimeoutMs), seenA.joined());
+    REQUIRE_MESSAGE(seenB.waitFinished(kTimeoutMs), seenB.joined());
     tmdq_run_wait(runA);
     tmdq_run_wait(runB);
 
     for (Seen* seen : { &seenA, &seenB })
     {
-        QCOMPARE(seen->finishedSuccess, 1);
+        CHECK(seen->finishedSuccess == 1);
         const auto got = seen->byJob();
-        QCOMPARE(got.size(), std::size_t{2});
+        REQUIRE(got.size() == std::size_t{2});
         for (int job = 0; job < 2; ++job)
         {
-            const QString diff = differences(got.at(job), want.at(job));
-            QVERIFY2(diff.isEmpty(), qPrintable("job " + QString::number(job) + " differs in: " + diff));
+            const std::string diff = differences(got.at(job), want.at(job));
+            REQUIRE_MESSAGE(diff.empty(), ("job " + std::to_string(job) + " differs in: " + diff));
         }
     }
 }
 
-void TestAbi::aSuccessfulCallClearsTheLastError()
+TEST_CASE("Abi: aSuccessfulCallClearsTheLastError")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok)
-        QSKIP("step_cal fixture not available");
 
     tmdq_file* file = nullptr;
-    QCOMPARE(tmdq_file_open("no-such-file.ch10", &file), int(TMDQ_ERR_PREPARE));
-    QVERIFY(!std::string(tmdq_last_error()).empty());
-    QCOMPARE(tmdq_file_open(f.path.c_str(), &file), int(TMDQ_OK));
-    QCOMPARE(std::string(tmdq_last_error()), std::string());   // the success left no stale message behind
+    CHECK(tmdq_file_open("no-such-file.ch10", &file) == int(TMDQ_ERR_PREPARE));
+    REQUIRE(!std::string(tmdq_last_error()).empty());
+    REQUIRE(tmdq_file_open(f.path.c_str(), &file) == int(TMDQ_OK));
+    CHECK(std::string(tmdq_last_error()) == std::string());   // the success left no stale message behind
 
     tmdq_channel_info info{};
     info.struct_size = sizeof(info);
-    QCOMPARE(tmdq_file_pcm_channel(file, 99, &info), int(TMDQ_ERR_BADARG));
-    QVERIFY(!std::string(tmdq_last_error()).empty());
-    QCOMPARE(tmdq_file_pcm_channel(file, 0, &info), int(TMDQ_OK));
-    QCOMPARE(std::string(tmdq_last_error()), std::string());
-    QCOMPARE(tmdq_file_time_channel(file, 99, &info), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_file_time_channel(file, 0, &info), int(TMDQ_OK));
-    QCOMPARE(std::string(tmdq_last_error()), std::string());
+    CHECK(tmdq_file_pcm_channel(file, 99, &info) == int(TMDQ_ERR_BADARG));
+    REQUIRE(!std::string(tmdq_last_error()).empty());
+    REQUIRE(tmdq_file_pcm_channel(file, 0, &info) == int(TMDQ_OK));
+    CHECK(std::string(tmdq_last_error()) == std::string());
+    CHECK(tmdq_file_time_channel(file, 99, &info) == int(TMDQ_ERR_BADARG));
+    REQUIRE(tmdq_file_time_channel(file, 0, &info) == int(TMDQ_OK));
+    CHECK(std::string(tmdq_last_error()) == std::string());
     tmdq_file_close(file);
 
     Request request(f, { lockCase(f) });
@@ -1926,61 +1919,58 @@ void TestAbi::aSuccessfulCallClearsTheLastError()
     bad.stream_count = 0;
     const tmdq_callbacks callbacks = seen.callbacks();
     tmdq_run* run = nullptr;
-    QCOMPARE(tmdq_run_start(&bad, &callbacks, &run), int(TMDQ_ERR_BADARG));
-    QVERIFY(!std::string(tmdq_last_error()).empty());
-    QVERIFY(runToTheEnd(request, seen));
-    QCOMPARE(std::string(tmdq_last_error()), std::string());
+    CHECK(tmdq_run_start(&bad, &callbacks, &run) == int(TMDQ_ERR_BADARG));
+    REQUIRE(!std::string(tmdq_last_error()).empty());
+    REQUIRE(runToTheEnd(request, seen));
+    CHECK(std::string(tmdq_last_error()) == std::string());
 
     tmdq_stream_info info2{};
     info2.struct_size = sizeof(info2);
-    QCOMPARE(tmdq_stream_result_info(nullptr, &info2), int(TMDQ_ERR_BADARG));
-    QVERIFY(!std::string(tmdq_last_error()).empty());
-    QCOMPARE(tmdq_stream_result_info(seen.results.at(0), &info2), int(TMDQ_OK));
-    QCOMPARE(std::string(tmdq_last_error()), std::string());
+    CHECK(tmdq_stream_result_info(nullptr, &info2) == int(TMDQ_ERR_BADARG));
+    REQUIRE(!std::string(tmdq_last_error()).empty());
+    REQUIRE(tmdq_stream_result_info(seen.results.at(0), &info2) == int(TMDQ_OK));
+    CHECK(std::string(tmdq_last_error()) == std::string());
     tmdq_channel_series series{};
     series.struct_size = sizeof(series);
-    QCOMPARE(tmdq_stream_result_channel(seen.results.at(0), 0, &series), int(TMDQ_ERR_BADARG));   // a lock stream has none
-    QVERIFY(!std::string(tmdq_last_error()).empty());
+    CHECK(tmdq_stream_result_channel(seen.results.at(0), 0, &series) == int(TMDQ_ERR_BADARG));   // a lock stream has none
+    REQUIRE(!std::string(tmdq_last_error()).empty());
 }
 
-void TestAbi::theExceptionGuardTurnsAThrowIntoAStatus()
+TEST_CASE("Abi: theExceptionGuardTurnsAThrowIntoAStatus")
 {
     // The one place a failure the library did not foresee is caught, so it is tried directly.
     tmdq::setError("stale");
-    QCOMPARE(tmdq::guarded("a call", []() -> int32_t { return TMDQ_OK; }), int(TMDQ_OK));
-    QCOMPARE(tmdq::guarded("a call", []() -> int32_t { throw std::runtime_error("boom"); }), int(TMDQ_ERR_INTERNAL));
-    QVERIFY(std::string(tmdq_last_error()).find("boom") != std::string::npos);
-    QVERIFY(std::string(tmdq_last_error()).find("a call") != std::string::npos);
-    QCOMPARE(tmdq::guarded("another", []() -> int32_t { throw 42; }), int(TMDQ_ERR_INTERNAL));
-    QVERIFY(std::string(tmdq_last_error()).find("unknown exception") != std::string::npos);
-    QVERIFY(std::string(tmdq_last_error()).find("another") != std::string::npos);
+    REQUIRE(tmdq::guarded("a call", []() -> int32_t { return TMDQ_OK; }) == int(TMDQ_OK));
+    CHECK(tmdq::guarded("a call", []() -> int32_t { throw std::runtime_error("boom"); }) == int(TMDQ_ERR_INTERNAL));
+    REQUIRE(std::string(tmdq_last_error()).find("boom") != std::string::npos);
+    REQUIRE(std::string(tmdq_last_error()).find("a call") != std::string::npos);
+    CHECK(tmdq::guarded("another", []() -> int32_t { throw 42; }) == int(TMDQ_ERR_INTERNAL));
+    REQUIRE(std::string(tmdq_last_error()).find("unknown exception") != std::string::npos);
+    REQUIRE(std::string(tmdq_last_error()).find("another") != std::string::npos);
     tmdq::clearError();
-    QCOMPARE(std::string(tmdq_last_error()), std::string());
+    CHECK(std::string(tmdq_last_error()) == std::string());
 
     // And a path that is not valid UTF-8 is a failure the host is told about, not a crash.
     tmdq_file* file = nullptr;
     const int32_t status = tmdq_file_open("\xff\xfe\xc3.ch10", &file);
-    QVERIFY2(status == TMDQ_ERR_PREPARE || status == TMDQ_ERR_INTERNAL, qPrintable(QString::number(status)));
-    QVERIFY(file == nullptr);
-    QVERIFY(!std::string(tmdq_last_error()).empty());
+    REQUIRE_MESSAGE((status == TMDQ_ERR_PREPARE || status == TMDQ_ERR_INTERNAL), std::to_string(status));
+    REQUIRE(file == nullptr);
+    REQUIRE(!std::string(tmdq_last_error()).empty());
 }
 
-void TestAbi::theByteOrderOfTheFileReachesTheJob()
+TEST_CASE("Abi: theByteOrderOfTheFileReachesTheJob")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok)
-        QSKIP("step_cal fixture not available");
 
     // Byte order is file-scoped and comes from the request, not from a stream. Without the swap this
     // recording decodes to something else entirely; both must match what the core makes with the same flag.
     const std::vector<Case> cases = { lockCase(f) };
     bool okSwap = false, okNoSwap = false;
-    const auto swapped = runCore(f, 0, cases, projectRoot().toStdString(), okSwap, true);
-    const auto plain = runCore(f, 0, cases, projectRoot().toStdString(), okNoSwap, false);
-    QVERIFY(okSwap);
-    QVERIFY(okNoSwap || plain.empty());   // an unswapped run may find no lock at all, which is also a result
-    QVERIFY2(plain.empty() || plain.at(0).lockPercent != swapped.at(0).lockPercent,
-             "the fixture should decode differently without the swap");
+    const auto swapped = runCore(f, 0, cases, rootUtf8(), okSwap, true);
+    const auto plain = runCore(f, 0, cases, rootUtf8(), okNoSwap, false);
+    REQUIRE(okSwap);
+    REQUIRE((okNoSwap || plain.empty()));   // an unswapped run may find no lock at all, which is also a result
+    REQUIRE_MESSAGE((plain.empty() || plain.at(0).lockPercent != swapped.at(0).lockPercent), "the fixture should decode differently without the swap");
 
     Request request(f, cases);
     request.req.swap_bytes = 0;
@@ -1988,90 +1978,79 @@ void TestAbi::theByteOrderOfTheFileReachesTheJob()
     const bool endedWell = runToTheEnd(request, seenPlain);
     if (plain.empty())
     {
-        QVERIFY(!endedWell);
-        QVERIFY(seenPlain.results.empty());
+        REQUIRE(!endedWell);
+        REQUIRE(seenPlain.results.empty());
     }
     else
     {
-        QVERIFY(endedWell);
-        QVERIFY2(differences(seenPlain.byJob().at(0), plain.at(0)).isEmpty(),
-                 qPrintable(differences(seenPlain.byJob().at(0), plain.at(0))));
+        REQUIRE(endedWell);
+        REQUIRE_MESSAGE(differences(seenPlain.byJob().at(0), plain.at(0)).empty(), differences(seenPlain.byJob().at(0), plain.at(0)));
     }
 
     Request swappedRequest(f, cases);
     swappedRequest.req.swap_bytes = 1;
     Seen seenSwapped;
-    QVERIFY(runToTheEnd(swappedRequest, seenSwapped));
-    QVERIFY2(differences(seenSwapped.byJob().at(0), swapped.at(0)).isEmpty(),
-             qPrintable(differences(seenSwapped.byJob().at(0), swapped.at(0))));
+    REQUIRE(runToTheEnd(swappedRequest, seenSwapped));
+    REQUIRE_MESSAGE(differences(seenSwapped.byJob().at(0), swapped.at(0)).empty(), differences(seenSwapped.byJob().at(0), swapped.at(0)));
 }
 
-void TestAbi::aReceiverParametersFileAndTheAppRootReachTheJob()
+TEST_CASE("Abi: aReceiverParametersFileAndTheAppRootReachTheJob")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok)
-        QSKIP("step_cal fixture not available");
 
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
-    const QString two = dir.filePath("two.toml");
-    QVERIFY(QDir().mkpath(dir.filePath("root/settings/receiver_params")));
-    auto write = [](const QString& path, const char* text) {
-        QFile file(path);
-        QVERIFY(file.open(QIODevice::WriteOnly));
-        file.write(text);
-    };
+    Scratch dir;
+    const std::string two = dir.filePath("two.toml");
+    REQUIRE(fs::create_directories(textfile::pathFromUtf8(dir.filePath("root/settings/receiver_params"))));
+    auto write = [](const std::string& path, const char* text) { writeBytes(textfile::pathFromUtf8(path), text); };
     write(two, "[L_RCVR1]\nWord = 5\n[R_RCVR1]\nWord = 6\n");
     write(dir.filePath("root/settings/receiver_params/default.toml"), "[C_RCVR1]\nWord = 7\n");
-    const std::string rootWithDefault = dir.filePath("root").toStdString();
+    const std::string rootWithDefault = dir.filePath("root");
 
     // (1) A word-map file named on the stream.
     Case named = receiverCase(f);
-    named.receiverParams = two.toStdString();
+    named.receiverParams = two;
     bool ok = false;
-    const auto wantNamed = runCore(f, 0, { named }, projectRoot().toStdString(), ok);
-    QVERIFY(ok);
-    QCOMPARE(wantNamed.at(0).channels.size(), std::size_t{2});
+    const auto wantNamed = runCore(f, 0, { named }, rootUtf8(), ok);
+    REQUIRE(ok);
+    REQUIRE(wantNamed.at(0).channels.size() == std::size_t{2});
     Request namedRequest(f, { named });
     Seen seenNamed;
-    QVERIFY(runToTheEnd(namedRequest, seenNamed));
-    QVERIFY2(differences(seenNamed.byJob().at(0), wantNamed.at(0)).isEmpty(), qPrintable(differences(seenNamed.byJob().at(0), wantNamed.at(0))));
+    REQUIRE(runToTheEnd(namedRequest, seenNamed));
+    REQUIRE_MESSAGE(differences(seenNamed.byJob().at(0), wantNamed.at(0)).empty(), differences(seenNamed.byJob().at(0), wantNamed.at(0)));
 
     // (2) No file named: the one under the application root, if it has one.
     const Case plain = receiverCase(f);
     const auto wantRoot = runCore(f, 0, { plain }, rootWithDefault, ok);
-    QVERIFY(ok);
-    QCOMPARE(wantRoot.at(0).channels.size(), std::size_t{1});
+    REQUIRE(ok);
+    REQUIRE(wantRoot.at(0).channels.size() == std::size_t{1});
     Request rootRequest(f, { plain });
     rootRequest.appRoot = rootWithDefault;
     rootRequest.req.app_root_utf8 = rootRequest.appRoot.c_str();
     Seen seenRoot;
-    QVERIFY(runToTheEnd(rootRequest, seenRoot));
-    QVERIFY2(differences(seenRoot.byJob().at(0), wantRoot.at(0)).isEmpty(), qPrintable(differences(seenRoot.byJob().at(0), wantRoot.at(0))));
+    REQUIRE(runToTheEnd(rootRequest, seenRoot));
+    REQUIRE_MESSAGE(differences(seenRoot.byJob().at(0), wantRoot.at(0)).empty(), differences(seenRoot.byJob().at(0), wantRoot.at(0)));
 
     // (3) No application root at all (NULL): the default word map, which is not either of the above.
     const auto wantNone = runCore(f, 0, { plain }, std::string(), ok);
-    QVERIFY(ok);
-    QVERIFY(wantNone.at(0).channels.size() != wantRoot.at(0).channels.size());
+    REQUIRE(ok);
+    REQUIRE(wantNone.at(0).channels.size() != wantRoot.at(0).channels.size());
     Request noneRequest(f, { plain });
     noneRequest.req.app_root_utf8 = nullptr;
     Seen seenNone;
-    QVERIFY(runToTheEnd(noneRequest, seenNone));
-    QVERIFY2(differences(seenNone.byJob().at(0), wantNone.at(0)).isEmpty(), qPrintable(differences(seenNone.byJob().at(0), wantNone.at(0))));
+    REQUIRE(runToTheEnd(noneRequest, seenNone));
+    REQUIRE_MESSAGE(differences(seenNone.byJob().at(0), wantNone.at(0)).empty(), differences(seenNone.byJob().at(0), wantNone.at(0)));
 }
 
-void TestAbi::theFirstProfileOfAWordWins()
+TEST_CASE("Abi: theFirstProfileOfAWordWins")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok)
-        QSKIP("step_cal fixture not available");
 
     // Two profiles for the same word are a host mistake; the first is used, as documented.
     Case first = receiverCase(f);
     first.calibration[1] = { {0.0, -10.0}, {1000.0, 0.0}, {30000.0, 40.0}, {65535.0, 60.0} };
     bool ok = false;
-    const auto want = runCore(f, 0, { first }, projectRoot().toStdString(), ok);
-    QVERIFY(ok);
+    const auto want = runCore(f, 0, { first }, rootUtf8(), ok);
+    REQUIRE(ok);
 
     Request request(f, { first });
     const tmdq_cal_point other[] = { {0.0, 0.0}, {65535.0, 1.0} };
@@ -2081,21 +2060,19 @@ void TestAbi::theFirstProfileOfAWordWins()
     request.configs[0].calibration = two;
     request.configs[0].calibration_count = 2;
     Seen seen;
-    QVERIFY(runToTheEnd(request, seen));
-    QVERIFY2(differences(seen.byJob().at(0), want.at(0)).isEmpty(), qPrintable(differences(seen.byJob().at(0), want.at(0))));
+    REQUIRE(runToTheEnd(request, seen));
+    REQUIRE_MESSAGE(differences(seen.byJob().at(0), want.at(0)).empty(), differences(seen.byJob().at(0), want.at(0)));
 
     // And in the other order the other profile is the one that counts.
     std::swap(two[0], two[1]);
     Seen swapped;
-    QVERIFY(runToTheEnd(request, swapped));
-    QVERIFY(!differences(swapped.byJob().at(0), want.at(0)).isEmpty());
+    REQUIRE(runToTheEnd(request, swapped));
+    REQUIRE(!differences(swapped.byJob().at(0), want.at(0)).empty());
 }
 
-void TestAbi::waitAloneIsEnoughToSeeTheEnd()
+TEST_CASE("Abi: waitAloneIsEnoughToSeeTheEnd")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok)
-        QSKIP("step_cal fixture not available");
 
     // A host that does not use the callback to learn the end calls tmdq_run_wait; when it returns, the run
     // is over and everything it was going to report has been reported.
@@ -2103,44 +2080,40 @@ void TestAbi::waitAloneIsEnoughToSeeTheEnd()
     Seen seen;
     const tmdq_callbacks callbacks = seen.callbacks();
     tmdq_run* run = nullptr;
-    QCOMPARE(tmdq_run_start(&request.req, &callbacks, &run), int(TMDQ_OK));
+    REQUIRE(tmdq_run_start(&request.req, &callbacks, &run) == int(TMDQ_OK));
     RunGuard guard{run};
     tmdq_run_wait(run);
-    QCOMPARE(tmdq_run_running(run), 0);
-    QCOMPARE(seen.finishedCount, 1);
-    QCOMPARE(seen.results.size(), std::size_t{2});
+    CHECK(tmdq_run_running(run) == 0);
+    REQUIRE(seen.finishedCount == 1);
+    REQUIRE(seen.results.size() == std::size_t{2});
     tmdq_run_wait(run);   // and again is harmless
-    QCOMPARE(seen.finishedCount, 1);
+    REQUIRE(seen.finishedCount == 1);
 }
 
-void TestAbi::optionalTextMayBeLeftNull()
+TEST_CASE("Abi: optionalTextMayBeLeftNull")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok)
-        QSKIP("step_cal fixture not available");
 
     // A label, a mask and a word-map file are all optional: NULL reads the same as empty.
     Case blank = lockCase(f);
     blank.label.clear();
     bool ok = false;
-    const auto want = runCore(f, 0, { blank }, projectRoot().toStdString(), ok);
-    QVERIFY(ok);
-    QCOMPARE(want.at(0).streamLabel, "Ch " + std::to_string(f.pcmId));   // the label an empty one is given
+    const auto want = runCore(f, 0, { blank }, rootUtf8(), ok);
+    REQUIRE(ok);
+    CHECK(want.at(0).streamLabel == "Ch " + std::to_string(f.pcmId));   // the label an empty one is given
 
     Request request(f, { blank });
     request.configs[0].label_utf8 = nullptr;
     request.configs[0].sync_mask_utf8 = nullptr;
     request.configs[0].receiver_params_toml_utf8 = nullptr;
     Seen seen;
-    QVERIFY(runToTheEnd(request, seen));
-    QVERIFY2(differences(seen.byJob().at(0), want.at(0)).isEmpty(), qPrintable(differences(seen.byJob().at(0), want.at(0))));
+    REQUIRE(runToTheEnd(request, seen));
+    REQUIRE_MESSAGE(differences(seen.byJob().at(0), want.at(0)).empty(), differences(seen.byJob().at(0), want.at(0)));
 }
 
-void TestAbi::theLinesBuildingJobsProducedReachLogFirst()
+TEST_CASE("Abi: theLinesBuildingJobsProducedReachLogFirst")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok)
-        QSKIP("step_cal fixture not available");
 
     // A stream with a non-linear profile makes the job builder write log lines; they are reported through
     // `log`, in order, on the thread that called start, before it returns - ahead of anything the run says.
@@ -2148,39 +2121,37 @@ void TestAbi::theLinesBuildingJobsProducedReachLogFirst()
     profiled.calibration[1] = { {0.0, -10.0}, {1000.0, 0.0}, {30000.0, 40.0}, {65535.0, 60.0} };
 
     ProcessingParams base;
-    base.filename = toFsPath(QString::fromStdString(f.path));
+    base.filename = textfile::pathFromUtf8(f.path);
     base.timeChannelId = f.timeId;
     StreamJobContext ctx;
-    ctx.appRoot = projectRoot().toStdString();
+    ctx.appRoot = rootUtf8();
     StreamJob job;
     StreamJobReport report;
-    QVERIFY(buildStreamJob(profiled.core(), base, ctx, job, report));
-    QVERIFY2(!report.log.empty(), "the job builder should have something to say about a profile");
+    REQUIRE(buildStreamJob(profiled.core(), base, ctx, job, report));
+    REQUIRE_MESSAGE(!report.log.empty(), "the job builder should have something to say about a profile");
 
     Request request(f, { lockCase(f), profiled });
     Seen seen;
     const tmdq_callbacks callbacks = seen.callbacks();
     const std::thread::id caller = std::this_thread::get_id();
     tmdq_run* run = nullptr;
-    QCOMPARE(tmdq_run_start(&request.req, &callbacks, &run), int(TMDQ_OK));
+    REQUIRE(tmdq_run_start(&request.req, &callbacks, &run) == int(TMDQ_OK));
     RunGuard guard{run};
-    QVERIFY2(seen.waitFinished(kTimeoutMs), seen.joined().c_str());
+    REQUIRE_MESSAGE(seen.waitFinished(kTimeoutMs), seen.joined());
     tmdq_run_wait(run);
 
     const std::vector<std::string> events = seen.snapshot();
-    QVERIFY(events.size() > report.log.size());
+    REQUIRE(events.size() > report.log.size());
     for (std::size_t i = 0; i < report.log.size(); ++i)
     {
-        QCOMPARE(events[i], "log:" + report.log[i]);
-        QVERIFY(seen.logThreads[i] == caller);
+        CHECK(events[i] == "log:" + report.log[i]);
+        REQUIRE(seen.logThreads[i] == caller);
     }
 }
 
-void TestAbi::everySettingOfAStreamReachesTheJob()
+TEST_CASE("Abi: everySettingOfAStreamReachesTheJob")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok)
-        QSKIP("step_cal fixture not available");
 
     // One stream, changed in one setting at a time. For each, the core's own run of the changed stream must
     // differ from its run of the unchanged one (or the row proves nothing), and the run through the ABI must
@@ -2192,7 +2163,7 @@ void TestAbi::everySettingOfAStreamReachesTheJob()
         Case        variant;
         std::string appRoot;
     };
-    const std::string project = projectRoot().toStdString();
+    const std::string project = rootUtf8();
     std::vector<Row> rows;
     auto add = [&](const char* name, Case base, auto change, const std::string& appRoot) {
         Case variant = base;
@@ -2214,14 +2185,13 @@ void TestAbi::everySettingOfAStreamReachesTheJob()
 
     for (Row& row : rows)
     {
-        const QString name = QString::fromLatin1(row.name);
+        const std::string name = row.name;
         bool okBase = false, okVariant = false;
         const auto base = runCore(f, 0, { row.base }, row.appRoot, okBase);
         const auto variant = runCore(f, 0, { row.variant }, row.appRoot, okVariant);
-        QVERIFY2(okBase && base.size() == 1, qPrintable(name + ": the unchanged stream must run"));
-        QVERIFY2(okVariant, qPrintable(name + ": the changed stream must build and run"));
-        QVERIFY2(variant.empty() || !sameStream(variant.at(0), base.at(0)),
-                 qPrintable(name + ": changing it should change the core's result, or the row proves nothing"));
+        REQUIRE_MESSAGE((okBase && base.size() == 1), (name + ": the unchanged stream must run"));
+        REQUIRE_MESSAGE(okVariant, (name + ": the changed stream must build and run"));
+        REQUIRE_MESSAGE((variant.empty() || !sameStream(variant.at(0), base.at(0))), (name + ": changing it should change the core's result, or the row proves nothing"));
 
         Request request(f, { row.variant });
         request.appRoot = row.appRoot;
@@ -2230,18 +2200,18 @@ void TestAbi::everySettingOfAStreamReachesTheJob()
         const bool ended = runToTheEnd(request, seen);
         if (variant.empty())
         {
-            QVERIFY2(!ended && seen.results.empty(), qPrintable(name + ": the core finds nothing, so must the ABI"));
+            REQUIRE_MESSAGE((!ended && seen.results.empty()), (name + ": the core finds nothing, so must the ABI"));
         }
         else
         {
-            QVERIFY2(ended, qPrintable(name + ": the run should complete"));
-            const QString diff = differences(seen.byJob().at(0), variant.at(0));
-            QVERIFY2(diff.isEmpty(), qPrintable(name + " differs in: " + diff));
+            REQUIRE_MESSAGE(ended, (name + ": the run should complete"));
+            const std::string diff = differences(seen.byJob().at(0), variant.at(0));
+            REQUIRE_MESSAGE(diff.empty(), (name + " differs in: " + diff));
         }
     }
 }
 
-void TestAbi::readingAHostStructNeverStraysBeyondTheKnownOne()
+TEST_CASE("Abi: readingAHostStructNeverStraysBeyondTheKnownOne")
 {
     // A newer host's longer struct is read only as far as this library knows it; the bytes after it, in the
     // destination, are never touched.
@@ -2254,132 +2224,124 @@ void TestAbi::readingAHostStructNeverStraysBeyondTheKnownOne()
     struct Destination { tmdq_channel_info info; unsigned char guard[64]; };
     Destination dest;
     std::memset(&dest, 0xCD, sizeof(dest));
-    QVERIFY(tmdq::readStruct(&source.info, sizeof(tmdq_channel_info), dest.info));
-    QCOMPARE(dest.info.channel_id, 42);
-    QCOMPARE(int(dest.info.struct_size), int(sizeof(tmdq_channel_info)));   // the size this library read it as
+    REQUIRE(tmdq::readStruct(&source.info, sizeof(tmdq_channel_info), dest.info));
+    CHECK(dest.info.channel_id == 42);
+    CHECK(int(dest.info.struct_size) == int(sizeof(tmdq_channel_info)));   // the size this library read it as
     for (unsigned char b : dest.guard)
-        QCOMPARE(int(b), 0xCD);
+        CHECK(int(b) == 0xCD);
 
     // A shorter struct than the first revision is refused, a NULL too.
     source.info.struct_size = sizeof(tmdq_channel_info) - 1;
-    QVERIFY(!tmdq::readStruct(&source.info, sizeof(tmdq_channel_info), dest.info));
-    QVERIFY(!tmdq::readStruct(static_cast<const tmdq_channel_info*>(nullptr), sizeof(tmdq_channel_info), dest.info));
+    REQUIRE(!tmdq::readStruct(&source.info, sizeof(tmdq_channel_info), dest.info));
+    REQUIRE(!tmdq::readStruct(static_cast<const tmdq_channel_info*>(nullptr), sizeof(tmdq_channel_info), dest.info));
 }
 
-void TestAbi::theStepFileIsReadLikeTheCore()
+TEST_CASE("Abi: theStepFileIsReadLikeTheCore")
 {
-    const std::string path = (projectRoot() + "/settings/rcvr_cals/default.toml").toStdString();
+    const std::string path = rootUtf8() + "/settings/rcvr_cals/default.toml";
     std::vector<StepDefinition> want;
     std::string error;
-    QVERIFY2(StepDetector::parseStepConfig(toFsPath(QString::fromStdString(path)), want, error), error.c_str());
-    QVERIFY(want.size() > 5);
+    REQUIRE_MESSAGE(StepDetector::parseStepConfig(textfile::pathFromUtf8(path), want, error), error);
+    REQUIRE(want.size() > 5);
 
     tmdq_steps* steps = nullptr;
-    QCOMPARE(tmdq_steps_parse(path.c_str(), &steps), int(TMDQ_OK));
-    QVERIFY(steps != nullptr);
-    QCOMPARE(tmdq_steps_count(steps), int(want.size()));
+    REQUIRE(tmdq_steps_parse(path.c_str(), &steps) == int(TMDQ_OK));
+    REQUIRE(steps != nullptr);
+    REQUIRE(tmdq_steps_count(steps) == int(want.size()));
     const double* db = tmdq_steps_db(steps);
-    QVERIFY(db != nullptr);
+    REQUIRE(db != nullptr);
     for (std::size_t i = 0; i < want.size(); ++i)
-        QCOMPARE(db[i], want[i].db);
+        CHECK(db[i] == want[i].db);
     tmdq_steps_free(steps);
 
     // A file that is not there says what the parser says; a file with no step in it is the same.
     tmdq_steps* none = reinterpret_cast<tmdq_steps*>(std::uintptr_t{1});
     std::vector<StepDefinition> ignored;
-    const std::string missing = (QDir::tempPath() + "/tst_abi_no_such_steps.toml").toStdString();
-    QVERIFY(!StepDetector::parseStepConfig(toFsPath(QString::fromStdString(missing)), ignored, error));
-    QCOMPARE(tmdq_steps_parse(missing.c_str(), &none), int(TMDQ_ERR_PREPARE));
-    QVERIFY(none == nullptr);
-    QCOMPARE(std::string(tmdq_last_error()), error);
+    const std::string missing = tempUtf8() + "/tst_abi_no_such_steps.toml";
+    REQUIRE(!StepDetector::parseStepConfig(textfile::pathFromUtf8(missing), ignored, error));
+    CHECK(tmdq_steps_parse(missing.c_str(), &none) == int(TMDQ_ERR_PREPARE));
+    REQUIRE(none == nullptr);
+    CHECK(std::string(tmdq_last_error()) == error);
 
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
-    QFile empty(dir.filePath("empty.toml"));
-    QVERIFY(empty.open(QIODevice::WriteOnly));
-    empty.write("# no steps here\n");
-    empty.close();
-    const std::string emptyPath = dir.filePath("empty.toml").toStdString();
-    QVERIFY(!StepDetector::parseStepConfig(toFsPath(QString::fromStdString(emptyPath)), ignored, error));
-    QCOMPARE(tmdq_steps_parse(emptyPath.c_str(), &none), int(TMDQ_ERR_PREPARE));
-    QCOMPARE(std::string(tmdq_last_error()), error);
+    Scratch dir;
+    const std::string emptyPath = writeFile(dir.filePath("empty.toml"), "# no steps here\n");
+    REQUIRE(!StepDetector::parseStepConfig(textfile::pathFromUtf8(emptyPath), ignored, error));
+    CHECK(tmdq_steps_parse(emptyPath.c_str(), &none) == int(TMDQ_ERR_PREPARE));
+    CHECK(std::string(tmdq_last_error()) == error);
 
     // Arguments.
-    QCOMPARE(tmdq_steps_parse(nullptr, &none), int(TMDQ_ERR_BADARG));
-    QVERIFY(none == nullptr);
-    QCOMPARE(tmdq_steps_parse(path.c_str(), nullptr), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_steps_count(nullptr), -1);
-    QVERIFY(tmdq_steps_db(nullptr) == nullptr);
+    CHECK(tmdq_steps_parse(nullptr, &none) == int(TMDQ_ERR_BADARG));
+    REQUIRE(none == nullptr);
+    CHECK(tmdq_steps_parse(path.c_str(), nullptr) == int(TMDQ_ERR_BADARG));
+    REQUIRE(tmdq_steps_count(nullptr) == -1);
+    REQUIRE(tmdq_steps_db(nullptr) == nullptr);
     tmdq_steps_free(nullptr);
 }
 
-void TestAbi::theInitialStepFilePathIsWrittenSnprintfStyle()
+TEST_CASE("Abi: theInitialStepFilePathIsWrittenSnprintfStyle")
 {
-    const std::string root = projectRoot().toStdString();
+    const std::string root = rootUtf8();
     const std::string want = StepDetector::initialStepConfigPath(root, std::string());
-    QVERIFY2(!want.empty(), "the shipped default step file should be found under the project root");
+    REQUIRE_MESSAGE(!want.empty(), "the shipped default step file should be found under the project root");
 
     // Measuring, then writing exactly, then writing into a buffer that is too small.
-    QCOMPARE(tmdq_step_config_initial_path(root.c_str(), nullptr, nullptr, 0), int(want.size()));
+    REQUIRE(tmdq_step_config_initial_path(root.c_str(), nullptr, nullptr, 0) == int(want.size()));
     std::vector<char> exact(want.size() + 1, 'x');
-    QCOMPARE(tmdq_step_config_initial_path(root.c_str(), nullptr, exact.data(), int(exact.size())), int(want.size()));
-    QCOMPARE(std::string(exact.data()), want);
+    REQUIRE(tmdq_step_config_initial_path(root.c_str(), nullptr, exact.data(), int(exact.size())) == int(want.size()));
+    CHECK(std::string(exact.data()) == want);
 
     std::vector<char> tight(8, 'x');
-    QCOMPARE(tmdq_step_config_initial_path(root.c_str(), "", tight.data(), int(tight.size())), int(want.size()));
-    QCOMPARE(std::string(tight.data()), want.substr(0, 7));   // truncated, and terminated
-    QCOMPARE(int(tight[7]), 0);
+    REQUIRE(tmdq_step_config_initial_path(root.c_str(), "", tight.data(), int(tight.size())) == int(want.size()));
+    CHECK(std::string(tight.data()) == want.substr(0, 7));   // truncated, and terminated
+    CHECK(int(tight[7]) == 0);
 
     // A preferred file that exists wins; one that does not is passed over.
     const std::string preferred = root + "/settings/rcvr_cals/TRC.toml";
     std::vector<char> big(512, 'x');
-    QVERIFY(tmdq_step_config_initial_path(root.c_str(), preferred.c_str(), big.data(), int(big.size())) > 0);
-    QCOMPARE(std::string(big.data()), StepDetector::initialStepConfigPath(root, preferred));
-    QCOMPARE(std::string(big.data()), preferred);
+    REQUIRE(tmdq_step_config_initial_path(root.c_str(), preferred.c_str(), big.data(), int(big.size())) > 0);
+    CHECK(std::string(big.data()) == StepDetector::initialStepConfigPath(root, preferred));
+    CHECK(std::string(big.data()) == preferred);
     std::fill(big.begin(), big.end(), 'x');
     tmdq_step_config_initial_path(root.c_str(), (root + "/no/such.toml").c_str(), big.data(), int(big.size()));
-    QCOMPARE(std::string(big.data()), want);
+    CHECK(std::string(big.data()) == want);
 
     // No app root and nothing preferred: empty.
     std::fill(big.begin(), big.end(), 'x');
-    QCOMPARE(tmdq_step_config_initial_path(nullptr, nullptr, big.data(), int(big.size())),
-             int(StepDetector::initialStepConfigPath(std::string(), std::string()).size()));
+    REQUIRE(tmdq_step_config_initial_path(nullptr, nullptr, big.data(), int(big.size())) == int(StepDetector::initialStepConfigPath(std::string(), std::string()).size()));
 
     // A buffer and capacity that do not make sense are an error, not a write.
-    QCOMPARE(tmdq_step_config_initial_path(root.c_str(), nullptr, nullptr, 10), -1);
-    QCOMPARE(tmdq_step_config_initial_path(root.c_str(), nullptr, big.data(), -1), -1);
+    CHECK(tmdq_step_config_initial_path(root.c_str(), nullptr, nullptr, 10) == -1);
+    CHECK(tmdq_step_config_initial_path(root.c_str(), nullptr, big.data(), -1) == -1);
 }
 
-void TestAbi::aCalibrationMatchesWhatTheExtractorMakes()
+TEST_CASE("Abi: aCalibrationMatchesWhatTheExtractorMakes")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok || shippedSteps().empty())
-        QSKIP("step_cal fixture or the shipped step file not available");
 
     const CalCase c(f);
     const DirectCalibration want = runDirectCalibration(c);
-    QVERIFY2(want.ok, want.summary.c_str());
-    QCOMPARE(want.results.size(), std::size_t{48});
+    REQUIRE_MESSAGE(want.ok, want.summary);
+    REQUIRE(want.results.size() == std::size_t{48});
     int calibrated = 0;
     for (const CalibrationChannelResult& r : want.results)
         calibrated += r.profile.valid ? 1 : 0;
-    QVERIFY2(calibrated >= 3, "the fixture should calibrate some channels, or the comparison proves little");
+    REQUIRE_MESSAGE(calibrated >= 3, "the fixture should calibrate some channels, or the comparison proves little");
 
     CalRequest request(c);
     Seen seen;
     CalGuard guard;
-    QVERIFY2(calibrateToTheEnd(request, seen, guard), seen.joined().c_str());
-    const QString diff = calibrationDifferences(guard.handle, want);
-    QVERIFY2(diff.isEmpty(), qPrintable(diff));
+    REQUIRE_MESSAGE(calibrateToTheEnd(request, seen, guard), seen.joined());
+    const std::string diff = calibrationDifferences(guard.handle, want);
+    REQUIRE_MESSAGE(diff.empty(), diff);
 
     // The documented order: finished last and once, progress from a single thread, never a stream result.
     const std::vector<std::string> events = seen.snapshot();
-    QCOMPARE(events.back(), std::string("finished:1"));
-    QCOMPARE(seen.finishedCount, 1);
-    QVERIFY(!seen.any("stream:"));
-    QCOMPARE(seen.progressThreads.size(), std::size_t{1});
-    QVERIFY(seen.any("log:"));
-    QCOMPARE(tmdq_calibration_running(guard.handle), 0);
+    CHECK(events.back() == std::string("finished:1"));
+    REQUIRE(seen.finishedCount == 1);
+    REQUIRE(!seen.any("stream:"));
+    REQUIRE(seen.progressThreads.size() == std::size_t{1});
+    REQUIRE(seen.any("log:"));
+    CHECK(tmdq_calibration_running(guard.handle) == 0);
 
     // The profiles it found feed a run: the same receiver stream, through the ABI and directly.
     Case calibrated_case = receiverCase(f);
@@ -2387,38 +2349,31 @@ void TestAbi::aCalibrationMatchesWhatTheExtractorMakes()
     {
         tmdq_calibration_channel ch{};
         ch.struct_size = sizeof(ch);
-        QCOMPARE(tmdq_calibration_channel_result(guard.handle, i, &ch), int(TMDQ_OK));
+        REQUIRE(tmdq_calibration_channel_result(guard.handle, i, &ch) == int(TMDQ_OK));
         if (ch.valid)
             calibrated_case.calibration[ch.word_index] = std::vector<tmdq_cal_point>(ch.points, ch.points + ch.point_count);
     }
-    QVERIFY(!calibrated_case.calibration.empty());
+    REQUIRE(!calibrated_case.calibration.empty());
     bool ok = false;
-    const auto direct = runCore(f, 0, { calibrated_case }, projectRoot().toStdString(), ok);
-    QVERIFY(ok);
+    const auto direct = runCore(f, 0, { calibrated_case }, rootUtf8(), ok);
+    REQUIRE(ok);
     Request run(f, { calibrated_case });
     Seen runSeen;
-    QVERIFY(runToTheEnd(run, runSeen));
-    QVERIFY2(differences(runSeen.byJob().at(0), direct.at(0)).isEmpty(), qPrintable(differences(runSeen.byJob().at(0), direct.at(0))));
+    REQUIRE(runToTheEnd(run, runSeen));
+    REQUIRE_MESSAGE(differences(runSeen.byJob().at(0), direct.at(0)).empty(), differences(runSeen.byJob().at(0), direct.at(0)));
 }
 
-void TestAbi::everySettingOfACalibrationReachesTheExtractor()
+TEST_CASE("Abi: everySettingOfACalibrationReachesTheExtractor")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok || shippedSteps().empty())
-        QSKIP("step_cal fixture or the shipped step file not available");
 
     // One setting changed at a time. For each, the core's result for the changed calibration must differ from
     // its result for the unchanged one (or the row proves nothing), and the run through the ABI must equal the
     // core's. A setting the ABI forgot to carry would give the unchanged calibration's result.
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
-    auto write = [](const QString& path, const char* text) {
-        QFile file(path);
-        QVERIFY(file.open(QIODevice::WriteOnly));
-        file.write(text);
-    };
+    Scratch dir;
+    auto write = [](const std::string& path, const char* text) { writeBytes(textfile::pathFromUtf8(path), text); };
     write(dir.filePath("one.toml"), "[L_RCVR1]\nWord = 1\n");
-    QVERIFY(QDir().mkpath(dir.filePath("root/settings/receiver_params")));
+    REQUIRE(fs::create_directories(textfile::pathFromUtf8(dir.filePath("root/settings/receiver_params"))));
     write(dir.filePath("root/settings/receiver_params/default.toml"), "[C_RCVR1]\nWord = 2\n[R_RCVR1]\nWord = 3\n");
 
     struct Row { const char* name; CalCase base; CalCase variant; };
@@ -2431,7 +2386,7 @@ void TestAbi::everySettingOfACalibrationReachesTheExtractor()
     auto add = [&](const char* name, auto change) { addWith(name, change, CalCase(f)); };
     // The grid fallback only applies when no word map is resolved: an application root with no default file.
     CalCase noMap(f);
-    noMap.appRoot = dir.filePath("empty-root").toStdString();
+    noMap.appRoot = dir.filePath("empty-root");
 
     add("randomized", [](CalCase& c) { c.in.randomized = true; });
     add("inverted", [](CalCase& c) { c.in.inverted = true; });
@@ -2446,37 +2401,35 @@ void TestAbi::everySettingOfACalibrationReachesTheExtractor()
     add("steps", [](CalCase& c) { c.in.steps.pop_back(); });
     addWith("receiver count", [](CalCase& c) { c.in.numReceivers = 2; }, noMap);
     addWith("receiver channels", [](CalCase& c) { c.in.receiverChannels = 1; }, noMap);
-    add("word-map file", [&](CalCase& c) { c.in.receiverParamsToml = toFsPath(dir.filePath("one.toml")); });
-    add("application root", [&](CalCase& c) { c.appRoot = dir.filePath("root").toStdString(); });
+    add("word-map file", [&](CalCase& c) { c.in.receiverParamsToml = textfile::pathFromUtf8(dir.filePath("one.toml")); });
+    add("application root", [&](CalCase& c) { c.appRoot = dir.filePath("root"); });
 
     for (Row& row : rows)
     {
-        const QString name = QString::fromLatin1(row.name);
+        const std::string name = row.name;
         const DirectCalibration base = runDirectCalibration(row.base);
         const DirectCalibration variant = runDirectCalibration(row.variant);
-        QVERIFY2(base.built && base.ok, qPrintable(name + ": the unchanged calibration must run: " + QString::fromStdString(base.summary)));
-        QVERIFY2(variant.built, qPrintable(name + ": the changed calibration must build"));
-        QVERIFY2(!sameCalibration(base, variant), qPrintable(name + ": changing it should change the core's result, or the row proves nothing"));
+        REQUIRE_MESSAGE((base.built && base.ok), (name + ": the unchanged calibration must run: " + base.summary));
+        REQUIRE_MESSAGE(variant.built, (name + ": the changed calibration must build"));
+        REQUIRE_MESSAGE(!sameCalibration(base, variant), (name + ": changing it should change the core's result, or the row proves nothing"));
 
         CalRequest request(row.variant);
         Seen seen;
         CalGuard guard;
         const bool ended = calibrateToTheEnd(request, seen, guard);
-        QVERIFY2(guard.handle != nullptr, qPrintable(name + ": the calibration should start"));
+        REQUIRE_MESSAGE(guard.handle != nullptr, (name + ": the calibration should start"));
         if (variant.ok)
-            QVERIFY2(ended, qPrintable(name + ": the calibration should complete"));
+            REQUIRE_MESSAGE(ended, (name + ": the calibration should complete"));
         else
-            QVERIFY2(!ended, qPrintable(name + ": the core fails, so must the ABI"));
-        const QString diff = calibrationDifferences(guard.handle, variant);
-        QVERIFY2(diff.isEmpty(), qPrintable(name + " differs in: " + diff));
+            REQUIRE_MESSAGE(!ended, (name + ": the core fails, so must the ABI"));
+        const std::string diff = calibrationDifferences(guard.handle, variant);
+        REQUIRE_MESSAGE(diff.empty(), (name + " differs in: " + diff));
     }
 }
 
-void TestAbi::aCalibrationSettingTheExtractorCannotUseIsRefused()
+TEST_CASE("Abi: aCalibrationSettingTheExtractorCannotUseIsRefused")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok || shippedSteps().empty())
-        QSKIP("step_cal fixture or the shipped step file not available");
 
     Seen seen;
     const tmdq_callbacks callbacks = seen.callbacks();
@@ -2485,250 +2438,237 @@ void TestAbi::aCalibrationSettingTheExtractorCannotUseIsRefused()
     CalCase badPattern(f);
     badPattern.in.syncPattern = "zz";
     CalRequest r1(badPattern);
-    QCOMPARE(tmdq_calibration_start(&r1.req, &callbacks, &handle), int(TMDQ_ERR_JOB));
-    QVERIFY(handle == nullptr);
-    QCOMPARE(std::string(tmdq_last_error()), std::string("Invalid frame sync pattern 'zz'."));
+    CHECK(tmdq_calibration_start(&r1.req, &callbacks, &handle) == int(TMDQ_ERR_JOB));
+    REQUIRE(handle == nullptr);
+    CHECK(std::string(tmdq_last_error()) == std::string("Invalid frame sync pattern 'zz'."));
 
     CalCase emptyPattern(f);
     emptyPattern.in.syncPattern.clear();
     CalRequest r2(emptyPattern);
     r2.req.sync_pattern_utf8 = nullptr;
-    QCOMPARE(tmdq_calibration_start(&r2.req, &callbacks, &handle), int(TMDQ_ERR_JOB));
-    QCOMPARE(std::string(tmdq_last_error()), std::string("Invalid frame sync pattern ''."));
+    CHECK(tmdq_calibration_start(&r2.req, &callbacks, &handle) == int(TMDQ_ERR_JOB));
+    CHECK(std::string(tmdq_last_error()) == std::string("Invalid frame sync pattern ''."));
 
     CalCase badMask(f);
     badMask.in.syncMask = "xyz";
     CalRequest r3(badMask);
-    QCOMPARE(tmdq_calibration_start(&r3.req, &callbacks, &handle), int(TMDQ_ERR_JOB));
-    QCOMPARE(std::string(tmdq_last_error()), std::string("Invalid frame sync mask 'xyz'."));
+    CHECK(tmdq_calibration_start(&r3.req, &callbacks, &handle) == int(TMDQ_ERR_JOB));
+    CHECK(std::string(tmdq_last_error()) == std::string("Invalid frame sync mask 'xyz'."));
 
     // Nothing was started, so nothing was reported.
-    QVERIFY(seen.snapshot().empty());
+    REQUIRE(seen.snapshot().empty());
 }
 
-void TestAbi::badArgumentsToTheCalibrationFunctionsAreRefused()
+TEST_CASE("Abi: badArgumentsToTheCalibrationFunctionsAreRefused")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok || shippedSteps().empty())
-        QSKIP("step_cal fixture or the shipped step file not available");
 
     Seen seen;
     const tmdq_callbacks callbacks = seen.callbacks();
     CalRequest good{CalCase(f)};
     tmdq_calibration* handle = reinterpret_cast<tmdq_calibration*>(std::uintptr_t{1});
 
-    QCOMPARE(tmdq_calibration_start(nullptr, &callbacks, &handle), int(TMDQ_ERR_BADARG));
-    QVERIFY(handle == nullptr);
-    QCOMPARE(tmdq_calibration_start(&good.req, &callbacks, nullptr), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_calibration_start(nullptr, &callbacks, &handle) == int(TMDQ_ERR_BADARG));
+    REQUIRE(handle == nullptr);
+    CHECK(tmdq_calibration_start(&good.req, &callbacks, nullptr) == int(TMDQ_ERR_BADARG));
 
     tmdq_calibration_request r = good.req;
     r.struct_size = sizeof(tmdq_calibration_request) - 1;
-    QCOMPARE(tmdq_calibration_start(&r, &callbacks, &handle), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_calibration_start(&r, &callbacks, &handle) == int(TMDQ_ERR_BADARG));
     r = good.req;
     r.cal_filename_utf8 = nullptr;
-    QCOMPARE(tmdq_calibration_start(&r, &callbacks, &handle), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_calibration_start(&r, &callbacks, &handle) == int(TMDQ_ERR_BADARG));
     r.cal_filename_utf8 = "";
-    QCOMPARE(tmdq_calibration_start(&r, &callbacks, &handle), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_calibration_start(&r, &callbacks, &handle) == int(TMDQ_ERR_BADARG));
     r = good.req;
     r.step_count = -1;
-    QCOMPARE(tmdq_calibration_start(&r, &callbacks, &handle), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_calibration_start(&r, &callbacks, &handle) == int(TMDQ_ERR_BADARG));
     r = good.req;
     r.step_db = nullptr;
-    QCOMPARE(tmdq_calibration_start(&r, &callbacks, &handle), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_calibration_start(&r, &callbacks, &handle) == int(TMDQ_ERR_BADARG));
     tmdq_callbacks shortCallbacks = callbacks;
     shortCallbacks.struct_size = sizeof(tmdq_callbacks) - 1;
-    QCOMPARE(tmdq_calibration_start(&good.req, &shortCallbacks, &handle), int(TMDQ_ERR_BADARG));
-    QVERIFY(handle == nullptr);
-    QVERIFY(seen.snapshot().empty());
+    CHECK(tmdq_calibration_start(&good.req, &shortCallbacks, &handle) == int(TMDQ_ERR_BADARG));
+    REQUIRE(handle == nullptr);
+    REQUIRE(seen.snapshot().empty());
 
     // NULL is tolerated where it makes sense.
     tmdq_calibration_cancel(nullptr);
-    QCOMPARE(tmdq_calibration_running(nullptr), 0);
+    CHECK(tmdq_calibration_running(nullptr) == 0);
     tmdq_calibration_wait(nullptr);
     tmdq_calibration_free(nullptr);
     tmdq_calibration_info info{};
     info.struct_size = sizeof(info);
-    QCOMPARE(tmdq_calibration_result(nullptr, &info), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_calibration_result(nullptr, &info) == int(TMDQ_ERR_BADARG));
     tmdq_calibration_channel ch{};
     ch.struct_size = sizeof(ch);
-    QCOMPARE(tmdq_calibration_channel_result(nullptr, 0, &ch), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_calibration_channel_result(nullptr, 0, &ch) == int(TMDQ_ERR_BADARG));
 
     // A run with no callbacks at all just runs; and a finished one refuses a bad index, a short struct, no output.
     CalGuard guard;
-    QCOMPARE(tmdq_calibration_start(&good.req, nullptr, &guard.handle), int(TMDQ_OK));
+    REQUIRE(tmdq_calibration_start(&good.req, nullptr, &guard.handle) == int(TMDQ_OK));
     tmdq_calibration_wait(guard.handle);
-    QCOMPARE(tmdq_calibration_running(guard.handle), 0);
-    QCOMPARE(tmdq_calibration_channel_result(guard.handle, 48, &ch), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_calibration_channel_result(guard.handle, -1, &ch), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_calibration_channel_result(guard.handle, 0, nullptr), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_calibration_result(guard.handle, nullptr), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_calibration_running(guard.handle) == 0);
+    CHECK(tmdq_calibration_channel_result(guard.handle, 48, &ch) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_calibration_channel_result(guard.handle, -1, &ch) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_calibration_channel_result(guard.handle, 0, nullptr) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_calibration_result(guard.handle, nullptr) == int(TMDQ_ERR_BADARG));
     tmdq_calibration_info shortInfo{};
     shortInfo.struct_size = sizeof(shortInfo) - 1;
-    QCOMPARE(tmdq_calibration_result(guard.handle, &shortInfo), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_calibration_result(guard.handle, &shortInfo) == int(TMDQ_ERR_BADARG));
     tmdq_calibration_channel shortChannel{};
     shortChannel.struct_size = sizeof(shortChannel) - 1;
-    QCOMPARE(tmdq_calibration_channel_result(guard.handle, 0, &shortChannel), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_calibration_channel_result(guard.handle, 0, &ch), int(TMDQ_OK));
+    CHECK(tmdq_calibration_channel_result(guard.handle, 0, &shortChannel) == int(TMDQ_ERR_BADARG));
+    REQUIRE(tmdq_calibration_channel_result(guard.handle, 0, &ch) == int(TMDQ_OK));
 }
 
-void TestAbi::aCalibrationThatCannotStartReportsThroughTheSink()
+TEST_CASE("Abi: aCalibrationThatCannotStartReportsThroughTheSink")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok || shippedSteps().empty())
-        QSKIP("step_cal fixture or the shipped step file not available");
 
     // A recording that is not there: the extractor reports it before any thread starts, so by the time
     // start returns the error and the end have been delivered, and the handle is already finished.
     CalCase missing(f);
-    missing.in.calFilename = toFsPath(QDir::tempPath() + "/tst_abi_no_such_cal.ch10");
+    missing.in.calFilename = textfile::pathFromUtf8(tempUtf8() + "/tst_abi_no_such_cal.ch10");
     const DirectCalibration want = runDirectCalibration(missing);
-    QVERIFY(!want.ok);
-    QVERIFY(!want.error.empty());
+    REQUIRE(!want.ok);
+    REQUIRE(!want.error.empty());
 
     CalRequest request(missing);
     Seen seen;
     const tmdq_callbacks callbacks = seen.callbacks();
     CalGuard guard;
-    QCOMPARE(tmdq_calibration_start(&request.req, &callbacks, &guard.handle), int(TMDQ_OK));
-    QVERIFY(guard.handle != nullptr);
-    QCOMPARE(seen.finishedCount, 1);
-    QCOMPARE(seen.finishedSuccess, 0);
-    QVERIFY(seen.any("error:"));
-    QCOMPARE(seen.snapshot().back(), std::string("finished:0"));
-    QCOMPARE(tmdq_calibration_running(guard.handle), 0);
-    const QString diff = calibrationDifferences(guard.handle, want);
-    QVERIFY2(diff.isEmpty(), qPrintable(diff));
+    REQUIRE(tmdq_calibration_start(&request.req, &callbacks, &guard.handle) == int(TMDQ_OK));
+    REQUIRE(guard.handle != nullptr);
+    REQUIRE(seen.finishedCount == 1);
+    CHECK(seen.finishedSuccess == 0);
+    REQUIRE(seen.any("error:"));
+    CHECK(seen.snapshot().back() == std::string("finished:0"));
+    CHECK(tmdq_calibration_running(guard.handle) == 0);
+    const std::string diff = calibrationDifferences(guard.handle, want);
+    REQUIRE_MESSAGE(diff.empty(), diff);
 
     // No steps at all is refused the same way, with the extractor's own words.
     const CalCase none(f, {});
     const DirectCalibration noSteps = runDirectCalibration(none);
-    QVERIFY(!noSteps.ok);
+    REQUIRE(!noSteps.ok);
     CalRequest empty(none);
     Seen seen2;
     const tmdq_callbacks callbacks2 = seen2.callbacks();
     CalGuard guard2;
-    QCOMPARE(tmdq_calibration_start(&empty.req, &callbacks2, &guard2.handle), int(TMDQ_OK));
-    QCOMPARE(seen2.finishedSuccess, 0);
-    QVERIFY2(calibrationDifferences(guard2.handle, noSteps).isEmpty(), qPrintable(calibrationDifferences(guard2.handle, noSteps)));
+    REQUIRE(tmdq_calibration_start(&empty.req, &callbacks2, &guard2.handle) == int(TMDQ_OK));
+    CHECK(seen2.finishedSuccess == 0);
+    REQUIRE_MESSAGE(calibrationDifferences(guard2.handle, noSteps).empty(), calibrationDifferences(guard2.handle, noSteps));
 }
 
-void TestAbi::resultsAreRefusedWhileACalibrationRunsAndCancelEndsIt()
+TEST_CASE("Abi: resultsAreRefusedWhileACalibrationRunsAndCancelEndsIt")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok || shippedSteps().empty())
-        QSKIP("step_cal fixture or the shipped step file not available");
 
     CalRequest request{CalCase(f)};
     Seen seen;
     const tmdq_callbacks callbacks = seen.callbacks();
     CalGuard guard;
-    QCOMPARE(tmdq_calibration_start(&request.req, &callbacks, &guard.handle), int(TMDQ_OK));
-    QCOMPARE(tmdq_calibration_running(guard.handle), 1);
+    REQUIRE(tmdq_calibration_start(&request.req, &callbacks, &guard.handle) == int(TMDQ_OK));
+    CHECK(tmdq_calibration_running(guard.handle) == 1);
 
     tmdq_calibration_info info{};
     info.struct_size = sizeof(info);
-    QCOMPARE(tmdq_calibration_result(guard.handle, &info), int(TMDQ_ERR_STATE));
-    QVERIFY(!std::string(tmdq_last_error()).empty());
+    CHECK(tmdq_calibration_result(guard.handle, &info) == int(TMDQ_ERR_STATE));
+    REQUIRE(!std::string(tmdq_last_error()).empty());
     tmdq_calibration_channel ch{};
     ch.struct_size = sizeof(ch);
-    QCOMPARE(tmdq_calibration_channel_result(guard.handle, 0, &ch), int(TMDQ_ERR_STATE));
+    CHECK(tmdq_calibration_channel_result(guard.handle, 0, &ch) == int(TMDQ_ERR_STATE));
 
     tmdq_calibration_cancel(guard.handle);
     tmdq_calibration_cancel(guard.handle);   // twice is as good as once
-    QVERIFY2(seen.waitFinished(kTimeoutMs), seen.joined().c_str());
+    REQUIRE_MESSAGE(seen.waitFinished(kTimeoutMs), seen.joined());
     tmdq_calibration_wait(guard.handle);
-    QCOMPARE(seen.finishedCount, 1);
-    QCOMPARE(seen.finishedSuccess, 0);
-    QCOMPARE(tmdq_calibration_running(guard.handle), 0);
-    QCOMPARE(tmdq_calibration_result(guard.handle, &info), int(TMDQ_OK));
-    QCOMPARE(std::string(info.summary_utf8), std::string("Calibration extraction cancelled."));
-    QCOMPARE(std::string(info.error_utf8), std::string());
+    REQUIRE(seen.finishedCount == 1);
+    CHECK(seen.finishedSuccess == 0);
+    CHECK(tmdq_calibration_running(guard.handle) == 0);
+    REQUIRE(tmdq_calibration_result(guard.handle, &info) == int(TMDQ_OK));
+    CHECK(std::string(info.summary_utf8) == std::string("Calibration extraction cancelled."));
+    CHECK(std::string(info.error_utf8) == std::string());
 }
 
-void TestAbi::freeingACalibrationInFlightCancelsAndWaits()
+TEST_CASE("Abi: freeingACalibrationInFlightCancelsAndWaits")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok || shippedSteps().empty())
-        QSKIP("step_cal fixture or the shipped step file not available");
 
     CalRequest request{CalCase(f)};
     auto seen = std::make_unique<Seen>();
     const tmdq_callbacks callbacks = seen->callbacks();
     tmdq_calibration* handle = nullptr;
-    QCOMPARE(tmdq_calibration_start(&request.req, &callbacks, &handle), int(TMDQ_OK));
+    REQUIRE(tmdq_calibration_start(&request.req, &callbacks, &handle) == int(TMDQ_OK));
     tmdq_calibration_free(handle);   // no cancel, no wait: free does both
 
-    QCOMPARE(seen->finishedCount, 1);
-    QCOMPARE(seen->finishedSuccess, 0);
-    QCOMPARE(seen->snapshot().back(), std::string("finished:0"));
+    REQUIRE(seen->finishedCount == 1);
+    CHECK(seen->finishedSuccess == 0);
+    CHECK(seen->snapshot().back() == std::string("finished:0"));
     seen.reset();
 }
 
-void TestAbi::waitAloneIsEnoughToSeeACalibrationEnd()
+TEST_CASE("Abi: waitAloneIsEnoughToSeeACalibrationEnd")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok || shippedSteps().empty())
-        QSKIP("step_cal fixture or the shipped step file not available");
 
     CalRequest request{CalCase(f)};
     Seen seen;
     const tmdq_callbacks callbacks = seen.callbacks();
     CalGuard guard;
-    QCOMPARE(tmdq_calibration_start(&request.req, &callbacks, &guard.handle), int(TMDQ_OK));
+    REQUIRE(tmdq_calibration_start(&request.req, &callbacks, &guard.handle) == int(TMDQ_OK));
     tmdq_calibration_wait(guard.handle);
-    QCOMPARE(tmdq_calibration_running(guard.handle), 0);
-    QCOMPARE(seen.finishedCount, 1);
-    QCOMPARE(seen.finishedSuccess, 1);
+    CHECK(tmdq_calibration_running(guard.handle) == 0);
+    REQUIRE(seen.finishedCount == 1);
+    CHECK(seen.finishedSuccess == 1);
     tmdq_calibration_info info{};
     info.struct_size = sizeof(info);
-    QCOMPARE(tmdq_calibration_result(guard.handle, &info), int(TMDQ_OK));
-    QCOMPARE(info.channel_count, 48);
+    REQUIRE(tmdq_calibration_result(guard.handle, &info) == int(TMDQ_OK));
+    REQUIRE(info.channel_count == 48);
     tmdq_calibration_wait(guard.handle);   // and again is harmless
 }
 
-void TestAbi::aThresholdThatHadToBeRelaxedIsReported()
+TEST_CASE("Abi: aThresholdThatHadToBeRelaxedIsReported")
 {
     const StepCal f = loadStepCal();
-    if (!f.ok || shippedSteps().empty())
-        QSKIP("step_cal fixture or the shipped step file not available");
 
     // Four expected steps against a recording that sweeps eleven: the nominal edge threshold cannot resolve
     // so few levels and some channels only pair after it is lowered. The flag says so, and it is the one
     // per-channel flag the ordinary eleven-step run never sets.
     const CalCase c(f, { 0.0, 6.0, 12.0, 18.0 });
     const DirectCalibration want = runDirectCalibration(c);
-    QVERIFY(want.ok);
+    REQUIRE(want.ok);
     int relaxed = 0;
     for (const CalibrationChannelResult& r : want.results)
         relaxed += r.thresholdRelaxed ? 1 : 0;
-    QVERIFY2(relaxed > 0, "the fixture should need a relaxed threshold with four steps, or this proves nothing");
+    REQUIRE_MESSAGE(relaxed > 0, "the fixture should need a relaxed threshold with four steps, or this proves nothing");
 
     CalRequest request(c);
     Seen seen;
     CalGuard guard;
-    QVERIFY2(calibrateToTheEnd(request, seen, guard), seen.joined().c_str());
-    const QString diff = calibrationDifferences(guard.handle, want);
-    QVERIFY2(diff.isEmpty(), qPrintable(diff));
+    REQUIRE_MESSAGE(calibrateToTheEnd(request, seen, guard), seen.joined());
+    const std::string diff = calibrationDifferences(guard.handle, want);
+    REQUIRE_MESSAGE(diff.empty(), diff);
     int reported = 0;
     for (int32_t i = 0; i < int(want.results.size()); ++i)
     {
         tmdq_calibration_channel ch{};
         ch.struct_size = sizeof(ch);
-        QCOMPARE(tmdq_calibration_channel_result(guard.handle, i, &ch), int(TMDQ_OK));
+        REQUIRE(tmdq_calibration_channel_result(guard.handle, i, &ch) == int(TMDQ_OK));
         reported += ch.threshold_relaxed;
     }
-    QCOMPARE(reported, relaxed);
+    CHECK(reported == relaxed);
 }
 
-void TestAbi::aFrameSyncFileIsReadLikeTheCore()
+TEST_CASE("Abi: aFrameSyncFileIsReadLikeTheCore")
 {
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
-    QStringList paths;
+    Scratch dir;
+    std::vector<std::string> paths;
     for (const char* name : { "framesync_PRN11.toml", "framesync_PRN15.toml", "framesync_rcvr_default.toml" })
-        paths << projectRoot() + "/settings/framesync_patterns/" + name;
+        paths.push_back(rootUtf8() + "/settings/framesync_patterns/" + name);
     // Each way a file can be odd.
-    const std::vector<std::pair<const char*, QByteArray>> odd = {
+    const std::vector<std::pair<const char*, std::string>> odd = {
         {"legacy", "[Frame]\nFrameSync = \"FE6B2840\"\nWordsInMinorFrame = 50\n"},
         {"legacy-too-small", "[Frame]\nFrameSync = \"FE6B2840\"\nWordsInMinorFrame = 1\n"},
         {"bits-too-small", "[Frame]\nBitsPerFrame = 3\nFrameSync = \"AB\"\n"},
@@ -2736,55 +2676,54 @@ void TestAbi::aFrameSyncFileIsReadLikeTheCore()
         {"no-randomized", "[Frame]\nBitsPerFrame = 800\nFrameSync = \"FE6B2840\"\nInverted = true\n"},
         {"randomized", "[Frame]\nBitsPerFrame = 800\nFrameSync = \"FE6B2840\"\nFrameSyncMask = \"FFFF0000\"\nRandomized = true\nInverted = false\n"},
         {"empty-values", "[Frame]\nFrameSync = \"\"\nFrameSyncMask = \"\"\n"},
-        {"bom", QByteArray("\xEF\xBB\xBF[Frame]\nBitsPerFrame = 8000\nFrameSync = \"334AABBF\"\n")},
-        {"non-ascii", QByteArray("[Frame]\nFrameSync = \"\xC3\xA9\xC3\xA8\"\nBitsPerFrame = 800\n")},
-        {"empty-file", QByteArray()},
+        {"bom", std::string("\xEF\xBB\xBF[Frame]\nBitsPerFrame = 8000\nFrameSync = \"334AABBF\"\n")},
+        {"non-ascii", std::string("[Frame]\nFrameSync = \"\xC3\xA9\xC3\xA8\"\nBitsPerFrame = 800\n")},
+        {"empty-file", std::string()},
         {"junk", "this is {{ not toml\n"},
     };
     for (const auto& [name, bytes] : odd)
-        paths << writeFile(dir.filePath(QString::fromLatin1(name) + ".toml"), bytes);
-    paths << dir.filePath("does-not-exist.toml");
+        paths.push_back(writeFile(dir.filePath(std::string(name) + ".toml"), bytes));
+    paths.push_back(dir.filePath("does-not-exist.toml"));
 
-    for (const QString& path : paths)
+    for (const std::string& path : paths)
     {
-        QVERIFY2(!path.isEmpty(), "a fixture could not be written");
-        const std::string utf8 = path.toStdString();
-        const FrameSyncFile want = readFrameSyncFile(toFsPath(path));
+        REQUIRE_MESSAGE(!path.empty(), "a fixture could not be written");
+        const std::string utf8 = path;
+        const FrameSyncFile want = readFrameSyncFile(textfile::pathFromUtf8(path));
         tmdq_frame_sync_file* file = nullptr;
-        QCOMPARE(tmdq_frame_sync_file_read(utf8.c_str(), &file), int(TMDQ_OK));
-        QVERIFY(file != nullptr);
-        QCOMPARE(describeSyncFile(file), describeSyncFile(want));
+        REQUIRE(tmdq_frame_sync_file_read(utf8.c_str(), &file) == int(TMDQ_OK));
+        REQUIRE(file != nullptr);
+        CHECK(describeSyncFile(file) == describeSyncFile(want));
         tmdq_frame_sync_file_free(file);
     }
 
     // The shipped PRN15 file is not "nothing": the comparison above is not vacuous.
-    const FrameSyncFile prn = readFrameSyncFile(toFsPath(paths[1]));
-    QCOMPARE(prn.pattern, std::string("334AABBF"));
-    QVERIFY(prn.bitsPerFrame.has_value());
-    QVERIFY(prn.randomized.has_value());
+    const FrameSyncFile prn = readFrameSyncFile(textfile::pathFromUtf8(paths[1]));
+    CHECK(prn.pattern == std::string("334AABBF"));
+    REQUIRE(prn.bitsPerFrame.has_value());
+    REQUIRE(prn.randomized.has_value());
 
     // Arguments.
     tmdq_frame_sync_file* none = reinterpret_cast<tmdq_frame_sync_file*>(std::uintptr_t{1});
-    QCOMPARE(tmdq_frame_sync_file_read(nullptr, &none), int(TMDQ_ERR_BADARG));
-    QVERIFY(none == nullptr);
-    QCOMPARE(tmdq_frame_sync_file_read("x", nullptr), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_frame_sync_file_read(nullptr, &none) == int(TMDQ_ERR_BADARG));
+    REQUIRE(none == nullptr);
+    CHECK(tmdq_frame_sync_file_read("x", nullptr) == int(TMDQ_ERR_BADARG));
     tmdq_frame_sync_file_info info{};
     info.struct_size = sizeof(info);
-    QCOMPARE(tmdq_frame_sync_file_info_get(nullptr, &info), int(TMDQ_ERR_BADARG));
-    const std::string good = paths[1].toStdString();
+    CHECK(tmdq_frame_sync_file_info_get(nullptr, &info) == int(TMDQ_ERR_BADARG));
+    const std::string good = paths[1];
     tmdq_frame_sync_file* file = nullptr;
-    QCOMPARE(tmdq_frame_sync_file_read(good.c_str(), &file), int(TMDQ_OK));
-    QCOMPARE(tmdq_frame_sync_file_info_get(file, nullptr), int(TMDQ_ERR_BADARG));
+    REQUIRE(tmdq_frame_sync_file_read(good.c_str(), &file) == int(TMDQ_OK));
+    CHECK(tmdq_frame_sync_file_info_get(file, nullptr) == int(TMDQ_ERR_BADARG));
     info.struct_size = sizeof(info) - 1;
-    QCOMPARE(tmdq_frame_sync_file_info_get(file, &info), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_frame_sync_file_info_get(file, &info) == int(TMDQ_ERR_BADARG));
     tmdq_frame_sync_file_free(file);
     tmdq_frame_sync_file_free(nullptr);
 }
 
-void TestAbi::aFrameSyncFileIsWrittenLikeTheCore()
+TEST_CASE("Abi: aFrameSyncFileIsWrittenLikeTheCore")
 {
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
+    Scratch dir;
     struct Args { const char* pattern; const char* mask; int bits; int inverted; int randomized; };
     const Args cases[] = {
         {"FE6B2840", "", 800, 0, 0},
@@ -2796,36 +2735,36 @@ void TestAbi::aFrameSyncFileIsWrittenLikeTheCore()
     int n = 0;
     for (const Args& a : cases)
     {
-        const QString viaAbi = dir.filePath(QString("abi%1.toml").arg(n));
-        const QString viaCore = dir.filePath(QString("core%1.toml").arg(n));
+        const std::string viaAbi = dir.filePath(std::format("abi{}.toml", n));
+        const std::string viaCore = dir.filePath(std::format("core{}.toml", n));
         ++n;
-        const std::string utf8 = viaAbi.toStdString();
-        QCOMPARE(tmdq_frame_sync_file_write(utf8.c_str(), a.pattern, a.mask, a.bits, a.inverted, a.randomized), int(TMDQ_OK));
-        QVERIFY(writeFrameSyncFile(toFsPath(viaCore), a.pattern, a.mask, a.bits, a.inverted != 0, a.randomized != 0));
-        QCOMPARE(slurp(viaAbi), slurp(viaCore));
+        const std::string utf8 = viaAbi;
+        REQUIRE(tmdq_frame_sync_file_write(utf8.c_str(), a.pattern, a.mask, a.bits, a.inverted, a.randomized) == int(TMDQ_OK));
+        REQUIRE(writeFrameSyncFile(textfile::pathFromUtf8(viaCore), a.pattern, a.mask, a.bits, a.inverted != 0, a.randomized != 0));
+        CHECK(slurp(viaAbi) == slurp(viaCore));
 
         // And it reads back as what was written.
         tmdq_frame_sync_file* file = nullptr;
-        QCOMPARE(tmdq_frame_sync_file_read(utf8.c_str(), &file), int(TMDQ_OK));
-        QCOMPARE(describeSyncFile(file), describeSyncFile(readFrameSyncFile(toFsPath(viaCore))));
+        REQUIRE(tmdq_frame_sync_file_read(utf8.c_str(), &file) == int(TMDQ_OK));
+        CHECK(describeSyncFile(file) == describeSyncFile(readFrameSyncFile(textfile::pathFromUtf8(viaCore))));
         tmdq_frame_sync_file_free(file);
     }
 
     // NULL text reads as empty; a path that cannot be written is an I/O error, not a crash.
-    const QString viaNull = dir.filePath("null.toml");
-    const std::string nullUtf8 = viaNull.toStdString();
-    QCOMPARE(tmdq_frame_sync_file_write(nullUtf8.c_str(), nullptr, nullptr, 800, 0, 0), int(TMDQ_OK));
-    const QString viaEmpty = dir.filePath("empty.toml");
-    QVERIFY(writeFrameSyncFile(toFsPath(viaEmpty), "", "", 800, false, false));
-    QCOMPARE(slurp(viaNull), slurp(viaEmpty));
+    const std::string viaNull = dir.filePath("null.toml");
+    const std::string nullUtf8 = viaNull;
+    REQUIRE(tmdq_frame_sync_file_write(nullUtf8.c_str(), nullptr, nullptr, 800, 0, 0) == int(TMDQ_OK));
+    const std::string viaEmpty = dir.filePath("empty.toml");
+    REQUIRE(writeFrameSyncFile(textfile::pathFromUtf8(viaEmpty), "", "", 800, false, false));
+    CHECK(slurp(viaNull) == slurp(viaEmpty));
 
-    const std::string dirPath = dir.path().toStdString();   // a directory is not a file
-    QCOMPARE(tmdq_frame_sync_file_write(dirPath.c_str(), "AB", "", 800, 0, 0), int(TMDQ_ERR_IO));
-    QVERIFY(!std::string(tmdq_last_error()).empty());
-    QCOMPARE(tmdq_frame_sync_file_write(nullptr, "AB", "", 800, 0, 0), int(TMDQ_ERR_BADARG));
+    const std::string dirPath = dir.path();   // a directory is not a file
+    CHECK(tmdq_frame_sync_file_write(dirPath.c_str(), "AB", "", 800, 0, 0) == int(TMDQ_ERR_IO));
+    REQUIRE(!std::string(tmdq_last_error()).empty());
+    CHECK(tmdq_frame_sync_file_write(nullptr, "AB", "", 800, 0, 0) == int(TMDQ_ERR_BADARG));
 }
 
-void TestAbi::templateMatchingAgreesWithTheCore()
+TEST_CASE("Abi: templateMatchingAgreesWithTheCore")
 {
     auto run = [](const std::vector<int>& t, const std::vector<int>& f) {
         tmdq_match* match = nullptr;
@@ -2853,13 +2792,13 @@ void TestAbi::templateMatchingAgreesWithTheCore()
     for (const auto& [t, f] : fixed)
     {
         auto [status, match] = run(t, f);
-        QCOMPARE(status, int(TMDQ_OK));
-        QVERIFY(same(match, TemplateMatcher::match(t, f)));
+        REQUIRE(status == int(TMDQ_OK));
+        REQUIRE(same(match, TemplateMatcher::match(t, f)));
         tmdq_match_free(match);
     }
     // The comparison is not vacuous: one of those really is a mismatch, another really matches.
-    QVERIFY(!TemplateMatcher::match({1, 2, 3}, {3, 4, 5}).ok);
-    QVERIFY(TemplateMatcher::match({13, 13, 14}, {14, 13}).ok);
+    REQUIRE(!TemplateMatcher::match({1, 2, 3}, {3, 4, 5}).ok);
+    REQUIRE(TemplateMatcher::match({13, 13, 14}, {14, 13}).ok);
 
     // Random sets, with repeats.
     std::mt19937 rng(20261023);
@@ -2871,131 +2810,129 @@ void TestAbi::templateMatchingAgreesWithTheCore()
         for (int k = 0; k < nt; ++k) t.push_back(int(rng() % 8));
         for (int k = 0; k < nf; ++k) f.push_back(int(rng() % 8));
         auto [status, match] = run(t, f);
-        QCOMPARE(status, int(TMDQ_OK));
+        REQUIRE(status == int(TMDQ_OK));
         const auto want = TemplateMatcher::match(t, f);
-        QVERIFY2(same(match, want), qPrintable(QString("case %1").arg(i)));
+        REQUIRE_MESSAGE(same(match, want), std::format("case {}", i));
         (want.ok ? matched : mismatched)++;
         tmdq_match_free(match);
     }
-    QVERIFY2(matched > 20 && mismatched > 500, qPrintable(QString("%1 matched, %2 mismatched").arg(matched).arg(mismatched)));
+    REQUIRE_MESSAGE((matched > 20 && mismatched > 500), std::format("{} matched, {} mismatched", matched, mismatched));
 
     // Arguments.
     tmdq_match* none = reinterpret_cast<tmdq_match*>(std::uintptr_t{1});
     const int32_t ids[] = {1, 2};
-    QCOMPARE(tmdq_template_match(ids, -1, ids, 2, &none), int(TMDQ_ERR_BADARG));
-    QVERIFY(none == nullptr);
-    QCOMPARE(tmdq_template_match(ids, 2, ids, -1, &none), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_template_match(nullptr, 2, ids, 2, &none), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_template_match(ids, 2, nullptr, 2, &none), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_template_match(ids, 2, ids, 2, nullptr), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_template_match(nullptr, 0, nullptr, 0, &none), int(TMDQ_OK));   // two empty sets
+    CHECK(tmdq_template_match(ids, -1, ids, 2, &none) == int(TMDQ_ERR_BADARG));
+    REQUIRE(none == nullptr);
+    CHECK(tmdq_template_match(ids, 2, ids, -1, &none) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_template_match(nullptr, 2, ids, 2, &none) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_template_match(ids, 2, nullptr, 2, &none) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_template_match(ids, 2, ids, 2, nullptr) == int(TMDQ_ERR_BADARG));
+    REQUIRE(tmdq_template_match(nullptr, 0, nullptr, 0, &none) == int(TMDQ_OK));   // two empty sets
     tmdq_match_info info{};
     info.struct_size = sizeof(info);
-    QCOMPARE(tmdq_match_info_get(none, &info), int(TMDQ_OK));
-    QCOMPARE(info.ok, 1);
-    QCOMPARE(tmdq_match_info_get(none, nullptr), int(TMDQ_ERR_BADARG));
+    REQUIRE(tmdq_match_info_get(none, &info) == int(TMDQ_OK));
+    CHECK(info.ok == 1);
+    CHECK(tmdq_match_info_get(none, nullptr) == int(TMDQ_ERR_BADARG));
     info.struct_size = sizeof(info) - 1;
-    QCOMPARE(tmdq_match_info_get(none, &info), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_match_info_get(none, &info) == int(TMDQ_ERR_BADARG));
     tmdq_match_free(none);
-    QCOMPARE(tmdq_match_info_get(nullptr, &info), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_match_info_get(nullptr, &info) == int(TMDQ_ERR_BADARG));
     tmdq_match_free(nullptr);
 }
 
-void TestAbi::aCsvIsParsedLikeTheCore()
+TEST_CASE("Abi: aCsvIsParsedLikeTheCore")
 {
     // The CSV exports kept in tests/data are not committed (that folder is ignored apart from the recordings), so
     // they are extra coverage where they exist and nothing is skipped or required where they do not. The files
     // written below are what the comparison stands on.
-    QStringList files;
+    std::vector<std::string> files;
     for (const char* name : { "Framesync_SNR Plot.csv", "PRN_TEST_FILE0001 - Copy.csv" })
-        if (QFileInfo::exists(dataPath(name)))
-            files << dataPath(name);
+        if (fs::exists(textfile::pathFromUtf8(dataPath(name))))
+            files.push_back(dataPath(name));
 
     // One written by the writer too, with every metric and a second source.
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
+    Scratch dir;
     CsvColumns cols;
     cols.add(TMDQ_METRIC_FRAME_SYNC_LOCK, "Ch 13", 0, {0.0, 1.0, 2.5}, {99.5, 100.0, 12.25});
     cols.add(TMDQ_METRIC_ACCUMULATED_MISSED_FRAMES, "Ch 13", 0, {0.0, 1.0, 2.5}, {0.0, 3.0, 7.0});
     cols.add(TMDQ_METRIC_SNR, "13 - Prn L_RCVR2", 2, {0.0, 1.0, 2.5}, {-3.5, 10.0, 22.125});
     cols.finish();
-    const QString generated = dir.filePath("generated.csv");
-    QVERIFY(CsvSeriesWriter::write(toFsPath(generated), cols.core, CsvTimeBase{120, 77125.5}));
-    files << generated;
+    const std::string generated = dir.filePath("generated.csv");
+    REQUIRE(CsvSeriesWriter::write(textfile::pathFromUtf8(generated), cols.core, CsvTimeBase{120, 77125.5}));
+    files.push_back(generated);
 
     // One with a malformed row in it, which the parser skips and counts.
-    const QString skipping = writeFile(dir.filePath("skipping.csv"),
+    const std::string skipping = writeFile(dir.filePath("skipping.csv"),
         "Time (DOY:HH:MM:SS.mmm),A Lock (%),B Accumulated Missed Frames\n"
         "120:00:00:00.000,5,1\n"
         "not-a-time,6,2\n"
         "120:00:00:01.000\n"
         "120:00:00:02.000,7,3\n");
-    files << skipping;
+    files.push_back(skipping);
 
     bool sawSkipped = false, sawStreamOrder = false;
-    for (const QString& path : files)
+    for (const std::string& path : files)
     {
-        const std::string utf8 = path.toStdString();
-        const CsvParseResult want = CsvSeriesParser::parse(toFsPath(path));
-        QVERIFY2(want.success, qPrintable(path));
-        QVERIFY(want.series.size() >= 2);
+        const std::string utf8 = path;
+        const CsvParseResult want = CsvSeriesParser::parse(textfile::pathFromUtf8(path));
+        REQUIRE_MESSAGE(want.success, path);
+        REQUIRE(want.series.size() >= 2);
         sawSkipped = sawSkipped || want.skippedRows > 0;
         for (const CsvSeries& series : want.series)
             sawStreamOrder = sawStreamOrder || series.streamOrder == 13;
         tmdq_csv* csv = nullptr;
-        QCOMPARE(tmdq_csv_parse(utf8.c_str(), &csv), int(TMDQ_OK));
-        QVERIFY(csv != nullptr);
-        const QString diff = csvDifferences(csv, want);
-        QVERIFY2(diff.isEmpty(), qPrintable(path + ": " + diff));
+        REQUIRE(tmdq_csv_parse(utf8.c_str(), &csv) == int(TMDQ_OK));
+        REQUIRE(csv != nullptr);
+        const std::string diff = csvDifferences(csv, want);
+        REQUIRE_MESSAGE(diff.empty(), (path + ": " + diff));
         tmdq_csv_free(csv);
     }
-    QVERIFY2(sawSkipped && sawStreamOrder, "the files should include a skipped row and a stream order, or the comparison proves little");
+    REQUIRE_MESSAGE((sawSkipped && sawStreamOrder), "the files should include a skipped row and a stream order, or the comparison proves little");
 
     // Files the parser refuses: not there, junk, the wrong header, a header and no data.
-    const QString junk = writeFile(dir.filePath("junk.csv"), "this is not a series file\n1,2,3\n");
-    const QString wrongHeader = writeFile(dir.filePath("wrong.csv"), "Day,Time,A Lock (%)\n1,00:00:00,5\n");
-    const QString noData = writeFile(dir.filePath("nodata.csv"), "Time (DOY:HH:MM:SS.mmm),A Lock (%)\n");
-    for (const QString& path : { QDir::tempPath() + "/tst_abi_no_such.csv", junk, wrongHeader, noData })
+    const std::string junk = writeFile(dir.filePath("junk.csv"), "this is not a series file\n1,2,3\n");
+    const std::string wrongHeader = writeFile(dir.filePath("wrong.csv"), "Day,Time,A Lock (%)\n1,00:00:00,5\n");
+    const std::string noData = writeFile(dir.filePath("nodata.csv"), "Time (DOY:HH:MM:SS.mmm),A Lock (%)\n");
+    for (const std::string& path : { tempUtf8() + "/tst_abi_no_such.csv", junk, wrongHeader, noData })
     {
-        QVERIFY(!CsvSeriesParser::parse(toFsPath(path)).success);
-        const std::string utf8 = path.toStdString();
+        REQUIRE(!CsvSeriesParser::parse(textfile::pathFromUtf8(path)).success);
+        const std::string utf8 = path;
         tmdq_csv* csv = reinterpret_cast<tmdq_csv*>(std::uintptr_t{1});
-        QCOMPARE(tmdq_csv_parse(utf8.c_str(), &csv), int(TMDQ_ERR_PREPARE));
-        QVERIFY(csv == nullptr);
-        QVERIFY(!std::string(tmdq_last_error()).empty());
+        CHECK(tmdq_csv_parse(utf8.c_str(), &csv) == int(TMDQ_ERR_PREPARE));
+        REQUIRE(csv == nullptr);
+        REQUIRE(!std::string(tmdq_last_error()).empty());
     }
 
     // Arguments and indices.
     tmdq_csv* csv = nullptr;
-    QCOMPARE(tmdq_csv_parse(nullptr, &csv), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_csv_parse("x", nullptr), int(TMDQ_ERR_BADARG));
-    const std::string good = generated.toStdString();
-    QCOMPARE(tmdq_csv_parse(good.c_str(), &csv), int(TMDQ_OK));
+    CHECK(tmdq_csv_parse(nullptr, &csv) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_csv_parse("x", nullptr) == int(TMDQ_ERR_BADARG));
+    const std::string good = generated;
+    REQUIRE(tmdq_csv_parse(good.c_str(), &csv) == int(TMDQ_OK));
     tmdq_csv_info info{};
     info.struct_size = sizeof(info);
-    QCOMPARE(tmdq_csv_info_get(csv, &info), int(TMDQ_OK));
+    REQUIRE(tmdq_csv_info_get(csv, &info) == int(TMDQ_OK));
     tmdq_csv_series_info series{};
     series.struct_size = sizeof(series);
-    QCOMPARE(tmdq_csv_series_get(csv, info.series_count, &series), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_csv_series_get(csv, -1, &series), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_csv_series_get(csv, 0, nullptr), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_csv_info_get(csv, nullptr), int(TMDQ_ERR_BADARG));
+    REQUIRE(tmdq_csv_series_get(csv, info.series_count, &series) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_csv_series_get(csv, -1, &series) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_csv_series_get(csv, 0, nullptr) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_csv_info_get(csv, nullptr) == int(TMDQ_ERR_BADARG));
     tmdq_csv_info shortInfo{};
     shortInfo.struct_size = sizeof(shortInfo) - 1;
-    QCOMPARE(tmdq_csv_info_get(csv, &shortInfo), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_csv_info_get(csv, &shortInfo) == int(TMDQ_ERR_BADARG));
     tmdq_csv_series_info shortSeries{};
     shortSeries.struct_size = sizeof(shortSeries) - 1;
-    QCOMPARE(tmdq_csv_series_get(csv, 0, &shortSeries), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_csv_info_get(nullptr, &info), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_csv_series_get(nullptr, 0, &series), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_csv_series_get(csv, 0, &shortSeries) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_csv_info_get(nullptr, &info) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_csv_series_get(nullptr, 0, &series) == int(TMDQ_ERR_BADARG));
     tmdq_csv_free(csv);
     tmdq_csv_free(nullptr);
 }
 
-void TestAbi::aCsvIsWrittenLikeTheCore()
+TEST_CASE("Abi: aCsvIsWrittenLikeTheCore")
 {
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
+    Scratch dir;
 
     // Columns that exercise the writer: every metric, two sources, a name with non-ASCII text (a comma cannot be written: the format has no quoting),
     // times that fall in the same millisecond, a column with more times than values, and an empty one.
@@ -3008,66 +2945,72 @@ void TestAbi::aCsvIsWrittenLikeTheCore()
     cols.add(TMDQ_METRIC_FRAME_SYNC_LOCK, "empty", 3, {}, {});
     cols.finish();
 
-    const QString viaAbi = dir.filePath("abi.csv");
-    const QString viaCore = dir.filePath("core.csv");
-    const std::string utf8 = viaAbi.toStdString();
-    QCOMPARE(tmdq_csv_write(utf8.c_str(), cols.pointers.data(), int(cols.pointers.size()), 120, 77125.5), int(TMDQ_OK));
-    QVERIFY(CsvSeriesWriter::write(toFsPath(viaCore), cols.core, CsvTimeBase{120, 77125.5}));
-    QCOMPARE(slurp(viaAbi), slurp(viaCore));
-    QVERIFY(slurp(viaAbi).size() > 200);
+    const std::string viaAbi = dir.filePath("abi.csv");
+    const std::string viaCore = dir.filePath("core.csv");
+    const std::string utf8 = viaAbi;
+    REQUIRE(tmdq_csv_write(utf8.c_str(), cols.pointers.data(), int(cols.pointers.size()), 120, 77125.5) == int(TMDQ_OK));
+    REQUIRE(CsvSeriesWriter::write(textfile::pathFromUtf8(viaCore), cols.core, CsvTimeBase{120, 77125.5}));
+    CHECK(slurp(viaAbi) == slurp(viaCore));
+    REQUIRE(slurp(viaAbi).size() > 200);
 
     // The time base reaches the stamps.
-    const QString viaOtherBase = dir.filePath("other.csv");
-    const std::string otherUtf8 = viaOtherBase.toStdString();
-    QCOMPARE(tmdq_csv_write(otherUtf8.c_str(), cols.pointers.data(), int(cols.pointers.size()), 7, 100.25), int(TMDQ_OK));
-    QVERIFY(CsvSeriesWriter::write(toFsPath(dir.filePath("other-core.csv")), cols.core, CsvTimeBase{7, 100.25}));
-    QCOMPARE(slurp(viaOtherBase), slurp(dir.filePath("other-core.csv")));
-    QVERIFY(slurp(viaOtherBase) != slurp(viaAbi));
+    const std::string viaOtherBase = dir.filePath("other.csv");
+    const std::string otherUtf8 = viaOtherBase;
+    REQUIRE(tmdq_csv_write(otherUtf8.c_str(), cols.pointers.data(), int(cols.pointers.size()), 7, 100.25) == int(TMDQ_OK));
+    REQUIRE(CsvSeriesWriter::write(textfile::pathFromUtf8(dir.filePath("other-core.csv")), cols.core, CsvTimeBase{7, 100.25}));
+    CHECK(slurp(viaOtherBase) == slurp(dir.filePath("other-core.csv")));
+    REQUIRE(slurp(viaOtherBase) != slurp(viaAbi));
 
     // And what the ABI wrote parses back, through the ABI, as the core parses it.
     tmdq_csv* csv = nullptr;
-    QCOMPARE(tmdq_csv_parse(utf8.c_str(), &csv), int(TMDQ_OK));
-    const QString diff = csvDifferences(csv, CsvSeriesParser::parse(toFsPath(viaAbi)));
-    QVERIFY2(diff.isEmpty(), qPrintable(diff));
+    REQUIRE(tmdq_csv_parse(utf8.c_str(), &csv) == int(TMDQ_OK));
+    const std::string diff = csvDifferences(csv, CsvSeriesParser::parse(textfile::pathFromUtf8(viaAbi)));
+    REQUIRE_MESSAGE(diff.empty(), diff);
     tmdq_csv_free(csv);
 
     // Refusals.
-    QCOMPARE(tmdq_csv_write(nullptr, cols.pointers.data(), 1, 0, 0.0), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_csv_write(utf8.c_str(), cols.pointers.data(), 0, 0, 0.0), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_csv_write(utf8.c_str(), cols.pointers.data(), -1, 0, 0.0), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_csv_write(utf8.c_str(), nullptr, 1, 0, 0.0), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_csv_write(nullptr, cols.pointers.data(), 1, 0, 0.0) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_csv_write(utf8.c_str(), cols.pointers.data(), 0, 0, 0.0) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_csv_write(utf8.c_str(), cols.pointers.data(), -1, 0, 0.0) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_csv_write(utf8.c_str(), nullptr, 1, 0, 0.0) == int(TMDQ_ERR_BADARG));
     const tmdq_csv_column* withNull[] = { cols.pointers[0], nullptr };
-    QCOMPARE(tmdq_csv_write(utf8.c_str(), withNull, 2, 0, 0.0), int(TMDQ_ERR_BADARG));
-    QVERIFY(std::string(tmdq_last_error()).find("column 1") != std::string::npos);
+    CHECK(tmdq_csv_write(utf8.c_str(), withNull, 2, 0, 0.0) == int(TMDQ_ERR_BADARG));
+    REQUIRE(std::string(tmdq_last_error()).find("column 1") != std::string::npos);
     tmdq_csv_column shortColumn = cols.wire[0];
     shortColumn.struct_size = sizeof(shortColumn) - 1;
     const tmdq_csv_column* withShort[] = { &shortColumn };
-    QCOMPARE(tmdq_csv_write(utf8.c_str(), withShort, 1, 0, 0.0), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_csv_write(utf8.c_str(), withShort, 1, 0, 0.0) == int(TMDQ_ERR_BADARG));
     tmdq_csv_column badMetric = cols.wire[0];
     badMetric.metric_type = 9;
     const tmdq_csv_column* withBadMetric[] = { &badMetric };
-    QCOMPARE(tmdq_csv_write(utf8.c_str(), withBadMetric, 1, 0, 0.0), int(TMDQ_ERR_BADARG));
-    QVERIFY(std::string(tmdq_last_error()).find("metric") != std::string::npos);
+    CHECK(tmdq_csv_write(utf8.c_str(), withBadMetric, 1, 0, 0.0) == int(TMDQ_ERR_BADARG));
+    REQUIRE(std::string(tmdq_last_error()).find("metric") != std::string::npos);
     tmdq_csv_column negativeCount = cols.wire[0];
     negativeCount.x_count = -1;
     const tmdq_csv_column* withNegative[] = { &negativeCount };
-    QCOMPARE(tmdq_csv_write(utf8.c_str(), withNegative, 1, 0, 0.0), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_csv_write(utf8.c_str(), withNegative, 1, 0, 0.0) == int(TMDQ_ERR_BADARG));
     tmdq_csv_column noArray = cols.wire[0];
     noArray.y_values = nullptr;
     const tmdq_csv_column* withNoArray[] = { &noArray };
-    QCOMPARE(tmdq_csv_write(utf8.c_str(), withNoArray, 1, 0, 0.0), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_csv_write(utf8.c_str(), withNoArray, 1, 0, 0.0) == int(TMDQ_ERR_BADARG));
+    tmdq_csv_column noTimes = cols.wire[0];
+    REQUIRE(noTimes.x_count > 0);
+    noTimes.x_values = nullptr;
+    const tmdq_csv_column* withNoTimes[] = { &noTimes };
+    CHECK(tmdq_csv_write(utf8.c_str(), withNoTimes, 1, 0, 0.0) == int(TMDQ_ERR_BADARG));
+    REQUIRE(std::string(tmdq_last_error()).find("does not match its array") != std::string::npos);
     tmdq_csv_column noName = cols.wire[0];
     noName.name_utf8 = nullptr;
     const tmdq_csv_column* withNoName[] = { &noName };
-    QCOMPARE(tmdq_csv_write(dir.filePath("noname.csv").toStdString().c_str(), withNoName, 1, 0, 0.0), int(TMDQ_OK));   // a NULL name reads as empty
+    REQUIRE(tmdq_csv_write(dir.filePath("noname.csv").c_str(), withNoName, 1, 0, 0.0) == int(TMDQ_OK));   // a NULL name reads as empty
 
     // A path that cannot be created is an I/O error.
-    const std::string dirPath = dir.path().toStdString();
-    QCOMPARE(tmdq_csv_write(dirPath.c_str(), cols.pointers.data(), 1, 0, 0.0), int(TMDQ_ERR_IO));
-    QVERIFY(!std::string(tmdq_last_error()).empty());
+    const std::string dirPath = dir.path();
+    CHECK(tmdq_csv_write(dirPath.c_str(), cols.pointers.data(), 1, 0, 0.0) == int(TMDQ_ERR_IO));
+    REQUIRE(!std::string(tmdq_last_error()).empty());
 }
 
-void TestAbi::clockStampsAgreeWithTheCore()
+TEST_CASE("Abi: clockStampsAgreeWithTheCore")
 {
     std::mt19937 rng(20261023);
     int checked = 0;
@@ -3080,31 +3023,31 @@ void TestAbi::clockStampsAgreeWithTheCore()
         const std::string want = clocktime::format(day, base, elapsed, ms);
 
         char exact[64] = {};
-        QCOMPARE(tmdq_clock_time_format(day, base, elapsed, ms ? 1 : 0, exact, sizeof(exact)), int(want.size()));
-        QCOMPARE(std::string(exact), want);
-        QCOMPARE(tmdq_clock_time_format(day, base, elapsed, ms ? 1 : 0, nullptr, 0), int(want.size()));
+        REQUIRE(tmdq_clock_time_format(day, base, elapsed, ms ? 1 : 0, exact, sizeof(exact)) == int(want.size()));
+        CHECK(std::string(exact) == want);
+        REQUIRE(tmdq_clock_time_format(day, base, elapsed, ms ? 1 : 0, nullptr, 0) == int(want.size()));
         ++checked;
     }
-    QCOMPARE(checked, 3000);
+    CHECK(checked == 3000);
 
     // A known stamp, so the oracle is not the only witness: 1 day, 1 h, 1 min, 1.5 s after 120:00:00:00.
     char buf[64] = {};
-    QVERIFY(tmdq_clock_time_format(120, 0.0, 86400.0 + 3600.0 + 60.0 + 1.5, 1, buf, sizeof(buf)) > 0);
-    QCOMPARE(std::string(buf), std::string("121:01:01:01.500"));
-    QVERIFY(tmdq_clock_time_format(120, 0.0, 86400.0 + 3600.0 + 60.0 + 1.5, 0, buf, sizeof(buf)) > 0);
-    QCOMPARE(std::string(buf), std::string("121:01:01:01"));
+    REQUIRE(tmdq_clock_time_format(120, 0.0, 86400.0 + 3600.0 + 60.0 + 1.5, 1, buf, sizeof(buf)) > 0);
+    CHECK(std::string(buf) == std::string("121:01:01:01.500"));
+    REQUIRE(tmdq_clock_time_format(120, 0.0, 86400.0 + 3600.0 + 60.0 + 1.5, 0, buf, sizeof(buf)) > 0);
+    CHECK(std::string(buf) == std::string("121:01:01:01"));
 
     // Truncation and refusals.
     char tight[6];
     std::memset(tight, 'x', sizeof(tight));
-    QCOMPARE(tmdq_clock_time_format(120, 0.0, 0.0, 1, tight, sizeof(tight)), 16);
-    QCOMPARE(std::string(tight), std::string("120:0"));
-    QCOMPARE(int(tight[5]), 0);
-    QCOMPARE(tmdq_clock_time_format(120, 0.0, 0.0, 1, nullptr, 10), -1);
-    QCOMPARE(tmdq_clock_time_format(120, 0.0, 0.0, 1, buf, -1), -1);
+    CHECK(tmdq_clock_time_format(120, 0.0, 0.0, 1, tight, sizeof(tight)) == 16);
+    CHECK(std::string(tight) == std::string("120:0"));
+    CHECK(int(tight[5]) == 0);
+    CHECK(tmdq_clock_time_format(120, 0.0, 0.0, 1, nullptr, 10) == -1);
+    CHECK(tmdq_clock_time_format(120, 0.0, 0.0, 1, buf, -1) == -1);
 }
 
-void TestAbi::aStreamBecomesTheSeriesTheCoreBuilds()
+TEST_CASE("Abi: aStreamBecomesTheSeriesTheCoreBuilds")
 {
     std::mt19937 rng(20261024);
     int withLock = 0, withMissed = 0, withChannels = 0, empty = 0, nan = 0;
@@ -3116,10 +3059,10 @@ void TestAbi::aStreamBecomesTheSeriesTheCoreBuilds()
 
         tmdq_stream_result* result = makeResult(data);
         tmdq_series_set* set = nullptr;
-        QCOMPARE(tmdq_stream_result_series(result, base, &set), int(TMDQ_OK));
-        QVERIFY(set != nullptr);
-        const QString diff = seriesDifferences(set, want);
-        QVERIFY2(diff.isEmpty(), qPrintable(QString("case %1: ").arg(i) + diff));
+        REQUIRE(tmdq_stream_result_series(result, base, &set) == int(TMDQ_OK));
+        REQUIRE(set != nullptr);
+        const std::string diff = seriesDifferences(set, want);
+        REQUIRE_MESSAGE(diff.empty(), (std::format("case {}: ", i) + diff));
         tmdq_series_set_free(set);
         tmdq_stream_result_free(result);
 
@@ -3131,8 +3074,7 @@ void TestAbi::aStreamBecomesTheSeriesTheCoreBuilds()
             nan += std::isnan(s.yMin) || std::isinf(s.yMax);
     }
     // The generator really reached each kind of stream.
-    QVERIFY2(withLock > 800 && withMissed > 700 && withChannels > 900 && empty > 20 && nan > 20,
-             qPrintable(QString("%1 %2 %3 %4 %5").arg(withLock).arg(withMissed).arg(withChannels).arg(empty).arg(nan)));
+    REQUIRE_MESSAGE((withLock > 800 && withMissed > 700 && withChannels > 900 && empty > 20 && nan > 20), std::format("{} {} {} {} {}", withLock, withMissed, withChannels, empty, nan));
 
     // A known stream, so the oracle is not the only witness: lock %, missed frames and two receiver channels.
     ProcessedStreamData known;
@@ -3147,56 +3089,61 @@ void TestAbi::aStreamBecomesTheSeriesTheCoreBuilds()
     known.channels.push_back({"R_RCVR2", 2, {-70.0, -71.0}});
     tmdq_stream_result* result = makeResult(known);
     tmdq_series_set* set = nullptr;
-    QCOMPARE(tmdq_stream_result_series(result, 990.0, &set), int(TMDQ_OK));
+    REQUIRE(tmdq_stream_result_series(result, 990.0, &set) == int(TMDQ_OK));
     tmdq_series_set_info info{};
     info.struct_size = sizeof(info);
-    QCOMPARE(tmdq_series_set_info_get(set, &info), int(TMDQ_OK));
-    QCOMPARE(info.series_count, 4);
-    QCOMPARE(info.elapsed_count, 2);
-    QCOMPARE(info.elapsed[0], 10.0);
-    QCOMPARE(info.elapsed[1], 11.0);
+    REQUIRE(tmdq_series_set_info_get(set, &info) == int(TMDQ_OK));
+    REQUIRE(info.series_count == 4);
+    REQUIRE(info.elapsed_count == 2);
+    CHECK(info.elapsed[0] == 10.0);
+    CHECK(info.elapsed[1] == 11.0);
     tmdq_series_spec spec{};
     spec.struct_size = sizeof(spec);
-    QCOMPARE(tmdq_series_set_spec(set, 3, &spec), int(TMDQ_OK));
-    QCOMPARE(spec.receiver_index, 2);
-    QCOMPARE(spec.stream_order, 40);
-    QCOMPARE(spec.stream_sequence, 2);
-    QCOMPARE(spec.source_id, 1);
-    QCOMPARE(spec.y_min, -71.0);
-    QCOMPARE(spec.y_max, -70.0);
+    REQUIRE(tmdq_series_set_spec(set, 3, &spec) == int(TMDQ_OK));
+    CHECK(spec.receiver_index == 2);
+    CHECK(spec.stream_order == 40);
+    CHECK(spec.stream_sequence == 2);
+    CHECK(spec.source_id == 1);
+    CHECK(spec.y_min == -71.0);
+    CHECK(spec.y_max == -70.0);
 
-    // The set keeps the stream's data alive after the host has freed the result.
+    // The set keeps the stream's data alive after the host has freed the result. Reading the values alone cannot
+    // show it: a Release heap leaves freed memory as it was (the Qt suite ran Debug, whose heap overwrites it), so
+    // the data's lifetime is watched directly, and it must end with the set.
+    const std::weak_ptr<const ProcessedStreamData> data = result->data;
     tmdq_stream_result_free(result);
-    QCOMPARE(spec.y_values[0], -70.0);
-    QCOMPARE(tmdq_series_set_spec(set, 2, &spec), int(TMDQ_OK));
-    QCOMPARE(spec.y_values[1], -79.0);
-    QCOMPARE(std::string(spec.name_utf8).empty(), false);
+    REQUIRE(!data.expired());
+    CHECK(spec.y_values[0] == -70.0);
+    REQUIRE(tmdq_series_set_spec(set, 2, &spec) == int(TMDQ_OK));
+    CHECK(spec.y_values[1] == -79.0);
+    CHECK(std::string(spec.name_utf8).empty() == false);
     tmdq_series_set_free(set);
+    CHECK(data.expired());
 
     // Arguments.
     tmdq_series_set* none = reinterpret_cast<tmdq_series_set*>(std::uintptr_t{1});
-    QCOMPARE(tmdq_stream_result_series(nullptr, 0.0, &none), int(TMDQ_ERR_BADARG));
-    QVERIFY(none == nullptr);
+    CHECK(tmdq_stream_result_series(nullptr, 0.0, &none) == int(TMDQ_ERR_BADARG));
+    REQUIRE(none == nullptr);
     tmdq_stream_result* again = makeResult(known);
-    QCOMPARE(tmdq_stream_result_series(again, 0.0, nullptr), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_stream_result_series(again, 0.0, &set), int(TMDQ_OK));
-    QCOMPARE(tmdq_series_set_info_get(nullptr, &info), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_series_set_info_get(set, nullptr), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_stream_result_series(again, 0.0, nullptr) == int(TMDQ_ERR_BADARG));
+    REQUIRE(tmdq_stream_result_series(again, 0.0, &set) == int(TMDQ_OK));
+    CHECK(tmdq_series_set_info_get(nullptr, &info) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_series_set_info_get(set, nullptr) == int(TMDQ_ERR_BADARG));
     info.struct_size = sizeof(info) - 1;
-    QCOMPARE(tmdq_series_set_info_get(set, &info), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_series_set_info_get(set, &info) == int(TMDQ_ERR_BADARG));
     spec.struct_size = sizeof(spec);
-    QCOMPARE(tmdq_series_set_spec(set, 4, &spec), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_series_set_spec(set, -1, &spec), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_series_set_spec(set, 0, nullptr), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_series_set_spec(nullptr, 0, &spec), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_series_set_spec(set, 4, &spec) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_series_set_spec(set, -1, &spec) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_series_set_spec(set, 0, nullptr) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_series_set_spec(nullptr, 0, &spec) == int(TMDQ_ERR_BADARG));
     spec.struct_size = sizeof(spec) - 1;
-    QCOMPARE(tmdq_series_set_spec(set, 0, &spec), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_series_set_spec(set, 0, &spec) == int(TMDQ_ERR_BADARG));
     tmdq_series_set_free(set);
     tmdq_series_set_free(nullptr);
     tmdq_stream_result_free(again);
 }
 
-void TestAbi::theTimeBaseMovesLikeTheCore()
+TEST_CASE("Abi: theTimeBaseMovesLikeTheCore")
 {
     std::mt19937 rng(20261024);
     auto info = [](const tmdq_time_base* b) {
@@ -3209,21 +3156,21 @@ void TestAbi::theTimeBaseMovesLikeTheCore()
     for (int run = 0; run < 700; ++run)
     {
         tmdq_time_base* abi = nullptr;
-        QCOMPARE(tmdq_time_base_create(&abi), int(TMDQ_OK));
+        REQUIRE(tmdq_time_base_create(&abi) == int(TMDQ_OK));
         SeriesTimeBase core;
         for (int step = 0; step < 14; ++step)
         {
             const int op = int(rng() % 6);
             if (op == 0)
             {
-                QCOMPARE(tmdq_time_base_reset(abi), int(TMDQ_OK));
+                REQUIRE(tmdq_time_base_reset(abi) == int(TMDQ_OK));
                 core.reset();
             }
             else if (op == 1)
             {
                 const int day = int(rng() % 400) - 5;
                 const double offset = double(rng() % 86400) / 3.0;
-                QCOMPARE(tmdq_time_base_set_clock(abi, day, offset), int(TMDQ_OK));
+                REQUIRE(tmdq_time_base_set_clock(abi, day, offset) == int(TMDQ_OK));
                 core.setClock(day, offset);
             }
             else if (op == 2 || op == 3)
@@ -3231,9 +3178,9 @@ void TestAbi::theTimeBaseMovesLikeTheCore()
                 const double first = (rng() % 5 == 0) ? 0.0 : 1.7e9 + double(rng() % 100000) / 8.0 + (rng() % 2) * 86400.0 * 400;
                 const bool has = rng() % 2;
                 double shift = -1.0;
-                QCOMPARE(tmdq_time_base_adopt(abi, first, has ? 1 : 0, &shift), int(TMDQ_OK));
+                REQUIRE(tmdq_time_base_adopt(abi, first, has ? 1 : 0, &shift) == int(TMDQ_OK));
                 const double want = core.adopt(first, has);
-                QCOMPARE(shift, want);
+                CHECK(shift == want);
                 ++adopted;
                 shifted += want != 0.0;
             }
@@ -3242,9 +3189,9 @@ void TestAbi::theTimeBaseMovesLikeTheCore()
                 const bool has = rng() % 3 != 0;
                 const double earliest = double(int(rng() % 4000) - 500) / 8.0;
                 double shift = -1.0;
-                QCOMPARE(tmdq_time_base_advance(abi, has ? 1 : 0, earliest, &shift), int(TMDQ_OK));
+                REQUIRE(tmdq_time_base_advance(abi, has ? 1 : 0, earliest, &shift) == int(TMDQ_OK));
                 const double want = core.advance(has ? std::optional<double>(earliest) : std::nullopt);
-                QCOMPARE(shift, want);
+                CHECK(shift == want);
                 ++advanced;
                 moved += want != 0.0;
             }
@@ -3255,49 +3202,48 @@ void TestAbi::theTimeBaseMovesLikeTheCore()
                 const double hi = lo + double(rng() % 200) / 4.0;
                 const double existing = double(rng() % 200) / 4.0;
                 int32_t out = -1;
-                QCOMPARE(tmdq_time_base_overlaps(abi, lo, hi, existing, &out), int(TMDQ_OK));
-                QCOMPARE(out != 0, core.overlaps(lo, hi, existing));
+                REQUIRE(tmdq_time_base_overlaps(abi, lo, hi, existing, &out) == int(TMDQ_OK));
+                CHECK((out != 0) == core.overlaps(lo, hi, existing));
                 ++(out ? overlapped : apart);
             }
             const tmdq_time_base_info i = info(abi);
-            QCOMPARE(i.base_day, core.baseDay());
-            QCOMPARE(i.base_abs_seconds, core.baseAbsSeconds());
-            QCOMPARE(i.base_time_offset, core.baseTimeOffset());
+            CHECK(i.base_day == core.baseDay());
+            CHECK(i.base_abs_seconds == core.baseAbsSeconds());
+            CHECK(i.base_time_offset == core.baseTimeOffset());
         }
         tmdq_time_base_free(abi);
     }
-    QVERIFY2(adopted > 2000 && shifted > 200 && advanced > 1000 && moved > 100 && overlapped > 100 && apart > 100,
-             qPrintable(QString("%1 %2 %3 %4 %5 %6").arg(adopted).arg(shifted).arg(advanced).arg(moved).arg(overlapped).arg(apart)));
+    REQUIRE_MESSAGE((adopted > 2000 && shifted > 200 && advanced > 1000 && moved > 100 && overlapped > 100 && apart > 100), std::format("{} {} {} {} {} {}", adopted, shifted, advanced, moved, overlapped, apart));
 
     // Arguments.
     tmdq_time_base* base = reinterpret_cast<tmdq_time_base*>(std::uintptr_t{1});
-    QCOMPARE(tmdq_time_base_create(nullptr), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_time_base_create(&base), int(TMDQ_OK));
+    CHECK(tmdq_time_base_create(nullptr) == int(TMDQ_ERR_BADARG));
+    REQUIRE(tmdq_time_base_create(&base) == int(TMDQ_OK));
     tmdq_time_base_info bi{};
     bi.struct_size = sizeof(bi);
-    QCOMPARE(tmdq_time_base_info_get(base, &bi), int(TMDQ_OK));
-    QCOMPARE(bi.base_day, 0);
-    QCOMPARE(bi.base_abs_seconds, 0.0);
-    QCOMPARE(bi.base_time_offset, 0.0);
+    REQUIRE(tmdq_time_base_info_get(base, &bi) == int(TMDQ_OK));
+    CHECK(bi.base_day == 0);
+    CHECK(bi.base_abs_seconds == 0.0);
+    CHECK(bi.base_time_offset == 0.0);
     double shift = 0.0;
     int32_t out = 0;
-    QCOMPARE(tmdq_time_base_info_get(nullptr, &bi), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_time_base_info_get(base, nullptr), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_time_base_info_get(nullptr, &bi) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_time_base_info_get(base, nullptr) == int(TMDQ_ERR_BADARG));
     bi.struct_size = sizeof(bi) - 1;
-    QCOMPARE(tmdq_time_base_info_get(base, &bi), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_time_base_reset(nullptr), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_time_base_set_clock(nullptr, 1, 2.0), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_time_base_adopt(nullptr, 1.0, 1, &shift), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_time_base_adopt(base, 1.0, 1, nullptr), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_time_base_advance(nullptr, 1, 1.0, &shift), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_time_base_advance(base, 1, 1.0, nullptr), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_time_base_overlaps(nullptr, 0.0, 1.0, 1.0, &out), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_time_base_overlaps(base, 0.0, 1.0, 1.0, nullptr), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_time_base_info_get(base, &bi) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_time_base_reset(nullptr) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_time_base_set_clock(nullptr, 1, 2.0) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_time_base_adopt(nullptr, 1.0, 1, &shift) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_time_base_adopt(base, 1.0, 1, nullptr) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_time_base_advance(nullptr, 1, 1.0, &shift) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_time_base_advance(base, 1, 1.0, nullptr) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_time_base_overlaps(nullptr, 0.0, 1.0, 1.0, &out) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_time_base_overlaps(base, 0.0, 1.0, 1.0, nullptr) == int(TMDQ_ERR_BADARG));
     tmdq_time_base_free(base);
     tmdq_time_base_free(nullptr);
 }
 
-void TestAbi::streamKeysIdentifyTheSameStream()
+TEST_CASE("Abi: streamKeysIdentifyTheSameStream")
 {
     ProcessedStreamData a;
     a.sourceId = 1;
@@ -3306,10 +3252,10 @@ void TestAbi::streamKeysIdentifyTheSameStream()
     tmdq_stream_result* ra = makeResult(a);
     tmdq_stream_key ka{};
     ka.struct_size = sizeof(ka);
-    QCOMPARE(tmdq_stream_result_key(ra, &ka), int(TMDQ_OK));
-    QCOMPARE(ka.source_id, 1);
-    QCOMPARE(std::string(ka.label_utf8), std::string("Ch 13"));
-    QCOMPARE(ka.channel, 13);
+    REQUIRE(tmdq_stream_result_key(ra, &ka) == int(TMDQ_OK));
+    CHECK(ka.source_id == 1);
+    CHECK(std::string(ka.label_utf8) == std::string("Ch 13"));
+    CHECK(ka.channel == 13);
 
     // Every difference of one field is a different stream; none is the same one.
     auto keyOf = [](ProcessedStreamData d, tmdq_stream_result** keep) {
@@ -3326,37 +3272,37 @@ void TestAbi::streamKeysIdentifyTheSameStream()
     ProcessedStreamData otherChannel = a; otherChannel.pcmChannelId = 14;
     const tmdq_stream_key ksame = keyOf(same, &r1), ksource = keyOf(otherSource, &r2), klabel = keyOf(otherLabel, &r3),
                           kchannel = keyOf(otherChannel, &r4);
-    QCOMPARE(tmdq_stream_key_equal(&ka, &ksame), 1);
-    QCOMPARE(tmdq_stream_key_equal(&ka, &ka), 1);
-    QCOMPARE(tmdq_stream_key_equal(&ka, &ksource), 0);
-    QCOMPARE(tmdq_stream_key_equal(&ka, &klabel), 0);
-    QCOMPARE(tmdq_stream_key_equal(&ka, &kchannel), 0);
-    QCOMPARE(tmdq_stream_key_equal(&ksource, &ka), 0);
+    CHECK(tmdq_stream_key_equal(&ka, &ksame) == 1);
+    CHECK(tmdq_stream_key_equal(&ka, &ka) == 1);
+    CHECK(tmdq_stream_key_equal(&ka, &ksource) == 0);
+    CHECK(tmdq_stream_key_equal(&ka, &klabel) == 0);
+    CHECK(tmdq_stream_key_equal(&ka, &kchannel) == 0);
+    CHECK(tmdq_stream_key_equal(&ksource, &ka) == 0);
     // The same answers as the core's own key.
-    QVERIFY(streamKeyOf(a) == streamKeyOf(same));
-    QVERIFY(!(streamKeyOf(a) == streamKeyOf(otherSource)));
+    REQUIRE(streamKeyOf(a) == streamKeyOf(same));
+    REQUIRE(!(streamKeyOf(a) == streamKeyOf(otherSource)));
 
     // A NULL label reads as empty; arguments.
     tmdq_stream_key nolabel = ka;
     nolabel.label_utf8 = nullptr;
     tmdq_stream_key emptyLabel = ka;
     emptyLabel.label_utf8 = "";
-    QCOMPARE(tmdq_stream_key_equal(&nolabel, &emptyLabel), 1);
-    QCOMPARE(tmdq_stream_key_equal(nullptr, &ka), -1);
-    QCOMPARE(tmdq_stream_key_equal(&ka, nullptr), -1);
+    CHECK(tmdq_stream_key_equal(&nolabel, &emptyLabel) == 1);
+    CHECK(tmdq_stream_key_equal(nullptr, &ka) == -1);
+    CHECK(tmdq_stream_key_equal(&ka, nullptr) == -1);
     tmdq_stream_key shortKey = ka;
     shortKey.struct_size = sizeof(shortKey) - 1;
-    QCOMPARE(tmdq_stream_key_equal(&shortKey, &ka), -1);
-    QCOMPARE(tmdq_stream_key_equal(&ka, &shortKey), -1);
-    QCOMPARE(tmdq_stream_result_key(nullptr, &ka), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_stream_result_key(ra, nullptr), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_stream_key_equal(&shortKey, &ka) == -1);
+    CHECK(tmdq_stream_key_equal(&ka, &shortKey) == -1);
+    CHECK(tmdq_stream_result_key(nullptr, &ka) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_stream_result_key(ra, nullptr) == int(TMDQ_ERR_BADARG));
     ka.struct_size = sizeof(ka) - 1;
-    QCOMPARE(tmdq_stream_result_key(ra, &ka), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_stream_result_key(ra, &ka) == int(TMDQ_ERR_BADARG));
     for (tmdq_stream_result* r : { ra, r1, r2, r3, r4 })
         tmdq_stream_result_free(r);
 }
 
-void TestAbi::importedStreamOrdersAreAssignedLikeTheCore()
+TEST_CASE("Abi: importedStreamOrdersAreAssignedLikeTheCore")
 {
     std::mt19937 rng(20261024);
     static const char* const labels[] = { "A", "B", "", "R\xC3\xA9", "same" };
@@ -3387,14 +3333,14 @@ void TestAbi::importedStreamOrdersAreAssignedLikeTheCore()
         }
         const std::vector<ImportedSeries> before = want;
         assignImportedStreamOrders(want);
-        QCOMPARE(tmdq_assign_imported_stream_orders(pointers.empty() ? nullptr : pointers.data(), int(pointers.size())), int(TMDQ_OK));
+        REQUIRE(tmdq_assign_imported_stream_orders(pointers.empty() ? nullptr : pointers.data(), int(pointers.size())) == int(TMDQ_OK));
         for (std::size_t i = 0; i < want.size(); ++i)
         {
-            QVERIFY2(wire[i].stream_order == want[i].streamOrder, qPrintable(QString("run %1 series %2").arg(run).arg(i)));
+            REQUIRE_MESSAGE(wire[i].stream_order == want[i].streamOrder, std::format("run {} series {}", run, i));
             // Only the order is written.
-            QCOMPARE(wire[i].metric_type, int(before[i].metricType));
-            QCOMPARE(wire[i].source_id, before[i].sourceId);
-            QCOMPARE(std::string(wire[i].stream_label_utf8), before[i].streamLabel);
+            CHECK(wire[i].metric_type == int(before[i].metricType));
+            CHECK(wire[i].source_id == before[i].sourceId);
+            CHECK(std::string(wire[i].stream_label_utf8) == before[i].streamLabel);
             if (before[i].metricType == MetricType::SNR)
             {
                 ++snr;
@@ -3408,8 +3354,7 @@ void TestAbi::importedStreamOrdersAreAssignedLikeTheCore()
             ++(sibling ? lockWithSibling : lockWithoutSibling);
         }
     }
-    QVERIFY2(snr > 1000 && lockWithSibling > 300 && lockWithoutSibling > 500,
-             qPrintable(QString("%1 %2 %3").arg(snr).arg(lockWithSibling).arg(lockWithoutSibling)));
+    REQUIRE_MESSAGE((snr > 1000 && lockWithSibling > 300 && lockWithoutSibling > 500), std::format("{} {} {}", snr, lockWithSibling, lockWithoutSibling));
 
     // Arguments.
     tmdq_imported_series one{};
@@ -3417,22 +3362,22 @@ void TestAbi::importedStreamOrdersAreAssignedLikeTheCore()
     one.metric_type = TMDQ_METRIC_FRAME_SYNC_LOCK;
     one.stream_label_utf8 = "x";
     tmdq_imported_series* list[] = { &one };
-    QCOMPARE(tmdq_assign_imported_stream_orders(list, 1), int(TMDQ_OK));
-    QCOMPARE(tmdq_assign_imported_stream_orders(nullptr, 0), int(TMDQ_OK));   // nothing to order
-    QCOMPARE(tmdq_assign_imported_stream_orders(list, -1), int(TMDQ_ERR_BADARG));
-    QCOMPARE(tmdq_assign_imported_stream_orders(nullptr, 1), int(TMDQ_ERR_BADARG));
+    REQUIRE(tmdq_assign_imported_stream_orders(list, 1) == int(TMDQ_OK));
+    REQUIRE(tmdq_assign_imported_stream_orders(nullptr, 0) == int(TMDQ_OK));   // nothing to order
+    CHECK(tmdq_assign_imported_stream_orders(list, -1) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_assign_imported_stream_orders(nullptr, 1) == int(TMDQ_ERR_BADARG));
     tmdq_imported_series* withNull[] = { &one, nullptr };
-    QCOMPARE(tmdq_assign_imported_stream_orders(withNull, 2), int(TMDQ_ERR_BADARG));
-    QVERIFY(std::string(tmdq_last_error()).find("series 1") != std::string::npos);
+    CHECK(tmdq_assign_imported_stream_orders(withNull, 2) == int(TMDQ_ERR_BADARG));
+    REQUIRE(std::string(tmdq_last_error()).find("series 1") != std::string::npos);
     tmdq_imported_series shortOne = one;
     shortOne.struct_size = sizeof(shortOne) - 1;
     tmdq_imported_series* withShort[] = { &shortOne };
-    QCOMPARE(tmdq_assign_imported_stream_orders(withShort, 1), int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_assign_imported_stream_orders(withShort, 1) == int(TMDQ_ERR_BADARG));
     tmdq_imported_series badMetric = one;
     badMetric.metric_type = 7;
     tmdq_imported_series* withBad[] = { &one, &badMetric };
     const int before = one.stream_order;
-    QCOMPARE(tmdq_assign_imported_stream_orders(withBad, 2), int(TMDQ_ERR_BADARG));
-    QCOMPARE(one.stream_order, before);   // a refused list is left alone
-    QVERIFY(std::string(tmdq_last_error()).find("metric") != std::string::npos);
+    CHECK(tmdq_assign_imported_stream_orders(withBad, 2) == int(TMDQ_ERR_BADARG));
+    CHECK(one.stream_order == before);   // a refused list is left alone
+    REQUIRE(std::string(tmdq_last_error()).find("metric") != std::string::npos);
 }

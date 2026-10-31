@@ -300,18 +300,6 @@ QStringList compiledNamesIn(const QStringList& files, const QString& folder, con
     return names;
 }
 
-/// The ABI sources `tests.pro` compiles straight into the test executable.
-QStringList testsProAbiSources(const QString& pro)
-{
-    static const QRegularExpression source(QStringLiteral("native/tmdq_core/([A-Za-z0-9_]+)\\.cpp"));
-    QStringList names;
-    QRegularExpressionMatchIterator it = source.globalMatch(pro);
-    while (it.hasNext())
-        names << it.next().captured(1);
-    names.sort();
-    return names;
-}
-
 /// The vendored C sources the application's .pro compiles.
 QStringList proIrigSources(const QString& pro)
 {
@@ -377,8 +365,8 @@ QStringList nativeProjectProblems(const QString& root, const QStringList& coreSo
         if (!expected.contains(name))
             problems << "the project compiles " + name + ", which is not a core source";
 
-    // The ABI's own sources: every .cpp in native/tmdq_core is built by the project and by the test executable
-    // (which is how TestAbi can call it), and neither builds anything that is not there.
+    // The ABI's own sources: every .cpp in native/tmdq_core is built by the project and by the native tests (which
+    // compile it in, so test_abi.cpp can call it as a host would), and neither builds anything that is not there.
     QStringList present;
     for (const QString& file : QDir(root + "/native/tmdq_core").entryList({"*.cpp"}, QDir::Files, QDir::Name))
         present << QFileInfo(file).completeBaseName();
@@ -386,20 +374,21 @@ QStringList nativeProjectProblems(const QString& root, const QStringList& coreSo
     for (const QString& file : files)
         if (!file.contains('/') && file.endsWith(".cpp"))
             inProject << QFileInfo(file).completeBaseName();
-    const QStringList inTests = testsProAbiSources(fileText(root + "/tests/tests.pro"));
+    const QStringList inTests = compiledNamesIn(
+        projectCompiledFiles(fileText(root + "/native/tmdq_core_tests/tmdq_core_tests.vcxproj")), "/tmdq_core/", ".cpp");
     for (const QString& name : present)
     {
         if (!inProject.contains(name))
             problems << "the project does not compile the ABI source " + name;
         if (!inTests.contains(name))
-            problems << "tests.pro does not compile the ABI source " + name;
+            problems << "the native tests do not compile the ABI source " + name;
     }
     for (const QString& name : inProject)
         if (!present.contains(name))
             problems << "the project compiles " + name + ".cpp, which is not in native/tmdq_core";
     for (const QString& name : inTests)
         if (!present.contains(name))
-            problems << "tests.pro compiles " + name + ".cpp, which is not in native/tmdq_core";
+            problems << "the native tests compile " + name + ".cpp, which is not in native/tmdq_core";
 
     // Nothing from another layer ("/src/view" is also the prefix of "/src/viewmodel").
     for (const QString& file : files)
@@ -722,7 +711,7 @@ void TestCoreQtFree::theNativeProjectGuardSeesEveryKindOfDrift()
     QVERIFY(dir.isValid());
     const QString root = dir.path();
     QVERIFY(QDir().mkpath(root + "/native/tmdq_core"));
-    QVERIFY(QDir().mkpath(root + "/tests"));
+    QVERIFY(QDir().mkpath(root + "/native/tmdq_core_tests"));
     auto write = [](const QString& path, const QString& text) {
         QFile f(path);
         QVERIFY(f.open(QIODevice::WriteOnly));
@@ -731,8 +720,15 @@ void TestCoreQtFree::theNativeProjectGuardSeesEveryKindOfDrift()
     write(root + "/native/tmdq_core/tmdq_core.cpp", "");
     write(root + "/native/tmdq_core/abi_extra.cpp", "");
     write(root + "/native/tmdq_core/notes.txt", "not a source");
-    const QString testsPro = "SOURCES += $$PWD/../native/tmdq_core/tmdq_core.cpp " + QString(1, QChar(92)) +
-                             "\n    $$PWD/../native/tmdq_core/abi_extra.cpp\n";
+    // The native tests' project, compiling the ABI in beside a test source and a core source of its own.
+    auto testsProject = [](const QStringList& abi) {
+        QString text = "<Project>\n  <ClCompile Include=\"test_abi.cpp\" />\n"
+                       "  <ClCompile Include=\"..\\..\\src\\model\\alpha.cpp\" />\n";
+        for (const QString& name : abi)
+            text += "  <ClCompile Include=\"..\\tmdq_core\\" + name + "\" />\n";
+        return text + "</Project>\n";
+    };
+    const QString testsGood = testsProject({ "tmdq_core.cpp", "abi_extra.cpp" });
     const QStringList core = { "alpha", "beta" };
     const QString pro = "SOURCES += lib/irig106/src/one.c \\\n    lib/irig106/src/two.c \\\n";
     const QString solution = "Project(\"{x}\") = \"tmdq_core\", \"native\\tmdq_core\\tmdq_core.vcxproj\", \"{y}\"\n";
@@ -749,7 +745,7 @@ void TestCoreQtFree::theNativeProjectGuardSeesEveryKindOfDrift()
         write(root + "/native/tmdq_core/tmdq_core.vcxproj", proj);
         write(root + "/tmDataQualityAnalyzer.pro", proText);
         write(root + "/tmdq.sln", slnText);
-        write(root + "/tests/tests.pro", testsText.isNull() ? testsPro : testsText);
+        write(root + "/native/tmdq_core_tests/tmdq_core_tests.vcxproj", testsText.isNull() ? testsGood : testsText);
         return nativeProjectProblems(root, core);
     };
     auto only = [](const QStringList& problems, const QString& needle) {
@@ -784,19 +780,22 @@ void TestCoreQtFree::theNativeProjectGuardSeesEveryKindOfDrift()
     p = check(project({ "tmdq_core.cpp", "abi_extra.cpp", "..\\..\\src\\model\\alpha.cpp", "..\\..\\src\\model\\beta.cpp" }), "SOURCES += a.cpp\n", solution);
     QVERIFY2(only(p, "irig106 sources () are not the .pro's ()"), qPrintable(p.join(";")));
 
-    // The ABI's own sources: one the project forgets, one it invents, and the same for the test executable.
+    // The ABI's own sources: one the project forgets, one it invents, and the same for the native tests.
     QStringList noAbiExtra = good;
     noAbiExtra.removeAt(1);
     p = check(project(noAbiExtra), pro, solution);
     QVERIFY2(only(p, "the project does not compile the ABI source abi_extra"), qPrintable(p.join(";")));
     p = check(project(good + QStringList{ "ghost.cpp" }), pro, solution);
     QVERIFY2(only(p, "the project compiles ghost.cpp, which is not in native/tmdq_core"), qPrintable(p.join(";")));
-    p = check(project(good), pro, solution, "SOURCES += $$PWD/../native/tmdq_core/tmdq_core.cpp\n");
-    QVERIFY2(only(p, "tests.pro does not compile the ABI source abi_extra"), qPrintable(p.join(";")));
-    p = check(project(good), pro, solution, testsPro + "SOURCES += $$PWD/../native/tmdq_core/ghost.cpp\n");
-    QVERIFY2(only(p, "tests.pro compiles ghost.cpp, which is not in native/tmdq_core"), qPrintable(p.join(";")));
-    p = check(project(good), pro, solution, "# nothing here\n");
+    p = check(project(good), pro, solution, testsProject({ "tmdq_core.cpp" }));
+    QVERIFY2(only(p, "the native tests do not compile the ABI source abi_extra"), qPrintable(p.join(";")));
+    p = check(project(good), pro, solution, testsProject({ "tmdq_core.cpp", "abi_extra.cpp", "ghost.cpp" }));
+    QVERIFY2(only(p, "the native tests compile ghost.cpp, which is not in native/tmdq_core"), qPrintable(p.join(";")));
+    p = check(project(good), pro, solution, "<Project />\n");
     QVERIFY2(p.size() == 2 && p.join(";").contains("tmdq_core") && p.join(";").contains("abi_extra"), qPrintable(p.join(";")));
+    // The tests' own sources and the core sources they compile are not ABI sources.
+    p = check(project(good), pro, solution, testsGood.left(testsGood.size() - 11) + "  <ClCompile Include=\"helper.cpp\" />\n</Project>\n");
+    QVERIFY2(p.isEmpty(), qPrintable(p.join(";")));
 
     // Qt in the configuration, in any case; a comment does not count.
     p = check(project(good, "<AdditionalDependencies>qt6core.lib</AdditionalDependencies>"), pro, solution);

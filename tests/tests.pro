@@ -123,23 +123,6 @@ HEADERS += \
     $$PWD/../include/view/batchapplydialog.h \
     $$PWD/../include/view/processingprogressdialog.h
 
-# The C ABI behind tmdq_core.dll (native/tmdq_core), compiled straight into the test executable so TestAbi
-# calls it as a host would, without loading a DLL. TMDQ_ABI_STATIC makes TMDQ_API empty (no dllimport).
-# The list is the one native/tmdq_core/tmdq_core.vcxproj compiles; TestCoreQtFree checks they agree.
-DEFINES += TMDQ_ABI_STATIC
-INCLUDEPATH += $$PWD/../native/tmdq_core
-SOURCES += \
-    $$PWD/../native/tmdq_core/tmdq_core.cpp \
-    $$PWD/../native/tmdq_core/abi_file.cpp \
-    $$PWD/../native/tmdq_core/abi_run.cpp \
-    $$PWD/../native/tmdq_core/abi_calibration.cpp \
-    $$PWD/../native/tmdq_core/abi_formats.cpp \
-    $$PWD/../native/tmdq_core/abi_series.cpp
-HEADERS += \
-    $$PWD/../native/tmdq_core/tmdq_abi.h \
-    $$PWD/../native/tmdq_core/abi_internal.h \
-    $$PWD/../native/tmdq_core/abi_events.h
-
 # irig106 library sources
 SOURCES += \
     $$PWD/../lib/irig106/src/irig106ch10.c \
@@ -196,7 +179,6 @@ SOURCES += \
     tst_streamconfigschema.cpp \
     tst_processingtemplateschema.cpp \
     tst_coreqtfree.cpp \
-    tst_abi.cpp \
     tst_qtprocessingevents.cpp
 
 # Test headers (needed for MOC processing)
@@ -219,5 +201,4 @@ HEADERS += \
     tst_streamconfigschema.h \
     tst_processingtemplateschema.h \
     tst_coreqtfree.h \
-    tst_abi.h \
     tst_qtprocessingevents.h
