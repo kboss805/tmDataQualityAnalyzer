@@ -19,6 +19,6 @@
       <TextBlock x:Name="VersionLabel" Grid.Column="1" Text="{Binding VersionText}" Margin="16,0,0,0"
                  VerticalAlignment="Center" />
     </Grid>
-    <views:LockChart x:Name="Chart" Series="{Binding Series}" />
+    <views:LockChart x:Name="Chart" Series="{Binding Series}" AllSeries="{Binding AllSeries}" />
   </DockPanel>
 </Window>

@@ -106,6 +106,14 @@ $Unsigned = Join-Path $Stage 'unsigned'
 New-Item -ItemType Directory -Force -Path $Unsigned | Out-Null
 Get-ChildItem $Publish -File | Where-Object { $_.Extension -ne '.pdb' } | Copy-Item -Destination $Unsigned
 Copy-Item $CoreDll $AppDir
+# The shipped settings (TmDq.App.csproj copies the repository's settings\ into the publish): the Receiver SNR defaults
+# file the setup dialog opens on, the patterns and word maps its Load buttons start in, and receiver_params\default.toml,
+# the word map the core falls back to. The installer never overwrites them (US8.0).
+$settings = Join-Path $Publish 'settings'
+foreach ($needed in 'framesync_patterns\framesync_rcvr_default.toml', 'receiver_params\default.toml') {
+    if (-not (Test-Path (Join-Path $settings $needed))) { throw "the publish has no settings\$needed" }
+}
+Copy-Item $settings (Join-Path $AppDir 'settings') -Recurse
 # The Visual C++ runtime DLLs tmdq_core.dll imports, beside it. A clean Windows has the Universal CRT (the
 # api-ms-win-crt-* imports) but not MSVCP140 / VCRUNTIME140*, and without them the DLL fails to load with error 126
 # (found by the Sandbox test). Taken from the same toolset's redist folder, as deploy\build_release.ps1 does for the

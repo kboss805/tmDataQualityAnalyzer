@@ -1,6 +1,8 @@
+using System;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using TmDq.App.Processing;
 using TmDq.App.Services;
 using TmDq.App.ViewModels;
 using TmDq.App.Views;
@@ -16,7 +18,11 @@ namespace TmDq.App
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
                 var window = new MainWindow();
-                var vm = new MainWindowViewModel(new StorageRecordingPicker(window));
+                // The installer's smoke test has no one to answer Configure Streams, so it runs the defaults.
+                IStreamConfigurator configurator = Startup.SmokeReportPath() is null
+                    ? new DialogConfigurator(new WindowStreamDialogs(window), new StorageSettingsFilePicker(window), AppContext.BaseDirectory)
+                    : new FirstChannelRun();
+                var vm = new MainWindowViewModel(new StorageRecordingPicker(window), configurator);
                 window.DataContext = vm;
                 desktop.MainWindow = window;
 

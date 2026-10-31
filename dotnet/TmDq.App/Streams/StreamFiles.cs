@@ -74,6 +74,19 @@ namespace TmDq.App.Streams
         public static ReceiverParams ReceiverParamsOf(StreamSetup s) =>
             new(s.PolarityIndex, s.SlopeIndex, s.ScaleDdBPerV, s.NumReceivers, s.ReceiverChannels);
 
+        public const string FrameSyncFolder = "framesync_patterns";
+        public const string ReceiverParamsFolder = "receiver_params";
+
+        /// <summary>Where a Load dialog starts: the shipped <paramref name="subfolder"/> of settings/ when it is there, else
+        /// the last folder a file was loaded from or saved to (as the Qt dialogs' settingsSubdir). A Save starts at the
+        /// last folder.</summary>
+        public static string? LoadFolder(string? appRoot, string subfolder, string? lastFolder)
+        {
+            if (string.IsNullOrEmpty(appRoot)) return lastFolder;
+            string shipped = Path.Combine(appRoot, "settings", subfolder);
+            return Directory.Exists(shipped) ? shipped : lastFolder;
+        }
+
         /// <summary>The path with ".toml" added when its file name has no extension, as the Qt save dialogs do.</summary>
         public static string WithTomlExtension(string path) => Path.HasExtension(path) ? path : path + ".toml";
     }

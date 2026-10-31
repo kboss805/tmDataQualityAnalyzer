@@ -1,0 +1,85 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:TmDq.App.ViewModels"
+        x:Class="TmDq.App.Views.ConfigureStreamsWindow"
+        x:DataType="vm:ConfigureStreamsViewModel"
+        Title="{Binding Title}"
+        SizeToContent="WidthAndHeight"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner">
+  <Window.Styles>
+    <Style Selector="TextBlock.header">
+      <Setter Property="Opacity" Value="0.7" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.ready">
+      <Setter Property="FontSize" Value="16" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="Gray" />
+    </Style>
+    <Style Selector="TextBlock.ready.isReady">
+      <Setter Property="Foreground" Value="#2E9E44" />
+    </Style>
+    <Style Selector="TextBlock.ready.isBlocking">
+      <Setter Property="Foreground" Value="#D13438" />
+    </Style>
+  </Window.Styles>
+
+  <StackPanel Margin="16" Spacing="8">
+    <!-- The recording's own settings: both describe the file, not a stream. -->
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <TextBlock Text="Time Channel:" VerticalAlignment="Center" />
+      <ComboBox x:Name="TimeChannel" MinWidth="200" ItemsSource="{Binding TimeChannelItems}"
+                SelectedIndex="{Binding TimeChannelIndex}" IsEnabled="{Binding HasTimeChannels}"
+                ToolTip.Tip="IRIG time channel used to timestamp frame samples. Required for calibration extraction." />
+      <CheckBox x:Name="LegacyChapter10" Content="Legacy Chapter 10" Margin="16,0,0,0" IsChecked="{Binding LegacyChapter10}">
+        <ToolTip.Tip>
+          <TextBlock TextWrapping="Wrap" MaxWidth="420"
+                     Text="Turn this on for recordings from older equipment. If no stream in this file finds frame sync, this is the first thing to try. It applies to the whole recording, not to one channel. (Technically: ordinary Chapter 10 recordings store the PCM payload with each pair of bytes swapped, and the reader undoes that before searching for sync. Legacy recordings do not, so this turns that step off.)" />
+        </ToolTip.Tip>
+      </CheckBox>
+    </StackPanel>
+
+    <Grid ColumnDefinitions="70,260,12,160,80,60" Margin="0,8,0,0">
+      <TextBlock Grid.Column="0" Classes="header" Text="Process" />
+      <TextBlock Grid.Column="1" Classes="header" Text="Channel" />
+      <TextBlock Grid.Column="3" Classes="header" Text="Mode" />
+      <TextBlock Grid.Column="4" Classes="header" Text="Configure" />
+      <TextBlock Grid.Column="5" Classes="header" Text="Ready" />
+    </Grid>
+    <Separator />
+
+    <ScrollViewer x:Name="RowsScroller" MaxHeight="320" HorizontalScrollBarVisibility="Disabled">
+      <ItemsControl x:Name="Rows" ItemsSource="{Binding Rows}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:StreamRowViewModel">
+            <Grid ColumnDefinitions="70,260,12,160,80,60" Height="40">
+              <CheckBox Grid.Column="0" HorizontalAlignment="Center" IsChecked="{Binding Process}" />
+              <TextBlock Grid.Column="1" Text="{Binding Label}" ToolTip.Tip="{Binding Label}"
+                         TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+              <ComboBox Grid.Column="3" HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                        ItemsSource="{x:Static vm:StreamRowViewModel.Modes}" SelectedIndex="{Binding ModeIndex}"
+                        ToolTip.Tip="Analysis mode: Receiver SNR measures channel signal quality; Frame Sync Lock measures synchronization stability." />
+              <Button Grid.Column="4" Classes="configure" Content="&#x2699;" FontSize="16" Padding="8,0"
+                      HorizontalAlignment="Center" VerticalAlignment="Center" Command="{Binding ConfigureCommand}"
+                      ToolTip.Tip="Open configuration dialog for this stream's frame sync, data rate, and receiver parameters." />
+              <TextBlock Grid.Column="5" Classes="ready" Classes.isReady="{Binding IsReady}"
+                         Classes.isBlocking="{Binding IsBlocking}" Text="{Binding ReadyGlyph}" ToolTip.Tip="{Binding ReadyTip}" />
+            </Grid>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+
+    <TextBlock x:Name="WhyNot" Text="{Binding WhyNotProcess}" Opacity="0.75" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left" />
+
+    <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,8,0,0">
+      <CheckBox x:Name="All" Grid.Column="0" Content="All" IsChecked="{Binding All}" ToolTip.Tip="Toggle all streams on or off." />
+      <Button x:Name="ProcessButton" Grid.Column="1" Classes="accent" Content="Process" MinWidth="80" Margin="0,0,8,0"
+              IsDefault="True" Command="{Binding ProcessCommand}" />
+      <Button x:Name="CancelButton" Grid.Column="2" Content="Cancel" MinWidth="80" IsCancel="True" Command="{Binding CancelCommand}" />
+    </Grid>
+  </StackPanel>
+</Window>
