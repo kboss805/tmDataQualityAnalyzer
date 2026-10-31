@@ -242,15 +242,26 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
-        public void EveryProjectInTheSolutionPassesAndImportsTheCheck()
+        public void EveryProjectInTheSolutionImportsTheCheck()
         {
-            // The real thing: each project's own restore output, transitive packages included.
+            // A project without the import is not checked at all; its own build cannot notice that.
             foreach (string project in new[] { "TmDq.Core", "TmDq.Core.Tests", "TmDq.App", "TmDq.App.Tests" })
             {
                 string csproj = File.ReadAllText(Repo.File(Path.Combine("dotnet", project, project + ".csproj")));
                 Assert.True(csproj.Contains(@"<Import Project=""..\build\PackageLicences.targets"" />"), project + " does not import the licence check");
+            }
+        }
+
+        [Fact]
+        public void TheAppsRealPackagesPass()
+        {
+            // The real thing: the restore output of this test project and what it references, transitive packages
+            // included. Restoring this project restores those, so their assets are always there when these tests run.
+            // (TmDq.Core.Tests is not in that graph; its own build runs the same check.)
+            foreach (string project in new[] { "TmDq.Core", "TmDq.App", "TmDq.App.Tests" })
+            {
                 string assets = Path.Combine(Repo.Root, "dotnet", project, "obj", "project.assets.json");
-                if (project == "TmDq.Core" && !File.Exists(assets)) continue;   // no packages, nothing restored
+                Assert.True(File.Exists(assets), project + " has not been restored: " + assets);
                 var r = Run(assets);
                 Assert.True(r.Exit == 0, project + ":\n" + r.Output);
             }
