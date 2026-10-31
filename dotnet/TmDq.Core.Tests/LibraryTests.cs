@@ -110,7 +110,7 @@ public class LibraryTests
         }
         finally
         {
-            File.Delete(copy);
+            TempFiles.Delete(copy);
         }
     }
 

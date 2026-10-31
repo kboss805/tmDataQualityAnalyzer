@@ -250,7 +250,7 @@ public class LayoutTests
         }
         finally
         {
-            File.Delete(copy);
+            TempFiles.Delete(copy);
         }
     }
 

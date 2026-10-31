@@ -117,7 +117,7 @@ public class FormatsTests
             }
             finally
             {
-                File.Delete(path);
+                TempFiles.Delete(path);
             }
         }
         Assert.True(wrong.Count == 0, string.Join("\n", wrong));
@@ -162,7 +162,7 @@ public class FormatsTests
         }
         finally
         {
-            Directory.Delete(folder, recursive: true);
+            TempFiles.DeleteDirectory(folder, recursive: true);
         }
     }
 
@@ -185,7 +185,7 @@ public class FormatsTests
             }
             finally
             {
-                File.Delete(path);
+                TempFiles.Delete(path);
             }
         }
     }
@@ -203,7 +203,7 @@ public class FormatsTests
         }
         finally
         {
-            File.Delete(path);
+            TempFiles.Delete(path);
         }
     }
 
@@ -220,7 +220,7 @@ public class FormatsTests
         }
         finally
         {
-            Directory.Delete(folder);
+            TempFiles.DeleteDirectory(folder);
         }
     }
 
@@ -336,7 +336,7 @@ public class FormatsTests
             }
             finally
             {
-                File.Delete(path);
+                TempFiles.Delete(path);
             }
         }
         Assert.True(wrong.Count == 0, string.Join("\n", wrong));
@@ -388,7 +388,7 @@ public class FormatsTests
         }
         finally
         {
-            File.Delete(path);
+            TempFiles.Delete(path);
         }
     }
 
@@ -425,7 +425,7 @@ public class FormatsTests
             }
             finally
             {
-                File.Delete(path);
+                TempFiles.Delete(path);
             }
         }
     }
@@ -465,7 +465,7 @@ public class FormatsTests
         }
         finally
         {
-            File.Delete(path);
+            TempFiles.Delete(path);
         }
     }
 
@@ -490,7 +490,7 @@ public class FormatsTests
         }
         finally
         {
-            Directory.Delete(folder);
+            TempFiles.DeleteDirectory(folder);
         }
 
         Assert.Throws<ArgumentNullException>(() => CsvFile.Write(null!, new[] { one }, 1, 0));

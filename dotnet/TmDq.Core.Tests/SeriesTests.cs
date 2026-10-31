@@ -418,7 +418,7 @@ public class SeriesTests
             }
             finally
             {
-                File.Delete(path);
+                TempFiles.Delete(path);
             }
         }
     }

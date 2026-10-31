@@ -105,7 +105,7 @@ public class NotLoadedProbe
         }
         finally
         {
-            File.Delete(notALibrary);
+            TempFiles.Delete(notALibrary);
         }
 
         // ...so the real one can still be loaded afterwards, by a path spelled relative to here.
