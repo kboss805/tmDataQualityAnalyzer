@@ -58,6 +58,15 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   project is an executable; the build merges a UTF-8 code-page manifest into it with `mt.exe`, because the vendored
   irig106 opens files with a narrow `open()` that reads the active code page. Green baseline **300 passed / 0
   failed / 1 skipped** (the skip is the probe `IsolatedLoadTests` runs in a child process). CI runs it in both jobs.
+- **The Avalonia app (plan step 3):** `dotnet/TmDq.App` (Avalonia 12, CommunityToolkit.Mvvm) and
+  `dotnet/TmDq.App.Tests` (xunit v3 on `Avalonia.Headless.XUnit`), both in `tmdq.sln`, which VS Code opens by default
+  (`dotnet.defaultSolution`). `dotnet build dotnet\TmDq.App.Tests -c Release` (needs `mt`, so after `env.ps1`), then run
+  `bin\Release\net10.0\TmDq.App.Tests.exe`. Not in CI until step 3.2. **Never type a version in a .csproj**: import
+  `dotnet/build/AppVersion.props`, which reads `AppVersion`. **Every .NET project imports
+  `dotnet/build/PackageLicences.targets`** (plan D5): a package (transitive ones too) outside the open-source allow-list
+  in `scripts/check_package_licences.ps1` fails the build, and a licence *file* passes only when its SHA-256 is in that
+  script's `$Reviewed` table, so read it before adding it. That script runs under Windows PowerShell 5.1 inside builds
+  started from PowerShell 7, which inherits 7's `PSModulePath`: avoid cmdlets from script modules (`Get-FileHash` fails).
 
 **After a Qt version bump, CLEAN every build directory** — `build/` *and* `tests/`, Debug and
 Release: `& $env:TMDQ_MAKE -f Makefile.<Config> clean` then rebuild. jom rebuilds an object only
