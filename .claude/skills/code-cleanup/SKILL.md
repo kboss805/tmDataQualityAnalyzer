@@ -4,14 +4,14 @@ description: >-
   Run a whole-codebase cleanup sweep of tmDataQualityAnalyzer: find orphaned/dead code (unreferenced
   functions, classes, files, includes, constants), readability and naming-convention drift, MVVM
   layering violations, and documentation that has fallen out of sync with the code (the test catalog
-  in docs/CLAUDE.md, User Story acceptance criteria). Use this WHENEVER the user asks for a "code
+  in docs/claude.md, User Story acceptance criteria). Use this WHENEVER the user asks for a "code
   cleanup", "cleanup pass", "find dead code", "check for orphans", "tidy up the codebase", or wants a
   periodic health check of the project as a whole — as opposed to reviewing one change, which is
   tm-code-review's job. This is repo-wide and diff-independent: it looks at the whole tree, not just
   what changed recently. The main hazard is false positives — several things in this codebase look
   orphaned but are deliberately kept (see loadCsvFile in PlotViewModel, kept as the exportCsv partner
   and a test fixture even with no production caller) — so this skill's first move is always checking
-  docs/CLAUDE.md and the project's auto-loaded MEMORY.md for a documented reason before flagging
+  docs/claude.md and the project's auto-loaded MEMORY.md for a documented reason before flagging
   anything as dead.
 ---
 
@@ -37,10 +37,10 @@ and re-broken.
 
 Before flagging a function, class, file, or constant as unused:
 
-1. **Search `docs/CLAUDE.md`.** The Architecture/Component sections document a number of
+1. **Search `docs/claude.md`.** The Architecture/Component sections document a number of
    intentionally-kept, low-call-count paths and explain *why* they exist.
 2. **Search the auto-loaded `MEMORY.md`** (this session's persistent project memory, described in
-   the root `CLAUDE.md`'s "Memory" section). Design decisions and prior review remediation live
+   `.claude/CLAUDE.md`'s "Memory" section). Design decisions and prior review remediation live
    here, not just in the code — the `loadCsvFile` case above is exactly this.
 3. **Check whether it's a test-only symbol.** A helper called only from `tests/` is not orphaned —
    it's doing its job. Grep `tests/` explicitly rather than trusting a `src/`-only search.
@@ -51,7 +51,7 @@ Before flagging a function, class, file, or constant as unused:
    flagging it.
 
 If none of the four account for it, it's a real candidate — but report it as "no caller found in
-`src/` or `tests/`, and no documented reason in `CLAUDE.md`/`MEMORY.md`" rather than a flat
+`src/` or `tests/`, and no documented reason in `.claude/CLAUDE.md`/`MEMORY.md`" rather than a flat
 "unused," so the user can correct you if there's context you're missing (a downstream consumer, a
 planned feature, an in-progress branch).
 
@@ -59,7 +59,7 @@ planned feature, an in-progress branch).
 
 `lib/irig106/**` is third-party and protected — never edit it, and never flag it for cleanup even if
 something in it looks dead, unused, or oddly styled by this project's conventions. It is maintained
-upstream; this project's job is to wrap it, not tidy it. (See the root `CLAUDE.md` "Hard rules".)
+upstream; this project's job is to wrap it, not tidy it. (See `.claude/CLAUDE.md` "Hard rules".)
 
 ## Finding orphaned code
 
@@ -80,12 +80,12 @@ v2.8.0 cleanup found ~20 unreferenced constants and 37 unused Qt includes that h
 time, so this class of drift is real and recurring here, not hypothetical.
 
 **Unused includes**: a header pulled in but nothing from it referenced in that translation unit.
-`clangd --check=<file>` (see `docs/CLAUDE.md` → clangd / IntelliSense) can surface some of this
+`clangd --check=<file>` (see `docs/claude.md` → clangd / IntelliSense) can surface some of this
 directly, once `compile_flags.txt` is regenerated and current.
 
 ## Readability and coding-standard drift
 
-Don't restate the rules here — `docs/CLAUDE.md`'s **Coding Conventions** section (naming, the `m_`
+Don't restate the rules here — `docs/claude.md`'s **Coding Conventions** section (naming, the `m_`
 prefix, include ordering, memory management) is the single source of truth, and copying it into this
 skill risks the copy going stale while the real rules move on. Read it, then check the tree against
 it:
@@ -96,13 +96,13 @@ it:
 - Include ordering (Google C++ style, six groups) — mechanical, safe to note file-by-file.
 - **MVVM layering**: View files (`src/view/`) should contain no business logic — look for anything
   in `mainview.cpp` or a `*dialog.cpp` that computes rather than displays. Model files should never
-  reach into Qt widgets. This project is explicit about the boundary (see `docs/CLAUDE.md`
+  reach into Qt widgets. This project is explicit about the boundary (see `docs/claude.md`
   Architecture section), and a leak here is worth flagging even without an accompanying functional
   bug.
 
 ## Stale documentation
 
-`docs/CLAUDE.md` describes the codebase in prose, and prose drifts silently in a way code doesn't
+`docs/claude.md` describes the codebase in prose, and prose drifts silently in a way code doesn't
 (nothing fails to compile when a comment goes stale). Two spots worth checking every sweep:
 
 - **The Test Suites catalog.** Compare its list of suites and coverage claims against what's
@@ -120,14 +120,14 @@ about which areas have seen recent churn and are most likely to have drifted.
 
 Group by category (Dead code / Readability & convention drift / MVVM layering / Stale docs). For
 each: **file:line** (or just the filename, for a whole orphaned file), what you found, your
-confidence that it's actually unused (say explicitly whether you checked `CLAUDE.md`/`MEMORY.md`),
+confidence that it's actually unused (say explicitly whether you checked `.claude/CLAUDE.md`/`MEMORY.md`),
 and a concrete suggested fix. List real findings only — an empty category is a fine result, not a
 failure to find something.
 
 **This sweep proposes; it doesn't delete.** Deletions, renames, and doc rewrites need the user's
 go-ahead before you apply them. Present findings, let the user pick what to act on, then apply only
 those — the same git-safety discipline this project applies everywhere else (see the root
-`CLAUDE.md` guidance on investigating before removing unfamiliar state).
+`.claude/CLAUDE.md` guidance on investigating before removing unfamiliar state).
 
 ## After applying any fix
 

@@ -13,7 +13,7 @@ are settled here; the rest is layered plumbing guarded by CI + the 267-test suit
 **Goal:** let one plot draw from more than one `.ch10` file — e.g. Receiver SNR
 in file A and Frame Sync Lock in file B — merged onto a single time axis. Today,
 opening a file `clearData()`s the plot and rebinds the single reader to that one
-file (`docs/CLAUDE.md` even states "There is no batch / multi-file mode").
+file (`docs/claude.md` even states "There is no batch / multi-file mode").
 
 ---
 
@@ -243,7 +243,7 @@ ViewModel + schema tests.
   export re-imports as one dataset (series keep their `sourceId` for grouping, but
   the `MainViewModel` source *list* isn't rebuilt). Not currently persisted.
 
-**Docs:** update `docs/CLAUDE.md` — the "no batch / multi-file mode" architecture
+**Docs:** update `docs/claude.md` — the "no batch / multi-file mode" architecture
 statement and the data-flow section — once this lands.
 
 ---
@@ -268,4 +268,4 @@ statement and the data-flow section — once this lands.
 4. Non-overlap warning (§3) + source removal UI/logic (§5).
 5. Source-qualified CSV in `SeriesColumnSchema` + round-trip tests (§7) — do this
    last; it's the highest-risk on-disk-format change.
-6. Update `docs/CLAUDE.md` (drop "no multi-file mode"; refresh the data-flow).
+6. Update `docs/claude.md` (drop "no multi-file mode"; refresh the data-flow).

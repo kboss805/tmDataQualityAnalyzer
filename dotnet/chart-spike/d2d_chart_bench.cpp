@@ -20,7 +20,7 @@
 //
 // WHAT IT MEASURES
 //
-// The same geometry, shapes and pen as the Qt baselines recorded in docs/CLAUDE.md
+// The same geometry, shapes and pen as the Qt baselines recorded in docs/claude.md
 // (v2.13.0, release build, 1200x700 plot, 1.5 px non-cosmetic pen, antialiasing on):
 //
 //     samples/series  series   first paint   repaint
@@ -627,7 +627,7 @@ int main()
     if (!d.init()) { std::printf("Direct2D init FAILED\n"); return 1; }
     std::printf("device: %s\n\n", d.hardware ? "D3D11 HARDWARE" : "WARP (software - not a GPU number)");
 
-    // The three shapes docs/CLAUDE.md records Qt numbers for.
+    // The three shapes docs/claude.md records Qt numbers for.
     const Case cases[] = {
         {  360000,  3, "36",  "8"  },
         {  360000, 12, "157", "34" },

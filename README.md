@@ -168,6 +168,7 @@ debug\tmDataQualityAnalyzer.exe
 
 ```text
 tmDataQualityAnalyzer/
+├── .claude/                    # Claude Code: the session guide (CLAUDE.md), shared settings, project skills
 ├── build/                      # Out-of-source build artifacts
 ├── deploy/                     # Release packaging: build_release.ps1, Inno Setup .iss, release notes
 ├── docs/                       # Design notes, logic docs (SNR_logic, framesync_logic), AI guide (claude.md)

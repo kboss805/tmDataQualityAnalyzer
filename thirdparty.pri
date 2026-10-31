@@ -2,7 +2,7 @@
 # thirdparty.pri - vendored-library compilation hygiene
 #
 # lib/irig106 is third-party and protected (see the "Protected Files" section of
-# docs/CLAUDE.md). It carries pre-existing compiler warnings we can't fix at the
+# docs/claude.md). It carries pre-existing compiler warnings we can't fix at the
 # source. Compile it without the app's default warning level so its noise doesn't
 # bury real app-code warnings - and so the whole build is warning-clean, letting
 # CI's warning gate trust every line instead of a lib/-filtered subset.

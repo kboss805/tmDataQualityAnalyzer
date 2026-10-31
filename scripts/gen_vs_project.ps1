@@ -31,7 +31,7 @@
 #     tests\<cfg>\, exactly as under jom. Left alone qmake would put it beside the project
 #     file, the app would not find its default settings, and every fixture test would skip.
 #     Only the exe goes there: objects, moc and rcc output stay under vs\, so Visual
-#     Studio and jom never share an intermediate file (the stale-object trap CLAUDE.md
+#     Studio and jom never share an intermediate file (the stale-object trap .claude/CLAUDE.md
 #     documents is exactly what mixing two build systems in one directory would invite).
 #
 #  2. THE VENDORED C LIBRARY'S WARNINGS. thirdparty.pri silences lib\irig106 with
@@ -53,7 +53,7 @@
 #     failed, error code 3'. Each project built alone was fine. /FS is set as a property.
 #
 #  5. THE QT RUNTIME. A freshly built exe cannot start without Qt's DLLs beside it. Qt VS
-#     Tools would solve that with a PATH entry; CLAUDE.md rules that out (a hard-coded Qt
+#     Tools would solve that with a PATH entry; .claude/CLAUDE.md rules that out (a hard-coded Qt
 #     path silently rots on the next QT_VERSION bump), so a post-build step runs
 #     deploy_qt_local.ps1 instead, which reads the kit from env.ps1 every time.
 #

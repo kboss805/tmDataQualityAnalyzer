@@ -15,7 +15,7 @@ powershell -ExecutionPolicy Bypass -File dotnet\chart-spike\run_d2d_bench.ps1   
 ## Measured
 
 1200x700, 1.5 px pen, antialiasing on, `/O2`, D3D11 **hardware** - the same shapes and
-conditions as the Qt baselines in `docs/CLAUDE.md` (v2.13.0, release).
+conditions as the Qt baselines in `docs/claude.md` (v2.13.0, release).
 
 | samples/series | series | geometry | Direct2D | Direct3D | Qt first | Qt repaint |
 | --- | --- | --- | --- | --- | --- | --- |

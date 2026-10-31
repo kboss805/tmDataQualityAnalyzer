@@ -6,12 +6,12 @@
     // pymarkdown misparses the frontmatter as body content, which cascades into
     // false MD041/MD023/MD003 findings on every skill file.
     "front-matter": { "enabled": true },
-    // docs/CLAUDE.md and others use pipe tables throughout.
+    // docs/claude.md and others use pipe tables throughout.
     "markdown-tables": { "enabled": true }
   },
   "plugins": {
     // Line-length: this project's markdown is long-form prose, not hand-wrapped
-    // at 80 columns (see CLAUDE.md, docs/claude.md) - enforcing MD013 would mean
+    // at 80 columns (see .claude/CLAUDE.md, docs/claude.md) - enforcing MD013 would mean
     // rewrapping nearly every doc into a different house style, not fixing a bug.
     "md013": {
       "enabled": false

@@ -39,7 +39,7 @@ version string elsewhere, that's a bug to remove, not a place to update.
 
 ## Step 3 — Update the developer changelog
 
-In `docs/CLAUDE.md`, under **Version History**, add a new `### vX.Y.Z — <Title>` section at the top of
+In `docs/claude.md`, under **Version History**, add a new `### vX.Y.Z — <Title>` section at the top of
 the list. Write tight, factual bullets describing what changed and which user story (US#) it serves —
 match the voice of the existing entries (they reference concrete classes/methods). Also bump the
 **Project Version** line near the top of that file.
@@ -65,7 +65,7 @@ These reach users but nothing in CI exercises them, so they rot silently:
   read "Version 2.7.0" at v2.9.0. Refresh screenshots with
   `powershell -File scripts\build_manual.ps1` if the UI changed.
 - **`README.md`** — the "developed on Qt x.y.z" line and the repo tree.
-- **`CLAUDE.md`** — the "Current version" line in the opening paragraph. It sat at 2.7.0
+- **`.claude/CLAUDE.md`** — the "Current version" line in the opening paragraph. It sat at 2.7.0
   through two releases, because nothing points at it.
 
 **Run the consistency check rather than grepping by hand:**
@@ -89,7 +89,7 @@ it deliberately every release rather than assuming the figures are fine.
 ## Step 5 — Verify before building
 
 Build the app clean (0 warnings) and run the **full Qt suite** with the **build-and-test** skill:
-the baseline is in the root `CLAUDE.md` and there are **no skips**. Then run the throughput guard:
+the baseline is in `.claude/CLAUDE.md` and there are **no skips**. Then run the throughput guard:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_throughput_bench.ps1
@@ -237,5 +237,5 @@ practice on whether they're tracked.
 
 - One version source (`constants.h`). Never hand-edit `version_autogen.h`, the `.pro` VERSION, or the
   `.rc` — they're derived.
-- Two notes files, two audiences: `docs/CLAUDE.md` history = developer; `RELEASENOTES.txt` = end user.
+- Two notes files, two audiences: `docs/claude.md` history = developer; `RELEASENOTES.txt` = end user.
 - A release must come from a green, zero-warning, full-suite-passing build.

@@ -4,9 +4,11 @@ Qt 6.12.0 / C++20 desktop app (qmake + MSVC 2022, Windows) for analyzing data qu
 Chapter 10 PCM telemetry: per-stream **Frame Sync Lock** stats and **Receiver AGC/SNR**, plotted vs.
 time. MVVM, single-reader / parallel-worker processing core. **Current version: 2.14.2.**
 
-> **Full reference:** `docs/CLAUDE.md` is the canonical, detailed guide (user stories, architecture,
+> **Full reference:** `docs/claude.md` is the canonical, detailed guide (user stories, architecture,
 > conventions, test catalog). Read it when you need depth. This file is the quick orientation that
-> loads every session — keep it lean.
+> loads every session — keep it lean. It lives in `.claude/` beside the settings and skills, which
+> Claude Code loads exactly as it would a root `CLAUDE.md`; the root `.gitignore` re-includes it
+> (`!.claude/CLAUDE.md`), since everything else under `.claude/` is ignored.
 
 ## Build & test
 
@@ -76,7 +78,7 @@ one. **The symptom is a crash in a test that has nothing to do with the change**
 address — `0xc0000005` in `TestStepDetector`, `0xC0000409` entering `TestPlotViewModel`,
 `0xC000041D` in the app. Three separate debugging sessions were spent on this before the cause was
 identified. CI never sees it because it builds fresh; only local builds after a bump are affected.
-(Also regenerate `compile_flags.txt` and delete both `.qmake.stash` files — see `docs/CLAUDE.md`.)
+(Also regenerate `compile_flags.txt` and delete both `.qmake.stash` files — see `docs/claude.md`.)
 
 **A change that DELETES a header is also only verified by a clean build** — and this one fails the
 other way, as a **false pass** rather than a crash. jom does not notice that a header has gone, so
@@ -107,7 +109,7 @@ headless runs (`QT_QPA_PLATFORM=offscreen`) need.
 `py scripts/gen_compile_flags.py` after a fresh clone, a Qt bump, or a `.pro`
 include/define change. **Run it inside each worktree too**: the paths are absolute, and a
 worktree otherwise silently resolves headers from the main checkout while still reporting
-zero errors (see `docs/CLAUDE.md` → clangd / IntelliSense).
+zero errors (see `docs/claude.md` → clangd / IntelliSense).
 
 **Toolset is pinned to Visual Studio 2022 (MSVC 14.44, v143).** `env.ps1` asks vswhere for
 `[17.0,18.0)` rather than `-latest`; installing VS 2026 had silently moved every build to
@@ -123,7 +125,7 @@ see below). The solution and `vs/` are **generated and gitignored** (absolute Qt
 paths) — **regenerate after a `.pro` change, a Qt bump, or a Visual Studio update**. It
 builds with VS's own MSBuild (no Qt VS Tools needed); the Qt runtime is deployed by a
 post-build step. The qmake build stays the supported/CI one; the `.pro` files remain the
-source of truth. Rationale for each correction: `docs/CLAUDE.md` → Unreleased.
+source of truth. Rationale for each correction: `docs/claude.md` → Unreleased.
 
 ## Migration in progress: Qt to Avalonia
 

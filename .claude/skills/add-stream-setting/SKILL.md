@@ -94,5 +94,5 @@ against regression).
 
 ## Reference
 
-`docs/CLAUDE.md` → "Adding a New Per-Stream Setting" is the canonical short version of this checklist;
+`docs/claude.md` → "Adding a New Per-Stream Setting" is the canonical short version of this checklist;
 this skill expands it with the mode/persistence decisions and the invariant pointers.

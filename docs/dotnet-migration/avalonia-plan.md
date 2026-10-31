@@ -224,7 +224,7 @@ sweep.
 
 Each step ports one area with its tests rewritten on the headless platform (measure widgets, drive
 input, render pixels; see the `verify-ui-change` skill for what each catches), and each acceptance
-criterion in `docs/CLAUDE.md` for the stories it covers gets a test or a recorded manual check.
+criterion in `docs/claude.md` for the stories it covers gets a test or a recorded manual check.
 
 - [ ] **4.1 Configure Streams** and its three setup dialogs, TOML load and save, Apply to all,
   validation (US1.0, US2.0 to US2.2, US7.0).
@@ -255,7 +255,7 @@ criterion in `docs/CLAUDE.md` for the stories it covers gets a test or a recorde
 
 ## Step 5: switch over
 
-- [ ] **5.1 Parity review:** every acceptance criterion in `docs/CLAUDE.md` checked against the new app,
+- [ ] **5.1 Parity review:** every acceptance criterion in `docs/claude.md` checked against the new app,
   every Qt UI test either ported or recorded as deliberately dropped with a reason.
 - [ ] **5.2 Side-by-side soak:** the same recordings processed in both apps, CSV exports compared
   byte for byte, plots compared by eye, across every fixture and the full PRN recording.
@@ -267,11 +267,11 @@ criterion in `docs/CLAUDE.md` for the stories it covers gets a test or a recorde
 
 - [ ] **6.1 Delete the Qt application:** `src/view`, `src/viewmodel`, their headers, the Qt Test UI
   suites, `tmDataQualityAnalyzer.pro` and `tests/tests.pro`, `qtbridge.h`, `QtProcessingEvents`.
-  Clean build from an empty tree, because a deletion is only verified by one (`CLAUDE.md`).
+  Clean build from an empty tree, because a deletion is only verified by one (`.claude/CLAUDE.md`).
 - [ ] **6.2 Remove Qt from the tooling:** `env.ps1`, `deploy_qt_local.ps1`, `gen_compile_flags.py`,
   `gen_vs_project.ps1`, the CI Qt install, `QT_QPA_PLATFORM`, and the skills that describe the Qt
   build (`build-and-test`, `verify-ui-change`, `write-qt-test`, `add-stream-setting`, `cut-release`).
-- [ ] **6.3 Rewrite `CLAUDE.md` and `docs/CLAUDE.md`** for the new architecture, keeping the domain
+- [ ] **6.3 Rewrite `.claude/CLAUDE.md` and `docs/claude.md`** for the new architecture, keeping the domain
   invariants (they are about telemetry, not Qt). Delete this file.
 
 ## Risks worth watching
