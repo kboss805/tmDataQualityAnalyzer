@@ -39,24 +39,25 @@ namespace TmDq.App.Plot
             return FromQtHsv(h, s, v);
         }
 
-        // QColor keeps 16 bits a channel: an 8-bit value is stored times 0x101 and read back through qt_div_257.
-        private const double Max16 = 65535.0;
+        // QColor keeps 16 bits a channel: an 8-bit value is stored times 0x101 and read back through qt_div_257. Qt 6
+        // converts between RGB and HSV in float, and so must this, or a shade comes out one off.
+        private const float Max16 = 65535f;
 
         private static int Div257(int x) => (x - (x >> 8) + 0x80) >> 8;
 
         // qRound; every value rounded here is non-negative.
-        private static int QRound(double d) => d >= 0.0 ? (int)(d + 0.5) : (int)(d - 0.5);
+        private static int QRound(float d) => d >= 0f ? (int)(d + 0.5f) : (int)(d - 0.5f);
 
         /// <summary>QColor::getHsv of an RGB colour: hue 0 to 359 (-1 for no hue), saturation and value 0 to 255.</summary>
         private static (int H, int S, int V) ToQtHsv(Color c)
         {
-            double r = c.R * 0x101 / Max16, g = c.G * 0x101 / Max16, b = c.B * 0x101 / Max16;
-            double max = Math.Max(r, Math.Max(g, b));
-            double min = Math.Min(r, Math.Min(g, b));
-            double delta = max - min;
+            float r = c.R * 0x101 / Max16, g = c.G * 0x101 / Max16, b = c.B * 0x101 / Max16;
+            float max = Math.Max(r, Math.Max(g, b));
+            float min = Math.Min(r, Math.Min(g, b));
+            float delta = max - min;
             int value = QRound(max * Max16);
             int hue, saturation;
-            if (Math.Abs(delta) <= 0.000000000001)
+            if (Math.Abs(delta) <= 0.00001f)
             {
                 hue = ushort.MaxValue;   // achromatic
                 saturation = 0;
@@ -64,12 +65,12 @@ namespace TmDq.App.Plot
             else
             {
                 saturation = QRound(delta / max * Max16);
-                double h;
+                float h;
                 if (r == max) h = (g - b) / delta;
-                else if (g == max) h = 2.0 + (b - r) / delta;
-                else h = 4.0 + (r - g) / delta;
-                h *= 60.0;
-                if (h < 0.0) h += 360.0;
+                else if (g == max) h = 2f + (b - r) / delta;
+                else h = 4f + (r - g) / delta;
+                h *= 60f;
+                if (h < 0f) h += 360f;
                 hue = QRound(h * 100);
             }
             return (hue == ushort.MaxValue ? -1 : hue / 100, Div257(saturation), Div257(value));
@@ -85,16 +86,16 @@ namespace TmDq.App.Plot
                 byte grey = (byte)Div257(value);
                 return Color.FromRgb(grey, grey, grey);
             }
-            double hh = hue == 36000 ? 0 : hue / 6000.0;
-            double ss = saturation / Max16;
-            double vv = value / Max16;
+            float hh = hue == 36000 ? 0f : hue / 6000f;
+            float ss = saturation / Max16;
+            float vv = value / Max16;
             int i = (int)hh;
-            double f = hh - i;
-            double p = vv * (1.0 - ss);
-            double r, g, b;
+            float f = hh - i;
+            float p = vv * (1f - ss);
+            float r, g, b;
             if ((i & 1) != 0)
             {
-                double q = vv * (1.0 - ss * f);
+                float q = vv * (1f - ss * f);
                 (r, g, b) = i switch
                 {
                     1 => (q, vv, p),
@@ -104,7 +105,7 @@ namespace TmDq.App.Plot
             }
             else
             {
-                double t = vv * (1.0 - ss * (1.0 - f));
+                float t = vv * (1f - ss * (1f - f));
                 (r, g, b) = i switch
                 {
                     0 => (vv, t, p),

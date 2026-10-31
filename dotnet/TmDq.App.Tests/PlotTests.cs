@@ -66,6 +66,25 @@ namespace TmDq.App.Tests
             Assert.Equal(Rgb(expected), PlotColors.Shade(Rgb(primary), level));
         }
 
+        public static IEnumerable<object[]> QtShadesAroundTheWheel()
+        {
+            // The same function, as QColor computed it, for colours the primaries do not reach: every sector of the hue
+            // wheel and both sides of an edge, a negative raw hue (magenta), a grey (no hue at all) and near-greys.
+            const string table = "255,0,128 1 255,60,161|255,0,128 2 255,120,190|255,0,128 3 255,180,219|200,30,90 1 220,85,134|200,30,90 2 240,149,182|200,30,90 3 255,215,230|128,255,0 1 161,255,60|128,255,0 2 190,255,120|128,255,0 3 219,255,180|90,200,20 1 132,220,73|90,200,20 2 178,240,136|90,200,20 3 225,255,205|0,255,255 1 60,255,255|0,255,255 2 120,255,255|0,255,255 3 180,255,255|20,120,200 1 73,156,220|20,120,200 2 136,195,240|20,120,200 3 205,233,255|255,255,0 1 255,255,60|255,255,0 2 255,255,120|255,255,0 3 255,255,180|140,0,255 1 164,60,255|140,0,255 2 192,120,255|140,0,255 3 220,180,255|255,0,255 1 255,60,255|255,0,255 2 255,120,255|255,0,255 3 255,180,255|1,2,3 1 13,18,23|1,2,3 2 35,39,43|1,2,3 3 53,58,63|128,128,128 1 148,148,148|128,128,128 2 168,168,168|128,128,128 3 188,188,188|250,251,249 1 235,255,215|250,251,249 2 235,255,215|250,251,249 3 235,255,215|17,200,201 1 71,221,221|17,200,201 2 134,241,241|17,200,201 3 202,255,255|201,17,200 1 221,71,221|201,17,200 2 241,134,241|201,17,200 3 255,202,255";
+            foreach (string row in table.Split('|'))
+            {
+                string[] parts = row.Split(' ');
+                yield return new object[] { parts[0], int.Parse(parts[1]), parts[2] };
+            }
+        }
+
+        [Theory]
+        [MemberData(nameof(QtShadesAroundTheWheel))]
+        public void AShadeOfAnyColourIsTheColourQtComputes(string color, int level, string expected)
+        {
+            Assert.Equal(Rgb(expected), PlotColors.Shade(Rgb(color), level));
+        }
+
         [Fact]
         public void TheShadesStartFromTheQtPrimaries()
         {
@@ -131,6 +150,7 @@ namespace TmDq.App.Tests
             Assert.Equal(new[] { true, false }, plot.Series.Select(s => s.Visible));
             Assert.All(plot.Series, s => Assert.Equal("CH 13", s.Name));
             Assert.Same(plot.Series[0].X, plot.Series[1].X);   // one elapsed array per stream
+            Assert.True(plot.Series[0].SortedX);               // so the chart walks only the samples in view
             Assert.Equal(116, plot.Series[0].X.Length);
             Assert.Equal(0.0, plot.Series[0].X[0]);
             Assert.Equal(outcome.Streams[0].LockPercent, plot.Series[0].Y);
