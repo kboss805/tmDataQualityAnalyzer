@@ -215,7 +215,6 @@ namespace TmDq.App.Processing
                 foreach ((bool error, string text) in _jobLines) Emit(error, text);
                 foreach (string line in between) Emit(false, line);
                 foreach ((bool error, string text) in _held ?? new()) Emit(error, text);
-                _jobLines.Clear();
                 _held = null;
             }
         }

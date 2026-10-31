@@ -279,8 +279,13 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
     - US2.0, US2.1 and US2.2: every criterion has a test.
     - US7.0: every criterion has a test. "Pattern no larger than the frame" holds by the two ranges.
     The changelog entry maps each criterion to its test.
-- [ ] **4.2 Processing:** progress dialog, cancel, the log sidebar with its colouring and the
+- [x] **4.2 Processing** (PR #226): progress dialog, cancel, the log sidebar with its colouring and the
   multi-line messages (US1.0, US3.0 to US3.2).
+  **Done:** a modal progress dialog (processing-progress.png) whose Cancel only asks and stops every stream, and which
+  cannot be closed or escaped while the run goes on; the log sidebar left of the chart (processing-log.png), timestamped
+  and coloured by the Qt rules, keeping a message's own lines, saying what the Qt log says in its order. Every
+  criterion of US1.0 now has a test, and so does US3.0's and US3.2's progress bar; the rest of US3.0 to US3.2 is the
+  chart's (4.3), the setup dialog's (4.1b) or the core's. The sidebar's toggle is 4.8's, the log's export 4.5's.
 - [ ] **4.3 The chart** (per D1): envelope and culling, dual axes with hiding, round clock ticks,
   wheel zoom, drag pan, band zoom, zoom history, crosshair and pinned readout, backing-store
   behaviour, the interval band (US3.x, US4.0). Port `TestTmChart`'s cases, including the dropout and
