@@ -186,7 +186,8 @@ namespace TmDq.App.ViewModels
             ? (bytes / 1048576.0).ToString("F1", CultureInfo.InvariantCulture) + " MB"
             : (bytes / 1024.0).ToString("F1", CultureInfo.InvariantCulture) + " KB";
 
-        private static string CountText(int count) => count == 0 ? "none" : count.ToString(CultureInfo.InvariantCulture);
+        /// <summary>A channel count as the Qt log gives it: "none" for zero.</summary>
+        public static string CountText(int count) => count == 0 ? "none" : count.ToString(CultureInfo.InvariantCulture);
 
         /// <summary>Passes a run's log lines, which come on the core's threads, to the session log on the thread that made
         /// it, in order.</summary>

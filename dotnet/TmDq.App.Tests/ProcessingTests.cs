@@ -189,6 +189,12 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
+        public void AChannelCountOfNoneSaysNone()
+        {
+            Assert.Equal(new[] { "none", "1", "12" }, new[] { 0, 1, 12 }.Select(MainWindowViewModel.CountText));
+        }
+
+        [Fact]
         public void TheJobLinesComeFirstAndWhatTheThreadsSayFollowsTheSummary()
         {
             // The order the Qt application logged in: the job builder's lines (written on the starting thread while the
@@ -340,8 +346,16 @@ namespace TmDq.App.Tests
         {
             var vm = new MainWindowViewModel(clock: new StoppedClock());
             Assert.Equal(new[] { "tmDataQualityAnalyzer v" + AppInfo.Version, "Load a Chapter 10 file to configure per-stream processing." }, Texts(vm));
+            // The core reports on its own threads; the log, which the sidebar shows, may only change on the UI thread.
+            var offTheUiThread = new List<string>();
+            vm.Log.Entries.CollectionChanged += (_, e) =>
+            {
+                if (!Dispatcher.UIThread.CheckAccess())
+                    lock (offTheUiThread) offTheUiThread.AddRange(e.NewItems!.Cast<LogEntry>().Select(x => x.Text));
+            };
             await vm.LoadAsync(Prn);
             List<string> lines = Texts(vm);
+            Assert.Empty(offTheUiThread);
 
             NativeCore.EnsureLoaded();
             RunRequest request = FirstChannelRun.Request(Prn, Ch10File.Open(Prn));
@@ -585,6 +599,37 @@ namespace TmDq.App.Tests
             Assert.Equal("13:05:09  first line\n  second line\n  third line\n13:05:09  next entry", Shown(text));
             var lines = text.TextLayout.TextLines;
             Assert.Equal(4, lines.Count);
+            window.Close();
+        }
+
+        [AvaloniaFact]
+        public void ALongLineWrapsInsideTheSidebar()
+        {
+            var log = new SessionLog(new StoppedClock());
+            log.Add(string.Join(" ", Enumerable.Repeat("a long message that does not fit on one line", 6)));
+            var (view, text, _, window) = ShowLog(log.Entries);
+            Assert.True(text.TextLayout.TextLines.Count >= 3, $"{text.TextLayout.TextLines.Count} line(s)");
+            Assert.True(text.Bounds.Width <= view.Bounds.Width, $"the text ({text.Bounds.Width}) is wider than the log ({view.Bounds.Width})");
+            window.Close();
+        }
+
+        [AvaloniaFact]
+        public void TheLogShowsTheCollectionItIsGivenAndOnlyThat()
+        {
+            var first = new SessionLog(new StoppedClock());
+            first.Add("from the first log");
+            var second = new SessionLog(new StoppedClock());
+            second.Add("from the second log");
+            var (view, text, _, window) = ShowLog(first.Entries);
+            view.Entries = second.Entries;
+            Dispatcher.UIThread.RunJobs();
+            first.Add("added to the first log later");
+            second.Add("added to the second log later");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("13:05:09  from the second log\n13:05:09  added to the second log later", Shown(text));
+            view.Entries = null;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("", Shown(text));
             window.Close();
         }
 

@@ -240,6 +240,7 @@ namespace TmDq.App.Tests
                 Assert.Null(vm.Series);
                 Assert.False(vm.IsBusy);
                 Assert.StartsWith("The processing core could not be loaded: ", vm.Status);
+                Assert.Equal((vm.Status, Logging.LogLevel.Error), (vm.Log.Entries[^1].Text, vm.Log.Entries[^1].Level));
             }
             finally
             {
