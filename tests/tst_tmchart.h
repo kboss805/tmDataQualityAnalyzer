@@ -31,6 +31,7 @@ private slots:
     void denseSeriesStillDrawsASingleSampleDropout();
     void denseSeriesShowsItsSpreadNotJustItsMean();
     void linePersistsWhenNoSampleIsInsideTheView();
+    void drawsTheCoresGeometryForEveryKindOfSeries();
     void rangeChangeRedrawsInsteadOfReusingGeometry();
     void cachedPaintStillFollowsTheData();
     void crosshairDrawsOverTheCachedPlot();

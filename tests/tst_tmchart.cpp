@@ -500,6 +500,95 @@ void TestTmChart::denseSeriesShowsItsSpreadNotJustItsMean()
     QVERIFY2(inkIn(0.45, 0.55) > 0, "the mean line is missing from the middle");
 }
 
+void TestTmChart::drawsTheCoresGeometryForEveryKindOfSeries()
+{
+    // The chart's geometry is the core's (chartgeometry.h, plan step 4.3a), and the chart only hands it each series
+    // with the right ranges and copies back what to draw. Each case here is drawn so that a slip in that hand-over
+    // puts the ink somewhere else: a series measured against the wrong axis, a segment's end taken from its start,
+    // a band's points with x and y swapped, an unordered series walked as if it were ordered.
+    TmChart chart;
+    chart.resize(600, 400);
+    const QColor red(Qt::red);
+
+    auto render = [&]() {
+        QImage img(chart.size(), QImage::Format_ARGB32);
+        img.fill(Qt::white);
+        QPainter painter(&img);
+        chart.renderTo(painter, chart.size());
+        painter.end();
+        return img;
+    };
+    // Red ink inside a part of the plot area, given as fractions of its width and height (0 = left, 0 = top).
+    auto inkIn = [&](const QImage& img, double x0, double x1, double y0, double y1) {
+        const QRectF a = chart.plotArea();
+        int n = 0;
+        for (int y = static_cast<int>(a.top() + a.height() * y0); y < static_cast<int>(a.top() + a.height() * y1); ++y)
+        {
+            for (int x = static_cast<int>(a.left() + a.width() * x0); x < static_cast<int>(a.left() + a.width() * x1); ++x)
+            {
+                const QColor c = img.pixelColor(x, y);
+                if (c.red() > c.green() + 40 && c.red() > c.blue() + 40)
+                {
+                    ++n;
+                }
+            }
+        }
+        return n;
+    };
+    auto only = [&](TmChart::Axis axis, const QVector<double>& xs, const QVector<double>& ys) {
+        chart.clearSeries();
+        const int id = chart.addSeries(axis);
+        chart.setSeriesPen(id, QPen(red, 2));
+        chart.setSeriesData(id, xs, ys);
+    };
+
+    // A flat series at 10 on the right axis (0..10) sits at the top of the plot; measured against the left axis
+    // (0..100) it would sit a tenth of the way up.
+    chart.setXRange(0, 100);
+    chart.setLeftRange(0, 100);
+    chart.setRightRange(0, 10);
+    chart.setRightAxisVisible(true);
+    only(TmChart::Axis::Right, {0, 100}, {10, 10});
+    QImage img = render();
+    QVERIFY2(inkIn(img, 0.1, 0.9, 0.0, 0.05) > 100, "a right-axis series is not at the top of its own range");
+    QVERIFY2(inkIn(img, 0.1, 0.9, 0.85, 0.95) == 0, "a right-axis series was measured against the left axis");
+
+    // A line from the bottom-left to the top-right corner: ink at both ends, not a level line.
+    only(TmChart::Axis::Left, {0, 100}, {0, 100});
+    img = render();
+    QVERIFY2(inkIn(img, 0.85, 1.0, 0.0, 0.15) > 0, "a sloped segment does not reach its end");
+    QVERIFY2(inkIn(img, 0.0, 0.15, 0.85, 1.0) > 0, "a sloped segment does not start where it should");
+
+    // A dense noisy series over the right half of the view only: its band is there, from top to bottom, and nothing
+    // of it is in the left half.
+    QVector<double> xs;
+    QVector<double> ys;
+    for (int i = 0; i < 20000; ++i)
+    {
+        xs.push_back(50.0 + i * 50.0 / 20000);
+        ys.push_back(i % 2 ? 95.0 : 5.0);
+    }
+    only(TmChart::Axis::Left, xs, ys);
+    img = render();
+    QVERIFY2(inkIn(img, 0.0, 0.45, 0.0, 1.0) == 0, "the band was drawn outside the series' columns");
+    QVERIFY2(inkIn(img, 0.55, 0.95, 0.0, 0.10) > 0, "the band does not reach the series' maximum");
+    QVERIFY2(inkIn(img, 0.55, 0.95, 0.90, 1.0) > 0, "the band does not reach the series' minimum");
+
+    // A descending series (unordered, so walked whole) in a view of its middle: the line still crosses the view.
+    // Walked as if it were ordered, the search for the view would find no sample in it, and nothing would be drawn.
+    xs.clear();
+    ys.clear();
+    for (int i = 99; i >= 0; --i)
+    {
+        xs.push_back(i);
+        ys.push_back(50);
+    }
+    only(TmChart::Axis::Left, xs, ys);
+    chart.setXRange(40, 60);
+    img = render();
+    QVERIFY2(inkIn(img, 0.1, 0.9, 0.4, 0.6) > 100, "an unordered series in a zoomed view was not drawn");
+}
+
 void TestTmChart::linePersistsWhenNoSampleIsInsideTheView()
 {
     // A series is built only from the samples inside the X range, which is what
