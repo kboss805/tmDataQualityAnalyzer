@@ -286,10 +286,20 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
   and coloured by the Qt rules, keeping a message's own lines, saying what the Qt log says in its order. Every
   criterion of US1.0 now has a test, and so does US3.0's and US3.2's progress bar; the rest of US3.0 to US3.2 is the
   chart's (4.3), the setup dialog's (4.1b) or the core's. The sidebar's toggle is 4.8's, the log's export 4.5's.
-- [ ] **4.3 The chart** (per D1): envelope and culling, dual axes with hiding, round clock ticks,
+- **4.3 The chart** (per D1): envelope and culling, dual axes with hiding, round clock ticks,
   wheel zoom, drag pan, band zoom, zoom history, crosshair and pinned readout, backing-store
   behaviour, the interval band (US3.x, US4.0). Port `TestTmChart`'s cases, including the dropout and
-  stale-cache ones.
+  stale-cache ones. In two PRs, the user's choice. The Qt `PlotWidget` (1,270 lines) is not refactored, since step 6
+  deletes it; its jobs become separate pieces here instead: the chart control and a plot view model (ranges, zoom
+  history, the readout's pin) in 4.3b, the legend, chip bar and context menu in 4.4, image export in 4.5.
+  - [x] **4.3a The geometry, in the core** (PR #227): the transforms between data and pixels, a series' line (the
+    samples in view only) and its per-pixel-column envelope (each column's mean, and the band from its minimum to its
+    maximum, the "interval band"), and the time ticks, moved out of the Qt `TmChart` into the core's `chartgeometry`
+    (decision D1). The Qt chart now draws from it, held bit for bit to its old code, which the native suite keeps as the
+    oracle. Through the C ABI (revision 2) and `TmDq.Core` (`ChartGeometry`) for 4.3b.
+  - [ ] **4.3b The chart control:** the Avalonia chart over that geometry: dual axes with hiding, the ticks and their
+    labels, Receiver SNR on the right axis, the backing store, wheel zoom, drag pan, band zoom, zoom history, the
+    crosshair and pinned readout, double-click to the full span; `TestTmChart`'s widget cases ported.
 - [ ] **4.4 Around the chart:** legend overlay (drag, cap, scroll, translucency), chip bar, context
   menu and its advertised shortcuts, keyboard shortcuts scoped to the chart, Customize View dialog
   (US4.0, US4.1).
