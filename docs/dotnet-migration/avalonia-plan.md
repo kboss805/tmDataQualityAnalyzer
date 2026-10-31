@@ -260,7 +260,7 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
   unconfigured); opening a Receiver SNR row in Frame Sync Lock cleared its receiver-parameters file on a copy that was
   then discarded (now the clear sticks); and calibration extracted with the first time channel rather than the one
   selected (fixed in 4.6).
-  - [ ] **4.1a The rules, without a window:** the receiver-parameters file through the C ABI (`tmdq_receiver_params_read`
+  - [x] **4.1a The rules, without a window** (PR #224): the receiver-parameters file through the C ABI (`tmdq_receiver_params_read`
     / `_save`, `tmdq_words_in_minor_frame`, ABI revision 1) and `TmDq.Core` (`ReceiverParamsFile`, `FrameGeometry`), so
     the app reads and writes it through the core's one implementation (rule 5); and in `TmDq.App/Streams`, a row's
     settings (`StreamSetup`), the defaults a row and a mode change start from (`StreamDefaults`), the dialog's rules
