@@ -161,7 +161,7 @@ if ($unins) {
     # later. So the VALUE is what must be gone, not the key.
     $left = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.ch10' -ErrorAction SilentlyContinue).'(default)'
     Check ".ch10 value cleared" ([string]::IsNullOrEmpty($left)) $(if ($left) { "still '$left'" } else { 'empty key left behind by design' })
-    Check "ProgID key removed" (-not (Test-Path 'HKLM:\SOFTWARE\Classes	mDataQualityAnalyzer.ch10')) 'uninsdeletekey'
+    Check "ProgID key removed" (-not (Test-Path 'HKLM:\SOFTWARE\Classes\tmDataQualityAnalyzer.ch10')) 'uninsdeletekey'
 } else {
     Check "uninstaller found" $false 'no unins*.exe in the install dir'
 }

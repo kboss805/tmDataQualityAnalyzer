@@ -25,7 +25,12 @@ param(
     # Defaults to the newest setup.exe in deploy\. Pass one explicitly to test an
     # older release, or an artifact downloaded from a GitHub release.
     [string]$Setup,
-    [int]$TimeoutSeconds = 600
+    [int]$TimeoutSeconds = 600,
+    # The script the Sandbox runs, from this folder. verify_install.ps1 tests the shipped Qt installer;
+    # verify_preview_install.ps1 tests the Avalonia preview packages (plan step 3.3).
+    [string]$Verifier = 'verify_install.ps1',
+    # More files or folders the verifier needs, copied beside the setup (a folder keeps its name).
+    [string[]]$Payload = @()
 )
 
 $ErrorActionPreference = 'Stop'
@@ -68,7 +73,15 @@ if (-not $Setup -or -not (Test-Path $Setup)) {
 Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $inDir, $outDir | Out-Null
 Copy-Item $Setup $inDir -Force
-Copy-Item (Join-Path $here 'verify_install.ps1') $inDir -Force
+# Through `powershell -File`, an array parameter arrives as ONE string ("a","b" included), so split it here.
+$Payload = @($Payload | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim().Trim('"').Trim("'") } | Where-Object { $_ })
+$verifierPath = Join-Path $here $Verifier
+if (-not (Test-Path $verifierPath)) { throw "No verifier $Verifier beside this script." }
+Copy-Item $verifierPath $inDir -Force
+foreach ($item in $Payload) {
+    if (-not (Test-Path $item)) { throw "Payload item not found: $item" }
+    Copy-Item $item $inDir -Recurse -Force
+}
 
 $wsb = Join-Path $work 'tmdqa-clean-install.wsb'
 @"
@@ -86,7 +99,7 @@ $wsb = Join-Path $work 'tmdqa-clean-install.wsb'
     </MappedFolder>
   </MappedFolders>
   <LogonCommand>
-    <Command>powershell.exe -NoExit -ExecutionPolicy Bypass -File C:\tmdqa\verify_install.ps1</Command>
+    <Command>powershell.exe -NoExit -ExecutionPolicy Bypass -File C:\tmdqa\$Verifier</Command>
   </LogonCommand>
   <Networking>Enable</Networking>
   <vGPU>Disable</vGPU>

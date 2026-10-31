@@ -214,12 +214,25 @@ sweep.
   session 0, not interactive, and all 36 passed, including one that renders the main window through Skia and reads
   its pixels (the spike had only run them as SYSTEM in a Sandbox). `scripts/test_app.ps1` prints that line in every
   run; CI runs it after the managed tests in all three jobs, so `core-without-qt` also proves the app needs no Qt.
-- [ ] **3.3 Packaging prototype:** self-contained publish, Inno Setup installer and portable ZIP,
+- [x] **3.3 Packaging prototype:** self-contained publish, Inno Setup installer and portable ZIP,
   signed. **Every unsigned assembly must be signed** (21 Avalonia DLLs plus our own): a user machine
   with Smart App Control on blocks unsigned code with error 4551, exactly as the Sandbox did. Test a
   single-file publish as the alternative. Verified with `deploy/sandbox/` on a clean machine with
   Smart App Control on. Both packages carry the third-party licence notices (Avalonia, SkiaSharp,
   Skia, CommunityToolkit.Mvvm, the .NET runtime), which the GPL-3.0 distribution owes them.
+  PR #222. **Done, and single-file is the answer, not the alternative.** Measured: a self-contained folder publish ships 27
+  unsigned PE files (22 Avalonia assemblies, MicroCom.Runtime, Tmds.DBus.Protocol, our 3), and signing them would put
+  this project's publisher identity on third-party code. A single-file publish bundles every managed assembly into our
+  exe, and the three native libraries beside it are already signed by their publishers (Microsoft for SkiaSharp and
+  HarfBuzz, AvaloniaUI OU for ANGLE), so the certificate signs only our own exe and `tmdq_core.dll`.
+  `deploy/avalonia/build_avalonia_package.ps1` builds the signed installer and portable ZIP as a **preview installed
+  beside the Qt app** (its own AppId and folder, no `.ch10` association) and refuses to sign any other unsigned file;
+  `scripts/gen_third_party_notices.ps1` writes the notices from the publish's deps file (20 packages, and the irig106
+  code inside `tmdq_core.dll`). Clean Windows 11 Sandbox, Smart App Control on: the unsigned build is blocked (Code
+  Integrity event 3077), the signed packages install, run, load the native core and call it, and nothing of theirs is
+  blocked. Found on the way: a single-file publish had shipped without the UTF-8 manifest (it bundles its own host from
+  `obj\`), and `tmdq_core.dll` needs the VC++ runtime beside it (`MSVCP140`, `VCRUNTIME140*`), which a clean Windows
+  lacks. Statically linking the CRT into the DLL would drop those three files; that is a core-build decision left open.
 - [ ] **3.4 A walking skeleton:** open a `.ch10`, process one stream with defaults, show the lock %
   series. Ugly is fine; it proves the whole path end to end in the new app, in CI, and in the
   installer.

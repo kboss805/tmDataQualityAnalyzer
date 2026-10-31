@@ -9,3 +9,8 @@
 # .gitignore ignores the generated .work/ payload, and a nested rule wins over this one.
 !sandbox/
 !sandbox/**
+
+# The Avalonia package prototype (plan step 3.3), the same way: its own .gitignore keeps
+# the staged layout and the packages out.
+!avalonia/
+!avalonia/**
