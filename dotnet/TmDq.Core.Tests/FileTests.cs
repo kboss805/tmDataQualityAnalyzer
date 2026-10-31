@@ -71,14 +71,16 @@ public class FileTests
         }
         finally
         {
-            File.Delete(junk);
+            TempFiles.Delete(junk);
         }
     }
 
     [Fact]
     public void OpeningDoesNotKeepTheRecordingOpen()
     {
-        // The native handle is closed before Open returns: a file still held open could not be deleted.
+        // The native handle is closed before Open returns: a file still held open could not be deleted. TempFiles waits
+        // out a moment's hold by another process (a virus scan of the fresh copy), but a handle the library leaked is
+        // never released, so this still fails once its window is over.
         string dir = Path.Combine(Path.GetTempPath(), "tmdq-held-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         string copy = Path.Combine(dir, "recording.ch10");
@@ -86,12 +88,12 @@ public class FileTests
         try
         {
             Ch10File.Open(copy);
-            File.Delete(copy);
+            TempFiles.Delete(copy);
             Assert.False(File.Exists(copy));
         }
         finally
         {
-            Directory.Delete(dir, recursive: true);
+            TempFiles.DeleteDirectory(dir, recursive: true);
         }
     }
 
@@ -115,7 +117,7 @@ public class FileTests
         }
         finally
         {
-            Directory.Delete(dir, recursive: true);
+            TempFiles.DeleteDirectory(dir, recursive: true);
         }
     }
 

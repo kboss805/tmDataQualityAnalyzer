@@ -410,7 +410,7 @@ public class RunTests
         }
         finally
         {
-            Directory.Delete(dir, recursive: true);
+            TempFiles.DeleteDirectory(dir, recursive: true);
         }
     }
 
@@ -509,7 +509,7 @@ public class RunTests
         }
         finally
         {
-            Directory.Delete(root, recursive: true);
+            TempFiles.DeleteDirectory(root, recursive: true);
         }
     }
 
@@ -682,7 +682,7 @@ public class RunTests
         }
         finally
         {
-            File.Delete(path);
+            TempFiles.Delete(path);
         }
     }
 

@@ -81,7 +81,7 @@ public class CalibrationTests
         }
         finally
         {
-            File.Delete(empty);
+            TempFiles.Delete(empty);
         }
 
         Assert.Throws<ArgumentNullException>(() => StepFile.Parse(null!));
@@ -98,7 +98,7 @@ public class CalibrationTests
         }
         finally
         {
-            File.Delete(path);
+            TempFiles.Delete(path);
         }
     }
 
@@ -128,7 +128,7 @@ public class CalibrationTests
         }
         finally
         {
-            Directory.Delete(folder, recursive: true);
+            TempFiles.DeleteDirectory(folder, recursive: true);
         }
     }
 
@@ -359,7 +359,7 @@ public class CalibrationTests
         }
         finally
         {
-            Directory.Delete(root, recursive: true);
+            TempFiles.DeleteDirectory(root, recursive: true);
         }
     }
 
