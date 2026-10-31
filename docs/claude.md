@@ -31,7 +31,6 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] An "All" toggle checks or unchecks every stream's Process flag in one action.
 - [x] The dialog window allows the user to specify the framesync pattern, frame length, framesync mask, and bitrate parameters for each telemetry stream.
 - [x] The dialog window allows the user to recall/restore previous frame parameters for each stream using configuration files.
-
   - **Scope:** Frame-sync Load/Save round-trips the frame sync pattern, sync mask, words/frame (bits per frame), and the two stream-format flags — **Invert Data** and **Derandomize**. Those two describe how the recording's bits are encoded (US2.0 calls NRZ-L / RNRZ-L a PCM code format), so a saved pattern file is only usable if it carries them: loading PRN-15 into a randomized stream and having to tick Derandomize by hand every time is the bug this fixes. **Data Rate** and **Sample Rate** stay out — the first is usually TMATS-derived and the second is an output resolution the operator chooses per session, so neither belongs to the pattern. Keep `loadFrameSyncFromToml`/`saveFrameSyncToToml` symmetric.
   - **Compatibility:** a file with no `Randomized` key (every pattern file written before this, including the shipped PRN ones) leaves the operator's current choice alone rather than clearing it.
 - [x] The dialog window allows the user to specify the SNR signal data parameters to be used for SNR signal data streams.
@@ -56,7 +55,6 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] All processed files are retained in memory; the user can optionally also export a CSV + Frame Sync Lock and Missed Frames images per file to a chosen folder, auto-named from each source file.
 - [x] Progress is shown while the batch runs, and a summary reports how many files were processed vs. skipped.
 - [x] A saved template round-trips the same per-stream settings the Configure Streams dialog captures (frame-sync, SNR, calibration references), and — optionally — per-series names/colors.
-
   - **Scope:** Matching is **exact channel-ID set** (a file must have the same PCM channel IDs as the template, no more/fewer) — decided for simplicity; revisit if a looser "subset" match is ever needed. This story is orthogonal to US2.2 (apply-to-all *within* one file). Templates carry **no file paths** — settings only, applied to whatever files the user picks. The only batch entry point is **Apply Template** (there is no direct multi-file open, and no Add/Remove Source); templates are the sole way to configure a batch.
   - **Config application:** each file's run feeds the template's `StreamConfig`s through unchanged (`applyBatchSourceConfig`); the reader dispatches each stream by `pcmChannelId`, which is safe precisely because of the exact-set match. **Non-linear calibration:** a template stores only the calibration *input references* (not the extracted profile), so **all batch files process with the linear slope/offset fallback**. Non-linear step calibration is available for single-file processing only; re-extraction on template apply is a possible future add.
   - **Custom names/colors:** captured only when **saving a template** from an already-processed, customized plot (`buildTemplateFromSource`), and reapplied per file after each run (`reapplyTemplateAppearance`, matched by channel id + metric/receiver/channel). Every file's copy of a channel intentionally shares the same name/color (they are the same channel across recordings); use the **Plot File** selector to view one file at a time when per-file distinction matters.
@@ -108,7 +106,6 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] When enabled and the user clicks OK, the entered settings are copied to every stream that is selected for processing and shares the same mode.
 - [x] Streams of a different mode are left unchanged.
 - [x] Each affected stream is marked configured/ready and its readiness indicator updates.
-
   - **Scope:** Orthogonal to US3.1 (frame sync error accumulation); split out as its own story. Fan-out copies the same fields written by the gear dialog today (see `openGearDialog` in `streamconfigdialog.cpp`); it does not widen the Frame Sync Load/Save TOML boundary defined in US1.0.
 
 ### US3.0: View the framesync lock statistics for IRIG 106 formatted PCM telemetry streams contained in .ch10 files — Complete
@@ -137,7 +134,6 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The user can switch the left-axis view between framesync lock (%) and accumulated missed frames modes (context menu > View Mode).
 - [x] The user can select which telemetry stream's accumulated missed frames to view in the plot window.
 - [x] Missed frames are accumulated per telemetry stream against that stream's own frame parameters.
-
   - **Scope:** A "missed frame" is a discrete loss-of-lock event — while in lock, the stream ran past the expected minor-frame boundary (`bits_in_frame`) without a sync match. The metric is a cumulative count of these events per stream, counted only within the selected `[start, stop]` processing window, and only ever increases. It is NOT a bit-level (Hamming/BER) error count. The user-facing label is "Accumulated Missed Frames" (`PlotConstants::kMissedFramesAxisLabel`); this is the canonical term across the UI, release notes, and code.
 
 ### US3.2: View SNR signal data from IRIG 106 formatted PCM telemetry streams contained in .ch10 files — Complete
@@ -211,7 +207,6 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Each on-chart chip is labelled and carries a tooltip naming the action it performs, so no control on the chart is an unexplained glyph.
 - [x] The crosshair readout can be pinned to a chosen series (context menu > **Readout**) instead of always following whichever curve is nearest the cursor.
 - [x] The most-used view actions have single-key shortcuts while the chart has focus - arrows step the time window, `+`/`-` zoom, `Home` restores the full span, `R` resets both axes, `V` switches metric, `L` toggles the legend - and the context menu advertises each key so they are discoverable rather than hidden.
-
   - **Delivered:** keyboard shortcuts now exist (criterion above). They live in
     `PlotWidget::keyPressEvent` and are deliberately **widget-scoped**, not
     application-wide: a bare-letter application shortcut is dispatched ahead of the
@@ -298,7 +293,6 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The step-config TOML is preloaded when the dialog opens — the file this stream last used, else the shipped default — and the status says it was loaded automatically.
 - [x] During main data processing, the application applies the non-linear calibration profile using piece-wise linear interpolation between steps.
 - [x] Raw values outside the calibrated range clamp to the nearest end-step dB instead of extrapolating, so a receiver driven past the calibrated range reads the ceiling or floor value.
-
   - **Saturated receivers (v2.12.0):** a receiver driven past its converter's range
     mid-sweep is now calibrated over the steps that stayed in scale, with readings clamped at
     the top measured step, instead of losing the whole channel to the linear fallback.
@@ -361,7 +355,6 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Imported data can be re-exported (CSV/image) and the recent-files list records the imported CSV.
 - [x] A CSV that is not in the application's export format (e.g. the legacy `Day,Time,…` layout, a wrong/missing header, or a file with no parseable data rows) is rejected with a clear error in the log rather than producing garbage series.
 - [x] Malformed or short data rows are skipped, and the user is informed how many rows were skipped.
-
   - **Scope:** Reuses the existing Model/ViewModel import path (`CsvSeriesParser::parse` + `PlotViewModel::loadCsvFile` / `loadCsvFileAsync`), which is the matched partner of `exportCsv`; this story is primarily the View-layer wiring (menu/drag-drop entry, format routing on file open) plus user-facing error reporting. It does not add a CSV import dialog with column mapping, and it does not attempt to import arbitrary third-party CSVs — only files this application produced.
 
 ### US7.0: Error Checking — Complete
@@ -392,7 +385,6 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The installer never overwrites an existing user TOML settings file, on upgrade or reinstall. A settings file is written only when it is absent (`onlyifdoesntexist`), and is left behind by uninstall (`uninsneveruninstall`).
 - [x] A settings file written by any earlier version stays usable: every reader supplies its own default for a key the file does not carry, so an older file degrades to "missing keys fall back to defaults" rather than to a wrong result.
 - [x] New fields added to a shipped default therefore reach a **fresh install**, not an existing one. An upgraded install keeps the operator's file exactly as it stands.
-
   - **Replaces two criteria that described a merge this project never built.** They claimed the installer saved a conflicting default as `new_x.toml` and carried the user's old values into it. Nothing implements that: `tmDataQualityAnalyzer.iss` is 95 declarative lines with no `[Code]` section, and there is no `new_x`, migration, schema-version or merge logic in `src/`, `deploy/` or `scripts/`. Confirmed on a clean machine by `deploy/sandbox/` - a first run wrote nothing under `settings\` and no registry key.
   - **The guarantee above is weaker but true, and the defensive readers are what make it safe** - `FrameSetup::readReceiverParams()` accepts both the current `[Receivers]` keys and the older `[Parameters]` spelling, an absent `Randomized` leaves the operator's choice alone rather than clearing it, and `StreamConfigSchema::fromJson()` keeps in-class defaults for anything omitted. A change that removed that tolerance would look harmless and would not be: it is load-bearing for this criterion, not incidental.
   - **When a merge would become necessary:** a shipped default gaining a field whose absence an old file cannot express - where "missing" and a deliberate choice are indistinguishable. `Randomized` is exactly that shape and was only safe because the reader was written to notice. Option B - building the merge in the installer's `[Code]` section - was scoped and deliberately not taken; see the "Settings on upgrade" row in `docs/future_plans/README.md` for why, and rebuild the sketch from this criterion if that day comes.
