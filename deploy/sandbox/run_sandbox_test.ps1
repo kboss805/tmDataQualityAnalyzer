@@ -29,7 +29,8 @@ param(
     # The script the Sandbox runs, from this folder. verify_install.ps1 tests the shipped Qt installer;
     # verify_preview_install.ps1 tests the Avalonia preview packages (plan step 3.3).
     [string]$Verifier = 'verify_install.ps1',
-    # More files or folders the verifier needs, copied beside the setup (a folder keeps its name).
+    # More files or folders the verifier needs, copied beside the setup (a folder keeps its name). Separate them
+    # with semicolons; a recording's name may contain a comma.
     [string[]]$Payload = @()
 )
 
@@ -73,8 +74,9 @@ if (-not $Setup -or -not (Test-Path $Setup)) {
 Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $inDir, $outDir | Out-Null
 Copy-Item $Setup $inDir -Force
-# Through `powershell -File`, an array parameter arrives as ONE string ("a","b" included), so split it here.
-$Payload = @($Payload | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim().Trim('"').Trim("'") } | Where-Object { $_ })
+# Through `powershell -File`, an array parameter arrives as ONE string, so the list is split here, on SEMICOLONS:
+# the committed recordings' names contain commas ("prn_testfile, sample.ch10").
+$Payload = @($Payload | ForEach-Object { $_ -split ';' } | ForEach-Object { $_.Trim().Trim('"').Trim("'") } | Where-Object { $_ })
 $verifierPath = Join-Path $here $Verifier
 if (-not (Test-Path $verifierPath)) { throw "No verifier $Verifier beside this script." }
 Copy-Item $verifierPath $inDir -Force

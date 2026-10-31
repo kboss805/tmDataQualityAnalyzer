@@ -77,7 +77,7 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   (`scripts\gen_third_party_notices.ps1`, from the publish's deps file), and builds the portable ZIP and the Inno
   installer (`tmDataQualityAnalyzer-preview.iss`: its own AppId and folder, no `.ch10` association). **Unlock
   SimplySign first.** Clean-machine test under Smart App Control: `deploy\sandbox\run_sandbox_test.ps1 -Verifier
-  verify_preview_install.ps1 -Setup <setup.exe> -Payload "<zip>,deploy\avalonia\staging\unsigned"` (an unsigned build
+  verify_preview_install.ps1 -Setup <setup.exe> -Payload "<zip>;deploy\avalonia\staging\unsigned;tests\data\test files\prn_testfile, sample.ch10"` (semicolons: recording names contain commas) (an unsigned build
   must be BLOCKED, or the pass means nothing). The UTF-8 manifest is merged into every SDK host (`apphost`,
   `singlefilehost`, `apphost_publish`): patching `bin\` misses a single-file publish.
 

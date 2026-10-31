@@ -16,6 +16,9 @@ namespace TmDq.App.Tests
             return path;
         }
 
+        /// <summary>A committed recording under tests/data/test files (a missing one fails, never skips).</summary>
+        public static string Recording(string name) => File(Path.Combine("tests", "data", "test files", name));
+
         /// <summary>The application's output folder for the configuration these tests were built in:
         /// dotnet\TmDq.App.Tests\bin\Release\net10.0 becomes dotnet\TmDq.App\bin\Release\net10.0.</summary>
         public static string AppOutput

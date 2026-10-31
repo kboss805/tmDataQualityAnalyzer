@@ -156,18 +156,28 @@ foreach ($f in $pe) {
     }
 }
 
-# --- 7. Smoke test: the staged app opens its window. ---
-Write-Host '[7/8] Launching the staged application...'
-$p = Start-Process $Exe -PassThru
-$null = $p.Handle
-$title = ''
-foreach ($i in 1..60) { Start-Sleep -Milliseconds 250; $p.Refresh(); if ($p.HasExited) { break }; if ($p.MainWindowTitle) { $title = $p.MainWindowTitle; break } }
-if ($title -ne 'TM Data Quality Analyzer') {
-    $Failures.Add("the staged application did not open its window (title '$title', exited: $($p.HasExited))")
-} else {
-    Write-Host "  OK: window '$title'"
+# --- 7. Smoke test: the staged app processes a recording end to end (window, native core, VC++ runtime). ---
+# With a recording on its command line and TMDQ_SMOKE_REPORT set, the app opens it, processes its first PCM channel
+# with the defaults, writes one line and exits (dotnet\TmDq.App\Startup.cs). The committed PRN sample's answer is
+# known: 116 one-second windows of channel 13, mean lock 93.532 %.
+Write-Host '[7/8] Processing a recording with the staged application...'
+$Recording = Join-Path $Root 'tests\data\test files\prn_testfile, sample.ch10'
+$Expected  = 'ok samples=116 mean=93.532 channel=13 '
+$report = Join-Path $Stage 'smoke.txt'
+$env:TMDQ_SMOKE_REPORT = $report
+try {
+    $p = Start-Process $Exe -ArgumentList "`"$Recording`"" -PassThru
+    $null = $p.Handle
+    if (-not $p.WaitForExit(120000)) { $p.Kill(); $Failures.Add('the staged application did not finish processing the PRN sample in 120 s') }
+} finally {
+    Remove-Item Env:\TMDQ_SMOKE_REPORT -ErrorAction SilentlyContinue
 }
-if (-not $p.HasExited) { $null = $p.CloseMainWindow(); if (-not $p.WaitForExit(5000)) { $p.Kill() } }
+$line = if (Test-Path $report) { (Get-Content $report -Raw).Trim() } else { '(no report)' }
+if ($p.HasExited -and $p.ExitCode -eq 0 -and $line.StartsWith($Expected)) {
+    Write-Host "  OK: $line"
+} else {
+    $Failures.Add("the staged application did not process the PRN sample as expected (exit $($p.ExitCode)): $line")
+}
 
 # --- 8. The packages. ---
 Write-Host '[8/8] Packaging...'

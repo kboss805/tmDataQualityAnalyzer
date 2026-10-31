@@ -45,6 +45,17 @@
     <ProjectReference Include="..\TmDq.Core\TmDq.Core.csproj" />
   </ItemGroup>
 
+  <!-- The native core, from the native build of the same configuration (scripts\build_core_dll.ps1), beside the exe in
+       the build output, in what references this project (the tests), and in a publish. Kept OUT of a single-file
+       bundle: a native library has to be a file on disk to load. The VC++ runtime it imports is added by the packaging
+       script (deploy\avalonia\build_avalonia_package.ps1). Missing, the app says so when it first needs the core. -->
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)..\..\native\out\$(Configuration)\tmdq_core.dll"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\..\native\out\$(Configuration)\tmdq_core.dll')"
+          Link="tmdq_core.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"
+          ExcludeFromSingleFile="true" Visible="false" />
+  </ItemGroup>
+
   <!-- The manifest goes into each intermediate host the SDK creates, before anything copies or bundles it: apphost
        for a build (copied to bin\), singlefilehost for a self-contained single-file publish, apphost_publish for
        other publishes. Patching the exe in bin\ after the build (as the test projects do) misses the published app:
