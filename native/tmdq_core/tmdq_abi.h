@@ -63,7 +63,8 @@ extern "C" {
 ///      calibration extraction, the frame-sync pattern file, template matching, CSV import and export,
 ///      clock stamps, series construction, the shared time base, stream identity, imported stream orders.
 ///   1  the receiver-parameters file (read and save) and the words in a minor frame (plan step 4.1a).
-#define TMDQ_ABI_REVISION 1
+///   2  the chart's geometry: transforms, a series' line and band, ticks (plan step 4.3a).
+#define TMDQ_ABI_REVISION 2
 
 typedef enum tmdq_status
 {
@@ -141,7 +142,9 @@ typedef enum tmdq_struct_id
     TMDQ_STRUCT_STREAM_KEY           = 19,
     TMDQ_STRUCT_TIME_BASE_INFO       = 20,
     TMDQ_STRUCT_IMPORTED_SERIES      = 21,
-    TMDQ_STRUCT_RECEIVER_PARAMS      = 22   ///< Revision 1.
+    TMDQ_STRUCT_RECEIVER_PARAMS      = 22,  ///< Revision 1.
+    TMDQ_STRUCT_CHART_VIEW           = 23,  ///< Revision 2.
+    TMDQ_STRUCT_GEOMETRY_INFO        = 24   ///< Revision 2.
 } tmdq_struct_id;
 
 #pragma pack(push, 8)
@@ -739,6 +742,87 @@ TMDQ_API int32_t tmdq_time_base_advance(tmdq_time_base* base, int32_t has_earlie
 /// @return TMDQ_OK; TMDQ_ERR_BADARG for a negative count, a NULL array with a positive count, a NULL or short
 /// struct, or an unknown metric type.
 TMDQ_API int32_t tmdq_assign_imported_stream_orders(tmdq_imported_series* const* series, int32_t count);
+
+/* ===========================================================================================
+ * Chart geometry (revision 2).
+ *
+ * What the plot draws, built by the core so every application strokes the same thing (plan decision D1): the
+ * transforms between data and the plot area's pixels, a series' line (the samples in view only; above two samples a
+ * pixel column, each column's mean) and the band from each column's minimum to its maximum, and the X ticks.
+ * The core's chartgeometry.h; the Qt chart draws from the same functions.
+ * ======================================================================================== */
+
+#pragma pack(push, 8)
+
+/// What a series is drawn against: the X range shown, the range of the Y axis the series is measured on, and the
+/// plot area in pixels (screen Y grows downward; the area's bottom is top + height).
+typedef struct tmdq_chart_view
+{
+    uint32_t struct_size;
+    int32_t  reserved;
+    double   x_lower;
+    double   x_upper;
+    double   y_lower;
+    double   y_upper;
+    double   left;
+    double   top;
+    double   width;
+    double   height;
+} tmdq_chart_view;
+
+/// A series' geometry, in pixels.
+typedef struct tmdq_geometry_info
+{
+    uint32_t      struct_size;
+    int32_t       segment_count;
+    const double* segments;      ///< segment_count x (x0, y0, x1, y1): the line, a gap having no segment across it.
+    int32_t       band_count;    ///< Closed outlines, one per unbroken run of columns (tmdq_geometry_band).
+    int32_t       decimated;     ///< 1 when drawn from the per-column envelope, 0 when sample by sample.
+} tmdq_geometry_info;
+
+#pragma pack(pop)
+
+/// Which way tmdq_chart_transform converts.
+typedef enum tmdq_chart_transform_kind
+{
+    TMDQ_X_TO_PIXEL = 0,   ///< An X value to a pixel column; the area's left edge for an X range that is not usable.
+    TMDQ_PIXEL_TO_X = 1,   ///< A pixel column to an X value; the X range's lower end for an area with no width.
+    TMDQ_Y_TO_PIXEL = 2,   ///< A Y value to a pixel row, larger values higher; the area's bottom for an unusable Y range.
+    TMDQ_PIXEL_TO_Y = 3    ///< A pixel row to a Y value; the Y range's lower end for an area with no height.
+} tmdq_chart_transform_kind;
+
+typedef struct tmdq_geometry tmdq_geometry;
+
+/// The line and band of the series (@p xs, @p ys), @p count samples, drawn in @p view. With @p sorted_x (see
+/// tmdq_chart_sorted_x) only the samples in view, and one each side, are walked. The arrays are read during the call
+/// only. @return TMDQ_OK with *@p out set; TMDQ_ERR_BADARG for a NULL output or view, a short view, a negative count,
+/// or a NULL array with a positive count.
+TMDQ_API int32_t tmdq_chart_geometry(const double* xs, const double* ys, int32_t count, int32_t sorted_x,
+                                     const tmdq_chart_view* view, tmdq_geometry** out);
+TMDQ_API int32_t tmdq_geometry_info_get(const tmdq_geometry* geometry, tmdq_geometry_info* out);
+/// The @p index'th band: *@p points is *@p point_count (x, y) pairs, the columns' minima left to right and then their
+/// maxima right to left. A view into the geometry. TMDQ_ERR_BADARG for an index out of range or a NULL.
+TMDQ_API int32_t tmdq_geometry_band(const tmdq_geometry* geometry, int32_t index, const double** points,
+                                    int32_t* point_count);
+TMDQ_API void    tmdq_geometry_free(tmdq_geometry* geometry);   ///< Safe on NULL.
+
+/// @return 1 when every time after the first is finite and none is smaller than the one before, else 0; -1 for a
+/// negative count or a NULL array with a positive count.
+TMDQ_API int32_t tmdq_chart_sorted_x(const double* xs, int32_t count);
+/// @return 1 when [@p lower, @p upper] is a finite span of positive width, else 0.
+TMDQ_API int32_t tmdq_chart_usable_range(double lower, double upper);
+/// Converts @p value as @p kind says, against @p view, into *@p out. TMDQ_ERR_BADARG for a NULL, a short view or an
+/// unknown kind.
+TMDQ_API int32_t tmdq_chart_transform(const tmdq_chart_view* view, int32_t kind, double value, double* out);
+/// @p count (at least 2) evenly spaced values from @p lower to @p upper, both ends included; none for a range that is
+/// not usable. Written into @p ticks, snprintf-style: the return is how many there are, and at most @p capacity are
+/// written. -1 for a negative capacity or a NULL buffer with a positive one.
+TMDQ_API int32_t tmdq_chart_ticks(double lower, double upper, int32_t count, double* ticks, int32_t capacity);
+/// Ticks for a time axis: a round step at least the span divided evenly into @p count, on the round clock times inside
+/// [@p lower, @p upper], @p origin being the clock time of x = 0 (below a second a step, tmdq_chart_ticks). Written
+/// as tmdq_chart_ticks writes.
+TMDQ_API int32_t tmdq_chart_time_ticks(double lower, double upper, int32_t count, double origin, double* ticks,
+                                       int32_t capacity);
 
 #ifdef __cplusplus
 }

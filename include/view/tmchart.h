@@ -15,6 +15,11 @@
 #include "constants.h"
 #include "plotconstants.h"
 
+namespace chart
+{
+struct View;
+}
+
 /// @brief First-party 2D line chart: the rendering engine behind PlotWidget.
 ///
 /// Replaces the vendored QCustomPlot. The library was third-party and protected
@@ -236,8 +241,10 @@ private:
     /// @return the line segments for one series, built per sample when the series is
     /// small enough to warrant it and from its per-pixel-column envelope when not.
     /// Fills @p s cachedSegments and cachedBands for the current ranges and plot
-    /// area. One pass: the mean line and the band come from the same column walk.
+    /// area, from the core's chart::buildSeriesGeometry.
     void rebuildSeriesGeometry(const Series& s) const;
+    /// The ranges and plot area a series on @p axis is drawn against, for the core's geometry.
+    chart::View viewFor(Axis axis) const;
     /// Drops every series' cached geometry. Called whenever something it was built
     /// from changes: the data, a range, or the plot area.
     void invalidateSeriesGeometry() const;

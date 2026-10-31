@@ -2,8 +2,8 @@
 
 
 #include <algorithm>
-#include <climits>
 #include <cmath>
+#include <span>
 
 #include <QFontMetrics>
 #include <QMouseEvent>
@@ -13,6 +13,7 @@
 #include <QResizeEvent>
 #include <QWheelEvent>
 
+#include "chartgeometry.h"
 #include "constants.h"
 #include "plotconstants.h"
 
@@ -30,13 +31,9 @@ constexpr int kTickLabelGapPx = 12;
 /// one notch changes the visible span by ~15%.
 constexpr double kWheelZoomStep = 0.85;
 
-/// @return True when @p lower / @p upper describe a usable, finite span. Guards
-/// every transform: a degenerate range would divide by zero and a non-finite one
-/// would poison every coordinate derived from it.
-bool usableRange(double lower, double upper)
-{
-    return std::isfinite(lower) && std::isfinite(upper) && (upper - lower) > 0.0;
-}
+/// Every range setter is guarded by the core's check (chart::usableRange): a degenerate range would divide by zero and
+/// a non-finite one would poison every coordinate derived from it.
+using chart::usableRange;
 }  // namespace
 
 TmChart::TmChart(QWidget* parent)
@@ -97,15 +94,7 @@ void TmChart::setSeriesData(int index, const QVector<double>& xs, const QVector<
     s.segmentsValid = false;
     // Sorted once here rather than per draw: the draw only needs the answer, and
     // the data is already being copied at this point.
-    s.sortedX = true;
-    for (int i = 1; i < s.xs.size(); ++i)
-    {
-        if (!std::isfinite(s.xs[i]) || s.xs[i] < s.xs[i - 1])
-        {
-            s.sortedX = false;
-            break;
-        }
-    }
+    s.sortedX = chart::isSortedX(std::span<const double>(s.xs.constData(), static_cast<std::size_t>(s.xs.size())));
 
     updateData();
 }
@@ -327,60 +316,49 @@ void TmChart::setZoomBand(double x0, double x1, bool visible)
 
 // ------------------------------------------------------------- geometry -----
 
+chart::View TmChart::viewFor(Axis axis) const
+{
+    chart::View v;
+    v.xLower = m_x_lower;
+    v.xUpper = m_x_upper;
+    v.yLower = axis == Axis::Left ? m_left_lower : m_right_lower;
+    v.yUpper = axis == Axis::Left ? m_left_upper : m_right_upper;
+    v.left   = m_plot_area.left();
+    v.top    = m_plot_area.top();
+    v.width  = m_plot_area.width();
+    v.height = m_plot_area.height();
+    return v;
+}
+
+// The transforms are the core's (chartgeometry.h), so the chart and the geometry it draws cannot disagree.
 double TmChart::pixelToX(double px) const
 {
     ensureLayout();
-    if (m_plot_area.width() <= 0)
-    {
-        return m_x_lower;
-    }
-    const double frac = (px - m_plot_area.left()) / static_cast<double>(m_plot_area.width());
-    return m_x_lower + frac * (m_x_upper - m_x_lower);
+    return chart::pixelToX(viewFor(Axis::Left), px);
 }
 
 double TmChart::xToPixel(double x) const
 {
     ensureLayout();
-    if (!usableRange(m_x_lower, m_x_upper))
-    {
-        return m_plot_area.left();
-    }
-    const double frac = (x - m_x_lower) / (m_x_upper - m_x_lower);
-    return m_plot_area.left() + frac * m_plot_area.width();
+    return chart::xToPixel(viewFor(Axis::Left), x);
 }
 
 double TmChart::pixelToLeft(double py) const
 {
     ensureLayout();
-    if (m_plot_area.height() <= 0)
-    {
-        return m_left_lower;
-    }
-    // Screen Y grows downward, data Y upward.
-    const double frac = (m_plot_area.bottom() - py) / static_cast<double>(m_plot_area.height());
-    return m_left_lower + frac * (m_left_upper - m_left_lower);
+    return chart::pixelToY(viewFor(Axis::Left), py);
 }
 
 double TmChart::leftToPixel(double value) const
 {
     ensureLayout();
-    if (!usableRange(m_left_lower, m_left_upper))
-    {
-        return m_plot_area.bottom();
-    }
-    const double frac = (value - m_left_lower) / (m_left_upper - m_left_lower);
-    return m_plot_area.bottom() - frac * m_plot_area.height();
+    return chart::yToPixel(viewFor(Axis::Left), value);
 }
 
 double TmChart::rightToPixel(double value) const
 {
     ensureLayout();
-    if (!usableRange(m_right_lower, m_right_upper))
-    {
-        return m_plot_area.bottom();
-    }
-    const double frac = (value - m_right_lower) / (m_right_upper - m_right_lower);
-    return m_plot_area.bottom() - frac * m_plot_area.height();
+    return chart::yToPixel(viewFor(Axis::Right), value);
 }
 
 void TmChart::recalcPlotArea() const
@@ -597,156 +575,33 @@ void TmChart::drawGrid(QPainter& painter) const
 
 void TmChart::rebuildSeriesGeometry(const Series& s) const
 {
-    QVector<QLineF>    segments;
+    // The core builds it (chartgeometry.h): the samples in view only, one by one while there are few enough per
+    // pixel column, otherwise each column's mean line and its min-to-max band. The Avalonia chart draws from the same
+    // function. Copied into Qt's types here because drawLines() takes them: only drawLines() avoids Qt's stroker for
+    // a non-cosmetic pen (twelve channels of an hour at 10 ms measured 1423 ms through drawPath(), 1725 ms through
+    // drawPolyline() and 27 ms through drawLines()).
+    const chart::SeriesGeometry g = chart::buildSeriesGeometry(
+        std::span<const double>(s.xs.constData(), static_cast<std::size_t>(s.xs.size())),
+        std::span<const double>(s.ys.constData(), static_cast<std::size_t>(s.ys.size())), s.sortedX, viewFor(s.axis));
+
+    QVector<QLineF> segments;
+    segments.reserve(static_cast<int>(g.segments.size()));
+    for (const chart::Segment& seg : g.segments)
+    {
+        segments.push_back(QLineF(seg.from.x, seg.from.y, seg.to.x, seg.to.y));
+    }
     QVector<QPolygonF> bands;
-
-    // Only the samples in view can draw anything, so when the times are ordered the
-    // rest are skipped outright rather than transformed and clipped. One sample is
-    // kept on each side so the line still enters and leaves the view along the
-    // segment the data actually describes. Zoomed in, this is the difference between
-    // paying for the whole recording and paying for what is on screen.
-    int begin = 0;
-    int end   = static_cast<int>(s.xs.size());
-    if (s.sortedX && !s.xs.isEmpty())
+    bands.reserve(static_cast<int>(g.bands.size()));
+    for (const std::vector<chart::Point>& band : g.bands)
     {
-        const auto lo_it = std::lower_bound(s.xs.cbegin(), s.xs.cend(), m_x_lower);
-        const auto hi_it = std::upper_bound(s.xs.cbegin(), s.xs.cend(), m_x_upper);
-        begin = std::max(0, static_cast<int>(lo_it - s.xs.cbegin()) - 1);
-        end   = std::min(static_cast<int>(s.xs.size()),
-                         static_cast<int>(hi_it - s.xs.cbegin()) + 1);
+        QPolygonF poly;
+        poly.reserve(static_cast<int>(band.size()));
+        for (const chart::Point& pt : band)
+        {
+            poly.push_back(QPointF(pt.x, pt.y));
+        }
+        bands.push_back(poly);
     }
-
-    // A plot only has as many pixel columns as it is wide, so a series with far more
-    // samples than that cannot show them individually. Above
-    // kMaxSamplesPerPixelColumn samples per column the column is summarised instead:
-    // a BAND from its minimum to its maximum, and a line through its MEAN.
-    //
-    // The band is what keeps this honest. A one-sample dropout is its column's
-    // minimum by definition, so the band always reaches it - and on this plot that
-    // lone sample is the event an operator is hunting for. The mean is what makes it
-    // readable: the outline alone drew dense noisy data as a solid blob with no
-    // indication of where the signal actually sat inside it.
-    //
-    // The samples themselves are untouched - PlotViewModel still holds every point,
-    // so CSV export and the readout are unaffected. This is a drawing decision only.
-    const int  columns  = m_plot_area.width();
-    const bool decimate = columns > 0
-        && (end - begin) > columns * PlotConstants::kMaxSamplesPerPixelColumn;
-
-    auto pixelFor = [&](double vx, double vy) {
-        return QPointF(xToPixel(vx),
-                       s.axis == Axis::Left ? leftToPixel(vy) : rightToPixel(vy));
-    };
-
-    // Segments rather than a path or a polyline because only drawLines() avoids Qt's
-    // stroker for a non-cosmetic pen: same geometry and pen, twelve channels of an
-    // hour at 10 ms measured 1423 ms through drawPath(), 1725 ms through
-    // drawPolyline() and 27 ms through drawLines().
-    QPointF prev;
-    bool    have_prev = false;
-
-    auto addPoint = [&](const QPointF& pt) {
-        if (have_prev)
-        {
-            segments.push_back(QLineF(prev, pt));
-        }
-        prev      = pt;
-        have_prev = true;
-    };
-
-    if (!decimate)
-    {
-        segments.reserve(std::max(0, end - begin - 1));
-        for (int i = begin; i < end; ++i)
-        {
-            const double vx = s.xs[i];
-            const double vy = s.ys[i];
-            if (!std::isfinite(vx) || !std::isfinite(vy))
-            {
-                have_prev = false;   // the gap breaks the line
-                continue;
-            }
-            addPoint(pixelFor(vx, vy));
-        }
-        s.cachedSegments = segments;
-        s.cachedBands.clear();
-        return;
-    }
-
-    segments.reserve(columns);
-    bands.reserve(1);
-
-    int     column = INT_MIN;        ///< Pixel column being accumulated.
-    double  col_x  = 0.0;            ///< Its x in pixels.
-    double  lo     = 0.0;            ///< Lowest y (in pixels) in the column.
-    double  hi     = 0.0;            ///< Highest y (in pixels) in the column.
-    double  sum    = 0.0;            ///< Sum of the column's y pixels, for the mean.
-    int     count  = 0;
-
-    // The band is built as two edges: tops left-to-right, bottoms right-to-left, so
-    // closing the polygon traces the outline of the run.
-    QVector<QPointF> tops;
-    QVector<QPointF> bottoms;
-
-    auto closeBand = [&]() {
-        if (tops.size() >= 2)
-        {
-            QPolygonF poly;
-            poly.reserve(tops.size() + bottoms.size());
-            for (const QPointF& pt : tops) poly.push_back(pt);
-            for (int i = bottoms.size() - 1; i >= 0; --i) poly.push_back(bottoms[i]);
-            bands.push_back(poly);
-        }
-        tops.clear();
-        bottoms.clear();
-    };
-
-    auto flushColumn = [&]() {
-        if (column == INT_MIN)
-        {
-            return;
-        }
-        tops.push_back(QPointF(col_x, lo));
-        bottoms.push_back(QPointF(col_x, hi));
-        addPoint(QPointF(col_x, sum / count));
-        column = INT_MIN;
-    };
-
-    for (int i = begin; i < end; ++i)
-    {
-        const double vx = s.xs[i];
-        const double vy = s.ys[i];
-        if (!std::isfinite(vx) || !std::isfinite(vy))
-        {
-            flushColumn();
-            closeBand();
-            have_prev = false;   // the gap breaks both the line and the band
-            continue;
-        }
-
-        const QPointF pt  = pixelFor(vx, vy);
-        const int     col = static_cast<int>(std::floor(pt.x()));
-        if (col != column)
-        {
-            flushColumn();
-            column = col;
-            col_x  = pt.x();
-            lo     = pt.y();
-            hi     = pt.y();
-            sum    = pt.y();
-            count  = 1;
-        }
-        else
-        {
-            lo   = std::min(lo, pt.y());
-            hi   = std::max(hi, pt.y());
-            sum += pt.y();
-            ++count;
-        }
-    }
-    flushColumn();
-    closeBand();
-
     s.cachedSegments = segments;
     s.cachedBands    = bands;
 }
@@ -921,65 +776,9 @@ void TmChart::drawAxes(QPainter& painter) const
 QVector<double> TmChart::timeTickValues(double lower, double upper, int count,
                                         double origin)
 {
-    QVector<double> ticks;
-    if (!usableRange(lower, upper))
-    {
-        return ticks;
-    }
-
-    // The X axis is read as DDD:HH:MM:SS, so a tick every 17 s is noise where a tick
-    // every 15 s is a landmark. Dividing the span evenly - what this used to do -
-    // put labels on arbitrary instants: a 116-second view produced ticks 29 seconds
-    // apart, and nothing on screen fell on a round time.
-    static const double kSteps[] = {
-        1, 2, 5, 10, 15, 30,                         // seconds
-        60, 120, 300, 600, 900, 1800,                // 1, 2, 5, 10, 15, 30 minutes
-        3600, 7200, 10800, 21600, 43200,             // 1, 2, 3, 6, 12 hours
-        86400                                        // 1 day
-    };
-
-    const int    n   = std::max(2, count);
-    const double raw = (upper - lower) / (n - 1);
-
-    // Below a second there is no natural step to snap to - the format has no field
-    // finer than seconds - so an evenly divided span is the honest answer.
-    if (raw < 1.0)
-    {
-        return tickValues(lower, upper, count);
-    }
-
-    double step = 0.0;
-    for (double s : kSteps)
-    {
-        if (s >= raw)
-        {
-            step = s;
-            break;
-        }
-    }
-    if (step == 0.0)
-    {
-        // Longer than a day per tick: whole days, which stay round however many the
-        // span needs. Without this the ladder's top entry would be reused and a
-        // multi-week recording would grow ticks without bound.
-        step = std::ceil(raw / 86400.0) * 86400.0;
-    }
-
-    // Start at the first round time at or after the range, not at the range itself -
-    // and round in the domain the LABEL is read in, which is the clock, not the
-    // elapsed value. An X value is seconds since the recording's first sample, while
-    // its label is a time of day; snapping the X value puts ticks a round interval
-    // apart but starting from whenever the recording happened to begin. A file
-    // starting at 10:30:17.046 produced ticks reading :17, :47, :17 - evenly spaced
-    // and never on a round second. Only a recording that began exactly on a round
-    // second looked right, which is why frame-sync runs (whose first window starts on
-    // a whole second) appeared correct while SNR runs did not.
-    const double first = std::ceil((lower + origin) / step) * step;
-    for (double clock = first; clock <= upper + origin + step * 1e-9; clock += step)
-    {
-        ticks.append(clock - origin);
-    }
-    return ticks;
+    // The core's (chart::timeTickValues): a round step, on round times of the clock.
+    const std::vector<double> ticks = chart::timeTickValues(lower, upper, count, origin);
+    return QVector<double>(ticks.begin(), ticks.end());
 }
 
 QVector<double> TmChart::xTickValues() const
@@ -993,19 +792,8 @@ QVector<double> TmChart::xTickValues() const
 
 QVector<double> TmChart::tickValues(double lower, double upper, int count)
 {
-    QVector<double> ticks;
-    if (!usableRange(lower, upper))
-    {
-        return ticks;
-    }
-    const int n = std::max(2, count);
-    ticks.reserve(n);
-    const double step = (upper - lower) / (n - 1);
-    for (int i = 0; i < n; ++i)
-    {
-        ticks.append(lower + i * step);
-    }
-    return ticks;
+    const std::vector<double> ticks = chart::tickValues(lower, upper, count);
+    return QVector<double>(ticks.begin(), ticks.end());
 }
 
 QString TmChart::formatX(double value) const

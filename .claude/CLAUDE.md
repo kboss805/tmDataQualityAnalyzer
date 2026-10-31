@@ -25,7 +25,7 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   suites**) is dominated by the real-Ch10 integration suites (a few minutes); add `--fast` (or
   `TMDQ_FAST_TESTS=1`) to skip the real-`.ch10` integration suites for ~1 s local iteration — **local only; CI
   and releases run the full suite**. No CLI single-suite filter.
-  Green baseline: **457 passed / 0 failed / 0 skipped**, always: there is **no standing skip**, and
+  Green baseline: **458 passed / 0 failed / 0 skipped**, always: there is **no standing skip**, and
   CI fails on any (a skip is a missing fixture). The heavy PRN throughput benchmark is a **native
   doctest case** now ("PipelineRunner throughput", `native/tmdq_core_tests/test_pipelinerunner.cpp`),
   skipped unless `TMDQA_RUN_HEAVY_BENCH=1` because it walks a 640 MB recording nine times and takes
@@ -58,7 +58,7 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   `native/out/<config>/tmdq_core.dll` (build that first; `TMDQ_CORE_DLL` overrides). The tests run the
   committed recordings through the library and compare with numbers the Qt pipeline produces. An xunit v3
   project is an executable; the build merges a UTF-8 code-page manifest into it with `mt.exe`, because the vendored
-  irig106 opens files with a narrow `open()` that reads the active code page. Green baseline **329 passed / 0
+  irig106 opens files with a narrow `open()` that reads the active code page. Green baseline **355 passed / 0
   failed / 1 skipped** (the skip is the probe `IsolatedLoadTests` runs in a child process). CI runs it in both jobs.
 - **The Avalonia app (plan step 3):** `dotnet/TmDq.App` (Avalonia 12, CommunityToolkit.Mvvm) and
   `dotnet/TmDq.App.Tests` (xunit v3 on `Avalonia.Headless.XUnit`), both in `tmdq.sln`, which VS Code opens by default

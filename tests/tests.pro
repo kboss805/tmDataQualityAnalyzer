@@ -41,6 +41,7 @@ SOURCES += \
     $$PWD/../src/model/streamjobbuilder.cpp \
     $$PWD/../src/model/calibrationextractor.cpp \
     $$PWD/../src/model/calibrationrequest.cpp \
+    $$PWD/../src/model/chartgeometry.cpp \
     $$PWD/../src/model/pipelinerunner.cpp \
     $$PWD/../src/model/clocktime.cpp \
     $$PWD/../src/model/csvseriesparser.cpp \
@@ -88,6 +89,7 @@ HEADERS += \
     $$PWD/../include/model/streamjobbuilder.h \
     $$PWD/../include/model/calibrationextractor.h \
     $$PWD/../include/model/calibrationrequest.h \
+    $$PWD/../include/model/chartgeometry.h \
     $$PWD/../include/model/pipelinerunner.h \
     $$PWD/../include/model/clocktime.h \
     $$PWD/../include/model/csvseriesparser.h \

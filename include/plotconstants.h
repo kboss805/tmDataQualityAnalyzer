@@ -37,17 +37,8 @@ namespace PlotConstants {
     inline constexpr int kPlotMinChartHeight = 250;   ///< Minimum height for the chart area within the plot widget.
     inline constexpr double kAxisMarginFactor = 0.05; ///< Y-axis padding as fraction of data range.
     inline constexpr double kMinAxisSpan      = 1.0;  ///< Minimum span enforced so a user max override can't invert/collapse an axis.
-    /// Lock-% axis bounds. Lock percentage is a fixed 0-100 quantity, not a
-    /// data-driven range, and three places need to agree on it: the chart's
-    /// initial left range, the ViewModel's lock-axis accessors, and the upper
-    /// limit the Set Left Max dialog will accept.
-    /// Samples per pixel column above which a series is drawn from its envelope
-    /// rather than sample by sample. One column can only show one vertical run of
-    /// pixels, so beyond a couple of samples per column the extra points cost time
-    /// and change nothing on screen. Measured on a 1200 px plot: 12 channels of one
-    /// hour at 10 ms (360k samples each) took 102 s per repaint drawing every
-    /// point.
-    inline constexpr int kMaxSamplesPerPixelColumn = 2;
+    // The decimation threshold, ChartConstants::kMaxSamplesPerPixelColumn, is the core's (constants.h): the chart's
+    // geometry is built there (plan step 4.3a).
 
     /// Alpha for the min/max band drawn behind a decimated series. Translucent so
     /// the mean line drawn over it stays legible, but solid enough that a one-sample
@@ -66,6 +57,10 @@ namespace PlotConstants {
     /// session cannot accumulate history without limit.
     inline constexpr int kMaxZoomDepth = 32;
 
+    /// Lock-% axis bounds. Lock percentage is a fixed 0-100 quantity, not a
+    /// data-driven range, and three places need to agree on it: the chart's
+    /// initial left range, the ViewModel's lock-axis accessors, and the upper
+    /// limit the Set Left Max dialog will accept.
     inline constexpr double kLockAxisMin      = 0.0;
     inline constexpr double kLockAxisMax      = 100.0;
     inline constexpr const char* kXAxisLabel        = "Time (DDD:HH:MM:SS)"; ///< X axis label.
