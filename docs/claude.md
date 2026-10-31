@@ -514,6 +514,18 @@ v2.9.0 intended. Every first-party header here is quote-included, so `anglebrack
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
 
+#### The Avalonia app is built and tested in CI, and its UI tests pass as the runner's service account (plan step 3.2)
+
+The question the spike left open is closed: Avalonia's headless UI tests pass on the self-hosted runner as its own service account. The CI log of this change reads `Running as NT AUTHORITY\NETWORK SERVICE, Windows session 0, interactive: False`, followed by `Total: 36, Errors: 0, Failed: 0`. The spike had only run them as SYSTEM in Session 0 inside a Windows Sandbox.
+
+- **`scripts/test_app.ps1`** builds `TmDq.App` with `TmDq.App.Tests` (warnings as errors, the manifest merge, the licence check) and runs the tests, failing on any failure. It deletes the test exe first so a failed build cannot run a stale one, needs no native DLL, and prints the account, Windows session and whether the process is interactive before the run, so every log says what the UI tests ran as.
+- **CI runs it in all three jobs**, after the managed tests: the self-hosted runner (NETWORK SERVICE, Session 0, no desktop), the hosted fallback, and `core-without-qt`, so the app is also proved to build and pass where Qt has never been installed.
+- **A rendering test**, `TheVersionIsDrawnNotOnlyLaidOut`: the main window is captured as a frame through Skia and read pixel by pixel. The version label's box holds drawn text (over a hundred pixels differ from the background) and an empty patch of the window holds none. Layout alone could not show that the platform draws on the runner. Checked by breaking it: a blank label fails it and the binding test, and the script exits 1; text drawn transparent fails only it, which is the coverage it adds.
+
+**A flaky test of mine, found by this change's first CI run.** Two `TempFilesTests` cases (#219) held a file open and released it after 400 ms on a thread-pool task, then required `TempFiles.Delete` to succeed within its 3 s window. On the two-core hosted runner, with 310 tests running in parallel and many of them blocking threads, the release task waited longer than the window for a pool thread, so the file was still held and both cases failed in `core-without-qt`. Reproduced locally by capping the thread pool at two workers (`DOTNET_ThreadPool_ForceMaxWorkerThreads=2`, with `DOTNET_PROCESSOR_COUNT=2`): the old cases failed three runs in three, exactly those two. The release now runs on a dedicated thread, which needs nothing from the pool, and under the same cap the whole suite passed three runs in three. `TempFiles` itself was not at fault.
+
+App baseline **36 / 0 / 0** (was 35: the rendering test). Managed baseline unchanged (**309 / 0 / 1**). Qt and native baselines unchanged.
+
 #### Managed tests clean up through a helper that waits out a brief hold
 
 CI went red on PR #218, which changed no code, because a managed test that had passed every check failed in its cleanup. `FormatsTests.AWrittenCsvIsAnExactFileAndIsReadBackWithTheSameIdentities` deleted its temporary CSV in a `finally` block, and on the runner (the NETWORK SERVICE account's temp folder) another process still had the new file open: `IOException: ... being used by another process`, most likely the virus scanner reading a file just written. A re-run passed. Every one of the 25 cleanups in `TmDq.Core.Tests` was written the same way, so any of them could fail like this.

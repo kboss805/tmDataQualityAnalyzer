@@ -207,9 +207,13 @@ sweep.
   BSD-3-Clause, with a licence file accepted only by its reviewed SHA-256 (one so far: ANGLE's BSD-3-Clause text in
   `Avalonia.Angle.Windows.Natives`, which `Avalonia.Desktop` brings). The app and its tests build locally only;
   CI is 3.2.
-- [ ] **3.2 CI for the new app:** build and test on the self-hosted runner (NETWORK SERVICE, Session 0)
+- [x] **3.2 CI for the new app:** build and test on the self-hosted runner (NETWORK SERVICE, Session 0)
   and the hosted fallback. This is where the one open question from the spike closes: the UI tests
   run as the runner's own account.
+  PR #221. **Closed:** on the self-hosted runner the app tests ran as `NT AUTHORITY\NETWORK SERVICE`, Windows
+  session 0, not interactive, and all 36 passed, including one that renders the main window through Skia and reads
+  its pixels (the spike had only run them as SYSTEM in a Sandbox). `scripts/test_app.ps1` prints that line in every
+  run; CI runs it after the managed tests in all three jobs, so `core-without-qt` also proves the app needs no Qt.
 - [ ] **3.3 Packaging prototype:** self-contained publish, Inno Setup installer and portable ZIP,
   signed. **Every unsigned assembly must be signed** (21 Avalonia DLLs plus our own): a user machine
   with Smart App Control on blocks unsigned code with error 4551, exactly as the Sandbox did. Test a
