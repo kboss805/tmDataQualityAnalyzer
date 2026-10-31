@@ -1,0 +1,112 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:TmDq.App.ViewModels"
+        x:Class="TmDq.App.Views.StreamSetupWindow"
+        x:DataType="vm:StreamSetupViewModel"
+        Title="{Binding Title}"
+        SizeToContent="WidthAndHeight"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner">
+  <Window.Styles>
+    <!-- Only the form's own fields: an unscoped "TextBox" or "Grid > *" selector also reaches the parts inside each
+         control's template (a NumericUpDown holds a TextBox; a TextBox's template is a Grid) and pushes the text off. -->
+    <Style Selector="Grid.form > TextBox, Grid.form > NumericUpDown, Grid.form > ComboBox">
+      <Setter Property="Width" Value="150" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+    <Style Selector="Grid.form > :is(Control)">
+      <Setter Property="Margin" Value="0,0,12,4" />
+    </Style>
+    <Style Selector="TextBlock.problems">
+      <Setter Property="Foreground" Value="#D13438" />
+    </Style>
+  </Window.Styles>
+
+  <StackPanel Margin="16" Spacing="8" MinWidth="560">
+    <!-- Frame sync, both modes -->
+    <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" RowDefinitions="Auto,Auto,12,Auto,Auto,Auto" Classes="form">
+      <TextBlock Grid.Row="0" Grid.Column="0" Text="Frame Sync" />
+      <TextBox x:Name="SyncPattern" Grid.Row="1" Grid.Column="0" Text="{Binding SyncPattern}" PlaceholderText="{Binding SyncPlaceholder}"
+               ToolTip.Tip="Hex frame synchronization word. Used to detect frame boundaries in the PCM stream." />
+      <TextBlock Grid.Row="0" Grid.Column="1" Text="Frame Sync Mask" />
+      <TextBox x:Name="SyncMask" Grid.Row="1" Grid.Column="1" Text="{Binding SyncMask}" PlaceholderText="e.g. FFFFFFFF"
+               ToolTip.Tip="Hex mask applied during frame sync comparison. Set bits are compared; cleared bits are ignored." />
+      <TextBlock Grid.Row="0" Grid.Column="2" Text="Bits Per Frame" />
+      <NumericUpDown x:Name="BitsPerFrame" Grid.Row="1" Grid.Column="2" Value="{Binding BitsInMinorFrame}"
+                     Minimum="64" Maximum="65536" Increment="1" FormatString="0"
+                     ToolTip.Tip="Total number of bits in one minor frame, including the frame sync word." />
+      <StackPanel Grid.Row="1" Grid.Column="4" Orientation="Horizontal" Spacing="4">
+        <Button x:Name="LoadFrameSync" Content="Load..." Command="{Binding LoadFrameSyncCommand}"
+                ToolTip.Tip="Load frame sync fields from a TOML file" />
+        <Button x:Name="SaveFrameSync" Content="Save..." Command="{Binding SaveFrameSyncCommand}"
+                ToolTip.Tip="Save frame sync fields to a TOML file" />
+      </StackPanel>
+
+      <TextBlock Grid.Row="3" Grid.Column="0" Text="Data Rate (Mbps)" />
+      <NumericUpDown x:Name="DataRate" Grid.Row="4" Grid.Column="0" Value="{Binding DataRateMbps}"
+                     Minimum="0" Maximum="1000" Increment="0.1" FormatString="0.000"
+                     ToolTip.Tip="Telemetry data rate in Mbps. Set to 0 (TMATS) to derive the rate from the file metadata." />
+      <TextBlock x:Name="DataRateHint" Grid.Row="5" Grid.Column="0" Text="{Binding DataRateHint}" Opacity="0.7" FontSize="12" />
+      <TextBlock Grid.Row="3" Grid.Column="1" Text="Average Period" />
+      <ComboBox x:Name="Period" Grid.Row="4" Grid.Column="1" ItemsSource="{x:Static vm:StreamSetupViewModel.Periods}"
+                SelectedIndex="{Binding PeriodIndex}"
+                ToolTip.Tip="Integration window for statistics. Shorter periods give finer time resolution; longer periods smooth noise." />
+    </Grid>
+
+    <CheckBox x:Name="Derandomize" Content="Derandomize" IsChecked="{Binding Randomized}"
+              ToolTip.Tip="Apply RNRZ-L self-synchronizing descrambler to the data stream." />
+    <CheckBox x:Name="InvertData" Content="Invert Data" IsChecked="{Binding Inverted}"
+              ToolTip.Tip="Invert every bit of the raw data stream before processing (use when the PCM signal polarity is inverted)." />
+
+    <!-- Receiver SNR only -->
+    <StackPanel x:Name="ReceiverGroup" Spacing="8" IsVisible="{Binding IsReceiverSnr}">
+      <Separator Margin="0,8" />
+      <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" RowDefinitions="Auto,Auto,12,Auto,Auto" Classes="form">
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="Polarity" />
+        <ComboBox x:Name="Polarity" Grid.Row="1" Grid.Column="0" ItemsSource="{x:Static vm:StreamSetupViewModel.Polarities}"
+                  SelectedIndex="{Binding PolarityIndex}"
+                  ToolTip.Tip="ADC output polarity. Positive = high voltage maps to highest dB; Negative = inverted." />
+        <TextBlock Grid.Row="0" Grid.Column="1" Text="Slope" />
+        <ComboBox x:Name="Slope" Grid.Row="1" Grid.Column="1" ItemsSource="{x:Static vm:StreamSetupViewModel.Slopes}"
+                  SelectedIndex="{Binding SlopeIndex}"
+                  ToolTip.Tip="ADC voltage range. Select the range that matches your receiver's analog output voltage span." />
+        <TextBlock Grid.Row="0" Grid.Column="2" Text="Scale (dB/V)" />
+        <NumericUpDown x:Name="Scale" Grid.Row="1" Grid.Column="2" Value="{Binding ScaleDdBPerV}"
+                       Minimum="0.001" Maximum="999.999" Increment="0.1" FormatString="0.000"
+                       ToolTip.Tip="Calibration scale factor in dB/V. Maps the ADC voltage span to the receiver SNR range in dB." />
+        <TextBlock Grid.Row="3" Grid.Column="0" Text="Num Rcvrs" />
+        <NumericUpDown x:Name="NumReceivers" Grid.Row="4" Grid.Column="0" Value="{Binding NumReceivers}"
+                       Minimum="1" Maximum="100" Increment="1" FormatString="0"
+                       ToolTip.Tip="Number of individual receiver units contributing channels to this stream." />
+        <TextBlock Grid.Row="3" Grid.Column="1" Text="Num Channels" />
+        <NumericUpDown x:Name="ReceiverChannels" Grid.Row="4" Grid.Column="1" Value="{Binding ReceiverChannels}"
+                       Minimum="1" Maximum="100" Increment="1" FormatString="0"
+                       ToolTip.Tip="Number of channels per receiver (e.g. 3 for L/R/C configuration)." />
+        <StackPanel Grid.Row="4" Grid.Column="4" Orientation="Horizontal" Spacing="4">
+          <Button x:Name="LoadReceiverParams" Content="Load..." Command="{Binding LoadReceiverParamsCommand}"
+                  ToolTip.Tip="Load receiver parameters from a TOML file" />
+          <Button x:Name="SaveReceiverParams" Content="Save..." Command="{Binding SaveReceiverParamsCommand}"
+                  ToolTip.Tip="Save receiver parameters to a TOML file" />
+        </StackPanel>
+      </Grid>
+      <TextBlock x:Name="WordMap" Opacity="0.75">
+        <Run Text="Word map: " /><Run Text="{Binding ReceiverParamsName}" />
+      </TextBlock>
+    </StackPanel>
+
+    <TextBlock x:Name="FileMessage" Text="{Binding FileMessage}" TextWrapping="Wrap" MaxWidth="560" HorizontalAlignment="Left"
+               IsVisible="{Binding FileMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+    <TextBlock x:Name="Problems" Classes="problems" Text="{Binding ProblemText}" TextWrapping="Wrap" MaxWidth="560" HorizontalAlignment="Left"
+               IsVisible="{Binding !CanAccept}" />
+
+    <Separator Margin="0,8" />
+    <Grid ColumnDefinitions="*,Auto,Auto">
+      <CheckBox x:Name="ApplyToAll" Grid.Column="0" Content="{Binding ApplyToAllText}" IsChecked="{Binding ApplyToAll}"
+                ToolTip.Tip="{Binding ApplyToAllTip}" />
+      <Button x:Name="OkButton" Grid.Column="1" Classes="accent" Content="OK" MinWidth="80" Margin="0,0,8,0"
+              IsDefault="True" Command="{Binding OkCommand}" />
+      <Button x:Name="CancelButton" Grid.Column="2" Content="Cancel" MinWidth="80" IsCancel="True" Command="{Binding CancelCommand}" />
+    </Grid>
+  </StackPanel>
+</Window>

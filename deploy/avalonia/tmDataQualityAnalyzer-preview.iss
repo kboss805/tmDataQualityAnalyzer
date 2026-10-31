@@ -51,7 +51,11 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 [Files]
 ; The single-file application, the three native libraries beside it (each signed by its own publisher), the native
 ; core, the licence and the third-party notices.
-Source: "{#StagingDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#StagingDir}\*"; DestDir: "{app}"; Excludes: "settings"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; The settings files, as the Qt installer ships them (US8.0): a file the user already has is never overwritten, on an
+; upgrade or a reinstall, and uninstalling leaves them.
+Source: "{#StagingDir}\settings\*"; DestDir: "{app}\settings"; Flags: recursesubdirs createallsubdirs onlyifdoesntexist uninsneveruninstall
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

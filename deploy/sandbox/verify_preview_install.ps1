@@ -129,6 +129,20 @@ if (Test-Path $exe) {
 foreach ($f in 'MSVCP140.dll', 'VCRUNTIME140.dll', 'VCRUNTIME140_1.dll') {
     Check "installed $f (the native core's C++ runtime)" (Test-Path (Join-Path $app $f)) ''
 }
+# The settings files (US8.0): installed, and never overwritten by an upgrade or a reinstall. The user's edit is stood in
+# for by a line appended to one; a second silent install must leave it there.
+$userFile = Join-Path $app 'settings\receiver_params\default.toml'
+foreach ($f in 'framesync_patterns\framesync_rcvr_default.toml', 'framesync_patterns\framesync_PRN15.toml', 'receiver_params\default.toml', 'rcvr_cals\default.toml') {
+    Check "installed settings\$f" (Test-Path (Join-Path $app "settings\$f")) ''
+}
+$marker = '# edited by the clean-machine test'
+if (Test-Path $userFile) {
+    Add-Content -Path $userFile -Value $marker
+    $again = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/ALLUSERS' -PassThru
+    $null = $again.Handle
+    $again.WaitForExit(300000) | Out-Null
+    Check 'a reinstall keeps an edited settings file' ((Get-Content $userFile -Raw) -match [regex]::Escape($marker)) ''
+}
 Say '  signatures:'
 $sigs = @(Signatures $app)
 foreach ($s in $sigs) { Say ('    {0,-10} {1,-28} {2}' -f $s.Status, $s.Signer, $s.Name) }
@@ -213,6 +227,7 @@ if ($unins) {
     $up.WaitForExit(300000) | Out-Null
     Start-Sleep -Seconds 5
     Check 'application removed' (-not (Test-Path $exe)) ''
+    Check 'settings left for the user' (Test-Path $userFile) ''
 } else {
     Check 'uninstaller found' $false 'no unins*.exe'
 }
