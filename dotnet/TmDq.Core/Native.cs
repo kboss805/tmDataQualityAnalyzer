@@ -47,6 +47,7 @@ internal enum StructId
     StreamKey = 19,
     TimeBaseInfo = 20,
     ImportedSeries = 21,
+    ReceiverParams = 22,
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 8)]
@@ -225,6 +226,18 @@ internal unsafe struct FrameSyncFileInfoNative
     public int Reserved;
     public byte* PatternUtf8;
     public byte* MaskUtf8;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 8)]
+internal struct ReceiverParamsNative
+{
+    public uint StructSize;
+    public int PolarityIndex;
+    public int SlopeIndex;
+    public int NumReceivers;
+    public int ReceiverChannels;
+    public int Reserved;
+    public double ScaleDbPerV;
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 8)]
@@ -486,6 +499,17 @@ internal static unsafe partial class Native
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
     internal static partial int tmdq_frame_sync_file_write(byte* pathUtf8, byte* patternUtf8, byte* maskUtf8, int bitsPerFrame, int inverted, int randomized);
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_receiver_params_read(byte* pathUtf8, ReceiverParamsNative* defaults, ReceiverParamsNative* result);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_receiver_params_save(byte* pathUtf8, ReceiverParamsNative* parameters, byte* wordMapSourceUtf8, int numWordsInMinorFrame);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_words_in_minor_frame(int bitsInMinorFrame);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]

@@ -62,7 +62,8 @@ extern "C" {
 ///   0  version 2: the file handle, runs of N streams, step files and
 ///      calibration extraction, the frame-sync pattern file, template matching, CSV import and export,
 ///      clock stamps, series construction, the shared time base, stream identity, imported stream orders.
-#define TMDQ_ABI_REVISION 0
+///   1  the receiver-parameters file (read and save) and the words in a minor frame (plan step 4.1a).
+#define TMDQ_ABI_REVISION 1
 
 typedef enum tmdq_status
 {
@@ -139,7 +140,8 @@ typedef enum tmdq_struct_id
     TMDQ_STRUCT_SERIES_SPEC          = 18,
     TMDQ_STRUCT_STREAM_KEY           = 19,
     TMDQ_STRUCT_TIME_BASE_INFO       = 20,
-    TMDQ_STRUCT_IMPORTED_SERIES      = 21
+    TMDQ_STRUCT_IMPORTED_SERIES      = 21,
+    TMDQ_STRUCT_RECEIVER_PARAMS      = 22   ///< Revision 1.
 } tmdq_struct_id;
 
 #pragma pack(push, 8)
@@ -460,6 +462,19 @@ typedef struct tmdq_frame_sync_file_info
     const char* mask_utf8;              ///< FrameSyncMask as written; empty if absent.
 } tmdq_frame_sync_file_info;
 
+/// The scalar settings of a receiver-parameters file (revision 1). The file's word map is not here: it is read
+/// when a stream is processed, and written by tmdq_receiver_params_save.
+typedef struct tmdq_receiver_params
+{
+    uint32_t struct_size;
+    int32_t  polarity_index;            ///< 0 positive, 1 negative; taken as the file writes it.
+    int32_t  slope_index;               ///< Index into the voltage ranges (0..3 in the application); taken as written.
+    int32_t  num_receivers;
+    int32_t  receiver_channels;         ///< Channels per receiver.
+    int32_t  reserved;
+    double   scale_db_per_v;
+} tmdq_receiver_params;
+
 /// The outcome of matching a template's channel ids against a file's.
 typedef struct tmdq_match_info
 {
@@ -539,6 +554,29 @@ TMDQ_API void    tmdq_frame_sync_file_free(tmdq_frame_sync_file* file);   ///< S
 /// Sample Rate are deliberately not written). @return TMDQ_OK, TMDQ_ERR_BADARG for a NULL path, or TMDQ_ERR_IO.
 TMDQ_API int32_t tmdq_frame_sync_file_write(const char* path_utf8, const char* pattern_utf8, const char* mask_utf8,
                                             int32_t bits_per_frame, int32_t inverted, int32_t randomized);
+
+/* --- the receiver-parameters file (revision 1) -------------------------------------------- */
+
+/// Reads a receiver-parameters file's scalar settings, as the Receiver SNR dialog loads it
+/// (FrameSetup::readReceiverParams). A key the file does not carry keeps its value from @p defaults, so a host
+/// passes what it is showing and gets back only what the file changes; a missing or unreadable file changes
+/// nothing. The counts are read from [Receivers] (Count, ChannelsPerReceiver), else from the older [Parameters]
+/// keys; a scale or a count that is not positive is ignored. @p defaults may be NULL for the application's defaults.
+/// @return TMDQ_OK, or TMDQ_ERR_BADARG for a NULL path or output, or a struct_size that is too small.
+TMDQ_API int32_t tmdq_receiver_params_read(const char* path_utf8, const tmdq_receiver_params* defaults,
+                                           tmdq_receiver_params* out);
+/// Writes a complete receiver-parameters file, as the Receiver SNR dialog saves it
+/// (FrameSetup::saveReceiverParamsFile): the scalars, then a word map, which is @p word_map_source_utf8's when that
+/// names a file that loads with at least one parameter in a frame of @p num_words_in_minor_frame words, and
+/// otherwise the default map for @p params' receiver counts. NULL or empty means the default map. The file is
+/// replaced, never merged. @return TMDQ_OK, TMDQ_ERR_BADARG (a NULL path or params, a struct_size that is too
+/// small), or TMDQ_ERR_IO with the core's reason in tmdq_last_error(): no usable word map (for example more channels
+/// than the frame has words), or the file could not be written.
+TMDQ_API int32_t tmdq_receiver_params_save(const char* path_utf8, const tmdq_receiver_params* params,
+                                           const char* word_map_source_utf8, int32_t num_words_in_minor_frame);
+/// Words in a minor frame of @p bits_in_minor_frame bits, rounded up: a partly filled last word still takes a
+/// slot (FrameSetup::wordsInMinorFrame). What tmdq_receiver_params_save's word count is made from.
+TMDQ_API int32_t tmdq_words_in_minor_frame(int32_t bits_in_minor_frame);
 
 /* --- template matching ------------------------------------------------------------------ */
 
