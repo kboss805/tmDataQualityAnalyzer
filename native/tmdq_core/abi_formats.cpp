@@ -1,7 +1,7 @@
 /**
  * @file abi_formats.cpp
  * @brief The file formats and small pure functions of the core, through the C ABI: the frame-sync pattern file,
- *        template matching, CSV import and export, and clock stamps.
+ *        the receiver-parameters file, template matching, CSV import and export, and clock stamps.
  *
  * Only translation. Each of these is a Qt-free core function the Qt application also calls (the dialogs,
  * `BatchController::matchFile`, `PlotViewModel`), so a host and the application cannot disagree about a format.
@@ -19,6 +19,7 @@
 #include "clocktime.h"
 #include "csvseriesparser.h"
 #include "csvserieswriter.h"
+#include "framesetup.h"
 #include "framesyncfile.h"
 #include "templatematcher.h"
 
@@ -29,6 +30,7 @@ constexpr std::size_t kMatchInfoMinimum     = sizeof(tmdq_match_info);
 constexpr std::size_t kCsvInfoMinimum       = sizeof(tmdq_csv_info);
 constexpr std::size_t kCsvSeriesMinimum     = sizeof(tmdq_csv_series_info);
 constexpr std::size_t kCsvColumnMinimum     = sizeof(tmdq_csv_column);
+constexpr std::size_t kReceiverParamsMinimum = sizeof(tmdq_receiver_params);
 
 static_assert(sizeof(int) == sizeof(int32_t), "the ids are handed to the host as the core holds them");
 
@@ -135,6 +137,101 @@ int32_t tmdq_frame_sync_file_write(const char* path_utf8, const char* pattern_ut
         }
         return TMDQ_OK;
     });
+}
+
+// --- the receiver-parameters file (revision 1) ---------------------------------------------------------
+
+namespace {
+
+ReceiverParams toCore(const tmdq_receiver_params& p)
+{
+    ReceiverParams r;
+    r.polarityIndex    = p.polarity_index;
+    r.slopeIndex       = p.slope_index;
+    r.scaleDdBPerV     = p.scale_db_per_v;
+    r.numReceivers     = p.num_receivers;
+    r.receiverChannels = p.receiver_channels;
+    return r;
+}
+
+tmdq_receiver_params toAbi(const ReceiverParams& r)
+{
+    tmdq_receiver_params p{};
+    p.polarity_index    = r.polarityIndex;
+    p.slope_index       = r.slopeIndex;
+    p.scale_db_per_v    = r.scaleDdBPerV;
+    p.num_receivers     = r.numReceivers;
+    p.receiver_channels = r.receiverChannels;
+    return p;
+}
+
+} // namespace
+
+int32_t tmdq_receiver_params_read(const char* path_utf8, const tmdq_receiver_params* defaults,
+                                  tmdq_receiver_params* out)
+{
+    tmdq::clearError();
+    if (!path_utf8)
+    {
+        tmdq::setError("null path");
+        return TMDQ_ERR_BADARG;
+    }
+    if (!out || out->struct_size < kReceiverParamsMinimum)
+    {
+        tmdq::setError("null output or a struct_size that is too small");
+        return TMDQ_ERR_BADARG;
+    }
+    // NULL defaults are the application's; given ones are read no further than the host's struct.
+    ReceiverParams start;
+    if (defaults)
+    {
+        tmdq_receiver_params given{};
+        if (!tmdq::readStruct(defaults, kReceiverParamsMinimum, given))
+        {
+            tmdq::setError("defaults with a struct_size that is too small");
+            return TMDQ_ERR_BADARG;
+        }
+        start = toCore(given);
+    }
+    return tmdq::guarded("tmdq_receiver_params_read", [&]() -> int32_t {
+        const tmdq_receiver_params result = toAbi(FrameSetup::readReceiverParams(tmdq::pathFromUtf8(path_utf8), start));
+        tmdq::writeStruct(result, kReceiverParamsMinimum, out);
+        return TMDQ_OK;
+    });
+}
+
+int32_t tmdq_receiver_params_save(const char* path_utf8, const tmdq_receiver_params* params,
+                                  const char* word_map_source_utf8, int32_t num_words_in_minor_frame)
+{
+    tmdq::clearError();
+    if (!path_utf8)
+    {
+        tmdq::setError("null path");
+        return TMDQ_ERR_BADARG;
+    }
+    tmdq_receiver_params given{};
+    if (!tmdq::readStruct(params, kReceiverParamsMinimum, given))
+    {
+        tmdq::setError("null params or a struct_size that is too small");
+        return TMDQ_ERR_BADARG;
+    }
+    return tmdq::guarded("tmdq_receiver_params_save", [&]() -> int32_t {
+        std::string error;
+        if (!FrameSetup::saveReceiverParamsFile(tmdq::pathFromUtf8(path_utf8), toCore(given),
+                                                word_map_source_utf8 ? tmdq::pathFromUtf8(word_map_source_utf8)
+                                                                     : std::filesystem::path(),
+                                                num_words_in_minor_frame, error))
+        {
+            tmdq::setError(error);
+            return TMDQ_ERR_IO;
+        }
+        return TMDQ_OK;
+    });
+}
+
+int32_t tmdq_words_in_minor_frame(int32_t bits_in_minor_frame)
+{
+    return FrameSetup::wordsInMinorFrame(bits_in_minor_frame);
 }
 
 // --- template matching ---------------------------------------------------------------------------------

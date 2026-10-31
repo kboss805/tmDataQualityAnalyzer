@@ -25,7 +25,7 @@ public class LayoutTests
     {
         Assert.Equal(2, Library.ExpectedVersion);
         Assert.Equal(2, Library.AbiVersion);
-        Assert.Equal(0, Library.AbiRevision);
+        Assert.Equal(1, Library.AbiRevision);   // 1: the receiver-parameters file (plan step 4.1a)
         Assert.True(Library.AbiRevision >= Library.MinimumRevision);
         Assert.Equal(Path.GetFullPath(Env.DllPath()), Library.LoadedPath, ignoreCase: true);
     }
@@ -65,6 +65,7 @@ public class LayoutTests
         new object[] { typeof(StreamKeyNative), 24 },
         new object[] { typeof(TimeBaseInfoNative), 24 },
         new object[] { typeof(ImportedSeriesNative), 24 },
+        new object[] { typeof(ReceiverParamsNative), 32 },
     };
 
     [Theory]
@@ -144,6 +145,9 @@ public class LayoutTests
             Row(typeof(FrameSyncFileInfoNative), "BitsFromLegacyKey", 12), Row(typeof(FrameSyncFileInfoNative), "Inverted", 16),
             Row(typeof(FrameSyncFileInfoNative), "HasRandomized", 20), Row(typeof(FrameSyncFileInfoNative), "Randomized", 24),
             Row(typeof(FrameSyncFileInfoNative), "PatternUtf8", 32), Row(typeof(FrameSyncFileInfoNative), "MaskUtf8", 40),
+            Row(typeof(ReceiverParamsNative), "PolarityIndex", 4), Row(typeof(ReceiverParamsNative), "SlopeIndex", 8),
+            Row(typeof(ReceiverParamsNative), "NumReceivers", 12), Row(typeof(ReceiverParamsNative), "ReceiverChannels", 16),
+            Row(typeof(ReceiverParamsNative), "ScaleDbPerV", 24),
 
             Row(typeof(MatchInfoNative), "Ok", 4), Row(typeof(MatchInfoNative), "MissingCount", 8),
             Row(typeof(MatchInfoNative), "ExtraCount", 12), Row(typeof(MatchInfoNative), "Missing", 16),

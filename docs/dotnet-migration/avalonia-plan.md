@@ -252,8 +252,22 @@ Each step ports one area with its tests rewritten on the headless platform (meas
 input, render pixels; see the `verify-ui-change` skill for what each catches), and each acceptance
 criterion in `docs/claude.md` for the stories it covers gets a test or a recorded manual check.
 
-- [ ] **4.1 Configure Streams** and its three setup dialogs, TOML load and save, Apply to all,
-  validation (US1.0, US2.0 to US2.2, US7.0).
+- **4.1 Configure Streams** and its setup dialogs, TOML load and save, Apply to all, validation (US1.0, US2.0 to
+  US2.2, US7.0), in two PRs. The Extract Calibration dialog and Apply Cal, which the Qt Receiver SNR dialog opens, are
+  4.6's: they are calibration (US5.3), and they arrive with the rest of it. Four Qt behaviours are deliberately not
+  ported: Process was enabled once any checked row was ready and ran the others on whatever they held (now every
+  checked row must be ready); a Mode change left the row green holding the other mode's frame sync (now it is
+  unconfigured); opening a Receiver SNR row in Frame Sync Lock cleared its receiver-parameters file on a copy that was
+  then discarded (now the clear sticks); and calibration extracted with the first time channel rather than the one
+  selected (fixed in 4.6).
+  - [x] **4.1a The rules, without a window** (PR #224): the receiver-parameters file through the C ABI (`tmdq_receiver_params_read`
+    / `_save`, `tmdq_words_in_minor_frame`, ABI revision 1) and `TmDq.Core` (`ReceiverParamsFile`, `FrameGeometry`), so
+    the app reads and writes it through the core's one implementation (rule 5); and in `TmDq.App/Streams`, a row's
+    settings (`StreamSetup`), the defaults a row and a mode change start from (`StreamDefaults`), the dialog's rules
+    (`StreamRules`: readiness, Process, a Mode change, what the dialog opens with and what OK keeps, Apply to all, the
+    field checks, the run) and the Load and Save buttons (`StreamFiles`).
+  - [ ] **4.1b The dialogs:** Configure Streams, the Frame Sync Lock and Receiver SNR setup dialogs, wired into the
+    app's Open in place of the walking skeleton's first-channel defaults.
 - [ ] **4.2 Processing:** progress dialog, cancel, the log sidebar with its colouring and the
   multi-line messages (US1.0, US3.0 to US3.2).
 - [ ] **4.3 The chart** (per D1): envelope and culling, dual axes with hiding, round clock ticks,
@@ -266,8 +280,10 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
 - [ ] **4.5 Export and import:** CSV, PNG/SVG/PDF with the legend composited, log export, CSV import
   with its rejections (US6.0 to US6.3). Oracle: byte-identical CSV against the Qt app on every
   fixture.
-- [ ] **4.6 Calibration:** Extract Calibration dialog, clips, the summary report and its warnings,
-  preloaded step file (US5.0 to US5.3).
+- [ ] **4.6 Calibration:** Extract Calibration dialog (opened from the Receiver SNR setup dialog) and Apply Cal, clips,
+  the summary report and its warnings, preloaded step file (US5.0 to US5.3). Extraction uses the time channel selected
+  in Configure Streams, not the recording's first (a Qt defect, decided in 4.1). A row already carries the calibration
+  and its references from 4.1a, and Apply to all copies them.
 - [ ] **4.7 Templates and batch:** Save as Template, Apply Template, Plot File selector, per-file
   export (US1.1). Templates written by the Qt app must load unchanged.
 - [ ] **4.8 The shell:** frameless chrome with **Windows 11 snap layouts** (unverified in Avalonia;

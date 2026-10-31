@@ -38,6 +38,7 @@
 #include "clocktime.h"
 #include "csvseriesparser.h"
 #include "csvserieswriter.h"
+#include "framesetup.h"
 #include "framesyncfile.h"
 #include "templatematcher.h"
 #include "constants.h"
@@ -1168,6 +1169,16 @@ TEST_CASE("Abi: theStructLayoutsArePinned")
     CHECK(tmdq_sizeof(TMDQ_STRUCT_CSV_COLUMN) == 48);
     CHECK(int(TMDQ_STRUCT_FRAME_SYNC_FILE_INFO) == 12);
     CHECK(int(TMDQ_STRUCT_CSV_COLUMN) == 16);
+
+    // Revision 1.
+    CHECK(int(sizeof(tmdq_receiver_params)) == 32);
+    CHECK(int(offsetof(tmdq_receiver_params, polarity_index)) == 4);
+    CHECK(int(offsetof(tmdq_receiver_params, slope_index)) == 8);
+    CHECK(int(offsetof(tmdq_receiver_params, num_receivers)) == 12);
+    CHECK(int(offsetof(tmdq_receiver_params, receiver_channels)) == 16);
+    CHECK(int(offsetof(tmdq_receiver_params, scale_db_per_v)) == 24);
+    CHECK(tmdq_sizeof(TMDQ_STRUCT_RECEIVER_PARAMS) == 32);
+    CHECK(int(TMDQ_STRUCT_RECEIVER_PARAMS) == 22);
     CHECK(int(TMDQ_ERR_IO) == 8);
     CHECK(int(TMDQ_METRIC_SNR) == int(MetricType::SNR));
     CHECK(int(TMDQ_METRIC_FRAME_SYNC_LOCK) == int(MetricType::FrameSyncLock));
@@ -1253,7 +1264,7 @@ TEST_CASE("Abi: theStructLayoutsArePinned")
 TEST_CASE("Abi: theVersionAndRevisionAreReported")
 {
     CHECK(tmdq_abi_version() == 2);
-    CHECK(tmdq_abi_revision() == 0);
+    CHECK(tmdq_abi_revision() == 1);   // 1: the receiver-parameters file (plan step 4.1a)
     CHECK(int(TMDQ_ABI_VERSION) == tmdq_abi_version());
     CHECK(int(TMDQ_ABI_REVISION) == tmdq_abi_revision());
     REQUIRE(tmdq_last_error() != nullptr);
@@ -3380,4 +3391,251 @@ TEST_CASE("Abi: importedStreamOrdersAreAssignedLikeTheCore")
     CHECK(tmdq_assign_imported_stream_orders(withBad, 2) == int(TMDQ_ERR_BADARG));
     CHECK(one.stream_order == before);   // a refused list is left alone
     REQUIRE(std::string(tmdq_last_error()).find("metric") != std::string::npos);
+}
+
+// --- the receiver-parameters file (revision 1, plan step 4.1a) ------------------------------------------------------
+
+namespace {
+
+tmdq_receiver_params abiParams(int polarity, int slope, double scale, int receivers, int channels)
+{
+    tmdq_receiver_params p{};
+    p.struct_size = sizeof(p);
+    p.polarity_index = polarity;
+    p.slope_index = slope;
+    p.scale_db_per_v = scale;
+    p.num_receivers = receivers;
+    p.receiver_channels = channels;
+    return p;
+}
+
+ReceiverParams coreParams(const tmdq_receiver_params& p)
+{
+    ReceiverParams r;
+    r.polarityIndex = p.polarity_index;
+    r.slopeIndex = p.slope_index;
+    r.scaleDdBPerV = p.scale_db_per_v;
+    r.numReceivers = p.num_receivers;
+    r.receiverChannels = p.receiver_channels;
+    return r;
+}
+
+/// Both kinds as one line of text, so a difference shows every field at once.
+std::string describe(const ReceiverParams& r)
+{
+    return std::format("polarity={} slope={} scale={:.17g} receivers={} channels={}", r.polarityIndex, r.slopeIndex,
+                       r.scaleDdBPerV, r.numReceivers, r.receiverChannels);
+}
+
+std::string describe(const tmdq_receiver_params& p) { return describe(coreParams(p)); }
+
+} // namespace
+
+TEST_CASE("Abi: aReceiverParametersFileIsReadLikeTheCore")
+{
+    // Every read rule, each in a file of its own, against the core called directly, from two starting points (the
+    // application's defaults, and values no file below gives, so a field read from the wrong key shows).
+    Scratch s;
+    const std::vector<std::pair<std::string, std::string>> files = {
+        {"full", "[Parameters]\r\nPolarity=1\r\nSlope=2\r\nScale=17.5\r\n[Receivers]\r\nCount=12\r\nChannelsPerReceiver=4\r\n"},
+        {"scale-only", "[Parameters]\r\nScale=33\r\n"},
+        {"legacy-counts", "[Parameters]\r\nNumReceivers=9\r\nReceiverChannels=2\r\n"},
+        {"both-count-keys", "[Parameters]\r\nNumReceivers=9\r\nReceiverChannels=2\r\n[Receivers]\r\nCount=5\r\nChannelsPerReceiver=6\r\n"},
+        {"receivers-without-channels", "[Receivers]\r\nCount=7\r\n[Parameters]\r\nReceiverChannels=8\r\n"},
+        {"not-positive", "[Parameters]\r\nScale=0\r\n[Receivers]\r\nCount=-3\r\nChannelsPerReceiver=0\r\n"},
+        {"negative-scale", "[Parameters]\r\nScale=-4.5\r\n"},
+        {"out-of-range-indices", "[Parameters]\r\nPolarity=7\r\nSlope=-1\r\n"},
+        {"quoted-scale", "[Parameters]\r\nScale=\"20\"\r\n"},
+        {"word-map-only", "[L_RCVR1]\r\nWord=3\r\n"},
+        {"empty", ""},
+    };
+    std::vector<std::string> paths;
+    for (const auto& [name, text] : files)
+        paths.push_back(writeFile(s.filePath(name + ".toml"), text));
+    paths.push_back(s.filePath("missing.toml"));
+    for (const char* shipped : {"default.toml", "RASA.toml", "TRC.toml"})
+        paths.push_back(utf8Of(repoFile(fs::path("settings") / "receiver_params" / shipped)));
+
+    const tmdq_receiver_params starts[] = {abiParams(0, 3, 20.0, 16, 3), abiParams(1, 1, 99.25, 41, 43)};
+    int changed = 0;
+    for (const std::string& path : paths)
+    {
+        for (const tmdq_receiver_params& start : starts)
+        {
+            INFO(path);
+            tmdq_receiver_params out{};
+            out.struct_size = sizeof(out);
+            REQUIRE(tmdq_receiver_params_read(path.c_str(), &start, &out) == int(TMDQ_OK));
+            const ReceiverParams want = FrameSetup::readReceiverParams(textfile::pathFromUtf8(path), coreParams(start));
+            CHECK(describe(out) == describe(want));
+            changed += describe(out) != describe(start);
+        }
+    }
+    // The corpus reaches both outcomes: some files change what was shown, some change nothing.
+    CHECK(changed > 10);
+
+    // Hand-checked, so the comparison is not the only witness: RASA is 12 receivers of 3 channels.
+    tmdq_receiver_params rasa{};
+    rasa.struct_size = sizeof(rasa);
+    REQUIRE(tmdq_receiver_params_read(utf8Of(repoFile("settings/receiver_params/RASA.toml")).c_str(), nullptr, &rasa) == int(TMDQ_OK));
+    CHECK(rasa.num_receivers == 12);
+    CHECK(rasa.receiver_channels == 3);
+
+    // NULL defaults are the application's own.
+    tmdq_receiver_params none{};
+    none.struct_size = sizeof(none);
+    REQUIRE(tmdq_receiver_params_read(s.filePath("missing.toml").c_str(), nullptr, &none) == int(TMDQ_OK));
+    CHECK(describe(none) == describe(ReceiverParams()));
+}
+
+TEST_CASE("Abi: aReceiverParametersFileIsSavedLikeTheCore")
+{
+    // Each case saved through the ABI and through FrameSetup::saveReceiverParamsFile: the same verdict, the same
+    // error text and the same bytes. Then what was saved reads back as the scalars that were saved.
+    Scratch s;
+    const std::string rasa = utf8Of(repoFile("settings/receiver_params/RASA.toml"));
+    const std::string bad = writeFile(s.filePath("not-a-map.toml"), "[Parameters]\r\nScale=3\r\n");
+    struct Case { const char* name; tmdq_receiver_params params; std::string source; bool nullSource; int words; };
+    const Case cases[] = {
+        {"default-map", abiParams(0, 3, 20.0, 16, 3), "", false, 50},
+        {"null-source", abiParams(1, 2, 12.5, 4, 2), "", true, 20},
+        {"rasa-map", abiParams(1, 0, 7.25, 12, 3), rasa, false, 50},
+        {"missing-source", abiParams(0, 1, 30.0, 2, 3), s.filePath("nowhere.toml"), false, 20},
+        {"source-without-a-map", abiParams(0, 1, 30.0, 2, 3), bad, false, 20},
+        {"rasa-map-too-big-for-the-frame", abiParams(0, 3, 20.0, 2, 2), rasa, false, 10},
+        {"default-map-too-big-for-the-frame", abiParams(0, 3, 20.0, 16, 3), "", false, 10},
+        {"no-receivers", abiParams(0, 3, 20.0, 0, 3), "", false, 50},
+    };
+    int saved = 0, refused = 0;
+    for (const Case& c : cases)
+    {
+        INFO(c.name);
+        const std::string viaAbi = s.filePath(std::string(c.name) + "-abi.toml");
+        const std::string viaCore = s.filePath(std::string(c.name) + "-core.toml");
+        const int32_t status = tmdq_receiver_params_save(viaAbi.c_str(), &c.params, c.nullSource ? nullptr : c.source.c_str(), c.words);
+        const std::string abiError = tmdq_last_error();
+        std::string coreError;
+        const bool coreOk = FrameSetup::saveReceiverParamsFile(textfile::pathFromUtf8(viaCore), coreParams(c.params),
+                                                               textfile::pathFromUtf8(c.source), c.words, coreError);
+        CHECK((status == int(TMDQ_OK)) == coreOk);
+        CHECK(slurp(viaAbi) == slurp(viaCore));
+        if (coreOk)
+        {
+            ++saved;
+            CHECK(abiError.empty());
+            tmdq_receiver_params back{};
+            back.struct_size = sizeof(back);
+            REQUIRE(tmdq_receiver_params_read(viaAbi.c_str(), nullptr, &back) == int(TMDQ_OK));
+            CHECK(describe(back) == describe(c.params));
+        }
+        else
+        {
+            ++refused;
+            CHECK(status == int(TMDQ_ERR_IO));
+            CHECK(abiError == coreError);
+            CHECK(!abiError.empty());
+        }
+    }
+    CHECK(saved >= 4);
+    CHECK(refused >= 2);
+
+    // The frame's word count reaches the core as given: swept across the edge where the default 16 x 3 map and RASA's
+    // stop fitting, every count gives the core's verdict, and both sides of each edge are reached.
+    for (const std::string& source : {std::string(), rasa})
+    {
+        bool fits = false, tooBig = false;
+        for (int words = 40; words <= 60; ++words)
+        {
+            INFO("source " << (source.empty() ? "default" : "RASA") << ", words " << words);
+            const tmdq_receiver_params p = abiParams(0, 3, 20.0, 16, 3);
+            const std::string viaAbi = s.filePath("edge-abi.toml");
+            const std::string viaCore = s.filePath("edge-core.toml");
+            std::error_code ignored;
+            fs::remove(textfile::pathFromUtf8(viaAbi), ignored);
+            fs::remove(textfile::pathFromUtf8(viaCore), ignored);
+            const bool abiOk = tmdq_receiver_params_save(viaAbi.c_str(), &p, source.c_str(), words) == int(TMDQ_OK);
+            std::string coreError;
+            const bool coreOk = FrameSetup::saveReceiverParamsFile(textfile::pathFromUtf8(viaCore), coreParams(p),
+                                                                   textfile::pathFromUtf8(source), words, coreError);
+            CHECK(abiOk == coreOk);
+            CHECK(slurp(viaAbi) == slurp(viaCore));
+            (coreOk ? fits : tooBig) = true;
+        }
+        CHECK(fits);
+        CHECK(tooBig);
+    }
+
+    // The map is the source's when it loads: RASA's word map, not the default one, is what the file now carries.
+    const std::string text = slurp(s.filePath("rasa-map-abi.toml"));
+    FrameSetup back;
+    REQUIRE(back.tryLoadingFile(textfile::pathFromUtf8(s.filePath("rasa-map-abi.toml")), 50));
+    FrameSetup original;
+    REQUIRE(original.tryLoadingFile(textfile::pathFromUtf8(rasa), 50));
+    REQUIRE(back.length() == original.length());
+    for (int i = 0; i < back.length(); ++i)
+    {
+        CHECK(back.getParameter(i)->name == original.getParameter(i)->name);
+        CHECK(back.getParameter(i)->word == original.getParameter(i)->word);
+    }
+
+    // A file that cannot be written (a folder of that name is in the way) says so in the core's words.
+    fs::create_directories(textfile::pathFromUtf8(s.filePath("blocked.toml")));
+    const tmdq_receiver_params p = abiParams(0, 3, 20.0, 2, 3);
+    CHECK(tmdq_receiver_params_save(s.filePath("blocked.toml").c_str(), &p, nullptr, 20) == int(TMDQ_ERR_IO));
+    CHECK(std::string(tmdq_last_error()) == "Could not write 'blocked.toml'.");
+}
+
+TEST_CASE("Abi: theWordsInAMinorFrameAreTheCores")
+{
+    for (int bits : {-17, -1, 0, 1, 15, 16, 17, 31, 32, 33, 64, 790, 800, 801, 2047, 32767, 32768, 65536})
+    {
+        INFO(bits);
+        CHECK(tmdq_words_in_minor_frame(bits) == FrameSetup::wordsInMinorFrame(bits));
+    }
+    CHECK(tmdq_words_in_minor_frame(800) == 50);
+    CHECK(tmdq_words_in_minor_frame(801) == 51);
+}
+
+TEST_CASE("Abi: badArgumentsToTheReceiverParameterFunctionsAreRefused")
+{
+    Scratch s;
+    const std::string path = writeFile(s.filePath("p.toml"), "[Parameters]\r\nScale=5\r\n");
+    tmdq_receiver_params out{};
+    out.struct_size = sizeof(out);
+    const tmdq_receiver_params good = abiParams(0, 3, 20.0, 2, 3);
+
+    CHECK(tmdq_receiver_params_read(nullptr, &good, &out) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_receiver_params_read(path.c_str(), &good, nullptr) == int(TMDQ_ERR_BADARG));
+    tmdq_receiver_params small = out;
+    small.struct_size = sizeof(small) - 1;
+    CHECK(tmdq_receiver_params_read(path.c_str(), &good, &small) == int(TMDQ_ERR_BADARG));
+    tmdq_receiver_params smallDefaults = good;
+    smallDefaults.struct_size = sizeof(smallDefaults) - 1;
+    CHECK(tmdq_receiver_params_read(path.c_str(), &smallDefaults, &out) == int(TMDQ_ERR_BADARG));
+    REQUIRE(std::string(tmdq_last_error()).find("struct_size") != std::string::npos);
+
+    CHECK(tmdq_receiver_params_save(nullptr, &good, nullptr, 20) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_receiver_params_save(s.filePath("q.toml").c_str(), nullptr, nullptr, 20) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_receiver_params_save(s.filePath("q.toml").c_str(), &smallDefaults, nullptr, 20) == int(TMDQ_ERR_BADARG));
+    CHECK_FALSE(fs::exists(textfile::pathFromUtf8(s.filePath("q.toml"))));
+
+    // A struct from a newer host (bigger) is read no further than this library knows, and its output written no
+    // further than the host's own size allows.
+    struct Bigger { tmdq_receiver_params p; int32_t extra[4]; };
+    Bigger defaults{};
+    defaults.p = good;
+    defaults.p.struct_size = sizeof(Bigger);
+    defaults.extra[0] = 0x5A5A5A5A;
+    Bigger result{};
+    result.p.struct_size = sizeof(Bigger);
+    result.extra[0] = 0x12345678;
+    REQUIRE(tmdq_receiver_params_read(path.c_str(), &defaults.p, &result.p) == int(TMDQ_OK));
+    CHECK(result.p.scale_db_per_v == 5.0);
+    CHECK(result.p.num_receivers == 2);
+    CHECK(result.extra[0] == 0x12345678);
+
+    // A successful call clears an earlier error.
+    CHECK(tmdq_receiver_params_read(nullptr, nullptr, nullptr) == int(TMDQ_ERR_BADARG));
+    REQUIRE(tmdq_receiver_params_read(path.c_str(), nullptr, &out) == int(TMDQ_OK));
+    CHECK(std::string(tmdq_last_error()).empty());
 }

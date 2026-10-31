@@ -58,13 +58,13 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   `native/out/<config>/tmdq_core.dll` (build that first; `TMDQ_CORE_DLL` overrides). The tests run the
   committed recordings through the library and compare with numbers the Qt pipeline produces. An xunit v3
   project is an executable; the build merges a UTF-8 code-page manifest into it with `mt.exe`, because the vendored
-  irig106 opens files with a narrow `open()` that reads the active code page. Green baseline **309 passed / 0
+  irig106 opens files with a narrow `open()` that reads the active code page. Green baseline **329 passed / 0
   failed / 1 skipped** (the skip is the probe `IsolatedLoadTests` runs in a child process). CI runs it in both jobs.
 - **The Avalonia app (plan step 3):** `dotnet/TmDq.App` (Avalonia 12, CommunityToolkit.Mvvm) and
   `dotnet/TmDq.App.Tests` (xunit v3 on `Avalonia.Headless.XUnit`), both in `tmdq.sln`, which VS Code opens by default
   (`dotnet.defaultSolution`). `powershell -ExecutionPolicy Bypass -File scripts\test_app.ps1 [-Configuration
   Debug|Release] [-NoBuild]` builds the app with its tests and runs them; the walking-skeleton tests process the PRN sample through `native\out\<cfg>\tmdq_core.dll` (build it first; `TMDQ_CORE_DLL` overrides). The app: Open, or a recording path on the command line; with `TMDQ_SMOKE_REPORT=<file>` it writes one result line and exits. CI runs it in all three
-  jobs. Green baseline **74 passed / 0 failed / 0 skipped**. **Never type a version in a .csproj**: import
+  jobs. Green baseline **160 passed / 0 failed / 0 skipped**. **Never type a version in a .csproj**: import
   `dotnet/build/AppVersion.props`, which reads `AppVersion`. **Every .NET project imports
   `dotnet/build/PackageLicences.targets`** (plan D5): a package (transitive ones too) outside the open-source allow-list
   in `scripts/check_package_licences.ps1` fails the build, and a licence *file* passes only when its SHA-256 is in that

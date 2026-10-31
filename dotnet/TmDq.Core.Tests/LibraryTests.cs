@@ -42,6 +42,16 @@ public class LibraryTests
     }
 
     [Fact]
+    public void ADllWithoutTheReceiverParameterFunctionsIsRefused()
+    {
+        // Revision 0 of version 2 has no tmdq_receiver_params_* (revision 1, plan step 4.1a): a binding that loaded it
+        // would fail at the first Receiver SNR Load or Save instead of at start-up.
+        InvalidOperationException e = Assert.Throws<InvalidOperationException>(() => Library.CheckVersion("old.dll", 2, 0));
+        Assert.Contains("old.dll", e.Message);
+        Library.CheckVersion("new.dll", 2, 1);
+    }
+
+    [Fact]
     public void TheLoadedDllPassesItsOwnChecks()
     {
         Assert.Equal(Library.ExpectedVersion, Library.AbiVersion);
@@ -79,7 +89,7 @@ public class LibraryTests
         // A swapped pair would still pass the size check on a DLL whose two structs happen to be the same size,
         // so the ids are pinned to the numbers the C header assigns.
         Assert.Equal(
-            new[] { ("ChannelInfo", 1), ("CalPoint", 2), ("CalProfile", 3), ("StreamConfig", 4), ("RunRequest", 5), ("Callbacks", 6), ("StreamInfo", 7), ("ChannelSeries", 8), ("CalibrationRequest", 9), ("CalibrationInfo", 10), ("CalibrationChannel", 11), ("FrameSyncFileInfo", 12), ("MatchInfo", 13), ("CsvInfo", 14), ("CsvSeriesInfo", 15), ("CsvColumn", 16), ("SeriesSetInfo", 17), ("SeriesSpec", 18), ("StreamKey", 19), ("TimeBaseInfo", 20), ("ImportedSeries", 21) },
+            new[] { ("ChannelInfo", 1), ("CalPoint", 2), ("CalProfile", 3), ("StreamConfig", 4), ("RunRequest", 5), ("Callbacks", 6), ("StreamInfo", 7), ("ChannelSeries", 8), ("CalibrationRequest", 9), ("CalibrationInfo", 10), ("CalibrationChannel", 11), ("FrameSyncFileInfo", 12), ("MatchInfo", 13), ("CsvInfo", 14), ("CsvSeriesInfo", 15), ("CsvColumn", 16), ("SeriesSetInfo", 17), ("SeriesSpec", 18), ("StreamKey", 19), ("TimeBaseInfo", 20), ("ImportedSeries", 21), ("ReceiverParams", 22) },
             Enum.GetValues<StructId>().Select(i => (i.ToString(), (int)i)));
     }
 
