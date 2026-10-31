@@ -11,9 +11,10 @@
     - The exe carries a manifest selecting the UTF-8 active code page (app.manifest), because the vendored
       irig106 library opens recordings with the C runtime's NARROW open(), which reads that code page. The SDK's
       ApplicationManifest property embeds a manifest in the managed assembly, NOT in the apphost exe that is
-      the process (found in the spike, dotnet/hybrid-spike/README.md), so it is merged into the exe after the
-      build with mt.exe (the Windows SDK; on PATH after scripts\env.ps1). Run the exe, not `dotnet run`, whose
-      process is dotnet.exe with its own manifest.
+      the process (found in the spike, dotnet/hybrid-spike/README.md), so mt.exe (the Windows SDK; on PATH after
+      scripts\env.ps1) merges it into every host the SDK creates, which reaches both the build output and a
+      single-file publish (the targets below). Run the exe, not `dotnet run`, whose process is dotnet.exe with its
+      own manifest.
   -->
 
   <Import Project="..\build\AppVersion.props" />
@@ -44,9 +45,20 @@
     <ProjectReference Include="..\TmDq.Core\TmDq.Core.csproj" />
   </ItemGroup>
 
-  <Target Name="EmbedUtf8Manifest" AfterTargets="Build">
-    <Exec Command="mt -nologo -manifest &quot;$(MSBuildProjectDirectory)\app.manifest&quot; -outputresource:&quot;$(OutDir)$(AssemblyName).exe;#1&quot;"
-          ContinueOnError="false" />
+  <!-- The manifest goes into each intermediate host the SDK creates, before anything copies or bundles it: apphost
+       for a build (copied to bin\), singlefilehost for a self-contained single-file publish, apphost_publish for
+       other publishes. Patching the exe in bin\ after the build (as the test projects do) misses the published app:
+       a single-file publish bundles its own host from obj\, and shipped with the SDK's default manifest, no UTF-8 code
+       page and no Windows 10 compatibility (found in plan step 3.3). One target per host, because a target runs at
+       most once per build and the hosts are created at different points of it. -->
+  <Target Name="TmDqManifestIntoAppHost" AfterTargets="_CreateAppHost" Condition="Exists('$(AppHostIntermediatePath)')">
+    <Exec Command="mt -nologo -manifest &quot;$(MSBuildProjectDirectory)\app.manifest&quot; -outputresource:&quot;$(AppHostIntermediatePath);#1&quot;" />
+  </Target>
+  <Target Name="TmDqManifestIntoSingleFileHost" AfterTargets="_CreateSingleFileHost" Condition="Exists('$(SingleFileHostIntermediatePath)')">
+    <Exec Command="mt -nologo -manifest &quot;$(MSBuildProjectDirectory)\app.manifest&quot; -outputresource:&quot;$(SingleFileHostIntermediatePath);#1&quot;" />
+  </Target>
+  <Target Name="TmDqManifestIntoPublishHost" AfterTargets="_CreateAppHostForPublish" Condition="Exists('$(AppHostForPublishIntermediatePath)')">
+    <Exec Command="mt -nologo -manifest &quot;$(MSBuildProjectDirectory)\app.manifest&quot; -outputresource:&quot;$(AppHostForPublishIntermediatePath);#1&quot;" />
   </Target>
 
   <Import Project="..\build\PackageLicences.targets" />
