@@ -104,7 +104,7 @@ WPF's cost, stated plainly: it is in maintenance mode, and NativeAOT does not su
    decode helpers. Mirroring the Ch10 header layouts in C# needs
    `[StructLayout(LayoutKind.Sequential, Pack = ...)]` written by hand. **Get `Pack` wrong
    and you read plausible garbage at wrong offsets** — the same class of silent domain bug
-   the invariants in `CLAUDE.md` exist to catch, except at an FFI seam no current test
+   the invariants in `.claude/CLAUDE.md` exist to catch, except at an FFI seam no current test
    looks at. `lib/irig106` is deny-listed, so the shim is new code outside it that we own
    and must test.
 
@@ -164,7 +164,7 @@ Both of these improve the Qt application whether or not the port ever happens, a
 reversible. They are the cheap way to keep the option open rather than steps toward taking
 it.
 
-**Both are now DONE** — see the `Unreleased` section of `docs/CLAUDE.md`. What they found in
+**Both are now DONE** — see the `Unreleased` section of `docs/claude.md`. What they found in
 passing is worth recording here, because both were worse than this file assumed:
 
 - **~~De-Qt the model layer.~~ Done, in the narrow sense that was worth doing.** The TOML

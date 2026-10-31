@@ -8,8 +8,8 @@
 # build derives version_autogen.h, the .pro VERSION and the .rc from it. But four
 # files carry the version as PROSE, and nothing derives those:
 #
-#   CLAUDE.md                  "Current version: X.Y.Z"   (sat at 2.7.0 for 2 releases)
-#   docs/CLAUDE.md             "Project Version: X.Y.Z"
+#   .claude/CLAUDE.md          "Current version: X.Y.Z"   (sat at 2.7.0 for 2 releases)
+#   docs/claude.md             "Project Version: X.Y.Z"
 #   resources/usermanual.html  subtitle + footer          (read 2.7.0 at v2.9.0)
 #   deploy/RELEASENOTES.txt    top section header
 #
@@ -68,11 +68,11 @@ Write-Host "Source of truth: AppVersion = $Version`n"
 # --- each user-facing version literal --------------------------------------
 # Pattern must capture the version in group 1 so a mismatch can name what it found.
 $checks = @(
-    @{ File = 'CLAUDE.md'
+    @{ File = '.claude\CLAUDE.md'
        Pattern = '\*\*Current version:\s*([0-9]+\.[0-9]+\.[0-9]+)\.\*\*'
        What = 'Current version line' }
 
-    @{ File = 'docs\CLAUDE.md'
+    @{ File = 'docs\claude.md'
        Pattern = '\*\*Project Version\*\*:\s*([0-9]+\.[0-9]+\.[0-9]+)'
        What = 'Project Version line' }
 
@@ -117,10 +117,10 @@ foreach ($c in $checks) {
 }
 
 # --- the changelog must have a section for THIS version --------------------
-$devlog = Read-Tracked 'docs\CLAUDE.md'
+$devlog = Read-Tracked 'docs\claude.md'
 if ($devlog) {
     if ($devlog -notmatch "###\s+v$([regex]::Escape($Version))\b") {
-        $Problems.Add("docs/CLAUDE.md : no '### v$Version' section in Version History")
+        $Problems.Add("docs/claude.md : no '### v$Version' section in Version History")
     } else {
         Write-Host ("  OK  {0,-28} {1}" -f 'changelog section', "### v$Version")
     }
@@ -129,7 +129,7 @@ if ($devlog) {
     # attributed to a build that did not contain them.
     if ($ReleaseMode) {
         if ($devlog -match '###\s+Unreleased') {
-            $Problems.Add("docs/CLAUDE.md : an 'Unreleased' section still exists - fold it into ### v$Version before releasing")
+            $Problems.Add("docs/claude.md : an 'Unreleased' section still exists - fold it into ### v$Version before releasing")
         } else {
             Write-Host ("  OK  {0,-28} {1}" -f 'no Unreleased section', 'clean')
         }

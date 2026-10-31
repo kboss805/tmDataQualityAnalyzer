@@ -75,6 +75,7 @@ compile_commands.json
 !.claude/settings.json
 !.claude/.claudeignore
 !.claude/skills/
+!.claude/CLAUDE.md
 
 # Build artifacts
 *.pdb

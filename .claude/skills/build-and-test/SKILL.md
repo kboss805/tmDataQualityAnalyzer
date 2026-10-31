@@ -78,7 +78,7 @@ nmake -f Makefile.Debug
 
 - Results are written to `tests\output\results.txt` (gitignored) AND printed to the console. A
   non-zero process exit code means at least one suite failed.
-- Green baseline: see `CLAUDE.md` (it moves with every suite that ports to doctest). There are **no
+- Green baseline: see `.claude/CLAUDE.md` (it moves with every suite that ports to doctest). There are **no
   standing skips**: a skip is a missing fixture, and CI fails on one. The heavy PRN throughput
   benchmark is not in this executable any more; it is a native doctest case, opt-in via
   `$env:TMDQA_RUN_HEAVY_BENCH=1`, and `scripts\run_throughput_bench.ps1` runs it at release.

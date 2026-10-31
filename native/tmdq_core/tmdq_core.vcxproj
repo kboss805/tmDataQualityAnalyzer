@@ -15,7 +15,7 @@
 
   The toolset is whatever MSBuild brings: v143 from the Visual Studio 2022 tools that scripts\env.ps1 pins, v145
   from Visual Studio 2026. Intermediates go in a folder per toolset, so objects from two compilers never share
-  a directory (the stale-object trap CLAUDE.md describes).
+  a directory (the stale-object trap .claude/CLAUDE.md describes).
 -->
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">

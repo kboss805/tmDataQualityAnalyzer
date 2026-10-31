@@ -1,7 +1,7 @@
 # Future plans
 
 Scratch space for work that is scoped but not yet started, before it graduates into
-`docs/IMPROVEMENT_PLAN.md` or a user story in `docs/CLAUDE.md`. Anything substantial
+`docs/IMPROVEMENT_PLAN.md` or a user story in `docs/claude.md`. Anything substantial
 gets its own file here plus a paragraph in this index; smaller items can live as a
 section below until they earn one.
 
@@ -47,17 +47,17 @@ documentation lives.
 
 | Initiative | Landed in | Documented in |
 | --- | --- | --- |
-| Switch the toolchain from MinGW to MSVC | PR #40 | `CLAUDE.md`, `docs/CLAUDE.md`, `scripts/env.ps1`, `deploy/build_release.ps1` |
+| Switch the toolchain from MinGW to MSVC | PR #40 | `CLAUDE.md`, `docs/claude.md`, `scripts/env.ps1`, `deploy/build_release.ps1` |
 | Move CI to a self-hosted runner | PR #41, #42 | [`docs/ci_runner.md`](../ci_runner.md), `.github/workflows/ci.yml` |
 | Ship sample `.ch10` files for CI | PR #41 | as above — self-hosting delivered it; small fixtures are committed, the full-size recording lives on the runner |
 | Upgrade to Qt 6.11.1 | PR #53 | `scripts/env.ps1` + `.github/workflows/ci.yml` (`QT_VERSION`). Clean: 0 warnings, 341/0/1. NOTE the shipped v2.8.0 binaries were built on 6.10.3, so the next release needs a NEW version number - do not repackage 2.8.0 |
 | Replace QCustomPlot with first-party charting | PR #55, #56, #57 | `include/view/tmchart.h`, `src/view/tmchart.cpp`, `tests/tst_tmchart.cpp`. Engine -> swap -> delete, so each step was revertible. Fixed a latent bug on the way: PDF export silently dropped the legend |
-| Keyboard shortcuts for the plot | PR #54 | `docs/CLAUDE.md` (US4.1), `resources/usermanual.html` section 8. Widget-scoped in `PlotWidget::keyPressEvent`, not application-wide |
+| Keyboard shortcuts for the plot | PR #54 | `docs/claude.md` (US4.1), `resources/usermanual.html` section 8. Widget-scoped in `PlotWidget::keyPressEvent`, not application-wide |
 | Gate warnings in test code too | PR #50 | `.github/workflows/ci.yml` - one gate over both build logs |
-| MSVC-flavored clangd config | PR #40 (found already done) | `docs/CLAUDE.md` -> clangd / IntelliSense; `scripts/gen_compile_flags.py`. Verified with `clangd --check` across QCustomPlot / Win32 / irig106 / test TUs: 0 errors |
+| MSVC-flavored clangd config | PR #40 (found already done) | `docs/claude.md` -> clangd / IntelliSense; `scripts/gen_compile_flags.py`. Verified with `clangd --check` across QCustomPlot / Win32 / irig106 / test TUs: 0 errors |
 | Speed up CI with a parallel build (`jom`) | PR #48 | `scripts/env.ps1` (`TMDQ_MAKE`), [`../ci_runner.md`](../ci_runner.md) - CI run 286s -> 93s |
-| Simplify the plot window | PR #43 | `docs/CLAUDE.md` (US4.0 / US4.1), `resources/usermanual.html` §3 |
+| Simplify the plot window | PR #43 | `docs/claude.md` (US4.0 / US4.1), `resources/usermanual.html` §3 |
 | Make the remaining plot shortcuts visible in the context menu | PR #71 | `PlotWidget::buildContextMenu`. `(V)` in the View Mode submenu title (Qt will not draw a shortcut on a submenu); new top-level **Reset View** carrying `R`, which is also the menu's only single-action equivalent of the on-chart Reset view chip. Both were tooltips, which discover nothing |
 | Hide a Y axis when nothing is plotted against it | PR #68 | `include/view/tmchart.h` (`setLeftAxisVisible`/`setRightAxisVisible`), `PlotViewModel::hasVisibleLeftAxisSeries`/`hasVisibleRightAxisSeries`, `PlotWidget::updateAxisVisibility`. Keys on **visible** series. Rendering the reclaimed layout also caught the first X tick label clipping off the left edge |
 | A comprehensive, task-oriented user manual | PR #75-#85, released in v2.10.0 | `docs/manual/walkthroughs.html` (the five walkthroughs), `scripts/build_manual.ps1` (figure registry + crop validation), `scripts/embed_manual_images.py` (one document object -> both manuals), `deploy/tmDataQualityAnalyzer.iss` (`fullmanual` task). Walkthrough headings carry no numbers and cross-references are anchors: the embedder numbers them and shifts the reference sections, so the same prose is correct in a manual that has the walkthroughs and one that does not. Registering a capture only validates its crop - it does not place it, and 8 of 23 sat in the repo and in neither manual until that was cross-checked |
-| Settings on upgrade: correct US8.0 to describe what ships | this change | `docs/CLAUDE.md` (US8.0), `UserGuide.txt` ("Your settings files, and what an upgrade does to them"). Two criteria claimed a `new_x.toml` merge that was never built - no `[Code]` section in the `.iss`, no merge logic anywhere - so they are replaced by the guarantee that is real: a settings file is never overwritten, and any file an earlier version wrote stays readable because every reader supplies its own default for a key the file lacks. That reader tolerance is named in the criteria, because it is load-bearing rather than incidental. Confirmed on a clean machine by `deploy/sandbox/`: a first run wrote nothing under `settings\` and no registry key |
+| Settings on upgrade: correct US8.0 to describe what ships | this change | `docs/claude.md` (US8.0), `UserGuide.txt` ("Your settings files, and what an upgrade does to them"). Two criteria claimed a `new_x.toml` merge that was never built - no `[Code]` section in the `.iss`, no merge logic anywhere - so they are replaced by the guarantee that is real: a settings file is never overwritten, and any file an earlier version wrote stays readable because every reader supplies its own default for a key the file lacks. That reader tolerance is named in the criteria, because it is load-bearing rather than incidental. Confirmed on a clean machine by `deploy/sandbox/`: a first run wrote nothing under `settings\` and no registry key |

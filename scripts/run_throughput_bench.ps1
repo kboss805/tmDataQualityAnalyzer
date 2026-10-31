@@ -72,7 +72,7 @@
 param(
     # Reuse whatever is already in native\out\<config>\. Only safe when nothing has been
     # rebuilt since - a stale test exe is exactly how a Qt bump produced a crash in
-    # an unrelated suite three times (see CLAUDE.md).
+    # an unrelated suite three times (see .claude/CLAUDE.md).
     [switch]$SkipBuild,
 
     # Build and measure Debug instead. For iterating on the benchmark itself; the
@@ -117,7 +117,7 @@ if (-not (Test-Path -LiteralPath $Fixture)) {
 if (-not (Test-Path -LiteralPath $Fixture)) {
     Write-Host "FAILED - no PRN fixture found in:" -ForegroundColor Red
     Write-Host "  $FixtureDir" -ForegroundColor Red
-    Write-Host "In a worktree, junction tests\data to the main checkout (see CLAUDE.md)." -ForegroundColor Red
+    Write-Host "In a worktree, junction tests\data to the main checkout (see .claude/CLAUDE.md)." -ForegroundColor Red
     exit 1
 }
 $FixtureMB = [math]::Round((Get-Item -LiteralPath $Fixture).Length / 1MB, 1)

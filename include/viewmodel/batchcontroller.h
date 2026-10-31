@@ -7,7 +7,7 @@
  * that turn-taking: which files are queued, which one is in flight, what to do
  * when it finishes, and the per-file export post-pass at the end.
  *
- * It lived in MainView, where docs/CLAUDE.md had to document a state machine
+ * It lived in MainView, where docs/claude.md had to document a state machine
  * sitting in the View layer. The View's remaining part is the part that is
  * genuinely the View's: showing the confirmation dialog and rendering the plot
  * to an image.

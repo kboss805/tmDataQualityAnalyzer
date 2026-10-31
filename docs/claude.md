@@ -522,6 +522,15 @@ v2.9.0 intended. Every first-party header here is quote-included, so `anglebrack
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
 
+#### The session guide moves into `.claude/`
+
+The short guide Claude Code loads at the start of every session moves from the repository root to **`.claude/CLAUDE.md`**, beside `settings.json` and the project skills, so everything Claude-specific lives in one folder. Claude Code loads it from there exactly as it did from the root. This file (`docs/claude.md`), the full developer guide, stays in `docs/`. No code changed.
+
+- **The root `.gitignore` re-includes it** (`!.claude/CLAUDE.md`). It ignores everything under `.claude/` except the files it lists, so without that line the moved file would have dropped out of git without a word, the same way `dotnet/build/` and `TmDq.App/` hid in step 3.1.
+- **`scripts/check_release_consistency.ps1` reads the new path** for its "Current version" check, which CI runs on every push; it found the line there.
+- **Every reference to where the guide lives now points at `.claude/CLAUDE.md`**: the skills (`build-and-test`, `code-cleanup`, `cut-release`), the plan, the release and Visual Studio scripts, a project-file comment, the Markdown lint config. The README's tree gains a `.claude/` line. References that record history (plan step 0.1, the future-plans table of what PR #40 touched) keep the name they had then.
+- **References to `docs/CLAUDE.md` now spell it `docs/claude.md`**, the name git actually tracks. Windows ignores the difference, so it never failed here, but a case-sensitive checkout and GitHub's links do not find the upper-case name (`git add docs/CLAUDE.md` once staged nothing). The changelog entries below keep their original spelling.
+
 #### The Avalonia app's projects and conventions (plan step 3.1)
 
 The first step of the Avalonia application. Nothing user-facing changed: the Qt application is still the one that ships, and the new app is a window that shows its version. What this step settles is how every later step's code is built.
