@@ -10,3 +10,10 @@
 
 bin/
 obj/
+
+# Two root rules catch .NET folders by accident, so they are re-included here:
+#  - "build/" (the Qt build folder) also matches dotnet/build/, the shared MSBuild props and targets;
+#  - "*.app" (a macOS app bundle) also matches TmDq.App/, because git on Windows ignores case.
+# Without these lines git status does not even list them, and a commit silently leaves them out.
+!build/
+!TmDq.App/

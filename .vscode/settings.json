@@ -138,5 +138,6 @@
   "doxdocgen.generic.returnTemplate": "@return",
   "doxdocgen.generic.includeTypeAtReturn": false,
   "C_Cpp.codeAnalysis.clangTidy.enabled": false,
-  "C_Cpp.configurationWarnings": "disabled"
+  "C_Cpp.configurationWarnings": "disabled",
+  "dotnet.defaultSolution": "tmdq.sln"
 }

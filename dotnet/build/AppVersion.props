@@ -1,0 +1,41 @@
+<Project>
+
+  <!--
+    The version of every assembly that ships, read from the one place it is written: AppVersion in
+    include/constants.h (kMajor, kMinor, kPatch). qmake, deploy/build_release.ps1 and the installer read the
+    same three numbers, so the Avalonia app cannot drift from the Qt one or from the release scripts.
+    Never type a version in a .csproj; import this instead.
+
+    A header the pattern no longer matches fails the build (TmDqVersionCheck below) rather than shipping 1.0.0.
+  -->
+
+  <PropertyGroup>
+    <TmDqVersionSource>$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)..\..\include\constants.h'))</TmDqVersionSource>
+    <TmDqVersionText Condition="Exists('$(TmDqVersionSource)')">$([System.IO.File]::ReadAllText('$(TmDqVersionSource)'))</TmDqVersionText>
+    <TmDqVersionMajor>$([System.Text.RegularExpressions.Regex]::Match('$(TmDqVersionText)', 'kMajor\s*=\s*\d+').Value)</TmDqVersionMajor>
+    <TmDqVersionMinor>$([System.Text.RegularExpressions.Regex]::Match('$(TmDqVersionText)', 'kMinor\s*=\s*\d+').Value)</TmDqVersionMinor>
+    <TmDqVersionPatch>$([System.Text.RegularExpressions.Regex]::Match('$(TmDqVersionText)', 'kPatch\s*=\s*\d+').Value)</TmDqVersionPatch>
+    <TmDqVersionMajor>$([System.Text.RegularExpressions.Regex]::Replace('$(TmDqVersionMajor)', '\D', ''))</TmDqVersionMajor>
+    <TmDqVersionMinor>$([System.Text.RegularExpressions.Regex]::Replace('$(TmDqVersionMinor)', '\D', ''))</TmDqVersionMinor>
+    <TmDqVersionPatch>$([System.Text.RegularExpressions.Regex]::Replace('$(TmDqVersionPatch)', '\D', ''))</TmDqVersionPatch>
+    <TmDqVersionText></TmDqVersionText>
+    <TmDqVersionRead Condition="'$(TmDqVersionMajor)' != '' and '$(TmDqVersionMinor)' != '' and '$(TmDqVersionPatch)' != ''">true</TmDqVersionRead>
+  </PropertyGroup>
+
+  <!-- Only a complete version is set: a partial one ("7.81.") would fail restore with a message about the
+       version string, before TmDqVersionCheck could say what is actually wrong. -->
+  <PropertyGroup Condition="'$(TmDqVersionRead)' == 'true'">
+    <Version>$(TmDqVersionMajor).$(TmDqVersionMinor).$(TmDqVersionPatch)</Version>
+    <AssemblyVersion>$(Version).0</AssemblyVersion>
+    <FileVersion>$(Version).0</FileVersion>
+    <InformationalVersion>$(Version)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
+  <Target Name="TmDqVersionCheck" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('$(TmDqVersionSource)')" Text="AppVersion source not found: $(TmDqVersionSource)" />
+    <Error Condition="Exists('$(TmDqVersionSource)') and '$(TmDqVersionRead)' != 'true'"
+           Text="Could not read AppVersion (kMajor/kMinor/kPatch) from $(TmDqVersionSource)" />
+  </Target>
+
+</Project>

@@ -195,12 +195,18 @@ sweep.
 
 ## Step 3: the Avalonia app's skeleton and pipeline
 
-- [ ] **3.1 Projects and conventions:** `TmDq.App` (Avalonia, MVVM with CommunityToolkit.Mvvm),
+- [x] **3.1 Projects and conventions:** `TmDq.App` (Avalonia, MVVM with CommunityToolkit.Mvvm),
   `TmDq.App.Tests` (`Avalonia.Headless.XUnit`), `TmDq.Core` from 2.3, all in the solution. Version
   single-sourced from `AppVersion` (generated into the assembly, never typed twice). The UTF-8
   code-page manifest merged into the exe with `mt.exe` (the SDK's own manifest setting does not reach
   an apphost; found in the spike). A build check (D5) fails on any package outside an allow-list of
   open-source licences, so an Accelerate component cannot arrive through a NuGet suggestion.
+  PR #217. The version comes from `dotnet/build/AppVersion.props` (all four projects' assemblies, and the exe's
+  version resource); the licence check is `dotnet/build/PackageLicences.targets` over
+  `scripts/check_package_licences.ps1`, imported by every .NET project, allow-list MIT, Apache-2.0, BSD-2-Clause and
+  BSD-3-Clause, with a licence file accepted only by its reviewed SHA-256 (one so far: ANGLE's BSD-3-Clause text in
+  `Avalonia.Angle.Windows.Natives`, which `Avalonia.Desktop` brings). The app and its tests build locally only;
+  CI is 3.2.
 - [ ] **3.2 CI for the new app:** build and test on the self-hosted runner (NETWORK SERVICE, Session 0)
   and the hosted fallback. This is where the one open question from the spike closes: the UI tests
   run as the runner's own account.

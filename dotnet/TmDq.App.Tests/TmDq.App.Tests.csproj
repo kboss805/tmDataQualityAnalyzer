@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tests of the Avalonia application on Avalonia's headless platform: no window system, no GPU, no desktop
+    session, so they run the same on a developer machine and on the CI runner's service account. Drawing goes
+    through Skia, so a test can measure real layout and read real pixels.
+
+    An xunit v3 test project is an executable: run bin\<Configuration>\net10.0\TmDq.App.Tests.exe directly
+    (scripts\test_dotnet.ps1 builds and runs it).
+  -->
+
+  <Import Project="..\build\AppVersion.props" />
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>TmDq.App.Tests</AssemblyName>
+    <RootNamespace>TmDq.App.Tests</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <PlatformTarget>x64</PlatformTarget>
+    <AppendPlatformToOutputPath>false</AppendPlatformToOutputPath>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless.XUnit" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Skia" Version="12.1.4" />
+    <PackageReference Include="xunit.v3" Version="3.2.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TmDq.App\TmDq.App.csproj" />
+  </ItemGroup>
+
+  <Import Project="..\build\PackageLicences.targets" />
+
+</Project>
