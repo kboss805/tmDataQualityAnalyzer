@@ -1,7 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Threading.Tasks;
+using System.Threading;
 using Xunit;
 
 namespace TmDq.Core.Tests;
@@ -16,29 +16,33 @@ public class TempFilesTests
     private static string NewPath(string suffix = ".tmp") =>
         Path.Combine(Path.GetTempPath(), "tmdq-tempfiles-" + Guid.NewGuid().ToString("N") + suffix);
 
-    /// <summary>Holds a file open with no sharing at all, as a scanner can, and lets go after the delay.</summary>
-    private static Task HoldFor(string path, TimeSpan delay)
+    /// <summary>Holds a file open with no sharing at all, as a scanner can, and lets go after the delay, on a thread of
+    /// its own. Not a thread-pool task: on a two-core CI runner with the suite running in parallel, a task waited
+    /// longer than the whole window for a pool thread, so the file was never released in time (CI on PR #221).</summary>
+    private static Thread HoldFor(string path, TimeSpan delay)
     {
         var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
-        return Task.Run(async () =>
+        var release = new Thread(() =>
         {
-            try { await Task.Delay(delay, TestContext.Current.CancellationToken); }
+            try { Thread.Sleep(delay); }
             finally { stream.Dispose(); }
-        });
+        }) { IsBackground = true, Name = "TempFilesTests hold" };
+        release.Start();
+        return release;
     }
 
     [Fact]
-    public async Task AFileHeldForAMomentIsDeletedOnceItIsReleased()
+    public void AFileHeldForAMomentIsDeletedOnceItIsReleased()
     {
         // Through the public call and its own window: a brief hold must not fail a cleanup.
         string path = NewPath();
         File.WriteAllText(path, "x");
-        Task release = HoldFor(path, TimeSpan.FromMilliseconds(400));
+        Thread release = HoldFor(path, TimeSpan.FromMilliseconds(400));
         Stopwatch clock = Stopwatch.StartNew();
         TempFiles.Delete(path);
         Assert.False(File.Exists(path));
         Assert.True(clock.Elapsed >= TimeSpan.FromMilliseconds(300), $"it did not wait for the release ({clock.ElapsedMilliseconds} ms)");
-        await release;
+        Assert.True(release.Join(TimeSpan.FromSeconds(10)), "the holding thread did not finish");
     }
 
     [Fact]
@@ -83,16 +87,16 @@ public class TempFilesTests
     }
 
     [Fact]
-    public async Task AFolderWithAFileHeldForAMomentIsDeletedOnceItIsReleased()
+    public void AFolderWithAFileHeldForAMomentIsDeletedOnceItIsReleased()
     {
         string dir = NewPath("");
         Directory.CreateDirectory(Path.Combine(dir, "inner"));
         string file = Path.Combine(dir, "inner", "held.bin");
         File.WriteAllText(file, "x");
-        Task release = HoldFor(file, TimeSpan.FromMilliseconds(400));
+        Thread release = HoldFor(file, TimeSpan.FromMilliseconds(400));
         TempFiles.DeleteDirectory(dir, recursive: true);
         Assert.False(Directory.Exists(dir));
-        await release;
+        Assert.True(release.Join(TimeSpan.FromSeconds(10)), "the holding thread did not finish");
     }
 
     [Fact]
