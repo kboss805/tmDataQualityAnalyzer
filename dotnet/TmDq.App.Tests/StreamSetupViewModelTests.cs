@@ -238,11 +238,15 @@ namespace TmDq.App.Tests
         public async Task LoadingReceiverParametersShowsThemAndTheWordMap()
         {
             string rasa = Path.Combine(Repo.Root, "settings", "receiver_params", "RASA.toml");
-            StreamSetupViewModel vm = Dialog(Row(StreamMode.ReceiverChannelInfo) with { BitsInMinorFrame = 800 }, new FakeFilePicker(rasa));
+            // Every field shown starts away from what RASA says, so each one the load does not reach stays visibly wrong.
+            StreamSetup shown = Row(StreamMode.ReceiverChannelInfo) with { BitsInMinorFrame = 800, PolarityIndex = 0, SlopeIndex = 0, ScaleDdBPerV = 1, NumReceivers = 1, ReceiverChannels = 5 };
+            StreamSetupViewModel vm = Dialog(shown, new FakeFilePicker(rasa));
             await vm.LoadReceiverParamsCommand.ExecuteAsync(null);
-            ReceiverParams expected = ReceiverParamsFile.Read(rasa, StreamFiles.ReceiverParamsOf(Row(StreamMode.ReceiverChannelInfo)));
-            Assert.Equal((expected.PolarityIndex, expected.SlopeIndex, (decimal)expected.ScaleDdBPerV, (decimal)expected.NumReceivers),
-                         (vm.PolarityIndex, vm.SlopeIndex, vm.ScaleDdBPerV, vm.NumReceivers));
+            ReceiverParams expected = ReceiverParamsFile.Read(rasa, StreamFiles.ReceiverParamsOf(shown));
+            Assert.NotEqual(StreamFiles.ReceiverParamsOf(shown), expected);
+            Assert.Equal((expected.PolarityIndex, expected.SlopeIndex, (decimal)expected.ScaleDdBPerV, (decimal)expected.NumReceivers, (decimal)expected.ReceiverChannels),
+                         (vm.PolarityIndex, vm.SlopeIndex, vm.ScaleDdBPerV, vm.NumReceivers, vm.ReceiverChannels));
+            Assert.Equal(3m, vm.ReceiverChannels);
             Assert.Equal("RASA.toml", vm.ReceiverParamsName);
             Assert.Equal(rasa, vm.ToSetup().ReceiverParamsToml);
             Assert.Equal("Loaded RASA.toml.", vm.FileMessage);
@@ -258,6 +262,7 @@ namespace TmDq.App.Tests
             await vm.SaveReceiverParamsCommand.ExecuteAsync(null);
             Assert.Equal(new ReceiverParams(0, 3, 12.5, 4, 3), ReceiverParamsFile.Read(target));
             Assert.Equal("Saved rx.toml.", vm.FileMessage);
+            Assert.Equal(_dir, vm.LastFolder);
             Assert.Equal("", vm.ToSetup().ReceiverParamsToml);   // saving does not change the row's word map
         }
 

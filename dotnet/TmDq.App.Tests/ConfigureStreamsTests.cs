@@ -272,6 +272,55 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
+        public async Task AStreamThatFailsIsNamedBesideTheOneThatWorked()
+        {
+            // CH-01 locks on PRN15; CH-04 (PRN11) given PRN15 cannot, and the core says why. The run still shows CH-01.
+            var dialogs = new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok() };
+            dialogs.OnConfigure = async c =>
+            {
+                c.Rows[0].Process = true;
+                await c.Rows[0].ConfigureCommand.ExecuteAsync(null);
+                c.Rows[3].Process = true;
+                await c.Rows[3].ConfigureCommand.ExecuteAsync(null);
+                c.ProcessCommand.Execute(null);
+            };
+            var vm = new MainWindowViewModel(configurator: new DialogConfigurator(dialogs, null, Repo.Root));
+            await vm.LoadAsync(Prn);
+            Assert.Equal(new[] { 13 }, vm.AllSeries.Select(s => s.PcmChannelId));
+            Assert.StartsWith("prn_testfile, sample.ch10: CH-01 PRN 15 5M (channel 13), 116 samples, mean lock ", vm.Status);
+            Assert.Contains(". Not processed: ", vm.Status, StringComparison.Ordinal);
+            Assert.Contains("CH-04", vm.Status, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void ASecondTimeChannelIsListedAndCanBeChosen()
+        {
+            // The PRN sample with CH-04 retyped as a time channel in TMATS (R-1\CDT-9:PCMIN -> 11), a same-length edit, as
+            // the native reader's tests make: the recording then has two time channels and three PCM ones.
+            byte[] bytes = File.ReadAllBytes(Prn);
+            byte[] from = System.Text.Encoding.ASCII.GetBytes(@"R-1\CDT-9:PCMIN;"), to = System.Text.Encoding.ASCII.GetBytes(@"R-1\CDT-9:11   ;");
+            int at = bytes.AsSpan().IndexOf(from);
+            Assert.True(at >= 0 && bytes.AsSpan(at + 1).IndexOf(from) < 0, "the channel-type key is not in the recording exactly once");
+            to.CopyTo(bytes, at);
+            string copy = Path.Combine(Path.GetTempPath(), "tmdq-app-twotime-" + Guid.NewGuid().ToString("N") + ".ch10");
+            File.WriteAllBytes(copy, bytes);
+            try
+            {
+                var vm = new ConfigureStreamsViewModel(copy, StreamsRun.Open(copy), new FakeStreamDialogs(), null, Repo.Root);
+                Assert.Equal(new[] { "1 - IRIG-B", "16 - CH-04 PRN 11 5M" }, vm.TimeChannelItems);
+                Assert.Equal(3, vm.Rows.Count);
+                Assert.Equal((0, 1), (vm.TimeChannelIndex, vm.TimeChannelId));   // the core's default: the first
+                vm.TimeChannelIndex = 1;
+                Assert.Equal(16, vm.TimeChannelId);
+                Assert.Equal(16, vm.ToRunRequest().TimeChannelId);
+            }
+            finally
+            {
+                Core.Tests.TempFiles.Delete(copy);
+            }
+        }
+
+        [Fact]
         public void TheStatusNamesWhatWasNotProcessed()
         {
             var lockStream = new ProcessedStream(13, "A", 0, 0, StreamMode.FrameSyncLock, new[] { 0.0 }, new[] { 50.0 }, new[] { 0.0 }, Array.Empty<ChannelData>());

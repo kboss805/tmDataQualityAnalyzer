@@ -199,7 +199,7 @@ namespace TmDq.App.Tests
             Assert.False(edit.IsCompleted);
             setup.OkCommand.Execute(null);
             Dispatcher.UIThread.RunJobs();
-            await edit;
+            await Closed(edit, "the setup dialog");
             Assert.True(setup.Accepted);
             Assert.False(open.IsVisible);
 
@@ -209,7 +209,7 @@ namespace TmDq.App.Tests
             Assert.IsType<ConfigureStreamsWindow>(owner.OwnedWindows.Single());
             configure.CancelCommand.Execute(null);
             Dispatcher.UIThread.RunJobs();
-            await shown;
+            await Closed(shown, "Configure Streams (Cancel)");
             Assert.False(configure.Accepted);
             Assert.Empty(owner.OwnedWindows);
 
@@ -221,10 +221,18 @@ namespace TmDq.App.Tests
             Assert.Single(owner.OwnedWindows);
             ready.ProcessCommand.Execute(null);
             Dispatcher.UIThread.RunJobs();
-            await shown;
+            await Closed(shown, "Configure Streams (Process)");
             Assert.True(ready.Accepted);
             Assert.Empty(owner.OwnedWindows);
             owner.Close();
+        }
+
+        // A dialog that is not closed would leave its task pending, and awaiting it would hang the run;
+        // once the dispatcher has run, the task must already be done.
+        private static async Task Closed(Task dialog, string what)
+        {
+            Assert.True(dialog.IsCompleted, what + " is still open.");
+            await dialog;
         }
     }
 }

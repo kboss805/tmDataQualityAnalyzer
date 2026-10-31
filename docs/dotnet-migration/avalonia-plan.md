@@ -268,6 +268,17 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
     field checks, the run) and the Load and Save buttons (`StreamFiles`).
   - [ ] **4.1b The dialogs:** Configure Streams, the Frame Sync Lock and Receiver SNR setup dialogs, wired into the
     app's Open in place of the walking skeleton's first-channel defaults.
+    **Done:** Open (or a recording on the command line) now asks through Configure Streams (`configure-streams.png`,
+    `receiver-snr-setup.png`, beside this plan), processes every checked stream in one run, and draws every Frame Sync
+    Lock stream (Receiver SNR results are counted in the status line; drawing them is 4.3's). One setup window serves
+    both modes. A problem is shown in the dialog as it arises and holds OK, where the Qt dialogs raised a message box on
+    OK. The app now ships `settings/` beside its exe, and the preview installer installs it as the Qt one does: never
+    overwritten, left by an uninstall. The installer's smoke test, which has no one to answer the dialog, still runs
+    the first channel with the defaults. **Each acceptance criterion** of the stories covered, with what holds it:
+    - US1.0: every criterion has a test, except the progress dialog and cancelling a run, which are 4.2's.
+    - US2.0, US2.1 and US2.2: every criterion has a test.
+    - US7.0: every criterion has a test. "Pattern no larger than the frame" holds by the two ranges.
+    The changelog entry maps each criterion to its test.
 - [ ] **4.2 Processing:** progress dialog, cancel, the log sidebar with its colouring and the
   multi-line messages (US1.0, US3.0 to US3.2).
 - [ ] **4.3 The chart** (per D1): envelope and culling, dual axes with hiding, round clock ticks,
