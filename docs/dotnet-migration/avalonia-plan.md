@@ -236,7 +236,7 @@ sweep.
 - [x] **3.4 A walking skeleton:** open a `.ch10`, process one stream with defaults, show the lock %
   series. Ugly is fine; it proves the whole path end to end in the new app, in CI, and in the
   installer.
-  **Done, in all three.** The app opens a recording (Open, or a path on the command line), processes its first PCM
+  PR #223. **Done, in all three.** The app opens a recording (Open, or a path on the command line), processes its first PCM
   channel with the Qt app's Frame Sync Lock defaults (PRN15: `334AABBF`, 32767 bits, 1 s) through `TmDq.Core` and
   `tmdq_core.dll`, and draws the lock % series (`walking-skeleton.png`, beside this plan). The committed PRN sample's
   channel 13 gives 116 windows, mean 93.531893 %, the numbers the managed tests already pin, and the app's series is
