@@ -143,8 +143,23 @@ namespace TmDq.App.Tests
             Assert.Equal(PlotViewModel.DefaultTitle, plot.Title);
 
             // The X axis reads as the recording's clock, and the ticks are snapped to it.
+            double first = outcome.Streams[0].TimesSec[0];
+            int day = DateTime.UnixEpoch.AddSeconds(first).DayOfYear;   // IRIG time counts from 1970
+            Assert.Equal(first % 86400.0, plot.TimeOrigin, 6);               // the clock time of x = 0
+            Assert.Equal(ClockTime.Format(day, plot.TimeOrigin, 30.0), plot.FormatTime(30.0));
             Assert.Matches(@"^\d{3}:\d{2}:\d{2}:\d{2}$", plot.FormatTime(0.0));
-            Assert.InRange(plot.TimeOrigin, 0.0, 86400.0);
+        }
+
+        [AvaloniaFact]
+        public void StreamsKeepTheirJobOrderAndTheViewDecidesWhichMetricIsShown()
+        {
+            using RunOutcome outcome = Run(Prn, 0, PrnStream(13) with { Label = "first" }, PrnStream(13) with { Label = "second" });
+            using var plot = new PlotViewModel();
+            plot.SetLockAxisView(LockAxisView.MissedFrames);
+            plot.AddStream(outcome.Results[1]);   // the second job first
+            plot.AddStream(outcome.Results[0]);
+            Assert.Equal(new[] { "first", "first", "second", "second" }, plot.Series.Select(s => s.StreamLabel));
+            Assert.Equal(new[] { false, true, false, true }, plot.Series.Select(s => s.Visible));   // missed frames shown
         }
 
         [AvaloniaFact]
@@ -207,6 +222,16 @@ namespace TmDq.App.Tests
             Assert.False(plot.HasRangeOverride);
 
             plot.SetSeries(Array.Empty<PlotSeries>());
+            Assert.Equal((0.0, 1.0), (plot.RightMin, plot.RightMax));
+
+            // Only SNR series that are shown set it: not a lock series, not a hidden one.
+            plot.SetSeries(new[]
+            {
+                PlotFixtures.Snr(0, "s", 1, 0, 1, 0, new[] { 0.0, 1.0 }, new[] { 12.0, 18.0 }),
+                PlotFixtures.Lock(1, "l", 2, 1, new[] { 0.0, 1.0 }, new[] { 90.0, 100.0 }),
+            });
+            Assert.Equal((10.0, 20.0), (plot.RightMin, plot.RightMax));
+            plot.SetSeriesVisible(0, false);
             Assert.Equal((0.0, 1.0), (plot.RightMin, plot.RightMax));
         }
 
@@ -307,6 +332,9 @@ namespace TmDq.App.Tests
             plot.ResetXRange();
             Assert.Equal((0.0, 100.0), (plot.XViewMin, plot.XViewMax));
             Assert.False(plot.CanZoomBack);                                // the history goes with a reset
+            plot.PushXZoom(10, 20);
+            plot.SetSeries(plot.Series.ToArray());
+            Assert.False(plot.CanZoomBack);                                // and with new series
         }
 
         [AvaloniaFact]
@@ -403,6 +431,23 @@ namespace TmDq.App.Tests
             return n;
         }
 
+        /// <summary>Red as the band's edge draws it (alpha 190), not as its fill alone does (alpha 90).</summary>
+        private static int StrongRedIn(Shown s, double x0, double x1, double y0, double y1)
+        {
+            Rect a = s.Area;
+            var part = new Rect(a.X + a.Width * x0, a.Y + a.Height * y0, a.Width * (x1 - x0), a.Height * (y1 - y0));
+            using ILockedFramebuffer fb = s.Frame();
+            int n = 0;
+            for (int y = (int)part.Top; y < (int)part.Bottom; y++)
+                for (int x = (int)part.Left; x < (int)part.Right; x++)
+                {
+                    uint p = Frames.Pixel(fb, x, y);
+                    int r = (int)(p >> 16) & 0xFF, g = (int)(p >> 8) & 0xFF;
+                    if (r - g > 110) n++;
+                }
+            return n;
+        }
+
         [AvaloniaFact]
         public void AnEmptyChartIsAFrameWithNothingInsideAndIgnoresTheWheel()
         {
@@ -466,6 +511,9 @@ namespace TmDq.App.Tests
             s.Window.MouseWheel(s.At(px, a.Center.Y), new Vector(0, -1), RawInputModifiers.None);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(100.0, plot.XViewMax - plot.XViewMin, 6);              // and out again
+            for (int i = 0; i < 200; i++) s.Window.MouseWheel(s.At(px, a.Center.Y), new Vector(0, 1), RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(plot.XViewMax - plot.XViewMin >= PlotViewModel.MinZoomSpanSeconds, "the wheel collapsed the view");
             s.Window.Close();
         }
 
@@ -657,6 +705,7 @@ namespace TmDq.App.Tests
             plot.SetRightMaxOverride(100);
             Dispatcher.UIThread.RunJobs();
             Assert.True(RedIn(s, 0.0, 1.0, 0.75, 1.0) > 0, "a one-sample dropout mid-column was not drawn");
+            Assert.True(StrongRedIn(s, 0.0, 1.0, 0.75, 1.0) > 0, "the dropout is only the band's faint fill, not its edge");
             Assert.Equal(0, RedIn(s, 0.0, 0.45, 0.10, 1.0));
 
             // Alternating 10 and 90: the band reaches both, and the mean runs through the middle.
@@ -718,9 +767,19 @@ namespace TmDq.App.Tests
             Assert.True(RedIn(s, 0.05, 0.45, 0.4, 0.6) > 50, "an unordered series is missing from the left of a zoomed view");
             Assert.True(RedIn(s, 0.55, 0.95, 0.4, 0.6) > 50, "an unordered series is missing from the right of a zoomed view");
 
-            // Two samples far apart, seen from between them.
-            Only(PlotFixtures.Snr(0, "r", 1, 0, 1, 0, new[] { 0.0, 100.0 }, new[] { 50.0, 50.0 }), rightMax: 100, view: (45, 55));
+            // Two samples far apart, drawn whole, then seen from between them: the line is drawn again for the new
+            // range, not reused from the last.
+            Only(PlotFixtures.Snr(0, "r", 1, 0, 1, 0, new[] { 0.0, 100.0 }, new[] { 0.0, 100.0 }), rightMax: 100);
+            Assert.True(RedIn(s, 0.0, 0.1, 0.85, 1.0) > 0);
+            plot.SetXViewByUser(45, 55);
+            Dispatcher.UIThread.RunJobs();
             Assert.True(RedIn(s, 0.05, 0.95, 0.4, 0.6) > 100, "the line through a view with no sample inside is missing");
+            Assert.Equal(0, RedIn(s, 0.0, 0.1, 0.85, 1.0));
+
+            // A hidden series is not drawn.
+            plot.SetSeriesVisible(0, false);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, RedIn(s, 0.0, 1.0, 0.0, 1.0));
             s.Window.Close();
         }
 

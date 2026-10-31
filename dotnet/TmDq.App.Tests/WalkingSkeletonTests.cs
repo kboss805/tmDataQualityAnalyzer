@@ -205,6 +205,8 @@ namespace TmDq.App.Tests
             Assert.NotNull(vm.Series);
             await vm.LoadAsync(Repo.Recording("step_cal, example.ch10"));
             Assert.Null(vm.Series);
+            Assert.False(vm.Plot.HasData);
+            Assert.Equal(TmDq.App.Plot.PlotViewModel.DefaultTitle, vm.Plot.Title);
         }
 
         [Fact]
