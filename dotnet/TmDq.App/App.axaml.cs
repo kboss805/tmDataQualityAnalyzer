@@ -21,7 +21,8 @@ namespace TmDq.App
                 var window = new MainWindow();
                 // The installer's smoke test has no one to answer Configure Streams, so it runs the defaults.
                 IStreamConfigurator configurator = Startup.SmokeReportPath() is null
-                    ? new DialogConfigurator(new WindowStreamDialogs(window), new StorageSettingsFilePicker(window), AppContext.BaseDirectory)
+                    ? new DialogConfigurator(new WindowStreamDialogs(window), new StorageSettingsFilePicker(window), AppContext.BaseDirectory,
+                                             new StorageCalibrationFilePicker(window))
                     : new FirstChannelRun();
                 var vm = new MainWindowViewModel(new StorageRecordingPicker(window), configurator, new WindowProcessingDialog(window),
                                                  files: new StorageDataFilePicker(window), exportDialog: new WindowExportDialog(window),

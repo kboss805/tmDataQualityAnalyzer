@@ -13,9 +13,15 @@ namespace TmDq.App.ViewModels
     {
         private readonly CancellationTokenSource _cancel = new();
         private int _progress;
-        private string _text = "Processing...";
+        private string _text;
 
-        public ProcessingViewModel() => CancelCommand = new RelayCommand(Cancel, () => !IsCancelling);
+        /// <param name="text">What the dialog says while the work goes on: the run's "Processing...", or a calibration
+        /// extraction's own words.</param>
+        public ProcessingViewModel(string text = "Processing...")
+        {
+            _text = text;
+            CancelCommand = new RelayCommand(Cancel, () => !IsCancelling);
+        }
 
         /// <summary>0 to 100.</summary>
         public int Progress

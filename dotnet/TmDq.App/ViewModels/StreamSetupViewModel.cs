@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -46,14 +47,40 @@ namespace TmDq.App.ViewModels
         private string _fileMessage = string.Empty;
         private IReadOnlyList<string> _problems = Array.Empty<string>();
 
+        private readonly int _timeChannelId;
+        private readonly bool _swapBytes;
+        private readonly IStreamDialogs? _dialogs;
+        private readonly ICalibrationFilePicker? _calibrationFiles;
+        private IReadOnlyList<CalibrationProfile> _calibration;
+        private string _calCh10Path, _stepTomlPath;
+        private double _clipStartSec, _clipEndSec;
+
         /// <param name="edited">What the dialog opens with: <see cref="StreamRules.ForEditing"/> of the row.</param>
         /// <param name="lastFolder">The folder a settings file was last loaded from or saved to in this session.</param>
-        public StreamSetupViewModel(StreamSetup edited, ISettingsFilePicker? files, string? appRoot, string? lastFolder)
+        /// <param name="timeChannelId">The time channel chosen in Configure Streams, which a calibration is extracted with;
+        /// -1 when the recording has none.</param>
+        /// <param name="swapBytes">The recording's byte order (Legacy Chapter 10 off), which a calibration is read with.</param>
+        /// <param name="dialogs">Shows Extract Calibration and its report; null leaves Apply Cal unavailable.</param>
+        /// <param name="lastCalFolder">The folder a calibration recording was last chosen from in this session.</param>
+        public StreamSetupViewModel(StreamSetup edited, ISettingsFilePicker? files, string? appRoot, string? lastFolder,
+                                    int timeChannelId = -1, bool swapBytes = true, IStreamDialogs? dialogs = null,
+                                    ICalibrationFilePicker? calibrationFiles = null, string? lastCalFolder = null)
         {
             _start = edited;
             _files = files;
             _appRoot = appRoot;
             _lastFolder = lastFolder;
+            _timeChannelId = timeChannelId;
+            _swapBytes = swapBytes;
+            _dialogs = dialogs;
+            _calibrationFiles = calibrationFiles;
+            LastCalFolder = lastCalFolder;
+            _calibration = edited.Calibration;
+            _calCh10Path = edited.CalCh10Path;
+            _stepTomlPath = edited.StepTomlPath;
+            _clipStartSec = edited.ClipStartSec;
+            _clipEndSec = edited.ClipEndSec;
+            ApplyCalCommand = new AsyncRelayCommand(ApplyCalAsync, () => CanApplyCal);
             _receiverParamsToml = edited.ReceiverParamsToml;
             _syncPattern = edited.SyncPattern;
             _syncMask = edited.SyncMask;
@@ -153,6 +180,72 @@ namespace TmDq.App.ViewModels
 
         public IRelayCommand CancelCommand { get; }
 
+        // ---- non-linear step calibration (plan step 4.6, US5.3) ---------------------------------------------------------
+
+        public const string ApplyCalTipText =
+            "Build a non-linear calibration profile from a calibration Chapter 10 file and a step-config TOML. Uses the word " +
+            "map, frame sync, and polarity above plus the time channel from the main dialog. Runtime-only; the profile " +
+            "itself is not saved to disk.";
+
+        /// <summary>Apply Cal opens Extract Calibration: for a Receiver SNR stream whose settings have no problem, in a
+        /// recording with a time channel.</summary>
+        public bool CanApplyCal => _dialogs is not null && IsReceiverSnr && _timeChannelId >= 0 && CanAccept;
+
+        /// <summary>What Apply Cal does, or why it is not available.</summary>
+        public string ApplyCalTip =>
+            !IsReceiverSnr || _dialogs is null ? ApplyCalTipText
+            : _timeChannelId < 0 ? "Select a Time Channel in the Configure Streams dialog before extracting calibration."
+            : !CanAccept ? "Correct the settings above before extracting calibration."
+            : ApplyCalTipText;
+
+        public IAsyncRelayCommand ApplyCalCommand { get; }
+
+        /// <summary>The profiles Apply Cal gave, carried to the row on OK.</summary>
+        public IReadOnlyList<CalibrationProfile> Calibration => _calibration;
+
+        public int CalibratedChannels => _calibration.Count(p => p.Valid);
+
+        /// <summary>Beside Apply Cal, as the Qt dialog says it.</summary>
+        public string CalibrationText => CalibratedChannels == 0
+            ? "(none — using linear calibration)"
+            : string.Create(CultureInfo.InvariantCulture, $"{CalibratedChannels} channel(s) calibrated (non-linear)");
+
+        public bool IsCalibrated => CalibratedChannels > 0;
+
+        /// <summary>The folder a calibration recording was last chosen from, for the next dialog.</summary>
+        public string? LastCalFolder { get; private set; }
+
+        /// <summary>Extract Calibration with the settings as they stand, the time channel and the byte order; on OK, its
+        /// profiles and references are the dialog's, and its report is shown, as the Qt dialog shows it.</summary>
+        private async Task ApplyCalAsync()
+        {
+            if (!CanApplyCal) return;
+            StreamSetup s = ToSetup();
+            var calibrationBase = new CalibrationBase(_timeChannelId, s.PcmChannelId, s.SyncPattern.Trim().ToUpperInvariant(),
+                                                      s.SyncMask.Trim().ToUpperInvariant(), s.BitsInMinorFrame, s.Randomized,
+                                                      s.Inverted, s.DataRateMbps, _swapBytes, s.ReceiverParamsToml,
+                                                      s.NumReceivers, s.ReceiverChannels);
+            var extract = new ExtractCalibrationViewModel(calibrationBase, _appRoot, _stepTomlPath, _calibrationFiles,
+                                                          _lastFolder, LastCalFolder);
+            await _dialogs!.ExtractCalibrationAsync(extract);
+            _lastFolder = extract.StepFolder ?? _lastFolder;
+            LastCalFolder = extract.CalFolder ?? LastCalFolder;
+            if (!extract.Accepted) return;
+
+            _calibration = extract.Profiles;
+            _calCh10Path = extract.CalPath;
+            _stepTomlPath = extract.StepPath;
+            _clipStartSec = extract.ClipStartSec;
+            _clipEndSec = extract.ClipEndSec;
+            OnPropertyChanged(nameof(Calibration));
+            OnPropertyChanged(nameof(CalibratedChannels));
+            OnPropertyChanged(nameof(CalibrationText));
+            OnPropertyChanged(nameof(IsCalibrated));
+            await _dialogs.ShowReportAsync("Calibration Extracted", extract.Report.Length > 0
+                ? extract.Report
+                : string.Create(CultureInfo.InvariantCulture, $"Applied non-linear calibration to {_calibration.Count} channel(s)."));
+        }
+
         /// <summary>The row as the dialog holds it. A field left empty (a spin box cleared) keeps the value it opened with;
         /// <see cref="Problems"/> has already said so.</summary>
         public StreamSetup ToSetup() => _start with
@@ -170,6 +263,11 @@ namespace TmDq.App.ViewModels
             NumReceivers = NumReceivers is decimal n ? (int)n : _start.NumReceivers,
             ReceiverChannels = ReceiverChannels is decimal c ? (int)c : _start.ReceiverChannels,
             ReceiverParamsToml = _receiverParamsToml,
+            Calibration = _calibration,
+            CalCh10Path = _calCh10Path,
+            StepTomlPath = _stepTomlPath,
+            ClipStartSec = _clipStartSec,
+            ClipEndSec = _clipEndSec,
         };
 
         private void Set<T>(ref T field, T value, [System.Runtime.CompilerServices.CallerMemberName] string? name = null)
@@ -193,6 +291,9 @@ namespace TmDq.App.ViewModels
             OnPropertyChanged(nameof(ProblemText));
             OnPropertyChanged(nameof(CanAccept));
             OkCommand?.NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(CanApplyCal));
+            OnPropertyChanged(nameof(ApplyCalTip));
+            ApplyCalCommand?.NotifyCanExecuteChanged();
         }
 
         private void Ok()

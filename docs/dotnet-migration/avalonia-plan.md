@@ -322,10 +322,15 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
   Import CSV and Export are top-bar buttons until 4.8's menu (`export-dialog.png`). The CSV matches the Qt
   application's byte for byte on seven runs over all five committed recordings. US6.0 and US6.1 reworded at the
   user's decision: the image is exactly what the chart shows, the CSV every series every time.
-- [ ] **4.6 Calibration:** Extract Calibration dialog (opened from the Receiver SNR setup dialog) and Apply Cal, clips,
+- [x] **4.6 Calibration** (PR #231): Extract Calibration dialog (opened from the Receiver SNR setup dialog) and Apply Cal, clips,
   the summary report and its warnings, preloaded step file (US5.0 to US5.3). Extraction uses the time channel selected
   in Configure Streams, not the recording's first (a Qt defect, decided in 4.1). A row already carries the calibration
   and its references from 4.1a, and Apply to all copies them.
+  **Done:** Apply Cal and its label in the Receiver SNR setup dialog; Extract Calibration (`ExtractCalibrationWindow`
+  over `ExtractCalibrationViewModel`) with the preloaded step file, the clips, the Qt status lines, the extraction
+  through the core under the progress dialog, and the "Calibration Extracted" report (`extract-calibration.png`,
+  `calibration-report.png`). The selected time channel and the recording's byte order reach the extraction; Apply Cal
+  is unavailable, with its reason, rather than warning in a box.
 - [ ] **4.7 Templates and batch:** Save as Template, Apply Template, Plot File selector, per-file
   export (US1.1). Templates written by the Qt app must load unchanged.
 - [ ] **4.8 The shell:** frameless chrome with **Windows 11 snap layouts** (unverified in Avalonia;

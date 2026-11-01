@@ -29,6 +29,24 @@ namespace TmDq.App.Tests
             if (OnEdit is not null) await OnEdit(vm);
         }
 
+        public Func<ExtractCalibrationViewModel, Task>? OnExtract { get; set; }
+
+        public List<ExtractCalibrationViewModel> Extracted { get; } = new();
+
+        public List<(string Title, string Text)> Reports { get; } = new();
+
+        public async Task ExtractCalibrationAsync(ExtractCalibrationViewModel vm)
+        {
+            Extracted.Add(vm);
+            if (OnExtract is not null) await OnExtract(vm);
+        }
+
+        public Task ShowReportAsync(string title, string text)
+        {
+            Reports.Add((title, text));
+            return Task.CompletedTask;
+        }
+
         /// <summary>A setup dialog answered by changing it with <paramref name="change"/> and pressing OK.</summary>
         public static Func<StreamSetupViewModel, Task> Ok(Action<StreamSetupViewModel>? change = null) => vm =>
         {

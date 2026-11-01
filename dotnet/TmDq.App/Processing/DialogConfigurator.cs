@@ -11,18 +11,21 @@ namespace TmDq.App.Processing
         private readonly IStreamDialogs _dialogs;
         private readonly ISettingsFilePicker? _files;
         private readonly string? _appRoot;
+        private readonly ICalibrationFilePicker? _calibrationFiles;
 
         /// <param name="appRoot">Where settings/ is: the defaults files, and the shipped receiver word map.</param>
-        public DialogConfigurator(IStreamDialogs dialogs, ISettingsFilePicker? files, string? appRoot)
+        /// <param name="calibrationFiles">Extract Calibration's file dialogs.</param>
+        public DialogConfigurator(IStreamDialogs dialogs, ISettingsFilePicker? files, string? appRoot, ICalibrationFilePicker? calibrationFiles = null)
         {
             _dialogs = dialogs;
             _files = files;
             _appRoot = appRoot;
+            _calibrationFiles = calibrationFiles;
         }
 
         public async Task<RunRequest?> ConfigureAsync(string path, Ch10File file)
         {
-            var vm = new ConfigureStreamsViewModel(path, file, _dialogs, _files, _appRoot);
+            var vm = new ConfigureStreamsViewModel(path, file, _dialogs, _files, _appRoot, _calibrationFiles);
             await _dialogs.ConfigureStreamsAsync(vm);
             return vm.Accepted ? vm.ToRunRequest() : null;
         }
