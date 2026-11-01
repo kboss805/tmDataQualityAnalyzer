@@ -753,6 +753,13 @@ namespace TmDq.App.Tests
             Assert.True(RedIn(s, 0, 1, 0.05, 0.20) > 0, "nothing near the series' maximum");
             Assert.True(RedIn(s, 0, 1, 0.80, 0.95) > 0, "nothing near the series' minimum");
             Assert.True(RedIn(s, 0, 1, 0.45, 0.55) > 0, "the mean line is missing from the middle");
+            // Between its edges and the mean, the band is filled in the series' own colour, faded.
+            using (ILockedFramebuffer fb = s.Frame())
+            {
+                Rect a = s.Area;
+                var inside = new Rect(a.X + a.Width * 0.1, a.Y + a.Height * 0.25, a.Width * 0.8, a.Height * 0.15);
+                Assert.True(Frames.Near(fb, inside, PlotColors.Snr[0]) > inside.Width * inside.Height * 0.5, "the band is not filled in the series' colour");
+            }
             s.Window.Close();
         }
 
