@@ -231,7 +231,7 @@ namespace TmDq.App.Plot
                 if (sourceId >= 0 && s.SourceId != sourceId) continue;
                 columns.Add(new CsvColumn(s.Metric, s.Name, s.SourceId, s.X, s.Y));
             }
-            if (columns.Count == 0) return false;
+            // No columns at all is the writer's to refuse, and it writes no file.
             TimeBaseInfo b = _timeBase?.Info ?? new TimeBaseInfo(0, 0.0, 0.0);
             try
             {
@@ -309,7 +309,6 @@ namespace TmDq.App.Plot
             for (int i = 0; i < data.Series.Count; i++)
             {
                 CsvSeries c = data.Series[i];
-                bool left = c.Metric is MetricType.FrameSyncLock or MetricType.AccumulatedMissedFrames;
                 _series.Add(new PlotSeries
                 {
                     Id = _nextId++,
@@ -318,7 +317,7 @@ namespace TmDq.App.Plot
                     Metric = c.Metric,
                     ReceiverIndex = c.ReceiverIndex,
                     ChannelIndex = c.ChannelIndex,
-                    StreamOrder = left ? orders[i] : c.StreamOrder,
+                    StreamOrder = orders[i],   // an SNR series keeps its own; the core gives the others theirs
                     SourceId = c.SourceId,
                     X = c.X,
                     Y = c.Y,

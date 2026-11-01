@@ -151,14 +151,20 @@ namespace TmDq.App.Tests
             return (view, window);
         }
 
+        /// <summary>Pixels of <paramref name="colour"/> in <paramref name="area"/>, as <see cref="Frames.Near"/> counts them: an
+        /// antialiased line is its colour blended with white, so it is the direction away from white that is compared.</summary>
         private static int Near(SKBitmap image, Rect area, Color colour)
         {
+            double cr = 255 - colour.R, cg = 255 - colour.G, cb = 255 - colour.B;
+            double cn = Math.Sqrt(cr * cr + cg * cg + cb * cb);
             int count = 0;
             for (int y = Math.Max(0, (int)area.Top); y < Math.Min(image.Height, (int)area.Bottom); y++)
                 for (int x = Math.Max(0, (int)area.Left); x < Math.Min(image.Width, (int)area.Right); x++)
                 {
                     SKColor p = image.GetPixel(x, y);
-                    if (Math.Abs(p.Red - colour.R) + Math.Abs(p.Green - colour.G) + Math.Abs(p.Blue - colour.B) < 60 && p.Alpha > 200) count++;
+                    double r = 255 - p.Red, g = 255 - p.Green, b = 255 - p.Blue;
+                    double n = Math.Sqrt(r * r + g * g + b * b);
+                    if (p.Alpha > 200 && n > 40 && (r * cr + g * cg + b * cb) / (n * cn) > 0.995) count++;
                 }
             return count;
         }
@@ -210,6 +216,47 @@ namespace TmDq.App.Tests
         }
 
         [AvaloniaFact]
+        public async Task AnImageShowsOnlyWhatTheChartShows()
+        {
+            // A step from 10 to 90 halfway along, in green, and a flat red series at 50, hidden.
+            Color red = Color.FromRgb(200, 0, 0);
+            var plot = new PlotViewModel();
+            plot.SetSeries(new[]
+            {
+                PlotFixtures.Snr(0, "step", 40, 0, 1, 0, new[] { 0.0, 0.99, 1.01, 2.0 }, new[] { 10.0, 10.0, 90.0, 90.0 }),
+                PlotFixtures.Snr(1, "hidden", 40, 0, 2, 0, new[] { 0.0, 2.0 }, new[] { 50.0, 50.0 }),
+            });
+            plot.RecolorSeries(0, LineColour);
+            plot.RecolorSeries(1, red);
+            plot.SetRightMinOverride(0);
+            plot.SetRightMaxOverride(100);
+            plot.SetSeriesVisible(1, false);
+            plot.LegendVisible = false;
+            (PlotView view, Window window) = Show(plot);
+            Rect Row(double value) => new(0, view.Chart.RightToPixel(value) - 3, 600, 6);
+
+            using SKBitmap whole = await PngOf(view);
+            Assert.True(Near(whole, Row(10), LineColour) > 100);
+            Assert.True(Near(whole, Row(90), LineColour) > 100);
+            Assert.Equal(0, Near(whole, new Rect(0, 0, 600, 400), red));   // hidden, so not in the image
+
+            // Zoomed to the first half, the image is that half: the step's top is off the chart, as on screen.
+            plot.SetXViewByUser(0.0, 0.9);
+            Dispatcher.UIThread.RunJobs();
+            using SKBitmap zoomed = await PngOf(view);
+            Assert.True(Near(zoomed, Row(10), LineColour) > 100);
+            Assert.Equal(0, Near(zoomed, Row(90), LineColour));
+
+            // Shown again, the hidden series is drawn.
+            plot.ResetXRange();
+            plot.SetSeriesVisible(1, true);
+            Dispatcher.UIThread.RunJobs();
+            using SKBitmap both = await PngOf(view);
+            Assert.True(Near(both, Row(50), red) > 100);
+            window.Close();
+        }
+
+        [AvaloniaFact]
         public async Task TheCursorsCrosshairIsNotExported()
         {
             (PlotView view, Window window) = Show(LowLine());
@@ -225,7 +272,9 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public async Task AnSvgAndAPdfAreTheChartsSizeAndAnyOtherNameIsAPdf()
         {
-            (PlotView view, Window window) = Show(LowLine());
+            PlotViewModel plot = LowLine();
+            plot.Title = "Pass 3";
+            (PlotView view, Window window) = Show(plot);
             string svg = TempPath(".svg"), pdf = TempPath(".PDF"), other = TempPath(".bogus");
             try
             {
@@ -238,6 +287,8 @@ namespace TmDq.App.Tests
                 string text = Encoding.Latin1.GetString(File.ReadAllBytes(pdf));
                 Assert.StartsWith("%PDF-", text);
                 Assert.Contains("/MediaBox [0 0 600 400]", text);   // the chart's size, in points
+                Assert.Contains("/Title (Pass 3)", text);            // the plot's title, as the document's
+                Assert.Contains("/Creator (tmDataQualityAnalyzer)", text);
 
                 Assert.Equal((other + ".pdf", ImageFormat.Pdf), await PlotImageExport.ExportAsync(view, other));
                 Assert.StartsWith("%PDF-", Encoding.Latin1.GetString(File.ReadAllBytes(other + ".pdf")));
@@ -292,6 +343,16 @@ namespace TmDq.App.Tests
             {
                 Assert.True(plot.ExportCsv(path));
                 Assert.Equal("Time (DOY:HH:MM:SS.mmm),Ch32 Lock (%),Ch32 Accumulated Missed Frames", HeaderOf(path));
+                byte[] everything = File.ReadAllBytes(path);
+
+                // The CSV is the data, not the view (US6.1): the other metric in view, every series hidden, zoomed in,
+                // it is the same file.
+                plot.SetLockAxisView(LockAxisView.MissedFrames);
+                plot.SetSeriesVisible(0, false);
+                plot.SetSeriesVisible(1, false);
+                plot.SetXViewByUser(0.2, 0.4);
+                Assert.True(plot.ExportCsv(path));
+                Assert.Equal(everything, File.ReadAllBytes(path));
 
                 Assert.False(new PlotViewModel().ExportCsv(none));
                 Assert.False(File.Exists(none));
@@ -323,6 +384,15 @@ namespace TmDq.App.Tests
                 Assert.Equal("Time (DOY:HH:MM:SS.mmm),S2| Ch5 Lock (%)", HeaderOf(one));
                 Assert.False(plot.ExportCsv(missing, 7));
                 Assert.False(File.Exists(missing));
+                Assert.True(plot.ExportCsv(one, 0));   // the first source is a source like any other
+                Assert.Equal("Time (DOY:HH:MM:SS.mmm),Ch5 Lock (%)", HeaderOf(one));
+
+                // Read back, each series keeps its source, so it is written qualified again.
+                var imported = new PlotViewModel();
+                Assert.True(imported.LoadCsv(all));
+                Assert.Equal(new[] { 0, 2 }, imported.Series.Select(s => s.SourceId));
+                Assert.True(imported.ExportCsv(one));
+                Assert.Equal(File.ReadAllBytes(all), File.ReadAllBytes(one));
             }
             finally
             {
@@ -370,10 +440,19 @@ namespace TmDq.App.Tests
             try
             {
                 var plot = new PlotViewModel();
-                plot.SetLeftMaxOverride(50);
+                plot.SetSeries(new[] { PlotFixtures.Lock(0, "earlier", 1, 0, X2, X2) });
                 plot.PushXZoom(0.2, 0.4);
+                plot.ReadoutSeriesId = 0;
+                int seriesChanged = 0, hasData = 0;
+                plot.SeriesChanged += (_, _) => seriesChanged++;
+                plot.PropertyChanged += (_, e) => hasData += e.PropertyName == nameof(PlotViewModel.HasData) ? 1 : 0;
                 Assert.True(plot.LoadCsv(path));
                 Assert.Equal(new[] { "A", "A", "B", "40 - X L_RCVR1", "40 - X R_RCVR1" }, plot.Series.Select(s => s.Name));
+                // Shown at once: the chart, the legend and Export are told; the pin to a series now gone is dropped.
+                Assert.Equal((1, 1), (seriesChanged, hasData));
+                Assert.Null(plot.ReadoutSeriesId);
+                Assert.All(plot.Series, s => Assert.True(s.SortedX));
+                Assert.Equal((10.0, 25.0), (plot.RightMin, plot.RightMax));   // the SNR shown, to 5 dB
                 // The clock is the file's: the second row is two seconds on, across midnight.
                 Assert.Equal(new[] { 0.0, 2.0 }, plot.Series[0].X);
                 Assert.Equal("001:23:59:59", plot.FormatTime(0));
@@ -703,6 +782,57 @@ namespace TmDq.App.Tests
             }
         }
 
+        private sealed class WaitingConfigurator : IStreamConfigurator
+        {
+            public readonly TaskCompletionSource<RunRequest?> Answer = new();
+
+            public Task<RunRequest?> ConfigureAsync(string path, Ch10File file) => Answer.Task;
+        }
+
+        [Fact]
+        public async Task WhileBusyNeitherImportNorExportStartsAndBothAreToldWhenItEnds()
+        {
+            string csv = WriteCsv(TwoStreams);
+            try
+            {
+                // Configure Streams up over a plot that has data: Export must wait too, though there is data to export.
+                var configurator = new WaitingConfigurator();
+                var vm = new MainWindowViewModel(configurator: configurator, files: new FakeFiles(), exportDialog: new FakeExportDialog());
+                vm.Plot.SetSeries(new[] { PlotFixtures.Lock(0, "earlier", 1, 0, X2, X2) });
+                int import = 0, export = 0;
+                vm.ImportCsvCommand.CanExecuteChanged += (_, _) => import++;
+                vm.ExportCommand.CanExecuteChanged += (_, _) => export++;
+                string recording = Repo.Recording("prn_testfile, sample.ch10");
+                Task open = vm.LoadAsync(recording);
+                while (!open.IsCompleted && vm.Log.Entries.All(e => !e.Text.StartsWith("  PCM channels", StringComparison.Ordinal))) await Task.Delay(10, TestContext.Current.CancellationToken);
+                Assert.True(vm.IsBusy);
+                Assert.Equal(Path.GetDirectoryName(recording), vm.LastFolder);   // where Export and Import CSV will start
+                Assert.False(vm.ImportCsvCommand.CanExecute(null));
+                Assert.False(vm.ExportCommand.CanExecute(null));
+                Assert.True((import, export) is ( > 0, > 0), $"told {import} and {export} times");
+                int lines = vm.Log.Entries.Count;
+                await vm.ImportCsvAsync(csv);   // ignored while busy
+                Assert.Equal(lines, vm.Log.Entries.Count);
+
+                configurator.Answer.SetResult(null);
+                await open;
+                Assert.True(vm.ImportCsvCommand.CanExecute(null));
+                Assert.True(vm.ExportCommand.CanExecute(null));
+                Assert.True((import, export) is ( > 1, > 1), $"told {import} and {export} times");
+
+                // A CSV being read keeps both waiting too.
+                Task reading = vm.ImportCsvAsync(csv);
+                Assert.True(vm.IsBusy);
+                Assert.False(vm.ImportCsvCommand.CanExecute(null));
+                await reading;
+                Assert.True(vm.ImportCsvCommand.CanExecute(null));
+            }
+            finally
+            {
+                TempFiles.Delete(csv);
+            }
+        }
+
         [Fact]
         public async Task ExportIsOfferedWithDataAndProposesThePlotsTitleInTheLastFolder()
         {
@@ -718,6 +848,9 @@ namespace TmDq.App.Tests
                 Assert.True(vm.ExportCommand.CanExecute(null));
                 Assert.True(changes > 0);
                 Assert.False(new MainWindowViewModel().ExportCommand.CanExecute(null));
+                var noDialog = new MainWindowViewModel();
+                noDialog.Plot.SetSeries(new[] { PlotFixtures.Lock(0, "a", 1, 0, X2, X2) });
+                Assert.False(noDialog.ExportCommand.CanExecute(null));   // data, but no dialog to ask with
 
                 int before = vm.Log.Entries.Count;
                 await vm.ExportCommand.ExecuteAsync(null);   // cancelled
@@ -815,6 +948,13 @@ namespace TmDq.App.Tests
                 await vm.ExportAsync(choice);
                 Assert.Equal(new[] { "Error Error: Failed to export log to " + nowhere + ".txt" }, LinesOf(vm, before));
 
+                // With nothing to draw the image, it is a failure, not a success.
+                var noImages = new MainWindowViewModel();
+                await noImages.ImportCsvAsync(csv);
+                before = noImages.Log.Entries.Count;
+                await noImages.ExportAsync(new ExportViewModel(Path.Combine(folder, "n.png"), "n.csv", "n.txt"));
+                Assert.Equal(new[] { "Error Error: Failed to export plot to " + Path.Combine(folder, "n.png") }, LinesOf(noImages, before));
+
                 // Without data, nothing is written.
                 var empty = new MainWindowViewModel(imageExporter: new FakeImages());
                 before = empty.Log.Entries.Count;
@@ -839,8 +979,16 @@ namespace TmDq.App.Tests
                 var dialog = new FakeExportDialog { Answer = vm => vm.ExportCommand.Execute(null) };
                 var vm = new MainWindowViewModel(exportDialog: dialog, imageExporter: images);
                 await vm.ImportCsvAsync(csv);
+                File.SetLastWriteTimeUtc(csv, new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+                int before = vm.Log.Entries.Count;
                 await vm.ExportCommand.ExecuteAsync(null);
+                // The dialog as it opens: the image alone. Only the image is written (the data's default name is the
+                // imported file's own, which is left as it was).
                 Assert.Equal(new[] { dialog.Shown!.ImagePath }, images.Asked);
+                Assert.Equal(new[] { "Success Plot exported as PNG to " + dialog.Shown.ImagePath }, LinesOf(vm, before));
+                Assert.Equal(csv, dialog.Shown.DataPath);
+                Assert.Equal(2020, File.GetLastWriteTimeUtc(csv).Year);
+                Assert.False(File.Exists(dialog.Shown.LogPath));
                 TempFiles.Delete(ImageFiles.Resolve(dialog.Shown.ImagePath).Path);
             }
             finally
@@ -881,6 +1029,11 @@ namespace TmDq.App.Tests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal((false, true), (vm.ExportImage, vm.ExportData));
             Assert.Equal((false, true), (image.IsEnabled, data.IsEnabled));
+            // Each Browse is its row's, and follows its box.
+            Button imageBrowse = window.FindControl<Button>("ImageBrowse")!, dataBrowse = window.FindControl<Button>("DataBrowse")!;
+            Assert.Equal((vm.BrowseImageCommand, vm.BrowseDataCommand, vm.BrowseLogCommand),
+                         (imageBrowse.Command, dataBrowse.Command, window.FindControl<Button>("LogBrowse")!.Command));
+            Assert.Equal((false, true), (imageBrowse.IsEffectivelyEnabled, dataBrowse.IsEffectivelyEnabled));
             data.Text = "";
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("", vm.DataPath);

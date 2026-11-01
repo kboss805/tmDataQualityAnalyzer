@@ -313,9 +313,15 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
   chart has focus; Customize View (`CustomizeViewWindow` over `CustomizeViewModel`), applied only on OK
   (`plot-chips-legend.png`, `plot-menu.png`, `customize-view.png`). The colour dialog is Avalonia's `ColorView`, a new
   MIT package. The legend's state across sessions is 4.8's; export and the legend in images are 4.5's.
-- [ ] **4.5 Export and import:** CSV, PNG/SVG/PDF with the legend composited, log export, CSV import
+- [x] **4.5 Export and import** (PR #230): CSV, PNG/SVG/PDF with the legend composited, log export, CSV import
   with its rejections (US6.0 to US6.3). Oracle: byte-identical CSV against the Qt app on every
   fixture.
+  **Done:** the Export dialog (`ExportWindow` over `ExportViewModel`), the image from one Skia routine for all three
+  formats with the legend at its place (`PlotImageExport`), the CSV both ways through the core
+  (`PlotViewModel.ExportCsv` and `LoadCsv`), the log as text, and Import CSV with the Qt messages and "Loading...";
+  Import CSV and Export are top-bar buttons until 4.8's menu (`export-dialog.png`). The CSV matches the Qt
+  application's byte for byte on seven runs over all five committed recordings. US6.0 and US6.1 reworded at the
+  user's decision: the image is exactly what the chart shows, the CSV every series every time.
 - [ ] **4.6 Calibration:** Extract Calibration dialog (opened from the Receiver SNR setup dialog) and Apply Cal, clips,
   the summary report and its warnings, preloaded step file (US5.0 to US5.3). Extraction uses the time channel selected
   in Configure Streams, not the recording's first (a Qt defect, decided in 4.1). A row already carries the calibration
