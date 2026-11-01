@@ -680,7 +680,7 @@ namespace TmDq.App.Tests
             var vm = new MainWindowViewModel(clock: new StoppedClock());
             MainWindow window = Shown(new MainWindow { DataContext = vm });
             Control panel = window.FindControl<Control>("LogPanel")!;
-            Control chart = window.FindControl<Control>("Chart")!;
+            Control chart = window.FindControl<PlotView>("PlotView")!;
             Rect p = Frames.InWindow(panel, window), c = Frames.InWindow(chart, window);
             Assert.True(p.Right <= c.Left, $"the log ({p}) is not left of the chart ({c})");
             Assert.InRange(p.Width, 400, 410);

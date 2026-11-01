@@ -4,5 +4,7 @@
              RequestedThemeVariant="Default">
   <Application.Styles>
     <FluentTheme />
+    <!-- Customize View's colour dialog (plan step 4.4). -->
+    <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
   </Application.Styles>
 </Application>

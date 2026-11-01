@@ -298,7 +298,7 @@ namespace TmDq.App.Tests
             var window = new MainWindow { DataContext = vm };
             window.Show();
             Dispatcher.UIThread.RunJobs();
-            PlotChart chart = window.FindControl<PlotChart>("Chart")!;
+            PlotChart chart = window.FindControl<PlotView>("PlotView")!.Chart;
             Assert.Same(vm.Plot, chart.Plot);
             Rect area = Frames.InWindow(chart, window);
             Rect plot = new Rect(area.X + chart.PlotArea.X + 2, area.Y + chart.PlotArea.Y + 2, chart.PlotArea.Width - 4, chart.PlotArea.Height - 4);

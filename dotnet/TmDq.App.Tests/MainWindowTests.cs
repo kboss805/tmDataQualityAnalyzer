@@ -49,7 +49,7 @@ namespace TmDq.App.Tests
             // Session 0, no desktop) it is the proof that the headless platform really renders there.
             MainWindow window = Show();
             TextBlock label = window.FindControl<TextBlock>("VersionLabel")!;
-            Control chart = window.FindControl<Control>("Chart")!;
+            Control chart = window.FindControl<PlotView>("PlotView")!.Chart;
             using ILockedFramebuffer fb = Frames.Capture(window).Lock();
             Rect chartArea = Frames.InWindow(chart, window);
             uint background = Frames.Pixel(fb, (int)chartArea.Center.X, (int)chartArea.Center.Y);
