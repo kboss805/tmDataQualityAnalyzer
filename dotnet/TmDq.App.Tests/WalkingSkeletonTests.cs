@@ -205,6 +205,8 @@ namespace TmDq.App.Tests
             Assert.NotNull(vm.Series);
             await vm.LoadAsync(Repo.Recording("step_cal, example.ch10"));
             Assert.Null(vm.Series);
+            Assert.False(vm.Plot.HasData);
+            Assert.Equal(TmDq.App.Plot.PlotViewModel.DefaultTitle, vm.Plot.Title);
         }
 
         [Fact]
@@ -296,92 +298,31 @@ namespace TmDq.App.Tests
             var window = new MainWindow { DataContext = vm };
             window.Show();
             Dispatcher.UIThread.RunJobs();
-            LockChart chart = window.FindControl<LockChart>("Chart")!;
+            PlotChart chart = window.FindControl<PlotChart>("Chart")!;
+            Assert.Same(vm.Plot, chart.Plot);
             Rect area = Frames.InWindow(chart, window);
-            Rect plot = area.Deflate(LockChart.PlotInset + 2);
+            Rect plot = new Rect(area.X + chart.PlotArea.X + 2, area.Y + chart.PlotArea.Y + 2, chart.PlotArea.Width - 4, chart.PlotArea.Height - 4);
 
             int before;
             uint background;
             using (ILockedFramebuffer fb = Frames.Capture(window).Lock())
             {
-                background = Frames.Pixel(fb, (int)area.Center.X, (int)area.Center.Y);
+                background = Frames.Pixel(fb, (int)plot.Center.X, (int)plot.Center.Y);
                 before = Frames.CountDifferent(fb, plot, background);
             }
 
             await vm.LoadAsync(Prn);
             Dispatcher.UIThread.RunJobs();
-            Assert.Same(vm.Series, chart.Series);
+            Assert.True(vm.Plot.HasData);
+            Assert.Equal("prn_testfile, sample", vm.Plot.Title);
             int after;
             using (ILockedFramebuffer fb = Frames.Capture(window).Lock())
                 after = Frames.CountDifferent(fb, plot, background);
 
+            // An empty chart is a frame with nothing inside; 116 points across the plot are a line hundreds of pixels long.
             Assert.Equal(0, before);
-            // 116 points across the plot: a line hundreds of pixels long.
             Assert.True(after > 500, $"only {after} pixels of the plot were drawn");
             window.Close();
-        }
-
-        [AvaloniaFact]
-        public void TheChartDrawsNothingWithoutASeriesOrWithOnePoint()
-        {
-            var chart = new LockChart { Width = 400, Height = 300 };
-            var window = new Window { Content = chart, SizeToContent = SizeToContent.WidthAndHeight };
-            window.Show();
-            Dispatcher.UIThread.RunJobs();
-            Rect area = Frames.InWindow(chart, window);
-            uint background;
-            using (ILockedFramebuffer fb = Frames.Capture(window).Lock())
-            {
-                background = Frames.Pixel(fb, 1, 1);
-                Assert.Equal(0, Frames.CountDifferent(fb, area, background));
-            }
-            chart.Series = new LockSeries("one", 1, new[] { 5.0 }, new[] { 50.0 });
-            Dispatcher.UIThread.RunJobs();
-            using (ILockedFramebuffer fb = Frames.Capture(window).Lock())
-                Assert.Equal(0, Frames.CountDifferent(fb, area, background));
-            window.Close();
-        }
-
-        [AvaloniaFact]
-        public void OneHundredPercentIsDrawnAtTheTopAndZeroAtTheBottom()
-        {
-            // The line's own colour, found in a band at the top of the plot and not at the bottom, and the other way
-            // round: counting drawn pixels alone could not tell the chart is upside down.
-            var chart = new LockChart { Width = 400, Height = 300 };
-            var window = new Window { Content = chart, SizeToContent = SizeToContent.WidthAndHeight };
-            window.Show();
-            Dispatcher.UIThread.RunJobs();
-            Rect area = Frames.InWindow(chart, window);
-            Rect plot = area.Deflate(LockChart.PlotInset);
-            Rect top = new Rect(plot.Left + 10, plot.Top - 3, plot.Width - 20, 6);
-            Rect bottom = new Rect(plot.Left + 10, plot.Bottom - 3, plot.Width - 20, 6);
-
-            (int Top, int Bottom) LineIn(double percent)
-            {
-                chart.Series = new LockSeries("flat", 1, new[] { 0.0, 1.0, 2.0 }, new[] { percent, percent, percent });
-                Dispatcher.UIThread.RunJobs();
-                using ILockedFramebuffer fb = Frames.Capture(window).Lock();
-                return (Purple(fb, top), Purple(fb, bottom));
-            }
-            var full = LineIn(100);
-            var none = LineIn(0);
-            Assert.True(full.Top > 100 && full.Bottom == 0, $"100 %: {full.Top} line pixels at the top, {full.Bottom} at the bottom");
-            Assert.True(none.Bottom > 100 && none.Top == 0, $"0 %: {none.Top} line pixels at the top, {none.Bottom} at the bottom");
-            window.Close();
-        }
-
-        /// <summary>Pixels in <paramref name="area"/> clearly of the line's purple (strong blue, more red than green).</summary>
-        private static int Purple(ILockedFramebuffer fb, Rect area)
-        {
-            int count = 0;
-            for (int y = (int)area.Top; y < (int)area.Bottom; y++)
-                for (int x = (int)area.Left; x < (int)area.Right; x++)
-                {
-                    uint p = Frames.Pixel(fb, x, y);
-                    int r = (int)(p >> 16) & 0xFF, g = (int)(p >> 8) & 0xFF, b = (int)p & 0xFF;
-                    if (b > 150 && r > g + 30) count++;
-                }
-            return count;
         }
 
         [Fact]

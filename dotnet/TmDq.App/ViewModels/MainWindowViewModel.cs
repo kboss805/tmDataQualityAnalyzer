@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TmDq.App.Logging;
+using TmDq.App.Plot;
 using TmDq.App.Processing;
 using TmDq.App.Services;
 using TmDq.Core;
@@ -16,8 +17,8 @@ namespace TmDq.App.ViewModels
 {
     /// <summary>The main window's state: open a recording, ask what to process (Configure Streams, plan step 4.1; with no
     /// one to ask, the first PCM channel with the Frame Sync Lock defaults, as the walking skeleton did), process it and
-    /// show the lock percentage, with the progress dialog up for the run and every step in the log (plan step 4.2). The
-    /// chart is still the skeleton's; plan step 4.3 builds the real one.</summary>
+    /// plot it (plan step 4.3b: <see cref="Plot"/>), with the progress dialog up for the run and every step in the log
+    /// (plan step 4.2).</summary>
     public sealed partial class MainWindowViewModel : ObservableObject
     {
         private readonly IRecordingPicker? _picker;
@@ -50,6 +51,9 @@ namespace TmDq.App.ViewModels
 
         /// <summary>The log sidebar's contents.</summary>
         public SessionLog Log { get; }
+
+        /// <summary>What the chart draws: every stream processed, on one time axis.</summary>
+        public PlotViewModel Plot { get; } = new();
 
         /// <summary>The progress dialog's state while a recording is processed; null otherwise.</summary>
         public ProcessingViewModel? Processing
@@ -131,9 +135,12 @@ namespace TmDq.App.ViewModels
                 }
                 Show(Array.Empty<LockSeries>());
                 Status = $"Processing {name} ...";
-                RunOutcome outcome = await RunWithDialogAsync(request);
+                using RunOutcome outcome = await RunWithDialogAsync(request);
                 Progress = 100;
                 Show(outcome.Streams.Where(s => s.Mode == StreamMode.FrameSyncLock).Select(LockSeries.Of).ToList());
+                // The core builds each stream's series, in table order, on one shared time axis.
+                foreach (StreamResult result in outcome.Results) Plot.AddStream(result);
+                Plot.Title = BaseName(name);
                 Status = Describe(name, outcome);
                 Log.Success("Processing complete — results plotted from memory.");
             }
@@ -209,8 +216,17 @@ namespace TmDq.App.ViewModels
             }
         }
 
+        /// <summary>A file name as the plot's title takes it, the Qt <c>QFileInfo::baseName</c>: up to its first dot.</summary>
+        public static string BaseName(string fileName)
+        {
+            int dot = fileName.IndexOf('.');
+            return dot < 0 ? fileName : fileName[..dot];
+        }
+
         private void Show(IReadOnlyList<LockSeries> series)
         {
+            // An empty run summary is a new run, or one that failed: the plot is cleared with it.
+            if (series.Count == 0) Plot.Clear();
             AllSeries = series;
             Series = series.Count > 0 ? series[0] : null;
         }
