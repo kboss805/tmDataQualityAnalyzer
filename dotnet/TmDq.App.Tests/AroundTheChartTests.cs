@@ -81,6 +81,10 @@ namespace TmDq.App.Tests
             Assert.Equal("CH40 L_RCVR3", rows[1].Label);
             Assert.Equal("40 - CH-01 2250.5MHZ AGC 800Kbps RNRZ-L L_RCVR3", rows[1].FullName);
             Assert.Equal(plot.Series[2].Color, rows[1].Color);
+            // Missed frames made visible by hand in the lock view are not listed either.
+            plot.Series[1].Visible = true;
+            Assert.Equal(new[] { 0, 2 }, plot.LegendEntries().Select(r => r.Id));
+            plot.Series[1].Visible = false;
 
             plot.SetLockAxisView(LockAxisView.MissedFrames);
             Assert.Equal(new[] { 1, 2 }, plot.LegendEntries().Select(r => r.Id));
@@ -128,6 +132,10 @@ namespace TmDq.App.Tests
             plot.ApplyTimeWindow(1.5, 0.5, "x", "y");
             Assert.Equal(new[] { "Stop time is before Start - clamped to start time." }, warnings);
             Assert.Equal((1.5, 1.5), (plot.XViewMin, plot.XViewMax));
+            // A stop equal to the start is not before it.
+            warnings.Clear();
+            plot.ApplyTimeWindow(1.0, 1.0, "x", "x");
+            Assert.Empty(warnings);
 
             // Without data nothing happens.
             var empty = new PlotViewModel();
@@ -149,7 +157,7 @@ namespace TmDq.App.Tests
             Assert.Equal(3600, plot.ParseTime("000:01:xx:00"));
             Assert.Equal(60, plot.ParseTime("000:00:01:1.5"));
             Assert.Equal(0, plot.ParseTime("01:02:03"));
-            Assert.Equal(0, plot.ParseTime("0:0:0:0:0"));
+            Assert.Equal(0, plot.ParseTime("0:0:0:1:0"));
 
             // Against a recording's clock: a label of the axis reads back as its time.
             var real = new PlotViewModel();
@@ -229,8 +237,20 @@ namespace TmDq.App.Tests
             lockOnly.ToggleViewMode();
             Assert.Equal(LockAxisView.LockPercent, lockOnly.LockAxisView);
             Assert.False(new PlotViewModel().CanSwitchViewMode);
+            // Missed frames alone (an imported CSV can carry them without the lock column): nothing to switch to either.
+            var missedOnly = new PlotViewModel();
+            missedOnly.SetSeries(new[] { PlotFixtures.Missed(0, "a", 1, 0, X3, X3) });
+            Assert.False(missedOnly.HasLockSeries);
+            Assert.True(missedOnly.HasMissedFramesSeries);
+            Assert.False(missedOnly.CanSwitchViewMode);
 
             Assert.False(plot.CanResetView);
+            // Zoomed at either end alone is zoomed.
+            plot.SetXViewByUser(0.0, 1.5);
+            Assert.True(plot.IsZoomed);
+            plot.SetXViewByUser(0.5, 2.0);
+            Assert.True(plot.IsZoomed);
+            plot.ResetXRange();
             plot.SetXViewByUser(0.5, 1.5);
             Assert.True(plot.IsZoomed);
             Assert.True(plot.CanResetView);
@@ -244,7 +264,10 @@ namespace TmDq.App.Tests
             plot.ResetView();
             Assert.Equal((0.0, 2.0), (plot.XViewMin, plot.XViewMax));
             Assert.False(plot.HasRangeOverride);
-            Assert.False(new PlotViewModel().CanResetView);
+            // A limit set with nothing shown is nothing to reset.
+            var empty = new PlotViewModel();
+            empty.SetRightMaxOverride(24);
+            Assert.False(empty.CanResetView);
         }
 
         [Fact]
@@ -252,14 +275,22 @@ namespace TmDq.App.Tests
         {
             var plot = new PlotViewModel();
             PlotSeries otherSource = PlotFixtures.Make(6, "Ch 5", MetricType.FrameSyncLock, 5, 2, X3, X3, source: 1);
-            plot.SetSeries(LockStream(0, "Ch 5", 5, 0).Concat(LockStream(2, "Ch 6", 6, 1)).Append(Snr(4, 40, 3, 1, 0)).Append(Snr(5, 40, 3, 1, 1)).Append(otherSource));
+            PlotSeries sameNameElsewhere = PlotFixtures.Lock(7, "Ch 5", 7, 4, X3, X3);
+            PlotSeries otherNameSameChannel = PlotFixtures.Missed(8, "Ch 5b", 5, 4, X3, X3);
+            PlotSeries snrSameStream = PlotFixtures.Make(9, "Ch 5", MetricType.Snr, 5, 4, X3, X3);
+            plot.SetSeries(LockStream(0, "Ch 5", 5, 0).Concat(LockStream(2, "Ch 6", 6, 1)).Append(Snr(4, 40, 3, 1, 0)).Append(Snr(5, 40, 3, 1, 1))
+                .Append(otherSource).Append(sameNameElsewhere).Append(otherNameSameChannel).Append(snrSameStream));
             plot.RenameSeries(0, "renamed");
             plot.RecolorSeries(0, Colors.Teal);
             Assert.Equal(new[] { "renamed", "renamed", "Ch 6", "Ch 6" }, plot.Series.Take(4).Select(s => s.Name));
             Assert.Equal(new[] { Colors.Teal, Colors.Teal }, plot.Series.Take(2).Select(s => s.Color));
             Assert.NotEqual(Colors.Teal, plot.Series[2].Color);
-            Assert.Equal("Ch 5", plot.SeriesById(6)!.Name);   // the same stream of another recording
-            Assert.NotEqual(Colors.Teal, plot.SeriesById(6)!.Color);
+            // A sibling is the same stream exactly: its label, its channel, its recording, and on the left axis.
+            foreach ((int id, string name) in new[] { (6, "Ch 5"), (7, "Ch 5"), (8, "Ch 5b"), (9, "Ch 5") })
+            {
+                Assert.Equal(name, plot.SeriesById(id)!.Name);
+                Assert.NotEqual(Colors.Teal, plot.SeriesById(id)!.Color);
+            }
 
             // An SNR channel alone.
             plot.RenameSeries(4, "left");
@@ -294,19 +325,25 @@ namespace TmDq.App.Tests
         [Fact]
         public void AQuietBatchOfVisibilityIsShownByOneRefresh()
         {
-            PlotViewModel plot = SnrOnly(2);
+            var plot = new PlotViewModel();
+            plot.SetSeries(new[]
+            {
+                PlotFixtures.Snr(0, "low", 40, 0, 1, 0, X3, new[] { 10.0, 12.0, 14.0 }),
+                PlotFixtures.Snr(1, "high", 40, 0, 2, 0, X3, new[] { 40.0, 45.0, 50.0 }),
+            });
+            double before = plot.RightMin;
             int series = 0, ranges = 0;
             plot.SeriesChanged += (_, _) => series++;
             plot.RangesChanged += (_, _) => ranges++;
             plot.SetSeriesVisibleQuiet(0, false);
             plot.SetSeriesVisibleQuiet(99, false);
             Assert.Equal((0, 0), (series, ranges));
-            Assert.Equal(40.0, plot.RightMin);   // not yet recomputed
+            Assert.Equal(before, plot.RightMin);   // not yet recomputed
+            Assert.True(before <= 10.0);
             plot.CommitAppearance();
             Assert.Equal((1, 1), (series, ranges));
-            Assert.Equal(40.0, plot.RightMin);
+            Assert.True(plot.RightMin > 14.0, $"the SNR range still starts at {plot.RightMin} without the hidden series");
             Assert.False(plot.Series[0].Visible);
-            Assert.Equal(50.0, plot.RightMax);
         }
 
         // ---- the commands behind the menu ---------------------------------------------------------------------------
@@ -466,14 +503,26 @@ namespace TmDq.App.Tests
             Assert.False(plot.Series[0].Visible);
         }
 
+        [Fact]
+        public async Task TheDialogsOwnQuestionsAreAskedThroughWhatItIsGiven()
+        {
+            var c = new CustomizeViewModel(LockPlot(), new FakePrompts());
+            var own = new FakePrompts();
+            own.Answers.Enqueue(Colors.Teal);
+            c.AskThrough(own);
+            await c.LockRows[0].PickColorCommand.ExecuteAsync(null);
+            Assert.Equal(Colors.Teal, c.LockRows[0].Color);
+        }
+
         // ---- Customize View's state ---------------------------------------------------------------------------------
 
         private static PlotViewModel Mixed()
         {
             var plot = new PlotViewModel();
             var series = new List<PlotSeries>();
-            series.AddRange(LockStream(0, "Ch 6", 6, 1));
-            series.AddRange(LockStream(2, "Ch 5", 5, 0));
+            // Ch 6 comes first in the plot, but its channel is after Ch 5's.
+            series.AddRange(LockStream(0, "Ch 6", 6, 0));
+            series.AddRange(LockStream(2, "Ch 5", 5, 1));
             // Stream 40: three receivers of three channels, given out of channel order.
             int id = 10;
             foreach (int r in new[] { 1, 2, 3 })
@@ -512,6 +561,15 @@ namespace TmDq.App.Tests
             Assert.Equal(true, s40.LeftReceivers[0].IsChecked);
             Assert.Equal("CH 40 — 40 - CH-01 2250.5MHZ AGC C_RCVR1", s40.ToString());
 
+            // A stream is checked when any of its series is shown, its missed frames as much as its lock; a hidden SNR
+            // channel is unchecked, and its receiver partly checked.
+            plot.SetLockAxisView(LockAxisView.MissedFrames);   // Ch 6 now shows only its missed frames
+            plot.SetSeriesVisible(18, false);                  // RCVR 3's channel R
+            var again = new CustomizeViewModel(plot, new FakePrompts());
+            Assert.True(again.LockRows[1].IsChecked);
+            Assert.False(again.SnrStreams[0].RightReceivers[0].Channels[1].IsChecked);
+            Assert.Null(again.SnrStreams[0].RightReceivers[0].IsChecked);
+
             var none = new CustomizeViewModel(LockPlot(), new FakePrompts());
             Assert.False(none.HasSnrStreams);
             Assert.Null(none.SelectedSnrStream);
@@ -546,10 +604,11 @@ namespace TmDq.App.Tests
         public void SelectAllAndNoneAndExpandActOnTheirTabAndTheStreamShown()
         {
             var c = new CustomizeViewModel(Mixed(), new FakePrompts());
-            c.SelectNoneLockCommand.Execute(null);
-            Assert.All(c.LockRows, r => Assert.False(r.IsChecked));
+            Assert.Equal(new[] { false, true }, c.LockRows.Select(r => r.IsChecked));   // each way to start with
             c.SelectAllLockCommand.Execute(null);
             Assert.All(c.LockRows, r => Assert.True(r.IsChecked));
+            c.SelectNoneLockCommand.Execute(null);
+            Assert.All(c.LockRows, r => Assert.False(r.IsChecked));
 
             c.SelectNoneSnrCommand.Execute(null);
             Assert.All(c.SnrStreams[0].Receivers.SelectMany(r => r.Channels), ch => Assert.False(ch.IsChecked));
@@ -570,8 +629,10 @@ namespace TmDq.App.Tests
             Assert.All(c.SnrStreams[1].Receivers, r => Assert.False(r.IsExpanded));
             Assert.Equal("Collapse All", c.ExpandText);
             Assert.Contains(nameof(CustomizeViewModel.ExpandText), said);
-            c.SnrStreams[0].LeftReceivers[0].IsExpanded = false;   // one collapsed by hand
+            said.Clear();
+            c.SnrStreams[0].LeftReceivers[0].IsExpanded = false;   // one collapsed by hand, as its expander does
             Assert.Equal("Expand All", c.ExpandText);
+            Assert.Contains(nameof(CustomizeViewModel.ExpandText), said);
             c.ToggleExpandCommand.Execute(null);
             Assert.All(c.SnrStreams[0].Receivers, r => Assert.True(r.IsExpanded));
             c.ToggleExpandCommand.Execute(null);
@@ -591,18 +652,24 @@ namespace TmDq.App.Tests
             c.LockRows[0].IsChecked = true;    // Ch 5
             c.LockRows[1].IsChecked = false;   // Ch 6
             c.LockRows[0].Name = "Five";
+            var rowSaid = new List<string?>();
+            c.LockRows[0].PropertyChanged += (_, e) => rowSaid.Add(e.PropertyName);
             prompts.Answers.Enqueue(Colors.Teal);
             await c.LockRows[0].PickColorCommand.ExecuteAsync(null);
             Assert.Equal(plot.SeriesById(2)!.Color, prompts.LastColor);   // the dialog opens on the stream's colour
             Assert.Equal(Colors.Teal, ((ISolidColorBrush)c.LockRows[0].Brush).Color);
+            Assert.Contains(nameof(LockStreamRow.Brush), rowSaid);   // the swatch repaints
             await c.LockRows[1].PickColorCommand.ExecuteAsync(null);   // cancelled
             Assert.Equal(plot.SeriesById(0)!.Color, c.LockRows[1].Color);
 
             ChannelItem ch = c.SnrStreams[0].LeftReceivers[0].Channels[0];
             ch.IsChecked = false;
+            var chSaid = new List<string?>();
+            ch.PropertyChanged += (_, e) => chSaid.Add(e.PropertyName);
             prompts.Answers.Enqueue("renamed");
             await ch.RenameCommand.ExecuteAsync(null);
             Assert.Equal("renamed", ch.ToolTip);
+            Assert.Contains(nameof(ChannelItem.ToolTip), chSaid);
             prompts.Answers.Enqueue(Colors.Olive);
             await ch.RecolorCommand.ExecuteAsync(null);
             Assert.Equal(Colors.Olive, ((ISolidColorBrush)ch.Brush).Color);
@@ -794,6 +861,7 @@ namespace TmDq.App.Tests
             Assert.Equal(plot.Series[2].Color, ((ISolidColorBrush)swatch.Background!).Color);
             Assert.Equal("CH-02 PRN 15 20M", Assert.IsType<TextBlock>(row.Children[1]).Text);
             Assert.Null(ToolTip.GetTip(row));   // its label is its whole name
+            Assert.Equal(3, Frames.InWindow(legend.Rows[1], s.Window).Top - Frames.InWindow(legend.Rows[0], s.Window).Bottom, 6);
 
             plot.SetSeries(new[] { Snr(0, 40, 0, 3, 0, "40 - CH-01 2250.5MHZ AGC 800Kbps RNRZ-L L_RCVR3") });
             Dispatcher.UIThread.RunJobs();
@@ -815,23 +883,35 @@ namespace TmDq.App.Tests
             Shown s = Show(plot);
             PlotLegend legend = s.View.Legend;
             Assert.Equal(48, legend.RowCount);
-            Assert.Equal(400 * PlotLegend.MaxHeightFraction, legend.Bounds.Height, 6);
+            Assert.Equal(240, legend.Bounds.Height, 6);   // 60 % of the chart's 400
             Assert.True(legend.Scroll.Extent.Height > legend.Scroll.Viewport.Height);
             ScrollBar bar = legend.GetVisualDescendants().OfType<ScrollBar>().Single(b => b.Orientation == Orientation.Vertical);
             Assert.True(bar.IsVisible);
+            Assert.False(legend.Scroll.AllowAutoHide);   // always shown, as the Qt one is
             Rect barBox = Frames.InWindow(bar, s.Window);
-            Assert.True(barBox.Width > 0);
+            Assert.Equal(PlotLegend.ScrollGutter, barBox.Width, 6);   // the theme's bar fills the gutter left for it
             foreach (Control row in legend.Rows)
             {
                 Rect text = Frames.InWindow(((StackPanel)row).Children[1], s.Window);
                 Assert.True(text.Right <= barBox.Left, $"a label ends at {text.Right}, under the scroll bar at {barBox.Left}");
             }
 
+            // A drag on the scroll bar scrolls the rows and leaves the legend where it is.
+            Point at = legend.Position;
+            Rect thumb = Frames.InWindow(bar.GetVisualDescendants().OfType<Thumb>().Single(), s.Window);
+            s.Window.MouseDown(thumb.Center, MouseButton.Left, RawInputModifiers.None);
+            s.Window.MouseMove(thumb.Center + new Point(-100, 40), RawInputModifiers.LeftMouseButton);
+            s.Window.MouseUp(thumb.Center + new Point(-100, 40), MouseButton.Left, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(at, legend.Position);
+            Assert.False(legend.UserMoved);
+            Assert.True(legend.Scroll.Offset.Y > 0);
+
             // So wide a name is capped too, at a fraction of the chart's width.
             plot.SetSeries(new[] { Snr(0, 40, 0, 1, 0, new string('W', 300)) });
             plot.SetSeries(new[] { PlotFixtures.Lock(0, new string('W', 300), 1, 0, X3, X3) });
             Dispatcher.UIThread.RunJobs();
-            Assert.Equal(600 * PlotLegend.MaxWidthFraction, legend.Bounds.Width, 6);
+            Assert.Equal(270, legend.Bounds.Width, 6);   // 45 % of the chart's 600
             s.Window.Close();
         }
 
@@ -868,6 +948,14 @@ namespace TmDq.App.Tests
             plot.SetSeries(LockStream(0, "Ch 6", 6, 0));
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(PlotLegend.EdgeMargin, legend.Position.X);
+
+            // Off the other corner, it stops a margin inside that one too.
+            grab = s.At(legend);
+            s.Window.MouseDown(grab, MouseButton.Left, RawInputModifiers.None);
+            s.Window.MouseMove(grab + new Point(2000, -2000), RawInputModifiers.LeftMouseButton);
+            s.Window.MouseUp(grab + new Point(2000, -2000), MouseButton.Left, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new Point(600 - legend.Bounds.Width - PlotLegend.EdgeMargin, PlotLegend.EdgeMargin), legend.Position);
             s.Window.Close();
         }
 
@@ -1065,8 +1153,10 @@ namespace TmDq.App.Tests
             await Choose(Item(Item(menu, "X Axis"), "Reset Span"));
             Assert.Equal((0.0, 2.0), (plot.XViewMin, plot.XViewMax));
             Assert.True(plot.HasRangeOverride);   // the span only
+            plot.SetXViewByUser(0.5, 1.5);
             await Choose(Item(Item(menu, "Y Axes"), "Reset"));
             Assert.False(plot.HasRangeOverride);
+            Assert.Equal((0.5, 1.5), (plot.XViewMin, plot.XViewMax));   // the limits only
 
             plot.SetXViewByUser(0.5, 1.5);
             plot.SetRightMaxOverride(24);
@@ -1145,6 +1235,8 @@ namespace TmDq.App.Tests
             Shown s = Show(plot);
             s.View.Chart.Focus();
             Dispatcher.UIThread.RunJobs();
+            int reachedWindow = 0;
+            s.Window.KeyDown += (_, _) => reachedWindow++;   // keys the plot did not take
 
             s.Key(Key.L);
             Assert.False(plot.LegendVisible);
@@ -1186,6 +1278,11 @@ namespace TmDq.App.Tests
             s.Key(Key.R);
             Assert.Equal((0.0, 2.0), (plot.XViewMin, plot.XViewMax));
             Assert.False(plot.HasRangeOverride);
+
+            // Each key the plot used stopped there; one it has no use for goes on.
+            Assert.Equal(0, reachedWindow);
+            s.Key(Key.Q);
+            Assert.Equal(1, reachedWindow);
             s.Window.Close();
         }
 
@@ -1328,10 +1425,26 @@ namespace TmDq.App.Tests
             var cw = Assert.IsType<ColorPromptWindow>(owner.OwnedWindows.Single());
             Assert.Equal("Choose Series Color", cw.Title);
             Assert.Equal(Colors.Teal, cw.Picker.Color);
+            // The picker is drawn by its own theme, which the application includes: without it there is nothing to pick.
+            Assert.NotEmpty(cw.Picker.GetVisualDescendants().OfType<ColorSpectrum>());
             cw.Picker.Color = Color.FromArgb(10, 1, 2, 3);
             Press(cw.OkButton);
             Assert.Equal(Color.FromRgb(1, 2, 3), await Closed(colour, "the colour prompt"));
             owner.Close();
+        }
+
+        [AvaloniaFact]
+        public async Task ThePlotViewAsksInWindowsOverItsOwn()
+        {
+            PlotViewModel plot = LockPlot();
+            Shown s = Show(plot);
+            Task title = new PlotCommands(plot, s.View.Prompts).SetTitleAsync();
+            Dispatcher.UIThread.RunJobs();
+            var w = Assert.IsType<TextPromptWindow>(s.Window.OwnedWindows.Single());
+            Press(w.CancelButton);
+            Assert.True(title.IsCompleted, "the title prompt is still open.");
+            await title;
+            s.Window.Close();
         }
 
         [AvaloniaFact]
@@ -1365,6 +1478,16 @@ namespace TmDq.App.Tests
                          w.FindControl<ItemsControl>("LockRows")!.GetLogicalDescendants().OfType<TextBox>().Select(t => t.Text));
             boxes[1].IsChecked = false;
             Assert.False(c.LockRows[1].IsChecked);
+            Assert.All(w.FindControl<TabControl>("Tabs")!.Items.OfType<TabItem>(), t => Assert.Equal(14, t.FontSize));
+
+            // A row's swatch is in its colour, and opens the colour dialog over this one rather than the main window.
+            Button swatch = w.FindControl<ItemsControl>("LockRows")!.GetLogicalDescendants().OfType<Button>().First(b => b is not ToggleButton);
+            Assert.Equal(c.LockRows[0].Color, ((ISolidColorBrush)swatch.Background!).Color);
+            Assert.Same(c.LockRows[0].PickColorCommand, swatch.Command);
+            Press(swatch);
+            var picker = Assert.IsType<ColorPromptWindow>(w.OwnedWindows.Single());
+            Press(picker.CancelButton);
+            Assert.Empty(w.OwnedWindows);
             Press(w.FindControl<Button>("OkButton")!);
             Assert.True(await Closed(shown, "Customize View"));
 
@@ -1403,8 +1526,14 @@ namespace TmDq.App.Tests
             Assert.Equal("Collapse All", w.FindControl<Button>("SnrExpand")!.Content);
             CheckBox[] channels = left[0].GetLogicalDescendants().OfType<CheckBox>().Skip(1).ToArray();
             Assert.Equal(new[] { "L", "R", "C" }, channels.Select(b => (string)b.Content!));
-            Assert.Equal(new[] { "Rename series…", "Change color…" },
-                         channels[0].ContextMenu!.Items.OfType<MenuItem>().Select(i => (string)i.Header!));
+            MenuItem[] items = channels[0].ContextMenu!.Items.OfType<MenuItem>().ToArray();
+            Assert.Equal(new[] { "Rename series…", "Change color…" }, items.Select(i => (string)i.Header!));
+            channels[0].ContextMenu!.Open(channels[0]);
+            Dispatcher.UIThread.RunJobs();
+            var channel = (ChannelItem)channels[0].DataContext!;
+            Assert.Same(channel.RenameCommand, items[0].Command);
+            Assert.Same(channel.RecolorCommand, items[1].Command);
+            channels[0].ContextMenu!.Close();
 
             stream.SelectedIndex = 1;
             Dispatcher.UIThread.RunJobs();

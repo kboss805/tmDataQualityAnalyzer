@@ -305,9 +305,14 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
     it and takes every gesture, over a cached data layer (`plot-lock.png`, `plot-snr.png`). The run now keeps the core's
     results for the plot. Menus, legend and chips that drive the rest are 4.4's. US4.0's "highlighted style" for lock
     curves is not true of the Qt app either, and is flagged in the changelog rather than invented.
-- [ ] **4.4 Around the chart:** legend overlay (drag, cap, scroll, translucency), chip bar, context
+- [x] **4.4 Around the chart** (PR #229): legend overlay (drag, cap, scroll, translucency), chip bar, context
   menu and its advertised shortcuts, keyboard shortcuts scoped to the chart, Customize View dialog
   (US4.0, US4.1).
+  **Done:** `PlotView` holds 4.3b's chart with the chip bar and the legend (`PlotLegend`) over it; the right-click menu
+  in the Qt order, its prompts (`PlotCommands` over `IPlotPrompts`) and the keys it advertises, which act only while the
+  chart has focus; Customize View (`CustomizeViewWindow` over `CustomizeViewModel`), applied only on OK
+  (`plot-chips-legend.png`, `plot-menu.png`, `customize-view.png`). The colour dialog is Avalonia's `ColorView`, a new
+  MIT package. The legend's state across sessions is 4.8's; export and the legend in images are 4.5's.
 - [ ] **4.5 Export and import:** CSV, PNG/SVG/PDF with the legend composited, log export, CSV import
   with its rejections (US6.0 to US6.3). Oracle: byte-identical CSV against the Qt app on every
   fixture.

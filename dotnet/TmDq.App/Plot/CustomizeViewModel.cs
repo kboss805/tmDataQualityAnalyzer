@@ -106,8 +106,7 @@ namespace TmDq.App.Plot
         {
             if (SelectedSnrStream is null) return;
             bool expand = SelectedSnrStream.Receivers.Any(r => !r.IsExpanded);
-            foreach (ReceiverGroup r in SelectedSnrStream.Receivers) r.IsExpanded = expand;
-            OnPropertyChanged(nameof(ExpandText));
+            foreach (ReceiverGroup r in SelectedSnrStream.Receivers) r.IsExpanded = expand;   // each says ExpandText changed
         }
 
         /// <summary>Asks the dialog's own questions (a colour, a name) through <paramref name="prompts"/>: the dialog's window
