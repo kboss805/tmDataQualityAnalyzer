@@ -25,7 +25,7 @@
         <views:LogView x:Name="Log" Entries="{Binding Log.Entries}" />
       </Border>
       <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="Transparent" />
-      <views:PlotChart x:Name="Chart" Grid.Column="2" Plot="{Binding Plot}" />
+      <views:PlotView x:Name="PlotView" Grid.Column="2" Plot="{Binding Plot}" />
     </Grid>
   </DockPanel>
 </Window>

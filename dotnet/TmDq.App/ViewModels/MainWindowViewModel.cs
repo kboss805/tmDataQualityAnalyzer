@@ -45,6 +45,8 @@ namespace TmDq.App.ViewModels
             OpenCommand = new AsyncRelayCommand(OpenAsync, () => !IsBusy && _picker is not null);
             Log.Add("tmDataQualityAnalyzer v" + AppInfo.Version);
             Log.Add("Load a Chapter 10 file to configure per-stream processing.");
+            // A time window entered outside the recording is clamped, and says so in the log, in goldenrod.
+            Plot.Warning += (_, message) => Log.Warning(message);
         }
 
         public string Title => AppInfo.Title;

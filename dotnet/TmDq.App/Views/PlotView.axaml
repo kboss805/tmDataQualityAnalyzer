@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="using:TmDq.App.Views"
+             x:Class="TmDq.App.Views.PlotView">
+  <UserControl.Styles>
+    <!-- The chips: translucent, in the legend's visual language, so they read over the data. -->
+    <Style Selector="Button.chip">
+      <Setter Property="Height" Value="26" />
+      <Setter Property="Padding" Value="8,0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Background" Value="#B9FFFFFF" />
+      <Setter Property="BorderBrush" Value="#C8C8C8" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Foreground" Value="#1E1E1E" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.chip:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#B9FFFFFF" />
+      <Setter Property="BorderBrush" Value="#005FB8" />
+      <Setter Property="Foreground" Value="#1E1E1E" />
+    </Style>
+    <Style Selector="Button.chip:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#B9FFFFFF" />
+      <Setter Property="BorderBrush" Value="#005FB8" />
+      <Setter Property="Foreground" Value="#1E1E1E" />
+    </Style>
+  </UserControl.Styles>
+  <Grid>
+    <views:PlotChart x:Name="Chart" x:FieldModifier="public" />
+    <!-- Over the chart, and only where its children are: the canvas has no background, so the rest reaches the chart. -->
+    <Canvas x:Name="Overlay" x:FieldModifier="public">
+      <StackPanel x:Name="ChipBar" x:FieldModifier="public" Orientation="Horizontal" Spacing="4" Canvas.Left="8" Canvas.Top="8" IsVisible="False">
+        <Button x:Name="ViewModeChip" x:FieldModifier="public" Classes="chip" IsVisible="False" />
+        <Button x:Name="ResetChip" x:FieldModifier="public" Classes="chip" Content="Reset view" IsVisible="False"
+                ToolTip.Tip="Restore the full time span and automatic axis scaling (or double-click the chart)" />
+      </StackPanel>
+      <views:PlotLegend x:Name="Legend" x:FieldModifier="public" />
+    </Canvas>
+  </Grid>
+</UserControl>

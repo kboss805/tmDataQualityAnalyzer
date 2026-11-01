@@ -50,9 +50,9 @@ namespace TmDq.App.Plot
     /// <summary>
     /// The plot's state, the C# half of the Qt <c>PlotViewModel</c> (plan decision D3): the series, built by the core from
     /// each processed stream on one shared time axis; their colours (US4.0); the visible time window with its zoom history;
-    /// both Y axes' ranges and overrides; which metric the left axis shows; and the readout under the cursor. The chart
-    /// (<c>PlotChart</c>) draws it and reports the user's gestures back; the menus and dialogs that set the rest are plan
-    /// step 4.4's. Used on the UI thread.
+    /// both Y axes' ranges and overrides; which metric the left axis shows; the readout under the cursor; and what the
+    /// legend, the chips, the menu, the keys and Customize View act on (plan step 4.4). The chart (<c>PlotChart</c>) draws
+    /// it and reports the user's gestures back; <c>PlotView</c> holds the controls around it. Used on the UI thread.
     /// </summary>
     public sealed partial class PlotViewModel : ObservableObject, IDisposable
     {
@@ -65,6 +65,9 @@ namespace TmDq.App.Plot
         public const double AxisMarginFactor = 0.05, MinAxisSpan = 1.0;
         public const int MaxZoomDepth = 32;
         public const double MinZoomSpanSeconds = 1e-6;
+        public const double KeyPanFraction = 0.10, KeyZoomFactor = 0.80;
+        public const double MissedFramesOverrideMax = 10000000.0, SnrOverrideLimit = 999.0;
+        private static readonly string[] ChannelPrefixes = { "L", "R", "C" };
 
         private readonly List<PlotSeries> _series = new();
         private readonly List<(double Min, double Max)> _zoomStack = new();
@@ -77,6 +80,7 @@ namespace TmDq.App.Plot
         private double? _leftMinOverride, _leftMaxOverride, _rightMinOverride, _rightMaxOverride;
         private LockAxisView _lockAxisView = LockAxisView.LockPercent;
         private int? _readoutSeriesId;
+        private bool _legendVisible = true;
 
         /// <summary>Raised when the series, their samples or their visibility change (the chart redraws them).</summary>
         public event EventHandler? SeriesChanged;
@@ -87,6 +91,9 @@ namespace TmDq.App.Plot
         /// <summary>Raised when a source's recording does not overlap what is already loaded (informational: they share one
         /// time axis with a gap between them).</summary>
         public event EventHandler<int>? NonOverlappingSource;
+
+        /// <summary>Raised with a warning for the log: a time window entered outside the recording, and clamped.</summary>
+        public event EventHandler<string>? Warning;
 
         public IReadOnlyList<PlotSeries> Series => _series;
 
@@ -523,6 +530,194 @@ namespace TmDq.App.Plot
             return lo;
         }
 
+        /// <summary>Drops a pin whose series is gone (processed again, which gives new ids) or hidden, so the Readout menu
+        /// never opens with nothing chosen. The readout itself already falls back to the nearest series then.</summary>
+        public void DropStaleReadoutPin()
+        {
+            if (_readoutSeriesId is not int id) return;
+            PlotSeries? s = _series.Find(x => x.Id == id);
+            if (s is null || !EffectiveVisible(s)) ReadoutSeriesId = null;
+        }
+
+        // ---- around the chart (plan step 4.4) -----------------------------------------------------------------------
+
+        public bool HasLockSeries => _series.Any(s => s.Metric == MetricType.FrameSyncLock);
+
+        public bool HasMissedFramesSeries => _series.Any(s => s.Metric == MetricType.AccumulatedMissedFrames);
+
+        /// <summary>Whether there is another left-axis metric to switch to: the View Mode menu, its chip and V need both.</summary>
+        public bool CanSwitchViewMode => HasData && HasLockSeries && HasMissedFramesSeries;
+
+        /// <summary>Whether the legend is wanted. It is still drawn only when it has a row; a hidden legend stays out of
+        /// exported images too. Kept for the session; remembering it between sessions is plan step 4.8's (preferences).</summary>
+        public bool LegendVisible
+        {
+            get => _legendVisible;
+            set => SetProperty(ref _legendVisible, value);
+        }
+
+        /// <summary>Whether the window is narrower than the whole recording (as QFuzzyCompare judges it).</summary>
+        public bool IsZoomed => HasData && (!FuzzyEqual(_xViewMin, XMin) || !FuzzyEqual(_xViewMax, _xMax));
+
+        /// <summary>Whether the view differs from the default (zoomed, or an axis limit set): the Reset view chip's rule.</summary>
+        public bool CanResetView => HasData && (IsZoomed || HasRangeOverride);
+
+        /// <summary>The whole span and automatic scaling again: the Reset view chip, the menu's Reset View and R.</summary>
+        public void ResetView()
+        {
+            ResetXRange();
+            ResetYRange();
+        }
+
+        /// <summary>Switches the left axis to the other metric; nothing unless both exist.</summary>
+        public void ToggleViewMode()
+        {
+            if (!HasLockSeries || !HasMissedFramesSeries) return;
+            SetLockAxisView(_lockAxisView == LockAxisView.LockPercent ? LockAxisView.MissedFrames : LockAxisView.LockPercent);
+        }
+
+        /// <summary>Slides the window by <paramref name="fraction"/> of its width (negative is earlier): the arrow keys.
+        /// Nothing when the whole recording is shown, since there is nowhere to go.</summary>
+        public void PanWindow(double fraction)
+        {
+            double lower = _xViewMin, upper = _xViewMax, span = upper - lower;
+            if (span <= 0.0) return;
+            if (lower <= XMin && upper >= _xMax) return;
+            double shift = span * fraction;
+            ApplyTimeWindow(lower + shift, upper + shift, FormatTime(lower + shift), FormatTime(upper + shift));
+        }
+
+        /// <summary>Scales the window about its centre (below 1 zooms in): + and -. Never narrower than a band zoom may be.</summary>
+        public void ZoomWindow(double factor)
+        {
+            double lower = _xViewMin, upper = _xViewMax, span = upper - lower;
+            if (span <= 0.0) return;
+            double centre = lower + span / 2.0, newSpan = span * factor;
+            if (newSpan < MinZoomSpanSeconds) return;
+            double newLower = centre - newSpan / 2.0, newUpper = centre + newSpan / 2.0;
+            ApplyTimeWindow(newLower, newUpper, FormatTime(newLower), FormatTime(newUpper));
+        }
+
+        /// <summary>
+        /// A time window entered or stepped to: each end clamped into the recording, with a warning naming the value as
+        /// entered; the stop pulled up to the start if it is before it; then remembered as a discrete zoom. The Qt
+        /// <c>PlotWidget::applyTimeWindow</c>.
+        /// </summary>
+        public void ApplyTimeWindow(double rawStart, double rawStop, string enteredStart, string enteredStop)
+        {
+            if (!HasData) return;
+            double start = Math.Clamp(rawStart, XMin, _xMax), stop = Math.Clamp(rawStop, XMin, _xMax);
+            if (!FuzzyEqual(start, rawStart))
+                Warning?.Invoke(this, $"Start \"{enteredStart}\" is outside the file time range - clamped to file bounds.");
+            if (!FuzzyEqual(stop, rawStop))
+                Warning?.Invoke(this, $"Stop \"{enteredStop}\" is outside the file time range - clamped to file bounds.");
+            if (start > stop)
+            {
+                Warning?.Invoke(this, "Stop time is before Start - clamped to start time.");
+                stop = start;
+            }
+            PushXZoom(start, stop);
+        }
+
+        /// <summary>A clock time typed as DDD:HH:MM:SS, as elapsed seconds on the plot's axis; 0 for text not in that form,
+        /// and 0 for a field that is not a whole number, as Qt's <c>toInt</c> gives (the Qt <c>parseTime</c>).</summary>
+        public double ParseTime(string text)
+        {
+            string[] parts = text.Split(':');
+            if (parts.Length != 4) return 0.0;
+            static int Field(string s) =>
+                int.TryParse(s, NumberStyles.AllowLeadingSign | NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite,
+                             CultureInfo.InvariantCulture, out int v) ? v : 0;
+            double entered = Field(parts[0]) * 86400.0 + Field(parts[1]) * 3600.0 + Field(parts[2]) * 60.0 + Field(parts[3]);
+            TimeBaseInfo b = _timeBase?.Info ?? new TimeBaseInfo(0, 0.0, 0.0);
+            return entered - (b.BaseDay * 86400.0 + b.BaseTimeOffset);
+        }
+
+        /// <summary>The rows the legend lists: each series shown, of the left-axis metric in view, in plot order.</summary>
+        public IReadOnlyList<LegendEntry> LegendEntries()
+        {
+            var entries = new List<LegendEntry>();
+            foreach (PlotSeries s in _series)
+            {
+                if (!EffectiveVisible(s)) continue;
+                if (s.Metric == MetricType.FrameSyncLock && _lockAxisView != LockAxisView.LockPercent) continue;
+                if (s.Metric == MetricType.AccumulatedMissedFrames && _lockAxisView != LockAxisView.MissedFrames) continue;
+                entries.Add(new LegendEntry(s.Id, LegendLabel(s), s.Name, s.Color));
+            }
+            return entries;
+        }
+
+        /// <summary>A series as the legend names it. An SNR series' name carries the whole TMATS stream title (the CSV
+        /// columns need it), which crowds the legend, so its row is "CH&lt;channel&gt; &lt;L|R|C&gt;_RCVR&lt;n&gt;", made from the
+        /// series' own numbers rather than parsed out of its name.</summary>
+        public static string LegendLabel(PlotSeries s)
+        {
+            if (s.Metric != MetricType.Snr) return s.Name;
+            string prefix = s.ChannelIndex >= 0 && s.ChannelIndex < ChannelPrefixes.Length
+                ? ChannelPrefixes[s.ChannelIndex]
+                : (s.ChannelIndex + 1).ToString(CultureInfo.InvariantCulture);
+            return string.Create(CultureInfo.InvariantCulture, $"CH{s.StreamOrder} {prefix}_RCVR{s.ReceiverIndex}");
+        }
+
+        /// <summary>A channel's letter as Customize View shows it: L, R or C, else its number from 1.</summary>
+        public static string ChannelLabel(int channelIndex) =>
+            channelIndex >= 0 && channelIndex < ChannelPrefixes.Length
+                ? ChannelPrefixes[channelIndex]
+                : (channelIndex + 1).ToString(CultureInfo.InvariantCulture);
+
+        // ---- appearance, from Customize View ------------------------------------------------------------------------
+
+        /// <summary>Renames a series; a Frame Sync Lock stream's lock and missed-frames series are renamed together, so the
+        /// name survives a switch of the view. Nothing for an id that is gone.</summary>
+        public void RenameSeries(int id, string name)
+        {
+            PlotSeries? s = _series.Find(x => x.Id == id);
+            if (s is null) return;
+            s.Name = name;
+            if (s.IsLeftAxis)
+                foreach (PlotSeries sibling in _series)
+                    if (IsSibling(s, sibling)) sibling.Name = name;
+        }
+
+        /// <summary>Recolours a series, and a Frame Sync Lock stream's other metric with it.</summary>
+        public void RecolorSeries(int id, Color color)
+        {
+            PlotSeries? s = _series.Find(x => x.Id == id);
+            if (s is null) return;
+            s.Color = color;
+            if (s.IsLeftAxis)
+                foreach (PlotSeries sibling in _series)
+                    if (IsSibling(s, sibling)) sibling.Color = color;
+        }
+
+        /// <summary>Shows or hides a series without telling the chart: Customize View sets many at once, then calls
+        /// <see cref="CommitAppearance"/>.</summary>
+        public void SetSeriesVisibleQuiet(int id, bool visible)
+        {
+            PlotSeries? s = _series.Find(x => x.Id == id);
+            if (s is not null) s.Visible = visible;
+        }
+
+        /// <summary>One refresh after a batch of quiet edits: the SNR range again, then the chart and the legend.</summary>
+        public void CommitAppearance()
+        {
+            ComputeSnrRange();
+            SeriesChanged?.Invoke(this, EventArgs.Empty);
+            RangesChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        public PlotSeries? SeriesById(int id) => _series.Find(x => x.Id == id);
+
+        private static bool IsSibling(PlotSeries of, PlotSeries candidate) =>
+            candidate.IsLeftAxis && candidate.StreamLabel == of.StreamLabel && candidate.StreamOrder == of.StreamOrder &&
+            candidate.SourceId == of.SourceId;
+
+        /// <summary>QFuzzyCompare: equal to about twelve significant digits (so 0 equals only 0).</summary>
+        private static bool FuzzyEqual(double a, double b) => Math.Abs(a - b) * 1000000000000.0 <= Math.Min(Math.Abs(a), Math.Abs(b));
+
         public void Dispose() => _timeBase?.Dispose();
     }
+
+    /// <summary>One legend row: the series it stands for, its label, its full name (the row's tooltip) and its colour.</summary>
+    public sealed record LegendEntry(int Id, string Label, string FullName, Color Color);
 }
