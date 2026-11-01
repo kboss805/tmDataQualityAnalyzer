@@ -297,9 +297,14 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
     maximum, the "interval band"), and the time ticks, moved out of the Qt `TmChart` into the core's `chartgeometry`
     (decision D1). The Qt chart now draws from it, held bit for bit to its old code, which the native suite keeps as the
     oracle. Through the C ABI (revision 2) and `TmDq.Core` (`ChartGeometry`) for 4.3b.
-  - [ ] **4.3b The chart control:** the Avalonia chart over that geometry: dual axes with hiding, the ticks and their
+  - [x] **4.3b The chart control** (PR #228): the Avalonia chart over that geometry: dual axes with hiding, the ticks and their
     labels, Receiver SNR on the right axis, the backing store, wheel zoom, drag pan, band zoom, zoom history, the
     crosshair and pinned readout, double-click to the full span; `TestTmChart`'s widget cases ported.
+    **Done:** `PlotViewModel` holds the plot's state (series built by the core on one time base, the Qt colours to the
+    shade, both axes' ranges and overrides, the view mode, the zoom history, the readout and its pin) and `PlotChart` draws
+    it and takes every gesture, over a cached data layer (`plot-lock.png`, `plot-snr.png`). The run now keeps the core's
+    results for the plot. Menus, legend and chips that drive the rest are 4.4's. US4.0's "highlighted style" for lock
+    curves is not true of the Qt app either, and is flagged in the changelog rather than invented.
 - [ ] **4.4 Around the chart:** legend overlay (drag, cap, scroll, translucency), chip bar, context
   menu and its advertised shortcuts, keyboard shortcuts scoped to the chart, Customize View dialog
   (US4.0, US4.1).
