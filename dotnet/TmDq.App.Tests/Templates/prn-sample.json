@@ -1,0 +1,137 @@
+{
+    "appVersion": "2.14.2",
+    "entries": [
+        {
+            "appearance": [
+                {
+                    "channelIndex": 0,
+                    "color": "#ff6a0dad",
+                    "metricType": "FrameSyncLock",
+                    "name": "Fifteen",
+                    "receiverIndex": 0
+                },
+                {
+                    "channelIndex": 0,
+                    "color": "#ff6a0dad",
+                    "metricType": "AccumulatedMissedFrames",
+                    "name": "Fifteen",
+                    "receiverIndex": 0
+                }
+            ],
+            "config": {
+                "label": "CH-01 PRN 15 5M",
+                "mode": "FrameSyncLock",
+                "numReceivers": 16,
+                "pcmChannelId": 13,
+                "polarityIndex": 0,
+                "process": true,
+                "receiverChannels": 3,
+                "receiverParamsToml": "",
+                "samplePeriodIndex": 0,
+                "scaleDdBPerV": 20,
+                "slopeIndex": 3,
+                "sync": {
+                    "bitsInMinorFrame": 32767,
+                    "dataRateMbps": 0,
+                    "inverted": false,
+                    "mask": "FFFFFFFF",
+                    "pattern": "334AABBF",
+                    "randomized": false
+                },
+                "tmatsDataRateMbps": 5
+            }
+        },
+        {
+            "config": {
+                "label": "CH-02 PRN 15 20M",
+                "mode": "FrameSyncLock",
+                "numReceivers": 16,
+                "pcmChannelId": 14,
+                "polarityIndex": 0,
+                "process": false,
+                "receiverChannels": 3,
+                "receiverParamsToml": "",
+                "samplePeriodIndex": 0,
+                "scaleDdBPerV": 20,
+                "slopeIndex": 3,
+                "sync": {
+                    "bitsInMinorFrame": 32767,
+                    "dataRateMbps": 0,
+                    "inverted": false,
+                    "mask": "FFFFFFFF",
+                    "pattern": "334AABBF",
+                    "randomized": false
+                },
+                "tmatsDataRateMbps": 20
+            }
+        },
+        {
+            "appearance": [
+                {
+                    "channelIndex": 0,
+                    "color": "#ff1f77b4",
+                    "metricType": "FrameSyncLock",
+                    "name": "Eleven",
+                    "receiverIndex": 0
+                },
+                {
+                    "channelIndex": 0,
+                    "color": "#ff1f77b4",
+                    "metricType": "AccumulatedMissedFrames",
+                    "name": "Eleven",
+                    "receiverIndex": 0
+                }
+            ],
+            "config": {
+                "label": "CH-03 PRN 11 1M",
+                "mode": "FrameSyncLock",
+                "numReceivers": 16,
+                "pcmChannelId": 15,
+                "polarityIndex": 0,
+                "process": true,
+                "receiverChannels": 3,
+                "receiverParamsToml": "",
+                "samplePeriodIndex": 0,
+                "scaleDdBPerV": 20,
+                "slopeIndex": 3,
+                "sync": {
+                    "bitsInMinorFrame": 2047,
+                    "dataRateMbps": 0,
+                    "inverted": false,
+                    "mask": "FFFFFFFF",
+                    "pattern": "A345CA5C",
+                    "randomized": false
+                },
+                "tmatsDataRateMbps": 1
+            }
+        },
+        {
+            "config": {
+                "label": "CH-04 PRN 11 5M",
+                "mode": "ReceiverChannelInfo",
+                "numReceivers": 16,
+                "pcmChannelId": 16,
+                "polarityIndex": 0,
+                "process": false,
+                "receiverChannels": 3,
+                "receiverParamsToml": "",
+                "samplePeriodIndex": 0,
+                "scaleDdBPerV": 20,
+                "slopeIndex": 3,
+                "sync": {
+                    "bitsInMinorFrame": 800,
+                    "dataRateMbps": 0,
+                    "inverted": false,
+                    "mask": "FFFFFFFF",
+                    "pattern": "FE6B2840",
+                    "randomized": false
+                },
+                "tmatsDataRateMbps": 5
+            }
+        }
+    ],
+    "name": "prn_testfile, sample",
+    "schemaVersion": 1,
+    "swapBytes": true,
+    "timeChannelIndex": 0
+}

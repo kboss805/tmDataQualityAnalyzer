@@ -24,6 +24,9 @@ namespace TmDq.App.Views
         public static async Task<(string Path, ImageFormat Format)?> ExportAsync(PlotView view, string path)
         {
             (string file, ImageFormat format) = ImageFiles.Resolve(path);
+            // The view may have just changed (a batch's export switches the recording and the metric shown before each
+            // image): the legend's size is the one its rows now need.
+            view.UpdateLayout();
             Size size = view.Chart.Bounds.Size;
             int width = Math.Max(1, (int)Math.Round(size.Width)), height = Math.Max(1, (int)Math.Round(size.Height));
             try

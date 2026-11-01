@@ -23,11 +23,11 @@ namespace TmDq.App.Processing
             _calibrationFiles = calibrationFiles;
         }
 
-        public async Task<RunRequest?> ConfigureAsync(string path, Ch10File file)
+        public async Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file)
         {
             var vm = new ConfigureStreamsViewModel(path, file, _dialogs, _files, _appRoot, _calibrationFiles);
             await _dialogs.ConfigureStreamsAsync(vm);
-            return vm.Accepted ? vm.ToRunRequest() : null;
+            return vm.Accepted ? new StreamsChoice(vm.ToRunRequest(), vm.Setups, vm.TimeChannelIndex) : null;
         }
     }
 }

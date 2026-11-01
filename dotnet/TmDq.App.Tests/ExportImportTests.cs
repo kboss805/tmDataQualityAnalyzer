@@ -784,9 +784,9 @@ namespace TmDq.App.Tests
 
         private sealed class WaitingConfigurator : IStreamConfigurator
         {
-            public readonly TaskCompletionSource<RunRequest?> Answer = new();
+            public readonly TaskCompletionSource<StreamsChoice?> Answer = new();
 
-            public Task<RunRequest?> ConfigureAsync(string path, Ch10File file) => Answer.Task;
+            public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file) => Answer.Task;
         }
 
         [Fact]

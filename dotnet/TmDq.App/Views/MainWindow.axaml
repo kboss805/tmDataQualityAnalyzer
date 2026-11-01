@@ -10,6 +10,11 @@
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12" Margin="8">
       <Button x:Name="OpenButton" Content="Open..." Command="{Binding OpenCommand}" />
+      <!-- The Qt menu's Process section, here until the shell's menu (plan step 4.8). -->
+      <Button x:Name="SaveTemplateButton" Content="Save as Template..." Command="{Binding SaveTemplateCommand}"
+              ToolTip.Tip="Save the processed recording's stream settings, names and colors as a template" />
+      <Button x:Name="ApplyTemplateButton" Content="Apply Template..." Command="{Binding ApplyTemplateCommand}"
+              ToolTip.Tip="Process several recordings with a saved template" />
       <!-- The Qt menu's Import/Export section, here until the shell's menu (plan step 4.8). -->
       <Button x:Name="ImportCsvButton" Content="Import CSV..." Command="{Binding ImportCsvCommand}"
               ToolTip.Tip="Import a previously exported CSV file" />
