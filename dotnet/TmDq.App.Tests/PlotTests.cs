@@ -383,6 +383,16 @@ namespace TmDq.App.Tests
             plot.SetSeries(new[] { PlotFixtures.Missed(0, "M", 1, 0, new[] { 0.0, 1.0 }, new[] { 0.0, 3.0 }) });
             Assert.Equal($"M\n{plot.FormatTime(1.0)}\n3.00 frames", plot.Readout(1.0, 10, Pixel));
             Assert.Null(new PlotViewModel().Readout(0, 0, Pixel));
+
+            // Two series equally near: the first listed is the one read out. A series with no name says nothing.
+            plot.SetSeries(new[]
+            {
+                PlotFixtures.Lock(0, "first", 1, 0, new[] { 0.0, 10.0 }, new[] { 1.0, 2.0 }),
+                PlotFixtures.Lock(1, "second", 2, 1, new[] { 0.0, 10.0 }, new[] { 3.0, 4.0 }),
+            });
+            Assert.StartsWith("first\n", plot.Readout(10.0, 100, Pixel));
+            plot.SetSeries(new[] { PlotFixtures.Lock(0, "", 1, 0, new[] { 0.0, 10.0 }, new[] { 1.0, 2.0 }) });
+            Assert.Null(plot.Readout(10.0, 100, Pixel));
         }
 
         [AvaloniaFact]
@@ -512,6 +522,11 @@ namespace TmDq.App.Tests
             Assert.Equal(snrOnly.Bottom, s.Chart.LeftToPixel(0), 6);
             Assert.Equal(snrOnly.Top, s.Chart.LeftToPixel(100), 6);
             Assert.Equal(25.0, s.Chart.PixelToX(s.Chart.XToPixel(25.0)), 9);
+
+            // Above the plot: the outer margin, the headroom kept for plan step 4.4's chip bar, the title and its gap.
+            var text = new FormattedText("Xg", System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+                new Typeface(Avalonia.Controls.Documents.TextElement.GetFontFamily(s.Chart)), PlotChart.FontSize, null);
+            Assert.Equal(PlotChart.OuterMargin + PlotChart.TopInset + Math.Ceiling(text.Height) + PlotChart.AxisLabelGap, snrOnly.Top, 6);
             s.Window.Close();
         }
 
@@ -565,6 +580,8 @@ namespace TmDq.App.Tests
             Rect a = s.Chart.PlotArea;
             double p20 = s.Chart.XToPixel(20), p60 = s.Chart.XToPixel(60);
 
+            s.Window.MouseMove(s.At(p60, a.Center.Y), RawInputModifiers.None);
+            Assert.True(s.Chart.CrosshairVisible);
             s.Window.MouseDown(s.At(p60, a.Center.Y), MouseButton.Left, RawInputModifiers.Control);
             s.Window.MouseMove(s.At(p20, a.Center.Y), RawInputModifiers.LeftMouseButton | RawInputModifiers.Control);
             Dispatcher.UIThread.RunJobs();
