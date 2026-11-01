@@ -14,3 +14,6 @@
 *.png binary
 *.exe binary
 *.dll binary
+
+# Qt-written templates, compared byte for byte (CR LF included): stored exactly as written
+dotnet/TmDq.App.Tests/Templates/*.json -text
