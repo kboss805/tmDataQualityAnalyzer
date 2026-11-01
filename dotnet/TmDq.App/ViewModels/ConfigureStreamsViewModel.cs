@@ -25,14 +25,18 @@ namespace TmDq.App.ViewModels
         private int _timeChannelIndex;
         private bool _legacyChapter10;
         private bool _all;
-        private string? _lastFolder;
+        private string? _lastFolder, _lastCalFolder;
+        private readonly ICalibrationFilePicker? _calibrationFiles;
 
-        public ConfigureStreamsViewModel(string recording, Ch10File file, IStreamDialogs? dialogs, ISettingsFilePicker? files, string? appRoot)
+        /// <param name="calibrationFiles">Extract Calibration's file dialogs (plan step 4.6).</param>
+        public ConfigureStreamsViewModel(string recording, Ch10File file, IStreamDialogs? dialogs, ISettingsFilePicker? files, string? appRoot,
+                                         ICalibrationFilePicker? calibrationFiles = null)
         {
             Recording = recording;
             _dialogs = dialogs;
             _files = files;
             _appRoot = appRoot;
+            _calibrationFiles = calibrationFiles;
             _timeChannels = file.TimeChannels;
             TimeChannelItems = _timeChannels.Select(StreamRules.TimeChannelText).ToList();
             _timeChannelIndex = Math.Max(0, _timeChannels.ToList().FindIndex(c => c.Id == file.DefaultTimeChannel));
@@ -100,8 +104,12 @@ namespace TmDq.App.ViewModels
         {
             int index = Rows.IndexOf(row);
             if (index < 0 || !row.Setup.Process || _dialogs is null) return;
-            var setup = new StreamSetupViewModel(StreamRules.ForEditing(row.Setup, _appRoot), _files, _appRoot, _lastFolder);
+            // A calibration is extracted with the time channel selected here and the recording's byte order, as the run
+            // will read the data it calibrates (the Qt dialog used the recording's first time channel whatever was chosen).
+            var setup = new StreamSetupViewModel(StreamRules.ForEditing(row.Setup, _appRoot), _files, _appRoot, _lastFolder,
+                                                 TimeChannelId, !LegacyChapter10, _dialogs, _calibrationFiles, _lastCalFolder);
             await _dialogs.EditStreamAsync(setup);
+            _lastCalFolder = setup.LastCalFolder;
             if (!setup.Accepted) return;
             _lastFolder = setup.LastFolder;
             row.Setup = StreamRules.Accept(row.Setup, setup.ToSetup());

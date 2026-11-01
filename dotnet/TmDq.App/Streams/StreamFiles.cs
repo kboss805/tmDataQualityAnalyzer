@@ -76,6 +76,7 @@ namespace TmDq.App.Streams
 
         public const string FrameSyncFolder = "framesync_patterns";
         public const string ReceiverParamsFolder = "receiver_params";
+        public const string StepCalFolder = "rcvr_cals";
 
         /// <summary>Where a Load dialog starts: the shipped <paramref name="subfolder"/> of settings/ when it is there, else
         /// the last folder a file was loaded from or saved to (as the Qt dialogs' settingsSubdir). A Save starts at the

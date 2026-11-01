@@ -72,7 +72,7 @@ namespace TmDq.App.Streams
         /// <summary>The receiver-parameters file the word map comes from; empty means the shipped default.</summary>
         public string ReceiverParamsToml { get; init; } = string.Empty;
 
-        // --- calibration references (Extract Calibration is plan step 4.6; they travel with the row already) ---
+        // --- the calibration Apply Cal gave (Extract Calibration, plan step 4.6) and what it was extracted from ---
 
         public IReadOnlyList<CalibrationProfile> Calibration { get; init; } = Array.Empty<CalibrationProfile>();
 

@@ -21,6 +21,9 @@
     <Style Selector="TextBlock.problems">
       <Setter Property="Foreground" Value="#D13438" />
     </Style>
+    <Style Selector="TextBlock.uncalibrated">
+      <Setter Property="Foreground" Value="Gray" />
+    </Style>
   </Window.Styles>
 
   <StackPanel Margin="16" Spacing="8" MinWidth="560">
@@ -93,6 +96,13 @@
       <TextBlock x:Name="WordMap" Opacity="0.75">
         <Run Text="Word map: " /><Run Text="{Binding ReceiverParamsName}" />
       </TextBlock>
+      <!-- Non-linear step calibration (US5.3): Apply Cal, and how many channels it calibrated. -->
+      <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+        <Button x:Name="ApplyCal" Content="Apply Cal" Command="{Binding ApplyCalCommand}"
+                ToolTip.Tip="{Binding ApplyCalTip}" ToolTip.ShowOnDisabled="True" />
+        <TextBlock x:Name="CalibrationLabel" Text="{Binding CalibrationText}" VerticalAlignment="Center"
+                   Classes.uncalibrated="{Binding !IsCalibrated}" />
+      </StackPanel>
     </StackPanel>
 
     <TextBlock x:Name="FileMessage" Text="{Binding FileMessage}" TextWrapping="Wrap" MaxWidth="560" HorizontalAlignment="Left"
