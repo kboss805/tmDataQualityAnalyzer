@@ -10,6 +10,11 @@
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12" Margin="8">
       <Button x:Name="OpenButton" Content="Open..." Command="{Binding OpenCommand}" />
+      <!-- The Qt menu's Import/Export section, here until the shell's menu (plan step 4.8). -->
+      <Button x:Name="ImportCsvButton" Content="Import CSV..." Command="{Binding ImportCsvCommand}"
+              ToolTip.Tip="Import a previously exported CSV file" />
+      <Button x:Name="ExportButton" Content="Export..." Command="{Binding ExportCommand}"
+              ToolTip.Tip="Export plot data and images" />
     </StackPanel>
     <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="8,4">
       <TextBlock x:Name="StatusText" Grid.Column="0" Text="{Binding Status}" TextTrimming="CharacterEllipsis"

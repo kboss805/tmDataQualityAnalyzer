@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using TmDq.Core;
@@ -81,6 +82,7 @@ namespace TmDq.App.Plot
         private LockAxisView _lockAxisView = LockAxisView.LockPercent;
         private int? _readoutSeriesId;
         private bool _legendVisible = true;
+        private bool _isLoading;
 
         /// <summary>Raised when the series, their samples or their visibility change (the chart redraws them).</summary>
         public event EventHandler? SeriesChanged;
@@ -211,6 +213,138 @@ namespace TmDq.App.Plot
             SeriesChanged?.Invoke(this, EventArgs.Empty);
             RangesChanged?.Invoke(this, EventArgs.Empty);
             OnPropertyChanged(nameof(HasData));
+        }
+
+        // ---- CSV, export and import (plan step 4.5) ---------------------------------------------------------------------
+
+        /// <summary>
+        /// Writes every series, shown or not, as the core's CSV (the Qt <c>exportCsv</c>): the writer owns the format, and
+        /// the plot hands it each series' identity and samples with the recording's clock. A <paramref name="sourceId"/> of
+        /// 0 or more keeps that source's series only (per-file batch export, 4.7). False, with no file written, when there
+        /// is nothing to write; false when the file cannot be written.
+        /// </summary>
+        public bool ExportCsv(string path, int sourceId = -1)
+        {
+            var columns = new List<CsvColumn>();
+            foreach (PlotSeries s in _series)
+            {
+                if (sourceId >= 0 && s.SourceId != sourceId) continue;
+                columns.Add(new CsvColumn(s.Metric, s.Name, s.SourceId, s.X, s.Y));
+            }
+            // No columns at all is the writer's to refuse, and it writes no file.
+            TimeBaseInfo b = _timeBase?.Info ?? new TimeBaseInfo(0, 0.0, 0.0);
+            try
+            {
+                CsvFile.Write(path, columns, b.BaseDay, b.BaseTimeOffset);
+                return true;
+            }
+            catch (TmdqException)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>Whether a CSV is being read for the plot (the "Loading..." overlay).</summary>
+        public bool IsLoading
+        {
+            get => _isLoading;
+            private set => SetProperty(ref _isLoading, value);
+        }
+
+        /// <summary>Reads an exported CSV and shows it in place of whatever was shown (the Qt <c>loadCsvFile</c>); false,
+        /// with nothing changed, for a file that is not one.</summary>
+        public bool LoadCsv(string path)
+        {
+            CsvData? data = ParseCsv(path);
+            if (data is null) return false;
+            ShowCsv(data);
+            return true;
+        }
+
+        /// <summary>
+        /// <see cref="LoadCsv"/> with the file read off the UI thread and <see cref="IsLoading"/> set meanwhile (the Qt
+        /// <c>loadCsvFileAsync</c>). A request while one is being read is dropped, as Qt drops it.
+        /// </summary>
+        public async Task<CsvLoad> LoadCsvAsync(string path)
+        {
+            if (IsLoading) return CsvLoad.Dropped;
+            IsLoading = true;
+            try
+            {
+                CsvData? data = await Task.Run(() => ParseCsv(path));
+                if (data is null) return CsvLoad.Failed;
+                ShowCsv(data);
+                return CsvLoad.Loaded;
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }
+
+        private static CsvData? ParseCsv(string path)
+        {
+            try
+            {
+                return CsvFile.Parse(path);
+            }
+            catch (TmdqException)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Shows a parsed CSV as a run's series would be shown (the Qt <c>commitParseResult</c>): the clock from the file;
+        /// each Frame Sync Lock stream's series given the core's stream order (<c>assignImportedStreamOrders</c>), so its
+        /// two metrics share a colour and each stream has its own; the metric of the active view shown; then a warning for
+        /// any rows skipped, since a partly loaded file must not pass for a whole one.
+        /// </summary>
+        private void ShowCsv(CsvData data)
+        {
+            IReadOnlyList<int> orders = ImportedStreams.AssignOrders(data.Series);
+            _series.Clear();
+            _zoomStack.Clear();
+            _readoutSeriesId = null;
+            for (int i = 0; i < data.Series.Count; i++)
+            {
+                CsvSeries c = data.Series[i];
+                _series.Add(new PlotSeries
+                {
+                    Id = _nextId++,
+                    Name = c.Name,
+                    StreamLabel = c.StreamLabel,
+                    Metric = c.Metric,
+                    ReceiverIndex = c.ReceiverIndex,
+                    ChannelIndex = c.ChannelIndex,
+                    StreamOrder = orders[i],   // an SNR series keeps its own; the core gives the others theirs
+                    SourceId = c.SourceId,
+                    X = c.X,
+                    Y = c.Y,
+                    YMin = c.YMin,
+                    YMax = c.YMax,
+                    SortedX = ChartGeometry.IsSortedX(c.X),
+                    Visible = c.Metric switch
+                    {
+                        MetricType.FrameSyncLock => _lockAxisView == LockAxisView.LockPercent,
+                        MetricType.AccumulatedMissedFrames => _lockAxisView == LockAxisView.MissedFrames,
+                        _ => true,
+                    },
+                });
+            }
+            _timeBase ??= new TimeBase();
+            _timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);
+            _xMax = data.XMax;
+            _xViewMin = 0.0;
+            _xViewMax = _xMax;
+            AssignColors();
+            ComputeSnrRange();
+            SeriesChanged?.Invoke(this, EventArgs.Empty);
+            RangesChanged?.Invoke(this, EventArgs.Empty);
+            OnPropertyChanged(nameof(HasData));
+            if (data.SkippedRows > 0)
+                Warning?.Invoke(this, string.Create(CultureInfo.InvariantCulture,
+                    $"Skipped {data.SkippedRows} malformed row(s) while loading the CSV."));
         }
 
         /// <summary>Removes everything, as a new recording does: the series, the time base, the zoom history, the title,
@@ -716,6 +850,17 @@ namespace TmDq.App.Plot
         private static bool FuzzyEqual(double a, double b) => Math.Abs(a - b) * 1000000000000.0 <= Math.Min(Math.Abs(a), Math.Abs(b));
 
         public void Dispose() => _timeBase?.Dispose();
+    }
+
+    /// <summary>What became of a request to read a CSV for the plot.</summary>
+    public enum CsvLoad
+    {
+        /// <summary>Read and shown.</summary>
+        Loaded,
+        /// <summary>Not an exported CSV (or unreadable): nothing changed.</summary>
+        Failed,
+        /// <summary>Ignored, because another was being read.</summary>
+        Dropped,
     }
 
     /// <summary>One legend row: the series it stands for, its label, its full name (the row's tooltip) and its colour.</summary>

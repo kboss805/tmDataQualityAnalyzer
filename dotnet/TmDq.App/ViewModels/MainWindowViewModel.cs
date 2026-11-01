@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -24,6 +25,9 @@ namespace TmDq.App.ViewModels
         private readonly IRecordingPicker? _picker;
         private readonly IStreamConfigurator _configurator;
         private readonly IProcessingDialog? _processingDialog;
+        private readonly IDataFilePicker? _files;
+        private readonly IExportDialog? _exportDialog;
+        private readonly IPlotImageExporter? _imageExporter;
         private ProcessingViewModel? _processing;
         private string _status = "Open a Chapter 10 recording.";
         private int _progress;
@@ -35,18 +39,33 @@ namespace TmDq.App.ViewModels
         /// Frame Sync Lock defaults (<see cref="FirstChannelRun"/>).</param>
         /// <param name="processingDialog">The progress dialog shown while a run goes on; null shows none.</param>
         /// <param name="clock">The log's clock; null is the system's.</param>
+        /// <param name="files">The CSV to import and Export's Browse dialogs; null leaves Import CSV unavailable.</param>
+        /// <param name="exportDialog">The Export dialog; null leaves Export unavailable.</param>
+        /// <param name="imageExporter">What writes the plot as an image; null makes an image export fail.</param>
         public MainWindowViewModel(IRecordingPicker? picker = null, IStreamConfigurator? configurator = null,
-                                   IProcessingDialog? processingDialog = null, TimeProvider? clock = null)
+                                   IProcessingDialog? processingDialog = null, TimeProvider? clock = null,
+                                   IDataFilePicker? files = null, IExportDialog? exportDialog = null,
+                                   IPlotImageExporter? imageExporter = null)
         {
             _picker = picker;
             _configurator = configurator ?? new FirstChannelRun();
             _processingDialog = processingDialog;
+            _files = files;
+            _exportDialog = exportDialog;
+            _imageExporter = imageExporter;
             Log = new SessionLog(clock);
             OpenCommand = new AsyncRelayCommand(OpenAsync, () => !IsBusy && _picker is not null);
+            ImportCsvCommand = new AsyncRelayCommand(PickAndImportAsync, () => !IsBusy && _files is not null);
+            ExportCommand = new AsyncRelayCommand(ExportAsync, () => !IsBusy && Plot.HasData && _exportDialog is not null);
             Log.Add("tmDataQualityAnalyzer v" + AppInfo.Version);
             Log.Add("Load a Chapter 10 file to configure per-stream processing.");
-            // A time window entered outside the recording is clamped, and says so in the log, in goldenrod.
+            // A time window entered outside the recording is clamped, and says so in the log, in goldenrod; so are the rows
+            // an imported CSV skipped.
             Plot.Warning += (_, message) => Log.Warning(message);
+            Plot.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(PlotViewModel.HasData)) ExportCommand.NotifyCanExecuteChanged();
+            };
         }
 
         public string Title => AppInfo.Title;
@@ -85,9 +104,17 @@ namespace TmDq.App.ViewModels
             get => _isBusy;
             private set
             {
-                if (SetProperty(ref _isBusy, value)) OpenCommand.NotifyCanExecuteChanged();
+                if (!SetProperty(ref _isBusy, value)) return;
+                OpenCommand.NotifyCanExecuteChanged();
+                ImportCsvCommand.NotifyCanExecuteChanged();
+                ExportCommand.NotifyCanExecuteChanged();
             }
         }
+
+        /// <summary>The folder of the last recording opened or CSV imported: where Import CSV starts and Export proposes
+        /// to write, as the Qt application's last-directory setting is (kept for the session; remembering it between
+        /// sessions is plan step 4.8's).</summary>
+        public string? LastFolder { get; private set; }
 
         /// <summary>The first Frame Sync Lock stream processed, or null before the first recording, after a failure, and
         /// when no such stream was processed.</summary>
@@ -106,10 +133,116 @@ namespace TmDq.App.ViewModels
 
         public IAsyncRelayCommand OpenCommand { get; }
 
+        /// <summary>Import CSV: an exported CSV shown without processing anything (US6.3).</summary>
+        public IAsyncRelayCommand ImportCsvCommand { get; }
+
+        /// <summary>Export: the plot as an image, its data as CSV and the log as text, any of them in one action (US6.0 to
+        /// US6.2). Available once there is data.</summary>
+        public IAsyncRelayCommand ExportCommand { get; }
+
+        public const string NotAnExportedCsv =
+            "ERROR: '{0}' is not a recognized exported CSV (expected a 'Time (DOY:HH:MM:SS.mmm)' column with data rows). Nothing was imported.";
+
         private async Task OpenAsync()
         {
             string? path = await _picker!.PickRecordingAsync();
             if (path is not null) await LoadAsync(path);
+        }
+
+        private async Task PickAndImportAsync()
+        {
+            string? path = await _files!.OpenCsvAsync(LastFolder);
+            if (path is not null) await ImportCsvAsync(path);
+        }
+
+        /// <summary>
+        /// Shows an exported CSV in place of whatever was shown, as the Qt <c>importCsv</c> does: the plot cleared, the file
+        /// read off the UI thread with "Loading..." over the chart, then titled with its name. A file that is not an
+        /// exported CSV is an error, and nothing is shown. Ignored while busy.
+        /// </summary>
+        public async Task ImportCsvAsync(string path)
+        {
+            if (IsBusy) return;
+            string name = Path.GetFileName(path);
+            LastFolder = Path.GetDirectoryName(Path.GetFullPath(path));
+            IsBusy = true;
+            try
+            {
+                Log.Add("Importing CSV: " + name);
+                Show(Array.Empty<LockSeries>());
+                NativeCore.EnsureLoaded();
+                if (await Plot.LoadCsvAsync(path) == CsvLoad.Loaded)
+                {
+                    Plot.Title = BaseName(name);
+                    Status = "Imported CSV: " + name;
+                    Log.Success(Status);
+                }
+                else
+                {
+                    Status = string.Format(CultureInfo.InvariantCulture, NotAnExportedCsv, name);
+                    Log.Error(Status);
+                }
+            }
+            catch (Exception e) when (e is FileNotFoundException or InvalidOperationException)
+            {
+                Status = "The processing core could not be loaded: " + e.Message;
+                Log.Error(Status);
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
+
+        private async Task ExportAsync()
+        {
+            (string image, string data, string log) = ExportViewModel.DefaultPaths(LastFolder ?? AppContext.BaseDirectory, Plot.Title);
+            var choice = new ExportViewModel(image, data, log, _files);
+            await _exportDialog!.ShowAsync(choice);
+            if (choice.Accepted) await ExportAsync(choice);
+        }
+
+        /// <summary>
+        /// Writes what <paramref name="choice"/> asks for, in the Qt order (the data, the image, then the log, which so
+        /// carries the lines about the other two), each saying in the log where it went or that it failed; a failure does
+        /// not stop the rest. Nothing without data.
+        /// </summary>
+        public async Task ExportAsync(ExportViewModel choice)
+        {
+            if (!Plot.HasData) return;
+            if (choice.ExportData)
+            {
+                if (Plot.ExportCsv(choice.DataPath)) Log.Success("Data exported to " + choice.DataPath);
+                else Log.Error("Error: Failed to export data to " + choice.DataPath);
+            }
+            if (choice.ExportImage)
+            {
+                (string Path, ImageFormat Format)? written = _imageExporter is null ? null : await _imageExporter.ExportAsync(choice.ImagePath);
+                if (written is { } w) Log.Success($"Plot exported as {w.Format.ToString().ToUpperInvariant()} to {w.Path}");
+                else Log.Error("Error: Failed to export plot to " + ImageFiles.Resolve(choice.ImagePath).Path);
+            }
+            if (choice.ExportLog)
+            {
+                if (WriteLog(choice.LogPath)) Log.Success("Log exported to " + choice.LogPath);
+                else Log.Error("Error: Failed to export log to " + choice.LogPath);
+            }
+        }
+
+        /// <summary>The log as the Qt export writes it: each line as the sidebar shows it, CR LF line ends (Qt's text
+        /// mode), UTF-8 without a byte-order mark, ending with a line end.</summary>
+        private bool WriteLog(string path)
+        {
+            string text = Log.PlainText.Replace("\n", "\r\n");
+            if (!text.EndsWith("\r\n", StringComparison.Ordinal)) text += "\r\n";
+            try
+            {
+                File.WriteAllText(path, text, new UTF8Encoding(false));
+                return true;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                return false;
+            }
         }
 
         /// <summary>Opens <paramref name="path"/>, asks what to process, processes it and shows the result or the reason it
@@ -119,6 +252,7 @@ namespace TmDq.App.ViewModels
         {
             if (IsBusy) return;
             string name = Path.GetFileName(path);
+            LastFolder = Path.GetDirectoryName(Path.GetFullPath(path));
             IsBusy = true;
             Progress = 0;
             try
