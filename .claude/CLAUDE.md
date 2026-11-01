@@ -64,7 +64,7 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   `dotnet/TmDq.App.Tests` (xunit v3 on `Avalonia.Headless.XUnit`), both in `tmdq.sln`, which VS Code opens by default
   (`dotnet.defaultSolution`). `powershell -ExecutionPolicy Bypass -File scripts\test_app.ps1 [-Configuration
   Debug|Release] [-NoBuild]` builds the app with its tests and runs them; the walking-skeleton tests process the PRN sample through `native\out\<cfg>\tmdq_core.dll` (build it first; `TMDQ_CORE_DLL` overrides). The app: Open, or a recording path on the command line, then Configure Streams (step 4.1) and every checked stream processed; with `TMDQ_SMOKE_REPORT=<file>` it skips the dialog, runs the first channel with the defaults, writes one result line and exits. The repository's `settings/` is copied beside the exe (the app root). CI runs it in all three
-  jobs. Green baseline **448 passed / 0 failed / 0 skipped**. **Never type a version in a .csproj**: import
+  jobs. Green baseline **476 passed / 0 failed / 0 skipped**. **Never type a version in a .csproj**: import
   `dotnet/build/AppVersion.props`, which reads `AppVersion`. **Every .NET project imports
   `dotnet/build/PackageLicences.targets`** (plan D5): a package (transitive ones too) outside the open-source allow-list
   in `scripts/check_package_licences.ps1` fails the build, and a licence *file* passes only when its SHA-256 is in that

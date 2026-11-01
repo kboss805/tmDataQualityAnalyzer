@@ -128,6 +128,26 @@ namespace TmDq.App.Tests
             Assert.Equal("✓ 11 steps parsed.", vm.StepStatus);
             Assert.Equal("✓ Calibrated 12 of 48 channel(s).", vm.CalStatus);
             Assert.True(vm.CanAccept);
+
+            // A bad one after a good one: its steps are gone, and so is the calibration made with them.
+            await vm.LoadStepFileAsync(bad);
+            Assert.Empty(vm.Steps);
+            Assert.Empty(vm.Profiles);
+            Assert.False(vm.CanAccept);
+        }
+
+        [Fact]
+        public async Task AnExtractionThatCalibratesNothingIsACrossAndHoldsOk()
+        {
+            // Thirty levels in the step file against eleven in the recording: no channel resolves them all.
+            string many = Path.Combine(_dir, "many.toml");
+            File.WriteAllText(many, string.Concat(Enumerable.Range(0, 30).Select(i => $"[[Step]]\ndb = {2 * i}.0\n\n")));
+            var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, many) { ProgressDialog = new FakeProgress() };
+            Assert.Equal("✓ 30 steps parsed (loaded automatically).", vm.StepStatus);
+            await vm.LoadCalibrationAsync(StepCal);
+            Assert.Equal(("✗ Calibrated 0 of 48 channel(s).", CalibrationStatusKind.Fail), (vm.CalStatus, vm.CalKind));
+            Assert.Empty(vm.Profiles);
+            Assert.False(vm.CanAccept);
         }
 
         [Fact]
@@ -135,9 +155,11 @@ namespace TmDq.App.Tests
         {
             var progress = new FakeProgress();
             var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null) { ProgressDialog = progress };
-            int closed = 0;
+            int closed = 0, okTold = 0;
             vm.CloseRequested += (_, _) => closed++;
+            vm.OkCommand.CanExecuteChanged += (_, _) => okTold++;
             await vm.LoadCalibrationAsync(StepCal);
+            Assert.True(okTold > 0);   // the OK button is told it may now be pressed
             Assert.Equal(("step_cal, example.ch10", StepCal), (vm.CalName, vm.CalPath));
             Assert.Equal(new[] { ExtractCalibrationViewModel.ProcessingText }, progress.Shown);
             Assert.Equal(1, progress.Closed);
@@ -149,6 +171,15 @@ namespace TmDq.App.Tests
             Assert.True(vm.OkCommand.CanExecute(null));
             vm.OkCommand.Execute(null);
             Assert.Equal((true, 1), (vm.Accepted, closed));
+
+            // A recording that then fails takes the calibration, and its report, away with it.
+            string notRecording = Path.Combine(_dir, "not.ch10");
+            File.WriteAllText(notRecording, "not a recording");
+            await vm.LoadCalibrationAsync(notRecording);
+            Assert.Equal(CalibrationStatusKind.Fail, vm.CalKind);
+            Assert.Empty(vm.Profiles);
+            Assert.Equal("", vm.Report);
+            Assert.False(vm.CanAccept);
 
             var cancelled = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null);
             cancelled.CancelCommand.Execute(null);
@@ -179,10 +210,12 @@ namespace TmDq.App.Tests
         {
             string notRecording = Path.Combine(_dir, "notes.ch10");
             File.WriteAllText(notRecording, "not a recording");
-            var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null) { ProgressDialog = new FakeProgress() };
+            var progress = new FakeProgress();
+            var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null) { ProgressDialog = progress };
             await vm.LoadCalibrationAsync(notRecording);
             Assert.Equal(("✗ Error opening data file.", CalibrationStatusKind.Fail), (vm.CalStatus, vm.CalKind));
             Assert.False(vm.CanAccept);
+            Assert.Empty(progress.Shown);   // over before it started: no progress dialog flashes up
 
             // Without a frame sync pattern, the recording is not even taken.
             var noSync = new ExtractCalibrationViewModel(StepCalBase() with { SyncPattern = "  " }, Repo.Root, null);
@@ -191,7 +224,7 @@ namespace TmDq.App.Tests
             Assert.Equal("", noSync.CalName);
             var files = new FakeCalFiles();
             files.Answers.Enqueue(StepCal);
-            var noSyncBrowse = new ExtractCalibrationViewModel(StepCalBase() with { SyncPattern = "" }, Repo.Root, null, files);
+            var noSyncBrowse = new ExtractCalibrationViewModel(StepCalBase() with { SyncPattern = "  " }, Repo.Root, null, files);
             await noSyncBrowse.BrowseCalCommand.ExecuteAsync(null);
             Assert.Empty(files.Asked);   // refused before the file dialog
             Assert.Equal("✗ Set a frame sync pattern before loading the calibration file.", noSyncBrowse.CalStatus);
@@ -223,14 +256,18 @@ namespace TmDq.App.Tests
         public async Task ClipsBeyondTheRecordingAreIgnoredAndSaySoAtTheStreamsDataRate()
         {
             var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null) { ProgressDialog = new FakeProgress() };
+            vm.ClipStart = 500m;
             vm.ClipEnd = 1000m;   // no recording yet: nothing extracted
             Assert.Null(vm.Extraction);
             await vm.LoadCalibrationAsync(StepCal);
             Assert.Equal(CalibrationStatusKind.Warn, vm.CalKind);
-            Assert.StartsWith("⚠ Clip Start + Clip End (1000.0 s) exceed the recording (", vm.CalStatus);
+            Assert.StartsWith("⚠ Clip Start + Clip End (1500.0 s) exceed the recording (", vm.CalStatus);
             Assert.EndsWith(" s) - clips ignored. Calibrated 12 of 48 channel(s).", vm.CalStatus);
+            Assert.Matches(@"exceed the recording \(\d+\.\d s\)", vm.CalStatus);   // to one decimal, as Qt gives it
             double atRate = RecordingSecondsIn(vm.CalStatus);
             Assert.InRange(atRate, 60, 70);
+            vm.ClipStart = 0m;
+            await vm.Extraction!;
             Assert.StartsWith(vm.CalStatus[2..vm.CalStatus.IndexOf(" Calibrated", StringComparison.Ordinal)] + "\n\n", vm.Report);
             Assert.True(vm.CanAccept);   // still calibrated, over the whole recording
 
@@ -239,14 +276,18 @@ namespace TmDq.App.Tests
             await half.LoadCalibrationAsync(StepCal);
             Assert.InRange(RecordingSecondsIn(half.CalStatus) / atRate, 1.8, 2.2);
 
-            // A clip that fits is used, and a change of clip extracts again.
+            // A change of either clip extracts again: each is held on its own.
             vm.ClipEnd = 0m;
             await vm.Extraction!;
+            Assert.Equal(CalibrationStatusKind.Ok, vm.CalKind);
+            Assert.DoesNotContain("clips ignored", vm.Report);
             vm.ClipStart = 5m;
             await vm.Extraction!;
             Assert.Equal((5.0, 0.0), (vm.ToRequest().ClipStartSec, vm.ToRequest().ClipEndSec));
             Assert.Equal(CalibrationStatusKind.Ok, vm.CalKind);
-            Assert.DoesNotContain("clips ignored", vm.Report);
+            vm.ClipStart = 2000m;
+            await vm.Extraction!;
+            Assert.Equal(CalibrationStatusKind.Warn, vm.CalKind);
         }
 
         [Fact]
@@ -263,6 +304,7 @@ namespace TmDq.App.Tests
             // An empty mask and the default word map are left to the core.
             CalibrationRequest plain = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null).ToRequest();
             Assert.Equal(((string?)null, (string?)null), (plain.SyncMask, plain.ReceiverParamsToml));
+            Assert.Equal(13, new ExtractCalibrationViewModel(StepCalBase() with { PcmChannelId = 13 }, Repo.Root, null).ToRequest().PcmChannelId);
             // The time channel only sets the reader's clock, and steps are found in elapsed time, so which one is read
             // cannot be seen in the outcome: the request is what holds it (and Configure Streams' choice reaching it, below).
         }
@@ -327,7 +369,7 @@ namespace TmDq.App.Tests
         };
 
         [Fact]
-        public void ApplyCalIsForAReceiverSnrStreamWithATimeChannelAndNoProblem()
+        public async Task ApplyCalIsForAReceiverSnrStreamWithATimeChannelAndNoProblem()
         {
             var dialogs = new FakeStreamDialogs();
             var vm = new StreamSetupViewModel(StepCalRow(), null, Repo.Root, null, 1, true, dialogs);
@@ -341,6 +383,8 @@ namespace TmDq.App.Tests
             var noTime = new StreamSetupViewModel(StepCalRow(), null, Repo.Root, null, -1, true, dialogs);
             Assert.False(noTime.CanApplyCal);
             Assert.Equal("Select a Time Channel in the Configure Streams dialog before extracting calibration.", noTime.ApplyCalTip);
+            await noTime.ApplyCalCommand.ExecuteAsync(null);   // run anyway: it does nothing
+            Assert.Empty(dialogs.Extracted);
 
             int told = 0;
             vm.ApplyCalCommand.CanExecuteChanged += (_, _) => told++;
@@ -362,13 +406,20 @@ namespace TmDq.App.Tests
                 await e.LoadCalibrationAsync(StepCal);
                 e.ClipStart = 2m;
                 await e.Extraction!;
+                e.ClipEnd = 1m;
+                await e.Extraction!;
                 e.OkCommand.Execute(null);
             };
             StreamSetup row = StepCalRow() with { StepTomlPath = Shipped("RASA.toml") };
             var vm = new StreamSetupViewModel(row, null, Repo.Root, null, 1, true, dialogs);
             vm.SyncPattern = " fe6b2840 ";
             vm.NumReceivers = 16;
+            var said = new List<string?>();
+            vm.PropertyChanged += (_, args) => said.Add(args.PropertyName);
             await vm.ApplyCalCommand.ExecuteAsync(null);
+            Assert.Contains(nameof(StreamSetupViewModel.CalibrationText), said);   // the label is told
+            // The step file's folder is the dialog's last folder now, as a settings file's would be.
+            Assert.Equal(Path.GetDirectoryName(Shipped("default.toml")), vm.LastFolder);
 
             ExtractCalibrationViewModel e = Assert.Single(dialogs.Extracted);
             // Opened on the stream's last step file, with the settings as they stand, the time channel and the byte order.
@@ -378,7 +429,7 @@ namespace TmDq.App.Tests
 
             StreamSetup kept = vm.ToSetup();
             Assert.Equal(CalibratedWords, kept.Calibration.Select(p => p.WordIndex));
-            Assert.Equal((StepCal, Shipped("default.toml"), 2.0, 0.0), (kept.CalCh10Path, kept.StepTomlPath, kept.ClipStartSec, kept.ClipEndSec));
+            Assert.Equal((StepCal, Shipped("default.toml"), 2.0, 1.0), (kept.CalCh10Path, kept.StepTomlPath, kept.ClipStartSec, kept.ClipEndSec));
 
             // Opened again, it starts on the step file just used; cancelled, it changes nothing.
             dialogs.OnExtract = e2 => { e2.CancelCommand.Execute(null); return Task.CompletedTask; };
@@ -502,7 +553,85 @@ namespace TmDq.App.Tests
             Assert.Equal(("cal", Path.GetDirectoryName(StepCal)), calFiles.Asked[^1]);
         }
 
+        [Fact]
+        public async Task TheConfiguratorGivesTheDialogsTheCalibrationFileDialogs()
+        {
+            bool canBrowse = false;
+            var dialogs = new FakeStreamDialogs
+            {
+                OnConfigure = async c =>
+                {
+                    StreamRowViewModel row = c.Rows[0];
+                    row.Process = true;
+                    row.ModeIndex = 0;
+                    await row.ConfigureCommand.ExecuteAsync(null);
+                },
+                OnEdit = async setup =>
+                {
+                    await setup.ApplyCalCommand.ExecuteAsync(null);
+                    setup.CancelCommand.Execute(null);
+                },
+                OnExtract = e =>
+                {
+                    canBrowse = e.BrowseCalCommand.CanExecute(null);
+                    e.CancelCommand.Execute(null);
+                    return Task.CompletedTask;
+                },
+            };
+            var configurator = new DialogConfigurator(dialogs, null, Repo.Root, new FakeCalFiles());
+            Assert.Null(await configurator.ConfigureAsync(StepCal, StreamsRun.Open(StepCal)));
+            Assert.Single(dialogs.Extracted);
+            Assert.True(canBrowse);
+        }
+
         // ---- the windows ---------------------------------------------------------------------------------------------------
+
+        [AvaloniaFact]
+        public async Task TheExtractionsProgressReachesTheProgressDialog()
+        {
+            ProcessingViewModel? shown = null;
+            var progress = new FakeProgress { OnShow = p => shown = p };
+            var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null) { ProgressDialog = progress };
+            Task extraction = vm.LoadCalibrationAsync(StepCal);
+            while (!extraction.IsCompleted) Dispatcher.UIThread.RunJobs();
+            await extraction;
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotNull(shown);
+            Assert.Equal(ExtractCalibrationViewModel.ProcessingText, shown!.Text);
+            Assert.True(shown.Progress > 0, $"the progress dialog stayed at {shown.Progress}");
+        }
+
+        [AvaloniaFact]
+        public void ExtractCalibrationAndItsReportSitOverTheSetupDialogThatOpenedThem()
+        {
+            var owner = new Window { Width = 400, Height = 300 };
+            owner.Show();
+            var dialogs = new WindowStreamDialogs(owner);
+            var setupVm = new StreamSetupViewModel(StepCalRow(), null, Repo.Root, null, 1, true, dialogs);
+            Task editing = dialogs.EditStreamAsync(setupVm);
+            Dispatcher.UIThread.RunJobs();
+            var setup = Assert.IsType<StreamSetupWindow>(Assert.Single(owner.OwnedWindows));
+
+            var extract = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null);
+            Task shown = dialogs.ExtractCalibrationAsync(extract);
+            Dispatcher.UIThread.RunJobs();
+            Assert.IsType<ExtractCalibrationWindow>(Assert.Single(setup.OwnedWindows));
+            extract.CancelCommand.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(shown.IsCompleted, "Extract Calibration is still open.");
+
+            Task report = dialogs.ShowReportAsync("Calibration Extracted", "text");
+            Dispatcher.UIThread.RunJobs();
+            var box = Assert.IsType<ReportWindow>(Assert.Single(setup.OwnedWindows));
+            box.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(report.IsCompleted, "the report is still open.");
+
+            setupVm.CancelCommand.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(editing.IsCompleted, "the setup dialog is still open.");
+            owner.Close();
+        }
 
         [AvaloniaFact]
         public void TheExtractCalibrationWindowShowsTheDialogsState()
