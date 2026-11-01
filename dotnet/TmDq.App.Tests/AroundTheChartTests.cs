@@ -593,7 +593,7 @@ namespace TmDq.App.Tests
             c.LockRows[0].Name = "Five";
             prompts.Answers.Enqueue(Colors.Teal);
             await c.LockRows[0].PickColorCommand.ExecuteAsync(null);
-            Assert.Equal(Colors.Teal, prompts.LastColor == plot.SeriesById(2)!.Color ? Colors.Teal : prompts.LastColor);
+            Assert.Equal(plot.SeriesById(2)!.Color, prompts.LastColor);   // the dialog opens on the stream's colour
             Assert.Equal(Colors.Teal, ((ISolidColorBrush)c.LockRows[0].Brush).Color);
             await c.LockRows[1].PickColorCommand.ExecuteAsync(null);   // cancelled
             Assert.Equal(plot.SeriesById(0)!.Color, c.LockRows[1].Color);
