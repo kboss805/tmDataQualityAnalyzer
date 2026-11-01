@@ -92,6 +92,7 @@ namespace TmDq.App.Views
             }
             ResetChip.IsVisible = vm?.CanResetView == true;
             ChipBar.IsVisible = hasData;
+            LoadingLabel.IsVisible = vm?.IsLoading == true;
 
             Legend.Show(hasData ? vm!.LegendEntries() : Array.Empty<LegendEntry>(), vm?.LegendVisible ?? true, Overlay.Bounds.Size);
         }

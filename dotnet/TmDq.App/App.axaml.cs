@@ -1,5 +1,6 @@
 using System;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using TmDq.App.Processing;
@@ -22,7 +23,9 @@ namespace TmDq.App
                 IStreamConfigurator configurator = Startup.SmokeReportPath() is null
                     ? new DialogConfigurator(new WindowStreamDialogs(window), new StorageSettingsFilePicker(window), AppContext.BaseDirectory)
                     : new FirstChannelRun();
-                var vm = new MainWindowViewModel(new StorageRecordingPicker(window), configurator, new WindowProcessingDialog(window));
+                var vm = new MainWindowViewModel(new StorageRecordingPicker(window), configurator, new WindowProcessingDialog(window),
+                                                 files: new StorageDataFilePicker(window), exportDialog: new WindowExportDialog(window),
+                                                 imageExporter: new PlotViewImageExporter(window.FindControl<PlotView>("PlotView")!));
                 window.DataContext = vm;
                 desktop.MainWindow = window;
 

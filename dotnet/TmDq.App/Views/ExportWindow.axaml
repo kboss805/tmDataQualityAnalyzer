@@ -1,0 +1,51 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:TmDq.App.ViewModels"
+        x:Class="TmDq.App.Views.ExportWindow"
+        x:DataType="vm:ExportViewModel"
+        Title="{x:Static vm:ExportViewModel.Title}"
+        MinWidth="500" Width="560" SizeToContent="Height" CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner">
+  <Window.Styles>
+    <Style Selector="HeaderedContentControl.group">
+      <Setter Property="Margin" Value="0,0,0,10" />
+    </Style>
+  </Window.Styles>
+  <!-- As the Qt dialog: the plot image first (the default export), then the data, then the log. -->
+  <StackPanel Margin="12" Spacing="2">
+    <HeaderedContentControl Classes="group" Header="Export Plot Image">
+      <StackPanel Spacing="4">
+        <CheckBox x:Name="ImageBox" Content="Export Image" IsChecked="{Binding ExportImage}" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <TextBox x:Name="ImagePathBox" Text="{Binding ImagePath}" IsEnabled="{Binding ExportImage}" />
+          <Button x:Name="ImageBrowse" Grid.Column="1" Content="Browse..." Command="{Binding BrowseImageCommand}" />
+        </Grid>
+      </StackPanel>
+    </HeaderedContentControl>
+    <HeaderedContentControl Classes="group" Header="Export Data (CSV)">
+      <StackPanel Spacing="4">
+        <CheckBox x:Name="DataBox" Content="Export Data" IsChecked="{Binding ExportData}" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <TextBox x:Name="DataPathBox" Text="{Binding DataPath}" IsEnabled="{Binding ExportData}" />
+          <Button x:Name="DataBrowse" Grid.Column="1" Content="Browse..." Command="{Binding BrowseDataCommand}" />
+        </Grid>
+      </StackPanel>
+    </HeaderedContentControl>
+    <HeaderedContentControl Classes="group" Header="Export Log (Text)">
+      <StackPanel Spacing="4">
+        <CheckBox x:Name="LogBox" Content="Export Log" IsChecked="{Binding ExportLog}" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <TextBox x:Name="LogPathBox" Text="{Binding LogPath}" IsEnabled="{Binding ExportLog}" />
+          <Button x:Name="LogBrowse" Grid.Column="1" Content="Browse..." Command="{Binding BrowseLogCommand}" />
+        </Grid>
+      </StackPanel>
+    </HeaderedContentControl>
+    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,6,0,0">
+      <Button x:Name="ExportButton" Content="Export" IsDefault="True" MinWidth="80" HorizontalContentAlignment="Center"
+              Command="{Binding ExportCommand}" />
+      <Button x:Name="CancelButton" Content="Cancel" IsCancel="True" MinWidth="80" HorizontalContentAlignment="Center"
+              Command="{Binding CancelCommand}" />
+    </StackPanel>
+  </StackPanel>
+</Window>

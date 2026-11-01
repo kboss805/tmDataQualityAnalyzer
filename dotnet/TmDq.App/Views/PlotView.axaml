@@ -38,5 +38,11 @@
       </StackPanel>
       <views:PlotLegend x:Name="Legend" x:FieldModifier="public" />
     </Canvas>
+    <!-- While a CSV is read for the plot (plan step 4.5); it takes no input. -->
+    <Border x:Name="LoadingLabel" x:FieldModifier="public" IsVisible="False" IsHitTestVisible="False"
+            HorizontalAlignment="Center" VerticalAlignment="Center" Padding="16,8" CornerRadius="6"
+            Background="#E6FFFFFF" BorderBrush="#C8C8C8" BorderThickness="1">
+      <TextBlock Text="Loading..." FontSize="16" Foreground="#1E1E1E" />
+    </Border>
   </Grid>
 </UserControl>
