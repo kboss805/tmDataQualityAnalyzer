@@ -29,14 +29,16 @@ namespace TmDq.App.ViewModels
         private readonly ICalibrationFilePicker? _calibrationFiles;
 
         /// <param name="calibrationFiles">Extract Calibration's file dialogs (plan step 4.6).</param>
+        /// <param name="lastCalFolder">Where the last calibration recording came from, in an earlier session (plan step 4.8).</param>
         public ConfigureStreamsViewModel(string recording, Ch10File file, IStreamDialogs? dialogs, ISettingsFilePicker? files, string? appRoot,
-                                         ICalibrationFilePicker? calibrationFiles = null)
+                                         ICalibrationFilePicker? calibrationFiles = null, string? lastCalFolder = null)
         {
             Recording = recording;
             _dialogs = dialogs;
             _files = files;
             _appRoot = appRoot;
             _calibrationFiles = calibrationFiles;
+            _lastCalFolder = lastCalFolder;
             _timeChannels = file.TimeChannels;
             TimeChannelItems = _timeChannels.Select(StreamRules.TimeChannelText).ToList();
             _timeChannelIndex = Math.Max(0, _timeChannels.ToList().FindIndex(c => c.Id == file.DefaultTimeChannel));
@@ -88,6 +90,9 @@ namespace TmDq.App.ViewModels
         public string WhyNotProcess => StreamRules.WhyNotProcess(Setups) ?? string.Empty;
 
         public bool Accepted { get; private set; }
+
+        /// <summary>Where Extract Calibration's last calibration recording came from, for the next session.</summary>
+        public string? LastCalFolder => _lastCalFolder;
 
         public IRelayCommand ProcessCommand { get; }
 

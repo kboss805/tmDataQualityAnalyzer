@@ -9,22 +9,22 @@
       <Setter Property="Padding" Value="8,0" />
       <Setter Property="FontSize" Value="12" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
-      <Setter Property="Background" Value="#B9FFFFFF" />
-      <Setter Property="BorderBrush" Value="#C8C8C8" />
+      <Setter Property="Background" Value="{DynamicResource ChipBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ChipBorder}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="6" />
-      <Setter Property="Foreground" Value="#1E1E1E" />
+      <Setter Property="Foreground" Value="{DynamicResource ChipForeground}" />
       <Setter Property="Cursor" Value="Hand" />
     </Style>
     <Style Selector="Button.chip:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="#B9FFFFFF" />
-      <Setter Property="BorderBrush" Value="#005FB8" />
-      <Setter Property="Foreground" Value="#1E1E1E" />
+      <Setter Property="Background" Value="{DynamicResource ChipBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ChipAccent}" />
+      <Setter Property="Foreground" Value="{DynamicResource ChipForeground}" />
     </Style>
     <Style Selector="Button.chip:pressed /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="#B9FFFFFF" />
-      <Setter Property="BorderBrush" Value="#005FB8" />
-      <Setter Property="Foreground" Value="#1E1E1E" />
+      <Setter Property="Background" Value="{DynamicResource ChipBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ChipAccent}" />
+      <Setter Property="Foreground" Value="{DynamicResource ChipForeground}" />
     </Style>
   </UserControl.Styles>
   <Grid>
@@ -41,8 +41,8 @@
     <!-- While a CSV is read for the plot (plan step 4.5); it takes no input. -->
     <Border x:Name="LoadingLabel" x:FieldModifier="public" IsVisible="False" IsHitTestVisible="False"
             HorizontalAlignment="Center" VerticalAlignment="Center" Padding="16,8" CornerRadius="6"
-            Background="#E6FFFFFF" BorderBrush="#C8C8C8" BorderThickness="1">
-      <TextBlock Text="Loading..." FontSize="16" Foreground="#1E1E1E" />
+            Background="{DynamicResource LoadingBackground}" BorderBrush="{DynamicResource LoadingBorder}" BorderThickness="1">
+      <TextBlock Text="Loading..." FontSize="16" Foreground="{DynamicResource LoadingForeground}" />
     </Border>
   </Grid>
 </UserControl>

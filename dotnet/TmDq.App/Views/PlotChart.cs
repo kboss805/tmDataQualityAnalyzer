@@ -38,11 +38,6 @@ namespace TmDq.App.Views
         public const double WheelZoomStep = 0.85;
         public const byte BandAlpha = 90, BandEdgeAlpha = 190, CrosshairAlpha = 140, ZoomBandAlpha = 45;
 
-        // The light theme's palette (the dark theme is plan step 4.8's).
-        public static readonly Color Background = Colors.White;
-        public static readonly Color Foreground = Color.FromRgb(30, 30, 30);
-        public static readonly Color Grid = Color.FromRgb(200, 200, 200);
-        public static readonly Color TitleColor = Color.FromRgb(0x00, 0x5F, 0xB8);
 
         // Keyed by the series itself: a new series reusing an old one's id must not be drawn from the old one's geometry.
         private readonly Dictionary<PlotSeries, (int Version, ChartView View, SeriesGeometry Geometry)> _geometry = new();
@@ -62,7 +57,16 @@ namespace TmDq.App.Views
             Focusable = true;
             ClipToBounds = true;
             ToolTip.SetPlacement(this, PlacementMode.Pointer);
+            // The theme changed (US9.0): the cached layer was painted in the other palette.
+            ActualThemeVariantChanged += (_, _) =>
+            {
+                _backingValid = false;
+                InvalidateVisual();
+            };
         }
+
+        /// <summary>The colours of the theme in use.</summary>
+        public ChartPalette Palette => ChartPalette.For(ActualThemeVariant);
 
         public PlotViewModel? Plot
         {
@@ -87,7 +91,7 @@ namespace TmDq.App.Views
                 bold ? new Typeface(Typeface.FontFamily, FontStyle.Normal, FontWeight.Bold) : Typeface,
                 FontSize, new ImmutableSolidColorBrush(color));
 
-        private double TextHeight => Math.Ceiling(Text("Xg", Foreground).Height);
+        private double TextHeight => Math.Ceiling(Text("Xg", Palette.Foreground).Height);
 
         /// <summary>The rectangle the data is drawn in: the control less the axes' gutters (a hidden axis reserves none),
         /// the title and the headroom kept for the overlays at the top.</summary>
@@ -97,7 +101,7 @@ namespace TmDq.App.Views
         {
             PlotViewModel? vm = Plot;
             bool leftVisible = vm?.LeftAxisVisible ?? true, rightVisible = vm?.RightAxisVisible ?? false;
-            double textH = TextHeight, labelW = Math.Ceiling(Text("-000.0", Foreground).Width);
+            double textH = TextHeight, labelW = Math.Ceiling(Text("-000.0", Palette.Foreground).Width);
             double left = OuterMargin;
             if (leftVisible) left += labelW + TickLength + textH + AxisLabelGap;
             double right = OuterMargin;
@@ -147,6 +151,7 @@ namespace TmDq.App.Views
             {
                 _backingValid = false;
             }
+
         }
 
         private void OnModelPropertyChanged(object? sender, PropertyChangedEventArgs e) => OnDataChanged(sender, e);
@@ -191,14 +196,14 @@ namespace TmDq.App.Views
 
         private void RenderData(DrawingContext dc, Size size)
         {
-            dc.FillRectangle(new ImmutableSolidColorBrush(Background), new Rect(size));
+            dc.FillRectangle(new ImmutableSolidColorBrush(Palette.Background), new Rect(size));
             PlotViewModel? vm = Plot;
             Rect area = AreaFor(size);
             bool hasData = vm?.HasData == true;
             bool leftVisible = vm?.LeftAxisVisible ?? true, rightVisible = vm?.RightAxisVisible ?? false;
 
             // The title, centred above the plot.
-            FormattedText title = Text(vm?.Title ?? PlotViewModel.DefaultTitle, TitleColor, bold: true);
+            FormattedText title = Text(vm?.Title ?? PlotViewModel.DefaultTitle, Palette.Title, bold: true);
             dc.DrawText(title, new Point((size.Width - title.Width) / 2, OuterMargin / 2));
 
             // Ticks need the core, which is loaded once there is data; an empty chart is a frame with its labels.
@@ -208,7 +213,7 @@ namespace TmDq.App.Views
             ChartView left = ViewFor(true, area), right = ViewFor(false, area);
 
             // The grid: dotted, at the X ticks and at the Y ticks of the axis drawn (the left when both are).
-            var gridPen = new ImmutablePen(new ImmutableSolidColorBrush(Grid), 1, new ImmutableDashStyle(new[] { 1.0, 2.0 }, 0));
+            var gridPen = new ImmutablePen(new ImmutableSolidColorBrush(Palette.Grid), 1, new ImmutableDashStyle(new[] { 1.0, 2.0 }, 0));
             foreach (double t in xTicks)
             {
                 double px = ChartGeometry.XToPixel(left, t);
@@ -291,7 +296,7 @@ namespace TmDq.App.Views
         private void DrawAxes(DrawingContext dc, Size size, Rect area, PlotViewModel? vm, double[] xTicks, double[] leftTicks,
                               double[] rightTicks, ChartView left, ChartView right, bool leftVisible, bool rightVisible)
         {
-            var pen = new ImmutablePen(new ImmutableSolidColorBrush(Foreground), 1);
+            var pen = new ImmutablePen(new ImmutableSolidColorBrush(Palette.Foreground), 1);
             double textH = TextHeight;
 
             // Axis lines: the bottom always; left and right only when that axis is in use.
@@ -306,7 +311,7 @@ namespace TmDq.App.Views
             {
                 double px = ChartGeometry.XToPixel(left, xTicks[i]);
                 dc.DrawLine(pen, new Point(px, area.Bottom), new Point(px, area.Bottom + TickLength));
-                FormattedText label = Text(vm!.FormatTime(xTicks[i]), Foreground);
+                FormattedText label = Text(vm!.FormatTime(xTicks[i]), Palette.Foreground);
                 double w = label.Width + TickLabelGap;
                 double labelLeft = px - w / 2;
                 bool isLast = i == xTicks.Length - 1;
@@ -322,22 +327,22 @@ namespace TmDq.App.Views
             {
                 double py = ChartGeometry.YToPixel(left, t);
                 dc.DrawLine(pen, new Point(area.Left - TickLength, py), new Point(area.Left, py));
-                FormattedText label = Text(t.ToString("F1", CultureInfo.InvariantCulture), Foreground);
+                FormattedText label = Text(t.ToString("F1", CultureInfo.InvariantCulture), Palette.Foreground);
                 dc.DrawText(label, new Point(area.Left - TickLength - 2 - label.Width, py - label.Height / 2));
             }
             foreach (double t in rightTicks)
             {
                 double py = ChartGeometry.YToPixel(right, t);
                 dc.DrawLine(pen, new Point(area.Right, py), new Point(area.Right + TickLength, py));
-                FormattedText label = Text(t.ToString("F1", CultureInfo.InvariantCulture), Foreground);
+                FormattedText label = Text(t.ToString("F1", CultureInfo.InvariantCulture), Palette.Foreground);
                 dc.DrawText(label, new Point(area.Right + TickLength + 2, py - label.Height / 2));
             }
 
             // The axis titles; the Y titles read bottom to top beside their axis.
-            FormattedText xTitle = Text(PlotViewModel.XAxisLabel, Foreground);
+            FormattedText xTitle = Text(PlotViewModel.XAxisLabel, Palette.Foreground);
             dc.DrawText(xTitle, new Point(area.Left + (area.Width - xTitle.Width) / 2, size.Height - textH - OuterMargin / 2));
-            if (leftVisible) DrawVertical(dc, Text(vm?.LeftAxisLabel ?? PlotViewModel.LockAxisLabel, Foreground), OuterMargin, area);
-            if (rightVisible) DrawVertical(dc, Text(PlotViewModel.SnrAxisLabel, Foreground), size.Width - OuterMargin, area);
+            if (leftVisible) DrawVertical(dc, Text(vm?.LeftAxisLabel ?? PlotViewModel.LockAxisLabel, Palette.Foreground), OuterMargin, area);
+            if (rightVisible) DrawVertical(dc, Text(PlotViewModel.SnrAxisLabel, Palette.Foreground), size.Width - OuterMargin, area);
         }
 
         private static void DrawVertical(DrawingContext dc, FormattedText text, double centreX, Rect area)
@@ -358,12 +363,12 @@ namespace TmDq.App.Views
             {
                 double p0 = ChartGeometry.XToPixel(view, Math.Min(_bandFrom, _bandTo));
                 double p1 = ChartGeometry.XToPixel(view, Math.Max(_bandFrom, _bandTo));
-                dc.FillRectangle(new ImmutableSolidColorBrush(Color.FromArgb(ZoomBandAlpha, Foreground.R, Foreground.G, Foreground.B)),
+                dc.FillRectangle(new ImmutableSolidColorBrush(Color.FromArgb(ZoomBandAlpha, Palette.Foreground.R, Palette.Foreground.G, Palette.Foreground.B)),
                                  new Rect(p0, area.Top, Math.Max(0, p1 - p0), area.Height));
             }
             if (_crosshairVisible)
             {
-                var pen = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(CrosshairAlpha, Foreground.R, Foreground.G, Foreground.B)),
+                var pen = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(CrosshairAlpha, Palette.Foreground.R, Palette.Foreground.G, Palette.Foreground.B)),
                                            1, new ImmutableDashStyle(new[] { 4.0, 2.0 }, 0));
                 double px = ChartGeometry.XToPixel(view, _crosshairX);
                 dc.DrawLine(pen, new Point(px, area.Top), new Point(px, area.Bottom));

@@ -982,8 +982,8 @@ namespace TmDq.App.Tests
             plot.SetRightMaxOverride(100);
             Shown s = Show(plot);
             PlotLegend legend = s.View.Legend;
-            Assert.Equal(PlotLegend.BackgroundColor, ((ImmutableSolidColorBrush)legend.Background!).Color);
-            Assert.Equal(185, PlotLegend.BackgroundColor.A);
+            Assert.Equal(ChartPalette.Light.LegendBackground, ((ImmutableSolidColorBrush)legend.Background!).Color);
+            Assert.Equal(185, ChartPalette.Light.LegendBackground.A);
 
             // Dragged so that it lies across the line.
             double lineY = s.View.Chart.RightToPixel(50);

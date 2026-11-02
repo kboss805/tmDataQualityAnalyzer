@@ -558,27 +558,6 @@ namespace TmDq.App.Tests
             Assert.Null(await chosen);
             owner.Close();
         }
-
-        [AvaloniaFact]
-        public void TheTopBarHasSaveAsTemplateAndApplyTemplate()
-        {
-            var vm = new MainWindowViewModel(templateFiles: new FakeTemplateFiles(), templateDialogs: new FakeTemplateDialogs());
-            var window = new MainWindow { DataContext = vm };
-            window.Show();
-            Dispatcher.UIThread.RunJobs();
-            Button open = window.FindControl<Button>("OpenButton")!, save = window.FindControl<Button>("SaveTemplateButton")!,
-                   apply = window.FindControl<Button>("ApplyTemplateButton")!;
-            Assert.Same(open.Parent, save.Parent);
-            Assert.Same(open.Parent, apply.Parent);
-            Assert.Equal(("Save as Template...", "Apply Template..."), ((string)save.Content!, (string)apply.Content!));
-            Assert.Same(vm.SaveTemplateCommand, save.Command);
-            Assert.Same(vm.ApplyTemplateCommand, apply.Command);
-            Assert.NotNull(ToolTip.GetTip(save));
-            Assert.NotNull(ToolTip.GetTip(apply));
-            Assert.False(save.IsEffectivelyEnabled);   // nothing processed yet
-            Assert.True(apply.IsEffectivelyEnabled);
-            window.Close();
-        }
     }
 
     internal static class VisualSearch

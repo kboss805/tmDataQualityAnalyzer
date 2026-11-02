@@ -6,5 +6,90 @@
     <FluentTheme />
     <!-- Customize View's colour dialog (plan step 4.4). -->
     <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
+    <!-- A section heading in the main menu (plan step 4.8): small and bold, a heading rather than an entry. Here, not on
+         the window, because the menu is a popup of its own. -->
+    <Style Selector="MenuItem.section">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="MinHeight" Value="24" />
+    </Style>
   </Application.Styles>
+  <Application.Resources>
+    <ResourceDictionary>
+      <!-- The menu's icons, drawn from the Qt application's resources: the folder and the floppy disk carry their own
+           colours and read in both themes; the export and import arrows are a shade for each theme. -->
+      <DrawingImage x:Key="OpenIcon">
+        <DrawingGroup>
+          <GeometryDrawing Geometry="M2 6 C2 4.9 2.9 4 4 4 L9.5 4 L12 7 L20 7 C21.1 7 22 7.9 22 9 L22 18 C22 19.1 21.1 20 20 20 L4 20 C2.9 20 2 19.1 2 18 Z">
+            <GeometryDrawing.Brush>
+              <LinearGradientBrush StartPoint="50%,0%" EndPoint="50%,100%">
+                <GradientStop Offset="0" Color="#FFD54F" />
+                <GradientStop Offset="1" Color="#FFA000" />
+              </LinearGradientBrush>
+            </GeometryDrawing.Brush>
+          </GeometryDrawing>
+          <GeometryDrawing Geometry="M2 18 L2 10 L4 10 L6 8 L22 8 L22 10 L20 18 Z">
+            <GeometryDrawing.Brush>
+              <LinearGradientBrush StartPoint="50%,0%" EndPoint="50%,100%" Opacity="0.85">
+                <GradientStop Offset="0" Color="#FFE082" />
+                <GradientStop Offset="1" Color="#FFB300" />
+              </LinearGradientBrush>
+            </GeometryDrawing.Brush>
+          </GeometryDrawing>
+        </DrawingGroup>
+      </DrawingImage>
+      <DrawingImage x:Key="SaveIcon">
+        <DrawingGroup>
+          <GeometryDrawing>
+            <GeometryDrawing.Brush>
+              <LinearGradientBrush StartPoint="50%,0%" EndPoint="50%,100%">
+                <GradientStop Offset="0" Color="#3B82F6" />
+                <GradientStop Offset="1" Color="#1D4ED8" />
+              </LinearGradientBrush>
+            </GeometryDrawing.Brush>
+            <GeometryDrawing.Geometry><RectangleGeometry Rect="3,2,18,20" RadiusX="2" RadiusY="2" /></GeometryDrawing.Geometry>
+          </GeometryDrawing>
+          <GeometryDrawing Brush="#CCFFFFFF"><GeometryDrawing.Geometry><RectangleGeometry Rect="7,2,10,7" RadiusX="1" RadiusY="1" /></GeometryDrawing.Geometry></GeometryDrawing>
+          <GeometryDrawing Brush="#CC1D4ED8"><GeometryDrawing.Geometry><RectangleGeometry Rect="9,3,5,2" RadiusX="0.5" RadiusY="0.5" /></GeometryDrawing.Geometry></GeometryDrawing>
+          <GeometryDrawing Brush="#E6FFFFFF"><GeometryDrawing.Geometry><RectangleGeometry Rect="5,12,14,8" RadiusX="1" RadiusY="1" /></GeometryDrawing.Geometry></GeometryDrawing>
+          <GeometryDrawing Geometry="M7 14 L17 14 M7 16 L17 16 M7 18 L17 18">
+            <GeometryDrawing.Pen><Pen Brush="#CC1D4ED8" Thickness="1" /></GeometryDrawing.Pen>
+          </GeometryDrawing>
+        </DrawingGroup>
+      </DrawingImage>
+      <!-- The colours of what the application draws itself, in each theme (US9.0, plan step 4.8): the chips and the
+           "Loading..." label over the chart (the Qt overlay bar's and loading label's), and the log sidebar's panel (the
+           Qt themes' text browser). The chart and its legend take theirs from ChartPalette. -->
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="ChipBackground" Color="#B9FFFFFF" />
+          <SolidColorBrush x:Key="ChipBorder" Color="#C8C8C8" />
+          <SolidColorBrush x:Key="ChipForeground" Color="#1E1E1E" />
+          <SolidColorBrush x:Key="ChipAccent" Color="#005FB8" />
+          <SolidColorBrush x:Key="LoadingBackground" Color="#E6FFFFFF" />
+          <SolidColorBrush x:Key="LoadingBorder" Color="#C8C8C8" />
+          <SolidColorBrush x:Key="LoadingForeground" Color="#1E1E1E" />
+          <SolidColorBrush x:Key="LogPanelBackground" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="LogPanelBorder" Color="#E5E5E5" />
+          <SolidColorBrush x:Key="TitleBarHover" Color="#38808080" />
+          <DrawingImage x:Key="ExportIcon"><GeometryDrawing Brush="#1A7A2E" Geometry="M2.7525 4.5C3.1322 4.5 3.44594 4.78227 3.49554 5.14836L3.50237 5.25014L3.5 18.2542C3.49992 18.6684 3.16408 19.0041 2.74986 19.0041C2.37017 19.0041 2.05642 18.7218 2.00683 18.3557L2 18.2539L2.00237 5.24986C2.00244 4.83565 2.33829 4.5 2.7525 4.5ZM15.6471 6.30373L15.7197 6.21961C15.986 5.95338 16.4027 5.92921 16.6963 6.1471L16.7804 6.21972L21.777 11.2174C22.0431 11.4835 22.0674 11.8999 21.8498 12.1935L21.7773 12.2776L16.7807 17.2811C16.488 17.5742 16.0131 17.5745 15.72 17.2818C15.4536 17.0157 15.4291 16.5991 15.6467 16.3053L15.7193 16.2211L19.43 12.504L5.75295 12.5049C5.37326 12.5049 5.05946 12.2228 5.0098 11.8567L5.00295 11.7549C5.00295 11.3752 5.28511 11.0615 5.65118 11.0118L5.75295 11.0049L19.443 11.004L15.7196 7.28028C15.4534 7.01398 15.4292 6.59732 15.6471 6.30373L15.7197 6.21961L15.6471 6.30373Z" /></DrawingImage>
+          <DrawingImage x:Key="ImportIcon"><GeometryDrawing Brush="#C7511A" Geometry="M21.2498 4.5C21.6295 4.5 21.9433 4.78215 21.993 5.14823L21.9998 5.25V18.2541C21.9998 18.6683 21.664 19.0041 21.2498 19.0041C20.8701 19.0041 20.5563 18.7219 20.5066 18.3558L20.4998 18.2541V5.25C20.4998 4.83579 20.8356 4.5 21.2498 4.5ZM12.6469 6.30373L12.7195 6.21961C12.9858 5.95338 13.4025 5.92921 13.6961 6.1471L13.7802 6.21972L18.7768 11.2174C19.0429 11.4835 19.0672 11.8999 18.8496 12.1935L18.7771 12.2776L13.7805 17.2811C13.4878 17.5742 13.0129 17.5745 12.7198 17.2818C12.4534 17.0157 12.4289 16.5991 12.6465 16.3053L12.7191 16.2211L16.43 12.504L2.75 12.5049C2.3703 12.5049 2.05651 12.2228 2.00685 11.8567L2 11.7549C2 11.3753 2.28215 11.0615 2.64823 11.0118L2.75 11.0049L16.443 11.004L12.7194 7.28028C12.4532 7.01398 12.429 6.59732 12.6469 6.30373L12.7195 6.21961L12.6469 6.30373Z" /></DrawingImage>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="ChipBackground" Color="#B9202020" />
+          <SolidColorBrush x:Key="ChipBorder" Color="#3C3C3C" />
+          <SolidColorBrush x:Key="ChipForeground" Color="#DCDCDC" />
+          <SolidColorBrush x:Key="ChipAccent" Color="#60CDFF" />
+          <SolidColorBrush x:Key="LoadingBackground" Color="#A0000000" />
+          <SolidColorBrush x:Key="LoadingBorder" Color="#3C3C3C" />
+          <SolidColorBrush x:Key="LoadingForeground" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="LogPanelBackground" Color="#202020" />
+          <SolidColorBrush x:Key="LogPanelBorder" Color="#303030" />
+          <SolidColorBrush x:Key="TitleBarHover" Color="#38808080" />
+          <DrawingImage x:Key="ExportIcon"><GeometryDrawing Brush="#5EC269" Geometry="M2.7525 4.5C3.1322 4.5 3.44594 4.78227 3.49554 5.14836L3.50237 5.25014L3.5 18.2542C3.49992 18.6684 3.16408 19.0041 2.74986 19.0041C2.37017 19.0041 2.05642 18.7218 2.00683 18.3557L2 18.2539L2.00237 5.24986C2.00244 4.83565 2.33829 4.5 2.7525 4.5ZM15.6471 6.30373L15.7197 6.21961C15.986 5.95338 16.4027 5.92921 16.6963 6.1471L16.7804 6.21972L21.777 11.2174C22.0431 11.4835 22.0674 11.8999 21.8498 12.1935L21.7773 12.2776L16.7807 17.2811C16.488 17.5742 16.0131 17.5745 15.72 17.2818C15.4536 17.0157 15.4291 16.5991 15.6467 16.3053L15.7193 16.2211L19.43 12.504L5.75295 12.5049C5.37326 12.5049 5.05946 12.2228 5.0098 11.8567L5.00295 11.7549C5.00295 11.3752 5.28511 11.0615 5.65118 11.0118L5.75295 11.0049L19.443 11.004L15.7196 7.28028C15.4534 7.01398 15.4292 6.59732 15.6471 6.30373L15.7197 6.21961L15.6471 6.30373Z" /></DrawingImage>
+          <DrawingImage x:Key="ImportIcon"><GeometryDrawing Brush="#F2884A" Geometry="M21.2498 4.5C21.6295 4.5 21.9433 4.78215 21.993 5.14823L21.9998 5.25V18.2541C21.9998 18.6683 21.664 19.0041 21.2498 19.0041C20.8701 19.0041 20.5563 18.7219 20.5066 18.3558L20.4998 18.2541V5.25C20.4998 4.83579 20.8356 4.5 21.2498 4.5ZM12.6469 6.30373L12.7195 6.21961C12.9858 5.95338 13.4025 5.92921 13.6961 6.1471L13.7802 6.21972L18.7768 11.2174C19.0429 11.4835 19.0672 11.8999 18.8496 12.1935L18.7771 12.2776L13.7805 17.2811C13.4878 17.5742 13.0129 17.5745 12.7198 17.2818C12.4534 17.0157 12.4289 16.5991 12.6465 16.3053L12.7191 16.2211L16.43 12.504L2.75 12.5049C2.3703 12.5049 2.05651 12.2228 2.00685 11.8567L2 11.7549C2 11.3753 2.28215 11.0615 2.64823 11.0118L2.75 11.0049L16.443 11.004L12.7194 7.28028C12.4532 7.01398 12.429 6.59732 12.6469 6.30373L12.7195 6.21961L12.6469 6.30373Z" /></DrawingImage>
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
 </Application>

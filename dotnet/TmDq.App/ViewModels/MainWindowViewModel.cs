@@ -12,6 +12,7 @@ using TmDq.App.Logging;
 using TmDq.App.Plot;
 using TmDq.App.Processing;
 using TmDq.App.Services;
+using TmDq.App.Settings;
 using TmDq.App.Templates;
 using TmDq.Core;
 
@@ -32,6 +33,7 @@ namespace TmDq.App.ViewModels
         private readonly ITemplateFilePicker? _templateFiles;
         private readonly ITemplateDialogs? _templateDialogs;
         private readonly string _appRoot;
+        private readonly PreferencesStore _preferences;
         private readonly List<ProcessedSource> _sources = new();
         private string _runningFile = string.Empty;
         private ProcessingViewModel? _processing;
@@ -51,12 +53,15 @@ namespace TmDq.App.ViewModels
         /// <param name="templateFiles">Save as Template's and Apply Template's file dialogs; null leaves both unavailable.</param>
         /// <param name="templateDialogs">The batch confirmation and the choice of recording; null leaves Apply Template unavailable.</param>
         /// <param name="appRoot">Where settings/ is, for a batch's runs; null is the application's folder.</param>
+        /// <param name="preferences">What is remembered between sessions (plan step 4.8); null keeps the defaults, in memory.</param>
         public MainWindowViewModel(IRecordingPicker? picker = null, IStreamConfigurator? configurator = null,
                                    IProcessingDialog? processingDialog = null, TimeProvider? clock = null,
                                    IDataFilePicker? files = null, IExportDialog? exportDialog = null,
                                    IPlotImageExporter? imageExporter = null, ITemplateFilePicker? templateFiles = null,
-                                   ITemplateDialogs? templateDialogs = null, string? appRoot = null)
+                                   ITemplateDialogs? templateDialogs = null, string? appRoot = null,
+                                   PreferencesStore? preferences = null)
         {
+            _preferences = preferences ?? new PreferencesStore(new Preferences());
             _picker = picker;
             _configurator = configurator ?? new FirstChannelRun();
             _processingDialog = processingDialog;
@@ -72,6 +77,12 @@ namespace TmDq.App.ViewModels
             ExportCommand = new AsyncRelayCommand(ExportAsync, () => !IsBusy && Plot.HasData && _exportDialog is not null);
             SaveTemplateCommand = new AsyncRelayCommand(SaveTemplateAsync, () => !IsBusy && _sources.Count > 0 && _templateFiles is not null);
             ApplyTemplateCommand = new AsyncRelayCommand(ApplyTemplateAsync, () => !IsBusy && _templateFiles is not null && _templateDialogs is not null);
+            OpenRecentCommand = new AsyncRelayCommand<string>(p => OpenPathAsync(p!), p => !IsBusy && p is not null);
+            ClearRecentFilesCommand = new RelayCommand(() => SetRecentFiles(Array.Empty<string>()));
+            ToggleThemeCommand = new RelayCommand(() => IsDarkTheme = !IsDarkTheme);
+            ToggleSidebarCommand = new RelayCommand(() => SidebarVisible = !SidebarVisible);
+            // The legend's visibility is remembered between sessions, as the Qt application's LegendVisible setting is.
+            Plot.LegendVisible = _preferences.Current.LegendVisible;
             Log.Add("tmDataQualityAnalyzer v" + AppInfo.Version);
             Log.Add("Load a Chapter 10 file to configure per-stream processing.");
             // A time window entered outside the recording is clamped, and says so in the log, in goldenrod; so are the rows
@@ -84,8 +95,69 @@ namespace TmDq.App.ViewModels
             Plot.PropertyChanged += (_, e) =>
             {
                 if (e.PropertyName == nameof(PlotViewModel.HasData)) ExportCommand.NotifyCanExecuteChanged();
+                if (e.PropertyName == nameof(PlotViewModel.LegendVisible))
+                    _preferences.Update(p => p with { LegendVisible = Plot.LegendVisible });
             };
         }
+
+        // ---- the shell (plan step 4.8): what is remembered, recent files, the theme and the sidebar --------------------
+
+        /// <summary>What is remembered between sessions.</summary>
+        public Preferences Preferences => _preferences.Current;
+
+        /// <summary>The recordings and CSVs opened last, the newest first (the Qt menu's Recent Files).</summary>
+        public IReadOnlyList<string> RecentFiles => _preferences.Current.RecentFiles;
+
+        /// <summary>Opens a recent file, or one dropped on the window. Unavailable while busy.</summary>
+        public IAsyncRelayCommand<string> OpenRecentCommand { get; }
+
+        public IRelayCommand ClearRecentFilesCommand { get; }
+
+        private void SetRecentFiles(IReadOnlyList<string> files)
+        {
+            _preferences.Update(p => p with { RecentFiles = files });
+            OnPropertyChanged(nameof(RecentFiles));
+        }
+
+        private void AddRecentFile(string path) => SetRecentFiles(Settings.RecentFiles.Add(RecentFiles, Path.GetFullPath(path)));
+
+        /// <summary>
+        /// Opens <paramref name="path"/> by its suffix, as the Qt <c>openPath</c> does for Recent Files and a drop: an
+        /// exported CSV is imported, anything else opened as a recording. Ignored while busy, as both are.
+        /// </summary>
+        public Task OpenPathAsync(string path) => Settings.RecentFiles.IsCsv(path) ? ImportCsvAsync(path) : LoadAsync(path);
+
+        /// <summary>The dark theme (the Qt application's default) or the light one; the choice is remembered.</summary>
+        public bool IsDarkTheme
+        {
+            get => _preferences.Current.IsDark;
+            set
+            {
+                if (value == IsDarkTheme) return;
+                _preferences.Update(p => p with { Theme = value ? Preferences.DarkTheme : Preferences.LightTheme });
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ThemeMenuText));
+            }
+        }
+
+        /// <summary>The menu item that switches the theme, named for where it goes.</summary>
+        public string ThemeMenuText => IsDarkTheme ? "Switch to Light Theme" : "Switch to Dark Theme";
+
+        public IRelayCommand ToggleThemeCommand { get; }
+
+        /// <summary>The log sidebar shown (the Qt title bar's toggle, Ctrl+B); the choice is remembered.</summary>
+        public bool SidebarVisible
+        {
+            get => _preferences.Current.SidebarVisible;
+            set
+            {
+                if (value == SidebarVisible) return;
+                _preferences.Update(p => p with { SidebarVisible = value });
+                OnPropertyChanged();
+            }
+        }
+
+        public IRelayCommand ToggleSidebarCommand { get; }
 
         public string Title => AppInfo.Title;
 
@@ -129,6 +201,7 @@ namespace TmDq.App.ViewModels
                 ExportCommand.NotifyCanExecuteChanged();
                 SaveTemplateCommand.NotifyCanExecuteChanged();
                 ApplyTemplateCommand.NotifyCanExecuteChanged();
+                OpenRecentCommand.NotifyCanExecuteChanged();
             }
         }
 
@@ -148,10 +221,14 @@ namespace TmDq.App.ViewModels
             _sources.AddRange(sources);
         }
 
-        /// <summary>The folder of the last recording opened or CSV imported: where Import CSV starts and Export proposes
-        /// to write, as the Qt application's last-directory setting is (kept for the session; remembering it between
-        /// sessions is plan step 4.8's).</summary>
-        public string? LastFolder { get; private set; }
+        /// <summary>The folder of the last recording opened, CSV imported or template used: where Import CSV and the
+        /// template dialogs start and Export proposes to write, remembered between sessions as the Qt application's
+        /// <c>LastCh10Directory</c> setting is.</summary>
+        public string? LastFolder
+        {
+            get => _preferences.Current.LastFolder;
+            private set => _preferences.Update(p => p with { LastFolder = value });
+        }
 
         /// <summary>The first Frame Sync Lock stream processed, or null before the first recording, after a failure, and
         /// when no such stream was processed.</summary>
@@ -210,6 +287,7 @@ namespace TmDq.App.ViewModels
                 NativeCore.EnsureLoaded();
                 if (await Plot.LoadCsvAsync(path) == CsvLoad.Loaded)
                 {
+                    AddRecentFile(path);
                     Plot.Title = BaseName(name);
                     Status = "Imported CSV: " + name;
                     Log.Success(Status);
@@ -516,6 +594,8 @@ namespace TmDq.App.ViewModels
                 Status = $"Opening {name} ...";
                 Log.Add("Opening: " + name);
                 Ch10File file = await StreamsRun.OpenAsync(path);
+                // A recording joins Recent Files once its channels are read, as in the Qt application.
+                AddRecentFile(path);
                 Log.Add("  File size: " + SizeText(new FileInfo(path).Length));
                 Log.Add("  Time channels: " + CountText(file.TimeChannels.Count));
                 Log.Add("  PCM channels: " + CountText(file.PcmChannels.Count));
