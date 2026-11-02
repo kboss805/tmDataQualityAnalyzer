@@ -415,6 +415,32 @@ namespace TmDq.App.Tests
             Assert.Equal((0.0, 0.0), (plot.XViewMin, plot.XViewMax));
         }
 
+        [AvaloniaFact]
+        public void TheTitleIsAnnouncedWhenItChangesAndOnlyThen()
+        {
+            // TestPlotViewModel's plotTitleChange: the chart redraws its title on the notice, and the same title again
+            // tells nobody.
+            var plot = new PlotViewModel();
+            var told = new List<string?>();
+            plot.PropertyChanged += (_, e) => told.Add(e.PropertyName);
+            plot.Title = "Flight 7";
+            plot.Title = "Flight 7";
+            Assert.Equal("Flight 7", plot.Title);
+            Assert.Equal(new[] { nameof(PlotViewModel.Title) }, told);
+        }
+
+        [Fact]
+        public void TheAxesAndTheTitleAreWordedAsTheQtApplicationWordsThem()
+        {
+            // TestConstants' plotConstants: the texts themselves (plotconstants.h), where every other test compares a label
+            // with the constant it was drawn from.
+            Assert.Equal("Time (DDD:HH:MM:SS)", PlotViewModel.XAxisLabel);
+            Assert.Equal("Framesync Lock (%)", PlotViewModel.LockAxisLabel);
+            Assert.Equal("Accumulated Missed Frames", PlotViewModel.MissedFramesAxisLabel);
+            Assert.Equal("Receiver SNR (dB)", PlotViewModel.SnrAxisLabel);
+            Assert.Equal("Framesync/SNR Plot", PlotViewModel.DefaultTitle);
+        }
+
         // ---- the chart --------------------------------------------------------------------------------------------
 
         private sealed record Shown(PlotChart Chart, Window Window)
@@ -842,6 +868,82 @@ namespace TmDq.App.Tests
                 Assert.Equal(0, Frames.Near(fb, new Rect(a.Left + 10, a.Bottom - 6, a.Width - 20, 6), purple));
                 Assert.True(Frames.Near(fb, new Rect(a.Left, 0, a.Width, a.Top - PlotChart.TopInset), ChartPalette.Light.Title) > 20, "no title");
             }
+            s.Window.Close();
+        }
+
+        [AvaloniaFact]
+        public void ATitleSetWhileShownIsDrawn()
+        {
+            var plot = new PlotViewModel();
+            plot.SetSeries(new[] { PlotFixtures.Lock(0, "flat", 1, 0, new[] { 0.0, 1.0 }, new[] { 50.0, 50.0 }) });
+            Shown s = Show(plot);
+            Rect a = s.Area;
+            var above = new Rect(a.Left, 0, a.Width, a.Top - PlotChart.TopInset);
+            int TitleInk()
+            {
+                using ILockedFramebuffer fb = s.Frame();
+                return Frames.Near(fb, above, ChartPalette.Light.Title);
+            }
+            int before = TitleInk();
+            plot.Title = "A much longer title than the default one, drawn across the chart";
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(TitleInk() > before + 50, "the new title was not drawn");
+            s.Window.Close();
+        }
+
+        [AvaloniaFact]
+        public void ALeftMinimumSetMovesTheChartsBottom()
+        {
+            // TestPlotWidget's yMinOverrideReachesTheChartAxis: a flat 50 % line sits mid-plot until the left minimum is set
+            // to 40, when it drops to a sixth of the way up (the axis then 40 to 100); Reset puts it back.
+            var plot = new PlotViewModel();
+            plot.SetSeries(new[] { PlotFixtures.Lock(0, "flat", 1, 0, new[] { 0.0, 1.0, 2.0 }, new[] { 50.0, 50.0, 50.0 }) });
+            Shown s = Show(plot);
+            Color purple = PlotColors.FrameSyncLock[0];
+            Rect a = s.Area;
+            int LineAt(double y)
+            {
+                using ILockedFramebuffer fb = s.Frame();
+                return Frames.Near(fb, new Rect(a.Left + 10, y - 3, a.Width - 20, 6), purple);
+            }
+            double low = a.Bottom - a.Height / 6;
+            Assert.True(LineAt(a.Center.Y) > 100, "the 50 % line is not mid-plot");
+            Assert.Equal(0, LineAt(low));
+
+            plot.SetLeftMinOverride(40.0);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal((40.0, 100.0), (plot.LeftMin, plot.LeftMax));
+            Assert.Equal(s.Chart.PlotArea.Bottom - s.Chart.PlotArea.Height / 6, s.Chart.LeftToPixel(50.0), 6);
+            Assert.True(LineAt(low) > 100, "the line did not move down with the minimum");
+            Assert.Equal(0, LineAt(a.Center.Y));
+
+            plot.ResetYRange();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(LineAt(a.Center.Y) > 100, "Reset did not put the line back");
+            s.Window.Close();
+        }
+
+        [AvaloniaFact]
+        public void TheRightAxisIsTitledOnlyWhileItIsShown()
+        {
+            // US4.0's right axis labelled with its unit: the title drawn beside it, read where it is drawn.
+            double[] x = { 0, 100 }, y = { 10, 20 };
+            var plot = new PlotViewModel();
+            plot.SetSeries(new[] { PlotFixtures.Snr(0, "s", 1, 0, 1, 0, x, y) });
+            Shown s = Show(plot);
+            Rect c = Frames.InWindow(s.Chart, s.Window), a = s.Area;
+            // The title is centred on the outer margin's inner edge: the strip right of the plot area's frame holds its
+            // right half and nothing else.
+            var strip = new Rect(c.Right - PlotChart.OuterMargin + 2, a.Center.Y - 40, PlotChart.OuterMargin - 3, 80);
+            int Ink()
+            {
+                using ILockedFramebuffer fb = s.Frame();
+                return Frames.CountDifferent(fb, strip, Frames.Pixel(fb, (int)c.Right - 1, (int)c.Top + 1));
+            }
+            Assert.True(Ink() > 20, "the right axis has no title");
+            plot.SetSeries(new[] { PlotFixtures.Lock(0, "l", 1, 0, x, y) });
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, Ink());
             s.Window.Close();
         }
     }

@@ -193,7 +193,15 @@ namespace TmDq.App.Tests
             Assert.Equal(new[] { "CH-01 PRN 15 5M", "CH-01 PRN 15 5M", "CH-03 PRN 11 1M", "CH-03 PRN 11 1M" }, plain.Plot.Series.Select(s => s.Name));
             Assert.DoesNotContain(plain.Log.Entries, e => e.Text.StartsWith("Exported", StringComparison.Ordinal));
             Assert.Empty(Directory.GetFiles(_dir, "*.csv"));
-            await plain.RunBatchAsync(PrnTemplate(), Array.Empty<string>(), null, false);   // nothing to run: nothing happens
+            // Nothing to run: nothing happens, not even the plot cleared (the Qt BatchController's start with no files).
+            int logged = plain.Log.Entries.Count;
+            string status = plain.Status;
+            IReadOnlyList<PlotSeries> shown = plain.Plot.Series.ToArray();
+            await plain.RunBatchAsync(PrnTemplate(), Array.Empty<string>(), null, false);
+            Assert.Equal(logged, plain.Log.Entries.Count);
+            Assert.Equal(status, plain.Status);
+            Assert.Equal(shown, plain.Plot.Series);
+            Assert.False(plain.IsBusy);
 
             // A CSV that cannot be written is said so.
             string nowhere = Path.Combine(_dir, "nowhere");
@@ -203,12 +211,12 @@ namespace TmDq.App.Tests
         }
 
         /// <summary>
-        /// A copy of <paramref name="source"/> recorded a day later, so that it shares no time with it: each time packet's
-        /// day one more. A time packet (data type 0x11) holds, after its channel-specific word, the BCD time in 16-bit
+        /// A copy of <paramref name="source"/> recorded <paramref name="days"/> later, so that it shares no time with it: each
+        /// time packet's day that many more. A time packet (data type 0x11) holds, after its channel-specific word, the BCD time in 16-bit
         /// words; the third has the day's units and tens in its low byte, and its high byte the hundreds of a day of the
         /// year (two low bits) or, when the channel-specific word's bit 9 says the date is a day and month, the month.
         /// </summary>
-        private string ADayLater(string source, string name)
+        private string ADayLater(string source, string name, int days = 1)
         {
             byte[] b = File.ReadAllBytes(source);
             int edited = 0;
@@ -219,8 +227,8 @@ namespace TmDq.App.Tests
                 int data = p + 24 + ((b[p + 14] & 0x80) != 0 ? 12 : 0);   // past a secondary header
                 bool dayOfYear = ((b[data + 1] >> 1) & 1) == 0;
                 int at = data + 4 + 4;
-                int day = (b[at] & 0xF) + 10 * (b[at] >> 4) + (dayOfYear ? 100 * (b[at + 1] & 0x3) : 0) + 1;
-                Assert.InRange(day, 2, dayOfYear ? 365 : 28);   // no carry into the month or the year
+                int day = (b[at] & 0xF) + 10 * (b[at] >> 4) + (dayOfYear ? 100 * (b[at + 1] & 0x3) : 0) + days;
+                Assert.InRange(day, 1 + days, dayOfYear ? 365 : 28);   // no carry into the month or the year
                 b[at] = (byte)(day % 10 | day / 10 % 10 << 4);
                 if (dayOfYear) b[at + 1] = (byte)(b[at + 1] & ~0x3 | day / 100);
                 edited++;
@@ -257,6 +265,28 @@ namespace TmDq.App.Tests
             Assert.Equal(new[] { Path.Combine(output, "step_cal, example.png"), Path.Combine(output, "a day later.png") }, images.Asked.Select(a => a.Path));
             // Each recording kept as the template ran it, for Save as Template: its time channel's place and byte order.
             Assert.Equal(new[] { (0, 1, true), (1, 1, true) }, vm.Sources.Select(s => (s.SourceId, s.TimeChannelIndex, s.SwapBytes)));
+        }
+
+        [Fact]
+        public async Task EachRecordingEarlierThanTheLastMovesTheTimeBaseAgain()
+        {
+            // TestPlotViewModel's addStreamDataRebasesTwiceForSuccessivelyEarlierSources, through the batch: step_cal two days
+            // later, a day later, then as recorded. Each file starts a day before everything already shown, so the shared
+            // base moves twice and the files already there shift right twice, landing a day apart.
+            Ch10File file = StreamsRun.Open(StepCal);
+            StreamSetup row = StreamRules.ForEditing(StreamRules.WithMode(StreamDefaults.NewStream(file.PcmChannels[0]), StreamMode.ReceiverChannelInfo), Repo.Root)
+                with { Process = true, Configured = true };
+            var template = new ProcessingTemplate("v", "step", 1, true, new[] { new TemplateEntry(row, Array.Empty<SeriesAppearance>()) });
+            string twoDays = ADayLater(StepCal, "two days later.ch10", days: 2), oneDay = ADayLater(StepCal, "a day later.ch10");
+            var vm = new MainWindowViewModel(appRoot: Repo.Root);
+            await vm.RunBatchAsync(template, new[] { twoDays, oneDay, StepCal }, null, false);
+
+            Assert.Equal(new[] { 0, 1, 2 }, vm.Plot.SourceList().Select(s => s.Id));
+            double StartOf(int source) => vm.Plot.Series.First(s => s.SourceId == source).X[0];
+            Assert.Equal(0.0, StartOf(2), 9);
+            Assert.Equal(86400.0, StartOf(1), 6);
+            Assert.Equal(2 * 86400.0, StartOf(0), 6);
+            Assert.Equal(StartOf(0) + vm.Plot.Series.First(s => s.SourceId == 2).X[^1], vm.Plot.XMax, 6);
         }
 
         /// <summary>What Configure Streams settled, given whatever the recording.</summary>

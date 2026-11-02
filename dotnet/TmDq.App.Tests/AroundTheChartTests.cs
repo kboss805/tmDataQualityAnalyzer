@@ -786,6 +786,25 @@ namespace TmDq.App.Tests
         }
 
         [AvaloniaFact]
+        public void ThePlotViewIsTheChartWithItsControlsOverItAndNothingAround()
+        {
+            // TestPlotWidget's noExternalControlWidgetsRemain (US4.0, US4.1): no control row around the chart. The chart
+            // fills the view, and every control the view holds is in the overlay over it.
+            PlotViewModel plot = LockPlot();
+            Shown s = Show(plot);
+            Grid root = Assert.IsType<Grid>(s.View.Content);
+            Assert.Equal(new Control[] { s.View.Chart, s.View.Overlay, s.View.LoadingLabel }, root.Children);
+            Assert.Equal(s.View.Bounds.Size, s.View.Chart.Bounds.Size);
+            Assert.Equal(s.View.Bounds.Size, s.View.Overlay.Bounds.Size);
+
+            TemplatedControl[] controls = s.View.GetLogicalDescendants().OfType<TemplatedControl>().ToArray();
+            Assert.Contains(s.View.ViewModeChip, controls);   // the walk reaches the chips
+            Assert.All(controls, c => Assert.True(c.GetLogicalAncestors().Contains(s.View.Overlay), c.GetType().Name + " is outside the overlay"));
+            Assert.False(s.View.LoadingLabel.IsHitTestVisible);
+            s.Window.Close();
+        }
+
+        [AvaloniaFact]
         public void TheViewModeChipSwitchesTheLeftAxisAndIsNamedForWhereItGoes()
         {
             PlotViewModel plot = LockPlot();

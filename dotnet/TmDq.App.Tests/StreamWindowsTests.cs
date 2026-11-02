@@ -9,6 +9,8 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using TmDq.App.Processing;
@@ -74,6 +76,55 @@ namespace TmDq.App.Tests
             Assert.True(w.FindControl<Button>("CancelButton")!.IsEffectivelyEnabled);
             Assert.Equal("Check at least one stream to process.", w.FindControl<TextBlock>("WhyNot")!.Text);
             w.Close();
+        }
+
+        [AvaloniaFact]
+        public void AChannelNameTooLongForItsColumnIsTrimmedWithTheWholeNameAsItsTooltip()
+        {
+            // TestStreamConfigDialog's channelLabelShortNameShownInFull and channelLabelLongNameElidedWithFullTooltip.
+            ConfigureStreamsViewModel vm = Configure();
+            string longName = "CH-02 PRN 15 20M, recorded on the second antenna of the far ground station";
+            vm.Rows[1].Setup = vm.Rows[1].Setup with { Label = longName };
+            var w = Shown(new ConfigureStreamsWindow { DataContext = vm });
+            TextBlock shortLabel = InRow<TextBlock>(RowGrids(w)[0], 1), longLabel = InRow<TextBlock>(RowGrids(w)[1], 1);
+
+            Assert.False(shortLabel.TextLayout.TextLines.Any(l => l.HasCollapsed), "a short name was trimmed");
+            Assert.Equal(longName, longLabel.Text);
+            Assert.True(longLabel.TextLayout.TextLines.Single().HasCollapsed, "a long name was not trimmed");
+            Assert.True(longLabel.Bounds.Width <= 260, "the name runs past its column");
+            Assert.Equal(longName, ToolTip.GetTip(longLabel));
+            Assert.Equal("CH-01 PRN 15 5M", ToolTip.GetTip(shortLabel));
+            w.Close();
+        }
+
+        [AvaloniaFact]
+        public void TheColumnHeadersReadInEitherTheme()
+        {
+            // TestStreamConfigDialog's headerLabelsUseThemeableObjectNames: the headers take the theme's text colour, light
+            // on the dark theme and dark on the light, rather than one colour of their own.
+            var app = (App)Application.Current!;
+            ThemeVariant? before = app.RequestedThemeVariant;
+            try
+            {
+                foreach (bool dark in new[] { true, false })
+                {
+                    app.ApplyTheme(dark);
+                    var w = Shown(new ConfigureStreamsWindow { DataContext = Configure() });
+                    TextBlock[] headers = w.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Classes.Contains("header")).ToArray();
+                    Assert.Equal(new[] { "Process", "Channel", "Mode", "Configure", "Ready" }, headers.Select(h => h.Text));
+                    Assert.All(headers, h =>
+                    {
+                        Color c = Assert.IsAssignableFrom<ISolidColorBrush>(h.Foreground).Color;
+                        double luminance = (0.299 * c.R + 0.587 * c.G + 0.114 * c.B) / 255;
+                        Assert.True(dark ? luminance > 0.6 : luminance < 0.4, $"'{h.Text}' is {c} in the {(dark ? "dark" : "light")} theme");
+                    });
+                    w.Close();
+                }
+            }
+            finally
+            {
+                app.RequestedThemeVariant = before;
+            }
         }
 
         [AvaloniaFact]

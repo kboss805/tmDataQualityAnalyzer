@@ -50,15 +50,18 @@ namespace TmDq.App.Services
 
         public StorageDataFilePicker(TopLevel owner) => _owner = owner;
 
+        /// <summary>What Import CSV offers: exported CSVs only (US6.3), starting at <paramref name="start"/>.</summary>
+        public static FilePickerOpenOptions CsvOptions(IStorageFolder? start) => new()
+        {
+            Title = "Import CSV File",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { ExportedCsv },
+            SuggestedStartLocation = start,
+        };
+
         public async Task<string?> OpenCsvAsync(string? folder)
         {
-            var files = await _owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-            {
-                Title = "Import CSV File",
-                AllowMultiple = false,
-                FileTypeFilter = new[] { ExportedCsv },
-                SuggestedStartLocation = await FolderAsync(folder),
-            });
+            var files = await _owner.StorageProvider.OpenFilePickerAsync(CsvOptions(await FolderAsync(folder)));
             return files.FirstOrDefault()?.TryGetLocalPath();
         }
 

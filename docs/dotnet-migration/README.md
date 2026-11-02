@@ -7,6 +7,7 @@ tests completely.
 | document | what it is |
 |---|---|
 | **[avalonia-plan.md](avalonia-plan.md)** | **The work plan.** Numbered steps, one PR each, ticked as they merge, with the rules every step follows and the decisions (D1-D5). Start here. |
+| [parity.md](parity.md) | The parity review (plan step 5.1): every acceptance criterion and every Qt test case, with what holds it in the new application or why it was dropped. |
 | [presentation-layer.md](presentation-layer.md) | Why Avalonia: the shell options (WPF, Avalonia, MAUI, WinUI) assessed against this application's needs, then measured. |
 | this file | The architecture the plan builds on, what the spikes answered, and the earlier decisions this one replaced. |
 | [`../future_plans/dotnet-port-assessment.md`](../future_plans/dotnet-port-assessment.md) | The original costed assessment of leaving Qt, which first argued for the hybrid below. |

@@ -21,14 +21,18 @@ namespace TmDq.App.Services
 
         public StorageRecordingPicker(TopLevel owner) => _owner = owner;
 
+        /// <summary>What Open offers: Chapter 10 recordings and nothing else, as the Qt Open does (US6.3: a CSV is imported,
+        /// never opened).</summary>
+        public static FilePickerOpenOptions Options => new()
+        {
+            Title = "Open a Chapter 10 recording",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { Ch10 },
+        };
+
         public async Task<string?> PickRecordingAsync()
         {
-            var files = await _owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-            {
-                Title = "Open a Chapter 10 recording",
-                AllowMultiple = false,
-                FileTypeFilter = new[] { Ch10, FilePickerFileTypes.All },
-            });
+            var files = await _owner.StorageProvider.OpenFilePickerAsync(Options);
             return files.FirstOrDefault()?.TryGetLocalPath();
         }
     }
