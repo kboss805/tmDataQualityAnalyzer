@@ -14,6 +14,7 @@
 #define MyAppPublisher "tmDataQualityAnalyzer"
 #define MyAppExeName "tmDataQualityAnalyzer.exe"
 #define StagingDir "staging\app"
+#define ManualFile "staging\manual\UserManual.html"
 
 [Setup]
 ; Not the Qt application's AppId: the two install, upgrade and uninstall independently.
@@ -47,6 +48,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
+; The full manual, as the Qt installer offers it: the BASE manual is compiled into the executable and is always reachable
+; from Help > User Manual, so declining this still leaves the user with a manual (plan step 4.9).
+Name: "fullmanual"; Description: "Install the full illustrated user manual"; GroupDescription: "Documentation:"
 
 [Files]
 ; The single-file application, the three native libraries beside it (each signed by its own publisher), the native
@@ -56,6 +60,9 @@ Source: "{#StagingDir}\*"; DestDir: "{app}"; Excludes: "settings"; Flags: ignore
 ; The settings files, as the Qt installer ships them (US8.0): a file the user already has is never overwritten, on an
 ; upgrade or a reinstall, and uninstalling leaves them.
 Source: "{#StagingDir}\settings\*"; DestDir: "{app}\settings"; Flags: recursesubdirs createallsubdirs onlyifdoesntexist uninsneveruninstall
+
+; The full user manual, optional. Its absence is a supported state: Help opens the manual compiled into the executable.
+Source: "{#ManualFile}"; DestDir: "{app}"; Flags: ignoreversion; Tasks: fullmanual
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

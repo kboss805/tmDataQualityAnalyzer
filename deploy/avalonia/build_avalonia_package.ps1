@@ -191,6 +191,13 @@ if ($p.HasExited -and $p.ExitCode -eq 0 -and $line.StartsWith($Expected)) {
 Write-Host '[8/8] Packaging...'
 $portable = Join-Path $Stage "tmDataQualityAnalyzer-preview-v${version}_portable"
 Copy-Item $AppDir $portable -Recurse
+# The full manual: always in the portable copy (there is no installer to ask), an optional task in the installer, which
+# takes it from beside the staged application rather than from within it (plan step 4.9).
+$manual = Join-Path $Root 'UserManual-preview.html'
+if (-not (Test-Path $manual)) { throw 'UserManual-preview.html is missing: run scripts\build_manual.ps1 -Preview' }
+New-Item -ItemType Directory -Force -Path (Join-Path $Stage 'manual') | Out-Null
+Copy-Item $manual (Join-Path $Stage 'manual\UserManual.html') -Force
+Copy-Item $manual (Join-Path $portable 'UserManual.html') -Force
 # A portable copy keeps its preferences in a folder beside itself, as the Qt portable ZIP does (plan step 4.8).
 New-Item -ItemType File -Path (Join-Path $portable 'portable') -Force | Out-Null
 if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }

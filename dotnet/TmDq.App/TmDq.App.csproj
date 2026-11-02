@@ -68,9 +68,11 @@
   </ItemGroup>
 
   <!-- The base user manual, compiled in as the Qt application has it (a Qt resource there), so Help > User Manual always
-       has a manual even when the optional full one is not installed (plan step 4.8; its figures are plan step 4.9's). -->
+       has a manual even when the optional full one is not installed (plan step 4.8). It is this application's own copy,
+       written and illustrated for it (scripts\build_manual.ps1 -Preview, plan step 4.9); at the switch-over it replaces
+       resources\usermanual.html. -->
   <ItemGroup>
-    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\resources\usermanual.html" LogicalName="usermanual.html" Visible="false" />
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\resources\usermanual-preview.html" LogicalName="usermanual.html" Visible="false" />
   </ItemGroup>
 
   <!-- The manifest goes into each intermediate host the SDK creates, before anything copies or bundles it: apphost

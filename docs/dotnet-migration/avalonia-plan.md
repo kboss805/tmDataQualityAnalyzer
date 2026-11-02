@@ -352,11 +352,21 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
   tmDataQualityAnalyzer\tmDataQualityAnalyzer.ini`, or beside a portable exe; the new app keeps its own JSON file
   beside it (the user's choice), filled once from the INI, read as QSettings reads it and held to INI files Qt 6.12
   wrote. Renders: `shell-dark.png`, `shell-light.png`, `shell-menu.png`, `shell-dialog-dark.png`.
-- [ ] **4.9 Help:** both manuals (base compiled in, full optional), About. The manual's figures are
+- [x] **4.9 Help** (PR #234): both manuals (base compiled in, full optional), About. The manual's figures are
   re-captured from the new app; `build_manual.ps1` grabs Qt widgets today and needs a new capture
   path. *(4.8 brought the Help submenu, About, and the manuals' opening: the full one when installed beside the app,
   else the base one compiled in and written to the temporary folder. Left here: the manuals' text and figures for the
   new app, and the preview installer's optional full manual.)*
+  **Done:** `build_manual.ps1` never grabbed widgets: its figures were screenshots taken by hand, which it crops,
+  scales and embeds. At the user's choice the new application has **its own copy of both manuals** until the
+  switch-over (`resources/usermanual-preview.html`, compiled in; `docs/manual/walkthroughs-preview.html`, spliced
+  into `UserManual-preview.html`), rewritten where it differs, so a Qt release before v3.0.0 still ships an accurate
+  manual; and, also the user's choice, **figures rendered from the application** on the headless platform
+  (`ManualFiguresTests`, which checks each caption's claims and runs in every test run), with `build_manual.ps1
+  -Preview` rendering and embedding them. The preview package carries the full manual (portable ZIP always,
+  installer optionally). **At the switch-over (5.3/6.1):** the preview copies replace `resources/usermanual.html`,
+  `docs/manual/walkthroughs.html` and `UserManual.html`, `docs/manual_images/preview` becomes the figures' folder,
+  and the hand-captured Qt figures and the script's Qt mode go.
 
 ## Step 5: switch over
 
