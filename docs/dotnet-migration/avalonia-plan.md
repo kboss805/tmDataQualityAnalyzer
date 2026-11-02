@@ -338,14 +338,25 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
   until 4.8's menu, the batch confirmation (`BatchApplyWindow`, `batch-apply.png`), the batch run one file after
   another, each kept as a recording of its own with the template's names and colours, the per-file CSV and images
   (the first file's CSV identical to the Qt export), and the Plot File submenu (`PlotViewModel.SetVisibleSource`).
-- [ ] **4.8 The shell:** frameless chrome with **Windows 11 snap layouts** (unverified in Avalonia;
+- [x] **4.8 The shell** (PR #233): frameless chrome with **Windows 11 snap layouts** (unverified in Avalonia;
   verify first), hamburger menu with sections and Help submenu, recent files, drag and drop, light and
   dark themes with native frames (US9.0), the sidebar toggle, and preferences. **Existing users'
   preferences migrate:** read the Qt app's `QSettings` values (registry, or the portable ini) on first
   run.
+  **Done:** one PR, at the user's choice. **Snap layouts verified:** Avalonia 12's
+  `WindowDecorationProperties.ElementRole` marks the title bar's own buttons; on the running app `WM_NCHITTEST`
+  answers `HTMAXBUTTON` at the maximize button (what makes Windows offer the layouts), `HTMINBUTTON`, `HTCLOSE` and
+  `HTCAPTION`, with `WindowDecorations="BorderOnly"` so Avalonia draws no title bar of its own. The menu has the Qt
+  sections, Recent Files and Help (User Manual, About), and replaces the top-bar buttons of 4.5 and 4.7. **The Qt
+  settings are an INI file, not the registry** (`QSettings::setDefaultFormat(IniFormat)`): `%APPDATA%\
+  tmDataQualityAnalyzer\tmDataQualityAnalyzer.ini`, or beside a portable exe; the new app keeps its own JSON file
+  beside it (the user's choice), filled once from the INI, read as QSettings reads it and held to INI files Qt 6.12
+  wrote. Renders: `shell-dark.png`, `shell-light.png`, `shell-menu.png`, `shell-dialog-dark.png`.
 - [ ] **4.9 Help:** both manuals (base compiled in, full optional), About. The manual's figures are
   re-captured from the new app; `build_manual.ps1` grabs Qt widgets today and needs a new capture
-  path.
+  path. *(4.8 brought the Help submenu, About, and the manuals' opening: the full one when installed beside the app,
+  else the base one compiled in and written to the temporary folder. Left here: the manuals' text and figures for the
+  new app, and the preview installer's optional full manual.)*
 
 ## Step 5: switch over
 
@@ -386,8 +397,8 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
     sees a NaN". State the rule itself: a host reading the ABI has no Qt to look it up in.
   - **`constants.h`:** `UIConstants`' QSettings section (`kOrganizationName`, `kApplicationName`, the
     `kSettingsKey*` keys), the theme identifiers and the "compiled in as a Qt resource" manual note belong to the Qt
-    application, not the core. 4.8's preference migration needs the key names: they move into its C# reader as the
-    legacy names, and leave the core's header.
+    application, not the core. 4.8's preference import already carries the key names it reads (`QtSettingsImport`),
+    so they leave the core's header with nothing to move.
   - **Comments:** about 300 lines in the core, the ABI and the native tests and about 190 in `dotnet/` cite a Qt
     class or function as the reference ("the Qt `BatchApplyDialog`", "`QString::toInt()`'s rules"). Where the code
     reproduces a Qt behaviour (`textparse.h`, `textformat.h`, `containerutil.h`, `PlotColors`, `TemplateFile`), the
@@ -403,8 +414,45 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
   The identifier renames do not depend on 6.1 and can land earlier as a small PR; the comments are best done after
   6.1, when nothing they cite is left to compare against. Finish with a scan for `\bQt\b`, `\bQ[A-Z][a-z]` and
   `\bq[A-Z]` over the surviving tree that finds nothing but the reasoned exceptions.
-- [ ] **6.4 Rewrite `.claude/CLAUDE.md` and `docs/claude.md`** for the new architecture, keeping the domain
-  invariants (they are about telemetry, not Qt). Delete this file.
+- [ ] **6.4 Consolidate the new code.** The port was built one step at a time, each held to the Qt application as
+  its oracle, so its shape follows the order of the steps rather than the application's. Once 6.1 has run there is
+  one application left to keep, and its tests (every step's mutation-checked suite) pin the behaviour while it is
+  reshaped. Not before: while both applications ship, a split of the new code is one more thing to keep in step
+  with the old, and a refactor inside a porting step blurs what the step changed. Found while building it
+  (2026-11-02):
+  - **`MainWindowViewModel` (734 lines, a constructor of 12 optional services):** it opens and imports, exports,
+    saves and applies templates, runs batches with their per-file export, keeps the preferences and Recent Files.
+    Split out a batch runner (`RunBatchAsync` and `ExportEachSourceAsync`), the export (`ExportAsync`, `WriteLog`)
+    and the shell's preferences; hand the dialogs and pickers in as one services object.
+  - **`PlotViewModel` (923 lines):** the time window with its zoom history, the readout and its pin, CSV import and
+    export, and the colours are four jobs; split them along those lines (the Qt `PlotWidget` was split in the port,
+    4.3b, but its view model was ported whole).
+  - **The walking skeleton's leftovers:** `LockSeries` and the main window's `Series` / `AllSeries` survive for the
+    installer's smoke report and the status line, while the plot draws from `PlotViewModel`. Give the smoke report
+    and the status line what they need from the run's outcome, and remove them.
+  - **Test helpers written more than once:** a configurator that cancels (`PreferencesTests`, `ProcessingTests`,
+    `ShellTests`), one that returns a given run (`ProcessingTests.Given`, `TemplateBatchTests.Settled`), recording
+    pickers (`ShellTests`, `WalkingSkeletonTests`), and the PRN sample with CH-04 retyped as a second time channel,
+    built byte by byte in `CalibrationDialogTests`, `ConfigureStreamsTests` and `TemplateTests`. One fixtures file.
+  - **The mutation harness** that every step since 2.4 has used lives in a session's scratch folder: a list of
+    exact-text mutants, a runner that builds and runs each in a worktree with a time limit and restores the file,
+    halves run side by side, and a selection rerun. Commit it under `scripts/` so the method outlives the sessions
+    that wrote it. It does not depend on 6.1 and can land any time.
+  - **The native core's and the ABI's surface:** some of it may have had only the Qt application as a caller.
+    Sweep the tree with the `code-cleanup` skill once 6.1 and 6.2 have run, and remove what nothing reaches.
+  - **CI:** without Qt, the self-hosted job's Qt build, its fixture overlay ordering and the hosted fallback's Qt
+    install go; the three jobs are likely to become one, on the runner that has never had Qt.
+  - **The Qt settings import** (`QtSettingsImport`, `QtIni` and the `QtSettings` fixtures, 4.8) stays through the
+    v3.0.x releases, so that anyone upgrading from the Qt application has its settings carried over; after that it is
+    removed. The settings formats stay two, each for one kind of file (decided 2026-11-02): **TOML for what people
+    write** (the processing configuration in `settings/`, which US5.0 and US5.1 require, existing users' files are,
+    and the core reads through one implementation) and **JSON for what the application writes** (preferences and
+    templates). The INI file is only ever read, and leaves with the import.
+
+  Each item is its own PR, mutation-checked as the port's steps were, the behaviour unchanged (a refactor that
+  needs a test changed has changed behaviour).
+- [ ] **6.5 Rewrite `.claude/CLAUDE.md` and `docs/claude.md`** for the new architecture, keeping the domain
+  invariants (they are about telemetry, not Qt), after 6.4 so they describe the code as it stays. Delete this file.
 
 ## Risks worth watching
 
@@ -415,5 +463,7 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
 - **Smart App Control on user machines.** Any unsigned assembly in a release blocks the app on those
   machines with no useful message. Step 3.3 makes signing every assembly part of the release.
 - **Snap layouts with custom chrome** are unverified in Avalonia; the Qt app's `WM_NCHITTEST` code does
-  not transfer literally. Prove it early in 4.8, or keep the native frame.
-- **Preferences migration** is easy to forget and visible to every existing user on day one.
+  not transfer literally. Prove it early in 4.8, or keep the native frame. *(Proven in 4.8: element roles,
+  `HTMAXBUTTON` on the running app.)*
+- **Preferences migration** is easy to forget and visible to every existing user on day one. *(Built in 4.8: the
+  Qt INI file read once, held to files QSettings wrote.)*
