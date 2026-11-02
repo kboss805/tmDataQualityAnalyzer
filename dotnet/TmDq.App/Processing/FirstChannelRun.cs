@@ -78,31 +78,5 @@ namespace TmDq.App.Processing
 
     /// <summary>What Configure Streams settled: the run, every row (processed or not) and the time channel's place in its
     /// list, which a template captures (plan step 4.7).</summary>
-    public sealed record StreamsChoice(RunRequest Request, IReadOnlyList<StreamSetup> Rows, int TimeChannelIndex)
-    {
-        /// <summary>A run with no dialog behind it: a processed row for each of its streams, over the first time channel.</summary>
-        public static StreamsChoice Of(RunRequest request) => new(request, request.Streams.Select(c => new StreamSetup
-        {
-            PcmChannelId = c.PcmChannelId,
-            Label = c.Label ?? "",
-            Process = true,
-            Configured = true,
-            Mode = c.Mode,
-            SettingsMode = c.Mode,
-            SyncPattern = c.SyncPattern,
-            SyncMask = c.SyncMask ?? "",
-            BitsInMinorFrame = c.BitsInMinorFrame,
-            Randomized = c.Randomized,
-            Inverted = c.Inverted,
-            DataRateMbps = c.DataRateMbps,
-            SamplePeriod = c.SamplePeriod,
-            PolarityIndex = c.PolarityIndex,
-            SlopeIndex = c.SlopeIndex,
-            ScaleDdBPerV = c.ScaleDdBPerV,
-            NumReceivers = c.NumReceivers,
-            ReceiverChannels = c.ReceiverChannels,
-            ReceiverParamsToml = c.ReceiverParamsToml ?? "",
-            Calibration = c.Calibration,
-        }).ToList(), 0);
-    }
+    public sealed record StreamsChoice(RunRequest Request, IReadOnlyList<StreamSetup> Rows, int TimeChannelIndex);
 }

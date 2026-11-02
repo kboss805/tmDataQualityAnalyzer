@@ -141,11 +141,11 @@ namespace TmDq.App.ViewModels
         /// <summary>Apply Template to Files: a template run over recordings chosen together, one after another (US1.1).</summary>
         public IAsyncRelayCommand ApplyTemplateCommand { get; }
 
+        // Only ever while busy: Save as Template is told when the work ends.
         private void SetSources(IEnumerable<ProcessedSource> sources)
         {
             _sources.Clear();
             _sources.AddRange(sources);
-            SaveTemplateCommand.NotifyCanExecuteChanged();
         }
 
         /// <summary>The folder of the last recording opened or CSV imported: where Import CSV starts and Export proposes
@@ -527,7 +527,6 @@ namespace TmDq.App.ViewModels
                 }
                 Show(Array.Empty<LockSeries>());
                 Status = $"Processing {name} ...";
-                _runningFile = name;
                 using RunOutcome outcome = await RunWithDialogAsync(choice.Request);
                 Progress = 100;
                 Show(outcome.Streams.Where(s => s.Mode == StreamMode.FrameSyncLock).Select(LockSeries.Of).ToList());

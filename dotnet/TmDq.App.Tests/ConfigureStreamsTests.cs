@@ -293,7 +293,7 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
-        public void ASecondTimeChannelIsListedAndCanBeChosen()
+        public async Task ASecondTimeChannelIsListedAndCanBeChosen()
         {
             // The PRN sample with CH-04 retyped as a time channel in TMATS (R-1\CDT-9:PCMIN -> 11), a same-length edit, as
             // the native reader's tests make: the recording then has two time channels and three PCM ones.
@@ -313,6 +313,22 @@ namespace TmDq.App.Tests
                 vm.TimeChannelIndex = 1;
                 Assert.Equal(16, vm.TimeChannelId);
                 Assert.Equal(16, vm.ToRunRequest().TimeChannelId);
+
+                // What is handed back carries the place chosen, which a template keeps; with no dialog, the default's.
+                Ch10File file = StreamsRun.Open(copy);
+                var dialogs = new FakeStreamDialogs();
+                dialogs.OnConfigure = async c =>
+                {
+                    c.TimeChannelIndex = 1;
+                    c.Rows[0].Process = true;
+                    dialogs.OnEdit = FakeStreamDialogs.Ok();
+                    await c.Rows[0].ConfigureCommand.ExecuteAsync(null);
+                    c.ProcessCommand.Execute(null);
+                };
+                StreamsChoice? chosen = await new DialogConfigurator(dialogs, null, Repo.Root).ConfigureAsync(copy, file);
+                Assert.Equal((1, 16), (chosen!.TimeChannelIndex, chosen.Request.TimeChannelId));
+                StreamsChoice? defaults = await new FirstChannelRun().ConfigureAsync(copy, file);
+                Assert.Equal((0, 1), (defaults!.TimeChannelIndex, defaults.Request.TimeChannelId));
             }
             finally
             {

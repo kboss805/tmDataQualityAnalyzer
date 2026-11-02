@@ -429,7 +429,8 @@ namespace TmDq.App.Tests
         {
             private readonly RunRequest _request;
             public Given(RunRequest request) => _request = request;
-            public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file) => Task.FromResult<StreamsChoice?>(StreamsChoice.Of(_request));
+            public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file) =>
+                Task.FromResult<StreamsChoice?>(new StreamsChoice(_request, Array.Empty<Streams.StreamSetup>(), 0));
         }
 
         [AvaloniaFact]

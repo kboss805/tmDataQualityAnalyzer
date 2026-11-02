@@ -331,8 +331,13 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
   through the core under the progress dialog, and the "Calibration Extracted" report (`extract-calibration.png`,
   `calibration-report.png`). The selected time channel and the recording's byte order reach the extraction; Apply Cal
   is unavailable, with its reason, rather than warning in a box.
-- [ ] **4.7 Templates and batch:** Save as Template, Apply Template, Plot File selector, per-file
+- [x] **4.7 Templates and batch** (PR #232): Save as Template, Apply Template, Plot File selector, per-file
   export (US1.1). Templates written by the Qt app must load unchanged.
+  **Done:** the template file read and written as the Qt schema has it (`TemplateFile`: three Qt-written templates
+  read as Qt reads them and written again byte for byte), Save as Template and Apply Template as top-bar buttons
+  until 4.8's menu, the batch confirmation (`BatchApplyWindow`, `batch-apply.png`), the batch run one file after
+  another, each kept as a recording of its own with the template's names and colours, the per-file CSV and images
+  (the first file's CSV identical to the Qt export), and the Plot File submenu (`PlotViewModel.SetVisibleSource`).
 - [ ] **4.8 The shell:** frameless chrome with **Windows 11 snap layouts** (unverified in Avalonia;
   verify first), hamburger menu with sections and Help submenu, recent files, drag and drop, light and
   dark themes with native frames (US9.0), the sidebar toggle, and preferences. **Existing users'
@@ -355,12 +360,50 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
 ## Step 6: retire Qt
 
 - [ ] **6.1 Delete the Qt application:** `src/view`, `src/viewmodel`, their headers, the Qt Test UI
-  suites, `tmDataQualityAnalyzer.pro` and `tests/tests.pro`, `qtbridge.h`, `QtProcessingEvents`.
+  suites, `tmDataQualityAnalyzer.pro` and `tests/tests.pro`, `qtbridge.h`, `QtProcessingEvents`
+  (`qtprocessingevents.h`), `plotconstants.h`, the Qt-typed DTOs in `include/dto` (`framesyncparams.h`,
+  `plotseriesdata.h`, `processingtemplate.h`, `seriesappearance.h`, `source.h`, `streamconfig.h`) and the two
+  Qt model sources (`processingtemplateschema`, `streamconfigschema`; `TestCoreQtFree`'s `kUiSessionSources`).
   Clean build from an empty tree, because a deletion is only verified by one (`.claude/CLAUDE.md`).
 - [ ] **6.2 Remove Qt from the tooling:** `env.ps1`, `deploy_qt_local.ps1`, `gen_compile_flags.py`,
   `gen_vs_project.ps1`, the CI Qt install, `QT_QPA_PLATFORM`, and the skills that describe the Qt
   build (`build-and-test`, `verify-ui-change`, `write-qt-test`, `add-stream-setting`, `cut-release`).
-- [ ] **6.3 Rewrite `.claude/CLAUDE.md` and `docs/claude.md`** for the new architecture, keeping the domain
+- [ ] **6.3 Take Qt out of the names that stay.** The code that outlives Qt still names it, in identifiers that
+  would read as dangling references once 6.1 has run. Found by a scan of the core, the C ABI, the native tests and
+  `dotnet/` (2026-11-01):
+  - **Core identifiers:** `qtMin` / `qtMax`, defined twice (`src/model/csvseriesparser.cpp` and
+    `src/model/seriesbuilder.cpp`). One helper, named for what it does, the NaN rule stated in its comment.
+  - **App identifiers:** `PlotColors.QRound`, `ToQtHsv` and `FromQtHsv`. They reproduce QColor's arithmetic on
+    purpose (4.3b); name them for the arithmetic (rounding half away from zero, 16-bit HSV) and keep the provenance
+    in one comment.
+  - **Test data and test names:** the member data `QtExports` (`ExportImportTests`), `QtShades` and
+    `QtShadesAroundTheWheel` (`PlotTests`); 24 test names in `TmDq.App.Tests` and `TmDq.Core.Tests` that say "Qt"
+    (`ATemplateIsWrittenAsTheQtApplicationWritesIt`, `EveryRecordingExportsTheQtApplicationsCsvByteForByte`,
+    `AShadeIsTheColourQtDraws`, ...); four native doctest names that say `QString`. The oracles stay as they are (the
+    fixtures were written by v2.14.2, and that stays true), so the names say what the expectation is, for instance
+    "as v2.14 wrote it", not which toolkit produced it.
+  - **Public API docs:** `tmdq_abi.h`'s `y_min` and `TmDq.Core`'s `Series.YMin` define the NaN rule as "as Qt's qMin
+    sees a NaN". State the rule itself: a host reading the ABI has no Qt to look it up in.
+  - **`constants.h`:** `UIConstants`' QSettings section (`kOrganizationName`, `kApplicationName`, the
+    `kSettingsKey*` keys), the theme identifiers and the "compiled in as a Qt resource" manual note belong to the Qt
+    application, not the core. 4.8's preference migration needs the key names: they move into its C# reader as the
+    legacy names, and leave the core's header.
+  - **Comments:** about 300 lines in the core, the ABI and the native tests and about 190 in `dotnet/` cite a Qt
+    class or function as the reference ("the Qt `BatchApplyDialog`", "`QString::toInt()`'s rules"). Where the code
+    reproduces a Qt behaviour (`textparse.h`, `textformat.h`, `containerutil.h`, `PlotColors`, `TemplateFile`), the
+    comment states the behaviour on its own terms and points at the test that pins it; where it only names the class
+    it was ported from, the user story replaces it.
+  - **Not Qt, and left alone:** `signal`, `slot`, `emit` in `stepdetector`, `calibrationextractor` and
+    `frameprocessor` are the RF signal and the step slots, not Qt's signals and slots. `m_` members are a C++
+    convention, not Qt's.
+  - **Already covered elsewhere:** `qtbridge.h` and `qtprocessingevents.h` (6.1); `deploy_qt_local.ps1` and the
+    `write-qt-test` skill (6.2); `TestCoreQtFree` goes with the Qt suite, and with nothing left to keep Qt out of,
+    its job ends (its other check, the `.pro` against `tmdq_core.vcxproj`, ends with the `.pro`).
+
+  The identifier renames do not depend on 6.1 and can land earlier as a small PR; the comments are best done after
+  6.1, when nothing they cite is left to compare against. Finish with a scan for `\bQt\b`, `\bQ[A-Z][a-z]` and
+  `\bq[A-Z]` over the surviving tree that finds nothing but the reasoned exceptions.
+- [ ] **6.4 Rewrite `.claude/CLAUDE.md` and `docs/claude.md`** for the new architecture, keeping the domain
   invariants (they are about telemetry, not Qt). Delete this file.
 
 ## Risks worth watching

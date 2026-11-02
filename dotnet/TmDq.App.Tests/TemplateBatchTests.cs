@@ -11,6 +11,7 @@ using Avalonia.Threading;
 using TmDq.App.Plot;
 using TmDq.App.Processing;
 using TmDq.App.Services;
+using TmDq.App.Streams;
 using TmDq.App.Templates;
 using TmDq.App.ViewModels;
 using TmDq.App.Views;
@@ -193,6 +194,95 @@ namespace TmDq.App.Tests
             Assert.DoesNotContain(plain.Log.Entries, e => e.Text.StartsWith("Exported", StringComparison.Ordinal));
             Assert.Empty(Directory.GetFiles(_dir, "*.csv"));
             await plain.RunBatchAsync(PrnTemplate(), Array.Empty<string>(), null, false);   // nothing to run: nothing happens
+
+            // A CSV that cannot be written is said so.
+            string nowhere = Path.Combine(_dir, "nowhere");
+            await plain.RunBatchAsync(PrnTemplate(), new[] { one }, nowhere, false);
+            Assert.Contains((Logging.LogLevel.Error, "Failed to export CSV: " + Path.Combine(nowhere, "flight 1.csv")),
+                            plain.Log.Entries.Select(e => (e.Level, e.Text)));
+        }
+
+        /// <summary>
+        /// A copy of <paramref name="source"/> recorded a day later, so that it shares no time with it: each time packet's
+        /// day one more. A time packet (data type 0x11) holds, after its channel-specific word, the BCD time in 16-bit
+        /// words; the third has the day's units and tens in its low byte, and its high byte the hundreds of a day of the
+        /// year (two low bits) or, when the channel-specific word's bit 9 says the date is a day and month, the month.
+        /// </summary>
+        private string ADayLater(string source, string name)
+        {
+            byte[] b = File.ReadAllBytes(source);
+            int edited = 0;
+            for (int p = 0; p + 24 <= b.Length; p += BitConverter.ToInt32(b, p + 4))
+            {
+                Assert.True(b[p] == 0x25 && b[p + 1] == 0xEB, "lost the packets' sync at " + p);
+                if (b[p + 15] != 0x11) continue;
+                int data = p + 24 + ((b[p + 14] & 0x80) != 0 ? 12 : 0);   // past a secondary header
+                bool dayOfYear = ((b[data + 1] >> 1) & 1) == 0;
+                int at = data + 4 + 4;
+                int day = (b[at] & 0xF) + 10 * (b[at] >> 4) + (dayOfYear ? 100 * (b[at + 1] & 0x3) : 0) + 1;
+                Assert.InRange(day, 2, dayOfYear ? 365 : 28);   // no carry into the month or the year
+                b[at] = (byte)(day % 10 | day / 10 % 10 << 4);
+                if (dayOfYear) b[at + 1] = (byte)(b[at + 1] & ~0x3 | day / 100);
+                edited++;
+            }
+            Assert.True(edited > 0, "no time packet");
+            string path = Path.Combine(_dir, name);
+            File.WriteAllBytes(path, b);
+            return path;
+        }
+
+        [Fact]
+        public async Task ARecordingThatSharesNoTimeWithTheOthersIsNamedInAWarning()
+        {
+            // step_cal's channel in Receiver SNR with the defaults, over the time channel at place 1, swapped.
+            Ch10File file = StreamsRun.Open(StepCal);
+            StreamSetup row = StreamRules.ForEditing(StreamRules.WithMode(StreamDefaults.NewStream(file.PcmChannels[0]), StreamMode.ReceiverChannelInfo), Repo.Root)
+                with { Process = true, Configured = true };
+            var template = new ProcessingTemplate("v", "step", 1, true, new[] { new TemplateEntry(row, Array.Empty<SeriesAppearance>()) });
+            string later = ADayLater(StepCal, "a day later.ch10"), missing = Path.Combine(_dir, "gone.ch10"), output = Path.Combine(_dir, "out");
+            Directory.CreateDirectory(output);
+            var images = new FakeImages();
+            var vm = new MainWindowViewModel(templateFiles: new FakeTemplateFiles(), templateDialogs: new FakeTemplateDialogs(), imageExporter: images, appRoot: Repo.Root);
+            images.Plot = vm.Plot;
+            var available = new List<bool>();
+            vm.ApplyTemplateCommand.CanExecuteChanged += (_, _) => available.Add(vm.ApplyTemplateCommand.CanExecute(null));
+            int before = vm.Log.Entries.Count;
+            await vm.RunBatchAsync(template, new[] { StepCal, later, missing }, output, false);
+
+            Assert.Equal(new[] { false, true }, available);   // Apply Template waits while the batch runs
+            Assert.Contains("Warning The most recently added source's recording time ('a day later.ch10') does not overlap the data already loaded. " +
+                            "They will share one time axis with a large gap between them.", Lines(vm, before));
+            Assert.Equal("Batch complete: 2 processed, 1 skipped. Output written to " + output + ".", vm.Status);
+            // Without frame-sync data, one image per file, named for it.
+            Assert.Equal(new[] { Path.Combine(output, "step_cal, example.png"), Path.Combine(output, "a day later.png") }, images.Asked.Select(a => a.Path));
+            // Each recording kept as the template ran it, for Save as Template: its time channel's place and byte order.
+            Assert.Equal(new[] { (0, 1, true), (1, 1, true) }, vm.Sources.Select(s => (s.SourceId, s.TimeChannelIndex, s.SwapBytes)));
+        }
+
+        /// <summary>What Configure Streams settled, given whatever the recording.</summary>
+        private sealed class Settled : IStreamConfigurator
+        {
+            private readonly StreamsChoice _choice;
+            public Settled(StreamsChoice choice) => _choice = choice;
+            public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file) => Task.FromResult<StreamsChoice?>(_choice);
+        }
+
+        [Fact]
+        public async Task AnOpenKeepsTheByteOrderAndTimeChannelConfigureStreamsSettled()
+        {
+            // Safran's channel 13 is PRN-15 recorded in the other byte order (Legacy Chapter 10 on), as 4.5's oracle runs it.
+            string safran = Repo.Recording("safran_testfile, sample.ch10");
+            Ch10File file = StreamsRun.Open(safran);
+            var stream = new StreamConfig
+            {
+                PcmChannelId = 13, Label = "PCM03", Mode = StreamMode.FrameSyncLock, SyncPattern = "334AABBF", SyncMask = "FFFFFFFF",
+                BitsInMinorFrame = 32767, SamplePeriod = FrameSyncDefaults.Period,
+            };
+            var request = new RunRequest(safran, file.DefaultTimeChannel, new[] { stream }) { SwapBytes = false };
+            var vm = new MainWindowViewModel(configurator: new Settled(new StreamsChoice(request, Array.Empty<StreamSetup>(), 3)), appRoot: Repo.Root);
+            await vm.LoadAsync(safran);
+            ProcessedSource source = Assert.Single(vm.Sources);
+            Assert.Equal((3, false), (source.TimeChannelIndex, source.SwapBytes));
         }
 
         // ---- Apply Template to Files --------------------------------------------------------------------------------------
@@ -211,7 +301,8 @@ namespace TmDq.App.Tests
             Assert.Null(vm.ReadTemplate(missing));
             Assert.Equal("Could not open template file: " + missing, vm.Log.Entries[^1].Text);
             Assert.Null(vm.ReadTemplate(Write("bad.json", "{ not json")));
-            Assert.StartsWith("Template file is not valid JSON: ", vm.Log.Entries[^1].Text);
+            TemplateFile.Parse("{ not json", out _, out string reason);   // the parser's own words follow
+            Assert.Equal("Template file is not valid JSON: " + reason, vm.Log.Entries[^1].Text);
             Assert.Null(vm.ReadTemplate(Write("new.json", "{\"schemaVersion\": 9, \"entries\": []}")));
             Assert.Equal("Template file uses an unsupported schema version.", vm.Log.Entries[^1].Text);
             Assert.Null(vm.ReadTemplate(Write("array.json", "[]")));
@@ -249,6 +340,24 @@ namespace TmDq.App.Tests
             await vm.ApplyTemplateCommand.ExecuteAsync(null);
             Assert.Contains("Success Processing 1 file(s)...", Lines(vm, before));
             Assert.Equal(new[] { (0, "flight 1") }, vm.Plot.SourceList());
+            // As the confirmation was left: the template's names and colours, and no export.
+            Assert.Equal("Batch complete: 1 processed, 0 skipped.", vm.Status);
+            Assert.Equal("Fifteen", vm.Plot.Series[0].Name);
+
+            // Its own names kept, and each file exported to the folder given (spaces trimmed).
+            string output = Path.Combine(_dir, "out");
+            Directory.CreateDirectory(output);
+            dialogs.OnConfirm = c =>
+            {
+                c.ReuseAppearance = false;
+                c.ExportPerFile = true;
+                c.OutputFolder = "  " + output + "  ";
+                c.ProcessCommand.Execute(null);
+            };
+            await vm.ApplyTemplateCommand.ExecuteAsync(null);
+            Assert.Equal("Batch complete: 1 processed, 0 skipped. Output written to " + output + ".", vm.Status);
+            Assert.True(File.Exists(Path.Combine(output, "flight 1.csv")));
+            Assert.Equal("CH-01 PRN 15 5M", vm.Plot.Series[0].Name);
 
             // A template that cannot be used stops there; no files are asked for.
             files.Asked.Clear();
@@ -284,6 +393,7 @@ namespace TmDq.App.Tests
             ProcessedSource source = Assert.Single(vm.Sources);
             Assert.Equal((0, Prn, 0, true), (source.SourceId, source.FilePath, source.TimeChannelIndex, source.SwapBytes));
             Assert.Equal(new[] { 13, 14, 15, 16 }, source.Rows.Select(r => r.PcmChannelId));   // every row, processed or not
+            Assert.Equal(new[] { true, false, false, false }, source.Rows.Select(r => r.Process));   // the first, as it was run
             Assert.Equal(new[] { (0, "prn_testfile, sample") }, vm.Plot.SourceList());
 
             vm.Plot.RenameSeries(vm.Plot.Series[0].Id, "Renamed");
@@ -323,6 +433,12 @@ namespace TmDq.App.Tests
             await vm.SaveTemplateCommand.ExecuteAsync(null);
             Assert.Empty(files.Asked);
 
+            // A recording that cannot be read forgets the batch's: there is nothing left to capture.
+            string notRecording = Path.Combine(_dir, "not.ch10");
+            File.WriteAllText(notRecording, "no");
+            await vm.LoadAsync(notRecording);
+            Assert.Empty(vm.Sources);
+            await vm.RunBatchAsync(PrnTemplate(), new[] { one, two }, null, false);
             await vm.LoadAsync(Prn);   // a new recording: the batch's are gone
             Assert.Single(vm.Sources);
         }
@@ -361,8 +477,11 @@ namespace TmDq.App.Tests
             await vm.BrowseCommand.ExecuteAsync(null);
             Assert.Equal(@"D:\out", vm.OutputFolder);
 
-            // No file matches: nothing to process.
-            Assert.False(new BatchApplyViewModel(new[] { checks[1] }, "", null).CanProcess);
+            // No file matches: nothing to process, even run regardless.
+            var none = new BatchApplyViewModel(new[] { checks[1] }, "", null);
+            Assert.False(none.CanProcess);
+            none.ProcessCommand.Execute(null);
+            Assert.False(none.Accepted);
             int closed = 0;
             vm.CloseRequested += (_, _) => closed++;
             vm.CancelCommand.Execute(null);

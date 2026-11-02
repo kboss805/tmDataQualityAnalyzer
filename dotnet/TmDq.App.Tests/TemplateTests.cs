@@ -80,6 +80,7 @@ namespace TmDq.App.Tests
             Assert.Empty(prn.Entries[1].Appearance);
             Assert.Equal(StreamMode.ReceiverChannelInfo, prn.Entries[3].Config.Mode);
             Assert.All(prn.Entries, e => Assert.True(e.Config.Configured));
+            Assert.All(prn.Entries, e => Assert.Equal(e.Config.Mode, e.Config.SettingsMode));   // the settings are the mode's
 
             ProcessingTemplate cal = Load(Fixture("calibrated.json"));
             Assert.Equal(("step_cal, example", 1, false), (cal.Name, cal.TimeChannelIndex, cal.SwapBytes));
@@ -124,11 +125,13 @@ namespace TmDq.App.Tests
         [Fact]
         public void WhatATemplateLeavesOutIsLeftOutAndAControlCharacterIsEscaped()
         {
-            var row = new StreamSetup { PcmChannelId = 1, Label = "a\u0001b" };
+            var row = new StreamSetup { PcmChannelId = 1, Label = "a\u0001b\u001f" };
             string json = TemplateFile.ToJson(new ProcessingTemplate("v", "n", 0, true, new[] { new TemplateEntry(row, Array.Empty<SeriesAppearance>()) }));
             Assert.DoesNotContain("appearance", json);
             Assert.DoesNotContain("calibration", json);
-            Assert.Contains("\"label\": \"a\\u0001b\"", json);
+            Assert.Contains("\"label\": \"a\\u0001b\\u001f\"", json);   // Qt's lower-case hex, up to 0x1f
+            // A template read at an older schema version is written at the current one.
+            Assert.Contains("\"schemaVersion\": 1", TemplateFile.ToJson(Parse("{\"schemaVersion\": 0, \"entries\": []}")));
             Assert.DoesNotContain("\r", json);
             Assert.EndsWith("}\n", json);
             // A calibration is kept by what it was extracted from, only when there was one.
@@ -194,7 +197,7 @@ namespace TmDq.App.Tests
                               "samplePeriodIndex": 7, "slopeIndex": -1, "polarityIndex": 5, "scaleDdBPerV": "7",
                               "calibration": "not an object"}},
                   {"config": {"pcmChannelId": 8, "label": "y", "samplePeriodIndex": -3, "slopeIndex": 9, "sync": "not an object",
-                              "calibration": {"calCh10Path": "c.ch10", "clipEndSec": 3}}}
+                              "scaleDdBPerV": true, "calibration": {"calCh10Path": "c.ch10", "clipEndSec": 3, "clipStartSec": null}}}
                 ]}
                 """);
             Assert.Equal(("", true, 0), (t.Name, t.SwapBytes, t.TimeChannelIndex));
@@ -203,7 +206,7 @@ namespace TmDq.App.Tests
             Assert.Equal((FrameSyncDefaults.BitsInMinorFrame, false, FrameSyncDefaults.Pattern), (a.BitsInMinorFrame, a.Randomized, a.SyncPattern));
             Assert.Equal((SamplePeriod.TenMilliseconds, 0, 5, 20.0), (a.SamplePeriod, a.SlopeIndex, a.PolarityIndex, a.ScaleDdBPerV));
             Assert.Equal("", a.CalCh10Path);
-            Assert.Equal((SamplePeriod.OneSecond, 3), (b.SamplePeriod, b.SlopeIndex));
+            Assert.Equal((SamplePeriod.OneSecond, 3, 20.0), (b.SamplePeriod, b.SlopeIndex, b.ScaleDdBPerV));
             Assert.Equal(("c.ch10", "", 0.0, 3.0), (b.CalCh10Path, b.StepTomlPath, b.ClipStartSec, b.ClipEndSec));
         }
 
@@ -237,6 +240,7 @@ namespace TmDq.App.Tests
             ProcessingTemplate prn = Load(Fixture("prn-sample.json"));
             Assert.True(TemplateBatch.Match(prn, new[] { 16, 15, 14, 13 }).Ok);
             Assert.Equal("missing channel(s): 15, 16", TemplateBatch.Describe(TemplateBatch.Match(prn, new[] { 13, 14 })));
+            Assert.Equal("missing channel(s): 16", TemplateBatch.Describe(TemplateBatch.Match(prn, new[] { 13, 14, 15 })));
             Assert.Equal("extra channel(s): 17", TemplateBatch.Describe(TemplateBatch.Match(prn, new[] { 13, 14, 15, 16, 17 })));
             Assert.Equal("missing channel(s): 13, 14, 15, 16; extra channel(s): 26", TemplateBatch.Describe(TemplateBatch.Match(prn, new[] { 26 })));
 
@@ -288,14 +292,16 @@ namespace TmDq.App.Tests
         public void ATemplatesLooksGoBackOnOneRecordingsMatchingSeriesInOneRefresh()
         {
             var plot = new PlotViewModel();
+            // Each decoy comes first, differing from the series a look is for in one thing only.
             plot.SetSeries(new[]
             {
+                PlotFixtures.Make(1, "Ch 13", MetricType.FrameSyncLock, 13, 1, X2, X2, source: 2),   // another recording
                 PlotFixtures.Make(0, "Ch 13", MetricType.FrameSyncLock, 13, 0, X2, X2, source: 1),
-                PlotFixtures.Make(1, "Ch 13", MetricType.FrameSyncLock, 13, 1, X2, X2, source: 2),
+                PlotFixtures.Make(4, "Rx", MetricType.Snr, 26, 2, X2, X2, receiver: 2, channel: 0, source: 1),   // another receiver
+                PlotFixtures.Make(3, "Rx", MetricType.Snr, 26, 2, X2, X2, receiver: 1, channel: 1, source: 1),   // another channel
                 PlotFixtures.Make(2, "Rx", MetricType.Snr, 26, 2, X2, X2, receiver: 1, channel: 0, source: 1),
-                PlotFixtures.Make(3, "Rx", MetricType.Snr, 26, 2, X2, X2, receiver: 1, channel: 1, source: 1),
             });
-            Color before1 = plot.SeriesById(1)!.Color, before3 = plot.SeriesById(3)!.Color;
+            Color before1 = plot.SeriesById(1)!.Color, before3 = plot.SeriesById(3)!.Color, before4 = plot.SeriesById(4)!.Color;
             var template = new ProcessingTemplate("v", "n", 0, true, new[]
             {
                 new TemplateEntry(new StreamSetup { PcmChannelId = 13, Label = "Ch 13" },
@@ -315,6 +321,15 @@ namespace TmDq.App.Tests
             Assert.Equal(("Ch 13", before1), (plot.SeriesById(1)!.Name, plot.SeriesById(1)!.Color));   // the other recording's
             Assert.Equal(("Left", Colors.Navy), (plot.SeriesById(2)!.Name, plot.SeriesById(2)!.Color));
             Assert.Equal(before3, plot.SeriesById(3)!.Color);   // the other channel
+            Assert.Equal(("Rx", before4), (plot.SeriesById(4)!.Name, plot.SeriesById(4)!.Color));   // the other receiver
+
+            // Put back on the second recording, a look goes on its series, not the first recording's.
+            TemplateBatch.ApplyAppearance(new ProcessingTemplate("v", "n", 0, true, new[]
+            {
+                new TemplateEntry(new StreamSetup { PcmChannelId = 13, Label = "Ch 13" },
+                                  new[] { new SeriesAppearance(MetricType.FrameSyncLock, 0, 0, "Second", Colors.Teal) }),
+            }), 2, plot);
+            Assert.Equal(("Second", "Thirteen"), (plot.SeriesById(1)!.Name, plot.SeriesById(0)!.Name));
         }
 
         [Fact]
@@ -329,6 +344,17 @@ namespace TmDq.App.Tests
             // A place past the recording's list is its default time channel; the template's byte order is the run's.
             RunRequest other = TemplateBatch.ToRunRequest(prn with { TimeChannelIndex = 5, SwapBytes = false }, Prn, file, 0, null);
             Assert.Equal((file.DefaultTimeChannel, false), (other.TimeChannelId, other.SwapBytes));
+            foreach (int place in new[] { -1, file.TimeChannels.Count })   // just outside the list, at either end
+                Assert.Equal(file.DefaultTimeChannel, TemplateBatch.ToRunRequest(prn with { TimeChannelIndex = place }, Prn, file, 0, null).TimeChannelId);
+
+            // A place inside the list is that time channel: the PRN sample with CH-04 retyped as a time channel (16), as
+            // ConfigureStreamsTests makes it.
+            byte[] bytes = File.ReadAllBytes(Prn);
+            System.Text.Encoding.ASCII.GetBytes(@"R-1\CDT-9:11   ;").CopyTo(bytes, bytes.AsSpan().IndexOf(System.Text.Encoding.ASCII.GetBytes(@"R-1\CDT-9:PCMIN;")));
+            string twoTime = Path.Combine(_dir, "two-time.ch10");
+            File.WriteAllBytes(twoTime, bytes);
+            Ch10File two = StreamsRun.Open(twoTime);
+            Assert.Equal(16, TemplateBatch.ToRunRequest(prn with { TimeChannelIndex = 1 }, twoTime, two, 0, null).TimeChannelId);
             Assert.Equal("flight", TemplateBatch.BaseName("flight"));
         }
 
@@ -374,6 +400,20 @@ namespace TmDq.App.Tests
             Assert.Equal(-1, plot.VisibleSource);
             plot.SetSeries(new[] { PlotFixtures.Make(0, "a", MetricType.Snr, 1, 0, X2, X2, source: 3) });
             Assert.Equal(new[] { (3, "Source 3") }, plot.SourceList());   // the labels went with it
+
+            // Source 0 is a recording like any other; one of a single sample is shown at its instant; each choice is told.
+            plot.SetSeries(new[]
+            {
+                PlotFixtures.Make(0, "a", MetricType.Snr, 1, 0, X2, X2, source: 0),
+                PlotFixtures.Make(1, "b", MetricType.Snr, 1, 1, new[] { 7.0 }, new[] { 30.0 }, source: 5),
+            });
+            int told = 0;
+            plot.PropertyChanged += (_, e) => told += e.PropertyName == nameof(PlotViewModel.VisibleSource) ? 1 : 0;
+            plot.SetVisibleSource(0);
+            Assert.Equal(new[] { true, false }, plot.Series.Select(plot.EffectiveVisible));
+            plot.SetVisibleSource(5);
+            Assert.Equal((7.0, 7.0), (plot.XViewMin, plot.XViewMax));
+            Assert.Equal(2, told);
         }
 
         [AvaloniaFact]
@@ -401,6 +441,8 @@ namespace TmDq.App.Tests
             Assert.Equal(1, plot.VisibleSource);
             plotFile = view.BuildContextMenu()!.Items.OfType<MenuItem>().Single(i => (string)i.Header! == "Plot File");
             Assert.Equal(new[] { false, true }, new[] { ((MenuItem)plotFile.Items[0]!).IsChecked, ((MenuItem)plotFile.Items[3]!).IsChecked });
+            await ((CommunityToolkit.Mvvm.Input.IRelayCommand)((MenuItem)plotFile.Items[0]!).Command!).ExecuteAsync();
+            Assert.Equal(-1, plot.VisibleSource);   // all of them again
 
             // One recording has nothing to choose between.
             plot.SetSeries(new[] { PlotFixtures.Make(0, "a", MetricType.Snr, 1, 0, X2, X2) });
