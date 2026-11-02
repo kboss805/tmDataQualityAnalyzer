@@ -12,6 +12,7 @@ using TmDq.App.Logging;
 using TmDq.App.Plot;
 using TmDq.App.Processing;
 using TmDq.App.Services;
+using TmDq.App.Templates;
 using TmDq.Core;
 
 namespace TmDq.App.ViewModels
@@ -28,6 +29,11 @@ namespace TmDq.App.ViewModels
         private readonly IDataFilePicker? _files;
         private readonly IExportDialog? _exportDialog;
         private readonly IPlotImageExporter? _imageExporter;
+        private readonly ITemplateFilePicker? _templateFiles;
+        private readonly ITemplateDialogs? _templateDialogs;
+        private readonly string _appRoot;
+        private readonly List<ProcessedSource> _sources = new();
+        private string _runningFile = string.Empty;
         private ProcessingViewModel? _processing;
         private string _status = "Open a Chapter 10 recording.";
         private int _progress;
@@ -42,10 +48,14 @@ namespace TmDq.App.ViewModels
         /// <param name="files">The CSV to import and Export's Browse dialogs; null leaves Import CSV unavailable.</param>
         /// <param name="exportDialog">The Export dialog; null leaves Export unavailable.</param>
         /// <param name="imageExporter">What writes the plot as an image; null makes an image export fail.</param>
+        /// <param name="templateFiles">Save as Template's and Apply Template's file dialogs; null leaves both unavailable.</param>
+        /// <param name="templateDialogs">The batch confirmation and the choice of recording; null leaves Apply Template unavailable.</param>
+        /// <param name="appRoot">Where settings/ is, for a batch's runs; null is the application's folder.</param>
         public MainWindowViewModel(IRecordingPicker? picker = null, IStreamConfigurator? configurator = null,
                                    IProcessingDialog? processingDialog = null, TimeProvider? clock = null,
                                    IDataFilePicker? files = null, IExportDialog? exportDialog = null,
-                                   IPlotImageExporter? imageExporter = null)
+                                   IPlotImageExporter? imageExporter = null, ITemplateFilePicker? templateFiles = null,
+                                   ITemplateDialogs? templateDialogs = null, string? appRoot = null)
         {
             _picker = picker;
             _configurator = configurator ?? new FirstChannelRun();
@@ -53,15 +63,24 @@ namespace TmDq.App.ViewModels
             _files = files;
             _exportDialog = exportDialog;
             _imageExporter = imageExporter;
+            _templateFiles = templateFiles;
+            _templateDialogs = templateDialogs;
+            _appRoot = appRoot ?? AppContext.BaseDirectory;
             Log = new SessionLog(clock);
             OpenCommand = new AsyncRelayCommand(OpenAsync, () => !IsBusy && _picker is not null);
             ImportCsvCommand = new AsyncRelayCommand(PickAndImportAsync, () => !IsBusy && _files is not null);
             ExportCommand = new AsyncRelayCommand(ExportAsync, () => !IsBusy && Plot.HasData && _exportDialog is not null);
+            SaveTemplateCommand = new AsyncRelayCommand(SaveTemplateAsync, () => !IsBusy && _sources.Count > 0 && _templateFiles is not null);
+            ApplyTemplateCommand = new AsyncRelayCommand(ApplyTemplateAsync, () => !IsBusy && _templateFiles is not null && _templateDialogs is not null);
             Log.Add("tmDataQualityAnalyzer v" + AppInfo.Version);
             Log.Add("Load a Chapter 10 file to configure per-stream processing.");
             // A time window entered outside the recording is clamped, and says so in the log, in goldenrod; so are the rows
             // an imported CSV skipped.
             Plot.Warning += (_, message) => Log.Warning(message);
+            // A batch's recordings share one time axis; one that does not overlap the rest is said so (the Qt words).
+            Plot.NonOverlappingSource += (_, _) => Log.Warning(
+                "The most recently added source's recording time ('" + _runningFile + "') does not overlap the data already loaded. " +
+                "They will share one time axis with a large gap between them.");
             Plot.PropertyChanged += (_, e) =>
             {
                 if (e.PropertyName == nameof(PlotViewModel.HasData)) ExportCommand.NotifyCanExecuteChanged();
@@ -108,7 +127,25 @@ namespace TmDq.App.ViewModels
                 OpenCommand.NotifyCanExecuteChanged();
                 ImportCsvCommand.NotifyCanExecuteChanged();
                 ExportCommand.NotifyCanExecuteChanged();
+                SaveTemplateCommand.NotifyCanExecuteChanged();
+                ApplyTemplateCommand.NotifyCanExecuteChanged();
             }
+        }
+
+        /// <summary>The recordings processed this session, as a template is captured from them; cleared by a new run.</summary>
+        public IReadOnlyList<ProcessedSource> Sources => _sources;
+
+        /// <summary>Save as Template: one processed recording's rows and its series' looks, to a file (US1.1).</summary>
+        public IAsyncRelayCommand SaveTemplateCommand { get; }
+
+        /// <summary>Apply Template to Files: a template run over recordings chosen together, one after another (US1.1).</summary>
+        public IAsyncRelayCommand ApplyTemplateCommand { get; }
+
+        // Only ever while busy: Save as Template is told when the work ends.
+        private void SetSources(IEnumerable<ProcessedSource> sources)
+        {
+            _sources.Clear();
+            _sources.AddRange(sources);
         }
 
         /// <summary>The folder of the last recording opened or CSV imported: where Import CSV starts and Export proposes
@@ -228,6 +265,225 @@ namespace TmDq.App.ViewModels
             }
         }
 
+        // ---- templates and batch (plan step 4.7, US1.1) ------------------------------------------------------------------
+
+        /// <summary>
+        /// Save as Template, as the Qt <c>saveTemplateButtonPressed</c> does: with several recordings processed, which to
+        /// capture from; then where; then the template, with the series' names and colours as they are now.
+        /// </summary>
+        private async Task SaveTemplateAsync()
+        {
+            if (_sources.Count == 0)
+            {
+                Log.Warning("Nothing to save as a template -- no sources have finished processing yet.");
+                return;
+            }
+            int index = 0;
+            if (_sources.Count > 1)
+            {
+                if (_templateDialogs is null) return;
+                var choices = _sources.Select(s => Path.GetFileName(s.FilePath) +
+                                                   string.Create(CultureInfo.InvariantCulture, $" (source {s.SourceId})")).ToList();
+                if (await _templateDialogs.ChooseSourceAsync(choices) is not int chosen) return;
+                index = chosen;
+            }
+            string? path = await _templateFiles!.SaveTemplateAsync(LastFolder);
+            if (string.IsNullOrEmpty(path)) return;
+            SaveTemplate(_sources[index], path);
+        }
+
+        /// <summary>Writes the template captured from <paramref name="source"/> to <paramref name="path"/>, and says so.</summary>
+        public bool SaveTemplate(ProcessedSource source, string path)
+        {
+            try
+            {
+                TemplateFile.Write(path, TemplateBatch.Build(source, Plot));
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                Log.Error("Could not write template file: " + path);
+                return false;
+            }
+            LastFolder = Path.GetDirectoryName(Path.GetFullPath(path));
+            Log.Success("Template saved: " + Path.GetFileName(path));
+            return true;
+        }
+
+        /// <summary>
+        /// Apply Template to Files, as the Qt <c>applyTemplateButtonPressed</c> does: a template, read with its errors in
+        /// the log; then the recordings; each checked against the template; the confirmation; then the batch.
+        /// </summary>
+        private async Task ApplyTemplateAsync()
+        {
+            if (IsBusy) return;
+            string? templatePath = await _templateFiles!.OpenTemplateAsync(LastFolder);
+            if (string.IsNullOrEmpty(templatePath)) return;
+            if (ReadTemplate(templatePath) is not { } template) return;
+            LastFolder = Path.GetDirectoryName(Path.GetFullPath(templatePath));
+
+            IReadOnlyList<string> picked = await _templateFiles.OpenRecordingsAsync(LastFolder);
+            if (picked.Count == 0) return;
+            NativeCore.EnsureLoaded();
+            IReadOnlyList<FileCheck> checks = await Task.Run(() => TemplateBatch.Validate(template, picked));
+            var confirm = new BatchApplyViewModel(checks, LastFolder ?? AppContext.BaseDirectory, _templateFiles);
+            await _templateDialogs!.ConfirmBatchAsync(confirm);
+            if (!confirm.Accepted || confirm.Matched.Count == 0) return;
+            await RunBatchAsync(template, confirm.Matched, confirm.ExportPerFile ? confirm.OutputFolder.Trim() : null, confirm.ReuseAppearance);
+        }
+
+        /// <summary>The template at <paramref name="path"/>, or null with the reason in the log, in the Qt words.</summary>
+        public ProcessingTemplate? ReadTemplate(string path)
+        {
+            TemplateLoad load;
+            ProcessingTemplate? template;
+            string error;
+            try
+            {
+                load = TemplateFile.Read(path, out template, out error);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                Log.Error("Could not open template file: " + path);
+                return null;
+            }
+            switch (load)
+            {
+                case TemplateLoad.InvalidJson:
+                    Log.Error("Template file is not valid JSON: " + error);
+                    return null;
+                case TemplateLoad.UnsupportedSchemaVersion:
+                    Log.Error("Template file uses an unsupported schema version.");
+                    return null;
+                case TemplateLoad.InvalidFormat:
+                    Log.Error("Template file is not a valid template (unrecognized format).");
+                    return null;
+            }
+            if (template!.Entries.Count == 0)
+            {
+                Log.Error("Template has no stream entries.");
+                return null;
+            }
+            return template;
+        }
+
+        /// <summary>
+        /// Runs <paramref name="template"/> over <paramref name="files"/>, one after another, as the Qt
+        /// <c>BatchController</c> does: a fresh plot; each file checked again and run with the template's rows, kept in the
+        /// plot as a recording of its own, named for the Plot File selector, with the template's names and colours when
+        /// asked; a file that is gone, no longer matches, or fails is skipped and said so. Then, when a folder is given, a
+        /// CSV and plot images per file; the plot left on the first file; and the summary.
+        /// </summary>
+        /// <param name="outputFolder">Where each file's CSV and images go; null exports nothing.</param>
+        public async Task RunBatchAsync(ProcessingTemplate template, IReadOnlyList<string> files, string? outputFolder, bool reuseAppearance)
+        {
+            if (files.Count == 0 || IsBusy) return;
+            IsBusy = true;
+            int processed = 0, skipped = 0, nextSourceId = 0;
+            var sources = new List<ProcessedSource>();
+            try
+            {
+                Show(Array.Empty<LockSeries>());
+                Log.Success(string.Create(CultureInfo.InvariantCulture, $"Processing {files.Count} file(s)..."));
+                foreach (string path in files)
+                {
+                    if (!File.Exists(path))
+                    {
+                        Log.Warning("Skipped missing batch file: " + path);
+                        skipped++;
+                        continue;
+                    }
+                    string name = Path.GetFileName(path), baseName = BaseName(name);
+                    int sourceId = nextSourceId++;
+                    try
+                    {
+                        Status = $"Opening {name} ...";
+                        Log.Add("Opening: " + name);
+                        Ch10File file = await StreamsRun.OpenAsync(path);
+                        // Checked again at its turn: the file may have changed since it was chosen.
+                        if (!TemplateBatch.Match(template, file.PcmChannels.Select(c => c.Id)).Ok)
+                        {
+                            Log.Warning("Skipped (channels no longer match template): " + name);
+                            skipped++;
+                            continue;
+                        }
+                        Status = $"Processing {name} ...";
+                        _runningFile = name;
+                        using RunOutcome outcome = await RunWithDialogAsync(TemplateBatch.ToRunRequest(template, path, file, sourceId, _appRoot));
+                        foreach (StreamResult result in outcome.Results) Plot.AddStream(result);
+                        processed++;
+                        sources.Add(new ProcessedSource(sourceId, path, template.TimeChannelIndex, template.SwapBytes,
+                                                        template.Entries.Select(e => e.Config).ToList()));
+                        Plot.SetSourceLabel(sourceId, baseName);
+                        if (reuseAppearance) TemplateBatch.ApplyAppearance(template, sourceId, Plot);
+                    }
+                    catch (Exception e) when (e is OperationCanceledException or RecordingException)
+                    {
+                        skipped++;
+                        Log.Error("Batch file failed to process: " + baseName);
+                    }
+                }
+                SetSources(sources);
+
+                if (outputFolder is not null) await ExportEachSourceAsync(outputFolder);
+
+                // The plot opens on the first file; "All files (overlaid)" is in the Plot File selector.
+                if (sources.Count > 1) Plot.SetVisibleSource(sources[0].SourceId);
+                if (sources.Count > 0) Plot.Title = BaseName(Path.GetFileName(sources[0].FilePath));
+                Status = string.Create(CultureInfo.InvariantCulture, $"Batch complete: {processed} processed, {skipped} skipped.") +
+                         (outputFolder is null ? "" : " Output written to " + outputFolder + ".");
+                Log.Success(Status);
+            }
+            catch (Exception e) when (e is FileNotFoundException or InvalidOperationException)
+            {
+                Status = "The processing core could not be loaded: " + e.Message;
+                Log.Error(Status);
+            }
+            finally
+            {
+                Progress = 0;
+                IsBusy = false;
+            }
+        }
+
+        /// <summary>
+        /// Each recording on its own, as the Qt <c>finish</c> writes it: its CSV (every series of that recording), then
+        /// with frame-sync data an image of the lock % and one of the missed frames, else one image; the view put back after.
+        /// </summary>
+        private async Task ExportEachSourceAsync(string folder)
+        {
+            LockAxisView original = Plot.LockAxisView;
+            bool frameSync = Plot.HasLockSeries || Plot.HasMissedFramesSeries;
+            foreach (ProcessedSource source in _sources)
+            {
+                string baseName = BaseName(Path.GetFileName(source.FilePath));
+                Plot.SetVisibleSource(source.SourceId);
+                string csv = Path.Combine(folder, baseName + ".csv");
+                if (Plot.ExportCsv(csv, source.SourceId)) Log.Success("Exported: " + csv);
+                else Log.Error("Failed to export CSV: " + csv);
+
+                if (_imageExporter is null) continue;
+                if (frameSync)
+                {
+                    Plot.SetLockAxisView(LockAxisView.LockPercent);
+                    await ExportImageAsync(Path.Combine(folder, baseName + "_framesync_lock.png"));
+                    Plot.SetLockAxisView(LockAxisView.MissedFrames);
+                    await ExportImageAsync(Path.Combine(folder, baseName + "_missed_frames.png"));
+                }
+                else
+                {
+                    await ExportImageAsync(Path.Combine(folder, baseName + ".png"));
+                }
+            }
+            Plot.SetLockAxisView(original);
+        }
+
+        private async Task ExportImageAsync(string path)
+        {
+            (string Path, ImageFormat Format)? written = await _imageExporter!.ExportAsync(path);
+            if (written is { } w) Log.Success($"Plot exported as {w.Format.ToString().ToUpperInvariant()} to {w.Path}");
+            else Log.Error("Error: Failed to export plot to " + ImageFiles.Resolve(path).Path);
+        }
+
         /// <summary>The log as the Qt export writes it: each line as the sidebar shows it, CR LF line ends (Qt's text
         /// mode), UTF-8 without a byte-order mark, ending with a line end.</summary>
         private bool WriteLog(string path)
@@ -263,20 +519,23 @@ namespace TmDq.App.ViewModels
                 Log.Add("  File size: " + SizeText(new FileInfo(path).Length));
                 Log.Add("  Time channels: " + CountText(file.TimeChannels.Count));
                 Log.Add("  PCM channels: " + CountText(file.PcmChannels.Count));
-                RunRequest? request = await _configurator.ConfigureAsync(path, file);
-                if (request is null)
+                StreamsChoice? choice = await _configurator.ConfigureAsync(path, file);
+                if (choice is null)
                 {
                     Status = $"{name}: not processed (Configure Streams was cancelled).";
                     return;
                 }
                 Show(Array.Empty<LockSeries>());
                 Status = $"Processing {name} ...";
-                using RunOutcome outcome = await RunWithDialogAsync(request);
+                using RunOutcome outcome = await RunWithDialogAsync(choice.Request);
                 Progress = 100;
                 Show(outcome.Streams.Where(s => s.Mode == StreamMode.FrameSyncLock).Select(LockSeries.Of).ToList());
                 // The core builds each stream's series, in table order, on one shared time axis.
                 foreach (StreamResult result in outcome.Results) Plot.AddStream(result);
                 Plot.Title = BaseName(name);
+                // The recording, as a template is captured from it, named in the Plot File selector.
+                SetSources(new[] { new ProcessedSource(choice.Request.SourceId, path, choice.TimeChannelIndex, choice.Request.SwapBytes, choice.Rows) });
+                Plot.SetSourceLabel(choice.Request.SourceId, BaseName(name));
                 Status = Describe(name, outcome);
                 Log.Success("Processing complete — results plotted from memory.");
             }
@@ -361,8 +620,12 @@ namespace TmDq.App.ViewModels
 
         private void Show(IReadOnlyList<LockSeries> series)
         {
-            // An empty run summary is a new run, or one that failed: the plot is cleared with it.
-            if (series.Count == 0) Plot.Clear();
+            // An empty run summary is a new run, or one that failed: the plot is cleared with it, and the recordings it held.
+            if (series.Count == 0)
+            {
+                Plot.Clear();
+                SetSources(Array.Empty<ProcessedSource>());
+            }
             AllSeries = series;
             Series = series.Count > 0 ? series[0] : null;
         }

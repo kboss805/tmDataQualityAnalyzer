@@ -257,6 +257,29 @@ namespace TmDq.App.Tests
         }
 
         [AvaloniaFact]
+        public async Task AnImageExportedJustAfterTheViewChangedIsLaidOutForTheNewView()
+        {
+            // A batch's export switches the recording shown and exports at once: the legend is already the new view's,
+            // one row rather than three.
+            double[] xs = { 0.0, 2.0 }, ys = { 10.0, 20.0 };
+            var plot = new PlotViewModel();
+            plot.SetSeries(new[]
+            {
+                PlotFixtures.Make(0, "a", MetricType.Snr, 40, 0, xs, ys, receiver: 1, channel: 0, source: 0),
+                PlotFixtures.Make(1, "b", MetricType.Snr, 40, 0, xs, ys, receiver: 1, channel: 1, source: 0),
+                PlotFixtures.Make(2, "c", MetricType.Snr, 40, 0, xs, ys, receiver: 1, channel: 2, source: 0),
+                PlotFixtures.Make(3, "d", MetricType.Snr, 40, 0, xs, ys, receiver: 1, channel: 0, source: 1),
+            });
+            (PlotView view, Window window) = Show(plot);
+            plot.SetVisibleSource(1);
+            using SKBitmap atOnce = await PngOf(view);
+            Dispatcher.UIThread.RunJobs();
+            using SKBitmap settled = await PngOf(view);
+            Assert.Equal(settled.Bytes, atOnce.Bytes);
+            window.Close();
+        }
+
+        [AvaloniaFact]
         public async Task TheCursorsCrosshairIsNotExported()
         {
             (PlotView view, Window window) = Show(LowLine());
@@ -784,9 +807,9 @@ namespace TmDq.App.Tests
 
         private sealed class WaitingConfigurator : IStreamConfigurator
         {
-            public readonly TaskCompletionSource<RunRequest?> Answer = new();
+            public readonly TaskCompletionSource<StreamsChoice?> Answer = new();
 
-            public Task<RunRequest?> ConfigureAsync(string path, Ch10File file) => Answer.Task;
+            public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file) => Answer.Task;
         }
 
         [Fact]

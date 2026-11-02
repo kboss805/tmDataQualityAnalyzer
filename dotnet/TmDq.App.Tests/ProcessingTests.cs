@@ -84,7 +84,7 @@ namespace TmDq.App.Tests
         /// <summary>Configure Streams cancelled.</summary>
         private sealed class Cancelled : IStreamConfigurator
         {
-            public Task<RunRequest?> ConfigureAsync(string path, Ch10File file) => Task.FromResult<RunRequest?>(null);
+            public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file) => Task.FromResult<StreamsChoice?>(null);
         }
 
         private static StreamConfig StepCalSnr(string? label = "RCVR") => new()
@@ -429,7 +429,8 @@ namespace TmDq.App.Tests
         {
             private readonly RunRequest _request;
             public Given(RunRequest request) => _request = request;
-            public Task<RunRequest?> ConfigureAsync(string path, Ch10File file) => Task.FromResult<RunRequest?>(_request);
+            public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file) =>
+                Task.FromResult<StreamsChoice?>(new StreamsChoice(_request, Array.Empty<Streams.StreamSetup>(), 0));
         }
 
         [AvaloniaFact]

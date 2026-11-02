@@ -26,7 +26,10 @@ namespace TmDq.App
                     : new FirstChannelRun();
                 var vm = new MainWindowViewModel(new StorageRecordingPicker(window), configurator, new WindowProcessingDialog(window),
                                                  files: new StorageDataFilePicker(window), exportDialog: new WindowExportDialog(window),
-                                                 imageExporter: new PlotViewImageExporter(window.FindControl<PlotView>("PlotView")!));
+                                                 imageExporter: new PlotViewImageExporter(window.FindControl<PlotView>("PlotView")!),
+                                                 templateFiles: new StorageTemplateFilePicker(window),
+                                                 templateDialogs: new WindowTemplateDialogs(window),
+                                                 appRoot: AppContext.BaseDirectory);
                 window.DataContext = vm;
                 desktop.MainWindow = window;
 

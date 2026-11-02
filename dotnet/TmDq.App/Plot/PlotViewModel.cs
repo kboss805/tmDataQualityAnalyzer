@@ -83,6 +83,8 @@ namespace TmDq.App.Plot
         private int? _readoutSeriesId;
         private bool _legendVisible = true;
         private bool _isLoading;
+        private int _visibleSource = -1;
+        private readonly Dictionary<int, string> _sourceLabels = new();
 
         /// <summary>Raised when the series, their samples or their visibility change (the chart redraws them).</summary>
         public event EventHandler? SeriesChanged;
@@ -361,6 +363,8 @@ namespace TmDq.App.Plot
             _leftMinOverride = _leftMaxOverride = _rightMinOverride = _rightMaxOverride = null;
             _readoutSeriesId = null;
             Title = DefaultTitle;
+            _visibleSource = -1;
+            _sourceLabels.Clear();
             SeriesChanged?.Invoke(this, EventArgs.Empty);
             RangesChanged?.Invoke(this, EventArgs.Empty);
             OnPropertyChanged(nameof(HasData));
@@ -377,8 +381,59 @@ namespace TmDq.App.Plot
             RangesChanged?.Invoke(this, EventArgs.Empty);
         }
 
-        /// <summary>Whether a series is drawn. The Plot File selector (US1.1) narrows this further in plan step 4.7.</summary>
-        public bool EffectiveVisible(PlotSeries s) => s.Visible;
+        /// <summary>Whether a series is drawn: shown, and of the recording the Plot File selector shows (US1.1), or of any
+        /// when it shows them all.</summary>
+        public bool EffectiveVisible(PlotSeries s) => s.Visible && (_visibleSource < 0 || s.SourceId == _visibleSource);
+
+        // ---- the recordings, and the Plot File selector (plan step 4.7) --------------------------------------------------
+
+        /// <summary>The recording the plot shows, or -1 for every one overlaid.</summary>
+        public int VisibleSource => _visibleSource;
+
+        /// <summary>Each recording the series come from, once, in the order first met, with its label: its file's name as
+        /// given (<see cref="SetSourceLabel"/>), else "Source N" (the Qt <c>sourceList</c>).</summary>
+        public IReadOnlyList<(int Id, string Label)> SourceList()
+        {
+            var list = new List<(int, string)>();
+            var seen = new HashSet<int>();
+            foreach (PlotSeries s in _series)
+            {
+                if (!seen.Add(s.SourceId)) continue;
+                list.Add((s.SourceId, _sourceLabels.TryGetValue(s.SourceId, out string? label)
+                    ? label
+                    : string.Create(CultureInfo.InvariantCulture, $"Source {s.SourceId}")));
+            }
+            return list;
+        }
+
+        /// <summary>Names a recording in the Plot File selector.</summary>
+        public void SetSourceLabel(int sourceId, string label) => _sourceLabels[sourceId] = label;
+
+        /// <summary>
+        /// Shows <paramref name="sourceId"/>'s series only, or every recording's for -1 (the Qt <c>setVisibleSource</c>):
+        /// the window is the span of what is shown, so browsing one file fills the plot, and the axes are ranged to it.
+        /// It narrows what is drawn, never what a CSV holds.
+        /// </summary>
+        public void SetVisibleSource(int sourceId)
+        {
+            _visibleSource = sourceId;
+            double lo = double.MaxValue, hi = double.MinValue;
+            foreach (PlotSeries s in _series)
+            {
+                if (!EffectiveVisible(s) || s.X.Length == 0) continue;
+                lo = Math.Min(lo, s.X[0]);
+                hi = Math.Max(hi, s.X[^1]);
+            }
+            if (lo <= hi)
+            {
+                _xViewMin = lo;
+                _xViewMax = hi;
+            }
+            ComputeSnrRange();
+            OnPropertyChanged(nameof(VisibleSource));
+            SeriesChanged?.Invoke(this, EventArgs.Empty);
+            RangesChanged?.Invoke(this, EventArgs.Empty);
+        }
 
         /// <summary>Left-axis metrics share one colour per stream (keyed by PCM channel), so a stream's lock and missed
         /// frames curves match; an SNR series takes its receiver's primary, shaded by its receiver cycle and channel.</summary>

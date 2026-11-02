@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using TmDq.App.Streams;
 using TmDq.Core;
 
 namespace TmDq.App.Processing
@@ -46,7 +48,15 @@ namespace TmDq.App.Processing
         public static RunRequest Request(string path, Ch10File file) =>
             new(path, file.DefaultTimeChannel, new[] { DefaultStream(file.PcmChannels[0]) });
 
-        public Task<RunRequest?> ConfigureAsync(string path, Ch10File file) => Task.FromResult<RunRequest?>(Request(path, file));
+        /// <summary>The run with the rows it stands for: the first channel processed with the defaults, the rest not.</summary>
+        public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file)
+        {
+            var rows = file.PcmChannels.Select((c, i) => i == 0
+                ? StreamDefaults.NewStream(c) with { Process = true, Configured = true }
+                : StreamDefaults.NewStream(c)).ToList();
+            int timeIndex = Math.Max(0, file.TimeChannels.ToList().FindIndex(c => c.Id == file.DefaultTimeChannel));
+            return Task.FromResult<StreamsChoice?>(new StreamsChoice(Request(path, file), rows, timeIndex));
+        }
 
         /// <summary>Processes <paramref name="path"/>'s first PCM channel on a worker thread.</summary>
         /// <exception cref="RecordingException">The file is not a recording the core can read, has no PCM channel, or
@@ -62,7 +72,11 @@ namespace TmDq.App.Processing
     /// <summary>Decides what a recording is processed with: Configure Streams, or (with no one to ask) the defaults.</summary>
     public interface IStreamConfigurator
     {
-        /// <summary>The run to start for <paramref name="file"/>, or null when the user cancelled.</summary>
-        Task<RunRequest?> ConfigureAsync(string path, Ch10File file);
+        /// <summary>The run to start for <paramref name="file"/>, and the choices it came from; null when the user cancelled.</summary>
+        Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file);
     }
+
+    /// <summary>What Configure Streams settled: the run, every row (processed or not) and the time channel's place in its
+    /// list, which a template captures (plan step 4.7).</summary>
+    public sealed record StreamsChoice(RunRequest Request, IReadOnlyList<StreamSetup> Rows, int TimeChannelIndex);
 }

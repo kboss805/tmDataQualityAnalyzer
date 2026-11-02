@@ -1,0 +1,55 @@
+{
+    "appVersion": "2.14.2",
+    "entries": [
+        {
+            "appearance": [
+                {
+                    "channelIndex": 0,
+                    "color": "#80ff0000",
+                    "metricType": "SNR",
+                    "name": "Left \"one\"\tΩ/ü\\",
+                    "receiverIndex": 1
+                },
+                {
+                    "channelIndex": 2,
+                    "color": "#ff00ff00",
+                    "metricType": "SNR",
+                    "name": "C3",
+                    "receiverIndex": 3
+                }
+            ],
+            "config": {
+                "calibration": {
+                    "calCh10Path": "D:\\cal\\café Ω.ch10",
+                    "clipEndSec": 2.25,
+                    "clipStartSec": 1.5,
+                    "stepTomlPath": "settings/rcvr_cals/default.toml"
+                },
+                "label": "CH-16 AGC STEP CALS 800K",
+                "mode": "ReceiverChannelInfo",
+                "numReceivers": 12,
+                "pcmChannelId": 26,
+                "polarityIndex": 1,
+                "process": true,
+                "receiverChannels": 4,
+                "receiverParamsToml": "C:\\settings\\receiver_params\\RASA.toml",
+                "samplePeriodIndex": 1,
+                "scaleDdBPerV": 7.25,
+                "slopeIndex": 2,
+                "sync": {
+                    "bitsInMinorFrame": 800,
+                    "dataRateMbps": 0.8,
+                    "inverted": true,
+                    "mask": "FFFF0000",
+                    "pattern": "FE6B2840",
+                    "randomized": true
+                },
+                "tmatsDataRateMbps": 0.8
+            }
+        }
+    ],
+    "name": "step_cal, example",
+    "schemaVersion": 1,
+    "swapBytes": false,
+    "timeChannelIndex": 1
+}

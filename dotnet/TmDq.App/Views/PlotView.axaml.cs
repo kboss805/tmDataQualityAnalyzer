@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Threading.Tasks;
 using Avalonia;
@@ -125,8 +126,15 @@ namespace TmDq.App.Views
             menu.Items.Add(Item("Set Plot Title...", commands.SetTitleAsync, hasData));
             menu.Items.Add(new Separator());
 
-            // Which processed file to view: only with more than one, which batch runs bring (plan step 4.7).
-            menu.Items.Add(new MenuItem { Header = "Plot File", IsEnabled = false });
+            // Which processed file to view: every one overlaid, or one, with more than one, which batch runs bring (plan
+            // step 4.7, the Qt Plot File submenu).
+            IReadOnlyList<(int Id, string Label)> sources = vm.SourceList();
+            var plotFile = new MenuItem { Header = "Plot File", IsEnabled = hasData && sources.Count > 1 };
+            plotFile.Items.Add(Radio("All files (overlaid)", "plotfile", vm.VisibleSource < 0, () => vm.SetVisibleSource(-1)));
+            plotFile.Items.Add(new Separator());
+            foreach ((int id, string label) in sources)
+                plotFile.Items.Add(Radio(label, "plotfile", vm.VisibleSource == id, () => vm.SetVisibleSource(id)));
+            menu.Items.Add(plotFile);
 
             var viewMode = new MenuItem { Header = "View Mode  (V)", IsEnabled = vm.CanSwitchViewMode };
             viewMode.Items.Add(Radio("Lock Percentage", "viewmode", vm.LockAxisView == LockAxisView.LockPercent,
