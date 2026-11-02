@@ -67,6 +67,12 @@
           CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" Visible="false" />
   </ItemGroup>
 
+  <!-- The base user manual, compiled in as the Qt application has it (a Qt resource there), so Help > User Manual always
+       has a manual even when the optional full one is not installed (plan step 4.8; its figures are plan step 4.9's). -->
+  <ItemGroup>
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\resources\usermanual.html" LogicalName="usermanual.html" Visible="false" />
+  </ItemGroup>
+
   <!-- The manifest goes into each intermediate host the SDK creates, before anything copies or bundles it: apphost
        for a build (copied to bin\), singlefilehost for a self-contained single-file publish, apphost_publish for
        other publishes. Patching the exe in bin\ after the build (as the test projects do) misses the published app:

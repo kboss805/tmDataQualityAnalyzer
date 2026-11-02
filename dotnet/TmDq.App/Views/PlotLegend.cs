@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -29,10 +30,6 @@ namespace TmDq.App.Views
         // free, so the bar, shown once they overflow, never covers a label (a test holds the theme to it).
         public const double ScrollGutter = 16;
 
-        public static readonly Color BackgroundColor = Color.FromArgb(BackgroundAlpha, 255, 255, 255);
-        public static readonly Color BorderColor = Color.FromRgb(170, 170, 170);
-        public static readonly Color TextColor = Color.FromRgb(30, 30, 30);
-
         private readonly StackPanel _rows = new() { Spacing = RowSpacing, Margin = new Thickness(0, 0, ScrollGutter, 0) };
         private readonly ScrollViewer _scroll;
         private Size _host;
@@ -41,8 +38,8 @@ namespace TmDq.App.Views
 
         public PlotLegend()
         {
-            Background = new ImmutableSolidColorBrush(BackgroundColor);
-            BorderBrush = new ImmutableSolidColorBrush(BorderColor);
+            ApplyPalette();
+            ActualThemeVariantChanged += (_, _) => ApplyPalette();
             BorderThickness = new Thickness(1);
             CornerRadius = new CornerRadius(CornerRadiusPx);
             Padding = new Thickness(ContentMargin);
@@ -94,7 +91,20 @@ namespace TmDq.App.Views
             if (RowCount > 0) Fit();
         }
 
-        private static Control Row(LegendEntry e)
+        /// <summary>The colours of the theme in use: translucent over the chart, in either theme (US9.0).</summary>
+        public ChartPalette Palette => ChartPalette.For(ActualThemeVariant);
+
+        private void ApplyPalette()
+        {
+            ChartPalette p = Palette;
+            Background = new ImmutableSolidColorBrush(p.LegendBackground);
+            BorderBrush = new ImmutableSolidColorBrush(p.LegendBorder);
+            foreach (Control row in _rows.Children)
+                foreach (TextBlock label in ((Panel)row).Children.OfType<TextBlock>())
+                    label.Foreground = new ImmutableSolidColorBrush(p.LegendText);
+        }
+
+        private Control Row(LegendEntry e)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Background = Brushes.Transparent };
             row.Children.Add(new Border
@@ -108,7 +118,7 @@ namespace TmDq.App.Views
             row.Children.Add(new TextBlock
             {
                 Text = e.Label,
-                Foreground = new ImmutableSolidColorBrush(TextColor),
+                Foreground = new ImmutableSolidColorBrush(Palette.LegendText),
                 FontSize = PlotChart.FontSize,
                 VerticalAlignment = VerticalAlignment.Center,
             });

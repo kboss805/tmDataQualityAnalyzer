@@ -191,6 +191,8 @@ if ($p.HasExited -and $p.ExitCode -eq 0 -and $line.StartsWith($Expected)) {
 Write-Host '[8/8] Packaging...'
 $portable = Join-Path $Stage "tmDataQualityAnalyzer-preview-v${version}_portable"
 Copy-Item $AppDir $portable -Recurse
+# A portable copy keeps its preferences in a folder beside itself, as the Qt portable ZIP does (plan step 4.8).
+New-Item -ItemType File -Path (Join-Path $portable 'portable') -Force | Out-Null
 if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
 foreach ($attempt in 1..5) {
     # A freshly written exe is briefly held by the virus scanner.

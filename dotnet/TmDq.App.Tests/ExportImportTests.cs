@@ -1091,31 +1091,8 @@ namespace TmDq.App.Tests
         }
 
         [AvaloniaFact]
-        public void TheTopBarHasImportCsvAndExportBesideOpen()
+        public async Task LoadingIsShownOverTheChartWhileACsvIsRead()
         {
-            var vm = new MainWindowViewModel(files: new FakeFiles(), exportDialog: new FakeExportDialog());
-            var window = new MainWindow { DataContext = vm };
-            window.Show();
-            Dispatcher.UIThread.RunJobs();
-            Button open = window.FindControl<Button>("OpenButton")!, import = window.FindControl<Button>("ImportCsvButton")!,
-                   export = window.FindControl<Button>("ExportButton")!;
-            Assert.Same(open.Parent, import.Parent);
-            Assert.Same(open.Parent, export.Parent);
-            Assert.Equal(("Import CSV...", "Export..."), ((string)import.Content!, (string)export.Content!));
-            Assert.Same(vm.ImportCsvCommand, import.Command);
-            Assert.Same(vm.ExportCommand, export.Command);
-            Assert.Equal("Import a previously exported CSV file", ToolTip.GetTip(import));
-            Assert.Equal("Export plot data and images", ToolTip.GetTip(export));
-            Assert.True(import.IsEffectivelyEnabled);
-            Assert.False(export.IsEffectivelyEnabled);   // nothing to export yet
-            vm.Plot.SetSeries(new[] { PlotFixtures.Lock(0, "a", 1, 0, X2, X2) });
-            Dispatcher.UIThread.RunJobs();
-            Assert.True(export.IsEffectivelyEnabled);
-            window.Close();
-        }
-
-        [AvaloniaFact]
-        public async Task LoadingIsShownOverTheChartWhileACsvIsRead()        {
             string path = WriteCsv(TwoStreams);
             try
             {

@@ -840,7 +840,7 @@ namespace TmDq.App.Tests
             {
                 Assert.True(Frames.Near(fb, new Rect(a.Left + 10, a.Top - 3, a.Width - 20, 6), purple) > 100);
                 Assert.Equal(0, Frames.Near(fb, new Rect(a.Left + 10, a.Bottom - 6, a.Width - 20, 6), purple));
-                Assert.True(Frames.Near(fb, new Rect(a.Left, 0, a.Width, a.Top - PlotChart.TopInset), PlotChart.TitleColor) > 20, "no title");
+                Assert.True(Frames.Near(fb, new Rect(a.Left, 0, a.Width, a.Top - PlotChart.TopInset), ChartPalette.Light.Title) > 20, "no title");
             }
             s.Window.Close();
         }
