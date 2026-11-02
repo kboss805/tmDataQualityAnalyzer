@@ -367,6 +367,12 @@ namespace TmDq.App.Tests
             public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file) => _answer;
         }
 
+        private sealed class CalFiles : TmDq.App.Services.ICalibrationFilePicker
+        {
+            public Task<string?> OpenStepFileAsync(string? folder) => Task.FromResult<string?>(null);
+            public Task<string?> OpenCalibrationRecordingAsync(string? folder) => Task.FromResult<string?>(Repo.Recording("step_cal, example.ch10"));
+        }
+
         [Fact]
         public async Task TheLastCalibrationFolderIsKeptBetweenSessions()
         {
@@ -378,6 +384,27 @@ namespace TmDq.App.Tests
             Assert.Equal(@"D:\cal", seen);
             Assert.Equal(@"D:\cal", store.Current.LastCalibrationFolder);
             Assert.Null(new ConfigureStreamsViewModel(Prn, file, dialogs, null, Repo.Root).LastCalFolder);
+            // The folder Extract Calibration's recording came from is kept for the next session.
+            var extracting = new FakeStreamDialogs();
+            extracting.OnConfigure = async c =>
+            {
+                StreamRowViewModel row = c.Rows[0];
+                row.Process = true;
+                row.ModeIndex = 0;   // Receiver SNR
+                await row.ConfigureCommand.ExecuteAsync(null);
+            };
+            extracting.OnEdit = async setup =>
+            {
+                await setup.ApplyCalCommand.ExecuteAsync(null);
+                setup.CancelCommand.Execute(null);
+            };
+            extracting.OnExtract = async e =>
+            {
+                await e.BrowseCalCommand.ExecuteAsync(null);
+                e.CancelCommand.Execute(null);
+            };
+            await new DialogConfigurator(extracting, null, Repo.Root, new CalFiles(), store).ConfigureAsync(Prn, file);
+            Assert.Equal(Path.GetDirectoryName(Repo.Recording("step_cal, example.ch10")), store.Current.LastCalibrationFolder);
             // Without a store there is nothing to seed or keep.
             seen = "unset";
             await new DialogConfigurator(dialogs, null, Repo.Root).ConfigureAsync(Prn, file);

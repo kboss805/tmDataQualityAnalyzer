@@ -387,6 +387,12 @@ namespace TmDq.App.Tests
                 Assert.Equal(palette.LegendBorder, ((ISolidColorBrush)view.Legend.BorderBrush!).Color);
                 Assert.All(view.Legend.Rows, r => Assert.Equal(palette.LegendText,
                     ((ISolidColorBrush)((Panel)r).Children.OfType<TextBlock>().Single().Foreground!).Color));
+                // Rows made in this theme are in its colours too.
+                vm.Plot.SetSeries(new[] { PlotFixtures.Lock(0, "a", 1, 0, new[] { 0.0, 1.0 }, new[] { 50.0, 60.0 }) });
+                vm.Plot.SetXViewByUser(0.2, 0.8);
+                Dispatcher.UIThread.RunJobs();
+                Assert.All(view.Legend.Rows, r => Assert.Equal(palette.LegendText,
+                    ((ISolidColorBrush)((Panel)r).Children.OfType<TextBlock>().Single().Foreground!).Color));
                 Assert.Equal(Color.Parse(logBackground), ((ISolidColorBrush)log.Background!).Color);
                 Assert.Equal(Color.Parse(chip), ((ISolidColorBrush)view.ResetChip.Background!).Color);
 
@@ -399,6 +405,44 @@ namespace TmDq.App.Tests
             window.Close();
         }
 
+        [Fact]
+        public void ThePalettesAreTheQtApplications()
+        {
+            // The Qt PlotWidget::applyTheme's and PlotLegendOverlay::applyTheme's colours, as numbers.
+            Assert.Equal(new[] { "#FFFFFFFF", "#FF1E1E1E", "#FFC8C8C8", "#FF005FB8", "#B9FFFFFF", "#FFAAAAAA", "#FF1E1E1E" }, Hex(ChartPalette.Light));
+            Assert.Equal(new[] { "#FF202020", "#FFDCDCDC", "#FF3C3C3C", "#FF60CDFF", "#B9202020", "#FF5A5A5A", "#FFE6E6E6" }, Hex(ChartPalette.Dark));
+        }
+
+        private static string[] Hex(ChartPalette p) => new[] { p.Background, p.Foreground, p.Grid, p.Title, p.LegendBackground, p.LegendBorder, p.LegendText }
+            .Select(c => $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}").ToArray();
+
+        [AvaloniaFact]
+        public void EachThemesBrushesAreTheQtThemes()
+        {
+            string[] keys = { "ChipBackground", "ChipBorder", "ChipForeground", "ChipAccent", "LoadingBackground", "LoadingBorder", "LoadingForeground",
+                              "LogPanelBackground", "LogPanelBorder", "TitleBarHover" };
+            string[] Brushes(ThemeVariant theme) => keys.Select(k =>
+            {
+                Assert.True(Application.Current!.TryFindResource(k, theme, out object? b), k);
+                Color c = ((ISolidColorBrush)b!).Color;
+                return $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}";
+            }).ToArray();
+            Assert.Equal(new[] { "#B9FFFFFF", "#FFC8C8C8", "#FF1E1E1E", "#FF005FB8", "#E6FFFFFF", "#FFC8C8C8", "#FF1E1E1E", "#FFFFFFFF", "#FFE5E5E5", "#38808080" },
+                         Brushes(ThemeVariant.Light));
+            Assert.Equal(new[] { "#B9202020", "#FF3C3C3C", "#FFDCDCDC", "#FF60CDFF", "#A0000000", "#FF3C3C3C", "#FFFFFFFF", "#FF202020", "#FF303030", "#38808080" },
+                         Brushes(ThemeVariant.Dark));
+            // The export and import arrows take each theme's shade; the folder and the floppy disk are the same in both.
+            foreach (string icon in new[] { "ExportIcon", "ImportIcon" })
+            {
+                Assert.True(Application.Current!.TryFindResource(icon, ThemeVariant.Light, out object? light));
+                Assert.True(Application.Current!.TryFindResource(icon, ThemeVariant.Dark, out object? dark));
+                Assert.NotSame(light, dark);
+            }
+            Assert.True(Application.Current!.TryFindResource("OpenIcon", ThemeVariant.Dark, out object? open));
+            Assert.True(Application.Current!.TryFindResource("SaveIcon", ThemeVariant.Dark, out object? save));
+            Assert.IsType<DrawingImage>(open);
+            Assert.IsType<DrawingImage>(save);
+        }
         [AvaloniaFact]
         public void TheApplicationsThemeIsEveryWindowsAndRemembered()
         {
