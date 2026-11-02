@@ -12,7 +12,7 @@ fresh ones, so it can run repeatedly against the manual in place. That matters
 because the COMMITTED manual already contains embedded figures - regenerating from
 it must not double them - and because prose edits between runs must survive.
 """
-import io, base64, os, re
+import io, base64, os, re, sys
 
 SRC = 'docs/manual_images/processed'
 VER = 'include/constants.h'
@@ -32,6 +32,28 @@ WALK = 'docs/manual/walkthroughs.html'
 BASE = 'resources/usermanual.html'
 FULL = 'UserManual.html'
 
+# --preview builds the Avalonia application's manuals instead (plan step 4.9): its own copies of the prose, rewritten
+# for it, and figures rendered from it (TmDq.App.Tests' ManualFiguresTests, which scripts\build_manual.ps1 -Preview
+# runs first). The Qt application keeps the manuals above until the switch-over, when the preview's replace them.
+# The figures keep the Qt manual's file names, so both are placed by the same anchors below.
+PREVIEW = '--preview' in sys.argv[1:]
+if PREVIEW:
+    SRC = 'docs/manual_images/preview/processed'
+    WALK = 'docs/manual/walkthroughs-preview.html'
+    BASE = 'resources/usermanual-preview.html'
+    FULL = 'UserManual-preview.html'
+
+# Captions that say something only the Qt application's figure shows; the preview's figures show this instead.
+PREVIEW_CAPTIONS = {
+    'walk-err-01-log-error.png':
+        'The log sidebar. Errors appear in red and warnings in amber among the normal progress '
+        'messages - here a stream whose frame sync pattern was not found, which is why only '
+        'two of the three curves reached the plot.',
+    'walk-cust-03-recolor.png':
+        'Choosing a series colour, from its colour in Customize View (on the Receiver SNR tab, a '
+        'channel\'s right-click menu). Custom names and colours are what a processing template carries '
+        'between files.',
+}
 
 def app_version():
     """Read the version from AppVersion in constants.h - the single source of truth.
@@ -52,6 +74,8 @@ PLACED = set()   # every capture this run embeds, for the coverage check below
 
 def fig(fname, caption, alt):
     PLACED.add(fname)
+    if PREVIEW:
+        caption = PREVIEW_CAPTIONS.get(fname, caption)
     with open(os.path.join(SRC, fname), 'rb') as f:
         b64 = base64.b64encode(f.read()).decode('ascii')
     return ('\n<figure>\n  <img alt="%s" src="data:image/png;base64,%s">\n'
@@ -156,7 +180,10 @@ after('<h2 id="getting-started">1. Getting started</h2>',
           'The hamburger menu open, showing the Process, Import/Export and Settings sections and '
           'a Help submenu'))
 
-before('<h2 id="configure">',
+# The installer's page is a capture of the Qt installer, which no headless render can make; the preview's prose
+# says the same in words.
+if not PREVIEW:
+  before('<h2 id="configure">',
        fig('walk-inst-01-components.png',
            'The installer offers the fuller manual as an optional component. The built-in manual '
            'is always available from Help regardless of this choice.',

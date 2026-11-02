@@ -17,6 +17,17 @@
 # inserting fresh ones, so running twice does not double them - and prose edits to
 # the manual between runs are preserved.
 # =============================================================================
+#
+# -Preview builds the Avalonia application's manuals instead (plan step 4.9): its own copies of the prose
+# (resources\usermanual-preview.html, compiled into that application, and docs\manual\walkthroughs-preview.html,
+# spliced into UserManual-preview.html), with figures RENDERED from the application rather than captured by hand.
+# TmDq.App.Tests' ManualFiguresTests sets up each scene from the committed recordings, checks what its caption says,
+# and renders it into docs\manual_images\preview; -NoCapture reuses the figures already there. The Qt application
+# keeps the manuals above until the switch-over (plan step 5), when the preview's replace them.
+#
+#   powershell -ExecutionPolicy Bypass -File scripts\build_manual.ps1 -Preview
+
+param([switch]$Preview, [switch]$NoCapture)
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
@@ -65,6 +76,33 @@ $MaxWidth     = 1200
 #
 # Each entry records WHY, because the reason is the whole value of keeping the file.
 $Spares = [ordered]@{
+}
+
+# The preview's figures: rendered at their final framing, so none is cropped, plus the figures that show nothing of
+# the application and so are shared with the Qt manual (a step file open in a text editor).
+$Shared = @('walk-cal-05-step-toml.png')
+if ($Preview) {
+    $QtDir  = $SrcDir
+    $SrcDir = Join-Path $SrcDir 'preview'
+    $OutDir = Join-Path $SrcDir 'processed'
+    $Manual = Join-Path $ProjectDir 'resources\usermanual-preview.html'
+    New-Item -ItemType Directory -Force -Path $SrcDir | Out-Null
+    if (-not $NoCapture) {
+        Write-Host "Rendering the figures from the application (ManualFiguresTests)..."
+        Get-ChildItem $SrcDir -Filter *.png | Remove-Item -Force
+        . (Join-Path $ProjectDir 'scripts\env.ps1') *> $null
+        $env:Platform = $null
+        $tests = Join-Path $ProjectDir 'dotnet\TmDq.App.Tests'
+        & dotnet build $tests -c Release -nologo -v q
+        if ($LASTEXITCODE -ne 0) { throw "the tests did not build ($LASTEXITCODE)" }
+        $env:TMDQ_CORE_DLL = Join-Path $ProjectDir 'native\out\Release\tmdq_core.dll'
+        if (-not (Test-Path $env:TMDQ_CORE_DLL)) { throw "build the native core first: scripts\build_core_dll.ps1 -Configuration Release" }
+        $env:TMDQ_MANUAL_FIGURES = $SrcDir
+        & (Join-Path $tests 'bin\Release\net10.0\TmDq.App.Tests.exe') -class TmDq.App.Tests.ManualFiguresTests
+        if ($LASTEXITCODE -ne 0) { throw "a figure's scene failed ($LASTEXITCODE): its caption no longer holds, or it could not be rendered" }
+        Remove-Item Env:TMDQ_MANUAL_FIGURES
+    }
+    foreach ($name in $Shared) { Copy-Item (Join-Path $QtDir $name) (Join-Path $SrcDir $name) -Force }
 }
 
 $Images = [ordered]@{
@@ -152,6 +190,12 @@ $Images = [ordered]@{
     'walk-err-01-log-error.png'                      = $false
 }
 
+if ($Preview) {
+    $Spares = [ordered]@{}
+    $Images = [ordered]@{}
+    foreach ($png in Get-ChildItem $SrcDir -Filter *.png | Sort-Object Name) { $Images[$png.Name] = $false }
+}
+
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
 # Clear previous output first: processed/ is gitignored build output, and a
@@ -216,10 +260,20 @@ New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 # as a single filename - a spares list that silently covers nothing.
 Set-Content -Path $SparesFile -Value @($Spares.Keys) -Encoding UTF8
 
-& py (Join-Path $ProjectDir 'scripts\embed_manual_images.py')
+$embedArgs = @(Join-Path $ProjectDir 'scripts\embed_manual_images.py')
+if ($Preview) { $embedArgs += '--preview' }
+& py @embedArgs
 if ($LASTEXITCODE -ne 0) { throw "embed step failed ($LASTEXITCODE)" }
 
 Write-Host "`nDone. Two manuals were written (sizes listed above):"
+if ($Preview) {
+    Write-Host "  base - resources\usermanual-preview.html, compiled into the Avalonia application. Rebuild"
+    Write-Host "         it to pick it up; it is an embedded resource."
+    Write-Host "  full - UserManual-preview.html, packaged as UserManual.html by"
+    Write-Host "         deploy\avalonia\build_avalonia_package.ps1: always in the portable ZIP, an"
+    Write-Host "         optional task in the installer."
+    return
+}
 Write-Host "  base - resources\usermanual.html, compiled into the exe. Rebuild the app to"
 Write-Host "         pick it up; it is a Qt resource."
 Write-Host "  full - UserManual.html, shipped as a file. Always in the portable ZIP; an"
