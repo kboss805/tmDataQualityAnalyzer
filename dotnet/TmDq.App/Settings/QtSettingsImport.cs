@@ -210,7 +210,6 @@ namespace TmDq.App.Settings
                     isList = true;
                     items.Add(current.ToString());
                     current.Clear();
-                    chopLimit = 0;
                     quoted = false;
                     i++;
                     SkipSpaces();

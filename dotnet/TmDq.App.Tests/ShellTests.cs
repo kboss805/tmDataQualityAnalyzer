@@ -204,6 +204,19 @@ namespace TmDq.App.Tests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(14, window.MainMenu.Items.Count);
             window.MainMenu.Hide();
+
+            // A section's heading is small and bold wherever the menu is shown (the style is the application's: a menu is
+            // a popup of its own).
+            window.BuildMenu();
+            var items = window.MainMenu.Items.ToList();
+            window.MainMenu.Items.Clear();
+            var host = new Window { Content = new MenuFlyoutPresenter { ItemsSource = items } };
+            host.Show();
+            Dispatcher.UIThread.RunJobs();
+            var heading = (MenuItem)items[0]!;
+            Assert.Equal((FontWeight.Bold, 11.0), (heading.FontWeight, heading.FontSize));
+            Assert.NotEqual(FontWeight.Bold, ((MenuItem)items[1]!).FontWeight);
+            host.Close();
             window.DataContext = null;
             window.BuildMenu();
             Assert.Empty(window.MainMenu.Items);
@@ -281,6 +294,12 @@ namespace TmDq.App.Tests
             vm.SidebarVisible = false;
             vm.SidebarVisible = true;
             Assert.Equal(0, window.Body.ColumnDefinitions[0].Width.Value);
+
+            // Hidden twice over (one hidden view model for another), it still returns at the width it had.
+            var hidden = new MainWindowViewModel(preferences: new PreferencesStore(new Preferences { SidebarVisible = false }));
+            window.DataContext = hidden;
+            hidden.SidebarVisible = true;
+            Assert.Equal(300, window.Body.ColumnDefinitions[0].Width.Value);
             window.Close();
         }
 
@@ -372,6 +391,7 @@ namespace TmDq.App.Tests
             Dispatcher.UIThread.RunJobs();
             PlotView view = window.FindControl<PlotView>("PlotView")!;
             Border log = window.FindControl<Border>("LogPanel")!;
+            Frames.Capture(window).Dispose();   // the chart's layer painted in the theme it opened in
 
             foreach ((ThemeVariant theme, ChartPalette palette, string logBackground, string chip) in new[]
                      {
@@ -387,20 +407,23 @@ namespace TmDq.App.Tests
                 Assert.Equal(palette.LegendBorder, ((ISolidColorBrush)view.Legend.BorderBrush!).Color);
                 Assert.All(view.Legend.Rows, r => Assert.Equal(palette.LegendText,
                     ((ISolidColorBrush)((Panel)r).Children.OfType<TextBlock>().Single().Foreground!).Color));
+                // Drawn, not only chosen: the chart's own background, read from a rendered frame, before anything but the
+                // theme has changed (the layer painted in the other theme is not reused).
+                using (WriteableBitmap frame = Frames.Capture(window))
+                using (ILockedFramebuffer fb = frame.Lock())
+                {
+                    Point inside = view.Chart.TranslatePoint(new Point(view.Chart.PlotArea.Right - 20, view.Chart.PlotArea.Bottom - 5), window)!.Value;
+                    Assert.Equal((uint)(palette.Background.R << 16 | palette.Background.G << 8 | palette.Background.B), Frames.Pixel(fb, (int)inside.X, (int)inside.Y));
+                }
+                Assert.Equal(Color.Parse(logBackground), ((ISolidColorBrush)log.Background!).Color);
+                Assert.Equal(Color.Parse(chip), ((ISolidColorBrush)view.ResetChip.Background!).Color);
+
                 // Rows made in this theme are in its colours too.
                 vm.Plot.SetSeries(new[] { PlotFixtures.Lock(0, "a", 1, 0, new[] { 0.0, 1.0 }, new[] { 50.0, 60.0 }) });
                 vm.Plot.SetXViewByUser(0.2, 0.8);
                 Dispatcher.UIThread.RunJobs();
                 Assert.All(view.Legend.Rows, r => Assert.Equal(palette.LegendText,
                     ((ISolidColorBrush)((Panel)r).Children.OfType<TextBlock>().Single().Foreground!).Color));
-                Assert.Equal(Color.Parse(logBackground), ((ISolidColorBrush)log.Background!).Color);
-                Assert.Equal(Color.Parse(chip), ((ISolidColorBrush)view.ResetChip.Background!).Color);
-
-                // Drawn, not only chosen: the chart's own background, read from a rendered frame.
-                using WriteableBitmap frame = Frames.Capture(window);
-                using ILockedFramebuffer fb = frame.Lock();
-                Point inside = view.Chart.TranslatePoint(new Point(view.Chart.PlotArea.Right - 20, view.Chart.PlotArea.Bottom - 5), window)!.Value;
-                Assert.Equal((uint)(palette.Background.R << 16 | palette.Background.G << 8 | palette.Background.B), Frames.Pixel(fb, (int)inside.X, (int)inside.Y));
             }
             window.Close();
         }

@@ -61,6 +61,11 @@ namespace TmDq.App.Tests
             Preferences empty = QtSettingsImport.Read(Fixture("empty-recent.ini"));
             Assert.Equal(new Preferences(), empty);
             Assert.Equal(new Preferences(), QtSettingsImport.Read(Path.Combine(_dir, "missing.ini")));
+
+            // A folder written empty is no folder.
+            string blank = Path.Combine(_dir, "blank.ini");
+            File.WriteAllText(blank, "[General]\r\nLastCh10Directory=\r\n[CalibrationSetupDialog]\r\nlastCalDir=\r\n");
+            Assert.Equal(((string?)null, (string?)null), (QtSettingsImport.Read(blank).LastFolder, QtSettingsImport.Read(blank).LastCalibrationFolder));
         }
 
         [Theory]
@@ -85,6 +90,11 @@ namespace TmDq.App.Tests
         [InlineData("a,", new[] { "a", "" }, true)]
         [InlineData("\\xZ", new[] { "Z" }, false)]
         [InlineData("x\\", new[] { "x" }, false)]
+        [InlineData("\"a \"b ", new[] { "a b " }, false)]
+        [InlineData("\"x\", y  ", new[] { "x", "y" }, true)]
+        [InlineData("a  , b", new[] { "a", "b" }, true)]
+        [InlineData("\"a\"  , b", new[] { "a", "b" }, true)]
+        [InlineData("a\\x20, b  ", new[] { "a ", "b" }, true)]
         public void AValueIsReadAsQSettingsReadsOne(string raw, string[] expected, bool isList)
         {
             QtIniValue v = QtIni.Value(raw);
@@ -116,7 +126,7 @@ namespace TmDq.App.Tests
         public void SectionsKeysAndCommentsAreReadAsQSettingsReadsThem()
         {
             IReadOnlyDictionary<string, QtIniValue> ini = QtIni.Parse(Encoding.UTF8.GetBytes(
-                "\uFEFF; a comment\r\n[General]\r\nTheme = light \r\nnoequals\r\n=nokey\r\n" +
+                "\uFEFF; a comment = not a key\r\n[General]\r\nTheme = light \r\nnoequals\r\n=nokey\r\n[ Spaced ]\r\nk=v\r\n" +
                 "[Calibration%20Setup]\nlast%U00FCDir=x\n[%47eneral]\nTheme=dark\n[a\\b]\nc=1\n\n[General]\nLegendVisible=false\n" +
                 "[GENERAL]\nSidebarVisible=0\n[%General]\ny=2"));
             Assert.Equal("light", ini["Theme"].AsString());
@@ -126,7 +136,8 @@ namespace TmDq.App.Tests
             Assert.Equal("false", ini["LegendVisible"].AsString());   // [General] again is the top level again
             Assert.Equal("0", ini["SidebarVisible"].AsString());      // in any case
             Assert.Equal("2", ini["General/y"].AsString());           // "%General" is a section called General
-            Assert.Equal(7, ini.Count);
+            Assert.Equal("v", ini["Spaced/k"].AsString());            // a section's name trimmed
+            Assert.Equal(8, ini.Count);
             Assert.Equal("%4", QtIni.UnescapeKey("%4"));
             Assert.Equal("%ZZ", QtIni.UnescapeKey("%ZZ"));
             Assert.Equal("%U00Z1", QtIni.UnescapeKey("%U00Z1"));
@@ -208,6 +219,9 @@ namespace TmDq.App.Tests
             string partial = Folder("partial");
             File.WriteAllText(Path.Combine(partial, PreferencesStore.FileName), "{\"SidebarVisible\": false, \"Theme\": null, \"RecentFiles\": null}");
             Assert.Equal(new Preferences { SidebarVisible = false }, PreferencesStore.Load(partial).Current);
+            string holes = Folder("holes");
+            File.WriteAllText(Path.Combine(holes, PreferencesStore.FileName), "{\"RecentFiles\": [null, \"C:\\\\a.ch10\"]}");
+            Assert.Equal(new[] { @"C:\a.ch10" }, PreferencesStore.Load(holes, _ => true).Current.RecentFiles);   // an entry that is null skipped
             string nulls = Folder("nulls");
             File.WriteAllText(Path.Combine(nulls, PreferencesStore.FileName), "null");
             Assert.Equal(new Preferences(), PreferencesStore.Load(nulls).Current);
@@ -281,8 +295,9 @@ namespace TmDq.App.Tests
             Assert.Equal((@"C:\before", false, false, false), (vm.LastFolder, vm.Plot.LegendVisible, vm.IsDarkTheme, vm.SidebarVisible));
             Assert.Same(store.Current, vm.Preferences);
 
-            // A recording joins Recent Files once its channels are read, even when Configure Streams is then cancelled.
-            await vm.LoadAsync(Prn);
+            // A recording joins Recent Files once its channels are read, even when Configure Streams is then cancelled, by
+            // its full path however it was named.
+            await vm.LoadAsync(Path.Combine(Path.GetDirectoryName(Prn)!, ".", Path.GetFileName(Prn)));
             Assert.Equal(new[] { Prn }, vm.RecentFiles);
             Assert.Equal(Path.GetDirectoryName(Prn), store.Current.LastFolder);
             Assert.Equal(new[] { Prn }, store.Current.RecentFiles);

@@ -123,10 +123,9 @@ namespace TmDq.App.ViewModels
 
         /// <summary>
         /// Opens <paramref name="path"/> by its suffix, as the Qt <c>openPath</c> does for Recent Files and a drop: an
-        /// exported CSV is imported, anything else opened as a recording. Ignored while busy.
+        /// exported CSV is imported, anything else opened as a recording. Ignored while busy, as both are.
         /// </summary>
-        public Task OpenPathAsync(string path) =>
-            IsBusy ? Task.CompletedTask : Settings.RecentFiles.IsCsv(path) ? ImportCsvAsync(path) : LoadAsync(path);
+        public Task OpenPathAsync(string path) => Settings.RecentFiles.IsCsv(path) ? ImportCsvAsync(path) : LoadAsync(path);
 
         /// <summary>The dark theme (the Qt application's default) or the light one; the choice is remembered.</summary>
         public bool IsDarkTheme

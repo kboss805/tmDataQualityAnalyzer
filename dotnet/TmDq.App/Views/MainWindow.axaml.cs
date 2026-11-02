@@ -65,7 +65,7 @@ namespace TmDq.App.Views
 
         private void OnModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(MainWindowViewModel.SidebarVisible)) ShowSidebar(_watched!.SidebarVisible);
+            if (e.PropertyName == nameof(MainWindowViewModel.SidebarVisible)) ShowSidebar(((MainWindowViewModel)sender!).SidebarVisible);
         }
 
         // The log's column (and the splitter's) give their width back to the chart while the sidebar is hidden, and get
@@ -182,7 +182,6 @@ namespace TmDq.App.Views
         private async void OnDrop(object? sender, DragEventArgs e)
         {
             if (FirstSupported(e.DataTransfer) is not { } path || Vm is not { } vm) return;
-            e.Handled = true;
             await vm.OpenPathAsync(path);
         }
     }
