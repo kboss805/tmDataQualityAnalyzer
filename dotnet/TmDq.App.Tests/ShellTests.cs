@@ -223,6 +223,24 @@ namespace TmDq.App.Tests
             window.Close();
         }
 
+        [Fact]
+        public void OpenOffersRecordingsOnlyAndImportCsvExportedCsvsOnly()
+        {
+            // US6.3: Open stays Chapter-10-only, Import CSV is CSV-only; the Qt dialogs' filters, with no "All files" to
+            // reach a CSV through Open.
+            FilePickerOpenOptions open = StorageRecordingPicker.Options;
+            Assert.False(open.AllowMultiple);
+            FilePickerFileType recordings = Assert.Single(open.FileTypeFilter!);
+            Assert.Equal(new[] { "*.ch10" }, recordings.Patterns);
+
+            FilePickerOpenOptions csv = StorageDataFilePicker.CsvOptions(null);
+            Assert.Equal("Import CSV File", csv.Title);
+            Assert.False(csv.AllowMultiple);
+            FilePickerFileType exported = Assert.Single(csv.FileTypeFilter!);
+            Assert.Equal("Exported CSV", exported.Name);
+            Assert.Equal(new[] { "*.csv" }, exported.Patterns);
+        }
+
         [AvaloniaFact]
         public void RecentFilesListsEachByItsNameNewestFirstAndClears()
         {

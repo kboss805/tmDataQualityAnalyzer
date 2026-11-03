@@ -44,6 +44,7 @@ namespace TmDq.App.Tests
                          (vm.SyncPattern, vm.SyncMask, vm.BitsInMinorFrame, vm.DataRateMbps, vm.PeriodIndex, vm.Randomized, vm.Inverted));
             Assert.Equal("Configure Frame Sync Lock \u2014 CH-01 PRN 15 5M", vm.Title);
             Assert.Equal("Apply to all Frame Sync Lock streams", vm.ApplyToAllText);
+            Assert.False(vm.ApplyToAll);   // off until asked for, as in the Qt dialog
             Assert.False(vm.IsReceiverSnr);
             Assert.Equal("e.g. A345CA5C", vm.SyncPlaceholder);
             Assert.True(vm.CanAccept);
@@ -57,6 +58,17 @@ namespace TmDq.App.Tests
             Assert.Equal("e.g. FE6B2840", snr.SyncPlaceholder);
             Assert.Equal((1, 2, 41.5m, 7m, 5m), (snr.PolarityIndex, snr.SlopeIndex, snr.ScaleDdBPerV, snr.NumReceivers, snr.ReceiverChannels));
             Assert.Equal("(default word map)", snr.ReceiverParamsName);
+        }
+
+        [Fact]
+        public void TheChoicesAreTheQtDialogsInItsOrder()
+        {
+            // US2.1's voltage ranges and polarity, and US3.0's and US3.2's sample windows: the lists themselves, as the Qt
+            // dialog offers them. What each index means to the core is pinned natively ("Constants: uiSamplePeriods",
+            // "Constants: uiSlopeVoltageBounds", "Constants: uiPolarityConstants").
+            Assert.Equal(new[] { "1 s", "100 ms", "10 ms" }, StreamSetupViewModel.Periods);
+            Assert.Equal(new[] { "Positive", "Negative" }, StreamSetupViewModel.Polarities);
+            Assert.Equal(new[] { "±10 V", "±5 V", "0–10 V", "0–5 V" }, StreamSetupViewModel.Slopes);
         }
 
         [Fact]

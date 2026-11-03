@@ -68,12 +68,17 @@ namespace TmDq.App.Tests
 
             public int Closed { get; private set; }
 
+            /// <summary>Progress reports that reached the dialog on a thread other than the UI thread.</summary>
+            public int OffTheUiThread { get; private set; }
+
             public void Show(ProcessingViewModel vm)
             {
                 Shown.Add(vm);
                 vm.PropertyChanged += (_, e) =>
                 {
-                    if (e.PropertyName == nameof(ProcessingViewModel.Progress)) Progress.Add(vm.Progress);
+                    if (e.PropertyName != nameof(ProcessingViewModel.Progress)) return;
+                    Progress.Add(vm.Progress);
+                    if (!Dispatcher.UIThread.CheckAccess()) OffTheUiThread++;
                 };
                 OnShow?.Invoke(vm);
             }
@@ -421,6 +426,9 @@ namespace TmDq.App.Tests
             Assert.Equal(100, dialog.Progress[^1]);
             Assert.True(dialog.Progress.Zip(dialog.Progress.Skip(1)).All(p => p.First <= p.Second), "progress went backwards");
             Assert.All(dialog.Progress, p => Assert.InRange(p, 0, 100));
+            // TestQtProcessingEvents' progressArrivesOnTheTargetsThreadInOrder: the core reports on its own threads, and
+            // every report reaches the dialog on the UI thread.
+            Assert.Equal(0, dialog.OffTheUiThread);
             Assert.Equal(116, vm.Series?.LockPercent.Length);
         }
 

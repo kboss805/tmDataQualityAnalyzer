@@ -370,13 +370,21 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
 
 ## Step 5: switch over
 
-- [ ] **5.1 Parity review:** every acceptance criterion in `docs/claude.md` checked against the new app,
+- [x] **5.1 Parity review** (PR #235): every acceptance criterion in `docs/claude.md` checked against the new app,
   every Qt UI test either ported or recorded as deliberately dropped with a reason.
+  **Done:** the record is [`parity.md`](parity.md), both tables. Of 157 criteria, 153 are held by a test, 2 are
+  checked by hand (the installer's per-user directory and progress page, below in 5.3), and **2 were never true of
+  either application** and are removed from the stories at the user's choice (US4.0's "highlighted style" for lock
+  curves, US5.2's Reset button). Of 278 Qt cases, 254 are ported, 23 dropped with a reason, and 1 not held (a guard
+  no recording can reach). The review closed 11 Qt cases and 3 untested criteria with tests, and found one difference:
+  the new Open also offered "All files", and now offers Chapter 10 recordings only, as the Qt Open does.
 - [ ] **5.2 Side-by-side soak:** the same recordings processed in both apps, CSV exports compared
   byte for byte, plots compared by eye, across every fixture and the full PRN recording.
 - [ ] **5.3 Release v3.0.0** (D4) with the `cut-release` skill updated for the new build: installer,
   portable ZIP, signing of every assembly, clean-machine Sandbox test, release notes that say what
-  moved and how preferences carried over.
+  moved and how preferences carried over. *(From 5.1: the Sandbox installs elevated and silently, so check two
+  US8.0 criteria by hand on the release build: a user without admin rights installs to a directory of their
+  choosing, and the installer shows its progress.)*
 
 ## Step 6: retire Qt
 
@@ -384,7 +392,8 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
   suites, `tmDataQualityAnalyzer.pro` and `tests/tests.pro`, `qtbridge.h`, `QtProcessingEvents`
   (`qtprocessingevents.h`), `plotconstants.h`, the Qt-typed DTOs in `include/dto` (`framesyncparams.h`,
   `plotseriesdata.h`, `processingtemplate.h`, `seriesappearance.h`, `source.h`, `streamconfig.h`) and the two
-  Qt model sources (`processingtemplateschema`, `streamconfigschema`; `TestCoreQtFree`'s `kUiSessionSources`).
+  Qt model sources (`processingtemplateschema`, `streamconfigschema`; `TestCoreQtFree`'s `kUiSessionSources`; empty
+  `NativeProjectTests.QtModelSources` with them, which fails until it is).
   Clean build from an empty tree, because a deletion is only verified by one (`.claude/CLAUDE.md`).
 - [ ] **6.2 Remove Qt from the tooling:** `env.ps1`, `deploy_qt_local.ps1`, `gen_compile_flags.py`,
   `gen_vs_project.ps1`, the CI Qt install, `QT_QPA_PLATFORM`, and the skills that describe the Qt
