@@ -16,13 +16,18 @@ step 5.1 (`361f8e8`).
   "Fifteen" and "Eleven" rows of the PRN template are drawn over each other. The Avalonia application lays the view out
   before it exports (step 4.7 found and fixed this in its own batch), so its rows are clean. The Qt application has
   shipped this since batch export did (v2.7.0); it is not fixed there, since the switch-over (5.3) retires it.
-- **The Avalonia application processes 3 to 6.5 % slower on the large recordings, and the whole difference is in the
-  native core DLL.** Pinned to the performance cores, three rounds each, the two applications alternating: the full PRN
-  recording 12.4 s against 13.2 s, Safran 12.0 against 12.4-12.5 s, PRN-AGC 73.0-73.4 against 77.0-77.2 s, every round
-  within a fraction of a percent of the others. The same four PRN streams run straight through `TmDq.Core`, with no
-  application at all, take 13.2 s too, so nothing above the core adds time: the gap is between `tmdq_core.dll` and the Qt
-  build of the same core sources. Both compile with `/O2 /MD /fp:precise`, C++20, MSVC 14.44, and both run a thread a
-  stream. The cause is not found yet; it is a separate task, not this step's.
+- **The Avalonia application processes 3 to 6.5 % slower on the large recordings, and the whole difference is the
+  process's CET shadow stack.** Pinned to the performance cores, three rounds each, the two applications alternating:
+  the full PRN recording 12.4 s against 13.2 s, Safran 12.0 against 12.4-12.5 s, PRN-AGC 73.0-73.4 against 77.0-77.2 s,
+  every round within a fraction of a percent of the others. The same four PRN streams run straight through `TmDq.Core`,
+  with no application at all, take 13.2 s too, so nothing above the core adds time. Nor does the DLL's build (both
+  compile the core with `/O2 /MD /fp:precise`, C++20, MSVC 14.44): the same `tmdq_core.dll` called from a small C++
+  program takes 12.5 s, as Qt does. What differs is the host. .NET 9 and later mark the app host CET-compatible
+  (`CETCompat`, on unless a project turns it off), so Windows keeps a hardware shadow stack of every call and return in
+  the process, the native core's included. The C++ program linked with `/CETCOMPAT` takes 13.2 s; the C# one built with
+  `CETCompat=false` takes 12.5 s. Whether to keep it is the switch-over's decision (5.3): it is the protection against
+  return-oriented attacks for a process whose C library parses recordings it is given, and the Qt application never had
+  it.
 - **Memory.** The Avalonia process's peak is about 60 MB higher on every run, which is the .NET runtime, the test host
   and the headless UI; the largest run (PRN-AGC at 100 ms, a 31 MB CSV) is 89 MB higher, for the managed copies of its
   results beside the core's.

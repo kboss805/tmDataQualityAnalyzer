@@ -392,7 +392,10 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
   portable ZIP, signing of every assembly, clean-machine Sandbox test, release notes that say what
   moved and how preferences carried over. *(From 5.1: the Sandbox installs elevated and silently, so check two
   US8.0 criteria by hand on the release build: a user without admin rights installs to a directory of their
-  choosing, and the installer shows its progress.)*
+  choosing, and the installer shows its progress.)* *(From 5.2: decide whether the app keeps .NET's CET shadow stack,
+  `CETCompat`, on by default. It costs 5 % on the large recordings, the whole of the Avalonia application's gap to Qt
+  (`soak.md`), and guards against return-oriented attacks on a process whose C library parses the recordings it is
+  given; the Qt application never had it.)*
 
 ## Step 6: retire Qt
 
