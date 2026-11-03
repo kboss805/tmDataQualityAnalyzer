@@ -18,7 +18,8 @@
         NO-MATCH   the old text is not in the file exactly once, so nothing ran
         NO-TESTS   the suite passed, but its arguments matched no test, so nothing was checked
         STALE      the build left a binary older than the mutated file, so nothing ran
-        LOCKED     a file lock outlasted the retries, so nothing ran
+        LOCKED     a file lock, or a build tool failing (mt.exe: MSB3073), outlasted the retries, so
+                   nothing ran
 
     What makes a result worth trusting, each one a trap that has bitten a past run:
       * It runs only in a linked git worktree (git worktree add C:\tmp\<name> <branch>). In the main
@@ -171,7 +172,8 @@ switch ($suite) {
     'managed' { $testProject = Join-Path $root 'dotnet\TmDq.Core.Tests'; $testExe = Join-Path $testProject 'bin\Release\net10.0\TmDq.Core.Tests.exe' }
     'app'     { $testProject = Join-Path $root 'dotnet\TmDq.App.Tests'; $testExe = Join-Path $testProject 'bin\Release\net10.0\TmDq.App.Tests.exe' }
 }
-$lockPattern = 'LNK1104|LNK1168|LNK1201|C1041|C1090|MSB3021|MSB3026|MSB3027|CS2012|being used by another process'
+# MSB3073 is a build step's tool failing (mt.exe, merging the manifest: c101008d), which is not the compiler's verdict.
+$lockPattern = 'LNK1104|LNK1168|LNK1201|C1041|C1090|MSB3021|MSB3026|MSB3027|MSB3073|c101008d|CS2012|being used by another process'
 
 # Builds one thing, retrying while the failure is a file lock (antivirus, an exiting test process).
 function Invoke-Build([string]$what, [scriptblock]$command) {
