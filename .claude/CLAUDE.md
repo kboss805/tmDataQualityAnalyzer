@@ -86,6 +86,13 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   verify_preview_install.ps1 -Setup <setup.exe> -Payload "<zip>;deploy\avalonia\staging\unsigned;tests\data\test files\prn_testfile, sample.ch10"` (semicolons: recording names contain commas) (an unsigned build
   must be BLOCKED, or the pass means nothing). The UTF-8 manifest is merged into every SDK host (`apphost`,
   `singlefilehost`, `apphost_publish`): patching `bin\` misses a single-file publish.
+- **Mutation check (plan rule 3):** `powershell -ExecutionPolicy Bypass -File scripts\mutate.ps1 -List <mutants.json>
+  [-Only <id>,...] [-Parts 2 -Part <k>] [-Out <file>]`. For each exact-text mutant in a JSON list it applies the
+  change, builds, runs one suite (`native`, `managed` or `app`, with the test exe's arguments) and restores the file
+  byte for byte. The verdicts are CAUGHT, SURVIVED, COMPILE, or one saying nothing ran. It refuses the main checkout
+  (run it from a `git worktree add C:\tmp\<name>`) and needs a green baseline first. A mutant's `expect` makes a kept
+  list a regression check. The list format and the traps it guards are in the script's header;
+  `scripts\mutants\example.json` is the sample.
 
 **After a Qt version bump, CLEAN every build directory** — `build/` *and* `tests/`, Debug and
 Release: `& $env:TMDQ_MAKE -f Makefile.<Config> clean` then rebuild. jom rebuilds an object only
