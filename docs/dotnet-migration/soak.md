@@ -25,7 +25,7 @@ step 5.1 (`361f8e8`).
   program takes 12.5 s, as Qt does. What differs is the host. .NET 9 and later mark the app host CET-compatible
   (`CETCompat`, on unless a project turns it off), so Windows keeps a hardware shadow stack of every call and return in
   the process, the native core's included. The C++ program linked with `/CETCOMPAT` takes 13.2 s; the C# one built with
-  `CETCompat=false` takes 12.5 s. Whether to keep it is the switch-over's decision (5.3): it is the protection against
+  `CETCompat=false` takes 12.5 s. It stays on (the user's decision, 2026-11-02): it is the protection against
   return-oriented attacks for a process whose C library parses recordings it is given, and the Qt application never had
   it.
 - **Memory.** The Avalonia process's peak is about 60 MB higher on every run, which is the .NET runtime, the test host
