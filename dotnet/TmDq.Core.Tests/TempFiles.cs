@@ -6,11 +6,12 @@ using System.Threading;
 namespace TmDq.Core.Tests;
 
 /// <summary>
-/// Deletes the files and folders a test made. Another process can hold a file it did not make for a moment after
-/// it is written (on the CI runner, most likely the virus scanner reading a new file in the temp folder), and a plain
-/// File.Delete in a finally block then fails a test whose every check passed. This retries for a short window while
-/// the file is in use, and still throws once the window is over: a handle the library leaked is never released, so
-/// a test that deletes a file to prove the library let go of it still fails when it did not.
+/// Reads back and deletes the files and folders a test made. Another process can hold a file it did not make for a
+/// moment after it is written (on the CI runner, most likely the virus scanner reading a new file in the temp folder),
+/// and a plain File.ReadAllBytes just after the library wrote the file, or a File.Delete in a finally block, then fails
+/// a test whose every check would pass. This retries for a short window while the file is in use, and still throws
+/// once the window is over: a handle the library leaked is never released, so a test that reads or deletes a file to
+/// prove the library let go of it still fails when it did not.
 /// </summary>
 internal static class TempFiles
 {
@@ -25,20 +26,29 @@ internal static class TempFiles
     /// <summary>Deletes a folder, as Directory.Delete does (a folder that does not exist is an error).</summary>
     public static void DeleteDirectory(string path, bool recursive = false) => DeleteDirectory(path, recursive, Window);
 
+    /// <summary>Reads a file, as File.ReadAllBytes does (a file that does not exist is an error at once).</summary>
+    public static byte[] ReadAllBytes(string path) => ReadAllBytes(path, Window);
+
+    /// <summary>Reads a file as text, as File.ReadAllText does (a file that does not exist is an error at once).</summary>
+    public static string ReadAllText(string path) => Retry(() => File.ReadAllText(path), Window);
+
+    internal static byte[] ReadAllBytes(string path, TimeSpan window) => Retry(() => File.ReadAllBytes(path), window);
+
     internal static void Delete(string path, TimeSpan window) => Retry(() => File.Delete(path), window);
 
     internal static void DeleteDirectory(string path, bool recursive, TimeSpan window) =>
         Retry(() => Directory.Delete(path, recursive), window);
 
-    private static void Retry(Action delete, TimeSpan window)
+    private static void Retry(Action act, TimeSpan window) => Retry(() => { act(); return true; }, window);
+
+    private static T Retry<T>(Func<T> act, TimeSpan window)
     {
         Stopwatch clock = Stopwatch.StartNew();
         while (true)
         {
             try
             {
-                delete();
-                return;
+                return act();
             }
             catch (Exception e) when (InUse(e) && clock.Elapsed < window)
             {
