@@ -312,15 +312,24 @@ namespace TmDq.App.Tests
         public void AGestureMovesTheWindowWithinTheDataAndIsNotRemembered()
         {
             PlotViewModel plot = HundredSeconds();
+            int ranges = 0, zoomBack = 0;
+            plot.RangesChanged += (_, _) => ranges++;
+            plot.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(PlotViewModel.CanZoomBack)) zoomBack++; };
             plot.SetXViewByUser(-10.0, 20.0);
             Assert.Equal((0.0, 30.0), (plot.XViewMin, plot.XViewMax));    // moved inside, its width kept
             plot.SetXViewByUser(90.0, 120.0);
             Assert.Equal((70.0, 100.0), (plot.XViewMin, plot.XViewMax));
             plot.SetXViewByUser(-50.0, 150.0);
             Assert.Equal((0.0, 100.0), (plot.XViewMin, plot.XViewMax));   // wider than the data: all of it
+            plot.SetXViewByUser(80.0, 100.5);                               // past either end by a little: inside too
+            Assert.Equal((79.5, 100.0), (plot.XViewMin, plot.XViewMax));
+            plot.SetXViewByUser(-0.5, 19.5);
+            Assert.Equal((0.0, 20.0), (plot.XViewMin, plot.XViewMax));
             plot.SetXViewByUser(40.0, 60.0);
             Assert.Equal((40.0, 60.0), (plot.XViewMin, plot.XViewMax));
             Assert.False(plot.CanZoomBack);
+            // Each move tells the chart, and says whether Zoom Back is available.
+            Assert.Equal((6, 6), (ranges, zoomBack));
         }
 
         [AvaloniaFact]
@@ -372,6 +381,8 @@ namespace TmDq.App.Tests
             Assert.Equal($"Lock A\n{time10}\n95.50%", plot.Readout(10.4, 104, Pixel));
             Assert.Equal($"SNR 1\n{time12}\n31.25 dB", plot.Readout(11.7, 117, Pixel));
             Assert.Null(plot.Readout(5.0, 50, Pixel));                     // 5 s from any sample: 50 px, more than 10
+            Assert.Equal($"Lock A\n{time10}\n95.50%", plot.Readout(9.0, 90, Pixel));   // 10 px: still read
+            Assert.Null(plot.Readout(8.5, 85, Pixel));                     // 15 px: not
 
             plot.ReadoutSeriesId = 1;
             Assert.Equal($"SNR 1  (pinned)\n{plot.FormatTime(0.0)}\n30.00 dB", plot.Readout(5.0, 50, Pixel));
