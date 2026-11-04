@@ -412,6 +412,46 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased
 
+#### One fixtures file for the app suite (plan step 6.4)
+
+The third item of 6.4. The port wrote the same test helpers in several classes, one step at a time. They are now in
+one file, `dotnet/TmDq.App.Tests/Fixtures.cs`, and no test's expectation changes.
+
+- **`FakeConfigurator`** stands for Configure Streams answered without its dialog. It replaces six private
+  configurators:
+  - `Cancelled()`: `ProcessingTests`, `PreferencesTests`, `ShellTests`;
+  - `Given(request)`: `ProcessingTests`;
+  - `Settled(choice)`: `TemplateBatchTests`;
+  - `Choosing(path, file => choice)`: `ManualFiguresTests`;
+  - `Waiting(task)`: the configurator still open until a test settles it, from `PreferencesTests` and
+    `ExportImportTests`.
+- **`FakeRecordingPicker`** is Open's file dialog: it gives its answer (null is a cancel) and counts how often it was
+  asked. It replaces `ShellTests.Picker` and `WalkingSkeletonTests.FakePicker`.
+- **`Recordings.WriteTwoTimeChannels`** writes the PRN sample with CH-04 retyped as a time channel. The copy has two
+  time channels (1 and 16) and three PCM ones. It was built byte by byte in `ConfigureStreamsTests`, `TemplateTests` and
+  `CalibrationDialogTests`. It checks that the key it edits is in the recording exactly once, which only
+  `ConfigureStreamsTests` checked before.
+- **Left where they are:** the fakes only one class uses, such as the calibration file picker and the export dialog.
+  `SoakTests`' configurator, which drives the real dialogs, also stays. So do `StreamFakes.cs` (the stream dialogs and the
+  settings file picker) and `PlotFixtures.cs` (series made by hand), which were shared already.
+
+**Mutation check** (`scripts\mutate.ps1`, each mutant against the tests that use that fixture). Eight mutants, all
+caught:
+- the picker counting nothing;
+- the picker always cancelling;
+- the waiting configurator answering at once;
+- the copy left with one time channel;
+- `Settled` (and `Given` through it) handing back a cancel;
+- `Choosing` handing back a cancel;
+- `Cancelled` never answering (caught by a hang);
+- the exactly-once guard inverted.
+
+**One thing it showed:** with the waiting configurator answering at once, `ARecentFileOpensByItsSuffixAndNotWhileBusy`
+still passes. The open reads the recording's channels off the UI thread, so the window is busy before Configure Streams
+is asked, and that test does not need the wait. `ExportImportTests`' busy case does, and caught it.
+
+App baseline unchanged (603 / 0 / 0, 34 not run).
+
 #### A file the core has just written is read back through `TempFiles`
 
 `FormatsTests.AWrittenCsvIsAnExactFileAndIsReadBackWithTheSameIdentities` failed CI four times in six runs on the

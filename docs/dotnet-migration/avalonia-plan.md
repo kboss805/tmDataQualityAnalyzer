@@ -486,6 +486,8 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
     `ShellTests`), one that returns a given run (`ProcessingTests.Given`, `TemplateBatchTests.Settled`), recording
     pickers (`ShellTests`, `WalkingSkeletonTests`), and the PRN sample with CH-04 retyped as a second time channel,
     built byte by byte in `CalibrationDialogTests`, `ConfigureStreamsTests` and `TemplateTests`. One fixtures file.
+    *(Done: `dotnet/TmDq.App.Tests/Fixtures.cs`: `FakeConfigurator`, which also takes the two waiting configurators
+    and the batch's and figures' settled ones; `FakeRecordingPicker`; `Recordings.WriteTwoTimeChannels`.)*
   - **The mutation harness** that every step since 2.4 has used lives in a session's scratch folder: a list of
     exact-text mutants, a runner that builds and runs each in a worktree with a time limit and restores the file,
     halves run side by side, and a selection rerun. Commit it under `scripts/` so the method outlives the sessions
