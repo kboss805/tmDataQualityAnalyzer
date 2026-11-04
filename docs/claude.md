@@ -412,6 +412,58 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased
 
+#### The dead-code sweep: the constants the Qt application left (plan step 6.4)
+
+The second item of 6.4: the native core's and the ABI's surface swept with the `code-cleanup` skill for what nothing
+reaches now that the Qt application is gone. The sweep counted, for every name the core's headers declare, its uses in
+the product (the core, the ABI, the C# binding, the app) apart from its own files, and in the tests; each candidate was
+then checked against `docs/claude.md` and memory for a reason to keep it.
+
+**Removed, at the user's choice: the 34 constants in `constants.h` nothing in the product reads**, each pinned only by a
+native case:
+- **28 `UIConstants`** of the Qt window: the title bar's height, its button metrics and edge gap, the four caption
+  glyphs, the status colours, the layout sizes, the initial window size, the byte units, the sample-period combo's last
+  index, the portable marker's, the full manual's and the pattern folder's file names, and the Receiver SNR pattern
+  file's name;
+- **6 `PCMConstants`:** what the Qt dialogs validated with (the hex pattern, the sync and frame bit limits, the
+  hex-digit maths) and the `kDefaultFrameSync` alias. The app validates with its own limits, which its tests hold
+  (US7.0, `parity.md`).
+
+The nine native cases that pinned only them go; four keep their live lines, and one pins `kDefaultFrameSyncLockPattern`
+where it pinned the alias. The two that hold the compiled defaults to the shipped pattern files read those files by
+name.
+
+**The full manual's name moves to the app's test.** The native case held `kFullManualFilename` to the installer, but
+Help reads `HelpManual.FullManualName`, which nothing held to it. `ShellTests` now holds the app's name to the
+installer's `ManualFile`, its `DestDir`, and the package script's two copies (staged for the installer, and in the
+portable copy).
+
+**Found and left, at the user's choice:**
+- **`Chapter10Reader`'s combo-box API** (`getTimeChannelComboBoxList`, `getPCMChannelComboBoxList`,
+  `timeChannelChanged`, `pcmChannelChanged`): the Qt dialog's, reached now only by tests.
+- **`ExtractCalibrationViewModel.ClipMaximum`:** unused, while the window types `Maximum="100000"`.
+- **Small test-only helpers:** `ChannelData::channelCount`, `ProcessedStreamData::hasSamples`, `AppVersion::toString`,
+  `streamKeyOf`.
+- **The three spikes** (`dotnet/*-spike`): kept until 6.5, since the migration's README cites them as the evidence for
+  its decisions.
+
+**Kept on purpose, not proposed:**
+- `PlotViewModel.LoadCsv`: the synchronous partner of the live import, and the tests' fixture.
+- The chart's test-observability members.
+- The binding's completeness (`ChartGeometry.PixelToY`, `Library.AbiVersion`).
+- `getFirstPCMChannelID`, which six native test files use.
+- **The ABI:** every export has its binding.
+
+**Checked:** the core rebuilt, every suite. **Mutation check** of the new app case, four mutants, all caught:
+- the installer installing the manual under another name;
+- the package script staging it under another name;
+- the portable copy carrying another name;
+- Help looking for another name.
+
+The first three edit deploy files the test reads as it runs, so they were run by hand. The fourth was first reported as a survivor, wrongly: its build had failed (`mt` was not on PATH), and the test ran the old binary. Built, it is caught.
+
+Native baseline **485 cases** (was 494; 1 skipped). App **603 / 0 / 0** (was 602), and 34 not run. Managed unchanged.
+
 #### The walking skeleton's leftovers go (plan step 6.4)
 
 The first item of 6.4. The walking skeleton (3.4) kept the first Frame Sync Lock stream as a `LockSeries` of its own,

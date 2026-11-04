@@ -27,7 +27,7 @@ Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `
 - **Native core tests (doctest, no Qt):** `powershell -ExecutionPolicy Bypass -File scripts\test_native.ps1
   [-Configuration Debug|Release] [-Rebuild] [-NoBuild] [<doctest args>]` builds `native/tmdq_core_tests`
   (MSBuild; the framework is the single header in `lib/doctest`) with **zero warnings and no Qt import**, then runs it.
-  Run it **filtered** while iterating: `-tc="TomlDocument*"`. Green baseline **494 test cases** (1 skipped: the
+  Run it **filtered** while iterating: `-tc="TomlDocument*"`. Green baseline **485 test cases** (1 skipped: the
   benchmark below). The suites read `tests/data/test files` (committed recordings) and `tests/fixtures`; in a
   worktree, junction `tests/data` to the main checkout's or the full-recording tests have nothing to read.
   **The throughput guard:** the heavy PRN benchmark ("PipelineRunner throughput", `test_pipelinerunner.cpp`) is
@@ -57,7 +57,7 @@ Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `
   `UserManual.html` (the full one, with `docs\manual\walkthroughs.html`), their figures rendered from the app by
   `ManualFiguresTests` into `docs\manual_images`: after a change to what a figure shows, rebuild with
   `powershell -ExecutionPolicy Bypass -File scripts\build_manual.ps1` (`-NoCapture` reuses the figures). CI runs it in
-  all three jobs. Green baseline **602 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases.
+  all three jobs. Green baseline **603 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases.
   **The side-by-side soak (plan step 5.2):** `powershell -ExecutionPolicy Bypass -File scripts\run_soak.ps1 [-NoBuild]
   [-Only <run>,...]` runs every run in `dotnet\TmDq.App.Tests\Soak\soak.json` (`SoakTests`, explicit, one process a
   run) and fails unless each CSV export is byte for byte what v2.14.2 exported (the manifest's `qt` blocks). Most

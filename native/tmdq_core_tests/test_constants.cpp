@@ -45,7 +45,7 @@ TEST_CASE("Constants: pcmDefaultFrameSync")
 {
     // PRN15. Both halves are pinned because they are only meaningful as a pair: a pattern with the wrong frame length
     // never locks, and nothing else in the build would catch them drifting apart.
-    CHECK(is(PCMConstants::kDefaultFrameSync, "334AABBF"));
+    CHECK(is(PCMConstants::kDefaultFrameSyncLockPattern, "334AABBF"));
     CHECK(PCMConstants::kDefaultBitsPerFrame == 32767);
 }
 
@@ -75,11 +75,6 @@ TEST_CASE("Constants: uiSamplePeriods")
     CHECK(UIConstants::kSamplePeriod1s == 1.0);
     CHECK(UIConstants::kSamplePeriod100ms == 0.1);
     CHECK(UIConstants::kSamplePeriod10ms == 0.01);
-}
-
-TEST_CASE("Constants: uiMaxSamplePeriodIndex")
-{
-    CHECK(UIConstants::kMaxSamplePeriodIndex == 2);
 }
 
 TEST_CASE("Constants: uiChannelPrefixes")
@@ -126,12 +121,6 @@ TEST_CASE("Constants: pcmProgressReportInterval")
     CHECK(PCMConstants::kProgressReportIntervalMs == 100);
 }
 
-TEST_CASE("Constants: uiLayoutConstants")
-{
-    CHECK(UIConstants::kFlatButtonMinWidth == 90);
-    CHECK(UIConstants::kLogPreviewHeight == 80);
-}
-
 TEST_CASE("Constants: uiTimeConversionConstants")
 {
     CHECK(UIConstants::kSecondsPerDay == 86400);
@@ -142,59 +131,24 @@ TEST_CASE("Constants: uiTimeConversionConstants")
 TEST_CASE("Constants: uiPolarityConstants")
 {
     CHECK(UIConstants::kDefaultPolarityIndex == 0);
-    // Title-bar chrome: shared by the main window and the title bar's own translation unit, so pinned like the rest.
-    CHECK(UIConstants::kTitleBarHeight == 40);
-    CHECK(UIConstants::kToolGlyphButtonW == 30);
-    CHECK(UIConstants::kToolGlyphButtonH == 26);
-    CHECK(UIConstants::kToolGlyphIconPx == 24);
-    CHECK(UIConstants::kTitleBarEdgeGap == 6);
-    // The caption glyphs live in the Unicode private use area, where a literal is fragile; a wrong codepoint is a blank
-    // button, which no other test would see.
-    CHECK(static_cast<int>(UIConstants::kGlyphMinimize) == 0xE921);
-    CHECK(static_cast<int>(UIConstants::kGlyphMaximize) == 0xE922);
-    CHECK(static_cast<int>(UIConstants::kGlyphRestore) == 0xE923);
-    CHECK(static_cast<int>(UIConstants::kGlyphClose) == 0xE8BB);
 }
 
 TEST_CASE("Constants: uiDeploymentConstants")
 {
-    CHECK(is(UIConstants::kPortableMarkerFilename, "portable"));
     CHECK(is(UIConstants::kSettingsDirName, "settings"));
     CHECK(is(UIConstants::kDefaultTomlFilename, "default.toml"));
     CHECK(is(UIConstants::kReceiverParamsDirName, "receiver_params"));
     CHECK(is(UIConstants::kRcvrCalsDirName, "rcvr_cals"));
-    CHECK(is(UIConstants::kFramesyncPatternsDirName, "framesync_patterns"));
-}
-
-TEST_CASE("Constants: uiOutputFilenameConstants")
-{
-    CHECK(UIConstants::kFileListMinHeight == 180);
-}
-
-TEST_CASE("Constants: the sync-pattern field's length is derived from the bit limit")
-{
-    // Once pinned beside the plot's constants, which have gone with v2.x. The field's length limit is derived
-    // from the bit limit, not spelled out separately - raising kMaxSyncPatternBits must widen the field.
-    CHECK(PCMConstants::kBitsPerHexDigit == 4);
-    CHECK(PCMConstants::kMaxSyncPatternHexChars == PCMConstants::kMaxSyncPatternBits / PCMConstants::kBitsPerHexDigit);
-    CHECK(PCMConstants::kMaxSyncPatternHexChars == 16);
-}
-
-TEST_CASE("Constants: pcmFrameSyncHexPattern")
-{
-    CHECK(is(PCMConstants::kFrameSyncHexPattern, "^[0-9A-Fa-f]+$"));
 }
 
 TEST_CASE("Constants: pcmFrameSyncMaskConstants")
 {
     CHECK(is(PCMConstants::kDefaultFrameSyncMask, "FFFFFFFF"));
-    CHECK(PCMConstants::kMaxSyncPatternBits == 64);
 }
 
 TEST_CASE("Constants: pcmFrameLengthBoundsConstants")
 {
     CHECK(PCMConstants::kMinFrameLengthBits == 64);
-    CHECK(PCMConstants::kMaxFrameLengthBits == 65536);
 }
 
 TEST_CASE("Constants: pcmMaxPacketBufferSize")
@@ -240,10 +194,7 @@ TEST_CASE("Constants: the Receiver SNR defaults compiled in are the ones the shi
     // The dialog loads this file for a Receiver SNR stream's frame sync and falls back to the compiled constants when
     // it is missing or a field is absent - so the fallback must say what the file says, or deleting the file changes
     // the defaults silently.
-    CHECK(is(UIConstants::kDefaultReceiverFrameSyncFilename, "framesync_rcvr_default.toml"));
-    const FrameSyncFile file =
-        readFrameSyncFile(shippedSetting(UIConstants::kFramesyncPatternsDirName,
-                                         UIConstants::kDefaultReceiverFrameSyncFilename));
+    const FrameSyncFile file = readFrameSyncFile(shippedSetting("framesync_patterns", "framesync_rcvr_default.toml"));
     CHECK(file.pattern == PCMConstants::kDefaultReceiverSNRPattern);
     CHECK(file.mask == PCMConstants::kDefaultFrameSyncMask);
     REQUIRE(file.bitsPerFrame.has_value());
@@ -256,7 +207,7 @@ TEST_CASE("Constants: the Receiver SNR defaults compiled in are the ones the shi
 TEST_CASE("Constants: the Frame Sync Lock default is the shipped PRN15 pattern file")
 {
     const FrameSyncFile file =
-        readFrameSyncFile(shippedSetting(UIConstants::kFramesyncPatternsDirName, "framesync_PRN15.toml"));
+        readFrameSyncFile(shippedSetting("framesync_patterns", "framesync_PRN15.toml"));
     CHECK(file.pattern == PCMConstants::kDefaultFrameSyncLockPattern);
     CHECK(file.mask == PCMConstants::kDefaultFrameSyncMask);
     REQUIRE(file.bitsPerFrame.has_value());
@@ -272,39 +223,6 @@ TEST_CASE("Constants: each settings folder that has a default ships it under the
         INFO(folder);
         CHECK(std::filesystem::is_regular_file(shippedSetting(folder, UIConstants::kDefaultTomlFilename)));
     }
-}
-
-TEST_CASE("Constants: the full manual's file name is the one the installer ships")
-{
-    // Help looks for this file beside the application; the installer's full-manual task is what puts it there.
-    CHECK(is(UIConstants::kFullManualFilename, "UserManual.html"));
-    const std::string script = readBytes(repoFile("deploy/avalonia/tmDataQualityAnalyzer.iss"));
-    CHECK(contains(script, std::string("staging\\manual\\") + UIConstants::kFullManualFilename + "\""));
-    CHECK(contains(script, "Source: \"{#ManualFile}\"; DestDir: \"{app}\""));
-}
-
-TEST_CASE("Constants: the status glyph colours")
-{
-    CHECK(is(UIConstants::kStatusOkColor, "green"));
-    CHECK(is(UIConstants::kStatusFailColor, "red"));
-    CHECK(is(UIConstants::kStatusIdleColor, "gray"));
-}
-
-TEST_CASE("Constants: progress, window and layout sizes")
-{
-    // The progress bar runs in percent: the processing coordinator scales to it.
-    CHECK(UIConstants::kProgressBarMax == 100);
-    CHECK(UIConstants::kLayoutSpacingSmall == 8);
-    CHECK(UIConstants::kAboutIconSize == 64);
-    CHECK(UIConstants::kSidebarMinWidth == 400);
-    CHECK(UIConstants::kInitialWindowWidth == 1920);
-    CHECK(UIConstants::kInitialWindowHeight == 1080);
-}
-
-TEST_CASE("Constants: the byte units the file-size text uses")
-{
-    CHECK(UIConstants::kBytesPerKB == 1024);
-    CHECK(UIConstants::kBytesPerMB == UIConstants::kBytesPerKB * UIConstants::kBytesPerKB);
 }
 
 TEST_CASE("Constants: calibration tuning the detector's own suites cannot tell from a neighbouring value")

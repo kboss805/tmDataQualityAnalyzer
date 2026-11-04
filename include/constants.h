@@ -36,8 +36,6 @@ namespace PCMConstants {
     /// PRN15 pattern with a PRN11 frame length can never lock. Change both or neither.
     inline constexpr const char* kDefaultFrameSyncLockPattern   = "334AABBF";
     inline constexpr const char* kDefaultReceiverSNRPattern     = "FE6B2840"; ///< Default Receiver SNR frame sync pattern.
-    // kDefaultFrameSync kept as an alias so existing call sites compile unchanged.
-    inline constexpr const char* kDefaultFrameSync              = kDefaultFrameSyncLockPattern;
 
     /// Maximum raw 16-bit sample value for calibration math.
     inline constexpr uint16_t kMaxRawSampleValue = 0xFFFF;
@@ -57,18 +55,9 @@ namespace PCMConstants {
     inline constexpr const char* kChannelTypePcm  = "PCMIN";  ///< TMATS type for PCM channels.
     /// @}
 
-    /// Regex pattern for validating hexadecimal input strings (e.g., frame sync).
-    inline constexpr const char* kFrameSyncHexPattern = "^[0-9A-Fa-f]+$";
-
-    /// @name Frame length and sync bounds (US2.1, US7.0)
+    /// @name Frame length bounds and defaults (US2.1, US7.0)
     /// @{
-    inline constexpr int kMaxSyncPatternBits  = 64;    ///< Maximum frame sync pattern length in bits (16 hex chars).
-    inline constexpr int kBitsPerHexDigit     = 4;     ///< Bits encoded by one hex character.
-    /// Maximum hex characters accepted in a sync pattern/mask field, derived from
-    /// the bit limit above so the input validator can't drift from it (US2.0/US7.0).
-    inline constexpr int kMaxSyncPatternHexChars = kMaxSyncPatternBits / kBitsPerHexDigit;
     inline constexpr int kMinFrameLengthBits  = 64;    ///< Minimum total frame length in bits.
-    inline constexpr int kMaxFrameLengthBits  = 65536; ///< Maximum total frame length in bits.
     /// Default Frame Sync Lock frame length in bits (PRN15 = 2^15-1). Paired with
     /// kDefaultFrameSyncLockPattern; see the note there.
     inline constexpr int kDefaultFrameSyncLockBits   = 32767;
@@ -86,22 +75,6 @@ namespace PCMConstants {
 
 /// @brief Constants for UI configuration, validation limits, and output formatting.
 namespace UIConstants {
-    /// @name Status glyph colours
-    /// Shared by every dialog that shows a pass/fail mark, so they cannot drift
-    /// apart: the Configure Streams Ready column and the Batch Process Files list
-    /// both read from here. Colour only — each dialog sizes its own glyph.
-    /// @{
-    inline constexpr const char* kStatusOkColor     = "green";        ///< Ready / matched.
-    inline constexpr const char* kStatusFailColor   = "red";          ///< Not ready / rejected.
-    inline constexpr const char* kStatusIdleColor   = "gray";         ///< Not applicable yet.
-    /// @}
-
-    /// @name Layout
-    /// @{
-    inline constexpr int kFlatButtonMinWidth    = 90;  ///< Minimum width for flat action buttons (accommodates "Collapse All").
-    inline constexpr int kLogPreviewHeight      = 80;  ///< Fixed height for the log preview panel.
-    /// @}
-
     /// @name Time conversion
     /// @{
     inline constexpr int kSecondsPerDay    = 86400; ///< Seconds in a day.
@@ -110,7 +83,6 @@ namespace UIConstants {
     /// @}
     inline constexpr int kDefaultSlopeIndex           = 3;     ///< Default voltage slope index (0-5V range).
     inline constexpr int kMaxSlopeIndex               = 3;     ///< Maximum valid voltage slope index.
-    inline constexpr int kMaxSamplePeriodIndex          = 2;     ///< Maximum valid sample period combo index.
     inline constexpr std::array<const char*, 3> kChannelPrefixes = {"L", "R", "C"}; ///< Channel prefix labels (L/R/C).
     inline constexpr int kNumKnownPrefixes            = 3;     ///< Number of known channel prefixes.
 
@@ -130,89 +102,14 @@ namespace UIConstants {
     /// @}
 
 
-    /// @name Custom title bar (frameless window)
-    /// Moved here from mainview.cpp when the title bar and the hamburger menu
-    /// were split into their own translation unit: both files need them, and a
-    /// file-local copy in each is how two sources of truth start.
-    /// @{
-    inline constexpr int kTitleBarHeight = 40;  ///< Custom title-bar height (logical px).
-    /// @name Title-bar button metrics
-    /// EVERY title-bar button uses these: the hamburger, the sidebar toggle, and the
-    /// minimize/maximize/close captions. Each carries a small glyph, so the hover
-    /// highlight is sized to hug it rather than filling a full-height cell. At the
-    /// original metrics the highlight was several times the glyph's visual area and
-    /// read as a large block floating in the bar; a compact, rounded box matches how
-    /// editors (VS Code, Antigravity) highlight their own title-bar controls.
-    ///
-    /// Kept >= 24 px in both axes: that is the usual minimum comfortable pointer
-    /// target, so tightening the box does not make the buttons fiddly to hit.
-    ///
-    /// Note this is a deliberate departure from the Windows caption convention, where
-    /// close spans the top-right corner (making it a Fitts's-law "infinite" target at
-    /// a maximized window's edge). Consistency across the whole bar was preferred; the
-    /// corner is now draggable caption instead.
-    /// @{
-    inline constexpr int kToolGlyphButtonW = 30;
-    inline constexpr int kToolGlyphButtonH = 26;
-    inline constexpr int kToolGlyphIconPx  = 24;
-    /// Gap between the last caption button and the window edge. The compact
-    /// buttons no longer span the corner, so without this their rounded hover
-    /// box would sit flush against the frame.
-    inline constexpr int kTitleBarEdgeGap  = 6;
-    /// @}
-
-    /// @name Caption-button glyphs from the Windows icon font
-    /// Segoe Fluent Icons (Windows 11), falling back to Segoe MDL2 Assets — the
-    /// same glyphs Windows draws for its own window buttons, so minimize,
-    /// maximize/restore and close share one set of metrics. Ordinary Unicode
-    /// look-alikes (U+2212, U+25A1, U+2715) do NOT: the UI font draws them at
-    /// noticeably different optical sizes, which is what made these buttons look
-    /// mismatched.
-    ///
-    /// Written as codepoints rather than literal characters on purpose: they live
-    /// in the Unicode private use area, so a literal in the source is fragile —
-    /// editors and tooling can silently drop it, leaving a blank button.
-    /// @{
-    inline constexpr char16_t kGlyphMinimize = 0xE921; ///< ChromeMinimize
-    inline constexpr char16_t kGlyphMaximize = 0xE922; ///< ChromeMaximize
-    inline constexpr char16_t kGlyphRestore  = 0xE923; ///< ChromeRestore
-    inline constexpr char16_t kGlyphClose    = 0xE8BB; ///< ChromeClose
-    /// @}
-    /// @}
-
     inline constexpr int kDefaultPolarityIndex = 0;  ///< Default polarity value (0 = Positive).
 
-    /// @name Progress / layout
+    /// @name The settings folder
     /// @{
-    inline constexpr int kProgressBarMax                 = 100;  ///< Maximum value for the progress bar.
-    inline constexpr int kFileListMinHeight              = 180;  ///< Minimum height for the file list tree widget (px).
-    inline constexpr int kLayoutSpacingSmall             = 8;                            ///< Small layout spacing (px).
-    inline constexpr int kAboutIconSize                  = 64;                           ///< About dialog icon size (px).
-    inline constexpr int kSidebarMinWidth                 = 400;                          ///< Minimum width for the sidebar panel (file name column + margins).
-    inline constexpr int kInitialWindowWidth              = 1920;                         ///< Initial main window width at launch (px).
-    inline constexpr int kInitialWindowHeight             = 1080;                         ///< Initial main window height at launch (px).
-    inline constexpr int kBytesPerKB                     = 1024;                         ///< Bytes per kilobyte.
-    inline constexpr int kBytesPerMB                     = 1048576;                      ///< Bytes per megabyte.
-    /// @}
-
-    /// @name Deployment / portable mode
-    /// @{
-    inline constexpr const char* kPortableMarkerFilename = "portable";      ///< Marker file name for portable mode detection.
     inline constexpr const char* kSettingsDirName         = "settings";     ///< Settings directory name relative to app root.
-    /// Optional full user manual, installed beside the app root.
-    ///
-    /// The BASE manual is compiled into the application, so it can never be missing.
-    /// This one is an installer option and may legitimately be absent — its absence
-    /// is a normal state, not an error, and Help falls back to the built-in manual.
-    inline constexpr const char* kFullManualFilename      = "UserManual.html";
     inline constexpr const char* kDefaultTomlFilename     = "default.toml"; ///< Default TOML configuration filename, used in each settings subdirectory below.
     inline constexpr const char* kReceiverParamsDirName   = "receiver_params";   ///< Receiver Parameters subdirectory name (relative to settings dir).
     inline constexpr const char* kRcvrCalsDirName         = "rcvr_cals";         ///< Receiver/SNR step calibration subdirectory name (relative to settings dir).
-    inline constexpr const char* kFramesyncPatternsDirName = "framesync_patterns"; ///< Frame sync pattern subdirectory name (relative to settings dir).
-    /// Frame sync pattern file the app loads as the default for Receiver SNR
-    /// streams (under kFramesyncPatternsDirName), so the receiver frame sync,
-    /// mask, and bits-per-frame are user-editable rather than hard-coded.
-    inline constexpr const char* kDefaultReceiverFrameSyncFilename = "framesync_rcvr_default.toml";
     /// @}
 }
 

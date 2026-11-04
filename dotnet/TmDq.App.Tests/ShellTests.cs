@@ -528,6 +528,20 @@ namespace TmDq.App.Tests
             Assert.Null(HelpManual.PathToOpen(app, Path.Combine(_dir, "no such temp")));
         }
 
+        [Fact]
+        public void TheFullManualIsTheFileTheInstallerAndThePortableCopyPutBesideTheApp()
+        {
+            // Help looks for it beside the application by this name; the installer's full-manual task and the portable ZIP
+            // are what put it there, so a rename on either side would leave Help on the base manual without a word.
+            Assert.Equal("UserManual.html", HelpManual.FullManualName);
+            string setup = File.ReadAllText(Repo.File(Path.Combine("deploy", "avalonia", "tmDataQualityAnalyzer.iss")));
+            Assert.Contains("#define ManualFile \"staging\\manual\\" + HelpManual.FullManualName + "\"", setup);
+            Assert.Contains("Source: \"{#ManualFile}\"; DestDir: \"{app}\"", setup);
+            string package = File.ReadAllText(Repo.File(Path.Combine("deploy", "avalonia", "build_avalonia_package.ps1")));
+            Assert.Contains("Join-Path $Stage 'manual\\" + HelpManual.FullManualName + "'", package);
+            Assert.Contains("Join-Path $portable '" + HelpManual.FullManualName + "'", package);
+        }
+
         [AvaloniaFact]
         public async Task AboutSaysTheVersionAndWhatTheApplicationDoes()
         {
