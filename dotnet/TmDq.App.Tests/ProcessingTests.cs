@@ -429,7 +429,7 @@ namespace TmDq.App.Tests
             // TestQtProcessingEvents' progressArrivesOnTheTargetsThreadInOrder: the core reports on its own threads, and
             // every report reaches the dialog on the UI thread.
             Assert.Equal(0, dialog.OffTheUiThread);
-            Assert.Equal(116, vm.Series?.LockPercent.Length);
+            Assert.Equal(116, Startup.FirstLockSeries(vm.Plot)?.Y.Length);
         }
 
         /// <summary>The run a test gives, whatever the recording.</summary>
@@ -472,7 +472,7 @@ namespace TmDq.App.Tests
             var dialog = new FakeProcessingDialog();
             var vm = new MainWindowViewModel(processingDialog: dialog, clock: new StoppedClock());
             await vm.LoadAsync(Prn);
-            Assert.NotNull(vm.Series);
+            Assert.NotNull(Startup.FirstLockSeries(vm.Plot));
 
             dialog.OnShow = p => p.CancelCommand.Execute(null);
             await vm.LoadAsync(Prn);
@@ -481,8 +481,7 @@ namespace TmDq.App.Tests
             Assert.True(cancelled.IsCancelling);
             Assert.False(cancelled.CancelCommand.CanExecute(null));
             Assert.Equal(2, dialog.Closed);
-            Assert.Null(vm.Series);
-            Assert.Empty(vm.AllSeries);
+            Assert.Empty(PlotFixtures.Locks(vm));
             Assert.False(vm.IsBusy);
             Assert.Equal("prn_testfile, sample.ch10: processing was cancelled.", vm.Status);
             List<string> lines = Texts(vm);

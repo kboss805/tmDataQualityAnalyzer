@@ -40,8 +40,6 @@ namespace TmDq.App.ViewModels
         private string _status = "Open a Chapter 10 recording.";
         private int _progress;
         private bool _isBusy;
-        private LockSeries? _series;
-        private IReadOnlyList<LockSeries> _allSeries = Array.Empty<LockSeries>();
 
         /// <param name="configurator">What a recording is processed with; null means the first PCM channel with the
         /// Frame Sync Lock defaults (<see cref="FirstChannelRun"/>).</param>
@@ -231,21 +229,6 @@ namespace TmDq.App.ViewModels
             private set => _preferences.Update(p => p with { LastFolder = value });
         }
 
-        /// <summary>The first Frame Sync Lock stream processed, or null before the first recording, after a failure, and
-        /// when no such stream was processed.</summary>
-        public LockSeries? Series
-        {
-            get => _series;
-            private set => SetProperty(ref _series, value);
-        }
-
-        /// <summary>Every Frame Sync Lock stream processed, in table order; empty when none.</summary>
-        public IReadOnlyList<LockSeries> AllSeries
-        {
-            get => _allSeries;
-            private set => SetProperty(ref _allSeries, value);
-        }
-
         public IAsyncRelayCommand OpenCommand { get; }
 
         /// <summary>Import CSV: an exported CSV shown without processing anything (US6.3).</summary>
@@ -284,7 +267,7 @@ namespace TmDq.App.ViewModels
             try
             {
                 Log.Add("Importing CSV: " + name);
-                Show(Array.Empty<LockSeries>());
+                ClearRun();
                 NativeCore.EnsureLoaded();
                 if (await Plot.LoadCsvAsync(path) == CsvLoad.Loaded)
                 {
@@ -462,7 +445,7 @@ namespace TmDq.App.ViewModels
             var sources = new List<ProcessedSource>();
             try
             {
-                Show(Array.Empty<LockSeries>());
+                ClearRun();
                 Log.Success(string.Create(CultureInfo.InvariantCulture, $"Processing {files.Count} file(s)..."));
                 foreach (string path in files)
                 {
@@ -607,11 +590,10 @@ namespace TmDq.App.ViewModels
                     Status = $"{name}: not processed (Configure Streams was cancelled).";
                     return;
                 }
-                Show(Array.Empty<LockSeries>());
+                ClearRun();
                 Status = $"Processing {name} ...";
                 using RunOutcome outcome = await RunWithDialogAsync(choice.Request);
                 Progress = 100;
-                Show(outcome.Streams.Where(s => s.Mode == StreamMode.FrameSyncLock).Select(LockSeries.Of).ToList());
                 // The core builds each stream's series, in table order, on one shared time axis.
                 foreach (StreamResult result in outcome.Results) Plot.AddStream(result);
                 Plot.Title = BaseName(name);
@@ -623,12 +605,12 @@ namespace TmDq.App.ViewModels
             }
             catch (OperationCanceledException)
             {
-                Show(Array.Empty<LockSeries>());
+                ClearRun();
                 Status = $"{name}: processing was cancelled.";
             }
             catch (RecordingException e)
             {
-                Show(Array.Empty<LockSeries>());
+                ClearRun();
                 Status = e.Message;
                 // A run with nothing processed has logged the core's own reasons already.
                 if (e is not NothingProcessedException) Log.Error(e.Message);
@@ -636,7 +618,7 @@ namespace TmDq.App.ViewModels
             catch (Exception e) when (e is FileNotFoundException or InvalidOperationException)
             {
                 // The native core is missing or does not match this build.
-                Show(Array.Empty<LockSeries>());
+                ClearRun();
                 Status = "The processing core could not be loaded: " + e.Message;
                 Log.Error(Status);
             }
@@ -700,16 +682,11 @@ namespace TmDq.App.ViewModels
             return dot < 0 ? fileName : fileName[..dot];
         }
 
-        private void Show(IReadOnlyList<LockSeries> series)
+        /// <summary>A new run, or one that failed: the plot is cleared, and the recordings it held.</summary>
+        private void ClearRun()
         {
-            // An empty run summary is a new run, or one that failed: the plot is cleared with it, and the recordings it held.
-            if (series.Count == 0)
-            {
-                Plot.Clear();
-                SetSources(Array.Empty<ProcessedSource>());
-            }
-            AllSeries = series;
-            Series = series.Count > 0 ? series[0] : null;
+            Plot.Clear();
+            SetSources(Array.Empty<ProcessedSource>());
         }
 
         /// <summary>The status line after a run: one Frame Sync Lock stream as the walking skeleton described it, else how
@@ -720,8 +697,9 @@ namespace TmDq.App.ViewModels
             string text;
             if (streams.Count == 1 && streams[0].Mode == StreamMode.FrameSyncLock)
             {
-                LockSeries s = LockSeries.Of(streams[0]);
-                text = $"{name}: {s.Label} (channel {s.PcmChannelId}), {s.LockPercent.Length} samples, mean lock {s.MeanLock:F1} %";
+                ProcessedStream s = streams[0];
+                double mean = s.LockPercent.Length == 0 ? 0 : s.LockPercent.Average();
+                text = $"{name}: {s.Label} (channel {s.PcmChannelId}), {s.LockPercent.Length} samples, mean lock {mean:F1} %";
             }
             else
             {

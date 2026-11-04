@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using TmDq.App.Plot;
 using TmDq.App.Processing;
 using TmDq.App.Streams;
 using TmDq.App.ViewModels;
@@ -220,10 +222,11 @@ namespace TmDq.App.Tests
             var vm = new MainWindowViewModel(configurator: new DialogConfigurator(dialogs, files, Repo.Root));
             await vm.LoadAsync(Prn);
 
-            Assert.Equal(new[] { 13, 15 }, vm.AllSeries.Select(s => s.PcmChannelId));
-            Assert.Same(vm.AllSeries[0], vm.Series);
-            Assert.Equal(116, vm.Series!.LockPercent.Length);   // channel 13 as the walking skeleton ran it
-            Assert.True(vm.AllSeries[1].MeanLock > 50, $"PRN11 should lock with its own pattern (mean {vm.AllSeries[1].MeanLock})");
+            IReadOnlyList<PlotSeries> locks = PlotFixtures.Locks(vm);
+            Assert.Equal(new[] { 13, 15 }, locks.Select(s => s.StreamOrder));
+            Assert.Same(locks[0], Startup.FirstLockSeries(vm.Plot));
+            Assert.Equal(116, locks[0].Y.Length);   // channel 13 as the walking skeleton ran it
+            Assert.True(locks[1].Y.Average() > 50, $"PRN11 should lock with its own pattern (mean {locks[1].Y.Average()})");
             Assert.Equal("prn_testfile, sample.ch10: 2 streams processed (2 Frame Sync Lock, 0 Receiver SNR)", vm.Status);
             Assert.False(vm.IsBusy);
         }
@@ -241,12 +244,12 @@ namespace TmDq.App.Tests
                 c.ProcessCommand.Execute(null);
             };
             await vm.LoadAsync(Prn);
-            LockSeries? shown = vm.Series;
+            PlotSeries? shown = Startup.FirstLockSeries(vm.Plot);
             Assert.NotNull(shown);
 
             dialogs.OnConfigure = c => { c.CancelCommand.Execute(null); return Task.CompletedTask; };
             await vm.LoadAsync(Prn);
-            Assert.Same(shown, vm.Series);
+            Assert.Same(shown, Startup.FirstLockSeries(vm.Plot));
             Assert.Equal("prn_testfile, sample.ch10: not processed (Configure Streams was cancelled).", vm.Status);
             Assert.False(vm.IsBusy);
             Assert.Equal(2, dialogs.ConfigureCalls);
@@ -266,8 +269,7 @@ namespace TmDq.App.Tests
             };
             var vm = new MainWindowViewModel(configurator: new DialogConfigurator(dialogs, null, Repo.Root));
             await vm.LoadAsync(Repo.Recording("step_cal, example.ch10"));
-            Assert.Null(vm.Series);
-            Assert.Empty(vm.AllSeries);
+            Assert.Empty(PlotFixtures.Locks(vm));
             Assert.Equal("step_cal, example.ch10: 1 stream processed (0 Frame Sync Lock, 1 Receiver SNR)", vm.Status);
         }
 
@@ -286,7 +288,7 @@ namespace TmDq.App.Tests
             };
             var vm = new MainWindowViewModel(configurator: new DialogConfigurator(dialogs, null, Repo.Root));
             await vm.LoadAsync(Prn);
-            Assert.Equal(new[] { 13 }, vm.AllSeries.Select(s => s.PcmChannelId));
+            Assert.Equal(new[] { 13 }, PlotFixtures.Locks(vm).Select(s => s.StreamOrder));
             Assert.StartsWith("prn_testfile, sample.ch10: CH-01 PRN 15 5M (channel 13), 116 samples, mean lock ", vm.Status);
             Assert.Contains(". Not processed: ", vm.Status, StringComparison.Ordinal);
             Assert.Contains("CH-04", vm.Status, StringComparison.Ordinal);

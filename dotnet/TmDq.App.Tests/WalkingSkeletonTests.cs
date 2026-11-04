@@ -11,6 +11,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using TmDq.App.Plot;
 using TmDq.App.Processing;
 using TmDq.App.Services;
 using TmDq.App.ViewModels;
@@ -47,17 +48,17 @@ namespace TmDq.App.Tests
             var vm = new MainWindowViewModel();
             await vm.LoadAsync(Prn);
 
-            LockSeries s = Assert.IsType<LockSeries>(vm.Series);
-            Assert.Equal("CH-01 PRN 15 5M", s.Label);
-            Assert.Equal(13, s.PcmChannelId);
-            Assert.Equal(116, s.LockPercent.Length);
-            Assert.Equal(116, s.TimesSec.Length);
-            Assert.Equal(93.531893, s.MeanLock, 6);
-            Assert.Equal(0.0, s.LockPercent.Min());
-            Assert.Equal(100.0, s.LockPercent.Max());
+            PlotSeries s = Assert.Single(PlotFixtures.Locks(vm));
+            Assert.Equal("CH-01 PRN 15 5M", s.StreamLabel);
+            Assert.Equal(13, s.StreamOrder);
+            Assert.Equal(116, s.Y.Length);
+            Assert.Equal(116, s.X.Length);
+            Assert.Equal(93.531893, s.Y.Average(), 6);
+            Assert.Equal(0.0, s.Y.Min());
+            Assert.Equal(100.0, s.Y.Max());
             Assert.Equal(100, vm.Progress);
             Assert.False(vm.IsBusy);
-            string mean = s.MeanLock.ToString("F1", CultureInfo.CurrentCulture);
+            string mean = s.Y.Average().ToString("F1", CultureInfo.CurrentCulture);
             Assert.Equal($"prn_testfile, sample.ch10: CH-01 PRN 15 5M (channel 13), 116 samples, mean lock {mean} %", vm.Status);
         }
 
@@ -66,7 +67,7 @@ namespace TmDq.App.Tests
         {
             var vm = new MainWindowViewModel();
             await vm.LoadAsync(Prn);
-            LockSeries s = vm.Series!;
+            PlotSeries s = Assert.Single(PlotFixtures.Locks(vm));
 
             // The same run straight through TmDq.Core, with the settings written out here rather than taken from the app.
             NativeCore.EnsureLoaded();
@@ -80,8 +81,9 @@ namespace TmDq.App.Tests
             using (ProcessingRun run = ProcessingRun.Start(new RunRequest(Prn, file.DefaultTimeChannel, new[] { config }), collector))
                 run.Wait();
             ProcessedStream direct = Assert.Single(collector.Results);
-            Assert.Equal(direct.TimesSec, s.TimesSec);
-            Assert.Equal(direct.LockPercent, s.LockPercent);
+            // The plot's values are the core's, one point a window.
+            Assert.Equal(direct.LockPercent, s.Y);
+            Assert.Equal(direct.TimesSec.Length, s.X.Length);
         }
 
         private sealed class Collector : IRunObserver
@@ -119,7 +121,7 @@ namespace TmDq.App.Tests
             {
                 var vm = new MainWindowViewModel();
                 await vm.LoadAsync(junk);
-                Assert.Null(vm.Series);
+                Assert.Null(Startup.FirstLockSeries(vm.Plot));
                 Assert.False(vm.IsBusy);
                 Assert.StartsWith(Path.GetFileName(junk) + " could not be opened: ", vm.Status);
             }
@@ -136,7 +138,7 @@ namespace TmDq.App.Tests
             string stepCal = Repo.Recording("step_cal, example.ch10");
             var vm = new MainWindowViewModel();
             await vm.LoadAsync(stepCal);
-            Assert.Null(vm.Series);
+            Assert.Null(Startup.FirstLockSeries(vm.Plot));
             Assert.False(vm.IsBusy);
 
             // The reason is the core's own, as the core gives it for the same run.
@@ -175,7 +177,7 @@ namespace TmDq.App.Tests
                 Assert.Empty(Ch10File.Open(copy).PcmChannels);
                 var vm = new MainWindowViewModel();
                 await vm.LoadAsync(copy);
-                Assert.Null(vm.Series);
+                Assert.Null(Startup.FirstLockSeries(vm.Plot));
                 Assert.False(vm.IsBusy);
                 Assert.Equal(Path.GetFileName(copy) + " has no PCM channel to process.", vm.Status);
             }
@@ -202,9 +204,9 @@ namespace TmDq.App.Tests
             // Nothing of the last recording may stay on screen under a status that says this one failed.
             var vm = new MainWindowViewModel();
             await vm.LoadAsync(Prn);
-            Assert.NotNull(vm.Series);
+            Assert.NotNull(Startup.FirstLockSeries(vm.Plot));
             await vm.LoadAsync(Repo.Recording("step_cal, example.ch10"));
-            Assert.Null(vm.Series);
+            Assert.Null(Startup.FirstLockSeries(vm.Plot));
             Assert.False(vm.Plot.HasData);
             Assert.Equal(TmDq.App.Plot.PlotViewModel.DefaultTitle, vm.Plot.Title);
         }
@@ -215,8 +217,10 @@ namespace TmDq.App.Tests
             // A recorder that keeps every report as it arrives (Progress<T> would post them to a context instead).
             var reports = new List<int>();
             var recorder = new SyncProgress(p => { lock (reports) reports.Add(p); });
-            LockSeries s = await FirstChannelRun.RunAsync(Prn, recorder);
-            Assert.Equal(116, s.LockPercent.Length);
+            Ch10File file = await StreamsRun.OpenAsync(Prn);
+            using RunOutcome outcome = await StreamsRun.RunAsync(FirstChannelRun.Request(Prn, file), recorder,
+                                                                 cancel: TestContext.Current.CancellationToken);
+            Assert.Equal(116, outcome.Streams[0].LockPercent.Length);
             // The core's reader reports 100 once at the end of every run; the view model sets 100 itself as well, so
             // only this shows the core's reports reach the caller.
             Assert.Contains(100, reports);
@@ -239,7 +243,7 @@ namespace TmDq.App.Tests
             {
                 var vm = new MainWindowViewModel();
                 await vm.LoadAsync(Prn);
-                Assert.Null(vm.Series);
+                Assert.Null(Startup.FirstLockSeries(vm.Plot));
                 Assert.False(vm.IsBusy);
                 Assert.StartsWith("The processing core could not be loaded: ", vm.Status);
                 Assert.Equal((vm.Status, Logging.LogLevel.Error), (vm.Log.Entries[^1].Text, vm.Log.Entries[^1].Level));
@@ -258,7 +262,7 @@ namespace TmDq.App.Tests
             string status = vm.Status;
             await vm.OpenCommand.ExecuteAsync(null);
             Assert.Equal(1, picker.Calls);
-            Assert.Null(vm.Series);
+            Assert.Null(Startup.FirstLockSeries(vm.Plot));
             Assert.Equal(status, vm.Status);
         }
 
@@ -267,7 +271,7 @@ namespace TmDq.App.Tests
         {
             var vm = new MainWindowViewModel(new FakePicker(Prn));
             await vm.OpenCommand.ExecuteAsync(null);
-            Assert.Equal(116, vm.Series?.LockPercent.Length);
+            Assert.Equal(116, Startup.FirstLockSeries(vm.Plot)?.Y.Length);
         }
 
         [AvaloniaFact]
@@ -282,7 +286,7 @@ namespace TmDq.App.Tests
             Assert.True(vm.IsBusy);
             await first;
             Assert.True(vm.OpenCommand.CanExecute(null));
-            Assert.Equal(13, vm.Series?.PcmChannelId);
+            Assert.Equal(13, Startup.FirstLockSeries(vm.Plot)?.StreamOrder);
         }
 
         [AvaloniaFact]
