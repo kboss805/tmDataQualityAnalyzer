@@ -5,7 +5,7 @@ using Avalonia.Layout;
 
 namespace TmDq.App.Views
 {
-    /// <summary>One of a list, the Qt <c>QInputDialog::getItem</c> (not editable): a label, the list with the first chosen,
+    /// <summary>One of a list (not editable): a label, the list with the first chosen,
     /// OK and Cancel. Closes with the index chosen, or null on Cancel.</summary>
     public sealed class ChoiceWindow : Window
     {

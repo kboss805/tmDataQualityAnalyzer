@@ -1,6 +1,7 @@
 // textfile: how a settings or step file's bytes become UTF-8 text, and how a path's name is spelled in a message.
-// No Qt. The TomlDocument tests reach this only through a file or two; these cases hold it directly, because
-// every encoding rule below is something a port off QString would change without any caller noticing.
+// The TomlDocument tests reach this only through a file or two; these cases hold it directly, because every
+// encoding rule below is one that settings files written for v2.x rely on, and a change to it would go unnoticed
+// by any caller.
 
 #include <cstdint>
 #include <string>

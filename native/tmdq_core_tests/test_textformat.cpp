@@ -1,6 +1,6 @@
-// textformat: formatFixed() reproduces QString::number(v, 'f', n) without Qt. The Qt suite used Qt itself as the
-// oracle; this one has no Qt to ask, so the expected text comes from two independent sources:
-//   * what Qt printed, recorded once with a throwaway diagnostic (the tables and the sweep's digest below), and
+// textformat: formatFixed() reproduces the fixed-notation text v2.14.2 printed (its Qt implementation): ties rounded
+// away from zero, where std::format rounds them to even. The expected text comes from two independent sources:
+//   * what v2.14.2 printed, recorded once with a throwaway diagnostic (the tables and the sweep's digest below), and
 //   * exact integer arithmetic, for every value that is a binary fraction (n/64): the scaled value is an integer
 //     quotient and a remainder, so "round half away from zero" is a comparison and not a formatting rule.
 
@@ -19,10 +19,10 @@ struct Recorded
 {
     double value;
     int decimals;
-    const char* expected;   // what QString::number(value, 'f', decimals) printed
+    const char* expected;   // what v2.14.2 printed for value at that many decimals
 };
 
-// What Qt printed (recorded with a throwaway diagnostic in the Qt suite; 17 significant digits round-trip each value).
+// What v2.14.2 printed (recorded with a throwaway diagnostic; 17 significant digits round-trip each value).
 const Recorded kNotTies[] = {
     {0.34999999999999998, 0, "0"},
     {0.34999999999999998, 1, "0.3"},
@@ -245,7 +245,7 @@ bool isTie(int n, int decimals)
 
 } // namespace
 
-TEST_CASE("textformat: exact ties round away from zero like Qt")
+TEST_CASE("textformat: exact ties round away from zero")
 {
     // The values the calibration report prints: half-dB steps and half-count levels. Each is an exact binary
     // fraction, so each is a true tie - and std::format would round half of them down.
@@ -266,10 +266,10 @@ TEST_CASE("textformat: exact ties round away from zero like Qt")
     CHECK(std::format("{:.1f}", 0.25) != "0.3");
 }
 
-TEST_CASE("textformat: values that are not ties agree with Qt")
+TEST_CASE("textformat: values that are not ties format as v2.14 formatted them")
 {
     // Decimal halves that binary cannot hold exactly (0.35, 2.675 ...) are decided by their true value, not
-    // by a tie, and both formatters agree. Recorded from Qt, at 0 to 7 decimals.
+    // by a tie, and both formatters agree. Recorded from v2.14.2, at 0 to 7 decimals.
     for (const Recorded& r : kNotTies)
     {
         INFO(r.value << " with " << r.decimals << " decimals");
@@ -277,14 +277,14 @@ TEST_CASE("textformat: values that are not ties agree with Qt")
     }
 }
 
-TEST_CASE("textformat: signs and zeros agree with Qt")
+TEST_CASE("textformat: signs and zeros format as v2.14 formatted them")
 {
     for (const Recorded& r : kSigns)
     {
         INFO(r.value << " with " << r.decimals << " decimals");
         CHECK(ours(r.value, r.decimals) == r.expected);
     }
-    // A negative that rounds to zero keeps its sign, as Qt prints it.
+    // A negative that rounds to zero keeps its sign, as v2.14.2 printed it.
     CHECK(ours(-0.4, 0) == "-0");
     CHECK(ours(-0.04, 1) == "-0.0");
     // ...but negative zero itself prints without one.
@@ -343,9 +343,9 @@ TEST_CASE("textformat: one step either side of a tie goes the way the value lies
     CHECK(checked > 1000);
 }
 
-TEST_CASE("textformat: a sweep of arbitrary doubles agrees with Qt")
+TEST_CASE("textformat: a sweep of arbitrary doubles formats as v2.14 formatted them")
 {
-    // A fixed pseudo-random sweep (so a failure reproduces) across several magnitudes. Qt's 20,000 answers were
+    // A fixed pseudo-random sweep (so a failure reproduces) across several magnitudes. v2.14.2's 20,000 answers were
     // folded into one FNV-1a digest when the sweep was recorded; the powers of ten are a table so the values do
     // not depend on std::pow.
     const double pow10[] = {1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3, 1e4, 1e5};
@@ -373,7 +373,7 @@ TEST_CASE("textformat: a sweep of arbitrary doubles agrees with Qt")
     CHECK(digest == kSweepDigest);
 }
 
-TEST_CASE("textformat: large and small magnitudes agree with Qt")
+TEST_CASE("textformat: large and small magnitudes format as v2.14 formatted them")
 {
     for (const Recorded& r : kMagnitudes)
     {
@@ -391,7 +391,7 @@ TEST_CASE("textformat: infinity and not-a-number print as words, with no sign on
         CHECK(ours(inf, d) == "inf");
         CHECK(ours(-inf, d) == "-inf");
         CHECK(ours(nan, d) == "nan");
-        CHECK(ours(-nan, d) == "nan");   // Qt prints no sign whatever the sign bit says
+        CHECK(ours(-nan, d) == "nan");   // no sign whatever the sign bit says (std::format: "-nan")
     }
 }
 

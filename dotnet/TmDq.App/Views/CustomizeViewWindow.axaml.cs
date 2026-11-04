@@ -5,7 +5,7 @@ using TmDq.App.Services;
 
 namespace TmDq.App.Views
 {
-    /// <summary>Customize View (plan step 4.4), the Qt <c>PlotCustomizationDialog</c>: closes true on OK, false on Cancel.
+    /// <summary>Customize View (plan step 4.4, US4.0): closes true on OK, false on Cancel.
     /// Its own questions (a colour, a name) are asked over it.</summary>
     public sealed partial class CustomizeViewWindow : Window
     {

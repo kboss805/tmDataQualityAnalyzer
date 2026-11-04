@@ -1,5 +1,5 @@
-// EventReporter: the null-safe forwarder every processing source reports through. No Qt; ported from the Qt
-// TestEventReporter, whose cases are all here under the same descriptions.
+// EventReporter: the null-safe forwarder every processing source reports through (ported in
+// plan step 2.4).
 
 #include <cstddef>
 #include <memory>

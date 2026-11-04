@@ -68,7 +68,7 @@ namespace TmDq.App.Services
         {
             var window = new ExtractCalibrationWindow { DataContext = vm };
             vm.CloseRequested += (_, _) => window.Close();
-            // The extraction's progress sits over this dialog, as the Qt one is window-modal to it.
+            // The extraction's progress sits over this dialog, modal to it, as in v2.x.
             vm.ProgressDialog = new WindowProcessingDialog(window);
             await window.ShowDialog(Top);
         }

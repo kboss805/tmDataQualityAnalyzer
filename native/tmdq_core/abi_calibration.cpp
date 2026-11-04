@@ -4,8 +4,8 @@
  *
  * Only translation. Reading a step file is `StepDetector::parseStepConfig`; turning the dialog's inputs into the
  * extractor's request (the sync text decoded like the main run, the default word map resolved like the main
- * run) is `buildCalibrationRequest`; the extraction itself is `CalibrationExtractor`. They are the ones the Qt
- * dialog uses, so a calibration through here and one through the dialog cannot disagree.
+ * run) is `buildCalibrationRequest`; the extraction itself is `CalibrationExtractor`. The rules are theirs, not
+ * this file's, so the extraction cannot disagree with the main run about the bitstream or the word map.
  */
 
 #include "tmdq_abi.h"

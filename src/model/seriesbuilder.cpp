@@ -11,21 +11,17 @@
 
 #include "constants.h"
 #include "seriescolumnschema.h"
+#include "seriesrange.h"
 #include "textparse.h"
 
 namespace {
-
-/// `qMin` / `qMax` are `a < b ? a : b` and `a < b ? b : a`, not `std::min` / `std::max`: they treat NaN
-/// differently, and a series' cached range depends on it.
-double qtMin(double a, double b) { return (a < b) ? a : b; }
-double qtMax(double a, double b) { return (a < b) ? b : a; }
 
 void fillRange(SeriesSpec& spec)
 {
     for (const double v : spec.yValues)
     {
-        spec.yMin = qtMin(spec.yMin, v);
-        spec.yMax = qtMax(spec.yMax, v);
+        spec.yMin = runningMin(spec.yMin, v);
+        spec.yMax = runningMax(spec.yMax, v);
     }
 }
 

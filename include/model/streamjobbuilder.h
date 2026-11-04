@@ -3,9 +3,9 @@
  * @brief Turns one stream's configuration into a processing job: validates it, decodes the frame-sync
  *        fields, and builds the frame-parameter table (word map and calibration).
  *
- * Qt-free core logic (de-Qt, plan step 1.5). The view model holds the user's settings as a
- * `StreamConfig` (QString, QHash) and converts it to a `StreamJobConfig` at the call; what the job is
- * built from, and every message a rejected configuration produces, is decided here.
+ * Core logic (plan step 1.5). A host's stream settings arrive as a `StreamJobConfig` (the C ABI
+ * builds one in `abi_run.cpp`); what the job is built from, and every message a rejected
+ * configuration produces, is decided here.
  */
 
 #ifndef STREAMJOBBUILDER_H

@@ -8,14 +8,10 @@
  * worker dequeues and processes them. The queue is bounded so the reader blocks
  * when a worker falls behind, preventing the whole file from being buffered in RAM.
  *
- * **Synchronisation is `std`, not Qt** (`std::mutex` / `std::condition_variable` /
- * `std::deque` in place of `QMutex` / `QWaitCondition` / `QQueue`). First step of the
- * de-Qt work in `docs/future_plans/dotnet-port-assessment.md`: this file is pure
- * infrastructure with no Qt semantics to preserve, and the interop spike already drives
- * the reader with `std::thread`. `PacketItem::payload` is a shared, read-only
- * `std::vector<uint8_t>`: it replaced a `QByteArray`, whose implicit sharing the reader
- * relied on to hand one packet to several queues for the price of a reference count.
- * That sharing is now explicit (see PacketPayload).
+ * Synchronisation is `std::mutex` / `std::condition_variable` over a `std::deque`.
+ * `PacketItem::payload` is a shared, read-only `std::vector<uint8_t>`, so the reader
+ * hands one packet to several queues for the price of a reference count
+ * (see PacketPayload).
  */
 
 #ifndef PACKETQUEUE_H
@@ -84,8 +80,8 @@ public:
     bool enqueue(PacketItem item)
     {
         std::unique_lock<std::mutex> lock(m_mutex);
-        // Predicate form rather than a bare wait in a while loop: it is the same
-        // condition the Qt version looped on, and it handles spurious wakeups itself.
+        // Predicate form rather than a bare wait in a while loop: it handles
+        // spurious wakeups itself.
         m_not_full.wait(lock, [this] {
             return m_closed || m_queue.size() < m_max_depth;
         });

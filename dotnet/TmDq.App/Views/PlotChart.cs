@@ -15,12 +15,12 @@ using TmDq.Core;
 namespace TmDq.App.Views
 {
     /// <summary>
-    /// The plot (plan step 4.3b), the Avalonia counterpart of the Qt <c>TmChart</c> with the gestures the Qt
-    /// <c>PlotWidget</c> adds: one shared time axis and two Y axes (lock percentage or missed frames on the left, Receiver
-    /// SNR on the right, each drawn only when something is on it); each series drawn from the core's geometry (its line,
-    /// and above two samples a pixel column the band from each column's minimum to its maximum); ticks on round clock
-    /// times; wheel zoom about the cursor, drag pan, a band dragged out with Ctrl or the middle button to zoom into it,
-    /// double-click for the whole span; a crosshair and the readout of the nearest value.
+    /// The plot (plan step 4.3b, US4.0), drawn and driven as v2.x's was: one shared time axis and two Y axes
+    /// (lock percentage or missed frames on the left, Receiver SNR on the right, each drawn only when something is
+    /// on it); each series drawn from the core's geometry (its line, and above two samples a pixel column the band
+    /// from each column's minimum to its maximum); ticks on round clock times; wheel zoom about the cursor, drag pan,
+    /// a band dragged out with Ctrl or the middle button to zoom into it, double-click for the whole span; a crosshair
+    /// and the readout of the nearest value.
     ///
     /// The data layer is painted once into a bitmap and reused until the data, a range, the size or the labels change,
     /// so moving the cursor costs the crosshair, not every series again. The state is the <see cref="PlotViewModel"/>'s;
@@ -31,7 +31,7 @@ namespace TmDq.App.Views
         public static readonly StyledProperty<PlotViewModel?> PlotProperty =
             AvaloniaProperty.Register<PlotChart, PlotViewModel?>(nameof(Plot));
 
-        // The Qt chart's layout, in pixels.
+        // The chart's layout, in pixels, as v2.x laid it out.
         public const double OuterMargin = 10, AxisLabelGap = 6, TickLength = 4, TickLabelGap = 12, TopInset = 12;
         public const double FontSize = 12, PenWidth = 1.5;
         public const int XTickCount = 10, YTickCount = 6;

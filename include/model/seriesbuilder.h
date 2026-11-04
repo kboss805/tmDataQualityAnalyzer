@@ -1,18 +1,16 @@
 /**
  * @file seriesbuilder.h
- * @brief Qt-free logic that turns processed streams into plot series on one shared time axis.
+ * @brief Logic that turns processed streams into plot series on one shared time axis.
  *
- * The data half of what `PlotViewModel::addStreamData`, `removeSource` and the CSV import's commit did
- * (de-Qt, plan step 1.6): which series a processed stream yields and what they are called, how the receiver
+ * The data half of adding a processed stream to the plot, removing a source and committing a CSV import
+ * (plan step 1.6): which series a processed stream yields and what they are called, how the receiver
  * channels are numbered, the elapsed-time axis and the clock it hangs from, how that clock moves when
  * a source that starts earlier arrives or the earliest source goes, whether a new source overlaps what is
  * already loaded, and the order an imported CSV's streams are given.
  *
- * What stays with the plot is the *storage* and the presentation: the series live in `QVector`s because
- * the chart shares those buffers (one elapsed array per stream, referenced by each of its series and by
- * the chart), colours, visibility, axis ranges and the signals. Putting the samples in the core would copy
- * them; the C# application will decide how it holds them. These functions work on views of the caller's
- * data and return values, so they do not care how it is stored.
+ * What stays with the plot is the *storage* and the presentation: how the samples are held, colours,
+ * visibility and axis ranges. These functions work on views of the caller's data and return values, so
+ * they do not care how it is stored.
  */
 
 #ifndef SERIESBUILDER_H
@@ -59,7 +57,7 @@ struct SeriesSpec
     int streamSequence = 0;             ///< The stream's job index, for ordering streams in the legend.
     int sourceId = 0;
     std::span<const double> yValues;    ///< A view of the processed data; it must outlive the spec.
-    double yMin = std::numeric_limits<double>::max();     ///< Smallest value (as `qMin` sees NaN), `max()` if none.
+    double yMin = std::numeric_limits<double>::max();     ///< Smallest value (NaN rule: `runningMin`), `max()` if none.
     double yMax = std::numeric_limits<double>::lowest();  ///< Largest value, `lowest()` if none.
 };
 

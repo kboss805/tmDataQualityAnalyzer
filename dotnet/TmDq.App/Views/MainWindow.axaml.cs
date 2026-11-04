@@ -18,7 +18,7 @@ namespace TmDq.App.Views
 {
     /// <summary>
     /// The main window and its shell (plan step 4.8): a title bar of its own in place of the system's, the menu behind
-    /// its hamburger button (the Qt application's sections, Recent Files and Help), the log sidebar's toggle, and a
+    /// its hamburger button (v2.x's sections, Recent Files and Help), the log sidebar's toggle, and a
     /// recording or exported CSV dropped anywhere on the window opened as Recent Files opens one.
     /// </summary>
     public sealed partial class MainWindow : Window
@@ -106,7 +106,7 @@ namespace TmDq.App.Views
         // ---- the menu ------------------------------------------------------------------------------------------------
 
         /// <summary>
-        /// The menu, rebuilt each time it opens, as the Qt application's: the Process section (Open, Recent Files, Save
+        /// The menu, rebuilt each time it opens, as v2.x's: the Process section (Open, Recent Files, Save
         /// as Template, Apply Template to Files), the Import/Export section (Import CSV, Export), the Settings section
         /// (the theme), then Help (User Manual, About) and Exit, each set off by a separator. Every entry is available
         /// as its command is.
@@ -136,7 +136,7 @@ namespace TmDq.App.Views
             MainMenu.Items.Add(Item("Exit", new RelayCommand(Close)));
         }
 
-        // A section's heading: a disabled item, as the Qt menu draws one (QMenu's own sections are blanked by a style).
+        // A section's heading: a disabled item in the "section" style, as v2.x's menu drew one.
         private static MenuItem Section(string title) => new() { Header = title, IsEnabled = false, Classes = { "section" } };
 
         private MenuItem Item(string header, System.Windows.Input.ICommand command, string? icon = null, string? tip = null,

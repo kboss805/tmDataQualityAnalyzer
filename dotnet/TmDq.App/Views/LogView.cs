@@ -11,10 +11,9 @@ using TmDq.App.Logging;
 namespace TmDq.App.Views
 {
     /// <summary>
-    /// The log sidebar: every line of the session's log, timestamped and coloured by level as the Qt log was (an error
+    /// The log sidebar: every line of the session's log, timestamped and coloured by level as v2.x's was (an error
     /// red, a warning goldenrod, a success green, the rest in the text colour), in one block of text so a selection can
-    /// run across lines. A line's own line breaks and runs of spaces are kept; the Qt log had to be told to with
-    /// <c>white-space: pre-wrap</c>. It follows the newest line.
+    /// run across lines. A line's own line breaks and runs of spaces are kept. It follows the newest line.
     /// </summary>
     public sealed class LogView : UserControl
     {

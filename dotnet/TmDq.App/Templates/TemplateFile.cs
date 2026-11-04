@@ -21,7 +21,7 @@ namespace TmDq.App.Templates
     public sealed record TemplateEntry(StreamSetup Config, IReadOnlyList<SeriesAppearance> Appearance);
 
     /// <summary>
-    /// A processing template (US1.1), the Qt <c>ProcessingTemplate</c>: every row of one recording's Configure Streams, the
+    /// A processing template (US1.1): every row of one recording's Configure Streams, the
     /// time channel's place in its list, the byte order, and the series' names and colours. No file paths of recordings
     /// and no calibration profiles, only what a calibration was extracted from.
     /// </summary>
@@ -44,12 +44,12 @@ namespace TmDq.App.Templates
     }
 
     /// <summary>
-    /// The template file (plan step 4.7, decision D3: template JSON is C#'s), read and written as the Qt
-    /// <c>ProcessingTemplateSchema</c> and <c>StreamConfigSchema</c> do, so a template either application wrote loads in
-    /// the other. Reading keeps the Qt rules: a key that is missing or of the wrong type keeps its default, an entry
-    /// without a channel id and a label is skipped, the sample period and slope indices are clamped, and a template from
-    /// before the byte order was kept reads as swapped. Writing gives the Qt application's bytes: keys sorted, four
-    /// spaces an indent, whole numbers without a point, CR LF, UTF-8 without a byte-order mark.
+    /// The template file (plan step 4.7, decision D3: template JSON is C#'s), read and written as v2.14.2 read
+    /// and wrote it, so a template either application wrote loads in the other. Reading keeps v2.x's rules: a key
+    /// that is missing or of the wrong type keeps its default, an entry without a channel id and a label is skipped,
+    /// the sample period and slope indices are clamped, and a template from before the byte order was kept reads as
+    /// swapped. Writing gives v2.14.2's bytes: keys sorted, four spaces an indent, whole numbers without a point,
+    /// CR LF, UTF-8 without a byte-order mark. TemplateTests holds both to three templates v2.14.2 wrote.
     /// </summary>
     public static class TemplateFile
     {
@@ -103,8 +103,8 @@ namespace TmDq.App.Templates
             }
         }
 
-        /// <summary>A row from a template's config, as the Qt <c>StreamConfigSchema::fromJson</c> reads it; null without a
-        /// channel id and a label.</summary>
+        /// <summary>A row from a template's config, by the reading rules above; null without a channel id and a
+        /// label.</summary>
         private static StreamSetup? ReadConfig(JsonElement json)
         {
             if (!json.TryGetProperty("pcmChannelId", out _) || !json.TryGetProperty("label", out _)) return null;
@@ -145,7 +145,7 @@ namespace TmDq.App.Templates
                 Randomized = randomized,
                 Inverted = inverted,
                 DataRateMbps = rate,
-                // Indices a newer or hand-edited template could carry out of range are clamped, as Qt clamps them.
+                // Indices a newer or hand-edited template could carry out of range are clamped, as v2.x clamped them.
                 SamplePeriod = (SamplePeriod)Math.Clamp(Int(json, "samplePeriodIndex", 0), 0, MaxSamplePeriodIndex),
                 TmatsDataRateMbps = Double(json, "tmatsDataRateMbps", 0.0),
                 PolarityIndex = Int(json, "polarityIndex", 0),
@@ -169,12 +169,12 @@ namespace TmDq.App.Templates
                 "AccumulatedMissedFrames" => MetricType.AccumulatedMissedFrames,
                 _ => MetricType.Snr,
             };
-            // QColor reads "#aarrggbb", "#rrggbb" and names; anything else is an invalid colour, which reads as black.
+            // A colour is hex ("#aarrggbb", "#rrggbb") or a name; anything else reads as black, as v2.x read it.
             Color color = Color.TryParse(Str(json, "color", ""), out Color c) ? c : Colors.Black;
             return new SeriesAppearance(metric, Int(json, "receiverIndex", 0), Int(json, "channelIndex", 0), Str(json, "name", ""), color);
         }
 
-        // QJsonValue's typed reads: the default unless the value is of the type (an int, a whole number in range).
+        // Typed reads, as v2.x's: the default unless the value is of the type (for an int, a whole number in range).
         private static int Int(JsonElement o, string key, int fallback) =>
             o.TryGetProperty(key, out JsonElement v) && v.ValueKind == JsonValueKind.Number && v.TryGetDouble(out double d) &&
             d == Math.Floor(d) && d >= int.MinValue && d <= int.MaxValue ? (int)d : fallback;
@@ -195,7 +195,8 @@ namespace TmDq.App.Templates
 
         // ---- writing ---------------------------------------------------------------------------------------------------
 
-        /// <summary>The template as the Qt application writes it, with "\n" line ends (<see cref="Write"/> makes them CR LF).</summary>
+        /// <summary>The template as v2.14.2 wrote it, with "\n" line ends (<see cref="Write"/> makes them
+        /// CR LF).</summary>
         public static string ToJson(ProcessingTemplate template)
         {
             var root = new SortedDictionary<string, object>(StringComparer.Ordinal)
@@ -212,7 +213,7 @@ namespace TmDq.App.Templates
             return text.Append('\n').ToString();
         }
 
-        /// <summary>Writes <paramref name="template"/> to <paramref name="path"/> as the Qt application does.</summary>
+        /// <summary>Writes <paramref name="template"/> to <paramref name="path"/> as v2.14.2 wrote it.</summary>
         /// <exception cref="IOException">The file cannot be written.</exception>
         public static void Write(string path, ProcessingTemplate template) =>
             File.WriteAllText(path, ToJson(template).Replace("\n", "\r\n", StringComparison.Ordinal), new UTF8Encoding(false));
@@ -276,7 +277,7 @@ namespace TmDq.App.Templates
             return o;
         }
 
-        /// <summary>QJsonDocument's indented form: four spaces a level, "key": value, an empty array's bracket on the
+        /// <summary>The indented form v2.14.2 wrote: four spaces a level, "key": value, an empty array's bracket on the
         /// next line at the key's indent.</summary>
         private static void WriteValue(StringBuilder text, object value, int level)
         {
@@ -323,11 +324,12 @@ namespace TmDq.App.Templates
             }
         }
 
-        /// <summary>A double as Qt writes one: the shortest text that reads back as it, a whole number without a point.</summary>
+        /// <summary>A double as v2.14.2 wrote one: the shortest text that reads back as it, a whole number without
+        /// a point.</summary>
         public static string Number(double d) => d.ToString("R", CultureInfo.InvariantCulture).Replace('E', 'e');
 
-        /// <summary>A string as Qt escapes one: the quote, the backslash and the control characters; everything else as it
-        /// is, in UTF-8.</summary>
+        /// <summary>A string as v2.14.2 escaped one: the quote, the backslash and the control characters; everything
+        /// else as it is, in UTF-8.</summary>
         private static void WriteString(StringBuilder text, string s)
         {
             text.Append('"');

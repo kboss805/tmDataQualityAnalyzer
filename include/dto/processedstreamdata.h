@@ -2,12 +2,11 @@
  * @file processedstreamdata.h
  * @brief In-memory result of processing a single PCM stream.
  *
- * Replaces the old CSV-on-disk output. FrameProcessor accumulates one of these
- * per run; ProcessingCoordinator hands it to PlotViewModel, which appends its
- * series to the (accumulating) plot.
+ * FrameProcessor accumulates one of these per stream of a run; the ABI hands it
+ * to the host as a stream result (tmdq_abi.h), and the series the plot draws are
+ * built from it in the core (seriesbuilder.h).
  *
- * Plain C++, like ProcessingParams: text is UTF-8 `std::string`. The plot's layers convert
- * where they build their `QString` series names.
+ * Plain C++, like ProcessingParams: text is UTF-8 `std::string`.
  */
 
 #ifndef PROCESSEDSTREAMDATA_H

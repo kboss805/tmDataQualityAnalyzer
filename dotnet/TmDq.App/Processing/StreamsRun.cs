@@ -74,7 +74,7 @@ namespace TmDq.App.Processing
             Task.Run(() => Run(request, progress, log, cancel));
 
         /// <summary>
-        /// Runs <paramref name="request"/> and waits for it, logging as the Qt application does: the lines the core
+        /// Runs <paramref name="request"/> and waits for it, logging as v2.x did: the lines the core
         /// writes while it builds each stream's job, then the summary (<see cref="Summary"/>), then the run's own lines
         /// and errors, and a line for each stream as it completes. A cancel stops every stream (US1.0).
         /// </summary>
@@ -117,8 +117,8 @@ namespace TmDq.App.Processing
             return new RunOutcome(streams, completed.Select(r => r.Result).ToList(), observer.Errors.ToList());
         }
 
-        /// <summary>The lines the Qt application logs when a run starts (<c>MainViewModel::startProcessing</c> and the
-        /// coordinator's): the file, the streams with their sample periods, and how many run at once.</summary>
+        /// <summary>The lines logged when a run starts, in v2.14.2's words: the file, the streams with their sample
+        /// periods, and how many run at once.</summary>
         public static IReadOnlyList<string> Summary(RunRequest request)
         {
             var lines = new List<string>
@@ -146,7 +146,7 @@ namespace TmDq.App.Processing
             _ => throw new ArgumentOutOfRangeException(nameof(period), period, null),
         };
 
-        /// <summary>The line logged for a stream that completed, as the Qt main window writes it.</summary>
+        /// <summary>The line logged for a stream that completed, in v2.14.2's words.</summary>
         public static string Completed(ProcessedStream s) =>
             $"  {s.Label}: {s.TimesSec.Length.ToString(CultureInfo.InvariantCulture)} samples, " +
             $"{s.Channels.Count.ToString(CultureInfo.InvariantCulture)} channel(s)";
@@ -189,9 +189,9 @@ namespace TmDq.App.Processing
     }
 
     /// <summary>
-    /// Passes a run's log on in the Qt application's order, one line at a time. While the run is being started the
-    /// lines are held: those written on the starting thread are the job builder's, which the Qt application logged before
-    /// its summary; anything the run's own threads say in that moment follows the summary.
+    /// Passes a run's log on in v2.x's order, one line at a time. While the run is being started the lines are held:
+    /// those written on the starting thread are the job builder's, which come before the summary; anything the run's
+    /// own threads say in that moment follows the summary.
     /// </summary>
     public sealed class RunLogOrder : IRunLog
     {

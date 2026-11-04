@@ -4,7 +4,7 @@ using System.IO;
 namespace TmDq.App.Services
 {
     /// <summary>
-    /// Help &gt; User Manual, as the Qt application opens it: the full illustrated manual when the installer put it beside
+    /// Help &gt; User Manual, as v2.x opened it: the full illustrated manual when the installer put it beside
     /// the application (an optional component, so its absence is normal), else the base manual, compiled in and written
     /// to the temporary folder for the browser to open.
     /// </summary>

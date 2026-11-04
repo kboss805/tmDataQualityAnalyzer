@@ -4,7 +4,7 @@ using Avalonia.Styling;
 namespace TmDq.App.Views
 {
     /// <summary>
-    /// The plot's colours in each theme (US9.0), the Qt <c>PlotWidget::applyTheme</c>'s and its legend's: the chart's
+    /// The plot's colours in each theme (US9.0), v2.x's for the chart and its legend: the chart's
     /// background, axes and text, grid, title, and the translucent legend and chips over it. A series keeps its own
     /// colour in both.
     /// </summary>

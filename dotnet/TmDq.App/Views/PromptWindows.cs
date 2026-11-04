@@ -9,7 +9,7 @@ using TmDq.App.Plot;
 namespace TmDq.App.Views
 {
     /// <summary>A small modal question with OK and Cancel (Enter and Escape), closing with its answer or null: the base of the
-    /// plot's prompts (plan step 4.4), the Qt <c>QInputDialog</c> and <c>QColorDialog</c>.</summary>
+    /// plot's prompts (plan step 4.4): text, a number, a time window and a colour.</summary>
     public abstract class PromptWindow<T> : Window
     {
         protected PromptWindow(string title)

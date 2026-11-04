@@ -25,8 +25,8 @@ struct Cell
     double value;
 };
 
-/// A time rounded to whole milliseconds, halves away from zero, computed the way `qRound` does it
-/// (add or subtract a half and truncate) so even the values where that differs from `std::round` agree:
+/// A time rounded to whole milliseconds, halves away from zero, by adding or subtracting a half and
+/// truncating - which v2.14's export did, so even the values where that differs from `std::round` agree:
 /// -62.5 ms is -63, not -62, and 0.49999999999999994 is 1.
 std::int64_t toMilliseconds(double seconds)
 {

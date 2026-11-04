@@ -18,7 +18,7 @@ namespace TmDq.App.Templates
     public sealed record FileCheck(string FilePath, bool Ok, string Reason);
 
     /// <summary>
-    /// The batch's rules without a window (plan step 4.7, US1.1), the Qt <c>BatchController</c>'s: a file matches a
+    /// The batch's rules without a window (plan step 4.7, US1.1), as v2.x had them: a file matches a
     /// template when its PCM channel ids are exactly the template's (the core's <c>TemplateMatcher</c>), a template is
     /// captured from one processed recording and the plot's series, and a template's names and colours are put back on a
     /// recording's fresh series.
@@ -62,7 +62,7 @@ namespace TmDq.App.Templates
         }
 
         /// <summary>
-        /// A template captured from <paramref name="source"/>, as the Qt <c>buildTemplate</c> captures it: this
+        /// A template captured from <paramref name="source"/>, as v2.x captured it: this
         /// application's version, the recording's name up to its first dot, the time channel's place and the byte order,
         /// every row, and for each row the name and colour of every series it gave (of that recording, on its channel).
         /// </summary>
@@ -78,8 +78,8 @@ namespace TmDq.App.Templates
                     .ToList())).ToList());
 
         /// <summary>
-        /// Puts <paramref name="template"/>'s names and colours back on <paramref name="sourceId"/>'s series, as the Qt
-        /// <c>applyAppearance</c> does: each look goes to the first series of that recording with its channel, metric,
+        /// Puts <paramref name="template"/>'s names and colours back on <paramref name="sourceId"/>'s series, as v2.x
+        /// put them back: each look goes to the first series of that recording with its channel, metric,
         /// receiver and channel index; then one refresh.
         /// </summary>
         public static void ApplyAppearance(ProcessingTemplate template, int sourceId, PlotViewModel plot)
@@ -97,7 +97,7 @@ namespace TmDq.App.Templates
             plot.CommitAppearance();
         }
 
-        /// <summary>A file name as the Qt <c>QFileInfo::baseName</c> takes it: up to its first dot.</summary>
+        /// <summary>A file name up to its first dot (all of it without one), as v2.x named a template.</summary>
         public static string BaseName(string fileName)
         {
             int dot = fileName.IndexOf('.', StringComparison.Ordinal);

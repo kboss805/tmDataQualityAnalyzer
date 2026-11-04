@@ -3,7 +3,7 @@ using TmDq.Core;
 namespace TmDq.App.Processing
 {
     /// <summary>
-    /// The Frame Sync Lock settings a stream starts with: PRN15, as the Qt application's defaults in include/constants.h
+    /// The Frame Sync Lock settings a stream starts with: PRN15, as the defaults in include/constants.h
     /// (kDefaultFrameSyncLockPattern, kDefaultFrameSyncMask, kDefaultFrameSyncLockBits) and the shipped
     /// settings/framesync_patterns/framesync_PRN15.toml have them. A test holds these to the header.
     /// </summary>

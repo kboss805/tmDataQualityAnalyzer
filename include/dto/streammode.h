@@ -3,7 +3,7 @@
  * @brief How a single PCM stream is processed.
  *
  * Its own header so the core's input (ProcessingParams) can name a mode without pulling in
- * StreamConfig, which carries Qt types for the dialogs.
+ * anything else.
  */
 
 #ifndef STREAMMODE_H

@@ -6,8 +6,8 @@ using TmDq.Core;
 namespace TmDq.App.Streams
 {
     /// <summary>
-    /// One stream's settings in Configure Streams: what the Qt application's StreamConfig carries (US1.0, US2.0, US2.1),
-    /// plus the row state that dialog keeps beside it. Immutable: every rule in <see cref="StreamRules"/> takes a setup
+    /// One stream's settings in Configure Streams: what the core's <c>StreamConfig</c> carries (US1.0, US2.0, US2.1),
+    /// plus the row state the dialog keeps beside it. Immutable: every rule in <see cref="StreamRules"/> takes a setup
     /// and returns a new one, so each can be tested on its own. The core's view of it is
     /// <see cref="StreamRules.ToStreamConfig"/>.
     /// </summary>
@@ -28,7 +28,7 @@ namespace TmDq.App.Streams
         public StreamMode Mode { get; init; } = StreamMode.FrameSyncLock;
 
         /// <summary>The setup dialog was accepted for this row (or it received an Apply to all) in its current mode.
-        /// Unlike the Qt dialog, a Mode change clears it: the row then holds the other mode's settings.</summary>
+        /// Unlike v2.x, a Mode change clears it: the row then holds the other mode's settings.</summary>
         public bool Configured { get; init; }
 
         /// <summary>The mode the frame-sync settings below belong to. When the dialog opens in another mode, that mode's

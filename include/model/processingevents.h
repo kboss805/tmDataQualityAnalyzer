@@ -1,17 +1,16 @@
 /**
  * @file processingevents.h
- * @brief How the processing core reports what it is doing, without Qt.
+ * @brief How the processing core reports what it is doing.
  *
- * The processing classes used to be `QObject`s that emitted signals: a log line, an
- * error, "finished". Signals meant the core needed
- * `moc`, a thread with an event loop, and a `QString` for every message. This interface
- * replaces them with a plain callback the core calls, so the core links nothing from Qt
- * and can sit behind a C ABI (the callbacks map onto a table of function pointers).
+ * The processing classes report a log line, an error, progress and "finished" through
+ * this interface: a plain callback the core calls, with no event loop and no thread of
+ * its own, so the core can sit behind a C ABI (the callbacks map onto a table of
+ * function pointers).
  *
  * **Threading contract.** Every method is called on the thread that is running the
  * processing (a worker thread, in production), in the order the events happen. An
  * implementation that must deliver them somewhere else - the UI thread - has to do its
- * own hand-off; `qtprocessingevents.h` is the Qt one. Messages are UTF-8.
+ * own hand-off. Messages are UTF-8.
  *
  * Calls arrive in order per source. Which events a source raises depends on what it is:
  * `FrameProcessor` raises log / error / finished, and `processingFinished` is always its

@@ -23,10 +23,10 @@ using Xunit;
 namespace TmDq.App.Tests
 {
     /// <summary>
-    /// Templates and batch (plan step 4.7, US1.1). The template's oracle is the Qt application: the three files under
-    /// Templates/ were written by the Qt <c>ProcessingTemplateSchema</c> through the Qt app's own write (a throwaway case
-    /// in its suite, since removed), so the app must read them as written and write their very bytes. The batch is the Qt
-    /// <c>BatchController</c>'s loop, its messages word for word, run over copies of the PRN sample.
+    /// Templates and batch (plan step 4.7, US1.1). The template's oracle is v2.14.2 (the Qt application): the three
+    /// files under Templates/ were written by its own template writer (a throwaway case in its suite, since removed),
+    /// so the app must read them as written and write their very bytes. The batch is v2.14.2's batch loop, its
+    /// messages word for word, run over copies of the PRN sample.
     /// </summary>
     [Collection(NativeCoreCollection.Name)]
     public sealed class TemplateTests : IDisposable
@@ -57,10 +57,10 @@ namespace TmDq.App.Tests
             return template!;
         }
 
-        // ---- the file, against the Qt application's -----------------------------------------------------------------------
+        // ---- the file, against v2.14.2's ----------------------------------------------------------------------------------
 
         [Fact]
-        public void TheQtApplicationsTemplatesReadAsTheyWereWritten()
+        public void TheV214TemplatesReadAsTheyWereWritten()
         {
             ProcessingTemplate prn = Load(Fixture("prn-sample.json"));
             Assert.Equal(("2.14.2", "prn_testfile, sample", 0, true, 1), (prn.AppVersion, prn.Name, prn.TimeChannelIndex, prn.SwapBytes, prn.SchemaVersion));
@@ -105,7 +105,7 @@ namespace TmDq.App.Tests
         [InlineData("prn-sample.json")]
         [InlineData("calibrated.json")]
         [InlineData("empty.json")]
-        public void ATemplateIsWrittenAsTheQtApplicationWritesIt(string name)
+        public void ATemplateIsWrittenAsV214WroteIt(string name)
         {
             string path = Path.Combine(_dir, name);
             TemplateFile.Write(path, Load(Fixture(name)));
@@ -120,7 +120,7 @@ namespace TmDq.App.Tests
         [InlineData(-0.5, "-0.5")]
         [InlineData(1e-7, "1e-07")]
         [InlineData(1e21, "1e+21")]
-        public void ADoubleIsWrittenAsQtWritesOne(double value, string text) => Assert.Equal(text, TemplateFile.Number(value));
+        public void ADoubleIsWrittenAsTheShortestTextThatReadsBack(double value, string text) => Assert.Equal(text, TemplateFile.Number(value));
 
         [Fact]
         public void WhatATemplateLeavesOutIsLeftOutAndAControlCharacterIsEscaped()
@@ -129,7 +129,7 @@ namespace TmDq.App.Tests
             string json = TemplateFile.ToJson(new ProcessingTemplate("v", "n", 0, true, new[] { new TemplateEntry(row, Array.Empty<SeriesAppearance>()) }));
             Assert.DoesNotContain("appearance", json);
             Assert.DoesNotContain("calibration", json);
-            Assert.Contains("\"label\": \"a\\u0001b\\u001f\"", json);   // Qt's lower-case hex, up to 0x1f
+            Assert.Contains("\"label\": \"a\\u0001b\\u001f\"", json);   // \u and four lower-case hex digits, up to 0x1f
             // A template read at an older schema version is written at the current one.
             Assert.Contains("\"schemaVersion\": 1", TemplateFile.ToJson(Parse("{\"schemaVersion\": 0, \"entries\": []}")));
             Assert.DoesNotContain("\r", json);
@@ -144,7 +144,7 @@ namespace TmDq.App.Tests
             Assert.DoesNotContain("Points", withCal);
         }
 
-        // ---- the reader's rules, the Qt schema's ----------------------------------------------------------------------------
+        // ---- the reader's rules, v2.14.2's schema's -------------------------------------------------------------------------
 
         [Theory]
         [InlineData("not json", TemplateLoad.InvalidJson)]
@@ -156,7 +156,7 @@ namespace TmDq.App.Tests
         [InlineData("{\"schemaVersion\": 1, \"entries\": {}}", TemplateLoad.InvalidFormat)]
         [InlineData("{\"schemaVersion\": 1, \"entries\": []}", TemplateLoad.Loaded)]
         [InlineData("{\"schemaVersion\": 0, \"entries\": []}", TemplateLoad.Loaded)]
-        public void ATemplateIsRefusedForWhatTheQtSchemaRefuses(string json, TemplateLoad expected)
+        public void ATemplateIsRefusedForWhatV214Refused(string json, TemplateLoad expected)
         {
             Assert.Equal(expected, TemplateFile.Parse(json, out ProcessingTemplate? template, out string error));
             Assert.Equal(expected == TemplateLoad.Loaded, template is not null);
@@ -211,7 +211,7 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
-        public void AnAppearanceReadsItsMetricAndColourAsQtReadsThem()
+        public void AnAppearanceReadsItsMetricAndColourAsV214ReadThem()
         {
             ProcessingTemplate t = Parse("""
                 {"schemaVersion": 1, "entries": [

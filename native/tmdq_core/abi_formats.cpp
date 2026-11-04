@@ -3,8 +3,8 @@
  * @brief The file formats and small pure functions of the core, through the C ABI: the frame-sync pattern file,
  *        the receiver-parameters file, template matching, CSV import and export, and clock stamps.
  *
- * Only translation. Each of these is a Qt-free core function the Qt application also calls (the dialogs,
- * `BatchController::matchFile`, `PlotViewModel`), so a host and the application cannot disagree about a format.
+ * Only translation. Each of these is a core function, so the format and its rules live in one place and what one
+ * host writes, another reads.
  */
 
 #include "tmdq_abi.h"

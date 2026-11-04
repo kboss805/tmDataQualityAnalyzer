@@ -1,13 +1,13 @@
 /**
  * @file framesyncfile.h
- * @brief Qt-free reader and writer of the frame-sync pattern file (US1.0 / US2.0 / US5.0).
+ * @brief Reader and writer of the frame-sync pattern file (US1.0 / US2.0 / US5.0).
  *
  * A pattern file carries what describes the recording's PCM code format and framing: the sync pattern,
  * its mask, the frame length in bits, and the two stream-format flags (Invert Data, Derandomize). It
  * does NOT carry Data Rate or Sample Rate - those are per-session operator inputs (US1.0). The dialogs
  * that load and save one, and the Receiver SNR defaults file that has the same layout
  * (`settings/framesync_patterns/framesync_rcvr_default.toml`), read it through here so the format has
- * one implementation (de-Qt, plan step 1.4). Putting the values into widgets stays with the dialogs.
+ * one implementation (plan step 1.4). Putting the values into widgets stays with the dialogs.
  *
  * Layout: a `[Frame]` section with `FrameSync`, `FrameSyncMask`, `BitsPerFrame`, `Inverted` and
  * `Randomized`; the older `WordsInMinorFrame` (16-bit words) is still read for files saved before

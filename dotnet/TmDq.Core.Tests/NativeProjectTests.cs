@@ -10,7 +10,7 @@ namespace TmDq.Core.Tests;
 /// <summary>
 /// The two native projects' source lists against the files on disk. MSBuild compiles only what a project lists, so a
 /// core source left out of tmdq_core.vcxproj is a link error at best, and a test file left out of
-/// tmdq_core_tests.vcxproj is a suite that silently never runs. Since the Qt application went (plan step 6.1), every
+/// tmdq_core_tests.vcxproj is a suite that silently never runs. Since the v2.x application went (plan step 6.1), every
 /// source in src/model is a core source, and these checks are the only ones that hold the projects to the disk.
 /// </summary>
 public class NativeProjectTests

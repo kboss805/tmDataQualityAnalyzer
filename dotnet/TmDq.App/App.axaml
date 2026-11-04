@@ -16,7 +16,7 @@
   </Application.Styles>
   <Application.Resources>
     <ResourceDictionary>
-      <!-- The menu's icons, drawn from the Qt application's resources: the folder and the floppy disk carry their own
+      <!-- The menu's icons, drawn after v2.x's: the folder and the floppy disk carry their own
            colours and read in both themes; the export and import arrows are a shade for each theme. -->
       <DrawingImage x:Key="OpenIcon">
         <DrawingGroup>
@@ -58,8 +58,8 @@
         </DrawingGroup>
       </DrawingImage>
       <!-- The colours of what the application draws itself, in each theme (US9.0, plan step 4.8): the chips and the
-           "Loading..." label over the chart (the Qt overlay bar's and loading label's), and the log sidebar's panel (the
-           Qt themes' text browser). The chart and its legend take theirs from ChartPalette. -->
+           "Loading..." label over the chart, and the log sidebar's panel, each in v2.x's colours. The chart and its
+           legend take theirs from ChartPalette. -->
       <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Light">
           <SolidColorBrush x:Key="ChipBackground" Color="#B9FFFFFF" />

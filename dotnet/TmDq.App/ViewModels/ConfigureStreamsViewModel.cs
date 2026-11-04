@@ -56,7 +56,7 @@ namespace TmDq.App.ViewModels
 
         public ObservableCollection<StreamRowViewModel> Rows { get; }
 
-        /// <summary>"&lt;id&gt; - &lt;name&gt;" for each time channel, as the Qt dialog lists them.</summary>
+        /// <summary>"&lt;id&gt; - &lt;name&gt;" for each time channel, as v2.x listed them.</summary>
         public IReadOnlyList<string> TimeChannelItems { get; }
 
         public bool HasTimeChannels => _timeChannels.Count > 0;
@@ -72,7 +72,7 @@ namespace TmDq.App.ViewModels
         public bool LegacyChapter10 { get => _legacyChapter10; set => SetProperty(ref _legacyChapter10, value); }
 
         /// <summary>The "All" box: setting it sets every row's Process. Rows changed one at a time do not change it, as in
-        /// the Qt dialog.</summary>
+        /// v2.x.</summary>
         public bool All
         {
             get => _all;
@@ -110,7 +110,7 @@ namespace TmDq.App.ViewModels
             int index = Rows.IndexOf(row);
             if (index < 0 || !row.Setup.Process || _dialogs is null) return;
             // A calibration is extracted with the time channel selected here and the recording's byte order, as the run
-            // will read the data it calibrates (the Qt dialog used the recording's first time channel whatever was chosen).
+            // will read the data it calibrates (v2.x used the recording's first time channel whatever was chosen).
             var setup = new StreamSetupViewModel(StreamRules.ForEditing(row.Setup, _appRoot), _files, _appRoot, _lastFolder,
                                                  TimeChannelId, !LegacyChapter10, _dialogs, _calibrationFiles, _lastCalFolder);
             await _dialogs.EditStreamAsync(setup);
@@ -172,14 +172,14 @@ namespace TmDq.App.ViewModels
 
         public bool Process { get => Setup.Process; set => Setup = Setup with { Process = value }; }
 
-        /// <summary>The Mode list's index, in the Qt dialog's order: 0 Receiver SNR, 1 Frame Sync Lock.</summary>
+        /// <summary>The Mode list's index, in v2.x's order: 0 Receiver SNR, 1 Frame Sync Lock.</summary>
         public int ModeIndex
         {
             get => Setup.Mode == StreamMode.FrameSyncLock ? 1 : 0;
             set => Setup = StreamRules.WithMode(Setup, value == 1 ? StreamMode.FrameSyncLock : StreamMode.ReceiverChannelInfo);
         }
 
-        /// <summary>The gear is available only on a checked row, as in the Qt dialog.</summary>
+        /// <summary>The gear is available only on a checked row, as in v2.x.</summary>
         public bool CanConfigure => Setup.Process;
 
         public Readiness Readiness => StreamRules.ReadinessOf(Setup);

@@ -15,7 +15,7 @@ using Xunit;
 namespace TmDq.App.Tests
 {
     /// <summary>
-    /// What is remembered between sessions (plan step 4.8): the preferences file, the Qt application's settings imported
+    /// What is remembered between sessions (plan step 4.8): the preferences file, v2.x's settings imported
     /// from INI files QSettings wrote, the recent-files rules, and the main window's view model keeping each preference.
     /// </summary>
     [Collection(NativeCoreCollection.Name)]
@@ -31,13 +31,13 @@ namespace TmDq.App.Tests
 
         private static string Prn => Repo.Recording("prn_testfile, sample.ch10");
 
-        // ---- the Qt application's settings, as QSettings wrote them --------------------------------------------------
+        // ---- v2.x's settings, as QSettings wrote them ---------------------------------------------------------------
 
         [Fact]
-        public void TheQtApplicationsSettingsReadAsQSettingsWroteThem()
+        public void TheV2SettingsReadAsV214WroteThem()
         {
-            // Written by Qt 6.12's QSettings in INI format (a throwaway program, kept byte for byte): every key the Qt
-            // application keeps, with commas, a semicolon, an equals sign, a quote, a backslash, a leading space and
+            // Written by Qt 6.12's QSettings in INI format (a throwaway program, kept byte for byte): every key
+            // v2.14.2 keeps, with commas, a semicolon, an equals sign, a quote, a backslash, a leading space and
             // non-ASCII in the values.
             Preferences all = QtSettingsImport.Read(Fixture("everything.ini"));
             Assert.Equal(("light", false, false, false), (all.Theme, all.IsDark, all.SidebarVisible, all.LegendVisible));
@@ -153,7 +153,7 @@ namespace TmDq.App.Tests
             foreach (string f in new[] { "a", "b", "c", "d", "e", "f" }) files = RecentFiles.Add(files, f);
             Assert.Equal(new[] { "f", "e", "d", "c", "b" }, files);
             Assert.Equal(new[] { "c", "f", "e", "d", "b" }, RecentFiles.Add(files, "c"));
-            Assert.Equal(new[] { "C", "f", "e", "d", "c" }, RecentFiles.Add(files, "C"));   // the Qt list's exact match
+            Assert.Equal(new[] { "C", "f", "e", "d", "c" }, RecentFiles.Add(files, "C"));   // case-sensitive
             Assert.Equal(new[] { "b", "d" }, RecentFiles.Prune(new[] { "", "b", "x", "d" }, f => f != "x"));
             Assert.Equal(5, RecentFiles.Prune(new[] { "1", "2", "3", "4", "5", "6" }, _ => true).Count);
         }
@@ -182,7 +182,7 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
-        public void TheFirstRunImportsTheQtSettingsOnceAndThenKeepsItsOwn()
+        public void TheFirstRunImportsTheV2SettingsOnceAndThenKeepsItsOwn()
         {
             string folder = Folder("first");
             string recording = Path.Combine(_dir, "flight.ch10");
@@ -196,7 +196,7 @@ namespace TmDq.App.Tests
             Assert.Equal(_dir, store.Current.LastFolder);
             Assert.True(File.Exists(Path.Combine(folder, PreferencesStore.FileName)), "the import was not written as this application's");
 
-            // From then on, this application's file is the one read, whatever the Qt application writes.
+            // From then on, this application's file is the one read, whatever v2.x writes.
             store.Update(p => p with { Theme = Preferences.DarkTheme });
             File.WriteAllText(Path.Combine(folder, PreferencesStore.QtFileName), "[General]\r\nTheme=light\r\nLegendVisible=false\r\n");
             Preferences again = PreferencesStore.Load(folder).Current;
@@ -277,7 +277,7 @@ namespace TmDq.App.Tests
             Assert.NotEqual(a, a with { LastCalibrationFolder = "f" });
             Assert.False(a.Equals(null));
             Assert.False(new Preferences { Theme = "light" }.IsDark);
-            Assert.True(new Preferences { Theme = "anything" }.IsDark);   // as the Qt application reads its setting
+            Assert.True(new Preferences { Theme = "anything" }.IsDark);   // all but "light" is dark, as v2.x read it
         }
 
         // ---- the main window keeps each preference --------------------------------------------------------------------

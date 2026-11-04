@@ -1,15 +1,14 @@
 // Series construction: how processed streams become plot series on one shared time axis (the series a stream yields,
 // their names and indices, the elapsed axis, re-basing across sources, the order an imported CSV's streams are given).
-// No Qt; the core half of the Qt TestSeriesBuild. That suite pinned this logic through PlotViewModel, whose data half is
-// orchestration over the core's functions (buildStreamSeries, SeriesTimeBase, assignImportedStreamOrders): drop a
-// stream's earlier series, judge overlap, move the base, build, sort, range, remove a source and move the base back.
-// The scenarios here run on `Plot`, a small host written over std types that does what the plot does with those
-// functions, so every recorded expectation is the core's answer in the plot's sequence. The ViewModel itself (its signals,
-// its storage, its colours) stays in TestSeriesBuild, which keeps one scenario for each thing the plot does.
+// The plot's data half is orchestration over the core's functions (buildStreamSeries, SeriesTimeBase,
+// assignImportedStreamOrders): drop a stream's earlier series, judge overlap, move the base, build, sort, range,
+// remove a source and move the base back. The scenarios here run on `Plot`, a small host written over std types that
+// does what the plot does with those functions, so every recorded expectation is the core's answer in the plot's
+// sequence. The view model itself (its storage, its colours) is the application's to test.
 //
-// The Qt suite compared the plot with the code the core replaced (the old addStreamData / removeSource / clearData and the
-// CSV commit's stream ordering) over generated sequences. That code is restated here over std types, sharing nothing with
-// the core's functions but the column schema's naming, and compared with `Plot` the same way.
+// The oracle is the code v2.14.2 ran before the core had these functions (its plot view model's addStreamData /
+// removeSource / clearData and the CSV commit's stream ordering), restated here over std types, sharing nothing with
+// the core's functions but the column schema's naming, and compared with `Plot` over generated sequences.
 
 #include <algorithm>
 #include <cmath>
@@ -57,7 +56,7 @@ struct Series
     double yMax = std::numeric_limits<double>::lowest();
 };
 
-/// `QString::number(v, 'g', 17)`, and the spellings Qt gives the specials.
+/// `v` in %g with 17 significant digits; a NaN prints "nan" and an infinity "inf" or "-inf".
 std::string num(double v)
 {
     if (std::isnan(v))
@@ -1122,7 +1121,7 @@ void assignImportedOrders(std::vector<Series>& series)
     {
         if (s.metricType == MetricType::SNR && !s.streamLabel.empty())
         {
-            label_to_stream_order[s.sourceId][s.streamLabel] = s.streamOrder;   // QMap::insert replaces, std::map::insert does not
+            label_to_stream_order[s.sourceId][s.streamLabel] = s.streamOrder;   // the last wins
         }
         next_stream_order = std::max(next_stream_order, s.streamOrder + 1);
     }
@@ -1153,7 +1152,7 @@ void assignImportedOrders(std::vector<Series>& series)
 
 namespace {
 
-/// A deterministic generator (the Qt suite's, state for state), so a failure names the same case every run.
+/// A deterministic generator, so a failure names the same case every run.
 struct Rng
 {
     std::uint32_t state;

@@ -22,7 +22,7 @@ namespace TmDq.App.Tests
         }
 
         [AvaloniaFact]
-        public void TheWindowIsTitledAsTheQtApplicationIs()
+        public void TheWindowIsTitledTmDataQualityAnalyzer()
         {
             MainWindow window = Show();
             Assert.Equal("TM Data Quality Analyzer", window.Title);

@@ -6,8 +6,8 @@ namespace TmDq.App.Streams
 {
     /// <summary>
     /// The setup dialogs' Load and Save buttons (US1.0, US5.0, US5.1): the frame-sync pattern file and the
-    /// receiver-parameters file, read and written by the core (plan rule 5), applied to a row the way the Qt dialogs
-    /// apply them. The one deliberate difference: a save that fails says so (the Qt frame-sync save ignored it).
+    /// receiver-parameters file, read and written by the core (plan rule 5), applied to a row the way v2.x applied
+    /// them. The one deliberate difference: a save that fails says so (v2.x's frame-sync save ignored the failure).
     /// </summary>
     public static class StreamFiles
     {
@@ -79,7 +79,7 @@ namespace TmDq.App.Streams
         public const string StepCalFolder = "rcvr_cals";
 
         /// <summary>Where a Load dialog starts: the shipped <paramref name="subfolder"/> of settings/ when it is there, else
-        /// the last folder a file was loaded from or saved to (as the Qt dialogs' settingsSubdir). A Save starts at the
+        /// the last folder a file was loaded from or saved to (as in v2.x). A Save starts at the
         /// last folder.</summary>
         public static string? LoadFolder(string? appRoot, string subfolder, string? lastFolder)
         {
@@ -88,7 +88,7 @@ namespace TmDq.App.Streams
             return Directory.Exists(shipped) ? shipped : lastFolder;
         }
 
-        /// <summary>The path with ".toml" added when its file name has no extension, as the Qt save dialogs do.</summary>
+        /// <summary>The path with ".toml" added when its file name has no extension, as v2.x added it.</summary>
         public static string WithTomlExtension(string path) => Path.HasExtension(path) ? path : path + ".toml";
     }
 }

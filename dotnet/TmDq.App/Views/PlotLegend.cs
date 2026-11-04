@@ -14,7 +14,7 @@ using TmDq.App.Plot;
 namespace TmDq.App.Views
 {
     /// <summary>
-    /// The legend that floats over the chart (plan step 4.4), the Qt <c>PlotLegendOverlay</c>: a translucent rounded box of
+    /// The legend that floats over the chart (plan step 4.4, US4.0): a translucent rounded box of
     /// rows, each a line swatch in the series' colour and its label, that scrolls once it reaches its cap (a fraction of the
     /// chart, so a dense plot cannot bury the data) and can be dragged anywhere inside the chart. It sits at the top right
     /// until it is dragged, and is kept inside the chart afterwards. What it lists is the plot's business

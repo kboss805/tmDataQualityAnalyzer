@@ -1,12 +1,12 @@
 // SeriesColumnSchema: the CSV column-header format and its inverse parser, pinned as a round trip so export and import
-// cannot drift. No Qt; ported from the Qt TestSeriesColumnSchema, whose cases are all here under the same descriptions.
+// cannot drift (ported in plan step 2.4).
 //
-// The Qt suite compared the parser with the QString implementation it replaced, over 40,000 generated headers. The
-// doctest binary has Qt in neither the code nor the test, so what that implementation answered was recorded once with a
-// throwaway diagnostic in the Qt suite (removed again): one FNV-1a digest over its answer for every generated header
-// (the header's metric, name, label, order, receiver and source), and the counters the reach check reads. The
-// generator below is the Qt suite's, token for token, driven by the same mt19937 seed, so it produces the same
-// headers. The formatters have no parsing in them, so for those a second way of writing the grammar stands in.
+// The oracle for the parser is the implementation v2.14.2 ran before the schema moved into the core, over 40,000
+// generated headers. What it answered was recorded once with a throwaway diagnostic (removed again): one FNV-1a digest
+// over its answer for every generated header (the header's metric, name, label, order, receiver and source), and the
+// counters the reach check reads. The generator below is the one that recording used, token for token, driven by the
+// same mt19937 seed, so it produces the same headers. The formatters have no parsing in them, so for those a second
+// way of writing the grammar stands in.
 
 #include <cstdint>
 #include <format>
@@ -251,7 +251,7 @@ TEST_CASE("SeriesColumnSchema: the source id round-trips")
 }
 
 // ---------------------------------------------------------------------------------------------
-// Edge cases. Written against the QString implementation before the schema moved into the Qt-free core, so they record
+// Edge cases. Written against v2.14.2's implementation before the schema moved into the core, so they record
 // what a header resolves to today rather than what the std::string rewrite happens to do.
 // ---------------------------------------------------------------------------------------------
 
@@ -305,7 +305,7 @@ TEST_CASE("SeriesColumnSchema: parse edge cases keep their recorded behaviour")
         { "qualifier-lower-case-s",     "s1| a",            0, "s1| a",        "",     0, 0, 0 },
         { "qualifier-negative",         "S-1| a",           0, "S-1| a",       "",     0, 0, 0 },
 
-        // --- text outside ASCII (UTF-16 in Qt, UTF-8 in the core) --------------------------------
+        // --- text outside ASCII (UTF-16 in v2.14.2, UTF-8 in the core) ---------------------------
         { "non-ascii-lock",             "R\xC3\xA9" "cepteur \xCE\xA9 Lock (%)", 1, "R\xC3\xA9" "cepteur \xCE\xA9",
           "R\xC3\xA9" "cepteur \xCE\xA9", 0, 0, 0 },
         { "non-ascii-snr",              "40 - R\xC3\xA9" "cepteur \xCE\xA9 L_RCVR2", 0,
@@ -352,8 +352,8 @@ TEST_CASE("SeriesColumnSchema: format edge cases keep their recorded behaviour")
 }
 
 // ---------------------------------------------------------------------------------------------
-// The generated headers. The generator is the Qt suite's, driven by the same seed; the digest and counters below are
-// what the QString implementation answered for them (see the top of the file).
+// The generated headers. The generator is the recording's, driven by the same seed; the digest and counters below are
+// what v2.14.2's implementation answered for them (see the top of the file).
 // ---------------------------------------------------------------------------------------------
 
 namespace {
@@ -415,7 +415,7 @@ std::string generateHeader(std::mt19937& rng)
 
 } // namespace
 
-TEST_CASE("SeriesColumnSchema: reads every generated header as the QString implementation did")
+TEST_CASE("SeriesColumnSchema: reads every generated header as v2.14 did")
 {
     std::mt19937 rng(20261021u);
     constexpr int kHeaders = 40000;
@@ -446,7 +446,7 @@ TEST_CASE("SeriesColumnSchema: reads every generated header as the QString imple
 
     CHECK(digest == 6058731668784468133ULL);
 
-    // The counters the QString implementation reached, and so the volume the generator reaches.
+    // The counters v2.14.2's implementation reached, and so the volume the generator reaches.
     CHECK(metricSeen[0] == 31209);   // SNR
     CHECK(metricSeen[1] == 6181);    // lock
     CHECK(metricSeen[2] == 2610);    // missed frames
@@ -530,7 +530,7 @@ TEST_CASE("SeriesColumnSchema: the formatters agree with the grammar written ano
 
 TEST_CASE("SeriesColumnSchema: a name that looks like a source qualifier does not round-trip")
 {
-    // A limitation of the FORMAT, present before the schema moved into the Qt-free core and kept as it was: source 0 is
+    // A limitation of the FORMAT, present before the schema moved into the core and kept as it was: source 0 is
     // written with no qualifier, so a series whose own NAME begins with "S<n>| " is read back as source <n> with the
     // rest as its name. Series names come from TMATS stream labels, so this needs a recording labelled like that;
     // pinned so a change to the format is a decision, not an accident.

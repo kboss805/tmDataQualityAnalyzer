@@ -1,6 +1,6 @@
 /**
  * @file textfile.cpp
- * @brief UTF-8 text-file reading for the Qt-free core. See textfile.h.
+ * @brief UTF-8 text-file reading for the native core. See textfile.h.
  */
 
 #include "textfile.h"
@@ -37,8 +37,8 @@ void appendUtf8(std::string& out, char32_t cp)
     }
 }
 
-/// Decodes UTF-16 (after its BOM) into UTF-8. An unpaired surrogate becomes U+FFFD, as
-/// Qt's decoder would make it.
+/// Decodes UTF-16 (after its BOM) into UTF-8. An unpaired surrogate becomes U+FFFD, the
+/// replacement character (pinned by test_textfile.cpp).
 std::string utf16ToUtf8(const std::string& bytes, std::size_t offset, bool big_endian)
 {
     std::string out;

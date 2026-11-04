@@ -1,7 +1,6 @@
 // PipelineRunner: the single-reader / parallel-worker pipeline, with a plain recording sink and no event loop, on the
-// committed step_cal recording. No Qt; ported from the Qt TestPipelineRunner, whose cases are all here under the same
-// descriptions. The throughput guard (the Qt TestProcessingCoordinator's benchmarkHeavyWorkloadSingleVsMultiStream)
-// lives here too: it measures the runner, not the coordinator around it, and it needs no Qt to do it.
+// committed step_cal recording (ported in plan step 2.4). The throughput guard lives here too: it measures the runner
+// itself, not anything a host puts around it.
 
 #include <algorithm>
 #include <atomic>
@@ -772,8 +771,8 @@ TEST_CASE("PipelineRunner: destroying a running runner stops it and reports the 
 // ---------------------------------------------------------------------------------------------------------------------
 //
 // The decommutation pipeline - one reader, N parallel workers, a bit-serial frame-sync scanner over every bit of the
-// recording - has a performance guard only because this case exists. It was the Qt TestProcessingCoordinator's
-// benchmarkHeavyWorkloadSingleVsMultiStream, and was inert three ways: it asserted nothing, nothing set the variable
+// recording - has a performance guard only because this case exists. Its v2.x predecessor, a benchmark of the
+// application's processing coordinator, was inert three ways: it asserted nothing, nothing set the variable
 // that enabled it, and it read a recording that could not satisfy it. See scripts\run_throughput_bench.ps1.
 //
 // It walks a ~640 MB recording nine times (four channel probes, four solo runs, one parallel run) and takes minutes,

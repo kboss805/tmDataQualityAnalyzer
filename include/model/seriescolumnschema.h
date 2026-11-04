@@ -7,10 +7,9 @@
  * back. Formatting (PlotViewModel::exportCsv / addStreamData) and parsing
  * (CsvSeriesParser) MUST stay inverses — historically they lived apart with a
  * "keep in lockstep" comment. This module owns both sides so they can't drift,
- * and is covered by a round-trip test (tst_seriescolumnschema).
+ * and is covered by a round-trip test (native/tmdq_core_tests/test_seriescolumnschema.cpp).
  *
- * Part of the Qt-free core: text is UTF-8 `std::string`, and `TestCoreQtFree`
- * keeps it so. The callers that hold QStrings convert at the call.
+ * Part of the native core: text is UTF-8 `std::string`.
  */
 
 #ifndef SERIESCOLUMNSCHEMA_H
@@ -28,11 +27,9 @@ namespace SeriesColumnSchema
     /// names are qualified per metric (the bare name is shared by a stream's lock and
     /// missed-frames series and would otherwise export as two identical headers).
     ///
-    /// These lived in PlotConstants until the de-Qt work. They are a serialization
-    /// contract rather than plot presentation, and this file is already the documented
-    /// single source of truth for the CSV column format - so they belong here, next to
-    /// the code that formats and parses them. Keeping them in constants.h beside the
-    /// QColor palettes is also what forced the MODEL layer to include a QtGui header.
+    /// They are a serialization contract rather than plot presentation, and this file is
+    /// the documented single source of truth for the CSV column format - so they belong
+    /// here, next to the code that formats and parses them.
     inline constexpr const char* kTimeHeader          = "Time (DOY:HH:MM:SS.mmm)";
     inline constexpr const char* kLockSuffix          = " Lock (%)";
     inline constexpr const char* kMissedFramesSuffix  = " Accumulated Missed Frames";
@@ -71,8 +68,8 @@ namespace SeriesColumnSchema
     /// sources sharing a channel id/label never export as identical, ambiguous
     /// columns; parseColumnHeader() strips it back off before recovering identity.
     ///
-    /// Takes the three fields that make up a header rather than the plot's series
-    /// struct, which carries Qt types. Used by PlotViewModel::exportCsv().
+    /// Takes the three fields that make up a header rather than a whole series.
+    /// Used by CsvSeriesWriter::write().
     std::string columnHeader(MetricType metricType, const std::string& name, int sourceId);
 
     /// Inverse of columnHeader(): classify a data-column header and recover its
@@ -82,9 +79,9 @@ namespace SeriesColumnSchema
     /// SNR; otherwise a recognized metric suffix picks Lock/MissedFrames; anything
     /// else resolves as SNR with a bare name. Used by CsvSeriesParser::parse().
     ///
-    /// Numbers are read with `QString::toInt()`'s rules (textparse.h): surrounding
+    /// Numbers are read with `textparse::parseInteger` (base 10): surrounding
     /// whitespace and a leading '+' are tolerated, junk or overflow reads as "not a
-    /// number". Digits are ASCII only: Qt also treated Unicode digits as the start
+    /// number". Digits are ASCII only: v2.14 also treated Unicode digits as the start
     /// of an SNR id, which no export of this application produces.
     ParsedColumn parseColumnHeader(const std::string& header);
 }

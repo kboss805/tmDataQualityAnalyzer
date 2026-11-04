@@ -2,9 +2,8 @@
  * @file abi_series.cpp
  * @brief Series construction, the shared time base, stream identity and imported stream orders, through the C ABI.
  *
- * Only translation: `buildStreamSeries`, `SeriesTimeBase`, `streamKeyOf` and `assignImportedStreamOrders` are the
- * Qt-free core functions `PlotViewModel` calls, so a host and the application cannot disagree about which series
- * a stream yields or how the shared axis moves.
+ * Only translation: `buildStreamSeries`, `SeriesTimeBase`, `streamKeyOf` and `assignImportedStreamOrders` are core
+ * functions (seriesbuilder.h), so which series a stream yields and how the shared axis moves are decided there.
  */
 
 #include "tmdq_abi.h"

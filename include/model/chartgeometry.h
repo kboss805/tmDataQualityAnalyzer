@@ -1,10 +1,10 @@
 /**
  * @file chartgeometry.h
- * @brief Qt-free geometry of the plot: where a series' samples land in pixels, the line drawn through them, the band
+ * @brief Geometry of the plot: where a series' samples land in pixels, the line drawn through them, the band
  * that keeps a dense series honest, and where the ticks go.
  *
- * Moved out of the Qt chart, `TmChart` (plan step 4.3a, decision D1: the native core builds the geometry and each
- * application only strokes it), so the Qt chart and the Avalonia one draw from one implementation:
+ * In the native core (plan step 4.3a, decision D1: the core builds the geometry and the application only strokes
+ * it), so every chart that draws a series draws it from one implementation:
  *
  *  - the transforms between data values and the plot area's pixels;
  *  - a series' line, built from the samples in view only (with one on each side, so the line still enters and

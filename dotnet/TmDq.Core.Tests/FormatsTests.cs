@@ -12,7 +12,7 @@ namespace TmDq.Core.Tests;
 /// <summary>
 /// The file formats through the managed library: the frame-sync pattern file, template matching, the CSV export
 /// and import, and clock stamps. Every expected answer is what the core's own functions gave for the same input
-/// (<see cref="FormatsDigest"/>), so the managed side is compared with the code behind the Qt application, over
+/// (<see cref="FormatsDigest"/>), so the managed side is compared with the code behind v2.14.2, over
 /// a corpus that reaches the odd inputs: byte-order marks, UTF-16, legacy keys, padding, signs, overflow,
 /// malformed rows and times.
 /// </summary>

@@ -10,8 +10,8 @@ namespace TmDq.Core.Tests;
 
 /// <summary>
 /// The channel lists of the five committed recordings. The expected ids, names and TMATS rates are the ones
-/// TestChapter10Reader pins on the Qt side (recorded from the application), so the managed reading is compared
-/// with the application's, not with itself.
+/// the core's own Chapter 10 reader cases pin (recorded from v2.14.2), so the managed reading is compared
+/// with v2.14.2's, not with itself.
 /// </summary>
 public class FileTests
 {

@@ -2,9 +2,9 @@
  * @file tomldocument.cpp
  * @brief Plain reader/writer for the TOML subset the settings files use.
  *
- * See tomldocument.h for why this is not a QSettings::Format any more, and for what the
- * port off QString reproduces. TestTomlDocument pins every behaviour below; it was
- * written against the Qt implementation first and passed there before this replaced it.
+ * See tomldocument.h for what this reader and writer are and are not, and for the file
+ * handling they keep. native/tmdq_core_tests/test_tomldocument.cpp pins every behaviour
+ * below, against what v2.14 read and wrote.
  */
 
 #include "tomldocument.h"
@@ -70,12 +70,10 @@ std::string stripInlineComment(const std::string& value)
 
 /// Strips surrounding double quotes and unescapes \" and \\ inside them.
 ///
-/// The unescape is new. The QSettings-format writer escaped both on the way out but
-/// its reader only stripped the surrounding quotes, so a value containing either
-/// character did not survive a round trip. No shipped key carries one - the TOML files
-/// hold hex patterns, integers, booleans and a scale - so this corrects a latent
-/// asymmetry rather than changing any real file's meaning. Writing fresh code that
-/// reproduced it on purpose seemed worse.
+/// The unescape mirrors the writer, which escapes both on the way out, so a value
+/// containing either character survives a round trip. No shipped key carries one - the
+/// TOML files hold hex patterns, integers, booleans and a scale - so no real file's
+/// meaning depends on it.
 std::string unquote(const std::string& value)
 {
     if (value.size() < 2 || !startsWith(value, '"') || !endsWith(value, '"'))
@@ -219,7 +217,7 @@ TomlDocument TomlDocument::load(const std::filesystem::path& path, std::string* 
 
         if (startsWith(line, '[') && endsWith(line, ']'))
         {
-            // One bracket pair is stripped, exactly as the QSettings format did.
+            // One bracket pair is stripped, and the name inside it trimmed.
             in_table = false;
             current_section = trimmed(line.substr(1, line.size() - 2));
             // A section with no keys still counts as declared: the receiver word map's
@@ -260,8 +258,8 @@ TomlDocument TomlDocument::load(const std::filesystem::path& path, std::string* 
             ? bare
             : current_section + '/' + bare;
 
-        // A repeated section's repeated key overwrites, which is what the QSettings
-        // map did too. Only [EMPTY] repeats in practice, and tryLoadingFile() skips it
+        // A repeated section's repeated key overwrites: the last value wins.
+        // Only [EMPTY] repeats in practice, and tryLoadingFile() skips it
         // by name, so no value anyone reads is lost this way.
         doc.m_values[compound] = value;
         doc.rememberOrder(current_section, bare);
@@ -296,9 +294,8 @@ int TomlDocument::integer(const std::string& key, int fallback, bool* parsed) co
     int v = 0;
     const bool ok = parseInteger(it->second, v);
     if (parsed) { *parsed = ok; }
-    // One DELIBERATE difference from the QSettings implementation: a present but
-    // unparseable value returns the caller's fallback, where QVariant::toInt() returned
-    // 0. That silently turned a corrupt Polarity or Slope into index 0 rather than into
+    // DELIBERATE: a present but unparseable value returns the caller's fallback, not 0.
+    // 0 would silently turn a corrupt Polarity or Slope into index 0 rather than into
     // the default the caller passed, which is never what any call site here wants.
     return ok ? v : fallback;
 }
@@ -321,12 +318,11 @@ bool TomlDocument::boolean(const std::string& key, bool fallback) const
     {
         return fallback;
     }
-    // Deliberately QVariant::toBool()'s exact rule, which is what the QSettings
-    // implementation went through: lowercase, then false only for empty, "0" or
-    // "false" - anything else is true. Reproduced rather than tightened so this
-    // refactor cannot change how any existing file reads. A stricter rule (unknown
-    // text falls back instead of reading as true) would be an improvement, but it is
-    // a separate decision from moving off QSettings.
+    // Deliberately the rule existing files have always been read with: trimmed and
+    // lowercased, then false only for empty, "0" or "false" - anything else is true.
+    // Kept rather than tightened so no existing file reads differently. A stricter rule
+    // (unknown text falls back instead of reading as true) would be an improvement, but
+    // it is a separate decision.
     const std::string v = asciiLower(trimmed(it->second));
     return !(v.empty() || v == "0" || v == "false");
 }
@@ -364,7 +360,7 @@ void TomlDocument::setValue(const std::string& key, int value)
 
 void TomlDocument::setValue(const std::string& key, double value)
 {
-    // QString::number(double)'s spelling: %g with six significant digits, so 3.0 is
+    // %g with six significant digits (shortest form, no trailing zeros), so 3.0 is
     // "3" (and is then written bare, like an integer), 0.00001 is "1e-05".
     char buf[64];
     const auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), value,
@@ -379,12 +375,10 @@ void TomlDocument::setValue(const std::string& key, bool value)
 
 bool TomlDocument::save(const std::filesystem::path& path, std::string* error) const
 {
-    // Truncate rather than merge. The QSettings implementation merged into whatever
-    // the file already held, so its callers had to QFile::remove() first or an old
-    // word map survived beside the new one.
+    // Truncate rather than merge, or an old word map would survive beside the new one.
     //
     // Text mode on purpose: the CRT writes each '\n' as CRLF, which is what the
-    // QIODevice::Text writer produced and what the shipped files use.
+    // shipped files use.
     std::ofstream out(path, std::ios::out | std::ios::trunc);
     if (!out.is_open())
     {

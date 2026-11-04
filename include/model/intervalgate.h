@@ -2,22 +2,23 @@
  * @file intervalgate.h
  * @brief A "has this much time passed?" gate on a monotonic clock, for throttling.
  *
- * Replaces the QElapsedTimer that Ch10PacketReader::run() used to throttle its progress
- * reporting to one update per PCMConstants::kProgressReportIntervalMs. Pulled out into
- * its own type rather than inlined at the call site for one reason: the throttle is the
- * only logic in that conversion that can go wrong SILENTLY - seconds where milliseconds
+ * Ch10PacketReader::run() uses it to throttle its progress reporting to one update per
+ * PCMConstants::kProgressReportIntervalMs. Pulled out into its own type rather than
+ * inlined at the call site for one reason: the throttle is the only logic there that
+ * can go wrong SILENTLY - seconds where milliseconds
  * were meant, or `>` where `>=` was - and a time-based check in the middle of a
  * per-packet loop cannot be tested. The recordings in the test suite read too quickly to
  * observe a 100 ms throttle reliably. With the time point injectable the whole contract
- * can be pinned deterministically, with no sleeps and no flakiness.
+ * can be pinned deterministically, with no sleeps and no flakiness
+ * (native/tmdq_core_tests/test_intervalgate.cpp).
  *
- * Qt-free (`<chrono>` only) so it can live in the native core.
+ * `<chrono>` only, so it can live in the native core.
  *
- * Semantics match QElapsedTimer::elapsed() >= interval, which is what it replaces:
  * `due()` is true when at least @c interval has elapsed since construction or the last
- * reset(). QElapsedTimer truncated to whole milliseconds before comparing; comparing at
- * full resolution here fires at exactly the same instant for a whole-millisecond
- * interval, because a truncated elapsed time reaches N ms exactly when the real one does.
+ * reset(), compared at the clock's full resolution. For a whole-millisecond interval that
+ * fires at exactly the instant a comparison of the elapsed time truncated to whole
+ * milliseconds would, because a truncated elapsed time reaches N ms exactly when the real
+ * one does.
  */
 
 #ifndef INTERVALGATE_H
@@ -29,7 +30,7 @@ class IntervalGate
 {
 public:
     /// steady_clock, never system_clock: a throttle on elapsed time must not jump when the
-    /// wall clock is adjusted. (It is also what QElapsedTimer was - a monotonic clock.)
+    /// wall clock is adjusted.
     using Clock = std::chrono::steady_clock;
 
     explicit IntervalGate(std::chrono::milliseconds interval,

@@ -10,8 +10,7 @@
  * field the other forgot. So both build their `ProcessingParams` from this one description, in
  * this one function, and a new raw-affecting field has one place to go.
  *
- * Plain C++: the text is UTF-8 `std::string`; the layers that hold `QString`s convert at their own
- * boundary.
+ * Plain C++: the text is UTF-8 `std::string`.
  */
 
 #ifndef FRAMESYNC_H
@@ -44,7 +43,7 @@ enum class FrameSyncError
 /**
  * @brief Decodes a hex sync pattern and mask.
  *
- * Hex is read like `QString::toULongLong(16)` (see `textparse::parseUnsignedHex`). The pattern's
+ * Hex is read by `textparse::parseUnsignedHex` (whitespace trimmed, an optional "0x"). The pattern's
  * length in bits is its CHARACTER count times four, whatever the characters are, so " FE6B " is 24
  * bits: that is what the main run has always done, and the extraction must not differ. An empty
  * mask means "every bit of the pattern".

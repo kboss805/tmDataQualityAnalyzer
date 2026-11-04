@@ -8,7 +8,7 @@
         CanResize="False"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner">
-  <!-- As the Qt dialog: the step file, the calibration recording, each with its status beneath, then the clips. -->
+  <!-- As v2.x laid it out: the step file, the calibration recording, each with its status beneath, then the clips. -->
   <StackPanel Margin="16" Spacing="8">
     <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,12,Auto,Auto,16,Auto,Auto" ColumnSpacing="12" RowSpacing="4">
       <TextBlock Grid.Row="0" Grid.Column="0" Text="Step Cal File:" VerticalAlignment="Center" />

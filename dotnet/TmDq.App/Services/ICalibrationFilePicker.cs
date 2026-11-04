@@ -19,7 +19,7 @@ namespace TmDq.App.Services
         Task<string?> OpenCalibrationRecordingAsync(string? folder);
     }
 
-    /// <summary>The platform's open dialogs, owned by a window, with the Qt dialog's titles and filters.</summary>
+    /// <summary>The platform's open dialogs, owned by a window, with v2.x's titles and filters.</summary>
     public sealed class StorageCalibrationFilePicker : ICalibrationFilePicker
     {
         private static readonly FilePickerFileType Toml = new("TOML Files") { Patterns = new[] { "*.toml" } };

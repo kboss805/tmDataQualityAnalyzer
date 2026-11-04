@@ -1,7 +1,7 @@
-// PacketQueue: the bounded reader-to-worker hand-off, tested directly rather than only through the pipeline. No Qt;
-// ported from the Qt TestPacketQueue, whose cases are all here under the same descriptions.
+// PacketQueue: the bounded reader-to-worker hand-off, tested directly rather than only through the pipeline (ported
+// in plan step 2.4).
 //
-// Until the Qt suite existed the queue was only exercised incidentally, through the full reader + FrameProcessor
+// Until it had a suite of its own the queue was only exercised incidentally, through the full reader + FrameProcessor
 // pipeline. A lost wakeup or a wrong fullness test shows up there as a hang or a silently shortened stream, far from
 // its cause.
 
@@ -73,7 +73,7 @@ bool waitUntil(Pred pred, std::chrono::milliseconds limit = kPatience)
 ///
 /// The one case close() cannot rescue is close() ITSELF being broken: the helper then stays blocked forever and the
 /// join would never return. So the join is bounded, and if it cannot complete the process aborts with a message naming
-/// the cause. (Found by mutation in the Qt suite: a close() that records the flag but never notifies hung the
+/// the cause. (Found by mutation before the port: a close() that records the flag but never notifies hung the
 /// validation run past 150 s instead of failing.)
 struct ThreadGuard
 {

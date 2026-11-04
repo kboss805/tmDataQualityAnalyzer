@@ -30,7 +30,7 @@ namespace TmDq.App.Tests
 {
     /// <summary>
     /// Around the chart (plan step 4.4): the legend, the chip bar, the right-click menu and its prompts, the keys, and
-    /// Customize View. The Qt TestPlotWidget's and TestPlotCustomizationDialog's cases are ported among them, read from
+    /// Customize View. The v2.x plot's and Customize View dialog's cases are ported among them, read from
     /// the controls and, where it is drawing that matters, from rendered frames.
     /// </summary>
     [Collection(NativeCoreCollection.Name)]
@@ -153,7 +153,8 @@ namespace TmDq.App.Tests
             Assert.Equal(86400 + 2 * 3600 + 3 * 60 + 4, plot.ParseTime("001:02:03:04"));
             Assert.Equal(-5, plot.ParseTime("000:00:00:-5"));
             Assert.Equal(10, plot.ParseTime(" 000:00:00:10 "));
-            // A field that is not a whole number counts as 0, as Qt's toInt gives; the wrong number of fields is 0.
+            // A field that is not a whole number (a sign and spaces around it allowed) counts as 0; the wrong number of
+            // fields is 0.
             Assert.Equal(3600, plot.ParseTime("000:01:xx:00"));
             Assert.Equal(60, plot.ParseTime("000:00:01:1.5"));
             Assert.Equal(0, plot.ParseTime("01:02:03"));
@@ -589,7 +590,7 @@ namespace TmDq.App.Tests
             r1.Channels[1].IsChecked = false;
             Assert.Null(r1.IsChecked);   // partly
             Assert.Contains(nameof(ReceiverGroup.IsChecked), changed);
-            r1.IsChecked = false;        // a click on a partly checked box checks them all, as Qt's does
+            r1.IsChecked = false;        // a click on a partly checked box checks them all, as v2.14.2's did
             Assert.Equal(true, r1.IsChecked);
             Assert.All(r1.Channels, ch => Assert.True(ch.IsChecked));
             r1.IsChecked = false;
@@ -906,7 +907,7 @@ namespace TmDq.App.Tests
             Assert.True(legend.Scroll.Extent.Height > legend.Scroll.Viewport.Height);
             ScrollBar bar = legend.GetVisualDescendants().OfType<ScrollBar>().Single(b => b.Orientation == Orientation.Vertical);
             Assert.True(bar.IsVisible);
-            Assert.False(legend.Scroll.AllowAutoHide);   // always shown, as the Qt one is
+            Assert.False(legend.Scroll.AllowAutoHide);   // always shown, as v2.14.2's was
             Rect barBox = Frames.InWindow(bar, s.Window);
             Assert.Equal(PlotLegend.ScrollGutter, barBox.Width, 6);   // the theme's bar fills the gutter left for it
             foreach (Control row in legend.Rows)

@@ -350,8 +350,8 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         state.rows_written++;
     }
 
-    // duration_cast truncates to whole milliseconds, exactly as QElapsedTimer::elapsed()
-    // did, so the one-decimal seconds this feeds in the completion log are unchanged.
+    // duration_cast truncates to whole milliseconds; the completion log shows the result
+    // as seconds to one decimal.
     const int64_t elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - run_start).count();
     constexpr double kMsPerSec = 1000.0;

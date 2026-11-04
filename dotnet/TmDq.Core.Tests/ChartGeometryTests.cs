@@ -7,7 +7,7 @@ using Xunit;
 namespace TmDq.Core.Tests;
 
 /// <summary>
-/// The chart's geometry through the binding (plan step 4.3a). The core's own suite compares it with the Qt chart's code;
+/// The chart's geometry through the binding (plan step 4.3a). The core's own suite compares it with v2.x's chart code;
 /// these hold the binding to it: every field of the view reaching the core in its place, the line and every band copied
 /// out whole, the transforms and the ticks. The expected values are worked out by hand, in a view whose eight fields
 /// are all different, so a field passed in another's place changes an answer.

@@ -49,7 +49,7 @@ namespace TmDq.App.Plot
     }
 
     /// <summary>
-    /// The plot's state, the C# half of the Qt <c>PlotViewModel</c> (plan decision D3): the series, built by the core from
+    /// The plot's state, held in C# (plan decision D3): the series, built by the core from
     /// each processed stream on one shared time axis; their colours (US4.0); the visible time window with its zoom history;
     /// both Y axes' ranges and overrides; which metric the left axis shows; the readout under the cursor; and what the
     /// legend, the chips, the menu, the keys and Customize View act on (plan step 4.4). The chart (<c>PlotChart</c>) draws
@@ -116,7 +116,7 @@ namespace TmDq.App.Plot
         // ---- the series ---------------------------------------------------------------------------------------------
 
         /// <summary>
-        /// Adds a finished stream's series (the core's <c>buildStreamSeries</c>), as the Qt <c>addStreamData</c> does: a
+        /// Adds a finished stream's series (the core's <c>buildStreamSeries</c>), as v2.x added them: a
         /// stream processed again replaces its earlier series; the shared time base moves earlier for a source that starts
         /// earlier (every existing series shifting right with it); the series keep job order; the whole span is shown.
         /// </summary>
@@ -220,7 +220,7 @@ namespace TmDq.App.Plot
         // ---- CSV, export and import (plan step 4.5) ---------------------------------------------------------------------
 
         /// <summary>
-        /// Writes every series, shown or not, as the core's CSV (the Qt <c>exportCsv</c>): the writer owns the format, and
+        /// Writes every series, shown or not, as the core's CSV (US6.1): the writer owns the format, and
         /// the plot hands it each series' identity and samples with the recording's clock. A <paramref name="sourceId"/> of
         /// 0 or more keeps that source's series only (per-file batch export, 4.7). False, with no file written, when there
         /// is nothing to write; false when the file cannot be written.
@@ -253,7 +253,7 @@ namespace TmDq.App.Plot
             private set => SetProperty(ref _isLoading, value);
         }
 
-        /// <summary>Reads an exported CSV and shows it in place of whatever was shown (the Qt <c>loadCsvFile</c>); false,
+        /// <summary>Reads an exported CSV and shows it in place of whatever was shown (US6.3); false,
         /// with nothing changed, for a file that is not one.</summary>
         public bool LoadCsv(string path)
         {
@@ -264,8 +264,8 @@ namespace TmDq.App.Plot
         }
 
         /// <summary>
-        /// <see cref="LoadCsv"/> with the file read off the UI thread and <see cref="IsLoading"/> set meanwhile (the Qt
-        /// <c>loadCsvFileAsync</c>). A request while one is being read is dropped, as Qt drops it.
+        /// <see cref="LoadCsv"/> with the file read off the UI thread and <see cref="IsLoading"/> set meanwhile. A
+        /// request while one is being read is dropped, as v2.x dropped it.
         /// </summary>
         public async Task<CsvLoad> LoadCsvAsync(string path)
         {
@@ -297,7 +297,7 @@ namespace TmDq.App.Plot
         }
 
         /// <summary>
-        /// Shows a parsed CSV as a run's series would be shown (the Qt <c>commitParseResult</c>): the clock from the file;
+        /// Shows a parsed CSV as a run's series would be shown: the clock from the file;
         /// each Frame Sync Lock stream's series given the core's stream order (<c>assignImportedStreamOrders</c>), so its
         /// two metrics share a colour and each stream has its own; the metric of the active view shown; then a warning for
         /// any rows skipped, since a partly loaded file must not pass for a whole one.
@@ -391,7 +391,7 @@ namespace TmDq.App.Plot
         public int VisibleSource => _visibleSource;
 
         /// <summary>Each recording the series come from, once, in the order first met, with its label: its file's name as
-        /// given (<see cref="SetSourceLabel"/>), else "Source N" (the Qt <c>sourceList</c>).</summary>
+        /// given (<see cref="SetSourceLabel"/>), else "Source N".</summary>
         public IReadOnlyList<(int Id, string Label)> SourceList()
         {
             var list = new List<(int, string)>();
@@ -410,7 +410,7 @@ namespace TmDq.App.Plot
         public void SetSourceLabel(int sourceId, string label) => _sourceLabels[sourceId] = label;
 
         /// <summary>
-        /// Shows <paramref name="sourceId"/>'s series only, or every recording's for -1 (the Qt <c>setVisibleSource</c>):
+        /// Shows <paramref name="sourceId"/>'s series only, or every recording's for -1 (Plot File):
         /// the window is the span of what is shown, so browsing one file fills the plot, and the axes are ranged to it.
         /// It narrows what is drawn, never what a CSV holds.
         /// </summary>
@@ -577,7 +577,7 @@ namespace TmDq.App.Plot
         public int ZoomDepth => _zoomStack.Count;
 
         /// <summary>A continuous gesture (wheel zoom, drag pan) moved the window: kept inside the data, its width kept, and
-        /// not remembered in the zoom history. The Qt <c>handlePlotXRangeChanged</c>.</summary>
+        /// not remembered in the zoom history.</summary>
         public void SetXViewByUser(double lower, double upper)
         {
             if (!HasData) return;
@@ -662,7 +662,7 @@ namespace TmDq.App.Plot
         /// <summary>
         /// What the readout says with the cursor at time <paramref name="x"/> (pixel column <paramref name="cursorPixel"/>):
         /// the nearest sample of any series shown, if it lies within 10 px of the cursor; or, when the readout is pinned,
-        /// that series' nearest sample wherever it is. Null when there is nothing to say. The Qt <c>onPlotMouseMove</c>.
+        /// that series' nearest sample wherever it is. Null when there is nothing to say.
         /// </summary>
         public string? Readout(double x, double cursorPixel, Func<double, double> xToPixel)
         {
@@ -745,7 +745,7 @@ namespace TmDq.App.Plot
             set => SetProperty(ref _legendVisible, value);
         }
 
-        /// <summary>Whether the window is narrower than the whole recording (as QFuzzyCompare judges it).</summary>
+        /// <summary>Whether the window is narrower than the whole recording (by <see cref="FuzzyEqual"/>).</summary>
         public bool IsZoomed => HasData && (!FuzzyEqual(_xViewMin, XMin) || !FuzzyEqual(_xViewMax, _xMax));
 
         /// <summary>Whether the view differs from the default (zoomed, or an axis limit set): the Reset view chip's rule.</summary>
@@ -789,8 +789,7 @@ namespace TmDq.App.Plot
 
         /// <summary>
         /// A time window entered or stepped to: each end clamped into the recording, with a warning naming the value as
-        /// entered; the stop pulled up to the start if it is before it; then remembered as a discrete zoom. The Qt
-        /// <c>PlotWidget::applyTimeWindow</c>.
+        /// entered; the stop pulled up to the start if it is before it; then remembered as a discrete zoom.
         /// </summary>
         public void ApplyTimeWindow(double rawStart, double rawStop, string enteredStart, string enteredStop)
         {
@@ -809,7 +808,8 @@ namespace TmDq.App.Plot
         }
 
         /// <summary>A clock time typed as DDD:HH:MM:SS, as elapsed seconds on the plot's axis; 0 for text not in that form,
-        /// and 0 for a field that is not a whole number, as Qt's <c>toInt</c> gives (the Qt <c>parseTime</c>).</summary>
+        /// and 0 for a field that is not a whole number (a sign and spaces around it are allowed), as v2.x
+        /// read it.</summary>
         public double ParseTime(string text)
         {
             string[] parts = text.Split(':');
@@ -901,7 +901,7 @@ namespace TmDq.App.Plot
             candidate.IsLeftAxis && candidate.StreamLabel == of.StreamLabel && candidate.StreamOrder == of.StreamOrder &&
             candidate.SourceId == of.SourceId;
 
-        /// <summary>QFuzzyCompare: equal to about twelve significant digits (so 0 equals only 0).</summary>
+        /// <summary>Equal to about twelve significant digits of the smaller magnitude (so 0 equals only 0).</summary>
         private static bool FuzzyEqual(double a, double b) => Math.Abs(a - b) * 1000000000000.0 <= Math.Min(Math.Abs(a), Math.Abs(b));
 
         public void Dispose() => _timeBase?.Dispose();

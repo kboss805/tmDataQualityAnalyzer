@@ -1,7 +1,6 @@
-// TemplateMatcher: the exact-set channel-id comparison behind Batch Apply (US1.1). No Qt; ported from the Qt
-// TestTemplateMatcher. Its cases read the matcher through BatchController::matchFile, which turns a template and a
-// reader's channel list into ids; that wiring is the ViewModel's and is now tested in TestBatchController. Everything
-// about the comparison itself is here, called directly.
+// TemplateMatcher: the exact-set channel-id comparison behind Batch Apply (US1.1), called directly
+// (ported in plan step 2.4). Turning a template and a recording's channel list into ids is the application's wiring
+// and is tested there.
 
 #include <algorithm>
 #include <cstdint>
@@ -31,8 +30,8 @@ std::string join(const Ids& ids)
 }
 
 /// The comparison written a second way, element by element over std::set, sharing nothing with the matcher's
-/// sort / unique / set_difference. The Qt suite's oracle was the QSet implementation the core replaced; this is the
-/// same rule (each list a set, missing and extra each sorted and once) with no Qt in it.
+/// sort / unique / set_difference. It is the rule v2.14.2 applied before the matcher moved into the core (each list
+/// a set, missing and extra each sorted and once).
 TemplateMatcher::MatchResult oracle(const Ids& templateIds, const Ids& fileIds)
 {
     const std::set<int> wanted(templateIds.begin(), templateIds.end());

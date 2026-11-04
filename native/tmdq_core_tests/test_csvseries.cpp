@@ -1,13 +1,11 @@
 // CSV series: the application's CSV, read by CsvSeriesParser and written by CsvSeriesWriter, and the clock stamp in its
-// time column (clocktime::format). No Qt; the core half of the Qt TestCsvSeries. That suite pinned the format through
-// PlotViewModel (loadCsvFile, exportCsv), so its expectations mixed the core's with the plot's storage and signals; the
-// cases here call the core directly. The ViewModel's half (the series a stream becomes, the source filter, the load
-// warning) stays in TestCsvSeries.
+// time column (clocktime::format), called directly. What a host does around them (the series a stream becomes, the
+// source filter, the load warning) is the host's to test.
 //
-// The Qt suite compared the core with the QString / QTextStream / QMap implementations it replaced, over generated files
-// and series, and the number reader with QString::toDouble. The doctest binary has no Qt, so what those answered was
-// recorded once with a throwaway diagnostic in the Qt suite (removed again): one FNV-1a digest per comparison, and the
-// counters the reach checks read. Each generator is the Qt suite's, token for token, on the same seeds.
+// The oracle is v2.14.2 (its Qt implementation): its CSV reader and writer, over generated files and series, and its
+// number reader over awkward texts. What they answered was recorded once with a throwaway diagnostic (removed again):
+// one FNV-1a digest per comparison, and the counters the reach checks read. Each generator is the one that recording
+// used, token for token, on the same seeds.
 
 #include <algorithm>
 #include <cmath>
@@ -67,7 +65,7 @@ std::string escaped(const std::string& bytes)
 }
 
 /// UTF-8 text with its non-ASCII characters spelled out as <U+XXXX>; a byte that does not start a valid sequence is
-/// U+FFFD (as the Qt suite's QString conversion made it).
+/// U+FFFD (as the conversion behind the recorded answers made it).
 std::string asciiOnly(const std::string& s)
 {
     std::string out;
@@ -105,7 +103,7 @@ std::string asciiOnly(const std::string& s)
     return out;
 }
 
-/// `QString::number(v, 'g', 12)`, and the spellings Qt gives the specials.
+/// `v` in %g with 12 significant digits; a NaN prints "nan" and an infinity "inf" or "-inf".
 std::string num(double v)
 {
     if (std::isnan(v))
@@ -150,7 +148,7 @@ struct Fnv
     void u32(std::uint32_t v) { for (int i = 0; i < 4; ++i) byte(static_cast<unsigned char>(v >> (8 * i))); }
 };
 
-/// A deterministic generator (the Qt suite's, state for state), so a failure names the same case every run.
+/// A deterministic generator (the recording's, state for state), so a failure names the same case every run.
 struct Rng
 {
     std::uint32_t state;
@@ -313,8 +311,8 @@ constexpr double kBase = 3 * 86400.0 + 7 * 3600.0 + 8 * 60.0 + 9.0;
 
 /// What a host does between a processed stream and the writer: the time base is the earliest first sample, each stream
 /// becomes its series on that base (buildStreamSeries), and the writer gets one column per series, for one source or for
-/// every source (a negative @p source_id). The Qt suite did this through PlotViewModel; none of its cases adds a source
-/// that starts earlier than one already there, so the base never moves and the streams are built once at the end.
+/// every source (a negative @p source_id). None of the cases adds a source that starts earlier than one already there,
+/// so the base never moves and the streams are built once at the end.
 struct Export
 {
     bool wrote = false;
@@ -399,8 +397,8 @@ const std::vector<ImportCase>& importCases()
             " | [0] A label=A L order=1 rcv=0 ch=0 src=0 : 0,50 1,60" },
         { "utf16be-bom", utf16be(kOneLock), "ok skipped=0 base=1/0 xmax=1 n=1"
             " | [0] A label=A L order=1 rcv=0 ch=0 src=0 : 0,50 1,60" },
-        // Changed on purpose when the importer left Qt (plan step 1.2); it loaded as "basic-lock" before.
-        // QTextStream detected a UTF-32 byte-order mark. Nothing writes a CSV in UTF-32, and the core
+        // Changed on purpose when the importer moved into the core (plan step 1.2); it loaded as "basic-lock"
+        // before: v2.14.2 detected a UTF-32 byte-order mark. Nothing writes a CSV in UTF-32, and the core
         // reads UTF-8 and UTF-16 (like TomlDocument), so it is now refused as not this format.
         { "utf32le-bom", utf32le(kOneLock), "fail" },
         { "utf16le-no-bom-is-garbage", utf16le(kOneLock, false), "fail" },
@@ -439,7 +437,7 @@ const std::vector<ImportCase>& importCases()
         { "non-ascii-names", kTimeHeader + ",R\xC3\xA9" "cepteur \xCE\xA9 Lock (%)\n1:00:00:00.000,50\n", "ok skipped=0 base=1/0 xmax=0 n=1"
             " | [0] R<U+00E9>cepteur <U+03A9> label=R<U+00E9>cepteur <U+03A9> L order=1 rcv=0 ch=0 src=0 : 0,50" },
         // Changed on purpose (plan step 1.2); the whole file failed to load before. A byte that is not
-        // valid UTF-8 (a Latin-1 "e-acute" from a re-saved file) made the QTextStream read give up on
+        // valid UTF-8 (a Latin-1 "e-acute" from a re-saved file) made v2.14.2's text read give up on
         // the file. The core keeps the bytes; the plot shows the replacement character in that one name.
         { "invalid-utf8-in-a-name", kTimeHeader + ",R\xE9" "cepteur Lock (%)\n1:00:00:00.000,50\n", "ok skipped=0 base=1/0 xmax=0 n=1"
             " | [0] R<U+FFFD>cepteur label=R<U+FFFD>cepteur L order=1 rcv=0 ch=0 src=0 : 0,50" },
@@ -497,7 +495,7 @@ const std::vector<ImportCase>& importCases()
             " | [1] B label=B L order=2 rcv=0 ch=0 src=0 : 0,2 1,4" },
         { "cell-padding-and-signs", kTimeHeader + ",A Lock (%)\n1:00:00:00.000, 5 \n1:00:00:01.000,+6\n1:00:00:02.000,-7\n1:00:00:03.000,\t8\t\n", "ok skipped=0 base=1/0 xmax=3 n=1"
             " | [0] A label=A L order=1 rcv=0 ch=0 src=0 : 0,5 1,6 2,-7 3,8" },
-        // Changed on purpose (plan step 1.2); the cell read as 5 before. Qt's number parser ignored
+        // Changed on purpose (plan step 1.2); the cell read as 5 before. v2.14.2's number parser ignored
         // Unicode spaces around a number; the core's (textparse.h) ignores ASCII ones only, so this cell
         // is not a number and is skipped like any other. The application never writes one.
         { "cell-padded-with-a-unicode-space", kTimeHeader + ",A Lock (%)\n1:00:00:00.000,\xC2\xA0" "5\xC2\xA0\n1:00:00:01.000,6\n", "ok skipped=0 base=1/0 xmax=1 n=1"
@@ -907,7 +905,7 @@ TEST_CASE("csvseries: the core reads every generated file as the code it replace
         bom += bytes.starts_with("\xEF\xBB\xBF");
         utf16 += bytes.starts_with("\xFF\xFE") || bytes.starts_with("\xFE\xFF");
     }
-    // What the Qt importer answered for the same 400 files (recorded), and the counts of what they were.
+    // What v2.14.2's importer answered for the same 400 files (recorded), and the counts of what they were.
     CHECK(f.h == 7563245506736825023ULL);
     CHECK(loaded == 350);
     CHECK(failed == 50);
@@ -1020,7 +1018,7 @@ TEST_CASE("csvseries: the core writes every generated series as the code it repl
         with_empty_cells += contains(bytes, ",,") || contains(bytes, ",\r\n");
         big += bytes.size() > 400;
     }
-    // What the Qt exporter wrote for the same 500 cases (recorded), and the counts of what they were.
+    // What v2.14.2's exporter wrote for the same 500 cases (recorded), and the counts of what they were.
     CHECK(f.h == 16836251510374325251ULL);
     CHECK(written == 346);
     CHECK(declined == 154);
@@ -1030,7 +1028,7 @@ TEST_CASE("csvseries: the core writes every generated series as the code it repl
     CHECK(big == 202);
 }
 
-TEST_CASE("csvseries: the clock stamp is what the QString one was, for every generated time")
+TEST_CASE("csvseries: the clock stamp is what v2.14 wrote, for every generated time")
 {
     constexpr int kCases = 8000;
     Rng rng(20261024u);
@@ -1063,12 +1061,12 @@ TEST_CASE("csvseries: the clock stamp is what the QString one was, for every gen
     CHECK(with_ms == 7994);
 }
 
-TEST_CASE("csvseries: the numbers a cell or a stamp field may hold read as Qt read them")
+TEST_CASE("csvseries: the numbers a cell or a stamp field may hold read as v2.14 read them")
 {
-    // The importer reads every cell and every timestamp field with textparse. A text Qt's parser took must read to the
-    // same bits, and one it refused must be refused: a spreadsheet's "Infinity" or "NaN(1)" is not a number to Qt, and
-    // std::from_chars would say it is. The answer Qt gave for each text (accepted or not, and the double and the int it
-    // read) is recorded as one digest.
+    // The importer reads every cell and every timestamp field with textparse. A text v2.14.2 took must read to the
+    // same bits, and one it refused must be refused: a spreadsheet's "Infinity" or "NaN(1)" was not a number to it,
+    // and std::from_chars would say it is. The answer v2.14.2 gave for each text (accepted or not, and the double and
+    // the int it read) is recorded as one digest.
     Strings texts = {
         "", " ", "+", "-", "nan", "NaN", "NAN", "-nan", "+nan", "inf", "Inf", "INF", "+inf", "-inf", "-INF",
         "infinity", "Infinity", "-Infinity", "+infinity", "nan(1)", "NaN(abc)", "nan()", "infin", "in", "na", "n", "i",
@@ -1155,7 +1153,7 @@ TEST_CASE("csvseries: a UTF-16 file with CR LF line ends loads")
 
 TEST_CASE("csvseries: a column whose times and values differ in number writes the shorter of the two")
 {
-    // The Qt suite's columns were always views of one series, so their two arrays had one length. A host may hand the
+    // A plot's columns are views of one series, so their two arrays have one length. A host may hand the
     // writer any two arrays; the writer uses as many samples as both have.
     TempDir dir;
     const fs::path path = dir.file("uneven.csv");
@@ -1180,7 +1178,7 @@ TEST_CASE("csvseries: a large export crosses the flush threshold intact")
 {
     // The writer hands its buffer to the file whenever it passes a mebibyte; every other test writes a few hundred bytes,
     // so a flush that lost or repeated a chunk would pass them all. 30,000 rows of three columns is about 1.5 MB, and
-    // its digest is the one the Qt exporter's bytes had.
+    // its digest is the one v2.14.2's exported bytes had.
     constexpr int kRows = 30000;
     std::vector<GeneratedSeries> all(3);
     for (int c = 0; c < 3; ++c)

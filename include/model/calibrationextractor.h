@@ -8,12 +8,13 @@
  * the per-channel output is the raw count averaged over a fine (10 ms) window.
  * StepDetector then turns each channel's raw series into a CalibrationProfile.
  *
- * A plain class, with no Qt. Lifecycle: construct, call start() with a `ProcessingEvents` sink,
+ * A plain class. Lifecycle: construct, call start() with a `ProcessingEvents` sink,
  * wait for `processingFinished`, then read results() and summary(). The sink is called from the
  * extraction's own threads - the thread inside start() for a failure before anything runs, the
  * reader thread for its log lines and progress, and the driver thread for the worker's lines, the
- * channel lines and the end - so it must be safe to call from any of them. `QtProcessingEvents`
- * is: it queues each call to a Qt object's thread. `processingFinished` is always the LAST call,
+ * channel lines and the end - so it must be safe to call from any of them. The C ABI's sink
+ * (`abi_events.h`) passes each call straight to the host's callbacks, which `tmdq_abi.h` documents as
+ * called from the library's own threads. `processingFinished` is always the LAST call,
  * and nothing in the extraction is still running when it arrives except the driver returning.
  *
  * Step detection runs on the driver thread, not on the caller's, so a modal progress dialog stays

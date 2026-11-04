@@ -17,7 +17,7 @@
     <KeyBinding Gesture="Ctrl+B" Command="{Binding ToggleSidebarCommand}" />
   </Window.KeyBindings>
   <Window.Styles>
-    <!-- The title bar's buttons: borderless glyphs with a soft hover, as the Qt title bar draws them. -->
+    <!-- The title bar's buttons: borderless glyphs with a soft hover, as v2.x drew them. -->
     <Style Selector="Grid#TitleBar Button">
       <Setter Property="Width" Value="30" />
       <Setter Property="Height" Value="26" />
@@ -83,8 +83,8 @@
       <TextBlock x:Name="VersionLabel" Grid.Column="1" Text="{Binding VersionText}" Margin="16,0,0,0"
                  VerticalAlignment="Center" />
     </Grid>
-    <!-- The log sidebar on the left (the Qt dock's place and minimum width), the chart beside it; the toggle in the
-         title bar hides it. Progress is in the modal progress dialog while a run goes on, as in Qt. -->
+    <!-- The log sidebar on the left (v2.x's place and minimum width), the chart beside it; the toggle in the
+         title bar hides it. Progress is in the modal progress dialog while a run goes on, as in v2.x. -->
     <Grid x:Name="Body" x:FieldModifier="public" ColumnDefinitions="400,4,*">
       <Border x:Name="LogPanel" Grid.Column="0" MinWidth="400" Margin="2,4,0,4" BorderThickness="1" CornerRadius="4"
               BorderBrush="{DynamicResource LogPanelBorder}" Background="{DynamicResource LogPanelBackground}"

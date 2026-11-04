@@ -27,7 +27,7 @@ namespace TmDq.App.ViewModels
     }
 
     /// <summary>
-    /// The batch confirmation (plan step 4.7, US1.1), the Qt <c>BatchApplyDialog</c>: how many of the chosen files match the
+    /// The batch confirmation (plan step 4.7, US1.1): how many of the chosen files match the
     /// template, a row for each, and the options: a CSV and plot images per file into a folder, and the template's series
     /// names and colours reused (on at first). Process needs a matching file, and a folder while exporting.
     /// </summary>

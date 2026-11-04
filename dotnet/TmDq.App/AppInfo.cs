@@ -6,7 +6,7 @@ namespace TmDq.App
     /// from AppVersion in include/constants.h (dotnet/build/AppVersion.props), so it is never written here.</summary>
     public static class AppInfo
     {
-        /// <summary>The main window's title, as the Qt application has it (MainView).</summary>
+        /// <summary>The main window's title, as v2.x had it.</summary>
         public const string Title = "TM Data Quality Analyzer";
 
         /// <summary>Major.minor.patch, e.g. "2.14.2".</summary>

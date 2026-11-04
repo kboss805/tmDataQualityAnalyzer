@@ -2,39 +2,29 @@
  * @file tomldocument.h
  * @brief Reads and writes the TOML subset this application's settings files use.
  *
- * Replaces the previous `TomlConfigHelper`, which implemented the same subset as a
- * custom `QSettings::Format`. QSettings is a settings STORE - scoped, cached, merged,
- * written through an atomic rename - and using it as a file-format parser cost more
- * than it saved:
+ * A file-format parser and writer, not a settings store:
  *
- *   - **It sorts.** Sections came back alphabetically, but a receiver word map is
- *     meaningful in file order, so `FrameSetup` opened and parsed the same file a
- *     SECOND time (`readGroupsInFileOrder`) just to recover that order.
- *   - **It merges.** Writing had to `QFile::remove()` the target first, or the old
- *     file's word map survived alongside the new one.
- *   - **It needs global registration.** `registerFormat()` is process-wide and lazy,
- *     so both `main()` and the test harness had to remember to call it before any
- *     config file could be read at all.
- *   - **It writes through a rename**, which on Windows silently does nothing when the
- *     target path is held by a live `QTemporaryFile` - a trap this project hit and had
- *     to write a memory note about.
- *   - **It cannot express arrays**, which is why `StepDetector::parseStepConfig` used to be a
- *     second, hand-written TOML parser for `[[Step]]` files. This class now reads arrays of
- *     tables itself (`arrayTables()`), and that parser went through it - see below.
+ *   - **It keeps file order.** A receiver word map is meaningful in file order, so
+ *     sections and keys come back in the order the file declares them, from one parse.
+ *   - **It replaces, never merges.** save() truncates the target, so an old file's word
+ *     map cannot survive alongside the new one and no caller deletes the file first.
+ *   - **It needs no registration.** Nothing process-wide has to be set up before a
+ *     config file can be read.
+ *   - **It writes the file in place**, not through a rename: a path it cannot open for
+ *     writing is reported as an error, never silently skipped.
+ *   - **It reads arrays of tables** (`arrayTables()`), so `StepDetector::parseStepConfig`
+ *     reads `[[Step]]` files through it rather than through a parser of its own - see below.
  *
  * This class is plain file I/O over a map of UTF-8 `std::string`s, with paths as
- * `std::filesystem::path` - no Qt at all. Callers holding a `QString`
- * convert at their own boundary: `toFsPath()` from `qtbridge.h` for a path, and
- * `toStdString()` / `fromStdString()` for text, which are UTF-8 in Qt 6.
+ * `std::filesystem::path`.
  *
- * The port reproduces what `QFile` + `QTextStream` + `QString` supplied for free, and
- * `TestTomlDocument` was written against the Qt version first to pin it: a UTF-8 BOM is
- * skipped, UTF-16 (LE or BE, with a BOM) is decoded, integers and doubles tolerate
- * surrounding whitespace and a leading '+', doubles are written `%g` with six
- * significant digits, and the file is written with CRLF line endings and no BOM.
- * Two narrowings, neither reachable from a shipped file: whitespace trimming is
- * ASCII only (Qt also trimmed Unicode spaces such as U+00A0), and invalid UTF-8 is
- * kept as bytes rather than replaced with U+FFFD.
+ * native/tmdq_core_tests/test_tomldocument.cpp pins the file handling, against what
+ * v2.14 read and wrote: a UTF-8 BOM is skipped, UTF-16 (LE or BE, with a BOM) is
+ * decoded, integers and doubles tolerate surrounding whitespace and a leading '+',
+ * doubles are written `%g` with six significant digits, and the file is written with
+ * CRLF line endings and no BOM. Whitespace trimming is ASCII only (U+00A0 is not
+ * trimmed), and invalid UTF-8 is kept as bytes rather than replaced with U+FFFD;
+ * neither is reachable from a shipped file.
  *
  * Supported subset, unchanged from what the shipped files use:
  *   - Section headers:    [SectionName]
@@ -94,8 +84,7 @@ public:
     /// Section names in the order the file first declares each one.
     ///
     /// File order is the point: a receiver word map's sections carry the parameter
-    /// order, and the QSettings implementation returned them SORTED - which is why
-    /// FrameSetup had to parse the same file a second time to recover it.
+    /// order, so they must not come back sorted.
     ///
     /// A repeated section appears once. The only name that repeats in practice is the
     /// [EMPTY] word-map placeholder, and `FrameSetup::tryLoadingFile()` skips that by
@@ -137,12 +126,12 @@ public:
     void setValue(const std::string& key, double value);
     void setValue(const std::string& key, bool value);
 
-    /// Writes the document to @p path, REPLACING whatever is there. Unlike QSettings
-    /// this never merges, so no caller needs to delete the file first.
+    /// Writes the document to @p path, REPLACING whatever is there. It never merges,
+    /// so no caller needs to delete the file first.
     ///
     /// Sections are emitted in the order they were first set, and keys in the order
     /// they were set within each section, so a file this writes reads back in the same
-    /// order it was built. The QSettings implementation emitted both alphabetically.
+    /// order it was built, not alphabetically.
     bool save(const std::filesystem::path& path, std::string* error = nullptr) const;
 
 private:

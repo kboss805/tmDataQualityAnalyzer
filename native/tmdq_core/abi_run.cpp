@@ -4,8 +4,7 @@
  *
  * This file only translates. The pipeline (one reader, a queue and a worker thread per stream, the order
  * they start and stop in) is `PipelineRunner`; turning a stream's settings into a job, and every message a
- * rejected setting produces, is `buildStreamJob`. They are the same two the Qt application uses, so a run
- * through here and a run through `MainViewModel` cannot disagree about what a setting means.
+ * rejected setting produces, is `buildStreamJob`. What a setting means is decided there, not here.
  */
 
 #include "tmdq_abi.h"

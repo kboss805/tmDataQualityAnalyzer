@@ -21,10 +21,10 @@ using Xunit;
 namespace TmDq.App.Tests
 {
     /// <summary>
-    /// Non-linear step calibration (plan step 4.6, US5.3): Extract Calibration (the Qt <c>CalibrationSetupDialog</c>), Apply
+    /// Non-linear step calibration (plan step 4.6, US5.3): Extract Calibration, Apply
     /// Cal in the Receiver SNR setup dialog and its report, and the time channel chosen in Configure Streams reaching the
     /// extraction. The extraction itself is the core's, held to the core's own answers by the managed library's tests;
-    /// these hold what the dialogs do with it, against step_cal, as <c>TestStreamConfigDialog</c>'s cases did.
+    /// these hold what the dialogs do with it, against step_cal, as v2.x's stream setup cases did.
     /// </summary>
     [Collection(NativeCoreCollection.Name)]
     public sealed class CalibrationDialogTests : IDisposable
@@ -263,7 +263,7 @@ namespace TmDq.App.Tests
             Assert.Equal(CalibrationStatusKind.Warn, vm.CalKind);
             Assert.StartsWith("⚠ Clip Start + Clip End (1500.0 s) exceed the recording (", vm.CalStatus);
             Assert.EndsWith(" s) - clips ignored. Calibrated 12 of 48 channel(s).", vm.CalStatus);
-            Assert.Matches(@"exceed the recording \(\d+\.\d s\)", vm.CalStatus);   // to one decimal, as Qt gives it
+            Assert.Matches(@"exceed the recording \(\d+\.\d s\)", vm.CalStatus);   // to one decimal, as v2.14.2 gave it
             double atRate = RecordingSecondsIn(vm.CalStatus);
             Assert.InRange(atRate, 60, 70);
             vm.ClipStart = 0m;
@@ -349,7 +349,7 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
-        public void EachStatusIsMarkedAndColouredAsQtsAre()
+        public void EachStatusIsMarkedAndColouredByItsKind()
         {
             Assert.Equal(("✓ a", "⚠ a", "✗ a", "a"),
                          (ExtractCalibrationViewModel.Marked(CalibrationStatusKind.Ok, "a"), ExtractCalibrationViewModel.Marked(CalibrationStatusKind.Warn, "a"),

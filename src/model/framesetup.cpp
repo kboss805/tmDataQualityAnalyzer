@@ -27,9 +27,8 @@ bool FrameSetup::tryLoadingFile(const std::filesystem::path& filename, int num_w
 {
     clearParameters();
 
-    // One parse, not two. This used to build a QSettings AND separately re-read the
-    // file with readGroupsInFileOrder(), because QSettings returns childGroups()
-    // sorted while a word map's order is the order the file lists it in.
+    // One parse: TomlDocument keeps the sections in file order, and a word map's
+    // order is the order the file lists it in.
     const TomlDocument doc = TomlDocument::load(filename);
     if (!doc.ok())
     {
@@ -174,9 +173,8 @@ ReceiverParams FrameSetup::readReceiverParams(const std::filesystem::path& path,
     // The receiver counts live under [Receivers] in every shipped parameters file.
     // Files the dialog itself wrote before v2.12.1 put them under [Parameters]
     // instead, so read those too rather than silently showing the defaults. Spelled
-    // as an explicit contains() rather than a nested default, which is what the
-    // QSettings version had to do and which read as though [Receivers] were optional
-    // in a different sense than it is.
+    // as an explicit contains() rather than a nested default, which would read as
+    // though [Receivers] were optional in a different sense than it is.
     const int receivers = cfg.contains("Receivers/Count")
         ? cfg.integer("Receivers/Count", params.numReceivers)
         : cfg.integer("Parameters/NumReceivers", params.numReceivers);
@@ -203,9 +201,8 @@ bool FrameSetup::writeReceiverParams(const std::filesystem::path& path, const Re
         return false;
     }
 
-    // No QFile::remove() first any more: TomlDocument::save() truncates. QSettings
-    // merged into whatever the file already held, so without the delete an overwrite
-    // left the old file's word map behind alongside the new one.
+    // No delete first: TomlDocument::save() truncates, so an overwrite never leaves
+    // the old file's word map behind alongside the new one.
     TomlDocument cfg;
     cfg.setValue("Parameters/Polarity", params.polarityIndex);
     cfg.setValue("Parameters/Slope",    params.slopeIndex);
@@ -278,8 +275,9 @@ int FrameSetup::receiverIndexFromName(const std::string& name)
     {
         return 0;
     }
-    // QString::toInt's rules (whitespace and a leading '+' tolerated) via the shared
-    // parser; pinned by receiverNameParsingMatchesQStringToInt.
+    // Base 10, surrounding whitespace and a leading '+' tolerated, via the shared parser;
+    // pinned by "a receiver number in a name is a whole decimal number, or none"
+    // (test_framesetup.cpp).
     int receiver = 0;
     const bool ok = textparse::parseInteger(name.substr(at + kReceiverTokenLength), receiver);
     // A name ending in "_RCVR" with no number, or with trailing non-digits, is

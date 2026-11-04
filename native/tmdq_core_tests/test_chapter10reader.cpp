@@ -1,6 +1,5 @@
 // Chapter10Reader: the metadata reader that lists a recording's channels for the Configure Streams dialog, and
-// ChannelData, the value it stores per channel. No Qt; ported from the Qt TestChapter10Reader and TestChannelData,
-// whose cases are all here under the same descriptions (the data-driven ones are loops).
+// ChannelData, the value it stores per channel (ported in plan step 2.4; the data-driven cases are loops).
 
 #include <cstdint>
 #include <cstring>
@@ -511,7 +510,7 @@ TEST_CASE("Chapter10Reader: the time channel list names the time channels")
     CHECK(reader.getTimeChannelList().size() == reader.getTimeChannelComboBoxList().size());
 }
 
-TEST_CASE("Chapter10Reader: a TMATS data rate is read like QString::toDouble")
+TEST_CASE("Chapter10Reader: a TMATS data rate is read as a whole positive decimal number, or not at all")
 {
     // Six characters, replacing "800000" in P-16\D2. A rate that is not a positive number is "not described", not a rate.
     struct Row { const char* name; const char* value; double expected; };

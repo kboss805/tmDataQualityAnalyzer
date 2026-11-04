@@ -1,13 +1,11 @@
-// FrameSyncFile: the frame-sync pattern file (US1.0 / US2.0 / US5.0), read and written by the core. No Qt; the core
-// half of the Qt TestFrameSyncFile. The Qt suite pinned the file format through the dialog's load and save
-// functions, so each of its expectations is what the dialog does with the file: a pattern upper-cased, a frame
-// length clamped to the spin box, a missing Randomized key leaving the box alone. None of that is the core's. The
-// cases here ask the core directly what a file SAYS (the pattern and mask as written, the length only if usable,
-// where the length came from, Invert Data, and Randomized only when the file has the key) and what writing puts in
-// the file. The dialog's half, and the Receiver SNR defaults, stay in TestFrameSyncFile.
+// FrameSyncFile: the frame-sync pattern file (US1.0 / US2.0 / US5.0), read and written by the core. What a dialog
+// does with the file (a pattern upper-cased, a frame length clamped to its field, a missing Randomized key leaving
+// the box alone) is not the core's. The cases here ask the core directly what a file SAYS (the pattern and mask as
+// written, the length only if usable, where the length came from, Invert Data, and Randomized only when the file has
+// the key) and what writing puts in the file.
 //
-// The oracle is the load and save code the core replaced, restated over TomlDocument and std types (the Qt suite
-// kept it over QString and widgets), run beside the core over generated files.
+// The oracle is the load and save code v2.14.2's setup dialog ran, restated over TomlDocument and std types, run
+// beside the core over generated files.
 
 #include <algorithm>
 #include <cstdint>
@@ -373,7 +371,7 @@ TEST_CASE("framesyncfile: what is written reads back, for every combination of t
 namespace {
 
 /// The load the dialog used to do inline, minus the widgets: the same keys, the same fallback, the same rules about
-/// what a file leaves alone. The Qt suite kept this over QString and widgets; here it fills the struct the core returns.
+/// what a file leaves alone. Here it fills the struct the core returns.
 FrameSyncFile oldRead(const fs::path& path)
 {
     const TomlDocument cfg = TomlDocument::load(path);
@@ -427,7 +425,7 @@ bool oldWrite(const fs::path& path, const std::string& pattern, const std::strin
     return cfg.save(path);
 }
 
-/// A deterministic generator (the Qt suite's, state for state), so a failure names the same case every run.
+/// A deterministic generator, so a failure names the same case every run.
 struct Rng
 {
     std::uint32_t state;

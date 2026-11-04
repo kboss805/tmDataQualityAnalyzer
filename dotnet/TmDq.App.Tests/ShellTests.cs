@@ -31,9 +31,9 @@ namespace TmDq.App.Tests
 {
     /// <summary>
     /// The shell (plan step 4.8): the title bar of the application's own with each part's role for Windows (snap
-    /// layouts on the maximize button), the menu with the Qt application's sections, Recent Files and Help, the keys,
-    /// the log sidebar's toggle, a file dropped on the window, the light and dark themes, and the manual. The Qt
-    /// <c>TestMainView</c>'s shell cases are ported among them.
+    /// layouts on the maximize button), the menu with v2.14.2's sections, Recent Files and Help, the keys,
+    /// the log sidebar's toggle, a file dropped on the window, the light and dark themes, and the manual. v2.x's
+    /// main-window shell cases are ported among them.
     /// </summary>
     [Collection(NativeCoreCollection.Name)]
     public sealed class ShellTests : IDisposable
@@ -143,7 +143,7 @@ namespace TmDq.App.Tests
             items.OfType<MenuItem>().Single(m => (string)m.Header! == header);
 
         [AvaloniaFact]
-        public async Task TheMenuHoldsTheQtApplicationsSectionsHelpAndExit()
+        public async Task TheMenuHoldsItsSectionsHelpAndExit()
         {
             var help = new FakeHelp();
             var picker = new Picker();
@@ -168,7 +168,7 @@ namespace TmDq.App.Tests
                          ((string)ToolTip.GetTip(Item("Import CSV..."))!, (string)ToolTip.GetTip(Item("Export..."))!));
             Assert.NotNull(ToolTip.GetTip(Item("Save as Template...")));
             Assert.NotNull(ToolTip.GetTip(Item("Apply Template to Files...")));
-            // The Qt menu's icons: the folder, the floppy disk, the import and export arrows.
+            // v2.14.2's menu icons: the folder, the floppy disk, the import and export arrows.
             foreach (string h in new[] { "Open...", "Save as Template...", "Import CSV...", "Export..." })
                 Assert.NotNull(Assert.IsType<Image>(Item(h).Icon).Source);
             Assert.Null(Item("Apply Template to Files...").Icon);
@@ -226,7 +226,7 @@ namespace TmDq.App.Tests
         [Fact]
         public void OpenOffersRecordingsOnlyAndImportCsvExportedCsvsOnly()
         {
-            // US6.3: Open stays Chapter-10-only, Import CSV is CSV-only; the Qt dialogs' filters, with no "All files" to
+            // US6.3: Open stays Chapter-10-only, Import CSV is CSV-only; v2.x's filters, with no "All files" to
             // reach a CSV through Open.
             FilePickerOpenOptions open = StorageRecordingPicker.Options;
             Assert.False(open.AllowMultiple);
@@ -447,9 +447,9 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
-        public void ThePalettesAreTheQtApplications()
+        public void ThePalettesAreV214s()
         {
-            // The Qt PlotWidget::applyTheme's and PlotLegendOverlay::applyTheme's colours, as numbers.
+            // v2.14.2's chart and legend colours for each theme, as numbers.
             Assert.Equal(new[] { "#FFFFFFFF", "#FF1E1E1E", "#FFC8C8C8", "#FF005FB8", "#B9FFFFFF", "#FFAAAAAA", "#FF1E1E1E" }, Hex(ChartPalette.Light));
             Assert.Equal(new[] { "#FF202020", "#FFDCDCDC", "#FF3C3C3C", "#FF60CDFF", "#B9202020", "#FF5A5A5A", "#FFE6E6E6" }, Hex(ChartPalette.Dark));
         }
@@ -458,7 +458,7 @@ namespace TmDq.App.Tests
             .Select(c => $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}").ToArray();
 
         [AvaloniaFact]
-        public void EachThemesBrushesAreTheQtThemes()
+        public void EachThemesBrushesAreV214s()
         {
             string[] keys = { "ChipBackground", "ChipBorder", "ChipForeground", "ChipAccent", "LoadingBackground", "LoadingBorder", "LoadingForeground",
                               "LogPanelBackground", "LogPanelBorder", "TitleBarHover" };

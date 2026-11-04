@@ -1,4 +1,4 @@
-// Helpers the native tests share. Header-only, no Qt.
+// Helpers the native tests share. Header-only.
 
 #ifndef TMDQ_TEST_SUPPORT_H
 #define TMDQ_TEST_SUPPORT_H

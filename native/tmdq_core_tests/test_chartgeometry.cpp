@@ -1,9 +1,9 @@
 // The plot's geometry (plan step 4.3a): the transforms between data and pixels, a series' line and its per-pixel-column
-// envelope, and the X ticks. No Qt. The code came out of the Qt chart, TmChart, which now calls it; that code is restated
-// here over std types as it was (`Old`) and compared with the core over generated series, views and ranges, so the Qt
-// chart is held to drawing exactly what it drew. The cases after the comparison work their answers out by hand: the
-// behaviours TestTmChart pins through a rendered widget (a dense series' dropout and spread, a line through a view no
-// sample is in, the time ticks), here on the geometry itself.
+// envelope, and the X ticks. The code came out of v2.x's chart, TmChart (its Qt implementation); that code is
+// restated here over std types as it was (`Old`) and compared with the core over generated series, views and ranges,
+// so the geometry is held to exactly what that chart drew. The cases after the comparison work their answers out by
+// hand: the behaviours the chart's own tests pinned through a rendered widget (a dense series' dropout and spread, a
+// line through a view no sample is in, the time ticks), here on the geometry itself.
 
 #include <algorithm>
 #include <bit>
@@ -25,9 +25,9 @@ constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
 constexpr double kInf = std::numeric_limits<double>::infinity();
 
 // ---------------------------------------------------------------------------
-// The Qt chart's code before it called the core (TmChart, at 02c214b), over std types.
-// QPointF, QLineF and QPolygonF become plain structs; QRectF the four doubles of the plot area; the series' axis picks
-// which Y range is used, as it did.
+// The chart's code before it called the core (TmChart, at 02c214b), over std types.
+// Its points, lines and polygons become plain structs; its rectangle the four doubles of the plot area; the series'
+// axis picks which Y range is used, as it did.
 // ---------------------------------------------------------------------------
 
 struct OldPoint { double x; double y; };
@@ -246,7 +246,7 @@ chart::View viewOf(const Old& o, bool leftAxis)
     return v;
 }
 
-// Bit-for-bit: the Qt chart must paint exactly the pixels it painted before.
+// Bit-for-bit: the geometry must place exactly the pixels the old code placed.
 bool same(double a, double b) { return std::bit_cast<std::uint64_t>(a) == std::bit_cast<std::uint64_t>(b); }
 
 bool sameGeometry(const chart::SeriesGeometry& g, const std::vector<OldLine>& segments,
@@ -295,10 +295,10 @@ chart::View unitView()
 }  // namespace
 
 // ---------------------------------------------------------------------------
-// Against the Qt chart's own code
+// Against the old chart's own code
 // ---------------------------------------------------------------------------
 
-TEST_CASE("ChartGeometry: a series' line and band are the Qt chart's, over generated series and views")
+TEST_CASE("ChartGeometry: a series' line and band are the code it replaced, over generated series and views")
 {
     std::mt19937 rng(4031);
     auto uniform = [&](double a, double b) { return std::uniform_real_distribution<double>(a, b)(rng); };
@@ -379,7 +379,7 @@ TEST_CASE("ChartGeometry: a series' line and band are the Qt chart's, over gener
         const bool oldSorted = Old::sorted(xs);
         CHECK(chart::isSortedX(xs) == oldSorted);
 
-        // The Qt chart truncated a mismatched pair to its common prefix before it stored the series.
+        // The old chart truncated a mismatched pair to its common prefix before it stored the series.
         const std::size_t paired = std::min(xs.size(), ys.size());
         const std::vector<double> oxs(xs.begin(), xs.begin() + static_cast<std::ptrdiff_t>(paired));
         const std::vector<double> oys(ys.begin(), ys.begin() + static_cast<std::ptrdiff_t>(paired));
@@ -413,7 +413,7 @@ TEST_CASE("ChartGeometry: a series' line and band are the Qt chart's, over gener
     CHECK(mismatched > 50);
 }
 
-TEST_CASE("ChartGeometry: the transforms are the Qt chart's")
+TEST_CASE("ChartGeometry: the transforms are the code they replaced")
 {
     std::mt19937 rng(77);
     auto uniform = [&](double a, double b) { return std::uniform_real_distribution<double>(a, b)(rng); };
@@ -437,7 +437,7 @@ TEST_CASE("ChartGeometry: the transforms are the Qt chart's")
     }
 }
 
-TEST_CASE("ChartGeometry: the ticks are the Qt chart's")
+TEST_CASE("ChartGeometry: the ticks are the code they replaced")
 {
     std::mt19937 rng(9);
     auto uniform = [&](double a, double b) { return std::uniform_real_distribution<double>(a, b)(rng); };
@@ -658,7 +658,7 @@ TEST_CASE("ChartGeometry: a series is sorted when every time after the first is 
     CHECK(chart::isSortedX(V{}));
     CHECK(chart::isSortedX(V{kNaN}));
     CHECK(chart::isSortedX(V{1.0, 1.0, 2.0}));
-    CHECK(chart::isSortedX(V{kNaN, 1.0, 2.0}));   // the first is not checked, as the Qt chart did not check it
+    CHECK(chart::isSortedX(V{kNaN, 1.0, 2.0}));   // the first is not checked, as the old chart did not check it
     CHECK_FALSE(chart::isSortedX(V{1.0, kNaN, 2.0}));
     CHECK_FALSE(chart::isSortedX(V{1.0, 2.0, kInf}));
     CHECK_FALSE(chart::isSortedX(V{2.0, 1.0}));
@@ -666,8 +666,8 @@ TEST_CASE("ChartGeometry: a series is sorted when every time after the first is 
 
 TEST_CASE("ChartGeometry: time ticks land on round times of the clock")
 {
-    // The Qt chart's own cases (TestTmChart::timeTicksLandOnRoundTimes and
-    // timeTicksAreRoundOnTheClockNotInElapsedSeconds), now on the core.
+    // The old chart's own cases (time ticks on round times, and round on the clock rather than in
+    // elapsed seconds), now on the core.
     auto multiplesOf = [](const std::vector<double>& ticks, double origin, double step) {
         return std::all_of(ticks.begin(), ticks.end(), [&](double t) {
             const double clock = t + origin;

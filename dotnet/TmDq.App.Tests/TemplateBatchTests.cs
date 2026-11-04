@@ -22,9 +22,9 @@ using Xunit;
 namespace TmDq.App.Tests
 {
     /// <summary>
-    /// Save as Template and Apply Template to Files in the main window (plan step 4.7, US1.1): the Qt main view's and
-    /// <c>BatchController</c>'s flow and messages, a batch over copies of the PRN sample, its per-file export held to the
-    /// Qt application's CSV, and the windows.
+    /// Save as Template and Apply Template to Files in the main window (plan step 4.7, US1.1): v2.14.2's main window's
+    /// and batch's flow and messages, a batch over copies of the PRN sample, its per-file export held to the
+    /// CSV v2.14.2 wrote, and the windows.
     /// </summary>
     [Collection(NativeCoreCollection.Name)]
     public sealed class TemplateBatchTests : IDisposable
@@ -123,7 +123,7 @@ namespace TmDq.App.Tests
         // ---- the batch ------------------------------------------------------------------------------------------------------
 
         [Fact]
-        public async Task ABatchRunsEachFileInTurnKeepsEachAndExportsEachAsTheQtApplicationDoes()
+        public async Task ABatchRunsEachFileInTurnKeepsEachAndExportsEachAsV214Did()
         {
             string one = Copy("flight 1.ch10"), two = Copy("flight 2.ch10"), missing = Path.Combine(_dir, "gone.ch10"), output = Path.Combine(_dir, "out");
             Directory.CreateDirectory(output);
@@ -162,7 +162,7 @@ namespace TmDq.App.Tests
             Assert.Equal(new[] { (0, one), (1, two) }, vm.Sources.Select(s => (s.SourceId, s.FilePath)));
             Assert.False(vm.IsBusy);
 
-            // The first file's CSV is the Qt application's export of these settings, byte for byte (4.5's oracle); the
+            // The first file's CSV is v2.14.2's export of these settings, byte for byte (4.5's oracle); the
             // second's columns are qualified by its recording.
             byte[] csv = File.ReadAllBytes(Path.Combine(output, "flight 1.csv"));
             Assert.Equal((9479, "1be395481250be54acbd94c95a093be75b166e7e5616abf94895b622a91e305a"),
@@ -193,7 +193,7 @@ namespace TmDq.App.Tests
             Assert.Equal(new[] { "CH-01 PRN 15 5M", "CH-01 PRN 15 5M", "CH-03 PRN 11 1M", "CH-03 PRN 11 1M" }, plain.Plot.Series.Select(s => s.Name));
             Assert.DoesNotContain(plain.Log.Entries, e => e.Text.StartsWith("Exported", StringComparison.Ordinal));
             Assert.Empty(Directory.GetFiles(_dir, "*.csv"));
-            // Nothing to run: nothing happens, not even the plot cleared (the Qt BatchController's start with no files).
+            // Nothing to run: nothing happens, not even the plot cleared (as v2.14.2's batch started with no files).
             int logged = plain.Log.Entries.Count;
             string status = plain.Status;
             IReadOnlyList<PlotSeries> shown = plain.Plot.Series.ToArray();
@@ -318,7 +318,7 @@ namespace TmDq.App.Tests
         // ---- Apply Template to Files --------------------------------------------------------------------------------------
 
         [Fact]
-        public void ATemplateThatCannotBeUsedIsAnErrorInTheQtWords()
+        public void ATemplateThatCannotBeUsedIsAnErrorInV214sWords()
         {
             var vm = new MainWindowViewModel();
             string Write(string name, string text)
@@ -523,7 +523,7 @@ namespace TmDq.App.Tests
         // ---- the windows ----------------------------------------------------------------------------------------------------
 
         [AvaloniaFact]
-        public void TheConfirmationWindowIsLaidOutAsQtsAndClosesOnProcessOrCancel()
+        public void TheConfirmationWindowListsTheFilesAndClosesOnProcessOrCancel()
         {
             var owner = new Window { Width = 400, Height = 300 };
             owner.Show();

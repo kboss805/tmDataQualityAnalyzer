@@ -21,7 +21,7 @@ namespace TmDq.App.Services
 
         public StorageRecordingPicker(TopLevel owner) => _owner = owner;
 
-        /// <summary>What Open offers: Chapter 10 recordings and nothing else, as the Qt Open does (US6.3: a CSV is imported,
+        /// <summary>What Open offers: Chapter 10 recordings and nothing else, as v2.x's did (US6.3: a CSV is imported,
         /// never opened).</summary>
         public static FilePickerOpenOptions Options => new()
         {

@@ -1,7 +1,6 @@
 // constants.h: the application's version, the PCM frame and file constants, the UI defaults, and the calibration
-// tuning, pinned by value. No Qt; the core half of the Qt TestConstants, whose cases on this header are all here (the
-// Qt suite keeps plotconstants.h, which is Qt). A constant is pinned when something outside the code depends on its
-// value - a file, a key, a TMATS type, a default an operator sees - because a wrong value there compiles, runs and
+// tuning, pinned by value (ported in plan step 2.4). A constant is pinned when something outside the code depends on
+// its value - a file, a key, a TMATS type, a default an operator sees - because a wrong value there compiles, runs and
 // looks plausible.
 
 #include <cmath>
@@ -35,7 +34,7 @@ std::filesystem::path shippedSetting(const char* folder, const char* file)
 
 } // namespace
 
-// --- the cases of the Qt suite, each under its old name --------------------------------------------------------------
+// --- the cases ported in plan step 2.4, each under its old name ------------------------------------------------------
 
 TEST_CASE("Constants: pcmMaxChannelCount")
 {
@@ -127,21 +126,6 @@ TEST_CASE("Constants: pcmProgressReportInterval")
     CHECK(PCMConstants::kProgressReportIntervalMs == 100);
 }
 
-TEST_CASE("Constants: uiQSettingsKeys")
-{
-    CHECK(is(UIConstants::kOrganizationName, "tmDataQualityAnalyzer"));
-    CHECK(is(UIConstants::kApplicationName, "tmDataQualityAnalyzer"));
-    CHECK(is(UIConstants::kSettingsKeyTheme, "Theme"));
-    CHECK(is(UIConstants::kSettingsKeyLastCh10Dir, "LastCh10Directory"));
-    CHECK(is(UIConstants::kSettingsKeyLastTomlDir, "LastTomlDirectory"));
-}
-
-TEST_CASE("Constants: uiThemeIdentifiers")
-{
-    CHECK(is(UIConstants::kThemeDark, "dark"));
-    CHECK(is(UIConstants::kThemeLight, "light"));
-}
-
 TEST_CASE("Constants: uiLayoutConstants")
 {
     CHECK(UIConstants::kFlatButtonMinWidth == 90);
@@ -172,12 +156,6 @@ TEST_CASE("Constants: uiPolarityConstants")
     CHECK(static_cast<int>(UIConstants::kGlyphClose) == 0xE8BB);
 }
 
-TEST_CASE("Constants: uiRecentFilesConstants")
-{
-    CHECK(is(UIConstants::kSettingsKeyRecentFiles, "RecentFiles"));
-    CHECK(UIConstants::kMaxRecentFiles == 5);
-}
-
 TEST_CASE("Constants: uiDeploymentConstants")
 {
     CHECK(is(UIConstants::kPortableMarkerFilename, "portable"));
@@ -195,7 +173,7 @@ TEST_CASE("Constants: uiOutputFilenameConstants")
 
 TEST_CASE("Constants: the sync-pattern field's length is derived from the bit limit")
 {
-    // Moved from the Qt plotConstants case, which pinned these beside the plot's. The field's length limit is derived
+    // Once pinned beside the plot's constants, which have gone with v2.x. The field's length limit is derived
     // from the bit limit, not spelled out separately - raising kMaxSyncPatternBits must widen the field.
     CHECK(PCMConstants::kBitsPerHexDigit == 4);
     CHECK(PCMConstants::kMaxSyncPatternHexChars == PCMConstants::kMaxSyncPatternBits / PCMConstants::kBitsPerHexDigit);
@@ -251,7 +229,7 @@ TEST_CASE("Constants: uiSlopeVoltageBounds")
     CHECK(UIConstants::kSlopeVoltageUpper[3] == 5.0);
 }
 
-// --- cases added beyond the Qt suite: each closes a gap the port's mutation check found ------------------------------
+// --- cases added in the port: each closes a gap the port's mutation check found --------------------------------------
 // Every constant in constants.h was altered in turn and run against the whole native suite. These are the ones that
 // survived it (the version numbers aside: the version case builds its expectation from them, and the release
 // consistency check pins the version across the shipped files). Where a shipped file carries the same value, the case
@@ -303,13 +281,6 @@ TEST_CASE("Constants: the full manual's file name is the one the installer ships
     const std::string script = readBytes(repoFile("deploy/avalonia/tmDataQualityAnalyzer.iss"));
     CHECK(contains(script, std::string("staging\\manual\\") + UIConstants::kFullManualFilename + "\""));
     CHECK(contains(script, "Source: \"{#ManualFile}\"; DestDir: \"{app}\""));
-}
-
-TEST_CASE("Constants: the window-state settings keys")
-{
-    // Persisted in the user's settings: a renamed key silently forgets every user's choice.
-    CHECK(is(UIConstants::kSettingsKeySidebarVisible, "SidebarVisible"));
-    CHECK(is(UIConstants::kSettingsKeyLegendVisible, "LegendVisible"));
 }
 
 TEST_CASE("Constants: the status glyph colours")

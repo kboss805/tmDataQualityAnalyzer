@@ -37,7 +37,7 @@ namespace TmDq.App.Services
         Task<int?> ChooseSourceAsync(IReadOnlyList<string> choices);
     }
 
-    /// <summary>The platform's file dialogs, owned by a window, with the Qt dialogs' titles and filters.</summary>
+    /// <summary>The platform's file dialogs, owned by a window, with v2.x's titles and filters.</summary>
     public sealed class StorageTemplateFilePicker : ITemplateFilePicker
     {
         private static readonly FilePickerFileType Templates = new("Template Files") { Patterns = new[] { "*.json" } };

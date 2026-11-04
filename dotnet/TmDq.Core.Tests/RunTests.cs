@@ -10,9 +10,9 @@ using Xunit;
 namespace TmDq.Core.Tests;
 
 /// <summary>
-/// Runs of the committed recordings through the managed library. The numbers are the ones the Qt application's
-/// own pipeline produces: the PRN figures are what the interop spike recorded before the de-Qt sweep (116
-/// samples and 1,100 missed frames at one second, 11,554 and 838 at ten milliseconds), and the rest were taken
+/// Runs of the committed recordings through the managed library. The numbers are the ones v2.14.2's own
+/// pipeline produced: the PRN figures are what the interop spike recorded before the pipeline moved into the core
+/// (116 samples and 1,100 missed frames at one second, 11,554 and 838 at ten milliseconds), and the rest were taken
 /// from the core run directly (PipelineRunner, the code behind both applications) with a digest that is
 /// recomputed here in the same order, so equal inputs give equal floating-point results.
 /// </summary>

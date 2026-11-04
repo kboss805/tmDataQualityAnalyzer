@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  tmdq_core_tests.exe - the native core's tests, written with doctest (lib\doctest) and built with NO Qt.
+  tmdq_core_tests.exe - the native core's tests, written with doctest (lib\doctest).
 
-  Plan step 2.4 ports the core's test suites off Qt Test one suite per pull request. A suite is ported when this
-  project has every case of the Qt one and a mutation check has been run against it; then the Qt version is
-  deleted. The project compiles only the core sources the ported suites need (each is a src\model\<name>.cpp that
-  tmdq_core.vcxproj also builds), so it grows with them.
+  Plan step 2.4 ported the core's test suites here one suite per pull request, each with a mutation check. The
+  project compiles the core sources (each a src\model\<name>.cpp that tmdq_core.vcxproj also builds) and the C ABI,
+  so the tests exercise the code the DLL is built from.
 
-  There is no Qt include path and no Qt library here, so a test that reached for Qt would not compile.
-  scripts\test_native.ps1 builds it, requires zero compiler warnings, and runs it.
+  The include paths are doctest's, the core's, the ABI's and irig106's, and the only library beyond the C runtime
+  and Windows is ws2_32. scripts\test_native.ps1 builds it, requires zero compiler warnings, checks its imports, and
+  runs it.
 
   Compiler switches are the ones tmdq_core.vcxproj uses, so the sources are compiled the same way here as in the
   DLL. Intermediates go in a folder per toolset, as there.

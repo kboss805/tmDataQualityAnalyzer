@@ -23,8 +23,8 @@ namespace TmDq.App.Logging
 
     /// <summary>
     /// The session's log, the sidebar's contents (US3.0 to US3.2 report through it). A line's level is given by whoever
-    /// knows it (an error from the core is an error whatever it says); a plain line is classified by its text as the Qt
-    /// application's <c>MainViewModel::classifyLogMessage</c> does. Used on the UI thread only.
+    /// knows it (an error from the core is an error whatever it says); a plain line is classified by its text
+    /// (<see cref="Classify"/>), as v2.x classified it. Used on the UI thread only.
     /// </summary>
     public sealed class SessionLog
     {
@@ -36,7 +36,7 @@ namespace TmDq.App.Logging
         public ObservableCollection<LogEntry> Entries { get; } = new();
 
         /// <summary>The level a plain line's text implies, highest first: ERROR, then WARNING, then the two lines that
-        /// report success, else information. Case matters, as it did in Qt.</summary>
+        /// report success, else information. Case matters, as it did in v2.x.</summary>
         public static LogLevel Classify(string message)
         {
             if (message.Contains("ERROR", StringComparison.Ordinal)) return LogLevel.Error;

@@ -1,5 +1,5 @@
-// The C ABI of tmdq_core.dll (native/tmdq_core), exercised in-process. No Qt; ported from the Qt TestAbi, whose cases
-// are all here under the same names.
+// The C ABI of tmdq_core.dll (native/tmdq_core), exercised in-process (ported in plan step
+// 2.4).
 //
 // The ABI sources are compiled straight into this executable (TMDQ_ABI_STATIC), so these tests call `tmdq_*` exactly
 // as a host would, from C++ rather than through P/Invoke. What they pin is the contract in `tmdq_abi.h`: the layout of
@@ -3144,7 +3144,7 @@ TEST_CASE("Abi: aStreamBecomesTheSeriesTheCoreBuilds")
     CHECK(spec.y_max == -70.0);
 
     // The set keeps the stream's data alive after the host has freed the result. Reading the values alone cannot
-    // show it: a Release heap leaves freed memory as it was (the Qt suite ran Debug, whose heap overwrites it), so
+    // show it: a Release heap leaves freed memory as it was (a Debug heap overwrites it), so
     // the data's lifetime is watched directly, and it must end with the set.
     const std::weak_ptr<const ProcessedStreamData> data = result->data;
     tmdq_stream_result_free(result);

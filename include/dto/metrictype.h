@@ -3,8 +3,7 @@
  * @brief Which kind of measurement a plot series carries.
  *
  * Its own header so the CSV column schema (SeriesColumnSchema), which is part of the
- * Qt-free core, can name a metric without pulling in PlotSeriesData, which carries Qt
- * types for the plot.
+ * native core, can name a metric without pulling in anything that describes the plot.
  */
 
 #ifndef METRICTYPE_H

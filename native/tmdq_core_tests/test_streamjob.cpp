@@ -1,12 +1,10 @@
 // Stream jobs: turning one stream's configuration into a processing job (`buildStreamJob`, plan step 1.5): the
 // validation and its messages, the receiver-parameters file and the default word map, the linear calibration and the
-// non-linear profiles that attach to it. No Qt; the core half of the Qt TestStreamJob. That suite pinned the builder through
-// MainViewModel::buildStreamJob, which converts the user's Qt settings (QString, QHash) into the builder's plain
-// ones and turns its report into signals; the cases here hand the builder those plain settings directly. What the wrapper
-// does stays in TestStreamJob, which keeps a row for each thing it converts.
+// non-linear profiles that attach to it. The cases hand the builder its plain settings directly; converting the
+// user's settings into them is the host's, and is tested there.
 //
-// The oracle is the view-model code the builder replaced, restated over std types (the Qt suite kept it over QString and
-// QFileInfo): run beside the builder over generated configurations. It shares with the builder the frame-sync decode, the
+// The oracle is the view-model code v2.14.2 ran before the builder existed, restated over std types: run beside the
+// builder over generated configurations. It shares with the builder the frame-sync decode, the
 // acquisition flags and `FrameSetup`, which have their own suites.
 
 #include <cstdint>
@@ -106,7 +104,7 @@ Built build(const StreamJobConfig& cfg, const std::string& app_root, bool swap_b
     return out;
 }
 
-/// `QString::number(v, 'g', 15)`, and the spellings Qt gives the specials.
+/// `v` in %g with 15 significant digits; a NaN prints "nan" and an infinity "inf" or "-inf".
 std::string num(double v)
 {
     if (std::isnan(v))
@@ -683,7 +681,7 @@ bool buildStreamJob(const StreamJobConfig& cfg, const ProcessingParams& base, co
 
 namespace {
 
-/// A deterministic generator (the Qt suite's, state for state), so a failure names the same case every run.
+/// A deterministic generator, so a failure names the same case every run.
 struct Rng
 {
     std::uint32_t state;

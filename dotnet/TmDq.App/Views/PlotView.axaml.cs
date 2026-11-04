@@ -12,7 +12,7 @@ using TmDq.App.Services;
 namespace TmDq.App.Views
 {
     /// <summary>
-    /// The plot window's whole content (plan step 4.4), the Qt <c>PlotWidget</c> less the drawing (4.3b's
+    /// The plot window's whole content (plan step 4.4), less the drawing (4.3b's
     /// <see cref="PlotChart"/>) and export (4.5): the chart, with nothing around it (US4.1), and over it the chip bar at the
     /// top left and the legend at the top right. Every control is in the right-click menu, rebuilt each time it opens so
     /// it is always current, or on a chip; the most used have single keys, which act only while the chart has focus (a
@@ -110,7 +110,7 @@ namespace TmDq.App.Views
         }
 
         /// <summary>
-        /// The right-click menu, as the Qt <c>buildContextMenu</c> has it: Set Plot Title first; Plot File; View Mode, its
+        /// The right-click menu, as v2.x had it: Set Plot Title first; Plot File; View Mode, its
         /// key in its title (a submenu can show no key of its own); Customize View; Show Legend; Readout; X Axis; Y Axes;
         /// Reset View. Everything that acts on data is disabled until there is some. Export is not here: it is a file
         /// operation, in the main menu (plan step 4.5). Null with no plot.
@@ -127,7 +127,7 @@ namespace TmDq.App.Views
             menu.Items.Add(new Separator());
 
             // Which processed file to view: every one overlaid, or one, with more than one, which batch runs bring (plan
-            // step 4.7, the Qt Plot File submenu).
+            // step 4.7, US1.1).
             IReadOnlyList<(int Id, string Label)> sources = vm.SourceList();
             var plotFile = new MenuItem { Header = "Plot File", IsEnabled = hasData && sources.Count > 1 };
             plotFile.Items.Add(Radio("All files (overlaid)", "plotfile", vm.VisibleSource < 0, () => vm.SetVisibleSource(-1)));

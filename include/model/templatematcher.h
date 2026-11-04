@@ -3,14 +3,14 @@
  * @brief Validates that a .ch10 file's PCM channel-ID set matches a processing
  *        template's, for Batch Apply (docs/processing-template-design.md).
  *
- * Qt-free core logic over plain channel ids (de-Qt, plan step 1.3). Matching is
+ * Core logic over plain channel ids (plan step 1.3). Matching is
  * exact-set: a file is accepted only if its channel-ID set is identical to the
  * template's -- no positional mapping, no subset tolerance. This is precisely
  * what makes it safe to feed the template's stored StreamConfigs (with their
  * original pcmChannelIds) straight to processing.
  *
- * Reading the ids out of a template or a reader's channel list is the caller's
- * (`BatchController::matchFile`), because those types carry Qt.
+ * Reading the ids out of a template or a reader's channel list is the caller's; a
+ * host reaches the matcher through the C ABI (`abi_formats.cpp`).
  */
 
 #ifndef TEMPLATEMATCHER_H

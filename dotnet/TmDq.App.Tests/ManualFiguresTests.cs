@@ -31,7 +31,7 @@ namespace TmDq.App.Tests
     /// test sets up one scene from the committed recordings and shipped settings, checks what the manual's caption says
     /// about it (so a caption cannot outlive the behaviour it describes), and renders it. With TMDQ_MANUAL_FIGURES set
     /// to a folder the figures are written there (scripts\build_manual.ps1 does this); otherwise to a temporary
-    /// folder, deleted after, so the suite still proves every figure can be made. The names are the ones the Qt
+    /// folder, deleted after, so the suite still proves every figure can be made. The names are the ones the v2.x
     /// manual's hand captures had, which the manual's anchors place. The dark theme, which the application opens in, except
     /// where the light one is the subject.
     /// </summary>
@@ -130,7 +130,7 @@ namespace TmDq.App.Tests
             public Task<bool> CustomizeAsync(CustomizeViewModel customize) => Task.FromResult(false);
         }
 
-        /// <summary>The PRN sample's two streams that carry data, as the template the Qt application saved has them
+        /// <summary>The PRN sample's two streams that carry data, as the template v2.14.2 saved has them
         /// (CH-01 on PRN 15, CH-03 on PRN 11), processed; and, with <paramref name="withBadStream"/>, CH-04 on PRN 15,
         /// which finds no sync.</summary>
         private static async Task<MainWindowViewModel> PrnProcessed(bool withBadStream = false, IProcessingDialog? progress = null,
