@@ -1,9 +1,9 @@
 # tmDataQualityAnalyzer — Claude Code guide
 
 Windows desktop app for analyzing data quality of IRIG 106 Chapter 10 PCM telemetry: per-stream **Frame Sync
-Lock** stats and **Receiver AGC/SNR**, plotted vs. time. MVVM, single-reader / parallel-worker processing core in
-C++20. **From v3.0.0 the shipping app is Avalonia 12 on .NET 10** (`dotnet/`) over that core as `tmdq_core.dll`; the
-Qt 6.12.0 app (qmake + MSVC 2022) stays in the tree, built and tested, until plan step 6.1. **Current version: 3.0.0.**
+Lock** stats and **Receiver AGC/SNR**, plotted vs. time. **Avalonia 12 on .NET 10** (`dotnet/`, MVVM) over a
+C++20 single-reader / parallel-worker processing core built as `tmdq_core.dll` (`include/`, `src/model/`, `native/`).
+The Qt application shipped up to v2.14.2 and was deleted in plan step 6.1. **Current version: 3.0.0.**
 
 > **Full reference:** `docs/claude.md` is the canonical, detailed guide (user stories, architecture,
 > conventions, test catalog). Read it when you need depth. This file is the quick orientation that
@@ -13,63 +13,55 @@ Qt 6.12.0 app (qmake + MSVC 2022) stays in the tree, built and tested, until pla
 
 ## Build & test
 
-Toolchain is **not on PATH** — set it up first by dot-sourcing `. .\scripts\env.ps1`, which imports
-the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on PATH. Use the
-**PowerShell** tool.
-
-- **App:** from `build/`, `qmake ..\tmDataQualityAnalyzer.pro -spec win32-msvc CONFIG+=debug` then
-  `& $env:TMDQ_MAKE -f Makefile.Debug` (`env.ps1` sets `TMDQ_MAKE` to the parallel `jom` when
-  present, else serial `nmake` — ~3.5x faster, so prefer it). Re-run qmake after
-  `.pro`/version/`Q_OBJECT` changes. **Zero warnings required.**
-- **Tests:** build **in-source inside `tests/`** (the exe must sit one level under `tests/` or the
-  data-file tests fail), then `.\debug\tmDataQualityAnalyzer_tests.exe`. The full run (all **19
-  suites**) is dominated by the real-Ch10 integration suites (a few minutes); add `--fast` (or
-  `TMDQ_FAST_TESTS=1`) to skip the real-`.ch10` integration suites for ~1 s local iteration — **local only; CI
-  and releases run the full suite**. No CLI single-suite filter.
-  Green baseline: **458 passed / 0 failed / 0 skipped**, always: there is **no standing skip**, and
-  CI fails on any (a skip is a missing fixture). The heavy PRN throughput benchmark is a **native
-  doctest case** now ("PipelineRunner throughput", `native/tmdq_core_tests/test_pipelinerunner.cpp`),
-  skipped unless `TMDQA_RUN_HEAVY_BENCH=1` because it walks a 640 MB recording nine times and takes
-  minutes. At release `scripts\run_throughput_bench.ps1` builds the native tests in Release, runs
-  them all, then runs that one case **pinned to the performance cores** (absolute times were
-  bimodal ~1.9x on this hybrid CPU) and **asserts** the parallel-vs-solo ratios — it printed its
-  timings and asserted nothing before that, so this is the decommutation pipeline's only
-  performance guard. Once enabled it cannot skip: a recording that cannot satisfy it is a failure.
-  It needs `tests/data/test files/prn_testfile, full.ch10` (gitignored); the committed sample
-  carries data for 2 of the 4 channels it times and cannot stand in. In a worktree, junction
-  `tests/data` to the main checkout's or the fixture tests skip.
+Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `scripts\env.ps1` (which imports
+`vcvars64.bat`) when `msbuild` or `mt` is not on PATH. Use the **PowerShell** tool.
 
 - **Native core DLL (no Qt):** `powershell -ExecutionPolicy Bypass -File scripts\build_core_dll.ps1
-  [-Configuration Debug|Release] [-Rebuild]` builds `tmdq.sln` (MSBuild, `native/tmdq_core/`) into
+  [-Configuration Debug|Release] [-Rebuild]` builds `native/tmdq_core/` (MSBuild) into
   `native/out/<config>/tmdq_core.dll`, then fails on any compiler warning or on an import outside a short
-  allow-list (the C runtime, `KERNEL32`, `WS2_32`, `USER32`). CI runs it for Debug and Release. It compiles
-  the same core sources as the qmake build; `TestCoreQtFree` fails if the two lists drift, so **a new core
-  source goes in `kCoreSources` AND `tmdq_core.vcxproj`**, and a new ABI source (`native/tmdq_core/*.cpp`) goes in the project AND `native/tmdq_core_tests/tmdq_core_tests.vcxproj` (`test_abi.cpp` compiles the ABI into the native test executable and calls it as a host would). `tmdq.sln` is the committed solution; the
-  root's `tmDataQualityAnalyzer.sln` is the generated, gitignored Qt one.
+  allow-list (the C runtime, `KERNEL32`, `WS2_32`, `USER32`). CI runs it for Debug and Release. **A new core source
+  goes in `tmdq_core.vcxproj`**, and a new ABI source (`native/tmdq_core/*.cpp`) in it AND in
+  `native/tmdq_core_tests/tmdq_core_tests.vcxproj` (`test_abi.cpp` compiles the ABI into the native test executable
+  and calls it as a host would); `NativeProjectTests` (managed suite) fails until every `src/model` source, ABI source
+  and test file is listed. **A change that deletes or renames a header is verified only by a `-Rebuild`.**
 - **Native core tests (doctest, no Qt):** `powershell -ExecutionPolicy Bypass -File scripts\test_native.ps1
   [-Configuration Debug|Release] [-Rebuild] [-NoBuild] [<doctest args>]` builds `native/tmdq_core_tests`
   (MSBuild; the framework is the single header in `lib/doctest`) with **zero warnings and no Qt import**, then runs it.
-  Plan step 2.4 ported every core Qt Test suite here (the last, `TestAbi`, compiles the C ABI in); a new test file
-  goes in the project and `TestCoreQtFree` checks the project compiles only core and ABI sources and no Qt.
-  CI runs it in every job, including `core-without-qt`, which builds the DLL and runs these and the managed tests on a
-  hosted runner that has never had Qt (and fails if it finds any). Run it **filtered** while iterating: `-tc="TomlDocument*"`.
+  Run it **filtered** while iterating: `-tc="TomlDocument*"`. Green baseline **498 test cases** (1 skipped: the
+  benchmark below). The suites read `tests/data/test files` (committed recordings) and `tests/fixtures`; in a
+  worktree, junction `tests/data` to the main checkout's or the full-recording tests have nothing to read.
+  **The throughput guard:** the heavy PRN benchmark ("PipelineRunner throughput", `test_pipelinerunner.cpp`) is
+  skipped unless `TMDQA_RUN_HEAVY_BENCH=1`, because it walks a 640 MB recording nine times. At release
+  `scripts\run_throughput_bench.ps1` builds the native tests in Release, runs them all, then runs that case **pinned to
+  the performance cores** (absolute times were bimodal ~1.9x on this hybrid CPU) and **asserts** the parallel-vs-solo
+  ratios: the decommutation pipeline's only performance guard. It needs `tests/data/test files/prn_testfile,
+  full.ch10` (gitignored); the committed sample carries data for 2 of the 4 channels it times and cannot stand in.
 - **Managed library and its tests (.NET 10):** `powershell -ExecutionPolicy Bypass -File scripts\test_dotnet.ps1
   [-Configuration Debug|Release] [-NoBuild]` builds `dotnet/TmDq.Core` (the C# binding of the DLL's C ABI) and
   `dotnet/TmDq.Core.Tests` (xunit v3, warnings are errors) and runs the test exe against
   `native/out/<config>/tmdq_core.dll` (build that first; `TMDQ_CORE_DLL` overrides). The tests run the
-  committed recordings through the library and compare with numbers the Qt pipeline produces. An xunit v3
+  committed recordings through the library and compare with numbers v2.14.2's pipeline produced. An xunit v3
   project is an executable; the build merges a UTF-8 code-page manifest into it with `mt.exe`, because the vendored
   irig106 opens files with a narrow `open()` that reads the active code page. Green baseline **358 passed / 0
   failed / 1 skipped** (the skip is the probe `IsolatedLoadTests` runs in a child process). CI runs it in both jobs.
-- **The Avalonia app (plan step 3):** `dotnet/TmDq.App` (Avalonia 12, CommunityToolkit.Mvvm) and
-  `dotnet/TmDq.App.Tests` (xunit v3 on `Avalonia.Headless.XUnit`), both in `tmdq.sln`, which VS Code opens by default
-  (`dotnet.defaultSolution`). `powershell -ExecutionPolicy Bypass -File scripts\test_app.ps1 [-Configuration
-  Debug|Release] [-NoBuild]` builds the app with its tests and runs them; the walking-skeleton tests process the PRN sample through `native\out\<cfg>\tmdq_core.dll` (build it first; `TMDQ_CORE_DLL` overrides). The app: Open, or a recording path on the command line, then Configure Streams (step 4.1) and every checked stream processed; with `TMDQ_SMOKE_REPORT=<file>` it skips the dialog, runs the first channel with the defaults, writes one result line and exits. The repository's `settings/` is copied beside the exe (the app root). Its preferences are `%APPDATA%\tmDataQualityAnalyzer\preferences.json` (beside the exe in a `tmDataQualityAnalyzer` folder when a `portable` file sits there), filled once from the Qt app's INI there on the first run: to run a dev build without touching yours, put a `portable` file beside it. Its manual is its own copy until the switch-over (`resources\usermanual-preview.html`, `docs\manual\walkthroughs-preview.html`, `UserManual-preview.html`), its figures rendered from it by `ManualFiguresTests`: after a change to what a figure shows, rebuild with `powershell -ExecutionPolicy Bypass -File scripts\build_manual.ps1 -Preview`. CI runs it in all three
-  jobs. Green baseline **602 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases.
+- **The app:** `dotnet/TmDq.App` (Avalonia 12, CommunityToolkit.Mvvm) and `dotnet/TmDq.App.Tests` (xunit v3 on
+  `Avalonia.Headless.XUnit`), both in `tmdq.sln`, which VS Code opens by default (`dotnet.defaultSolution`).
+  `powershell -ExecutionPolicy Bypass -File scripts\test_app.ps1 [-Configuration Debug|Release] [-NoBuild]` builds the
+  app with its tests and runs them against `native\out\<cfg>\tmdq_core.dll` (build it first; `TMDQ_CORE_DLL`
+  overrides). The app: Open, or a recording path on the command line, then Configure Streams and every checked stream
+  processed; with `TMDQ_SMOKE_REPORT=<file>` it skips the dialog, runs the first channel with the defaults, writes one
+  result line and exits. The repository's `settings/` is copied beside the exe (the app root). Its preferences are
+  `%APPDATA%\tmDataQualityAnalyzer\preferences.json` (beside the exe in a `tmDataQualityAnalyzer` folder when a
+  `portable` file sits there), filled once from v2.x's INI there on the first run: to run a dev build without touching
+  yours, put a `portable` file beside it. Its manuals are `resources\usermanual.html` (compiled in) and
+  `UserManual.html` (the full one, with `docs\manual\walkthroughs.html`), their figures rendered from the app by
+  `ManualFiguresTests` into `docs\manual_images`: after a change to what a figure shows, rebuild with
+  `powershell -ExecutionPolicy Bypass -File scripts\build_manual.ps1` (`-NoCapture` reuses the figures). CI runs it in
+  all three jobs. Green baseline **602 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases.
   **The side-by-side soak (plan step 5.2):** `powershell -ExecutionPolicy Bypass -File scripts\run_soak.ps1 [-NoBuild]
   [-Only <run>,...]` runs every run in `dotnet\TmDq.App.Tests\Soak\soak.json` (`SoakTests`, explicit, one process a
-  run) and fails unless each CSV export is byte for byte what the Qt application exported (the manifest's `qt` blocks).
-  Most runs read the full and local recordings under `tests\data`, which are not committed, so CI never runs it, and a
+  run) and fails unless each CSV export is byte for byte what v2.14.2 exported (the manifest's `qt` blocks). Most
+  runs read the full and local recordings under `tests\data`, which are not committed, so CI never runs it, and a
   missing recording fails. Run it after a change to processing, the plot's series or the CSV writer.
   **Never type a version in a .csproj**: import
   `dotnet/build/AppVersion.props`, which reads `AppVersion`. **Every .NET project imports
@@ -77,17 +69,18 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   in `scripts/check_package_licences.ps1` fails the build, and a licence *file* passes only when its SHA-256 is in that
   script's `$Reviewed` table, so read it before adding it. That script runs under Windows PowerShell 5.1 inside builds
   started from PowerShell 7, which inherits 7's `PSModulePath`: avoid cmdlets from script modules (`Get-FileHash` fails).
-- **The release package (from v3.0.0; plan step 3.3 built it as a preview):** `powershell -ExecutionPolicy Bypass -File
+- **The release package:** `powershell -ExecutionPolicy Bypass -File
   deploy\avalonia\build_avalonia_package.ps1 [-SignCertSha1 '']` publishes **single-file** (every managed assembly
   inside our exe, so the certificate signs only our own code: the exe and `tmdq_core.dll`; it refuses to sign any other
   unsigned file), adds the VC++ runtime DLLs `tmdq_core.dll` imports, generates `THIRD-PARTY-NOTICES.txt`
   (`scripts\gen_third_party_notices.ps1`, from the publish's deps file), and builds the portable ZIP and the Inno
-  installer (`deploy\avalonia\tmDataQualityAnalyzer.iss`: the Qt installer's AppId and folder, so it upgrades a v2.x
+  installer (`deploy\avalonia\tmDataQualityAnalyzer.iss`: v2.x's AppId and folder, so it upgrades a v2.x
   install in place, deleting its `bin\`, keeping `settings\`, and taking the `.ch10` association). It runs
   `check_release_consistency.ps1 -ReleaseMode` first. **Unlock SimplySign first.** Clean-machine test under Smart App
-  Control, which installs v2.14.2 and upgrades it: `deploy\sandbox\run_sandbox_test.ps1 -Verifier
-  verify_avalonia_install.ps1 -Setup <setup.exe> -Payload "<zip>;deploy\avalonia\staging\unsigned;tests\data\test files\prn_testfile, sample.ch10;deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe"` (semicolons: recording names contain commas) (an unsigned build
-  must be BLOCKED, or the pass means nothing). The UTF-8 manifest is merged into every SDK host (`apphost`,
+  Control, which installs v2.14.2 and upgrades it: `deploy\sandbox\run_sandbox_test.ps1 -Setup <setup.exe> -Payload
+  "<zip>;deploy\avalonia\staging\unsigned;tests\data\test files\prn_testfile, sample.ch10;deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe"`
+  (semicolons: recording names contain commas; v2.14.2's setup is its GitHub release's asset) (an unsigned build must
+  be BLOCKED, or the pass means nothing). The UTF-8 manifest is merged into every SDK host (`apphost`,
   `singlefilehost`, `apphost_publish`): patching `bin\` misses a single-file publish.
 - **Mutation check (plan rule 3):** `powershell -ExecutionPolicy Bypass -File scripts\mutate.ps1 -List <mutants.json>
   [-Only <id>,...] [-Parts 2 -Part <k>] [-Out <file>]`. For each exact-text mutant in a JSON list it applies the
@@ -97,90 +90,46 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   list a regression check. The list format and the traps it guards are in the script's header;
   `scripts\mutants\example.json` is the sample.
 
-**After a Qt version bump, CLEAN every build directory** — `build/` *and* `tests/`, Debug and
-Release: `& $env:TMDQ_MAKE -f Makefile.<Config> clean` then rebuild. jom rebuilds an object only
-when its dependencies look newer, and a new Qt's headers can carry an *older* date than the objects
-already on disk, so objects compiled against the previous Qt are silently relinked against the new
-one. **The symptom is a crash in a test that has nothing to do with the change**, at a meaningless
-address — `0xc0000005` in `TestStepDetector`, `0xC0000409` entering `TestPlotViewModel`,
-`0xC000041D` in the app. Three separate debugging sessions were spent on this before the cause was
-identified. CI never sees it because it builds fresh; only local builds after a bump are affected.
-(Also regenerate `compile_flags.txt` and delete both `.qmake.stash` files — see `docs/claude.md`.)
-
-**A change that DELETES a header is also only verified by a clean build** — and this one fails the
-other way, as a **false pass** rather than a crash. jom does not notice that a header has gone, so
-every translation unit that still `#include`s it keeps its stale `.obj`, relinks, and the build
-reports success. v2.14.2's TOML refactor removed `tomlconfighelper.h` and left a dead include in
-`streamconfigdialog.cpp`; the full suite ran green at 414/0/0 with zero warnings, entirely against
-a stale object, and **CI went red on the very next clean build**. Grepping for the *class* name
-cannot catch this: what survives is the *filename*. So after deleting or renaming a header, wipe
-`build/` and `tests/` before believing any result.
-
-The **`build-and-test`** skill encodes all of this; prefer it.
-
-**Running a built exe (IDE or by hand):** `py`-free one-liner
-`powershell -File scripts\deploy_qt_local.ps1 -Config debug [-Tests]` copies the Qt
-runtime next to the exe, so launching needs **no Qt on PATH**. Prefer this to adding Qt
-to PATH in an IDE config: a hard-coded Qt path silently rots on the next `QT_VERSION`
-bump (that is what caused a `0xC0000135` DLL-not-found after the 6.11.1 upgrade).
-**Re-run it after any clean**: wiping `tests/debug/` removes the deployed Qt runtime
-along with the objects, and the suite then dies before its first test with exit **127**
-and `Qt6Cored.dll: cannot open shared object file` — which looks nothing like a missing
-deploy step, and leaves `output/results.txt` holding the PREVIOUS run's numbers for
-anyone who reads it without checking. Delete that file before a run you intend to
-trust. The
-script also copies the **offscreen** platform plugin, which `windeployqt` omits and
-headless runs (`QT_QPA_PLATFORM=offscreen`) need.
-
-**IntelliSense:** clangd reads a generated, gitignored `compile_flags.txt` — run
-`py scripts/gen_compile_flags.py` after a fresh clone, a Qt bump, or a `.pro`
-include/define change. **Run it inside each worktree too**: the paths are absolute, and a
-worktree otherwise silently resolves headers from the main checkout while still reporting
-zero errors (see `docs/claude.md` → clangd / IntelliSense).
+**IntelliSense:** clangd reads a generated, gitignored `compile_flags.txt` — run `py scripts/gen_compile_flags.py`
+after a fresh clone. **Run it inside each worktree too**: the paths are absolute, and a worktree otherwise silently
+resolves headers from the main checkout while still reporting zero errors (see `docs/claude.md` → clangd /
+IntelliSense).
 
 **Toolset is pinned to Visual Studio 2022 (MSVC 14.44, v143).** `env.ps1` asks vswhere for
 `[17.0,18.0)` rather than `-latest`; installing VS 2026 had silently moved every build to
 MSVC 14.51 and left two compilers' objects in one tree. Override with `TMDQ_VS_RANGE`
-(a vswhere range). **After changing the compiler, wipe `build/` and `tests/` objects** —
-same stale-object trap as a Qt bump.
+(a vswhere range). **After changing the compiler, rebuild the core with `-Rebuild`.**
 
-**Visual Studio:** `powershell -File scripts\gen_vs_project.ps1` generates
-`tmDataQualityAnalyzer.sln` (app + tests, Debug|x64 and Release|x64) from the `.pro` files
-via `qmake -tp vc`, then fixes what the raw output gets wrong. Open it in Visual Studio
-Community and F5 (it targets VS 2026 / toolset v145; `env.ps1` itself stays on VS 2022 —
-see below). The solution and `vs/` are **generated and gitignored** (absolute Qt
-paths) — **regenerate after a `.pro` change, a Qt bump, or a Visual Studio update**. It
-builds with VS's own MSBuild (no Qt VS Tools needed); the Qt runtime is deployed by a
-post-build step. The qmake build stays the supported/CI one; the `.pro` files remain the
-source of truth. Rationale for each correction: `docs/claude.md` → v3.0.0.
+**Qt tooling left for plan step 6.2** (dead since 6.1, deleted there): the Qt half of `env.ps1`,
+`scripts\deploy_qt_local.ps1`, `scripts\gen_vs_project.ps1` (it needs the deleted `.pro` files), the Qt paths in
+`gen_compile_flags.py`, CI's Qt install, and the skills that describe the Qt build (`build-and-test`,
+`verify-ui-change`, `write-qt-test`, `add-stream-setting`; `cut-release` is current).
 
-## Migration in progress: Qt to Avalonia
+## Migration: Qt to Avalonia, finishing
 
-The UI is moving to **Avalonia 12 on .NET 10** over a Qt-free native core, and Qt is leaving the app,
-the core and the tests. **Read `docs/dotnet-migration/avalonia-plan.md` before migration work**: one
-PR per numbered step, ticked as it merges. **v3.0.0 (step 5.3) switched the release to the Avalonia app;** the Qt app
-is no longer shipped but is still built and tested in CI until step 6.1 deletes it, so the Qt build rules in this file
-still apply. The new code lives in `dotnet/`.
+**Read `docs/dotnet-migration/avalonia-plan.md` before migration work**: one PR per numbered step, ticked as it merges.
+v3.0.0 (step 5.3) released the Avalonia app; step 6.1 deleted the Qt one. What is left is step 6: the Qt tooling (6.2),
+the Qt names in code that stays (6.3), and consolidating the new code (6.4).
 
 ## Project skills (`.claude/skills/`)
 
-`build-and-test` · `tm-code-review` · `write-qt-test` · `add-stream-setting` · `cut-release` ·
-`verify-ui-change` · `code-cleanup`.
-Invoke explicitly (`/build-and-test`) or let them trigger by intent.
+`tm-code-review` · `cut-release` · `code-cleanup`, current; `build-and-test` · `write-qt-test` · `add-stream-setting` ·
+`verify-ui-change` still describe the Qt build and are rewritten or removed in plan step 6.2 - follow this file over them.
+Invoke explicitly (`/cut-release`) or let them trigger by intent.
 
 ## Hard rules
 
 - **Never edit** `lib/irig106/**` (third-party; deny-listed in
-  `.claude/settings.json`). Adapt in app code (`ch10packetreader.cpp`, `frameprocessor.cpp`,
-  `plotwidget.cpp`, …) instead.
-- **Version is single-sourced** in `AppVersion` (`include/constants.h`); never hand-edit
-  `version_autogen.h`, `.pro` VERSION, or the `.rc`.
+  `.claude/settings.json`). Adapt in the core (`chapter10reader.cpp`, `ch10packetreader.cpp`,
+  `frameprocessor.cpp`, …) instead.
+- **Version is single-sourced** in `AppVersion` (`include/constants.h`); `dotnet/build/AppVersion.props`, the package
+  script and the manuals read it. Never type a version anywhere else.
 
 ## Domain invariants (silent-bug territory — see `tm-code-review` skill & `docs/*_logic.md`)
 
 - **Ch10 paths:** both readers pass irig106 the path in the process code page (`path.string()`),
-  never UTF-8 from `toUtf8()` - its narrow `open()` reads that code page, which
-  `codepage.pri`'s manifest makes UTF-8.
+  never as UTF-8 bytes - its narrow `open()` reads that code page, which the UTF-8 code-page manifest
+  merged into the app and every test host (`dotnet/TmDq.App/app.manifest`, `resources/utf8codepage.manifest`) makes UTF-8.
 - **SNR:** average raw counts first, calibrate once per window. Out-of-range interpolation **clamps**,
   never extrapolates. The calibration extractor must mirror the main run's word map + raw-affecting
   flags exactly: both build them through `applyAcquisition` (`include/model/framesync.h`), so a new

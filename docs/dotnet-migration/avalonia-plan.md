@@ -406,13 +406,18 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
 
 ## Step 6: retire Qt
 
-- [ ] **6.1 Delete the Qt application:** `src/view`, `src/viewmodel`, their headers, the Qt Test UI
+- [x] **6.1 Delete the Qt application:** `src/view`, `src/viewmodel`, their headers, the Qt Test UI
   suites, `tmDataQualityAnalyzer.pro` and `tests/tests.pro`, `qtbridge.h`, `QtProcessingEvents`
   (`qtprocessingevents.h`), `plotconstants.h`, the Qt-typed DTOs in `include/dto` (`framesyncparams.h`,
   `plotseriesdata.h`, `processingtemplate.h`, `seriesappearance.h`, `source.h`, `streamconfig.h`) and the two
   Qt model sources (`processingtemplateschema`, `streamconfigschema`; `TestCoreQtFree`'s `kUiSessionSources`; empty
   `NativeProjectTests.QtModelSources` with them, which fails until it is).
   Clean build from an empty tree, because a deletion is only verified by one (`.claude/CLAUDE.md`).
+  **Done:** 122 files deleted (the application, its tests, its build and its packaging, `UserGuide.txt`, the Qt manuals
+  and their hand captures), with the manual switch-over of 4.9 (the `-preview` copies take the real names, and the
+  manual scripts lose their Qt mode). CI builds and tests the native core, the managed library and the app only;
+  `NativeProjectTests` holds every `src/model` source to the DLL's project with no exemptions. Verified from an empty
+  tree; baselines unchanged.
 - [ ] **6.2 Remove Qt from the tooling:** `env.ps1`, `deploy_qt_local.ps1`, `gen_compile_flags.py`,
   `gen_vs_project.ps1`, the CI Qt install, `QT_QPA_PLATFORM`, and the skills that describe the Qt
   build (`build-and-test`, `verify-ui-change`, `write-qt-test`, `add-stream-setting`, `cut-release`).

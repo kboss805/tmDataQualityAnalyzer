@@ -409,6 +409,73 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ## Version History
 
+### Unreleased
+
+#### The Qt application is deleted (plan step 6.1)
+
+v3.0.0 shipped the Avalonia application; this deletes the Qt one, which nothing built or shipped any more except CI. No
+behaviour of the application changes, and no test of what remains is lost: the parity review (5.1) ported or recorded
+every Qt case, and the soak (5.2) holds the application to v2.14.2's exported bytes.
+
+- **Deleted, 122 files:**
+  - **the application:** `src/main.cpp`, `src/view`, `src/viewmodel`, `include/view`, `include/viewmodel`;
+  - **what only it used:** `qtbridge.h`, `qtprocessingevents.h`, `plotconstants.h`, the six Qt-typed DTOs
+    (`framesyncparams.h`, `plotseriesdata.h`, `processingtemplate.h`, `seriesappearance.h`, `source.h`,
+    `streamconfig.h`), and the two Qt model sources (`processingtemplateschema`, `streamconfigschema`);
+  - **its tests:** the Qt Test suite (`tests/main.cpp`, the 19 `tst_*` suites, `tests/tests.pro`), `TestCoreQtFree`
+    among them;
+  - **its build:** `tmDataQualityAnalyzer.pro`, `codepage.pri`, `resources.pri`, `resources.qrc`, `thirdparty.pri`, the
+    Windows `.rc`, the stylesheets and the SVG icons (the Avalonia app draws its icons from paths in its code);
+  - **its packaging:** `deploy/build_release.ps1`, `deploy/tmDataQualityAnalyzer.iss`, `deploy/sandbox/verify_install.ps1`,
+    `scripts/run_release.ps1`, and `UserGuide.txt`, the text guide it shipped;
+  - **its manuals and their hand-captured figures.**
+- **Kept:** `tests/data` and `tests/fixtures` (the native suite reads them), `resources/icon.ico` (the installer's) and
+  `resources/utf8codepage.manifest` (the native tests').
+- **The manuals switch over** (plan step 4.9's note): `resources/usermanual-preview.html`, `UserManual-preview.html`,
+  `docs/manual/walkthroughs-preview.html` and `docs/manual_images/preview/` take the Qt manuals' names and folder. The
+  one figure no test renders (a step file in a text editor) is committed there and kept when the others are rendered
+  again.
+  - **`build_manual.ps1` and `embed_manual_images.py` have one mode:** the figures rendered by `ManualFiguresTests`,
+    scaled and embedded. The crop table, the spares list and the Qt-only captions went with the hand captures.
+  - **Checked by running it:** with the figures as they were, the manuals it writes are byte for byte the ones
+    committed.
+- **What referred to them:**
+  - **CI** no longer builds the Qt application or its tests: the two build steps, the warning gate over their logs, the
+    suite's run, its fixture-loss guard, its results upload, and the full-PRN overlay that only that run used. The
+    native, managed and app suites, the release check and `core-without-qt` are unchanged.
+  - **`NativeProjectTests`** loses its list of the two Qt model sources: every source in `src/model` is now a core
+    source and must be in the DLL's project. It is the check `TestCoreQtFree` was, without Qt.
+  - **The constants case** that pinned the full manual's file name against the Qt installer reads the release
+    installer instead.
+  - **The csproj, `ShellTests`, the package script and the consistency check** name the manuals by their own names; the
+    Sandbox runner defaults to `verify_avalonia_install.ps1` and the setup in `deploy\avalonia`.
+  - **The docs:** `README.md` (requirements, build, layout, and the features that described the Qt app), `.claude/CLAUDE.md`,
+    `cut-release`, and this guide's reference sections (tech stack, architecture, conventions, build, development tasks,
+    debugging and testing), which described the Qt application. The test catalog keeps the native and .NET suites and
+    gains the four native halves that were only described inside their Qt suites' entries.
+- **Left for 6.2, as the plan splits it:** the Qt half of `env.ps1`, `deploy_qt_local.ps1`, `gen_vs_project.ps1` (it
+  needs the deleted `.pro` files), the Qt paths in `gen_compile_flags.py`, CI's Qt install and `QT_QPA_PLATFORM`, and the
+  four skills that describe the Qt build. `.claude/CLAUDE.md` lists them as dead.
+
+**Verified from an empty tree** (every native and .NET build output removed first, since a deletion is only verified
+by a clean build): `tmdq_core.dll` Debug and Release with zero warnings and the import check; native 498 test cases
+(1 skipped, the benchmark); managed 358 / 0 / 1; app 602 / 0 / 0 (34 not run, the soak); the consistency check. Nothing
+left includes a deleted header, and the core includes no Qt header.
+
+**Found on the way:** the first clean run failed one native case, the full manual's file name, which read the Qt
+installer script this step deletes. It now reads the release installer's.
+
+**Mutation check:** four mutants, one per check this step changed, each run against the test that should hold it:
+- **a stray source in `src/model`** that the DLL's project does not list (`NativeProjectTests`, now with no exemptions);
+- **the installer shipping the manual under another name** (the retargeted constants case);
+- **the app compiling in the wrong manual** (`ShellTests`' manual test, now on `resources/usermanual.html`);
+- **the full manual a version behind** (`check_release_consistency.ps1`, now on `UserManual.html`).
+
+**All four caught**, and every file restored byte for byte.
+
+Baselines unchanged: native 498 cases, managed 358 / 0 / 1, app 602 / 0 / 0. The Qt baseline (458 / 0 / 0) is gone with
+its suite.
+
 ### v3.0.0 — The Avalonia Application
 
 The first release of the Avalonia application (`docs/dotnet-migration/avalonia-plan.md`, decision D4): every user story
@@ -6539,11 +6606,16 @@ keep the tag history aligned with `main`. The only change is to CI.
 
 ## Tech Stack
 
-- **Language**: C++
-- **Framework**: Qt
-- **Build System**: qmake
-- **Platform**: Windows (primary target)
-- **External Libraries**: irig106utils (embedded C library). Charting is first-party (`TmChart`, `src/view/tmchart.cpp`) - the vendored QCustomPlot was removed once it was replaced.
+- **The application**: C# on .NET 10, Avalonia 12 (MIT) with CommunityToolkit.Mvvm - `dotnet/TmDq.App`.
+- **The native core**: C++20, no Qt, built by MSBuild into `tmdq_core.dll` (`native/tmdq_core`), with a C ABI
+  (`tmdq_abi.h`) that `dotnet/TmDq.Core` binds.
+- **Platform**: Windows x64.
+- **External libraries**: irig106utils (embedded C library, compiled into the core) and doctest (the native tests'
+  single header). Charting is first-party: the core builds the geometry (`chartgeometry`), the app draws it
+  (`PlotChart`). Every .NET package the app ships is on the licence allow-list (`scripts/check_package_licences.ps1`,
+  plan decision D5).
+- **History**: the Qt 6 application (qmake, Qt Widgets) shipped up to v2.14.2 and was deleted in plan step 6.1; v3.0.0
+  is the first release of this one (`docs/dotnet-migration/avalonia-plan.md`).
 
 ## ⚠️ CRITICAL: Protected Files — DO NOT MODIFY
 
@@ -6568,134 +6640,69 @@ The following files are third-party library code and **MUST NOT be modified** un
 - Make future updates difficult
 - Potentially introduce bugs in tested code
 
-**If changes are needed**: They should be made by wrapping/adapting the library in application code (e.g., `chapter10reader.cpp`, `frameprocessor.cpp`, `plotwidget.cpp`), NOT by modifying the library files directly.
+**If changes are needed**: They should be made by wrapping/adapting the library in the core (e.g., `chapter10reader.cpp`, `ch10packetreader.cpp`, `frameprocessor.cpp`), NOT by modifying the library files directly.
 
 ## Architecture
 
-The application follows the **MVVM (Model-View-ViewModel)** pattern. The processing
-core is a **single-reader / parallel-worker** pipeline: opening a Ch10 file shows the
-per-stream **Configure Streams** dialog, and pressing Process reads the file exactly
-once while each selected stream is processed concurrently on its own worker thread.
-Results are accumulated **in memory** (no CSV-on-disk intermediate) and appended to
-the plot as each stream finishes.
+Three layers, each tested on its own:
 
-**Multi-source model:** the plot can hold more than one `.ch10` file's streams at
-once. This is now driven **only** by the Apply Template batch loop (there is no
-Add/Remove Source UI, and no direct multi-file open). Every source gets a stable
-`sourceId` (`include/dto/source.h`) that travels with its
-`ProcessedStreamData`/`PlotSeriesData`, so two sources that happen to reuse the same
-PCM channel id never cross-contaminate. All sources share one elapsed-seconds X
-axis: `PlotViewModel` re-bases to the **earliest absolute sample across every
-source**. See `docs/multi-file-input-design.md` for the underlying design (time
-alignment, non-overlap detection, source-qualified CSV export). There is only ever
-**one active processing run at a time** — a batch is N sequential runs into one
-accumulating `PlotViewModel`, not concurrent reads. (`MainViewModel::addSource()`
-and `removeSource()` remain the model's add/remove primitives; only `addSource` has
-a caller now — the batch loop.)
+1. **The native core** (`include/`, `src/model/`): reading Chapter 10 recordings, decommutation, calibration, the file
+   formats (TOML settings, the CSV export, the frame-sync pattern file) and the plot's series and geometry. Plain
+   C++20 with no UI and no Qt. The processing pipeline is a **single-reader / parallel-worker** one: a run reads the
+   file exactly once while each selected stream is processed on its own worker thread, and the results stay in memory.
+2. **The C ABI and the C# library**: `native/tmdq_core` builds the core into `tmdq_core.dll` behind `tmdq_abi.h`
+   (opaque handles, plain structs, a revision number, every error as a code and a message); `dotnet/TmDq.Core` is its
+   C# binding, and nothing above it touches a pointer.
+3. **The application** (`dotnet/TmDq.App`, MVVM): Avalonia views over CommunityToolkit.Mvvm view models. The
+   presentation state (what is shown, the axes, the legend, the dialogs' rules, preferences, the template JSON) is C#;
+   the data and every file format the core reads or writes are the core's (plan decision D3).
 
-**Processing templates / batch apply** (docs/processing-template-design.md) is the
-sole way to process many `.ch10` files that share the same PCM channel IDs.
-**File > Save as Template…** captures a processed source's `streamConfigs` +
-`timeChannelIndex` + each stream's series appearance (name/color) via
-`ProcessingTemplateSchema` (which reuses `StreamConfigSchema` per entry, so no field
-list is duplicated; `calibrationByWord` is never serialized — only the calibration
-*input references* `calCh10Path`/`stepTomlPath`/`clipStartSec`/`clipEndSec`, so batch
-runs use the **linear** calibration fallback). **File > Apply Template to Files…**
-picks a template + N files, validates each file's PCM channel-ID set against the
-template (`TemplateMatcher`, **exact-set match** — a file with any missing/extra
-channel is rejected with a reason), then processes every matching file in one batch
-(`BatchController`, `include/viewmodel/batchcontroller.h`). Every processed file is **retained in
-memory**; the plot's right-click **Plot File** submenu
-chooses which one to view (or "All files (overlaid)"), driven by
-`PlotViewModel::setVisibleSource` / `effectiveVisible` (a source gate orthogonal to
-per-series visibility and the **View Mode** lock%/accumulation selector). A batch
-can **also** export a CSV + a Frame Sync Lock and a Missed Frames image per file
-(optional checkbox → a post-pass in `finishBatch` that isolates each source). The
-batch loop is a sequential one-run-at-a-time state machine (`BatchController::advance()`
-↔ `onProcessingFinished()`) that can re-apply the template's saved series names/colors
-onto each file's freshly-created series. It lives in the **ViewModel** layer; the View
-keeps only its own half - `MainView::confirmAndStartBatch()` shows the confirmation
-dialog, and an `ImageExporter` callback renders the per-file images, because only the
-widget can draw the plot. Exact-set matching is what makes it safe to
-feed the template's stored `pcmChannelId`s straight to `setStreamConfigs()`.
-`schemaVersion` gates the template format so a newer/unrecognized file is rejected,
-not mis-read.
+**Multi-source plots:** the plot can hold several recordings' series at once, and only the Apply Template batch puts
+them there. Every recording is a source with its own id, so two recordings that reuse a PCM channel id never mix, and
+all share one elapsed-seconds X axis based at the earliest sample of any of them (the core's `seriesbuilder`). There is
+one processing run at a time: a batch is N runs into one accumulating plot. The plot's **Plot File** selector shows one
+recording or all (`PlotViewModel.SetVisibleSource`), orthogonal to per-series visibility and the View Mode.
+
+**Processing templates** (US1.1, `docs/processing-template-design.md`): **Save as Template…** captures one processed
+recording's rows of Configure Streams, its time channel's place and byte order, and each series' name and colour
+(`TemplateFile`, the JSON v2.x wrote, byte for byte); **Apply Template to Files…** checks each chosen file's PCM
+channel ids against the template's (the core's `TemplateMatcher`, exact-set match), then runs every match in turn
+(`MainWindowViewModel.RunBatchAsync`), optionally exporting a CSV and the plot images per file. A template stores only a
+calibration's inputs, never its profile, so a batch processes with the linear calibration.
 
 ### Core Components
 
-#### View
+#### The application (`dotnet/TmDq.App`)
 
-1. **MainView** (`src/view/mainview.cpp`, `include/view/mainview.h`)
-   - Thin GUI layer; creates and lays out all Qt widgets, the hamburger menu, and the custom title bar
-   - Frameless window: a custom title bar (set via `setMenuWidget`) hosts the hamburger (≡) menu button, the sidebar toggle, and min/maximize/close buttons; `nativeEvent()` handles `WM_NCCALCSIZE`/`WM_NCHITTEST` so Windows still provides native move/resize/snap/double-click-maximize. The hamburger + sidebar glyphs are QPainter-drawn per theme
-   - All commands live in the single hamburger menu, grouped into sections via the file-local `addMenuSection()` helper (**not** `QMenu::addSection`, whose label a stylesheet blanks — see below): Process (Open…, Recent Files, Save as Template…, Apply Template to Files…, Exit), Import/Export (Import CSV…, Export…), Settings (theme toggle). **Help is a submenu** (`m_help_menu`, after a separator) holding User Manual… and About… — sections are the default, and a submenu is used only where the entries are reached rarely and by name (Recent Files is the other one)
-   - Binds to MainViewModel Q_PROPERTYs and connects signals/slots; contains no business logic
-   - `logError()` / `logWarning()` / `logSuccess()` append colored HTML entries (red / #DAA520 / green) to the log window
-   - Errors/warnings shown inline in the log (`QTextBrowser`, clickable links, persistent, auto-scroll); QMessageBox reserved for About and the calibration summary
-   - Status bar shows the file metadata summary (filename, size, channel counts, time range)
-   - Recent Files submenu (Process section) with QSettings persistence
-   - Drag-and-drop and Open… of a single `.ch10` file (launches the StreamConfigDialog) or a previously exported `.csv` file (US6.3: routed by `openPath()`/`importCsv()` straight into the plot via `PlotViewModel::loadCsvFileAsync`, bypassing the dialog and processing pipeline)
-   - Save as Template… (enabled once a source has processed) captures a source's per-stream settings + series appearance to a template JSON; Apply Template to Files… (always enabled) picks a template + N `.ch10` files and batch-processes every file with the same channel IDs via `startBatchFromTemplate()` → the batch loop (retain-all + Plot File selector; optional per-file CSV+image export). This is the only batch entry point — there is no Add/Remove Source or direct multi-file open. See the processing-templates section above and `docs/processing-template-design.md`
-   - Progress/Cancel live in the modal ProcessingProgressDialog, shown only while processing runs
-   - Log window fills the left sidebar dock (`m_sidebar_dock`); the title-bar sidebar button or Ctrl+B toggles it, with the shown/hidden state persisted in QSettings (`SidebarVisible`). The plot (PlotWidget) is the central widget
-   - Help > User Manual… copies the embedded `resources/usermanual.html` to the temp dir and opens it in the default browser
+- **`MainWindow` / `MainWindowViewModel`**: the shell - its own title bar (snap layouts on the maximize button), the
+  hamburger menu in the v2.x sections (Process, Import/Export, Settings, Help, Exit), Recent Files, drag and drop, the
+  log sidebar (Ctrl+B), the themes, and the commands behind them: Open, Import CSV, Export, Save as Template, Apply
+  Template and the batch.
+- **Configure Streams** (`ConfigureStreamsViewModel`, `ConfigureStreamsWindow`) and the two setup dialogs (Frame Sync
+  Lock, Receiver SNR): one row per PCM channel, each problem shown as it arises, OK and Process held until every checked
+  row is ready, Apply to all (US2.2), the pattern and receiver-parameter files' Load and Save.
+- **Extract Calibration** (`ExtractCalibrationViewModel`) behind Apply Cal (US5.3).
+- **The run** (`StreamsRun`, `ProcessingViewModel` and its window): the core's run on its own threads, the modal
+  progress dialog whose Cancel stops every stream, and the log (`SessionLog`, `LogView`) in v2.x's words and colours.
+- **The plot**: `PlotViewModel` (the series built by the core, the colours, the axes and overrides, the time window and
+  its zoom history, the view mode, the readout), `PlotChart` (drawing from the core's geometry, the gestures, a cached
+  data layer), and `PlotView` around it (the legend, the chip bar, the right-click menu, the keys, Customize View).
+- **Export and import** (`ExportViewModel`, `PlotImageExport`): the CSV through the core's writer (every series), the
+  image through one Skia renderer for PNG, SVG and PDF (exactly what the chart shows), the log as text; Import CSV
+  through the core's parser.
+- **Preferences** (`Preferences`, `PreferencesStore`, `QtSettingsImport`): `preferences.json` in
+  `%APPDATA%\tmDataQualityAnalyzer` (beside the exe for a portable copy), filled once from v2.x's INI on the first run.
+- **Help**: the manual compiled in (`resources/usermanual.html`), or the full one beside the exe.
 
-2. **StreamConfigDialog** (`src/view/streamconfigdialog.cpp`, `include/view/streamconfigdialog.h`)
-   - Modal "Configure Streams" dialog listing one row per PCM channel in the file
-   - Five columns: Process, Channel, Mode, Configure (gear), Ready (status icon); a Time Channel combo at top
-   - The gear opens a per-stream sub-dialog — Frame Sync Lock setup or Receiver SNR setup — keyed to the row's Mode
-   - Sub-dialogs Load/Save frame-sync and receiver-parameter TOML files (US5.0/US5.1) and host the "Extract Calibration…" action (US5.3) and the "Apply to all `<mode>` streams" fan-out (US2.2)
-   - The three sub-dialogs (Frame Lock, Calibration, Receiver SNR) live in the private header `include/view/streamsubdialogs.h` and share one layout vocabulary so their look-and-feel stays consistent: a `DialogLayout` constants block (outer spacing, section/control gaps, grid spacing, icon-button size) plus helpers `configureFormGrid`, `addLoadSaveButtons` (owns the frame-sync grid's gap column + Load/Save cell offsets — no caller hard-codes them), `addCheckboxRow`, `addBottomBar`, `matchControlHeight`, `buildFrameSyncRow`, and `makeDialogButtons`. Convention: text inputs (line edits, combos, spin boxes) are left-aligned; buttons and status icons (gear, Load/Save, ✓/✗) are centered. Table-header/separator colors come from the theme QSS (`QLabel#streamHeaderLabel`, `QFrame#streamHeaderSeparator`), not inline stylesheets, so they read on both light and dark themes
-   - Returns the configured `QVector<StreamConfig>` via `configs()` and the two **file-level** values via `timeChannelIndex()` and `swapBytes()`. Byte order is file-scoped because it is a property of the recorder that wrote the file; it is stamped onto every `StreamJob` rather than stored per stream
+#### The C# library (`dotnet/TmDq.Core`)
 
-3. **PlotCustomizationDialog** (`src/view/plotcustomizationdialog.cpp`, `include/view/plotcustomizationdialog.h`)
-   - "Customize Plot Series" dialog: a Frame Sync Lock tab (one row per stream — visibility toggle, color swatch, editable name) and a Receiver SNR tab (collapsible per-stream receiver/channel tree with tri-state group toggles and Expand/Collapse All; right-click a channel to rename or recolor it). Color/name edits are applied to the ViewModel on OK via `commitAppearanceChanges()`
+The binding of every ABI function: `Ch10File` (a recording's channels), `ProcessingRun` and `StreamResult` (a run and
+what it produced, with progress, log and cancel), `CalibrationRun` and `StepFile`, the file formats (`FrameSyncFile`,
+`ReceiverParamsFile`, `CsvFile`, `TemplateMatcher`, `ClockTime`), series construction (`SeriesSet`, `TimeBase`,
+`ImportedStreams`) and `ChartGeometry`. `Library` loads `tmdq_core.dll` (the app passes the one beside it, or
+`TMDQ_CORE_DLL`: `NativeCore`) and refuses one whose ABI revision it does not know.
 
-4. **ExportDialog** (`src/view/exportdialog.cpp`, `include/view/exportdialog.h`)
-   - Unified export dialog: any combination of CSV data, a plot image (PNG/SVG/PDF), and the log text, each with its own filename/location; checkbox-to-field enable logic and export-button validation
-
-5. **PlotLegendOverlay** (`src/view/plotlegendoverlay.cpp`, `include/view/plotlegendoverlay.h`)
-   - The movable legend that floats over the chart: a translucent, rounded frame parented to `TmChart`, holding a scrolling single-column list of line-swatch + label rows
-   - Owns its rows (reconciled by series id across rebuilds), its size and placement (top-right until dragged, clamped inside afterwards), its light/dark styling, and the drag itself
-   - Takes a finished list of `Entry{id, label, color}`; `PlotWidget` decides which series belong in it, so the overlay never sees a ViewModel
-
-6. **PlotWidget** (`src/view/plotwidget.cpp`, `include/view/plotwidget.h`)
-   - Self-contained `TmChart` chart filling the whole widget - no external control rows; every control (Plot File, View Mode, Customize View, plot title, X/Y axis ranges, Export) lives in the right-click context menu built by `buildContextMenu()`/`showPlotContextMenu()` - plus a movable legend overlay (a translucent, draggable frame parented to the chart; single-column line-swatch + label rows with a vertical scrollbar for dense plots; composited into PNG/SVG exports)
-   - Mouse wheel zoom and click-drag pan; `onSeriesVisibilityToggled()` toggles one series without a full rebuild
-   - `TmChart` repaints from `paintEvent()`, so there is no replot call to schedule; context-menu entries stay disabled until data loads, and `applyTheme(bool dark)` syncs colors with the app theme
-
-#### ViewModel
-
-1. **MainViewModel** (`src/viewmodel/mainviewmodel.cpp`, `include/viewmodel/mainviewmodel.h`)
-   - Owns application state, validation, and the per-stream `StreamConfig` captured by StreamConfigDialog
-   - Exposes Q_PROPERTYs (`inputFilename`, channel lists/indices, `fileLoaded`, `progressPercent`, `processing`) for the View to bind to
-   - `openFile()` loads metadata via Chapter10Reader and logs channel/time/frame info; `clearState()` first, so it always starts a fresh session (`sources()` reset, source-id counter reset to 0)
-   - `addSource()` (multi-file input) loads a second/later file's metadata the same way but *without* `clearState()` — the file being configured is tracked the same either way (`m_input_filename`/`m_stream_configs`/`m_reader` all refer to whichever file is currently being configured), shared via the `loadFileMetadata()` helper both call
-   - Builds a list of `StreamJob` objects (validated `ProcessingParams`, now stamped with the pending file's `sourceId`, + an owned `FrameSetup`) and hands them to ProcessingCoordinator
-   - Receives each `ProcessedStreamData` and forwards it to PlotViewModel; on a successful run, `onCoordinatorProcessingFinished()` appends a `Source` record (`include/dto/source.h`) to `sources()` — a failed/cancelled run leaves no phantom entry; `removeSource()` drops one. Manages recent files
-
-2. **ProcessingCoordinator** (`src/viewmodel/processingcoordinator.cpp`, `include/viewmodel/processingcoordinator.h`)
-   - The Qt face of multi-stream processing; the pipeline itself is `PipelineRunner` (below), which it wraps and reports as signals
-   - `startProcessing(QVector<StreamJob>)` hands the jobs to the runner, which takes ownership of each job's FrameSetup and spins up one `Ch10PacketReader` thread plus one `FrameProcessor` worker thread (and a `PacketQueue`) per stream
-   - `cancelProcessing()` asks the runner for a cooperative abort of all workers and the reader; `reset()` clears transient state
-   - Keeps the opening "--- Processing N stream(s) ---" log line and the final progress of 100 for itself (the reader also reports 100, so the bar reads it twice)
-   - Emits `progressChanged(int)`, `processingStateChanged(bool)`, `streamProcessed(ProcessedStreamData)`, `processingFinished(bool)`, `logMessageReceived(QString)`, `errorOccurred(QString)`
-
-3. **BatchController** (`src/viewmodel/batchcontroller.cpp`, `include/viewmodel/batchcontroller.h`)
-   - *Processing templates / batch apply (US1.1)*; owns the sequential Apply Template run: the file queue, which file is in flight, the per-file config application, the appearance reuse, and the export post-pass
-   - `validate()` checks each file's channel set against the template (the slow part of starting a batch, since it reads every file's channels) through `matchFile()`, which reads the ids out of the template and the reader's list for the Qt-free `TemplateMatcher`; `buildTemplate()` captures a processed source as a template; `applyAppearance()` reapplies a template's saved names/colors. All three are static and free of dialog code, which is what makes them testable
-   - Reports through `message(LogLevel, QString)` and `finished()` rather than calling the View, and renders per-file images through an injected `ImageExporter` callback — the widget draws, the controller decides when and where
-   - Lived in `MainView` until v2.12.1; the View kept a state machine, which is the layering leak this removes
-
-4. **PlotViewModel** (`src/viewmodel/plotviewmodel.cpp`, `include/viewmodel/plotviewmodel.h`)
-   - Converts each `ProcessedStreamData` into in-memory `PlotSeriesData` vectors (name, receiver/channel indices, x/y values, cached Y min/max, color), carrying its `sourceId` through so cross-source identity checks (reprocess-replace, rename/recolor sibling-sync) never cross a source boundary
-   - (The logic - the series a stream yields, the shared base and its re-basing, the overlap rule, the import's stream ordering - is the core's `seriesbuilder.h`; this class keeps the storage and the presentation.) Converts absolute IRIG seconds to elapsed seconds against a shared base that tracks the **earliest absolute sample across every source** (not just the first-added one): `addStreamData()` re-bases — shifting every existing series right — when a later-added source started earlier; `removeSource()` is the mirror, shifting left only if the removed source held the earliest sample. Emits `nonOverlappingSourceWarning(sourceId)` (informational) the first time a newly added source's absolute range doesn't intersect what's already loaded
-   - Assigns the purple/blue/green (lock) and red/orange/yellow (SNR) palette
-   - Manages axis ranges (auto Y with margin, manual Y override, X time window), the left-axis view toggle (lock % vs accumulated missed frames), and per-series visibility
-   - Signals `dataChanged()`, `axisRangeChanged()`, `seriesVisibilityChanged()`, `nonOverlappingSourceWarning(int)`; `computeYRange()` uses per-series cached min/max
-   - `hasLeftYMaxOverride()`/`leftYMaxOverrideValue()` and the right-axis counterparts expose whether/what the user overrode the axis maxima
-
-#### Model
+#### The native core
 
 1. **Chapter10Reader** (`src/model/chapter10reader.cpp`, `include/model/chapter10reader.h`)
    - Reads Ch10 file **metadata** up front: scans TMATS to catalog time and PCM channels, provides channel lists, time accessors, and channel ID resolution. Wraps the irig106utils C library.
@@ -6703,14 +6710,14 @@ not mis-read.
 
 2. **Ch10PacketReader** (`src/model/ch10packetreader.cpp`, `include/model/ch10packetreader.h`)
    - The single-pass reader. `prepare()` opens the file, parses TMATS, resolves each stream's PCM attributes, and builds the channel-ID → `PacketQueue` routing; `run()` (on its own thread) reads the file once, tracks IRIG time, and dispatches each PCM packet's payload to the matching queues, then posts end-of-stream sentinels
-   - Plain C++, no Qt: it reports progress, log lines and errors to a `ProcessingEvents` sink (`include/model/processingevents.h`) on the reading thread, relayed to the UI thread by `qtprocessingevents.h`
+   - Plain C++, no Qt: it reports progress, log lines and errors to a `ProcessingEvents` sink (`include/model/processingevents.h`) on the reading thread, which the ABI relays to the host
    - Owns the `SuChanInfo` per-channel bookkeeping table
 
 3. **PacketQueue** (`include/model/packetqueue.h`) — bounded, thread-safe per-stream packet queue connecting the reader to one worker (header-only)
 
 4. **FrameProcessor** (`src/model/frameprocessor.cpp`, `include/model/frameprocessor.h`)
    - Per-stream worker: drains its PacketQueue, runs the bit-serial frame-sync scanner (acquire/lock, off-phase rejection, bit-span lock %), accumulates lock %, missed frames, and (SNR mode) calibrated channel values into a `ProcessedStreamData`
-   - Plain C++, no Qt: it reports log lines, errors and completion to a `ProcessingEvents` sink (`include/model/processingevents.h`) on the processing thread; `qtprocessingevents.h` forwards them to a `QObject`'s thread as queued calls
+   - Plain C++, no Qt: it reports log lines, errors and completion to a `ProcessingEvents` sink (`include/model/processingevents.h`) on the processing thread, which the ABI relays to the host
    - Private helpers include `derandomizeBitstream()` and `hasSyncPattern()`; applies linear slope/offset or a non-linear `CalibrationProfile` per channel
 
 5. **FrameSetup** (`src/model/framesetup.cpp`, `include/model/framesetup.h`) — frame configuration / word-map + calibration table built per job. Plain C++ (no `QObject`, no Qt in the header); calibration profiles are attached from a `std::unordered_map`
@@ -6726,164 +6733,98 @@ not mis-read.
 10. **CsvSeriesParser** and **CsvSeriesWriter** (`src/model/csvseriesparser.cpp`, `src/model/csvserieswriter.cpp`, with `clocktime.cpp`; headers in `include/model/`) - the two directions of the application's CSV format, matched inverses. **Part of the Qt-free core** (UTF-8 `std::string`, `std::filesystem::path`, `std::vector`, listed in `TestCoreQtFree`). `CsvSeriesParser::parse(path)` returns `CsvSeries` / `CsvParseResult`: UTF-8 or UTF-16 with a byte-order mark, carriage returns ignored, a single `Time (DOY:HH:MM:SS.mmm)` column then one column per series; thread-safe, so `PlotViewModel::loadCsvFileAsync` runs it (and the conversion to `PlotSeriesData`) on a worker thread. `CsvSeriesWriter::write(path, columns, timeBase)` writes what `PlotViewModel::exportCsv` used to: CR LF, UTF-8 without a BOM, six decimals, one row per distinct millisecond (rounded half away from zero, the last sample in a millisecond winning), empty cells where a column has no sample; its `CsvColumn`s view the plot's buffers through `std::span`. `clocktime::format` is the `DDD:HH:MM:SS[.mmm]` stamp both the writer and `PlotViewModel::formatTime` use. Pinned by `TestCsvSeries`, which keeps the Qt implementations they replaced as oracles
 11. **SeriesColumnSchema** (`src/model/seriescolumnschema.cpp`, `include/model/seriescolumnschema.h`) — single source of truth for the CSV column-header format: builds each series' column header and the SNR series name, and parses a header back to its identity fields (metric type, name, stream label/order, receiver, source id). Shared by `CsvSeriesWriter`, `PlotViewModel::addStreamData` and `CsvSeriesParser` so export and import stay inverses (pinned by `tst_seriescolumnschema`'s round-trip). Multi-file input: a series from source 0 exports with the unqualified, byte-identical-since-v2.6 header format; source 1+ gets a leading `"S<n>| "` qualifier that `parseColumnHeader()` strips back off before recovering identity. **Part of the Qt-free core** (UTF-8 `std::string`, listed in `TestCoreQtFree`): `columnHeader()` takes the metric, name and source id rather than a `PlotSeriesData`, and the callers that hold `QString`s convert at the call. `MetricType` lives in `include/dto/metrictype.h` so the schema can name it; `PlotSeriesData::MetricType` is an alias of it, so every existing spelling still compiles
 
-12. **StreamConfigSchema** (`src/model/streamconfigschema.cpp`, `include/model/streamconfigschema.h`) — single source of truth for `StreamConfig`'s JSON representation (`toJson()`/`fromJson()`), so no field list is hand-mapped twice. Excludes `calibrationByWord` (extracted profiles are session-only, never serialized) but includes the calibration *input references* (`calCh10Path`, `stepTomlPath`, `clipStartSec`, `clipEndSec`). Used by `ProcessingTemplateSchema`
-13. **ProcessingTemplateSchema** (`src/model/processingtemplateschema.cpp`, `include/model/processingtemplateschema.h`) — *processing templates / batch apply*; serializes/parses a `ProcessingTemplate` (`schemaVersion`, `appVersion`, `name`, `timeChannelIndex`, and a list of `TemplateStreamEntry`). Delegates each entry's config to `StreamConfigSchema` and adds the per-entry `SeriesAppearance` array; no file paths (a template is location-independent); a `schemaVersion` newer than `kCurrentSchemaVersion` is rejected
-14. **TemplateMatcher** (`src/model/templatematcher.cpp`, `include/model/templatematcher.h`) - *processing templates / batch apply*; pure, disk-free validator that a target file's PCM channel-ID set matches a template's **exactly** (`match(templateIds, fileIds)` -> `MatchResult{ok, missing, extra}`, sorted, each id once). **Part of the Qt-free core** (`std::vector<int>` in and out, listed in `TestCoreQtFree`); `BatchController::matchFile` reads the ids out of a `ProcessingTemplate` and the reader's channel list and calls it. Exact-set matching is what lets the batch loop feed the template's stored `pcmChannelId`s straight to processing
-15. **StreamJobBuilder** (`src/model/streamjobbuilder.cpp`, `include/model/streamjobbuilder.h`) - turns one stream's settings into a processing job: `buildStreamJob(StreamJobConfig, ProcessingParams base, StreamJobContext, StreamJob&, StreamJobReport&)` validates the sync pattern, mask and frame length, then (Receiver SNR) builds the frame-parameter table from the named receiver-parameters file, else the shipped `settings/receiver_params/default.toml`, else a default word map, applies the linear calibration and attaches any step-calibration profiles, returning the job or the reason for refusing it plus the log lines. **Part of the Qt-free core** (UTF-8 text, `std::filesystem::path`, `std::unordered_map`; listed in `TestCoreQtFree`); `MainViewModel::buildStreamJob` copies a `StreamConfig` into a `StreamJobConfig`, supplies the application root and the file-scoped byte order, and relays the report as `logMessageReceived`. Pinned by `TestStreamJob`
-16. **SeriesBuilder** (`src/model/seriesbuilder.cpp`, `include/model/seriesbuilder.h`) - the data logic behind the plot's series: `buildStreamSeries` turns a `ProcessedStreamData` into the series it yields (lock %, missed frames, one per receiver channel, with names, receiver numbers, channel indices, cached ranges and the elapsed axis; values are views, not copies); `SeriesTimeBase` is the clock the shared elapsed axis hangs from (earliest absolute sample across every source, its day and time of day, `adopt` / `advance` for re-basing, `overlaps` for the non-overlap warning); `assignImportedStreamOrders` orders an imported CSV's streams; `StreamKey` is the "same stream run again" identity. **Part of the Qt-free core** (listed in `TestCoreQtFree`); `PlotViewModel` keeps the sample storage (`QVector`s the chart shares) and the presentation, and calls it. Pinned by `TestSeriesBuild`
-17. **IRIG 106 Library** (`lib/irig106/`) — third-party C library for the Chapter 10 file format (see Protected Files)
+12. **TemplateMatcher** (`src/model/templatematcher.cpp`, `include/model/templatematcher.h`) - *processing templates / batch apply*; pure, disk-free validator that a target file's PCM channel-ID set matches a template's **exactly** (`match(templateIds, fileIds)` -> `MatchResult{ok, missing, extra}`, sorted, each id once). **Part of the Qt-free core** (`std::vector<int>` in and out, listed in `TestCoreQtFree`); `BatchController::matchFile` reads the ids out of a `ProcessingTemplate` and the reader's channel list and calls it. Exact-set matching is what lets the batch loop feed the template's stored `pcmChannelId`s straight to processing
+13. **StreamJobBuilder** (`src/model/streamjobbuilder.cpp`, `include/model/streamjobbuilder.h`) - turns one stream's settings into a processing job: `buildStreamJob(StreamJobConfig, ProcessingParams base, StreamJobContext, StreamJob&, StreamJobReport&)` validates the sync pattern, mask and frame length, then (Receiver SNR) builds the frame-parameter table from the named receiver-parameters file, else the shipped `settings/receiver_params/default.toml`, else a default word map, applies the linear calibration and attaches any step-calibration profiles, returning the job or the reason for refusing it plus the log lines. **Part of the Qt-free core** (UTF-8 text, `std::filesystem::path`, `std::unordered_map`; listed in `TestCoreQtFree`); `MainViewModel::buildStreamJob` copies a `StreamConfig` into a `StreamJobConfig`, supplies the application root and the file-scoped byte order, and relays the report as `logMessageReceived`. Pinned by `TestStreamJob`
+14. **SeriesBuilder** (`src/model/seriesbuilder.cpp`, `include/model/seriesbuilder.h`) - the data logic behind the plot's series: `buildStreamSeries` turns a `ProcessedStreamData` into the series it yields (lock %, missed frames, one per receiver channel, with names, receiver numbers, channel indices, cached ranges and the elapsed axis; values are views, not copies); `SeriesTimeBase` is the clock the shared elapsed axis hangs from (earliest absolute sample across every source, its day and time of day, `adopt` / `advance` for re-basing, `overlaps` for the non-overlap warning); `assignImportedStreamOrders` orders an imported CSV's streams; `StreamKey` is the "same stream run again" identity. **Part of the Qt-free core** (listed in `TestCoreQtFree`); `PlotViewModel` keeps the sample storage (`QVector`s the chart shares) and the presentation, and calls it. Pinned by `TestSeriesBuild`
+15. **IRIG 106 Library** (`lib/irig106/`) — third-party C library for the Chapter 10 file format (see Protected Files)
+
 
 ### Data Flow
 
 ```text
-User opens .ch10 ─► MainView ─► MainViewModel ─► Chapter10Reader (metadata)
-     (or Add Source)                  │           [assigns/reuses sourceId]
-                            StreamConfigDialog (per-stream config)
-                                      │
-                      MainViewModel builds QVector<StreamJob>
-                              [ProcessingParams.sourceId stamped]
-                                      │
-                ProcessingCoordinator (Qt) ─► PipelineRunner (no Qt)
-                          ┌───────────┴───────────┐
-                  Ch10PacketReader (one pass)      │
-                          │  routes packets        │
-                     PacketQueue ─► FrameProcessor (one worker per stream, parallel)
-                                              │
-                                   ProcessedStreamData (in memory, carries sourceId)
-                                              │
-                                   PlotViewModel ─► PlotWidget (TmChart)
-                          [re-bases shared elapsed axis to the earliest
-                           sample across all loaded sources; identity
-                           checks key on (sourceId, streamLabel, order)]
+User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► Chapter10Reader (metadata)
+                                │
+                   Configure Streams (per-stream settings)
+                                │
+                StreamsRun builds a RunRequest ─► ProcessingRun (TmDq.Core, through the C ABI)
+                                                        │
+                                       PipelineRunner (the core, its own threads)
+                                  ┌─────────────────────┴───────────┐
+                          Ch10PacketReader (one pass)               │
+                                  │  routes packets                 │
+                             PacketQueue ─► FrameProcessor (one worker per stream, parallel)
+                                                        │
+                                  ProcessedStreamData (in memory, carries its source id)
+                                                        │
+                       StreamResult ─► the core's series builder ─► PlotViewModel ─► PlotChart
+                                      [one shared elapsed axis, based at the earliest
+                                       sample across every loaded source]
 ```
-
-## Qt-Specific Considerations
-
-### Qt Version Compatibility
-
-- **Target**: Qt 6.12.0
-- **Important**: Qt 6 made significant changes to container classes
-  - `QStringList` methods differ from Qt 5
-  - Prefer range-based for loops when iterating over Qt containers
-
-### Container Iteration Pattern
-
-**Preferred** (range-based for loop):
-
-```cpp
-QStringList items = getItems();
-for (const QString& item : items)
-    doSomething(item);
-```
-
-**Avoid** (index-based with .length()):
-
-```cpp
-// This may not compile in Qt 6!
-for (int i = 0; i < items.length(); i++)
-    doSomething(items[i]);
-```
-
-### Required Includes
-
-When using Qt classes, ensure proper headers are included:
-
-- `QStringList` requires `#include <QStringList>`
-- `QString` requires `#include <QString>`
-- Composite widgets require their specific headers
 
 ## Coding Conventions
 
 ### File Organization
 
-- **Headers**: `include/` directory
-- **Implementation**: `src/` directory
-- **Resources**: `resources/` directory
-- **UI files**: If using Qt Designer (currently hand-coded)
+- **The core**: headers in `include/` (`dto/`, `model/`, `constants.h`), sources in `src/model/`; the ABI in
+  `native/tmdq_core/`; the doctest suite in `native/tmdq_core_tests/`. A new core source goes in `tmdq_core.vcxproj`
+  (and so into the tests' project too); `NativeProjectTests` fails until both list it.
+- **.NET**: `dotnet/TmDq.Core` (the binding), `dotnet/TmDq.App` (folders by role: `ViewModels`, `Views`, `Plot`,
+  `Streams`, `Processing`, `Settings`, `Templates`, `Services`, `Logging`), each with a `.Tests` project beside it.
+- **Resources**: `resources/` (the base manual, the icon, the UTF-8 manifest); shipped settings in `settings/`.
 
 ### Naming Conventions
 
-- **Classes**: PascalCase (e.g., `MainView`, `MainViewModel`, `Chapter10Reader`, `FrameProcessor`)
-- **Constants**: kPascalCase in namespaces (e.g., `PCMConstants::kWordsInMinorFrame`, `UIConstants::kDefaultScaleIndex`)
-- **Member variables**: `m_` prefix with snake_case (e.g., `m_frame_setup`, `m_reader`); widget members drop type suffixes when the declared type is clear (e.g., `m_input_file` not `m_input_file_lineedit`); buttons use `_btn` suffix (e.g., `m_process_btn`); settings members use `m_settings_` prefix (e.g., `m_settings_frame_sync`)
-- **Methods**: camelCase (e.g., `process()`, `getTimeChannelComboBoxList()`)
-- **Slots**: camelCase with descriptive names (e.g., `inputFileButtonPressed()`)
-- **Struct fields**: `ProcessingParams` uses snake_case; the newer value types (`StreamConfig`, `StreamJob`, `ProcessedStreamData`, `CalibrationProfile`) use camelCase (Qt property style)
+- **C++ (the core)**: classes PascalCase (`Chapter10Reader`, `FrameProcessor`); constants `kPascalCase` in namespaces
+  (`PCMConstants::kWordsInMinorFrame`); members `m_` with snake_case (`m_frame_setup`); methods camelCase;
+  `ProcessingParams` fields snake_case, the newer value types (`StreamJob`, `ProcessedStreamData`,
+  `CalibrationProfile`) camelCase.
+- **C#**: the .NET conventions - PascalCase types, members and properties, `_camelCase` private fields; tests named
+  for what they hold, as sentences (`ABatchRunsEachFileInTurnKeepsEachAndExportsEachAsTheQtApplicationDoes`).
 
-### Memory Management
-
-- UI widgets created with `new` should specify parent widget for automatic cleanup
-- Manual `delete` in destructor for widgets without parents
-- Follow Qt's parent-child ownership model
-- Use `const QString&` for all string parameters passed by reference
-
-### Include Ordering (Google C++ Style)
+### Include Ordering (the core, Google C++ Style)
 
 Order includes in each `.cpp` / `.h` file as follows, with a blank line between groups:
 
-1. Related header (e.g., `#include "mainview.h"` in `mainview.cpp`)
+1. Related header (e.g., `#include "frameprocessor.h"` in `frameprocessor.cpp`)
 2. C system headers (e.g., `<time.h>`)
 3. C++ standard library headers (e.g., `<fstream>`, `<string>`)
-4. Third-party / Qt headers (e.g., `<QDebug>`, `<QMessageBox>`) — alphabetized
-5. irig106 library headers — keep in dependency order, not alphabetized
-6. Project headers (e.g., `"channeldata.h"`, `"constants.h"`) — alphabetized
-
-### Signals and Slots
-
-- Use Qt's signals/slots mechanism for event handling
-- Connect signals in `setUpConnections()` method
-- Uses new-style connect syntax (`&ClassName::signalName`)
+4. irig106 library headers — keep in dependency order, not alphabetized
+5. Project headers (e.g., `"channeldata.h"`, `"constants.h"`) — alphabetized
 
 ## Build System
 
-### qmake Project File (tmDataQualityAnalyzer.pro)
+Everything builds from `tmdq.sln`, which VS Code opens by default:
 
-- Defines source files, headers, resources
-- Configures Qt modules (core, gui, widgets)
-- Sets C++20 standard
-- Includes platform-specific libraries (ws2_32 for Windows sockets)
-
-### Build Targets
-
-- **Debug**: `nmake -f Makefile.Debug` → `debug/tmDataQualityAnalyzer.exe`
-- **Release**: `nmake -f Makefile.Release` → `release/tmDataQualityAnalyzer.exe`
-
-### VS Code Integration
-
-Tasks are defined in `.vscode/tasks.json`:
-
-- "qmake: Configure" - Runs qmake to generate Makefiles
-- "Build (Debug)" - Compiles debug build
-- "Build (Release)" - Compiles release build
-- "Clean" - Cleans build artifacts
-- "Rebuild" - Clean + Build
+- **`tmdq_core.dll`**: `scripts\build_core_dll.ps1 [-Configuration Debug|Release]` (MSBuild over
+  `native/tmdq_core/tmdq_core.vcxproj`, into `native/out/<config>/`), then fails on any compiler warning or on an import
+  outside a short allow-list.
+- **The .NET projects**: `dotnet build` through the test scripts below; every project imports
+  `dotnet/build/AppVersion.props` (the version, read from `AppVersion`) and `dotnet/build/PackageLicences.targets` (the
+  licence allow-list).
+- **The release**: `deploy\avalonia\build_avalonia_package.ps1` (single-file publish, signing, the portable ZIP and the
+  Inno installer); `.claude/skills/cut-release` is the procedure.
 
 ### clangd / IntelliSense (`compile_flags.txt`)
 
 clangd and clang-tidy read a single project-root `compile_flags.txt` — one flag per
-line, applied to every translation unit, which is sufficient here because every TU
-shares the same includes and defines. It is **generated, not committed** (the Qt include
-paths are machine-specific and absolute), and it is **gitignored**, so a fresh clone has
+line, applied to every translation unit. It is **generated, not committed** (its paths
+are machine-specific and absolute), and it is **gitignored**, so a fresh clone has
 no IntelliSense until you run:
 
 ```powershell
 py scripts/gen_compile_flags.py
 ```
 
-Re-run it after a Qt version bump, or after changing `INCLUDEPATH` / `DEFINES` /
-`QT +=` in the `.pro` — the generator mirrors those by hand (`PROJECT_INCLUDES`,
-`QT_MODULES`, `DEFINES` in the script), so a `.pro` change silently leaves clangd stale
-until it's regenerated on both sides.
-
 It targets MSVC (`--target=x86_64-pc-windows-msvc`, `-fms-compatibility`), and clangd
 then locates the MSVC and Windows SDK system headers itself — those paths are
 deliberately **not** in the file. Verify with:
 
 ```powershell
-clangd --check=src/view/plotwidget.cpp
+clangd --check=src/model/frameprocessor.cpp
 ```
 
-which should end in `All checks completed, 0 errors`.
+which should end in `All checks completed, 0 errors`. (The generator still carries the Qt include paths the deleted
+application needed; plan step 6.2 takes them out with the rest of the Qt tooling.)
 
 **Worktree trap.** The paths in `compile_flags.txt` are absolute into the checkout that
 generated it, and `.claude/worktrees/<name>/` sits *inside* the main checkout — so
@@ -6896,15 +6837,22 @@ that worktrees also need.
 
 ### Deployment & Packaging
 
-- **Build automation**: `deploy/build_release.ps1` — builds release, runs `windeployqt`, stages installer and portable layouts, signs exe, creates ZIP, compiles Inno Setup installer
-- **Inno Setup installer**: `deploy/tmDataQualityAnalyzer.iss` — EXE installer with admin/non-admin support, TOML merge logic, `.ch10` file association, "What's New" page, Start Menu/desktop shortcuts
-- **Portable ZIP**: Flat layout with `portable` marker file; QSettings redirected to app directory via `QSettings::setPath()` in `main.cpp`; includes LICENSE.txt and README.txt
-- **Release notes**: `deploy/RELEASENOTES.txt` — shown as "What's New" page in installer (`InfoBeforeFile`)
-- **Portable README**: `deploy/README_portable.txt` — copied as README.txt into portable ZIP
-- **App root auto-detection** (`mainviewmodel.cpp`): Checks if `settings/` exists next to the exe (portable) or one level up (installed/dev/build)
-- **Installed layout**: `{install}/bin/tmDataQualityAnalyzer.exe` + `{install}/settings/default.toml`
-- **Portable layout**: `tmDataQualityAnalyzer.exe` + `settings/default.toml` + `portable` marker + `LICENSE.txt` + `README.txt` in same directory
-- **Code signing**: Optional via `SIGN_CERT_SHA1` environment variable (SHA-1 thumbprint of certificate in Windows Certificate Store)
+- **Build automation**: `deploy/avalonia/build_avalonia_package.ps1` — the consistency check, a signing pre-flight,
+  the core in Release, a self-contained single-file publish, staging (settings, the VC++ runtime the core imports, the
+  licence, `THIRD-PARTY-NOTICES.txt`), signing our two binaries only, a smoke run on the PRN sample, the ZIP and the
+  installer.
+- **Inno Setup installer**: `deploy/avalonia/tmDataQualityAnalyzer.iss` — v2.x's AppId and folder, so it upgrades a
+  v2.x install in place (its `bin\`, `UserGuide.txt` and old manual deleted, `settings\` kept), admin or per-user,
+  the `.ch10` association, the "What's New" page, the optional full manual.
+- **Portable ZIP**: the same files flat, with a `portable` marker (preferences in a `tmDataQualityAnalyzer` folder beside
+  the exe), `UserManual.html`, `LICENSE.txt`, `THIRD-PARTY-NOTICES.txt` and `README.txt`.
+- **Release notes**: `deploy/RELEASENOTES.txt` — the installer's "What's New" page (`InfoBeforeFile`) and the GitHub
+  release's text.
+- **Portable README**: `deploy/README_portable.txt` — copied as `README.txt` into the ZIP.
+- **Clean-machine test**: `deploy/sandbox/run_sandbox_test.ps1` with `verify_avalonia_install.ps1` — Smart App Control
+  on, an unsigned control blocked, v2.14.2 installed and upgraded.
+- **Code signing**: the certificate's SHA-1 in `SIGN_CERT_SHA1` (falls back to the Certum OSS certificate), token-backed
+  (SimplySign): unlock it first.
 
 ## Important Implementation Notes
 
@@ -6914,6 +6862,8 @@ that worktrees also need.
 - Be careful with C/C++ interop (no exceptions in C code)
 - File handles managed through `m_file_handle`
 - Buffer management for reading packets
+- irig106 setup is serialised (`lockIrig106Setup()`), and the path is passed in the process code page, which the UTF-8
+  manifest makes UTF-8 (`.claude/CLAUDE.md`, Domain invariants)
 
 ### Time Handling
 
@@ -6927,7 +6877,7 @@ that worktrees also need.
 - Drains the stream's `PacketQueue` (fed by the single `Ch10PacketReader`) rather than opening the file itself
 - Accumulates results into an in-memory `ProcessedStreamData` (lock %, accumulated missed frames, and SNR channel series) — there is no CSV-on-disk intermediate
 - One `FrameProcessor` per stream runs on its own `std::thread` (no event loop); `PipelineRunner` owns the lifecycle - the queues, the reader and the threads - and joins them all before it reports the end
-- Reports log, error, and completion through `ProcessingEvents`; the coordinator's adapter relays them as its own signals, on the UI thread and in order
+- Reports log, error, and completion through `ProcessingEvents`; the ABI's run relays them to the host's observer, and the app posts them to the UI thread, in order (`SessionLog`)
 
 ### Framesync Lock Statistics Calculation
 
@@ -6944,139 +6894,106 @@ that worktrees also need.
 
 ## Common Development Tasks
 
-### Adding a New UI Widget
+### Adding a Control or a Dialog
 
-1. Declare pointer in `mainview.h` private section
-2. Create widget in appropriate `setUpSection()` method
-3. Add to layout
-4. Connect signals if needed in `setUpConnections()`
-5. Handle cleanup in destructor if no parent
-6. If the widget drives business logic, expose the action via a MainViewModel slot or property
+1. Put the rule in a view model (`dotnet/TmDq.App/ViewModels`), where a plain `[Fact]` can test it without a window.
+2. Bind it from the view's XAML; keep the code-behind to what only a control can do (focus, pointer gestures, popups).
+3. Test the window on the headless platform (`[AvaloniaFact]`), never a control in a plain `[Fact]`, and never await a
+   modal dialog in a test.
 
-### Modifying Build Configuration
+### Changing What the Core Does
 
-1. Edit `tmDataQualityAnalyzer.pro`
-2. Re-run qmake from the project root: `qmake tmDataQualityAnalyzer.pro -spec win32-msvc CONFIG+=debug`
-3. Rebuild: `nmake -f Makefile.Debug`
+1. Pin the current behaviour with a doctest case first (plan rule 2), then change it.
+2. A new function a host needs goes through the ABI (`native/tmdq_core/tmdq_abi.h`, a new revision) and its binding in
+   `dotnet/TmDq.Core`, with a native case in `test_abi.cpp` and a managed test.
+3. Mutation-check the change (`scripts\mutate.ps1`).
 
 ### Adding a New Per-Stream Setting
 
-1. Add the field to the `StreamConfig` struct in `include/dto/streamconfig.h` (with a default in `constants.h` if appropriate)
-2. Surface it in the relevant gear sub-dialog in `StreamConfigDialog` (Frame Sync Lock or Receiver SNR setup), and include it in the "Apply to all" fan-out if it should propagate
-3. If it must round-trip to a TOML file, add it to the matching `loadFrameSyncFromToml` / `saveFrameSyncToToml` helper in `streamsubdialogs.cpp`, or to `FrameSetup`'s receiver-parameters read/write, which both go through `TomlDocument` (respecting the US5.1/US1.0 boundaries)
-4. Carry it into `ProcessingParams` (and `FrameSetup` if it affects the word map) where `MainViewModel` builds each `StreamJob`
-5. Consume it in `FrameProcessor::process()`
+1. Add the field to the app's `StreamConfig` (`dotnet/TmDq.Core/RunTypes.cs`) and to the core's job input it travels in.
+2. Surface it in the relevant setup dialog's view model, and in Apply to all if it should propagate.
+3. If it must round-trip to a TOML file, add it to the core's format (`framesyncfile` or the receiver-parameters file,
+   through `TomlDocument`), respecting the TOML boundary in `.claude/CLAUDE.md`.
+4. Carry it into `ProcessingParams` (and `FrameSetup` if it affects the word map) in `StreamJobBuilder`, and through
+   `applyAcquisition` if it affects raw values (the calibration extractor must see it too).
+5. Consume it in `FrameProcessor::process()`.
 
 ## Debugging
 
 ### Common Issues
 
-1. **Build fails with PATH errors**
-   - Dot-source `scripts\env.ps1` first — it imports the MSVC environment and puts the Qt
-     `msvc2022_64` kit bin on PATH
-   - Check paths in `.vscode/tasks.json` match your Qt installation
-2. **qmake fails: "QMAKE_MSC_VER isn't set"**
-   - A stale `.qmake.stash` (qmake caches the compiler's version detection and shares it up the
-     directory tree) is masking MSVC detection — e.g. a leftover from a pre-switch MinGW build.
-     Delete `.qmake.stash` (and any in parent dirs) and build in a clean dir.
-
-3. **MOC errors**
-   - Ensure Q_OBJECT macro is present in classes with signals/slots
-   - Re-run qmake if header structure changed
+1. **A build tool is not found** (`msbuild`, `mt`, `dumpbin`): the scripts dot-source `scripts\env.ps1` when they are
+   missing, which imports the Visual Studio 2022 environment; run them from PowerShell, not a bare `cmd`.
+2. **`dotnet build` fails on `Platform=x64`**: `vcvars` sets it, and a .NET build then looks for an x64 configuration
+   that does not exist. The scripts clear it; clear it yourself in a shell that ran `env.ps1`.
+3. **A test sees an old `tmdq_core.dll`**: the managed and app tests load `native\out\<config>\tmdq_core.dll` (or
+   `TMDQ_CORE_DLL`), so rebuild the core after changing it.
 
 ### Build Warnings
 
-- Build should produce 0 warnings. If new warnings appear, fix them before committing.
+- Every build is warning-free: the core's (`build_core_dll.ps1` and `test_native.ps1` fail on one) and the .NET
+  projects' (warnings are errors). Fix a new one before committing.
 
 ## Testing
 
-Automated unit tests use the **Qt Test** framework. Test sources are in the `tests/` directory with a separate `tests/tests.pro` project file.
+Three suites, each run by its own script; the baselines are in `.claude/CLAUDE.md`:
+
+- **The native core** (doctest, `native/tmdq_core_tests`): `scripts\test_native.ps1`.
+- **The C# library** (xunit v3, `dotnet/TmDq.Core.Tests`): `scripts\test_dotnet.ps1`.
+- **The application** (xunit v3 on `Avalonia.Headless.XUnit`, `dotnet/TmDq.App.Tests`): `scripts\test_app.ps1`.
+
+The suites read the committed recordings under `tests/data/test files` and the fixtures under `tests/fixtures`. The
+side-by-side soak (`scripts\run_soak.ps1`) holds the application's CSV exports to the bytes v2.14.2 exported, and
+mutation checks run through `scripts\mutate.ps1`.
 
 ### Continuous Integration
 
-`.github/workflows/ci.yml` builds the app and runs the full suite on every push to
-`main` and every PR. It prefers a **self-hosted Windows runner** (local toolchain and
-the full-size `.ch10` recordings on disk) and falls back to GitHub-hosted
-`windows-latest` when that runner is offline or a contributor lacks access — both
-paths run the same suite. The workflow's own constraints (ASCII-only, Windows
-PowerShell 5.1, `QT_QPA_PLATFORM=offscreen`) are documented in its header comment;
-the runner machine's setup and recovery procedure is in
-[`docs/ci_runner.md`](ci_runner.md).
+`.github/workflows/ci.yml` builds the core and runs all three suites on every push to `main` and every PR. It prefers a
+**self-hosted Windows runner** and falls back to GitHub-hosted `windows-latest` when that runner is offline or a
+contributor lacks access; beside either, `core-without-qt` builds and tests everything on a hosted runner that has never
+had Qt. The workflow's own constraints (ASCII-only, Windows PowerShell 5.1) are documented in its header comment; the
+runner machine's setup and recovery procedure is in [`docs/ci_runner.md`](ci_runner.md).
 
 ### Test Suites
 
-The suites below are registered in `tests/main.cpp`, in a different order than they're
-listed here: the fast, no-fixture suites run first, followed by the heavy
-`.ch10`-integration suite (`TestProcessingCoordinator`), which `--fast`/`TMDQ_FAST_TESTS`
-skip for quick local iteration. The source/header files are listed in `tests/tests.pro`.
-
 - **ChannelData** (doctest, `native/tmdq_core_tests/test_chapter10reader.cpp`; no Qt; ported from the Qt `TestChannelData`, plan step 2.4, whose Qt version is deleted) — ChannelData model object tests, including a non-ASCII name round-tripping and copies keeping every field Also copy assignment.
 - **Chapter10Reader** (doctest, `native/tmdq_core_tests/test_chapter10reader.cpp`; no Qt; ported from the Qt `TestChapter10Reader`, plan step 2.4, whose Qt version is deleted) — Chapter 10 metadata reader, on the five committed recordings: exact channel ids, names and TMATS data rates for each; the combo-box index to channel mapping (placeholder at 0, past the end); each way a file fails to load (missing, empty, text, short header, first packet not TMATS, only TMATS, cut inside TMATS) with its exact message and no channels left; a second load replacing the first and a failed open leaving the old channels alone; and a copy of `step_cal` with same-length edits to its TMATS text (no data checksum, header untouched) that reaches what the fixtures do not - the channel-enabled flag (T / Y / 1 either case enable, F / N / 0 / other disable, missing enables, whitespace ignored), the type codes (`PCMIN` / `01` / `09`, `TIMEIN` / `11`, case-sensitive), the name priority (data source id, channel data link name, PCM link name), a non-ASCII name, and the bit rate read like `QString::toDouble`. Written against the `QObject` reader first; validated against 23 mutants Also a second time channel (the PCM channel retyped as 11), listed in id order with the FIRST as the default. Validated against 44 mutants with ChannelData (42 caught, 2 equivalent).
-- **TestConstants** (`tst_constants`) — `plotconstants.h` (Qt: `QColor`, `QString`), pinned by value in one case. `constants.h` is Qt-free and pinned by the native suite below.
 - **Constants** (doctest, `native/tmdq_core_tests/test_constants.cpp`; no Qt; the core half of the Qt `TestConstants`, plan step 2.4) — every constant in `constants.h` that something outside the code depends on: the version (built from its three numbers), the PCM frame and file constants, the UI defaults and settings keys, and the calibration tuning that the detector's own suites cannot tell from a neighbouring value. Where a shipped file carries the same value, the case reads the file: the Receiver SNR fallback constants against `settings/framesync_patterns/framesync_rcvr_default.toml`, the Frame Sync Lock default against `framesync_PRN15.toml`, each settings folder's `default.toml`, and the full manual's name against the installer script.
 - **Ch10PacketReader** (doctest, `native/tmdq_core_tests/test_ch10packetreader.cpp`; no Qt; ported from the Qt `TestCh10PacketReader`, plan step 2.4, whose Qt version is deleted; the first native suite to read recordings, compiling the vendored irig106 as the DLL does) — the single-pass reader, tested directly on the committed `step_cal` recording (it had no tests of its own): each way `prepare()` fails has its own exact message; a full run reports its start, no error, progress that never goes backwards and ends at 100, all 1598 packets (6,539,016 payload bytes) and exactly one end marker; an abort is announced, reports 100 and still posts the end marker; a file cut inside a PCM packet, inside a time packet, or with a damaged header checksum reports the right read error and delivers exactly the packets before the damage; a file that ends inside a packet header is a clean end of file and a damaged sync pattern silently costs one packet (both pinned as the behaviour they are); and two streams on one channel each get every packet sharing one payload buffer. Cut points are found by walking the packet headers. Written against the signal-based reader first; validated against eleven mutants Setup is serialised across threads (the library's own state is not thread-safe): while one thread holds `lockIrig106Setup()` a setup on another cannot even open the file (a copy held open with no sharing makes an early open fail visibly), a failed setup releases the lock, and eight threads setting up 40 times each all succeed and agree Also: every attribute `prepare()` resolves for a worker (mask given and defaulted, bits and words separately, byte order, the bit period from TMATS or an operator rate), each packet's bit count and strictly increasing base time, a queue shared by two streams (every packet twice, one end marker), a file cut inside its first header and one whose first packet is not TMATS, and routing on the multi-channel PRN sample (exactly channel 13's packets). Validated against 54 mutants (50 caught; 4 need recordings the repository does not have). The masked stream's word mask is every bit of a word, `0xFFFF` (it was cut by the sync mask before the fix).
 - **FrameProcessor** (doctest, `native/tmdq_core_tests/test_frameprocessor.cpp`; no Qt; ported from the Qt `TestFrameProcessor`, plan step 2.4, whose Qt version is deleted; the test executable carries the UTF-8 code-page manifest for its non-ASCII path case) — constructor defaults, abort flag, `derandomizeBitstream` (identity/short and changed/long), invalid time-channel/PCM-channel/file handling, and processing real Ch10 data (receiver-data accumulation, lock-only mode has no channels, monotonic frame-sync errors, slope affects values, shorter period → more samples, calibration round-trip clean steps, off-phase sync after lock-loss not extracted); and `reportsExactlyTheseMessages` (10 rows), the exact text and order of everything it reports - success, a non-ASCII stream label, a bounded window, a masked pattern, sync-but-no-frames, cancel, both internal errors, and the all-odd and mixed byte-swap warnings - written against the signals implementation first; and `aSyncMaskDoesNotMaskReceiverWords`, a receiver stream processed with and without a sync mask that ignores sync bits 8-15 giving identical values (the word mask is every bit of a word, not cut by the sync mask). Also, on synthetic streams timed at one second per bit with every value worked by hand: windows on both clocks (a bit on a window's end in it, each window averaging its own frames, the completion count), a bounded window (both ends in, nothing outside counted, windows starting at the start), lost lock (missed frames counted bit by bit, never also extrapolated; a window with no frame at 0), one missed frame per frame length of unsynced bits inside the window only, gap extrapolation at the bit period's rate or the operator's, the minimum syncs, only enabled words as channels with `(raw + offset) x slope`, the descrambler against an independent IRIG 106 randomizer (in pieces, resynchronizing, across packets), inversion and a packet with no payload; three more message rows. Validated against 129 mutants (127 caught; an abort check whose absence only delays a mid-packet abort, and the unpinned text of a start-only bound)
-- **TestMainViewModelHelpers** (`tst_mainviewmodel_helpers`) — `MainViewModel::classifyLogMessage()`, the severity policy the View renders but does not decide. The channel-naming cases that used to live here moved to **TestFrameSetup** with the `MainViewModel` forwarders they called: `FrameSetup` is where that naming lives; and `buildStreamJobAttachesCalibrationByWord`, which runs a receiver stream through the private `buildStreamJob` (the test is a friend) and checks which parameters received which profile and the log line that says so; and `buildStreamJob` as a whole: 43 rows of how the sync pattern and mask are decoded (whitespace trimmed, `+` and `0x` accepted, any `-` refused, 64-bit overflow refused, the pattern's length counted in characters), every field a config contributes to the worker's parameters, and each rejection message in the order the checks run
-- **TestStreamJob** (`tst_streamjob`) - what `MainViewModel::buildStreamJob` does around the core's job builder: 15 cases, each one line of the outcome (built or not, the message, the log, every worker parameter, the whole frame-parameter table with its calibration), one for each thing the wrapper does (it carries the user's Qt settings across - label, sync fields, file names, profiles - reads the application root and byte order it holds, and reports what the builder found as a QString and as signals). The builder itself (`buildStreamJob` in `streamjobbuilder.h`) is the core's and is tested without Qt in `native/tmdq_core_tests/test_streamjob.cpp`: all 59 cases (the slope indices and their arithmetic, polarity, the scale at its edges, an explicit receiver file that is missing, a folder, outside the frame, empty, metadata-only or not TOML, the word-count rounding, the default file and the default word map in each state, profiles attached and not, the order of the checks, non-ASCII labels and names) plus two for the default file's word at the frame's edge; the old view-model code restated over std types (with one marked line, the fix for an appended default map) and compared over 1,500 generated configurations; and two direct tests (a UTF-8 application root with non-ASCII folder names; error and log as plain text). 102 mutants of `streamjobbuilder.cpp`: 101 caught, 1 equivalent
 - **FrameSetup** (doctest, `native/tmdq_core_tests/test_framesetup.cpp`; no Qt; ported from the Qt `TestFrameSetup`, plan step 2.4, whose Qt version is deleted; reads `tests/fixtures` and `settings/receiver_params` through `repoFile()`) — Frame parameter loading, word map, calibration, `channelPrefix()` naming the known channel positions then falling back to `CH<n+1>`, `receiverParameterName()` combining the two, `receiverIndexFromName()` inverting it (0 for a name with no parseable `_RCVR<N>`), and the receiver-parameters file as a whole: the scalars read from the `[Receivers]` block the shipped files actually use (and the older `[Parameters]` keys still accepted), a save/load round trip that carries the word map with them, the default-map fallback when no file was loaded, nothing written when there is no map to write, and the metadata-only file that parses to zero parameters — the contract `tryLoadingFile()`'s two callers depend on; and `receiverNameParsingMatchesQStringToInt`, which pins how a hand-typed parameter name parses (the last `_RCVR` token wins, whitespace and a leading `+` tolerated, a second sign / negative / trailing junk / overflow reads as no receiver, a name starting with the token has no channel part) - written against the `QString` implementation first; and `attachCalibrationProfiles`, which attaches a step-calibration profile only when it is valid and its word matches a parameter (an invalid one stays linear; a word the map lacks is ignored), written against the `QObject`/`QHash` version first Also: the linear calibration worked by hand for every voltage range and polarity, the reserved sections, file order, a reload, the default map's numbering and bounds (each count must be positive, not only their product), `readReceiverParams` precedence and guards, the exact file `writeReceiverParams` writes, a failed source map replaced by the default one, and the write-failure message. Validated against 90 mutants (87 caught, 3 equivalent).
-- **TestPlotViewModel** (`tst_plotviewmodel`) — default state, CSV load/export (incl. header-only, malformed rows, async load signals), time conversion/formatting, color assignment, the computed Y range and the SNR max override that pins it (the minimum stays automatic, Reset returns it to the data), X time window, visibility, clear/title, in-memory `addStreamData` (lock/SNR/error series, multi-stream accumulation), the left-axis view toggle preserving per-stream selection, and stream-identity regression coverage: two streams sharing a TMATS-derived `streamLabel` but different `streamOrder` must stay independent through reprocess-replace and `renameSeries()`/`recolorSeries()` sibling-sync (pinned after a pre-v2.6.0 cross-contamination bug). Multi-file input: cross-source identity (two different `sourceId`s reusing the same `streamLabel`/`streamOrder` stay independent through reprocess-replace/rename/recolor), time-base re-basing (a later-added source starting earlier shifts existing series right; three successively-earlier sources compound correctly; a later source starting after triggers no shift), the non-overlap warning signal (fires once per newly-arriving non-overlapping source, not for an overlapping range), and `removeSource()` (drops only the target source, re-bases left only when the removed source held the earliest sample, clears all data when the last source is removed, no-ops for an unknown id). US1.1 source view: `setVisibleSource()` isolates a source via `effectiveVisible()` without mutating per-series `visible`, `sourceList()` lists distinct labeled sources, and `exportCsv(path, sourceId)` writes only that source's columns; and `aNonAsciiStreamLabelReachesEverySeries`, which pins that a non-ASCII stream label (arriving as UTF-8 from the core) names the lock and missed-frames series, prefixes the SNR series' name, and is what a re-run matches on to replace the stream
-- **TestSeriesBuild** (`tst_seriesbuild`) - what the `PlotViewModel` does with processed streams and imported files, as one line of its data layer per scenario (time base, span, flags, warnings, every series' identity, indices, cached range and samples): 16 scenarios, one for each thing the plot does (it drops a stream's earlier series, judges overlap and raises the warning once per source, moves the base for an earlier source, orders its legend by job, removes a source and moves the base back, clears, keeps counting ids, takes an import in and replaces what was there). The functions behind it (`buildStreamSeries`, `SeriesTimeBase`, `assignImportedStreamOrders`) are the core's and are tested without Qt in `native/tmdq_core_tests/test_seriesbuild.cpp`: all 77 scenarios (what a stream becomes, the receiver number in every spelling, channel indices, mismatched arrays, NaN and infinity, legend order, running a stream again, re-basing across sources, the overlap rule at every boundary, the base day and time of day across the epoch, a year, a leap day and the far future, removing sources, ids across removals and clears, and the order given to an imported CSV's streams) run on `Plot`, a small host written over std types that does what the plot does with those functions; the old data logic restated over std types and compared with `Plot` over 700 random add/remove/clear sequences (whole state after every step) and the old import ordering over 4,000 generated lists; direct tests of views-not-copies and of `SeriesTimeBase`. 113 mutants of `seriesbuilder.cpp`: 108 caught, 5 equivalent
-- **TestProcessingCoordinator** (`tst_processingcoordinator`) — constructor defaults, `reset()` clears state, cancel-with-no-run no-op, `cancelProcessingEndsTheRunWithoutAResult` (Cancel ends the run unsuccessfully, delivers no result, and the state goes true then false) and `destroyingTheCoordinatorMidRunIsSafe` (nothing queued for the dead object is delivered), `startProcessing()` empty-returns-false and processing-state emission, plus a single-vs-multi-stream throughput diagnostic that reports and asserts nothing (the throughput GUARD is the native `PipelineRunner throughput` case); and `workerReportsPrecedeTheResultAndFinishComesLast`, which checks through a real run that the worker's completion line is relayed before the stream's result and `processingFinished` is last; its end-to-end test also checks the progress bar (0 at the start, then 100 reported twice: once by the reader, once on finish); and `aRecordingUnderANonAsciiFolderProcessesEndToEnd`, which runs the committed `step_cal` recording copied under a non-ASCII folder through the whole pipeline
-- **TestMainView** (`tst_mainview`) — Main window construction, widget wiring, log routing, dock visibility behavior, and the CSV import routing (`openPath`/`importCsv`, valid/invalid). The batch-apply cases moved to **TestBatchController** with the state machine itself; and `aFinishedStreamIsLoggedUnderItsLabel`, the log line quoting a finished stream's (non-ASCII) label
-- **TestPlotWidget** (`tst_plotwidget`) — Plot widget construction, null/valid ViewModel connection, dark/light theme application, the movable legend overlay populating from data (hidden until data loads, then one row per visible active-metric series), a shown/resized-window regression case asserting the overlay sizes correctly (not a collapsed frame-only box) after a second rebuild adds more rows — a QScrollArea `widgetResizable` sizeHint staleness bug reproduced and fixed post-review — the SNR legend row showing the short `"CH<id> <ch.name>"` form instead of the full TMATS stream title, the legend row layout reserving a right-side gutter matching the style's scrollbar extent, and each legend row carrying an objectName the overlay stylesheet can target to override the app's global `QWidget { background-color: ... }` theme rule (otherwise every row painted as an opaque chip); plus `exportImage()` writing a PNG/SVG/PDF headlessly (the parameterized image-export entry point extracted for batch apply); and the right-click context menu that replaced the external control rows: it lists every expected top-level item, its data-dependent entries are disabled until data loads, the Plot File submenu is disabled for a single source and switches `visibleSource` for a multi-source run, View Mode reflects and sets the active left-axis metric, `X Axis > Reset Span` / `Y Axes > Reset` clear the X window and both Y overrides, plus two structural guards - wheel-zoom/drag-pan stay enabled (horizontal-only) once data arrives, and **no QComboBox / QSpinBox / QLineEdit / QAbstractButton lives outside the chart** - on-chart overlays are allowed, external control rows are not (the machine-checkable form of "no external controls"); plus the legend toggle (shows/hides the overlay and survives a rebuild, appears only once data is loaded, is parented to the chart, and stays in sync with the context menu's checkable Show Legend item); plus Y axis occupancy - a lock-only plot hides the right axis, an SNR-only plot hides the left, an empty chart keeps the left (hiding both would leave a bare box), and hiding the last *visible* SNR series reclaims the right axis just as never loading one would
-- **TestTmChart** (`tst_tmchart`) - the first-party chart replacing QCustomPlot: series bookkeeping across removals and out-of-range access, mismatched x/y lengths truncated (a draw-time overrun), degenerate/non-finite ranges rejected, X and Y coordinate transforms round-tripping with the correct screen orientation, wheel zoom anchoring the value under the cursor and reporting the new range, interactions inert until enabled, and the shared `renderTo()` export path painting real content while omitting the crosshair/zoom-band overlays (cursor state, not data), and that hiding a Y axis reclaims its margin (the measurable consequence) while leaving the coordinate transforms consistent with the new plot area; and, since the chart draws the core's geometry (plan step 4.3a), that every kind of series reaches it in its place: a right-axis series against its own range, a sloped segment, a band only where the series is, an unordered series in a zoomed view
-- **TestPlotCustomizationDialog** (`tst_plotcustomizationdialog`) — Customize Plot Series dialog: one Frame Sync Lock checkbox per stream, Select All/None, apply → per-stream lock/missed visibility round-trip to the ViewModel; Receiver SNR tree build (receiver grouping), tri-state group cascade, Select All/None, apply → per-channel SNR visibility round-trip, and the Expand/Collapse All button toggle; plus per-stream rename/recolor (lock tab) and per-channel rename/recolor via pending item roles (SNR tab) applied to the ViewModel on OK, and the single batched `seriesAppearanceChanged` emission (reaches private widgets/slots via a friend declaration, same pattern as TestFrameProcessor)
-- **TestStreamConfigDialog** (`tst_streamconfigdialog`) — Per-stream Configure Streams dialog: stream rows, mode selection, gear setup dialogs, TOML load/save round-trips, "Apply to all" fan-out, the Channel column label (short names shown in full, long TMATS-derived names elided on the right with "..." , left-justified, styled via `channelNameCell` to mimic the Mode combo box's border/fill, and the full name always available via tooltip — which is now the only place a truncated name is recoverable), the Mode combo's left-justified closed-box text (via an editable-but-readonly internal line edit) while selection still tracks correctly, and the table header/separator using theme-QSS object names (`streamHeaderLabel` / `streamHeaderSeparator`) rather than hard-coded inline colors; the Extract Calibration dialog: an unreadable sync or an unopenable recording shown on the status line without extracting, a real `step_cal` extraction through the progress dialog (twelve profiles), byte order / inversion / derandomization each reaching the extraction (the wrong value must visibly fail), and the data rate reaching it (half the rate shows exactly twice the recording length)
-- **TestFrameSyncFile** (`tst_framesyncfile`) - what the dialogs do with a frame-sync pattern file (US1.0 / US2.0 / US5.0), through the dialog's own load/save functions. The file format itself (what a file says, what writing puts in it) is the core's and is tested without Qt in `native/tmdq_core_tests/test_framesyncfile.cpp` (all 57 load rows and 15 save rows as the core's values, a round trip for every flag combination, 300 generated files and saves against the code the core replaced; 65 of 66 mutants caught, 1 equivalent). This suite keeps the dialog-level behaviour: 23 load rows (each run with Derandomize ticked and unticked) covering upper-casing, the spin box's range, a field left alone, Invert Data cleared when absent and Derandomize left alone when absent; 6 save rows (the widgets' values reach the file unchanged); 16 Receiver SNR defaults rows (`loadReceiverFrameDefaults`); the old dialog code kept as an oracle and compared over 300 generated files and 300 generated saves, each branch asserted reached; save-then-load round trip through the dialog
-- **TestExportDialog** (`tst_exportdialog`) — Export dialog checkbox-to-field enable logic, export-button validation, and the log-export row defaults/accessors and log-only validation
 - **StepDetector** (doctest, `native/tmdq_core_tests/test_stepdetector.cpp`; no Qt; ported from the Qt `TestStepDetector`, plan step 2.4, whose Qt version is deleted) — Non-linear calibration (US5.3): `[[Step]]` TOML parsing (valid / empty-fails), plateau detection (clean, too-few-fails, extra-plateaus uses last of monotonic run, short-blip doesn't steal a pairing slot, long leading transient doesn't shift pairing, inverted-polarity sweep not reversed, non-monotonic pairing rejected, noisy, settling-at-plateau-start excluded, round-trip exact), the calibration-import resilience cases (the outcome code names the gate that rejected, a compressed out-of-tolerance receiver still calibrates via the relaxed threshold while a healthy one does not relax, noise-split plateaus coalesce instead of severing the sweep, a flat channel reports "flat / no signal" rather than a plateau shortfall, samples pinned at the floor or rail kept out of the noise estimate so live dwells neither split nor shatter, a split dwell far above the noise still paired as one step, railed top steps calibrating the range that stayed in scale while the rail clamps rather than extrapolates, an unconfirmed dwell measured from the dwell grid rather than bridged or shifted, the number of levels the sweep held reported so a short step file can be flagged, and which step file the Extract Calibration dialog preloads), and `interpolateCalibration()` (midpoint, below/above clamping, coincident-raw guard); and the step-file parser pinned directly, written against the `QString` implementation first: case-insensitive `[[Step]]` header and `db` key, a header with a trailing comment or inner spaces not counting as a step, keys outside a step or in another section ignored, a step with no parseable `db` kept at 0, `QString::toDouble`'s value rules (quotes are NOT stripped), file order with the last `db` winning, the output cleared on every call, UTF-8 BOM / UTF-16 files, a non-ASCII path, both error messages, and `initialStepConfigPath` ignoring a directory The step-file parser (`parseStepConfig`, now a reader over `TomlDocument`'s arrays of tables) is also run against a verbatim copy of the hand-written parser it replaced, kept in the test as an oracle, over 4,000 generated files - headers with comments, spaces, other names and missing brackets; keys in every case, quoted, commented, empty, repeated and outside any step - and must agree on success, on every step's dB to the bit, and on the message Also, cases for the inner rules the field scenarios pass through without isolating: the edge threshold's exact value (six robust sigmas of the live derivative, floor and ceiling runs excluded), the confirmation window's boundary, the 2-count floor and no relaxing below it, a sweep starting where a reversal ended, a split up to a tenth of a step, an inverted receiver's split dwell and floor rail, and the saturated-top path's dwell grid (smeared transitions, coarse sample periods, tolerated and refused irregularity, a skipped slot), unconfirmed-dwell measurement (settled tail, median, between its neighbours) and guards. Validated against 96 mutants (82 caught, 13 equivalent; the last was tied to a lead-in before a saturated sweep, since fixed). Also: a turn-on transient before a saturated sweep, on a normal and an inverted receiver, and before an unconfirmed dwell, does not shift the step numbering.
 - **SeriesColumnSchema** (doctest, `native/tmdq_core_tests/test_seriescolumnschema.cpp`; no Qt; ported from the Qt `TestSeriesColumnSchema`, plan step 2.4, whose Qt version is deleted) — the CSV column-header schema (`SeriesColumnSchema`): SNR name and `columnHeader()` formatting, `parseColumnHeader()` classification (lock/missed suffix vs. SNR `"<id> - "` prefix, multi-word stream labels split at the last space, SNR-shape-wins-over-suffix), the unknown→SNR fallback, and the format→parse round trip that keeps `exportCsv` and `CsvSeriesParser` inverses; the three header strings (`kTimeHeader`, the two suffixes) pinned as the file format they are. Multi-file input: source 0 stays unqualified (byte-identical), source 1+ gets a leading `"S<n>| "` qualifier that round-trips through parse for both SNR and Lock/Missed shapes, an unqualified header still defaults to source 0, and a header merely starting with the letter `'S'` isn't misparsed as a qualifier. Written in layers: the original round-trip cases; a table of 40 parse and 8 format edge cases (the 35 and 8 recorded against the `QString` implementation BEFORE it moved - empty headers, ids and receiver numbers with signs, spaces, overflow, a qualifier with no space or a literal overflow, non-ASCII labels - and 5 parse rows added since, worked out from the code and not recorded from Qt: a receiver token without its underscore or in the wrong case, and the characters either side of `'0'..'9'` not being digits); the **40,000 generated headers**, the Qt suite's generator token for token on the same seed, checked against one FNV-1a digest of what the `QString` implementation answered for each (recorded once with a throwaway diagnostic, removed again) and the eight reach counters; and every combination of formatter inputs against the grammar written a second way. It also pins a limitation of the FORMAT: a series NAMED `S1| A` at source 0 reads back as source 1. Validated against 69 mutants (64 caught, 5 equivalent)
-- **TestCsvSeries** (`tst_csvseries`) - what the plot does with the CSV series format, through `PlotViewModel` (`loadCsvFile`, `exportCsv`): 10 import rows (the load warning's count, the clock taken from the first row, the order each stream is given) and 9 export rows (every series, one source's, none), plus a non-ASCII folder, an export of nothing, an unwritable path, and export-import-export being byte-identical. The format itself (the parser, the writer, the clock stamp and the number reader) is the core's and is tested without Qt in `native/tmdq_core_tests/test_csvseries.cpp`: all 66 import rows (line endings, byte-order marks, blank and short rows, padded headers, cell number forms, special values, every timestamp shape, source qualifiers, channel counts; four record behaviour changed on purpose, with the old value in a comment) and 17 export rows (millisecond rounding, six-decimal ties, out-of-order and repeated samples, day boundaries, sources, non-ASCII labels), a file replaced rather than appended to, a non-ASCII folder, uneven time and value arrays, an export crossing the 1 MiB flush, and export-import-export being byte-identical. **Oracles** are what the replaced Qt code answered, recorded as digests: 400 generated files, 500 generated series sets, 8,000 clock stamps and 20,095 number texts (`QString::toDouble` / `toInt`) plus a 1.46 MB export, each generator asserted to reach every outcome in volume. 239 mutants of the parser, writer, clock stamp and number readers: 215 caught, 24 equivalent
 - **CalibrationExtractor** (doctest, `native/tmdq_core_tests/test_calibrationextractor.cpp`; no Qt; ported from the Qt `TestCalibrationExtractor`, plan step 2.4, whose Qt version is deleted; reads the committed recordings through `repoFile()`) — US5.3 pipeline orchestration (complements TestStepDetector's pure logic): drives the async extraction end to end (reader + FrameProcessor workers → per-channel StepDetector). A bad file (with non-empty steps, so it clears the empty-steps guard) finishes unsuccessfully with a recorded error and no partial state; over `rnrz-l_testfile.ch10`, exactly words 6/7/8 (RCVR3 L/R/C, the only real stepped SNR sweep) build valid non-linear profiles while every other receiver word falls back to linear; over `step_cal, example.ch10` (receivers far out of alignment, its real 11-step 0–60 dB config, the shipped sequential word map), receivers 1, 3, 5 and 6 calibrate with every step paired to its own dwell (0 dB at the pre-sweep level, 60 dB at the top dwell, no split dwell taking a slot), receiver 1 over only the range that stayed in scale because its top two steps sit on the rail (readings hold at 48 dB), receiver 2 reports flat / no signal, and the report names the receivers; plus the pure `summarize()` report (receivers grouped, partial receivers spelled out with reasons, unnamed channels reported by name) and its two "check" prompts - a step file shorter than the recording and a word map that does not match it - each proven on the real recording with the wrong file, and silent on the correct setup; and clips that exceed the recording being reported rather than silently ignored; and `extractionReportsItsProgress`, which checks the extraction's progress reaches the dialog (non-decreasing, ending at 100); and `summarizeProducesExactlyThisReport` (15 scenarios, the **whole** report text each - empty, one receiver, mixed, unnamed, an all-calibrated unnamed group alone, beside a numbered receiver, beside a failure and with a saturated top, non-ASCII names, both "check" sections, a saturated top with exact-half dB values, a relaxed threshold, flat levels, several failure reasons, twelve receivers), `extractionLogsOneLinePerChannelWithData`, and `aNonAsciiChannelNameSurvivesExtractionItsLogAndItsReport` (a real `step_cal` extraction with a word map naming channels with non-ASCII text); the extractor's lifecycle through one `Recorder` helper: failures before anything starts (no steps; a word map that is missing, outside the frame, empty, or too large; an unopenable recording), a cancel from the first report and from another thread, a start while running being ignored, a finished extractor running again, destroying a running one, the end being the last report, a failure being an error and a cancel not, a worker failure reporting its own reason, and the clip-ignored log line Also: a clip that takes the whole recording from either end alone is reported and ignored, and a clip really removes the seconds it names (20 s off the start leaves only receiver 1 calibrated, off the end none); the whole step_cal extraction, channel by channel, against recorded numbers (outcome, plateaus, points, edge threshold, profile sum) unclipped and clipped; every per-channel log note (the MISMATCH marker, a failed channel's outcome and threshold, a railed channel's partial calibration, a relaxed threshold) and the tag on the worker's and reader's lines; the window sized from the frame rate (100 ms floor, 200 ms ceiling, ten frames, 12.5 printing as 13) and a slow recording measured in its own time; the default word map taking 49 channels of a 50-word frame but not 50; a word just past the frame refused; a cancel from the very first report (before the worker exists), a cancel that wakes a worker waiting for packets (the reader parked), and a cancel that lands after the worker finished (the worker parked on its last line); an extractor starting clean after a clipped, failed or cancelled run; the extractor no longer running while it reports the end; a destroyed extractor having been CANCELLED rather than waited out; and seven more report scenarios (the lead-in boundary and the most levels any channel held, the higher of two railed tops, an inverted receiver's top at the first point, a flat channel with no level, an unnamed flat channel beside a calibrated one, a plateau count of zero, a count with no data). Validated against 190 mutants (166 caught, 24 equivalent)
-- **TestStreamConfigSchema** (`tst_streamconfigschema`) — `StreamConfigSchema` round trip for both `StreamMode` variants and the calibration input references (`calCh10Path`/`stepTomlPath`/`clipStartSec`/`clipEndSec`), confirms `calibrationByWord` itself never appears in the serialized JSON (and the `calibration` block is omitted entirely when no non-linear calibration was ever extracted), and `fromJson()` rejecting an object missing required fields while leaving in-class defaults for anything else omitted
-- **TestProcessingTemplateSchema** (`tst_processingtemplateschema`) — processing templates / batch apply: `ProcessingTemplateSchema` round trip for both `StreamMode`s, series appearance, calibration input references, and `timeChannelIndex`; that appearance is omitted when empty; that `calibrationByWord` is never serialized (inherited from `StreamConfigSchema`); and `schemaVersion` accept/reject + malformed-document rejection — no `.ch10` fixture, runs in CI
-- **TestBatchController** (`tst_batchcontroller`) — the Apply Template batch loop (US1.1): `buildTemplate()` capturing a source's configs + time channel + byte order + each series' name/color, `applyAppearance()` mapping a template's saved appearance onto the right series (both moved here from TestMainView, and no longer need a window to run), plus two cases the loop's old home made impractical — a queue whose files have all gone missing drains to `finished()` with both counted as skipped rather than stalling on a reader, and `start()` with nothing matched does not clear the session or announce a run; and `aFileWhoseChannelsNoLongerMatchIsSkippedAtItsTurn`, the second channel check made once a file has loaded (the first can be stale), which skips a file the template does not describe with a warning and counts it in the summary; and `matchFileComparesChannelIdsAndNothingElse` (from `TestTemplateMatcher`), the ids `matchFile` reads: every template entry and every file channel counts, and a channel's name plays no part
 - **TemplateMatcher** (doctest, `native/tmdq_core_tests/test_templatematcher.cpp`; no Qt; ported from the Qt `TestTemplateMatcher`, plan step 2.4, whose Qt version is deleted) - batch apply channel-ID matching, called directly on two id lists: pass regardless of order; reject with the right `missing`/`extra` sets on a missing channel, an extra channel, and both; a file with no channels lacks every template channel; two empty sets match and an empty template finds every file channel extra; repeats count once and are reported once (including repeats that are not neighbours); results sorted; any `int` is an id. A second way of writing the comparison (element by element over `std::set`, sharing nothing with the matcher's sort / unique / set_difference) is compared over 4,000 generated id-list pairs (each outcome asserted reached). The two cases that were about `BatchController::matchFile` (every template entry and every file channel counts; a channel's name plays no part) moved to `TestBatchController::matchFileComparesChannelIdsAndNothingElse`. Validated against 20 mutants (the matcher and the ViewModel's wiring of it)
 - **PacketQueue** (doctest, `native/tmdq_core_tests/test_packetqueue.cpp`; no Qt; ported from the Qt `TestPacketQueue`, plan step 2.4, whose Qt version is deleted) — the bounded reader-to-worker hand-off, tested directly rather than only through the pipeline: FIFO order, every `PacketItem` field surviving (including an embedded NUL in the payload), the producer blocking at exactly the configured depth and resuming after one dequeue, the consumer blocking when empty and resuming after one enqueue, `close()` releasing a blocked producer (`enqueue` returns false) and a blocked consumer (end-of-stream sentinel), a closed queue draining what it already holds before reporting end-of-stream, a non-positive depth falling back to the default of 64, and 20,000 items through a depth-4 queue in order under constant hand-off with a watchdog so a lost wakeup fails instead of hanging the suite. Validated against the original Qt-based queue (must pass) and eight single-defect mutants (every one must fail) - see the changelog. Pure logic, runs in CI Also: a producer-sent end-of-stream item does not close the queue, a closed queue's sentinel carries nothing, a full queue closed under a blocked producer keeps what it holds, and the bound holds at depths 1, 3 and 7. Re-validated against 26 mutants (25 caught; `close()` without its lock is a race no test can force).
 - **IntervalGate** (doctest, `native/tmdq_core_tests/test_intervalgate.cpp`; no Qt; ported from the Qt `TestIntervalGate`, plan step 2.4, whose Qt version is deleted) — the progress throttle that replaced `QElapsedTimer` in `Ch10PacketReader::run()`, pinned with injected time points so nothing depends on a sleep: not due before the interval, due at *exactly* the interval (`>=`, not `>`), due long after without `due()` restarting the interval itself, the interval read as milliseconds rather than seconds or microseconds, `reset()` measuring from the reset, sub-millisecond precision agreeing with `QElapsedTimer`'s truncation on every side of the boundary, and a default-constructed gate starting at *now* rather than the clock's epoch (otherwise it is due the instant it exists and throttles nothing). Validated against seven single-defect mutants, every one of which must fail. Pure logic, runs in CI Also: intervals other than 100 ms (1, 7, 250, 5,000) each at its boundary, a zero interval always due, a time before the start never due, and a second reset replacing the first. Re-validated against 17 mutants.
-- **TomlDocument and textfile** (doctest, `native/tmdq_core_tests/test_tomldocument.cpp` and `test_textfile.cpp`; no Qt, run by `scripts\test_native.ps1`, not part of the Qt executable) — ported from the Qt `TestTomlDocument` (plan step 2.4, the first suite moved; the Qt version is deleted). Every case of the original is there under the same description, plus the cases the mutation check showed it lacked. the settings-file reader/writer, pinned directly rather than only through `FrameSetup` and the dialogs: sections and keys in file order (not sorted), an empty `[EMPTY]` section still declared, `[[Name]]` opening an array-of-tables entry rather than a section (keys in file order with values as written - quotes kept, an unquoted comment stripped; names matched without case but otherwise exactly, so `[[ Step ]]` and `[[Steps]]` are not `[[Step]]`; a malformed `[[` line opening an entry no name matches; a section header or a half-header ending an entry; entries never leaking into sections), quote-aware `#` comments, `\"` and `\\` unescaped, a repeated key overwriting, a UTF-8 BOM with CRLF, UTF-16 LE and BE with a BOM, a non-ASCII value saved to and loaded from a folder outside every Western code page, the integer rule (whitespace and `+` tolerated, junk / fraction / overflow / empty return the caller's fallback with `parsed` false), the double rule (including `inf`), `QVariant::toBool()`'s boolean rule (even `no` is true), the exact bytes `save()` writes (top-level keys first, a blank line between sections, CRLF, no BOM), doubles as `%g` with six digits, `save()` truncating rather than merging, and both error paths naming the file. Written against the Qt implementation first; validated against four mutants of the `std` port. Pure logic, runs in CI `test_textfile.cpp` holds `textfile` directly: the UTF-8 mark (and two bytes of it not being one), UTF-16 in either byte order with and without a mark, UTF-8 lengths at 0x7F / 0x80 / 0x7FF / 0x800 / 0xD7FF / 0xE000 / 0xFFFF, surrogate pairs and unpaired surrogates (U+FFFD), an odd trailing byte, `readText` as binary (a Ctrl-Z and carriage returns come through), `utf8FileName` and `pathFromUtf8`. 39 cases, 300 assertions.
-- **TestQtProcessingEvents** (`tst_qtprocessingevents`) — the hand-off from a processing thread to Qt that replaced `FrameProcessor`'s signals: 300 mixed log / error events raised on a worker thread arrive on the target's thread in the order raised with completion last (and the test really did cross threads); UTF-8 messages decode (an accented letter and an em dash); any handler may be missing; events still queued for a destroyed target are dropped, which is what lets the coordinator and extractor die with events in flight. Validated against mutants that deliver directly instead of queued (the run crashes) and that decode as Latin-1. Pure logic, runs in CI; and progress events (101 values from a worker thread arrive on the target's thread in order)
+- **TomlDocument and textfile** (doctest, `native/tmdq_core_tests/test_tomldocument.cpp` and `test_textfile.cpp`; no Qt, run by `scripts\test_native.ps1`) — ported from the Qt `TestTomlDocument` (plan step 2.4, the first suite moved; the Qt version is deleted). Every case of the original is there under the same description, plus the cases the mutation check showed it lacked. the settings-file reader/writer, pinned directly rather than only through `FrameSetup` and the dialogs: sections and keys in file order (not sorted), an empty `[EMPTY]` section still declared, `[[Name]]` opening an array-of-tables entry rather than a section (keys in file order with values as written - quotes kept, an unquoted comment stripped; names matched without case but otherwise exactly, so `[[ Step ]]` and `[[Steps]]` are not `[[Step]]`; a malformed `[[` line opening an entry no name matches; a section header or a half-header ending an entry; entries never leaking into sections), quote-aware `#` comments, `\"` and `\\` unescaped, a repeated key overwriting, a UTF-8 BOM with CRLF, UTF-16 LE and BE with a BOM, a non-ASCII value saved to and loaded from a folder outside every Western code page, the integer rule (whitespace and `+` tolerated, junk / fraction / overflow / empty return the caller's fallback with `parsed` false), the double rule (including `inf`), `QVariant::toBool()`'s boolean rule (even `no` is true), the exact bytes `save()` writes (top-level keys first, a blank line between sections, CRLF, no BOM), doubles as `%g` with six digits, `save()` truncating rather than merging, and both error paths naming the file. Written against the Qt implementation first; validated against four mutants of the `std` port. Pure logic, runs in CI `test_textfile.cpp` holds `textfile` directly: the UTF-8 mark (and two bytes of it not being one), UTF-16 in either byte order with and without a mark, UTF-8 lengths at 0x7F / 0x80 / 0x7FF / 0x800 / 0xD7FF / 0xE000 / 0xFFFF, surrogate pairs and unpaired surrogates (U+FFFD), an odd trailing byte, `readText` as binary (a Ctrl-Z and carriage returns come through), `utf8FileName` and `pathFromUtf8`. 39 cases, 300 assertions.
 - **TextFormat** (doctest, `native/tmdq_core_tests/test_textformat.cpp`; no Qt; ported from the Qt `TestTextFormat`, plan step 2.4, whose Qt version is deleted) — `formatFixed()`, which reproduces `QString::number(v, 'f', n)` without Qt, checked against what Qt printed (recorded when the suite was ported) and against exact integer arithmetic: the exact ties the report prints (Qt rounds them away from zero, `std::format` to even), every n/64 at 0 to 6 decimals, 20,000 arbitrary doubles from a fixed generator, signs and negative zero, the extremes, and `isExactTie()` seeing only real ties. Pure logic, runs in CI Also: one representable step either side of every tie, the neighbours of a tie not being ties, and infinity and not-a-number printing as Qt prints them (`inf`, `-inf`, `nan` for either sign of NaN).
 - **FrameSync** (doctest, `native/tmdq_core_tests/test_framesync.cpp`; no Qt; ported from the Qt `TestFrameSync`, plan step 2.4, whose Qt version is deleted) — the shared decode in `framesync.h`: `parseUnsignedHex` against what `QString::toULongLong(16)` answered (a recorded table of 78 inputs and a digest of 40,000 random strings) and a `std::format` round trip over 4,000 values in every accepted spelling, `resolveFrameSync` (the pattern's length counted in characters, an empty mask meaning every bit, the pattern checked before the mask and the result never half-written), `applyAcquisition` setting every raw-affecting field and no other, and `fullSyncMask` (every bit of the pattern, no shift by 64, a full mask for a pattern of no length, exactly N bits set for 1 to 63). Pure logic, runs in CI Also: every flag of `applyAcquisition` independently, megabits to bits per second, and the frame rounded up to whole words.
 - **CalibrationRequest** (doctest, `native/tmdq_core_tests/test_calibrationrequest.cpp`; no Qt; ported from the Qt `TestCalibrationRequest`, plan step 2.4, whose Qt version is deleted) - building the Extract Calibration dialog's request in the Qt-free core (`buildCalibrationRequest`, plan step 2.2b): the sync text decoded like the main run (a length of four bits per character, whatever the characters), each refusal with the dialog's own words (empty and invalid pattern, invalid mask, the pattern checked first), a failed build leaving the request alone (refused for the pattern and for the mask, which return from different places), every other field carried, the default word map used only when none is named and the application root has one (also under a root with non-ASCII text in its name); one typical request read out in full; and the code the dialog used to run inline, kept in the test over `std::string` and `std::filesystem` as the oracle over 3,000 generated inputs with reach thresholds. Validated against 40 mutants (39 caught, 1 equivalent)
 - **ChartGeometry** (doctest, `native/tmdq_core_tests/test_chartgeometry.cpp`; no Qt; plan step 4.3a) - the plot's geometry, moved out of the Qt `TmChart` into the core's `chartgeometry`: the Qt chart's own code restated over std types as the oracle, compared bit for bit over 3,000 generated series and views, 5,000 transforms and 20,000 tick ranges; and worked by hand, a dense series' single-sample dropout and its spread, the threshold of two samples a column, a line through a view no sample is in, the walk limited to the view, gaps breaking the line and the band, a one-column run without a band, the transforms and their fallbacks, sortedness, the time ticks on round clock times (a span of exactly a second and of exactly a step, a tick a hair past the end) and plain ticks. Validated against 55 mutants of `chartgeometry.cpp` and the threshold (54 caught, 1 equivalent)
 - **Abi** (doctest, `native/tmdq_core_tests/test_abi.cpp`; no Qt; ported from the Qt `TestAbi`, plan step 2.4, whose Qt version is deleted; the last core suite to move) - the C ABI of `tmdq_core.dll` (`native/tmdq_core/tmdq_abi.h`, revisions 1 to 4), called in-process: the ABI sources are compiled into the native test executable (`TMDQ_ABI_STATIC`) and used exactly as a host would use them. Pins every struct's size and field offsets (what the managed side must reproduce), every enum's number, the version and revision, and `tmdq_sizeof`; struct versioning both ways (a longer host struct accepted and read no further than known, a shorter one refused, a library-filled struct written no further than the host's own size, `readStruct` proved with guard bytes); the file handle against `Chapter10Reader` (ids, names, TMATS rates, default time channel, out-of-range and null arguments, the reader's own failure reason word for word); and runs against an oracle that builds and runs the same configs directly through `buildStreamJob` and `PipelineRunner` (a lock stream and a receiver stream together, sample for sample), each stream setting varied one at a time with the requirement that the core's result changes, the file-scoped byte order, a named word-map file, the application root present and absent, non-linear profiles (valid, invalid, duplicate), NULL optional text, the job builder's log lines arriving first on the calling thread, the documented order and threads of every callback, cancel, free while running, a result outliving its run and freed from another thread, a callback that throws, two runs at once, `wait` as the only synchronisation, every bad argument, the per-thread last error and the exception guard; and, from revision 2, the step file and its initial path, calibration extraction against the extractor run directly (every channel field, the report, the callbacks), each calibration setting varied one at a time, results refused while running, cancel, free in flight and `wait` alone; and, from revision 3, the formats (pattern file, template matching, CSV in both directions, clock stamps) each against the core called directly with byte-identical files; and, from revision 4, series construction, the shared time base, stream keys and imported stream orders over random streams, operation sequences and lists; and, from version 2 revision 1, the receiver-parameters file (a corpus of files read from two starting points and every save byte-identical to the core's, with the same errors), the words in a minor frame, and their bad arguments. Written against the core first; validated against 106 single-defect mutants of the ABI sources, the header and the guards (step 2.2a), 91 for the calibration side (step 2.2b) 73 for the formats (step 2.2c) and 57 for series construction (step 2.2d, with 5,700 random streams, time-base steps and CSV lists compared against the core), and 20 for the receiver-parameters functions (step 4.1a). Ported, run against the same 307 distinct mutants: everything the Qt suite caught is caught, after two cases were tightened (a series set's data lifetime watched through a `weak_ptr`, since a Release heap does not overwrite freed memory; a CSV column with no time array refused)
-- **TestCoreQtFree** (`tst_coreqtfree`) — the guard that keeps the processing core free of Qt: it walks the `#include "..."` closure of every core source and fails on any `<Q...>` header or any reach into `include/viewmodel` or `include/view`, requires every `src/model` source to be classified as core or UI-session, and proves its own walker on a temporary tree (several spellings of a Qt header and class and struct forward declarations seen through a shared header, a look-alike not counted, a layering violation, a commented-out include ignored). Since plan step 1.7 it also **confines Qt outside the View**: every file under `src/` and `include/` other than `src/view` / `include/view` that includes a Qt header or forward-declares a Qt class must be on `kQtOutsideTheView` (and a listed file that no longer does fails as stale, so the list only shrinks), and every other header must be Qt-free and layer-clean through its whole include closure; that guard is proven on a second temporary tree (unlisted, stale, exempt, look-alike, forward declaration, a header reaching up into the View). Since plan step 2.1 it also **keeps the MSBuild project that builds `tmdq_core.dll` (`native/tmdq_core/tmdq_core.vcxproj`) in step with the Qt build**: the same `src/model` sources as `kCoreSources`, the same irig106 files as the `.pro`, nothing from another layer, no mention of Qt outside its comments, and `tmdq.sln` builds it (one function, `nativeProjectProblems`, proved on a temporary tree with each kind of drift). Since plan step 2.2a it also **holds the C ABI's own sources** (`native/tmdq_core/*.cpp`) to the core's rule (no Qt, no ViewModel or View header, through their includes; `abiSourceProblems`, proved on a temporary tree) and checks that they are the same set in the project, in the native tests' project (which compiles them in for `test_abi.cpp`; `tests/tests.pro` did until `TestAbi` moved to doctest) and on disk. Pure file reading, runs in CI Since plan step 2.4 it also keeps the doctest project (`native/tmdq_core_tests/tmdq_core_tests.vcxproj`) honest: it compiles only core sources (each one in `kCoreSources`) and no file of another layer, never mentions Qt outside its comments, every `test_*.cpp` on disk is in the project and the other way round, the test files reach no Qt or View/ViewModel header through their includes, and `tmdq.sln` builds it (`nativeTestsProblems`, proved on a temporary tree by `theNativeTestsGuardSeesEveryKindOfDrift`).
-- **TmDq.Core.Tests** (xunit v3, `dotnet/TmDq.Core.Tests`; not part of the Qt executable - run by `scripts/test_dotnet.ps1`, 358 tests) - the C# binding of the C ABI against the real `tmdq_core.dll`: the struct layout pinned against `tmdq_sizeof` and to the offsets the native `Abi` cases pin (`LayoutTests`); the two native projects' source lists against the files on disk, so a core source or a test file cannot be left out unnoticed (`NativeProjectTests`, plan step 5.1); the channel lists of the five recordings (`FileTests`); runs of the committed recordings in both modes against the numbers the Qt pipeline produces, every stream setting reaching the job one at a time, the byte order and application root, a named word-map file, calibration profiles, failures with their statuses and messages, observer order and exceptions, cancel, dispose, results outliving runs and giving their memory back (`RunTests`); step files and calibration extraction against the numbers the core's own `CalibrationExtractor` makes - all 48 channels, the report, seven variations, the profiles fed to a run (`CalibrationTests`, expected values in `CalibrationDigest`); the file formats - pattern files, template matching, CSV in both directions, clock stamps - over a corpus against what the core's own functions answer, byte for byte (`FormatsTests`, `FormatsDigest`); what `Library.Load` checks and how a second load behaves, and that a DLL older than revision 2 is refused (`LibraryTests`); the chart's geometry - a dense series' dropout and spread, every field of the view in its place, the transforms and their fallbacks, a line through an empty view and a gap, the walk limited to the view, sortedness, both kinds of ticks (`ChartGeometryTests`); the receiver-parameters file - the defaults, every scalar read into its own field, a partial or missing file keeping what is shown, the older keys, saves read back with the word map of the named source or the default one, the frame bounding the map, an unwritable path (`ReceiverParamsTests`); series construction - the series of real streams, the shared time base over a 90-step operation sequence, stream keys, the order of imported streams (`SeriesTests`, `SeriesDigest`); the arena and the snprintf-style text helper (`ArenaTests`); and the not-yet-loaded state, seen only in a child process of the same executable (`IsolatedLoadTests`, whose probe is the one skip). Validated against 197 single-defect mutants of the library (plan step 2.3a) 138 more (step 2.3b), 125 more (step 2.3c) and 108 more (step 2.3d) and 15 more (step 4.1a) and 20 more (step 4.3a)
-- **TmDq.App.Tests** (xunit v3 on `Avalonia.Headless.XUnit`, `dotnet/TmDq.App.Tests`; not part of the Qt executable, 602 tests; plan step 3.1, in CI since 3.2 through `scripts/test_app.ps1`) - the Avalonia application on the headless platform with its own `App` class and Skia drawing: the walking skeleton end to end (`WalkingSkeletonTests`: the PRN sample's first PCM channel processed with the Frame Sync Lock defaults through `tmdq_core.dll`, 116 windows and mean 93.531893 %, and identical to the core's own run of the same settings; progress, busy and the Open command; a non-recording, a recording with no PCM channel, defaults that find no sync (with the core's own reason), a missing native core; a failed load clearing the last series; the chart drawn only with a series, 100 % at the top; the defaults held to `constants.h`; the command line and the smoke report); the rules of Configure Streams and its setup dialogs without a window (`StreamRulesTests`: readiness and its tooltips, Process only when every checked row is ready and why not, a Mode change making the row unconfigured, what the dialog opens with in either mode and the Frame Sync Lock switch dropping the receiver file for good, what OK keeps, Apply to all for each mode (the Qt dialog's three cases ported), the All box, the hex fields, every range and its message, the receiver checks only for Receiver SNR, the `StreamConfig` and `RunRequest` Process builds, the Receiver SNR defaults held to `constants.h`) and through the core (`StreamFilesTests`: a new row's defaults, the Receiver SNR defaults file read field by field, the pattern file's round trip with each flag combination, upper-casing both ways, an older file leaving Derandomize alone, the frame length held to the dialog's range, the per-session fields left out, `.toml` added, an unwritable path, the receiver file's load and save with the row's own word map and frame); the dialogs (plan step 4.1b): a setup dialog without a window (`StreamSetupViewModelTests`: what it opens with in each mode, the problems that hold OK as they arise, OK and Cancel, the setup it gives back, Load and Save through the core with the folders the file dialogs start in and what a failed save says), Configure Streams on the PRN sample and the whole path from Open (`ConfigureStreamsTests`: its rows and the recording's settings, the gear and its dialog, a mode change, Apply to all, the All box, the run Process builds, the last folder carried between dialogs, two streams processed and drawn, a cancel keeping the last result, Receiver SNR on step_cal, the status line), both windows on the headless platform (`StreamWindowsTests`: bindings, visibility, layout, the Ready colours, shown modally and closed by OK, Cancel and Process), and several streams (`SeveralStreamsTests`: the chart's colours and shared time axis read from a rendered frame, the settings beside the exe); the plot (plan step 4.3b, `PlotTests`: the Qt colours to the shade, 84 shades Qt printed; a run's series from the core on one time base, its clock, job order, a stream again, a source that starts earlier; the axes' ranges, overrides and visibility; the view mode; the window under gestures, band zoom and its history; the readout and its pin; the chart's margins, transforms, wheel, pan, band, double-click, crosshair over the cached layer, an export without overlays, a dense dropout and spread, every kind of series in its place); around the chart (plan step 4.4, `AroundTheChartTests`: the legend's rows, place, caps, scroll bar, drag, resize, translucency read from a rendered frame, and visibility; the chip bar and each chip; the menu's items, order, keys, enabling and actions, and its prompts with fake answers; the keys, scoped to the chart; the time window's clamp and its warnings in the log; a rename or recolour reaching a stream's other metric; Customize View's rows, tristate boxes and OK, and its window; each prompt's window, OK and Cancel); export and import (plan step 4.5, `ExportImportTests`: the CSV of seven runs over every committed recording byte for byte against the Qt application's, and read back and written again; the image read back pixel by pixel, exactly what the chart shows with the legend where it is, without the cursor, the SVG's and the PDF's sizes and title, the format rule; the CSV both ways on the plot, every series every time, a source alone and qualified, the clock, orders, colours and visibility, files that are not exports, skipped rows, the read off the UI thread; the Export dialog's state and window; Import CSV and Export in the main window, their lines, files, failures and availability; the top bar and "Loading..."); calibration (plan step 4.6, `CalibrationDialogTests`: Extract Calibration on step_cal, the preloaded step file, the extraction under the progress dialog and its Cancel, every status, the clips at two data rates, the request, Browse and its folders; Apply Cal, its availability, OK keeping the calibration and the report; the chosen time channel and byte order from Configure Streams, and the calibration reaching the run; the windows); templates and batch (plan step 4.7, `TemplateTests` and `TemplateBatchTests`: the Qt application's three templates read and written byte for byte, every reading rule, matching and its words, capture and the looks put back, the plot's recordings and Plot File; the batch over copies of the PRN sample with its first CSV against the Qt export, a recording that shares no time with the others, each file's export, Apply Template and Save as Template end to end, the confirmation's state and window); the shell (plan step 4.8, `PreferencesTests` and `ShellTests`: the Qt application's settings read as INI files QSettings wrote, every rule of the INI format, the recent-files rules, the preferences file's import, defaults and writes, the main window keeping each preference; the title bar and each part's role for Windows, the window's buttons, the menu with its sections, Recent Files, Help and Exit, Ctrl+O and Ctrl+B, the sidebar's width, drag and drop, each theme's palette and brushes as numbers and drawn, the manual and About); the user manual's figures (plan step 4.9, `ManualFiguresTests`: 27 figures rendered from the application's scenes over the committed recordings, each caption's claims checked, written to `TMDQ_MANUAL_FIGURES` for `scripts\build_manual.ps1 -Preview` and otherwise to a temporary folder); the parity review's gaps (plan step 5.1, spread over the suites above: a left minimum moving the drawn line, the plot view holding nothing but the chart and its overlay, the title's notice and redraw, the axis titles' own words and the right one drawn only while shown, three recordings each earlier than the last, a long channel name trimmed with its tooltip, the headers in either theme, the setup dialog's choice lists, an empty batch, progress on the UI thread, Open's and Import CSV's filters); the side-by-side soak (plan step 5.2, `SoakTests`, explicit: 34 runs over every recording on the machine, the full and local ones included, each through Configure Streams, Extract Calibration and the main window's view models, its CSV held byte for byte to the Qt application's, recorded in `Soak/soak.json`; run by `scripts\run_soak.ps1`, listed as not run by the suite); processing (plan step 4.2, `ProcessingTests`: the log's levels, clock and lines, the summary, `RunLogOrder` from two threads, the run's log through the core in the Qt order, a cancel before the start and while the file is read, the whole log of a run on the UI thread, the progress dialog for both modes and its Cancel, a close and Escape refused, modal, the log's colours read from a rendered frame, line breaks, wrapping, the newest line followed, the log beside the chart); the main window's title, version label (laid out by the real theme, and drawn: a rendered frame read pixel by pixel) and sizes (`MainWindowTests`); the version read from `include/constants.h` with the tests' own pattern in both assemblies and the exe's version resource (`VersionTests`), and `dotnet/build/AppVersion.props` built against made-up headers (`VersionBuildTests`); the UTF-8 code-page manifest read back out of the built exe, and merged into every host the SDK creates (`ManifestTests`); `scripts/gen_third_party_notices.ps1` against deps files and packages folders the tests write (`ThirdPartyNoticesTests`: the MIT text filled with the package's own copyright, a package's own licence file quoted, shared texts and notices files once, the runtime pack, non-shipping packages left out, an unknown licence or a missing copyright an error, the irig106 licence quoted from its header, tracking query strings dropped, UTF-8 with a BOM); `scripts/check_package_licences.ps1` against packages folders the tests write (`PackageLicenceTests`) and `dotnet/build/PackageLicences.targets` in real SDK builds against a local feed with a fake commercial package (`LicenceBuildTests`). Validated against 46 mutants (43 caught by a test, 2 by the build, 1 unreachable guard), and 54 more for the stream rules (step 4.1a, all caught) and 66 more for the dialogs (step 4.1b, 65 caught, 1 equivalent), and 94 more for processing (step 4.2, 91 caught, 3 equivalent and their code removed), and 102 more for the chart (step 4.3b, 98 caught, 3 equivalent, 1 not held), and 226 more for around the chart (step 4.4, 218 caught, 3 by the compiler, 4 equivalent, 1 line removed), and 129 more for export and import (step 4.5, 123 caught, 2 lines removed, 3 equivalent, 1 not held), and 109 more for calibration (step 4.6, 106 caught, 1 by the compiler, 2 equivalent), and 196 more for templates and batch (step 4.7, 187 caught, 1 by the compiler, 2 equivalent, 2 lines removed, 4 with the code moved to the tests), and 227 more for the shell (step 4.8, 222 caught, 2 by the compiler, 3 lines removed)
+- **CsvSeries** (doctest, `native/tmdq_core_tests/test_csvseries.cpp`; no Qt; the core half of the Qt `TestCsvSeries`, plan step 2.4) - the application's CSV, read by `CsvSeriesParser` and written by `CsvSeriesWriter`, and the clock stamp in its time column, called directly; the Qt suite's comparisons with the code the core replaced are recorded digests over the same generated files.
+- **FrameSyncFile** (doctest, `native/tmdq_core_tests/test_framesyncfile.cpp`; no Qt; the core half of the Qt `TestFrameSyncFile`, plan step 2.4) - the frame-sync pattern file (US1.0 / US2.0 / US5.0): what a file says (the pattern and mask as written, the length only if usable, Invert Data, and Randomized only when the file has the key) and what writing puts in it, against the code it replaced over generated files.
+- **SeriesBuild** (doctest, `native/tmdq_core_tests/test_seriesbuild.cpp`; no Qt; the core half of the Qt `TestSeriesBuild`, plan step 2.4) - how processed streams become plot series on one shared time axis: the series a stream yields, their names and indices, re-basing across sources, the order an imported CSV's streams are given, run in the plot's sequence and against the code it replaced.
+- **StreamJob** (doctest, `native/tmdq_core_tests/test_streamjob.cpp`; no Qt; the core half of the Qt `TestStreamJob`, plan step 1.5) - turning one stream's configuration into a processing job: the validation and its messages, the receiver-parameters file and the default word map, the linear calibration and the profiles that attach to it, against the code it replaced over generated configurations.
+- **TmDq.Core.Tests** (xunit v3, `dotnet/TmDq.Core.Tests`; run by `scripts/test_dotnet.ps1`, 358 tests) - the C# binding of the C ABI against the real `tmdq_core.dll`: the struct layout pinned against `tmdq_sizeof` and to the offsets the native `Abi` cases pin (`LayoutTests`); the two native projects' source lists against the files on disk, so a core source or a test file cannot be left out unnoticed (`NativeProjectTests`, plan step 5.1); the channel lists of the five recordings (`FileTests`); runs of the committed recordings in both modes against the numbers the Qt pipeline produces, every stream setting reaching the job one at a time, the byte order and application root, a named word-map file, calibration profiles, failures with their statuses and messages, observer order and exceptions, cancel, dispose, results outliving runs and giving their memory back (`RunTests`); step files and calibration extraction against the numbers the core's own `CalibrationExtractor` makes - all 48 channels, the report, seven variations, the profiles fed to a run (`CalibrationTests`, expected values in `CalibrationDigest`); the file formats - pattern files, template matching, CSV in both directions, clock stamps - over a corpus against what the core's own functions answer, byte for byte (`FormatsTests`, `FormatsDigest`); what `Library.Load` checks and how a second load behaves, and that a DLL older than revision 2 is refused (`LibraryTests`); the chart's geometry - a dense series' dropout and spread, every field of the view in its place, the transforms and their fallbacks, a line through an empty view and a gap, the walk limited to the view, sortedness, both kinds of ticks (`ChartGeometryTests`); the receiver-parameters file - the defaults, every scalar read into its own field, a partial or missing file keeping what is shown, the older keys, saves read back with the word map of the named source or the default one, the frame bounding the map, an unwritable path (`ReceiverParamsTests`); series construction - the series of real streams, the shared time base over a 90-step operation sequence, stream keys, the order of imported streams (`SeriesTests`, `SeriesDigest`); the arena and the snprintf-style text helper (`ArenaTests`); and the not-yet-loaded state, seen only in a child process of the same executable (`IsolatedLoadTests`, whose probe is the one skip). Validated against 197 single-defect mutants of the library (plan step 2.3a) 138 more (step 2.3b), 125 more (step 2.3c) and 108 more (step 2.3d) and 15 more (step 4.1a) and 20 more (step 4.3a)
+- **TmDq.App.Tests** (xunit v3 on `Avalonia.Headless.XUnit`, `dotnet/TmDq.App.Tests`; 602 tests; plan step 3.1, in CI since 3.2 through `scripts/test_app.ps1`) - the Avalonia application on the headless platform with its own `App` class and Skia drawing: the walking skeleton end to end (`WalkingSkeletonTests`: the PRN sample's first PCM channel processed with the Frame Sync Lock defaults through `tmdq_core.dll`, 116 windows and mean 93.531893 %, and identical to the core's own run of the same settings; progress, busy and the Open command; a non-recording, a recording with no PCM channel, defaults that find no sync (with the core's own reason), a missing native core; a failed load clearing the last series; the chart drawn only with a series, 100 % at the top; the defaults held to `constants.h`; the command line and the smoke report); the rules of Configure Streams and its setup dialogs without a window (`StreamRulesTests`: readiness and its tooltips, Process only when every checked row is ready and why not, a Mode change making the row unconfigured, what the dialog opens with in either mode and the Frame Sync Lock switch dropping the receiver file for good, what OK keeps, Apply to all for each mode (the Qt dialog's three cases ported), the All box, the hex fields, every range and its message, the receiver checks only for Receiver SNR, the `StreamConfig` and `RunRequest` Process builds, the Receiver SNR defaults held to `constants.h`) and through the core (`StreamFilesTests`: a new row's defaults, the Receiver SNR defaults file read field by field, the pattern file's round trip with each flag combination, upper-casing both ways, an older file leaving Derandomize alone, the frame length held to the dialog's range, the per-session fields left out, `.toml` added, an unwritable path, the receiver file's load and save with the row's own word map and frame); the dialogs (plan step 4.1b): a setup dialog without a window (`StreamSetupViewModelTests`: what it opens with in each mode, the problems that hold OK as they arise, OK and Cancel, the setup it gives back, Load and Save through the core with the folders the file dialogs start in and what a failed save says), Configure Streams on the PRN sample and the whole path from Open (`ConfigureStreamsTests`: its rows and the recording's settings, the gear and its dialog, a mode change, Apply to all, the All box, the run Process builds, the last folder carried between dialogs, two streams processed and drawn, a cancel keeping the last result, Receiver SNR on step_cal, the status line), both windows on the headless platform (`StreamWindowsTests`: bindings, visibility, layout, the Ready colours, shown modally and closed by OK, Cancel and Process), and several streams (`SeveralStreamsTests`: the chart's colours and shared time axis read from a rendered frame, the settings beside the exe); the plot (plan step 4.3b, `PlotTests`: the Qt colours to the shade, 84 shades Qt printed; a run's series from the core on one time base, its clock, job order, a stream again, a source that starts earlier; the axes' ranges, overrides and visibility; the view mode; the window under gestures, band zoom and its history; the readout and its pin; the chart's margins, transforms, wheel, pan, band, double-click, crosshair over the cached layer, an export without overlays, a dense dropout and spread, every kind of series in its place); around the chart (plan step 4.4, `AroundTheChartTests`: the legend's rows, place, caps, scroll bar, drag, resize, translucency read from a rendered frame, and visibility; the chip bar and each chip; the menu's items, order, keys, enabling and actions, and its prompts with fake answers; the keys, scoped to the chart; the time window's clamp and its warnings in the log; a rename or recolour reaching a stream's other metric; Customize View's rows, tristate boxes and OK, and its window; each prompt's window, OK and Cancel); export and import (plan step 4.5, `ExportImportTests`: the CSV of seven runs over every committed recording byte for byte against the Qt application's, and read back and written again; the image read back pixel by pixel, exactly what the chart shows with the legend where it is, without the cursor, the SVG's and the PDF's sizes and title, the format rule; the CSV both ways on the plot, every series every time, a source alone and qualified, the clock, orders, colours and visibility, files that are not exports, skipped rows, the read off the UI thread; the Export dialog's state and window; Import CSV and Export in the main window, their lines, files, failures and availability; the top bar and "Loading..."); calibration (plan step 4.6, `CalibrationDialogTests`: Extract Calibration on step_cal, the preloaded step file, the extraction under the progress dialog and its Cancel, every status, the clips at two data rates, the request, Browse and its folders; Apply Cal, its availability, OK keeping the calibration and the report; the chosen time channel and byte order from Configure Streams, and the calibration reaching the run; the windows); templates and batch (plan step 4.7, `TemplateTests` and `TemplateBatchTests`: the Qt application's three templates read and written byte for byte, every reading rule, matching and its words, capture and the looks put back, the plot's recordings and Plot File; the batch over copies of the PRN sample with its first CSV against the Qt export, a recording that shares no time with the others, each file's export, Apply Template and Save as Template end to end, the confirmation's state and window); the shell (plan step 4.8, `PreferencesTests` and `ShellTests`: the Qt application's settings read as INI files QSettings wrote, every rule of the INI format, the recent-files rules, the preferences file's import, defaults and writes, the main window keeping each preference; the title bar and each part's role for Windows, the window's buttons, the menu with its sections, Recent Files, Help and Exit, Ctrl+O and Ctrl+B, the sidebar's width, drag and drop, each theme's palette and brushes as numbers and drawn, the manual and About); the user manual's figures (plan step 4.9, `ManualFiguresTests`: 27 figures rendered from the application's scenes over the committed recordings, each caption's claims checked, written to `TMDQ_MANUAL_FIGURES` for `scripts\build_manual.ps1 -Preview` and otherwise to a temporary folder); the parity review's gaps (plan step 5.1, spread over the suites above: a left minimum moving the drawn line, the plot view holding nothing but the chart and its overlay, the title's notice and redraw, the axis titles' own words and the right one drawn only while shown, three recordings each earlier than the last, a long channel name trimmed with its tooltip, the headers in either theme, the setup dialog's choice lists, an empty batch, progress on the UI thread, Open's and Import CSV's filters); the side-by-side soak (plan step 5.2, `SoakTests`, explicit: 34 runs over every recording on the machine, the full and local ones included, each through Configure Streams, Extract Calibration and the main window's view models, its CSV held byte for byte to the Qt application's, recorded in `Soak/soak.json`; run by `scripts\run_soak.ps1`, listed as not run by the suite); processing (plan step 4.2, `ProcessingTests`: the log's levels, clock and lines, the summary, `RunLogOrder` from two threads, the run's log through the core in the Qt order, a cancel before the start and while the file is read, the whole log of a run on the UI thread, the progress dialog for both modes and its Cancel, a close and Escape refused, modal, the log's colours read from a rendered frame, line breaks, wrapping, the newest line followed, the log beside the chart); the main window's title, version label (laid out by the real theme, and drawn: a rendered frame read pixel by pixel) and sizes (`MainWindowTests`); the version read from `include/constants.h` with the tests' own pattern in both assemblies and the exe's version resource (`VersionTests`), and `dotnet/build/AppVersion.props` built against made-up headers (`VersionBuildTests`); the UTF-8 code-page manifest read back out of the built exe, and merged into every host the SDK creates (`ManifestTests`); `scripts/gen_third_party_notices.ps1` against deps files and packages folders the tests write (`ThirdPartyNoticesTests`: the MIT text filled with the package's own copyright, a package's own licence file quoted, shared texts and notices files once, the runtime pack, non-shipping packages left out, an unknown licence or a missing copyright an error, the irig106 licence quoted from its header, tracking query strings dropped, UTF-8 with a BOM); `scripts/check_package_licences.ps1` against packages folders the tests write (`PackageLicenceTests`) and `dotnet/build/PackageLicences.targets` in real SDK builds against a local feed with a fake commercial package (`LicenceBuildTests`). Validated against 46 mutants (43 caught by a test, 2 by the build, 1 unreachable guard), and 54 more for the stream rules (step 4.1a, all caught) and 66 more for the dialogs (step 4.1b, 65 caught, 1 equivalent), and 94 more for processing (step 4.2, 91 caught, 3 equivalent and their code removed), and 102 more for the chart (step 4.3b, 98 caught, 3 equivalent, 1 not held), and 226 more for around the chart (step 4.4, 218 caught, 3 by the compiler, 4 equivalent, 1 line removed), and 129 more for export and import (step 4.5, 123 caught, 2 lines removed, 3 equivalent, 1 not held), and 109 more for calibration (step 4.6, 106 caught, 1 by the compiler, 2 equivalent), and 196 more for templates and batch (step 4.7, 187 caught, 1 by the compiler, 2 equivalent, 2 lines removed, 4 with the code moved to the tests), and 227 more for the shell (step 4.8, 222 caught, 2 by the compiler, 3 lines removed)
 - **EventReporter** (doctest, `native/tmdq_core_tests/test_eventreporter.cpp`; no Qt; ported from the Qt `TestEventReporter`, plan step 2.4, whose Qt version is deleted) — `EventReporter`, the null-safe forwarder every processing source reports through: every call harmless with no sink, each of log / error / finished / progress reaching its own sink method with its argument, calls arriving in order, a replaced sink receiving later calls and the old one none, a cleared sink going silent, and the reporter (not a borrowed pointer) keeping a shared sink alive. Pure logic, runs in CI Also: a sink that does not override the optional `progressUpdated` still hears everything else, and arguments pass through unchanged (UTF-8, empty, an embedded NUL, any progress value).
 - **PipelineRunner** (doctest, `native/tmdq_core_tests/test_pipelinerunner.cpp`; no Qt; ported from the Qt `TestPipelineRunner`, plan step 2.4, whose Qt version is deleted; it also holds the throughput guard, see below) — the Qt-free pipeline, with a plain recording sink and no event loop, on the committed `step_cal` recording: a single stream delivers its result (stamped with `jobIndex` and the job's `sourceId`) and then the end, with every worker line before the result, the end last, and exactly one progress of 100 (the runner adds none of its own); several streams on one channel each deliver their own result; a stream that finds no sync does not stop the others, and says why; a run in which every stream fails ends unsuccessfully; a recording that cannot be opened (or no jobs) fails before anything runs, with a reason and nothing reported, and leaves the runner usable; a second start while running is refused and does not disturb the first; cancel ends the run unsuccessfully with no result and is a no-op with nothing running, and four cases hold the sink at a chosen moment of a real run (a thread parked on a log line) to pin what a race cannot: a stream that finished after the cancel was asked for delivers nothing and the run fails even though another stream had delivered, a worker waiting on an empty queue is woken by the cancel while the reader is still stuck, a worker that has not started reading is stopped by its own abort flag, and `running()` is already false inside the end report; the runner runs again after a run ends, without waiting for the thread that reported it; a stream that ends early without a cancel (its processor aborted, reached through the test being a friend) closes its own queue so the reader is not left blocked on it and the healthy stream still finishes, and destroying a running runner stops it and has reported the end by the time the destructor returns Also: several streams on one channel each get every packet (their results are identical, not merely the same length), a stream that fails after another delivered does not undo the run's success (the failing stream is parked on its report until the good one has delivered), the first job names the recording, a cancel wakes EVERY worker waiting on an empty queue and the reader sees it too, nothing of one run is left over in the next (success, failure and cancel in turn), a run lets go of its frame setups however it ends, and the two refusal messages are exact. Validated against 58 mutants (52 caught, 6 equivalent). **The throughput guard** is the case "PipelineRunner throughput: four streams on one recording cost about what the slowest costs": opt-in (`TMDQA_RUN_HEAVY_BENCH`, skipped and listed as skipped without it), run at release by `scripts\run_throughput_bench.ps1`, and a FAILURE rather than a skip once asked for if the recording cannot satisfy it. It asserts ratios (parallel over the slowest solo at most 1.50, over all-sequential at most 0.85; measured 1.01 and 0.64), never milliseconds. Validated against 5 mutants of its limits and checks, all caught.
 
-### Running Tests
-
-```powershell
-. .\scripts\env.ps1   # imports MSVC + puts the Qt msvc kit on PATH
-cd tests
-qmake tests.pro -spec win32-msvc
-nmake -f Makefile.Debug
-.\debug\tmDataQualityAnalyzer_tests.exe -o results.txt,txt
-```
-
-### Adding a New Test
-
-1. Create `tst_newtest.h` with `Q_OBJECT` and private slots for each test case
-2. Create `tst_newtest.cpp` with test implementations
-3. Add both files to `tests/tests.pro` under `SOURCES +=` and `HEADERS +=`
-4. Add `#include "tst_newtest.h"` and a `QTest::qExec()` block in `tests/main.cpp`
+The native suite runs with `-tc="<name>*"` to filter while iterating. A new native test file goes in
+`native/tmdq_core_tests/tmdq_core_tests.vcxproj` (`NativeProjectTests` fails until it is); a new .NET test needs nothing
+but its class.
 
 ## Future Feature Candidates
 
-All identified feature items have been implemented. The one initiative in progress is the move off Qt
-to Avalonia; its work plan is `docs/dotnet-migration/avalonia-plan.md`.
+All identified feature items have been implemented. The move off Qt is finishing: its last steps (the Qt tooling, the
+Qt names that remain, the consolidation) are in `docs/dotnet-migration/avalonia-plan.md`.
 
 ## Additional Resources
 
-- [Qt 6 Documentation](https://doc.qt.io/qt-6/)
+- [Avalonia documentation](https://docs.avaloniaui.net/)
 - [IRIG 106 Chapter 10 Standard](https://www.irig106.org/)
 - [irig106utils GitHub](https://github.com/atac/irig106utils)
-- [Qt Coding Conventions](https://wiki.qt.io/Qt_Coding_Style)

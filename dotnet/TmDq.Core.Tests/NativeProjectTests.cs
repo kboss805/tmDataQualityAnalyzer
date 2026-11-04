@@ -10,20 +10,14 @@ namespace TmDq.Core.Tests;
 /// <summary>
 /// The two native projects' source lists against the files on disk. MSBuild compiles only what a project lists, so a
 /// core source left out of tmdq_core.vcxproj is a link error at best, and a test file left out of
-/// tmdq_core_tests.vcxproj is a suite that silently never runs. The Qt suite's TestCoreQtFree checks the core's list
-/// against the .pro's and goes with it (plan step 6.1); these checks do not depend on Qt, so they stay.
+/// tmdq_core_tests.vcxproj is a suite that silently never runs. Since the Qt application went (plan step 6.1), every
+/// source in src/model is a core source, and these checks are the only ones that hold the projects to the disk.
 /// </summary>
 public class NativeProjectTests
 {
     private static string Native => Path.Combine(Env.RepoRoot, "native");
 
     private static string Model => Path.Combine(Env.RepoRoot, "src", "model");
-
-    /// <summary>
-    /// The Qt application's model sources: they live beside the core's but are not core, and go with the Qt application
-    /// (plan step 6.1). Once they are deleted this list must be emptied, or the test fails.
-    /// </summary>
-    private static readonly string[] QtModelSources = { "processingtemplateschema.cpp", "streamconfigschema.cpp" };
 
     /// <summary>The full paths a project compiles, from its <c>ClCompile</c> items.</summary>
     private static string[] Compiled(string project)
@@ -60,9 +54,7 @@ public class NativeProjectTests
     [Fact]
     public void TheDllCompilesEveryCoreAndAbiSource()
     {
-        Assert.All(QtModelSources, f => Assert.True(File.Exists(Path.Combine(Model, f)),
-            f + " is gone: take it off QtModelSources, so that every source in src/model is held to the core's list"));
-        Assert.Equal(OnDisk(Model, "*.cpp").Except(QtModelSources), Under(Model, Core));
+        Assert.Equal(OnDisk(Model, "*.cpp"), Under(Model, Core));
         Assert.Equal(OnDisk(Path.Combine(Native, "tmdq_core"), "*.cpp"), Under(Path.Combine(Native, "tmdq_core"), Core));
     }
 

@@ -22,13 +22,13 @@
 # =============================================================================
 
 param(
-    # Defaults to the newest setup.exe in deploy\. Pass one explicitly to test an
+    # Defaults to the newest setup.exe in deploy\avalonia\. Pass one explicitly to test an
     # older release, or an artifact downloaded from a GitHub release.
     [string]$Setup,
     [int]$TimeoutSeconds = 600,
-    # The script the Sandbox runs, from this folder. verify_install.ps1 tests the Qt installer (v2.x);
-    # verify_avalonia_install.ps1 tests the Avalonia application's packages from v3.0.0 on, and the upgrade from v2.x.
-    [string]$Verifier = 'verify_install.ps1',
+    # The script the Sandbox runs, from this folder: verify_avalonia_install.ps1 tests the packages and the upgrade
+    # from v2.x, and needs the -Payload its header lists.
+    [string]$Verifier = 'verify_avalonia_install.ps1',
     # More files or folders the verifier needs, copied beside the setup (a folder keeps its name). Separate them
     # with semicolons; a recording's name may contain a comma.
     [string[]]$Payload = @()
@@ -64,7 +64,7 @@ if ($live.Count -gt 0) {
 }
 
 if (-not $Setup) {
-    $Setup = (Get-ChildItem (Join-Path $deployDir 'tmDataQualityAnalyzer-v*_setup.exe') -ErrorAction SilentlyContinue |
+    $Setup = (Get-ChildItem (Join-Path $deployDir 'avalonia\tmDataQualityAnalyzer-v*_setup.exe') -ErrorAction SilentlyContinue |
               Sort-Object LastWriteTime | Select-Object -Last 1).FullName
 }
 if (-not $Setup -or -not (Test-Path $Setup)) {

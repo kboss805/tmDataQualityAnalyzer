@@ -5,13 +5,12 @@
   There is no Qt include path and no Qt library on this project, so a core source that reached for a Qt
   header would fail to compile. scripts\build_core_dll.ps1 builds it and then reads the DLL's imports.
 
-  The Qt application keeps compiling these same sources through qmake until plan step 6. This project's
-  source list is checked against kCoreSources and the application's .pro by TestCoreQtFree, so the two
-  builds cannot drift apart.
+  Its source list is held to the files on disk by NativeProjectTests (dotnet/TmDq.Core.Tests): every source in
+  src/model, and every ABI source here, must be listed, and the native tests must compile exactly the same list.
 
-  Compiler switches mirror what qmake gives the application (see tmDataQualityAnalyzer.pro and the
-  generated Makefile): C++20, /utf-8, /permissive-, warning level 3, the same warnings promoted, and
-  UNICODE. The vendored irig106 C library is compiled with warnings off, as thirdparty.pri does.
+  Compiler switches are the ones the Qt application's qmake build used until plan step 6.1 deleted it: C++20,
+  /utf-8, /permissive-, warning level 3, the same warnings promoted, and UNICODE. The vendored irig106 C library
+  is compiled with warnings off.
 
   The toolset is whatever MSBuild brings: v143 from the Visual Studio 2022 tools that scripts\env.ps1 pins, v145
   from Visual Studio 2026. Intermediates go in a folder per toolset, so objects from two compilers never share
@@ -122,7 +121,7 @@
     <ClCompile Include="abi_series.cpp" />
   </ItemGroup>
 
-  <!-- The core: src\model\<name>.cpp for every name in TestCoreQtFree's kCoreSources. -->
+  <!-- The core: every source in src\model (NativeProjectTests holds this list to the folder). -->
   <ItemGroup>
     <ClCompile Include="..\..\src\model\calibrationextractor.cpp" />
     <ClCompile Include="..\..\src\model\calibrationrequest.cpp" />
@@ -146,8 +145,7 @@
     <ClCompile Include="..\..\src\model\tomldocument.cpp" />
   </ItemGroup>
 
-  <!-- The vendored irig106 library: plain C, third-party, no warnings (thirdparty.pri does the same).
-       The list is the one tmDataQualityAnalyzer.pro compiles, in dependency order. -->
+  <!-- The vendored irig106 library: plain C, third-party, no warnings. In dependency order. -->
   <ItemGroup>
     <ClCompile Include="..\..\lib\irig106\src\irig106ch10.c" />
     <ClCompile Include="..\..\lib\irig106\src\i106_time.c" />

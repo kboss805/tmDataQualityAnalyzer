@@ -516,9 +516,9 @@ namespace TmDq.App.Tests
             Assert.Null(HelpManual.Installed(app));
             string written = HelpManual.PathToOpen(app, temp)!;
             Assert.Equal(Path.Combine(temp, HelpManual.TempName), written);
-            Assert.Equal(File.ReadAllBytes(Path.Combine(Repo.Root, "resources", "usermanual-preview.html")), File.ReadAllBytes(written));
+            Assert.Equal(File.ReadAllBytes(Path.Combine(Repo.Root, "resources", "usermanual.html")), File.ReadAllBytes(written));
             File.WriteAllText(written, "stale");   // written again each time
-            Assert.Equal(new FileInfo(Path.Combine(Repo.Root, "resources", "usermanual-preview.html")).Length, new FileInfo(HelpManual.PathToOpen(app, temp)!).Length);
+            Assert.Equal(new FileInfo(Path.Combine(Repo.Root, "resources", "usermanual.html")).Length, new FileInfo(HelpManual.PathToOpen(app, temp)!).Length);
 
             string full = Path.Combine(app, HelpManual.FullManualName);
             File.WriteAllText(full, "full");
