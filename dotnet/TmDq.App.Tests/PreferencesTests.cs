@@ -282,16 +282,11 @@ namespace TmDq.App.Tests
 
         // ---- the main window keeps each preference --------------------------------------------------------------------
 
-        private sealed class Cancelled : IStreamConfigurator
-        {
-            public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file) => Task.FromResult<StreamsChoice?>(null);
-        }
-
         [Fact]
         public async Task TheMainWindowRemembersItsFolderItsRecentFilesAndItsChoices()
         {
             var store = new PreferencesStore(new Preferences { LastFolder = @"C:\before", LegendVisible = false, Theme = "light", SidebarVisible = false });
-            var vm = new MainWindowViewModel(configurator: new Cancelled(), preferences: store);
+            var vm = new MainWindowViewModel(configurator: FakeConfigurator.Cancelled(), preferences: store);
             Assert.Equal((@"C:\before", false, false, false), (vm.LastFolder, vm.Plot.LegendVisible, vm.IsDarkTheme, vm.SidebarVisible));
             Assert.Same(store.Current, vm.Preferences);
 
@@ -348,7 +343,7 @@ namespace TmDq.App.Tests
         [Fact]
         public async Task ARecentFileOpensByItsSuffixAndNotWhileBusy()
         {
-            var vm = new MainWindowViewModel(configurator: new Cancelled());
+            var vm = new MainWindowViewModel(configurator: FakeConfigurator.Cancelled());
             Assert.False(vm.OpenRecentCommand.CanExecute(null));
             Assert.True(vm.OpenRecentCommand.CanExecute(Prn));
             await vm.OpenRecentCommand.ExecuteAsync(Prn);
@@ -362,7 +357,7 @@ namespace TmDq.App.Tests
 
             // Busy, it is unavailable, and a path given anyway does nothing; it is told when that ends.
             var gate = new TaskCompletionSource<StreamsChoice?>();
-            var slow = new MainWindowViewModel(configurator: new Waiting(gate.Task));
+            var slow = new MainWindowViewModel(configurator: FakeConfigurator.Waiting(gate.Task));
             var available = new List<bool>();
             slow.OpenRecentCommand.CanExecuteChanged += (_, _) => available.Add(slow.OpenRecentCommand.CanExecute(Prn));
             Task first = slow.OpenPathAsync(Prn);
@@ -373,13 +368,6 @@ namespace TmDq.App.Tests
             await first;
             Assert.Equal(new[] { false, true }, available);
             Assert.DoesNotContain(slow.Log.Entries, e => e.Text.Contains("Upper.CSV", StringComparison.Ordinal));
-        }
-
-        private sealed class Waiting : IStreamConfigurator
-        {
-            private readonly Task<StreamsChoice?> _answer;
-            public Waiting(Task<StreamsChoice?> answer) => _answer = answer;
-            public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file) => _answer;
         }
 
         private sealed class CalFiles : TmDq.App.Services.ICalibrationFilePicker

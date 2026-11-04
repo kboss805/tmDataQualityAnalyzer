@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
@@ -470,12 +469,8 @@ namespace TmDq.App.Tests
         [Fact]
         public async Task ConfigureStreamsHandsTheChosenTimeChannelAndByteOrderToTheExtraction()
         {
-            // The PRN sample with CH-04 retyped as a time channel (16), as ConfigureStreamsTests makes it: two time channels.
-            byte[] bytes = File.ReadAllBytes(Repo.Recording("prn_testfile, sample.ch10"));
-            byte[] from = Encoding.ASCII.GetBytes(@"R-1\CDT-9:PCMIN;"), to = Encoding.ASCII.GetBytes(@"R-1\CDT-9:11   ;");
-            to.CopyTo(bytes, bytes.AsSpan().IndexOf(from));
-            string copy = Path.Combine(_dir, "two-time.ch10");
-            File.WriteAllBytes(copy, bytes);
+            // The PRN sample with CH-04 retyped as a time channel (16): two time channels.
+            string copy = Recordings.WriteTwoTimeChannels(Path.Combine(_dir, "two-time.ch10"));
 
             var dialogs = new FakeStreamDialogs
             {

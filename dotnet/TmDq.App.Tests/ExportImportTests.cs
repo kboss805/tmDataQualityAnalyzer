@@ -805,13 +805,6 @@ namespace TmDq.App.Tests
             }
         }
 
-        private sealed class WaitingConfigurator : IStreamConfigurator
-        {
-            public readonly TaskCompletionSource<StreamsChoice?> Answer = new();
-
-            public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file) => Answer.Task;
-        }
-
         [Fact]
         public async Task WhileBusyNeitherImportNorExportStartsAndBothAreToldWhenItEnds()
         {
@@ -819,8 +812,8 @@ namespace TmDq.App.Tests
             try
             {
                 // Configure Streams up over a plot that has data: Export must wait too, though there is data to export.
-                var configurator = new WaitingConfigurator();
-                var vm = new MainWindowViewModel(configurator: configurator, files: new FakeFiles(), exportDialog: new FakeExportDialog());
+                var answer = new TaskCompletionSource<StreamsChoice?>();
+                var vm = new MainWindowViewModel(configurator: FakeConfigurator.Waiting(answer.Task), files: new FakeFiles(), exportDialog: new FakeExportDialog());
                 vm.Plot.SetSeries(new[] { PlotFixtures.Lock(0, "earlier", 1, 0, X2, X2) });
                 int import = 0, export = 0;
                 vm.ImportCsvCommand.CanExecuteChanged += (_, _) => import++;
@@ -837,7 +830,7 @@ namespace TmDq.App.Tests
                 await vm.ImportCsvAsync(csv);   // ignored while busy
                 Assert.Equal(lines, vm.Log.Entries.Count);
 
-                configurator.Answer.SetResult(null);
+                answer.SetResult(null);
                 await open;
                 Assert.True(vm.ImportCsvCommand.CanExecute(null));
                 Assert.True(vm.ExportCommand.CanExecute(null));
