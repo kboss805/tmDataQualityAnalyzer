@@ -49,11 +49,14 @@ namespace TmDq.App.Plot
     }
 
     /// <summary>
-    /// The plot's state, held in C# (plan decision D3): the series, built by the core from
-    /// each processed stream on one shared time axis; their colours (US4.0); the visible time window with its zoom history;
-    /// both Y axes' ranges and overrides; which metric the left axis shows; the readout under the cursor; and what the
-    /// legend, the chips, the menu, the keys and Customize View act on (plan step 4.4). The chart (<c>PlotChart</c>) draws
-    /// it and reports the user's gestures back; <c>PlotView</c> holds the controls around it. Used on the UI thread.
+    /// The plot's state, held in C# (plan decision D3): the series, built by the core from each processed stream on one
+    /// shared time axis; both Y axes' ranges and overrides; which metric the left axis shows; the recordings and the Plot
+    /// File selector; the readout's pin; and what the legend, the chips, the menu, the keys and Customize View act on
+    /// (plan step 4.4). The chart (<c>PlotChart</c>) draws it and reports the user's gestures back; <c>PlotView</c> holds
+    /// the controls around it. Used on the UI thread.
+    /// <para>Four jobs are done by their own types, and reached through this one: the time window and its zoom history
+    /// (<see cref="PlotTimeWindow"/>), the readout's text (<see cref="PlotReadout"/>), CSV export and import
+    /// (<see cref="PlotCsv"/>), and the colours (<see cref="PlotColors.Assign"/>).</para>
     /// </summary>
     public sealed partial class PlotViewModel : ObservableObject, IDisposable
     {
@@ -71,12 +74,11 @@ namespace TmDq.App.Plot
         private static readonly string[] ChannelPrefixes = { "L", "R", "C" };
 
         private readonly List<PlotSeries> _series = new();
-        private readonly List<(double Min, double Max)> _zoomStack = new();
+        private readonly PlotTimeWindow _window;
         // Made with the first stream: the core is loaded only once a recording has been opened.
         private TimeBase? _timeBase;
         private int _nextId;
         private string _title = DefaultTitle;
-        private double _xMax, _xViewMin, _xViewMax;
         private double _snrMin, _snrMax = 1.0;
         private double? _leftMinOverride, _leftMaxOverride, _rightMinOverride, _rightMaxOverride;
         private LockAxisView _lockAxisView = LockAxisView.LockPercent;
@@ -98,6 +100,17 @@ namespace TmDq.App.Plot
 
         /// <summary>Raised with a warning for the log: a time window entered outside the recording, and clamped.</summary>
         public event EventHandler<string>? Warning;
+
+        public PlotViewModel()
+        {
+            _window = new PlotTimeWindow(() => HasData, FormatTime);
+            _window.Changed += (_, _) =>
+            {
+                RangesChanged?.Invoke(this, EventArgs.Empty);
+                OnPropertyChanged(nameof(CanZoomBack));
+            };
+            _window.Warning += (_, warning) => Warning?.Invoke(this, warning);
+        }
 
         public IReadOnlyList<PlotSeries> Series => _series;
 
@@ -131,7 +144,7 @@ namespace TmDq.App.Plot
 
             bool hadSeries = _series.Count > 0;
             int sourceId = result.SourceId;
-            if (hadSeries && !_series.Any(s => s.SourceId == sourceId) && !_timeBase.Overlaps(times[0], times[^1], _xMax))
+            if (hadSeries && !_series.Any(s => s.SourceId == sourceId) && !_timeBase.Overlaps(times[0], times[^1], _window.XMax))
             {
                 NonOverlappingSource?.Invoke(this, sourceId);
             }
@@ -167,13 +180,7 @@ namespace TmDq.App.Plot
                         YMin = spec.YMin,
                         YMax = spec.YMax,
                         SortedX = sorted,
-                        // The left-axis metrics are shown one at a time, by the active view.
-                        Visible = spec.Metric switch
-                        {
-                            MetricType.FrameSyncLock => _lockAxisView == LockAxisView.LockPercent,
-                            MetricType.AccumulatedMissedFrames => _lockAxisView == LockAxisView.MissedFrames,
-                            _ => true,
-                        },
+                        Visible = ShownInView(spec.Metric, _lockAxisView),
                     });
                 }
             }
@@ -183,13 +190,9 @@ namespace TmDq.App.Plot
             _series.Clear();
             _series.AddRange(ordered);
 
-            _xMax = 0.0;
-            foreach (PlotSeries s in _series)
-                if (s.X.Length > 0) _xMax = Math.Max(_xMax, s.X[^1]);
-            _xViewMin = 0.0;
-            _xViewMax = _xMax;
+            _window.ShowSpan(SpanOf(_series));
 
-            AssignColors();
+            PlotColors.Assign(_series);
             ComputeSnrRange();
             SeriesChanged?.Invoke(this, EventArgs.Empty);
             RangesChanged?.Invoke(this, EventArgs.Empty);
@@ -204,13 +207,9 @@ namespace TmDq.App.Plot
             _series.Clear();
             _series.AddRange(series.OrderBy(s => s.StreamSequence));
             _nextId = _series.Count == 0 ? 0 : _series.Max(s => s.Id) + 1;
-            _xMax = 0.0;
-            foreach (PlotSeries s in _series)
-                if (s.X.Length > 0) _xMax = Math.Max(_xMax, s.X[^1]);
-            _xViewMin = 0.0;
-            _xViewMax = _xMax;
-            _zoomStack.Clear();
-            AssignColors();
+            _window.ShowSpan(SpanOf(_series));
+            _window.ClearHistory();
+            PlotColors.Assign(_series);
             ComputeSnrRange();
             SeriesChanged?.Invoke(this, EventArgs.Empty);
             RangesChanged?.Invoke(this, EventArgs.Empty);
@@ -225,26 +224,9 @@ namespace TmDq.App.Plot
         /// 0 or more keeps that source's series only (per-file batch export, 4.7). False, with no file written, when there
         /// is nothing to write; false when the file cannot be written.
         /// </summary>
-        public bool ExportCsv(string path, int sourceId = -1)
-        {
-            var columns = new List<CsvColumn>();
-            foreach (PlotSeries s in _series)
-            {
-                if (sourceId >= 0 && s.SourceId != sourceId) continue;
-                columns.Add(new CsvColumn(s.Metric, s.Name, s.SourceId, s.X, s.Y));
-            }
+        public bool ExportCsv(string path, int sourceId = -1) =>
             // No columns at all is the writer's to refuse, and it writes no file.
-            TimeBaseInfo b = _timeBase?.Info ?? new TimeBaseInfo(0, 0.0, 0.0);
-            try
-            {
-                CsvFile.Write(path, columns, b.BaseDay, b.BaseTimeOffset);
-                return true;
-            }
-            catch (TmdqException)
-            {
-                return false;
-            }
-        }
+            PlotCsv.Write(path, PlotCsv.Columns(_series, sourceId), _timeBase?.Info ?? new TimeBaseInfo(0, 0.0, 0.0));
 
         /// <summary>Whether a CSV is being read for the plot (the "Loading..." overlay).</summary>
         public bool IsLoading
@@ -257,7 +239,7 @@ namespace TmDq.App.Plot
         /// with nothing changed, for a file that is not one.</summary>
         public bool LoadCsv(string path)
         {
-            CsvData? data = ParseCsv(path);
+            CsvData? data = PlotCsv.Parse(path);
             if (data is null) return false;
             ShowCsv(data);
             return true;
@@ -273,7 +255,7 @@ namespace TmDq.App.Plot
             IsLoading = true;
             try
             {
-                CsvData? data = await Task.Run(() => ParseCsv(path));
+                CsvData? data = await Task.Run(() => PlotCsv.Parse(path));
                 if (data is null) return CsvLoad.Failed;
                 ShowCsv(data);
                 return CsvLoad.Loaded;
@@ -284,62 +266,20 @@ namespace TmDq.App.Plot
             }
         }
 
-        private static CsvData? ParseCsv(string path)
-        {
-            try
-            {
-                return CsvFile.Parse(path);
-            }
-            catch (TmdqException)
-            {
-                return null;
-            }
-        }
-
         /// <summary>
-        /// Shows a parsed CSV as a run's series would be shown: the clock from the file;
-        /// each Frame Sync Lock stream's series given the core's stream order (<c>assignImportedStreamOrders</c>), so its
-        /// two metrics share a colour and each stream has its own; the metric of the active view shown; then a warning for
-        /// any rows skipped, since a partly loaded file must not pass for a whole one.
+        /// Shows a parsed CSV as a run's series would be shown (<see cref="PlotCsv.Series"/>), with the clock from the
+        /// file; then a warning for any rows skipped, since a partly loaded file must not pass for a whole one.
         /// </summary>
         private void ShowCsv(CsvData data)
         {
-            IReadOnlyList<int> orders = ImportedStreams.AssignOrders(data.Series);
             _series.Clear();
-            _zoomStack.Clear();
+            _window.ClearHistory();
             _readoutSeriesId = null;
-            for (int i = 0; i < data.Series.Count; i++)
-            {
-                CsvSeries c = data.Series[i];
-                _series.Add(new PlotSeries
-                {
-                    Id = _nextId++,
-                    Name = c.Name,
-                    StreamLabel = c.StreamLabel,
-                    Metric = c.Metric,
-                    ReceiverIndex = c.ReceiverIndex,
-                    ChannelIndex = c.ChannelIndex,
-                    StreamOrder = orders[i],   // an SNR series keeps its own; the core gives the others theirs
-                    SourceId = c.SourceId,
-                    X = c.X,
-                    Y = c.Y,
-                    YMin = c.YMin,
-                    YMax = c.YMax,
-                    SortedX = ChartGeometry.IsSortedX(c.X),
-                    Visible = c.Metric switch
-                    {
-                        MetricType.FrameSyncLock => _lockAxisView == LockAxisView.LockPercent,
-                        MetricType.AccumulatedMissedFrames => _lockAxisView == LockAxisView.MissedFrames,
-                        _ => true,
-                    },
-                });
-            }
+            _series.AddRange(PlotCsv.Series(data, _lockAxisView, ref _nextId));
             _timeBase ??= new TimeBase();
             _timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);
-            _xMax = data.XMax;
-            _xViewMin = 0.0;
-            _xViewMax = _xMax;
-            AssignColors();
+            _window.ShowSpan(data.XMax);
+            PlotColors.Assign(_series);
             ComputeSnrRange();
             SeriesChanged?.Invoke(this, EventArgs.Empty);
             RangesChanged?.Invoke(this, EventArgs.Empty);
@@ -354,9 +294,8 @@ namespace TmDq.App.Plot
         public void Clear()
         {
             _series.Clear();
-            _zoomStack.Clear();
+            _window.Clear();
             _timeBase?.Reset();
-            _xMax = _xViewMin = _xViewMax = 0.0;
             _snrMin = 0.0;
             _snrMax = 1.0;
             _lockAxisView = LockAxisView.LockPercent;
@@ -424,39 +363,29 @@ namespace TmDq.App.Plot
                 lo = Math.Min(lo, s.X[0]);
                 hi = Math.Max(hi, s.X[^1]);
             }
-            if (lo <= hi)
-            {
-                _xViewMin = lo;
-                _xViewMax = hi;
-            }
+            if (lo <= hi) _window.Show(lo, hi);
             ComputeSnrRange();
             OnPropertyChanged(nameof(VisibleSource));
             SeriesChanged?.Invoke(this, EventArgs.Empty);
             RangesChanged?.Invoke(this, EventArgs.Empty);
         }
 
-        /// <summary>Left-axis metrics share one colour per stream (keyed by PCM channel), so a stream's lock and missed
-        /// frames curves match; an SNR series takes its receiver's primary, shaded by its receiver cycle and channel.</summary>
-        private void AssignColors()
+        /// <summary>Whether a series of <paramref name="metric"/> is shown when it arrives: the left-axis metrics are shown
+        /// one at a time, by the view.</summary>
+        internal static bool ShownInView(MetricType metric, LockAxisView view) => metric switch
         {
-            var leftIndex = new Dictionary<int, int>();
-            foreach (PlotSeries s in _series)
-            {
-                if (s.IsLeftAxis)
-                {
-                    if (!leftIndex.TryGetValue(s.StreamOrder, out int idx))
-                    {
-                        idx = leftIndex.Count;
-                        leftIndex[s.StreamOrder] = idx;
-                    }
-                    int n = PlotColors.FrameSyncLock.Count;
-                    s.Color = PlotColors.Shade(PlotColors.FrameSyncLock[idx % n], idx / n);
-                    continue;
-                }
-                int primaries = PlotColors.Snr.Count;
-                int receiver = Math.Max(0, s.ReceiverIndex - 1);
-                s.Color = PlotColors.Shade(PlotColors.Snr[receiver % primaries], receiver / primaries + s.ChannelIndex);
-            }
+            MetricType.FrameSyncLock => view == LockAxisView.LockPercent,
+            MetricType.AccumulatedMissedFrames => view == LockAxisView.MissedFrames,
+            _ => true,
+        };
+
+        /// <summary>Where the data ends: the latest last sample of any series, or 0.</summary>
+        private static double SpanOf(IEnumerable<PlotSeries> series)
+        {
+            double xMax = 0.0;
+            foreach (PlotSeries s in series)
+                if (s.X.Length > 0) xMax = Math.Max(xMax, s.X[^1]);
+            return xMax;
         }
 
         // ---- the axes -----------------------------------------------------------------------------------------------
@@ -470,9 +399,9 @@ namespace TmDq.App.Plot
         private bool HasVisible(bool left) => _series.Any(s => s.IsLeftAxis == left && EffectiveVisible(s));
 
         public double XMin => 0.0;
-        public double XMax => _xMax;
-        public double XViewMin => _xViewMin;
-        public double XViewMax => _xViewMax;
+        public double XMax => _window.XMax;
+        public double XViewMin => _window.ViewMin;
+        public double XViewMax => _window.ViewMax;
 
         /// <summary>The left axis's lower end: the override, else 0.</summary>
         public double LeftMin => _leftMinOverride ?? LockAxisMin;
@@ -573,70 +502,25 @@ namespace TmDq.App.Plot
 
         // ---- the time window ----------------------------------------------------------------------------------------
 
-        public bool CanZoomBack => _zoomStack.Count > 0;
-        public int ZoomDepth => _zoomStack.Count;
+        public bool CanZoomBack => _window.CanZoomBack;
+        public int ZoomDepth => _window.Depth;
 
         /// <summary>A continuous gesture (wheel zoom, drag pan) moved the window: kept inside the data, its width kept, and
         /// not remembered in the zoom history.</summary>
-        public void SetXViewByUser(double lower, double upper)
-        {
-            if (!HasData) return;
-            double width = upper - lower;
-            if (lower < 0.0)
-            {
-                lower = 0.0;
-                upper = width;
-            }
-            if (upper > _xMax)
-            {
-                upper = _xMax;
-                lower = Math.Max(0.0, _xMax - width);
-            }
-            SetXView(lower, upper);
-        }
+        public void SetXViewByUser(double lower, double upper) => _window.SetByUser(lower, upper);
 
         /// <summary>A discrete zoom (a band dragged out, a time window entered): the window is remembered first, so
         /// <see cref="ZoomBack"/> returns to it; the oldest of more than <see cref="MaxZoomDepth"/> is forgotten.</summary>
-        public void PushXZoom(double min, double max)
-        {
-            _zoomStack.Add((_xViewMin, _xViewMax));
-            if (_zoomStack.Count > MaxZoomDepth) _zoomStack.RemoveAt(0);
-            SetXView(min, max);
-        }
+        public void PushXZoom(double min, double max) => _window.Push(min, max);
 
-        public void ZoomBack()
-        {
-            if (_zoomStack.Count == 0) return;
-            (double min, double max) = _zoomStack[^1];
-            _zoomStack.RemoveAt(_zoomStack.Count - 1);
-            SetXView(min, max);
-        }
+        public void ZoomBack() => _window.Back();
 
         /// <summary>The whole recording again; the zoom history goes with it.</summary>
-        public void ResetXRange()
-        {
-            _zoomStack.Clear();
-            SetXView(0.0, _xMax);
-        }
+        public void ResetXRange() => _window.Reset();
 
         /// <summary>A band dragged out between two times: ignored when narrower than <see cref="MinZoomSpanSeconds"/> (a
         /// click, not a drag), otherwise kept inside the data and remembered as a discrete zoom.</summary>
-        public void ApplyBandZoom(double from, double to)
-        {
-            if (!HasData) return;
-            double lower = Math.Min(from, to), upper = Math.Max(from, to);
-            if (upper - lower < MinZoomSpanSeconds) return;
-            double start = Math.Clamp(lower, 0.0, _xMax), stop = Math.Clamp(upper, 0.0, _xMax);
-            PushXZoom(start, Math.Max(start, stop));
-        }
-
-        private void SetXView(double min, double max)
-        {
-            _xViewMin = min;
-            _xViewMax = max;
-            RangesChanged?.Invoke(this, EventArgs.Empty);
-            OnPropertyChanged(nameof(CanZoomBack));
-        }
+        public void ApplyBandZoom(double from, double to) => _window.Band(from, to);
 
         // ---- the clock ----------------------------------------------------------------------------------------------
 
@@ -664,60 +548,8 @@ namespace TmDq.App.Plot
         /// the nearest sample of any series shown, if it lies within 10 px of the cursor; or, when the readout is pinned,
         /// that series' nearest sample wherever it is. Null when there is nothing to say.
         /// </summary>
-        public string? Readout(double x, double cursorPixel, Func<double, double> xToPixel)
-        {
-            if (!HasData) return null;
-            int pinnedIndex = _readoutSeriesId is int id ? _series.FindIndex(s => s.Id == id) : -1;
-            bool pinned = pinnedIndex >= 0;
-            double bestDist = double.MaxValue, bestX = 0.0, bestY = 0.0;
-            int best = -1;
-            for (int i = 0; i < _series.Count; i++)
-            {
-                if (pinned && i != pinnedIndex) continue;
-                PlotSeries s = _series[i];
-                if (!EffectiveVisible(s) || s.X.Length == 0) continue;
-                int at = LowerBound(s.X, x);
-                for (int k = at; k < s.X.Length && k - at < 2; k++)
-                    Consider(i, k);
-                if (at > 0) Consider(i, at - 1);
-
-                void Consider(int series, int index)
-                {
-                    double d = Math.Abs(_series[series].X[index] - x);
-                    if (d < bestDist)
-                    {
-                        bestDist = d;
-                        bestX = _series[series].X[index];
-                        bestY = _series[series].Y[index];
-                        best = series;
-                    }
-                }
-            }
-            if (best < 0) return null;
-            if (!pinned && Math.Abs(xToPixel(bestX) - cursorPixel) > 10.0) return null;
-            PlotSeries found = _series[best];
-            if (found.Name.Length == 0) return null;
-            string unit = found.Metric switch
-            {
-                MetricType.FrameSyncLock => "%",
-                MetricType.AccumulatedMissedFrames => " frames",
-                _ => " dB",
-            };
-            return $"{found.Name}{(pinned ? "  (pinned)" : "")}\n{FormatTime(bestX)}\n" +
-                   bestY.ToString("F2", CultureInfo.InvariantCulture) + unit;
-        }
-
-        private static int LowerBound(double[] xs, double value)
-        {
-            int lo = 0, hi = xs.Length;
-            while (lo < hi)
-            {
-                int mid = lo + (hi - lo) / 2;
-                if (xs[mid] < value) lo = mid + 1;
-                else hi = mid;
-            }
-            return lo;
-        }
+        public string? Readout(double x, double cursorPixel, Func<double, double> xToPixel) =>
+            HasData ? PlotReadout.Describe(_series, EffectiveVisible, _readoutSeriesId, x, cursorPixel, xToPixel, FormatTime) : null;
 
         /// <summary>Drops a pin whose series is gone (processed again, which gives new ids) or hidden, so the Readout menu
         /// never opens with nothing chosen. The readout itself already falls back to the nearest series then.</summary>
@@ -745,8 +577,8 @@ namespace TmDq.App.Plot
             set => SetProperty(ref _legendVisible, value);
         }
 
-        /// <summary>Whether the window is narrower than the whole recording (by <see cref="FuzzyEqual"/>).</summary>
-        public bool IsZoomed => HasData && (!FuzzyEqual(_xViewMin, XMin) || !FuzzyEqual(_xViewMax, _xMax));
+        /// <summary>Whether the window is narrower than the whole recording.</summary>
+        public bool IsZoomed => _window.IsZoomed;
 
         /// <summary>Whether the view differs from the default (zoomed, or an axis limit set): the Reset view chip's rule.</summary>
         public bool CanResetView => HasData && (IsZoomed || HasRangeOverride);
@@ -767,45 +599,17 @@ namespace TmDq.App.Plot
 
         /// <summary>Slides the window by <paramref name="fraction"/> of its width (negative is earlier): the arrow keys.
         /// Nothing when the whole recording is shown, since there is nowhere to go.</summary>
-        public void PanWindow(double fraction)
-        {
-            double lower = _xViewMin, upper = _xViewMax, span = upper - lower;
-            if (span <= 0.0) return;
-            if (lower <= XMin && upper >= _xMax) return;
-            double shift = span * fraction;
-            ApplyTimeWindow(lower + shift, upper + shift, FormatTime(lower + shift), FormatTime(upper + shift));
-        }
+        public void PanWindow(double fraction) => _window.Pan(fraction);
 
         /// <summary>Scales the window about its centre (below 1 zooms in): + and -. Never narrower than a band zoom may be.</summary>
-        public void ZoomWindow(double factor)
-        {
-            double lower = _xViewMin, upper = _xViewMax, span = upper - lower;
-            if (span <= 0.0) return;
-            double centre = lower + span / 2.0, newSpan = span * factor;
-            if (newSpan < MinZoomSpanSeconds) return;
-            double newLower = centre - newSpan / 2.0, newUpper = centre + newSpan / 2.0;
-            ApplyTimeWindow(newLower, newUpper, FormatTime(newLower), FormatTime(newUpper));
-        }
+        public void ZoomWindow(double factor) => _window.Zoom(factor);
 
         /// <summary>
         /// A time window entered or stepped to: each end clamped into the recording, with a warning naming the value as
         /// entered; the stop pulled up to the start if it is before it; then remembered as a discrete zoom.
         /// </summary>
-        public void ApplyTimeWindow(double rawStart, double rawStop, string enteredStart, string enteredStop)
-        {
-            if (!HasData) return;
-            double start = Math.Clamp(rawStart, XMin, _xMax), stop = Math.Clamp(rawStop, XMin, _xMax);
-            if (!FuzzyEqual(start, rawStart))
-                Warning?.Invoke(this, $"Start \"{enteredStart}\" is outside the file time range - clamped to file bounds.");
-            if (!FuzzyEqual(stop, rawStop))
-                Warning?.Invoke(this, $"Stop \"{enteredStop}\" is outside the file time range - clamped to file bounds.");
-            if (start > stop)
-            {
-                Warning?.Invoke(this, "Stop time is before Start - clamped to start time.");
-                stop = start;
-            }
-            PushXZoom(start, stop);
-        }
+        public void ApplyTimeWindow(double rawStart, double rawStop, string enteredStart, string enteredStop) =>
+            _window.Apply(rawStart, rawStop, enteredStart, enteredStop);
 
         /// <summary>A clock time typed as DDD:HH:MM:SS, as elapsed seconds on the plot's axis; 0 for text not in that form,
         /// and 0 for a field that is not a whole number (a sign and spaces around it are allowed), as v2.x
@@ -900,9 +704,6 @@ namespace TmDq.App.Plot
         private static bool IsSibling(PlotSeries of, PlotSeries candidate) =>
             candidate.IsLeftAxis && candidate.StreamLabel == of.StreamLabel && candidate.StreamOrder == of.StreamOrder &&
             candidate.SourceId == of.SourceId;
-
-        /// <summary>Equal to about twelve significant digits of the smaller magnitude (so 0 equals only 0).</summary>
-        private static bool FuzzyEqual(double a, double b) => Math.Abs(a - b) * 1000000000000.0 <= Math.Min(Math.Abs(a), Math.Abs(b));
 
         public void Dispose() => _timeBase?.Dispose();
     }
