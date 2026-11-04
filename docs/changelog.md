@@ -12,6 +12,26 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The application's icon
+
+v3.0.0 shipped an exe with no icon: the Qt application's came from its `.rc` file, which the port left behind, so
+Explorer, the taskbar, Alt+Tab, the shortcuts and every title bar showed a generic one.
+
+- **`resources/icon.ico`** is square in every size Windows asks for (16, 24, 32, 48, 64 and 256 px), made from the
+  original artwork (`docs/design/icon_image.png`, centred on a square canvas) by the new `scripts/gen_app_icon.py`. It
+  was one 64 by 61 image. The installer (`SetupIconFile`) takes the same file.
+- **`TmDq.App.csproj`** sets `ApplicationIcon`; the SDK copies the assembly's resources into every host, single-file
+  included, and the manifest merge (`mt.exe`) leaves them alone. Every window takes the same file as an Avalonia
+  resource, through an `:is(Window)` style in `App.axaml`, for its title bar and Alt+Tab.
+- **`IconTests`**: the file's sizes, its images byte for byte in the built exe's icon group, the windows' resource the
+  same file, and every window kind showing it. **`build_avalonia_package.ps1`** reads the icon back out of the
+  single-file published exe, as it does the manifest, and fails without it.
+
+**Checked:** five mutants (`scripts\mutate.ps1`, a `C:\tmp` worktree), four caught; the fifth, a plain `Window`
+selector, is equivalent, because `Window` gives every subclass its own style key (`StyleKeyOverride`). Rebased onto
+the layout tidy, the artwork's new place in `docs/design/`, and the app suite run again. App baseline 608 passed / 0
+failed, 34 not run (was 604).
+
 #### The shared build files at the root, the finished docs in their own folders
 
 The first of three PRs that tidy the repository's layout now the move off Qt is finished; this one moves no code.

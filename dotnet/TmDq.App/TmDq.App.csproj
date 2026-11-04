@@ -28,7 +28,16 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <IsPackable>false</IsPackable>
+    <!-- The exe's icon, for Explorer, the taskbar and the shortcuts (scripts\gen_app_icon.py makes it from the artwork).
+         The compiler puts it in the managed assembly's resources, and the SDK copies those into every host it creates,
+         singlefilehost included, before the manifest targets below run; mt.exe replaces only the manifest. The windows'
+         title bars take the same file as an Avalonia resource (below, and App.axaml). v3.0.0 shipped without either. -->
+    <ApplicationIcon>$(MSBuildThisFileDirectory)..\..\resources\icon.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="$(MSBuildThisFileDirectory)..\..\resources\icon.ico" Link="Assets\icon.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.4" />
