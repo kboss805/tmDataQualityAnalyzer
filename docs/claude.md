@@ -412,6 +412,112 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased
 
+#### Qt out of the names that stay (plan step 6.3)
+
+The code that outlives the Qt application no longer names it, except where the reference is the point: the oracles
+recorded from v2.14.2, and the import of v2.x's settings file. Nothing a user sees changes, and no test's expectation
+changes.
+
+- **One range helper, named for its rule.** The core's `qtMin` / `qtMax`, defined twice (`csvseriesparser.cpp`,
+  `seriesbuilder.cpp`), are one pair in `include/model/seriesrange.h`, `runningMin` and `runningMax`, with the NaN rule
+  written out. **The rule is not symmetric**, which the old names hid:
+  - the minimum takes the new value unless the range so far is strictly lower, so a NaN sample makes the minimum NaN
+    and the next sample replaces it;
+  - the maximum keeps the range so far unless the new value is strictly higher, so a NaN sample leaves it as it was.
+
+  `tmdq_abi.h`'s `y_min` / `y_max` and `TmDq.Core`'s `SeriesSpec.YMin` / `YMax` state it for a host, in place of "as
+  Qt's qMin sees a NaN".
+- **The app's colour arithmetic, named for what it does:** `PlotColors.QRound`, `ToQtHsv` and `FromQtHsv` are
+  `RoundHalfAway`, `ToHsv16` and `FromHsv16`. Where the arithmetic came from is said once, in the class's summary.
+- **`constants.h`:** the QSettings keys, the theme identifiers and the recent-files limit go, with the four native cases
+  that pinned them (native 494 cases, was 498). They were the Qt application's; the import of v2.x's settings carries the
+  key names it reads, held by `PreferencesTests` against the INI files v2.14.2 wrote. The full manual's note says "compiled
+  into the application".
+- **35 test names and test data, and 15 native case names,** say what each holds, or "as v2.14" where the expectation is
+  what v2.14.2 wrote or did (the oracles themselves are unchanged). `parity.md` names the new ones; the table below maps
+  the old names the changelog entries above use.
+- **The comments, about 600 lines in some 120 files,** stand on their own:
+  - a behaviour once explained by a Qt function ("as `QString::toInt` reads it") is stated, checked against the code,
+    with the test that pins it named;
+  - a note saying what a class was ported from ("the Qt `BatchApplyDialog`") says what it does, or its user story;
+  - an oracle's provenance is said once a file, as v2.14.2.
+
+  Four agents each swept one part (the core and the ABI, the native tests, the app, the .NET tests and binding) under
+  the same rules. A checker then compared every changed file with its comments stripped against the committed
+  version: the only code that changed is the renames and the helper above.
+- **One stale reference, fixed in passing:** `processedstreamdata.h` described a hand-off through the deleted
+  `ProcessingCoordinator`.
+
+**What still names Qt, on purpose** (the plan's closing scan, `\bQt\b`, `\bQ[A-Z][a-z]`, `\bq[A-Z]`, over `include`,
+`src`, `native` and `dotnet`):
+- **The import of v2.x's settings** (`QtSettingsImport`, `QtIni`, `Preferences`, `PreferencesTests`): the file it reads
+  is the QSettings INI format, and its comments describe that format. It stays through the v3.0.x releases (6.4).
+- **Six oracles' provenance,** one sentence a file: `ExportImportTests`, `SoakTests` and `TemplateTests`, and the
+  native `test_chartgeometry`, `test_csvseries` and `test_textformat`, whose expected answers are v2.14.2's Qt code.
+- **Two assertion messages in `SoakTests`,** which name the soak manifest's `qt` result blocks (data v2.14.2 exported).
+- **Not scanned:** the three research spikes under `dotnet/` (`chart-spike`, `hybrid-spike`, `interop-spike`, 57
+  files), which compare against Qt by design; 6.4's sweep decides whether they stay.
+
+**Checked:** every suite, the core rebuilt: native 494 cases (1 skipped), managed 358 / 0 / 1, app 602 / 0 / 0 (34
+not run). **Mutation check** (`scripts\mutate.ps1`, the native series and CSV cases): the minimum keeping its value past
+a NaN, the maximum becoming NaN at one (the mirror image it is not), and each call site given the other helper.
+**All four caught.**
+
+**The renames:**
+
+| Was | Now |
+| --- | --- |
+| `EachStatusIsMarkedAndColouredAsQtsAre` | `EachStatusIsMarkedAndColouredByItsKind` |
+| `TheExportWindowIsLaidOutAsQtsAndEachRowFollowsItsBox` | `TheExportWindowHasItsThreeRowsAndEachFollowsItsBox` |
+| `QtExports` | `ExportsAsV214WroteThem` |
+| `EveryRecordingExportsTheQtApplicationsCsvByteForByte` | `EveryRecordingExportsTheCsvV214ExportedByteForByte` |
+| `ExportWritesWhatWasChosenInTheQtOrderAndTheLogSaysWhere` | `ExportWritesTheDataThenTheImageThenTheLogAndTheLogSaysWhere` |
+| `TheWindowIsTitledAsTheQtApplicationIs` | `TheWindowIsTitledTmDataQualityAnalyzer` |
+| `QtShadesAroundTheWheel` | `ShadesAroundTheWheelAsV214PrintedThem` |
+| `QtShades` | `ShadesAsV214PrintedThem` |
+| `AShadeIsTheColourQtDraws` | `AShadeIsTheColourV214Drew` |
+| `AShadeOfAnyColourIsTheColourQtComputes` | `AShadeOfAnyColourIsTheColourV214Computed` |
+| `TheShadesStartFromTheQtPrimaries` | `TheShadesStartFromThePrimaries` |
+| `TheAxesAndTheTitleAreWordedAsTheQtApplicationWordsThem` | `TheAxesAndTheTitleAreWordedAsV214WordedThem` |
+| `TheFirstRunImportsTheQtSettingsOnceAndThenKeepsItsOwn` | `TheFirstRunImportsTheV2SettingsOnceAndThenKeepsItsOwn` |
+| `TheQtApplicationsSettingsReadAsQSettingsWroteThem` | `TheV2SettingsReadAsV214WroteThem` |
+| `ALinesLevelFollowsTheQtRules` | `ALinesLevelIsDecidedByItsText` |
+| `TheSummaryIsTheQtApplications` | `TheSummaryIsWordedAsV214WordedIt` |
+| `AFileSizeIsGivenAsTheQtLogGivesIt` | `AFileSizeIsGivenInMegabytesOrKilobytesToOneDecimal` |
+| `TheLogTellsTheStoryOfARunAsTheQtApplicationDoes` | `TheLogTellsTheStoryOfARunAsV214Did` |
+| `TheMenuHoldsTheQtApplicationsSectionsHelpAndExit` | `TheMenuHoldsItsSectionsHelpAndExit` |
+| `ThePalettesAreTheQtApplications` | `ThePalettesAreV214s` |
+| `EachThemesBrushesAreTheQtThemes` | `EachThemesBrushesAreV214s` |
+| `EachRunExportsTheCsvTheQtApplicationExported` | `EachRunExportsTheCsvV214Exported` |
+| `TheReceiverSnrDefaultsAreTheQtApplicationsFromTheHeader` | `TheReceiverSnrDefaultsComeFromTheHeader` |
+| `TheReadyColumnSaysWhatTheQtDialogSays` | `TheReadyColumnSaysWhatARowStillNeeds` |
+| `TheChoicesAreTheQtDialogsInItsOrder` | `TheChoicesAreUs21sAndUs30sInTheirOrder` |
+| `ABatchRunsEachFileInTurnKeepsEachAndExportsEachAsTheQtApplicationDoes` | `ABatchRunsEachFileInTurnKeepsEachAndExportsEachAsV214Did` |
+| `ATemplateThatCannotBeUsedIsAnErrorInTheQtWords` | `ATemplateThatCannotBeUsedIsAnErrorInV214sWords` |
+| `TheConfirmationWindowIsLaidOutAsQtsAndClosesOnProcessOrCancel` | `TheConfirmationWindowListsTheFilesAndClosesOnProcessOrCancel` |
+| `ATemplateIsWrittenAsTheQtApplicationWritesIt` | `ATemplateIsWrittenAsV214WroteIt` |
+| `ADoubleIsWrittenAsQtWritesOne` | `ADoubleIsWrittenAsTheShortestTextThatReadsBack` |
+| `ATemplateIsRefusedForWhatTheQtSchemaRefuses` | `ATemplateIsRefusedForWhatV214Refused` |
+| `AnAppearanceReadsItsMetricAndColourAsQtReadsThem` | `AnAppearanceReadsItsMetricAndColourAsV214ReadThem` |
+| `TheQtApplicationsTemplatesReadAsTheyWereWritten` | `TheV214TemplatesReadAsTheyWereWritten` |
+| `TheDefaultsAreTheQtApplicationsFromTheHeader` | `TheDefaultsComeFromTheHeader` |
+| `AParsedCsvsStreamsAreOrderedLikeTheQtTestsExpect` | `AParsedCsvsStreamsAreOrderedAsV214OrderedThem` |
+| "Chapter10Reader: a TMATS data rate is read like QString::toDouble" | "Chapter10Reader: a TMATS data rate is read as a whole positive decimal number, or not at all" |
+| "ChartGeometry: a series' line and band are the Qt chart's, over generated series and views" | "ChartGeometry: a series' line and band are the code it replaced, over generated series and views" |
+| "ChartGeometry: the transforms are the Qt chart's" | "ChartGeometry: the transforms are the code they replaced" |
+| "ChartGeometry: the ticks are the Qt chart's" | "ChartGeometry: the ticks are the code they replaced" |
+| "csvseries: the clock stamp is what the QString one was, for every generated time" | "csvseries: the clock stamp is what v2.14 wrote, for every generated time" |
+| "csvseries: the numbers a cell or a stamp field may hold read as Qt read them" | "csvseries: the numbers a cell or a stamp field may hold read as v2.14 read them" |
+| "FrameSetup: receiver name parsing matches QString::toInt" | "FrameSetup: a receiver number in a name is a whole decimal number, or none" |
+| "framesync: parseUnsignedHex agrees with Qt on awkward inputs" | "framesync: parseUnsignedHex agrees with v2.14 on awkward inputs" |
+| "framesync: parseUnsignedHex agrees with Qt on arbitrary text" | "framesync: parseUnsignedHex agrees with v2.14 on arbitrary text" |
+| "SeriesColumnSchema: reads every generated header as the QString implementation did" | "SeriesColumnSchema: reads every generated header as v2.14 did" |
+| "textformat: exact ties round away from zero like Qt" | "textformat: exact ties round away from zero" |
+| "textformat: values that are not ties agree with Qt" | "textformat: values that are not ties format as v2.14 formatted them" |
+| "textformat: signs and zeros agree with Qt" | "textformat: signs and zeros format as v2.14 formatted them" |
+| "textformat: a sweep of arbitrary doubles agrees with Qt" | "textformat: a sweep of arbitrary doubles formats as v2.14 formatted them" |
+| "textformat: large and small magnitudes agree with Qt" | "textformat: large and small magnitudes format as v2.14 formatted them" |
+
 #### Qt out of the tooling (plan step 6.2)
 
 6.1 deleted the Qt application; this deletes what built, ran and documented it. Nothing that builds or ships changes.

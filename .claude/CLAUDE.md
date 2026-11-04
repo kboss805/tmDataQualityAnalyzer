@@ -27,7 +27,7 @@ Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `
 - **Native core tests (doctest, no Qt):** `powershell -ExecutionPolicy Bypass -File scripts\test_native.ps1
   [-Configuration Debug|Release] [-Rebuild] [-NoBuild] [<doctest args>]` builds `native/tmdq_core_tests`
   (MSBuild; the framework is the single header in `lib/doctest`) with **zero warnings and no Qt import**, then runs it.
-  Run it **filtered** while iterating: `-tc="TomlDocument*"`. Green baseline **498 test cases** (1 skipped: the
+  Run it **filtered** while iterating: `-tc="TomlDocument*"`. Green baseline **494 test cases** (1 skipped: the
   benchmark below). The suites read `tests/data/test files` (committed recordings) and `tests/fixtures`; in a
   worktree, junction `tests/data` to the main checkout's or the full-recording tests have nothing to read.
   **The throughput guard:** the heavy PRN benchmark ("PipelineRunner throughput", `test_pipelinerunner.cpp`) is
