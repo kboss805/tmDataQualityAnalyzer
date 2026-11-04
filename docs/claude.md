@@ -412,6 +412,55 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased
 
+#### `PlotViewModel`'s four jobs in their own types (plan step 6.4)
+
+The fourth item of 6.4. The plot's view model was ported from Qt whole, and it did four jobs beside holding the
+series. Each is now a type of its own in `dotnet/TmDq.App/Plot`. `PlotViewModel` goes from 923 lines to 724, and nothing
+the plot does changes.
+- **`PlotTimeWindow`:** the span of the data, the window shown and the zoom history. It also handles the gestures and
+  keys that move the window: the wheel and drag, a band, an entered window with its warnings, the arrow keys, + and -,
+  Zoom Back and Reset Span.
+- **`PlotReadout`:** what the crosshair's readout says, pinned or nearest within 10 px.
+- **`PlotCsv`:** the series to the core's CSV writer, and a parsed file back into series as a run's would be.
+- **`PlotColors.Assign`:** the colours, beside the shades they are made from.
+
+**The public surface is unchanged.** `PlotViewModel` keeps every member as a one-line forward, so `PlotTests`,
+`AroundTheChartTests` and the views run untouched. They were written against the old code, so they are the proof that
+behaviour is unchanged. Moving the callers onto the new types would have rewritten those tests (about 260 lines).
+**Also tidied:** two copies of the rule for which left-axis metric a new series shows (`ShownInView`), and two of the
+span's computation (`SpanOf`).
+
+**What stays on `PlotViewModel`, on purpose:**
+- **The readout's pin and the loading flag:** they are properties the views bind to.
+- **The clock** (`FormatTime`, `ParseTime`, `TimeOrigin`): it reads the time base, which belongs to the series.
+- **The legend's rows.**
+
+**Checked:**
+- **Every suite:** app 603 / 0 / 0 with 34 not run, unchanged.
+- **The soak** (`run_soak.ps1`, since the change touches the plot's series and the CSV path): all 34 runs exported
+  byte for byte what v2.14.2 exported.
+- **Mutation check** (`scripts\mutate.ps1`, against the plot's, the chart's, the export's and the templates' classes):
+  26 mutants in the four new types and the view model's wiring to them. **All caught**, once three gaps were closed:
+  - **The time window:** the history one short; a click taken as a band; an arrow key acting on the whole span; a stop
+    before the start kept; a window moved off the start not counted as zoomed; Reset Span keeping the history; + past
+    the narrowest band. Also: `SetSeries` and an imported CSV keeping the history, a window's warnings not passed on,
+    and Plot File not showing the recording's span.
+  - **The readout:** a pinned readout reading any series, and the missed frames' unit.
+  - **The CSV:** source 0 exported with every source; an imported series not given the core's stream order; a CSV
+    that cannot be written reported written.
+  - **The colours:** the second stream already a shade, and receiver 1 taking the second primary.
+- **Three gaps, closed in `PlotTests`.** None was opened by the split: the tests are as before, and so was the code they
+  missed.
+  - **A gesture past either end by less than a second:** the test went 20 s past at least, so a clamp that let up to
+    1 s through survived, at either end.
+  - **The two notices a move gives:** the chart and `PlotView` redraw on `RangesChanged` and on any property change
+    alike, so dropping either notice changed nothing they did. The test now counts both, so a listener that relies on
+    one notice is protected.
+  - **The readout's reach:** the test probed 50 px from a sample only. It now reads a sample at 10 px and not one at
+    15, which also holds the boundary.
+- **One mutant refused by the compiler** (no `Changed` raised at all leaves the event unused, an error here) was
+  rewritten to raise it only for a window starting before 0, and caught.
+
 #### One fixtures file for the app suite (plan step 6.4)
 
 The third item of 6.4. The port wrote the same test helpers in several classes, one step at a time. They are now in
@@ -6990,9 +7039,12 @@ calibration's inputs, never its profile, so a batch processes with the linear ca
 - **Extract Calibration** (`ExtractCalibrationViewModel`) behind Apply Cal (US5.3).
 - **The run** (`StreamsRun`, `ProcessingViewModel` and its window): the core's run on its own threads, the modal
   progress dialog whose Cancel stops every stream, and the log (`SessionLog`, `LogView`) in v2.x's words and colours.
-- **The plot**: `PlotViewModel` (the series built by the core, the colours, the axes and overrides, the time window and
-  its zoom history, the view mode, the readout), `PlotChart` (drawing from the core's geometry, the gestures, a cached
-  data layer), and `PlotView` around it (the legend, the chip bar, the right-click menu, the keys, Customize View).
+- **The plot**: `PlotViewModel` (the series built by the core, the axes and overrides, the view mode, the recordings
+  and Plot File, the readout's pin), with four jobs in types of their own that it reaches: `PlotTimeWindow` (the span,
+  the window and its zoom history, the gestures and keys that move it), `PlotReadout` (what the readout says),
+  `PlotCsv` (the series to and from the core's CSV) and `PlotColors` (the colours). `PlotChart` draws it (from the
+  core's geometry, the gestures, a cached data layer), and `PlotView` holds what is around it (the legend, the chip bar,
+  the right-click menu, the keys, Customize View).
 - **Export and import** (`ExportViewModel`, `PlotImageExport`): the CSV through the core's writer (every series), the
   image through one Skia renderer for PNG, SVG and PDF (exactly what the chart shows), the log as text; Import CSV
   through the core's parser.
