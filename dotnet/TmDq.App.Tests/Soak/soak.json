@@ -1,0 +1,1703 @@
+{
+  "comment": "The side-by-side soak (plan step 5.2): each run processed by both applications, CSV exports compared byte for byte, plots by eye. Read by SoakTests (explicit) and, until step 6.1, the Qt harness that recorded each 'qt' block. Recordings are relative to tests/data, settings to settings/, templates to this folder.",
+  "runs": [
+    {
+      "name": "prn-sample",
+      "recording": "test files/prn_testfile, sample.ch10",
+      "swapBytes": true,
+      "committed": true,
+      "note": "step 4.5's oracle run",
+      "streams": [
+        {
+          "channel": 13,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 15,
+          "mode": "lock",
+          "pattern": "A345CA5C",
+          "mask": "FFFFFFFF",
+          "bits": 2047,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        }
+      ],
+      "qt": {
+        "files": {
+          "prn-sample.csv": [
+            9479,
+            "1be395481250be54acbd94c95a093be75b166e7e5616abf94895b622a91e305a"
+          ]
+        }
+      }
+    },
+    {
+      "name": "prn-sample-4ch-100ms",
+      "recording": "test files/prn_testfile, sample.ch10",
+      "swapBytes": true,
+      "committed": true,
+      "note": "",
+      "streams": [
+        {
+          "channel": 13,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "100ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 14,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "100ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 15,
+          "mode": "lock",
+          "pattern": "A345CA5C",
+          "mask": "FFFFFFFF",
+          "bits": 2047,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "100ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 16,
+          "mode": "lock",
+          "pattern": "A345CA5C",
+          "mask": "FFFFFFFF",
+          "bits": 2047,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "100ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        }
+      ],
+      "qt": {
+        "files": {
+          "prn-sample-4ch-100ms.csv": [
+            93027,
+            "42431e6afd3647e61447019e00c33d9589101ebae960e844766297a62148794d"
+          ]
+        }
+      }
+    },
+    {
+      "name": "prn-sample-4ch-10ms",
+      "recording": "test files/prn_testfile, sample.ch10",
+      "swapBytes": true,
+      "committed": true,
+      "note": "",
+      "streams": [
+        {
+          "channel": 13,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "10ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 14,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "10ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 15,
+          "mode": "lock",
+          "pattern": "A345CA5C",
+          "mask": "FFFFFFFF",
+          "bits": 2047,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "10ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 16,
+          "mode": "lock",
+          "pattern": "A345CA5C",
+          "mask": "FFFFFFFF",
+          "bits": 2047,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "10ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        }
+      ],
+      "qt": {
+        "files": {
+          "prn-sample-4ch-10ms.csv": [
+            924658,
+            "0fd0db52269b52a39aeb1563057cfc9e34b7c926d9b3bfc188854bb09d39b329"
+          ]
+        }
+      }
+    },
+    {
+      "name": "prn-sample-mask-rate",
+      "recording": "test files/prn_testfile, sample.ch10",
+      "swapBytes": true,
+      "committed": true,
+      "note": "a narrower sync mask, and a data rate typed over the TMATS one",
+      "streams": [
+        {
+          "channel": 13,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFF0",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "100ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 15,
+          "mode": "lock",
+          "pattern": "A345CA5C",
+          "mask": "FFFFFFFF",
+          "bits": 2047,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 1.25,
+          "period": "100ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        }
+      ],
+      "qt": {
+        "files": {
+          "prn-sample-mask-rate.csv": [
+            42652,
+            "14fcd4c729cf1bdd71a46ac69649e09867f957e088c774a1bb4e34af9a35bacb"
+          ]
+        }
+      }
+    },
+    {
+      "name": "step_cal-snr-1s",
+      "recording": "test files/step_cal, example.ch10",
+      "swapBytes": true,
+      "committed": true,
+      "note": "",
+      "streams": [
+        {
+          "channel": 26,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 800,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": "receiver_params/default.toml"
+        }
+      ],
+      "qt": {
+        "files": {
+          "step_cal-snr-1s.csv": [
+            32537,
+            "61d80af27c78596230e299beab5a0be4052761c8a3ed6cac4507037623aacf43"
+          ]
+        }
+      }
+    },
+    {
+      "name": "step_cal-snr-100ms",
+      "recording": "test files/step_cal, example.ch10",
+      "swapBytes": true,
+      "committed": true,
+      "note": "",
+      "streams": [
+        {
+          "channel": 26,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 800,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "100ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": "receiver_params/default.toml"
+        }
+      ],
+      "qt": {
+        "files": {
+          "step_cal-snr-100ms.csv": [
+            305772,
+            "51314fdd63d336b00e39b4d3adac214a7c1536cd4a128d8f3edebb3f757f091c"
+          ]
+        }
+      }
+    },
+    {
+      "name": "step_cal-snr-10ms",
+      "recording": "test files/step_cal, example.ch10",
+      "swapBytes": true,
+      "committed": true,
+      "note": "",
+      "streams": [
+        {
+          "channel": 26,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 800,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "10ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": "receiver_params/default.toml"
+        }
+      ],
+      "qt": {
+        "files": {
+          "step_cal-snr-10ms.csv": [
+            3041088,
+            "4c64e144e0446eac432a9ed1a57f5d1670dafbe86116b6526b4ad1aaa53f08f3"
+          ]
+        }
+      }
+    },
+    {
+      "name": "step_cal-snr-calibrated",
+      "recording": "test files/step_cal, example.ch10",
+      "swapBytes": true,
+      "committed": true,
+      "note": "calibrated from itself with the clips the manual shows",
+      "streams": [
+        {
+          "channel": 26,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 800,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": "receiver_params/default.toml",
+          "calibration": {
+            "recording": "test files/step_cal, example.ch10",
+            "steps": "rcvr_cals/default.toml",
+            "clipStart": 6.0,
+            "clipEnd": 2.0
+          }
+        }
+      ],
+      "qt": {
+        "files": {
+          "step_cal-snr-calibrated.csv": [
+            32522,
+            "d68782d6b8f7f090a4a71e5ca4ff582bd939237b850a38f65f538d50a0d08a5b"
+          ]
+        }
+      }
+    },
+    {
+      "name": "step_cal-lock-10ms",
+      "recording": "test files/step_cal, example.ch10",
+      "swapBytes": true,
+      "committed": true,
+      "note": "",
+      "streams": [
+        {
+          "channel": 26,
+          "mode": "lock",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 800,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "10ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        }
+      ],
+      "qt": {
+        "files": {
+          "step_cal-lock-10ms.csv": [
+            248629,
+            "4264c6bb1d7e268b1dfb0da445047f694d0e2d258c96595f9f2fcc123dd7cc24"
+          ]
+        }
+      }
+    },
+    {
+      "name": "trc-snr-1s",
+      "recording": "test files/agc_rnrz-l_trc_testfile.ch10",
+      "swapBytes": true,
+      "committed": true,
+      "note": "",
+      "streams": [
+        {
+          "channel": 13,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 8000,
+          "randomized": true,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": "receiver_params/default.toml"
+        }
+      ],
+      "qt": {
+        "files": {
+          "trc-snr-1s.csv": [
+            92308,
+            "b85a3fe76e6ec21f688b8fe4ffe4a96c636e4899338da2a7f3b220799c83a0ea"
+          ]
+        }
+      }
+    },
+    {
+      "name": "trc-snr-trc-100ms",
+      "recording": "test files/agc_rnrz-l_trc_testfile.ch10",
+      "swapBytes": true,
+      "committed": true,
+      "note": "",
+      "streams": [
+        {
+          "channel": 13,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 8000,
+          "randomized": true,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "100ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": "receiver_params/TRC.toml"
+        }
+      ],
+      "qt": {
+        "files": {
+          "trc-snr-trc-100ms.csv": [
+            900109,
+            "57cb615f5d28c4af76796b6b3e7436855b4a9566e3ebed0e1bcab6e04c73eae4"
+          ]
+        }
+      }
+    },
+    {
+      "name": "trc-lock-10ms",
+      "recording": "test files/agc_rnrz-l_trc_testfile.ch10",
+      "swapBytes": true,
+      "committed": true,
+      "note": "",
+      "streams": [
+        {
+          "channel": 13,
+          "mode": "lock",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 8000,
+          "randomized": true,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "10ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        }
+      ],
+      "qt": {
+        "files": {
+          "trc-lock-10ms.csv": [
+            754619,
+            "dd8916b430ffe9aa1457beab377b1ecc25782b75d870bf91590da82089ab1bdc"
+          ]
+        }
+      }
+    },
+    {
+      "name": "rasa-snr-1s",
+      "recording": "test files/agc_nzl_rasa_testfile.ch10",
+      "swapBytes": true,
+      "committed": true,
+      "note": "",
+      "streams": [
+        {
+          "channel": 26,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 800,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 1,
+          "slope": 2,
+          "scale": 10.0,
+          "receivers": 12,
+          "channels": 3,
+          "receiverParams": "receiver_params/RASA.toml"
+        }
+      ],
+      "qt": {
+        "files": {
+          "rasa-snr-1s.csv": [
+            43697,
+            "997029776bd9b5db8602627c87f5cd06766c8ac95b020a387bfd332549a4d7f4"
+          ]
+        }
+      }
+    },
+    {
+      "name": "rasa-snr-10ms",
+      "recording": "test files/agc_nzl_rasa_testfile.ch10",
+      "swapBytes": true,
+      "committed": true,
+      "note": "",
+      "streams": [
+        {
+          "channel": 26,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 800,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "10ms",
+          "polarity": 1,
+          "slope": 2,
+          "scale": 10.0,
+          "receivers": 12,
+          "channels": 3,
+          "receiverParams": "receiver_params/RASA.toml"
+        }
+      ],
+      "qt": {
+        "files": {
+          "rasa-snr-10ms.csv": [
+            4294162,
+            "4643411d0d7661569208f8065da1cb83258a2d8466c2d500bbcf0d5ebd83d948"
+          ]
+        }
+      }
+    },
+    {
+      "name": "safran-sample-1s",
+      "recording": "test files/safran_testfile, sample.ch10",
+      "swapBytes": false,
+      "committed": true,
+      "note": "",
+      "streams": [
+        {
+          "channel": 13,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 14,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        }
+      ],
+      "qt": {
+        "files": {
+          "safran-sample-1s.csv": [
+            9511,
+            "2cc500908527352f99d6142634a34d9bfe31732ccd6e346a942e50447cf0cb31"
+          ]
+        }
+      }
+    },
+    {
+      "name": "safran-sample-100ms",
+      "recording": "test files/safran_testfile, sample.ch10",
+      "swapBytes": false,
+      "committed": true,
+      "note": "",
+      "streams": [
+        {
+          "channel": 13,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "100ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 14,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "100ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        }
+      ],
+      "qt": {
+        "files": {
+          "safran-sample-100ms.csv": [
+            94073,
+            "831a64e1bc87b6c40fb38082aa0081bb15c4bddda6ae6198e8c0a2a6766f933f"
+          ]
+        }
+      }
+    },
+    {
+      "name": "prn-full-1s",
+      "recording": "test files/prn_testfile, full.ch10",
+      "swapBytes": true,
+      "committed": false,
+      "note": "",
+      "streams": [
+        {
+          "channel": 13,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 14,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 15,
+          "mode": "lock",
+          "pattern": "A345CA5C",
+          "mask": "FFFFFFFF",
+          "bits": 2047,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 16,
+          "mode": "lock",
+          "pattern": "A345CA5C",
+          "mask": "FFFFFFFF",
+          "bits": 2047,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        }
+      ],
+      "qt": {
+        "files": {
+          "prn-full-1s.csv": [
+            33734,
+            "9f46bd1283fe5c177a4f7619f081ae7e8dd1070660f8843c675580733f84a981"
+          ]
+        }
+      }
+    },
+    {
+      "name": "prn-full-10ms",
+      "recording": "test files/prn_testfile, full.ch10",
+      "swapBytes": true,
+      "committed": false,
+      "note": "the largest CSV and the densest plot",
+      "streams": [
+        {
+          "channel": 13,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "10ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 14,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "10ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 15,
+          "mode": "lock",
+          "pattern": "A345CA5C",
+          "mask": "FFFFFFFF",
+          "bits": 2047,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "10ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 16,
+          "mode": "lock",
+          "pattern": "A345CA5C",
+          "mask": "FFFFFFFF",
+          "bits": 2047,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "10ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        }
+      ],
+      "qt": {
+        "files": {
+          "prn-full-10ms.csv": [
+            3139716,
+            "7c63c98cb1aa1e99266bd24e3a78b07f4bc5c6e4f0cedbd7e17abe0b6371487a"
+          ]
+        }
+      }
+    },
+    {
+      "name": "safran-full-1s",
+      "recording": "test files/safran_testfile, full.ch10",
+      "swapBytes": false,
+      "committed": false,
+      "note": "",
+      "streams": [
+        {
+          "channel": 13,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 14,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        }
+      ],
+      "qt": {
+        "files": {
+          "safran-full-1s.csv": [
+            194162,
+            "7f4ffdb6f5c606de2519d59a2432d0099729cbe65cf0803f9e7d5c91828b1246"
+          ]
+        }
+      }
+    },
+    {
+      "name": "prn_agc-full-1s",
+      "recording": "test files/prn_agc_testfile, full.ch10",
+      "swapBytes": true,
+      "committed": false,
+      "note": "",
+      "streams": [
+        {
+          "channel": 11,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 12,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 13,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 14,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 26,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 800,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": "receiver_params/default.toml"
+        }
+      ],
+      "qt": {
+        "files": {
+          "prn_agc-full-1s.csv": [
+            3493392,
+            "9d52f94547a1d5e99c1e363bc318c8947ee267632dda304b6cf025b2fcbe190b"
+          ]
+        }
+      }
+    },
+    {
+      "name": "prn_agc-full-100ms",
+      "recording": "test files/prn_agc_testfile, full.ch10",
+      "swapBytes": true,
+      "committed": false,
+      "note": "",
+      "streams": [
+        {
+          "channel": 11,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "100ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 12,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "100ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 13,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "100ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 14,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "100ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 26,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 800,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "100ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": "receiver_params/default.toml"
+        }
+      ],
+      "qt": {
+        "files": {
+          "prn_agc-full-100ms.csv": [
+            32149685,
+            "6b62aefc9c9f9d76412f6ff0f5cd2fb7c6c8297990145539b435e4b5e0429ca7"
+          ]
+        }
+      }
+    },
+    {
+      "name": "stepcal1-rasa-1s",
+      "recording": "STEPCAL 1 (NRZ-L).ch10",
+      "swapBytes": true,
+      "committed": false,
+      "note": "",
+      "streams": [
+        {
+          "channel": 26,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 800,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 1,
+          "slope": 2,
+          "scale": 10.0,
+          "receivers": 12,
+          "channels": 3,
+          "receiverParams": "receiver_params/RASA.toml"
+        }
+      ],
+      "qt": {
+        "files": {
+          "stepcal1-rasa-1s.csv": [
+            43697,
+            "997029776bd9b5db8602627c87f5cd06766c8ac95b020a387bfd332549a4d7f4"
+          ]
+        }
+      }
+    },
+    {
+      "name": "stepcal2-rasa-100ms",
+      "recording": "STEPCAL 2 (NRZ-L).ch10",
+      "swapBytes": true,
+      "committed": false,
+      "note": "",
+      "streams": [
+        {
+          "channel": 26,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 800,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "100ms",
+          "polarity": 1,
+          "slope": 2,
+          "scale": 10.0,
+          "receivers": 12,
+          "channels": 3,
+          "receiverParams": "receiver_params/RASA.toml"
+        }
+      ],
+      "qt": {
+        "files": {
+          "stepcal2-rasa-100ms.csv": [
+            382215,
+            "af65a6e5ebedca9374989326290d66f782fa094b8fe36b04dbf7e795e06ae322"
+          ]
+        }
+      }
+    },
+    {
+      "name": "nrz-l-rasa-100ms",
+      "recording": "nrz-l_testfile.ch10",
+      "swapBytes": true,
+      "committed": false,
+      "note": "",
+      "streams": [
+        {
+          "channel": 26,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 800,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "100ms",
+          "polarity": 1,
+          "slope": 2,
+          "scale": 10.0,
+          "receivers": 12,
+          "channels": 3,
+          "receiverParams": "receiver_params/RASA.toml"
+        }
+      ],
+      "qt": {
+        "files": {
+          "nrz-l-rasa-100ms.csv": [
+            430128,
+            "5fb7f0e3e6c04e1f77a14e096d85cda50478fb1ead393c2cd5a962e94c45dd2d"
+          ]
+        }
+      }
+    },
+    {
+      "name": "nrz-l_cal-rasa-1s",
+      "recording": "nrz-l_cal_testfile.ch10",
+      "swapBytes": true,
+      "committed": false,
+      "note": "",
+      "streams": [
+        {
+          "channel": 26,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 800,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 1,
+          "slope": 2,
+          "scale": 10.0,
+          "receivers": 12,
+          "channels": 3,
+          "receiverParams": "receiver_params/RASA.toml"
+        }
+      ],
+      "qt": {
+        "files": {
+          "nrz-l_cal-rasa-1s.csv": [
+            43697,
+            "997029776bd9b5db8602627c87f5cd06766c8ac95b020a387bfd332549a4d7f4"
+          ]
+        }
+      }
+    },
+    {
+      "name": "nrz-l-rasa-calibrated",
+      "recording": "nrz-l_testfile.ch10",
+      "swapBytes": true,
+      "committed": false,
+      "note": "calibrated from its own calibration recording with the RASA step file",
+      "streams": [
+        {
+          "channel": 26,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 800,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 1,
+          "slope": 2,
+          "scale": 10.0,
+          "receivers": 12,
+          "channels": 3,
+          "receiverParams": "receiver_params/RASA.toml",
+          "calibration": {
+            "recording": "nrz-l_cal_testfile.ch10",
+            "steps": "rcvr_cals/RASA.toml",
+            "clipStart": 0.0,
+            "clipEnd": 0.0
+          }
+        }
+      ],
+      "qt": {
+        "files": {
+          "nrz-l-rasa-calibrated.csv": [
+            43597,
+            "aa9dee24006dd96de7aef74dcde824999e4649ab18c06d30e8e6619116d23a15"
+          ]
+        }
+      }
+    },
+    {
+      "name": "rasa-calibrated-from-stepcal1",
+      "recording": "test files/agc_nzl_rasa_testfile.ch10",
+      "swapBytes": true,
+      "committed": false,
+      "note": "",
+      "streams": [
+        {
+          "channel": 26,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 800,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 1,
+          "slope": 2,
+          "scale": 10.0,
+          "receivers": 12,
+          "channels": 3,
+          "receiverParams": "receiver_params/RASA.toml",
+          "calibration": {
+            "recording": "STEPCAL 1 (NRZ-L).ch10",
+            "steps": "rcvr_cals/RASA.toml",
+            "clipStart": 0.0,
+            "clipEnd": 0.0
+          }
+        }
+      ],
+      "qt": {
+        "files": {
+          "rasa-calibrated-from-stepcal1.csv": [
+            43597,
+            "aa9dee24006dd96de7aef74dcde824999e4649ab18c06d30e8e6619116d23a15"
+          ]
+        }
+      }
+    },
+    {
+      "name": "stepcals-both-100ms",
+      "recording": "STEP CALS (RNRZ-L, NRZ-L).ch10",
+      "swapBytes": true,
+      "committed": false,
+      "note": "27 is randomized and 28 is not, whatever their TMATS names say",
+      "streams": [
+        {
+          "channel": 27,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 800,
+          "randomized": true,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "100ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": "receiver_params/default.toml"
+        },
+        {
+          "channel": 28,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 800,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "100ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": "receiver_params/default.toml"
+        }
+      ],
+      "qt": {
+        "files": {
+          "stepcals-both-100ms.csv": [
+            3406025,
+            "093abde59f2b608d8ca2a6ca397619ddc812d390c9af68b66b20cae90873af8f"
+          ]
+        }
+      }
+    },
+    {
+      "name": "stepcals-both-calibrated",
+      "recording": "STEP CALS (RNRZ-L, NRZ-L).ch10",
+      "swapBytes": true,
+      "committed": false,
+      "note": "",
+      "streams": [
+        {
+          "channel": 27,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 800,
+          "randomized": true,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": "receiver_params/default.toml",
+          "calibration": {
+            "recording": "STEP CALS (RNRZ-L, NRZ-L).ch10",
+            "steps": "rcvr_cals/default.toml",
+            "clipStart": 0.0,
+            "clipEnd": 0.0
+          }
+        },
+        {
+          "channel": 28,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 800,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": "receiver_params/default.toml",
+          "calibration": {
+            "recording": "STEP CALS (RNRZ-L, NRZ-L).ch10",
+            "steps": "rcvr_cals/default.toml",
+            "clipStart": 0.0,
+            "clipEnd": 0.0
+          }
+        }
+      ],
+      "qt": {
+        "files": {
+          "stepcals-both-calibrated.csv": [
+            345675,
+            "91e09c0e3c81ec2a065bc1ff0b402740b42ca7b47a8e0b18c6df3f042b39dd12"
+          ]
+        }
+      }
+    },
+    {
+      "name": "rnrz-l-trc-snr-1s",
+      "recording": "rnrz-l_testfile.ch10",
+      "swapBytes": true,
+      "committed": false,
+      "note": "",
+      "streams": [
+        {
+          "channel": 13,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 8000,
+          "randomized": true,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": "receiver_params/TRC.toml"
+        }
+      ],
+      "qt": {
+        "files": {
+          "rnrz-l-trc-snr-1s.csv": [
+            92308,
+            "b85a3fe76e6ec21f688b8fe4ffe4a96c636e4899338da2a7f3b220799c83a0ea"
+          ]
+        }
+      }
+    },
+    {
+      "name": "rnrz-l-trc-calibrated",
+      "recording": "rnrz-l_testfile.ch10",
+      "swapBytes": true,
+      "committed": false,
+      "note": "",
+      "streams": [
+        {
+          "channel": 13,
+          "mode": "snr",
+          "pattern": "FE6B2840",
+          "mask": "FFFFFFFF",
+          "bits": 8000,
+          "randomized": true,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "1s",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": "receiver_params/TRC.toml",
+          "calibration": {
+            "recording": "rnrz-l_testfile.ch10",
+            "steps": "rcvr_cals/TRC.toml",
+            "clipStart": 0.0,
+            "clipEnd": 0.0
+          }
+        }
+      ],
+      "qt": {
+        "files": {
+          "rnrz-l-trc-calibrated.csv": [
+            92308,
+            "1e9804d3863556de7ac989d014496b1c81cb73bffc30c2ec1570ea94a94ab127"
+          ]
+        }
+      }
+    },
+    {
+      "name": "prn-test-file-0002-10ms",
+      "recording": "PRN_TEST_FILE0002.ch10",
+      "swapBytes": true,
+      "committed": false,
+      "note": "",
+      "streams": [
+        {
+          "channel": 13,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "10ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 14,
+          "mode": "lock",
+          "pattern": "334AABBF",
+          "mask": "FFFFFFFF",
+          "bits": 32767,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "10ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 15,
+          "mode": "lock",
+          "pattern": "A345CA5C",
+          "mask": "FFFFFFFF",
+          "bits": 2047,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "10ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        },
+        {
+          "channel": 16,
+          "mode": "lock",
+          "pattern": "A345CA5C",
+          "mask": "FFFFFFFF",
+          "bits": 2047,
+          "randomized": false,
+          "inverted": false,
+          "dataRateMbps": 0.0,
+          "period": "10ms",
+          "polarity": 0,
+          "slope": 3,
+          "scale": 20.0,
+          "receivers": 16,
+          "channels": 3,
+          "receiverParams": ""
+        }
+      ],
+      "qt": {
+        "files": {
+          "prn-test-file-0002-10ms.csv": [
+            3139716,
+            "7c63c98cb1aa1e99266bd24e3a78b07f4bc5c6e4f0cedbd7e17abe0b6371487a"
+          ]
+        }
+      }
+    },
+    {
+      "name": "batch-prn-sample-template",
+      "template": "../Templates/prn-sample.json",
+      "recordings": [
+        "test files/prn_testfile, sample.ch10",
+        "PRN_TEST_FILE0001.ch10",
+        "PRN_TEST_FILE0002.ch10",
+        "PRN_TEST_FILE0003.ch10",
+        "test files/prn_testfile, full.ch10"
+      ],
+      "committed": false,
+      "note": "the Qt application's own template, its names and colours reused",
+      "qt": {
+        "files": {
+          "PRN_TEST_FILE0001.csv": [
+            15394,
+            "2f83eba7b6534dd67f83c1e943962a0ee310bcbbe7f6f86e9aaafc0f27ce9b32"
+          ],
+          "PRN_TEST_FILE0002.csv": [
+            15394,
+            "5d09a176d0fc1067907c812761ea60b5d52d2e0e431a459f091cbb6d14c19803"
+          ],
+          "PRN_TEST_FILE0003.csv": [
+            15394,
+            "51c3888f96905f25d7c0b4d44b62b7558035e4e95af7f40261725db3ae781e23"
+          ],
+          "prn_testfile, full.csv": [
+            15394,
+            "5fcbc6aa3ec685eda58880ae76066e56011e25bc52254d9c42f947aa862dde49"
+          ],
+          "prn_testfile, sample.csv": [
+            9445,
+            "7a5c9ae7eb20f32b5f357921d2a03bc3dd9ea4ab446408bcb22d7d8c7e0c97bd"
+          ]
+        }
+      }
+    },
+    {
+      "name": "batch-prn-4ch-100ms",
+      "template": "prn-4ch-100ms.json",
+      "recordings": [
+        "test files/prn_testfile, sample.ch10",
+        "PRN_TEST_FILE0001.ch10",
+        "PRN_TEST_FILE0003.ch10"
+      ],
+      "committed": false,
+      "note": "",
+      "qt": {
+        "files": {
+          "PRN_TEST_FILE0001.csv": [
+            1370215,
+            "0c3bf9f95e6d07b5fdc63bd445480a4ddefd7dcb6e10ff7984114fc297c72152"
+          ],
+          "PRN_TEST_FILE0003.csv": [
+            1370215,
+            "b03abf4c80c5d9baf1b7c6d40a963fe81acd902be0f521ef4adc92692708d826"
+          ],
+          "prn_testfile, sample.csv": [
+            93027,
+            "176fa2ed6bc13c1fc41382df08eb7949640b86ae29c08b4a29e4ca9b5f4e7ecf"
+          ]
+        }
+      }
+    }
+  ]
+}

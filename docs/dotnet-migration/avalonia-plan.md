@@ -378,13 +378,24 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
   curves, US5.2's Reset button). Of 278 Qt cases, 254 are ported, 23 dropped with a reason, and 1 not held (a guard
   no recording can reach). The review closed 11 Qt cases and 3 untested criteria with tests, and found one difference:
   the new Open also offered "All files", and now offers Chapter 10 recordings only, as the Qt Open does.
-- [ ] **5.2 Side-by-side soak:** the same recordings processed in both apps, CSV exports compared
+- [x] **5.2 Side-by-side soak** (PR #236): the same recordings processed in both apps, CSV exports compared
   byte for byte, plots compared by eye, across every fixture and the full PRN recording.
+  **Done:** the record is [`soak.md`](soak.md). 34 runs over all 17 recordings on the machine (the committed ones, the
+  full PRN, Safran and PRN-AGC recordings, and nine local ones; 11.6 GB), sweeping every sample rate and averaging
+  period, both modes, Derandomize, Legacy Chapter 10, a sync mask, a typed data rate, three receiver parameter files,
+  six calibrations and two template batches: **all 40 CSV files identical** in the two applications, and the plots the
+  same in everything the data decides. One difference found, a Qt defect: its batch export draws the legend before
+  laying it out, so rows overlap (the Avalonia batch lays out first, since 4.7). The runs stay as an explicit test
+  (`SoakTests`, `scripts\run_soak.ps1`) holding the Avalonia application to the Qt application's bytes, recorded in
+  `dotnet/TmDq.App.Tests/Soak/soak.json`, after Qt is gone.
 - [ ] **5.3 Release v3.0.0** (D4) with the `cut-release` skill updated for the new build: installer,
   portable ZIP, signing of every assembly, clean-machine Sandbox test, release notes that say what
   moved and how preferences carried over. *(From 5.1: the Sandbox installs elevated and silently, so check two
   US8.0 criteria by hand on the release build: a user without admin rights installs to a directory of their
-  choosing, and the installer shows its progress.)*
+  choosing, and the installer shows its progress.)* *(From 5.2, decided 2026-11-02: the app keeps .NET's CET shadow
+  stack, `CETCompat`, on by default; nothing to change. It costs 5 % on the large recordings, the whole of the Avalonia application's gap to Qt
+  (`soak.md`), and guards against return-oriented attacks on a process whose C library parses the recordings it is
+  given; the Qt application never had it.)*
 
 ## Step 6: retire Qt
 

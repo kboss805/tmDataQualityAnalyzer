@@ -1,0 +1,109 @@
+{
+    "appVersion": "2.14.2",
+    "entries": [
+        {
+            "appearance": [],
+            "config": {
+                "label": "CH-01 PRN 15 5M",
+                "mode": "FrameSyncLock",
+                "numReceivers": 16,
+                "pcmChannelId": 13,
+                "polarityIndex": 0,
+                "process": true,
+                "receiverChannels": 3,
+                "receiverParamsToml": "",
+                "samplePeriodIndex": 1,
+                "scaleDdBPerV": 20,
+                "slopeIndex": 3,
+                "sync": {
+                    "bitsInMinorFrame": 32767,
+                    "dataRateMbps": 0,
+                    "inverted": false,
+                    "mask": "FFFFFFFF",
+                    "pattern": "334AABBF",
+                    "randomized": false
+                },
+                "tmatsDataRateMbps": 5
+            }
+        },
+        {
+            "appearance": [],
+            "config": {
+                "label": "CH-02 PRN 15 20M",
+                "mode": "FrameSyncLock",
+                "numReceivers": 16,
+                "pcmChannelId": 14,
+                "polarityIndex": 0,
+                "process": true,
+                "receiverChannels": 3,
+                "receiverParamsToml": "",
+                "samplePeriodIndex": 1,
+                "scaleDdBPerV": 20,
+                "slopeIndex": 3,
+                "sync": {
+                    "bitsInMinorFrame": 32767,
+                    "dataRateMbps": 0,
+                    "inverted": false,
+                    "mask": "FFFFFFFF",
+                    "pattern": "334AABBF",
+                    "randomized": false
+                },
+                "tmatsDataRateMbps": 20
+            }
+        },
+        {
+            "appearance": [],
+            "config": {
+                "label": "CH-03 PRN 11 1M",
+                "mode": "FrameSyncLock",
+                "numReceivers": 16,
+                "pcmChannelId": 15,
+                "polarityIndex": 0,
+                "process": true,
+                "receiverChannels": 3,
+                "receiverParamsToml": "",
+                "samplePeriodIndex": 1,
+                "scaleDdBPerV": 20,
+                "slopeIndex": 3,
+                "sync": {
+                    "bitsInMinorFrame": 2047,
+                    "dataRateMbps": 0,
+                    "inverted": false,
+                    "mask": "FFFFFFFF",
+                    "pattern": "A345CA5C",
+                    "randomized": false
+                },
+                "tmatsDataRateMbps": 1
+            }
+        },
+        {
+            "appearance": [],
+            "config": {
+                "label": "CH-04 PRN 11 5M",
+                "mode": "ReceiverChannelInfo",
+                "numReceivers": 16,
+                "pcmChannelId": 16,
+                "polarityIndex": 0,
+                "process": true,
+                "receiverChannels": 3,
+                "receiverParamsToml": "",
+                "samplePeriodIndex": 1,
+                "scaleDdBPerV": 20,
+                "slopeIndex": 3,
+                "sync": {
+                    "bitsInMinorFrame": 2047,
+                    "dataRateMbps": 0,
+                    "inverted": false,
+                    "mask": "FFFFFFFF",
+                    "pattern": "A345CA5C",
+                    "randomized": false
+                },
+                "tmatsDataRateMbps": 5
+            }
+        }
+    ],
+    "name": "prn, 4 channels at 100 ms",
+    "schemaVersion": 1,
+    "swapBytes": true,
+    "timeChannelIndex": 0
+}
