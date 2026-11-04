@@ -1,41 +1,82 @@
-tmDataQualityAnalyzer v2.14.2 - What's New
+tmDataQualityAnalyzer v3.0.0 - What's New
 =================================
 
-  The application itself is unchanged from v2.14.1. This release corrects three
-  of the files that ship alongside it and one piece of the documentation.
-  Nothing about how streams are processed, calibrated, plotted or exported has
-  changed.
+  The application has been rebuilt on a new user interface framework. It does
+  the same jobs, in the same windows, and gives the same answers: every
+  recording we hold was processed by both v2.14.2 and v3.0.0, in 34 runs
+  covering every sample rate and averaging period, both stream modes,
+  calibrations and batch runs, and every exported CSV file came out
+  identical, byte for byte.
 
-  Changed:
+  What happens when you install it:
 
-  - The three supplied frame sync pattern files now state the Derandomize
-    setting instead of leaving it unmentioned. Loading PRN-11, PRN-15 or the
-    receiver default now sets that box - previously it left whatever you had
-    already ticked, so the result depended on what you had been doing before.
+  - It replaces v2.x rather than installing beside it. Run the installer and
+    it upgrades your existing installation in place: same folder, same Start
+    menu entry, and the .ch10 file association moves to the new version.
 
-    All three state Derandomize OFF, which is what these supplied patterns
-    target. If your stream is RNRZ-L you still tick the box after loading, as
-    before. A pattern file you saved yourself is unaffected and keeps the old
-    leave-it-alone behaviour.
+  - Your settings files are kept. Frame sync patterns, receiver parameter
+    files and calibration step files you saved or edited in the settings
+    folder are never overwritten, exactly as before.
+
+  - Your preferences come with you. The first time v3.0.0 starts, it reads
+    the preferences v2.x kept - the theme, whether the log sidebar and the
+    legend are shown, your recent files, and the folders you last opened
+    recordings and calibration files from - and carries on from there.
+
+  - If you need the previous version, v2.14.2 stays available for download
+    from the project's releases page.
+
+  New and improved:
+
+  - Configure Streams says what is wrong as it happens. OK and Process wait
+    until every stream you checked is ready, and a line under the list names
+    the stream that is not. A stream whose Mode you change has to be set up
+    again for its new mode, rather than keeping settings meant for the other.
+
+  - Apply Cal is unavailable, with a tooltip saying why, when a calibration
+    cannot be extracted (a setting has a problem, or the recording has no time
+    channel), instead of warning you after the click.
+
+  - The window's maximize button offers Windows 11's snap layouts.
+
+  - Export picks the image format from the file name you give it (.png, .svg,
+    or a PDF otherwise), and Browse adds the right extension for you.
+
+  - In the legend, a Receiver SNR channel shown by its short name gives its
+    full name as a tooltip.
+
+  - The user manual has been rewritten for this version, with every figure
+    taken from the application itself. The plain-text UserGuide.txt is gone:
+    the manual replaces it, in the application under Help > User Manual and,
+    if you choose, as the full illustrated manual installed beside it.
 
   Fixed:
 
-  - The user guide said the Derandomize setting was "deliberately not saved"
-    when you save a frame sync pattern file. That stopped being true in v2.13.0,
-    when it started being saved alongside Invert Data. The guide now describes
-    what a saved pattern file actually carries.
+  - Extract Calibration now uses the time channel you chose in Configure
+    Streams and the recording's own byte order (Legacy Chapter 10). It used
+    to take the recording's first time channel whatever you had chosen.
 
-  - The user guide now says what installing a new version does to your settings
-    folder: nothing. Your own pattern files, receiver parameters and calibration
-    step files are never overwritten by an upgrade and are kept when you
-    uninstall. A new setting added to a supplied default file reaches a fresh
-    installation rather than an existing one, and your files stay readable
-    either way.
+  - A batch run's exported images no longer draw the legend's rows on top of
+    one another.
 
-  Under the hood:
+  - A recording stored under a folder whose name has accented or other
+    non-English letters can now be processed. It could be opened and listed,
+    but processing it failed.
 
-  - The installer is now tested by installing it on a clean machine - a
-    throwaway Windows Sandbox that has never held this application - which
-    checks that it runs somewhere with no Qt installed, that the first run
-    leaves your settings alone, and that uninstalling removes the program while
-    keeping the settings folder.
+  - A Receiver SNR stream given a sync mask that ignores some of the low 16
+    bits no longer loses bits from its receiver values (and from the
+    calibrations extracted from it).
+
+  - A calibration sweep that saturates at the top, with a turn-on spike before
+    it, is no longer numbered one step off.
+
+  - A calibration report whose unnamed channels all calibrated lists them as
+    calibrated, not under "Fell back to linear calibration".
+
+  Good to know:
+
+  - Processing very large recordings takes about 5% longer than v2.14.2. That
+    is the cost of a Windows security protection (the hardware shadow stack)
+    that this version runs with and v2.x did not.
+
+  - The window now opens at 1280 x 800.

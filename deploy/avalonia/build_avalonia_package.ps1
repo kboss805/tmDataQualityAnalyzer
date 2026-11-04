@@ -1,10 +1,11 @@
 # =============================================================================
-# build_avalonia_package.ps1 - the Avalonia application's packaging prototype
-# (docs/dotnet-migration/avalonia-plan.md, step 3.3).
+# build_avalonia_package.ps1 - the release packages from v3.0.0 on: the Avalonia
+# application (docs/dotnet-migration/avalonia-plan.md, step 3.3 built it as a preview
+# beside the Qt application; step 5.3 made it the release).
 #
 # Produces, beside this script:
-#   tmDataQualityAnalyzer-preview-vX.Y.Z_portable.zip
-#   tmDataQualityAnalyzer-preview-vX.Y.Z_setup.exe
+#   tmDataQualityAnalyzer-vX.Y.Z_portable.zip
+#   tmDataQualityAnalyzer-vX.Y.Z_setup.exe   (replaces a v2.x install: tmDataQualityAnalyzer.iss)
 #
 # THE LAYOUT IS A SINGLE-FILE PUBLISH, and that is what keeps signing honest. A
 # self-contained folder publish ships 27 unsigned PE files: 22 Avalonia assemblies,
@@ -54,12 +55,18 @@ $Stage    = Join-Path $Here 'staging'
 $Publish  = Join-Path $Stage 'publish'
 $AppDir   = Join-Path $Stage 'app'
 $Exe      = Join-Path $AppDir 'tmDataQualityAnalyzer.exe'
-$ZipPath  = Join-Path $Here "tmDataQualityAnalyzer-preview-v${version}_portable.zip"
-$SetupExe = Join-Path $Here "tmDataQualityAnalyzer-preview-v${version}_setup.exe"
+$ZipPath  = Join-Path $Here "tmDataQualityAnalyzer-v${version}_portable.zip"
+$SetupExe = Join-Path $Here "tmDataQualityAnalyzer-v${version}_setup.exe"
 
 Write-Host '============================================'
-Write-Host " tmDataQualityAnalyzer Preview v$version (Avalonia)"
+Write-Host " tmDataQualityAnalyzer v$version"
 Write-Host '============================================'
+
+# --- Every user-facing version literal agrees with AppVersion, and the changelog has this version's section. ---
+# Before anything is built: a mismatched manual or release-notes header is not something to discover afterwards.
+Write-Host 'Checking release consistency...'
+& powershell -ExecutionPolicy Bypass -File (Join-Path $Root 'scripts\check_release_consistency.ps1') -ReleaseMode
+if ($LASTEXITCODE -ne 0) { throw 'check_release_consistency.ps1 failed: fix the inconsistencies above before packaging' }
 
 # --- 0. Signing pre-flight, before anything is built. ---
 $Signtool = $null
@@ -189,7 +196,7 @@ if ($p.HasExited -and $p.ExitCode -eq 0 -and $line.StartsWith($Expected)) {
 
 # --- 8. The packages. ---
 Write-Host '[8/8] Packaging...'
-$portable = Join-Path $Stage "tmDataQualityAnalyzer-preview-v${version}_portable"
+$portable = Join-Path $Stage "tmDataQualityAnalyzer-v${version}_portable"
 Copy-Item $AppDir $portable -Recurse
 # The full manual: always in the portable copy (there is no installer to ask), an optional task in the installer, which
 # takes it from beside the staged application rather than from within it (plan step 4.9).
@@ -200,6 +207,7 @@ Copy-Item $manual (Join-Path $Stage 'manual\UserManual.html') -Force
 Copy-Item $manual (Join-Path $portable 'UserManual.html') -Force
 # A portable copy keeps its preferences in a folder beside itself, as the Qt portable ZIP does (plan step 4.8).
 New-Item -ItemType File -Path (Join-Path $portable 'portable') -Force | Out-Null
+Copy-Item (Join-Path $Root 'deploy\README_portable.txt') (Join-Path $portable 'README.txt')
 if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
 foreach ($attempt in 1..5) {
     # A freshly written exe is briefly held by the virus scanner.
@@ -218,7 +226,7 @@ if (-not $iscc) {
         # Bare 'signtool': env.ps1 put the SDK on PATH, and a quoted full path gets mis-split on the way to iscc.
         $isccArgs += '/DSIGN', "/Ssigntool=signtool sign /sha1 $SignCertSha1 /tr $SignTimestamp /td sha256 /fd sha256 `$f"
     }
-    $isccArgs += (Join-Path $Here 'tmDataQualityAnalyzer-preview.iss')
+    $isccArgs += (Join-Path $Here 'tmDataQualityAnalyzer.iss')
     & $iscc @isccArgs
     if ($LASTEXITCODE -ne 0) { $Failures.Add('Inno Setup compile or installer signing failed') }
 }

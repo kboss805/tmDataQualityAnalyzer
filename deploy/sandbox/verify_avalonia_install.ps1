@@ -1,18 +1,21 @@
 # =============================================================================
-# verify_preview_install.ps1 - clean-machine test of the Avalonia preview packages
-# (plan step 3.3) under Smart App Control.
+# verify_avalonia_install.ps1 - clean-machine test of the Avalonia application's packages
+# (plan step 3.3 built it for the preview; step 5.3 made it the release's) under Smart App
+# Control, including the UPGRADE from the Qt application.
 #
 # Runs INSIDE Windows Sandbox, launched by
-#   run_sandbox_test.ps1 -Verifier verify_preview_install.ps1 -Setup <preview setup.exe>
-#                        -Payload "<zip>;deploy\avalonia\staging\unsigned;tests\data\test files\prn_testfile, sample.ch10"
+#   run_sandbox_test.ps1 -Verifier verify_avalonia_install.ps1 -Setup <setup.exe>
+#       -Payload "<zip>;deploy\avalonia\staging\unsigned;tests\data\test files\prn_testfile, sample.ch10;deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe"
 # (the list is separated by semicolons: the committed recordings' names contain commas)
 # Do not run it on a developer machine: it installs to Program Files and uninstalls again.
 #
 # What it proves: on a machine that has never seen the application, with Smart App
-# Control ON, the signed installer installs, the installed app and the portable ZIP
-# both open their window, every PE file carries a valid signature, the native core
-# DLL loads, Code Integrity blocked nothing of ours - and an UNSIGNED build of the
-# same exe IS blocked, which is what shows the enforcement was real and not absent.
+# Control ON, the last Qt release installs as a user has it, and the signed installer
+# upgrades it in place - the Qt files gone, the user's settings file and preferences
+# carried over, the .ch10 association moved to the new exe. The installed app and the
+# portable ZIP both open their window, every PE file carries a valid signature, the
+# native core DLL loads, Code Integrity blocked nothing of ours - and an UNSIGNED build
+# of the same exe IS blocked, which is what shows the enforcement was real and not absent.
 #
 # ASCII only, written for Windows PowerShell 5.1 (what Sandbox has).
 # =============================================================================
@@ -68,7 +71,7 @@ function Signatures($dir) {
     }
 }
 
-Say 'tmDataQualityAnalyzer Preview (Avalonia) clean-machine test'
+Say 'tmDataQualityAnalyzer (Avalonia) clean-machine test, with the upgrade from v2.x'
 Say ('time    : ' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))
 Say ('windows : ' + (Get-CimInstance Win32_OperatingSystem).Caption)
 
@@ -99,24 +102,60 @@ try {
 }
 Check 'Smart App Control blocks unsigned code here' $blocked $how
 
-# --- 2. Silent per-machine install. ---
+$app = 'C:\Program Files\tmDataQualityAnalyzer'
+$exe = Join-Path $app 'tmDataQualityAnalyzer.exe'
+$userFile = Join-Path $app 'settings\receiver_params\default.toml'
+$marker = '# edited by the clean-machine test'
+$prefsDir = Join-Path $env:APPDATA 'tmDataQualityAnalyzer'
+function Install($path, $label) {
+    $ip = Start-Process $path -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/ALLUSERS' -PassThru
+    $null = $ip.Handle
+    $ip.WaitForExit(300000) | Out-Null
+    $ip.WaitForExit()
+    Check "$label exit code 0" ($ip.ExitCode -eq 0) ('exit=' + $ip.ExitCode)
+}
+
+# --- 2. The Qt application, installed as a user has it: v2.14.2 with its default tasks (the .ch10 association and the
+# full manual), a settings file the user edited, and the preferences it keeps in its INI file. ---
 Say ''
-Say '[2] Silent install'
-$setup = (Get-ChildItem (Join-Path $IN '*_setup.exe') | Select-Object -First 1).FullName
+Say '[2] Install v2.x (the Qt application) as a user has it'
+$old = (Get-ChildItem (Join-Path $IN 'tmDataQualityAnalyzer-v2.*_setup.exe') | Select-Object -First 1).FullName
+if (-not $old) { Check 'the v2.x setup is in the payload' $false 'pass deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe' }
+else {
+    Say ('  setup: ' + (Split-Path $old -Leaf))
+    Install $old 'v2.x installer'
+    Check 'v2.x installed its exe in bin\' (Test-Path (Join-Path $app 'bin\tmDataQualityAnalyzer.exe')) ''
+    Check 'v2.x installed its text guide' (Test-Path (Join-Path $app 'UserGuide.txt')) ''
+    Check 'v2.x installed its full manual' (Test-Path (Join-Path $app 'UserManual.html')) ''
+    if (Test-Path $userFile) { Add-Content -Path $userFile -Value $marker }
+    Check 'the user''s edit is in a v2.x settings file' ((Test-Path $userFile) -and ((Get-Content $userFile -Raw) -match [regex]::Escape($marker))) ''
+    # What the Qt application keeps, as its QSettings writes it (an INI file, main.cpp sets IniFormat).
+    New-Item -ItemType Directory -Force -Path $prefsDir | Out-Null
+    "[General]`r`nTheme=light`r`nLegendVisible=false`r`n" | Out-File -FilePath (Join-Path $prefsDir 'tmDataQualityAnalyzer.ini') -Encoding ASCII
+}
+
+# --- 3. The upgrade: v3.x over v2.x, silent and per-machine. ---
+Say ''
+Say '[3] Upgrade to this version'
+$setup = (Get-ChildItem (Join-Path $IN 'tmDataQualityAnalyzer-v*_setup.exe') | Where-Object { $_.Name -notlike 'tmDataQualityAnalyzer-v2.*' } | Select-Object -First 1).FullName
 Say ('  setup: ' + (Split-Path $setup -Leaf))
 Check 'setup signed' ((Get-AuthenticodeSignature $setup).Status -eq 'Valid') (Get-AuthenticodeSignature $setup).Status
-$p = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/ALLUSERS' -PassThru
-$null = $p.Handle
-$p.WaitForExit(300000) | Out-Null
-$p.WaitForExit()
-Check 'installer exit code 0' ($p.ExitCode -eq 0) ('exit=' + $p.ExitCode)
-$app = 'C:\Program Files\tmDataQualityAnalyzer Preview'
-$exe = Join-Path $app 'tmDataQualityAnalyzer.exe'
+Install $setup 'installer'
 foreach ($f in 'tmDataQualityAnalyzer.exe', 'tmdq_core.dll', 'libSkiaSharp.dll', 'libHarfBuzzSharp.dll', 'av_libglesv2.dll', 'LICENSE.txt', 'THIRD-PARTY-NOTICES.txt') {
     Check "installed $f" (Test-Path (Join-Path $app $f)) ''
 }
-Check 'did not touch the Qt application''s folder' (-not (Test-Path 'C:\Program Files\tmDataQualityAnalyzer')) ''
-Check 'no .ch10 association (the shipped app keeps it)' (-not (Test-Path 'HKLM:\SOFTWARE\Classes\.ch10')) ''
+Check 'the Qt application''s bin\ folder is gone' (-not (Test-Path (Join-Path $app 'bin'))) ''
+Check 'the Qt application''s text guide is gone' (-not (Test-Path (Join-Path $app 'UserGuide.txt'))) ''
+$manualFile = Join-Path $app 'UserManual.html'
+Check 'the full manual (a task v2.x had chosen) is this version''s' ((Test-Path $manualFile) -and ((Get-Content $manualFile -Raw) -match 'Help .{1,3} User Manual') -and ((Get-Content $manualFile -Raw) -notmatch 'Version 2\.')) ''
+Check 'the user''s edited settings file survived the upgrade' ((Test-Path $userFile) -and ((Get-Content $userFile -Raw) -match [regex]::Escape($marker))) ''
+$command = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\tmDataQualityAnalyzer.ch10\shell\open\command' -ErrorAction SilentlyContinue).'(default)'
+Check '.ch10 opens the new exe' ($command -eq ('"' + $exe + '" "%1"')) ([string]$command)
+$ext = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.ch10' -ErrorAction SilentlyContinue).'(default)'
+Check '.ch10 still names the ProgID' ($ext -eq 'tmDataQualityAnalyzer.ch10') ([string]$ext)
+$entries = @(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
+             ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'tmDataQualityAnalyzer*' })
+Check 'one entry in Installed apps, not two' ($entries.Count -eq 1) (($entries | ForEach-Object { $_.DisplayName + ' ' + $_.DisplayVersion }) -join '; ')
 # Compared as version numbers: the setup's ProductVersion string carries padding (seen: '2.14.2' followed by blanks),
 # which a text comparison with the exe's '2.14.2.0' calls a mismatch.
 $want = ((Get-Item $setup).VersionInfo.ProductVersion -replace '[^0-9.]', '').Trim('.')
@@ -129,15 +168,12 @@ if (Test-Path $exe) {
 foreach ($f in 'MSVCP140.dll', 'VCRUNTIME140.dll', 'VCRUNTIME140_1.dll') {
     Check "installed $f (the native core's C++ runtime)" (Test-Path (Join-Path $app $f)) ''
 }
-# The settings files (US8.0): installed, and never overwritten by an upgrade or a reinstall. The user's edit is stood in
-# for by a line appended to one; a second silent install must leave it there.
-$userFile = Join-Path $app 'settings\receiver_params\default.toml'
+# The settings files (US8.0): installed, and never overwritten by an upgrade or a reinstall. The user's edit is the line
+# appended under v2.x; a second silent install must leave it there too.
 foreach ($f in 'framesync_patterns\framesync_rcvr_default.toml', 'framesync_patterns\framesync_PRN15.toml', 'receiver_params\default.toml', 'rcvr_cals\default.toml') {
     Check "installed settings\$f" (Test-Path (Join-Path $app "settings\$f")) ''
 }
-$marker = '# edited by the clean-machine test'
 if (Test-Path $userFile) {
-    Add-Content -Path $userFile -Value $marker
     $again = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/ALLUSERS' -PassThru
     $null = $again.Handle
     $again.WaitForExit(300000) | Out-Null
@@ -148,9 +184,9 @@ $sigs = @(Signatures $app)
 foreach ($s in $sigs) { Say ('    {0,-10} {1,-28} {2}' -f $s.Status, $s.Signer, $s.Name) }
 Check 'every PE file validly signed' ((@($sigs | Where-Object { $_.Status -ne 'Valid' })).Count -eq 0) ("$($sigs.Count) files")
 
-# --- 3. The installed app runs under Smart App Control. ---
+# --- 4. The installed app runs under Smart App Control, and takes the Qt application's preferences on its first run. ---
 Say ''
-Say '[3] Launch the installed app'
+Say '[4] Launch the installed app'
 $ap = Start-Process $exe -PassThru
 $null = $ap.Handle
 $title = Wait-Window $ap 30
@@ -162,11 +198,14 @@ if ($live) {
     Stop-Process -Id $ap.Id -Force
     Start-Sleep -Seconds 2
 }
+$prefs = Join-Path $prefsDir 'preferences.json'
+$json = if (Test-Path $prefs) { Get-Content $prefs -Raw } else { '' }
+Check 'the first run imported the Qt application''s preferences' (($json -match '"[Tt]heme"\s*:\s*"light"') -and ($json -match '"[Ll]egendVisible"\s*:\s*false')) $(if ($json) { ($json -replace '\s+', ' ') } else { 'no preferences.json' })
 Process-Recording $exe 'the installed app'
 
-# --- 4. The native core DLL loads (the app does not call it until plan step 3.4). ---
+# --- 5. The native core DLL loads and answers, on its own. ---
 Say ''
-Say '[4] Load tmdq_core.dll'
+Say '[5] Load tmdq_core.dll'
 # LOAD_WITH_ALTERED_SEARCH_PATH: the DLL's own folder is searched for ITS dependencies (the VC++ runtime beside it),
 # as it is for the app, which sits in that folder, and for .NET's NativeLibrary.Load. A plain LoadLibrary from this
 # PowerShell searches beside powershell.exe instead, and failed with error 126 although the runtime was installed.
@@ -188,15 +227,16 @@ if ($h -ne [IntPtr]::Zero) {
     Check 'tmdq_abi_version() answers' ($abi -gt 0) ('ABI version ' + $abi)
 }
 
-# --- 5. The portable ZIP, extracted somewhere new, also runs. ---
+# --- 6. The portable ZIP, extracted somewhere new, also runs. ---
 Say ''
-Say '[5] Portable ZIP'
+Say '[6] Portable ZIP'
 $zip = (Get-ChildItem (Join-Path $IN '*_portable.zip') | Select-Object -First 1).FullName
 $pdir = Join-Path $env:USERPROFILE 'Desktop\portable'
 Expand-Archive -Path $zip -DestinationPath $pdir -Force
 $pexe = (Get-ChildItem $pdir -Recurse -Filter 'tmDataQualityAnalyzer.exe' | Select-Object -First 1).FullName
 Check 'ZIP holds the exe' ([bool]$pexe) $pexe
 Check 'ZIP holds the third-party notices' ([bool](Get-ChildItem $pdir -Recurse -Filter 'THIRD-PARTY-NOTICES.txt')) ''
+Check 'ZIP holds the full manual, the readme and the portable marker' ((Get-ChildItem $pdir -Recurse -Filter 'UserManual.html') -and (Get-ChildItem $pdir -Recurse -Filter 'README.txt') -and (Get-ChildItem $pdir -Recurse -Filter 'portable')) ''
 if ($pexe) {
     $pp = Start-Process $pexe -PassThru
     $null = $pp.Handle
@@ -206,9 +246,9 @@ if ($pexe) {
     Process-Recording $pexe 'the portable app'
 }
 
-# --- 6. What Code Integrity blocked while this ran. ---
+# --- 7. What Code Integrity blocked while this ran. ---
 Say ''
-Say '[6] Code Integrity events since the test began'
+Say '[7] Code Integrity events since the test began'
 $events = @(Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-CodeIntegrity/Operational'; StartTime = $started } -ErrorAction SilentlyContinue |
             Where-Object { $_.Id -in 3033, 3034, 3077, 3089 })
 $ours = @($events | Where-Object { $_.Message -match 'tmDataQualityAnalyzer|tmdq_core|libSkiaSharp|libHarfBuzzSharp|av_libglesv2' })
@@ -216,9 +256,9 @@ foreach ($e in $ours | Select-Object -First 12) { Say ('  event ' + $e.Id + ': '
 $blockedOurs = @($ours | Where-Object { $_.Message -notmatch 'tmdq-unsigned' -and $_.Id -in 3033, 3077 })
 Check 'nothing of the signed packages was blocked' ($blockedOurs.Count -eq 0) $(if ($blockedOurs.Count) { "$($blockedOurs.Count) block event(s)" } else { "$($ours.Count) event(s) about our files, all for the unsigned control or informational" })
 
-# --- 7. Uninstall. ---
+# --- 8. Uninstall. ---
 Say ''
-Say '[7] Uninstall'
+Say '[8] Uninstall'
 $unins = Get-ChildItem $app -Filter 'unins*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($unins) {
     Check 'uninstaller signed' ((Get-AuthenticodeSignature $unins.FullName).Status -eq 'Valid') (Get-AuthenticodeSignature $unins.FullName).Status
@@ -228,6 +268,11 @@ if ($unins) {
     Start-Sleep -Seconds 5
     Check 'application removed' (-not (Test-Path $exe)) ''
     Check 'settings left for the user' (Test-Path $userFile) ''
+    # uninsdeletevalue on .ch10 and uninsdeletekey on the ProgID, as v2.x: the empty .ch10 key is left on purpose.
+    $left = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.ch10' -ErrorAction SilentlyContinue).'(default)'
+    Check '.ch10 association cleared' ([string]::IsNullOrEmpty($left)) $(if ($left) { "still '$left'" } else { '' })
+    Check 'ProgID key removed' (-not (Test-Path 'HKLM:\SOFTWARE\Classes\tmDataQualityAnalyzer.ch10')) ''
+    Check 'no entry left in Installed apps' (@(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall' | ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'tmDataQualityAnalyzer*' }).Count -eq 0) ''
 } else {
     Check 'uninstaller found' $false 'no unins*.exe'
 }
