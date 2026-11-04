@@ -412,6 +412,30 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased
 
+#### The walking skeleton's leftovers go (plan step 6.4)
+
+The first item of 6.4. The walking skeleton (3.4) kept the first Frame Sync Lock stream as a `LockSeries` of its own,
+copied out of the core's result, and the main window kept it, and all of them, as `Series` and `AllSeries`. From 4.3b
+the plot drew from `PlotViewModel`, and the copies lived on only for the installer's smoke report and the status line.
+
+- **The status line** (`MainWindowViewModel.Describe`) reads the run's outcome: the one Frame Sync Lock stream's label,
+  channel, sample count and mean lock, worded as before.
+- **The smoke report** (`Startup.SmokeReport`) reads the first Frame Sync Lock series the plot holds, in table order
+  (`Startup.FirstLockSeries`): the values the core built from the run, so the line is the same
+  (`ok samples=116 mean=93.532 channel=13 | ...` for the PRN sample), and so is the exit code.
+- **Gone:** `LockSeries`, `MainWindowViewModel.Series` and `AllSeries`, and `FirstChannelRun.RunAsync`, which only a
+  test called. `Show` is `ClearRun`: a new or failed run clears the plot and the recordings it held, as before.
+- **The tests that read them read the plot instead,** the same expectations (`PlotFixtures.Locks`): the channels a
+  run produced, 116 samples, the mean 93.531893 and its range, a cancelled Configure Streams keeping the last result,
+  nothing shown after a failure. The comparison with the core's own run compares the plot's values with the core's;
+  the progress test drives `StreamsRun` directly.
+
+**Mutation check** (`scripts\mutate.ps1`, the four app test classes that hold it): the smoke report taking the last
+lock stream, reading the missed frames, its mean and its channel wrong; a cleared run keeping the plot, or the batch's
+recordings; the status line's mean wrong. **All seven caught.**
+
+App baseline unchanged (602 / 0 / 0, 34 not run).
+
 #### Qt out of the names that stay (plan step 6.3)
 
 The code that outlives the Qt application no longer names it, except where the reference is the point: the oracles
