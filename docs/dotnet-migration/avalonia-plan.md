@@ -493,6 +493,8 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
     list in `scripts/mutants/example.json`.)*
   - **The native core's and the ABI's surface:** some of it may have had only the Qt application as a caller.
     Sweep the tree with the `code-cleanup` skill once 6.1 and 6.2 have run, and remove what nothing reaches.
+    *(Done: 34 constants removed, at the user's choice; the combo-box API, `ClipMaximum` and small test-only helpers
+    found and left; the spikes kept until 6.5.)*
   - **CI:** without Qt, the self-hosted job's Qt build, its fixture overlay ordering and the hosted fallback's Qt
     install go; the three jobs are likely to become one, on the runner that has never had Qt.
   - **The Qt settings import** (`QtSettingsImport`, `QtIni` and the `QtSettings` fixtures, 4.8) stays through the
