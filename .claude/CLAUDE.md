@@ -42,7 +42,7 @@ Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `
   `native/out/<config>/tmdq_core.dll` (build that first; `TMDQ_CORE_DLL` overrides). The tests run the
   committed recordings through the library and compare with numbers v2.14.2's pipeline produced. An xunit v3
   project is an executable; the build merges a UTF-8 code-page manifest into it with `mt.exe`, because the vendored
-  irig106 opens files with a narrow `open()` that reads the active code page. Green baseline **358 passed / 0
+  irig106 opens files with a narrow `open()` that reads the active code page. Green baseline **360 passed / 0
   failed / 1 skipped** (the skip is the probe `IsolatedLoadTests` runs in a child process). CI runs it in both jobs.
 - **The app:** `dotnet/TmDq.App` (Avalonia 12, CommunityToolkit.Mvvm) and `dotnet/TmDq.App.Tests` (xunit v3 on
   `Avalonia.Headless.XUnit`), both in `tmdq.sln`, which VS Code opens by default (`dotnet.defaultSolution`).
