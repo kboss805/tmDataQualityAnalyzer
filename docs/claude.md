@@ -8,7 +8,10 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, `cl` / `nmake`), Qt `msvc2022_64` kit.
   This is the only supported toolchain (and what CI uses).
 - **C++ Standard**: C++20 (moved from C++17 for `std::format`, which the de-Qt string work needs in place of `QString::arg`; `inline constexpr` is used throughout constants.h)
-- **Project Version**: 2.14.2 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
+- **Shipping application** (from v3.0.0): the Avalonia 12 application on .NET 10 (`dotnet/TmDq.App`) over the native
+  core (`tmdq_core.dll`), packaged by `deploy/avalonia/build_avalonia_package.ps1`. The Qt application stays in the tree,
+  built and tested, until plan step 6.1 deletes it; it is no longer released.
+- **Project Version**: 3.0.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
 
 ## User Stories
 
@@ -406,9 +409,15 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ## Version History
 
-### Unreleased
+### v3.0.0 — The Avalonia Application
 
-Items from `docs/future_plans/dotnet-port-assessment.md` that are worth doing whether or not
+The first release of the Avalonia application (`docs/dotnet-migration/avalonia-plan.md`, decision D4): every user story
+of v2.14.2 on Avalonia 12 and .NET 10, over the Qt-free native core, its CSV exports byte for byte the Qt application's
+(5.2's soak). The installer replaces a v2.x install in place; v2.14.2 stays downloadable as the fallback for one release
+cycle. Everything below, from the plan's first steps to its stage 5, landed between v2.14.2 and this release; the
+release itself is the first section.
+
+Before the plan was written, the work started as items from `docs/future_plans/dotnet-port-assessment.md` that are worth doing whether or not
 that port ever happens - the throughput guard, the TOML move off `QSettings`, and now the
 de-Qt of the native core in small steps (QtGui out of the model's headers, then
 `PacketQueue`, then the `QElapsedTimer`s, then the packet bytes, then the first `QVector`s, the processing result and the pipeline's pointer lists) - plus the clean-build regression the TOML change
@@ -417,6 +426,33 @@ caused, a generated Visual Studio solution, and C++20. The first `QString` steps
 Qt out of `FrameProcessor` and `Ch10PacketReader`; the DTOs follow, starting with
 `ProcessingParams` and `ProcessedStreamData`, and `FrameSetup`, `Chapter10Reader` and `ChannelData` lose their `QObject`s and `QString`s, the calibration report becomes `std::string`, and `CalibrationExtractor` becomes a plain class (the last `QObject` in the core); the last Qt header the core reached, in `constants.h`, goes, and a test now guards it. One user-facing fix, found during the
 `QString` survey: recordings under a folder with a non-ASCII name can be processed.
+
+#### The release: v3.0.0 ships the Avalonia application, and replaces v2.x when installed (plan step 5.3)
+
+The first release built from `deploy/avalonia/build_avalonia_package.ps1` rather than `deploy/build_release.ps1`. Two choices, both the user's: **the installer replaces a v2.x install** rather than installing beside it, and the mutation harness (#237) merged first so this section gathers the whole of the work.
+
+- **`AppVersion` 3.0.0** (D4). The manuals that ship are re-stamped by `build_manual.ps1 -Preview -NoCapture`; their figures are unchanged.
+- **The installer** (`deploy/avalonia/tmDataQualityAnalyzer.iss`, renamed from the preview's):
+  - **the Qt installer's AppId, folder and Start menu name,** so v3.0.0 is v2.x's upgrade: one entry in Installed apps, in the folder the user already has;
+  - **`[InstallDelete]`** takes away what v2.x left that this version does not ship: `bin\` (the Qt exe, runtime and plugins), `UserGuide.txt`, and `UserManual.html`. **The last is a trap the upgrade would otherwise have sprung:** Help opens a `UserManual.html` beside the exe when there is one, and v2.x's sat exactly there, so declining the full-manual task would have left Help opening the Qt application's manual;
+  - **`settings\`** is the same folder in both layouts (v2.x's exe in `bin\` looked one level up for it), so `onlyifdoesntexist` keeps the user's files through the upgrade (US8.0);
+  - **the `.ch10` association,** as v2.x wrote it, now pointing at the exe in the install folder; declined on an upgrade, v2.x's ProgID is deleted rather than left opening an exe the upgrade has removed;
+  - **What's New** (`InfoBeforeFile`) is `deploy/RELEASENOTES.txt`, as v2.x's installer showed it;
+  - **preferences** need nothing from the installer: the app imports the Qt INI file on its first run (4.8).
+- **The package script** names the artifacts `tmDataQualityAnalyzer-v3.0.0_portable.zip` and `_setup.exe`, runs `check_release_consistency.ps1 -ReleaseMode` before anything is built (as `build_release.ps1` did), and puts `deploy/README_portable.txt` in the ZIP as `README.txt`, rewritten for this layout (the `portable` marker, no `UserGuide.txt`, the third-party notices).
+- **The consistency check** reads the manuals that ship, `resources/usermanual-preview.html` and `UserManual-preview.html`. The Qt manuals are no longer shipped and still say 2.14.2, which is true of them; 6.1 gives the preview copies their names.
+- **The Sandbox verifier** (`deploy/sandbox/verify_avalonia_install.ps1`, renamed from the preview's) now tests **the upgrade**: v2.14.2 installed with its default tasks, a settings file edited and the Qt INI written, then this setup over it. It checks the Qt `bin\` and text guide gone, the full manual this version's, the edited settings file kept, `.ch10` opening the new exe, one entry in Installed apps, the first run importing the Qt preferences, and on uninstall the association and the entry gone with `settings\` left.
+- **`cut-release`** describes this build: every suite (native, managed, app, and Qt while it is in the tree), `build_avalonia_package.ps1`, the artifacts in `deploy/avalonia/`, the Sandbox upgrade test, and the two US8.0 criteria checked by hand.
+- **`deploy/RELEASENOTES.txt`** says what moved and how the preferences and settings carried over.
+
+**Verified on the release build:**
+- **Every suite at 3.0.0:** native 498 cases (1 skipped, the opt-in benchmark), managed 358 / 0 / 1, app 602 / 0 / 0 (34 not run, the soak), Qt 458 / 0 / 0 with zero warnings.
+- **The package:** the consistency check clean in release mode; the signing pre-flight; the exe and `tmdq_core.dll` signed by this project's certificate and the six other PE files by their publishers, all Valid, in the staging folder, inside the ZIP and in the installer; the staged app processing the PRN sample (channel 13, 116 samples, mean lock 93.532 %).
+- **Inno Setup failed once** with "EndUpdateResource failed, try excluding the Output folder from your antivirus software": the virus scanner held the new setup.exe while Inno wrote its icon. The installer step alone was run again from the same staged files and succeeded, signed.
+- **The Sandbox, under Smart App Control, on the signed packages: every check passed.** The unsigned control was blocked. v2.14.2 installed (its `bin\`, text guide and full manual), a settings file edited and the Qt INI written (light theme, legend hidden); then this setup over it: exit 0, the Qt `bin\` and `UserGuide.txt` gone, the full manual this version's, the edited file kept (and kept again by a reinstall), `.ch10` opening `C:\Program Files\tmDataQualityAnalyzer\tmDataQualityAnalyzer.exe`, one entry in Installed apps at 3.0.0, all nine PE files Valid. The installed app opened its window, took the Qt preferences on its first run (`"Theme": "light"`, `"LegendVisible": false`) and processed the PRN sample; `tmdq_core.dll` answered ABI revision 2; the portable copy opened and processed the sample; Code Integrity blocked nothing of ours; uninstalling removed the application, the association and the entry, and left `settings\`.
+- **Not checked by the Sandbox,** which installs silently and elevated: the two US8.0 criteria that are Inno Setup's own pages (a per-user install to a chosen folder, and the progress page). They are checked by hand on this build before the release is published.
+
+Every baseline is unchanged.
 
 #### A Visual Studio solution, generated rather than committed
 

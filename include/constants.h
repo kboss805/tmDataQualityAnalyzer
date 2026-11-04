@@ -13,9 +13,9 @@
 
 /// @brief Application version information.
 struct AppVersion {
-    static constexpr int kMajor = 2;   ///< Major version number.
-    static constexpr int kMinor = 14;   ///< Minor version number.
-    static constexpr int kPatch = 2;   ///< Patch version number.
+    static constexpr int kMajor = 3;   ///< Major version number.
+    static constexpr int kMinor = 0;   ///< Minor version number.
+    static constexpr int kPatch = 0;   ///< Patch version number.
 
     /// @return Version string in "major.minor.patch" format. UTF-8 `std::string`, so this header -
     /// which the whole processing core includes - needs no Qt; callers that hold a QString convert.

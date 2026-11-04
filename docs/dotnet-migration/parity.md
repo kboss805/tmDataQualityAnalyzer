@@ -203,13 +203,13 @@ names in quotes) or managed (`TmDq.Core.Tests`).
 | US7.0 | Error messages displayed when invalid values entered | HELD | TypingAnInvalidPatternShowsTheProblemAndHoldsOk, AFrameSyncProblemIsNamed | Inline, not message box |
 | US7.0 | Frame sync pattern only hexadecimal | HELD | ASyncFieldTakesOneToSixteenHexDigits |  |
 | US7.0 | Pattern no larger than user-specified frame length | HELD | TheLongestPatternFitsTheShortestFrame | Holds by limits (64 bits ≤ 64-bit min frame) |
-| US8.0 | Installer produces a code-signed application executable | HELD | build_avalonia_package.ps1 (sign + verify steps 5-6); verify_preview_install.ps1 "every PE file validly signed" |  |
-| US8.0 | Installs to "Program Files" for admin users | HELD | tmDataQualityAnalyzer-preview.iss DefaultDirName={autopf}; verify_preview_install.ps1 /ALLUSERS install check |  |
+| US8.0 | Installer produces a code-signed application executable | HELD | build_avalonia_package.ps1 (sign + verify steps 5-6); verify_avalonia_install.ps1 "every PE file validly signed" | Passed on the v3.0.0 build |
+| US8.0 | Installs to "Program Files" for admin users | HELD | deploy/avalonia/tmDataQualityAnalyzer.iss DefaultDirName={autopf}; verify_avalonia_install.ps1 /ALLUSERS install and upgrade | Passed on the v3.0.0 build |
 | US8.0 | Installs to user-selected dir for non-admins | BY HAND | .iss PrivilegesRequiredOverridesAllowed=dialog | Inno Setup's own dialog (PrivilegesRequiredOverridesAllowed=dialog); the Sandbox installs elevated, so checked by hand at 5.3 |
 | US8.0 | Installer shows progress while installing | BY HAND | .iss WizardStyle=modern (Inno default progress page) | Inno Setup's own page (WizardStyle=modern); the Sandbox installs silently, so checked by hand at 5.3 |
-| US8.0 | Never overwrites user TOML; left by uninstall | HELD | .iss line 62 onlyifdoesntexist uninsneveruninstall; verifier "a reinstall keeps an edited settings file", "settings left for the user" | Verifier checks added in 4.1b, not re-run (needs signed build) |
+| US8.0 | Never overwrites user TOML; left by uninstall | HELD | .iss line 62 onlyifdoesntexist uninsneveruninstall; verifier "the user's edited settings file survived the upgrade", "a reinstall keeps an edited settings file", "settings left for the user" | Passed on the v3.0.0 build, the upgrade from v2.14.2 included |
 | US8.0 | Older settings file stays usable; missing keys default | HELD | TheQtApplicationsTemplatesReadAsTheyWereWritten, APatternFileRoundTripsTheFrameSyncAndBothFlags, ReceiverParamsTests, TheFirstRunImportsTheQtSettingsOnceAndThenKeepsItsOwn | Reader tolerance |
-| US8.0 | New default fields reach fresh install only; upgrade keeps file | HELD | .iss onlyifdoesntexist; verify_preview_install.ps1 reinstall check | Same caveat: not re-run |
+| US8.0 | New default fields reach fresh install only; upgrade keeps file | HELD | .iss onlyifdoesntexist; verify_avalonia_install.ps1 upgrade and reinstall checks | Passed on the v3.0.0 build |
 | US9.0 | Toggle light/dark theme via a menu action | HELD | TheMenuHoldsTheQtApplicationsSectionsHelpAndExit |  |
 | US9.0 | Selected theme persists across restarts | HELD | TheMainWindowRemembersItsFolderItsRecentFilesAndItsChoices, TheFirstRunImportsTheQtSettingsOnceAndThenKeepsItsOwn |  |
 | US9.0 | All windows, dialogs, plot update immediately | HELD | EachThemeDrawsTheChartTheLegendTheChipsAndTheLogInItsColours, TheApplicationsThemeIsEveryWindowsAndRemembered, ThePalettesAreTheQtApplications | Native frames checked by hand only |

@@ -1,8 +1,9 @@
 # tmDataQualityAnalyzer — Claude Code guide
 
-Qt 6.12.0 / C++20 desktop app (qmake + MSVC 2022, Windows) for analyzing data quality of IRIG 106
-Chapter 10 PCM telemetry: per-stream **Frame Sync Lock** stats and **Receiver AGC/SNR**, plotted vs.
-time. MVVM, single-reader / parallel-worker processing core. **Current version: 2.14.2.**
+Windows desktop app for analyzing data quality of IRIG 106 Chapter 10 PCM telemetry: per-stream **Frame Sync
+Lock** stats and **Receiver AGC/SNR**, plotted vs. time. MVVM, single-reader / parallel-worker processing core in
+C++20. **From v3.0.0 the shipping app is Avalonia 12 on .NET 10** (`dotnet/`) over that core as `tmdq_core.dll`; the
+Qt 6.12.0 app (qmake + MSVC 2022) stays in the tree, built and tested, until plan step 6.1. **Current version: 3.0.0.**
 
 > **Full reference:** `docs/claude.md` is the canonical, detailed guide (user stories, architecture,
 > conventions, test catalog). Read it when you need depth. This file is the quick orientation that
@@ -76,14 +77,16 @@ the MSVC environment (via `vcvars64.bat`) and puts the Qt `msvc2022_64` kit on P
   in `scripts/check_package_licences.ps1` fails the build, and a licence *file* passes only when its SHA-256 is in that
   script's `$Reviewed` table, so read it before adding it. That script runs under Windows PowerShell 5.1 inside builds
   started from PowerShell 7, which inherits 7's `PSModulePath`: avoid cmdlets from script modules (`Get-FileHash` fails).
-- **The Avalonia package (plan step 3.3, a preview beside the Qt app):** `powershell -ExecutionPolicy Bypass -File
+- **The release package (from v3.0.0; plan step 3.3 built it as a preview):** `powershell -ExecutionPolicy Bypass -File
   deploy\avalonia\build_avalonia_package.ps1 [-SignCertSha1 '']` publishes **single-file** (every managed assembly
   inside our exe, so the certificate signs only our own code: the exe and `tmdq_core.dll`; it refuses to sign any other
   unsigned file), adds the VC++ runtime DLLs `tmdq_core.dll` imports, generates `THIRD-PARTY-NOTICES.txt`
   (`scripts\gen_third_party_notices.ps1`, from the publish's deps file), and builds the portable ZIP and the Inno
-  installer (`tmDataQualityAnalyzer-preview.iss`: its own AppId and folder, no `.ch10` association). **Unlock
-  SimplySign first.** Clean-machine test under Smart App Control: `deploy\sandbox\run_sandbox_test.ps1 -Verifier
-  verify_preview_install.ps1 -Setup <setup.exe> -Payload "<zip>;deploy\avalonia\staging\unsigned;tests\data\test files\prn_testfile, sample.ch10"` (semicolons: recording names contain commas) (an unsigned build
+  installer (`deploy\avalonia\tmDataQualityAnalyzer.iss`: the Qt installer's AppId and folder, so it upgrades a v2.x
+  install in place, deleting its `bin\`, keeping `settings\`, and taking the `.ch10` association). It runs
+  `check_release_consistency.ps1 -ReleaseMode` first. **Unlock SimplySign first.** Clean-machine test under Smart App
+  Control, which installs v2.14.2 and upgrades it: `deploy\sandbox\run_sandbox_test.ps1 -Verifier
+  verify_avalonia_install.ps1 -Setup <setup.exe> -Payload "<zip>;deploy\avalonia\staging\unsigned;tests\data\test files\prn_testfile, sample.ch10;deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe"` (semicolons: recording names contain commas) (an unsigned build
   must be BLOCKED, or the pass means nothing). The UTF-8 manifest is merged into every SDK host (`apphost`,
   `singlefilehost`, `apphost_publish`): patching `bin\` misses a single-file publish.
 - **Mutation check (plan rule 3):** `powershell -ExecutionPolicy Bypass -File scripts\mutate.ps1 -List <mutants.json>
@@ -149,14 +152,15 @@ see below). The solution and `vs/` are **generated and gitignored** (absolute Qt
 paths) — **regenerate after a `.pro` change, a Qt bump, or a Visual Studio update**. It
 builds with VS's own MSBuild (no Qt VS Tools needed); the Qt runtime is deployed by a
 post-build step. The qmake build stays the supported/CI one; the `.pro` files remain the
-source of truth. Rationale for each correction: `docs/claude.md` → Unreleased.
+source of truth. Rationale for each correction: `docs/claude.md` → v3.0.0.
 
 ## Migration in progress: Qt to Avalonia
 
 The UI is moving to **Avalonia 12 on .NET 10** over a Qt-free native core, and Qt is leaving the app,
 the core and the tests. **Read `docs/dotnet-migration/avalonia-plan.md` before migration work**: one
-PR per numbered step, ticked as it merges. Until its switch-over the Qt app stays the shipping product,
-so everything in this file still applies. The new code lives in `dotnet/`.
+PR per numbered step, ticked as it merges. **v3.0.0 (step 5.3) switched the release to the Avalonia app;** the Qt app
+is no longer shipped but is still built and tested in CI until step 6.1 deletes it, so the Qt build rules in this file
+still apply. The new code lives in `dotnet/`.
 
 ## Project skills (`.claude/skills/`)
 

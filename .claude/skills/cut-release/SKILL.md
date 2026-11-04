@@ -15,6 +15,11 @@ description: >-
 The version number has **one** source of truth and several derived consumers. Edit the source, let the
 build derive the rest, update the human-facing notes, then package. Do the steps in order.
 
+**From v3.0.0 the release is the Avalonia application** (`dotnet/TmDq.App` over `tmdq_core.dll`), packaged by
+`deploy\avalonia\build_avalonia_package.ps1`. The Qt application is still built and tested until plan step 6.1 deletes
+it, but it is no longer packaged: `deploy\build_release.ps1` and `deploy\tmDataQualityAnalyzer.iss` describe v2.x and
+are not run. (Plan step 6.2 rewrites this skill once Qt is gone.)
+
 ## Step 1 — Decide the version
 
 Semantic-ish: patch for fixes/polish, minor for new user-facing features (a new US), major for big
@@ -32,10 +37,12 @@ struct AppVersion {
     static constexpr int kPatch = 0;
 ```
 
-Do **not** add a version literal anywhere else. qmake parses this header and generates
-`version_autogen.h` for the Windows resource (`.rc`), and `deploy/build_release.ps1` /
-`tmDataQualityAnalyzer.iss` read the same three constants at build time. If you find a hardcoded
-version string elsewhere, that's a bug to remove, not a place to update.
+Do **not** add a version literal anywhere else. `dotnet/build/AppVersion.props` reads these three
+constants for every .NET project (never type a version in a `.csproj`), `build_avalonia_package.ps1` reads
+them for the package names and passes them to Inno Setup, and qmake still derives the Qt build's
+`version_autogen.h`. If you find a hardcoded version string elsewhere, that's a bug to remove, not a place
+to update. (Test fixtures written BY a version, such as the v2.14.2 templates, keep theirs: they record
+who wrote them.)
 
 ## Step 3 — Update the developer changelog
 
@@ -51,19 +58,21 @@ page (`InfoBeforeFile`), so it is **end-user language**, not developer changelog
 version header line (`tmDataQualityAnalyzer vX.Y.Z - What's New`) and group bullets as
 New / Improved / Fixed. No class names or file paths — describe what the user can now do.
 
-(The portable `deploy/README_portable.txt` rarely changes per release; update it only if install/run
-instructions changed.)
+(The portable `deploy/README_portable.txt`, shipped in the ZIP as `README.txt`, rarely changes per release;
+update it only if install/run instructions changed.)
 
 ### Also check every other artifact that SHIPS
 
 These reach users but nothing in CI exercises them, so they rot silently:
 
-- **`UserGuide.txt`** — copied into BOTH the installer and the portable ZIP. It sat eighteen months
-  out of date describing a toolbar that no longer existed, shipping alongside an accurate in-app
-  manual that said something different.
-- **`resources/usermanual.html`** — Help > User Manual. Its subtitle carries a version string; it
-  read "Version 2.7.0" at v2.9.0. Refresh screenshots with
-  `powershell -File scripts\build_manual.ps1` if the UI changed.
+- **The manuals** — `resources/usermanual-preview.html` (Help > User Manual, compiled into the app) and
+  `UserManual-preview.html` (the full manual, shipped as `UserManual.html`); they keep their `-preview`
+  names until plan step 6.1 replaces the Qt manuals with them. Their subtitle and footer carry the version
+  from `AppVersion`, stamped by `powershell -ExecutionPolicy Bypass -File scripts\build_manual.ps1 -Preview
+  -NoCapture` after the bump (drop `-NoCapture` to re-render the figures when the UI changed). The Qt
+  manual read "Version 2.7.0" at v2.9.0; the consistency check below is why that cannot recur.
+- **`UserGuide.txt`** is the Qt application's and is no longer shipped (the v3.0.0 installer deletes it
+  on an upgrade).
 - **`README.md`** — the "developed on Qt x.y.z" line and the repo tree.
 - **`.claude/CLAUDE.md`** — the "Current version" line in the opening paragraph. It sat at 2.7.0
   through two releases, because nothing points at it.
@@ -80,16 +89,23 @@ behind. A **missing marker is a failure**, not a pass, so rewording one of those
 check loudly instead of silently disabling it. `build_release.ps1` runs it before packaging and CI
 runs it without `-ReleaseMode` on every PR, so drift is caught long before a release.
 
-**What the check cannot judge: whether the screenshots still show the truth.** Look at the figures
-in `resources/usermanual.html` and ask whether anything in this release changes what they depict.
+**What the check cannot judge: whether the screenshots still show the truth.** The figures are rendered
+from the application by `ManualFiguresTests`, which checks each caption's claims, but a caption cannot say
+everything a picture shows. Look at the figures in the manuals and ask whether anything in this release
+changes what they depict.
 v2.9.1's headline fix removed the empty axis that four of the seven figures were displaying - a
 manual illustrating the bug it just fixed. No script can catch that; it is a judgement call, so make
 it deliberately every release rather than assuming the figures are fine.
 
 ## Step 5 — Verify before building
 
-Build the app clean (0 warnings) and run the **full Qt suite** with the **build-and-test** skill:
-the baseline is in `.claude/CLAUDE.md` and there are **no skips**. Then run the throughput guard:
+Run every suite, each against the baseline in `.claude/CLAUDE.md`: the native core
+(`scripts\test_native.ps1`, after `scripts\build_core_dll.ps1`), the managed library
+(`scripts\test_dotnet.ps1`), the Avalonia app (`scripts\test_app.ps1`), and, while the Qt application is
+still in the tree, the **full Qt suite** with the **build-and-test** skill (zero warnings, **no skips**).
+After a change to processing, the plot's series or the CSV writer, also run the soak
+(`scripts\run_soak.ps1`), which holds the app to the Qt application's exported bytes. Then run the
+throughput guard:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_throughput_bench.ps1
@@ -120,7 +136,7 @@ except for the intended version/notes changes.
 
 ## Step 6 — Signing is proven automatically (nothing to do by hand)
 
-`build_release.ps1` runs a **signing pre-flight as step 0**, before the build: it signs a
+`build_avalonia_package.ps1` runs a **signing pre-flight as step 0** (`deploy\avalonia\signing.ps1`), before the build: it signs a
 throwaway copy under a timeout and aborts if the certificate cannot produce a signature. This
 used to be a manual ritual here, and skipping it once cost a whole packaging cycle.
 
@@ -140,27 +156,33 @@ To build unsigned, pass `-SignCertSha1 ''`; the pre-flight is skipped with a not
 
 ## Step 7 — Build, sign, and package
 
-Run the release script from the project root in **PowerShell**:
+Run the release script from the project root under **Windows PowerShell 5.1** (`powershell`, not `pwsh`):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File deploy\build_release.ps1
+powershell -ExecutionPolicy Bypass -File deploy\avalonia\build_avalonia_package.ps1
 ```
 
-It performs (and prints progress for) all of: qmake release build → windeployqt → code-sign the exe →
-portable layout → portable ZIP → Inno Setup installer (also signed). It reads the version from
-`constants.h` automatically, so there is no version argument to pass.
+It performs (and prints progress for) all of: the consistency check (`-ReleaseMode`) → the signing
+pre-flight → `tmdq_core.dll` in Release → a self-contained **single-file** publish → the manifest check
+(UTF-8 code page) → staging (settings, the VC++ runtime the DLL imports, the licence, the generated
+`THIRD-PARTY-NOTICES.txt`) → signing **our two binaries only** (the exe and `tmdq_core.dll`; it refuses to
+sign anything else it finds unsigned) → verifying every PE file's signature → a smoke run of the staged
+app on the PRN sample → the portable ZIP and the Inno installer (`deploy\avalonia\tmDataQualityAnalyzer.iss`,
+also signed). It reads the version from `constants.h`, so there is no version argument.
 
 - **Signing:** uses the cert SHA-1 in `$env:SIGN_CERT_SHA1` (falls back to the bundled Certum OSS
-  thumbprint). To build unsigned, pass `-SignCertSha1 ''`. Signing failures warn but don't abort —
-  check the output if a signed artifact is required.
-- **Inno Setup:** if `iscc` isn't found the installer step is skipped with a message; install Inno
-  Setup 6 if you need the `_setup.exe`.
+  thumbprint). To build unsigned, pass `-SignCertSha1 ''`. Any signing failure is a listed problem and
+  a non-zero exit.
+- **The installer replaces a v2.x install** (the Qt installer's AppId and folder): it deletes the Qt
+  `bin\`, `UserGuide.txt` and the old `UserManual.html`, keeps `settings\`, and moves the `.ch10`
+  association. Preferences carry over by the app's own first-run import of the Qt INI file.
+- **Inno Setup:** if `iscc` isn't found no installer is produced, and the run says so and fails.
 - Antivirus can briefly lock freshly-built exes; the ZIP step already retries — don't panic on a
   transient "file in use".
 
 ## Step 8 — Confirm the artifacts
 
-The script prints the final paths. Expect, in `deploy/`:
+The script prints the final paths. Expect, in `deploy/avalonia/`:
 
 - `tmDataQualityAnalyzer-vX.Y.Z_portable.zip`
 - `tmDataQualityAnalyzer-vX.Y.Z_setup.exe`
@@ -171,12 +193,15 @@ for everything. It reports honestly now, but its trustworthiness is exactly what
 check independently:
 
 ```powershell
-foreach ($t in @('deploy\staging\installer\bin\tmDataQualityAnalyzer.exe',
-                 "deploy\staging\portable\tmDataQualityAnalyzer-v$v`_portable\tmDataQualityAnalyzer.exe",
-                 "deploy\tmDataQualityAnalyzer-v$v`_setup.exe")) {
+foreach ($t in @('deploy\avalonia\staging\app\tmDataQualityAnalyzer.exe',
+                 'deploy\avalonia\staging\app\tmdq_core.dll',
+                 "deploy\avalonia\staging\tmDataQualityAnalyzer-v$v`_portable\tmDataQualityAnalyzer.exe",
+                 "deploy\avalonia\tmDataQualityAnalyzer-v$v`_setup.exe")) {
   '{0,-8} {1}' -f (Get-AuthenticodeSignature $t).Status, (Get-Item $t).VersionInfo.FileVersion
 }
 ```
+
+An Inno `setup.exe` carries its version in `ProductVersion`, not `FileVersion`.
 
 Then **extract the exe from the portable ZIP and check that too**. Signing runs BEFORE the ZIP and
 the installer compile, so a failed signing still produces a ZIP — containing an unsigned exe — while
@@ -194,28 +219,34 @@ signed and versioned. Whether the installer **works somewhere new** is a differe
 and v2.13.1 could not make it: that needed "a genuinely clean Windows target; Windows 11
 Home offers neither Sandbox nor Hyper-V."
 
-On Windows Pro/Enterprise with the **Windows Sandbox** feature enabled:
+On Windows Pro/Enterprise with the **Windows Sandbox** feature enabled (one line; semicolons separate
+the payload, because the recordings' names contain commas):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File deploy\sandbox\run_sandbox_test.ps1
+powershell -ExecutionPolicy Bypass -File deploy\sandbox\run_sandbox_test.ps1 -Verifier verify_avalonia_install.ps1 -Setup "deploy\avalonia\tmDataQualityAnalyzer-v$v`_setup.exe" -Payload "deploy\avalonia\tmDataQualityAnalyzer-v$v`_portable.zip;deploy\avalonia\staging\unsigned;tests\data\test files\prn_testfile, sample.ch10;deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe"
 ```
 
-One command. It stages the newest `setup.exe`, generates the `.wsb` (absolute host paths,
-which is why it is generated rather than committed), launches a disposable VM that has
-never seen this application, and prints the results back here. Exits non-zero on failure.
+It generates the `.wsb` (absolute host paths, which is why it is generated rather than committed),
+launches a disposable VM that has never seen this application, and prints the results back here.
+Exits non-zero on failure. `deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe` is the last Qt release
+(the GitHub release's asset, if it is not on disk).
 
 What it establishes that nothing else can:
 
-- **The DLL closure.** Every `Qt6*`, `qwindows.dll`, `MSVCP140*` and `VCRUNTIME140*` must
-  load from the install directory on a machine with no Qt at all. This is the check worth
-  the whole exercise after a **Qt version bump** - v2.14.1 was the first build on 6.12.0,
-  and the closure had last been verified on 6.11.1.
-- **`platforms\qwindows.dll`** present and loaded - the classic omission, which kills a Qt
-  app at startup with no window and no useful error.
-- **First-run side effects** on a machine with no prior settings: what the app writes, and
-  what it leaves alone.
+- **Smart App Control** is on, and **an unsigned build of the same exe is blocked**: without that
+  negative control a pass proves nothing about the signatures.
+- **The upgrade from v2.x:** v2.14.2 installed with its default tasks, a settings file edited and the
+  Qt INI written, then this setup over it: the Qt `bin\` and text guide gone, the full manual this
+  version's, the edited settings file kept, `.ch10` opening the new exe, one entry in Installed apps,
+  and the first run importing the Qt preferences.
+- **The DLL closure:** the installed app and the portable ZIP open their windows and process the PRN
+  sample end to end; `tmdq_core.dll` loads with the VC++ runtime beside it; every PE file verifies.
 - **Uninstall**: program files and the ProgID go, `settings\` stays (`uninsneveruninstall`,
   US8.0), the `.ch10` value is cleared while its now-empty key is left behind on purpose.
+
+**Two US8.0 criteria the Sandbox cannot check** (it installs silently and elevated): on the release
+build, a user **without admin rights** installs to a directory of their choosing ("Install for me
+only"), and the installer **shows its progress**. Ask the user to run the setup by hand for these.
 
 **A red result is not automatically a product defect.** The first run of this harness
 reported three failures and every one was the harness: a Windows system DLL caught by a
@@ -229,9 +260,10 @@ while one is running, for that reason.
 ## Step 10 - Commit / tag (only if asked)
 
 Don't commit, tag, or push unless the user asks. When they do: commit the `constants.h` + notes
-changes together with a `feat: release vX.Y.Z` style message, and tag `vX.Y.Z` to match the existing
-tag convention. The release artifacts in `deploy/` are build outputs — follow the repo's existing
-practice on whether they're tracked.
+changes together with a `feat: release vX.Y.Z` style message, and tag `vX.Y.Z` (annotated) to match the
+existing tag convention. The GitHub release is titled `vX.Y.Z`, carries the setup.exe and the portable
+ZIP, and its body is the top section of `RELEASENOTES.txt`. Publishing it is outward-facing: confirm
+with the user first. The release artifacts are build outputs and are not tracked.
 
 ## Guardrails
 

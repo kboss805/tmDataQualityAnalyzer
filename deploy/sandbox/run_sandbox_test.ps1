@@ -26,8 +26,8 @@ param(
     # older release, or an artifact downloaded from a GitHub release.
     [string]$Setup,
     [int]$TimeoutSeconds = 600,
-    # The script the Sandbox runs, from this folder. verify_install.ps1 tests the shipped Qt installer;
-    # verify_preview_install.ps1 tests the Avalonia preview packages (plan step 3.3).
+    # The script the Sandbox runs, from this folder. verify_install.ps1 tests the Qt installer (v2.x);
+    # verify_avalonia_install.ps1 tests the Avalonia application's packages from v3.0.0 on, and the upgrade from v2.x.
     [string]$Verifier = 'verify_install.ps1',
     # More files or folders the verifier needs, copied beside the setup (a folder keeps its name). Separate them
     # with semicolons; a recording's name may contain a comma.
