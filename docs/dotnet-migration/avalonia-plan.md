@@ -467,7 +467,8 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
   - **The mutation harness** that every step since 2.4 has used lives in a session's scratch folder: a list of
     exact-text mutants, a runner that builds and runs each in a worktree with a time limit and restores the file,
     halves run side by side, and a selection rerun. Commit it under `scripts/` so the method outlives the sessions
-    that wrote it. It does not depend on 6.1 and can land any time.
+    that wrote it. It does not depend on 6.1 and can land any time. *(Done: `scripts/mutate.ps1`, with a sample
+    list in `scripts/mutants/example.json`.)*
   - **The native core's and the ABI's surface:** some of it may have had only the Qt application as a caller.
     Sweep the tree with the `code-cleanup` skill once 6.1 and 6.2 have run, and remove what nothing reaches.
   - **CI:** without Qt, the self-hosted job's Qt build, its fixture overlay ordering and the hosted fallback's Qt

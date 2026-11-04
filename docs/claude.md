@@ -516,6 +516,48 @@ v2.9.0 intended. Every first-party header here is quote-included, so `anglebrack
 Qt, the CRT and the Windows SDK in one rule. Stable since VS2019 16.10; this toolchain is
 19.51.
 
+#### The mutation harness, committed (plan step 6.4)
+
+Since 2.4, every step was mutation-checked by a runner kept in a session's scratch folder and rewritten for each step. It is now `scripts/mutate.ps1`, so the method outlives the sessions that wrote it. Neither application changes.
+
+- **One list, one suite:** a JSON list of exact-text mutants (id, file, old text, new text) and the suite that should catch them: `native` (doctest), `managed` (`TmDq.Core.Tests`) or `app` (`TmDq.App.Tests`). The test exe's arguments and environment can be set for the whole list or for one mutant. For `managed` and `app` the DLL is rebuilt first, so a mutant in the native core reaches them.
+- **The verdicts:**
+  - CAUGHT: a failing test, a crash, or a hang past the limit (420 s unless the list sets another).
+  - SURVIVED.
+  - COMPILE: not a survivor. Rewrite the mutant, unless the compiler is what holds the rule.
+  - Four that mean nothing ran: NO-MATCH, NO-TESTS, STALE and LOCKED.
+- **The traps the scratch runners each learned, now in one place:**
+  - **Only in a linked worktree;** the main checkout is refused. An IDE's design-time build shares obj and bin with the loop (found in 4.7 and 4.8).
+  - **A green baseline first,** with zero warnings for the native suite.
+  - **The pristine bytes kept:** every restore is compared, and the run stops if one fails.
+  - **No stale binary:** the test exe is deleted before each build, and what the mutated file compiles into (the test exe, `tmdq_core.dll`, or its project's assembly) must be newer than the file.
+  - **An old text found exactly once:** one that matches nothing would run unmutated and "survive".
+  - **The file's own line endings.**
+  - **A filter that matches no test** fails the baseline, and makes a mutant's run NO-TESTS rather than a survivor.
+- **A list that records decisions:** a mutant's `expect` (caught, survived or compile) marks an equivalent mutant, or a rule the compiler holds. A rerun reports any verdict that no longer matches, and its exit code says so.
+- **The options:**
+  - `-Parts 2 -Part 0` and `-Part 1` split a long list over two worktrees;
+  - `-Only` reruns what survived;
+  - `-Out` writes each verdict as it comes.
+- **`scripts/mutants/example.json`:** four mutants of `TomlDocument`, one for each verdict a mutant that runs can get: two caught, one equivalent, one refused by the compiler.
+
+**Found on the way:** the app's assembly is `tmDataQualityAnalyzer`, not `TmDq.App`. The first app mutant was reported STALE until the freshness check read the project's `AssemblyName`.
+
+**Checked by running it, under Windows PowerShell 5.1 and PowerShell 7,** in a worktree:
+- **every verdict reached by a real mutant:**
+  - a catch in each suite, and a native-core mutant caught by the managed suite through the rebuilt DLL;
+  - the equivalent mutant and the compile error;
+  - a text that matches nothing;
+  - a filter that matches no test, both at the baseline and for one mutant;
+  - a one-second limit, which killed the run and left no process behind;
+- **the main checkout refused;**
+- **`-Only`, `-Parts`, `-NoBaseline` and `-Out`;**
+- **the worktree clean** after each run.
+
+**Not reached:** LOCKED and a failed restore, both of which need a lock held from outside.
+
+No test baseline changes.
+
 #### The side-by-side soak (plan step 5.2)
 
 The same recordings processed in both applications, the CSV exports compared byte for byte and the plots by eye: the record is `docs/dotnet-migration/soak.md`. Everything on the machine was used, and the session's settings swept, both at the user's choice.
