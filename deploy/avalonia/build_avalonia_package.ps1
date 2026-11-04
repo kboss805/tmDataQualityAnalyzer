@@ -20,12 +20,12 @@
 #
 # Parameters:
 #   -SignCertSha1  thumbprint of the code-signing certificate (CurrentUser\My).
-#                  Default: $env:SIGN_CERT_SHA1, else the Certum OSS certificate the
-#                  Qt release uses. Pass '' to build unsigned (it will not run on a
+#                  Default: $env:SIGN_CERT_SHA1, else the project's Certum OSS
+#                  certificate. Pass '' to build unsigned (it will not run on a
 #                  machine with Smart App Control on).
 #   -SignTimestamp timestamp server (default http://timestamp.digicert.com)
 #
-# Usage (Windows PowerShell 5.1, like the Qt release script):
+# Usage (Windows PowerShell 5.1, as the release scripts run):
 #   powershell -ExecutionPolicy Bypass -File deploy\avalonia\build_avalonia_package.ps1
 # =============================================================================
 
@@ -123,8 +123,8 @@ foreach ($needed in 'framesync_patterns\framesync_rcvr_default.toml', 'receiver_
 Copy-Item $settings (Join-Path $AppDir 'settings') -Recurse
 # The Visual C++ runtime DLLs tmdq_core.dll imports, beside it. A clean Windows has the Universal CRT (the
 # api-ms-win-crt-* imports) but not MSVCP140 / VCRUNTIME140*, and without them the DLL fails to load with error 126
-# (found by the Sandbox test). Taken from the same toolset's redist folder, as deploy\build_release.ps1 does for the
-# Qt package, and chosen from the DLL's own import list so a new runtime import cannot be missed. Microsoft signs
+# (found by the Sandbox test). Taken from the same toolset's redist folder, and chosen from the DLL's own import list
+# so a new runtime import cannot be missed. Microsoft signs
 # them, so Smart App Control accepts them.
 $crtDir = Get-ChildItem (Join-Path $env:VCToolsRedistDir 'x64') -Directory -Filter 'Microsoft.VC*.CRT' -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $crtDir) { throw "VC++ runtime redist not found under '$env:VCToolsRedistDir\x64' - is the MSVC environment loaded?" }

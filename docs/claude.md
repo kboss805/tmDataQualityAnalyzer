@@ -4,14 +4,15 @@ This file provides context and guidelines for AI assistants working on the tmDat
 
 ## Version Information
 
-- **Qt Version**: 6.12.0 (minimum: Qt 6.0.0)
-- **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, `cl` / `nmake`), Qt `msvc2022_64` kit.
-  This is the only supported toolchain (and what CI uses).
+- **.NET**: .NET 10 SDK; the application is Avalonia 12 (`dotnet/TmDq.App`).
+- **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, MSVC 14.44 / v143, pinned by `scripts\env.ps1`) for
+  the native core. This is the only supported toolchain (and what CI uses). (Up to v2.14.2 the application was Qt
+  6.12.0; it and its tooling were deleted in plan steps 6.1 and 6.2.)
 - **C++ Standard**: C++20 (moved from C++17 for `std::format`, which the de-Qt string work needs in place of `QString::arg`; `inline constexpr` is used throughout constants.h)
 - **Shipping application** (from v3.0.0): the Avalonia 12 application on .NET 10 (`dotnet/TmDq.App`) over the native
   core (`tmdq_core.dll`), packaged by `deploy/avalonia/build_avalonia_package.ps1`. The Qt application stays in the tree,
   built and tested, until plan step 6.1 deletes it; it is no longer released.
-- **Project Version**: 3.0.0 — defined once in the `AppVersion` struct in `include/constants.h`; qmake parses it from that header and propagates it to the Qt `VERSION` and the Windows resource file (`version_autogen.h`), so no other file carries a duplicate version literal
+- **Project Version**: 3.0.0 — defined once in the `AppVersion` struct in `include/constants.h`; `dotnet/build/AppVersion.props` reads it for every assembly, and the package script and the manual build read it too, so no other file carries a duplicate version literal
 
 ## User Stories
 
@@ -410,6 +411,68 @@ The stories below follow the workflow a first-time user takes through the applic
 ## Version History
 
 ### Unreleased
+
+#### Qt out of the tooling (plan step 6.2)
+
+6.1 deleted the Qt application; this deletes what built, ran and documented it. Nothing that builds or ships changes.
+
+- **`scripts/env.ps1`** imports Visual Studio 2022 and nothing else: the Qt kit on PATH, `QT_VERSION` / `QT_ROOT` /
+  `QTDIR` and their stale-value tripwire, and the jom-or-nmake choice (`TMDQ_MAKE`) are gone. The toolset pin
+  (`[17.0,18.0)`, `TMDQ_VS_RANGE`) stays.
+- **Deleted:** `scripts/deploy_qt_local.ps1` (the Qt runtime beside an exe), `scripts/gen_vs_project.ps1` (a Visual
+  Studio solution generated from the `.pro` files; `tmdq.sln` is the solution now), `scripts/build_ide.ps1` (it built
+  the Qt tests) and `scripts/setup-env.ps1` (it registered `QTDIR`).
+- **`scripts/gen_compile_flags.py`** writes the native projects' include paths and defines, and no Qt.
+  **Checked by running it:** clangd parses `src/model/frameprocessor.cpp` with no diagnostics.
+- **CI:**
+  - the hosted job's Qt install, the workflow's `QT_VERSION`, and `qmake --version` are gone;
+  - the toolchain steps report `dotnet --version` beside `cl`;
+  - `core-without-qt` stays: the self-hosted runner's machine still holds the Qt kit, so it is the job that proves
+    nothing needs one.
+- **`.vscode`:**
+  - **tasks:** build the core, build the app, run each suite, build the manual, and generate the clangd flags;
+  - **launch:** the app (`coreclr`) and the native tests (`cppvsdbg` or CodeLLDB);
+  - **IntelliSense:** the core's include paths in `c_cpp_properties.json`;
+  - **recommended extensions:** the C# and Avalonia extensions in place of Qt's.
+- **The skills:**
+  - **rewritten for this build:** `build-and-test` (the four scripts in order, filtering, and the traps that remain:
+    a deleted header, a stale binary, `Platform=x64`, the IDE's background build, the worktree junction),
+    `add-stream-setting` (the path `Randomized` takes, from the setup dialog's view model through Apply to all, the
+    templates, the binding and the ABI to `FrameProcessor` and the calibration extractor), and `verify-ui-change`
+    (rendering on the headless platform through Skia, measuring controls, and the traps there);
+  - **renamed and rewritten:** `write-qt-test` is now `write-test`, for the doctest suite and the two xunit suites;
+  - **corrected where they named the Qt application:** `tm-code-review` and `code-cleanup`.
+- **The rest of what named the Qt tooling:**
+  - **comments:** the package script's and `signing.ps1`'s, `run_throughput_bench.ps1`'s, `AppVersion.props`', and the
+    Sandbox runner's message when no setup is found;
+  - **ignore files:** `.gitignore` (the Qt build's leftovers stay ignored, with a note that they are safe to delete) and
+    `dotnet/.gitignore`;
+  - **settings:** `.claude/settings.json`, whose qmake and nmake permissions are gone;
+  - **docs:** `docs/ci_runner.md` (the runner needs MSVC and .NET; the Qt kit, jom and the full-recording overlay are
+    unused), `.claude/CLAUDE.md` and this guide's version block.
+
+**Checked by running it, from a shell that had never sourced `env.ps1`** (so every script imported Visual Studio
+through the new one):
+- **`env.ps1` itself:** it found the pinned MSVC 14.44 with no Qt on PATH;
+- **the builds:** `tmdq_core.dll` Debug and Release rebuilt;
+- **the suites:** native 498 cases (1 skipped), managed 358 / 0 / 1, app 602 / 0 / 0 (34 not run);
+- **the manual build and the consistency check.**
+
+**Mutation check:** this step changes tooling, held by running it rather than by a test suite, so the mutants were run
+by hand from a shell with no MSBuild on PATH (so the core's build had to source `env.ps1`):
+- **`env.ps1` copying nothing from `vcvars`:** the core's build fails, with "vcvars64.bat did not produce a usable build
+  environment". **Caught.**
+- **an include path dropped** from `gen_compile_flags.py`: clangd reports `'frameprocessor.h' file not found`. **Caught.**
+- **The first `env.ps1` mutant was equivalent:** it changed the default Visual Studio range, and the direct VS 2022 probe,
+  the fallback for a missing vswhere, found the Build Tools anyway. That is the fallback doing its job.
+
+Every file restored byte for byte.
+
+**Found on the way, and fixed:** with the import broken, `env.ps1` re-runs `vcvars` to show its output, and under
+Windows PowerShell 5.1 that output's stderr (vcvars' own "'vswhere.exe' is not recognized") became a terminating error
+at that line, so the build failed without the message saying why. The re-run now merges stderr inside `cmd`.
+
+Baselines unchanged.
 
 #### The Qt application is deleted (plan step 6.1)
 
@@ -6823,8 +6886,8 @@ deliberately **not** in the file. Verify with:
 clangd --check=src/model/frameprocessor.cpp
 ```
 
-which should end in `All checks completed, 0 errors`. (The generator still carries the Qt include paths the deleted
-application needed; plan step 6.2 takes them out with the rest of the Qt tooling.)
+which should report no diagnostics. (clangd 22 can still end in `1 errors` on a file where one of its own
+refactoring self-tests, a "tweak", fails: that line is not a problem in the code.)
 
 **Worktree trap.** The paths in `compile_flags.txt` are absolute into the checkout that
 generated it, and `.claude/worktrees/<name>/` sits *inside* the main checkout — so

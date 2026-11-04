@@ -1,81 +1,44 @@
 {
-  // Two IDEs, two debug adapters - pick the entry that names YOUR editor.
+  // The application is .NET: "coreclr" needs the C# extension (ms-dotnettools.csharp). Its native core,
+  // tmdq_core.dll, is copied beside it by the build, so it is debugged from the native test executable instead,
+  // with the debugger your editor has:
   //
-  //   VS Code      has ms-vscode.cpptools  -> use the "MSVC debugger" entries.
-  //                It does NOT have CodeLLDB, so the LLDB entries fail there.
-  //   Antigravity  has vadimcn.vscode-lldb -> use the "CodeLLDB" entries.
-  //                cpptools is Microsoft-licensed and is not available in the
-  //                fork, so "cppvsdbg" fails there with
-  //                "Configured debug type 'cppvsdbg' is not supported".
+  //   VS Code      has ms-vscode.cpptools  -> use the "MSVC debugger" entry.
+  //   Antigravity  has vadimcn.vscode-lldb -> use the "CodeLLDB" entry (cpptools is
+  //                Microsoft-licensed and not available in the fork).
   //
-  // Both adapters read the MSVC PDBs (CodeLLDB ships msdia140.dll for this), so
-  // breakpoints and source stepping work either way. Debug the *Debug* build;
-  // the Release build is compiled without full debug info, so use it to run
-  // rather than to step through. To just build+launch Release with no debugger
-  // at all - which works identically in both IDEs - run the task
-  // "Build and Launch (Release)" instead of pressing F5.
+  // Both adapters read the MSVC PDBs. Debug the Debug builds; the Release builds carry no full debug info.
+  //
+  // A dev build keeps its preferences in %APPDATA%\tmDataQualityAnalyzer, which is your installed copy's: put a file
+  // named "portable" beside the built exe to keep them beside it instead.
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "App (Debug) - VS Code / MSVC debugger",
-      "type": "cppvsdbg",
+      "name": "App (Debug)",
+      "type": "coreclr",
       "request": "launch",
-      "program": "${workspaceFolder}/build/debug/tmDataQualityAnalyzer.exe",
+      "program": "${workspaceFolder}/dotnet/TmDq.App/bin/Debug/net10.0/tmDataQualityAnalyzer.exe",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
-      "preLaunchTask": "Build (Debug)"
+      "preLaunchTask": "Build app (Debug)"
     },
     {
-      "name": "App (Debug) - Antigravity / CodeLLDB",
-      "type": "lldb",
-      "request": "launch",
-      "program": "${workspaceFolder}/build/debug/tmDataQualityAnalyzer.exe",
-      "cwd": "${workspaceFolder}",
-      "terminal": "integrated",
-      "preLaunchTask": "Build (Debug)"
-    },
-    {
-      "name": "App (Release) - VS Code / MSVC debugger",
+      "name": "Native tests (Debug) - VS Code / MSVC debugger",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/build/release/tmDataQualityAnalyzer.exe",
+      "program": "${workspaceFolder}/native/out/Debug/tmdq_core_tests.exe",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
-      "preLaunchTask": "Build (Release)"
+      "preLaunchTask": "Native tests"
     },
     {
-      "name": "App (Release) - Antigravity / CodeLLDB",
+      "name": "Native tests (Debug) - Antigravity / CodeLLDB",
       "type": "lldb",
       "request": "launch",
-      "program": "${workspaceFolder}/build/release/tmDataQualityAnalyzer.exe",
+      "program": "${workspaceFolder}/native/out/Debug/tmdq_core_tests.exe",
       "cwd": "${workspaceFolder}",
       "terminal": "integrated",
-      "preLaunchTask": "Build (Release)"
-    },
-    {
-      "name": "Tests (Debug) - VS Code / MSVC debugger",
-      "type": "cppvsdbg",
-      "request": "launch",
-      "program": "${workspaceFolder}/tests/debug/tmDataQualityAnalyzer_tests.exe",
-      "cwd": "${workspaceFolder}/tests",
-      // cppvsdbg takes "environment" (an ARRAY of {name,value}); "env" (an object)
-      // is CodeLLDB's spelling and is silently ignored here - which would leave
-      // QT_QPA_PLATFORM unset and let the widget tests open real windows.
-      "environment": [
-        { "name": "QT_QPA_PLATFORM", "value": "offscreen" }
-      ],
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "Tests (Debug) - Antigravity / CodeLLDB",
-      "type": "lldb",
-      "request": "launch",
-      "program": "${workspaceFolder}/tests/debug/tmDataQualityAnalyzer_tests.exe",
-      "cwd": "${workspaceFolder}/tests",
-      "env": {
-        "QT_QPA_PLATFORM": "offscreen"
-      },
-      "terminal": "integrated"
+      "preLaunchTask": "Native tests"
     }
   ]
 }

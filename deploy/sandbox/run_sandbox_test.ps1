@@ -68,7 +68,7 @@ if (-not $Setup) {
               Sort-Object LastWriteTime | Select-Object -Last 1).FullName
 }
 if (-not $Setup -or -not (Test-Path $Setup)) {
-    throw "No setup.exe found. Run deploy\build_release.ps1 first, or pass -Setup <path>."
+    throw "No setup.exe found. Run deploy\avalonia\build_avalonia_package.ps1 first, or pass -Setup <path>."
 }
 
 Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue

@@ -3,22 +3,17 @@
     {
       "name": "windows-msvc-x64",
       "includePath": [
-        "${workspaceFolder}/**",
-        "${env:QTDIR}/include/**"
+        "${workspaceFolder}/include",
+        "${workspaceFolder}/include/**",
+        "${workspaceFolder}/lib/irig106/include",
+        "${workspaceFolder}/lib/doctest",
+        "${workspaceFolder}/native/tmdq_core"
       ],
       "defines": [
         "UNICODE",
         "_UNICODE",
         "WIN32",
-        "WIN64",
-        "_ENABLE_EXTENDED_ALIGNED_STORAGE",
-        "QT_PRINTSUPPORT_LIB",
-        "QT_WIDGETS_LIB",
-        "QT_SVG_LIB",
-        "QT_GUI_LIB",
-        "QT_CONCURRENT_LIB",
-        "QT_CORE_LIB",
-        "QT_NEEDS_QMAIN"
+        "WIN64"
       ],
       "compilerPath": "cl.exe",
       "cStandard": "c11",

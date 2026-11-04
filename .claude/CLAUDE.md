@@ -100,22 +100,16 @@ IntelliSense).
 MSVC 14.51 and left two compilers' objects in one tree. Override with `TMDQ_VS_RANGE`
 (a vswhere range). **After changing the compiler, rebuild the core with `-Rebuild`.**
 
-**Qt tooling left for plan step 6.2** (dead since 6.1, deleted there): the Qt half of `env.ps1`,
-`scripts\deploy_qt_local.ps1`, `scripts\gen_vs_project.ps1` (it needs the deleted `.pro` files), the Qt paths in
-`gen_compile_flags.py`, CI's Qt install, and the skills that describe the Qt build (`build-and-test`,
-`verify-ui-change`, `write-qt-test`, `add-stream-setting`; `cut-release` is current).
-
 ## Migration: Qt to Avalonia, finishing
 
 **Read `docs/dotnet-migration/avalonia-plan.md` before migration work**: one PR per numbered step, ticked as it merges.
-v3.0.0 (step 5.3) released the Avalonia app; step 6.1 deleted the Qt one. What is left is step 6: the Qt tooling (6.2),
-the Qt names in code that stays (6.3), and consolidating the new code (6.4).
+v3.0.0 (step 5.3) released the Avalonia app; step 6.1 deleted the Qt one and 6.2 its tooling. What is left: the Qt
+names in code that stays (6.3), and consolidating the new code (6.4).
 
 ## Project skills (`.claude/skills/`)
 
-`tm-code-review` · `cut-release` · `code-cleanup`, current; `build-and-test` · `write-qt-test` · `add-stream-setting` ·
-`verify-ui-change` still describe the Qt build and are rewritten or removed in plan step 6.2 - follow this file over them.
-Invoke explicitly (`/cut-release`) or let them trigger by intent.
+`build-and-test` · `write-test` · `add-stream-setting` · `verify-ui-change` · `tm-code-review` · `cut-release` ·
+`code-cleanup`. Invoke explicitly (`/build-and-test`) or let them trigger by intent.
 
 ## Hard rules
 
