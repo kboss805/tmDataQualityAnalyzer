@@ -1,5 +1,5 @@
-// Ch10PacketReader: the single-pass reader, tested directly on the committed step_cal recording. No Qt; ported from
-// the Qt TestCh10PacketReader, whose cases are all here under the same descriptions (its data-driven cases are loops).
+// Ch10PacketReader: the single-pass reader, tested directly on the committed step_cal recording (ported in plan step
+// 2.4; the data-driven cases are loops).
 
 #include <atomic>
 #include <chrono>
@@ -673,8 +673,8 @@ TEST_CASE("Ch10PacketReader: a failed setup still releases the lock")
 }
 
 // ---------------------------------------------------------------------------
-// What prepare() hands each stream, and what each packet carries. The Qt suite counted packets and bytes; these pin the
-// fields a worker actually reads.
+// What prepare() hands each stream, and what each packet carries. Counting packets and bytes is not enough; these pin
+// the fields a worker actually reads.
 // ---------------------------------------------------------------------------
 
 TEST_CASE("Ch10PacketReader: prepare resolves every attribute a worker reads")

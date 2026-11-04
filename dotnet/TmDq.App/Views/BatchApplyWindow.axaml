@@ -7,7 +7,7 @@
         Width="600" SizeToContent="Height" MinWidth="480"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner">
-  <!-- As the Qt dialog: how many match, a row per file, the output options, then Process and Cancel. -->
+  <!-- As v2.x laid it out: how many match, a row per file, the output options, then Process and Cancel. -->
   <StackPanel Margin="16" Spacing="10">
     <TextBlock x:Name="Summary" Text="{Binding Summary}" TextWrapping="Wrap" />
     <Border BorderBrush="#C8C8C8" BorderThickness="1" CornerRadius="4" MinHeight="120" MaxHeight="260">

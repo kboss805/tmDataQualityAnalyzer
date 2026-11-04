@@ -1,9 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    The Avalonia application that replaces the Qt one (docs/dotnet-migration/avalonia-plan.md, step 3).
-    MVVM with CommunityToolkit.Mvvm; the processing core is tmdq_core.dll, reached through TmDq.Core.
-    Until the switch-over (plan step 6.1) the Qt application is the one that ships.
+    The Avalonia application (docs/dotnet-migration/avalonia-plan.md, step 3), which replaced v2.x and ships
+    from v3.0.0. MVVM with CommunityToolkit.Mvvm; the processing core is tmdq_core.dll, reached through TmDq.Core.
 
     - The version comes from AppVersion in include/constants.h (..\build\AppVersion.props); never type one here.
     - Every package must be on the open-source licence allow-list (..\build\PackageLicences.targets, plan D5):
@@ -57,7 +56,7 @@
           ExcludeFromSingleFile="true" Visible="false" />
   </ItemGroup>
 
-  <!-- The shipped settings (the repository's settings\ folder) beside the exe, as the Qt app has them: the frame-sync
+  <!-- The shipped settings (the repository's settings\ folder) beside the exe, as v2.x had them: the frame-sync
        patterns the setup dialogs open on and the Receiver SNR defaults file, the receiver word maps (default.toml is
        the core's fallback map), the step calibrations. The app finds them at AppContext.BaseDirectory. Kept out of a
        single-file bundle: they are files the user may edit, and the installer never overwrites them. -->

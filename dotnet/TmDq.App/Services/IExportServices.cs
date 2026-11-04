@@ -36,7 +36,7 @@ namespace TmDq.App.Services
         Task<(string Path, ImageFormat Format)?> ExportAsync(string path);
     }
 
-    /// <summary>The platform's file dialogs, owned by a window, with the Qt dialogs' titles and filters.</summary>
+    /// <summary>The platform's file dialogs, owned by a window, with v2.x's titles and filters.</summary>
     public sealed class StorageDataFilePicker : IDataFilePicker
     {
         private static readonly FilePickerFileType ExportedCsv = new("Exported CSV") { Patterns = new[] { "*.csv" } };

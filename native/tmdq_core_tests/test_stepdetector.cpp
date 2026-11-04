@@ -1,6 +1,6 @@
 // StepDetector: the step-file parser, the plateau detection that turns a calibration recording into a profile (US5.3),
-// and interpolateCalibration(). No Qt; ported from the Qt TestStepDetector, whose cases are all here under the same
-// descriptions. The data-driven Qt cases are loops with INFO; qFuzzyCompare is reproduced by fuzzy() below.
+// and interpolateCalibration() (ported in plan step 2.4). Data-driven cases are loops with INFO; approximate equality
+// is fuzzy() below.
 
 #include <algorithm>
 #include <bit>
@@ -21,8 +21,8 @@ using namespace tmdq_test;
 
 namespace {
 
-/// qFuzzyCompare(a, b) for doubles: equal to about twelve significant digits. Like Qt's, it never holds for zero
-/// against anything but zero, so the cases that compare with zero use ==.
+/// Relative equality for doubles: equal to about twelve significant digits. It never holds for zero against anything
+/// but zero, so the cases that compare with zero use ==.
 bool fuzzy(double a, double b)
 {
     return std::abs(a - b) * 1000000000000.0 <= std::min(std::abs(a), std::abs(b));
@@ -227,7 +227,8 @@ TEST_CASE("StepDetector: parseStepConfig ignores keys outside a step and other s
 
 TEST_CASE("StepDetector: parseStepConfig value rules")
 {
-    // QString::toDouble's rules, on the text after '=' with a trailing '#' comment removed. A value that does not parse
+    // textparse::parseDouble's rules (surrounding whitespace ignored, one optional sign, decimal or exponent form, the
+    // whole text a number), on the text after '=' with a trailing '#' comment removed. A value that does not parse
     // is skipped, leaving the step at its default of 0 - the step itself still exists.
     struct Row { const char* name; const char* text; double expected; };
     const Row rows[] = {
@@ -283,7 +284,7 @@ TEST_CASE("StepDetector: parseStepConfig clears its output first")
 
 TEST_CASE("StepDetector: parseStepConfig reads a BOM, CRLF and UTF-16")
 {
-    // Files as Notepad saves them. QTextStream detected all of these; a plain byte reader would see the BOM as part of
+    // Files as Notepad saves them. v2.14.2 read all of these; a plain byte reader would see the BOM as part of
     // the first line and silently drop step 1.
     const std::string text = "[[Step]]\r\ndb = 4\r\n[[Step]]\r\ndb = 8\r\n";
     auto utf16 = [&](bool big) {

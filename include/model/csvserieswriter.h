@@ -1,9 +1,9 @@
 /**
  * @file csvserieswriter.h
- * @brief Qt-free writer of the application's CSV export; the inverse of CsvSeriesParser.
+ * @brief Writer of the application's CSV export; the inverse of CsvSeriesParser.
  *
- * Both directions of the format live in the core (plan step 1.2) so the Qt application and the
- * future C# one write and read the same bytes through one implementation. The plot hands over the
+ * Both directions of the format live in the core (plan step 1.2), so what is written and what is
+ * read back are the same bytes through one implementation. The plot hands over the
  * series it holds as a list of `CsvColumn`s (viewing its own storage, copying nothing).
  */
 

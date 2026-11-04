@@ -27,8 +27,8 @@ namespace TmDq.App.Tests
 {
     /// <summary>
     /// Processing (plan step 4.2): the progress dialog and its Cancel (US1.0, US3.0, US3.2), and the log sidebar with its
-    /// colours and multi-line messages. The log says what the Qt application's log says, in its order: the lines are the
-    /// Qt view model's and coordinator's, and the core's own, which the core writes the same for both.
+    /// colours and multi-line messages. The log says what v2.14.2's log said, in its order: the lines are the
+    /// view model's and the run's, and the core's own, which the core writes the same for both.
     /// </summary>
     [Collection(NativeCoreCollection.Name)]
     public sealed class ProcessingTests
@@ -109,9 +109,9 @@ namespace TmDq.App.Tests
         // ---- The log's rules -------------------------------------------------------------------------------------------
 
         [Fact]
-        public void ALinesLevelFollowsTheQtRules()
+        public void ALinesLevelIsDecidedByItsText()
         {
-            // The Qt suite's cases (TestMainViewModelHelpers::classifyLogMessageSeverity), and the edges of each rule.
+            // v2.x's cases for a line's level, and the edges of each rule.
             Assert.Equal(LogLevel.Error, SessionLog.Classify("File read ERROR; aborting."));
             Assert.Equal(LogLevel.Warning, SessionLog.Classify("WARNING: 2 time gap(s) detected."));
             Assert.Equal(LogLevel.Success, SessionLog.Classify("Pre-scan result: 3 PCM channels."));
@@ -161,7 +161,7 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
-        public void TheSummaryIsTheQtApplications()
+        public void TheSummaryIsWordedAsV214WordedIt()
         {
             var request = new RunRequest(@"C:\rec\flight 7.ch10", 1, new[]
             {
@@ -188,7 +188,7 @@ namespace TmDq.App.Tests
         [InlineData(1048575L, "1024.0 KB")]
         [InlineData(1048576L, "1.0 MB")]
         [InlineData(81013684L, "77.3 MB")]
-        public void AFileSizeIsGivenAsTheQtLogGivesIt(long bytes, string expected)
+        public void AFileSizeIsGivenInMegabytesOrKilobytesToOneDecimal(long bytes, string expected)
         {
             Assert.Equal(expected, MainWindowViewModel.SizeText(bytes));
         }
@@ -202,7 +202,7 @@ namespace TmDq.App.Tests
         [Fact]
         public void TheJobLinesComeFirstAndWhatTheThreadsSayFollowsTheSummary()
         {
-            // The order the Qt application logged in: the job builder's lines (written on the starting thread while the
+            // The order v2.14.2 logged in: the job builder's lines (written on the starting thread while the
             // run is started), the summary, then the run's threads, which may already be talking by then.
             var log = new RecordingLog();
             var order = new RunLogOrder(log);
@@ -347,7 +347,7 @@ namespace TmDq.App.Tests
         // ---- The main window's log and progress dialog ------------------------------------------------------------------
 
         [AvaloniaFact]
-        public async Task TheLogTellsTheStoryOfARunAsTheQtApplicationDoes()
+        public async Task TheLogTellsTheStoryOfARunAsV214Did()
         {
             var vm = new MainWindowViewModel(clock: new StoppedClock());
             Assert.Equal(new[] { "tmDataQualityAnalyzer v" + AppInfo.Version, "Load a Chapter 10 file to configure per-stream processing." }, Texts(vm));
@@ -622,7 +622,7 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public void AMultiLineMessageKeepsItsLinesAndTheirIndent()
         {
-            // The Qt log once ran a multi-line report together into one paragraph (HTML collapses a newline and a run of
+            // v2.x's log ran a multi-line report together into one paragraph (HTML collapses a newline and a run of
             // spaces); here each line of the message must be a line of the text, its indent kept.
             var log = new SessionLog(new StoppedClock());
             log.Error("first line\n  second line\n  third line");

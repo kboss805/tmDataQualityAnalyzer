@@ -1,19 +1,18 @@
 /**
  * @file pipelinerunner.h
- * @brief Runs the single-reader / parallel-worker processing pipeline, with no Qt.
+ * @brief Runs the single-reader / parallel-worker processing pipeline.
  *
  * One `Ch10PacketReader` reads the recording once and fans each PCM packet out to a
  * `PacketQueue` per stream; one `FrameProcessor` per stream drains its queue on a thread of its
  * own. This class owns that whole arrangement - the queues, the reader, the threads, the order they
- * start and stop in, and what a stream's result is stamped with - so the Qt application
- * (`ProcessingCoordinator`) and a C ABI over the core can both be a thin wrapper around it instead
- * of each carrying their own copy.
+ * start and stop in, and what a stream's result is stamped with - so the C ABI over the core
+ * (`abi_run.cpp`) is a thin wrapper around it instead of carrying its own copy.
  *
  * **Threading.** `start()` resolves the recording's TMATS synchronously on the calling thread and
  * returns at once; everything after that happens on the runner's own threads: one per stream, and
  * one that reads the file, which is also the thread that reports the end. The sink's methods are
  * called from those threads, so a sink that needs them somewhere else (the UI thread) does its own
- * hand-off - `QtProcessingEvents` is the Qt one. What a sink can rely on:
+ * hand-off. What a sink can rely on:
  *
  *  - `logMessage` / `errorOccurred`: from the reader thread or any stream's thread; per source, in
  *    the order they were raised.
@@ -25,7 +24,7 @@
  *    at least one stream completed and the run was not cancelled.
  *
  * A sink must not call `start()` on the runner from inside one of these calls: that would join
- * the thread it is running on. The Qt adapter never does, because it delivers by a queued call.
+ * the thread it is running on. The C ABI asks the same of a host's callbacks (`tmdq_abi.h`).
  */
 
 #ifndef PIPELINERUNNER_H

@@ -1,11 +1,11 @@
 /**
  * @file csvseriesparser.h
- * @brief Qt-free parser that turns the application's CSV export back into plot series.
+ * @brief Parser that turns the application's CSV export back into plot series.
  *
- * Pure data ingestion: no UI, no Qt, no signals. Every method is static and thread-safe, so
- * `PlotViewModel` runs `parse()` on a worker thread. Text is UTF-8 `std::string` and the path a
- * `std::filesystem::path`; the plot converts to its own `QString`/`QVector` series at the boundary
- * (de-Qt, plan step 1.2). Its inverse is `CsvSeriesWriter`.
+ * Pure data ingestion: no UI, no callbacks. Every method is static and thread-safe, so
+ * `parse()` may run on a worker thread. Text is UTF-8 `std::string` and the path a
+ * `std::filesystem::path`; a host reaches it through the C ABI (`abi_formats.cpp`, plan step 1.2).
+ * Its inverse is `CsvSeriesWriter`.
  */
 
 #ifndef CSVSERIESPARSER_H

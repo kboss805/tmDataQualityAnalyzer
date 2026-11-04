@@ -11,7 +11,7 @@ using TmDq.Core;
 namespace TmDq.App.Plot
 {
     /// <summary>
-    /// The Customize View dialog's state (plan step 4.4), the Qt <c>PlotCustomizationDialog</c> without its widgets: which
+    /// The Customize View dialog's state (plan step 4.4, US4.0) without its widgets: which
     /// series are shown, and their names and colours, edited as a copy of the plot and applied only on OK. Rows hold
     /// series ids, not positions, so a list that changed while the dialog was open cannot send an edit to another series.
     /// </summary>
@@ -30,7 +30,7 @@ namespace TmDq.App.Plot
             _plot = plot;
             _prompts = prompts;
 
-            // Grouped by PCM channel, in its order, as the Qt dialog's QMaps group them.
+            // Grouped by PCM channel, the groups in ascending stream order, as v2.x's dialog grouped them.
             var labels = new Dictionary<int, string>();
             foreach (PlotSeries s in plot.Series)
                 labels.TryAdd(s.StreamOrder, s.StreamLabel);
@@ -236,7 +236,7 @@ namespace TmDq.App.Plot
         public IBrush Brush => Channels.Count > 0 ? Channels[0].Brush : Brushes.Gray;
 
         /// <summary>True when every channel is checked, false when none is, null when some are. Setting it checks or clears
-        /// them all; a click on a partly checked box checks them all, as a Qt tristate item does.</summary>
+        /// them all; a click on a partly checked box checks them all, as v2.x's did (AroundTheChartTests).</summary>
         public bool? IsChecked
         {
             get

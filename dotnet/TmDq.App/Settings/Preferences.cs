@@ -18,7 +18,7 @@ namespace TmDq.App.Settings
         public const string DarkTheme = "dark";
         public const string LightTheme = "light";
 
-        /// <summary>"dark" or "light"; dark at first, as in the Qt application.</summary>
+        /// <summary>"dark" or "light"; dark at first, as in v2.x.</summary>
         public string Theme { get; init; } = DarkTheme;
 
         public bool SidebarVisible { get; init; } = true;
@@ -34,7 +34,7 @@ namespace TmDq.App.Settings
         /// <summary>Where Extract Calibration's last calibration recording came from.</summary>
         public string? LastCalibrationFolder { get; init; }
 
-        /// <summary>Anything but "light" is the dark theme, as the Qt application reads its setting.</summary>
+        /// <summary>Anything but "light" is the dark theme, as v2.x read its setting.</summary>
         [JsonIgnore]
         public bool IsDark => Theme != LightTheme;
 
@@ -46,7 +46,7 @@ namespace TmDq.App.Settings
         public override int GetHashCode() => HashCode.Combine(Theme, SidebarVisible, LegendVisible, RecentFiles.Count, LastFolder, LastCalibrationFolder);
     }
 
-    /// <summary>The recent-files list's rules, the Qt <c>addRecentFile</c>'s and its start-up pruning.</summary>
+    /// <summary>The recent-files list's rules, v2.x's: how a file is added, and the pruning at start-up.</summary>
     public static class RecentFiles
     {
         public const int Limit = 5;

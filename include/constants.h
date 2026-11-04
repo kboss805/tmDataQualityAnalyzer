@@ -18,7 +18,7 @@ struct AppVersion {
     static constexpr int kPatch = 0;   ///< Patch version number.
 
     /// @return Version string in "major.minor.patch" format. UTF-8 `std::string`, so this header -
-    /// which the whole processing core includes - needs no Qt; callers that hold a QString convert.
+    /// which the whole processing core includes - needs nothing beyond the standard library.
     static std::string toString()
     {
         return std::to_string(kMajor) + "." + std::to_string(kMinor) + "." + std::to_string(kPatch);
@@ -86,13 +86,6 @@ namespace PCMConstants {
 
 /// @brief Constants for UI configuration, validation limits, and output formatting.
 namespace UIConstants {
-    /// @name QSettings keys and theme identifiers
-    /// @{
-    inline constexpr const char* kOrganizationName  = "tmDataQualityAnalyzer"; ///< QSettings organization name.
-    inline constexpr const char* kApplicationName   = "tmDataQualityAnalyzer"; ///< QSettings application name.
-    inline constexpr const char* kSettingsKeyTheme  = "Theme";        ///< QSettings key for theme preference.
-    inline constexpr const char* kSettingsKeyLastCh10Dir = "LastCh10Directory"; ///< QSettings key for last Ch10 file dialog directory.
-    inline constexpr const char* kSettingsKeyLastTomlDir  = "LastTomlDirectory";  ///< QSettings key for last TOML file dialog directory.
     /// @name Status glyph colours
     /// Shared by every dialog that shows a pass/fail mark, so they cannot drift
     /// apart: the Configure Streams Ready column and the Batch Process Files list
@@ -101,14 +94,6 @@ namespace UIConstants {
     inline constexpr const char* kStatusOkColor     = "green";        ///< Ready / matched.
     inline constexpr const char* kStatusFailColor   = "red";          ///< Not ready / rejected.
     inline constexpr const char* kStatusIdleColor   = "gray";         ///< Not applicable yet.
-    /// @}
-
-    inline constexpr const char* kThemeDark         = "dark";         ///< Dark theme identifier.
-    inline constexpr const char* kThemeLight        = "light";        ///< Light theme identifier.
-    inline constexpr const char* kSettingsKeyRecentFiles = "RecentFiles"; ///< QSettings key for recent files list.
-    inline constexpr const char* kSettingsKeySidebarVisible = "SidebarVisible"; ///< QSettings key for sidebar (log) visibility.
-    inline constexpr const char* kSettingsKeyLegendVisible  = "LegendVisible";  ///< QSettings key for plot legend visibility.
-    inline constexpr int kMaxRecentFiles            = 5;              ///< Maximum number of recent files to remember.
     /// @}
 
     /// @name Layout
@@ -216,7 +201,7 @@ namespace UIConstants {
     inline constexpr const char* kSettingsDirName         = "settings";     ///< Settings directory name relative to app root.
     /// Optional full user manual, installed beside the app root.
     ///
-    /// The BASE manual is compiled in as a Qt resource, so it can never be missing.
+    /// The BASE manual is compiled into the application, so it can never be missing.
     /// This one is an installer option and may legitimately be absent — its absence
     /// is a normal state, not an error, and Help falls back to the built-in manual.
     inline constexpr const char* kFullManualFilename      = "UserManual.html";
@@ -366,7 +351,7 @@ namespace CalibrationConstants {
 }
 
 
-/// @brief Constants for the plot's geometry (chartgeometry.h), shared by the Qt and the Avalonia chart.
+/// @brief Constants for the plot's geometry (chartgeometry.h), which the native core and the Avalonia chart share.
 namespace ChartConstants {
     /// Samples per pixel column above which a series is drawn from its envelope
     /// rather than sample by sample. One column can only show one vertical run of

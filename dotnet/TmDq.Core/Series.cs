@@ -10,8 +10,10 @@ namespace TmDq.Core;
 /// <param name="ChannelIndex">0-based count within the receiver among this stream's SNR series.</param>
 /// <param name="StreamOrder">The stream's PCM channel id.</param>
 /// <param name="StreamSequence">The stream's job index, for ordering streams in the legend.</param>
-/// <param name="YMin">Smallest value as Qt's qMin sees a NaN; <see cref="double.MaxValue"/> if there is none.</param>
-/// <param name="YMax">Largest value; <see cref="double.MinValue"/> if there is none.</param>
+/// <param name="YMin">Smallest value, NaN-aware: a NaN sample makes it NaN until the next sample replaces it;
+/// <see cref="double.MaxValue"/> if there is none.</param>
+/// <param name="YMax">Largest value, NaN-aware: a NaN sample leaves it as it was; <see cref="double.MinValue"/> if
+/// there is none.</param>
 /// <param name="ValueCount">Number of values, parallel to the set's elapsed times.</param>
 public sealed record SeriesSpec(
     MetricType Metric,

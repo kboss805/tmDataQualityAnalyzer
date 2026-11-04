@@ -2,11 +2,11 @@
  * @file calibrationrequest.h
  * @brief Turns what the Extract Calibration dialog knows into a `CalibrationExtractor::Request`.
  *
- * Qt-free core logic (plan step 2.2b). The dialog used to do this inline: decode the sync text the way
+ * Core logic (plan step 2.2b), for the Extract Calibration dialog (US5.3): decode the sync text the way
  * the main run decodes it (so the extraction reads the same bitstream), and fall back to the shipped
  * default word map when the stream names none (so both passes use the same word indices, or the profiles
- * attach to the wrong channels). Both are rules about the data, so they live in the core where the C ABI
- * and the Qt dialog call the same code.
+ * attach to the wrong channels). Both are rules about the data, so they live in the core, which the dialog
+ * reaches through the C ABI (`abi_calibration.cpp`).
  */
 
 #ifndef CALIBRATIONREQUEST_H

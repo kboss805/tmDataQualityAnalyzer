@@ -12,7 +12,7 @@ namespace TmDq.Core.Tests;
 /// <summary>
 /// Step files and calibration extraction through the managed library, on the committed step_cal recording. The
 /// expected numbers (<see cref="CalibrationDigest"/>) are what the core's CalibrationExtractor makes when run
-/// directly, the code behind the Qt application's Extract Calibration dialog.
+/// directly, the code behind the Extract Calibration dialog.
 /// </summary>
 public class CalibrationTests
 {

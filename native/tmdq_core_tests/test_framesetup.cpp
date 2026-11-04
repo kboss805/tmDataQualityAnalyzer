@@ -1,6 +1,6 @@
 // FrameSetup: the word map and calibration table every stream job owns, and the receiver-parameters file it is read
-// from and written to. No Qt; ported from the Qt TestFrameSetup, whose cases are all here under the same descriptions,
-// plus the paths that suite did not reach (the linear calibration's arithmetic, the reserved sections, a word map that
+// from and written to (ported in plan step 2.4), plus the paths the suite it was ported from did not
+// reach (the linear calibration's arithmetic, the reserved sections, a word map that
 // fails to load being replaced by the default one when a file is saved).
 
 #include <filesystem>
@@ -188,7 +188,7 @@ TEST_CASE("FrameSetup: tryLoadingFile reads a valid file")
 
 TEST_CASE("FrameSetup: tryLoadingFile keeps the file's order, not a sorted one")
 {
-    // QSettings returned its groups sorted; a word map's meaning is the order the file lists it in.
+    // The reader TomlDocument replaced returned sections sorted; a word map's meaning is the order the file lists.
     TempDir tmp;
     writeBytes(tmp.file("order.toml"), "[Z]\nWord = 1\n\n[A]\nWord = 7\n\n[M]\nWord = 3\n");
     FrameSetup fs;
@@ -416,15 +416,15 @@ TEST_CASE("FrameSetup: receiverIndexFromName inverts receiverParameterName")
     CHECK(FrameSetup::channelPartOfName("") == "");
 }
 
-TEST_CASE("FrameSetup: receiver name parsing matches QString::toInt")
+TEST_CASE("FrameSetup: a receiver number in a name is a whole decimal number, or none")
 {
-    // receiverIndexFromName() used to hand the text after "_RCVR" to QString::toInt, so a name written by hand in a
-    // receiver-parameters TOML parsed with toInt's rules. When the helper moved to std::string these were pinned FIRST,
-    // against the QString implementation, because a plain from_chars would change every one of them.
+    // The text after "_RCVR" is read by textparse::parseInteger: base 10, the whole text digits after one optional
+    // sign, surrounding whitespace ignored. These answers were pinned FIRST, against v2.14.2's implementation, before
+    // the helper moved to std::string, because a plain from_chars would change every one of them.
     // The token is the LAST "_RCVR": an earlier one is just part of the name.
     CHECK(FrameSetup::receiverIndexFromName("A_RCVR1_RCVR2") == 2);
     CHECK(FrameSetup::channelPartOfName("A_RCVR1_RCVR2") == "A_RCVR1");
-    // toInt ignores surrounding whitespace and accepts a leading '+'...
+    // Surrounding whitespace is ignored and a leading '+' accepted...
     CHECK(FrameSetup::receiverIndexFromName("L_RCVR 3") == 3);
     CHECK(FrameSetup::receiverIndexFromName("L_RCVR3 ") == 3);
     CHECK(FrameSetup::receiverIndexFromName("L_RCVR+4") == 4);

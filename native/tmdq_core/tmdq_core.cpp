@@ -3,10 +3,10 @@
  * @brief The per-thread error, the version, and the struct sizes of the C ABI (tmdq_abi.h).
  *
  * The functions themselves are in the other files beside this one: abi_file.cpp, abi_run.cpp,
- * abi_calibration.cpp, abi_formats.cpp, abi_series.cpp. All of them are plain translation onto the Qt-free
- * core (std::filesystem paths in, UTF-8 std::string out). The DLL this builds (tmdq_core.vcxproj, which has
- * no Qt on its include path) depends on the C runtime and the Windows libraries the vendored irig106 code
- * calls - nothing else, and scripts\build_core_dll.ps1 fails the build if that changes.
+ * abi_calibration.cpp, abi_formats.cpp, abi_series.cpp. All of them are plain translation onto the core
+ * (std::filesystem paths in, UTF-8 std::string out). The DLL this builds (tmdq_core.vcxproj) depends on the
+ * C runtime and the Windows libraries the vendored irig106 code calls - nothing else, and
+ * scripts\build_core_dll.ps1 fails the build if that changes.
  */
 
 #include "tmdq_abi.h"

@@ -4,9 +4,9 @@ using System.Threading.Tasks;
 namespace TmDq.App.Plot
 {
     /// <summary>
-    /// What the plot's context menu items do that needs an answer from the user (plan step 4.4): the Qt
-    /// <c>PlotWidget</c>'s <c>onSetPlotTitle</c>, <c>onSetTimeWindow</c>, the four axis limits and
-    /// <c>onCustomizePlotClicked</c>. Each does nothing without data, as the Qt slots do (the menu disables them anyway).
+    /// What the plot's context menu items do that needs an answer from the user (plan step 4.4, US4.0):
+    /// Set Plot Title, Set Time Window, the four axis limits and Customize View. Each does nothing without data, as in
+    /// v2.x (the menu disables them anyway).
     /// </summary>
     public sealed class PlotCommands
     {
@@ -84,7 +84,8 @@ namespace TmDq.App.Plot
             if (await _prompts.CustomizeAsync(customize)) customize.Apply();
         }
 
-        /// <summary>A value as <c>QDoubleSpinBox</c> keeps it: clamped to its range and rounded to its decimals.</summary>
+        /// <summary>A number field's value: clamped to its range (a maximum below the minimum taken as the
+        /// minimum), then rounded to its decimals, half away from zero. AroundTheChartTests holds it.</summary>
         public static double SpinValue(double value, double min, double max, int decimals) =>
             Math.Round(Math.Clamp(value, min, Math.Max(min, max)), decimals, MidpointRounding.AwayFromZero);
     }

@@ -2,8 +2,8 @@
  * @file abi_chart.cpp
  * @brief The chart's geometry through the C ABI (revision 2): the transforms, a series' line and band, and the ticks.
  *
- * Only translation of chartgeometry.h, which the Qt chart also calls, so a host and the Qt application draw the same
- * pixels. A series' segments and bands are handed out as views into the geometry, without a copy.
+ * Only translation of chartgeometry.h, so every host draws the pixels the core's geometry describes. A series'
+ * segments and bands are handed out as views into the geometry, without a copy.
  */
 
 #include "tmdq_abi.h"

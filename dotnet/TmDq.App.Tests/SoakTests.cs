@@ -24,8 +24,8 @@ namespace TmDq.App.Tests
 {
     /// <summary>
     /// The side-by-side soak (plan step 5.2): every run in <c>Soak/soak.json</c> processed as the application processes
-    /// it, its CSV export compared byte for byte with what the Qt application exported for the same run (the manifest's
-    /// <c>qt</c> block, recorded by a throwaway Qt harness that drove the Qt application's own pieces).
+    /// it, its CSV export compared byte for byte with what v2.14.2 (the Qt application) exported for the same run (the
+    /// manifest's <c>qt</c> block, recorded by a throwaway harness that drove v2.14.2's own pieces).
     /// <para>
     /// Explicit: most runs read recordings that are not committed (the full recordings, gigabytes, and the local ones
     /// under tests/data), so the tests are listed but not run unless asked for, and a missing recording fails rather than
@@ -54,7 +54,7 @@ namespace TmDq.App.Tests
 
         [AvaloniaTheory(Explicit = true)]
         [MemberData(nameof(Runs))]
-        public async Task EachRunExportsTheCsvTheQtApplicationExported(string name)
+        public async Task EachRunExportsTheCsvV214Exported(string name)
         {
             JsonObject run = LoadRuns().Single(r => (string)r!["name"]! == name)!.AsObject();
             string? outRoot = Environment.GetEnvironmentVariable("TMDQ_SOAK_OUT");
@@ -112,7 +112,7 @@ namespace TmDq.App.Tests
             result["log"] = new JsonArray(configurator.Log.Concat(vm.Log.Entries.Select(e => e.Level + " " + e.Text)).Select(l => (JsonNode)l!).ToArray());
             File.WriteAllText(Path.Combine(dir, "result.json"), result.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 
-            // What the Qt application wrote for this run, file by file.
+            // What v2.14.2 wrote for this run, file by file.
             JsonObject? qt = run["qt"]?["files"]?.AsObject();
             Assert.True(qt is not null, $"{name}: the manifest holds no Qt result for this run");
             Assert.Equal(qt!.Select(f => f.Key).OrderBy(k => k, StringComparer.Ordinal), files.Select(f => f.Key));
@@ -147,7 +147,7 @@ namespace TmDq.App.Tests
 
             public SoakConfigurator(JsonObject run) => _run = run;
 
-            /// <summary>Started when Process is pressed, as the Qt harness times from startProcessing.</summary>
+            /// <summary>Started when Process is pressed, where the v2.14.2 harness started its clock.</summary>
             public Stopwatch? Clock { get; private set; }
 
             public bool CalibrationFailed { get; private set; }

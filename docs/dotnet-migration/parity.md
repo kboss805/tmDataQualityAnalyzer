@@ -71,12 +71,12 @@ names in quotes) or managed (`TmDq.Core.Tests`).
 | US1.0 | Once "Process" selected, main window updated with processed data | HELD | TwoStreamsConfiguredAndProcessedAreBothDrawn, EveryLockStreamIsDrawnInItsOwnColourOnOneTimeAxis |  |
 | US1.0 | Progress shown in a modal dialog, separate from main window | HELD | TheProgressDialogIsUpForTheRunAndShowsTheCoresProgress, TheProgressDialogIsShownOverTheMainWindowAndClosedWhenTold, TheProgressDialogShowsTheRunAndCancelOnlyAsks | IsDialog asserted |
 | US1.0 | User can cancel; Cancel stops every stream being decommutated | HELD | ACancelWhileTheFileIsReadStopsTheReaderAndEveryStream, CancelInTheProgressDialogStopsTheRunAndShowsNothing, TheProgressDialogCannotBeClosedOrEscapedWhileTheRunGoesOn |  |
-| US1.1 | Batch-process via Apply Template to Files…, multi-select files | HELD | ApplyTemplateReadsTheTemplateChecksTheFilesAndRunsTheOnesThatMatchOnceConfirmed, TheMenuHoldsTheQtApplicationsSectionsHelpAndExit | Top-bar test replaced by menu test |
+| US1.1 | Batch-process via Apply Template to Files…, multi-select files | HELD | ApplyTemplateReadsTheTemplateChecksTheFilesAndRunsTheOnesThatMatchOnceConfirmed, TheMenuHoldsItsSectionsHelpAndExit | Top-bar test replaced by menu test |
 | US1.1 | Configured once at template creation (Save as Template) | HELD | SaveAsTemplateCapturesTheRecordingJustProcessed, WithSeveralRecordingsSaveAsTemplateAsksWhichAndAnOpenForgetsThem, ATemplateIsCapturedFromOneRecordingAndItsSeriesAsTheyLook |  |
 | US1.1 | Matched by PCM channel ID; mismatch skipped, missing/extra told | HELD | AFileMatchesOnItsChannelIdsAloneAndAMismatchIsSpelledOut, TheConfirmationSaysHowManyMatchAndNeedsAFolderOnlyToExport |  |
-| US1.1 | All files retained; optional CSV + images per file | HELD | ABatchRunsEachFileInTurnKeepsEachAndExportsEachAsTheQtApplicationDoes |  |
+| US1.1 | All files retained; optional CSV + images per file | HELD | ABatchRunsEachFileInTurnKeepsEachAndExportsEachAsV214Did |  |
 | US1.1 | Progress shown; summary of processed vs skipped | HELD | ABatchRunsEachFileInTurn…, ATemplatesNamesAndColoursGoOnEveryFileWhenAskedAndAFailedFileIsSaidSo |  |
-| US1.1 | Template round-trips per-stream settings and optional names/colors | HELD | TheQtApplicationsTemplatesReadAsTheyWereWritten, ATemplateIsWrittenAsTheQtApplicationWritesIt, ATemplatesLooksGoBackOnOneRecordingsMatchingSeriesInOneRefresh | Byte-for-byte against Qt-written templates |
+| US1.1 | Template round-trips per-stream settings and optional names/colors | HELD | TheV214TemplatesReadAsTheyWereWritten, ATemplateIsWrittenAsV214WroteIt, ATemplatesLooksGoBackOnOneRecordingsMatchingSeriesInOneRefresh | Byte-for-byte against Qt-written templates |
 | US2.0 | Define frame sync pattern and frame length per stream | HELD | TheDialogOpensWithTheRowAndIsNamedForItsMode, WhatTheDialogHoldsIsTheSetupItGivesBack |  |
 | US2.0 | Accepts frame sync pattern sizes up to 64 bits | HELD | ASyncFieldTakesOneToSixteenHexDigits, AFrameSyncProblemIsNamed |  |
 | US2.0 | Accepts frame sync masks up to 64 bits | HELD | ASyncFieldTakesOneToSixteenHexDigits, AFrameSyncProblemIsNamed |  |
@@ -90,8 +90,8 @@ names in quotes) or managed (`TmDq.Core.Tests`).
 | US2.1 | Select PCM code format NRZ-L, RNRZ-L | HELD | APatternFileRoundTripsTheFrameSyncAndBothFlags |  |
 | US2.1 | Define number of receivers and channels per receiver | HELD | TheReceiverSnrDialogShowsTheReceiverSettingsLaidOut, TheReceiverSettingsHaveTheDialogsRanges |  |
 | US2.1 | Define scale of AGC sample data in dB/V | HELD | TheReceiverSettingsHaveTheDialogsRanges |  |
-| US2.1 | Voltage range: 0-5V, 0-10V, +/-5V, +/-10V | HELD | TheReceiverSettingsHaveTheDialogsRanges; native "Constants: uiSlopeVoltageBounds", TheChoicesAreTheQtDialogsInItsOrder (5.1) |  |
-| US2.1 | Define polarity: positive or negative | HELD | TheReceiverSettingsHaveTheDialogsRanges; native "Constants: uiPolarityConstants", TheChoicesAreTheQtDialogsInItsOrder (5.1) |  |
+| US2.1 | Voltage range: 0-5V, 0-10V, +/-5V, +/-10V | HELD | TheReceiverSettingsHaveTheDialogsRanges; native "Constants: uiSlopeVoltageBounds", TheChoicesAreUs21sAndUs30sInTheirOrder (5.1) |  |
+| US2.1 | Define polarity: positive or negative | HELD | TheReceiverSettingsHaveTheDialogsRanges; native "Constants: uiPolarityConstants", TheChoicesAreUs21sAndUs30sInTheirOrder (5.1) |  |
 | US2.2 | Each setup dialog has "Apply to all <mode>" toggle beside OK | HELD | TheDialogOpensWithTheRowAndIsNamedForItsMode |  |
 | US2.2 | On OK, settings copied to selected streams of same mode | HELD | ApplyToAllCopiesToTheOtherCheckedRowsOfTheMode, ApplyToAllCopiesSettingsToSameModeStreams |  |
 | US2.2 | Streams of a different mode left unchanged | HELD | ApplyToAllLeavesDifferentModeStreamsUnchanged |  |
@@ -99,7 +99,7 @@ names in quotes) or managed (`TmDq.Core.Tests`).
 | US3.0 | View lock statistics (left y-axis) vs time in plot | HELD | AStreamsSeriesComeFromTheCoreOnOneTimeAxis, EveryKindOfSeriesIsDrawnFromTheCoresGeometryInItsPlace |  |
 | US3.0 | Select which streams' lock statistics to view | HELD | CustomizeViewHasARowPerLockStreamAndTheSnrStreamsByReceiver, OkShowsOnlyTheMetricInViewAndAppliesTheNamesAndColours |  |
 | US3.0 | Select the time window to view lock statistics | HELD | ATimeWindowIsClampedIntoTheRecordingWithAWarningForEachEnd, TheWheelZoomsAboutTheCursor |  |
-| US3.0 | Sample windows 10ms, 100ms, 1s | HELD | native "Constants: uiSamplePeriods", "FrameProcessor: a shorter period gives more samples", TheChoicesAreTheQtDialogsInItsOrder (5.1) |  |
+| US3.0 | Sample windows 10ms, 100ms, 1s | HELD | native "Constants: uiSamplePeriods", "FrameProcessor: a shorter period gives more samples", TheChoicesAreUs21sAndUs30sInTheirOrder (5.1) |  |
 | US3.0 | Progress bar updates while processing lock statistics | HELD | TheProgressDialogIsUpForTheRunAndShowsTheCoresProgress |  |
 | US3.1 | View accumulated missed frames (left y-axis) vs time | HELD | TheLeftAxisIsLockPercentOrMissedFramesAndTheViewCarriesTheStreamsShown, StreamsKeepTheirJobOrderAndTheViewDecidesWhichMetricIsShown |  |
 | US3.1 | Switch left-axis view via context menu > View Mode | HELD | TheMenuSetsTheViewModeAndTheLegend |  |
@@ -108,7 +108,7 @@ names in quotes) or managed (`TmDq.Core.Tests`).
 | US3.2 | View SNR (right y-axis) vs time in plot | HELD | AStreamsSeriesComeFromTheCoreOnOneTimeAxis, AHiddenAxisGivesItsMarginBackAndTheTransformsFollowThePlotArea |  |
 | US3.2 | Select which receiver/channels SNR to view | HELD | AReceiversBoxFollowsItsChannelsAndSetsThemAll, CustomizeViewsSnrTabShowsTheStreamChosenByReceiverInTwoColumns |  |
 | US3.2 | Select time window to view SNR data | HELD | ATimeWindowIsClampedIntoTheRecordingWithAWarningForEachEnd |  |
-| US3.2 | Averaging periods 100 Hz, 10 Hz, 1 Hz | HELD | native "Constants: uiSamplePeriods", "FrameProcessor: a shorter period gives more samples", TheChoicesAreTheQtDialogsInItsOrder (5.1) | Same Average Period |
+| US3.2 | Averaging periods 100 Hz, 10 Hz, 1 Hz | HELD | native "Constants: uiSamplePeriods", "FrameProcessor: a shorter period gives more samples", TheChoicesAreUs21sAndUs30sInTheirOrder (5.1) | Same Average Period |
 | US3.2 | Raw values converted to Volts using range and polarity | HELD | native "FrameProcessor: the slope scales the values", "Constants: uiSlopeVoltageBounds" | Core |
 | US3.2 | Volts converted to dB using scale (dB/V) | HELD | native "FrameProcessor: only enabled words become channels, each calibrated as (raw + offset) x slope" | Core |
 | US3.2 | Progress bar updates while processing SNR | HELD | TheProgressDialogFollowsAReceiverSnrRunToo |  |
@@ -116,8 +116,8 @@ names in quotes) or managed (`TmDq.Core.Tests`).
 | US4.0 | Chart occupies entire plot area; context menu disabled until data | HELD | TheMenusDataItemsWaitForData, ARightClickOnTheChartOpensTheMenu, ThePlotViewIsTheChartWithItsControlsOverItAndNothingAround (5.1) |  |
 | US4.0 | Context menu provides Plot File, View Mode, Customize… etc. | HELD | TheMenuLeadsWithTheTitleAndHoldsEveryPlotControlAndNoExport | Asserts submenus and no Export |
 | US4.0 | Custom plot title via Set Plot Title… | HELD | TheTitleAndTheTimeWindowAreAskedSeededWithWhatIsShown, HundredPercentIsAtTheTopAndTheTitleIsDrawn |  |
-| US4.0 | Left Y axis labeled average framesync lock percent | HELD | TheLeftAxisIsLockPercentOrMissedFramesAndTheViewCarriesTheStreamsShown, TheAxesAndTheTitleAreWordedAsTheQtApplicationWordsThem (5.1) |  |
-| US4.0 | Right Y axis labeled SNR in decibels | HELD | TheRightAxisIsTitledOnlyWhileItIsShown (5.1), TheAxesAndTheTitleAreWordedAsTheQtApplicationWordsThem (5.1) | Was untested |
+| US4.0 | Left Y axis labeled average framesync lock percent | HELD | TheLeftAxisIsLockPercentOrMissedFramesAndTheViewCarriesTheStreamsShown, TheAxesAndTheTitleAreWordedAsV214WordedThem (5.1) |  |
+| US4.0 | Right Y axis labeled SNR in decibels | HELD | TheRightAxisIsTitledOnlyWhileItIsShown (5.1), TheAxesAndTheTitleAreWordedAsV214WordedThem (5.1) | Was untested |
 | US4.0 | Bottom X axis labeled elapsed time DDD:HH:MM:SS | HELD | AStreamsSeriesComeFromTheCoreOnOneTimeAxis | Regex ^\d{3}:\d{2}:\d{2}:\d{2}$ |
 | US4.0 | Y axis automatically scales to data min/max | HELD | TheSnrAxisIsRoundedToFiveDecibelsAndAnOverrideNeverInvertsIt, TheLeftAxisIsLockPercentOrMissedFrames… |  |
 | US4.0 | X axis automatically scales to full time span | HELD | AGestureMovesTheWindowWithinTheDataAndIsNotRemembered, ADoubleClickRestoresTheWholeSpan |  |
@@ -132,12 +132,12 @@ names in quotes) or managed (`TmDq.Core.Tests`).
 | US4.0 | Show/hide legend from menu or L; persists; excluded from export | HELD | TheMenuSetsTheViewModeAndTheLegend, TheMainWindowRemembersItsFolderItsRecentFilesAndItsChoices, APngIsTheChartAtItsSizeWithTheLegendWhereItIs |  |
 | US4.0 | Legend background is translucent | HELD | TheLegendIsTranslucentSoTheDataBehindItShows |  |
 | US4.0 | Legend height capped with vertical scrollbar for dense plots | HELD | ADenseLegendIsCappedAndScrollsWithoutCoveringALabel |  |
-| US4.0 | SNR legend rows show short label; full name via tooltip/CSV | HELD | TheLegendListsTheSeriesShownOfTheMetricInView, EveryRecordingExportsTheQtApplicationsCsvByteForByte |  |
+| US4.0 | SNR legend rows show short label; full name via tooltip/CSV | HELD | TheLegendListsTheSeriesShownOfTheMetricInView, EveryRecordingExportsTheCsvV214ExportedByteForByte |  |
 | US4.0 | Legend composited into exported PNG and SVG at position | HELD | APngIsTheChartAtItsSizeWithTheLegendWhereItIs | SVG legend not asserted (same renderer) |
 | US4.0 | Rename or recolor a series from Customize dialog | HELD | ARenameOrRecolourReachesAStreamsOtherMetricAndNoOtherStream, OkShowsOnlyTheMetricInView…, EachPromptAnswersOnOkAndNothingOnCancel |  |
-| US4.0 | Lock curves purple, blue, green primaries, one per stream | HELD | EachStreamAndEachReceiverTakesItsColour, AShadeIsTheColourQtDraws |  |
+| US4.0 | Lock curves purple, blue, green primaries, one per stream | HELD | EachStreamAndEachReceiverTakesItsColour, AShadeIsTheColourV214Drew |  |
 | US4.0 | SNR curves red, orange, yellow primaries, one per receiver | HELD | EachStreamAndEachReceiverTakesItsColour |  |
-| US4.0 | Additional series use progressively lighter shades of primary | HELD | AShadeIsTheColourQtDraws, EachStreamAndEachReceiverTakesItsColour | 84 Qt-printed shades |
+| US4.0 | Additional series use progressively lighter shades of primary | HELD | AShadeIsTheColourV214Drew, EachStreamAndEachReceiverTakesItsColour | 84 Qt-printed shades |
 | US4.0 | Lock curves drawn with visually highlighted style, SNR not | REMOVED | — | Never true of either app (one 1.5 px pen for every curve); the story reworded at the user's choice |
 | US4.1 | Plot window has no external control rows | HELD | ThePlotViewIsTheChartWithItsControlsOverItAndNothingAround (5.1) | Was untested |
 | US4.1 | Every plot control via context menu or on-chart overlay | HELD | TheMenuLeadsWithTheTitleAndHoldsEveryPlotControlAndNoExport, TheChipBarIsOverTheChartAtTheTopLeftAndOnlyWithData |  |
@@ -180,16 +180,16 @@ names in quotes) or managed (`TmDq.Core.Tests`).
 | US5.3 | Out-of-range raw values clamp to nearest end-step dB | HELD | native "StepDetector: interpolate below/above the … point clamps" | Core |
 | US6.0 | Image is exactly what chart shows (series, metric, window, legend) | HELD | AnImageShowsOnlyWhatTheChartShows, TheCursorsCrosshairIsNotExported |  |
 | US6.0 | Image format svg, png, pdf | HELD | AnSvgAndAPdfAreTheChartsSizeAndAnyOtherNameIsAPdf, AnImagesNameDecidesItsFormat |  |
-| US6.0 | Image filename/location via export dialog | HELD | BrowseStartsAtTheRowsPathAndANameWithoutASuffixGetsTheRowsOwn, TheExportWindowIsLaidOutAsQtsAndEachRowFollowsItsBox |  |
+| US6.0 | Image filename/location via export dialog | HELD | BrowseStartsAtTheRowsPathAndANameWithoutASuffixGetsTheRowsOwn, TheExportWindowHasItsThreeRowsAndEachFollowsItsBox |  |
 | US6.0 | Movable legend rendered into image at on-plot position | HELD | APngIsTheChartAtItsSizeWithTheLegendWhereItIs |  |
-| US6.0 | Single export dialog for any combination, one action | HELD | ExportWritesWhatWasChosenInTheQtOrderAndTheLogSaysWhere, AFailedExportSaysSoAndTheRestStillRun, TheExportDialogsAnswerIsCarriedOut |  |
-| US6.1 | Single CSV covering every series, shown or hidden | HELD | AnExportHoldsEverySeriesShownOrNotAndNothingToWriteWritesNoFile, EveryRecordingExportsTheQtApplicationsCsvByteForByte |  |
-| US6.1 | CSV has timestamp column and one column per series | HELD | EveryRecordingExportsTheQtApplicationsCsvByteForByte | Byte-identical to Qt |
-| US6.1 | Column headers identify stream and receiver/channel | HELD | EveryRecordingExportsTheQtApplicationsCsvByteForByte, ALaterSourcesColumnsAreQualifiedAndASourceCanBeExportedAlone |  |
+| US6.0 | Single export dialog for any combination, one action | HELD | ExportWritesTheDataThenTheImageThenTheLogAndTheLogSaysWhere, AFailedExportSaysSoAndTheRestStillRun, TheExportDialogsAnswerIsCarriedOut |  |
+| US6.1 | Single CSV covering every series, shown or hidden | HELD | AnExportHoldsEverySeriesShownOrNotAndNothingToWriteWritesNoFile, EveryRecordingExportsTheCsvV214ExportedByteForByte |  |
+| US6.1 | CSV has timestamp column and one column per series | HELD | EveryRecordingExportsTheCsvV214ExportedByteForByte | Byte-identical to Qt |
+| US6.1 | Column headers identify stream and receiver/channel | HELD | EveryRecordingExportsTheCsvV214ExportedByteForByte, ALaterSourcesColumnsAreQualifiedAndASourceCanBeExportedAlone |  |
 | US6.1 | CSV filename/location via export dialog | HELD | BrowseStartsAtTheRowsPathAndANameWithoutASuffixGetsTheRowsOwn |  |
-| US6.2 | Log contents exported to plain-text file | HELD | ExportWritesWhatWasChosenInTheQtOrderAndTheLogSaysWhere |  |
+| US6.2 | Log contents exported to plain-text file | HELD | ExportWritesTheDataThenTheImageThenTheLogAndTheLogSaysWhere |  |
 | US6.2 | Log filename/location via export dialog | HELD | BrowseStartsAtTheRowsPathAndANameWithoutASuffixGetsTheRowsOwn, AFailedExportSaysSoAndTheRestStillRun |  |
-| US6.3 | Open CSV via Import CSV…, drag-and-drop, or Recent Files | HELD | TheMenuHoldsTheQtApplicationsSectionsHelpAndExit, ARecordingOrCsvDroppedOnTheWindowOpensAsRecentFilesOpensIt, ARecentFileOpensByItsSuffixAndNotWhileBusy |  |
+| US6.3 | Open CSV via Import CSV…, drag-and-drop, or Recent Files | HELD | TheMenuHoldsItsSectionsHelpAndExit, ARecordingOrCsvDroppedOnTheWindowOpensAsRecentFilesOpensIt, ARecentFileOpensByItsSuffixAndNotWhileBusy |  |
 | US6.3 | Import CSV… opens CSV-only dialog, disabled while processing | HELD | ImportCsvAsksInTheLastFolderAndAnImportOfSkippedRowsWarnsBeforeItSucceeds, OpenOffersRecordingsOnlyAndImportCsvExportedCsvsOnly (5.1) | Busy-disable and filter tested |
 | US6.3 | Open… remains Chapter-10-only | HELD | OpenOffersRecordingsOnlyAndImportCsvExportedCsvsOnly (5.1) | Was untested, and Open also offered "All files"; now Chapter 10 only, as the Qt Open |
 | US6.3 | Import bypasses Configure Streams, straight into plot | HELD | ImportCsvShowsTheFileTitledByItsNameAndSaysSo |  |
@@ -208,12 +208,12 @@ names in quotes) or managed (`TmDq.Core.Tests`).
 | US8.0 | Installs to user-selected dir for non-admins | BY HAND | .iss PrivilegesRequiredOverridesAllowed=dialog | Inno Setup's own dialog (PrivilegesRequiredOverridesAllowed=dialog); the Sandbox installs elevated, so checked by hand at 5.3. **Checked by hand on the v3.0.0 build: passed.** |
 | US8.0 | Installer shows progress while installing | BY HAND | .iss WizardStyle=modern (Inno default progress page) | Inno Setup's own page (WizardStyle=modern); the Sandbox installs silently, so checked by hand at 5.3. **Checked by hand on the v3.0.0 build: passed.** |
 | US8.0 | Never overwrites user TOML; left by uninstall | HELD | .iss line 62 onlyifdoesntexist uninsneveruninstall; verifier "the user's edited settings file survived the upgrade", "a reinstall keeps an edited settings file", "settings left for the user" | Passed on the v3.0.0 build, the upgrade from v2.14.2 included |
-| US8.0 | Older settings file stays usable; missing keys default | HELD | TheQtApplicationsTemplatesReadAsTheyWereWritten, APatternFileRoundTripsTheFrameSyncAndBothFlags, ReceiverParamsTests, TheFirstRunImportsTheQtSettingsOnceAndThenKeepsItsOwn | Reader tolerance |
+| US8.0 | Older settings file stays usable; missing keys default | HELD | TheV214TemplatesReadAsTheyWereWritten, APatternFileRoundTripsTheFrameSyncAndBothFlags, ReceiverParamsTests, TheFirstRunImportsTheV2SettingsOnceAndThenKeepsItsOwn | Reader tolerance |
 | US8.0 | New default fields reach fresh install only; upgrade keeps file | HELD | .iss onlyifdoesntexist; verify_avalonia_install.ps1 upgrade and reinstall checks | Passed on the v3.0.0 build |
-| US9.0 | Toggle light/dark theme via a menu action | HELD | TheMenuHoldsTheQtApplicationsSectionsHelpAndExit |  |
-| US9.0 | Selected theme persists across restarts | HELD | TheMainWindowRemembersItsFolderItsRecentFilesAndItsChoices, TheFirstRunImportsTheQtSettingsOnceAndThenKeepsItsOwn |  |
-| US9.0 | All windows, dialogs, plot update immediately | HELD | EachThemeDrawsTheChartTheLegendTheChipsAndTheLogInItsColours, TheApplicationsThemeIsEveryWindowsAndRemembered, ThePalettesAreTheQtApplications | Native frames checked by hand only |
-| US9.0 | Menu and title-bar icons swap with theme | HELD | EachThemesBrushesAreTheQtThemes | Caption glyphs are font glyphs, follow foreground |
+| US9.0 | Toggle light/dark theme via a menu action | HELD | TheMenuHoldsItsSectionsHelpAndExit |  |
+| US9.0 | Selected theme persists across restarts | HELD | TheMainWindowRemembersItsFolderItsRecentFilesAndItsChoices, TheFirstRunImportsTheV2SettingsOnceAndThenKeepsItsOwn |  |
+| US9.0 | All windows, dialogs, plot update immediately | HELD | EachThemeDrawsTheChartTheLegendTheChipsAndTheLogInItsColours, TheApplicationsThemeIsEveryWindowsAndRemembered, ThePalettesAreV214s | Native frames checked by hand only |
+| US9.0 | Menu and title-bar icons swap with theme | HELD | EachThemesBrushesAreV214s | Caption glyphs are font glyphs, follow foreground |
 
 ## The Qt test cases
 
@@ -285,12 +285,12 @@ application's `AddStream`.
 | tst_plotcustomizationdialog::snrRenameRecolorAppliesToViewModel | PORTED | AroundTheChartTests.cs::OkShowsOnlyTheMetricInViewAndAppliesTheNamesAndColours |  |
 | tst_plotcustomizationdialog::applyChangesEmitsAppearanceSignal | PORTED | AroundTheChartTests.cs::OkShowsOnlyTheMetricInViewAndAppliesTheNamesAndColours, ::AQuietBatchOfVisibilityIsShownByOneRefresh | One refresh per OK |
 | tst_plotcustomizationdialog::applyChangesRobustToSeriesListChange | PORTED | AroundTheChartTests.cs::SeriesGoneWhileTheDialogIsOpenAreSkipped |  |
-| tst_exportdialog::testCheckboxTogglesFields | PORTED | ExportImportTests.cs::TheExportWindowIsLaidOutAsQtsAndEachRowFollowsItsBox, ::TheDialogStartsWithTheImageTickedAndEachRowFollowsItsBox |  |
-| tst_exportdialog::testExportButtonValidation | PORTED | ExportImportTests.cs::ExportWaitsForATickedRowAndAPathForEach, ::TheExportWindowIsLaidOutAsQtsAndEachRowFollowsItsBox |  |
-| tst_exportdialog::testLogRowDefaultsAndAccessors | PORTED | ExportImportTests.cs::TheDialogStartsWithTheImageTickedAndEachRowFollowsItsBox, ::TheExportWindowIsLaidOutAsQtsAndEachRowFollowsItsBox |  |
+| tst_exportdialog::testCheckboxTogglesFields | PORTED | ExportImportTests.cs::TheExportWindowHasItsThreeRowsAndEachFollowsItsBox, ::TheDialogStartsWithTheImageTickedAndEachRowFollowsItsBox |  |
+| tst_exportdialog::testExportButtonValidation | PORTED | ExportImportTests.cs::ExportWaitsForATickedRowAndAPathForEach, ::TheExportWindowHasItsThreeRowsAndEachFollowsItsBox |  |
+| tst_exportdialog::testLogRowDefaultsAndAccessors | PORTED | ExportImportTests.cs::TheDialogStartsWithTheImageTickedAndEachRowFollowsItsBox, ::TheExportWindowHasItsThreeRowsAndEachFollowsItsBox |  |
 | tst_exportdialog::testLogOnlyExportValidation | PORTED | ExportImportTests.cs::ExportWaitsForATickedRowAndAPathForEach |  |
-| tst_mainview::constructsAndDestroysWithoutCrash | PORTED | MainWindowTests.cs::TheWindowIsTitledAsTheQtApplicationIs (and every MainWindow Show/Close) | Implicit |
-| tst_mainview::windowTitleIsNonEmpty | PORTED | MainWindowTests.cs::TheWindowIsTitledAsTheQtApplicationIs | Checks the exact title |
+| tst_mainview::constructsAndDestroysWithoutCrash | PORTED | MainWindowTests.cs::TheWindowIsTitledTmDataQualityAnalyzer (and every MainWindow Show/Close) | Implicit |
+| tst_mainview::windowTitleIsNonEmpty | PORTED | MainWindowTests.cs::TheWindowIsTitledTmDataQualityAnalyzer | Checks the exact title |
 | tst_mainview::titleBarExists | PORTED | ShellTests.cs::TheTitleBarIsTheApplicationsOwnAndTellsWindowsWhatEachPartIs |  |
 | tst_mainview::supportedFileDetection | PORTED | PreferencesTests.cs::ARecordingOrAnExportedCsvIsOpenedByItsSuffix; ShellTests.cs::TheFirstRecordingOrCsvAmongTheFilesIsTheOneTaken | Same inputs, case-insensitive |
 | tst_mainview::openPathImportsCsv | PORTED | PreferencesTests.cs::ARecentFileOpensByItsSuffixAndNotWhileBusy; ShellTests.cs::ARecordingOrCsvDroppedOnTheWindowOpensAsRecentFilesOpensIt |  |
@@ -298,14 +298,14 @@ application's `AddStream`.
 | tst_mainview::importInvalidCsvIsRejected | PORTED | ExportImportTests.cs::ACsvThatIsNotAnExportIsAnErrorAndLeavesThePlotEmpty; PreferencesTests.cs::TheMainWindowRemembersItsFolderItsRecentFilesAndItsChoices | Not logged as a success; not added to recent files |
 | tst_mainview::fullManualPathEmptyWhenNotInstalled | PORTED | ShellTests.cs::TheManualIsTheFullOneWhenInstalledElseTheBaseOneCompiledIn | The null/empty-root case is not asserted |
 | tst_mainview::fullManualPathFoundWhenInstalled | PORTED | ShellTests.cs::TheManualIsTheFullOneWhenInstalledElseTheBaseOneCompiledIn |  |
-| tst_mainview::helpSubmenuHoldsManualAndAbout | PORTED | ShellTests.cs::TheMenuHoldsTheQtApplicationsSectionsHelpAndExit |  |
-| tst_mainview::exitIsTheLastMenuEntry | PORTED | ShellTests.cs::TheMenuHoldsTheQtApplicationsSectionsHelpAndExit | Full menu order checked, Exit last |
+| tst_mainview::helpSubmenuHoldsManualAndAbout | PORTED | ShellTests.cs::TheMenuHoldsItsSectionsHelpAndExit |  |
+| tst_mainview::exitIsTheLastMenuEntry | PORTED | ShellTests.cs::TheMenuHoldsItsSectionsHelpAndExit | Full menu order checked, Exit last |
 | tst_mainview::lightThemeReachesNativeWindowFrames | PORTED | ShellTests.cs::TheApplicationsThemeIsEveryWindowsAndRemembered | App-level theme variant; claude.md says the real frames were checked on the running app |
-| tst_mainview::openAndSaveTemplateCarryIcons | PORTED | ShellTests.cs::TheMenuHoldsTheQtApplicationsSectionsHelpAndExit, ::EachThemesBrushesAreTheQtThemes | Icon source non-null; no check that the glyph actually draws |
-| tst_mainview::menuSectionHeadersSurviveTheStylesheet | PORTED | ShellTests.cs::TheMenuHoldsTheQtApplicationsSectionsHelpAndExit, ::TheMenuIsBuiltAsItOpensAndIsEmptyWithoutAViewModel | Disabled headers; bold 11pt in the flyout |
-| tst_mainview::aFinishedStreamIsLoggedUnderItsLabel | PORTED | ProcessingTests.cs::TheLogTellsTheStoryOfARunAsTheQtApplicationDoes; Core SeriesTests.cs ("Ch 26 é" round trip); ArenaTests.cs | Pieced together: the log line is only asserted with ASCII labels |
+| tst_mainview::openAndSaveTemplateCarryIcons | PORTED | ShellTests.cs::TheMenuHoldsItsSectionsHelpAndExit, ::EachThemesBrushesAreV214s | Icon source non-null; no check that the glyph actually draws |
+| tst_mainview::menuSectionHeadersSurviveTheStylesheet | PORTED | ShellTests.cs::TheMenuHoldsItsSectionsHelpAndExit, ::TheMenuIsBuiltAsItOpensAndIsEmptyWithoutAViewModel | Disabled headers; bold 11pt in the flyout |
+| tst_mainview::aFinishedStreamIsLoggedUnderItsLabel | PORTED | ProcessingTests.cs::TheLogTellsTheStoryOfARunAsV214Did; Core SeriesTests.cs ("Ch 26 é" round trip); ArenaTests.cs | Pieced together: the log line is only asserted with ASCII labels |
 | tst_mainview::logPreservesMultiLineMessages | PORTED | ProcessingTests.cs::AMultiLineMessageKeepsItsLinesAndTheirIndent, ::EachLineIsTimedByTheClockAndKeepsItsOwnLineBreaks |  |
-| tst_mainviewmodel_helpers::classifyLogMessageSeverity | PORTED | ProcessingTests.cs::ALinesLevelFollowsTheQtRules | Same cases plus edge cases |
+| tst_mainviewmodel_helpers::classifyLogMessageSeverity | PORTED | ProcessingTests.cs::ALinesLevelIsDecidedByItsText | Same cases plus edge cases |
 | tst_mainviewmodel_helpers::buildStreamJobAttachesCalibrationByWord | PORTED | test_streamjob.cpp::"every configuration builds, or is refused, as recorded"; test_abi.cpp::"aNonLinearProfileReachesTheJob" | Rows for attached, missing word and invalid profile, plus the log line |
 | tst_mainviewmodel_helpers::buildStreamJobDecodesTheSyncPatternAndMask | PORTED | test_framesync.cpp::"parseUnsignedHex agrees with Qt on awkward inputs", ::"resolveFrameSync decodes pattern, mask and length" |  |
 | tst_mainviewmodel_helpers::buildStreamJobBuildsTheAcquisitionParameters | PORTED | test_framesync.cpp::"applyAcquisition …" cases; test_streamjob.cpp recorded rows; test_abi.cpp::"everySettingOfAStreamReachesTheJob", ::"theByteOrderOfTheFileReachesTheJob" | Sample periods, rate, words, swap, "Ch N" label |
@@ -337,7 +337,7 @@ application's `AddStream`.
 | plotviewmodel::loadEmptyFile | PORTED | ExportImportTests.cs::AFileThatIsNotAnExportedCsvChangesNothing | "" row |
 | plotviewmodel::formatTimeZeroElapsed | PORTED | ExportImportTests.cs::AnImportedPlotIsShownAsARunsWouldBe | FormatTime(0) is the file's first time |
 | plotviewmodel::formatTimeDayBoundary | PORTED | ExportImportTests.cs::AnImportedPlotIsShownAsARunsWouldBe | 001:23:59:59 then 002:00:00:01 |
-| plotviewmodel::formatTimeNegativeElapsed | PORTED | test_csvseries.cpp "csvseries: the clock stamp is what the QString one was, for every generated time" | Hash oracle with 4154 negatives; no explicit 044:23:59:59 case |
+| plotviewmodel::formatTimeNegativeElapsed | PORTED | test_csvseries.cpp "csvseries: the clock stamp is what v2.14 wrote, for every generated time" | Hash oracle with 4154 negatives; no explicit 044:23:59:59 case |
 | plotviewmodel::loadCsvHeaderOnly | PORTED | ExportImportTests.cs::AFileThatIsNotAnExportedCsvChangesNothing | Header-only is rejected |
 | plotviewmodel::loadCsvMalformedRows | PORTED | ExportImportTests.cs::MalformedRowsAreSkippedWithAWarningThatCountsThem |  |
 | plotviewmodel::lockSeriesMetricType | PORTED | ExportImportTests.cs::AnImportedPlotIsShownAsARunsWouldBe, ::EveryExportReadsBackAsItsSeries…; FormatsTests.cs::EveryCsvIsParsedAsTheCoreParsesIt | Suffix stripped, metric typed |
@@ -385,7 +385,7 @@ application's `AddStream`.
 | plotviewmodel::sourceListListsDistinctLabeledSources | PORTED | TemplateTests.cs::ThePlotListsItsRecordingsAndShowsOneOrAll |  |
 | plotviewmodel::exportCsvSourceFilterWritesOnlyThatSource | PORTED | ExportImportTests.cs::ALaterSourcesColumnsAreQualifiedAndASourceCanBeExportedAlone |  |
 | plotviewmodel::exportCsvCreatesFile | PORTED | ExportImportTests.cs::AnExportHoldsEverySeriesShownOrNotAndNothingToWriteWritesNoFile |  |
-| plotviewmodel::exportCsvHeaderAndData | PORTED | ExportImportTests.cs::EveryRecordingExportsTheQtApplicationsCsvByteForByte, ::AnExportHoldsEverySeries… |  |
+| plotviewmodel::exportCsvHeaderAndData | PORTED | ExportImportTests.cs::EveryRecordingExportsTheCsvV214ExportedByteForByte, ::AnExportHoldsEverySeries… |  |
 | plotviewmodel::exportCsvEmptyNoFile | PORTED | ExportImportTests.cs::AnExportHoldsEverySeries… |  |
 | plotviewmodel::exportCsvIncludesErrorColumn | PORTED | ExportImportTests.cs::AnExportHoldsEverySeries… | Exact Lock/Missed header |
 | plotviewmodel::exportCsvRoundTripsThroughLoad | PORTED | ExportImportTests.cs::EveryExportReadsBackAsItsSeriesAndExportsAgainByteForByte |  |
@@ -410,7 +410,7 @@ application's `AddStream`.
 | tmchart::cachedPaintStillFollowsTheData | PORTED | PlotTests.cs::TheCrosshairAndReadoutFollowTheCursorOverTheCachedPlot | DataLayerRenders count on range and data change |
 | tmchart::crosshairDrawsOverTheCachedPlot | PORTED | PlotTests.cs::TheCrosshairAndReadoutFollowTheCursorOverTheCachedPlot | Only the column changes; no data re-render |
 | tmchart::exportOmitsCursorOverlays | PORTED | PlotTests.cs::AnExportOmitsTheCursorsOverlays; ExportImportTests.cs::TheCursorsCrosshairIsNotExported | Crosshair only; zoom band not checked |
-| csvseries::importEdgeCasesKeepTheirRecordedBehaviour | PORTED | test_csvseries.cpp "csvseries: every import case reads as recorded"; SeriesTests.cs::AParsedCsvsStreamsAreOrderedLikeTheQtTestsExpect; ExportImportTests.cs::MalformedRowsAreSkipped… | All 10 rows in native |
+| csvseries::importEdgeCasesKeepTheirRecordedBehaviour | PORTED | test_csvseries.cpp "csvseries: every import case reads as recorded"; SeriesTests.cs::AParsedCsvsStreamsAreOrderedAsV214OrderedThem; ExportImportTests.cs::MalformedRowsAreSkipped… | All 10 rows in native |
 | csvseries::exportEdgeCasesKeepTheirRecordedBehaviour | PORTED | test_csvseries.cpp "csvseries: every export case writes the bytes recorded"; ExportImportTests.cs::ALaterSourcesColumnsAreQualified… | All 9 rows in native |
 | csvseries::csvPathsMayBeNonAscii | PORTED | test_csvseries.cpp "csvseries: a CSV in a folder with a non-ASCII name is written and read back" | Managed CSV path not checked; pattern-file analogue is |
 | csvseries::exportOfNothingWritesNothing | PORTED | ExportImportTests.cs::AnExportHoldsEverySeries…, ::ALaterSourcesColumnsAreQualified… |  |
@@ -444,7 +444,7 @@ application's `AddStream`.
 | tst_streamconfigdialog::testFrameSyncValidation | PORTED | StreamRulesTests.ASyncFieldTakesOneToSixteenHexDigits (A34F/ZXY rows); StreamWindowsTests.TypingAnInvalidPatternShowsTheProblemAndHoldsOk |  |
 | tst_streamconfigdialog::testFrameMaskValidation | PORTED | StreamRulesTests.ASyncFieldTakesOneToSixteenHexDigits (FFFF/FFZZ rows), AFrameSyncProblemIsNamed |  |
 | tst_streamconfigdialog::testDataRateLimits | PORTED | StreamRulesTests.TheDataRateIsFromZeroToAThousand |  |
-| tst_streamconfigdialog::testDefaultSampleRate | PORTED | StreamWindowsTests.TheFrameSyncLockDialogHidesTheReceiverSettings ("1 s"); StreamSetupViewModelTests index→period; StreamSetupViewModelTests.TheChoicesAreTheQtDialogsInItsOrder (5.1) | The three labels in order |
+| tst_streamconfigdialog::testDefaultSampleRate | PORTED | StreamWindowsTests.TheFrameSyncLockDialogHidesTheReceiverSettings ("1 s"); StreamSetupViewModelTests index→period; StreamSetupViewModelTests.TheChoicesAreUs21sAndUs30sInTheirOrder (5.1) | The three labels in order |
 | tst_streamconfigdialog::applyToAllCopiesSettingsToSameModeStreams | PORTED | StreamRulesTests.ApplyToAllCopiesSettingsToSameModeStreams; ConfigureStreamsTests.ApplyToAllCopiesToTheOtherCheckedRowsOfTheMode |  |
 | tst_streamconfigdialog::applyToAllLeavesDifferentModeStreamsUnchanged | PORTED | StreamRulesTests.ApplyToAllLeavesDifferentModeStreamsUnchanged; ConfigureStreamsTests.ApplyToAllCopies… |  |
 | tst_streamconfigdialog::applyToAllUncheckedDoesNotAffectOtherStreams | PORTED | ConfigureStreamsTests.TwoStreamsConfiguredAndProcessedAreBothDrawn (implicit) | ApplyToAllLeavesUncheckedStreamsUnchanged tests unchecked rows, not the Apply-to-all box left off. |
@@ -457,28 +457,28 @@ application's `AddStream`.
 | tst_streamconfigdialog::byteOrderToggleIsFileLevel | PORTED | StreamWindowsTests.ConfigureStreamsShowsARowPerChannel…, TheAllBoxAndLegacyChapter10ReachTheViewModel; ConfigureStreamsTests.TheRunIsTheCheckedRowsWithTheRecordingsSettings | One named control; the byte swap lives on the RunRequest only. |
 | tst_streamconfigdialog::legacyToggleIsInverseOfByteSwap | PORTED | StreamRulesTests.LegacyChapter10IsTheInverseOfTheByteSwap; ConfigureStreamsTests.TheRunIsTheCheckedRows…; StreamWindowsTests (unticked at open) |  |
 | tst_streamconfigschema::fromJsonClampsOutOfRangeComboIndices | PORTED | TemplateTests.AValueOfTheWrongTypeKeepsItsDefaultAndIndicesAreClamped | High and negative values clamp; in-range values come from the Qt fixtures. |
-| tst_streamconfigschema::roundTripFrameSyncLockConfig | PORTED | TemplateTests.TheQtApplicationsTemplatesReadAsTheyWereWritten, ATemplateIsWrittenAsTheQtApplicationWritesIt | Qt-written fixtures are read and rewritten byte for byte. |
+| tst_streamconfigschema::roundTripFrameSyncLockConfig | PORTED | TemplateTests.TheV214TemplatesReadAsTheyWereWritten, ATemplateIsWrittenAsV214WroteIt | Qt-written fixtures are read and rewritten byte for byte. |
 | tst_streamconfigschema::roundTripReceiverChannelInfoConfig | PORTED | same (calibrated.json) |  |
 | tst_streamconfigschema::roundTripPreservesCalibrationInputReferences | PORTED | same (calibrated.json) |  |
 | tst_streamconfigschema::toJsonNeverIncludesCalibrationByWord | PORTED | TemplateTests.WhatATemplateLeavesOutIsLeftOutAndAControlCharacterIsEscaped |  |
 | tst_streamconfigschema::toJsonOmitsCalibrationBlockWhenNoCalCh10Path | PORTED | same |  |
 | tst_streamconfigschema::fromJsonRejectsObjectMissingRequiredFields | PORTED | TemplateTests.AMissingKeyKeepsItsDefaultAndAnEntryNeedsAChannelAndALabel | The entry is skipped. |
 | tst_streamconfigschema::fromJsonLeavesDefaultsWhenOptionalFieldsMissing | PORTED | same |  |
-| tst_processingtemplateschema::roundTripFrameSyncLockEntry | PORTED | TemplateTests.TheQtApplicationsTemplatesReadAsTheyWereWritten, ATemplateIsWrittenAsTheQtApplicationWritesIt |  |
+| tst_processingtemplateschema::roundTripFrameSyncLockEntry | PORTED | TemplateTests.TheV214TemplatesReadAsTheyWereWritten, ATemplateIsWrittenAsV214WroteIt |  |
 | tst_processingtemplateschema::roundTripReceiverChannelInfoEntry | PORTED | same |  |
-| tst_processingtemplateschema::roundTripPreservesAppearance | PORTED | same; AnAppearanceReadsItsMetricAndColourAsQtReadsThem |  |
+| tst_processingtemplateschema::roundTripPreservesAppearance | PORTED | same; AnAppearanceReadsItsMetricAndColourAsV214ReadThem |  |
 | tst_processingtemplateschema::toJsonOmitsAppearanceWhenEmpty | PORTED | TemplateTests.WhatATemplateLeavesOutIsLeftOut… |  |
 | tst_processingtemplateschema::roundTripPreservesCalibrationInputReferences | PORTED | TemplateTests.TheQtApplicationsTemplatesRead… (calibrated.json) |  |
 | tst_processingtemplateschema::toJsonNeverIncludesCalibrationByWord | PORTED | TemplateTests.WhatATemplateLeavesOutIsLeftOut… |  |
-| tst_processingtemplateschema::fromJsonAcceptsCurrentSchemaVersion | PORTED | TemplateTests.ATemplateIsRefusedForWhatTheQtSchemaRefuses (v1 row); WhatATemplateLeavesOut… (writes v1) |  |
-| tst_processingtemplateschema::fromJsonRejectsNewerSchemaVersion | PORTED | TemplateTests.ATemplateIsRefusedForWhatTheQtSchemaRefuses |  |
+| tst_processingtemplateschema::fromJsonAcceptsCurrentSchemaVersion | PORTED | TemplateTests.ATemplateIsRefusedForWhatV214Refused (v1 row); WhatATemplateLeavesOut… (writes v1) |  |
+| tst_processingtemplateschema::fromJsonRejectsNewerSchemaVersion | PORTED | TemplateTests.ATemplateIsRefusedForWhatV214Refused |  |
 | tst_processingtemplateschema::fromJsonRejectsMissingSchemaVersion | PORTED | same |  |
 | tst_processingtemplateschema::fromJsonRejectsMissingEntriesArray | PORTED | same |  |
 | tst_processingtemplateschema::fromJsonRejectsNonObjectDocument | PORTED | same ("[]" row) |  |
 | tst_processingtemplateschema::swapBytesRoundTripsAndDefaultsTrue | PORTED | TemplateTests.TheQtApplicationsTemplatesRead… (SwapBytes false), AMissingKeyKeepsItsDefault… (true) |  |
 | tst_batchcontroller::buildTemplateCapturesConfigsAndAppearance | PORTED | TemplateTests.ATemplateIsCapturedFromOneRecordingAndItsSeriesAsTheyLook |  |
 | tst_batchcontroller::applyAppearanceRenamesMatchingSeries | PORTED | TemplateTests.ATemplatesLooksGoBackOnOneRecordingsMatchingSeriesInOneRefresh |  |
-| tst_batchcontroller::missingFilesAreSkippedAndReported | PORTED | TemplateBatchTests.ABatchRunsEachFileInTurnKeepsEachAndExportsEachAsTheQtApplicationDoes | One missing file among good ones, not an all-missing batch; skip warning and counts asserted. |
+| tst_batchcontroller::missingFilesAreSkippedAndReported | PORTED | TemplateBatchTests.ABatchRunsEachFileInTurnKeepsEachAndExportsEachAsV214Did | One missing file among good ones, not an all-missing batch; skip warning and counts asserted. |
 | tst_batchcontroller::validateComparesEachFilesChannelsToTheTemplate | PORTED | TemplateTests.AFileMatchesOnItsChannelIdsAloneAndAMismatchIsSpelledOut |  |
 | tst_batchcontroller::matchFileComparesChannelIdsAndNothingElse | PORTED | same; native test_templatematcher.cpp | "Ids only" holds because Match takes a list of ids. |
 | tst_batchcontroller::aFileWhoseChannelsNoLongerMatchIsSkippedAtItsTurn | PORTED | TemplateBatchTests.ABatchRunsEachFileInTurn… (step_cal skipped at its turn) |  |
@@ -500,7 +500,7 @@ application's `AddStream`.
 | tst_framesyncfile::theCoreReadsEveryGeneratedFileLikeTheOldDialogCode | PORTED | native "the core reads every generated file like the code it replaced"; FormatsTests corpus | How the dialog applies a read file is not compared against the old code. |
 | tst_framesyncfile::theCoreWritesEveryGeneratedFileLikeTheOldDialogCode | PORTED | native "the core writes every generated file like the code it replaced" |  |
 | tst_framesyncfile::aFileWrittenByTheDialogLoadsBackIntoIt | PORTED | StreamFilesTests.APatternFileRoundTrips…; StreamSetupViewModelTests.LoadingAPatternFileShowsItAndRemembersTheFolder, SavingAPatternFileWritesWhatIsShown |  |
-| tst_qtprocessingevents::deliversOnTheTargetsThreadInOrder | PORTED | ProcessingTests.TheLogTellsTheStoryOfARunAsTheQtApplicationDoes, TheJobLinesComeFirstAndWhatTheThreadsSayFollowsTheSummary; RunTests.AnObserverIsToldInTheDocumentedOrder | The Qt bridge is gone; UI-thread delivery and ordering are held by these. |
+| tst_qtprocessingevents::deliversOnTheTargetsThreadInOrder | PORTED | ProcessingTests.TheLogTellsTheStoryOfARunAsV214Did, TheJobLinesComeFirstAndWhatTheThreadsSayFollowsTheSummary; RunTests.AnObserverIsToldInTheDocumentedOrder | The Qt bridge is gone; UI-thread delivery and ordering are held by these. |
 | tst_qtprocessingevents::progressArrivesOnTheTargetsThreadInOrder | PORTED | ProcessingTests.TheProgressDialogIsUpForTheRunAndShowsTheCoresProgress (5.1) | In order, and every report on the UI thread |
 | tst_qtprocessingevents::messagesAreDecodedFromUtf8 | PORTED | ProcessingTests.TheRunLogsTheJobLinesThenTheSummaryThenWhatTheRunSays (core's em dash); native EventReporter "arguments pass through unchanged" |  |
 | tst_qtprocessingevents::missingHandlersAreSkipped | PORTED | RunTests.ARunWithNoObserverJustRuns, AnObserverThatDoesNotOverrideCompletionStillReleasesTheResult; native EventReporter "with no sink…" |  |
@@ -519,5 +519,5 @@ application's `AddStream`.
 | tst_coreqtfree::theAbiGuardSeesQtAndHigherLayers | DROPPED | none | Self-test of the deleted guard. |
 | tst_coreqtfree::theNativeTestsAreQtFreeAndCompileOnlyCoreSources | PORTED | TmDq.Core.Tests NativeProjectTests.TheNativeTestsCompileEveryTestFileAndTheDllsOwnSources (5.1); test_native.ps1 dumpbin check | Every test file compiled, and the DLL's sources and nothing else; no Qt import is the script's check |
 | tst_coreqtfree::theNativeTestsGuardSeesEveryKindOfDrift | DROPPED | none | Self-test of the deleted guard. |
-| tst_constants::plotConstants | PORTED | PlotTests.cs::TheAxesAndTheTitleAreWordedAsTheQtApplicationWordsThem (5.1); ShellTests.ThePalettesAreTheQtApplications; PlotTests (0-100) | The texts themselves now |
+| tst_constants::plotConstants | PORTED | PlotTests.cs::TheAxesAndTheTitleAreWordedAsV214WordedThem (5.1); ShellTests.ThePalettesAreV214s; PlotTests (0-100) | The texts themselves now |
 | tst_streamjob::jobsKeepTheirRecordedBehaviour | PORTED | native test_streamjob.cpp; RunTests.EverySettingOfAStreamReachesTheJob, TheByteOrderOfTheFileReachesTheJob, TheApplicationRootsOwnWordMap…, AWordMapFileNamedOnTheStream…, CalibrationProfilesAreCarried…, AStreamTheCoreRejectsIsAJobError…; StreamRulesTests.TheCoreGetsTheRow… |  |

@@ -11,9 +11,9 @@ namespace TmDq.App.Tests
     /// <summary>
     /// What reaches a row from files (plan step 4.1a): the defaults a new row and a Receiver SNR row start with, and the
     /// setup dialogs' Load and Save of the frame-sync pattern file and the receiver-parameters file. The files are read
-    /// and written by the core; these hold the app to applying them as the Qt dialogs do (US1.0, US5.0, US5.1). The
-    /// flag cases port tst_streamconfigdialog.cpp's tomlFrameSyncRoundTripsStreamFormatFlags and
-    /// tomlFrameSyncOmitsPerSessionFields.
+    /// and written by the core; these hold the app to applying them as v2.14.2's dialogs did (US1.0, US5.0, US5.1). The
+    /// flag cases are v2.x's: the stream-format flags round-trip through the pattern file and the per-session fields
+    /// stay out of it.
     /// </summary>
     [Collection(NativeCoreCollection.Name)]
     public sealed class StreamFilesTests : IDisposable

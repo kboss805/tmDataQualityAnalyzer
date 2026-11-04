@@ -8,15 +8,15 @@ namespace TmDq.App.Streams
 {
     /// <summary>
     /// The rules of Configure Streams and its setup dialogs (US1.0, US2.0 to US2.2, US7.0), as pure functions over
-    /// <see cref="StreamSetup"/>. They follow the Qt StreamConfigDialog except in three places where it was wrong, each
+    /// <see cref="StreamSetup"/>. They follow v2.x's Configure Streams except in three places where it was wrong, each
     /// a decision recorded in the plan (step 4.1) and pinned by a test:
     /// <list type="bullet">
     /// <item>a checked row that was never configured is not processed with whatever it holds: Process waits until every
-    /// checked row is ready (the Qt dialog enabled Process once any row was, and ran the rest on defaults);</item>
-    /// <item>changing a configured row's Mode makes it unconfigured (the Qt dialog kept it green, holding the other
-    /// mode's frame sync);</item>
-    /// <item>opening a row in Frame Sync Lock after Receiver SNR really drops its receiver-parameters file (the Qt
-    /// dialog cleared it on a copy it then discarded).</item>
+    /// checked row is ready (v2.x enabled Process once any row was, and ran the rest on defaults);</item>
+    /// <item>changing a configured row's Mode makes it unconfigured (v2.x kept it green, holding the other mode's
+    /// frame sync);</item>
+    /// <item>opening a row in Frame Sync Lock after Receiver SNR really drops its receiver-parameters file (v2.x
+    /// cleared it on a copy it then discarded).</item>
     /// </list>
     /// </summary>
     public static class StreamRules
@@ -31,7 +31,7 @@ namespace TmDq.App.Streams
         public const int MaxReceiverChannels = 100;
         public const int MaxSlopeIndex = 3;
 
-        /// <summary>The setup dialog's message for an empty pattern, as the Qt dialog words it.</summary>
+        /// <summary>The setup dialog's message for an empty pattern, in v2.14.2's words.</summary>
         public const string PatternRequired = "A frame sync pattern is required (e.g. FE6B2840).";
 
         // --- the Ready column and the Process button ---
@@ -194,7 +194,7 @@ namespace TmDq.App.Streams
 
         /// <summary>
         /// What is wrong with a setup the user is about to accept, in the order the dialog shows it; empty when it can be
-        /// accepted. The frame sync for both modes, the receiver settings for Receiver SNR. Each is a rule the Qt dialog
+        /// accepted. The frame sync for both modes, the receiver settings for Receiver SNR. Each is a rule v2.x
         /// kept with a validator, a spin box's range or the core's own check; here it is stated, so a value loaded from a
         /// file cannot slip past it.
         /// </summary>
@@ -230,7 +230,7 @@ namespace TmDq.App.Streams
 
         // --- to the core ---
 
-        /// <summary>The core's view of a row: the pattern and mask trimmed and upper-cased, as the Qt dialogs hand them on.</summary>
+        /// <summary>The core's view of a row: the pattern and mask trimmed and upper-cased, as in v2.x.</summary>
         public static StreamConfig ToStreamConfig(StreamSetup s) => new()
         {
             PcmChannelId = s.PcmChannelId,
@@ -262,7 +262,7 @@ namespace TmDq.App.Streams
                 AppRoot = string.IsNullOrEmpty(appRoot) ? null : appRoot,
             };
 
-        /// <summary>The time-channel list's text for a channel: "<id> - <name>", as the Qt dialog lists it (the PCM rows
+        /// <summary>The time-channel list's text for a channel: "<id> - <name>", as v2.x listed it (the PCM rows
         /// show the bare name).</summary>
         public static string TimeChannelText(ChannelInfo channel) =>
             channel.Id.ToString(CultureInfo.InvariantCulture) + " - " + channel.Name;

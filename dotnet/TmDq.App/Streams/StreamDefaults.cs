@@ -5,8 +5,8 @@ using TmDq.Core;
 namespace TmDq.App.Streams
 {
     /// <summary>
-    /// The settings a stream starts with, and those a Mode change brings, as the Qt application has them
-    /// (MainViewModel::buildDefaultStreamConfigs, StreamConfigDialog's mode-switch defaults, loadReceiverFrameDefaults).
+    /// The settings a stream starts with, and those a Mode change brings, as v2.x had them: a new
+    /// recording's rows, the defaults a Mode switch loads, and the receiver frame defaults read from settings/.
     /// </summary>
     public static class StreamDefaults
     {
@@ -37,7 +37,7 @@ namespace TmDq.App.Streams
 
             // Receiver SNR: the shipped defaults file when it says something, field by field (pattern and mask
             // upper-cased), else the constants. Its Randomized and Inverted keys are not used, and a length from the
-            // older WordsInMinorFrame key is ignored, exactly as the Qt dialog reads it (loadReceiverFrameDefaults).
+            // older WordsInMinorFrame key is ignored, exactly as v2.x read it.
             string pattern = ReceiverSnrDefaults.Pattern, mask = FrameSyncDefaults.Mask;
             int bits = ReceiverSnrDefaults.BitsInMinorFrame;
             if (!string.IsNullOrEmpty(appRoot))

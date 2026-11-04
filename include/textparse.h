@@ -1,16 +1,17 @@
 /**
  * @file textparse.h
- * @brief Qt-free text helpers with `QString`'s parsing rules, for the de-Qt'd core.
+ * @brief Text helpers with the forgiving number rules the application's files are read with.
  *
- * `QString::toInt()` / `toDouble()` / `trimmed()` are more forgiving than the C++
- * standard's `std::from_chars`: they ignore surrounding whitespace and accept a leading
- * '+'. Settings files and parameter names written by hand rely on that, so code that
- * moved off QString keeps the rules. They live here, once, so the TOML reader and the
- * receiver-name parser cannot drift apart (`TestTomlDocument` and
- * `TestFrameSetup::receiverNameParsingMatchesQStringToInt` pin them).
+ * These rules are more forgiving than the C++ standard's `std::from_chars`: surrounding
+ * whitespace is ignored and a leading '+' is accepted. Settings files and parameter names
+ * written by hand rely on that. The rules live here, once, so the TOML reader, the CSV
+ * importer and the receiver-name parser cannot drift apart (native/tmdq_core_tests/
+ * test_tomldocument.cpp, test_framesetup.cpp and test_csvseries.cpp pin them).
  *
- * Deliberately ASCII-only: Qt also trimmed Unicode spaces (U+00A0 and friends) and
- * parsed Unicode digits; no file this application reads carries either.
+ * Deliberately ASCII-only: whitespace is ASCII whitespace and digits are ASCII digits.
+ * v2.14 also trimmed Unicode spaces (U+00A0 and friends) and parsed Unicode digits; no
+ * file this application reads carries either. Its answers are the oracle the tests hold
+ * these rules to.
  */
 
 #ifndef TEXTPARSE_H
@@ -29,7 +30,7 @@ inline bool isAsciiSpace(char c)
     return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r';
 }
 
-/// `QString::trimmed()` for ASCII whitespace.
+/// @p s without its leading and trailing ASCII whitespace (space, \t, \n, \v, \f, \r).
 inline std::string trimmed(const std::string& s)
 {
     std::size_t b = 0;
@@ -45,9 +46,9 @@ inline std::string trimmed(const std::string& s)
     return s.substr(b, e - b);
 }
 
-/// `QString::toInt()` / `toLongLong()`: surrounding whitespace ignored, one optional
-/// leading '+' or '-', base 10, the whole remainder must be digits, and out of range
-/// fails rather than saturating. @return false (leaving @p out untouched) on failure.
+/// An integer in base 10: surrounding whitespace ignored, one optional leading '+' or
+/// '-', the whole remainder must be digits, and out of range for @p Int fails rather
+/// than saturating. @return false (leaving @p out untouched) on failure.
 template <typename Int>
 bool parseInteger(const std::string& text, Int& out)
 {
@@ -59,7 +60,7 @@ bool parseInteger(const std::string& text, Int& out)
         ++first;
         if (first != last && (*first == '+' || *first == '-'))
         {
-            return false; // "+-3" is not a number to Qt either
+            return false; // one sign only: "+-3" is not a number
         }
     }
     if (first == last)
@@ -76,7 +77,7 @@ bool parseInteger(const std::string& text, Int& out)
     return true;
 }
 
-/// `QString::toULongLong(&ok, 16)`: surrounding whitespace ignored, an optional leading '+', an
+/// An unsigned integer in base 16: surrounding whitespace ignored, an optional leading '+', an
 /// optional "0x" / "0X" prefix, then at least one hex digit and nothing else; a '-' is refused
 /// (even "-0"), and more than 64 bits is refused rather than wrapped. @return false (leaving
 /// @p out untouched) on failure.
@@ -107,11 +108,10 @@ inline bool parseUnsignedHex(const std::string& text, std::uint64_t& out)
     return true;
 }
 
-/// `QString::toDouble()`, as far as a settings file or a CSV cell can reach: surrounding whitespace
-/// ignored, an optional leading '+', decimal or exponent form, and the special values spelled the way
-/// Qt takes them - "nan", "inf", "+inf" and "-inf", in any case. `std::from_chars` also takes
-/// "infinity", "nan(...)" and a signed "nan"; Qt reads those as not a number, so they are refused here
-/// (the native `csvseries` test compares the two over tens of thousands of strings, against what Qt answered).
+/// A double: surrounding whitespace ignored, one optional leading '+' or '-', decimal or exponent
+/// form, and the special values "nan", "inf", "+inf" and "-inf", in any case. `std::from_chars` also
+/// takes "infinity", "nan(...)" and a signed "nan"; those were never numbers to this application, so they
+/// are refused here (test_csvseries.cpp checks tens of thousands of strings against the recorded answers).
 inline bool parseDouble(const std::string& text, double& out)
 {
     const std::string s = trimmed(text);

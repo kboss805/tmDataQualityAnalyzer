@@ -1,7 +1,7 @@
 /**
  * @file chartgeometry.cpp
- * @brief Implementation of the plot's geometry - transcribed from TmChart, expression for expression, so the Qt chart
- * draws exactly the pixels it drew before it called this.
+ * @brief Implementation of the plot's geometry - transcribed expression for expression from the chart code it replaced,
+ * which test_chartgeometry.cpp restates and compares it with, so the chart draws exactly the pixels it drew before.
  */
 
 #include "chartgeometry.h"

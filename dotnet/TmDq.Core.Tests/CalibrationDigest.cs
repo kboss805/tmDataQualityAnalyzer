@@ -2,7 +2,7 @@ namespace TmDq.Core.Tests;
 
 /// <summary>
 /// What the core itself makes of the committed step_cal recording, recorded by running CalibrationExtractor
-/// directly (the code behind the Qt application's Extract Calibration dialog, built by the same
+/// directly (the code behind the Extract Calibration dialog, its request built by the same
 /// buildCalibrationRequest) with the shipped 11-step file and the shipped word map, plus a few variations.
 /// Doubles are printed with 17 significant digits, so they parse back to the exact value.
 /// Channel line: index|name|word|valid|hadData|outcome|plateaus|extra|relaxed|saturated|sweepLevels|edgeThreshold|

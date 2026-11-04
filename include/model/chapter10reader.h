@@ -30,11 +30,10 @@
  * channels from the TMATS record, and provide channel/time accessors. PCM frame
  * extraction is handled by FrameProcessor.
  *
- * A plain class, with no Qt: text is UTF-8 `std::string`, the path is a
+ * A plain class: text is UTF-8 `std::string`, the path is a
  * `std::filesystem::path`, and a failed load leaves its reason in lastError() rather
  * than emitting a signal - loading is synchronous, on the caller's thread, so the caller
- * already knows when to look. The layers that show channel lists convert them at their
- * own boundary (`qtbridge.h`).
+ * already knows when to look. A host reads the channel lists through the C ABI.
  */
 class Chapter10Reader
 {

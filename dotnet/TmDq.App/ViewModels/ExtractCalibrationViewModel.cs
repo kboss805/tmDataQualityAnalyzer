@@ -30,7 +30,7 @@ namespace TmDq.App.ViewModels
         int NumReceivers,
         int ReceiverChannels);
 
-    /// <summary>How a line of the dialog reads: as the Qt dialog marks and colours it.</summary>
+    /// <summary>How a line of the dialog reads, which decides its mark and its colour.</summary>
     public enum CalibrationStatusKind
     {
         Pending,
@@ -40,7 +40,7 @@ namespace TmDq.App.ViewModels
     }
 
     /// <summary>
-    /// The Extract Calibration dialog's state (plan step 4.6, US5.3), the Qt <c>CalibrationSetupDialog</c>: a step file
+    /// The Extract Calibration dialog's state (plan step 4.6, US5.3): a step file
     /// (the stream's last, else the shipped default, loaded as the dialog opens), a calibration recording, and a clip at
     /// each end. Once both files are in hand, and again after any change to them or to a clip, the calibration is
     /// extracted, with the progress dialog up and Cancel stopping it. OK is available once the step file parsed and at
@@ -240,7 +240,7 @@ namespace TmDq.App.ViewModels
         }
 
         /// <summary>
-        /// Extracts with what the dialog holds, as the Qt <c>maybeRunExtraction</c> does: nothing until a calibration
+        /// Extracts with what the dialog holds: nothing until a calibration
         /// recording is chosen; a word to choose a valid step file first; otherwise the extraction, its outcome in the
         /// recording's status line and OK available once a channel calibrated.
         /// </summary>
@@ -350,7 +350,7 @@ namespace TmDq.App.ViewModels
             OnPropertyChanged(nameof(CalBrush));
         }
 
-        /// <summary>A status line as the Qt dialog writes it: a tick, a warning sign or a cross before the text.</summary>
+        /// <summary>A status line as v2.x wrote it: a tick, a warning sign or a cross before the text.</summary>
         public static string Marked(CalibrationStatusKind kind, string text) => kind switch
         {
             CalibrationStatusKind.Ok => "✓ " + text,
@@ -359,7 +359,7 @@ namespace TmDq.App.ViewModels
             _ => text,
         };
 
-        /// <summary>The Qt dialog's colours: green, the log's goldenrod, red, and gray while pending.</summary>
+        /// <summary>The status colours, v2.x's: green, the log's goldenrod, red, and gray while pending.</summary>
         public static IBrush BrushOf(CalibrationStatusKind kind) => kind switch
         {
             CalibrationStatusKind.Ok => Brushes.Green,

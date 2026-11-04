@@ -1,15 +1,15 @@
 /**
  * @file textformat.h
- * @brief Number formatting that reproduces Qt's `'f'` output without Qt.
+ * @brief Fixed-notation number formatting that rounds an exact tie away from zero.
  *
- * The de-Qt'd core builds its text with `std::format`, which rounds an exact tie to the even digit
- * (`2.5` with no decimals is "2"). `QString::number(v, 'f', n)` and `QString::arg(v, 0, 'f', n)`
- * round it away from zero ("3"). Measured, not assumed: 0.5 -> "1" vs "0", 2.5 -> "3" vs "2",
+ * The core builds its text with `std::format`, which rounds an exact tie to the even digit
+ * (`2.5` with no decimals is "2"). The reports an operator reads have always rounded it away from
+ * zero ("3"). Measured, not assumed: 0.5 -> "1" vs "0", 2.5 -> "3" vs "2",
  * 0.25 with one decimal -> "0.3" vs "0.2", 1234.5 -> "1235" vs "1234". Every other value agrees,
  * because it is decided by the exact binary value rather than a tie.
  *
- * Reports an operator reads were written against Qt's output, so a step file with half-dB steps
- * must keep printing "3 dB", not "2 dB". `formatFixed()` is that output.
+ * So a step file with half-dB steps must keep printing "3 dB", not "2 dB". `formatFixed()` is that
+ * output; native/tmdq_core_tests/test_textformat.cpp pins it against what v2.14 printed.
  */
 
 #ifndef TEXTFORMAT_H
@@ -41,14 +41,14 @@ inline bool isExactTie(double magnitude, int decimals)
     return exact[tail - 1] == '5' && exact.find_first_not_of('0', tail) == std::string::npos;
 }
 
-/// `QString::number(value, 'f', decimals)`: fixed notation, ties rounded away from zero, and the
+/// @p value in fixed notation with @p decimals places: ties rounded away from zero, and the
 /// sign kept on a negative value that rounds to zero ("-0"), though not on negative zero itself.
 inline std::string formatFixed(double value, int decimals)
 {
     // A not-a-number or an infinity needs no branch of its own: the magnitude has no sign bit left, so a
-    // not-a-number prints as "nan" whatever its sign (as Qt prints it; std::format would say "-nan"), and
-    // an infinity gets its sign from the comparison below.
-    // Not the sign bit: Qt prints negative zero as "0" but -0.4 rounded to nothing as "-0".
+    // not-a-number prints as "nan" whatever its sign (std::format would say "-nan"), and an infinity
+    // gets its sign from the comparison below.
+    // Not the sign bit: negative zero prints as "0" but -0.4 rounded to nothing as "-0".
     const bool negative = value < 0.0;
     const double magnitude = std::fabs(value);
     // An exact tie is nudged one step up, so the correctly-rounded formatter takes it away from zero.

@@ -19,10 +19,10 @@ using Xunit;
 namespace TmDq.App.Tests
 {
     /// <summary>
-    /// The chart (plan step 4.3b): the plot's state (<see cref="PlotViewModel"/>, the C# half of the Qt PlotViewModel:
-    /// series from the core on one time axis, colours, ranges and overrides, the view mode, the zoom history, the
-    /// readout) and the control that draws it and takes the gestures (<see cref="PlotChart"/>, the Qt TmChart with the
-    /// gestures PlotWidget adds). The drawing cases are TestTmChart's, read from rendered frames.
+    /// The chart (plan step 4.3b): the plot's state (<see cref="PlotViewModel"/>: series from the core on one time
+    /// axis, colours, ranges and overrides, the view mode, the zoom history, the readout) and the control that draws it
+    /// and takes the gestures (<see cref="PlotChart"/>). The drawing cases are v2.x's chart's, read from rendered
+    /// frames.
     /// </summary>
     [Collection(NativeCoreCollection.Name)]
     public sealed class PlotTests
@@ -36,9 +36,9 @@ namespace TmDq.App.Tests
 
         // ---- colours ------------------------------------------------------------------------------------------------
 
-        public static IEnumerable<object[]> QtShades()
+        public static IEnumerable<object[]> ShadesAsV214PrintedThem()
         {
-            // What QColor printed for PlotViewModel::shadeOfColor (Qt 6.12.0), primary by primary, levels 0 to 6.
+            // The shades v2.14.2 printed (Shade's rule, lighter per level), primary by primary, levels 0 to 6.
             string table = @"
 106,13,173 0 106,13,173|106,13,173 1 135,60,193|106,13,173 2 171,116,213|106,13,173 3 211,182,233|106,13,173 4 236,213,253|106,13,173 5 238,215,255|106,13,173 6 238,215,255
 67,97,238 0 67,97,238|67,97,238 1 132,155,255|67,97,238 2 192,204,255|67,97,238 3 215,222,255|67,97,238 4 215,222,255|67,97,238 5 215,222,255|67,97,238 6 215,222,255
@@ -60,15 +60,15 @@ namespace TmDq.App.Tests
         }
 
         [Theory]
-        [MemberData(nameof(QtShades))]
-        public void AShadeIsTheColourQtDraws(string primary, int level, string expected)
+        [MemberData(nameof(ShadesAsV214PrintedThem))]
+        public void AShadeIsTheColourV214Drew(string primary, int level, string expected)
         {
             Assert.Equal(Rgb(expected), PlotColors.Shade(Rgb(primary), level));
         }
 
-        public static IEnumerable<object[]> QtShadesAroundTheWheel()
+        public static IEnumerable<object[]> ShadesAroundTheWheelAsV214PrintedThem()
         {
-            // The same function, as QColor computed it, for colours the primaries do not reach: every sector of the hue
+            // The same function, as v2.14.2 computed it, for colours the primaries miss: every sector of the hue
             // wheel and both sides of an edge, a negative raw hue (magenta), a grey (no hue at all) and near-greys.
             const string table = "255,0,128 1 255,60,161|255,0,128 2 255,120,190|255,0,128 3 255,180,219|200,30,90 1 220,85,134|200,30,90 2 240,149,182|200,30,90 3 255,215,230|128,255,0 1 161,255,60|128,255,0 2 190,255,120|128,255,0 3 219,255,180|90,200,20 1 132,220,73|90,200,20 2 178,240,136|90,200,20 3 225,255,205|0,255,255 1 60,255,255|0,255,255 2 120,255,255|0,255,255 3 180,255,255|20,120,200 1 73,156,220|20,120,200 2 136,195,240|20,120,200 3 205,233,255|255,255,0 1 255,255,60|255,255,0 2 255,255,120|255,255,0 3 255,255,180|140,0,255 1 164,60,255|140,0,255 2 192,120,255|140,0,255 3 220,180,255|255,0,255 1 255,60,255|255,0,255 2 255,120,255|255,0,255 3 255,180,255|1,2,3 1 13,18,23|1,2,3 2 35,39,43|1,2,3 3 53,58,63|128,128,128 1 148,148,148|128,128,128 2 168,168,168|128,128,128 3 188,188,188|250,251,249 1 235,255,215|250,251,249 2 235,255,215|250,251,249 3 235,255,215|17,200,201 1 71,221,221|17,200,201 2 134,241,241|17,200,201 3 202,255,255|201,17,200 1 221,71,221|201,17,200 2 241,134,241|201,17,200 3 255,202,255";
             foreach (string row in table.Split('|'))
@@ -79,14 +79,14 @@ namespace TmDq.App.Tests
         }
 
         [Theory]
-        [MemberData(nameof(QtShadesAroundTheWheel))]
-        public void AShadeOfAnyColourIsTheColourQtComputes(string color, int level, string expected)
+        [MemberData(nameof(ShadesAroundTheWheelAsV214PrintedThem))]
+        public void AShadeOfAnyColourIsTheColourV214Computed(string color, int level, string expected)
         {
             Assert.Equal(Rgb(expected), PlotColors.Shade(Rgb(color), level));
         }
 
         [Fact]
-        public void TheShadesStartFromTheQtPrimaries()
+        public void TheShadesStartFromThePrimaries()
         {
             Assert.Equal(new[] { "106,13,173", "67,97,238", "46,184,92" }, PlotColors.FrameSyncLock.Select(c => $"{c.R},{c.G},{c.B}"));
             Assert.Equal(new[] { "204,0,0", "255,140,0", "230,200,30" }, PlotColors.Snr.Select(c => $"{c.R},{c.G},{c.B}"));
@@ -430,7 +430,7 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
-        public void TheAxesAndTheTitleAreWordedAsTheQtApplicationWordsThem()
+        public void TheAxesAndTheTitleAreWordedAsV214WordedThem()
         {
             // TestConstants' plotConstants: the texts themselves (plotconstants.h), where every other test compares a label
             // with the constant it was drawn from.

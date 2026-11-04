@@ -51,8 +51,8 @@ struct ResolvedPcmAttrs {
  * @brief Validated parameters bundle passed to the worker thread.
  *
  * Plain C++: the core's input. Text is UTF-8 `std::string` and the file is a
- * `std::filesystem::path`; the layers that still hold Qt types convert where they fill it in
- * (`qtbridge.h`).
+ * `std::filesystem::path`; the C ABI fills it in from a host's settings (`abi_run.cpp`, through
+ * `buildStreamJob`).
  */
 struct ProcessingParams {
     std::filesystem::path filename; ///< Path to the .ch10 input file.

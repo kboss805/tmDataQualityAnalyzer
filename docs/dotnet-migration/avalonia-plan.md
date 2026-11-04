@@ -425,7 +425,7 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
   `build_ide.ps1` and `setup-env.ps1` are deleted; `gen_compile_flags.py` writes the native projects' flags; CI installs
   no Qt; `.vscode` builds, runs and debugs the new projects. `build-and-test`, `add-stream-setting` and
   `verify-ui-change` are rewritten for this build, `write-qt-test` is `write-test`, and `cut-release` was rewritten in 5.3.
-- [ ] **6.3 Take Qt out of the names that stay.** The code that outlives Qt still names it, in identifiers that
+- [x] **6.3 Take Qt out of the names that stay.** The code that outlives Qt still names it, in identifiers that
   would read as dangling references once 6.1 has run. Found by a scan of the core, the C ABI, the native tests and
   `dotnet/` (2026-11-01):
   - **Core identifiers:** `qtMin` / `qtMax`, defined twice (`src/model/csvseriesparser.cpp` and
@@ -460,6 +460,11 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
   The identifier renames do not depend on 6.1 and can land earlier as a small PR; the comments are best done after
   6.1, when nothing they cite is left to compare against. Finish with a scan for `\bQt\b`, `\bQ[A-Z][a-z]` and
   `\bq[A-Z]` over the surviving tree that finds nothing but the reasoned exceptions.
+  **Done:** `runningMin` / `runningMax` (`seriesrange.h`, the NaN rule written out, and not symmetric), `RoundHalfAway` /
+  `ToHsv16` / `FromHsv16`, the QSettings constants and their pins gone, 50 test and case names, and about 600 comment
+  lines in some 120 files, checked to have changed no code. The scan finds only the reasoned exceptions: the import of
+  v2.x's settings (its INI format), one provenance sentence in each of six oracle files, two soak messages naming the
+  manifest's `qt` blocks; the research spikes are left to 6.4.
 - [ ] **6.4 Consolidate the new code.** The port was built one step at a time, each held to the Qt application as
   its oracle, so its shape follows the order of the steps rather than the application's. Once 6.1 has run there is
   one application left to keep, and its tests (every step's mutation-checked suite) pin the behaviour while it is

@@ -245,7 +245,7 @@ std::vector<double> sampleDerivative(const std::vector<double>& raw)
 {
     std::vector<double> deriv;
     // reserve() takes an unsigned count: for an empty series the "one fewer" is -1, which
-    // QVector shrugged off and a std::vector reads as 18 quintillion elements.
+    // a std::vector reads as 18 quintillion elements, so it is clamped at zero.
     deriv.reserve(static_cast<std::size_t>(std::max(0, intSize(raw) - 1)));
     for (int i = 1; i < intSize(raw); i++)
     {

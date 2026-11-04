@@ -3,7 +3,7 @@ using Avalonia.Markup.Xaml;
 
 namespace TmDq.App.Views
 {
-    /// <summary>The batch confirmation (plan step 4.7), the Qt <c>BatchApplyDialog</c>, over
+    /// <summary>The batch confirmation (plan step 4.7, US1.1), over
     /// <see cref="ViewModels.BatchApplyViewModel"/>.</summary>
     public sealed partial class BatchApplyWindow : Window
     {

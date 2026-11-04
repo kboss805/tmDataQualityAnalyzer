@@ -13,15 +13,11 @@
 
 #include "constants.h"
 #include "seriescolumnschema.h"
+#include "seriesrange.h"
 #include "textfile.h"
 #include "textparse.h"
 
 namespace {
-
-/// What `qMin` / `qMax` do with a NaN: they are `a < b ? a : b`, not `std::min`, and the cached range
-/// of a series with a NaN in it depends on it.
-double qtMin(double a, double b) { return (a < b) ? a : b; }
-double qtMax(double a, double b) { return (a < b) ? b : a; }
 
 /// The lines of the file as UTF-8. A UTF-16 file (with a BOM) is read whole and transcoded; anything
 /// else is streamed, with a UTF-8 BOM dropped.
@@ -99,9 +95,8 @@ public:
             m_consumed += line.size() + 1;
             got = true;
         }
-        // Every carriage return is ignored, wherever it is: the importer read through a Windows
-        // text-mode QFile, which drops them all (not just the one before a line feed), so a lone one
-        // neither ends a line nor stays in a name.
+        // Every carriage return is ignored, wherever it is (not just the one before a line feed), as
+        // v2.14's importer read them, so a lone one neither ends a line nor stays in a name.
         line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
         return got;
     }
@@ -260,8 +255,8 @@ CsvParseResult CsvSeriesParser::parse(const std::filesystem::path& path)
                 CsvSeries& s = series[static_cast<std::size_t>(i)];
                 s.xValues.push_back(elapsed);
                 s.yValues.push_back(value);
-                s.yMin = qtMin(s.yMin, value);
-                s.yMax = qtMax(s.yMax, value);
+                s.yMin = runningMin(s.yMin, value);
+                s.yMax = runningMax(s.yMax, value);
             }
         }
     }

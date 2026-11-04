@@ -1,8 +1,6 @@
 // buildCalibrationRequest: what the Extract Calibration dialog (or a host) asks the extractor to do, built from the
-// stream's settings as typed. No Qt; ported from the Qt TestCalibrationRequest, whose cases are all here under the same
-// descriptions. The Qt suite kept the dialog's old inline code (QString, QFileInfo) beside the new function as an
-// oracle for the move; the same rule is written here over std::string and std::filesystem, so the comparison over
-// generated inputs stays and Qt is not needed for it.
+// stream's settings as typed (ported in plan step 2.4). The oracle is the dialog's inline code v2.14.2 ran before
+// this function existed, restated over std::string and std::filesystem and compared with it over generated inputs.
 
 #include <cstdint>
 #include <filesystem>
@@ -25,9 +23,9 @@ using tmdq_test::TempDir;
 namespace fs = std::filesystem;
 
 // ---------------------------------------------------------------------------
-// The code as it was, in the Extract Calibration dialog (src/view/streamsubdialogs.cpp), with its inputs taken from a
-// CalibrationInputs instead of the dialog's members, and its Qt types turned into the standard ones. Not used by the
-// application any more.
+// The code as it was in v2.14.2's Extract Calibration dialog (src/view/streamsubdialogs.cpp), with its inputs taken
+// from a CalibrationInputs instead of the dialog's members, and its types turned into the standard ones. Not used by
+// the application any more.
 // ---------------------------------------------------------------------------
 
 struct OldResult

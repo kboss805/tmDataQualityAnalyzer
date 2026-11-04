@@ -1,6 +1,5 @@
 // FrameProcessor: frame sync, word extraction and windowed averaging, on synthetic bit streams and on the committed
-// recordings. No Qt; ported from the Qt TestFrameProcessor, whose cases are all here under the same descriptions (its
-// data-driven cases are loops).
+// recordings (ported in plan step 2.4; the data-driven cases are loops).
 
 #include <algorithm>
 #include <atomic>
@@ -432,7 +431,7 @@ TEST_CASE("FrameProcessor: a non-ASCII path opens in both readers")
 
 TEST_CASE("FrameProcessor: reports exactly these messages")
 {
-    // The text of every message FrameProcessor reports, exactly, in order. Written against the QString/signals
+    // The text of every message FrameProcessor reports, exactly, in order. Written against v2.14.2's
     // implementation and kept as it was across the move to std::format and an event sink: a format specifier is the
     // kind of thing a port gets subtly wrong (%1 of %2, 'f' with one decimal) and nothing else would notice.
     const std::string tag = "[CH 7 Rcvr Bus] ";

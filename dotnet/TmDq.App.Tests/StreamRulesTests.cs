@@ -14,8 +14,8 @@ namespace TmDq.App.Tests
     /// <summary>
     /// The rules of Configure Streams and its setup dialogs (plan step 4.1a), without a window: readiness and the Process
     /// button, a Mode change, what the dialog opens with and what accepting it keeps, Apply to all (US2.2), the field
-    /// checks (US7.0) and the run Process starts. The three Apply-to-all cases port the Qt dialog's tests
-    /// (tst_streamconfigdialog.cpp); the three fixes to the Qt behaviour have a test each, named for what they now do.
+    /// checks (US7.0) and the run Process starts. The three Apply-to-all cases port v2.x's dialog tests;
+    /// the three fixes to v2.14.2's behaviour have a test each, named for what they now do.
     /// Nothing here loads the native core.
     /// </summary>
     public sealed class StreamRulesTests
@@ -71,7 +71,7 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
-        public void TheReadyColumnSaysWhatTheQtDialogSays()
+        public void TheReadyColumnSaysWhatARowStillNeeds()
         {
             Assert.Equal("Click the gear icon to configure this stream.", StreamRules.ReadinessTip(Readiness.NeedsConfiguration));
             Assert.Equal("A frame sync pattern is required.", StreamRules.ReadinessTip(Readiness.MissingPattern));
@@ -87,7 +87,7 @@ namespace TmDq.App.Tests
             Assert.True(StreamRules.CanProcess(new[] { Ready() }));
             // An unchecked row, configured or not, is not in the way.
             Assert.True(StreamRules.CanProcess(new[] { Ready(), Row("Ch 02", 2) }));
-            // The Qt dialog enabled Process here and ran the second row on whatever it held.
+            // v2.14.2's dialog enabled Process here and ran the second row on whatever it held.
             Assert.False(StreamRules.CanProcess(new[] { Ready(), Row("Ch 02", 2) with { Process = true } }));
             Assert.False(StreamRules.CanProcess(new[] { Ready(), Ready("Ch 02", 2) with { SyncPattern = "" } }));
         }
@@ -150,7 +150,7 @@ namespace TmDq.App.Tests
         [Fact]
         public void SwitchingToFrameSyncLockDropsTheReceiverFileForGood()
         {
-            // The Qt dialog cleared the file on the copy it edited and then discarded that copy, so the row kept it.
+            // v2.14.2's dialog cleared the file on the copy it edited and then discarded that copy, so the row kept it.
             StreamSetup row = StreamRules.WithMode(SnrSource(), StreamMode.FrameSyncLock);
             StreamSetup accepted = StreamRules.Accept(row, StreamRules.ForEditing(row, appRoot: null));
             Assert.Equal("", accepted.ReceiverParamsToml);
@@ -392,7 +392,7 @@ namespace TmDq.App.Tests
         // --- defaults ---
 
         [Fact]
-        public void TheReceiverSnrDefaultsAreTheQtApplicationsFromTheHeader()
+        public void TheReceiverSnrDefaultsComeFromTheHeader()
         {
             string header = File.ReadAllText(Repo.File(Path.Combine("include", "constants.h")));
             string Text(string name) => Regex.Match(header, name + @"\s*=\s*""([0-9A-Fa-f]+)""").Groups[1].Value;

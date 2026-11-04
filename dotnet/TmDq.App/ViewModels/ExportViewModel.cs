@@ -16,7 +16,7 @@ namespace TmDq.App.ViewModels
     }
 
     /// <summary>
-    /// The Export dialog's state (plan step 4.5), the Qt <c>ExportDialog</c>: three rows, the plot image (ticked by
+    /// The Export dialog's state (plan step 4.5; US6.0 to US6.2): three rows, the plot image (ticked by
     /// default), the data and the log, each a box and a path with Browse. A row's path and Browse are enabled only while
     /// its box is ticked, and Export only while some box is ticked and every ticked row has a path. There is no format
     /// choice: an image's suffix decides it.
@@ -66,7 +66,7 @@ namespace TmDq.App.ViewModels
         }
 
         /// <summary>
-        /// The three default paths, as the Qt <c>onExportPlot</c> makes them: the plot's title (or "plot") with the
+        /// The three default paths, as v2.x made them: the plot's title (or "plot") with the
         /// characters a file name cannot hold replaced by "_", as "&lt;title&gt;.png", "&lt;title&gt;.csv" and
         /// "&lt;title&gt;_log.txt" in <paramref name="folder"/>.
         /// </summary>

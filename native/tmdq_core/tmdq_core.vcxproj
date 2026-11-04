@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  tmdq_core.dll - the processing core behind the flat C ABI in tmdq_abi.h, built with NO Qt.
+  tmdq_core.dll - the processing core behind the flat C ABI in tmdq_abi.h.
 
-  There is no Qt include path and no Qt library on this project, so a core source that reached for a Qt
-  header would fail to compile. scripts\build_core_dll.ps1 builds it and then reads the DLL's imports.
+  The include path is the core's own headers and the vendored irig106 library, and nothing is linked beyond the
+  C runtime and Windows system libraries, so a core source that reached for anything else would fail to build.
+  scripts\build_core_dll.ps1 builds it and then checks the DLL's imports against an allow-list.
 
   Its source list is held to the files on disk by NativeProjectTests (dotnet/TmDq.Core.Tests): every source in
   src/model, and every ABI source here, must be listed, and the native tests must compile exactly the same list.
 
-  Compiler switches are the ones the Qt application's qmake build used until plan step 6.1 deleted it: C++20,
-  /utf-8, /permissive-, warning level 3, the same warnings promoted, and UNICODE. The vendored irig106 C library
-  is compiled with warnings off.
+  Compiler switches, kept from v2.x's build when plan step 6.1 removed it: C++20, /utf-8, /permissive-, warning
+  level 3, the warnings in AdditionalOptions promoted, and UNICODE. The vendored irig106 C library is compiled
+  with warnings off.
 
   The toolset is whatever MSBuild brings: v143 from the Visual Studio 2022 tools that scripts\env.ps1 pins, v145
   from Visual Studio 2026. Intermediates go in a folder per toolset, so objects from two compilers never share
@@ -71,8 +72,8 @@
       <ProgramDataBaseFileName>$(IntDir)tmdq_core.pdb</ProgramDataBaseFileName>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory);$(MSBuildThisFileDirectory)..\..\include;$(MSBuildThisFileDirectory)..\..\include\dto;$(MSBuildThisFileDirectory)..\..\include\model;$(MSBuildThisFileDirectory)..\..\lib\irig106\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>TMDQ_ABI_BUILD;UNICODE;_UNICODE;WIN32;WIN64;_ENABLE_EXTENDED_ALIGNED_STORAGE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <!-- The application's switches, from its generated Makefile: strict conformance, the same
-           warnings raised to level 3, and the two that are off because Qt's headers trip them. -->
+      <!-- Strict conformance, the listed warnings raised to level 3, and two kept off (C4577, C4467)
+           as v2.x's build had them. -->
       <AdditionalOptions>/FS /utf-8 /Zc:__cplusplus /Zc:throwingNew /Zc:externConstexpr /w34100 /w34189 /w44456 /w44457 /w44458 /wd4577 /wd4467 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>

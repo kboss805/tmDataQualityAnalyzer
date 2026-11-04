@@ -29,8 +29,8 @@ namespace TmDq.App.Tests
 {
     /// <summary>
     /// Export and import (plan step 4.5): the plot as CSV, as an image and the log as text, the Export dialog, and an
-    /// exported CSV read back, with the Qt application's rejections and messages. The CSV oracle is the Qt application
-    /// itself: each committed recording was processed by the Qt pipeline into the Qt plot and exported by it, once, and
+    /// exported CSV read back, with v2.14.2's rejections and messages. The CSV oracle is v2.14.2 (the Qt application)
+    /// itself: each committed recording was processed by its pipeline into its plot and exported by it, once, and
     /// the app must write the very same bytes.
     /// </summary>
     [Collection(NativeCoreCollection.Name)]
@@ -38,15 +38,15 @@ namespace TmDq.App.Tests
     {
         public ExportImportTests() => NativeCore.EnsureLoaded();
 
-        // ---- the oracle: the Qt application's export of every committed recording ---------------------------------------
+        // ---- the oracle: v2.14.2's export of every committed recording ----------------------------------------------
 
         /// <summary>
-        /// What the Qt application wrote for each scenario (its size and SHA-256), recorded by a throwaway case in its own
-        /// suite: the core's job builder over these very settings, a <c>ProcessingCoordinator</c> run, each stream handed
-        /// to the Qt <c>PlotViewModel::addStreamData</c> as it finished, then <c>exportCsv</c>. One stream mode a run, as
+        /// What v2.14.2 wrote for each scenario (its size and SHA-256), recorded by a throwaway case in its own
+        /// suite: the core's job builder over these very settings, a processing run, each stream handed to its plot's
+        /// view model as it finished, then its CSV export. One stream mode a run, as
         /// Configure Streams allows one row a channel.
         /// </summary>
-        public static IEnumerable<object[]> QtExports() => new[]
+        public static IEnumerable<object[]> ExportsAsV214WroteThem() => new[]
         {
             new object[] { "prn", 9479, "1be395481250be54acbd94c95a093be75b166e7e5616abf94895b622a91e305a" },
             new object[] { "step_cal", 32537, "61d80af27c78596230e299beab5a0be4052761c8a3ed6cac4507037623aacf43" },
@@ -68,7 +68,7 @@ namespace TmDq.App.Tests
             BitsInMinorFrame = bits, Randomized = randomized,
         };
 
-        /// <summary>The settings each recording was exported with, as the Qt case stated them.</summary>
+        /// <summary>The settings each recording was exported with, as v2.14.2's case stated them.</summary>
         private static (string File, bool SwapBytes, StreamConfig[] Streams) Scenario(string name) => name switch
         {
             "prn" => ("prn_testfile, sample.ch10", true, new[]
@@ -108,8 +108,8 @@ namespace TmDq.App.Tests
         private static string Sha256(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
         [Theory]
-        [MemberData(nameof(QtExports))]
-        public void EveryRecordingExportsTheQtApplicationsCsvByteForByte(string scenario, int length, string sha256)
+        [MemberData(nameof(ExportsAsV214WroteThem))]
+        public void EveryRecordingExportsTheCsvV214ExportedByteForByte(string scenario, int length, string sha256)
         {
             PlotViewModel plot = Processed(scenario);
             string path = TempPath(".csv");
@@ -425,7 +425,7 @@ namespace TmDq.App.Tests
         }
 
         [Theory]
-        [MemberData(nameof(QtExports))]
+        [MemberData(nameof(ExportsAsV214WroteThem))]
         public void EveryExportReadsBackAsItsSeriesAndExportsAgainByteForByte(string scenario, int length, string sha256)
         {
             _ = length;
@@ -767,7 +767,7 @@ namespace TmDq.App.Tests
                 string error = "ERROR: '" + name + "' is not a recognized exported CSV (expected a 'Time (DOY:HH:MM:SS.mmm)' column with data rows). Nothing was imported.";
                 Assert.Equal(new[] { "Info Importing CSV: " + name, "Error " + error }, LinesOf(vm, before));
                 Assert.Equal(error, vm.Status);
-                Assert.False(vm.Plot.HasData);   // cleared before the file was read, as Qt clears it
+                Assert.False(vm.Plot.HasData);   // cleared before the file was read, as v2.14.2 cleared it
                 Assert.Equal(PlotViewModel.DefaultTitle, vm.Plot.Title);
             }
             finally
@@ -893,7 +893,7 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
-        public async Task ExportWritesWhatWasChosenInTheQtOrderAndTheLogSaysWhere()
+        public async Task ExportWritesTheDataThenTheImageThenTheLogAndTheLogSaysWhere()
         {
             string csv = WriteCsv(TwoStreams), folder = TempPath("");
             Directory.CreateDirectory(folder);
@@ -1023,7 +1023,7 @@ namespace TmDq.App.Tests
         // ---- the windows ---------------------------------------------------------------------------------------------------
 
         [AvaloniaFact]
-        public void TheExportWindowIsLaidOutAsQtsAndEachRowFollowsItsBox()
+        public void TheExportWindowHasItsThreeRowsAndEachFollowsItsBox()
         {
             var vm = new ExportViewModel("a.png", "a.csv", "a_log.txt", new FakeFiles());
             var window = new ExportWindow { DataContext = vm };

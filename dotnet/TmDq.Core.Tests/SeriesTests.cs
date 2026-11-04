@@ -398,7 +398,7 @@ public class SeriesTests
     }
 
     [Fact]
-    public void AParsedCsvsStreamsAreOrderedLikeTheQtTestsExpect()
+    public void AParsedCsvsStreamsAreOrderedAsV214OrderedThem()
     {
         // The expected orders are the ones TestCsvSeries pins for these two files, read through the plot.
         (string File, int[] Orders)[] cases =

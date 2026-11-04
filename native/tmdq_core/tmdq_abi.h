@@ -8,7 +8,7 @@
  * performance-critical core as native MSVC C++ and puts the developer-facing surface in
  * C#. This header is the boundary that makes that possible:
  *
- *   1. The pipeline is driven through a flat C ABI - no Qt types, no C++ classes, no
+ *   1. The pipeline is driven through a flat C ABI - plain C types, no C++ classes, no
  *      exceptions crossing.
  *   2. The struct layouts must agree between MSVC and the CLR. Get Pack wrong and you
  *      read plausible garbage at the wrong offsets, which is exactly the class of
@@ -647,8 +647,10 @@ typedef struct tmdq_series_spec
     const char*    name_utf8;         ///< The legend/CSV name.
     const char*    stream_label_utf8;
     const double*  y_values;          ///< A view of the stream's data, y_count long, parallel to the set's elapsed array.
-    double         y_min;             ///< Smallest value as Qt's qMin sees a NaN; DBL_MAX if there is none.
-    double         y_max;             ///< Largest value; -DBL_MAX if there is none.
+    double         y_min;             ///< Smallest value, NaN-aware: a NaN sample makes it NaN until the next sample
+                                      ///< replaces it; DBL_MAX if there is none.
+    double         y_max;             ///< Largest value, NaN-aware: a NaN sample leaves it as it was; -DBL_MAX if there
+                                      ///< is none.
     int32_t        receiver_index;    ///< From the parameter name's last "_RCVR<N>"; 0 for the frame-sync metrics.
     int32_t        channel_index;     ///< 0-based count within the receiver among this stream's SNR series.
     int32_t        stream_order;      ///< The stream's PCM channel id.
@@ -749,7 +751,7 @@ TMDQ_API int32_t tmdq_assign_imported_stream_orders(tmdq_imported_series* const*
  * What the plot draws, built by the core so every application strokes the same thing (plan decision D1): the
  * transforms between data and the plot area's pixels, a series' line (the samples in view only; above two samples a
  * pixel column, each column's mean) and the band from each column's minimum to its maximum, and the X ticks.
- * The core's chartgeometry.h; the Qt chart draws from the same functions.
+ * The core's chartgeometry.h, translated by abi_chart.cpp.
  * ======================================================================================== */
 
 #pragma pack(push, 8)

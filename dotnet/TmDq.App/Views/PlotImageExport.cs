@@ -11,7 +11,7 @@ using TmDq.App.Plot;
 namespace TmDq.App.Views
 {
     /// <summary>
-    /// The plot as an image file (plan step 4.5), the Qt <c>PlotWidget::exportImage</c>: the chart's data layer at its
+    /// The plot as an image file (plan step 4.5, US6.0): the chart's data layer at its
     /// size on screen, without the crosshair, the zoom band or the chips, and the legend where it is on the chart (dragged
     /// and scrolled as shown) unless it is hidden. The file's suffix picks the format: .png, .svg, anything else PDF,
     /// with ".pdf" added when missing. One routine draws all three, onto a Skia canvas: a raster surface, an SVG canvas

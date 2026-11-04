@@ -4,7 +4,7 @@ using Avalonia.Markup.Xaml;
 namespace TmDq.App.Views
 {
     /// <summary>The progress dialog (US1.0): shown modally while a run goes on. Closing it from the title bar or with
-    /// Alt+F4 is refused, as the Qt dialog refused it, so a stray close cannot leave a run going unseen; Cancel is the
+    /// Alt+F4 is refused, as v2.x refused it, so a stray close cannot leave a run going unseen; Cancel is the
     /// only way out, and the window closes when the run has stopped.</summary>
     public sealed partial class ProcessingWindow : Window
     {

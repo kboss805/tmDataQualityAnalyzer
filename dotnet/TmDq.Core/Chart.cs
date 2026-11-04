@@ -22,7 +22,7 @@ public sealed record SeriesGeometry(double[] Segments, IReadOnlyList<double[]> B
 }
 
 /// <summary>
-/// The plot's geometry, built by the core (plan decision D1) so this application and the Qt one draw the same pixels:
+/// The plot's geometry, built by the core (plan decision D1) so every host of the core draws the same pixels:
 /// the transforms between data and pixels, a series' line and band, and the X ticks.
 /// </summary>
 public static unsafe class ChartGeometry

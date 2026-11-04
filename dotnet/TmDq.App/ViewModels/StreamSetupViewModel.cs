@@ -16,8 +16,8 @@ namespace TmDq.App.ViewModels
     /// <summary>
     /// One stream's setup dialog (US1.0, US2.0, US2.1, US2.2): the Frame Sync Lock dialog, or the Receiver SNR one, which
     /// adds the receiver settings. It edits a copy of the row (<see cref="StreamRules.ForEditing"/>); OK is available only
-    /// when <see cref="StreamRules.Problems"/> finds nothing, and the problems are shown as they arise, so a value the Qt
-    /// dialog's validators and spin boxes would have refused, or a file would have slipped past them, is named instead.
+    /// when <see cref="StreamRules.Problems"/> finds nothing, and the problems are shown as they arise, so a value
+    /// v2.x's validators and spin boxes would have refused, or a file would have slipped past them, is named instead.
     /// </summary>
     public sealed partial class StreamSetupViewModel : ObservableObject
     {
@@ -205,7 +205,7 @@ namespace TmDq.App.ViewModels
 
         public int CalibratedChannels => _calibration.Count(p => p.Valid);
 
-        /// <summary>Beside Apply Cal, as the Qt dialog says it.</summary>
+        /// <summary>Beside Apply Cal, in v2.14.2's words.</summary>
         public string CalibrationText => CalibratedChannels == 0
             ? "(none — using linear calibration)"
             : string.Create(CultureInfo.InvariantCulture, $"{CalibratedChannels} channel(s) calibrated (non-linear)");
@@ -216,7 +216,7 @@ namespace TmDq.App.ViewModels
         public string? LastCalFolder { get; private set; }
 
         /// <summary>Extract Calibration with the settings as they stand, the time channel and the byte order; on OK, its
-        /// profiles and references are the dialog's, and its report is shown, as the Qt dialog shows it.</summary>
+        /// profiles and references are the dialog's, and its report is shown, as v2.x showed it.</summary>
         private async Task ApplyCalAsync()
         {
             if (!CanApplyCal) return;

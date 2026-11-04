@@ -1,7 +1,7 @@
 // CalibrationExtractor: the calibration pipeline's orchestration (US5.3), driven end to end on the committed
 // recordings (the reader and a FrameProcessor on threads, then StepDetector per channel), plus the pure operator-facing
-// report. No Qt; ported from the Qt TestCalibrationExtractor, whose cases are all here under the same descriptions (its
-// data-driven cases are loops). StepDetector's own logic is test_stepdetector.cpp.
+// report (ported in plan step 2.4; the data-driven cases are loops). StepDetector's own logic is
+// test_stepdetector.cpp.
 
 #include <algorithm>
 #include <atomic>
@@ -690,8 +690,8 @@ std::vector<CalibrationChannelResult> reportScenario(const std::string& scenario
     }
     else if (scenario == "saturated-ties")
     {
-        // Top dB 37.5 and unresolved dB 42.5 / 2.5 sit exactly halfway between two integers, which is where Qt's 'f'
-        // formatting (away from zero) and a half-to-even formatter disagree.
+        // Top dB 37.5 and unresolved dB 42.5 / 2.5 sit exactly halfway between two integers, which is where the
+        // report's formatting (textformat::formatFixed, away from zero) and a half-to-even formatter disagree.
         v.push_back(railedResult("L_RCVR1", 37.5, {42.5, 2.5}));
         v.push_back(railedResult("R_RCVR1", 37.5, {42.5, 60.0}));
         v.push_back(channelResult("C_RCVR1", O::Calibrated, 6));
@@ -794,8 +794,8 @@ std::vector<CalibrationChannelResult> reportScenario(const std::string& scenario
 TEST_CASE("CalibrationExtractor: summarize produces exactly this report")
 {
     // The whole text, not fragments: the report is what the operator reads, and the other summary tests only look for
-    // phrases inside it. Includes the exact halves (37.5, 42.5, 2.5, 0.5, 1234.5) that Qt rounds away from zero, which a
-    // half-to-even formatter would print differently.
+    // phrases inside it. Includes the exact halves (37.5, 42.5, 2.5, 0.5, 1234.5) that the report rounds away from
+    // zero, which a half-to-even formatter would print differently.
     struct Row
     {
         const char*              scenario;

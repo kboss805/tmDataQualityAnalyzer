@@ -81,14 +81,15 @@ namespace TmDq.App.ViewModels
             ClearRecentFilesCommand = new RelayCommand(() => SetRecentFiles(Array.Empty<string>()));
             ToggleThemeCommand = new RelayCommand(() => IsDarkTheme = !IsDarkTheme);
             ToggleSidebarCommand = new RelayCommand(() => SidebarVisible = !SidebarVisible);
-            // The legend's visibility is remembered between sessions, as the Qt application's LegendVisible setting is.
+            // The legend's visibility is remembered between sessions (US4.0, US4.1), as v2.x remembered it.
             Plot.LegendVisible = _preferences.Current.LegendVisible;
             Log.Add("tmDataQualityAnalyzer v" + AppInfo.Version);
             Log.Add("Load a Chapter 10 file to configure per-stream processing.");
             // A time window entered outside the recording is clamped, and says so in the log, in goldenrod; so are the rows
             // an imported CSV skipped.
             Plot.Warning += (_, message) => Log.Warning(message);
-            // A batch's recordings share one time axis; one that does not overlap the rest is said so (the Qt words).
+            // A batch's recordings share one time axis; one that does not overlap the rest is said so, in v2.14.2's
+            // words.
             Plot.NonOverlappingSource += (_, _) => Log.Warning(
                 "The most recently added source's recording time ('" + _runningFile + "') does not overlap the data already loaded. " +
                 "They will share one time axis with a large gap between them.");
@@ -105,7 +106,7 @@ namespace TmDq.App.ViewModels
         /// <summary>What is remembered between sessions.</summary>
         public Preferences Preferences => _preferences.Current;
 
-        /// <summary>The recordings and CSVs opened last, the newest first (the Qt menu's Recent Files).</summary>
+        /// <summary>The recordings and CSVs opened last, the newest first (the menu's Recent Files).</summary>
         public IReadOnlyList<string> RecentFiles => _preferences.Current.RecentFiles;
 
         /// <summary>Opens a recent file, or one dropped on the window. Unavailable while busy.</summary>
@@ -122,12 +123,12 @@ namespace TmDq.App.ViewModels
         private void AddRecentFile(string path) => SetRecentFiles(Settings.RecentFiles.Add(RecentFiles, Path.GetFullPath(path)));
 
         /// <summary>
-        /// Opens <paramref name="path"/> by its suffix, as the Qt <c>openPath</c> does for Recent Files and a drop: an
+        /// Opens <paramref name="path"/> by its suffix, as v2.x did for Recent Files and a drop: an
         /// exported CSV is imported, anything else opened as a recording. Ignored while busy, as both are.
         /// </summary>
         public Task OpenPathAsync(string path) => Settings.RecentFiles.IsCsv(path) ? ImportCsvAsync(path) : LoadAsync(path);
 
-        /// <summary>The dark theme (the Qt application's default) or the light one; the choice is remembered.</summary>
+        /// <summary>The dark theme (v2.x's default too) or the light one (US9.0); the choice is remembered.</summary>
         public bool IsDarkTheme
         {
             get => _preferences.Current.IsDark;
@@ -145,7 +146,7 @@ namespace TmDq.App.ViewModels
 
         public IRelayCommand ToggleThemeCommand { get; }
 
-        /// <summary>The log sidebar shown (the Qt title bar's toggle, Ctrl+B); the choice is remembered.</summary>
+        /// <summary>The log sidebar shown (the title bar's toggle, Ctrl+B); the choice is remembered.</summary>
         public bool SidebarVisible
         {
             get => _preferences.Current.SidebarVisible;
@@ -222,8 +223,8 @@ namespace TmDq.App.ViewModels
         }
 
         /// <summary>The folder of the last recording opened, CSV imported or template used: where Import CSV and the
-        /// template dialogs start and Export proposes to write, remembered between sessions as the Qt application's
-        /// <c>LastCh10Directory</c> setting is.</summary>
+        /// template dialogs start and Export proposes to write, remembered between sessions (v2.x's
+        /// <c>LastCh10Directory</c>, which the first run imports).</summary>
         public string? LastFolder
         {
             get => _preferences.Current.LastFolder;
@@ -270,7 +271,7 @@ namespace TmDq.App.ViewModels
         }
 
         /// <summary>
-        /// Shows an exported CSV in place of whatever was shown, as the Qt <c>importCsv</c> does: the plot cleared, the file
+        /// Shows an exported CSV in place of whatever was shown (US6.3): the plot cleared, the file
         /// read off the UI thread with "Loading..." over the chart, then titled with its name. A file that is not an
         /// exported CSV is an error, and nothing is shown. Ignored while busy.
         /// </summary>
@@ -318,7 +319,7 @@ namespace TmDq.App.ViewModels
         }
 
         /// <summary>
-        /// Writes what <paramref name="choice"/> asks for, in the Qt order (the data, the image, then the log, which so
+        /// Writes what <paramref name="choice"/> asks for, in v2.x's order (the data, the image, then the log, which so
         /// carries the lines about the other two), each saying in the log where it went or that it failed; a failure does
         /// not stop the rest. Nothing without data.
         /// </summary>
@@ -346,7 +347,7 @@ namespace TmDq.App.ViewModels
         // ---- templates and batch (plan step 4.7, US1.1) ------------------------------------------------------------------
 
         /// <summary>
-        /// Save as Template, as the Qt <c>saveTemplateButtonPressed</c> does: with several recordings processed, which to
+        /// Save as Template (US1.1): with several recordings processed, which to
         /// capture from; then where; then the template, with the series' names and colours as they are now.
         /// </summary>
         private async Task SaveTemplateAsync()
@@ -388,7 +389,7 @@ namespace TmDq.App.ViewModels
         }
 
         /// <summary>
-        /// Apply Template to Files, as the Qt <c>applyTemplateButtonPressed</c> does: a template, read with its errors in
+        /// Apply Template to Files (US1.1): a template, read with its errors in
         /// the log; then the recordings; each checked against the template; the confirmation; then the batch.
         /// </summary>
         private async Task ApplyTemplateAsync()
@@ -409,7 +410,8 @@ namespace TmDq.App.ViewModels
             await RunBatchAsync(template, confirm.Matched, confirm.ExportPerFile ? confirm.OutputFolder.Trim() : null, confirm.ReuseAppearance);
         }
 
-        /// <summary>The template at <paramref name="path"/>, or null with the reason in the log, in the Qt words.</summary>
+        /// <summary>The template at <paramref name="path"/>, or null with the reason in the log, in v2.14.2's
+        /// words.</summary>
         public ProcessingTemplate? ReadTemplate(string path)
         {
             TemplateLoad load;
@@ -445,8 +447,8 @@ namespace TmDq.App.ViewModels
         }
 
         /// <summary>
-        /// Runs <paramref name="template"/> over <paramref name="files"/>, one after another, as the Qt
-        /// <c>BatchController</c> does: a fresh plot; each file checked again and run with the template's rows, kept in the
+        /// Runs <paramref name="template"/> over <paramref name="files"/>, one after another, as v2.x's
+        /// batch did: a fresh plot; each file checked again and run with the template's rows, kept in the
         /// plot as a recording of its own, named for the Plot File selector, with the template's names and colours when
         /// asked; a file that is gone, no longer matches, or fails is skipped and said so. Then, when a folder is given, a
         /// CSV and plot images per file; the plot left on the first file; and the summary.
@@ -524,7 +526,7 @@ namespace TmDq.App.ViewModels
         }
 
         /// <summary>
-        /// Each recording on its own, as the Qt <c>finish</c> writes it: its CSV (every series of that recording), then
+        /// Each recording on its own, as v2.x's batch wrote it: its CSV (every series of that recording), then
         /// with frame-sync data an image of the lock % and one of the missed frames, else one image; the view put back after.
         /// </summary>
         private async Task ExportEachSourceAsync(string folder)
@@ -562,8 +564,8 @@ namespace TmDq.App.ViewModels
             else Log.Error("Error: Failed to export plot to " + ImageFiles.Resolve(path).Path);
         }
 
-        /// <summary>The log as the Qt export writes it: each line as the sidebar shows it, CR LF line ends (Qt's text
-        /// mode), UTF-8 without a byte-order mark, ending with a line end.</summary>
+        /// <summary>The log as v2.14.2's export wrote it (US6.2): each line as the sidebar shows it, CR LF line ends,
+        /// UTF-8 without a byte-order mark, ending with a line end.</summary>
         private bool WriteLog(string path)
         {
             string text = Log.PlainText.Replace("\n", "\r\n");
@@ -580,7 +582,7 @@ namespace TmDq.App.ViewModels
         }
 
         /// <summary>Opens <paramref name="path"/>, asks what to process, processes it and shows the result or the reason it
-        /// failed, logging each step as the Qt application does. The progress dialog is up for the run, and its Cancel
+        /// failed, logging each step as v2.x did. The progress dialog is up for the run, and its Cancel
         /// stops every stream. Cancelling Configure Streams leaves the last result on screen. Ignored while busy.</summary>
         public async Task LoadAsync(string path)
         {
@@ -594,7 +596,7 @@ namespace TmDq.App.ViewModels
                 Status = $"Opening {name} ...";
                 Log.Add("Opening: " + name);
                 Ch10File file = await StreamsRun.OpenAsync(path);
-                // A recording joins Recent Files once its channels are read, as in the Qt application.
+                // A recording joins Recent Files once its channels are read, as in v2.x.
                 AddRecentFile(path);
                 Log.Add("  File size: " + SizeText(new FileInfo(path).Length));
                 Log.Add("  Time channels: " + CountText(file.TimeChannels.Count));
@@ -663,12 +665,12 @@ namespace TmDq.App.ViewModels
             }
         }
 
-        /// <summary>A file size as the Qt log gives it: megabytes from 1 MiB, kilobytes below, one decimal.</summary>
+        /// <summary>A file size as v2.14.2's log gave it: megabytes from 1 MiB, kilobytes below, one decimal.</summary>
         public static string SizeText(long bytes) => bytes >= 1048576
             ? (bytes / 1048576.0).ToString("F1", CultureInfo.InvariantCulture) + " MB"
             : (bytes / 1024.0).ToString("F1", CultureInfo.InvariantCulture) + " KB";
 
-        /// <summary>A channel count as the Qt log gives it: "none" for zero.</summary>
+        /// <summary>A channel count as v2.14.2's log gave it: "none" for zero.</summary>
         public static string CountText(int count) => count == 0 ? "none" : count.ToString(CultureInfo.InvariantCulture);
 
         /// <summary>Passes a run's log lines, which come on the core's threads, to the session log on the thread that made
@@ -691,7 +693,7 @@ namespace TmDq.App.ViewModels
             }
         }
 
-        /// <summary>A file name as the plot's title takes it, the Qt <c>QFileInfo::baseName</c>: up to its first dot.</summary>
+        /// <summary>A file name as the plot's title takes it: up to its first dot (all of it without one).</summary>
         public static string BaseName(string fileName)
         {
             int dot = fileName.IndexOf('.');

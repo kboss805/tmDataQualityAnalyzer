@@ -149,7 +149,7 @@ namespace TmDq.App.Tests
             vm.All = true;
             Assert.All(vm.Rows, r => Assert.True(r.Process));
             vm.Rows[1].Process = false;
-            Assert.True(vm.All);   // one-way, as in the Qt dialog
+            Assert.True(vm.All);   // one-way, as in v2.14.2's dialog
             vm.All = false;
             Assert.All(vm.Rows, r => Assert.False(r.Process));
         }

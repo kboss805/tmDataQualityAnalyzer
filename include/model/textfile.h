@@ -1,15 +1,15 @@
 /**
  * @file textfile.h
- * @brief Qt-free reading of small text files as UTF-8, and a few path helpers.
+ * @brief Reading of small text files as UTF-8, and a few path helpers.
  *
  * The settings reader (`TomlDocument`) and the step-file parser
- * (`StepDetector::parseStepConfig`) both used `QFile` + `QTextStream`, whose Unicode
- * auto-detection silently handled the encodings Notepad writes. Reading the bytes with
- * the standard library does not, so that handling lives here once instead of in each:
- * a UTF-8 byte-order mark is skipped, and UTF-16 (little or big endian, BOM required) is
- * decoded. A file with no BOM is taken to be UTF-8, as before.
+ * (`StepDetector::parseStepConfig`) must both read the encodings Notepad writes, which
+ * reading the bytes with the standard library does not handle, so that handling lives
+ * here once instead of in each: a UTF-8 byte-order mark is skipped, and UTF-16 (little
+ * or big endian, BOM required) is decoded. A file with no BOM is taken to be UTF-8.
  *
- * Pinned by `TestTomlDocument` and the `parseStepConfig` cases in `TestStepDetector`.
+ * Pinned by native/tmdq_core_tests/test_textfile.cpp, test_tomldocument.cpp and the
+ * `parseStepConfig` cases in test_stepdetector.cpp.
  */
 
 #ifndef TEXTFILE_H

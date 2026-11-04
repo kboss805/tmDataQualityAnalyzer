@@ -1,10 +1,10 @@
-// TomlDocument, the reader/writer behind every settings file. No Qt: this file is built by
-// native/tmdq_core_tests/tmdq_core_tests.vcxproj with MSBuild and links no Qt.
+// TomlDocument, the reader/writer behind every settings file. This file is built by
+// native/tmdq_core_tests/tmdq_core_tests.vcxproj with MSBuild.
 //
-// It is the doctest port of the Qt Test suite TestTomlDocument (plan step 2.4), case for case and
-// assertion for assertion. Those cases pin the behaviour directly, including the parts Qt supplied for free
-// (byte-order marks and UTF-16, whitespace and '+' tolerance in numbers, the %g double format, CRLF on
-// write), because those are exactly what a port off QString would change without any caller noticing.
+// Ported in plan step 2.4, case for case and assertion for assertion. The cases pin the behaviour directly,
+// including the rules the reader and writer this one replaced had (byte-order marks and UTF-16, whitespace and
+// '+' tolerance in numbers, the %g double format, CRLF on write), because those are exactly what a change to it
+// could break without any caller noticing.
 
 #include <cmath>
 #include <limits>
@@ -33,7 +33,8 @@ TEST_CASE("TomlDocument reads sections and keys in file order")
     TempDir tmp;
     const fs::path path = tmp.file("order.toml");
     // Deliberately not alphabetical: a receiver word map is meaningful in file order,
-    // which is what the QSettings version lost and had to re-parse the file to recover.
+    // which is what the reader this one replaced lost (it returned sections sorted) and had to re-parse the file
+    // to recover.
     writeBytes(path, "Top = 1\n"
                      "\n"
                      "[Zeta]\n"
@@ -229,8 +230,8 @@ TEST_CASE("TomlDocument reads a UTF-8 BOM and CRLF")
 
 TEST_CASE("TomlDocument reads UTF-16 with a BOM")
 {
-    // Older Notepad's "Unicode" encoding. Qt's text stream detected the BOM and decoded
-    // it, so a settings file saved that way worked, and the port must not stop it.
+    // Older Notepad's "Unicode" encoding. The reader this one replaced detected the BOM
+    // and decoded it, so a settings file saved that way worked, and it must go on working.
     const std::u16string text = u"[S]\r\nName = \"café Ω\"\r\nN = 12\r\n";
 
     for (const bool bigEndian : {false, true})
@@ -294,7 +295,7 @@ TEST_CASE("TomlDocument: integer parsing")
     bool parsed = false;
     CHECK(doc.integer("I/Plain", -1, &parsed) == 42);
     CHECK(parsed);
-    // QString::toInt ignores surrounding whitespace and accepts a leading '+'.
+    // Surrounding whitespace is ignored and a leading '+' accepted.
     CHECK(doc.integer("I/Spaced", -1, &parsed) == 42);
     CHECK(parsed);
     CHECK(doc.integer("I/Plus", -1, &parsed) == 7);
@@ -338,7 +339,7 @@ TEST_CASE("TomlDocument: number parsing")
 
 TEST_CASE("TomlDocument: the boolean rule")
 {
-    // QVariant::toBool()'s rule, reproduced on purpose: false only for empty, "0" or
+    // The rule the reader this one replaced had, kept on purpose: false only for empty, "0" or
     // "false" (any case, surrounding space ignored) - anything else, even "no", is true.
     TempDir tmp;
     const fs::path path = tmp.file("bools.toml");
@@ -407,7 +408,7 @@ TEST_CASE("TomlDocument writes the exact file format")
 
 TEST_CASE("TomlDocument: doubles are written as six significant digits")
 {
-    // QString::number(double) is %g with six significant digits. A whole value prints
+    // A double is written as %g with six significant digits. A whole value prints
     // with no decimal point and is then written bare like an integer; anything else is
     // a quoted string. Existing scale files carry exactly these spellings.
     TomlDocument doc;
@@ -432,7 +433,7 @@ TEST_CASE("TomlDocument: doubles are written as six significant digits")
 
 TEST_CASE("TomlDocument: save truncates an existing file")
 {
-    // The QSettings version merged into an existing file, so an old word map survived
+    // The writer this one replaced merged into an existing file, so an old word map survived
     // beside a new one unless the caller deleted the file first.
     TempDir tmp;
     const fs::path path = tmp.file("truncate.toml");
@@ -462,7 +463,7 @@ TEST_CASE("TomlDocument: a missing file and an unwritable path report errors")
     CHECK_MESSAGE(contains(error, "out.toml"), error);
 }
 
-// --- cases added beyond the Qt suite: each closes a gap its mutation check found (plan step 2.4)
+// --- cases added in the port: each closes a gap its mutation check found (plan step 2.4)
 
 TEST_CASE("TomlDocument: quotes come off a value only when they surround it")
 {
@@ -575,7 +576,7 @@ TEST_CASE("TomlDocument: the words a number may be")
                      "NegInf = \"-inf\"\n"
                      "PosInf = \"+inf\"\n"
                      "Inf = \"INF\"\n"
-                     "Infinity = \"infinity\"\n"          // not a number to Qt, though to the standard library
+                     "Infinity = \"infinity\"\n"          // not a number here, though to std::from_chars
                      "None = \"none\"\n"
                      "NanWithText = \"nan(1)\"\n"
                      "Exp = \"1E-1\"\n"

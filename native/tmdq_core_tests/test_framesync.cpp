@@ -1,7 +1,7 @@
-// framesync: the shared frame-sync decode (framesync.h) and the hex parser under it. The Qt suite used
-// QString::toULongLong(16) as the oracle for the parser; this one has no Qt to ask, so the expected answers are
-//   * what Qt answered, recorded once with a throwaway diagnostic (the table of awkward inputs, and the 40,000-string
-//     sweep as one digest), and
+// framesync: the shared frame-sync decode (framesync.h) and the hex parser under it. The parser must read a pattern
+// exactly as v2.14.2 did, so its expected answers are
+//   * what v2.14.2 answered, recorded once with a throwaway diagnostic (the table of awkward inputs, and the
+//     40,000-string sweep as one digest), and
 //   * a round trip through std::format("{:x}") for values the parser must read back exactly, in every spelling it
 //     accepts - an oracle that shares no code with the parser.
 
@@ -17,7 +17,7 @@
 
 namespace {
 
-// What Qt answered (QString::toULongLong(&ok, 16)), recorded with a throwaway diagnostic in the Qt suite.
+// What v2.14.2's hex conversion answered (accepted or not, and the value), recorded with a throwaway diagnostic.
 struct HexCase { const char* text; bool ok; unsigned long long value; };
 const HexCase kHexCases[] = {
     {"FE6B2840", true, 4268435520ull},
@@ -118,7 +118,7 @@ bool ourHex(const std::string& text, std::uint64_t& value) { return textparse::p
 
 } // namespace
 
-TEST_CASE("framesync: parseUnsignedHex agrees with Qt on awkward inputs")
+TEST_CASE("framesync: parseUnsignedHex agrees with v2.14 on awkward inputs")
 {
     for (const HexCase& c : kHexCases)
     {
@@ -137,11 +137,11 @@ TEST_CASE("framesync: parseUnsignedHex agrees with Qt on awkward inputs")
     }
 }
 
-TEST_CASE("framesync: parseUnsignedHex agrees with Qt on arbitrary text")
+TEST_CASE("framesync: parseUnsignedHex agrees with v2.14 on arbitrary text")
 {
     // A fixed pseudo-random sweep (so a failure reproduces) over the characters that matter: digits, both cases of
-    // the hex letters, a prefix letter, signs and whitespace. Qt's 40,000 answers were folded into one FNV-1a digest
-    // when the sweep was recorded.
+    // the hex letters, a prefix letter, signs and whitespace. v2.14.2's 40,000 answers were folded into one FNV-1a
+    // digest when the sweep was recorded.
     const std::string alphabet = "0123456789abcdefABCDEFxX+- \t";
     Xorshift next{0x2545F4914F6CDD1Dull};
     std::uint64_t digest = 1469598103934665603ull;

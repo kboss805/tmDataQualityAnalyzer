@@ -1,11 +1,11 @@
 /**
  * @file clocktime.h
- * @brief Qt-free formatting of an elapsed time as the "DDD:HH:MM:SS[.mmm]" clock stamp.
+ * @brief Formatting of an elapsed time as the "DDD:HH:MM:SS[.mmm]" clock stamp.
  *
  * The plot's X axis, its readouts and the CSV export all show a time as the day-of-year and time of
  * day it falls on, counted from the recording's first sample. The CSV export writes the stamp and the
- * importer reads it back, so the formatting lives in the core beside them; `PlotViewModel::formatTime`
- * is a thin wrapper.
+ * importer reads it back, so the formatting lives in the core beside them; the C# `ClockTime`
+ * (`Formats.cs`) is a thin wrapper over it, through the C ABI.
  */
 
 #ifndef CLOCKTIME_H

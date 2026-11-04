@@ -326,7 +326,7 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
-        public void TheDefaultsAreTheQtApplicationsFromTheHeader()
+        public void TheDefaultsComeFromTheHeader()
         {
             string header = File.ReadAllText(Repo.File(Path.Combine("include", "constants.h")));
             string Text(string name) => Regex.Match(header, name + @"\s*=\s*""([0-9A-Fa-f]+)""").Groups[1].Value;

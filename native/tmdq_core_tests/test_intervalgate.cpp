@@ -1,6 +1,5 @@
-// IntervalGate: the progress throttle that replaced QElapsedTimer in Ch10PacketReader::run(), pinned with injected time
-// points so nothing depends on a sleep (one case touches the real clock, built to be insensitive to scheduling). No Qt;
-// ported from the Qt TestIntervalGate, whose cases are all here under the same descriptions.
+// IntervalGate: the progress throttle in Ch10PacketReader::run(), pinned with injected time points so nothing depends
+// on a sleep (one case touches the real clock, built to be insensitive to scheduling). Ported in plan step 2.4.
 
 #include <chrono>
 #include <thread>
@@ -34,8 +33,8 @@ TEST_CASE("IntervalGate: not due before the interval has elapsed")
 
 TEST_CASE("IntervalGate: due at exactly the interval")
 {
-    // `>=`, not `>`: QElapsedTimer::elapsed() >= interval is what this replaced, so the boundary instant itself must
-    // count. A throttle that needs one extra tick drifts late on every cycle.
+    // `>=`, not `>`: v2.14.2's throttle fired once the elapsed time reached the interval, so the boundary instant
+    // itself must count. A throttle that needs one extra tick drifts late on every cycle.
     const auto t0 = base();
     const IntervalGate gate(100ms, t0);
 
@@ -115,7 +114,7 @@ TEST_CASE("IntervalGate: reset restarts the interval")
 
 TEST_CASE("IntervalGate: sub-millisecond precision decides the boundary")
 {
-    // QElapsedTimer truncated to whole milliseconds before comparing, so 99.999999 ms read as 99 and was not due.
+    // v2.14.2's timer truncated to whole milliseconds before comparing, so 99.999999 ms read as 99 and was not due.
     // Comparing at full resolution must agree on every side of the boundary, or the two implementations would disagree
     // by up to a millisecond.
     const auto t0 = base();
