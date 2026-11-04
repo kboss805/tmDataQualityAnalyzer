@@ -300,8 +300,9 @@ TEST_CASE("Constants: the full manual's file name is the one the installer ships
 {
     // Help looks for this file beside the application; the installer's full-manual task is what puts it there.
     CHECK(is(UIConstants::kFullManualFilename, "UserManual.html"));
-    const std::string script = readBytes(repoFile("deploy/tmDataQualityAnalyzer.iss"));
-    CHECK(contains(script, std::string("..\\") + UIConstants::kFullManualFilename + "\"; DestDir: \"{app}\""));
+    const std::string script = readBytes(repoFile("deploy/avalonia/tmDataQualityAnalyzer.iss"));
+    CHECK(contains(script, std::string("staging\\manual\\") + UIConstants::kFullManualFilename + "\""));
+    CHECK(contains(script, "Source: \"{#ManualFile}\"; DestDir: \"{app}\""));
 }
 
 TEST_CASE("Constants: the window-state settings keys")

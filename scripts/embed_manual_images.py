@@ -1,25 +1,26 @@
 """Embed docs/manual_images/processed/*.png into resources/usermanual.html.
 
-Called by scripts/build_manual.ps1, which crops and downscales the screenshots
-first - run that rather than this directly.
+Called by scripts/build_manual.ps1, which renders the figures from the application
+and downscales them first - run that rather than this directly.
 
-The manual is a Qt resource: it gets copied to a temp directory and opened in the
-default browser, so relative image paths would not resolve. Every figure is
-therefore a base64 data URI, keeping the manual one self-contained file.
+The manual is an embedded resource of the application: it gets written to a temp
+directory and opened in the default browser, so relative image paths would not
+resolve. Every figure is therefore a base64 data URI, keeping the manual one
+self-contained file.
 
 Idempotent: it strips any figures and figure CSS already present before inserting
 fresh ones, so it can run repeatedly against the manual in place. That matters
 because the COMMITTED manual already contains embedded figures - regenerating from
 it must not double them - and because prose edits between runs must survive.
 """
-import io, base64, os, re, sys
+import io, base64, os, re
 
 SRC = 'docs/manual_images/processed'
 VER = 'include/constants.h'
 WALK = 'docs/manual/walkthroughs.html'
 
 # TWO outputs from ONE source, so they cannot drift:
-#   BASE - compiled into the exe as a Qt resource. ALWAYS present, in the installer
+#   BASE - compiled into the exe as an embedded resource. ALWAYS present, in the installer
 #          and the portable ZIP alike, and impossible to delete. That is what makes
 #          "the user always has a manual" a structural guarantee rather than
 #          something the installer has to uphold.
@@ -32,28 +33,8 @@ WALK = 'docs/manual/walkthroughs.html'
 BASE = 'resources/usermanual.html'
 FULL = 'UserManual.html'
 
-# --preview builds the Avalonia application's manuals instead (plan step 4.9): its own copies of the prose, rewritten
-# for it, and figures rendered from it (TmDq.App.Tests' ManualFiguresTests, which scripts\build_manual.ps1 -Preview
-# runs first). The Qt application keeps the manuals above until the switch-over, when the preview's replace them.
-# The figures keep the Qt manual's file names, so both are placed by the same anchors below.
-PREVIEW = '--preview' in sys.argv[1:]
-if PREVIEW:
-    SRC = 'docs/manual_images/preview/processed'
-    WALK = 'docs/manual/walkthroughs-preview.html'
-    BASE = 'resources/usermanual-preview.html'
-    FULL = 'UserManual-preview.html'
-
-# Captions that say something only the Qt application's figure shows; the preview's figures show this instead.
-PREVIEW_CAPTIONS = {
-    'walk-err-01-log-error.png':
-        'The log sidebar. Errors appear in red and warnings in amber among the normal progress '
-        'messages - here a stream whose frame sync pattern was not found, which is why only '
-        'two of the three curves reached the plot.',
-    'walk-cust-03-recolor.png':
-        'Choosing a series colour, from its colour in Customize View (on the Receiver SNR tab, a '
-        'channel\'s right-click menu). Custom names and colours are what a processing template carries '
-        'between files.',
-}
+# The figures are rendered from the application by TmDq.App.Tests' ManualFiguresTests (plan step 4.9), which
+# scripts\build_manual.ps1 runs first; each test checks what its figure's caption here says.
 
 def app_version():
     """Read the version from AppVersion in constants.h - the single source of truth.
@@ -74,8 +55,6 @@ PLACED = set()   # every capture this run embeds, for the coverage check below
 
 def fig(fname, caption, alt):
     PLACED.add(fname)
-    if PREVIEW:
-        caption = PREVIEW_CAPTIONS.get(fname, caption)
     with open(os.path.join(SRC, fname), 'rb') as f:
         b64 = base64.b64encode(f.read()).decode('ascii')
     return ('\n<figure>\n  <img alt="%s" src="data:image/png;base64,%s">\n'
@@ -180,14 +159,7 @@ after('<h2 id="getting-started">1. Getting started</h2>',
           'The hamburger menu open, showing the Process, Import/Export and Settings sections and '
           'a Help submenu'))
 
-# The installer's page is a capture of the Qt installer, which no headless render can make; the preview's prose
-# says the same in words.
-if not PREVIEW:
-  before('<h2 id="configure">',
-       fig('walk-inst-01-components.png',
-           'The installer offers the fuller manual as an optional component. The built-in manual '
-           'is always available from Help regardless of this choice.',
-           'Installer page offering an optional full illustrated user manual'))
+# The installer's page is not a figure: no headless render can make it, and the prose says the same in words.
 
 # Customize View has TWO tabs and both are shown here, in tab order. The SNR tree
 # was previously in the walkthroughs only - and the walkthroughs are an OPTIONAL
@@ -206,8 +178,9 @@ after('<h2 id="plot">3. Working with the plot</h2>',
           'Customize Plot Series dialog on the Receiver SNR tab showing a collapsible '
           'receiver and channel tree')
     + fig('walk-cust-03-recolor.png',
-          'Choosing a series colour, reached by right-clicking a series in Customize View. Custom '
-          'names and colours are what a processing template carries between files.',
+          'Choosing a series colour, from its colour in Customize View (on the Receiver SNR tab, a '
+          'channel\'s right-click menu). Custom names and colours are what a processing template carries '
+          'between files.',
           'The colour picker dialog for choosing a plot series colour'))
 
 after('<h3>Navigating</h3>',
@@ -220,7 +193,7 @@ after('<h2 id="interface">7. Interface &amp; settings</h2>',
       fig('walk-err-01-log-error.png',
           'The log sidebar. Errors appear in red and warnings in amber among the normal progress '
           'messages - here a stream whose frame sync pattern was not found, which is why only '
-          'three of the four curves reached the plot.',
+          'two of the three curves reached the plot.',
           'The application showing the log sidebar with a red error message among progress lines')
     + fig('walk-theme-01-light-plot.png',
           'The light theme. The choice persists between sessions and applies to every window, '
@@ -343,32 +316,6 @@ if os.path.exists(WALK):
             + '\nAdd a fig() call here or a {{FIG:}} placeholder in %s, '
               'or delete the capture.' % WALK)
     print('figure coverage: %d/%d captures placed' % (len(PLACED), len(have)))
-
-    # The other direction: a capture dropped into docs/manual_images/ but never
-    # registered in build_manual.ps1 is never cropped, so it never reaches either
-    # manual. That cannot fail the build - an unregistered file is not broken, it
-    # is undecided - but it must be said out loud, because the alternative is a
-    # screenshot sitting in the repository for releases on end believing it ships.
-    # Spares are captures build_manual.ps1 declares as kept-on-purpose. Without
-    # them this fired on three deliberate decisions every single build, which is how
-    # a warning stops being read - and an unread warning is worse than none, because
-    # it looks like coverage.
-    spares = set()
-    spares_file = os.path.join(SRC, '.spares')
-    if os.path.exists(spares_file):
-        spares = {ln.strip() for ln in io.open(spares_file, encoding='utf-8-sig')
-                  if ln.strip()}
-
-    src_dir = os.path.dirname(SRC)
-    on_disk = {f for f in os.listdir(src_dir) if f.lower().endswith('.png')}
-    forgotten = sorted(on_disk - have - spares)
-    for f in forgotten:
-        print('WARNING: %s is in %s but reaches no manual. Register it in $Images '
-              'in build_manual.ps1, record why it is kept in $Spares, or delete it.'
-              % (f, src_dir))
-    if spares:
-        print('spares: %d capture(s) kept on purpose and used in neither manual'
-              % len(spares))
 
 io.open(FULL, 'w', encoding='utf-8', newline='\n').write(full)
 print('full manual : %-24s %5.0f KB, %d figures%s'

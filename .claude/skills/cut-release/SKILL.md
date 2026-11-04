@@ -16,9 +16,8 @@ The version number has **one** source of truth and several derived consumers. Ed
 build derive the rest, update the human-facing notes, then package. Do the steps in order.
 
 **From v3.0.0 the release is the Avalonia application** (`dotnet/TmDq.App` over `tmdq_core.dll`), packaged by
-`deploy\avalonia\build_avalonia_package.ps1`. The Qt application is still built and tested until plan step 6.1 deletes
-it, but it is no longer packaged: `deploy\build_release.ps1` and `deploy\tmDataQualityAnalyzer.iss` describe v2.x and
-are not run. (Plan step 6.2 rewrites this skill once Qt is gone.)
+`deploy\avalonia\build_avalonia_package.ps1`. The Qt application and its packaging (v2.x's) were deleted in plan step
+6.1.
 
 ## Step 1 — Decide the version
 
@@ -39,8 +38,8 @@ struct AppVersion {
 
 Do **not** add a version literal anywhere else. `dotnet/build/AppVersion.props` reads these three
 constants for every .NET project (never type a version in a `.csproj`), `build_avalonia_package.ps1` reads
-them for the package names and passes them to Inno Setup, and qmake still derives the Qt build's
-`version_autogen.h`. If you find a hardcoded version string elsewhere, that's a bug to remove, not a place
+them for the package names and passes them to Inno Setup, and the manual build stamps them into the
+manuals. If you find a hardcoded version string elsewhere, that's a bug to remove, not a place
 to update. (Test fixtures written BY a version, such as the v2.14.2 templates, keep theirs: they record
 who wrote them.)
 
@@ -65,15 +64,12 @@ update it only if install/run instructions changed.)
 
 These reach users but nothing in CI exercises them, so they rot silently:
 
-- **The manuals** — `resources/usermanual-preview.html` (Help > User Manual, compiled into the app) and
-  `UserManual-preview.html` (the full manual, shipped as `UserManual.html`); they keep their `-preview`
-  names until plan step 6.1 replaces the Qt manuals with them. Their subtitle and footer carry the version
-  from `AppVersion`, stamped by `powershell -ExecutionPolicy Bypass -File scripts\build_manual.ps1 -Preview
-  -NoCapture` after the bump (drop `-NoCapture` to re-render the figures when the UI changed). The Qt
-  manual read "Version 2.7.0" at v2.9.0; the consistency check below is why that cannot recur.
-- **`UserGuide.txt`** is the Qt application's and is no longer shipped (the v3.0.0 installer deletes it
-  on an upgrade).
-- **`README.md`** — the "developed on Qt x.y.z" line and the repo tree.
+- **The manuals** — `resources/usermanual.html` (Help > User Manual, compiled into the app) and
+  `UserManual.html` (the full manual, shipped beside it). Their subtitle and footer carry the version from
+  `AppVersion`, stamped by `powershell -ExecutionPolicy Bypass -File scripts\build_manual.ps1 -NoCapture`
+  after the bump (drop `-NoCapture` to re-render the figures when the UI changed). The manual read
+  "Version 2.7.0" at v2.9.0; the consistency check below is why that cannot recur.
+- **`README.md`** — the system requirements, the build commands and the repo tree.
 - **`.claude/CLAUDE.md`** — the "Current version" line in the opening paragraph. It sat at 2.7.0
   through two releases, because nothing points at it.
 
@@ -101,11 +97,9 @@ it deliberately every release rather than assuming the figures are fine.
 
 Run every suite, each against the baseline in `.claude/CLAUDE.md`: the native core
 (`scripts\test_native.ps1`, after `scripts\build_core_dll.ps1`), the managed library
-(`scripts\test_dotnet.ps1`), the Avalonia app (`scripts\test_app.ps1`), and, while the Qt application is
-still in the tree, the **full Qt suite** with the **build-and-test** skill (zero warnings, **no skips**).
-After a change to processing, the plot's series or the CSV writer, also run the soak
-(`scripts\run_soak.ps1`), which holds the app to the Qt application's exported bytes. Then run the
-throughput guard:
+(`scripts\test_dotnet.ps1`) and the app (`scripts\test_app.ps1`), all with zero warnings. After a change
+to processing, the plot's series or the CSV writer, also run the soak (`scripts\run_soak.ps1`), which
+holds the app to the bytes v2.14.2 exported. Then run the throughput guard:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_throughput_bench.ps1
@@ -117,8 +111,7 @@ cores** and prints a ratio block. It fails unless doctest reports that exactly t
 passed.
 
 **The benchmark is a native doctest case now**, "PipelineRunner throughput: ..." in
-`native/tmdq_core_tests/test_pipelinerunner.cpp`; it measures `PipelineRunner`, which has no Qt, so
-the script no longer builds or runs the Qt suite (that is the step above). It used to be the Qt
+`native/tmdq_core_tests/test_pipelinerunner.cpp`; it measures `PipelineRunner`. It used to be the Qt
 suite's one standing skip — opt-in behind `TMDQA_RUN_HEAVY_BENCH`, nothing set that variable, and
 *it asserted nothing even when it ran*, so the decommutation pipeline had no performance guard at
 all and the suite's "413/0/1" baseline was that hole. The script sets the variable, the benchmark
@@ -129,7 +122,7 @@ It needs `tests/data/test files/prn_testfile, full.ch10` (~640 MB, gitignored). 
 sample is **not** a substitute — it carries PCM data for 2 of the 4 channels the benchmark
 times — and the script says so up front instead of letting the benchmark fail late.
 
-CI leaves the benchmark off (the case is skipped there), and its Qt skip gate expects **none**.
+CI leaves the benchmark off (the case is skipped there).
 
 Do not package a release over a red or warning-laden build. Confirm `git status` is clean
 except for the intended version/notes changes.
@@ -213,8 +206,8 @@ status back to the user.
 
 ## Step 9 - Install it on a clean machine
 
-Everything up to here ran on a machine that already holds this application's Qt runtime,
-its settings and its registry state, so it can only prove the artifacts are correctly
+Everything up to here ran on a machine that already holds this application, its settings
+and its registry state, so it can only prove the artifacts are correctly
 signed and versioned. Whether the installer **works somewhere new** is a different claim,
 and v2.13.1 could not make it: that needed "a genuinely clean Windows target; Windows 11
 Home offers neither Sandbox nor Hyper-V."

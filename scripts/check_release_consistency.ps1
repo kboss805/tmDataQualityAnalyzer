@@ -4,13 +4,13 @@
 #
 # WHY THIS EXISTS
 #
-# The version has ONE source of truth (AppVersion in include/constants.h) and the
-# build derives version_autogen.h, the .pro VERSION and the .rc from it. But four
-# files carry the version as PROSE, and nothing derives those:
+# The version has ONE source of truth (AppVersion in include/constants.h), and the
+# build derives the assemblies' versions from it (dotnet/build/AppVersion.props). But
+# four files carry the version as PROSE, and nothing derives those:
 #
 #   .claude/CLAUDE.md          "Current version: X.Y.Z"   (sat at 2.7.0 for 2 releases)
 #   docs/claude.md             "Project Version: X.Y.Z"
-#   resources/usermanual-preview.html  subtitle + footer  (the Qt manual read 2.7.0 at v2.9.0)
+#   resources/usermanual.html  subtitle + footer          (read 2.7.0 at v2.9.0)
 #   deploy/RELEASENOTES.txt    top section header
 #
 # Every one of those has shipped stale at least once. The cut-release skill says to
@@ -76,14 +76,11 @@ $checks = @(
        Pattern = '\*\*Project Version\*\*:\s*([0-9]+\.[0-9]+\.[0-9]+)'
        What = 'Project Version line' }
 
-    # The manuals that SHIP: from v3.0.0 the Avalonia application's, compiled into it and spliced into the full
-    # manual. They keep their -preview names until the Qt application goes (plan step 6.1); the Qt manuals
-    # (resources\usermanual.html, UserManual.html) are no longer shipped and still describe v2.14.2.
-    @{ File = 'resources\usermanual-preview.html'
+    @{ File = 'resources\usermanual.html'
        Pattern = '<p class="subtitle">User Manual .{1,3} Version ([0-9]+\.[0-9]+\.[0-9]+)</p>'
        What = 'manual subtitle' }
 
-    @{ File = 'resources\usermanual-preview.html'
+    @{ File = 'resources\usermanual.html'
        Pattern = 'This manual describes\s+version ([0-9]+\.[0-9]+\.[0-9]+)\.'
        What = 'manual footer' }
 
@@ -94,11 +91,11 @@ $checks = @(
     # The FULL manual is a second shipped artifact, generated alongside the base one
     # by build_manual.ps1. A second manual that nothing checks is precisely the stale
     # artifact this script exists to prevent, so it gets the same two markers.
-    @{ File = 'UserManual-preview.html'
+    @{ File = 'UserManual.html'
        Pattern = '<p class="subtitle">User Manual .{1,3} Version ([0-9]+\.[0-9]+\.[0-9]+)</p>'
        What = 'full manual subtitle' }
 
-    @{ File = 'UserManual-preview.html'
+    @{ File = 'UserManual.html'
        Pattern = 'This manual describes\s+version ([0-9]+\.[0-9]+\.[0-9]+)\.'
        What = 'full manual footer' }
 )

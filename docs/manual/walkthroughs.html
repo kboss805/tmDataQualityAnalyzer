@@ -30,7 +30,7 @@ one, so they are worth understanding before the walkthroughs that use them.</p>
 
 <h3>Configure Frame Sync Lock</h3>
 
-{{FIG:walk-fs-03-framesync-setup.png|The frame sync setup dialog, configured for a PRN 15 stream - which is what a new stream starts on, so a PRN 15 recording needs no pattern file loaded. The folder and disk buttons load and save the top three fields as a TOML file.|Configure Frame Sync Lock dialog showing frame sync pattern, mask, bits per frame, data rate and averaging period}}
+{{FIG:walk-fs-03-framesync-setup.png|The frame sync setup dialog, configured for a PRN 15 stream - which is what a new stream starts on, so a PRN 15 recording needs no pattern file loaded. Load and Save keep the pattern, the mask, the frame length, Derandomize and Invert Data in a TOML file.|Configure Frame Sync Lock dialog showing frame sync pattern, mask, bits per frame, data rate and averaging period}}
 
 <table>
   <tr><th>Field</th><th>What it is</th><th>What a wrong value does</th></tr>
@@ -69,10 +69,10 @@ measured as a proportion of the frame-sized bit slots actually traversed, not as
 The field is there because the value is genuinely useful elsewhere, not because the metric is
 fragile.</div>
 
-<div class="note"><strong>Load and Save round-trip only three fields.</strong> The folder and
-disk buttons write <em>Frame Sync</em>, <em>Frame Sync Mask</em> and <em>Bits Per Frame</em>,
-and nothing else. <em>Derandomize</em>, <em>Data Rate</em> and <em>Average Period</em> are
-deliberately treated as per-session choices and are not saved, and neither is
+<div class="note"><strong>Load and Save keep five fields.</strong> <em>Frame Sync</em>,
+<em>Frame Sync Mask</em>, <em>Bits Per Frame</em>, <em>Derandomize</em> and <em>Invert Data</em> describe the
+frame format and how it was recorded, so a pattern file carries all five. <em>Data Rate</em> and <em>Average
+Period</em> are deliberately treated as per-session choices and are not saved, and neither is
 <strong>Legacy Chapter 10</strong> &mdash; which is not in this dialog at all, because it
 describes the recording rather than the stream. This is intended, not an
 oversight: a pattern file describes a <em>frame format</em>, which is a property of the
@@ -127,8 +127,6 @@ synchronisation, and find the moments where it did not.</p>
 <p>Use <strong>≡ → Open…</strong> (or <kbd>Ctrl</kbd>+<kbd>O</kbd>), or drag a
 <code>.ch10</code> file onto the window.</p>
 
-{{FIG:walk-fs-01-open.png|Opening a Chapter 10 recording. The file type filter shows only .ch10 files.|Open Chapter 10 File dialog with a .ch10 file selected}}
-
 <p>The application reads the file's TMATS metadata — not the data itself, which is why this is
 quick even on a multi-gigabyte recording — and opens the Configure Streams dialog listing every
 PCM channel it found.</p>
@@ -152,6 +150,9 @@ has enough information to run:</p>
   <li><span style="color:gray;">✗</span> — not selected. Nothing is required of it.</li>
 </ul>
 
+<p>Until every selected stream is ready, <strong>Process</strong> waits, and the line under the rows says
+which stream is holding it up.</p>
+
 <p>Two settings at the top of the dialog describe the recording rather than a stream, so they
 apply to every channel in the file:</p>
 <ul>
@@ -168,7 +169,7 @@ apply to every channel in the file:</p>
 <p>Press <strong>Process</strong>. The file is read <em>once</em>, with every selected stream
 decoded in parallel, so processing four streams costs little more than processing one.</p>
 
-{{FIG:walk-fs-04-processing.png|Processing under way. The log fills in beside the progress dialog, reporting each stream as it completes.|Processing progress dialog at 74 percent with the log showing per-stream progress}}
+{{FIG:walk-fs-04-processing.png|Processing under way. The log fills in beside the progress dialog as the file is read; each stream reports its counts when it completes, and Cancel stops them all.|Processing progress dialog part-way through, with the log reporting how much of the file has been read}}
 
 <p>The log is worth reading rather than ignoring. Each stream reports the bytes it processed,
 the syncs it found and the frames it extracted — the quickest way to notice that a stream was
@@ -199,7 +200,7 @@ which is which.</p>
 
 <h3>Step 6 — Export</h3>
 
-<p>Right-click the chart and choose <strong>Export…</strong>. You can produce an image, the
+<p>Choose <strong>&equiv; &rarr; Export…</strong>. You can produce an image, the
 underlying data as CSV, and the log text in one action; see
 <a href="#import-export">Import &amp; export</a> for exactly what each contains.</p>
 
@@ -237,8 +238,6 @@ represents.</p>
 <p>Rather than typing all of that for every recording from a given system, load a saved
 <strong>receiver parameters</strong> file. It carries the word map &mdash; which word in the
 frame belongs to which receiver and channel &mdash; along with the polarity, slope and scale.</p>
-
-{{FIG:walk-snr-03-load-params.png|Loading a receiver parameters file. These are per-installation rather than per-recording, so one file usually serves every recording from the same hardware.|File dialog for selecting a receiver parameters TOML file}}
 
 <div class="note">A receiver parameters file describes <em>the hardware</em>, not the flight.
 One file typically covers every recording from the same installation, which is why these are
@@ -322,7 +321,8 @@ holds steady, so it does not matter whether a technician left each step for one 
 <h3>Step 1 &mdash; Open the calibration dialog</h3>
 
 <p>Configure the receiver stream as usual, then press <strong>Apply Cal</strong> in the Receiver
-SNR setup dialog. Before any profile is attached, the text beside that button reads
+SNR setup dialog. It is available once the stream's settings are valid and the recording has a time channel;
+until then its tooltip says what is missing. Before any profile is attached, the text beside that button reads
 <em>(none &mdash; using linear calibration)</em>, which is how you can tell at a glance what a
 stream is currently using.</p>
 
@@ -534,8 +534,6 @@ channels.</p>
 
 <p>Choose <strong>&equiv; &rarr; Save as Template&hellip;</strong>.</p>
 
-{{FIG:walk-batch-01-save-template.png|Saving a template. Give it a name that identifies the installation or aircraft rather than the recording it came from, since it will be applied to many others.|Save as Template file dialog writing a JSON template file}}
-
 <p>A template is a small <code>.json</code> file holding the per-stream configuration and,
 optionally, each series' name and colour. It contains <strong>no file paths</strong>, so it is
 not tied to the recording it was built from &mdash; it describes a <em>setup</em>, and can be
@@ -573,7 +571,8 @@ mislabelled result you cannot.</div>
       makes the results comparable at a glance.</li>
   <li><strong>Also export a CSV + plot images per file</strong> &mdash; writes, for each
       recording, a CSV plus two images named after the source file:
-      <code>&hellip;_framesync_lock.png</code> and <code>&hellip;_missed_frames.png</code>.
+      <code>&hellip;_framesync_lock.png</code> and <code>&hellip;_missed_frames.png</code>
+      (one image, <code>&hellip;.png</code>, for a recording with no frame sync streams).
       This is the option that turns a batch run into a folder of results you can hand to
       someone else.</li>
 </ul>

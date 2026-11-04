@@ -9,7 +9,7 @@ This application reads IRIG 106 Chapter 10 (.ch10) files and processes one or mo
 - **Frame Sync Lock** — measures how reliably the frame sync pattern locks across the recording, reported as a lock percentage over time. No receiver/calibration parameters are required.
 - **Receiver AGC (SNR)** — extracts calibrated receiver-channel AGC values from the minor frame using a Receiver Parameters configuration (word map + calibration), with voltage-to-dB conversion.
 
-Results are plotted in an interactive chart. The UI allows the user to configure each stream, including channel selection, frame sync parameters, time range, and the averaging window.
+Results are plotted in an interactive chart. The UI allows the user to configure each stream, including channel selection, frame sync parameters and the averaging window.
 
 ## Features
 
@@ -17,7 +17,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 
 - **Chapter 10 File Support**: Read, parse, and process IRIG 106 Chapter 10 telemetry files
 - **Channel Selection**: Choose the time channel and one or more PCM channels for processing
-- **Drag-and-Drop**: Drop `.ch10` or exported `.csv` files directly onto the application window, or open them from the ☰ menu (**Open…**)
+- **Drag-and-Drop**: Drop `.ch10` or exported `.csv` files directly onto the application window, or open them from the ☰ menu (**Open…** for recordings, **Import CSV…** for exports)
 - **Recent Files**: Up to 5 entries under the ☰ menu (Process section), persisted across sessions
 - **CSV Import**: Re-open a CSV this application previously exported straight into the plot — no re-processing of the source `.ch10` file (☰ menu > **Import CSV…**, or drag-and-drop a `.csv`)
 
@@ -55,90 +55,73 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 ### Settings & Configuration
 
 - **TOML Configuration**: Save and load frame sync fields and receiver parameters from TOML files
-- **Per-File-Type Directory Persistence**: Independently remembers the last used directory for Ch10 and TOML file dialogs between sessions
+- **Folder Persistence**: Remembers, between sessions, the folder of the last recording, CSV or template, and the folder of the last calibration recording
 
 ### Plot & Visualization
 
 - **Interactive Plot Window**: Plot showing frame sync lock (%) and/or receiver AGC (dB) series with mouse wheel zoom, click-drag pan (open/closed-hand grab cursor), auto-scale axes, per-series visibility toggles, and an auto-assigned color palette
 - **Color Coding**: Frame Sync Lock series use purple/blue/green primaries (one per stream) and Receiver SNR series use red/orange/yellow primaries (one per receiver); additional streams, receivers, and channels are derived as progressively lighter shades so related series stay grouped
 - **Customize Plot Series Dialog**: A tabbed dialog selects which series are visible — a Frame Sync Lock tab (one toggle per stream) and a Receiver SNR tab that presents each stream as a collapsible tree of receivers with L/R/C channel checkboxes, tri-state group toggles, and Expand/Collapse All; streams with many receivers split across two columns
-- **Distraction-Free Plot**: The chart fills the entire plot area - there are no control rows around it. Every control lives in a **right-click context menu** on the chart (Set Plot Title, Plot File, View Mode, Customize View, Show Legend, X Axis, Y Axes, Export) or in a single on-chart chip bar
-- **On-Chart Chip Bar**: A compact overlay at the chart's top-left holding the legend toggle, a one-click **View Mode** chip (labelled with the view it switches to), and a **Reset view** chip that appears only once the view is zoomed or an axis maximum is pinned - so nothing sits there unused
+- **Distraction-Free Plot**: The chart fills the entire plot area - there are no control rows around it. Every control lives in a **right-click context menu** on the chart (Set Plot Title, Plot File, View Mode, Customize View, Show Legend, Readout, X Axis, Y Axes, Reset View), in a single on-chart chip bar, or on a key while the chart has focus
+- **On-Chart Chip Bar**: A compact overlay at the chart's top-left holding a one-click **View Mode** chip (labelled with the view it switches to) and a **Reset view** chip that appears only once the view is zoomed or an axis limit is set - so nothing sits there unused
 - **Quick Plot Gestures**: Ctrl+drag or middle-drag rubber-bands a time range to zoom into it, double-click restores the full span, and a dashed crosshair follows the cursor for comparing series at the same instant
 - **View Mode**: The context menu switches the left axis between Frame Sync Lock (%) and Accumulated Missed Frames; the per-stream visibility selection is preserved across the switch
 - **Plot File Selector**: After a batch run, the context menu's **Plot File** submenu selects which processed file to view, or overlays them all (disabled when only one file is loaded)
-- **Movable On-Plot Legend**: A translucent legend floats inside the chart (defaulting to the top-right, reset each session) and can be dragged clear of the data; it scrolls for dense plots (e.g. 48+ SNR channels) and is composited into exported images at its placed position. A small on-chart button (top-left) shows/hides it, and the choice persists between sessions
+- **Movable On-Plot Legend**: A translucent legend floats inside the chart (defaulting to the top-right, reset each session) and can be dragged clear of the data; it scrolls for dense plots (e.g. 48+ SNR channels) and is composited into exported images at its placed position. **Show Legend** on the right-click menu (or **L**) shows or hides it, and the choice persists between sessions
 - **X-Axis Time Display**: Actual file time (DDD:HH:MM:SS) on the X axis instead of elapsed seconds
-- **Export**: Export the current plot and its data from the ☰ menu or the plot's right-click menu (**Export…**) — choose any combination of CSV data, a plot image (PNG/SVG/PDF), and the log window contents (text); the image includes the legend
+- **Export**: Export the current plot and its data from the ☰ menu (**Export…**) — choose any combination of CSV data (every series), a plot image (PNG/SVG/PDF, exactly what the chart shows, legend included), and the log window contents (text)
 - **Hover Tooltip**: Shows series name, time (DDD:HH:MM:SS), and value (lock % or dB) on mouse hover
 
 ### Logging & Feedback
 
-- **Inline Log Window**: Persistent, scrollable log with color-coded messages (green for success, yellow for warnings, red for errors)
-- **Status Bar**: Displays file metadata summary (filename, size, channel counts, time range)
-- **Pre-Process Summary**: Logs input file, channels, time range, sample rate, receiver count, and output path before processing
-- **Startup & File Logging**: Logs default.ini settings at startup, channel/time/frame info when opening Ch10 files, and INI validation details when loading settings
-- **Clickable Log Links**: Output file path and "Open Folder" links in the log window after processing completes
+- **Inline Log Window**: Persistent, scrollable log with color-coded messages (green for success, goldenrod for warnings, red for errors)
+- **Pre-Process Summary**: Logs the input file, the streams, the time range and each stream's averaging period before processing
+- **File Logging**: Logs the file's size, time channels and PCM channels when a Chapter 10 file is opened, and each stream as it completes
 
 ### Application & UI
 
 - **Single Hamburger Menu**: Every command lives in one ☰ menu in the window's title bar, grouped into Process, Import/Export, Settings, and Help sections
-- **Frameless Window**: A custom title bar with its own minimize/maximize/close buttons; native Windows drag, resize, snap, and double-click-maximize are preserved
+- **Custom Title Bar**: The window's own title bar with minimize/maximize/close buttons; native Windows drag, resize, snap layouts and double-click-maximize are preserved
 - **Toggleable Sidebar**: Show or hide the log sidebar from the title bar or with **Ctrl+B**; the choice persists across sessions
-- **Dark & Light Themes**: Windows 11 / WinUI 3 styled dark and light themes with runtime toggle (Settings section); title-bar and menu icons re-render per theme
+- **Dark & Light Themes**: Fluent dark and light themes with runtime toggle (Settings section); every window, dialog and the plot follow it, and the menu icons swap per theme
 - **Built-in User Manual**: An HTML user manual opens in the default browser from ☰ menu > Help > **User Manual…**
-- **Keyboard Shortcuts**: Ctrl+O (open a file), Ctrl+B (toggle the sidebar)
+- **Keyboard Shortcuts**: Ctrl+O (open a file), Ctrl+B (toggle the sidebar), and on the focused chart the arrows, +/-, Home, Backspace, R, V and L
 - **Tooltips**: Descriptive tooltips on plot controls and dialog fields
 
 ### Deployment
 
-- **Installer & Portable Distribution**: Inno Setup EXE installer with admin/non-admin support, portable ZIP with local settings, INI upgrade logic, and optional `.ch10` file association
+- **Installer & Portable Distribution**: A signed Inno Setup installer with admin/non-admin support that upgrades a v2.x install in place (settings files kept, preferences imported on the first run), a portable ZIP that keeps its preferences beside itself, and an optional `.ch10` file association
 
 ## System Requirements
 
-### Software
-
-- **Qt**: Version 6.0.0 or later (developed on 6.12.0), `msvc2022_64` kit
-- **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools — workload
-  "Desktop development with C++", giving `cl` / `nmake` + the Windows SDK)
-- **C++ Standard**: C++20 required
-- **Operating System**: Windows
-
-### Build Tools
-
-- qmake (Qt build system)
-- MSVC 2022 toolchain (`cl` / `nmake`)
+- **Running it:** Windows 10 (1809) or later, x64. The installer and the portable ZIP carry everything the application
+  needs; nothing else is installed first.
+- **Building it:**
+  - **.NET 10 SDK** - the application (`dotnet/TmDq.App`, Avalonia 12) and the C# library over the native core
+    (`dotnet/TmDq.Core`).
+  - **MSVC 2022** (Visual Studio 2022 C++ Build Tools, workload "Desktop development with C++", with the Windows SDK) -
+    the native core, `tmdq_core.dll` (`native/`, C++20, MSBuild).
+  - **Inno Setup 6** - only for the installer.
 
 ## Building the Project
 
-### Using Qt Creator
-
-1. Open `tmDataQualityAnalyzer.pro` in Qt Creator
-2. Configure the project with your Qt MSVC 2022 kit
-3. Build and run (Ctrl+R)
-
-### Using Command Line (Windows)
+Everything is in `tmdq.sln`. From a PowerShell prompt at the repository root:
 
 ```powershell
-# Set up the MSVC toolchain + Qt (imports vcvars, puts the Qt msvc kit on PATH)
-. .\scripts\env.ps1
+# The native core, then its doctest suite
+powershell -ExecutionPolicy Bypass -File scripts\build_core_dll.ps1 -Configuration Release
+powershell -ExecutionPolicy Bypass -File scripts\test_native.ps1 -Configuration Release
 
-# Create and enter the build directory
-mkdir build
-cd build
+# The C# library's tests and the application's tests, against that DLL
+powershell -ExecutionPolicy Bypass -File scripts\test_dotnet.ps1 -Configuration Release
+powershell -ExecutionPolicy Bypass -File scripts\test_app.ps1 -Configuration Release
 
-# Configure the project (run from the build directory)
-qmake ../tmDataQualityAnalyzer.pro -spec win32-msvc
-
-# Build debug version
-nmake -f Makefile.Debug
-
-# Build release version
-nmake -f Makefile.Release
-
-# Run the application
-debug\tmDataQualityAnalyzer.exe
+# The release packages (signed; pass -SignCertSha1 '' for an unsigned build)
+powershell -ExecutionPolicy Bypass -File deploy\avalonia\build_avalonia_package.ps1
 ```
+
+The scripts find MSVC themselves (`scripts\env.ps1`). `.claude/CLAUDE.md` and `docs/claude.md` describe each one, the
+test baselines and the release process.
 
 ## Usage
 
@@ -162,62 +145,38 @@ debug\tmDataQualityAnalyzer.exe
 
 4. **Process**
    - Click **Process** (the dialog's accept button) to read the file and run all enabled streams concurrently
-   - Monitor progress in the progress bar and log window; each stream is added to the plot as it completes
+   - A progress dialog shows the run, and its **Cancel** stops every stream; the log fills in beside the chart, and the results are plotted when the run completes
 
 ## Project Structure
 
 ```text
 tmDataQualityAnalyzer/
 ├── .claude/                    # Claude Code: the session guide (CLAUDE.md), shared settings, project skills
-├── build/                      # Out-of-source build artifacts
-├── deploy/                     # Release packaging: build_release.ps1, Inno Setup .iss, release notes
-├── docs/                       # Design notes, logic docs (SNR_logic, framesync_logic), AI guide (claude.md)
-├── include/                    # Header files, organized by MVVM layer
-│   ├── dto/                    # Plain value types passed between layers
-│   │   ├── streamconfig.h · source.h · processingparams.h · processedstreamdata.h
-│   │   ├── plotseriesdata.h · seriesappearance.h · processingtemplate.h
-│   │   └── framesyncparams.h · calibrationprofile.h (US5.3, runtime-only)
-│   ├── model/                 # File I/O, decommutation, schemas (no Qt UI)
-│   │   ├── chapter10reader.h · ch10packetreader.h · packetqueue.h · frameprocessor.h
-│   │   ├── stepdetector.h · calibrationextractor.h        # Non-linear step calibration (US5.3)
-│   │   ├── framesetup.h · channeldata.h · tomlconfighelper.h
-│   │   ├── csvseriesparser.h · seriescolumnschema.h       # CSV import/export (US6.x)
-│   │   └── streamconfigschema.h · processingtemplateschema.h · templatematcher.h  # Templates (US1.1)
-│   ├── view/                  # Qt widgets and dialogs
-│   │   ├── mainview.h          # Main window: hamburger menu + frameless title bar + log sidebar
-│   │   ├── plotwidget.h        # chart host + on-plot legend + right-click context menu
-│   │   ├── tmchart.h           # first-party 2D line chart (axes, series, gestures, export)
-│   │   ├── streamconfigdialog.h · streamsubdialogs.h · plotcustomizationdialog.h
-│   │   └── exportdialog.h · batchapplydialog.h · processingprogressdialog.h
-│   ├── viewmodel/             # Application logic bound to the views
-│   │   └── mainviewmodel.h · processingcoordinator.h · plotviewmodel.h
-│   └── constants.h            # App version (single source), UI/plot constants, QSettings keys
-├── src/                        # Implementations mirroring include/ (main.cpp, model/, view/, viewmodel/)
-├── lib/irig106/                # Third-party IRIG 106 library — do NOT edit (adapt in app code)
-│   ├── src/                   # irig106utils C source files
-│   └── include/               # irig106utils C header files
-├── tests/                      # Qt Test framework unit tests (19 suites)
-├── settings/                   # Default and user TOML settings files
-├── resources/                  # Stylesheets, icons, embedded manual, Windows .rc
-│   ├── win11-dark.qss · win11-light.qss       # Theme stylesheets
-│   ├── usermanual.html         # Embedded HTML user manual (Help > User Manual…)
-│   ├── export-{dark,light}.svg · import-{dark,light}.svg   # Menu icons (per-theme variants)
-│   ├── chevron-*.svg · checkmark.svg · gear.svg · folder-open.svg
-│   ├── play.svg · stop.svg · retry.svg · floppy-save.svg · toggle-*.svg
-│   ├── tmDataQualityAnalyzer_resource.rc      # Windows resource file
-│   └── icon.ico               # Application icon
-├── scripts/                    # Developer helper scripts (the signed release build is deploy/build_release.ps1)
-│   ├── env.ps1                # MSVC + Qt environment setup — dot-source before building
-│   ├── build_ide.ps1          # IDE/VS Code test build helper
-│   ├── setup-env.ps1          # One-time Windows user environment variable registration
-│   └── gen_compile_flags.py   # Generate compile_flags.txt for clangd/clang-tidy IntelliSense
-├── tmDataQualityAnalyzer.pro   # Qt project file (parses the version from constants.h)
-└── README.md                   # This file
+├── deploy/                     # Release packaging and its clean-machine test
+│   ├── avalonia/               # build_avalonia_package.ps1, the Inno Setup script, signing
+│   ├── sandbox/                # Windows Sandbox install-and-upgrade test (Smart App Control)
+│   └── RELEASENOTES.txt        # The installer's "What's New" page
+├── docs/                       # Developer guide (claude.md), logic notes, the migration plan, manual sources
+├── dotnet/                     # The application and the C# library (.NET 10)
+│   ├── TmDq.App/               # The Avalonia 12 application (MVVM, CommunityToolkit.Mvvm)
+│   ├── TmDq.App.Tests/         # Its tests, on Avalonia's headless platform (xunit v3)
+│   ├── TmDq.Core/              # The C# binding of the native core's C ABI
+│   └── TmDq.Core.Tests/        # Its tests, running the committed recordings through the library
+├── include/                    # The native core's headers (no Qt): constants.h, dto/, model/
+├── src/model/                  # The native core: Chapter 10 reading, decommutation, calibration, file formats
+├── native/                     # tmdq_core.dll (MSBuild): the C ABI over the core, and the doctest suite
+├── lib/                        # Third-party: irig106 (do NOT edit - adapt in the core) and doctest
+├── tests/                      # Test fixtures the suites read: data/ (committed .ch10 recordings), fixtures/
+├── settings/                   # The shipped TOML settings: frame sync patterns, receiver parameters, step files
+├── resources/                  # The base user manual (compiled into the app), the icon, the UTF-8 manifest
+├── scripts/                    # Build, test, manual and release-check scripts
+├── UserManual.html             # The full illustrated manual, shipped beside the application
+└── tmdq.sln                    # The solution: the native core, its tests, and the .NET projects
 ```
 
 ## Credits
 
-This project incorporates code from the [irig106utils](https://github.com/atac/irig106utils) library for IRIG 106 Chapter 10 file handling. Charting is first-party (`TmChart`); the previously vendored QCustomPlot library has been removed.
+This project incorporates code from the [irig106utils](https://github.com/atac/irig106utils) library for IRIG 106 Chapter 10 file handling. The user interface is built on [Avalonia](https://avaloniaui.net/) (MIT); every library the application ships is listed with its licence in `THIRD-PARTY-NOTICES.txt` beside it. Charting is first-party.
 
 ## License
 

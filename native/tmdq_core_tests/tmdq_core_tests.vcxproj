@@ -83,7 +83,7 @@
       <!-- irig106 uses ntohs and friends; the DLL links the same. -->
       <AdditionalDependencies>ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
-    <!-- The UTF-8 active code page, as the application has (codepage.pri): the readers hand irig106 the path in the
+    <!-- The UTF-8 active code page, as the application has (its app.manifest): the readers hand irig106 the path in the
          process code page, which its narrow open() reads, so without this a non-ASCII folder could not be opened. -->
     <Manifest>
       <AdditionalManifestFiles>$(MSBuildThisFileDirectory)..\..\resources\utf8codepage.manifest;%(AdditionalManifestFiles)</AdditionalManifestFiles>
@@ -165,7 +165,7 @@
   </ItemGroup>
 
   <!-- The C ABI, native\tmdq_core\*.cpp: every source tmdq_core.vcxproj builds besides the core, compiled in here so
-       test_abi.cpp calls tmdq_* as a host would, without loading the DLL. TestCoreQtFree checks the two lists agree. -->
+       test_abi.cpp calls tmdq_* as a host would, without loading the DLL. NativeProjectTests checks the two lists agree. -->
   <ItemGroup>
     <ClCompile Include="..\tmdq_core\abi_calibration.cpp" />
     <ClCompile Include="..\tmdq_core\abi_chart.cpp" />

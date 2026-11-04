@@ -200,8 +200,8 @@ $portable = Join-Path $Stage "tmDataQualityAnalyzer-v${version}_portable"
 Copy-Item $AppDir $portable -Recurse
 # The full manual: always in the portable copy (there is no installer to ask), an optional task in the installer, which
 # takes it from beside the staged application rather than from within it (plan step 4.9).
-$manual = Join-Path $Root 'UserManual-preview.html'
-if (-not (Test-Path $manual)) { throw 'UserManual-preview.html is missing: run scripts\build_manual.ps1 -Preview' }
+$manual = Join-Path $Root 'UserManual.html'
+if (-not (Test-Path $manual)) { throw 'UserManual.html is missing: run scripts\build_manual.ps1' }
 New-Item -ItemType Directory -Force -Path (Join-Path $Stage 'manual') | Out-Null
 Copy-Item $manual (Join-Path $Stage 'manual\UserManual.html') -Force
 Copy-Item $manual (Join-Path $portable 'UserManual.html') -Force
