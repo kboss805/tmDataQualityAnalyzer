@@ -265,7 +265,7 @@ namespace TmDq.App.Tests
         public async Task TheLockPlotsWithAndWithoutTheLegendAndInAccumulation()
         {
             MainWindowViewModel vm = await PrnProcessed();
-            Assert.Equal(new[] { 13, 15 }, vm.AllSeries.Select(s => s.PcmChannelId));   // "these streams"
+            Assert.Equal(new[] { 13, 15 }, PlotFixtures.Locks(vm).Select(s => s.StreamOrder));   // "these streams"
             Assert.False(vm.Plot.RightAxisVisible);                                     // "no SNR scale on the right"
             MainWindow w = MainWindowOf(vm);
             SKRectI chart = Bounds(PlotViewOf(w), w);
@@ -331,7 +331,7 @@ namespace TmDq.App.Tests
         {
             // A stream configured with the wrong pattern: an error in the log, and one curve fewer on the plot.
             MainWindowViewModel bad = await PrnProcessed(withBadStream: true);
-            Assert.Equal(2, bad.AllSeries.Count);
+            Assert.Equal(2, PlotFixtures.Locks(bad).Count);
             Assert.Contains(bad.Log.Entries, e => e.Level == Logging.LogLevel.Error);
             MainWindow w = MainWindowOf(bad);
             Save("walk-err-01-log-error.png", w);

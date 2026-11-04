@@ -55,7 +55,7 @@ namespace TmDq.App
                         if (Startup.SmokeReportPath() is { } report)
                         {
                             Startup.WriteSmokeReport(report, vm);
-                            desktop.Shutdown(vm.Series is null ? 1 : 0);
+                            desktop.Shutdown(Startup.FirstLockSeries(vm.Plot) is null ? 1 : 0);
                         }
                     };
                 }

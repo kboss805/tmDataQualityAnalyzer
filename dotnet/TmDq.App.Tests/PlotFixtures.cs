@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using System.Linq;
 using TmDq.App.Plot;
+using TmDq.App.ViewModels;
 using TmDq.Core;
 
 namespace TmDq.App.Tests
@@ -7,6 +9,10 @@ namespace TmDq.App.Tests
     /// <summary>Series made by hand, for a plot to show without a run (<see cref="PlotViewModel.SetSeries"/>).</summary>
     internal static class PlotFixtures
     {
+        /// <summary>The Frame Sync Lock series a run put on the main window's plot, in table order.</summary>
+        public static IReadOnlyList<PlotSeries> Locks(MainWindowViewModel vm) =>
+            vm.Plot.Series.Where(s => s.Metric == MetricType.FrameSyncLock).OrderBy(s => s.StreamSequence).ToList();
+
         public static PlotSeries Make(int id, string name, MetricType metric, int order, int sequence, double[] xs, double[] ys,
                                       int receiver = 0, int channel = 0, int source = 0) => new()
         {

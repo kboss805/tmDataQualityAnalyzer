@@ -7,17 +7,6 @@ using TmDq.Core;
 
 namespace TmDq.App.Processing
 {
-    /// <summary>One stream's lock percentage over time, copied out of the core's result.</summary>
-    /// <param name="Label">The stream's name as TMATS gives it.</param>
-    /// <param name="TimesSec">Each window's time, in seconds of the recording's time channel.</param>
-    /// <param name="LockPercent">Each window's frame-sync lock, 0 to 100.</param>
-    public sealed record LockSeries(string Label, int PcmChannelId, double[] TimesSec, double[] LockPercent)
-    {
-        public double MeanLock => LockPercent.Length == 0 ? 0 : LockPercent.Average();
-
-        public static LockSeries Of(ProcessedStream s) => new(s.Label, s.PcmChannelId, s.TimesSec, s.LockPercent);
-    }
-
     /// <summary>A recording the core could not process, with the reason in words for the user.</summary>
     public class RecordingException : Exception
     {
@@ -56,16 +45,6 @@ namespace TmDq.App.Processing
                 : StreamDefaults.NewStream(c)).ToList();
             int timeIndex = Math.Max(0, file.TimeChannels.ToList().FindIndex(c => c.Id == file.DefaultTimeChannel));
             return Task.FromResult<StreamsChoice?>(new StreamsChoice(Request(path, file), rows, timeIndex));
-        }
-
-        /// <summary>Processes <paramref name="path"/>'s first PCM channel on a worker thread.</summary>
-        /// <exception cref="RecordingException">The file is not a recording the core can read, has no PCM channel, or
-        /// its stream did not complete; the message says which.</exception>
-        public static async Task<LockSeries> RunAsync(string path, IProgress<int>? progress = null)
-        {
-            Ch10File file = await StreamsRun.OpenAsync(path);
-            using RunOutcome outcome = await StreamsRun.RunAsync(Request(path, file), progress);
-            return LockSeries.Of(outcome.Streams[0]);
         }
     }
 

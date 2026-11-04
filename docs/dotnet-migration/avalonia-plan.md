@@ -480,7 +480,8 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
     4.3b, but its view model was ported whole).
   - **The walking skeleton's leftovers:** `LockSeries` and the main window's `Series` / `AllSeries` survive for the
     installer's smoke report and the status line, while the plot draws from `PlotViewModel`. Give the smoke report
-    and the status line what they need from the run's outcome, and remove them.
+    and the status line what they need from the run's outcome, and remove them. *(Done: the status line describes
+    the outcome's stream, the smoke report reads the plot's first lock series, `Startup.FirstLockSeries`.)*
   - **Test helpers written more than once:** a configurator that cancels (`PreferencesTests`, `ProcessingTests`,
     `ShellTests`), one that returns a given run (`ProcessingTests.Given`, `TemplateBatchTests.Settled`), recording
     pickers (`ShellTests`, `WalkingSkeletonTests`), and the PRN sample with CH-04 retyped as a second time channel,

@@ -1,7 +1,10 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
+using TmDq.App.Plot;
 using TmDq.App.ViewModels;
+using TmDq.Core;
 
 namespace TmDq.App
 {
@@ -28,9 +31,14 @@ namespace TmDq.App
         public static string? SmokeReportPath() =>
             Environment.GetEnvironmentVariable(SmokeReportVariable) is { Length: > 0 } path ? path : null;
 
-        /// <summary>"ok samples=N mean=M.MMM channel=C | status" when a series was produced, else "failed | status".</summary>
-        public static string SmokeReport(MainWindowViewModel vm) => vm.Series is { } s
-            ? FormattableString.Invariant($"ok samples={s.LockPercent.Length} mean={s.MeanLock:F3} channel={s.PcmChannelId} | {vm.Status}")
+        /// <summary>The first Frame Sync Lock stream the plot holds, in table order, or null when it holds none.</summary>
+        public static PlotSeries? FirstLockSeries(PlotViewModel plot) =>
+            plot.Series.Where(s => s.Metric == MetricType.FrameSyncLock).OrderBy(s => s.StreamSequence).FirstOrDefault();
+
+        /// <summary>"ok samples=N mean=M.MMM channel=C | status" when a lock series was plotted, else "failed | status".
+        /// The channel is the stream's PCM channel id.</summary>
+        public static string SmokeReport(MainWindowViewModel vm) => FirstLockSeries(vm.Plot) is { } s
+            ? FormattableString.Invariant($"ok samples={s.Y.Length} mean={(s.Y.Length == 0 ? 0 : s.Y.Average()):F3} channel={s.StreamOrder} | {vm.Status}")
             : "failed | " + vm.Status;
 
         public static void WriteSmokeReport(string path, MainWindowViewModel vm) =>
