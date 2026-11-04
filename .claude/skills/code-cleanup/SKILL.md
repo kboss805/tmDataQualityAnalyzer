@@ -26,14 +26,12 @@ purpose."
 ## Before flagging anything: check for a documented reason
 
 **The single biggest risk here is a false positive**, because "no caller found by grep" and "dead"
-are not the same thing in this codebase. `PlotViewModel::loadCsvFile()`/`loadCsvFileAsync()` have no
-production call site — production feeds the plot via `addStreamData()` from in-memory
-`ProcessedStreamData` — and they still look deletable. They are not: they're the symmetric partner
-of the live `exportCsv()`, their signals drive `PlotWidget`'s loading overlay, and ~20
-`TestPlotViewModel` cases use them as a fixture. Deleting them would look like a harmless cleanup
-and would actually remove real, deliberate coverage. That exact case is recorded in this project's
-memory (`plotviewmodel-csv-load-is-intended-not-dead.md`) precisely so it doesn't get re-discovered
-and re-broken.
+are not the same thing in this codebase. The case that taught it (in the Qt application, deleted in plan
+step 6.1): `PlotViewModel::loadCsvFile()` had no production call site and looked deletable, but it was the
+symmetric partner of the live `exportCsv()`, its signals drove the loading overlay, and ~20 test cases used
+it as a fixture. Deleting it would have looked like a harmless cleanup and removed real, deliberate
+coverage. Cases like it are recorded in this project's memory so they don't get re-discovered and
+re-broken.
 
 Before flagging a function, class, file, or constant as unused:
 
@@ -42,16 +40,16 @@ Before flagging a function, class, file, or constant as unused:
 2. **Search the auto-loaded `MEMORY.md`** (this session's persistent project memory, described in
    `.claude/CLAUDE.md`'s "Memory" section). Design decisions and prior review remediation live
    here, not just in the code — the `loadCsvFile` case above is exactly this.
-3. **Check whether it's a test-only symbol.** A helper called only from `tests/` is not orphaned —
-   it's doing its job. Grep `tests/` explicitly rather than trusting a `src/`-only search.
-4. **Check for Qt meta-object usage.** A slot connected with the new-style pointer syntax
-   (`&Class::method`, which this project uses throughout `setUpConnections()`) shows up in a normal
-   grep; `Q_INVOKABLE` methods and `Q_PROPERTY` accessors reached only through the meta-object
-   system will not necessarily show a direct call site. Check for those macros on a method before
-   flagging it.
+3. **Check whether it's a test-only symbol.** A helper called only from the test projects
+   (`native/tmdq_core_tests`, `dotnet/*.Tests`) is not orphaned — it's doing its job. Grep them
+   explicitly rather than trusting a search of the product code alone.
+4. **Check for uses no C# or C++ call site shows.** A property or command bound by name in `.axaml`
+   (`{Binding Name}`), a member CommunityToolkit.Mvvm generates (`[ObservableProperty]`, `[RelayCommand]`),
+   an ABI export reached by P/Invoke (`Native.cs`), and a test discovered by its attribute all look
+   unreferenced to a plain grep for a call.
 
 If none of the four account for it, it's a real candidate — but report it as "no caller found in
-`src/` or `tests/`, and no documented reason in `.claude/CLAUDE.md`/`MEMORY.md`" rather than a flat
+the product or the tests, and no documented reason in `.claude/CLAUDE.md`/`MEMORY.md`" rather than a flat
 "unused," so the user can correct you if there's context you're missing (a downstream consumer, a
 planned feature, an in-progress branch).
 
@@ -63,19 +61,19 @@ upstream; this project's job is to wrap it, not tidy it. (See `.claude/CLAUDE.md
 
 ## Finding orphaned code
 
-This is naturally a broad sweep across `src/`, `include/`, and `tests/` — if you're running it as an
+This is naturally a broad sweep across `include/`, `src/model/`, `native/` and `dotnet/` — if you're running it as an
 agent, consider delegating the initial grep pass to an Explore agent rather than doing dozens of
 searches inline.
 
-**Files**: cross-check what's on disk against what's actually built. A `.cpp`/`.h` under `src/` or
-`include/` that isn't listed in `tmDataQualityAnalyzer.pro`'s `SOURCES`/`HEADERS` (or `tests/tests.pro`'s,
-for test files) is dead weight in the repo regardless of its contents — nothing compiles it, and it
-isn't covered by "check the tests" either.
+**Files**: cross-check what's on disk against what's actually built. `NativeProjectTests` already fails on
+a `.cpp` the native projects do not list; a header in `include/` that nothing includes is dead weight it
+cannot see. The .NET projects compile every `.cs` under their folder, so a dead C# file still builds:
+look for types nothing uses.
 
 **Functions/classes/constants**: grep the symbol name across the whole tree and count
 non-declaration hits. One hit (the declaration) or hits only inside its own `.cpp` means nothing
-outside calls it — check for a documented reason (above) before flagging. The three constants
-namespaces (`PCMConstants`, `UIConstants`, `PlotConstants`) are worth a pass on their own: the
+outside calls it — check for a documented reason (above) before flagging. The constants namespaces
+in `constants.h` (`PCMConstants`, `UIConstants`, `ChartConstants`, ...) are worth a pass on their own: the
 v2.8.0 cleanup found ~20 unreferenced constants and 37 unused Qt includes that had accumulated over
 time, so this class of drift is real and recurring here, not hypothetical.
 
@@ -93,20 +91,20 @@ it:
 - Naming: PascalCase classes, `kPascalCase` constants in namespaces, `m_`-prefixed snake_case
   members, camelCase methods/slots — flag drift; don't silently mass-rename if the pattern turns out
   to be widespread, since that's a bigger conversation than a cleanup sweep.
-- Include ordering (Google C++ style, six groups) — mechanical, safe to note file-by-file.
-- **MVVM layering**: View files (`src/view/`) should contain no business logic — look for anything
-  in `mainview.cpp` or a `*dialog.cpp` that computes rather than displays. Model files should never
-  reach into Qt widgets. This project is explicit about the boundary (see `docs/claude.md`
-  Architecture section), and a leak here is worth flagging even without an accompanying functional
-  bug.
+- Include ordering in the core (Google C++ style) — mechanical, safe to note file-by-file.
+- **MVVM layering**: views (`dotnet/TmDq.App/Views`) hold no rules — look for code-behind that computes
+  rather than displays; view models reach no Avalonia control; the core knows no UI at all, and the
+  presentation state is C# while the data and file formats are the core's (plan decision D3). This
+  project is explicit about the boundary (see `docs/claude.md` Architecture section), and a leak here
+  is worth flagging even without an accompanying functional bug.
 
 ## Stale documentation
 
 `docs/claude.md` describes the codebase in prose, and prose drifts silently in a way code doesn't
 (nothing fails to compile when a comment goes stale). Two spots worth checking every sweep:
 
-- **The Test Suites catalog.** Compare its list of suites and coverage claims against what's
-  actually registered in `tests/main.cpp` and `tests/tests.pro`. A suite renamed, extended, or
+- **The Test Suites catalog.** Compare its list of suites and coverage claims against the test files
+  actually there (`native/tmdq_core_tests/test_*.cpp`, `dotnet/*.Tests/*Tests.cs`). A suite renamed, extended, or
   removed without updating its one-paragraph description is silent drift that compounds over
   releases.
 - **User Story acceptance criteria.** Spot-check a story or two against the behavior it actually

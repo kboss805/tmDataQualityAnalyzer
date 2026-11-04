@@ -2,8 +2,8 @@
 
   <!--
     The version of every assembly that ships, read from the one place it is written: AppVersion in
-    include/constants.h (kMajor, kMinor, kPatch). qmake, deploy/build_release.ps1 and the installer read the
-    same three numbers, so the Avalonia app cannot drift from the Qt one or from the release scripts.
+    include/constants.h (kMajor, kMinor, kPatch). deploy/avalonia/build_avalonia_package.ps1, the installer and
+    the manuals read the same three numbers, so the app cannot drift from its release.
     Never type a version in a .csproj; import this instead.
 
     A header the pattern no longer matches fails the build (TmDqVersionCheck below) rather than shipping 1.0.0.

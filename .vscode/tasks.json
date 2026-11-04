@@ -2,112 +2,76 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "qmake: Configure",
+            "label": "Build core DLL (Debug)",
             "type": "shell",
             "command": "powershell.exe",
-            "args": [
-                "-ExecutionPolicy", "Bypass",
-                "-Command",
-                ". ./scripts/env.ps1; New-Item -ItemType Directory -Force -Path build | Out-Null; Set-Location build; qmake ../tmDataQualityAnalyzer.pro -spec win32-msvc CONFIG+=debug"
-            ],
-            "options": { "cwd": "${workspaceFolder}" },
-            "problemMatcher": []
-        },
-        {
-            "label": "Build App (Debug)",
-            "type": "shell",
-            "command": "powershell.exe",
-            "args": [
-                "-ExecutionPolicy", "Bypass",
-                "-Command",
-                ". ./scripts/env.ps1; New-Item -ItemType Directory -Force -Path build | Out-Null; Set-Location build; qmake ../tmDataQualityAnalyzer.pro -spec win32-msvc CONFIG+=debug; nmake -f Makefile.Debug"
-            ],
+            "args": ["-ExecutionPolicy", "Bypass", "-File", "scripts/build_core_dll.ps1", "-Configuration", "Debug"],
             "options": { "cwd": "${workspaceFolder}" },
             "group": "build",
-            "problemMatcher": []
+            "problemMatcher": "$msCompile"
         },
         {
-            "label": "Build (Debug)",
+            "label": "Build core DLL (Release)",
             "type": "shell",
             "command": "powershell.exe",
-            "args": [
-                "-ExecutionPolicy", "Bypass",
-                "-Command",
-                ". ./scripts/env.ps1; New-Item -ItemType Directory -Force -Path build | Out-Null; Set-Location build; qmake ../tmDataQualityAnalyzer.pro -spec win32-msvc CONFIG+=debug; & $env:TMDQ_MAKE -f Makefile.Debug; Set-Location ../tests; qmake tests.pro -spec win32-msvc CONFIG+=debug; & $env:TMDQ_MAKE -f Makefile.Debug; Set-Location ..; ./scripts/deploy_qt_local.ps1 -Config debug; ./scripts/deploy_qt_local.ps1 -Config debug -Tests"
-            ],
+            "args": ["-ExecutionPolicy", "Bypass", "-File", "scripts/build_core_dll.ps1", "-Configuration", "Release"],
             "options": { "cwd": "${workspaceFolder}" },
             "group": "build",
-            "problemMatcher": []
+            "problemMatcher": "$msCompile"
         },
         {
-            "label": "Build (Release)",
+            "label": "Build app (Debug)",
+            "detail": "The native core, then the Avalonia application, which copies tmdq_core.dll beside itself.",
             "type": "shell",
             "command": "powershell.exe",
-            "args": [
-                "-ExecutionPolicy", "Bypass",
-                "-Command",
-                ". ./scripts/env.ps1; New-Item -ItemType Directory -Force -Path build | Out-Null; Set-Location build; qmake ../tmDataQualityAnalyzer.pro -spec win32-msvc CONFIG+=release; & $env:TMDQ_MAKE -f Makefile.Release; Set-Location ..; ./scripts/deploy_qt_local.ps1 -Config release"
-            ],
+            "args": ["-ExecutionPolicy", "Bypass", "-Command",
+                     "powershell -ExecutionPolicy Bypass -File scripts/build_core_dll.ps1 -Configuration Debug; if ($LASTEXITCODE) { exit $LASTEXITCODE }; $env:Platform = $null; dotnet build dotnet/TmDq.App -c Debug -nologo"],
             "options": { "cwd": "${workspaceFolder}" },
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "problemMatcher": []
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": ["$msCompile"]
         },
         {
-            "label": "Build and Launch (Release)",
+            "label": "Native tests",
             "type": "shell",
             "command": "powershell.exe",
-            "args": [
-                "-ExecutionPolicy", "Bypass",
-                "-File", "scripts/run_release.ps1"
-            ],
+            "args": ["-ExecutionPolicy", "Bypass", "-File", "scripts/test_native.ps1", "-Configuration", "Debug"],
             "options": { "cwd": "${workspaceFolder}" },
-            "problemMatcher": []
+            "group": "test",
+            "problemMatcher": "$msCompile"
         },
         {
-            "label": "Clean",
+            "label": "Managed tests",
             "type": "shell",
             "command": "powershell.exe",
-            "args": [
-                "-ExecutionPolicy", "Bypass",
-                "-Command",
-                ". ./scripts/env.ps1; Set-Location build; if (Test-Path Makefile) { nmake -f Makefile clean }"
-            ],
+            "args": ["-ExecutionPolicy", "Bypass", "-File", "scripts/test_dotnet.ps1", "-Configuration", "Debug"],
             "options": { "cwd": "${workspaceFolder}" },
-            "problemMatcher": []
+            "group": "test",
+            "problemMatcher": "$msCompile"
         },
         {
-            "label": "Force Build (Debug)",
+            "label": "App tests",
             "type": "shell",
             "command": "powershell.exe",
-            "args": [
-                "-ExecutionPolicy", "Bypass",
-                "-Command",
-                ". ./scripts/env.ps1; New-Item -ItemType Directory -Force -Path build | Out-Null; Set-Location build; qmake ../tmDataQualityAnalyzer.pro -spec win32-msvc CONFIG+=debug; Set-Location ${workspaceFolder}; Get-ChildItem src,include -Recurse -Include *.cpp,*.h | ForEach-Object { $_.LastWriteTime = Get-Date }; Set-Location build; nmake -f Makefile.Debug"
-            ],
+            "args": ["-ExecutionPolicy", "Bypass", "-File", "scripts/test_app.ps1", "-Configuration", "Debug"],
             "options": { "cwd": "${workspaceFolder}" },
-            "group": "build",
-            "problemMatcher": []
+            "group": "test",
+            "problemMatcher": "$msCompile"
         },
         {
-            "label": "Rebuild",
-            "dependsOn": ["Clean", "Build (Debug)"],
-            "dependsOrder": "sequence",
+            "label": "Build manual (reuse figures)",
+            "type": "shell",
+            "command": "powershell.exe",
+            "args": ["-ExecutionPolicy", "Bypass", "-File", "scripts/build_manual.ps1", "-NoCapture"],
+            "options": { "cwd": "${workspaceFolder}" },
             "problemMatcher": []
         },
         {
             "label": "Gen compile_flags.txt (clangd)",
             "type": "shell",
-            "command": "powershell.exe",
-            "args": [
-                "-ExecutionPolicy", "Bypass",
-                "-Command",
-                ". ./scripts/env.ps1; py scripts/gen_compile_flags.py"
-            ],
+            "command": "py",
+            "args": ["scripts/gen_compile_flags.py"],
             "options": { "cwd": "${workspaceFolder}" },
-            "detail": "Generate compile_flags.txt for clangd/clang-tidy IntelliSense (reads QTDIR). Re-run after a Qt bump or include/define changes.",
+            "detail": "Generate compile_flags.txt for clangd/clang-tidy IntelliSense over the native core. Re-run after a fresh clone, in each worktree, or after an include/define change.",
             "problemMatcher": []
         }
     ]

@@ -5,8 +5,6 @@
       "Write(lib/irig106/**)"
     ],
     "allow": [
-      "Bash(qmake:*)",
-      "Bash(nmake:*)",
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",

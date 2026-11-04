@@ -1,98 +1,79 @@
 ---
 name: add-stream-setting
 description: >-
-  Add a new per-stream configuration setting to tmDataQualityAnalyzer end-to-end, across every MVVM
-  layer it must touch. Use this WHENEVER the work involves introducing a new knob/parameter that the
-  user configures per PCM stream — a new frame-sync field, a new SNR/calibration option, a new
-  processing flag — or when the user says "add a setting/field/option for X to the stream config",
-  "expose Y in the gear dialog", or "let the user control Z per stream". This change type is the most
-  error-prone in the project because one setting must be threaded through StreamConfig → the gear
-  sub-dialog → the Apply-to-all fan-out → ProcessingParams/FrameSetup → FrameProcessor → (optionally)
-  the TOML round-trip → tests, and skipping any layer produces a control that silently does nothing.
-  This skill is the checklist that keeps the layers in sync.
+  Add a new per-stream configuration setting to tmDataQualityAnalyzer end-to-end, across every layer
+  it must cross. Use this WHENEVER the work introduces a new knob the user configures per PCM stream -
+  a new frame-sync field, a new SNR/calibration option, a new processing flag - or the user says "add
+  a setting/field/option for X to the stream config", "expose Y in the setup dialog", or "let the user
+  control Z per stream". One setting must be threaded from the setup dialog's view model through Apply
+  to all, the templates, the C# binding, the C ABI and the job builder to FrameProcessor (and the
+  calibration extractor, if it affects raw values), and a layer skipped is a control that silently
+  does nothing. This skill is the checklist that keeps the layers in sync.
 ---
 
-# Add a Per-Stream Setting — tmDataQualityAnalyzer
+# Add a per-stream setting — tmDataQualityAnalyzer
 
-A per-stream setting is captured in the **Configure Streams** dialog and must flow through the whole
-MVVM pipeline to actually affect processing. Miss a layer and you get a dead control: the UI shows it
-but `FrameProcessor` never sees it, or it's set but never fans out / never persists. Work the layers
-in order and verify at the end with a real run.
+A per-stream setting is chosen in a stream's setup dialog (Configure Streams' gear) and has to reach
+`FrameProcessor` to affect anything. `Randomized` (Derandomize) takes the whole path, so follow it:
+`grep -rn -i randomized dotnet/TmDq.App dotnet/TmDq.Core native/tmdq_core include src/model`.
 
-First decide two things, because they gate which steps apply:
+Decide two things first, because they gate which steps apply:
 
-- **Mode:** does it belong to Frame Sync Lock streams, Receiver SNR streams, or both? That picks which
-  gear sub-dialog in `streamsubdialogs.h` hosts it.
-- **Persistence:** is it a saved/recalled config value, or a per-session operator input? This decides
-  whether it round-trips through TOML — and is governed by a hard boundary (see step 5).
+- **Mode:** Frame Sync Lock streams, Receiver SNR streams, or both.
+- **Persistence:** is it part of what a pattern or receiver-parameters file describes, or a
+  per-session operator input? The TOML boundary in `.claude/CLAUDE.md` decides (step 6).
 
 ## The layers, in order
 
-### 1. Data type — `include/dto/streamconfig.h`
+1. **The app's settings record** — `dotnet/TmDq.App/Streams/StreamSetup.cs` (`StreamSetup`), with its
+   default in `Streams/StreamDefaults.cs` if it has one.
+2. **The setup dialog** — `ViewModels/StreamSetupViewModel.cs` (the field, its property, loading it from
+   and writing it to `StreamSetup`, and any validation: a problem is shown as it arises, and OK waits),
+   and the control in `Views/StreamSetupWindow.axaml`, with a tooltip like every other field.
+3. **The rules** — `Streams/StreamRules.cs`: the edited row, **Apply to all** (US2.2: a setting that
+   should not fan out says so in a comment), and the conversion to the run's `StreamConfig`.
+4. **Templates** — `Templates/TemplateFile.cs`: a template carries every row's settings, in the JSON
+   v2.x wrote; read with a default when the key is missing (older templates), write it in the same
+   form. `TemplateTests` holds the format byte for byte.
+5. **The C# binding and the ABI** — `dotnet/TmDq.Core/RunTypes.cs` (`StreamConfig`),
+   `ProcessingRun.cs` (marshalling), `Native.cs` (the struct), and `native/tmdq_core/tmdq_abi.h` plus
+   `abi_run.cpp`. A field added to an ABI struct changes its size: append it, bump the ABI revision
+   (and `Library.MinimumRevision`), and update the layout pins on both sides (`tmdq_sizeof`).
+6. **Persistence, only if it belongs to the file** — the core's format (`src/model/framesyncfile.cpp`
+   for a pattern file, the receiver-parameters reader in `framesetup.cpp`), both through
+   `TomlDocument`, symmetric in load and save, and its ABI functions and binding (`abi_formats.cpp`,
+   `Formats.cs`). The app's Load/Save is `Streams/StreamFiles.cs`. **The boundary:** a pattern file
+   round-trips the sync pattern, sync mask, words/frame and the two stream-format flags (`Inverted`,
+   `Randomized`); Data Rate and Sample Rate are per-session and stay out; calibration profiles are
+   never serialised. A file without the new key keeps the operator's choice (US8.0: readers default
+   what a file does not carry).
+7. **The job** — `include/model/streamjobbuilder.h` (`StreamJobConfig`) and `src/model/streamjobbuilder.cpp`,
+   into `ProcessingParams` (and `FrameSetup` if it affects the word map). **A raw-affecting setting goes
+   through `applyAcquisition`** (`include/model/framesync.h`), which the calibration extractor shares, so
+   extraction sees it too; then carry it in the calibration request (`calibrationrequest.cpp`,
+   `abi_calibration.cpp`, `Calibration.cs`, `ExtractCalibrationViewModel`).
+8. **The effect** — `src/model/frameprocessor.cpp`. Honour the invariants (the **tm-code-review**
+   skill): average raw counts before calibrating, bit-span lock %, no missed-frame double count.
 
-Add the field to `StreamConfig` (camelCase, Qt-property style). Give it a sensible default; if it's a
-tunable constant, define the default in `include/constants.h` (`kPascalCase` in the right namespace)
-and reference it rather than hardcoding. If the field is frame-sync-related and belongs with the
-bundled acquisition params, it may fit inside `FrameSyncParams` (`include/dto/framesyncparams.h`)
-which is composed into `StreamConfig`.
+## Tests, at every layer (the **write-test** skill)
 
-### 2. UI — the gear sub-dialog in `include/view/streamsubdialogs.h`
+- **native:** `test_streamjob.cpp` (the builder carries it), `test_frameprocessor.cpp` (it changes the
+  output: the strongest test), `test_abi.cpp` (the struct and its conversion), and `test_framesyncfile.cpp`
+  if it persists;
+- **managed:** the layout pin and a run through `ProcessingRun` that it changes;
+- **app:** `StreamSetupViewModelTests` (shown, validated, kept), `StreamRulesTests` (Apply to all and the
+  conversion), `TemplateTests` (the round trip, and an older template without the key), `StreamFilesTests`
+  if it persists;
+- **the soak manifest** (`dotnet/TmDq.App.Tests/Soak/soak.json`) states every setting of every run, so
+  add the new one there with its default.
 
-Surface the control in the Frame Sync Lock setup or Receiver SNR setup sub-dialog (whichever matches
-the mode). Add the widget, a tooltip (every field has one), wire it to read/write the `StreamConfig`
-field, and respect the wireframe separator: persistent config fields go above it, per-session inputs
-below. Validate input at entry (US7.0) — e.g. hex-only for patterns, range checks for counts.
-
-### 3. Apply-to-all fan-out (US2.2) — `src/view/streamconfigdialog.cpp`
-
-If the setting should propagate when the user checks "Apply to all `<mode>` streams", add it to the
-field-copy lambda that the gear dialog uses (the same dialog→row copy path as every other fanned-out
-field). If it's intentionally per-stream-only, note that in the field's comment so a future reader
-knows the omission is deliberate.
-
-### 4. Processing inputs — `src/viewmodel/mainviewmodel.cpp` (`buildStreamJob`)
-
-Carry the field from `StreamConfig` into `ProcessingParams` (`include/dto/processingparams.h`,
-snake_case fields). If it affects the **word map or calibration table**, also thread it into
-`FrameSetup` where the job is built. This is the bridge from "configured" to "will be processed".
-
-### 5. Persistence (only if it's a saved config value) — `src/model/tomlconfighelper.cpp`
-
-If and only if the field is meant to be saved/recalled, add it to the matching load/save helper —
-keeping load and save **symmetric**. Respect the boundaries:
-
-- **Frame-sync TOML round-trips ONLY** sync pattern, sync mask, words/frame. `Randomized`,
-  `Data Rate`, `Sample Rate` are per-session and excluded by design (US1.0). Do not widen
-  `loadFrameSyncToml`/`saveFrameSyncToml`.
-- Receiver-parameter TOML covers the word map + linear calibration (US5.1). Calibration *profiles*
-  are session-only and never serialized.
-If the field is a per-session operator input, skip this step entirely — that's the correct behavior,
-not an omission.
-
-### 6. Consumption — `src/model/frameprocessor.cpp` (`process()`)
-
-Make the setting actually do something. Read it from `ProcessingParams`/`FrameSetup` and apply it in
-the extraction loop or `recordTimeSample()`. Honor the existing invariants (see the **tm-code-review**
-skill): average-raw-before-calibrate, bit-span lock %, no missed-frame double-count, COW-detach before
-mutating payload bytes. This is the layer where a wrong placement causes a real data bug, not just a
-dead control.
-
-### 7. Tests — via the **write-qt-test** skill
-
-Add coverage proving the setting changes behavior: a `tst_streamconfigdialog` case for capture +
-Apply-to-all fan-out, a `tst_tomlconfighelper`/`tst_framesetup` round-trip if it persists, and a
-`tst_frameprocessor` case asserting the processing effect (the strongest test — it pins the behavior
-against regression).
+Then mutation-check each layer's line (`scripts\mutate.ps1`): a mutant that drops the field at any one
+layer must fail a test.
 
 ## Verify
 
-1. Build the app and the full test suite with the **build-and-test** skill (0 warnings, all green).
-2. If feasible, do a real run (the **verify**/**run** skills) and confirm the control visibly changes
-   output. A setting that builds and passes unit tests but does nothing in the app means a layer was
-   missed — most often step 4 (not carried into `ProcessingParams`) or step 6 (not consumed).
-3. Review the change with the **tm-code-review** skill before committing.
-
-## Reference
-
-`docs/claude.md` → "Adding a New Per-Stream Setting" is the canonical short version of this checklist;
-this skill expands it with the mode/persistence decisions and the invariant pointers.
+1. Build and run every suite with the **build-and-test** skill.
+2. Run the app on a recording where the setting matters and see the output change. A setting that
+   passes the unit tests and changes nothing in the app means a layer was missed: most often the
+   conversion in `StreamRules`, or the ABI.
+3. Review with the **tm-code-review** skill before committing.

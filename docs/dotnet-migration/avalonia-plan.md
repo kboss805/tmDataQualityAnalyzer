@@ -418,9 +418,13 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
   manual scripts lose their Qt mode). CI builds and tests the native core, the managed library and the app only;
   `NativeProjectTests` holds every `src/model` source to the DLL's project with no exemptions. Verified from an empty
   tree; baselines unchanged.
-- [ ] **6.2 Remove Qt from the tooling:** `env.ps1`, `deploy_qt_local.ps1`, `gen_compile_flags.py`,
+- [x] **6.2 Remove Qt from the tooling:** `env.ps1`, `deploy_qt_local.ps1`, `gen_compile_flags.py`,
   `gen_vs_project.ps1`, the CI Qt install, `QT_QPA_PLATFORM`, and the skills that describe the Qt
   build (`build-and-test`, `verify-ui-change`, `write-qt-test`, `add-stream-setting`, `cut-release`).
+  **Done:** `env.ps1` imports Visual Studio and nothing else; `deploy_qt_local.ps1`, `gen_vs_project.ps1`,
+  `build_ide.ps1` and `setup-env.ps1` are deleted; `gen_compile_flags.py` writes the native projects' flags; CI installs
+  no Qt; `.vscode` builds, runs and debugs the new projects. `build-and-test`, `add-stream-setting` and
+  `verify-ui-change` are rewritten for this build, `write-qt-test` is `write-test`, and `cut-release` was rewritten in 5.3.
 - [ ] **6.3 Take Qt out of the names that stay.** The code that outlives Qt still names it, in identifiers that
   would read as dangling references once 6.1 has run. Found by a scan of the core, the C ABI, the native tests and
   `dotnet/` (2026-11-01):

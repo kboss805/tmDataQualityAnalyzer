@@ -1,9 +1,8 @@
 name: CI
 
 # Build the native core and run its doctest suite, the managed library's tests and the
-# Avalonia application's tests on every push to main and every PR. (The Qt application
-# and its Qt Test suite were deleted in plan step 6.1; the Qt toolchain these jobs still
-# set up goes in step 6.2.)
+# Avalonia application's tests on every push to main and every PR. (The Qt application,
+# its Qt Test suite and the Qt toolchain were deleted in plan steps 6.1 and 6.2.)
 #
 # Runner selection with fallback:
 #   - Preferred: a SELF-HOSTED Windows runner (label: tmdqa) that has the MSVC 2022
@@ -46,11 +45,6 @@ on:
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
-
-# Qt version. env.ps1 (self-hosted) and install-qt-action (hosted) both read it, so
-# it stays the single knob; it must match the Qt kit installed on the self-hosted runner.
-env:
-  QT_VERSION: '6.12.0'
 
 jobs:
   # --- Decide which runner to use -------------------------------------------
@@ -96,7 +90,7 @@ jobs:
     steps:
       - name: Checkout
         # Default clean:true restores the committed sample fixtures and removes
-        # stale gitignored build outputs (build/, tests\debug, .qmake.stash) each
+        # stale gitignored build outputs (native\out, native\obj, dotnet bin and obj) each
         # run - persistent-runner hygiene, handled for us.
         uses: actions/checkout@v4
 
@@ -118,7 +112,7 @@ jobs:
           # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
           $ErrorActionPreference = 'Continue'
           . .\scripts\env.ps1
-          qmake --version
+          dotnet --version
           cmd /c "cl 2>&1" | Select-Object -First 1
           # cl exits non-zero when given no input file, and GitHub appends
           # "exit $LASTEXITCODE" to powershell steps - this step is informational,
@@ -187,16 +181,7 @@ jobs:
           powershell -ExecutionPolicy Bypass -File scripts\check_release_consistency.ps1
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
-      - name: Install Qt ${{ env.QT_VERSION }} (MSVC)
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: ${{ env.QT_VERSION }}
-          host: windows
-          target: desktop
-          arch: win64_msvc2022_64
-          cache: true
-
-      - name: Set up MSVC (cl / nmake)
+      - name: Set up MSVC (cl / msbuild / mt)
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
@@ -212,7 +197,7 @@ jobs:
           # PS 5.1 turns native-tool stderr into a terminating NativeCommandError
           # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
           $ErrorActionPreference = 'Continue'
-          qmake --version
+          dotnet --version
           cmd /c "cl 2>&1" | Select-Object -First 1
           # cl exits non-zero when given no input file, and GitHub appends
           # "exit $LASTEXITCODE" to powershell steps - this step is informational,
@@ -262,12 +247,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "the app tests failed" }
 
   # --- The core on a machine that has never had Qt (plan step 2.4) ------------
-  # Both build jobs above still have Qt on the machine (the self-hosted kit; install-qt-action
-  # on hosted) until plan step 6.2 takes it off, so all they can show is that nothing REACHES for
-  # it: no Qt include path, no Qt import. This job builds and tests the core, its native tests,
-  # the managed library and the Avalonia application where Qt is not installed at all. It runs
-  # on every push and PR whichever runner was picked, and its first step fails if the image ever
-  # gains a Qt, so the proof cannot quietly lapse.
+  # The self-hosted runner's machine still holds the Qt kit the deleted application needed, so
+  # a run there can only show that nothing REACHES for it: no Qt include path, no Qt import.
+  # This job builds and tests the core, its native tests, the managed library and the Avalonia
+  # application where Qt is not installed at all. It runs on every push and PR whichever runner
+  # was picked, and its first step fails if the image ever gains a Qt, so the proof cannot
+  # quietly lapse.
   core-without-qt:
     runs-on: windows-latest
     steps:
@@ -300,7 +285,6 @@ jobs:
             Get-ChildItem -LiteralPath $dir -Filter 'Qt6Core*.dll' -ErrorAction SilentlyContinue |
               ForEach-Object { $found += "Qt DLL on PATH: $($_.FullName)" }
           }
-          # (Not QT_VERSION: the workflow sets it for the Qt jobs, and it installs nothing.)
           Get-ChildItem env: | Where-Object { $_.Name -match '^(QTDIR|QT_ROOT|QT_ROOT_DIR|QT_PLUGIN_PATH|Qt6_DIR)$' } |
             ForEach-Object { $found += "variable $($_.Name)=$($_.Value)" }
           # Each base must be set: an empty one would make "\Qt", which resolves to the drive's root.
@@ -319,7 +303,7 @@ jobs:
         shell: powershell
         run: |
           # The scripts dot-source env.ps1 only when msbuild / mt are missing; msvc-dev-cmd put
-          # them on PATH, so nothing here touches the Qt half of env.ps1.
+          # them on PATH.
           $ErrorActionPreference = 'Continue'
           foreach ($cfg in 'Debug', 'Release') {
             powershell -ExecutionPolicy Bypass -File scripts\build_core_dll.ps1 -Configuration $cfg

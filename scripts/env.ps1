@@ -1,46 +1,24 @@
 # =============================================================================
 # env.ps1  —  Shared environment configuration for tmDataQualityAnalyzer builds.
 #
-# QT_VERSION is the single source of truth for the installed Qt version. QT_ROOT
-# (default C:\Qt\<QT_VERSION>) is the knob for a relocated Qt install; QTDIR is
-# derived from it plus the MSVC kit.
-#
-# Imports the Visual Studio 2022 C++ environment (cl / nmake / Windows SDK) from
-# vcvars64.bat — located via vswhere, then a direct path probe — and puts the Qt
-# msvc2022_64 kit on PATH. Dot-source it before building:
+# Imports the Visual Studio 2022 C++ environment (cl, msbuild, mt, dumpbin, the Windows
+# SDK) from vcvars64.bat, located via vswhere, then a direct path probe. The build and
+# test scripts dot-source it when msbuild or mt is not already on PATH:
 #   . "$PSScriptRoot\env.ps1"
 #
 # The toolset is PINNED to Visual Studio 2022 (17.x, MSVC v143). vswhere -latest used to
 # pick whatever was newest, so installing Visual Studio 2026 silently moved every build
-# to MSVC 14.51 (v145) while the docs, CI and the Qt msvc2022_64 kit all said 2022.
-# Objects compiled by two compilers then sit in one build tree. Set TMDQ_VS_RANGE (a
-# vswhere version range, e.g. '[18.0,19.0)') to choose another on purpose;
-# scripts\gen_vs_project.ps1 does, because VS 2026 builds v145 projects.
+# to MSVC 14.51 (v145) while the docs and CI all said 2022. Objects compiled by two
+# compilers then sit in one build tree. Set TMDQ_VS_RANGE (a vswhere version range, e.g.
+# '[18.0,19.0)') to choose another on purpose.
+#
+# vcvars sets Platform=x64, which a .NET build then takes for a solution platform that
+# does not exist; the scripts that run dotnet clear it after sourcing this one.
 # =============================================================================
-
-if (-not $env:QT_VERSION) { $env:QT_VERSION = '6.12.0' }
-if (-not $env:QT_ROOT)    { $env:QT_ROOT    = "C:\Qt\$env:QT_VERSION" }
-
-$env:QTDIR = "$env:QT_ROOT\msvc2022_64"
-
-# Tripwire for a stale PERSISTENT QTDIR. This script owns QTDIR for the current
-# shell, so builds are always right - but a user-level QTDIR set in Windows is
-# read by tools that never source this script (cpptools resolves ${env:QTDIR} in
-# .vscode/c_cpp_properties.json, as do Qt Creator and the Qt VS Tools). One left
-# pointing at a removed MinGW kit is what produced a 0xC0000135 DLL-not-found
-# after the 6.11.1 upgrade, so say something rather than let it rot again.
-$persistentQtDir = [Environment]::GetEnvironmentVariable('QTDIR', 'User')
-if ($persistentQtDir -and $persistentQtDir -ne $env:QTDIR) {
-    Write-Warning ("Persistent user QTDIR is '$persistentQtDir' but this Qt is '$env:QTDIR'. " +
-                   "Builds here are unaffected, but tools reading QTDIR (cpptools, Qt Creator) " +
-                   "will use the stale one. Fix with:  " +
-                   "powershell -ExecutionPolicy Bypass -File scripts\setup-env.ps1")
-}
 
 # Import the MSVC + Windows SDK environment from vcvars64.bat, once per shell.
 # Guard on our OWN marker: a Developer-shell profile can set VSCMD_VER while leaving
-# the env incomplete (no INCLUDE/LIB), which makes qmake fail with
-# "QMAKE_MSC_VER isn't set". Always run a full import once.
+# the env incomplete (no INCLUDE/LIB). Always run a full import once.
 if (-not $env:TMDQ_VCVARS_DONE) {
     $vcvars = $env:TMDQ_VCVARS  # explicit override wins
     $vsRange = if ($env:TMDQ_VS_RANGE) { $env:TMDQ_VS_RANGE } else { '[17.0,18.0)' }
@@ -94,42 +72,16 @@ if (-not $env:TMDQ_VCVARS_DONE) {
     }
 
     # Judge the import by its RESULT, now that its chatter is gone. A PARTIAL import is
-    # the failure that matters and it is otherwise silent: qmake fails much later with
-    # "QMAKE_MSC_VER isn't set", which names neither vcvars nor this script. INCLUDE and
-    # LIB are what the compiler cannot work without.
+    # the failure that matters and it is otherwise silent: the compiler fails much later,
+    # with a message that names neither vcvars nor this script. INCLUDE and LIB are what
+    # the compiler cannot work without.
     if (-not $env:INCLUDE -or -not $env:LIB) {
         Write-Host "vcvars64.bat left INCLUDE/LIB unset - re-running it with its output shown:"
-        cmd /c "`"$vcvars`""
+        # 2>&1 inside cmd: under Windows PowerShell 5.1 its stderr would otherwise become a terminating error here,
+        # before the message below could say what went wrong.
+        cmd /c "`"$vcvars`" 2>&1" | ForEach-Object { Write-Host $_ }
         throw "vcvars64.bat did not produce a usable build environment. Ran: $vcvars"
     }
 
     $env:TMDQ_VCVARS_DONE = '1'
-}
-
-# Put the Qt msvc kit's bin ahead of everything for qmake / Qt DLLs.
-$env:PATH = "$env:QTDIR\bin;$env:PATH"
-
-# --- Parallel make (optional) ------------------------------------------------
-# nmake has no -j and builds on a single core. jom is Qt's drop-in parallel
-# replacement (same -f syntax, defaults to one job per core). Everything that builds
-# should invoke $env:TMDQ_MAKE rather than naming a tool, so a machine without jom -
-# notably the GitHub-hosted CI runner - transparently falls back to nmake instead of
-# failing. Set TMDQ_JOM to point at a jom.exe in a non-standard location.
-if (-not $env:TMDQ_JOM) {
-    $qtTools = Join-Path (Split-Path -Parent $env:QT_ROOT) 'Tools'
-    foreach ($candidate in @(
-        (Join-Path $qtTools 'jom\jom.exe'),
-        (Join-Path $qtTools 'QtCreator\bin\jom\jom.exe')
-    )) {
-        if (Test-Path $candidate) { $env:TMDQ_JOM = $candidate; break }
-    }
-}
-
-if ($env:TMDQ_JOM -and (Test-Path $env:TMDQ_JOM)) {
-    $env:PATH = "$(Split-Path -Parent $env:TMDQ_JOM);$env:PATH"
-    $env:TMDQ_MAKE = 'jom'
-} elseif (Get-Command jom -ErrorAction SilentlyContinue) {
-    $env:TMDQ_MAKE = 'jom'
-} else {
-    $env:TMDQ_MAKE = 'nmake'
 }

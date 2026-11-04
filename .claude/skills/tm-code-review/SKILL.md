@@ -26,19 +26,19 @@ bugs hide and where a generic reviewer is blind.
 3. For broader, adversarially-verified correctness coverage you can also invoke the native
    `/code-review` skill; this skill is the project-aware layer that complements it. It supersedes the
    ad-hoc generic review prompts this project used before, which targeted web concerns like SQL/XSS
-   that don't apply to a Qt desktop app.
+   that don't apply to a desktop app.
 4. Report findings grouped by severity (Critical / High / Medium / Low). For each: **file:line**,
    **what's wrong**, **why it matters here**, **concrete fix**. List real issues only — do not pad.
 
 ## Protected files — a hard stop
 
-**Visual/layout changes need more than a read-through.** If the diff touches widget geometry,
-sizing, stylesheets or plot rendering, the test suite asserts essentially nothing about it — use the
-**verify-ui-change** skill (render it AND measure the widgets) rather than reasoning from the code.
+**Visual/layout changes need more than a read-through.** If the diff touches control sizes,
+spacing, styles, the themes or the plot's drawing, the test suite asserts little about it — use the
+**verify-ui-change** skill (render it AND measure the controls) rather than reasoning from the code.
 
 `lib/irig106/**` is third-party and MUST NOT be modified. If the diff
-touches them, that is a Critical finding on its own: the fix belongs in the wrapping app code
-(`chapter10reader.cpp`, `ch10packetreader.cpp`, `frameprocessor.cpp`, `plotwidget.cpp`). Flag it and
+touches them, that is a Critical finding on its own: the fix belongs in the core that wraps it
+(`chapter10reader.cpp`, `ch10packetreader.cpp`, `frameprocessor.cpp`). Flag it and
 stop endorsing the change until it moves.
 
 ## Domain invariants to verify (the high-value checks)
@@ -106,7 +106,9 @@ stop endorsing the change until it moves.
 ## General pass (still do this)
 
 Correctness/edge cases (off-by-one, overflow in the bit math — note `uint64_t` shift registers and
-`UINT64_MAX` sentinels), input validation, Qt parent/ownership and `delete` correctness, naming and
+`UINT64_MAX` sentinels), input validation, ownership across the ABI (every handle freed once: the C
+functions' `*_free`, the binding's `IDisposable`), threading (the core reports on its own threads; the app
+posts to the UI thread), naming and
 convention adherence (`docs/claude.md` "Coding Conventions"), and DRY against the single-source
 helpers (`FrameSetup::buildDefaultReceiverMap`, `channelPrefix`, `receiverParameterName`).
 

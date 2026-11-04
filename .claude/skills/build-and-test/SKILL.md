@@ -1,153 +1,91 @@
 ---
 name: build-and-test
 description: >-
-  Build and run the tmDataQualityAnalyzer Qt/C++ app or its unit-test suite on this Windows/MSVC
-  machine. Use this WHENEVER you need to compile the project, run qmake/nmake, run the Qt Test
-  suite, verify a change builds cleanly, reproduce a build error, or check that tests still pass —
-  even if the user just says "build it", "run the tests", "does this compile?", or "make sure it's
-  green". The Qt and MSVC toolchains are NOT on PATH, the test exe has a strict in-source build
-  location requirement, and there is no single-suite CLI filter — get any of these wrong and the
-  build or the data-file tests fail for reasons unrelated to the code. This skill encodes the exact
-  setup so you don't rediscover it each time.
+  Build and test tmDataQualityAnalyzer - the native core (tmdq_core.dll), the C# library over it and
+  the Avalonia application - on this Windows machine. Use this WHENEVER you need to compile anything,
+  run a test suite, check a change builds cleanly with zero warnings, reproduce a build error, or
+  confirm the suites are still green - even if the user just says "build it", "run the tests", "does
+  this compile?" or "make sure it's green". There are three suites with three scripts, each against
+  its own baseline; the managed and app suites run against a DLL the native build produced, and a
+  stale one, a stale binary or a filter that matches nothing all produce results that look real and
+  are not. This skill encodes the order and the traps.
 ---
 
-# Build and Test — tmDataQualityAnalyzer
+# Build and test — tmDataQualityAnalyzer
 
-This project is Qt 6.12.0 / C++20 built with qmake + MSVC 2022 (Visual Studio 2022 C++ Build Tools)
-on Windows. The toolchain is **not on PATH**, so every build session must set it up first. There are
-two separate qmake projects: the app (`tmDataQualityAnalyzer.pro` at the root) and the tests
-(`tests/tests.pro`).
+Three layers, each built and tested by its own script, from the repository root, in **PowerShell**.
+The scripts import Visual Studio 2022 themselves (`scripts\env.ps1`) when `msbuild` or `mt` is not
+on PATH; nothing needs to be set up first. The baselines are in `.claude/CLAUDE.md` — read them
+there, not from memory.
 
-Run all commands with the **PowerShell** tool (this is a Windows machine).
-
-## Step 0 — Set up the toolchain (required, every session)
-
-The single source of truth is `scripts/env.ps1`. Dot-source it; it imports the MSVC environment
-(via `vcvars64.bat`, located with vswhere or a path probe) and puts the Qt `msvc2022_64` kit bin on
-PATH:
+## The order
 
 ```powershell
-. .\scripts\env.ps1
+# 1. The native core. Everything else loads this DLL.
+powershell -ExecutionPolicy Bypass -File scripts\build_core_dll.ps1 -Configuration Release
+
+# 2. Its doctest suite (builds native\tmdq_core_tests, zero warnings, no Qt import, then runs it).
+powershell -ExecutionPolicy Bypass -File scripts\test_native.ps1 -Configuration Release
+
+# 3. The C# library's tests, against native\out\Release\tmdq_core.dll.
+powershell -ExecutionPolicy Bypass -File scripts\test_dotnet.ps1 -Configuration Release
+
+# 4. The application's tests, on Avalonia's headless platform, against the same DLL.
+powershell -ExecutionPolicy Bypass -File scripts\test_app.ps1 -Configuration Release
 ```
 
-Shell state does not persist between PowerShell tool calls, so dot-source `env.ps1` at the start of
-each command (or chain the build into the same call with `;`). Verify with `qmake --version` /
-`cl` if a build fails with "command not found". A harmless `'vswhere.exe' is not recognized` line may
-print (emitted from inside vcvars) — ignore it as long as `cl` resolves.
+CI runs all four in Release, in every job. Use the same configuration for the DLL and the suites
+that load it: the managed and app scripts take `native\out\<config>\tmdq_core.dll` (or
+`TMDQ_CORE_DLL`), and a Debug suite against a Release DLL built an hour ago tests the hour-old core.
 
-## Building the application
+**Zero warnings is the rule everywhere:** `build_core_dll.ps1` and `test_native.ps1` fail on one, and
+every .NET project treats warnings as errors.
+
+## Iterating
+
+- **Native, filtered:** `scripts\test_native.ps1 -tc="TomlDocument*"` (any doctest argument passes
+  through); `-NoBuild` reruns the last build.
+- **Managed or app, filtered:** run the test executable directly after the script has built it:
+  `dotnet\TmDq.App.Tests\bin\Release\net10.0\TmDq.App.Tests.exe -class TmDq.App.Tests.ShellTests`
+  (or `-method "*Name*"`), with `TMDQ_CORE_DLL` set to the DLL. **Check the summary's `Total:`** — a
+  filter that matches nothing runs zero tests, and a run of nothing must not be read as a pass.
+- **The soak** (`scripts\run_soak.ps1`) after a change to processing, the plot's series or the CSV
+  writer: it holds the app's exports to v2.14.2's bytes on the full and local recordings, so it runs
+  here, never in CI.
+- **The throughput guard** (`scripts\run_throughput_bench.ps1`) at release, or after a change to the
+  pipeline's threading: it needs the full PRN recording.
+
+## The traps
+
+- **A deleted or renamed header is verified only by `-Rebuild`.** An incremental build keeps the
+  objects that still include it. Wipe `native\obj` (or pass `-Rebuild`) before believing a result.
+- **The binary must be newer than the source.** A failed link can leave the previous executable in
+  place and a script can print a stale result; after a build, check the test exe's time, and for the
+  app or managed suite that the DLL it loads was rebuilt too.
+- **`Platform=x64`.** `vcvars` sets it, and a `dotnet build` in that shell then looks for a solution
+  platform that does not exist. The scripts clear it; clear it yourself (`$env:Platform = $null`)
+  before calling `dotnet` by hand in a shell that sourced `env.ps1`.
+- **An IDE's design-time build shares `obj` and `bin`.** VS Code's C# Dev Kit builds the projects in
+  the background, and two builds racing over one `obj` fail or test the wrong thing. Run long loops
+  (mutation checks) in a worktree: `git worktree add C:\tmp\<name>`.
+- **Worktrees need the recordings:** junction `tests\data` to the main checkout's, or the suites that
+  read the full recordings have nothing to read.
+- **The app suite's preferences:** a test never touches `%APPDATA%`; when running the built app by
+  hand, put a file named `portable` beside the exe first, or it reads and writes your installed
+  copy's `preferences.json`.
+
+## Running the application
 
 ```powershell
-. .\scripts\env.ps1
-New-Item -ItemType Directory -Force -Path build | Out-Null
-Set-Location build
-qmake ..\tmDataQualityAnalyzer.pro -spec win32-msvc 'CONFIG+=debug'
-nmake -f Makefile.Debug
+$env:Platform = $null; dotnet build dotnet\TmDq.App -c Debug
+dotnet\TmDq.App\bin\Debug\net10.0\tmDataQualityAnalyzer.exe "tests\data\test files\prn_testfile, sample.ch10"
 ```
 
-- Debug output: `build\debug\tmDataQualityAnalyzer.exe`. For release, swap `CONFIG+=release` /
-  `Makefile.Release` (output under `build\release\`).
-- **Prefer `$env:TMDQ_MAKE` over naming a tool.** `env.ps1` sets it to `jom` when that's
-  available (it is, at `C:\Qt\Tools\jom\jom.exe`) and `nmake` otherwise. `nmake` is
-  serial with no `-j`; `jom` is the parallel drop-in and takes the same `-f` argument.
-  On this box it cuts the app build from ~88 s to ~25 s and the test build from ~157 s
-  to ~23 s, so use it — `& $env:TMDQ_MAKE -f Makefile.Debug`. Plain `nmake` still works
-  and is what a machine without `jom` falls back to.
-- Re-run `qmake` whenever you add/remove a source/header in the `.pro`, change `constants.h`'s
-  version, or change a class's `Q_OBJECT` wiring (MOC). For ordinary edits to existing `.cpp` files,
-  `nmake` alone is enough.
-- **Zero-warning policy:** the build must produce 0 warnings. If a change introduces one, fix it
-  before considering the build done — do not report success over new warnings.
+The build copies `native\out\Debug\tmdq_core.dll` and the repository's `settings\` beside the exe
+(build the DLL first). With `TMDQ_SMOKE_REPORT=<file>` it skips Configure Streams, processes the
+first channel with the defaults, writes one line and exits.
 
-## Building and running the tests
+## Reporting
 
-The test executable resolves its data fixtures with `applicationDirPath()` → `cdUp()` → `data/`
-(see `testDataPath()` in `tests/tst_processingcoordinator.cpp`). That means **the test exe must live exactly
-one level below `tests/`** — i.e. `tests/debug/` or `tests/release/`. Build *in-source inside
-`tests/`*; do NOT build into a nested or out-of-tree directory, or every ProcessingCoordinator /
-StreamConfigDialog data-file test fails or skips with no obvious cause. (The
-native doctest suite finds the repository from `tmdq.sln` instead, so it has no such rule.)
-
-```powershell
-. .\scripts\env.ps1
-Set-Location tests
-qmake tests.pro -spec win32-msvc 'CONFIG+=debug'
-nmake -f Makefile.Debug
-.\debug\tmDataQualityAnalyzer_tests.exe
-```
-
-- Results are written to `tests\output\results.txt` (gitignored) AND printed to the console. A
-  non-zero process exit code means at least one suite failed.
-- Green baseline: see `.claude/CLAUDE.md` (it moves with every suite that ports to doctest). There are **no
-  standing skips**: a skip is a missing fixture, and CI fails on one. The heavy PRN throughput
-  benchmark is not in this executable any more; it is a native doctest case, opt-in via
-  `$env:TMDQA_RUN_HEAVY_BENCH=1`, and `scripts\run_throughput_bench.ps1` runs it at release.
-- A convenience wrapper exists: `powershell -ExecutionPolicy Bypass -File scripts\build_ide.ps1`
-  builds the tests (Debug) using the active toolchain from `env.ps1`. It builds but does not run.
-
-### Fast mode and the no-single-suite-filter reality
-
-The full run is dominated by the real-Ch10 integration suite — `TestProcessingCoordinator`
-processes a real Chapter 10 fixture and takes a few minutes. The rest of the core's integration
-tests (the pipeline, the frame processor, the calibration extractor) are native doctest cases now.
-For quick local iteration, pass **`--fast`** (or set **`TMDQ_FAST_TESTS=1`**):
-
-```powershell
-.\debug\tmDataQualityAnalyzer_tests.exe --fast   # ~1 s: skips the .ch10 integration suite
-```
-
-Fast mode runs the pure-logic + widget/dialog suites (the same set CI runs, where the `.ch10`
-fixtures are absent) and skips `TestProcessingCoordinator`. It is a **local convenience only** — always do a final **full** run
-(no `--fast`) before declaring tests green, and never rely on it for CI or a release gate. This is the
-built-in replacement for hand-trimming `main.cpp` (which must never be committed). The harness still
-does not honor a `ClassName::testCase` single-suite filter.
-
-## Running the app or the test exe
-
-Launching needs Qt's DLLs findable. **Do not put Qt on PATH by hand and never hard-code a Qt path**
-in an IDE config — that rots at the next `QT_VERSION` bump. Deploy the runtime beside the exe:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\deploy_qt_local.ps1 -Config debug [-Tests]
-```
-
-The `.vscode` build tasks already call it, so F5 handles it. Failure codes:
-
-- **`0xC0000135`** — no Qt DLLs found at all.
-- **`0xC0000139`** — Qt DLLs found but the WRONG VERSION (e.g. an old kit still on PATH).
-- **exit `3` with no output** — `abort()`, almost always "no Qt platform plugin could be
-  initialized" (the offscreen plugin is missing; `deploy_qt_local.ps1` copies it deliberately).
-
-If `env.ps1` warns that the persistent user `QTDIR` has drifted, fix it with
-`scripts\setup-env.ps1` — tools that never source `env.ps1` (cpptools, Qt Creator) read that value.
-
-## Waiting on CI
-
-GitHub creates the `pull_request` run with a **multi-minute lag** (~3.5 min measured). `gh pr checks`
-immediately after opening a PR reports "no checks reported" — **that is not a missing gate**, and
-reporting it as a CI failure is wrong. Wait, or dispatch on the branch
-(`gh workflow run ci.yml --ref <branch>`) and confirm the run's `headSha` matches the PR head before
-trusting it.
-
-## When a build breaks for non-code reasons
-
-- **"qmake/nmake/cl is not recognized"** → you skipped Step 0 in this shell.
-- **qmake: "msvc-version.conf loaded but QMAKE_MSC_VER isn't set"** → a stale `.qmake.stash` (qmake
-  caches compiler detection and shares it up the directory tree) is masking MSVC detection. Delete
-  `.qmake.stash` (and any in parent dirs) and build in a clean dir.
-- **`C1041 ... cannot open program database`** → stale artifacts in the build dir. Clean it
-  (`Remove-Item debug -Recurse -Force` + delete the `Makefile*`) and re-`qmake`.
-- **`LNK2019` unresolved Win32 symbol** → a Win32 API (e.g. user32's `GetWindowRect`) needs its import
-  lib linked explicitly. Add it to the `win32` `LIBS` in the `.pro`.
-- **Data-file tests fail/skip but logic looks fine** → the test exe is not one level under `tests/`;
-  rebuild in-source in `tests/`.
-- **MOC / "unresolved external symbol ... vtable/metaObject"** → a `Q_OBJECT` class changed; re-run
-  `qmake` then rebuild.
-
-## Guardrails
-
-- Never edit files under `lib/irig106/` to make a build pass — it is third-party and protected.
-  Adapt in application code instead.
-- The generated `version_autogen.h`, `Makefile*`, and `build/` artifacts are not authored by hand.
-- Report build/test outcomes faithfully: if a suite fails, show the failing assertion from
-  `tests\output\results.txt`; if you trimmed `main.cpp` to iterate, say so and confirm you restored it.
+Report each suite's numbers against its baseline, warnings included. A failure is reported with its
+output, not summarised away; a skipped suite is said to be skipped.

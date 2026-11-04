@@ -2,108 +2,94 @@
 name: verify-ui-change
 description: >-
   Verify a visual or layout change to the tmDataQualityAnalyzer UI actually looks and measures
-  right, before committing it. Use this WHENEVER a change touches widget geometry, sizing, spacing,
-  margins, stylesheets, painting, the plot's rendering (TmChart), or anything the user describes in
-  visual terms — "the buttons are too big", "make room for", "the labels overlap", "tighten the
-  highlight", "that looks wrong" — and also before shipping any change to plot rendering or export.
-  The 357-test suite asserts almost nothing about appearance, so a visual defect passes CI silently;
-  worse, a control that is the WRONG SIZE still looks plausible in a screenshot. This skill encodes
-  how to render the UI headlessly, how to measure widgets, and which of the two catches what — both
-  have shipped real bugs in this project.
+  right, before committing it. Use this WHENEVER a change touches control sizes, spacing, margins,
+  styles, the themes, the plot's drawing (PlotChart) or export, the legend, or anything the user
+  describes in visual terms - "the buttons are too big", "make room for", "the labels overlap",
+  "tighten the highlight", "that looks wrong". The app suite asserts some appearance (frames read back
+  pixel by pixel) but not most of it, so a visual defect can pass CI; worse, a control that is the
+  WRONG SIZE still looks plausible in a picture. This skill encodes how to render the UI headlessly,
+  how to measure controls, and which of the two catches what - both have shipped real bugs here.
 ---
 
 # Verify a UI change — tmDataQualityAnalyzer
 
-**The suite will not catch you.** 357 tests pass while tick labels overlap into an unreadable
-smear, or while a title-bar button is half its intended height. Appearance is deliberately not
-asserted — pinning pixels would pin styling and break on every legitimate tweak.
-
-So verification is manual, and it has **two halves that catch different things**:
+Verification has **two halves that catch different things**:
 
 | Technique | Catches | Blind to |
 | --- | --- | --- |
 | **Render and look** | overlap, clipping, wrong colours, missing elements, bad spacing | a control that is plausibly the wrong size |
-| **Measure the widget** | wrong size/position, a defeated `setFixedSize`, stale layout | anything about how it actually looks |
+| **Measure the control** | wrong size or position, a style overriding a size, stale layout | anything about how it actually looks |
 
-Do both. Each has shipped a real bug here that the other would have caught.
+Do both. Each has caught a real defect here that the other missed.
 
 ## 1. Render it and look
 
-Everything renders headlessly — no need to run the app.
+The app's tests run on Avalonia's headless platform **drawing through Skia** (`TestAppBuilder`:
+`UseHeadlessDrawing = false`), so a frame is the real rendering, text included — no need to run the
+app. In an `[AvaloniaFact]`:
 
-```powershell
-$env:QT_QPA_PLATFORM = 'offscreen'
+```csharp
+var window = new Window { Width = 900, Height = 600, Content = control };
+window.Show();
+Dispatcher.UIThread.RunJobs();                 // layout and render before capturing
+using var frame = Frames.Capture(window);      // window.CaptureRenderedFrame()
+frame.Save(@"C:\tmp\look.png");                // then READ the image back and look at it
 ```
 
-- **A whole widget:** `widget->grab()` → `QPixmap::save(path)`.
-- **Part of it, magnified** (for small chrome like buttons — a 1:1 grab is too small to judge):
-  `w->grab(QRect(x, y, w, h)).scaled(w*4, h*4, Qt::IgnoreAspectRatio, Qt::FastTransformation)`
-- **The plot, with data:** `PlotWidget::exportImage(path)` — the same path PNG/SVG/PDF export uses,
-  so it also verifies exports.
+- **The plot, with data:** `PlotImageExport` writes PNG, SVG and PDF through the same routine the
+  screen uses, so a render of an export also verifies export.
+- **Small chrome** (a chip, a title-bar button): capture, then crop and scale the region up before
+  judging; a 1:1 render of a 30 px button is too small to read.
+- **The manual's figures** are this technique already: `ManualFiguresTests` sets up each scene,
+  checks its caption's claims and renders it (`scripts\build_manual.ps1` keeps them).
 
-Then **actually look at the image** (read it back). Do not infer from the numbers.
+Then **actually look at the image**. Do not infer from the numbers.
 
-### Two traps when rendering
+### Traps when rendering
 
-- **A widget that is resized but never shown gets no layout.** `resize()` alone leaves child
-  geometry unset, so the grab is tiny or empty. Call `show()` + `QApplication::processEvents()`
-  first. (`TmChart` is immune — its layout is lazy for exactly this reason — but `PlotWidget` and
-  `MainView` are not.)
-- **Offscreen has no font rendering**, so text renders as empty boxes. That is expected and is
-  *not* a bug to chase. Judge layout, spacing and geometry from these renders; judge text
-  appearance from a real screenshot.
+- **No layout until it is shown and the dispatcher has run.** A control that was never shown, or
+  shown without `RunJobs()`, has empty bounds and an empty frame.
+- **Popups are not drawn into their window's frame** (context menus, the hamburger flyout, tooltips):
+  draw the menu in a window of its own, as `ManualFiguresTests` does.
+- **Subpixel text antialiasing puts coloured fringes on black text**, which a colour test reads as the
+  wrong colour. Tests that read text colour set `TextOptions.SetTextRenderingMode(window,
+  TextRenderingMode.Antialias)`; the app keeps the default.
+- **The theme is the application's:** set it (`((App)Application.Current!).ApplyTheme(dark)`) before rendering a scene that depends
+  on it, and render both themes when the change is a colour.
 
-## 2. Measure the widget
+## 2. Measure the control
 
-Rendering cannot tell you a 30x13 button should have been 30x26 — it just looks like a slightly
-squat button. Dump the numbers:
+A render cannot tell you a 30x13 button should have been 30x26. Read the numbers after layout:
 
-```cpp
-qDebug() << b->objectName() << b->geometry()
-         << "min"  << b->minimumSize() << "max" << b->maximumSize()
-         << "hint" << b->sizeHint();
+```csharp
+var b = window.FindControl<Button>("MaximizeButton")!;
+Console.WriteLine($"{b.Bounds} desired {b.DesiredSize} min {b.MinWidth}x{b.MinHeight} max {b.MaxWidth}x{b.MaxHeight}");
+Rect inWindow = Frames.InWindow(b, window);     // its bounds in window coordinates
 ```
 
-`qDebug()` is swallowed by the multi-`qExec` test harness — write to a file (`QFile` +
-`QTextStream`) if you are probing from a test.
+**Read the constraints, not just the bounds.** A style setter or a template can override a size
+set on the control; when `Bounds` disagree with what you set, look for a style that matches it,
+including styles leaking into a template's parts (`/template/` selectors).
 
-**Read `min` and `max`, not just the geometry.** `setFixedSize()` sets both; if `min` is `0x0` when
-you expected your fixed size, something overwrote it — see the trap below.
+## Probe code
 
-## The QSS-vs-code sizing trap
-
-**A stylesheet `min-width`/`min-height` REPLACES the minimum that `setFixedSize()` installed**,
-leaving the maximum intact — so the widget collapses to its `sizeHint`. This shipped a bug in
-PR #60: buttons meant to be 30x26 were 27x26 and 30x13, and the render looked entirely reasonable.
-
-**Rule: style for paint (colour, border, radius), size in code.** Never set both.
-
-## Removing the probe
-
-Probe code is temporary. Before committing:
-
-```bash
-git diff <test file>          # must show no probe residue
-git checkout <test file>      # simplest, if the probe was the only change there
-```
-
-Leaving a stray blank line is enough to put an unrelated hunk in the PR.
+A probe is temporary. Before committing, `git diff` the test file and remove every line of it —
+a stray blank line puts an unrelated hunk in the PR. A measurement worth keeping becomes an
+assertion instead (the legend's 16 px scroll-bar gutter is one, found by measuring).
 
 ## Judgement calls belong to the user
 
-Sizes, spacing and colour are the user's call, not yours. Verify the change does what was asked and
-report *measured* before/after numbers; do not silently substitute your own taste. If a requested
-value looks wrong to you (e.g. it stops controls touching but does not fully clear them), implement
-what was asked, say what the alternative would cost, and let them decide.
+Sizes, spacing and colour are the user's call. Verify the change does what was asked and report
+*measured* before/after numbers; do not substitute your own taste. If a requested value looks wrong,
+implement it, say what the alternative would cost, and let them decide.
 
 ## Worked examples from this project
 
-- **Colliding tick labels** — 357 tests green; rendering a real two-axis plot showed
-  `DDD:HH:MM:SS` labels smeared together at the default tick count. Fixed by decluttering labels
-  (tick marks unaffected). *Only rendering could have caught this.*
-- **Title-bar buttons 30x13** — the render looked like a plausible compact pill and was nearly
-  shipped twice; `min=0x0` in the measurement named the cause immediately. *Only measuring could
-  have caught this.*
-- **`plotArea()` empty** — `TmChart` computed layout only in `resizeEvent`, which a never-shown
-  widget never receives, collapsing every coordinate to zero. Caught by writing the transform tests
-  first.
+- **The legend's scroll bar covered the labels** — the first version reserved 12 px; a test
+  measuring the rendered rows found Fluent's bar is 16 px. *Only measuring caught it.*
+- **The colour dialog clipped its own slider**, and **the clip boxes read "1000."** — both found by
+  looking at a render, not by any test. *Only looking caught them.*
+- **Avalonia drew its own caption buttons over the custom title bar** — found by capturing the
+  running window; `WindowDecorations="BorderOnly"` removed them.
+- **(Qt era) colliding tick labels and 30x13 title-bar buttons** — the same two lessons, from the
+  application this one replaced: render to see overlap, measure to see size.

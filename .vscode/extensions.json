@@ -1,6 +1,7 @@
 {
     "recommendations": [
-        "Qt.qt-official-extension-vscode",
+        "ms-dotnettools.csharp",
+        "AvaloniaTeam.vscode-avalonia",
         "eclipse-cdt.cdt-gdb-vscode",
         "llvm-vs-code-extensions.vscode-clangd",
         "mohsen1.prettify-json",

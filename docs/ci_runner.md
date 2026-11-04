@@ -2,7 +2,7 @@
 
 Operational notes for the machine that runs CI. The **workflow** side is documented
 in the header comment of [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)
-(runner routing, the ASCII/PowerShell-5.1 constraints, the fixture overlay); this
+(runner routing, the ASCII/PowerShell-5.1 constraints, the Qt-free job); this
 file covers the **box**: how the runner is installed, what it needs on disk, and how
 to bring it back when it stops picking up jobs.
 
@@ -36,43 +36,17 @@ on `main` or require approval for all outside-collaborator workflow runs.
 
 ## What the box provides
 
-1. **The toolchain**, pre-installed rather than provisioned per run: MSVC 2022 and
-   the Qt `msvc2022_64` kit matching `QT_VERSION` in `ci.yml`. Every workflow step
-   that runs a Qt or MSVC binary dot-sources `. .\scripts\env.ps1` — each step is a
-   fresh shell, so PATH set in one step does **not** carry into the next. A step that
-   skips it fails in about a second with a missing-DLL error.
-1. **`jom`** — installed at `C:\Qt\Tools\jom\jom.exe`. It is the parallel drop-in for
-   `nmake`, which has no `-j` and so builds on a single core. `env.ps1` probes
-   `<Qt>\Tools\jom\jom.exe` and `<Qt>\Tools\QtCreator\bin\jom\jom.exe`, honours
-   `TMDQ_JOM` as an explicit override, and exports **`TMDQ_MAKE`** as either `jom` or
-   `nmake`; every build invokes `$env:TMDQ_MAKE`. It is purely an accelerator — a box
-   without `jom` builds identically, just slower, which is what the GitHub-hosted
-   fallback runner does.
-
-   It cut a full run from **286 s to 93 s (-67%)** on this 28-core box: the app build
-   88 s → 25 s, the test build 157 s → 23 s. Each build step logs which tool it used,
-   so a regression to `nmake` is visible in the log rather than silent.
-
-   Because the runner is a **service running as NETWORK SERVICE**, `jom` must live
-   where that account can read it — the `C:\Qt` tree is fine (its ACL grants
-   `Authenticated Users`, which covers service accounts), a user profile is not. No
-   service restart is needed after installing: detection probes the filesystem at
-   build time rather than relying on the service's cached `PATH`.
-1. **The full-size PRN recording.** `C:\actions-runner\.env` sets:
-
-   ```text
-   TMDQA_CH10_FULL=C:\ProgramData\tmdqa-ci-fixtures\prn_testfile_full.ch10
-   ```
-
-   a 640 MB copy of the complete recording. The "Overlay full-size PRN fixture" step
-   copies it over the committed sample so the heavy throughput benchmark has real
-   data to walk. It lives in `ProgramData`, **not** in a user profile, because
-   `NETWORK SERVICE` cannot read `C:\Users\kevin\...`; from there the overlay silently
-   no-ops and the benchmark falls back to the small sample. It also lives outside the
-   checkout so CI never depends on the dev tree's state.
-
-   If the variable is unset or the path is missing, CI emits a warning and continues
-   on the committed sample — the run is still green.
+1. **The toolchain**, pre-installed rather than provisioned per run: MSVC 2022 (the
+   Visual Studio 2022 C++ Build Tools) and the .NET 10 SDK, installed machine-wide so the
+   service account can run `dotnet`. The build and test scripts dot-source
+   `. .\scripts\env.ps1` themselves when `msbuild` or `mt` is missing — each step is a
+   fresh shell, so PATH set in one step does **not** carry into the next.
+1. **Nothing else.** Until plan step 6.2 the box also needed the Qt `msvc2022_64` kit and
+   `jom` (Qt's parallel `nmake`, which cut a full run from 286 s to 93 s), and CI overlaid
+   the full PRN recording (`TMDQA_CH10_FULL` in `C:\actions-runner\.env`) for a benchmark
+   that now runs at release on the development machine instead. The kit, `jom` and the
+   recording can stay on the box or go; no step reads them. The Qt kit staying is why
+   `core-without-qt` runs on a hosted image rather than here.
 
 ## Service mode: what differs from an interactive shell
 
@@ -91,8 +65,9 @@ because each one looks like a code failure at first glance:
   `$ErrorActionPreference='stop'` — `cl` prints its banner to stderr. Every Windows
   step sets `$ErrorActionPreference = 'Continue'` and gates failure on explicit
   `$LASTEXITCODE` checks instead.
-- **No interactive desktop**, so widgets cannot expose windows. Test steps set
-  `QT_QPA_PLATFORM: offscreen` in both jobs.
+- **No interactive desktop**, so no window can be shown. The app's tests run on Avalonia's
+  headless platform, which needs none; `test_app.ps1` prints the account and session so
+  the log records it.
 
 ## Operating the runner
 
@@ -122,9 +97,7 @@ $reg = gh api -X POST repos/kboss805/tmDataQualityAnalyzer/actions/runners/regis
 .\config.cmd --url https://github.com/kboss805/tmDataQualityAnalyzer --token $reg --name tmdqa-selfhosted-1 --labels tmdqa --work _work --unattended --runasservice
 ```
 
-`.env` has survived a reconfigure in practice, but **verify `TMDQA_CH10_FULL` is
-still set afterwards** — if it is lost, the heavy benchmark quietly degrades to the
-small sample.
+`.env` has survived a reconfigure in practice; nothing in CI reads it any more.
 
 ### Runner routing needs an optional secret
 
