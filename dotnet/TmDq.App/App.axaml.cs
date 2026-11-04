@@ -33,12 +33,19 @@ namespace TmDq.App
                     ? new DialogConfigurator(new WindowStreamDialogs(window), new StorageSettingsFilePicker(window), AppContext.BaseDirectory,
                                              new StorageCalibrationFilePicker(window), preferences)
                     : new FirstChannelRun();
-                var vm = new MainWindowViewModel(new StorageRecordingPicker(window), configurator, new WindowProcessingDialog(window),
-                                                 files: new StorageDataFilePicker(window), exportDialog: new WindowExportDialog(window),
-                                                 imageExporter: new PlotViewImageExporter(window.FindControl<PlotView>("PlotView")!),
-                                                 templateFiles: new StorageTemplateFilePicker(window),
-                                                 templateDialogs: new WindowTemplateDialogs(window),
-                                                 appRoot: AppContext.BaseDirectory, preferences: preferences);
+                var vm = new MainWindowViewModel(new MainWindowServices
+                {
+                    Picker = new StorageRecordingPicker(window),
+                    Configurator = configurator,
+                    ProcessingDialog = new WindowProcessingDialog(window),
+                    Files = new StorageDataFilePicker(window),
+                    ExportDialog = new WindowExportDialog(window),
+                    ImageExporter = new PlotViewImageExporter(window.FindControl<PlotView>("PlotView")!),
+                    TemplateFiles = new StorageTemplateFilePicker(window),
+                    TemplateDialogs = new WindowTemplateDialogs(window),
+                    AppRoot = AppContext.BaseDirectory,
+                    Preferences = preferences,
+                });
                 vm.PropertyChanged += (_, e) =>
                 {
                     if (e.PropertyName == nameof(MainWindowViewModel.IsDarkTheme)) ApplyTheme(vm.IsDarkTheme);

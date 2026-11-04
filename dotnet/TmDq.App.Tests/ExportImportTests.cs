@@ -783,7 +783,7 @@ namespace TmDq.App.Tests
             try
             {
                 var files = new FakeFiles { Answer = path };
-                var vm = new MainWindowViewModel(files: files);
+                var vm = new MainWindowViewModel(new MainWindowServices { Files = files });
                 Assert.True(vm.ImportCsvCommand.CanExecute(null));
                 Assert.False(new MainWindowViewModel().ImportCsvCommand.CanExecute(null));   // no file dialog
                 int before = vm.Log.Entries.Count;
@@ -813,7 +813,7 @@ namespace TmDq.App.Tests
             {
                 // Configure Streams up over a plot that has data: Export must wait too, though there is data to export.
                 var answer = new TaskCompletionSource<StreamsChoice?>();
-                var vm = new MainWindowViewModel(configurator: FakeConfigurator.Waiting(answer.Task), files: new FakeFiles(), exportDialog: new FakeExportDialog());
+                var vm = new MainWindowViewModel(new MainWindowServices { Configurator = FakeConfigurator.Waiting(answer.Task), Files = new FakeFiles(), ExportDialog = new FakeExportDialog() });
                 vm.Plot.SetSeries(new[] { PlotFixtures.Lock(0, "earlier", 1, 0, X2, X2) });
                 int import = 0, export = 0;
                 vm.ImportCsvCommand.CanExecuteChanged += (_, _) => import++;
@@ -856,7 +856,7 @@ namespace TmDq.App.Tests
             try
             {
                 var dialog = new FakeExportDialog();
-                var vm = new MainWindowViewModel(exportDialog: dialog, imageExporter: new FakeImages());
+                var vm = new MainWindowViewModel(new MainWindowServices { ExportDialog = dialog, ImageExporter = new FakeImages() });
                 Assert.False(vm.ExportCommand.CanExecute(null));
                 int changes = 0;
                 vm.ExportCommand.CanExecuteChanged += (_, _) => changes++;
@@ -874,7 +874,7 @@ namespace TmDq.App.Tests
                 Assert.Equal((image, data, log), (dialog.Shown!.ImagePath, dialog.Shown.DataPath, dialog.Shown.LogPath));
                 Assert.Equal(before, vm.Log.Entries.Count);
 
-                var fresh = new MainWindowViewModel(exportDialog: dialog);
+                var fresh = new MainWindowViewModel(new MainWindowServices { ExportDialog = dialog });
                 fresh.Plot.SetSeries(new[] { PlotFixtures.Lock(0, "a", 1, 0, X2, X2) });
                 await fresh.ExportCommand.ExecuteAsync(null);
                 Assert.Equal(ExportViewModel.DefaultPaths(AppContext.BaseDirectory, PlotViewModel.DefaultTitle).Image, dialog.Shown!.ImagePath);
@@ -902,7 +902,7 @@ namespace TmDq.App.Tests
                         vm.ExportCommand.Execute(null);
                     },
                 };
-                var vm = new MainWindowViewModel(exportDialog: dialog, imageExporter: images);
+                var vm = new MainWindowViewModel(new MainWindowServices { ExportDialog = dialog, ImageExporter = images });
                 await vm.ImportCsvAsync(csv);
                 (string image, string data, string log) = ExportViewModel.DefaultPaths(folder, vm.Plot.Title);
                 var choice = new ExportViewModel(image, data, log) { ExportData = true, ExportLog = true };
@@ -946,7 +946,7 @@ namespace TmDq.App.Tests
             Directory.CreateDirectory(folder);
             try
             {
-                var vm = new MainWindowViewModel(imageExporter: new FakeImages { Fail = true });
+                var vm = new MainWindowViewModel(new MainWindowServices { ImageExporter = new FakeImages { Fail = true } });
                 await vm.ImportCsvAsync(csv);
                 string nowhere = Path.Combine(folder, "missing", "x");
                 var choice = new ExportViewModel(nowhere + ".bogus", nowhere + ".csv", Path.Combine(folder, "log.txt")) { ExportData = true, ExportLog = true };
@@ -972,7 +972,7 @@ namespace TmDq.App.Tests
                 Assert.Equal(new[] { "Error Error: Failed to export plot to " + Path.Combine(folder, "n.png") }, LinesOf(noImages, before));
 
                 // Without data, nothing is written.
-                var empty = new MainWindowViewModel(imageExporter: new FakeImages());
+                var empty = new MainWindowViewModel(new MainWindowServices { ImageExporter = new FakeImages() });
                 before = empty.Log.Entries.Count;
                 await empty.ExportAsync(new ExportViewModel(Path.Combine(folder, "e.png"), "e.csv", "e.txt"));
                 Assert.Equal(before, empty.Log.Entries.Count);
@@ -993,7 +993,7 @@ namespace TmDq.App.Tests
             {
                 var images = new FakeImages();
                 var dialog = new FakeExportDialog { Answer = vm => vm.ExportCommand.Execute(null) };
-                var vm = new MainWindowViewModel(exportDialog: dialog, imageExporter: images);
+                var vm = new MainWindowViewModel(new MainWindowServices { ExportDialog = dialog, ImageExporter = images });
                 await vm.ImportCsvAsync(csv);
                 File.SetLastWriteTimeUtc(csv, new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc));
                 int before = vm.Log.Entries.Count;

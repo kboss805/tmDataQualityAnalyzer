@@ -286,7 +286,7 @@ namespace TmDq.App.Tests
         public async Task TheMainWindowRemembersItsFolderItsRecentFilesAndItsChoices()
         {
             var store = new PreferencesStore(new Preferences { LastFolder = @"C:\before", LegendVisible = false, Theme = "light", SidebarVisible = false });
-            var vm = new MainWindowViewModel(configurator: FakeConfigurator.Cancelled(), preferences: store);
+            var vm = new MainWindowViewModel(new MainWindowServices { Configurator = FakeConfigurator.Cancelled(), Preferences = store });
             Assert.Equal((@"C:\before", false, false, false), (vm.LastFolder, vm.Plot.LegendVisible, vm.IsDarkTheme, vm.SidebarVisible));
             Assert.Same(store.Current, vm.Preferences);
 
@@ -343,7 +343,7 @@ namespace TmDq.App.Tests
         [Fact]
         public async Task ARecentFileOpensByItsSuffixAndNotWhileBusy()
         {
-            var vm = new MainWindowViewModel(configurator: FakeConfigurator.Cancelled());
+            var vm = new MainWindowViewModel(new MainWindowServices { Configurator = FakeConfigurator.Cancelled() });
             Assert.False(vm.OpenRecentCommand.CanExecute(null));
             Assert.True(vm.OpenRecentCommand.CanExecute(Prn));
             await vm.OpenRecentCommand.ExecuteAsync(Prn);
@@ -357,7 +357,7 @@ namespace TmDq.App.Tests
 
             // Busy, it is unavailable, and a path given anyway does nothing; it is told when that ends.
             var gate = new TaskCompletionSource<StreamsChoice?>();
-            var slow = new MainWindowViewModel(configurator: FakeConfigurator.Waiting(gate.Task));
+            var slow = new MainWindowViewModel(new MainWindowServices { Configurator = FakeConfigurator.Waiting(gate.Task) });
             var available = new List<bool>();
             slow.OpenRecentCommand.CanExecuteChanged += (_, _) => available.Add(slow.OpenRecentCommand.CanExecute(Prn));
             Task first = slow.OpenPathAsync(Prn);

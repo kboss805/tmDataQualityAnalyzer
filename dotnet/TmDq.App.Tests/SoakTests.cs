@@ -68,7 +68,7 @@ namespace TmDq.App.Tests
             var view = new PlotView { Width = 1600, Height = 900 };
             var window = new Window { Content = view, SizeToContent = SizeToContent.WidthAndHeight };
             var configurator = new SoakConfigurator(run);
-            var vm = new MainWindowViewModel(configurator: configurator, imageExporter: new PlotViewImageExporter(view), appRoot: Repo.Root);
+            var vm = new MainWindowViewModel(new MainWindowServices { Configurator = configurator, ImageExporter = new PlotViewImageExporter(view), AppRoot = Repo.Root });
             view.Plot = vm.Plot;
             window.Show();
             Dispatcher.UIThread.RunJobs();

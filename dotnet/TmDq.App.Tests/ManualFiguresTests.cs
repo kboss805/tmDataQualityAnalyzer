@@ -97,7 +97,7 @@ namespace TmDq.App.Tests
         private static MainWindowViewModel WithServices(IStreamConfigurator configurator, IProcessingDialog? progress = null)
         {
             AppServices s = AppServices.Any;
-            return new MainWindowViewModel(s, configurator, progress, files: s, exportDialog: s, templateFiles: s, templateDialogs: s, appRoot: Repo.Root);
+            return new MainWindowViewModel(new MainWindowServices { Picker = s, Configurator = configurator, ProcessingDialog = progress, Files = s, ExportDialog = s, TemplateFiles = s, TemplateDialogs = s, AppRoot = Repo.Root });
         }
         /// <summary>The progress dialog of a run, shown at the first report past 70 % to <paramref name="at"/>.</summary>
         private sealed class CapturingDialog : IProcessingDialog

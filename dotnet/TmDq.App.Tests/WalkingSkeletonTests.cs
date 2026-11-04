@@ -249,7 +249,7 @@ namespace TmDq.App.Tests
         public async Task OpenAsksThePickerAndACancelChangesNothing()
         {
             var picker = new FakeRecordingPicker();
-            var vm = new MainWindowViewModel(picker);
+            var vm = new MainWindowViewModel(new MainWindowServices { Picker = picker });
             string status = vm.Status;
             await vm.OpenCommand.ExecuteAsync(null);
             Assert.Equal(1, picker.Asked);
@@ -260,7 +260,7 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public async Task OpenProcessesTheChosenRecording()
         {
-            var vm = new MainWindowViewModel(new FakeRecordingPicker(Prn));
+            var vm = new MainWindowViewModel(new MainWindowServices { Picker = new FakeRecordingPicker(Prn) });
             await vm.OpenCommand.ExecuteAsync(null);
             Assert.Equal(116, Startup.FirstLockSeries(vm.Plot)?.Y.Length);
         }
@@ -268,7 +268,7 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public async Task OpenIsDisabledWhileARecordingIsProcessedAndASecondLoadIsIgnored()
         {
-            var vm = new MainWindowViewModel(new FakeRecordingPicker(Prn));
+            var vm = new MainWindowViewModel(new MainWindowServices { Picker = new FakeRecordingPicker(Prn) });
             Assert.True(vm.OpenCommand.CanExecute(null));
             Task first = vm.LoadAsync(Prn);
             Assert.True(vm.IsBusy);
