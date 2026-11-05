@@ -1,8 +1,11 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
+using System.Text.Json;
 using Xunit;
 
 namespace TmDq.App.Tests
@@ -101,10 +104,28 @@ namespace TmDq.App.Tests
         }
     }
 
-    /// <summary>Runs `dotnet build` on a throwaway project, isolated from the calling process's MSBuild state.</summary>
+    /// <summary>Runs `dotnet build` on a throwaway project, or evaluates a real one, isolated from the calling
+    /// process's MSBuild state.</summary>
     internal static class BuildTool
     {
-        public static (int Exit, string Output) Run(string workingDirectory, string project, params string[] extra)
+        public static (int Exit, string Output) Run(string workingDirectory, string project, params string[] extra) =>
+            Dotnet(workingDirectory, new[] { "build", project, "-nologo", "-v", "minimal", "-p:NuGetAudit=false" }.Concat(extra));
+
+        /// <summary>What the project's properties evaluate to, without building or restoring it.</summary>
+        public static Dictionary<string, string> Evaluate(string project, params string[] properties)
+        {
+            var (exit, output) = Dotnet(Path.GetDirectoryName(project)!,
+                new[] { "msbuild", project, "-nologo" }.Concat(properties.Select(p => "-getProperty:" + p)));
+            Assert.True(exit == 0, "evaluating " + project + " failed:\n" + output);
+            // With more than one property MSBuild prints {"Properties": {name: value, ...}}.
+            using JsonDocument json = JsonDocument.Parse(output);
+            var values = new Dictionary<string, string>();
+            foreach (JsonProperty p in json.RootElement.GetProperty("Properties").EnumerateObject())
+                values[p.Name] = p.Value.GetString() ?? "";
+            return values;
+        }
+
+        private static (int Exit, string Output) Dotnet(string workingDirectory, IEnumerable<string> arguments)
         {
             var start = new ProcessStartInfo("dotnet")
             {
@@ -114,9 +135,7 @@ namespace TmDq.App.Tests
                 CreateNoWindow = true,
                 WorkingDirectory = workingDirectory,
             };
-            foreach (string a in new[] { "build", project, "-nologo", "-v", "minimal", "-p:NuGetAudit=false" })
-                start.ArgumentList.Add(a);
-            foreach (string a in extra)
+            foreach (string a in arguments)
                 start.ArgumentList.Add(a);
             // A build started from inside another .NET process must not inherit that process's MSBuild settings, nor
             // the Platform=x64 that vcvars64 (scripts\env.ps1) puts in the environment: MSBuild reads every variable

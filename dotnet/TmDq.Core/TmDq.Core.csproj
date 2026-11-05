@@ -10,8 +10,6 @@
     The DLL is found by Library.Load(path); nothing here searches PATH.
   -->
 
-  <Import Project="..\build\AppVersion.props" />
-
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>TmDq.Core</AssemblyName>
@@ -24,7 +22,5 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
-
-  <Import Project="..\build\PackageLicences.targets" />
 
 </Project>

@@ -1,7 +1,7 @@
 # CI's self-hosted runner: removed
 
 From plan step 6.4, CI is one job on GitHub-hosted `windows-2022`
-([`.github/workflows/ci.yml`](../.github/workflows/ci.yml); its header says why). The
+([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml); its header says why). The
 self-hosted runner it replaced was taken off the development machine on 2026-11-05.
 
 | | |

@@ -62,7 +62,7 @@ The stories below follow the workflow a first-time user takes through the applic
   - **Config application:** each file's run feeds the template's `StreamConfig`s through unchanged (`TemplateBatch.ToRunRequest`); the reader dispatches each stream by `pcmChannelId`, which is safe precisely because of the exact-set match. **Non-linear calibration:** a template stores only the calibration *input references* (not the extracted profile), so **all batch files process with the linear slope/offset fallback**. Non-linear step calibration is available for single-file processing only; re-extraction on template apply is a possible future add.
   - **Custom names/colors:** captured only when **saving a template** from an already-processed, customized plot (`TemplateBatch.Build`), and reapplied per file after each run (`TemplateBatch.ApplyAppearance`, matched by channel id + metric/receiver/channel). Every file's copy of a channel intentionally shares the same name/color (they are the same channel across recordings); use the **Plot File** selector to view one file at a time when per-file distinction matters.
   - **Retain-all + file selector:** a batch always keeps every processed file in memory; the plot's right-click **Plot File** submenu chooses which file to view, defaulting to every source overlaid, with "All files (overlaid)" for comparison. The filter is a `PlotViewModel` source gate (`SetVisibleSource`) orthogonal to per-series visibility and the **View Mode** (lock %/accumulation) selector. Optional per-file export runs as a post-pass (`BatchRunner` shows each source alone, then writes its CSV, and a `_framesync_lock.png` and `_missed_frames.png`, through `SessionExport`).
-  - **Status: implemented** (Save/Apply Template, one `BatchRunner` batch loop, retain-all + Plot File selector), every part tested in `TemplateTests` and `TemplateBatchTests`, the batch over copies of the committed PRN sample. See `docs/processing-template-design.md`.
+  - **Status: implemented** (Save/Apply Template, one `BatchRunner` batch loop, retain-all + Plot File selector), every part tested in `TemplateTests` and `TemplateBatchTests`, the batch over copies of the committed PRN sample. See `docs/design/processing-template-design.md`.
 
 ### US2.0: Define the key parameters required to process the framesync lock statistics and frame sync error accumulation — Complete
 
@@ -461,7 +461,7 @@ all share one elapsed-seconds X axis based at the earliest sample of any of them
 one processing run at a time: a batch is N runs into one accumulating plot. The plot's **Plot File** selector shows one
 recording or all (`PlotViewModel.SetVisibleSource`), orthogonal to per-series visibility and the View Mode.
 
-**Processing templates** (US1.1, `docs/processing-template-design.md`): **Save as Template…** captures one processed
+**Processing templates** (US1.1, `docs/design/processing-template-design.md`): **Save as Template…** captures one processed
 recording's rows of Configure Streams, its time channel's place and byte order, and each series' name and colour
 (`TemplateFile`, the same JSON v2.x wrote); **Apply Template to Files…** checks each chosen file's PCM channel ids
 against the template's (the core's `TemplateMatcher`, exact-set match), then runs every match in turn (`BatchRunner`),
@@ -582,7 +582,7 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
   and a new ABI source in both native projects; `NativeProjectTests` fails until they list it.
 - **.NET**: `dotnet/TmDq.Core` (the binding) and `dotnet/TmDq.App` (folders by role: `ViewModels`, `Views`, `Plot`,
   `Streams`, `Processing`, `Settings`, `Templates`, `Services`, `Logging`), each with a `.Tests` project beside it;
-  `dotnet/build` holds the props and targets every project imports.
+  `dotnet/build` holds the props and targets that `Directory.Build.props` and `Directory.Build.targets`, at the root, import into every .NET project.
 - **Resources**: `resources/` (the base manual, the icon, the UTF-8 manifest); shipped settings in `settings/`.
 
 ### Naming Conventions
@@ -630,8 +630,9 @@ Everything builds from `tmdq.sln`, which VS Code opens by default; `.claude/CLAU
 - **`tmdq_core.dll`**: `scripts\build_core_dll.ps1 [-Configuration Debug|Release]` (MSBuild over
   `native/tmdq_core/tmdq_core.vcxproj`, into `native/out/<config>/`), then fails on any compiler warning or on an import
   outside a short allow-list.
-- **The .NET projects**: built by the test scripts; every project imports `dotnet/build/AppVersion.props` (the version,
-  read from `AppVersion`) and `dotnet/build/PackageLicences.targets` (the licence allow-list).
+- **The .NET projects**: built by the test scripts; `Directory.Build.props` and `Directory.Build.targets` at the root import
+  `dotnet/build/AppVersion.props` (the version, read from `AppVersion`) and `dotnet/build/PackageLicences.targets` (the
+  licence allow-list) into every .NET project, so none imports them itself.
 - **The manuals**: `scripts\build_manual.ps1` renders the figures from the app (`ManualFiguresTests`) and embeds them.
 - **The release**: `deploy\avalonia\build_avalonia_package.ps1` (single-file publish, signing, the portable ZIP and the
   Inno installer); `.claude/skills/cut-release` is the procedure.
@@ -803,7 +804,7 @@ is); a new .NET test needs nothing but its class.
 built, which the job checks), on every push to `main` and every PR: the release consistency check, a check that the
 machine has no Qt, the core built Debug and Release, then the native, managed and app suites. The workflow's own
 constraints (ASCII-only, Windows PowerShell 5.1) are in its header comment. The self-hosted runner CI used until plan
-step 6.4 was removed from the machine; [`docs/ci_runner.md`](ci_runner.md) records how, and why it must not come back.
+step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_runner.md) records how, and why it must not come back.
 
 ### Test Suites
 
