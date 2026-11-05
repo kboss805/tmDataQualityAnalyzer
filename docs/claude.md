@@ -412,6 +412,56 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased
 
+#### `MainWindowViewModel`'s jobs in their own types, its services in one object (plan step 6.4)
+
+The fifth item of 6.4. The main window's view model opened and imported, exported, saved and applied templates, ran
+batches with their per-file export, and kept the preferences and Recent Files. Its constructor took eleven optional
+services. The plan's three pieces are now types of their own in `dotnet/TmDq.App/ViewModels`. The file goes from 713
+lines to 566, and nothing the window does changes.
+- **`ShellPreferences`:** what the shell remembers between sessions: Recent Files, the theme, the sidebar, the last
+  folder and the legend's choice, each change written at once. The view model forwards these properties and passes on
+  their notices, so the window's bindings are unchanged.
+- **`SessionExport`:** Export's writes, in v2.x's order, with their log lines. These are the data, the image and the log
+  (CR LF, UTF-8 without a byte-order mark). A batch's per-file CSV and images go through it too.
+- **`BatchRunner`:** Apply Template's loop over the files, and each file's CSV and images. It reaches the window through
+  a small internal interface (`IRunHost`) for the status line, the file being run (named in the warning that a
+  recording shares no time with the others), and a run with the progress dialog up. The view model keeps the busy
+  guard, clearing the plot, the recordings kept, the summary and the core-not-loaded error.
+- **`MainWindowServices`** replaces the eleven optional parameters. Each service is a property that says what leaving it
+  out does (Open unavailable without a picker, and so on). Every construction now names what it hands in. That is 70
+  in the tests, rewritten by a script that matched each named or positional argument to its property, and one in
+  `App`.
+
+**The members stay**, as forwards, so the tests that pin the window's behaviour run as they were, apart from how they
+construct it.
+
+**Mutation check** (`scripts\mutate.ps1`, the seven app test classes that drive the main window). There were 29
+mutants, one or more for each new type:
+- **`ShellPreferences`** (8): Recent Files changed without a notice; the theme's menu text not updated; the sidebar's,
+  the legend's and the last folder's choices not remembered; a recent file kept as given rather than by its full path;
+  Clear Recent Files clearing nothing; the shell's notices not passed on.
+- **`SessionExport`** (7): the image written before the data; an export with no data; the log written with LF, or
+  without a final line end; a batch file's CSV line reworded; the image format's name not in capitals; a batch with no
+  image writer trying images.
+- **`BatchRunner`** (7): a missing file not counted as skipped; the warning about a recording that shares no time with
+  the others not naming it; the plot titled with the last file; the template's names and colours put back the wrong way
+  round; the view not put back after the per-file images; the files left overlaid; the summary not saying where the
+  output went.
+- **The view model** (3): a batch's recordings not kept for Save as Template; a batch drawn onto the last run's plot;
+  the status line not following the files.
+- **`MainWindowServices`** (4): the configurator, the image exporter, the picker or the preferences handed in and
+  ignored.
+
+**27 were caught. Two survived, and both were gaps, now closed** by one test
+(`WithNoImageWriterABatchExportsEachCsvAloneAndItsStatusNamesTheFileRunning`):
+- **images tried with no image writer:** every image would be logged as failed, and no test ran a batch with an output
+  folder and no writer;
+- **the status line not following the files:** the summary replaces it when the batch ends, before any test read it.
+  The test's progress dialog now notes the status each time it is shown: "Processing flight 1.ch10 ...", then
+  flight 2's.
+
+**Checked:** the soak, all 34 runs exporting byte for byte what v2.14.2 exported, the two template batches among them. App **604 / 0 / 0** (was 603), and 34 not run.
+
 #### `PlotViewModel`'s four jobs in their own types (plan step 6.4)
 
 The fourth item of 6.4. The plot's view model was ported from Qt whole, and it did four jobs beside holding the
@@ -7022,7 +7072,7 @@ recording or all (`PlotViewModel.SetVisibleSource`), orthogonal to per-series vi
 recording's rows of Configure Streams, its time channel's place and byte order, and each series' name and colour
 (`TemplateFile`, the JSON v2.x wrote, byte for byte); **Apply Template to Files…** checks each chosen file's PCM
 channel ids against the template's (the core's `TemplateMatcher`, exact-set match), then runs every match in turn
-(`MainWindowViewModel.RunBatchAsync`), optionally exporting a CSV and the plot images per file. A template stores only a
+(`BatchRunner`, through `MainWindowViewModel.RunBatchAsync`), optionally exporting a CSV and the plot images per file. A template stores only a
 calibration's inputs, never its profile, so a batch processes with the linear calibration.
 
 ### Core Components
@@ -7032,7 +7082,11 @@ calibration's inputs, never its profile, so a batch processes with the linear ca
 - **`MainWindow` / `MainWindowViewModel`**: the shell - its own title bar (snap layouts on the maximize button), the
   hamburger menu in the v2.x sections (Process, Import/Export, Settings, Help, Exit), Recent Files, drag and drop, the
   log sidebar (Ctrl+B), the themes, and the commands behind them: Open, Import CSV, Export, Save as Template, Apply
-  Template and the batch.
+  Template and the batch. Three jobs are types of their own that the view model reaches through its members:
+  `ShellPreferences` (Recent Files, the theme, the sidebar, the last folder, the legend's choice), `SessionExport` (the
+  data, the image and the log written out) and `BatchRunner` (Apply Template's batch and each file's export). What it
+  reaches outside itself, its dialogs, pickers, configurator, clock and preferences, is handed in as one
+  `MainWindowServices`; each service left out has the effect its property states.
 - **Configure Streams** (`ConfigureStreamsViewModel`, `ConfigureStreamsWindow`) and the two setup dialogs (Frame Sync
   Lock, Receiver SNR): one row per PCM channel, each problem shown as it arises, OK and Process held until every checked
   row is ready, Apply to all (US2.2), the pattern and receiver-parameter files' Load and Save.

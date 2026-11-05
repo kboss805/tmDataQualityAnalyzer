@@ -474,7 +474,8 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
   - **`MainWindowViewModel` (734 lines, a constructor of 12 optional services):** it opens and imports, exports,
     saves and applies templates, runs batches with their per-file export, keeps the preferences and Recent Files.
     Split out a batch runner (`RunBatchAsync` and `ExportEachSourceAsync`), the export (`ExportAsync`, `WriteLog`)
-    and the shell's preferences; hand the dialogs and pickers in as one services object.
+    and the shell's preferences; hand the dialogs and pickers in as one services object. *(Done: `BatchRunner`,
+    `SessionExport`, `ShellPreferences`, and `MainWindowServices` in place of the eleven optional parameters.)*
   - **`PlotViewModel` (923 lines):** the time window with its zoom history, the readout and its pin, CSV import and
     export, and the colours are four jobs; split them along those lines (the Qt `PlotWidget` was split in the port,
     4.3b, but its view model was ported whole). *(Done: `PlotTimeWindow`, `PlotReadout`, `PlotCsv` and
