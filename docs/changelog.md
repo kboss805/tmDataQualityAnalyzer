@@ -72,7 +72,7 @@ were the plan's own, so they are here.
   - **6, retire Qt:** 6.1 delete the Qt application; 6.2 Qt out of the tooling; 6.3 Qt out of the names that stay; 6.4
     consolidate the new code; 6.5 this.
 
-**Checked:** CHECKED_RESULT
+**Checked:** the core built Debug and Release; native 485 cases (1 skipped), managed 360 / 0 / 1, app 604 / 0 / 0 (34 not run), zero warnings: every baseline unchanged. The release check passes, and fails in release mode on this Unreleased section, so it reads the new file. Two hand mutants of the changelog, run in a worktree: the v3.0.0 heading renamed (`docs/claude.md` no longer has one to fall back on) and the file missing. **Both caught.**
 
 #### CI is one job, on a hosted runner that has never had Qt (plan step 6.4)
 
