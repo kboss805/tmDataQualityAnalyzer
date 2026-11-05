@@ -12,6 +12,14 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The self-hosted runner removed
+
+The runner CI used until plan step 6.4 (`tmdqa-selfhosted-1`) is off the development machine: its registration and
+service, `C:\actions-runner`, and the `RUNNER_ADMIN_TOKEN` secret. `docs/ci_runner.md`, which said how to remove it, now
+records that it was removed, how that was checked (GitHub lists no runner, no service, registry key or process is left,
+the repository has no secrets), and that a self-hosted runner must not be registered again while the repository is
+public. `docs/claude.md`'s CI paragraph says the same. Docs only: nothing builds or runs differently.
+
 #### The guides rewritten, the plan and the spikes gone (plan step 6.5)
 
 The last step of the move off Qt. Its three choices were the user's: the history moves to a file of its own, the parity

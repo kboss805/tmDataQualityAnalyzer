@@ -1,41 +1,34 @@
-# CI's self-hosted runner: retired
+# CI's self-hosted runner: removed
 
 From plan step 6.4, CI is one job on GitHub-hosted `windows-2022`
-([`.github/workflows/ci.yml`](../.github/workflows/ci.yml); its header says why). Nothing
-targets the self-hosted runner any more, and the optional `RUNNER_ADMIN_TOKEN` secret that
-let CI see whether it was online is no longer read.
-
-**Take the runner off the machine.** The repository is public, and a registered,
-online runner is a machine-takeover risk there: a pull request from a fork runs the
-workflow file from its own branch, so it can target the runner's labels and execute
-code on the box with the runner's privileges. With no job of ours using it, there is
-nothing to lose by removing it.
+([`.github/workflows/ci.yml`](../.github/workflows/ci.yml); its header says why). The
+self-hosted runner it replaced was taken off the development machine on 2026-11-05.
 
 | | |
 | --- | --- |
-| Host | the development machine |
-| Install root | `C:\actions-runner` |
 | Runner name | `tmdqa-selfhosted-1` (labels `self-hosted`, `Windows`, `X64`, `tmdqa`) |
 | Service | `actions.runner.kboss805-tmDataQualityAnalyzer.tmdqa-selfhosted-1`, as `NT AUTHORITY\NETWORK SERVICE` |
+| Install root | `C:\actions-runner` |
+| In use | from PRs #41 and #42 until #249 (plan step 6.4) |
 
-From an **elevated** shell in `C:\actions-runner` (the service and its registration are
-removed together; there is no `svc.cmd` on Windows):
+**What was removed, and how it was checked:**
 
-```bash
-$remove = gh api -X POST repos/kboss805/tmDataQualityAnalyzer/actions/runners/remove-token -q .token
-.\config.cmd remove --token $remove
-```
+- **The registration and the service**, together, by `config.cmd remove` with a remove
+  token, from an elevated shell (there is no `svc.cmd` on Windows). GitHub lists no
+  runner for the repository, and no `actions.runner.*` service, registry key or
+  `Runner.Listener` process is left.
+- **`C:\actions-runner`**, deleted.
+- **The `RUNNER_ADMIN_TOKEN` repository secret**, which let CI see whether the runner was
+  online; the repository has no secrets now. The fine-grained token the secret held is
+  revoked in its owner's GitHub settings, which nothing in the repository can check.
 
-Then check that GitHub lists no runner, delete `C:\actions-runner`, and delete the
-`RUNNER_ADMIN_TOKEN` repository secret and the fine-grained token behind it:
+**Why it went rather than stayed idle:** the repository is public, and a registered,
+online runner is a machine-takeover risk there. A pull request from a fork runs the
+workflow file from its own branch, so it can target the runner's labels and execute code
+on the box with the runner's privileges. With no job using it, there was nothing to lose.
 
-```bash
-gh api repos/kboss805/tmDataQualityAnalyzer/actions/runners -q '.total_count'
-```
-
-```bash
-gh secret delete RUNNER_ADMIN_TOKEN --repo kboss805/tmDataQualityAnalyzer
-```
+**Do not register a self-hosted runner for this repository again** while it is public.
+If CI ever needs something the hosted image lacks, install it in a step of the hosted job.
 
 ## What the self-hosted runner taught, still true of the hosted job
 

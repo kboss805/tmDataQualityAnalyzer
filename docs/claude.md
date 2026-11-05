@@ -803,7 +803,7 @@ is); a new .NET test needs nothing but its class.
 built, which the job checks), on every push to `main` and every PR: the release consistency check, a check that the
 machine has no Qt, the core built Debug and Release, then the native, managed and app suites. The workflow's own
 constraints (ASCII-only, Windows PowerShell 5.1) are in its header comment. The self-hosted runner CI used until plan
-step 6.4 is retired; [`docs/ci_runner.md`](ci_runner.md) says how to take it off the machine.
+step 6.4 was removed from the machine; [`docs/ci_runner.md`](ci_runner.md) records how, and why it must not come back.
 
 ### Test Suites
 
