@@ -1,7 +1,7 @@
 /**
  * @file templatematcher.h
  * @brief Validates that a .ch10 file's PCM channel-ID set matches a processing
- *        template's, for Batch Apply (docs/processing-template-design.md).
+ *        template's, for Batch Apply (docs/design/processing-template-design.md).
  *
  * Core logic over plain channel ids (plan step 1.3). Matching is
  * exact-set: a file is accepted only if its channel-ID set is identical to the

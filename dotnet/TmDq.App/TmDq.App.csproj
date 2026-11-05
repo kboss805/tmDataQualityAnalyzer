@@ -3,8 +3,8 @@
   <!--
     The Avalonia application, which replaced v2.x (the Qt application) and ships from v3.0.0. MVVM with CommunityToolkit.Mvvm; the processing core is tmdq_core.dll, reached through TmDq.Core.
 
-    - The version comes from AppVersion in include/constants.h (..\build\AppVersion.props); never type one here.
-    - Every package must be on the open-source licence allow-list (..\build\PackageLicences.targets):
+    - The version comes from AppVersion in include/constants.h (dotnet\build\AppVersion.props, which Directory.Build.props at the root imports into every project); never type one here.
+    - Every package must be on the open-source licence allow-list (dotnet\build\PackageLicences.targets, imported by Directory.Build.targets):
       no Avalonia Accelerate component, whatever an IDE suggests.
     - The exe carries a manifest selecting the UTF-8 active code page (app.manifest), because the vendored
       irig106 library opens recordings with the C runtime's NARROW open(), which reads that code page. The SDK's
@@ -14,8 +14,6 @@
       single-file publish (the targets below). Run the exe, not `dotnet run`, whose process is dotnet.exe with its
       own manifest.
   -->
-
-  <Import Project="..\build\AppVersion.props" />
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -87,7 +85,5 @@
   <Target Name="TmDqManifestIntoPublishHost" AfterTargets="_CreateAppHostForPublish" Condition="Exists('$(AppHostForPublishIntermediatePath)')">
     <Exec Command="mt -nologo -manifest &quot;$(MSBuildProjectDirectory)\app.manifest&quot; -outputresource:&quot;$(AppHostForPublishIntermediatePath);#1&quot;" />
   </Target>
-
-  <Import Project="..\build\PackageLicences.targets" />
 
 </Project>

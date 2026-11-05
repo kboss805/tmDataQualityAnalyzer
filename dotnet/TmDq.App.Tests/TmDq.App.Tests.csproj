@@ -9,8 +9,6 @@
     (scripts\test_dotnet.ps1 builds and runs it).
   -->
 
-  <Import Project="..\build\AppVersion.props" />
-
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
@@ -39,7 +37,5 @@
     <!-- The library tests' retrying delete, for the temporary files these tests write too. -->
     <Compile Include="..\TmDq.Core.Tests\TempFiles.cs" Link="TempFiles.cs" />
   </ItemGroup>
-
-  <Import Project="..\build\PackageLicences.targets" />
 
 </Project>

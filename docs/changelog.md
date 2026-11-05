@@ -12,6 +12,31 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The shared build files at the root, the finished docs in their own folders
+
+The first of three PRs that tidy the repository's layout now the move off Qt is finished; this one moves no code.
+
+- **`Directory.Build.props` and `Directory.Build.targets`** at the root import `dotnet/build/AppVersion.props` and
+  `dotnet/build/PackageLicences.targets` into every .NET project, which imported them one by one. The rule "every
+  project imports them" is now held by MSBuild rather than by each project, and it closes a gap it hid:
+  `TmDq.Core.Tests` never imported the version (it built as 1.0.0). Both files apply only to `.csproj`; the native
+  projects import them too and are left alone.
+- **`PackageLicenceTests.EveryProjectInTheSolutionGetsTheCheckAndTheVersion`** replaces the test that read each
+  `.csproj` for the import line: it asks MSBuild what each project evaluates to (`dotnet msbuild -getProperty`), the
+  licence script and the version, so a project the root files miss fails whatever its text says.
+- **`docs/design/`** holds the design notes of features that shipped (`processing-template-design.md`,
+  `multi-file-input-design.md`, the Configure Streams wireframes, the icon's source image), and **`docs/records/`** gains
+  the finished improvement plan (`IMPROVEMENT_PLAN.md`, with a note saying so) and `ci_runner.md`. Every reference is
+  repointed: `docs/claude.md`, `.claude/CLAUDE.md`, `docs/future_plans/README.md`, and comments in
+  `seriescolumnschema` and `templatematcher.h`.
+
+**Checked:** the core built in Debug and Release; every suite at its baseline (native 485 test cases, 1 skipped; managed
+360 passed / 0 failed / 1 skipped; app 604 passed / 0 failed, 34 not run); the release consistency check. Four mutants,
+all caught by the new test: the targets' import removed, either root file's condition never true for a `.csproj`
+(no check; every project at 1.0.0), and `TmDq.Core.Tests` opting out of the targets, which only the evaluation sees.
+They were run by hand in a worktree, because `scripts\mutate.ps1` requires a rebuilt binary newer than the mutated
+file, and a build file mutant changes none (the test reads what MSBuild evaluates, at run time).
+
 #### TempFilesTests start the clock before the hold
 
 Two timing checks (`AFileHeldForAMomentIsReadOnceItIsReleased`, `AFileHeldForAMomentIsDeletedOnceItIsReleased`) started

@@ -1,0 +1,13 @@
+<Project>
+
+  <!--
+    MSBuild imports this file into every project under this folder, after the project's own content. It runs the
+    package licence check (no licensed tooling; the project stays GPL-3.0) in every .NET project, so no project
+    imports it itself and none can be left out of it.
+
+    Only .csproj: the native projects import this file too, and they resolve no packages.
+  -->
+
+  <Import Project="dotnet\build\PackageLicences.targets" Condition="'$(MSBuildProjectExtension)' == '.csproj'" />
+
+</Project>

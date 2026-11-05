@@ -1,0 +1,16 @@
+<Project>
+
+  <!--
+    MSBuild imports this file into every project under this folder, before the project's own content. It gives
+    every .NET project the version read from AppVersion (include/constants.h), so no project imports it itself and
+    none can forget to: never type a version in a .csproj.
+
+    Only .csproj: the native projects (tmdq_core.vcxproj, tmdq_core_tests.vcxproj) import this file too, and are
+    left as they are.
+
+    Directory.Build.targets beside it adds the package licence check the same way.
+  -->
+
+  <Import Project="dotnet\build\AppVersion.props" Condition="'$(MSBuildProjectExtension)' == '.csproj'" />
+
+</Project>

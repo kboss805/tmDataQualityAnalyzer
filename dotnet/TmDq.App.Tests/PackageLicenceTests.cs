@@ -242,13 +242,20 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
-        public void EveryProjectInTheSolutionImportsTheCheck()
+        public void EveryProjectInTheSolutionGetsTheCheckAndTheVersion()
         {
-            // A project without the import is not checked at all; its own build cannot notice that.
+            // Directory.Build.props and Directory.Build.targets at the root bring the version and the check to every
+            // project. A project they miss (a condition that is never true for it, a project that opts out) is not
+            // checked at all, and ships 1.0.0, and its own build cannot notice either: so ask MSBuild what each project
+            // evaluates to.
+            string script = Path.GetFullPath(Repo.File(Path.Combine("scripts", "check_package_licences.ps1")));
+            string version = VersionTests.HeaderVersion();
             foreach (string project in new[] { "TmDq.Core", "TmDq.Core.Tests", "TmDq.App", "TmDq.App.Tests" })
             {
-                string csproj = File.ReadAllText(Repo.File(Path.Combine("dotnet", project, project + ".csproj")));
-                Assert.True(csproj.Contains(@"<Import Project=""..\build\PackageLicences.targets"" />"), project + " does not import the licence check");
+                var values = BuildTool.Evaluate(Repo.File(Path.Combine("dotnet", project, project + ".csproj")), "TmDqLicenceScript", "Version");
+                Assert.True(string.Equals(script, values["TmDqLicenceScript"], StringComparison.OrdinalIgnoreCase),
+                            project + " does not get the licence check: TmDqLicenceScript is '" + values["TmDqLicenceScript"] + "'");
+                Assert.True(version == values["Version"], project + " does not get the version: Version is '" + values["Version"] + "'");
             }
         }
 

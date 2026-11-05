@@ -1,5 +1,8 @@
 # tmDataQualityAnalyzer — Improvement Plan
 
+> A record, kept as written (it moved here from `docs/` after the move off Qt finished). It was written for the Qt
+> application; new work starts as a note in `docs/future_plans/` or a user story in `docs/claude.md`.
+
 A phased roadmap for the next round of work. Ordered as agreed. Each phase is
 independently shippable (own branch → PR → merge), so the list can be paused or
 reprioritized at any point.

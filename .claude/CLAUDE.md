@@ -64,9 +64,9 @@ Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `
   run) and fails unless each CSV export is byte for byte what v2.14.2 exported (the manifest's `qt` blocks). Most
   runs read the full and local recordings under `tests\data`, which are not committed, so CI never runs it, and a
   missing recording fails. Run it after a change to processing, the plot's series or the CSV writer.
-  **Never type a version in a .csproj**: import
-  `dotnet/build/AppVersion.props`, which reads `AppVersion`. **Every .NET project imports
-  `dotnet/build/PackageLicences.targets`** (no licensed tooling; the project stays GPL-3.0): a package (transitive ones too) outside the open-source allow-list
+  **Never type a version in a .csproj**: `Directory.Build.props` at the root imports
+  `dotnet/build/AppVersion.props`, which reads `AppVersion`, into every .NET project, and **`Directory.Build.targets`**
+  **imports `dotnet/build/PackageLicences.targets`** (no licensed tooling; the project stays GPL-3.0): a package (transitive ones too) outside the open-source allow-list
   in `scripts/check_package_licences.ps1` fails the build, and a licence *file* passes only when its SHA-256 is in that
   script's `$Reviewed` table, so read it before adding it. That script runs under Windows PowerShell 5.1 inside builds
   started from PowerShell 7, which inherits 7's `PSModulePath`: avoid cmdlets from script modules (`Get-FileHash` fails).
@@ -109,8 +109,9 @@ MSVC 14.51 and left two compilers' objects in one tree. Override with `TMDQ_VS_R
 - **`docs/claude.md`** describes the code as it is; update it in the same PR as a change it describes.
 - **"plan step X.Y"** in a comment or an entry names a step of the move off Qt (the plan was deleted when it finished,
   in 6.5): search `docs/changelog.md` for the step's section.
-- **`docs/records/`** keeps the parity review (each acceptance criterion and the test that holds it) and the soak's
-  record, as written.
+- **`docs/records/`** keeps finished work as written: the parity review (each acceptance criterion and the test that
+  holds it), the soak's record, the old improvement plan and the self-hosted runner's removal. Design notes for
+  features that shipped are in `docs/design/`.
 
 ## Project skills (`.claude/skills/`)
 

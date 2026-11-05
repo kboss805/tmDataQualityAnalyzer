@@ -20,7 +20,7 @@ namespace
     constexpr char             kLabelChannelSep = ' ';     // between "<streamLabel>" and "<channelName>"
     constexpr std::string_view kReceiverToken   = "_RCVR";
 
-    // Multi-file input (docs/multi-file-input-design.md §7): a leading source
+    // Multi-file input (docs/design/multi-file-input-design.md §7): a leading source
     // qualifier "S<n>| " on a source-1+ column. 'S' + digits can't be confused with
     // the SNR id-prefix shape (that starts with a bare digit, not a letter) or the
     // Lock/MissedFrames suffixes (those are suffixes, not a prefix).

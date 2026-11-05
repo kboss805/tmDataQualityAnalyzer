@@ -60,7 +60,7 @@ namespace SeriesColumnSchema
     /// stream names would otherwise export as identical columns. SNR names already
     /// carry the channel and are unique, so they pass through unchanged.
     ///
-    /// Multi-file input (docs/multi-file-input-design.md §7): a series from source
+    /// Multi-file input (docs/design/multi-file-input-design.md §7): a series from source
     /// 0 (the first/only source) exports with EXACTLY this format, unchanged --
     /// a single-source export stays byte-identical to every prior release, and
     /// every previously exported CSV still imports. A series from source 1+ gets a

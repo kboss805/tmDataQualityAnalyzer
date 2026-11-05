@@ -10,7 +10,7 @@ namespace TmDq.App.Tests
     /// <summary>
     /// The version is written once, in AppVersion (include/constants.h), and dotnet/build/AppVersion.props reads it
     /// into every assembly. These tests read the header themselves, with their own pattern, and require every
-    /// place the version reaches to agree with it, so a project that forgets the import (and ships 1.0.0) fails.
+    /// place the version reaches to agree with it, so a project the import misses (and ships 1.0.0) fails.
     /// </summary>
     public sealed class VersionTests
     {

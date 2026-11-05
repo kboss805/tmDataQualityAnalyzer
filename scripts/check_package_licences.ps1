@@ -17,7 +17,7 @@
         file, so a later version that changes its licence fails again and needs a fresh review.
       - anything else (no licence, a missing nuspec) fails.
 
-    PackageLicences.targets runs it after restore for every project that imports it; it is also runnable alone.
+    PackageLicences.targets runs it after restore in every .NET project (Directory.Build.targets imports it); it is also runnable alone.
 
     Works under Windows PowerShell 5.1 and PowerShell 7.
 

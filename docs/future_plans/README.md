@@ -1,7 +1,8 @@
 # Future plans
 
 Scratch space for work that is scoped but not yet started, before it graduates into
-`docs/IMPROVEMENT_PLAN.md` or a user story in `docs/claude.md`. Anything substantial
+a user story in `docs/claude.md` (the improvement plan it once fed is finished, and kept
+in `docs/records/IMPROVEMENT_PLAN.md`). Anything substantial
 gets its own file here plus a paragraph in this index; smaller items can live as a
 section below until they earn one.
 
@@ -31,14 +32,14 @@ documentation lives.
 | --- | --- | --- |
 | Move off Qt to Avalonia 12 on .NET 10 (the hybrid: the native core behind a C ABI, the UI in C#) | PRs #170-#249; released in v3.0.0 | `docs/claude.md` (architecture), `docs/changelog.md` (v3.0.0 and every plan step), `docs/records/parity.md` and `docs/records/soak.md`. The plan and the assessment were deleted on landing, as this index asks |
 | Switch the toolchain from MinGW to MSVC | PR #40 | `CLAUDE.md`, `docs/claude.md`, `scripts/env.ps1`, `deploy/build_release.ps1` |
-| Move CI to a self-hosted runner | PR #41, #42 | [`docs/ci_runner.md`](../ci_runner.md), `.github/workflows/ci.yml` |
+| Move CI to a self-hosted runner | PR #41, #42 | [`docs/records/ci_runner.md`](../records/ci_runner.md), `.github/workflows/ci.yml` |
 | Ship sample `.ch10` files for CI | PR #41 | as above — self-hosting delivered it; small fixtures are committed, the full-size recording lives on the runner |
 | Upgrade to Qt 6.11.1 | PR #53 | `scripts/env.ps1` + `.github/workflows/ci.yml` (`QT_VERSION`). Clean: 0 warnings, 341/0/1. NOTE the shipped v2.8.0 binaries were built on 6.10.3, so the next release needs a NEW version number - do not repackage 2.8.0 |
 | Replace QCustomPlot with first-party charting | PR #55, #56, #57 | `include/view/tmchart.h`, `src/view/tmchart.cpp`, `tests/tst_tmchart.cpp`. Engine -> swap -> delete, so each step was revertible. Fixed a latent bug on the way: PDF export silently dropped the legend |
 | Keyboard shortcuts for the plot | PR #54 | `docs/claude.md` (US4.1), `resources/usermanual.html` section 8. Widget-scoped in `PlotWidget::keyPressEvent`, not application-wide |
 | Gate warnings in test code too | PR #50 | `.github/workflows/ci.yml` - one gate over both build logs |
 | MSVC-flavored clangd config | PR #40 (found already done) | `docs/claude.md` -> clangd / IntelliSense; `scripts/gen_compile_flags.py`. Verified with `clangd --check` across QCustomPlot / Win32 / irig106 / test TUs: 0 errors |
-| Speed up CI with a parallel build (`jom`) | PR #48 | `scripts/env.ps1` (`TMDQ_MAKE`), [`../ci_runner.md`](../ci_runner.md) - CI run 286s -> 93s |
+| Speed up CI with a parallel build (`jom`) | PR #48 | `scripts/env.ps1` (`TMDQ_MAKE`), [`../records/ci_runner.md`](../records/ci_runner.md) - CI run 286s -> 93s |
 | Simplify the plot window | PR #43 | `docs/claude.md` (US4.0 / US4.1), `resources/usermanual.html` §3 |
 | Make the remaining plot shortcuts visible in the context menu | PR #71 | `PlotWidget::buildContextMenu`. `(V)` in the View Mode submenu title (Qt will not draw a shortcut on a submenu); new top-level **Reset View** carrying `R`, which is also the menu's only single-action equivalent of the on-chart Reset view chip. Both were tooltips, which discover nothing |
 | Hide a Y axis when nothing is plotted against it | PR #68 | `include/view/tmchart.h` (`setLeftAxisVisible`/`setRightAxisVisible`), `PlotViewModel::hasVisibleLeftAxisSeries`/`hasVisibleRightAxisSeries`, `PlotWidget::updateAxisVisibility`. Keys on **visible** series. Rendering the reclaimed layout also caught the first X tick label clipping off the left edge |

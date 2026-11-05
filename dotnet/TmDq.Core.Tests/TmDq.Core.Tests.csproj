@@ -40,6 +40,4 @@
           ContinueOnError="false" />
   </Target>
 
-  <Import Project="..\build\PackageLicences.targets" />
-
 </Project>
