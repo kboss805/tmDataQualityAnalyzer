@@ -118,6 +118,19 @@ namespace TmDq.App.Tests
             }
         }
 
+        /// <summary>The progress dialog, noting the main window's status line each time it is shown.</summary>
+        private sealed class StatusAtShow : IProcessingDialog
+        {
+            public MainWindowViewModel? Main;
+            public readonly List<string> Seen = new();
+
+            public void Show(ProcessingViewModel vm) => Seen.Add(Main!.Status);
+
+            public void Close()
+            {
+            }
+        }
+
         private static string[] Lines(MainWindowViewModel vm, int skip) => vm.Log.Entries.Skip(skip).Select(e => e.Level + " " + e.Text).ToArray();
 
         // ---- the batch ------------------------------------------------------------------------------------------------------
@@ -168,6 +181,29 @@ namespace TmDq.App.Tests
             Assert.Equal((9479, "1be395481250be54acbd94c95a093be75b166e7e5616abf94895b622a91e305a"),
                          (csv.Length, Convert.ToHexString(SHA256.HashData(csv)).ToLowerInvariant()));
             Assert.StartsWith("Time (DOY:HH:MM:SS.mmm),S1| CH-01 PRN 15 5M Lock (%)", File.ReadAllLines(Path.Combine(output, "flight 2.csv"))[0]);
+        }
+
+        [Fact]
+        public async Task WithNoImageWriterABatchExportsEachCsvAloneAndItsStatusNamesTheFileRunning()
+        {
+            string one = Copy("flight 1.ch10"), two = Copy("flight 2.ch10"), output = Path.Combine(_dir, "out");
+            Directory.CreateDirectory(output);
+            var dialog = new StatusAtShow();
+            var vm = new MainWindowViewModel(new MainWindowServices { ProcessingDialog = dialog, AppRoot = Repo.Root });
+            dialog.Main = vm;
+            int before = vm.Log.Entries.Count;
+            await vm.RunBatchAsync(PrnTemplate(), new[] { one, two }, output, reuseAppearance: false);
+
+            // Each file's run is shown under the status naming it.
+            Assert.Equal(new[] { "Processing flight 1.ch10 ...", "Processing flight 2.ch10 ..." }, dialog.Seen);
+
+            // Each CSV, and no image tried: no line about a plot image, and no image on disk.
+            string[] lines = Lines(vm, before);
+            Assert.Contains("Success Exported: " + Path.Combine(output, "flight 1.csv"), lines);
+            Assert.Contains("Success Exported: " + Path.Combine(output, "flight 2.csv"), lines);
+            Assert.DoesNotContain(lines, l => l.Contains("export plot", StringComparison.Ordinal) || l.Contains("Plot exported", StringComparison.Ordinal));
+            Assert.Equal(new[] { "flight 1.csv", "flight 2.csv" }, Directory.GetFiles(output).Select(f => Path.GetFileName(f)).Order());
+            Assert.Equal("Batch complete: 2 processed, 0 skipped. Output written to " + output + ".", vm.Status);
         }
 
         [Fact]
