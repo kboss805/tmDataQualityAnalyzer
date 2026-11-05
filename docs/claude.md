@@ -419,10 +419,14 @@ fallback when it was offline, and in `core-without-qt` beside either. The second
 machine still has the Qt kit, so only a hosted image could show that nothing needs Qt. With the Qt application gone,
 the hosted job is the only one, at the user's choice.
 
-- **`ci.yml` is one job, `ci`, on `windows-latest`,** with the steps the jobs shared, in this order: the release
+- **`ci.yml` is one job, `ci`, on `windows-2022`,** with the steps the jobs shared, in this order: the release
   consistency check, MSVC and .NET 10 set up, the toolchain's versions, the check that the machine has no Qt, the core
   in Debug and Release, then the native, managed and app suites. The job keeps the name of the old aggregate check, so
   a PR's status still reads `ci`.
+- **On `windows-2022`, with Visual Studio 2022, which the job checks.** `windows-latest` now carries Visual Studio
+  2026 (MSVC 14.51): this PR's first run built there, and so had every `core-without-qt` run. Only the self-hosted
+  job built with the compiler `env.ps1` pins and releases use (VS 2022, MSVC 14.44). So the job runs on
+  `windows-2022`, asks `msvc-dev-cmd` for 2022, and fails unless `VisualStudioVersion` is 17.0.
 - **Gone:** `pick-runner`, its probe of the runner's status through `RUNNER_ADMIN_TOKEN`, `build-self-hosted`,
   `build-hosted`, and the aggregate job.
 - **Faster, not slower:** the self-hosted runner ran one job at a time, so a PR's job waited behind main's. On #245
@@ -435,7 +439,9 @@ the hosted job is the only one, at the user's choice.
 - **Stale comments corrected:** the throughput benchmark's case, its script and `tests/.gitignore` described CI
   overlaying the full PRN recording on the runner, which ended in 6.1.
 
-**Checked by running it:** this PR's own CI is the one job, every suite at its baseline.
+**Checked by running it:** this PR's own CI is the one job. On `windows-latest` (the first run): no Qt found; native
+485 cases (1 skipped), managed 360 / 0 / 1, app 604 / 0 / 0 (34 not run), zero warnings, 11 minutes. Then on
+`windows-2022` with Visual Studio 2022.
 
 #### `MainWindowViewModel`'s jobs in their own types, its services in one object (plan step 6.4)
 
@@ -7385,7 +7391,7 @@ mutation checks run through `scripts\mutate.ps1`.
 
 ### Continuous Integration
 
-`.github/workflows/ci.yml` is one job, `ci`, on GitHub-hosted `windows-latest`, on every push to `main` and every PR:
+`.github/workflows/ci.yml` is one job, `ci`, on GitHub-hosted `windows-2022` (Visual Studio 2022, as releases are built), on every push to `main` and every PR:
 the release consistency check, a check that the machine has no Qt, the core built Debug and Release, then the native,
 managed and app suites. The workflow's own constraints (ASCII-only, Windows PowerShell 5.1) are documented in its header
 comment. The self-hosted runner CI used until plan step 6.4 is retired; [`docs/ci_runner.md`](ci_runner.md) says how

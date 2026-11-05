@@ -35,7 +35,10 @@ concurrency:
 
 jobs:
   ci:
-    runs-on: windows-latest
+    # windows-2022, not windows-latest: the build is pinned to Visual Studio 2022 (MSVC 14.44, v143; scripts\env.ps1
+    # asks vswhere for [17.0,18.0)), which is what releases are built with. windows-latest carries Visual Studio 2026
+    # (MSVC 14.51), so a job there never builds with the release compiler.
+    runs-on: windows-2022
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -55,6 +58,7 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
+          vsversion: 2022
 
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v4
@@ -69,9 +73,13 @@ jobs:
           $ErrorActionPreference = 'Continue'
           dotnet --version
           cmd /c "cl 2>&1" | Select-Object -First 1
+          Write-Host "Visual Studio $env:VisualStudioVersion, MSVC $env:VCToolsVersion"
+          # The pin env.ps1 holds locally ([17.0,18.0)): fail rather than quietly build with another compiler.
+          if ($env:VisualStudioVersion -ne '17.0') {
+            throw "CI must build with Visual Studio 2022 (17.0), as releases are, and got '$env:VisualStudioVersion'"
+          }
           # cl exits non-zero when given no input file, and GitHub appends
-          # "exit $LASTEXITCODE" to powershell steps - this step is informational,
-          # so end it explicitly successful.
+          # "exit $LASTEXITCODE" to powershell steps, so end it explicitly successful.
           exit 0
 
       - name: Prove there is no Qt on this machine

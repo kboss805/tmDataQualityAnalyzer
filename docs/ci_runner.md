@@ -1,6 +1,6 @@
 # CI's self-hosted runner: retired
 
-From plan step 6.4, CI is one job on GitHub-hosted `windows-latest`
+From plan step 6.4, CI is one job on GitHub-hosted `windows-2022`
 ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml); its header says why). Nothing
 targets the self-hosted runner any more, and the optional `RUNNER_ADMIN_TOKEN` secret that
 let CI see whether it was online is no longer read.
