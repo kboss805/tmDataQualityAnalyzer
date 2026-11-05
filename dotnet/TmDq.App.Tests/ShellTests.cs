@@ -132,7 +132,7 @@ namespace TmDq.App.Tests
         {
             var help = new FakeHelp();
             var picker = new FakeRecordingPicker();
-            (MainWindow window, MainWindowViewModel vm) = Show(new MainWindowViewModel(picker));
+            (MainWindow window, MainWindowViewModel vm) = Show(new MainWindowViewModel(new MainWindowServices { Picker = picker }));
             window.Help = help;
             window.BuildMenu();
             Assert.Equal(new[]
@@ -230,7 +230,7 @@ namespace TmDq.App.Tests
         public void RecentFilesListsEachByItsNameNewestFirstAndClears()
         {
             var store = new PreferencesStore(new Preferences());
-            (MainWindow window, MainWindowViewModel vm) = Show(new MainWindowViewModel(preferences: store));
+            (MainWindow window, MainWindowViewModel vm) = Show(new MainWindowViewModel(new MainWindowServices { Preferences = store }));
             window.BuildMenu();
             MenuItem recent = Find(window.MainMenu.Items, "Recent Files");
             MenuItem none = Assert.IsType<MenuItem>(Assert.Single(recent.Items));
@@ -252,7 +252,7 @@ namespace TmDq.App.Tests
         public void CtrlOOpensAndCtrlBTogglesTheSidebar()
         {
             var picker = new FakeRecordingPicker();
-            (MainWindow window, MainWindowViewModel vm) = Show(new MainWindowViewModel(picker));
+            (MainWindow window, MainWindowViewModel vm) = Show(new MainWindowViewModel(new MainWindowServices { Picker = picker }));
             window.KeyPress(Key.O, RawInputModifiers.Control, PhysicalKey.O, "o");
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, picker.Asked);
@@ -269,7 +269,7 @@ namespace TmDq.App.Tests
         public void TheSidebarHidesGivingItsWidthToTheChartAndReturnsAsItWas()
         {
             var store = new PreferencesStore(new Preferences { SidebarVisible = false });
-            (MainWindow window, MainWindowViewModel vm) = Show(new MainWindowViewModel(preferences: store));
+            (MainWindow window, MainWindowViewModel vm) = Show(new MainWindowViewModel(new MainWindowServices { Preferences = store }));
             Border log = window.FindControl<Border>("LogPanel")!;
             Assert.Equal((0.0, 0.0, false), (window.Body.ColumnDefinitions[0].Width.Value, window.Body.ColumnDefinitions[1].Width.Value, log.IsVisible));
             Assert.False(window.SidebarButton.IsChecked);
@@ -291,7 +291,7 @@ namespace TmDq.App.Tests
             Assert.Equal(300, window.Body.ColumnDefinitions[0].Width.Value);
 
             // A new view model is followed, and the old one let go.
-            var other = new MainWindowViewModel(preferences: new PreferencesStore(new Preferences { SidebarVisible = false }));
+            var other = new MainWindowViewModel(new MainWindowServices { Preferences = new PreferencesStore(new Preferences { SidebarVisible = false }) });
             window.DataContext = other;
             Assert.Equal(0, window.Body.ColumnDefinitions[0].Width.Value);
             vm.SidebarVisible = false;
@@ -299,7 +299,7 @@ namespace TmDq.App.Tests
             Assert.Equal(0, window.Body.ColumnDefinitions[0].Width.Value);
 
             // Hidden twice over (one hidden view model for another), it still returns at the width it had.
-            var hidden = new MainWindowViewModel(preferences: new PreferencesStore(new Preferences { SidebarVisible = false }));
+            var hidden = new MainWindowViewModel(new MainWindowServices { Preferences = new PreferencesStore(new Preferences { SidebarVisible = false }) });
             window.DataContext = hidden;
             hidden.SidebarVisible = true;
             Assert.Equal(300, window.Body.ColumnDefinitions[0].Width.Value);
@@ -343,7 +343,7 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public async Task ARecordingOrCsvDroppedOnTheWindowOpensAsRecentFilesOpensIt()
         {
-            (MainWindow window, MainWindowViewModel vm) = Show(new MainWindowViewModel(configurator: FakeConfigurator.Cancelled()));
+            (MainWindow window, MainWindowViewModel vm) = Show(new MainWindowViewModel(new MainWindowServices { Configurator = FakeConfigurator.Cancelled() }));
             var at = new Point(600, 300);
             DragDropEffects offered = DragDropEffects.Move;
             window.AddHandler(DragDrop.DragOverEvent, (_, e) => offered = e.DragEffects, RoutingStrategies.Bubble, handledEventsToo: true);

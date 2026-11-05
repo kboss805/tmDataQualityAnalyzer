@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -21,19 +20,23 @@ namespace TmDq.App.ViewModels
     /// <summary>The main window's state: open a recording, ask what to process (Configure Streams, plan step 4.1; with no
     /// one to ask, the first PCM channel with the Frame Sync Lock defaults, as the walking skeleton did), process it and
     /// plot it (plan step 4.3b: <see cref="Plot"/>), with the progress dialog up for the run and every step in the log
-    /// (plan step 4.2).</summary>
-    public sealed partial class MainWindowViewModel : ObservableObject
+    /// (plan step 4.2).
+    /// <para>Three jobs are done by types of their own, reached through this one's members: what the shell remembers
+    /// (<see cref="ShellPreferences"/>), Export (<see cref="SessionExport"/>) and Apply Template's batch
+    /// (<see cref="BatchRunner"/>). What it reaches outside itself is handed in as one <see cref="MainWindowServices"/>.</para>
+    /// </summary>
+    public sealed partial class MainWindowViewModel : ObservableObject, IRunHost
     {
         private readonly IRecordingPicker? _picker;
         private readonly IStreamConfigurator _configurator;
         private readonly IProcessingDialog? _processingDialog;
         private readonly IDataFilePicker? _files;
         private readonly IExportDialog? _exportDialog;
-        private readonly IPlotImageExporter? _imageExporter;
         private readonly ITemplateFilePicker? _templateFiles;
         private readonly ITemplateDialogs? _templateDialogs;
-        private readonly string _appRoot;
-        private readonly PreferencesStore _preferences;
+        private readonly ShellPreferences _shell;
+        private readonly SessionExport _export;
+        private readonly BatchRunner _batch;
         private readonly List<ProcessedSource> _sources = new();
         private string _runningFile = string.Empty;
         private ProcessingViewModel? _processing;
@@ -41,46 +44,31 @@ namespace TmDq.App.ViewModels
         private int _progress;
         private bool _isBusy;
 
-        /// <param name="configurator">What a recording is processed with; null means the first PCM channel with the
-        /// Frame Sync Lock defaults (<see cref="FirstChannelRun"/>).</param>
-        /// <param name="processingDialog">The progress dialog shown while a run goes on; null shows none.</param>
-        /// <param name="clock">The log's clock; null is the system's.</param>
-        /// <param name="files">The CSV to import and Export's Browse dialogs; null leaves Import CSV unavailable.</param>
-        /// <param name="exportDialog">The Export dialog; null leaves Export unavailable.</param>
-        /// <param name="imageExporter">What writes the plot as an image; null makes an image export fail.</param>
-        /// <param name="templateFiles">Save as Template's and Apply Template's file dialogs; null leaves both unavailable.</param>
-        /// <param name="templateDialogs">The batch confirmation and the choice of recording; null leaves Apply Template unavailable.</param>
-        /// <param name="appRoot">Where settings/ is, for a batch's runs; null is the application's folder.</param>
-        /// <param name="preferences">What is remembered between sessions (plan step 4.8); null keeps the defaults, in memory.</param>
-        public MainWindowViewModel(IRecordingPicker? picker = null, IStreamConfigurator? configurator = null,
-                                   IProcessingDialog? processingDialog = null, TimeProvider? clock = null,
-                                   IDataFilePicker? files = null, IExportDialog? exportDialog = null,
-                                   IPlotImageExporter? imageExporter = null, ITemplateFilePicker? templateFiles = null,
-                                   ITemplateDialogs? templateDialogs = null, string? appRoot = null,
-                                   PreferencesStore? preferences = null)
+        /// <param name="services">What it reaches outside itself; null, or any one left out, as
+        /// <see cref="MainWindowServices"/> says.</param>
+        public MainWindowViewModel(MainWindowServices? services = null)
         {
-            _preferences = preferences ?? new PreferencesStore(new Preferences());
-            _picker = picker;
-            _configurator = configurator ?? new FirstChannelRun();
-            _processingDialog = processingDialog;
-            _files = files;
-            _exportDialog = exportDialog;
-            _imageExporter = imageExporter;
-            _templateFiles = templateFiles;
-            _templateDialogs = templateDialogs;
-            _appRoot = appRoot ?? AppContext.BaseDirectory;
-            Log = new SessionLog(clock);
+            services ??= new MainWindowServices();
+            _shell = new ShellPreferences(services.Preferences ?? new PreferencesStore(new Preferences()));
+            _picker = services.Picker;
+            _configurator = services.Configurator ?? new FirstChannelRun();
+            _processingDialog = services.ProcessingDialog;
+            _files = services.Files;
+            _exportDialog = services.ExportDialog;
+            _templateFiles = services.TemplateFiles;
+            _templateDialogs = services.TemplateDialogs;
+            Log = new SessionLog(services.Clock);
+            _export = new SessionExport(Plot, Log, services.ImageExporter);
+            _batch = new BatchRunner(this, Plot, Log, _export, services.AppRoot ?? AppContext.BaseDirectory);
             OpenCommand = new AsyncRelayCommand(OpenAsync, () => !IsBusy && _picker is not null);
             ImportCsvCommand = new AsyncRelayCommand(PickAndImportAsync, () => !IsBusy && _files is not null);
             ExportCommand = new AsyncRelayCommand(ExportAsync, () => !IsBusy && Plot.HasData && _exportDialog is not null);
             SaveTemplateCommand = new AsyncRelayCommand(SaveTemplateAsync, () => !IsBusy && _sources.Count > 0 && _templateFiles is not null);
             ApplyTemplateCommand = new AsyncRelayCommand(ApplyTemplateAsync, () => !IsBusy && _templateFiles is not null && _templateDialogs is not null);
             OpenRecentCommand = new AsyncRelayCommand<string>(p => OpenPathAsync(p!), p => !IsBusy && p is not null);
-            ClearRecentFilesCommand = new RelayCommand(() => SetRecentFiles(Array.Empty<string>()));
-            ToggleThemeCommand = new RelayCommand(() => IsDarkTheme = !IsDarkTheme);
-            ToggleSidebarCommand = new RelayCommand(() => SidebarVisible = !SidebarVisible);
+            _shell.PropertyChanged += (_, e) => OnPropertyChanged(e.PropertyName);
             // The legend's visibility is remembered between sessions (US4.0, US4.1), as v2.x remembered it.
-            Plot.LegendVisible = _preferences.Current.LegendVisible;
+            Plot.LegendVisible = _shell.LegendVisible;
             Log.Add("tmDataQualityAnalyzer v" + AppInfo.Version);
             Log.Add("Load a Chapter 10 file to configure per-stream processing.");
             // A time window entered outside the recording is clamped, and says so in the log, in goldenrod; so are the rows
@@ -94,31 +82,22 @@ namespace TmDq.App.ViewModels
             Plot.PropertyChanged += (_, e) =>
             {
                 if (e.PropertyName == nameof(PlotViewModel.HasData)) ExportCommand.NotifyCanExecuteChanged();
-                if (e.PropertyName == nameof(PlotViewModel.LegendVisible))
-                    _preferences.Update(p => p with { LegendVisible = Plot.LegendVisible });
+                if (e.PropertyName == nameof(PlotViewModel.LegendVisible)) _shell.LegendVisible = Plot.LegendVisible;
             };
         }
 
         // ---- the shell (plan step 4.8): what is remembered, recent files, the theme and the sidebar --------------------
 
         /// <summary>What is remembered between sessions.</summary>
-        public Preferences Preferences => _preferences.Current;
+        public Preferences Preferences => _shell.Current;
 
         /// <summary>The recordings and CSVs opened last, the newest first (the menu's Recent Files).</summary>
-        public IReadOnlyList<string> RecentFiles => _preferences.Current.RecentFiles;
+        public IReadOnlyList<string> RecentFiles => _shell.RecentFiles;
 
         /// <summary>Opens a recent file, or one dropped on the window. Unavailable while busy.</summary>
         public IAsyncRelayCommand<string> OpenRecentCommand { get; }
 
-        public IRelayCommand ClearRecentFilesCommand { get; }
-
-        private void SetRecentFiles(IReadOnlyList<string> files)
-        {
-            _preferences.Update(p => p with { RecentFiles = files });
-            OnPropertyChanged(nameof(RecentFiles));
-        }
-
-        private void AddRecentFile(string path) => SetRecentFiles(Settings.RecentFiles.Add(RecentFiles, Path.GetFullPath(path)));
+        public IRelayCommand ClearRecentFilesCommand => _shell.ClearRecentFilesCommand;
 
         /// <summary>
         /// Opens <paramref name="path"/> by its suffix, as v2.x did for Recent Files and a drop: an
@@ -129,34 +108,23 @@ namespace TmDq.App.ViewModels
         /// <summary>The dark theme (v2.x's default too) or the light one (US9.0); the choice is remembered.</summary>
         public bool IsDarkTheme
         {
-            get => _preferences.Current.IsDark;
-            set
-            {
-                if (value == IsDarkTheme) return;
-                _preferences.Update(p => p with { Theme = value ? Preferences.DarkTheme : Preferences.LightTheme });
-                OnPropertyChanged();
-                OnPropertyChanged(nameof(ThemeMenuText));
-            }
+            get => _shell.IsDarkTheme;
+            set => _shell.IsDarkTheme = value;
         }
 
         /// <summary>The menu item that switches the theme, named for where it goes.</summary>
-        public string ThemeMenuText => IsDarkTheme ? "Switch to Light Theme" : "Switch to Dark Theme";
+        public string ThemeMenuText => _shell.ThemeMenuText;
 
-        public IRelayCommand ToggleThemeCommand { get; }
+        public IRelayCommand ToggleThemeCommand => _shell.ToggleThemeCommand;
 
         /// <summary>The log sidebar shown (the title bar's toggle, Ctrl+B); the choice is remembered.</summary>
         public bool SidebarVisible
         {
-            get => _preferences.Current.SidebarVisible;
-            set
-            {
-                if (value == SidebarVisible) return;
-                _preferences.Update(p => p with { SidebarVisible = value });
-                OnPropertyChanged();
-            }
+            get => _shell.SidebarVisible;
+            set => _shell.SidebarVisible = value;
         }
 
-        public IRelayCommand ToggleSidebarCommand { get; }
+        public IRelayCommand ToggleSidebarCommand => _shell.ToggleSidebarCommand;
 
         public string Title => AppInfo.Title;
 
@@ -225,8 +193,8 @@ namespace TmDq.App.ViewModels
         /// <c>LastCh10Directory</c>, which the first run imports).</summary>
         public string? LastFolder
         {
-            get => _preferences.Current.LastFolder;
-            private set => _preferences.Update(p => p with { LastFolder = value });
+            get => _shell.LastFolder;
+            private set => _shell.LastFolder = value;
         }
 
         public IAsyncRelayCommand OpenCommand { get; }
@@ -271,7 +239,7 @@ namespace TmDq.App.ViewModels
                 NativeCore.EnsureLoaded();
                 if (await Plot.LoadCsvAsync(path) == CsvLoad.Loaded)
                 {
-                    AddRecentFile(path);
+                    _shell.AddRecentFile(path);
                     Plot.Title = BaseName(name);
                     Status = "Imported CSV: " + name;
                     Log.Success(Status);
@@ -306,26 +274,7 @@ namespace TmDq.App.ViewModels
         /// carries the lines about the other two), each saying in the log where it went or that it failed; a failure does
         /// not stop the rest. Nothing without data.
         /// </summary>
-        public async Task ExportAsync(ExportViewModel choice)
-        {
-            if (!Plot.HasData) return;
-            if (choice.ExportData)
-            {
-                if (Plot.ExportCsv(choice.DataPath)) Log.Success("Data exported to " + choice.DataPath);
-                else Log.Error("Error: Failed to export data to " + choice.DataPath);
-            }
-            if (choice.ExportImage)
-            {
-                (string Path, ImageFormat Format)? written = _imageExporter is null ? null : await _imageExporter.ExportAsync(choice.ImagePath);
-                if (written is { } w) Log.Success($"Plot exported as {w.Format.ToString().ToUpperInvariant()} to {w.Path}");
-                else Log.Error("Error: Failed to export plot to " + ImageFiles.Resolve(choice.ImagePath).Path);
-            }
-            if (choice.ExportLog)
-            {
-                if (WriteLog(choice.LogPath)) Log.Success("Log exported to " + choice.LogPath);
-                else Log.Error("Error: Failed to export log to " + choice.LogPath);
-            }
-        }
+        public Task ExportAsync(ExportViewModel choice) => _export.WriteAsync(choice);
 
         // ---- templates and batch (plan step 4.7, US1.1) ------------------------------------------------------------------
 
@@ -441,59 +390,12 @@ namespace TmDq.App.ViewModels
         {
             if (files.Count == 0 || IsBusy) return;
             IsBusy = true;
-            int processed = 0, skipped = 0, nextSourceId = 0;
-            var sources = new List<ProcessedSource>();
             try
             {
                 ClearRun();
-                Log.Success(string.Create(CultureInfo.InvariantCulture, $"Processing {files.Count} file(s)..."));
-                foreach (string path in files)
-                {
-                    if (!File.Exists(path))
-                    {
-                        Log.Warning("Skipped missing batch file: " + path);
-                        skipped++;
-                        continue;
-                    }
-                    string name = Path.GetFileName(path), baseName = BaseName(name);
-                    int sourceId = nextSourceId++;
-                    try
-                    {
-                        Status = $"Opening {name} ...";
-                        Log.Add("Opening: " + name);
-                        Ch10File file = await StreamsRun.OpenAsync(path);
-                        // Checked again at its turn: the file may have changed since it was chosen.
-                        if (!TemplateBatch.Match(template, file.PcmChannels.Select(c => c.Id)).Ok)
-                        {
-                            Log.Warning("Skipped (channels no longer match template): " + name);
-                            skipped++;
-                            continue;
-                        }
-                        Status = $"Processing {name} ...";
-                        _runningFile = name;
-                        using RunOutcome outcome = await RunWithDialogAsync(TemplateBatch.ToRunRequest(template, path, file, sourceId, _appRoot));
-                        foreach (StreamResult result in outcome.Results) Plot.AddStream(result);
-                        processed++;
-                        sources.Add(new ProcessedSource(sourceId, path, template.TimeChannelIndex, template.SwapBytes,
-                                                        template.Entries.Select(e => e.Config).ToList()));
-                        Plot.SetSourceLabel(sourceId, baseName);
-                        if (reuseAppearance) TemplateBatch.ApplyAppearance(template, sourceId, Plot);
-                    }
-                    catch (Exception e) when (e is OperationCanceledException or RecordingException)
-                    {
-                        skipped++;
-                        Log.Error("Batch file failed to process: " + baseName);
-                    }
-                }
-                SetSources(sources);
-
-                if (outputFolder is not null) await ExportEachSourceAsync(outputFolder);
-
-                // The plot opens on the first file; "All files (overlaid)" is in the Plot File selector.
-                if (sources.Count > 1) Plot.SetVisibleSource(sources[0].SourceId);
-                if (sources.Count > 0) Plot.Title = BaseName(Path.GetFileName(sources[0].FilePath));
-                Status = string.Create(CultureInfo.InvariantCulture, $"Batch complete: {processed} processed, {skipped} skipped.") +
-                         (outputFolder is null ? "" : " Output written to " + outputFolder + ".");
+                BatchResult result = await _batch.RunAsync(template, files, outputFolder, reuseAppearance);
+                SetSources(result.Sources);
+                Status = result.Summary;
                 Log.Success(Status);
             }
             catch (Exception e) when (e is FileNotFoundException or InvalidOperationException)
@@ -505,62 +407,6 @@ namespace TmDq.App.ViewModels
             {
                 Progress = 0;
                 IsBusy = false;
-            }
-        }
-
-        /// <summary>
-        /// Each recording on its own, as v2.x's batch wrote it: its CSV (every series of that recording), then
-        /// with frame-sync data an image of the lock % and one of the missed frames, else one image; the view put back after.
-        /// </summary>
-        private async Task ExportEachSourceAsync(string folder)
-        {
-            LockAxisView original = Plot.LockAxisView;
-            bool frameSync = Plot.HasLockSeries || Plot.HasMissedFramesSeries;
-            foreach (ProcessedSource source in _sources)
-            {
-                string baseName = BaseName(Path.GetFileName(source.FilePath));
-                Plot.SetVisibleSource(source.SourceId);
-                string csv = Path.Combine(folder, baseName + ".csv");
-                if (Plot.ExportCsv(csv, source.SourceId)) Log.Success("Exported: " + csv);
-                else Log.Error("Failed to export CSV: " + csv);
-
-                if (_imageExporter is null) continue;
-                if (frameSync)
-                {
-                    Plot.SetLockAxisView(LockAxisView.LockPercent);
-                    await ExportImageAsync(Path.Combine(folder, baseName + "_framesync_lock.png"));
-                    Plot.SetLockAxisView(LockAxisView.MissedFrames);
-                    await ExportImageAsync(Path.Combine(folder, baseName + "_missed_frames.png"));
-                }
-                else
-                {
-                    await ExportImageAsync(Path.Combine(folder, baseName + ".png"));
-                }
-            }
-            Plot.SetLockAxisView(original);
-        }
-
-        private async Task ExportImageAsync(string path)
-        {
-            (string Path, ImageFormat Format)? written = await _imageExporter!.ExportAsync(path);
-            if (written is { } w) Log.Success($"Plot exported as {w.Format.ToString().ToUpperInvariant()} to {w.Path}");
-            else Log.Error("Error: Failed to export plot to " + ImageFiles.Resolve(path).Path);
-        }
-
-        /// <summary>The log as v2.14.2's export wrote it (US6.2): each line as the sidebar shows it, CR LF line ends,
-        /// UTF-8 without a byte-order mark, ending with a line end.</summary>
-        private bool WriteLog(string path)
-        {
-            string text = Log.PlainText.Replace("\n", "\r\n");
-            if (!text.EndsWith("\r\n", StringComparison.Ordinal)) text += "\r\n";
-            try
-            {
-                File.WriteAllText(path, text, new UTF8Encoding(false));
-                return true;
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-            {
-                return false;
             }
         }
 
@@ -580,7 +426,7 @@ namespace TmDq.App.ViewModels
                 Log.Add("Opening: " + name);
                 Ch10File file = await StreamsRun.OpenAsync(path);
                 // A recording joins Recent Files once its channels are read, as in v2.x.
-                AddRecentFile(path);
+                _shell.AddRecentFile(path);
                 Log.Add("  File size: " + SizeText(new FileInfo(path).Length));
                 Log.Add("  Time channels: " + CountText(file.TimeChannels.Count));
                 Log.Add("  PCM channels: " + CountText(file.PcmChannels.Count));
@@ -627,6 +473,12 @@ namespace TmDq.App.ViewModels
                 IsBusy = false;
             }
         }
+
+        void IRunHost.SetStatus(string status) => Status = status;
+
+        void IRunHost.SetRunningFile(string name) => _runningFile = name;
+
+        Task<RunOutcome> IRunHost.RunWithDialogAsync(RunRequest request) => RunWithDialogAsync(request);
 
         /// <summary>Runs <paramref name="request"/> with the progress dialog up until it has stopped.</summary>
         private async Task<RunOutcome> RunWithDialogAsync(RunRequest request)

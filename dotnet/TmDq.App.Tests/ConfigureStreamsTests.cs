@@ -219,7 +219,7 @@ namespace TmDq.App.Tests
                 await c.Rows[2].ConfigureCommand.ExecuteAsync(null);
                 c.ProcessCommand.Execute(null);
             };
-            var vm = new MainWindowViewModel(configurator: new DialogConfigurator(dialogs, files, Repo.Root));
+            var vm = new MainWindowViewModel(new MainWindowServices { Configurator = new DialogConfigurator(dialogs, files, Repo.Root) });
             await vm.LoadAsync(Prn);
 
             IReadOnlyList<PlotSeries> locks = PlotFixtures.Locks(vm);
@@ -235,7 +235,7 @@ namespace TmDq.App.Tests
         public async Task CancellingConfigureStreamsKeepsTheLastResult()
         {
             var dialogs = new FakeStreamDialogs();
-            var vm = new MainWindowViewModel(configurator: new DialogConfigurator(dialogs, null, Repo.Root));
+            var vm = new MainWindowViewModel(new MainWindowServices { Configurator = new DialogConfigurator(dialogs, null, Repo.Root) });
             dialogs.OnConfigure = async c =>
             {
                 c.Rows[0].Process = true;
@@ -267,7 +267,7 @@ namespace TmDq.App.Tests
                 await c.Rows[0].ConfigureCommand.ExecuteAsync(null);
                 c.ProcessCommand.Execute(null);
             };
-            var vm = new MainWindowViewModel(configurator: new DialogConfigurator(dialogs, null, Repo.Root));
+            var vm = new MainWindowViewModel(new MainWindowServices { Configurator = new DialogConfigurator(dialogs, null, Repo.Root) });
             await vm.LoadAsync(Repo.Recording("step_cal, example.ch10"));
             Assert.Empty(PlotFixtures.Locks(vm));
             Assert.Equal("step_cal, example.ch10: 1 stream processed (0 Frame Sync Lock, 1 Receiver SNR)", vm.Status);
@@ -286,7 +286,7 @@ namespace TmDq.App.Tests
                 await c.Rows[3].ConfigureCommand.ExecuteAsync(null);
                 c.ProcessCommand.Execute(null);
             };
-            var vm = new MainWindowViewModel(configurator: new DialogConfigurator(dialogs, null, Repo.Root));
+            var vm = new MainWindowViewModel(new MainWindowServices { Configurator = new DialogConfigurator(dialogs, null, Repo.Root) });
             await vm.LoadAsync(Prn);
             Assert.Equal(new[] { 13 }, PlotFixtures.Locks(vm).Select(s => s.StreamOrder));
             Assert.StartsWith("prn_testfile, sample.ch10: CH-01 PRN 15 5M (channel 13), 116 samples, mean lock ", vm.Status);

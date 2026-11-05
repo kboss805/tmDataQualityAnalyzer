@@ -118,6 +118,19 @@ namespace TmDq.App.Tests
             }
         }
 
+        /// <summary>The progress dialog, noting the main window's status line each time it is shown.</summary>
+        private sealed class StatusAtShow : IProcessingDialog
+        {
+            public MainWindowViewModel? Main;
+            public readonly List<string> Seen = new();
+
+            public void Show(ProcessingViewModel vm) => Seen.Add(Main!.Status);
+
+            public void Close()
+            {
+            }
+        }
+
         private static string[] Lines(MainWindowViewModel vm, int skip) => vm.Log.Entries.Skip(skip).Select(e => e.Level + " " + e.Text).ToArray();
 
         // ---- the batch ------------------------------------------------------------------------------------------------------
@@ -128,7 +141,7 @@ namespace TmDq.App.Tests
             string one = Copy("flight 1.ch10"), two = Copy("flight 2.ch10"), missing = Path.Combine(_dir, "gone.ch10"), output = Path.Combine(_dir, "out");
             Directory.CreateDirectory(output);
             var images = new FakeImages();
-            var vm = new MainWindowViewModel(imageExporter: images, appRoot: Repo.Root);
+            var vm = new MainWindowViewModel(new MainWindowServices { ImageExporter = images, AppRoot = Repo.Root });
             images.Plot = vm.Plot;
             vm.Plot.SetLockAxisView(LockAxisView.MissedFrames);   // a view to be put back
             int before = vm.Log.Entries.Count;
@@ -171,10 +184,33 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
+        public async Task WithNoImageWriterABatchExportsEachCsvAloneAndItsStatusNamesTheFileRunning()
+        {
+            string one = Copy("flight 1.ch10"), two = Copy("flight 2.ch10"), output = Path.Combine(_dir, "out");
+            Directory.CreateDirectory(output);
+            var dialog = new StatusAtShow();
+            var vm = new MainWindowViewModel(new MainWindowServices { ProcessingDialog = dialog, AppRoot = Repo.Root });
+            dialog.Main = vm;
+            int before = vm.Log.Entries.Count;
+            await vm.RunBatchAsync(PrnTemplate(), new[] { one, two }, output, reuseAppearance: false);
+
+            // Each file's run is shown under the status naming it.
+            Assert.Equal(new[] { "Processing flight 1.ch10 ...", "Processing flight 2.ch10 ..." }, dialog.Seen);
+
+            // Each CSV, and no image tried: no line about a plot image, and no image on disk.
+            string[] lines = Lines(vm, before);
+            Assert.Contains("Success Exported: " + Path.Combine(output, "flight 1.csv"), lines);
+            Assert.Contains("Success Exported: " + Path.Combine(output, "flight 2.csv"), lines);
+            Assert.DoesNotContain(lines, l => l.Contains("export plot", StringComparison.Ordinal) || l.Contains("Plot exported", StringComparison.Ordinal));
+            Assert.Equal(new[] { "flight 1.csv", "flight 2.csv" }, Directory.GetFiles(output).Select(f => Path.GetFileName(f)).Order());
+            Assert.Equal("Batch complete: 2 processed, 0 skipped. Output written to " + output + ".", vm.Status);
+        }
+
+        [Fact]
         public async Task ATemplatesNamesAndColoursGoOnEveryFileWhenAskedAndAFailedFileIsSaidSo()
         {
             string one = Copy("flight 1.ch10"), two = Copy("flight 2.ch10");
-            var vm = new MainWindowViewModel(processingDialog: new CancelFirst(), appRoot: Repo.Root);
+            var vm = new MainWindowViewModel(new MainWindowServices { ProcessingDialog = new CancelFirst(), AppRoot = Repo.Root });
             int before = vm.Log.Entries.Count;
             await vm.RunBatchAsync(PrnTemplate(), new[] { one, two }, null, reuseAppearance: true);
             string[] lines = Lines(vm, before);
@@ -188,7 +224,7 @@ namespace TmDq.App.Tests
                          vm.Plot.Series.Select(s => s.Color));
 
             // Without reuse, the series keep their own names; no folder, no export.
-            var plain = new MainWindowViewModel(appRoot: Repo.Root);
+            var plain = new MainWindowViewModel(new MainWindowServices { AppRoot = Repo.Root });
             await plain.RunBatchAsync(PrnTemplate(), new[] { one }, null, reuseAppearance: false);
             Assert.Equal(new[] { "CH-01 PRN 15 5M", "CH-01 PRN 15 5M", "CH-03 PRN 11 1M", "CH-03 PRN 11 1M" }, plain.Plot.Series.Select(s => s.Name));
             Assert.DoesNotContain(plain.Log.Entries, e => e.Text.StartsWith("Exported", StringComparison.Ordinal));
@@ -250,7 +286,7 @@ namespace TmDq.App.Tests
             string later = ADayLater(StepCal, "a day later.ch10"), missing = Path.Combine(_dir, "gone.ch10"), output = Path.Combine(_dir, "out");
             Directory.CreateDirectory(output);
             var images = new FakeImages();
-            var vm = new MainWindowViewModel(templateFiles: new FakeTemplateFiles(), templateDialogs: new FakeTemplateDialogs(), imageExporter: images, appRoot: Repo.Root);
+            var vm = new MainWindowViewModel(new MainWindowServices { TemplateFiles = new FakeTemplateFiles(), TemplateDialogs = new FakeTemplateDialogs(), ImageExporter = images, AppRoot = Repo.Root });
             images.Plot = vm.Plot;
             var available = new List<bool>();
             vm.ApplyTemplateCommand.CanExecuteChanged += (_, _) => available.Add(vm.ApplyTemplateCommand.CanExecute(null));
@@ -278,7 +314,7 @@ namespace TmDq.App.Tests
                 with { Process = true, Configured = true };
             var template = new ProcessingTemplate("v", "step", 1, true, new[] { new TemplateEntry(row, Array.Empty<SeriesAppearance>()) });
             string twoDays = ADayLater(StepCal, "two days later.ch10", days: 2), oneDay = ADayLater(StepCal, "a day later.ch10");
-            var vm = new MainWindowViewModel(appRoot: Repo.Root);
+            var vm = new MainWindowViewModel(new MainWindowServices { AppRoot = Repo.Root });
             await vm.RunBatchAsync(template, new[] { twoDays, oneDay, StepCal }, null, false);
 
             Assert.Equal(new[] { 0, 1, 2 }, vm.Plot.SourceList().Select(s => s.Id));
@@ -301,7 +337,7 @@ namespace TmDq.App.Tests
                 BitsInMinorFrame = 32767, SamplePeriod = FrameSyncDefaults.Period,
             };
             var request = new RunRequest(safran, file.DefaultTimeChannel, new[] { stream }) { SwapBytes = false };
-            var vm = new MainWindowViewModel(configurator: FakeConfigurator.Settled(new StreamsChoice(request, Array.Empty<StreamSetup>(), 3)), appRoot: Repo.Root);
+            var vm = new MainWindowViewModel(new MainWindowServices { Configurator = FakeConfigurator.Settled(new StreamsChoice(request, Array.Empty<StreamSetup>(), 3)), AppRoot = Repo.Root });
             await vm.LoadAsync(safran);
             ProcessedSource source = Assert.Single(vm.Sources);
             Assert.Equal((3, false), (source.TimeChannelIndex, source.SwapBytes));
@@ -341,10 +377,10 @@ namespace TmDq.App.Tests
             string one = Copy("flight 1.ch10");
             var files = new FakeTemplateFiles { Template = Fixture("prn-sample.json"), Recordings = new[] { one, StepCal } };
             var dialogs = new FakeTemplateDialogs();
-            var vm = new MainWindowViewModel(templateFiles: files, templateDialogs: dialogs, appRoot: Repo.Root);
+            var vm = new MainWindowViewModel(new MainWindowServices { TemplateFiles = files, TemplateDialogs = dialogs, AppRoot = Repo.Root });
             Assert.True(vm.ApplyTemplateCommand.CanExecute(null));
-            Assert.False(new MainWindowViewModel(templateFiles: files).ApplyTemplateCommand.CanExecute(null));
-            Assert.False(new MainWindowViewModel(templateDialogs: dialogs).ApplyTemplateCommand.CanExecute(null));
+            Assert.False(new MainWindowViewModel(new MainWindowServices { TemplateFiles = files }).ApplyTemplateCommand.CanExecute(null));
+            Assert.False(new MainWindowViewModel(new MainWindowServices { TemplateDialogs = dialogs }).ApplyTemplateCommand.CanExecute(null));
 
             // Cancelled at the confirmation: nothing runs.
             int before = vm.Log.Entries.Count;
@@ -401,7 +437,7 @@ namespace TmDq.App.Tests
         public async Task SaveAsTemplateCapturesTheRecordingJustProcessed()
         {
             var files = new FakeTemplateFiles { SavePath = Path.Combine(_dir, "mine.json") };
-            var vm = new MainWindowViewModel(templateFiles: files, appRoot: Repo.Root);
+            var vm = new MainWindowViewModel(new MainWindowServices { TemplateFiles = files, AppRoot = Repo.Root });
             Assert.False(vm.SaveTemplateCommand.CanExecute(null));   // nothing processed yet
             await vm.SaveTemplateCommand.ExecuteAsync(null);         // run anyway: it says so
             Assert.Equal((Logging.LogLevel.Warning, "Nothing to save as a template -- no sources have finished processing yet."),
@@ -443,7 +479,7 @@ namespace TmDq.App.Tests
             string one = Copy("flight 1.ch10"), two = Copy("flight 2.ch10");
             var files = new FakeTemplateFiles { SavePath = Path.Combine(_dir, "chosen.json") };
             var dialogs = new FakeTemplateDialogs { Choice = 1 };
-            var vm = new MainWindowViewModel(templateFiles: files, templateDialogs: dialogs, appRoot: Repo.Root);
+            var vm = new MainWindowViewModel(new MainWindowServices { TemplateFiles = files, TemplateDialogs = dialogs, AppRoot = Repo.Root });
             await vm.RunBatchAsync(PrnTemplate(), new[] { one, two }, null, false);
             await vm.SaveTemplateCommand.ExecuteAsync(null);
             Assert.Equal(new[] { "flight 1.ch10 (source 0)", "flight 2.ch10 (source 1)" }, dialogs.Choices);

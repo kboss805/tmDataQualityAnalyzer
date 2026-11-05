@@ -343,7 +343,7 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public async Task TheLogTellsTheStoryOfARunAsV214Did()
         {
-            var vm = new MainWindowViewModel(clock: new StoppedClock());
+            var vm = new MainWindowViewModel(new MainWindowServices { Clock = new StoppedClock() });
             Assert.Equal(new[] { "tmDataQualityAnalyzer v" + AppInfo.Version, "Load a Chapter 10 file to configure per-stream processing." }, Texts(vm));
             // The core reports on its own threads; the log, which the sidebar shows, may only change on the UI thread.
             var offTheUiThread = new List<string>();
@@ -372,7 +372,7 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public async Task TheCoresErrorIsLoggedOnceInRedAndNothingIsCalledComplete()
         {
-            var vm = new MainWindowViewModel(clock: new StoppedClock());
+            var vm = new MainWindowViewModel(new MainWindowServices { Clock = new StoppedClock() });
             await vm.LoadAsync(StepCal);
             LogEntry error = Assert.Single(vm.Log.Entries, e => e.Level == LogLevel.Error);
             Assert.Contains("no frame sync found", error.Text);
@@ -388,7 +388,7 @@ namespace TmDq.App.Tests
             try
             {
                 var dialog = new FakeProcessingDialog();
-                var vm = new MainWindowViewModel(processingDialog: dialog);
+                var vm = new MainWindowViewModel(new MainWindowServices { ProcessingDialog = dialog });
                 await vm.LoadAsync(junk);
                 Assert.Equal("Opening: " + Path.GetFileName(junk), vm.Log.Entries[^2].Text);
                 Assert.Equal((vm.Status, LogLevel.Error), (vm.Log.Entries[^1].Text, vm.Log.Entries[^1].Level));
@@ -404,7 +404,7 @@ namespace TmDq.App.Tests
         public async Task TheProgressDialogIsUpForTheRunAndShowsTheCoresProgress()
         {
             var dialog = new FakeProcessingDialog();
-            var vm = new MainWindowViewModel(processingDialog: dialog);
+            var vm = new MainWindowViewModel(new MainWindowServices { ProcessingDialog = dialog });
             bool upDuringTheRun = false;
             dialog.OnShow = p => upDuringTheRun = ReferenceEquals(vm.Processing, p) && vm.IsBusy && dialog.Closed == 0;
             await vm.LoadAsync(Prn);
@@ -431,7 +431,7 @@ namespace TmDq.App.Tests
         {
             // US3.2 asks for the progress bar while SNR data is processed, as US3.0 does for lock statistics.
             var dialog = new FakeProcessingDialog();
-            var vm = new MainWindowViewModel(configurator: FakeConfigurator.Given(StepCalRequest(StepCalSnr())), processingDialog: dialog);
+            var vm = new MainWindowViewModel(new MainWindowServices { Configurator = FakeConfigurator.Given(StepCalRequest(StepCalSnr())), ProcessingDialog = dialog });
             await vm.LoadAsync(StepCal);
             Assert.Single(dialog.Shown);
             Assert.Equal(1, dialog.Closed);
@@ -444,7 +444,7 @@ namespace TmDq.App.Tests
         public async Task NoProgressDialogWhenNothingIsProcessed()
         {
             var dialog = new FakeProcessingDialog();
-            var vm = new MainWindowViewModel(configurator: FakeConfigurator.Cancelled(), processingDialog: dialog);
+            var vm = new MainWindowViewModel(new MainWindowServices { Configurator = FakeConfigurator.Cancelled(), ProcessingDialog = dialog });
             await vm.LoadAsync(Prn);
             Assert.Empty(dialog.Shown);
             Assert.Equal(0, dialog.Closed);
@@ -455,7 +455,7 @@ namespace TmDq.App.Tests
         public async Task CancelInTheProgressDialogStopsTheRunAndShowsNothing()
         {
             var dialog = new FakeProcessingDialog();
-            var vm = new MainWindowViewModel(processingDialog: dialog, clock: new StoppedClock());
+            var vm = new MainWindowViewModel(new MainWindowServices { ProcessingDialog = dialog, Clock = new StoppedClock() });
             await vm.LoadAsync(Prn);
             Assert.NotNull(Startup.FirstLockSeries(vm.Plot));
 
@@ -670,7 +670,7 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public void TheMainWindowShowsTheLogBesideTheChart()
         {
-            var vm = new MainWindowViewModel(clock: new StoppedClock());
+            var vm = new MainWindowViewModel(new MainWindowServices { Clock = new StoppedClock() });
             MainWindow window = Shown(new MainWindow { DataContext = vm });
             Control panel = window.FindControl<Control>("LogPanel")!;
             Control chart = window.FindControl<PlotView>("PlotView")!;
