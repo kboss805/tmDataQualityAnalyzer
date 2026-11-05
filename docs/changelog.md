@@ -30,7 +30,12 @@ The first of three PRs that tidy the repository's layout now the move off Qt is 
   repointed: `docs/claude.md`, `.claude/CLAUDE.md`, `docs/future_plans/README.md`, and comments in
   `seriescolumnschema` and `templatematcher.h`.
 
-**Checked:** CHECKED_RESULT
+**Checked:** the core built in Debug and Release; every suite at its baseline (native 485 test cases, 1 skipped; managed
+360 passed / 0 failed / 1 skipped; app 604 passed / 0 failed, 34 not run); the release consistency check. Four mutants,
+all caught by the new test: the targets' import removed, either root file's condition never true for a `.csproj`
+(no check; every project at 1.0.0), and `TmDq.Core.Tests` opting out of the targets, which only the evaluation sees.
+They were run by hand in a worktree, because `scripts\mutate.ps1` requires a rebuilt binary newer than the mutated
+file, and a build file mutant changes none (the test reads what MSBuild evaluates, at run time).
 
 #### TempFilesTests start the clock before the hold
 
