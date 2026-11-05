@@ -36,7 +36,7 @@
 # times FOUR channels, and that file carries PCM packets for channels 13 and 15
 # only; 14 and 16 are in its TMATS with no data behind them. So enabling the
 # variable did not produce a number. It now requires 'prn_testfile, full.ch10'
-# (~640 MB, gitignored, present on the development box and the self-hosted runner)
+# (~640 MB, gitignored, present on the development box only)
 # and says so plainly when it is absent.
 #
 # WHY RELEASE AND NOT CI
@@ -103,9 +103,9 @@ Write-Host "=== Decommutation throughput guard ($Config) ===" -ForegroundColor C
 
 # --- the fixture -------------------------------------------------------------
 # Checked before spending minutes on a build. Mirrors the test's own choice: the full
-# recording beside the sample if it is there, otherwise the sample path, which on the
-# self-hosted runner has been overlaid with the full recording from $TMDQA_CH10_FULL. A
-# fixture under ~600 MB is the committed sample, which carries PCM data for 2 of the 4
+# recording beside the sample if it is there, otherwise the sample path (which CI once
+# overlaid with the full recording; nothing does now). A fixture under ~600 MB is
+# the committed sample, which carries PCM data for 2 of the 4
 # channels the benchmark times - it cannot produce a number, so say so here rather than
 # after a build and a multi-minute run.
 $FixtureDir = Join-Path $ProjectDir 'tests\data\test files'

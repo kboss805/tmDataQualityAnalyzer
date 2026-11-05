@@ -412,6 +412,37 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased
 
+#### CI is one job, on a hosted runner that has never had Qt (plan step 6.4)
+
+The last item of 6.4. Every PR ran the build and the three suites twice: on the self-hosted runner, or the hosted
+fallback when it was offline, and in `core-without-qt` beside either. The second run was there because the self-hosted
+machine still has the Qt kit, so only a hosted image could show that nothing needs Qt. With the Qt application gone,
+the hosted job is the only one, at the user's choice.
+
+- **`ci.yml` is one job, `ci`, on `windows-2022`,** with the steps the jobs shared, in this order: the release
+  consistency check, MSVC and .NET 10 set up, the toolchain's versions, the check that the machine has no Qt, the core
+  in Debug and Release, then the native, managed and app suites. The job keeps the name of the old aggregate check, so
+  a PR's status still reads `ci`.
+- **On `windows-2022`, with Visual Studio 2022, which the job checks.** `windows-latest` now carries Visual Studio
+  2026 (MSVC 14.51): this PR's first run built there, and so had every `core-without-qt` run. Only the self-hosted
+  job built with the compiler `env.ps1` pins and releases use (VS 2022, MSVC 14.44). So the job runs on
+  `windows-2022`, asks `msvc-dev-cmd` for 2022, and fails unless `VisualStudioVersion` is 17.0.
+- **Gone:** `pick-runner`, its probe of the runner's status through `RUNNER_ADMIN_TOKEN`, `build-self-hosted`,
+  `build-hosted`, and the aggregate job.
+- **Faster, not slower:** the self-hosted runner ran one job at a time, so a PR's job waited behind main's. On #245
+  the result came 15 minutes after the push; the hosted job alone takes about 11.
+- **The self-hosted runner is retired.** `docs/ci_runner.md` now says how to remove the runner, its service and the
+  secret, and keeps the lessons that still apply to the hosted job.
+  - **It should be removed:** the repository is public, and a pull request from a fork runs the workflow from its own
+    branch, so it could target a registered runner's labels. The old note allowed self-hosting only while the
+    repository was private.
+- **Stale comments corrected:** the throughput benchmark's case, its script and `tests/.gitignore` described CI
+  overlaying the full PRN recording on the runner, which ended in 6.1.
+
+**Checked by running it:** this PR's own CI is the one job. On `windows-latest` (the first run): no Qt found; native
+485 cases (1 skipped), managed 360 / 0 / 1, app 604 / 0 / 0 (34 not run), zero warnings, 11 minutes. Then on
+`windows-2022` with Visual Studio 2022.
+
 #### `MainWindowViewModel`'s jobs in their own types, its services in one object (plan step 6.4)
 
 The fifth item of 6.4. The main window's view model opened and imported, exported, saved and applied templates, ran
@@ -7360,11 +7391,11 @@ mutation checks run through `scripts\mutate.ps1`.
 
 ### Continuous Integration
 
-`.github/workflows/ci.yml` builds the core and runs all three suites on every push to `main` and every PR. It prefers a
-**self-hosted Windows runner** and falls back to GitHub-hosted `windows-latest` when that runner is offline or a
-contributor lacks access; beside either, `core-without-qt` builds and tests everything on a hosted runner that has never
-had Qt. The workflow's own constraints (ASCII-only, Windows PowerShell 5.1) are documented in its header comment; the
-runner machine's setup and recovery procedure is in [`docs/ci_runner.md`](ci_runner.md).
+`.github/workflows/ci.yml` is one job, `ci`, on GitHub-hosted `windows-2022` (Visual Studio 2022, as releases are built), on every push to `main` and every PR:
+the release consistency check, a check that the machine has no Qt, the core built Debug and Release, then the native,
+managed and app suites. The workflow's own constraints (ASCII-only, Windows PowerShell 5.1) are documented in its header
+comment. The self-hosted runner CI used until plan step 6.4 is retired; [`docs/ci_runner.md`](ci_runner.md) says how
+to take it off the machine.
 
 ### Test Suites
 

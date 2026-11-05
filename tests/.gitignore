@@ -5,9 +5,9 @@ scratch_tst.cpp
 run_tests.ps1
 nul
 # The .ch10 fixtures are large and mostly gitignored, EXCEPT the small
-# (<100 MB) committed CI fixtures below, which the hosted CI needs. The full-size
-# variants (e.g. the full PRN and Safran recordings) stay local-only and are
-# overlaid on the self-hosted runner. "data/test files/" is the canonical fixture
+# (<100 MB) committed CI fixtures below, which CI needs. The full-size
+# variants (e.g. the full PRN and Safran recordings) stay local-only, read by the
+# release benchmark and the soak. "data/test files/" is the canonical fixture
 # folder - everything else directly under data/ (stray exports, scratch csv/png,
 # one-off recordings) is ignored outright, and within test files/ itself only the
 # four small fixtures below are tracked; the multi-GB "full" siblings next to them

@@ -500,7 +500,9 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
     *(Done: 34 constants removed, at the user's choice; the combo-box API, `ClipMaximum` and small test-only helpers
     found and left; the spikes kept until 6.5.)*
   - **CI:** without Qt, the self-hosted job's Qt build, its fixture overlay ordering and the hosted fallback's Qt
-    install go; the three jobs are likely to become one, on the runner that has never had Qt.
+    install go; the three jobs are likely to become one, on the runner that has never had Qt. *(Done: one job, `ci`,
+    on hosted `windows-2022`, at the user's choice; the self-hosted runner retired, `docs/ci_runner.md` says how to
+    remove it.)*
   - **The Qt settings import** (`QtSettingsImport`, `QtIni` and the `QtSettings` fixtures, 4.8) stays through the
     v3.0.x releases, so that anyone upgrading from the Qt application has its settings carried over; after that it is
     removed. The settings formats stay two, each for one kind of file (decided 2026-11-02): **TOML for what people

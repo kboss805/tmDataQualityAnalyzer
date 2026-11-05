@@ -892,9 +892,9 @@ TEST_CASE("PipelineRunner throughput: four streams on one recording cost about w
     //
     // The committed `prn_testfile, sample.ch10` is a 77 MB excerpt that carries PCM packets for channels 13 and 15
     // ONLY - 14 and 16 are described in its TMATS but hold no data at all - so it cannot produce a number. The full
-    // ~640 MB recording sits beside it on the development box; the self-hosted runner copies it OVER the sample path
-    // (see .github/workflows/ci.yml), so on that machine the sample path IS the full recording. Checking for the full
-    // file by name must not defeat that, so prefer the full file where it exists and fall back to the sample path.
+    // ~640 MB recording sits beside it on the development box. CI once copied it OVER the sample path, so the case
+    // still prefers the full file where it exists and falls back to the sample path; scripts\run_throughput_bench.ps1
+    // refuses a fixture that is only the sample before it starts.
     const fs::path root        = repoRoot();
     const fs::path full_path   = root / "tests" / "data" / "test files" / "prn_testfile, full.ch10";
     const fs::path sample_path = root / "tests" / "data" / "test files" / "prn_testfile, sample.ch10";

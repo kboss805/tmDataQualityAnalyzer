@@ -43,7 +43,7 @@ Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `
   committed recordings through the library and compare with numbers v2.14.2's pipeline produced. An xunit v3
   project is an executable; the build merges a UTF-8 code-page manifest into it with `mt.exe`, because the vendored
   irig106 opens files with a narrow `open()` that reads the active code page. Green baseline **360 passed / 0
-  failed / 1 skipped** (the skip is the probe `IsolatedLoadTests` runs in a child process). CI runs it in both jobs.
+  failed / 1 skipped** (the skip is the probe `IsolatedLoadTests` runs in a child process). CI runs it.
 - **The app:** `dotnet/TmDq.App` (Avalonia 12, CommunityToolkit.Mvvm) and `dotnet/TmDq.App.Tests` (xunit v3 on
   `Avalonia.Headless.XUnit`), both in `tmdq.sln`, which VS Code opens by default (`dotnet.defaultSolution`).
   `powershell -ExecutionPolicy Bypass -File scripts\test_app.ps1 [-Configuration Debug|Release] [-NoBuild]` builds the
@@ -56,8 +56,8 @@ Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `
   yours, put a `portable` file beside it. Its manuals are `resources\usermanual.html` (compiled in) and
   `UserManual.html` (the full one, with `docs\manual\walkthroughs.html`), their figures rendered from the app by
   `ManualFiguresTests` into `docs\manual_images`: after a change to what a figure shows, rebuild with
-  `powershell -ExecutionPolicy Bypass -File scripts\build_manual.ps1` (`-NoCapture` reuses the figures). CI runs it in
-  all three jobs. Green baseline **604 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases.
+  `powershell -ExecutionPolicy Bypass -File scripts\build_manual.ps1` (`-NoCapture` reuses the figures). CI runs the
+  app suite. Green baseline **604 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases.
   **The side-by-side soak (plan step 5.2):** `powershell -ExecutionPolicy Bypass -File scripts\run_soak.ps1 [-NoBuild]
   [-Only <run>,...]` runs every run in `dotnet\TmDq.App.Tests\Soak\soak.json` (`SoakTests`, explicit, one process a
   run) and fails unless each CSV export is byte for byte what v2.14.2 exported (the manifest's `qt` blocks). Most
