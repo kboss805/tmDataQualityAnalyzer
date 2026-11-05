@@ -412,6 +412,27 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ### Unreleased
 
+#### A file the core has just written is read back through `TempFiles`
+
+`FormatsTests.AWrittenCsvIsAnExactFileAndIsReadBackWithTheSameIdentities` failed CI four times in six runs on the
+self-hosted runner, all on PRs #244 and #245, once with the machine idle. Each time it was the same `IOException`: the file
+was in use when the test read back the CSV the core had just written. The core's writer had closed it already, so another
+process held the new file for a moment, most likely the virus scanner in the runner account's temp folder.
+`TempFiles` already waited out the same hold for deletes (PRs #218 and #221).
+
+- **`TempFiles.ReadAllBytes` and `ReadAllText`** read as `File`'s do, retrying while the file is in use, with the
+  same window as a delete (3 s). A missing file is an error at once, and a hold that lasts past the window is still
+  an error, so a test that reads a file to prove the core let go of it still fails when it did not.
+- **`FormatsTests`' four reads of a file the core wrote** go through them.
+- **`TempFilesTests`, three more:** a read waits out a brief hold, gives up on a lasting one, and fails at once
+  on a missing file.
+
+**Mutation check** (`scripts\mutate.ps1`, `TempFilesTests`): either read not retrying, the public read given no
+window, a lasting hold waited for forever (caught as a hang), a missing file waited for, and what was read thrown away.
+**All six caught.**
+
+Managed baseline **360 / 0 / 1** (was 358 / 0 / 1).
+
 #### The dead-code sweep: the constants the Qt application left (plan step 6.4)
 
 The second item of 6.4: the native core's and the ABI's surface swept with the `code-cleanup` skill for what nothing

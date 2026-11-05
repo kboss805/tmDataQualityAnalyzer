@@ -63,6 +63,61 @@ public class TempFilesTests
     }
 
     [Fact]
+    public void AFileHeldForAMomentIsReadOnceItIsReleased()
+    {
+        // What failed CI on PRs #244 and #245: a CSV read back the instant the core had written it, met the scanner.
+        string path = NewPath();
+        File.WriteAllText(path, "written");
+        try
+        {
+            Thread release = HoldFor(path, TimeSpan.FromMilliseconds(400));
+            Stopwatch clock = Stopwatch.StartNew();
+            Assert.Equal("written", TempFiles.ReadAllText(path));
+            Assert.True(clock.Elapsed >= TimeSpan.FromMilliseconds(300), $"it did not wait for the release ({clock.ElapsedMilliseconds} ms)");
+            Assert.True(release.Join(TimeSpan.FromSeconds(10)), "the holding thread did not finish");
+
+            release = HoldFor(path, TimeSpan.FromMilliseconds(400));
+            Assert.Equal("written"u8.ToArray(), TempFiles.ReadAllBytes(path));
+            Assert.True(release.Join(TimeSpan.FromSeconds(10)), "the holding thread did not finish");
+        }
+        finally
+        {
+            TempFiles.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void AFileStillHeldWhenTheWindowEndsIsNotRead()
+    {
+        // A leaked handle never lets go: the read gives up and says so, after trying for the whole window.
+        string path = NewPath();
+        File.WriteAllText(path, "x");
+        try
+        {
+            using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                Stopwatch clock = Stopwatch.StartNew();
+                Assert.Throws<IOException>(() => TempFiles.ReadAllBytes(path, TimeSpan.FromMilliseconds(300)));
+                Assert.True(clock.Elapsed >= TimeSpan.FromMilliseconds(300), $"it gave up early ({clock.ElapsedMilliseconds} ms)");
+            }
+        }
+        finally
+        {
+            TempFiles.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void AMissingFileIsNotReadAndIsNotWaitedFor()
+    {
+        // As File.ReadAllBytes: a file that is not there will not appear, so it is an error at once.
+        Stopwatch clock = Stopwatch.StartNew();
+        Assert.Throws<FileNotFoundException>(() => TempFiles.ReadAllBytes(NewPath()));
+        Assert.Throws<FileNotFoundException>(() => TempFiles.ReadAllText(NewPath()));
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(1), $"a missing file was retried ({clock.ElapsedMilliseconds} ms)");
+    }
+
+    [Fact]
     public void TheDefaultWindowIsLongEnoughForAScanAndShortEnoughToFailALeak()
     {
         Assert.InRange(TempFiles.Window, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));

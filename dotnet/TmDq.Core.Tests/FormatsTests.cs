@@ -181,7 +181,7 @@ public class FormatsTests
             {
                 FrameSyncFile.Write(path, Unhex(w[2]), Unhex(w[3]), int.Parse(w[4]), w[5] == "1", w[6] == "1");
                 Assert.True(want[2] == "1", w[1]);
-                Assert.True(want[3] == Convert.ToHexString(File.ReadAllBytes(path)).ToLowerInvariant(), $"{w[1]}: the file differs from the core's");
+                Assert.True(want[3] == Convert.ToHexString(TempFiles.ReadAllBytes(path)).ToLowerInvariant(), $"{w[1]}: the file differs from the core's");
             }
             finally
             {
@@ -421,7 +421,7 @@ public class FormatsTests
             {
                 CsvFile.Write(path, Columns(cols), int.Parse(head[2]), D(head[3]));
                 Assert.True(want[2] == "1", head[1]);
-                Assert.True(want[3] == Convert.ToHexString(File.ReadAllBytes(path)).ToLowerInvariant(), $"{head[1]}: the file differs from the core's");
+                Assert.True(want[3] == Convert.ToHexString(TempFiles.ReadAllBytes(path)).ToLowerInvariant(), $"{head[1]}: the file differs from the core's");
             }
             finally
             {
@@ -445,11 +445,11 @@ public class FormatsTests
             CsvFile.Write(path, columns, 120, 77125.5);
 
             // The header, hand-written: CR LF, the clock column, the metric suffixes and the source qualifier.
-            string text = File.ReadAllText(path);
+            string text = TempFiles.ReadAllText(path);
             Assert.StartsWith("Time (DOY:HH:MM:SS.mmm),Ch A Lock (%),Ch A Accumulated Missed Frames,S1| 40 - Ch A L_RCVR2\r\n", text);
             Assert.Contains("120:21:25:25.500,99.000000,0.000000,-80.500000\r\n", text);
             Assert.Contains("120:21:25:26.500,98.000000,2.000000,-79.250000\r\n", text);
-            Assert.NotEqual(0xEF, File.ReadAllBytes(path)[0]);       // no byte-order mark
+            Assert.NotEqual(0xEF, TempFiles.ReadAllBytes(path)[0]);       // no byte-order mark
 
             CsvData back = CsvFile.Parse(path);
             Assert.Equal(120, back.BaseDay);
