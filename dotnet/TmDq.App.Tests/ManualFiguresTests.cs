@@ -73,13 +73,6 @@ namespace TmDq.App.Tests
 
         // ---- scenes ------------------------------------------------------------------------------------------------
 
-        private sealed class Settled : IStreamConfigurator
-        {
-            private readonly Func<string, Ch10File, StreamsChoice> _choose;
-            public Settled(Func<string, Ch10File, StreamsChoice> choose) => _choose = choose;
-            public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file) => Task.FromResult<StreamsChoice?>(_choose(path, file));
-        }
-
         /// <summary>Every service a command needs to be available, as the application has them; none is asked anything.</summary>
         private sealed class AppServices : IRecordingPicker, IDataFilePicker, IExportDialog, ITemplateFilePicker, ITemplateDialogs,
                                            ISettingsFilePicker, ICalibrationFilePicker
@@ -137,7 +130,7 @@ namespace TmDq.App.Tests
                                                                     Action<MainWindowViewModel>? before = null)
         {
             ProcessingTemplate template = PrnTemplate();
-            MainWindowViewModel vm = WithServices(new Settled((path, file) =>
+            MainWindowViewModel vm = WithServices(FakeConfigurator.Choosing((path, file) =>
             {
                 List<StreamSetup> rows = template.Entries.Select(e => e.Config).ToList();
                 if (withBadStream)
@@ -160,7 +153,7 @@ namespace TmDq.App.Tests
         /// <summary>step_cal's receiver stream processed, linearly or with <paramref name="profiles"/>.</summary>
         private static async Task<MainWindowViewModel> StepCalProcessed(IReadOnlyList<CalibrationProfile>? profiles = null)
         {
-            MainWindowViewModel vm = WithServices(new Settled((path, file) =>
+            MainWindowViewModel vm = WithServices(FakeConfigurator.Choosing((path, file) =>
                 new StreamsChoice(new RunRequest(path, file.DefaultTimeChannel, new[] { StepCalSnr(profiles) }) { AppRoot = Repo.Root },
                                   Array.Empty<StreamSetup>(), 0)));
             await vm.LoadAsync(StepCal);

@@ -347,12 +347,8 @@ namespace TmDq.App.Tests
             foreach (int place in new[] { -1, file.TimeChannels.Count })   // just outside the list, at either end
                 Assert.Equal(file.DefaultTimeChannel, TemplateBatch.ToRunRequest(prn with { TimeChannelIndex = place }, Prn, file, 0, null).TimeChannelId);
 
-            // A place inside the list is that time channel: the PRN sample with CH-04 retyped as a time channel (16), as
-            // ConfigureStreamsTests makes it.
-            byte[] bytes = File.ReadAllBytes(Prn);
-            System.Text.Encoding.ASCII.GetBytes(@"R-1\CDT-9:11   ;").CopyTo(bytes, bytes.AsSpan().IndexOf(System.Text.Encoding.ASCII.GetBytes(@"R-1\CDT-9:PCMIN;")));
-            string twoTime = Path.Combine(_dir, "two-time.ch10");
-            File.WriteAllBytes(twoTime, bytes);
+            // A place inside the list is that time channel: the PRN sample with CH-04 retyped as a time channel (16).
+            string twoTime = Recordings.WriteTwoTimeChannels(Path.Combine(_dir, "two-time.ch10"));
             Ch10File two = StreamsRun.Open(twoTime);
             Assert.Equal(16, TemplateBatch.ToRunRequest(prn with { TimeChannelIndex = 1 }, twoTime, two, 0, null).TimeChannelId);
             Assert.Equal("flight", TemplateBatch.BaseName("flight"));

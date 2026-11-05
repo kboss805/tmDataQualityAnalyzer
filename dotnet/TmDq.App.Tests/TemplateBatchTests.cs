@@ -289,14 +289,6 @@ namespace TmDq.App.Tests
             Assert.Equal(StartOf(0) + vm.Plot.Series.First(s => s.SourceId == 2).X[^1], vm.Plot.XMax, 6);
         }
 
-        /// <summary>What Configure Streams settled, given whatever the recording.</summary>
-        private sealed class Settled : IStreamConfigurator
-        {
-            private readonly StreamsChoice _choice;
-            public Settled(StreamsChoice choice) => _choice = choice;
-            public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file) => Task.FromResult<StreamsChoice?>(_choice);
-        }
-
         [Fact]
         public async Task AnOpenKeepsTheByteOrderAndTimeChannelConfigureStreamsSettled()
         {
@@ -309,7 +301,7 @@ namespace TmDq.App.Tests
                 BitsInMinorFrame = 32767, SamplePeriod = FrameSyncDefaults.Period,
             };
             var request = new RunRequest(safran, file.DefaultTimeChannel, new[] { stream }) { SwapBytes = false };
-            var vm = new MainWindowViewModel(configurator: new Settled(new StreamsChoice(request, Array.Empty<StreamSetup>(), 3)), appRoot: Repo.Root);
+            var vm = new MainWindowViewModel(configurator: FakeConfigurator.Settled(new StreamsChoice(request, Array.Empty<StreamSetup>(), 3)), appRoot: Repo.Root);
             await vm.LoadAsync(safran);
             ProcessedSource source = Assert.Single(vm.Sources);
             Assert.Equal((3, false), (source.TimeChannelIndex, source.SwapBytes));

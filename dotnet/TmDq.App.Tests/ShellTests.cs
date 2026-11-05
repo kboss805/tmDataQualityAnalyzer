@@ -55,21 +55,6 @@ namespace TmDq.App.Tests
             return (window, vm);
         }
 
-        private sealed class Picker : IRecordingPicker
-        {
-            public int Asked;
-            public Task<string?> PickRecordingAsync()
-            {
-                Asked++;
-                return Task.FromResult<string?>(null);
-            }
-        }
-
-        private sealed class Cancelled : IStreamConfigurator
-        {
-            public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file) => Task.FromResult<StreamsChoice?>(null);
-        }
-
         private sealed class FakeHelp : IHelpActions
         {
             public readonly List<string> Asked = new();
@@ -146,7 +131,7 @@ namespace TmDq.App.Tests
         public async Task TheMenuHoldsItsSectionsHelpAndExit()
         {
             var help = new FakeHelp();
-            var picker = new Picker();
+            var picker = new FakeRecordingPicker();
             (MainWindow window, MainWindowViewModel vm) = Show(new MainWindowViewModel(picker));
             window.Help = help;
             window.BuildMenu();
@@ -266,7 +251,7 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public void CtrlOOpensAndCtrlBTogglesTheSidebar()
         {
-            var picker = new Picker();
+            var picker = new FakeRecordingPicker();
             (MainWindow window, MainWindowViewModel vm) = Show(new MainWindowViewModel(picker));
             window.KeyPress(Key.O, RawInputModifiers.Control, PhysicalKey.O, "o");
             Dispatcher.UIThread.RunJobs();
@@ -358,7 +343,7 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public async Task ARecordingOrCsvDroppedOnTheWindowOpensAsRecentFilesOpensIt()
         {
-            (MainWindow window, MainWindowViewModel vm) = Show(new MainWindowViewModel(configurator: new Cancelled()));
+            (MainWindow window, MainWindowViewModel vm) = Show(new MainWindowViewModel(configurator: FakeConfigurator.Cancelled()));
             var at = new Point(600, 300);
             DragDropEffects offered = DragDropEffects.Move;
             window.AddHandler(DragDrop.DragOverEvent, (_, e) => offered = e.DragEffects, RoutingStrategies.Bubble, handledEventsToo: true);

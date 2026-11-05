@@ -13,7 +13,6 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using TmDq.App.Plot;
 using TmDq.App.Processing;
-using TmDq.App.Services;
 using TmDq.App.ViewModels;
 using TmDq.App.Views;
 using TmDq.Core;
@@ -33,14 +32,6 @@ namespace TmDq.App.Tests
     public sealed class WalkingSkeletonTests
     {
         private static string Prn => Repo.Recording("prn_testfile, sample.ch10");
-
-        private sealed class FakePicker : IRecordingPicker
-        {
-            private readonly string? _answer;
-            public FakePicker(string? answer) => _answer = answer;
-            public int Calls { get; private set; }
-            public Task<string?> PickRecordingAsync() { Calls++; return Task.FromResult(_answer); }
-        }
 
         [AvaloniaFact]
         public async Task OpeningTheSampleShowsItsFirstChannelsLockPercentage()
@@ -257,11 +248,11 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public async Task OpenAsksThePickerAndACancelChangesNothing()
         {
-            var picker = new FakePicker(null);
+            var picker = new FakeRecordingPicker();
             var vm = new MainWindowViewModel(picker);
             string status = vm.Status;
             await vm.OpenCommand.ExecuteAsync(null);
-            Assert.Equal(1, picker.Calls);
+            Assert.Equal(1, picker.Asked);
             Assert.Null(Startup.FirstLockSeries(vm.Plot));
             Assert.Equal(status, vm.Status);
         }
@@ -269,7 +260,7 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public async Task OpenProcessesTheChosenRecording()
         {
-            var vm = new MainWindowViewModel(new FakePicker(Prn));
+            var vm = new MainWindowViewModel(new FakeRecordingPicker(Prn));
             await vm.OpenCommand.ExecuteAsync(null);
             Assert.Equal(116, Startup.FirstLockSeries(vm.Plot)?.Y.Length);
         }
@@ -277,7 +268,7 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public async Task OpenIsDisabledWhileARecordingIsProcessedAndASecondLoadIsIgnored()
         {
-            var vm = new MainWindowViewModel(new FakePicker(Prn));
+            var vm = new MainWindowViewModel(new FakeRecordingPicker(Prn));
             Assert.True(vm.OpenCommand.CanExecute(null));
             Task first = vm.LoadAsync(Prn);
             Assert.True(vm.IsBusy);

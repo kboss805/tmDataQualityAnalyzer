@@ -297,15 +297,8 @@ namespace TmDq.App.Tests
         [Fact]
         public async Task ASecondTimeChannelIsListedAndCanBeChosen()
         {
-            // The PRN sample with CH-04 retyped as a time channel in TMATS (R-1\CDT-9:PCMIN -> 11), a same-length edit, as
-            // the native reader's tests make: the recording then has two time channels and three PCM ones.
-            byte[] bytes = File.ReadAllBytes(Prn);
-            byte[] from = System.Text.Encoding.ASCII.GetBytes(@"R-1\CDT-9:PCMIN;"), to = System.Text.Encoding.ASCII.GetBytes(@"R-1\CDT-9:11   ;");
-            int at = bytes.AsSpan().IndexOf(from);
-            Assert.True(at >= 0 && bytes.AsSpan(at + 1).IndexOf(from) < 0, "the channel-type key is not in the recording exactly once");
-            to.CopyTo(bytes, at);
-            string copy = Path.Combine(Path.GetTempPath(), "tmdq-app-twotime-" + Guid.NewGuid().ToString("N") + ".ch10");
-            File.WriteAllBytes(copy, bytes);
+            // The PRN sample with CH-04 retyped as a time channel: two time channels and three PCM ones.
+            string copy = Recordings.WriteTwoTimeChannels(Path.Combine(Path.GetTempPath(), "tmdq-app-twotime-" + Guid.NewGuid().ToString("N") + ".ch10"));
             try
             {
                 var vm = new ConfigureStreamsViewModel(copy, StreamsRun.Open(copy), new FakeStreamDialogs(), null, Repo.Root);
