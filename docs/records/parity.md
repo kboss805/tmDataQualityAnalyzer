@@ -1,5 +1,9 @@
 # Parity review: the Avalonia application against the Qt one (plan step 5.1)
 
+> A record, kept as written (it moved here from `docs/dotnet-migration/` in plan step 6.5). The plan it cites was
+> deleted when the move off Qt finished; `docs/changelog.md` records each step. The paths and baselines are those of
+> its day.
+
 Plan step 5.1 asks for two things before the switch-over: every acceptance criterion in `docs/claude.md` checked
 against the new application, and every Qt test either ported or recorded as deliberately dropped, with a reason. This is
 that record, made on 2026-11-02 at `b16ad0a` (step 4.9 merged), with the tests this step added marked **(5.1)**.

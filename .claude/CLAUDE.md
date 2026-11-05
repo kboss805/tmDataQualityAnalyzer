@@ -3,10 +3,11 @@
 Windows desktop app for analyzing data quality of IRIG 106 Chapter 10 PCM telemetry: per-stream **Frame Sync
 Lock** stats and **Receiver AGC/SNR**, plotted vs. time. **Avalonia 12 on .NET 10** (`dotnet/`, MVVM) over a
 C++20 single-reader / parallel-worker processing core built as `tmdq_core.dll` (`include/`, `src/model/`, `native/`).
-The Qt application shipped up to v2.14.2 and was deleted in plan step 6.1. **Current version: 3.0.0.**
+Up to v2.14.2 it was a Qt application; `docs/changelog.md` records the move. **Current version: 3.0.0.**
 
 > **Full reference:** `docs/claude.md` is the canonical, detailed guide (user stories, architecture,
-> conventions, test catalog). Read it when you need depth. This file is the quick orientation that
+> conventions, test catalog); `docs/changelog.md` is the history (every release, every step of the move
+> off Qt). Read them when you need depth. This file is the quick orientation that
 > loads every session — keep it lean. It lives in `.claude/` beside the settings and skills, which
 > Claude Code loads exactly as it would a root `CLAUDE.md`; the root `.gitignore` re-includes it
 > (`!.claude/CLAUDE.md`), since everything else under `.claude/` is ignored.
@@ -16,7 +17,7 @@ The Qt application shipped up to v2.14.2 and was deleted in plan step 6.1. **Cur
 Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `scripts\env.ps1` (which imports
 `vcvars64.bat`) when `msbuild` or `mt` is not on PATH. Use the **PowerShell** tool.
 
-- **Native core DLL (no Qt):** `powershell -ExecutionPolicy Bypass -File scripts\build_core_dll.ps1
+- **Native core DLL:** `powershell -ExecutionPolicy Bypass -File scripts\build_core_dll.ps1
   [-Configuration Debug|Release] [-Rebuild]` builds `native/tmdq_core/` (MSBuild) into
   `native/out/<config>/tmdq_core.dll`, then fails on any compiler warning or on an import outside a short
   allow-list (the C runtime, `KERNEL32`, `WS2_32`, `USER32`). CI runs it for Debug and Release. **A new core source
@@ -24,7 +25,7 @@ Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `
   `native/tmdq_core_tests/tmdq_core_tests.vcxproj` (`test_abi.cpp` compiles the ABI into the native test executable
   and calls it as a host would); `NativeProjectTests` (managed suite) fails until every `src/model` source, ABI source
   and test file is listed. **A change that deletes or renames a header is verified only by a `-Rebuild`.**
-- **Native core tests (doctest, no Qt):** `powershell -ExecutionPolicy Bypass -File scripts\test_native.ps1
+- **Native core tests (doctest):** `powershell -ExecutionPolicy Bypass -File scripts\test_native.ps1
   [-Configuration Debug|Release] [-Rebuild] [-NoBuild] [<doctest args>]` builds `native/tmdq_core_tests`
   (MSBuild; the framework is the single header in `lib/doctest`) with **zero warnings and no Qt import**, then runs it.
   Run it **filtered** while iterating: `-tc="TomlDocument*"`. Green baseline **485 test cases** (1 skipped: the
@@ -58,14 +59,14 @@ Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `
   `ManualFiguresTests` into `docs\manual_images`: after a change to what a figure shows, rebuild with
   `powershell -ExecutionPolicy Bypass -File scripts\build_manual.ps1` (`-NoCapture` reuses the figures). CI runs the
   app suite. Green baseline **604 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases.
-  **The side-by-side soak (plan step 5.2):** `powershell -ExecutionPolicy Bypass -File scripts\run_soak.ps1 [-NoBuild]
+  **The side-by-side soak:** `powershell -ExecutionPolicy Bypass -File scripts\run_soak.ps1 [-NoBuild]
   [-Only <run>,...]` runs every run in `dotnet\TmDq.App.Tests\Soak\soak.json` (`SoakTests`, explicit, one process a
   run) and fails unless each CSV export is byte for byte what v2.14.2 exported (the manifest's `qt` blocks). Most
   runs read the full and local recordings under `tests\data`, which are not committed, so CI never runs it, and a
   missing recording fails. Run it after a change to processing, the plot's series or the CSV writer.
   **Never type a version in a .csproj**: import
   `dotnet/build/AppVersion.props`, which reads `AppVersion`. **Every .NET project imports
-  `dotnet/build/PackageLicences.targets`** (plan D5): a package (transitive ones too) outside the open-source allow-list
+  `dotnet/build/PackageLicences.targets`** (no licensed tooling; the project stays GPL-3.0): a package (transitive ones too) outside the open-source allow-list
   in `scripts/check_package_licences.ps1` fails the build, and a licence *file* passes only when its SHA-256 is in that
   script's `$Reviewed` table, so read it before adding it. That script runs under Windows PowerShell 5.1 inside builds
   started from PowerShell 7, which inherits 7's `PSModulePath`: avoid cmdlets from script modules (`Get-FileHash` fails).
@@ -82,7 +83,7 @@ Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `
   (semicolons: recording names contain commas; v2.14.2's setup is its GitHub release's asset) (an unsigned build must
   be BLOCKED, or the pass means nothing). The UTF-8 manifest is merged into every SDK host (`apphost`,
   `singlefilehost`, `apphost_publish`): patching `bin\` misses a single-file publish.
-- **Mutation check (plan rule 3):** `powershell -ExecutionPolicy Bypass -File scripts\mutate.ps1 -List <mutants.json>
+- **Mutation check (every behaviour change):** `powershell -ExecutionPolicy Bypass -File scripts\mutate.ps1 -List <mutants.json>
   [-Only <id>,...] [-Parts 2 -Part <k>] [-Out <file>]`. For each exact-text mutant in a JSON list it applies the
   change, builds, runs one suite (`native`, `managed` or `app`, with the test exe's arguments) and restores the file
   byte for byte. The verdicts are CAUGHT, SURVIVED, COMPILE, or one saying nothing ran. It refuses the main checkout
@@ -100,11 +101,16 @@ IntelliSense).
 MSVC 14.51 and left two compilers' objects in one tree. Override with `TMDQ_VS_RANGE`
 (a vswhere range). **After changing the compiler, rebuild the core with `-Rebuild`.**
 
-## Migration: Qt to Avalonia, finishing
+## Docs and history
 
-**Read `docs/dotnet-migration/avalonia-plan.md` before migration work**: one PR per numbered step, ticked as it merges.
-v3.0.0 (step 5.3) released the Avalonia app; step 6.1 deleted the Qt one and 6.2 its tooling. What is left: the Qt
-names in code that stays (6.3), and consolidating the new code (6.4).
+- **Every change gets a changelog entry** under `### Unreleased` at the top of `docs/changelog.md`: what changed and
+  why, how it was checked (the mutation check's verdicts), and any baseline that moved. `cut-release` folds it into the
+  release's section, and `check_release_consistency.ps1 -ReleaseMode` refuses a release with it left.
+- **`docs/claude.md`** describes the code as it is; update it in the same PR as a change it describes.
+- **"plan step X.Y"** in a comment or an entry names a step of the move off Qt (the plan was deleted when it finished,
+  in 6.5): search `docs/changelog.md` for the step's section.
+- **`docs/records/`** keeps the parity review (each acceptance criterion and the test that holds it) and the soak's
+  record, as written.
 
 ## Project skills (`.claude/skills/`)
 

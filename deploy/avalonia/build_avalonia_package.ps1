@@ -1,7 +1,7 @@
 # =============================================================================
 # build_avalonia_package.ps1 - the release packages from v3.0.0 on: the Avalonia
-# application (docs/dotnet-migration/avalonia-plan.md, step 3.3 built it as a preview
-# beside the Qt application; step 5.3 made it the release).
+# application (plan step 3.3 built it as a preview beside the Qt application; step 5.3
+# made it the release; docs/changelog.md records both).
 #
 # Produces, beside this script:
 #   tmDataQualityAnalyzer-vX.Y.Z_portable.zip

@@ -36,7 +36,7 @@ each suite has its house style and helpers. Build and run with the **build-and-t
 - **The ABI** is compiled into the test executable (`test_abi.cpp` calls `tmdq_*` as a host would),
   so a new ABI function gets its native case there, and its struct layout a pin.
 - **Reimplementing or moving code:** keep the old implementation, restated over std types, as an
-  oracle in the test, and compare the two over generated input (plan rule 2). Most suites here do;
+  oracle in the test, and compare the two over generated input (`docs/claude.md`, Working Method). Most suites here do;
   `test_chartgeometry.cpp` and `test_streamjob.cpp` are worked examples.
 
 ## The C# library's suite
@@ -72,7 +72,7 @@ Name a test for what it holds, as a sentence: `ATimeWindowIsClampedIntoTheRecord
 
 ## Prove it can fail
 
-A test that cannot fail proves nothing (plan rule 3). For each rule the new test holds, break the
+A test that cannot fail proves nothing (`docs/claude.md`, Working Method). For each rule the new test holds, break the
 code once and watch the test fail:
 
 - by hand for one or two, restoring the file byte for byte after;

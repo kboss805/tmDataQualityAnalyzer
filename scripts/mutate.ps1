@@ -6,8 +6,8 @@
 .DESCRIPTION
     Each mutant replaces one exact piece of text in one file. For each mutant the script applies the
     replacement, builds, runs the suite, and puts the file back byte for byte. A test that cannot fail
-    proves nothing; this is how every step of the migration plan since 2.4 checked its tests
-    (docs/dotnet-migration/avalonia-plan.md, rule 3).
+    proves nothing; this is how every step of the move to Avalonia from plan step 2.4 on checked its
+    tests, and how every behaviour change is checked now.
 
     The verdicts:
         CAUGHT     a test failed, the run crashed, or it hung past the time limit

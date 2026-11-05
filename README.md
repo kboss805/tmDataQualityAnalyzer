@@ -156,7 +156,7 @@ tmDataQualityAnalyzer/
 │   ├── avalonia/               # build_avalonia_package.ps1, the Inno Setup script, signing
 │   ├── sandbox/                # Windows Sandbox install-and-upgrade test (Smart App Control)
 │   └── RELEASENOTES.txt        # The installer's "What's New" page
-├── docs/                       # Developer guide (claude.md), logic notes, the migration plan, manual sources
+├── docs/                       # Developer guide (claude.md), changelog, logic notes, records, manual sources
 ├── dotnet/                     # The application and the C# library (.NET 10)
 │   ├── TmDq.App/               # The Avalonia 12 application (MVVM, CommunityToolkit.Mvvm)
 │   ├── TmDq.App.Tests/         # Its tests, on Avalonia's headless platform (xunit v3)

@@ -116,11 +116,11 @@ foreach ($c in $checks) {
     }
 }
 
-# --- the changelog must have a section for THIS version --------------------
-$devlog = Read-Tracked 'docs\claude.md'
+# --- the changelog (docs/changelog.md) must have a section for THIS version -
+$devlog = Read-Tracked 'docs\changelog.md'
 if ($devlog) {
     if ($devlog -notmatch "###\s+v$([regex]::Escape($Version))\b") {
-        $Problems.Add("docs/claude.md : no '### v$Version' section in Version History")
+        $Problems.Add("docs/changelog.md : no '### v$Version' section")
     } else {
         Write-Host ("  OK  {0,-28} {1}" -f 'changelog section', "### v$Version")
     }
@@ -129,7 +129,7 @@ if ($devlog) {
     # attributed to a build that did not contain them.
     if ($ReleaseMode) {
         if ($devlog -match '###\s+Unreleased') {
-            $Problems.Add("docs/claude.md : an 'Unreleased' section still exists - fold it into ### v$Version before releasing")
+            $Problems.Add("docs/changelog.md : an 'Unreleased' section still exists - fold it into ### v$Version before releasing")
         } else {
             Write-Host ("  OK  {0,-28} {1}" -f 'no Unreleased section', 'clean')
         }
