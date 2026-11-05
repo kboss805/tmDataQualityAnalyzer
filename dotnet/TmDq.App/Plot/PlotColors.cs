@@ -29,6 +29,34 @@ namespace TmDq.App.Plot
             Color.FromRgb(230, 200, 30),   // yellow
         };
 
+        /// <summary>
+        /// Colours every series, in order: the left-axis metrics share one colour per stream (by its stream order, the
+        /// PCM channel), so a stream's lock and missed-frames curves match, and each new stream takes the next Frame
+        /// Sync Lock primary, then shades of them; an SNR series takes its receiver's primary, shaded by its receiver's
+        /// cycle through the primaries and by its channel.
+        /// </summary>
+        internal static void Assign(IEnumerable<PlotSeries> series)
+        {
+            var leftIndex = new Dictionary<int, int>();
+            foreach (PlotSeries s in series)
+            {
+                if (s.IsLeftAxis)
+                {
+                    if (!leftIndex.TryGetValue(s.StreamOrder, out int idx))
+                    {
+                        idx = leftIndex.Count;
+                        leftIndex[s.StreamOrder] = idx;
+                    }
+                    int n = FrameSyncLock.Count;
+                    s.Color = Shade(FrameSyncLock[idx % n], idx / n);
+                    continue;
+                }
+                int primaries = Snr.Count;
+                int receiver = Math.Max(0, s.ReceiverIndex - 1);
+                s.Color = Shade(Snr[receiver % primaries], receiver / primaries + s.ChannelIndex);
+            }
+        }
+
         /// <summary><paramref name="color"/> made lighter <paramref name="level"/> times: per level the saturation
         /// falls by 60 (not below 40) and the value rises by 20 (not above 255). Level 0 or below is the colour itself.</summary>
         public static Color Shade(Color color, int level)

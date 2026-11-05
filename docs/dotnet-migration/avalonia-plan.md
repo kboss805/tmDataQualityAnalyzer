@@ -477,7 +477,8 @@ criterion in `docs/claude.md` for the stories it covers gets a test or a recorde
     and the shell's preferences; hand the dialogs and pickers in as one services object.
   - **`PlotViewModel` (923 lines):** the time window with its zoom history, the readout and its pin, CSV import and
     export, and the colours are four jobs; split them along those lines (the Qt `PlotWidget` was split in the port,
-    4.3b, but its view model was ported whole).
+    4.3b, but its view model was ported whole). *(Done: `PlotTimeWindow`, `PlotReadout`, `PlotCsv` and
+    `PlotColors.Assign`; `PlotViewModel` keeps its members as forwards, so the suites that pin it run unchanged.)*
   - **The walking skeleton's leftovers:** `LockSeries` and the main window's `Series` / `AllSeries` survive for the
     installer's smoke report and the status line, while the plot draws from `PlotViewModel`. Give the smoke report
     and the status line what they need from the run's outcome, and remove them. *(Done: the status line describes
