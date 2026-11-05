@@ -37,8 +37,10 @@ public class TempFilesTests
         // Through the public call and its own window: a brief hold must not fail a cleanup.
         string path = NewPath();
         File.WriteAllText(path, "x");
-        Thread release = HoldFor(path, TimeSpan.FromMilliseconds(400));
+        // The clock starts before the hold: the hold ends 400 ms after its thread starts, so a stall between the two
+        // cannot make a correct wait measure short (it read 194 ms on a busy CI runner when the clock started second).
         Stopwatch clock = Stopwatch.StartNew();
+        Thread release = HoldFor(path, TimeSpan.FromMilliseconds(400));
         TempFiles.Delete(path);
         Assert.False(File.Exists(path));
         Assert.True(clock.Elapsed >= TimeSpan.FromMilliseconds(300), $"it did not wait for the release ({clock.ElapsedMilliseconds} ms)");
@@ -70,8 +72,9 @@ public class TempFilesTests
         File.WriteAllText(path, "written");
         try
         {
-            Thread release = HoldFor(path, TimeSpan.FromMilliseconds(400));
+            // The clock starts before the hold, as above.
             Stopwatch clock = Stopwatch.StartNew();
+            Thread release = HoldFor(path, TimeSpan.FromMilliseconds(400));
             Assert.Equal("written", TempFiles.ReadAllText(path));
             Assert.True(clock.Elapsed >= TimeSpan.FromMilliseconds(300), $"it did not wait for the release ({clock.ElapsedMilliseconds} ms)");
             Assert.True(release.Join(TimeSpan.FromSeconds(10)), "the holding thread did not finish");

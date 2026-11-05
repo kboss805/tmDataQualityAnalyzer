@@ -12,6 +12,17 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### TempFilesTests start the clock before the hold
+
+Two timing checks (`AFileHeldForAMomentIsReadOnceItIsReleased`, `AFileHeldForAMomentIsDeletedOnceItIsReleased`) started
+the thread that holds the file and then the stopwatch. The hold's 400 ms runs from the thread's start, so a stall between
+the two made a correct wait measure short: 194 ms against the 300 ms floor on a busy CI runner (PR #252). The clock now
+starts first, so the measured time is never less than the hold. Test only; `TempFiles` is unchanged.
+
+**Checked:** the managed suite at its baseline (360 passed / 0 failed / 1 skipped); three mutants against
+`TempFilesTests`, all caught: `TempFiles` never retrying (six tests), and each test with a 0 ms hold (its own test), so
+the 300 ms floor still catches a wait that did not happen.
+
 #### The self-hosted runner removed
 
 The runner CI used until plan step 6.4 (`tmdqa-selfhosted-1`) is off the development machine: its registration and
