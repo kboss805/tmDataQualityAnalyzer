@@ -1,40 +1,27 @@
 name: CI
 
 # Build the native core and run its doctest suite, the managed library's tests and the
-# Avalonia application's tests on every push to main and every PR. (The Qt application,
-# its Qt Test suite and the Qt toolchain were deleted in plan steps 6.1 and 6.2.)
+# Avalonia application's tests on every push to main and every PR, in one job on a
+# GitHub-hosted Windows runner (plan step 6.4).
 #
-# Runner selection with fallback:
-#   - Preferred: a SELF-HOSTED Windows runner (label: tmdqa) that has the MSVC 2022
-#     toolchain and .NET 10 on disk, so there is no per-run download.
-#   - Fallback: the GitHub-hosted windows-latest runner (provisions MSVC and .NET per
-#     run). The small .ch10 fixtures are committed to the repo, so both runners run the
-#     same tests. The heavy PRN throughput benchmark lives in the native doctest suite,
-#     is opt-in (TMDQA_RUN_HEAVY_BENCH) and is run at release, not here.
-#   - Always, beside whichever of those runs: core-without-qt, a hosted job that never
-#     installs Qt and builds and tests the native core, its doctest suite, the C#
-#     library and the app there (plan step 2.4). The `ci` status needs both.
+# One job, on a machine that has never had Qt. Until 6.4 there were three: a self-hosted
+# runner (preferred when online), a hosted fallback, and core-without-qt beside either,
+# which proved the core and the app need no Qt (plan step 2.4). The self-hosted machine
+# still held the Qt kit the deleted application needed, so only the hosted job could prove
+# that; with the Qt application gone (6.1, 6.2) it is the only job, and a step before the
+# build still fails if the image ever gains a Qt, so the proof cannot quietly lapse. The
+# small .ch10 fixtures are committed, so every suite runs here. The heavy PRN throughput
+# benchmark is opt-in (TMDQA_RUN_HEAVY_BENCH) and needs the full recording, which is not
+# committed: it is run at release (scripts\run_throughput_bench.ps1), not here.
 #
-# Windows steps use `shell: powershell` (Windows PowerShell 5.1), NOT `pwsh`.
-# The self-hosted runner runs as a Windows service under NT AUTHORITY\NETWORK
-# SERVICE, and PowerShell 7 is installed here as a per-user MSIX/Store package
-# (C:\Program Files\WindowsApps\...) that a service account cannot launch - `pwsh`
-# fails with "command not found". Windows PowerShell 5.1 lives in System32 and is
-# available to every account, and is present on GitHub-hosted runners too, so both
-# CI paths use the same shell. Don't switch these back to pwsh unless PowerShell 7
-# is installed machine-wide (MSI, C:\Program Files\PowerShell\7) on the runner.
+# Windows steps use `shell: powershell` (Windows PowerShell 5.1), NOT `pwsh`: it is the
+# shell the build scripts are written for and tested under (they also run under 7), and
+# what the release scripts run under on the development machine.
 #
 # KEEP THIS FILE PURE ASCII. Windows PowerShell 5.1 reads the temp script GitHub
 # writes for each step as Windows-1252, not UTF-8, so a UTF-8 em-dash/arrow decodes
 # into bytes that include a smart quote - which 5.1 treats as a string delimiter and
 # the step dies with "The string is missing the terminator". Use -, ->, "..." only.
-#
-# The pick-runner job routes to self-hosted only when that runner is actually
-# ONLINE - otherwise (runner offline, or a contributor without the runner) it falls
-# back to hosted. Detecting the runner's status needs an admin token, which the
-# default GITHUB_TOKEN lacks, so it uses an OPTIONAL secret RUNNER_ADMIN_TOKEN
-# (fine-grained PAT, repository "Administration: read"). Without that secret CI
-# always uses the hosted fallback - safe, zero-config, works for every contributor.
 
 on:
   push:
@@ -47,124 +34,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # --- Decide which runner to use -------------------------------------------
-  pick-runner:
-    runs-on: ubuntu-latest
-    outputs:
-      target: ${{ steps.pick.outputs.target }}
-    steps:
-      - id: pick
-        env:
-          # Optional: a fine-grained PAT with repo "Administration: read" enables
-          # routing to the self-hosted runner when it is online. Absent -> hosted.
-          RUNNER_ADMIN_TOKEN: ${{ secrets.RUNNER_ADMIN_TOKEN }}
-        run: |
-          target=hosted
-          if [ -z "$RUNNER_ADMIN_TOKEN" ]; then
-            echo "::notice title=Runner routing::RUNNER_ADMIN_TOKEN is not set, so the hosted fallback is used."
-          else
-            # Keep the HTTP status and GitHub's own message (never the token), so a fallback says WHY:
-            # 401 or 403 usually means the token has expired or lacks "Administration: read" on this repository.
-            status=$(curl -s -o runners.json -w '%{http_code}' \
-              -H "Authorization: Bearer $RUNNER_ADMIN_TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/repos/${{ github.repository }}/actions/runners" || true)
-            if [ "$status" = "200" ]; then
-              online=$(jq '[.runners[]? | select(.status == "online") | select(any(.labels[].name; . == "tmdqa"))] | length' runners.json 2>/dev/null) || online=0
-              echo "Runner API answered HTTP 200; ${online:-0} runner(s) with the tmdqa label are online."
-              if [ "${online:-0}" -ge 1 ]; then target=self-hosted; fi
-            else
-              echo "::warning title=Runner routing::The runner API answered HTTP ${status:-none}, so the hosted fallback is used. 401 or 403 usually means RUNNER_ADMIN_TOKEN has expired or lacks Administration: read on this repository."
-              if [ -s runners.json ]; then echo "GitHub says: $(jq -r '.message // empty' runners.json 2>/dev/null)"; fi
-            fi
-            rm -f runners.json
-          fi
-          echo "target=$target" >> "$GITHUB_OUTPUT"
-          echo "Selected CI runner: $target"
-
-  # --- Preferred: self-hosted (local toolchain + fixtures) -----------------
-  build-self-hosted:
-    needs: pick-runner
-    if: needs.pick-runner.outputs.target == 'self-hosted'
-    runs-on: [self-hosted, windows, tmdqa]
-    steps:
-      - name: Checkout
-        # Default clean:true restores the committed sample fixtures and removes
-        # stale gitignored build outputs (native\out, native\obj, dotnet bin and obj) each
-        # run - persistent-runner hygiene, handled for us.
-        uses: actions/checkout@v4
-
-      - name: Release consistency (version literals)
-        shell: powershell
-        run: |
-          # Four user-facing files carry the version as prose; nothing derives them
-          # from AppVersion, and each has shipped stale. Needs no toolchain, so it
-          # runs before the build and fails fast. -ReleaseMode is deliberately NOT
-          # passed: an "Unreleased" changelog section is correct between releases and
-          # is only an error at packaging time (build_avalonia_package.ps1 passes it there).
-          powershell -ExecutionPolicy Bypass -File scripts\check_release_consistency.ps1
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-
-      - name: Toolchain versions
-        shell: powershell
-        run: |
-          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError
-          # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
-          $ErrorActionPreference = 'Continue'
-          . .\scripts\env.ps1
-          dotnet --version
-          cmd /c "cl 2>&1" | Select-Object -First 1
-          # cl exits non-zero when given no input file, and GitHub appends
-          # "exit $LASTEXITCODE" to powershell steps - this step is informational,
-          # so end it explicitly successful.
-          exit 0
-
-      - name: Build native core (tmdq_core.dll, no Qt)
-        shell: powershell
-        run: |
-          # The core, built by MSBuild (tmdq.sln) with no Qt include path, then checked: zero
-          # warnings, and the DLL's imports on an allow-list.
-          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError, so failures
-          # are gated by explicit $LASTEXITCODE checks.
-          $ErrorActionPreference = 'Continue'
-          foreach ($cfg in 'Debug', 'Release') {
-            powershell -ExecutionPolicy Bypass -File scripts\build_core_dll.ps1 -Configuration $cfg
-            if ($LASTEXITCODE -ne 0) { throw "tmdq_core.dll ($cfg) failed the build or the no-Qt check" }
-          }
-
-      - name: Native tests (doctest, no Qt)
-        shell: powershell
-        run: |
-          # The core's own tests, ported off Qt Test in plan step 2.4: doctest, built by MSBuild
-          # with no Qt on any path. The script requires zero compiler warnings and no Qt import, then runs them.
-          $ErrorActionPreference = 'Continue'
-          powershell -ExecutionPolicy Bypass -File scripts\test_native.ps1 -Configuration Release
-          if ($LASTEXITCODE -ne 0) { throw "the native tests failed" }
-
-      - name: Managed tests (TmDq.Core against the native DLL)
-        shell: powershell
-        run: |
-          # The C# library over the ABI and its xunit tests, run against the Release tmdq_core.dll built by the
-          # previous step. The script builds with warnings as errors and merges the UTF-8 code-page manifest
-          # into the test exe (mt.exe; it sources env.ps1 when mt is not already on PATH).
-          $ErrorActionPreference = 'Continue'
-          powershell -ExecutionPolicy Bypass -File scripts\test_dotnet.ps1 -Configuration Release
-          if ($LASTEXITCODE -ne 0) { throw "the managed tests failed" }
-
-      - name: App tests (Avalonia, headless)
-        shell: powershell
-        run: |
-          # The Avalonia application (dotnet/TmDq.App) and its tests on the headless platform, which needs no
-          # window system: on the self-hosted runner they run as its service account in Session 0 with no
-          # desktop, and the script prints the account and session so the log records it. No native DLL needed.
-          $ErrorActionPreference = 'Continue'
-          powershell -ExecutionPolicy Bypass -File scripts\test_app.ps1 -Configuration Release
-          if ($LASTEXITCODE -ne 0) { throw "the app tests failed" }
-
-  # --- Fallback: GitHub-hosted (provisions the toolchain; runs committed fixtures) ---
-  build-hosted:
-    needs: pick-runner
-    if: needs.pick-runner.outputs.target == 'hosted'
+  ci:
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -181,7 +51,7 @@ jobs:
           powershell -ExecutionPolicy Bypass -File scripts\check_release_consistency.ps1
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
-      - name: Set up MSVC (cl / msbuild / mt)
+      - name: Set up MSVC (cl / msbuild / dumpbin / mt)
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
@@ -203,71 +73,6 @@ jobs:
           # "exit $LASTEXITCODE" to powershell steps - this step is informational,
           # so end it explicitly successful.
           exit 0
-
-      - name: Build native core (tmdq_core.dll, no Qt)
-        shell: powershell
-        run: |
-          # The core, built by MSBuild (tmdq.sln) with no Qt include path, then checked: zero
-          # warnings, and the DLL's imports on an allow-list.
-          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError, so failures
-          # are gated by explicit $LASTEXITCODE checks.
-          $ErrorActionPreference = 'Continue'
-          foreach ($cfg in 'Debug', 'Release') {
-            powershell -ExecutionPolicy Bypass -File scripts\build_core_dll.ps1 -Configuration $cfg
-            if ($LASTEXITCODE -ne 0) { throw "tmdq_core.dll ($cfg) failed the build or the no-Qt check" }
-          }
-
-      - name: Native tests (doctest, no Qt)
-        shell: powershell
-        run: |
-          # The core's own tests, ported off Qt Test in plan step 2.4: doctest, built by MSBuild
-          # with no Qt on any path. The script requires zero compiler warnings and no Qt import, then runs them.
-          $ErrorActionPreference = 'Continue'
-          powershell -ExecutionPolicy Bypass -File scripts\test_native.ps1 -Configuration Release
-          if ($LASTEXITCODE -ne 0) { throw "the native tests failed" }
-
-      - name: Managed tests (TmDq.Core against the native DLL)
-        shell: powershell
-        run: |
-          # The C# library over the ABI and its xunit tests, run against the Release tmdq_core.dll built by the
-          # previous step. The script builds with warnings as errors and merges the UTF-8 code-page manifest
-          # into the test exe (mt.exe; it sources env.ps1 when mt is not already on PATH).
-          $ErrorActionPreference = 'Continue'
-          powershell -ExecutionPolicy Bypass -File scripts\test_dotnet.ps1 -Configuration Release
-          if ($LASTEXITCODE -ne 0) { throw "the managed tests failed" }
-
-      - name: App tests (Avalonia, headless)
-        shell: powershell
-        run: |
-          # The Avalonia application (dotnet/TmDq.App) and its tests on the headless platform, which needs no
-          # window system: on the self-hosted runner they run as its service account in Session 0 with no
-          # desktop, and the script prints the account and session so the log records it. No native DLL needed.
-          $ErrorActionPreference = 'Continue'
-          powershell -ExecutionPolicy Bypass -File scripts\test_app.ps1 -Configuration Release
-          if ($LASTEXITCODE -ne 0) { throw "the app tests failed" }
-
-  # --- The core on a machine that has never had Qt (plan step 2.4) ------------
-  # The self-hosted runner's machine still holds the Qt kit the deleted application needed, so
-  # a run there can only show that nothing REACHES for it: no Qt include path, no Qt import.
-  # This job builds and tests the core, its native tests, the managed library and the Avalonia
-  # application where Qt is not installed at all. It runs on every push and PR whichever runner
-  # was picked, and its first step fails if the image ever gains a Qt, so the proof cannot
-  # quietly lapse.
-  core-without-qt:
-    runs-on: windows-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up MSVC (msbuild / dumpbin / mt)
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-
-      - name: Set up .NET 10
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
 
       - name: Prove there is no Qt on this machine
         shell: powershell
@@ -302,17 +107,22 @@ jobs:
       - name: Build native core (tmdq_core.dll)
         shell: powershell
         run: |
-          # The scripts dot-source env.ps1 only when msbuild / mt are missing; msvc-dev-cmd put
-          # them on PATH.
+          # The core, built by MSBuild (tmdq.sln), then checked: zero warnings, and the DLL's
+          # imports on an allow-list. The scripts dot-source env.ps1 only when msbuild / mt are
+          # missing; msvc-dev-cmd put them on PATH.
+          # PS 5.1 turns native-tool stderr into a terminating NativeCommandError, so failures
+          # are gated by explicit $LASTEXITCODE checks.
           $ErrorActionPreference = 'Continue'
           foreach ($cfg in 'Debug', 'Release') {
             powershell -ExecutionPolicy Bypass -File scripts\build_core_dll.ps1 -Configuration $cfg
-            if ($LASTEXITCODE -ne 0) { throw "tmdq_core.dll ($cfg) failed the build or the no-Qt check" }
+            if ($LASTEXITCODE -ne 0) { throw "tmdq_core.dll ($cfg) failed the build or its import check" }
           }
 
       - name: Native tests (doctest)
         shell: powershell
         run: |
+          # The core's own tests: doctest, built by MSBuild. The script requires zero compiler
+          # warnings and no Qt import, then runs them.
           $ErrorActionPreference = 'Continue'
           powershell -ExecutionPolicy Bypass -File scripts\test_native.ps1 -Configuration Release
           if ($LASTEXITCODE -ne 0) { throw "the native tests failed" }
@@ -320,6 +130,9 @@ jobs:
       - name: Managed tests (TmDq.Core against the native DLL)
         shell: powershell
         run: |
+          # The C# library over the ABI and its xunit tests, run against the Release tmdq_core.dll built
+          # above. The script builds with warnings as errors and merges the UTF-8 code-page manifest
+          # into the test exe (mt.exe).
           $ErrorActionPreference = 'Continue'
           powershell -ExecutionPolicy Bypass -File scripts\test_dotnet.ps1 -Configuration Release
           if ($LASTEXITCODE -ne 0) { throw "the managed tests failed" }
@@ -327,28 +140,8 @@ jobs:
       - name: App tests (Avalonia, headless)
         shell: powershell
         run: |
-          # The Avalonia application (dotnet/TmDq.App) and its tests on the headless platform, which needs no
-          # window system: on the self-hosted runner they run as its service account in Session 0 with no
-          # desktop, and the script prints the account and session so the log records it. No native DLL needed.
+          # The Avalonia application (dotnet/TmDq.App) and its tests on the headless platform, which needs
+          # no window system; the script prints the account and session it runs as, so the log records it.
           $ErrorActionPreference = 'Continue'
           powershell -ExecutionPolicy Bypass -File scripts\test_app.ps1 -Configuration Release
           if ($LASTEXITCODE -ne 0) { throw "the app tests failed" }
-
-  # --- Single stable status: the selected build job AND the Qt-free job both passed ---
-  ci:
-    needs: [pick-runner, build-self-hosted, build-hosted, core-without-qt]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          sh='${{ needs.build-self-hosted.result }}'
-          ho='${{ needs.build-hosted.result }}'
-          nq='${{ needs.core-without-qt.result }}'
-          echo "target=${{ needs.pick-runner.outputs.target }}  self-hosted=$sh  hosted=$ho  core-without-qt=$nq"
-          if [ "$nq" != "success" ]; then
-            echo "CI failed - the core did not build and pass without Qt"; exit 1
-          fi
-          if [ "$sh" = "success" ] || [ "$ho" = "success" ]; then
-            echo "CI passed"; exit 0
-          fi
-          echo "CI failed - the selected build job did not succeed"; exit 1
