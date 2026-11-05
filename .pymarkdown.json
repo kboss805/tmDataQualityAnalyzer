@@ -29,7 +29,7 @@
     "md036": {
       "enabled": false
     },
-    // Duplicate headings: the version-history changelog in docs/claude.md
+    // Duplicate headings: the changelog in docs/changelog.md
     // legitimately reuses "#### Fixed" / "#### Cosmetic" / "#### Tests" under a
     // different "### vX.Y.Z" parent every release. siblings_only restricts the
     // check to headings under the SAME parent, which is the actual bug this rule

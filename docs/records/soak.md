@@ -1,5 +1,9 @@
 # The side-by-side soak: the Avalonia application against the Qt one (plan step 5.2)
 
+> A record, kept as written (it moved here from `docs/dotnet-migration/` in plan step 6.5). The plan it cites was
+> deleted when the move off Qt finished; `docs/changelog.md` records each step. The paths and baselines are those of
+> its day.
+
 Plan step 5.2 asks for the same recordings processed in both applications, the CSV exports compared byte for byte and
 the plots by eye, across every fixture and the full PRN recording. This is that record, made on 2026-11-02 on top of
 step 5.1 (`361f8e8`).

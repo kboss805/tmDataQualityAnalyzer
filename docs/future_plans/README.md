@@ -14,25 +14,7 @@ what was built is worse than no plan at all.
 
 ## Open items
 
-**[Moving off Qt to Avalonia](dotnet-port-assessment.md)** - **COMMITTED (2026-10-20), in
-progress.** The work plan is
-[`docs/dotnet-migration/avalonia-plan.md`](../dotnet-migration/avalonia-plan.md): numbered
-steps, one PR each on `main`, ticked as they merge. The file here is the costed assessment
-that came first.
-
-The shape is the **hybrid** the assessment argued for: the performance-critical core stays
-native C++ with no framework (the bit-serial scanner, the derandomizer and the calibration
-maths are never rewritten), behind a flat C ABI, and the UI becomes **Avalonia 12 on .NET 10**
-with the chart drawn by Skia. Qt leaves the application, the core and the tests. The full C#
-rewrite is still **not recommended**.
-
-Already done on `main`: the throughput guard, the TOML move off `QSettings`, the Qt-free
-native core (guarded by `TestCoreQtFree`), the exploration spikes (#170), the plan (#171) and
-the chart decision (#172). The Qt application keeps building and shipping until the plan's
-switch-over.
-
-Unlike the other entries here, this one is not deleted when its first PR lands: it graduates
-when the plan's last step does, and the plan file goes with it.
+None.
 
 Add an entry here when something is scoped and not yet started, and give it its own file
 once it needs more than a paragraph. An empty list is the normal resting state, not a
@@ -47,6 +29,7 @@ documentation lives.
 
 | Initiative | Landed in | Documented in |
 | --- | --- | --- |
+| Move off Qt to Avalonia 12 on .NET 10 (the hybrid: the native core behind a C ABI, the UI in C#) | PRs #170-#249; released in v3.0.0 | `docs/claude.md` (architecture), `docs/changelog.md` (v3.0.0 and every plan step), `docs/records/parity.md` and `docs/records/soak.md`. The plan and the assessment were deleted on landing, as this index asks |
 | Switch the toolchain from MinGW to MSVC | PR #40 | `CLAUDE.md`, `docs/claude.md`, `scripts/env.ps1`, `deploy/build_release.ps1` |
 | Move CI to a self-hosted runner | PR #41, #42 | [`docs/ci_runner.md`](../ci_runner.md), `.github/workflows/ci.yml` |
 | Ship sample `.ch10` files for CI | PR #41 | as above — self-hosting delivered it; small fixtures are committed, the full-size recording lives on the runner |

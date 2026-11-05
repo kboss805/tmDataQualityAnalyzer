@@ -4,7 +4,7 @@
  *
  * WHAT THIS IS FOR
  *
- * The Avalonia application (docs/dotnet-migration/avalonia-plan.md) keeps the
+ * The Avalonia application keeps the
  * performance-critical core as native MSVC C++ and puts the developer-facing surface in
  * C#. This header is the boundary that makes that possible:
  *
@@ -22,9 +22,9 @@
  * STATE: version 2, the full ABI of plan step 2.2 (files, runs, calibration, the file
  * formats, series construction). Version 1 was the interop spike's two calls (probe a
  * file, run one lock stream); they were retired in plan step 2.3 when the C# library
- * (dotnet/TmDq.Core) and its tests replaced the spike's driver. The spike
- * (dotnet/interop-spike) keeps its own copy of the version-1 header as the record of
- * what was measured.
+ * (dotnet/TmDq.Core) and its tests replaced the spike's driver. The spike, with its
+ * copy of the version-1 header, was deleted in plan step 6.5 (docs/changelog.md records
+ * what it measured).
  *
  * The conventions every function follows are written out below, at the head of the
  * "files and runs" section. tmdq_last_error() is per-thread.

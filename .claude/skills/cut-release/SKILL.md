@@ -45,10 +45,11 @@ who wrote them.)
 
 ## Step 3 — Update the developer changelog
 
-In `docs/claude.md`, under **Version History**, add a new `### vX.Y.Z — <Title>` section at the top of
-the list. Write tight, factual bullets describing what changed and which user story (US#) it serves —
-match the voice of the existing entries (they reference concrete classes/methods). Also bump the
-**Project Version** line near the top of that file.
+In `docs/changelog.md`, turn the `### Unreleased` section at the top into `### vX.Y.Z — <Title>`, with a
+short lead saying what the release is, and keep the entries under it. Add tight, factual bullets for
+anything that landed without an entry, saying what changed and which user story (US#) it serves — match
+the voice of the existing entries (they reference concrete classes/methods). Then bump the
+**Project Version** line near the top of `docs/claude.md`.
 
 ## Step 4 — Update the user-facing "What's New"
 
@@ -262,5 +263,5 @@ with the user first. The release artifacts are build outputs and are not tracked
 
 - One version source (`constants.h`). Never hand-edit `version_autogen.h`, the `.pro` VERSION, or the
   `.rc` — they're derived.
-- Two notes files, two audiences: `docs/claude.md` history = developer; `RELEASENOTES.txt` = end user.
+- Two notes files, two audiences: `docs/changelog.md` = developer; `RELEASENOTES.txt` = end user.
 - A release must come from a green, zero-warning, full-suite-passing build.

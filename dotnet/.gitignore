@@ -1,11 +1,7 @@
 # .NET build output.
 #
-# Scoped here rather than added to the repository root .gitignore on purpose: that file
-# belongs to main, and this branch's rule is to stay additive so merges from main keep
-# being trivial (see docs/dotnet-migration/README.md). A new file in a new directory
-# cannot conflict; an edit to the root ignore list can.
-#
-# Only the .NET artifacts need listing; the root .gitignore covers the rest.
+# Scoped to dotnet/ rather than added to the repository root .gitignore: the .NET
+# artifacts are this folder's, and the root list covers the rest.
 
 bin/
 obj/
