@@ -3,7 +3,7 @@ using System.Reflection;
 namespace TmDq.App
 {
     /// <summary>What the application says about itself. The version is the assembly's, which the build reads
-    /// from AppVersion in include/constants.h (dotnet/build/AppVersion.props), so it is never written here.</summary>
+    /// from AppVersion in include/constants.h (eng/AppVersion.props), so it is never written here.</summary>
     public static class AppInfo
     {
         /// <summary>The main window's title, as v2.x had it.</summary>

@@ -5,7 +5,7 @@
 # WHY THIS EXISTS
 #
 # The version has ONE source of truth (AppVersion in include/constants.h), and the
-# build derives the assemblies' versions from it (dotnet/build/AppVersion.props). But
+# build derives the assemblies' versions from it (eng/AppVersion.props). But
 # four files carry the version as PROSE, and nothing derives those:
 #
 #   .claude/CLAUDE.md          "Current version: X.Y.Z"   (sat at 2.7.0 for 2 releases)

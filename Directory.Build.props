@@ -11,6 +11,6 @@
     Directory.Build.targets beside it adds the package licence check the same way.
   -->
 
-  <Import Project="dotnet\build\AppVersion.props" Condition="'$(MSBuildProjectExtension)' == '.csproj'" />
+  <Import Project="eng\AppVersion.props" Condition="'$(MSBuildProjectExtension)' == '.csproj'" />
 
 </Project>

@@ -79,6 +79,13 @@ release/
 Makefile
 Makefile.*
 
+# .NET build output, in every project folder under src/ and tests/.
+bin/
+obj/
+# "*.app" above (a macOS app bundle) also matches src/TmDq.App/, because git on Windows ignores case. Without this line
+# git status does not even list the folder, and a commit silently leaves it out.
+!TmDq.App/
+
 # Temporary files
 *~
 *.swp

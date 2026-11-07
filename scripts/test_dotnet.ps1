@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Builds the managed side (dotnet\TmDq.Core and its tests) and runs the tests against the native core DLL.
+    Builds the managed side (src\TmDq.Core and its tests) and runs the tests against the native core DLL.
 
 .DESCRIPTION
     1. Requires native\out\<Configuration>\tmdq_core.dll (build it with scripts\build_core_dll.ps1). The tests find
@@ -38,7 +38,7 @@ if (-not $env:TMDQ_CORE_DLL) {
     }
 }
 
-$project = Join-Path $root 'dotnet\TmDq.Core.Tests'
+$project = Join-Path $root 'tests\TmDq.Core.Tests'
 $exe = Join-Path $project "bin\$Configuration\net10.0\TmDq.Core.Tests.exe"
 
 $ErrorActionPreference = 'Continue'   # 5.1 turns native stderr into a terminating error

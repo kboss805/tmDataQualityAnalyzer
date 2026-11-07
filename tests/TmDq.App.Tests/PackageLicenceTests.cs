@@ -252,7 +252,7 @@ namespace TmDq.App.Tests
             string version = VersionTests.HeaderVersion();
             foreach (string project in new[] { "TmDq.Core", "TmDq.Core.Tests", "TmDq.App", "TmDq.App.Tests" })
             {
-                var values = BuildTool.Evaluate(Repo.File(Path.Combine("dotnet", project, project + ".csproj")), "TmDqLicenceScript", "Version");
+                var values = BuildTool.Evaluate(Repo.File(Path.Combine(Repo.Project(project), project + ".csproj")), "TmDqLicenceScript", "Version");
                 Assert.True(string.Equals(script, values["TmDqLicenceScript"], StringComparison.OrdinalIgnoreCase),
                             project + " does not get the licence check: TmDqLicenceScript is '" + values["TmDqLicenceScript"] + "'");
                 Assert.True(version == values["Version"], project + " does not get the version: Version is '" + values["Version"] + "'");
@@ -267,7 +267,7 @@ namespace TmDq.App.Tests
             // (TmDq.Core.Tests is not in that graph; its own build runs the same check.)
             foreach (string project in new[] { "TmDq.Core", "TmDq.App", "TmDq.App.Tests" })
             {
-                string assets = Path.Combine(Repo.Root, "dotnet", project, "obj", "project.assets.json");
+                string assets = Path.Combine(Repo.Project(project), "obj", "project.assets.json");
                 Assert.True(File.Exists(assets), project + " has not been restored: " + assets);
                 var r = Run(assets);
                 Assert.True(r.Exit == 0, project + ":\n" + r.Output);
@@ -277,7 +277,7 @@ namespace TmDq.App.Tests
         /// <summary>ANGLE's licence as restore put it on disk for the application (Avalonia.Desktop brings it).</summary>
         private static string LicenceOfRestoredAngle()
         {
-            string assets = Path.Combine(Repo.Root, "dotnet", "TmDq.App", "obj", "project.assets.json");
+            string assets = Path.Combine(Repo.Root, "src", "TmDq.App", "obj", "project.assets.json");
             using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(assets));
             foreach (JsonProperty folder in doc.RootElement.GetProperty("packageFolders").EnumerateObject())
             {

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate resources/icon.ico, the application's icon, from its artwork (docs/design/icon_image.png).
 
-The icon is the exe's (dotnet/TmDq.App/TmDq.App.csproj's ApplicationIcon: Explorer, the taskbar, the shortcuts), every
+The icon is the exe's (src/TmDq.App/TmDq.App.csproj's ApplicationIcon: Explorer, the taskbar, the shortcuts), every
 window's (an AvaloniaResource: the title bar, Alt+Tab) and the installer's (SetupIconFile). Windows picks the size it
 needs from the file, and scales the nearest one when the file lacks it, so it carries every size Windows asks for at
 100 % to 200 %: 16, 24, 32, 48, 64 and 256 px. The artwork is 710 by 679, so it is centred on a square transparent

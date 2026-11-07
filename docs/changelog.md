@@ -12,6 +12,32 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The .NET projects in src/ and tests/, their build files in eng/
+
+The second of the three PRs that tidy the repository's layout. Files move; no code changes, beyond the paths that name
+them.
+
+- **`dotnet/` is gone.** `TmDq.Core` and `TmDq.App` are in `src/` (beside `src/model`, which the third PR folds into
+  `src/core`), `TmDq.Core.Tests` and `TmDq.App.Tests` in `tests/` (beside `data/` and `fixtures/`), and
+  `dotnet/build/`'s `AppVersion.props` and `PackageLicences.targets` in `eng/`. Each project keeps its depth, so the
+  paths inside it to `native/`, `settings/` and `resources/` are unchanged; the test projects' references to the
+  projects they test now go through `..\..\src`.
+- **`tmdq.sln`** has solution folders `src` and `tests` where it had `dotnet`.
+- **`dotnet/.gitignore`'s rules are in the root `.gitignore`:** `bin/` and `obj/`, and the re-inclusion of
+  `TmDq.App/`, which the root's `*.app` rule matches because git on Windows ignores case. `dotnet/build/`'s
+  re-inclusion is no longer needed: `eng/` matches no rule.
+- **Repointed:** the test scripts, the soak, the manual build, the package script, `mutate.ps1` (which also tells a
+  .NET project's file from the native core's by the new prefix, `src\TmDq.` or `tests\TmDq.`, since `src\model` is
+  the core's), `.gitattributes`, the VS Code launch and build tasks, the CI comment, the tests that read repository
+  files (`Repo.Project` names a project's folder), and the guides, skills and README. The changelog and
+  `docs/records/` keep the paths of their day.
+
+**Checked:** the core built in Release; every suite at its baseline on the moved tree, rebased onto the icon's PR
+(native 485 test cases, 1 skipped; managed 360 passed / 0 failed / 1 skipped; app 608 passed / 0 failed, 34 not run).
+Three mutants (`scripts\mutate.ps1`, a `C:\tmp` worktree), all caught: an app rule under `src\`, which the harness
+rebuilt the app's assembly for (with its old `^dotnet` prefix the same mutant is STALE, no verdict), and
+`Repo.Project` with its two folders swapped or with every project sent to `src\`.
+
 #### The application's icon
 
 v3.0.0 shipped an exe with no icon: the Qt application's came from its `.rc` file, which the port left behind, so

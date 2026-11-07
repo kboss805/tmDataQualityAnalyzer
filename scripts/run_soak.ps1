@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Runs the side-by-side soak (plan step 5.2): every run in dotnet\TmDq.App.Tests\Soak\soak.json through the Avalonia
+    Runs the side-by-side soak (plan step 5.2): every run in tests\TmDq.App.Tests\Soak\soak.json through the Avalonia
     application, each CSV export compared byte for byte with the Qt application's.
 .DESCRIPTION
     The soak's runs read the full recordings and the local ones under tests\data, which are not committed, so its tests
@@ -28,8 +28,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$manifest = Join-Path $root 'dotnet\TmDq.App.Tests\Soak\soak.json'
-$exe = Join-Path $root "dotnet\TmDq.App.Tests\bin\$Configuration\net10.0\TmDq.App.Tests.exe"
+$manifest = Join-Path $root 'tests\TmDq.App.Tests\Soak\soak.json'
+$exe = Join-Path $root "tests\TmDq.App.Tests\bin\$Configuration\net10.0\TmDq.App.Tests.exe"
 
 if (-not $NoBuild) {
     # test_app.ps1 builds the app and its tests (and sets up mt.exe); its run of the ordinary suite comes with it.

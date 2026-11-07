@@ -8,6 +8,6 @@
     Only .csproj: the native projects import this file too, and they resolve no packages.
   -->
 
-  <Import Project="dotnet\build\PackageLicences.targets" Condition="'$(MSBuildProjectExtension)' == '.csproj'" />
+  <Import Project="eng\PackageLicences.targets" Condition="'$(MSBuildProjectExtension)' == '.csproj'" />
 
 </Project>

@@ -40,7 +40,7 @@ namespace TmDq.App.Tests
     {
         public SoakTests() => NativeCore.EnsureLoaded();
 
-        public static string ManifestPath => Path.Combine(Repo.Root, "dotnet", "TmDq.App.Tests", "Soak", "soak.json");
+        public static string ManifestPath => Path.Combine(Repo.Root, "tests", "TmDq.App.Tests", "Soak", "soak.json");
 
         private static JsonArray LoadRuns() => JsonNode.Parse(File.ReadAllText(ManifestPath))!["runs"]!.AsArray();
 

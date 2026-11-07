@@ -4,14 +4,14 @@ This file provides context and guidelines for AI assistants working on the tmDat
 
 ## Version Information
 
-- **.NET**: .NET 10 SDK; the application is Avalonia 12 (`dotnet/TmDq.App`).
+- **.NET**: .NET 10 SDK; the application is Avalonia 12 (`src/TmDq.App`).
 - **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, MSVC 14.44 / v143, pinned by `scripts\env.ps1`) for
   the native core. This is the only supported toolchain; CI builds with it too (`windows-2022`, checked by the job).
 - **C++ Standard**: C++20 (`std::format`, `std::span`, `inline constexpr` throughout `constants.h`).
-- **Shipping application** (from v3.0.0): the Avalonia 12 application on .NET 10 (`dotnet/TmDq.App`) over the native
+- **Shipping application** (from v3.0.0): the Avalonia 12 application on .NET 10 (`src/TmDq.App`) over the native
   core (`tmdq_core.dll`), packaged by `deploy/avalonia/build_avalonia_package.ps1`. Up to v2.14.2 the application was
   Qt 6; `docs/changelog.md` records the move.
-- **Project Version**: 3.0.0 — defined once in the `AppVersion` struct in `include/constants.h`; `dotnet/build/AppVersion.props` reads it for every assembly, and the package script and the manual build read it too, so no other file carries a duplicate version literal
+- **Project Version**: 3.0.0 — defined once in the `AppVersion` struct in `include/constants.h`; `eng/AppVersion.props` reads it for every assembly, and the package script and the manual build read it too, so no other file carries a duplicate version literal
 
 ## User Stories
 
@@ -403,9 +403,9 @@ The stories below follow the workflow a first-time user takes through the applic
 
 ## Tech Stack
 
-- **The application**: C# on .NET 10, Avalonia 12 (MIT) with CommunityToolkit.Mvvm - `dotnet/TmDq.App`.
+- **The application**: C# on .NET 10, Avalonia 12 (MIT) with CommunityToolkit.Mvvm - `src/TmDq.App`.
 - **The native core**: C++20, built by MSBuild into `tmdq_core.dll` (`native/tmdq_core`), with a C ABI (`tmdq_abi.h`)
-  that `dotnet/TmDq.Core` binds.
+  that `src/TmDq.Core` binds.
 - **Platform**: Windows x64.
 - **External libraries**: irig106utils (a vendored C library, compiled into the core) and doctest (the native tests'
   single header, `lib/doctest`). Charting is first-party: the core builds the geometry (`chartgeometry`), the app draws
@@ -448,9 +448,9 @@ Three layers, each tested on its own:
    C++20 with no UI. The processing pipeline is a **single-reader / parallel-worker** one: a run reads the file exactly
    once while each selected stream is processed on its own worker thread, and the results stay in memory.
 2. **The C ABI and the C# library**: `native/tmdq_core` builds the core into `tmdq_core.dll` behind `tmdq_abi.h`
-   (opaque handles, plain structs, a version and revision, every error as a code and a message); `dotnet/TmDq.Core` is
+   (opaque handles, plain structs, a version and revision, every error as a code and a message); `src/TmDq.Core` is
    its C# binding, and nothing above it touches a pointer.
-3. **The application** (`dotnet/TmDq.App`, MVVM): Avalonia views over CommunityToolkit.Mvvm view models. The
+3. **The application** (`src/TmDq.App`, MVVM): Avalonia views over CommunityToolkit.Mvvm view models. The
    presentation state (what is shown, the axes, the legend, the dialogs' rules, preferences, the template JSON) is C#;
    the data and every file format the core reads or writes are the core's. Views hold no rules: code-behind does only
    what a control must (focus, pointer gestures, popups), and view models reach no control.
@@ -470,7 +470,7 @@ profile, so a batch processes with the linear calibration.
 
 ### Core Components
 
-#### The application (`dotnet/TmDq.App`)
+#### The application (`src/TmDq.App`)
 
 - **`MainWindow` / `MainWindowViewModel`** (`ViewModels`, `Views`): the shell - its own title bar (snap layouts on the
   maximize button), the hamburger menu (Process, Import/Export, Settings, Help, Exit), Recent Files, drag and drop, the
@@ -502,7 +502,7 @@ profile, so a batch processes with the linear calibration.
   run. The import stays through the v3.0.x releases, then goes.
 - **Help**: the manual compiled in (`resources/usermanual.html`), or the full one beside the exe.
 
-#### The C# library (`dotnet/TmDq.Core`)
+#### The C# library (`src/TmDq.Core`)
 
 The binding of every ABI function: `Ch10File` (a recording's channels), `ProcessingRun` and `StreamResult` (a run and
 what it produced, with progress, log and cancel), `CalibrationRun` and `StepFile`, the file formats (`FrameSyncFile`,
@@ -580,9 +580,10 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
 - **The core**: headers in `include/` (`dto/`, `model/`, `constants.h`), sources in `src/model/`; the ABI in
   `native/tmdq_core/`; the doctest suite in `native/tmdq_core_tests/`. A new core source goes in `tmdq_core.vcxproj`,
   and a new ABI source in both native projects; `NativeProjectTests` fails until they list it.
-- **.NET**: `dotnet/TmDq.Core` (the binding) and `dotnet/TmDq.App` (folders by role: `ViewModels`, `Views`, `Plot`,
-  `Streams`, `Processing`, `Settings`, `Templates`, `Services`, `Logging`), each with a `.Tests` project beside it;
-  `dotnet/build` holds the props and targets that `Directory.Build.props` and `Directory.Build.targets`, at the root, import into every .NET project.
+- **.NET**: `src/TmDq.Core` (the binding) and `src/TmDq.App` (folders by role: `ViewModels`, `Views`, `Plot`,
+  `Streams`, `Processing`, `Settings`, `Templates`, `Services`, `Logging`), each with a `.Tests` project of the same
+  name under `tests/`; `eng/` holds the props and targets that `Directory.Build.props` and `Directory.Build.targets`,
+  at the root, import into every .NET project.
 - **Resources**: `resources/` (the base manual, the icon, the UTF-8 manifest); shipped settings in `settings/`.
 
 ### Naming Conventions
@@ -631,7 +632,7 @@ Everything builds from `tmdq.sln`, which VS Code opens by default; `.claude/CLAU
   `native/tmdq_core/tmdq_core.vcxproj`, into `native/out/<config>/`), then fails on any compiler warning or on an import
   outside a short allow-list.
 - **The .NET projects**: built by the test scripts; `Directory.Build.props` and `Directory.Build.targets` at the root import
-  `dotnet/build/AppVersion.props` (the version, read from `AppVersion`) and `dotnet/build/PackageLicences.targets` (the
+  `eng/AppVersion.props` (the version, read from `AppVersion`) and `eng/PackageLicences.targets` (the
   licence allow-list) into every .NET project, so none imports them itself.
 - **The manuals**: `scripts\build_manual.ps1` renders the figures from the app (`ManualFiguresTests`) and embeds them.
 - **The release**: `deploy\avalonia\build_avalonia_package.ps1` (single-file publish, signing, the portable ZIP and the
@@ -732,7 +733,7 @@ that worktrees also need.
 
 ### Adding a Control or a Dialog
 
-1. Put the rule in a view model (`dotnet/TmDq.App/ViewModels`), where a plain `[Fact]` can test it without a window.
+1. Put the rule in a view model (`src/TmDq.App/ViewModels`), where a plain `[Fact]` can test it without a window.
 2. Bind it from the view's XAML; keep the code-behind to what only a control can do (focus, pointer gestures, popups).
 3. Test the window on the headless platform (`[AvaloniaFact]`), never a control in a plain `[Fact]`, and never await a
    modal dialog in a test. The `verify-ui-change` skill covers measuring and rendering.
@@ -741,7 +742,7 @@ that worktrees also need.
 
 1. Pin the current behaviour with a doctest case first, then change it.
 2. A new function a host needs goes through the ABI (`native/tmdq_core/tmdq_abi.h`, a new revision) and its binding in
-   `dotnet/TmDq.Core`, with a native case in `test_abi.cpp` and a managed test.
+   `src/TmDq.Core`, with a native case in `test_abi.cpp` and a managed test.
 3. Mutation-check the change (`scripts\mutate.ps1`), and after a change to processing, the plot's series or the CSV
    writer, run the soak (`scripts\run_soak.ps1`).
 
@@ -750,7 +751,7 @@ that worktrees also need.
 The `add-stream-setting` skill is the checklist. In short:
 
 1. Add the field to the app's stream setup (`Streams/StreamSetup`, its defaults and rules) and to `StreamConfig`
-   (`dotnet/TmDq.Core/RunTypes.cs`), and to the core's job input it travels in, through the ABI.
+   (`src/TmDq.Core/RunTypes.cs`), and to the core's job input it travels in, through the ABI.
 2. Surface it in the setup dialog's view model, in Apply to all if it should propagate, and in the template file.
 3. If it must round-trip to a TOML file, add it to the core's format (`framesyncfile` or the receiver-parameters file,
    through `TomlDocument`), respecting the TOML boundary in `.claude/CLAUDE.md`.
@@ -783,8 +784,8 @@ Three suites, each run by its own script; the baselines are in `.claude/CLAUDE.m
 
 - **The native core** (doctest, `native/tmdq_core_tests`): `scripts\test_native.ps1`, filtered with
   `-tc="<name>*"` while iterating.
-- **The C# library** (xunit v3, `dotnet/TmDq.Core.Tests`): `scripts\test_dotnet.ps1`.
-- **The application** (xunit v3 on `Avalonia.Headless.XUnit`, `dotnet/TmDq.App.Tests`): `scripts\test_app.ps1`.
+- **The C# library** (xunit v3, `tests/TmDq.Core.Tests`): `scripts\test_dotnet.ps1`.
+- **The application** (xunit v3 on `Avalonia.Headless.XUnit`, `tests/TmDq.App.Tests`): `scripts\test_app.ps1`.
 
 The suites read the committed recordings under `tests/data/test files` and the fixtures under `tests/fixtures`. Two
 more checks run by hand:
@@ -859,7 +860,7 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
   series construction, the receiver-parameters file), the callbacks' order and threads, cancel and free in flight, bad
   arguments and the last error.
 
-**The C# library** (`dotnet/TmDq.Core.Tests`): the struct layout against the native side (`LayoutTests`); the native
+**The C# library** (`tests/TmDq.Core.Tests`): the struct layout against the native side (`LayoutTests`); the native
 projects' source lists against the files on disk (`NativeProjectTests`); the recordings' channels (`FileTests`); runs of
 the committed recordings against numbers v2.14.2 produced, every setting reaching the job, failures, observers, cancel
 and lifetimes (`RunTests`); calibration against the core's extractor (`CalibrationTests`); the file formats byte for
@@ -867,7 +868,7 @@ byte against the core (`FormatsTests`); loading the DLL (`LibraryTests`, `Isolat
 suite's one skip); `ChartGeometryTests`, `ReceiverParamsTests`, `SeriesTests`, `ArenaTests`; and `TempFilesTests`, the
 helper every test cleans up and reads back through, which waits out a virus scanner's moment's hold.
 
-**The application** (`dotnet/TmDq.App.Tests`, on the headless platform with Skia drawing):
+**The application** (`tests/TmDq.App.Tests`, on the headless platform with Skia drawing):
 
 - **The run:** `WalkingSkeletonTests` (Open to the drawn chart on the PRN sample, failures, the smoke report),
   `ProcessingTests` (the log, the progress dialog and its Cancel, the run's lines in order), `SeveralStreamsTests`.

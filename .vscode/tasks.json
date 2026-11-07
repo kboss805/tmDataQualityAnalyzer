@@ -25,7 +25,7 @@
             "type": "shell",
             "command": "powershell.exe",
             "args": ["-ExecutionPolicy", "Bypass", "-Command",
-                     "powershell -ExecutionPolicy Bypass -File scripts/build_core_dll.ps1 -Configuration Debug; if ($LASTEXITCODE) { exit $LASTEXITCODE }; $env:Platform = $null; dotnet build dotnet/TmDq.App -c Debug -nologo"],
+                     "powershell -ExecutionPolicy Bypass -File scripts/build_core_dll.ps1 -Configuration Debug; if ($LASTEXITCODE) { exit $LASTEXITCODE }; $env:Platform = $null; dotnet build src/TmDq.App -c Debug -nologo"],
             "options": { "cwd": "${workspaceFolder}" },
             "group": { "kind": "build", "isDefault": true },
             "problemMatcher": ["$msCompile"]

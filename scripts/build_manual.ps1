@@ -49,7 +49,7 @@ if (-not $NoCapture) {
     Get-ChildItem $SrcDir -Filter *.png | Where-Object { $Kept -notcontains $_.Name } | Remove-Item -Force
     . (Join-Path $ProjectDir 'scripts\env.ps1') *> $null
     $env:Platform = $null
-    $tests = Join-Path $ProjectDir 'dotnet\TmDq.App.Tests'
+    $tests = Join-Path $ProjectDir 'tests\TmDq.App.Tests'
     & dotnet build $tests -c Release -nologo -v q
     if ($LASTEXITCODE -ne 0) { throw "the tests did not build ($LASTEXITCODE)" }
     $env:TMDQ_CORE_DLL = Join-Path $ProjectDir 'native\out\Release\tmdq_core.dll'

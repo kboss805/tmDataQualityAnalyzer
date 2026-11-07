@@ -15,7 +15,7 @@ description: >-
 The version number has **one** source of truth and several derived consumers. Edit the source, let the
 build derive the rest, update the human-facing notes, then package. Do the steps in order.
 
-**From v3.0.0 the release is the Avalonia application** (`dotnet/TmDq.App` over `tmdq_core.dll`), packaged by
+**From v3.0.0 the release is the Avalonia application** (`src/TmDq.App` over `tmdq_core.dll`), packaged by
 `deploy\avalonia\build_avalonia_package.ps1`. The Qt application and its packaging (v2.x's) were deleted in plan step
 6.1.
 
@@ -36,7 +36,7 @@ struct AppVersion {
     static constexpr int kPatch = 0;
 ```
 
-Do **not** add a version literal anywhere else. `dotnet/build/AppVersion.props` reads these three
+Do **not** add a version literal anywhere else. `eng/AppVersion.props` reads these three
 constants for every .NET project (never type a version in a `.csproj`), `build_avalonia_package.ps1` reads
 them for the package names and passes them to Inno Setup, and the manual build stamps them into the
 manuals. If you find a hardcoded version string elsewhere, that's a bug to remove, not a place

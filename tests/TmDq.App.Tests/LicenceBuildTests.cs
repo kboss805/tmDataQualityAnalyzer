@@ -11,7 +11,7 @@ using Xunit;
 namespace TmDq.App.Tests
 {
     /// <summary>
-    /// dotnet/build/PackageLicences.targets end to end: a throwaway project that imports it restores a package from
+    /// eng/PackageLicences.targets end to end: a throwaway project that imports it restores a package from
     /// a local feed and is built with the real SDK. The script's own tests (PackageLicenceTests) cannot see the
     /// target being wired wrongly (the wrong hook, a condition that is never true), and only a real build can.
     /// Everything is isolated: the feed, the packages folder and the NuGet configuration are the test's own.
@@ -54,7 +54,7 @@ namespace TmDq.App.Tests
         {
             string project = Path.Combine(_dir, "consumer", "Consumer.csproj");
             Directory.CreateDirectory(Path.GetDirectoryName(project)!);
-            string targets = Repo.File(Path.Combine("dotnet", "build", "PackageLicences.targets"));
+            string targets = Repo.File(Path.Combine("eng", "PackageLicences.targets"));
             string references = string.Concat(Array.ConvertAll(packageIds, id => $"<PackageReference Include=\"{id}\" Version=\"1.0.0\" />"));
             File.WriteAllText(project,
                 "<Project Sdk=\"Microsoft.NET.Sdk\">\n" +

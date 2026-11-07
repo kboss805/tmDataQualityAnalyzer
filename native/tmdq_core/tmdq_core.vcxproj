@@ -6,7 +6,7 @@
   C runtime and Windows system libraries, so a core source that reached for anything else would fail to build.
   scripts\build_core_dll.ps1 builds it and then checks the DLL's imports against an allow-list.
 
-  Its source list is held to the files on disk by NativeProjectTests (dotnet/TmDq.Core.Tests): every source in
+  Its source list is held to the files on disk by NativeProjectTests (tests/TmDq.Core.Tests): every source in
   src/model, and every ABI source here, must be listed, and the native tests must compile exactly the same list.
 
   Compiler switches, kept from v2.x's build when plan step 6.1 removed it: C++20, /utf-8, /permissive-, warning

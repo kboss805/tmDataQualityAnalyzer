@@ -10,7 +10,7 @@
   -->
 
   <PropertyGroup>
-    <TmDqVersionSource>$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)..\..\include\constants.h'))</TmDqVersionSource>
+    <TmDqVersionSource>$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)..\include\constants.h'))</TmDqVersionSource>
     <TmDqVersionText Condition="Exists('$(TmDqVersionSource)')">$([System.IO.File]::ReadAllText('$(TmDqVersionSource)'))</TmDqVersionText>
     <TmDqVersionMajor>$([System.Text.RegularExpressions.Regex]::Match('$(TmDqVersionText)', 'kMajor\s*=\s*\d+').Value)</TmDqVersionMajor>
     <TmDqVersionMinor>$([System.Text.RegularExpressions.Regex]::Match('$(TmDqVersionText)', 'kMinor\s*=\s*\d+').Value)</TmDqVersionMinor>

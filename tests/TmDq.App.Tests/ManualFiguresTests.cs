@@ -66,7 +66,7 @@ namespace TmDq.App.Tests
 
         private static ProcessingTemplate PrnTemplate()
         {
-            Assert.Equal(TemplateLoad.Loaded, TemplateFile.Read(Path.Combine(Repo.Root, "dotnet", "TmDq.App.Tests", "Templates", "prn-sample.json"),
+            Assert.Equal(TemplateLoad.Loaded, TemplateFile.Read(Path.Combine(Repo.Root, "tests", "TmDq.App.Tests", "Templates", "prn-sample.json"),
                                                                  out ProcessingTemplate? t, out _));
             return t!;
         }

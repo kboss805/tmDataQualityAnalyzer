@@ -6,7 +6,7 @@ using Xunit;
 namespace TmDq.App.Tests
 {
     /// <summary>
-    /// dotnet/build/AppVersion.props against headers other than the real one: a throwaway project imports it and is
+    /// eng/AppVersion.props against headers other than the real one: a throwaway project imports it and is
     /// built with the header path given on the command line (a global property overrides the one the props set).
     /// The real header can only show that the numbers agree; these show they are read from the file, each from its
     /// own definition, and that a header the pattern cannot read stops the build instead of shipping 1.0.0.
@@ -28,7 +28,7 @@ namespace TmDq.App.Tests
             File.WriteAllText(headerPath, header);
             string project = Path.Combine(_dir, "versioned", "Versioned.csproj");
             Directory.CreateDirectory(Path.GetDirectoryName(project)!);
-            string props = Repo.File(Path.Combine("dotnet", "build", "AppVersion.props"));
+            string props = Repo.File(Path.Combine("eng", "AppVersion.props"));
             File.WriteAllText(project,
                 "<Project Sdk=\"Microsoft.NET.Sdk\">\n" +
                 $"  <Import Project=\"{props}\" />\n" +

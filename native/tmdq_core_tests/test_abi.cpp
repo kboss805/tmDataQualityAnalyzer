@@ -5,7 +5,7 @@
 // as a host would, from C++ rather than through P/Invoke. What they pin is the contract in `tmdq_abi.h`: the layout of
 // every struct, what a run reports and in what order, what a bad argument returns, who owns what and when, and that a
 // run through the ABI is the run the core itself makes. (The managed side repeats the layout and numeric checks from
-// C#, in dotnet/TmDq.Core.Tests.)
+// C#, in tests/TmDq.Core.Tests.)
 
 #include <atomic>
 #include <chrono>

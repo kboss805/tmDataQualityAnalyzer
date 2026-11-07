@@ -56,8 +56,8 @@
 
     The suites:
         native    native\tmdq_core_tests (doctest). Run with a filter while iterating: "args": ["-tc=Abi*"]
-        managed   dotnet\TmDq.Core.Tests (xunit v3), against the worktree's tmdq_core.dll
-        app       dotnet\TmDq.App.Tests (xunit v3), against the worktree's tmdq_core.dll.
+        managed   tests\TmDq.Core.Tests (xunit v3), against the worktree's tmdq_core.dll
+        app       tests\TmDq.App.Tests (xunit v3), against the worktree's tmdq_core.dll.
                   "args": ["-stopOnFail"] stops at the first failure, which is all a verdict needs.
                   Run the soak's explicit cases with "args": ["-explicit", "only", "-class",
                   "TmDq.App.Tests.SoakTests"] and each mutant's runs in "env": {"TMDQ_SOAK_ONLY": "..."}.
@@ -169,8 +169,8 @@ $outDir = Join-Path $root 'native\out\Release'
 $coreDll = Join-Path $outDir 'tmdq_core.dll'
 switch ($suite) {
     'native'  { $testProject = Join-Path $root 'native\tmdq_core_tests\tmdq_core_tests.vcxproj'; $testExe = Join-Path $outDir 'tmdq_core_tests.exe' }
-    'managed' { $testProject = Join-Path $root 'dotnet\TmDq.Core.Tests'; $testExe = Join-Path $testProject 'bin\Release\net10.0\TmDq.Core.Tests.exe' }
-    'app'     { $testProject = Join-Path $root 'dotnet\TmDq.App.Tests'; $testExe = Join-Path $testProject 'bin\Release\net10.0\TmDq.App.Tests.exe' }
+    'managed' { $testProject = Join-Path $root 'tests\TmDq.Core.Tests'; $testExe = Join-Path $testProject 'bin\Release\net10.0\TmDq.Core.Tests.exe' }
+    'app'     { $testProject = Join-Path $root 'tests\TmDq.App.Tests'; $testExe = Join-Path $testProject 'bin\Release\net10.0\TmDq.App.Tests.exe' }
 }
 # MSB3073 is a build step's tool failing (mt.exe, merging the manifest: c101008d), which is not the compiler's verdict.
 $lockPattern = 'LNK1104|LNK1168|LNK1201|C1041|C1090|MSB3021|MSB3026|MSB3027|MSB3073|c101008d|CS2012|being used by another process'
@@ -214,7 +214,7 @@ function Build-Suite {
 # What a mutated file compiles into, which must be newer than the file once the build is done.
 function Get-Product([string]$file) {
     $full = Join-Path $root $file
-    if ($file -match '^dotnet[\\/]') {
+    if ($file -match '^(src|tests)[\\/]TmDq\.') {   # a .NET project's file (src\model is the native core's)
         $dir = Split-Path $full
         while ($dir.Length -gt $root.Length) {
             $proj = @(Get-ChildItem $dir -Filter '*.csproj' -ErrorAction SilentlyContinue)

@@ -19,8 +19,8 @@ each suite has its house style and helpers. Build and run with the **build-and-t
 | Code under test | Suite | Where |
 | --- | --- | --- |
 | The core (`include/`, `src/model/`) and the C ABI (`native/tmdq_core/`) | doctest | `native/tmdq_core_tests/test_<name>.cpp` |
-| The C# binding (`dotnet/TmDq.Core`) | xunit v3 | `dotnet/TmDq.Core.Tests/<Name>Tests.cs` |
-| The application (`dotnet/TmDq.App`) | xunit v3 on `Avalonia.Headless.XUnit` | `dotnet/TmDq.App.Tests/<Name>Tests.cs` |
+| The C# binding (`src/TmDq.Core`) | xunit v3 | `tests/TmDq.Core.Tests/<Name>Tests.cs` |
+| The application (`src/TmDq.App`) | xunit v3 on `Avalonia.Headless.XUnit` | `tests/TmDq.App.Tests/<Name>Tests.cs` |
 
 ## The native suite (doctest)
 
@@ -59,7 +59,7 @@ each suite has its house style and helpers. Build and run with the **build-and-t
   controls or capture a frame (`Frames.Capture`, `Frames.Pixel`, `Frames.Near`, `Frames.CountDifferent`).
   `IsEffectivelyEnabled`, not `IsEnabled`, is what the user sees.
 - **Never await a modal dialog in a test.** Give the code under test a fake (`StreamFakes.cs` and the
-  `I*` services in `dotnet/TmDq.App/Services`) and assert on what it was asked.
+  `I*` services in `src/TmDq.App/Services`) and assert on what it was asked.
 - **Classes that load the native core** join `[Collection(NativeCoreCollection.Name)]`, which runs them
   one at a time (one of them points `TMDQ_CORE_DLL` at a missing file for a moment).
 - **Files:** `Repo.Recording("<name>")`, `Repo.File("settings/...")`. A test that writes a preferences
