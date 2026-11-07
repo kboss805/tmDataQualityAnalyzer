@@ -1,7 +1,7 @@
 # tmDataQualityAnalyzer — Claude Code guide
 
 Windows desktop app for analyzing data quality of IRIG 106 Chapter 10 PCM telemetry: per-stream **Frame Sync
-Lock** stats and **Receiver AGC/SNR**, plotted vs. time. **Avalonia 12 on .NET 10** (`dotnet/`, MVVM) over a
+Lock** stats and **Receiver AGC/SNR**, plotted vs. time. **Avalonia 12 on .NET 10** (`src/TmDq.App`, MVVM) over a
 C++20 single-reader / parallel-worker processing core built as `tmdq_core.dll` (`include/`, `src/model/`, `native/`).
 Up to v2.14.2 it was a Qt application; `docs/changelog.md` records the move. **Current version: 3.0.0.**
 
@@ -38,14 +38,14 @@ Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `
   ratios: the decommutation pipeline's only performance guard. It needs `tests/data/test files/prn_testfile,
   full.ch10` (gitignored); the committed sample carries data for 2 of the 4 channels it times and cannot stand in.
 - **Managed library and its tests (.NET 10):** `powershell -ExecutionPolicy Bypass -File scripts\test_dotnet.ps1
-  [-Configuration Debug|Release] [-NoBuild]` builds `dotnet/TmDq.Core` (the C# binding of the DLL's C ABI) and
-  `dotnet/TmDq.Core.Tests` (xunit v3, warnings are errors) and runs the test exe against
+  [-Configuration Debug|Release] [-NoBuild]` builds `src/TmDq.Core` (the C# binding of the DLL's C ABI) and
+  `tests/TmDq.Core.Tests` (xunit v3, warnings are errors) and runs the test exe against
   `native/out/<config>/tmdq_core.dll` (build that first; `TMDQ_CORE_DLL` overrides). The tests run the
   committed recordings through the library and compare with numbers v2.14.2's pipeline produced. An xunit v3
   project is an executable; the build merges a UTF-8 code-page manifest into it with `mt.exe`, because the vendored
   irig106 opens files with a narrow `open()` that reads the active code page. Green baseline **360 passed / 0
   failed / 1 skipped** (the skip is the probe `IsolatedLoadTests` runs in a child process). CI runs it.
-- **The app:** `dotnet/TmDq.App` (Avalonia 12, CommunityToolkit.Mvvm) and `dotnet/TmDq.App.Tests` (xunit v3 on
+- **The app:** `src/TmDq.App` (Avalonia 12, CommunityToolkit.Mvvm) and `tests/TmDq.App.Tests` (xunit v3 on
   `Avalonia.Headless.XUnit`), both in `tmdq.sln`, which VS Code opens by default (`dotnet.defaultSolution`).
   `powershell -ExecutionPolicy Bypass -File scripts\test_app.ps1 [-Configuration Debug|Release] [-NoBuild]` builds the
   app with its tests and runs them against `native\out\<cfg>\tmdq_core.dll` (build it first; `TMDQ_CORE_DLL`
@@ -60,13 +60,13 @@ Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `
   `powershell -ExecutionPolicy Bypass -File scripts\build_manual.ps1` (`-NoCapture` reuses the figures). CI runs the
   app suite. Green baseline **608 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases.
   **The side-by-side soak:** `powershell -ExecutionPolicy Bypass -File scripts\run_soak.ps1 [-NoBuild]
-  [-Only <run>,...]` runs every run in `dotnet\TmDq.App.Tests\Soak\soak.json` (`SoakTests`, explicit, one process a
+  [-Only <run>,...]` runs every run in `tests\TmDq.App.Tests\Soak\soak.json` (`SoakTests`, explicit, one process a
   run) and fails unless each CSV export is byte for byte what v2.14.2 exported (the manifest's `qt` blocks). Most
   runs read the full and local recordings under `tests\data`, which are not committed, so CI never runs it, and a
   missing recording fails. Run it after a change to processing, the plot's series or the CSV writer.
   **Never type a version in a .csproj**: `Directory.Build.props` at the root imports
-  `dotnet/build/AppVersion.props`, which reads `AppVersion`, into every .NET project, and **`Directory.Build.targets`**
-  **imports `dotnet/build/PackageLicences.targets`** (no licensed tooling; the project stays GPL-3.0): a package (transitive ones too) outside the open-source allow-list
+  `eng/AppVersion.props`, which reads `AppVersion`, into every .NET project, and **`Directory.Build.targets`**
+  **imports `eng/PackageLicences.targets`** (no licensed tooling; the project stays GPL-3.0): a package (transitive ones too) outside the open-source allow-list
   in `scripts/check_package_licences.ps1` fails the build, and a licence *file* passes only when its SHA-256 is in that
   script's `$Reviewed` table, so read it before adding it. That script runs under Windows PowerShell 5.1 inside builds
   started from PowerShell 7, which inherits 7's `PSModulePath`: avoid cmdlets from script modules (`Get-FileHash` fails).
@@ -123,14 +123,14 @@ MSVC 14.51 and left two compilers' objects in one tree. Override with `TMDQ_VS_R
 - **Never edit** `lib/irig106/**` (third-party; deny-listed in
   `.claude/settings.json`). Adapt in the core (`chapter10reader.cpp`, `ch10packetreader.cpp`,
   `frameprocessor.cpp`, …) instead.
-- **Version is single-sourced** in `AppVersion` (`include/constants.h`); `dotnet/build/AppVersion.props`, the package
+- **Version is single-sourced** in `AppVersion` (`include/constants.h`); `eng/AppVersion.props`, the package
   script and the manuals read it. Never type a version anywhere else.
 
 ## Domain invariants (silent-bug territory — see `tm-code-review` skill & `docs/*_logic.md`)
 
 - **Ch10 paths:** both readers pass irig106 the path in the process code page (`path.string()`),
   never as UTF-8 bytes - its narrow `open()` reads that code page, which the UTF-8 code-page manifest
-  merged into the app and every test host (`dotnet/TmDq.App/app.manifest`, `resources/utf8codepage.manifest`) makes UTF-8.
+  merged into the app and every test host (`src/TmDq.App/app.manifest`, `resources/utf8codepage.manifest`) makes UTF-8.
 - **SNR:** average raw counts first, calibrate once per window. Out-of-range interpolation **clamps**,
   never extrapolates. The calibration extractor must mirror the main run's word map + raw-affecting
   flags exactly: both build them through `applyAcquisition` (`include/model/framesync.h`), so a new

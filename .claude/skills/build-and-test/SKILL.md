@@ -46,7 +46,7 @@ every .NET project treats warnings as errors.
 - **Native, filtered:** `scripts\test_native.ps1 -tc="TomlDocument*"` (any doctest argument passes
   through); `-NoBuild` reruns the last build.
 - **Managed or app, filtered:** run the test executable directly after the script has built it:
-  `dotnet\TmDq.App.Tests\bin\Release\net10.0\TmDq.App.Tests.exe -class TmDq.App.Tests.ShellTests`
+  `tests\TmDq.App.Tests\bin\Release\net10.0\TmDq.App.Tests.exe -class TmDq.App.Tests.ShellTests`
   (or `-method "*Name*"`), with `TMDQ_CORE_DLL` set to the DLL. **Check the summary's `Total:`** — a
   filter that matches nothing runs zero tests, and a run of nothing must not be read as a pass.
 - **The soak** (`scripts\run_soak.ps1`) after a change to processing, the plot's series or the CSV
@@ -77,8 +77,8 @@ every .NET project treats warnings as errors.
 ## Running the application
 
 ```powershell
-$env:Platform = $null; dotnet build dotnet\TmDq.App -c Debug
-dotnet\TmDq.App\bin\Debug\net10.0\tmDataQualityAnalyzer.exe "tests\data\test files\prn_testfile, sample.ch10"
+$env:Platform = $null; dotnet build src\TmDq.App -c Debug
+src\TmDq.App\bin\Debug\net10.0\tmDataQualityAnalyzer.exe "tests\data\test files\prn_testfile, sample.ch10"
 ```
 
 The build copies `native\out\Debug\tmdq_core.dll` and the repository's `settings\` beside the exe

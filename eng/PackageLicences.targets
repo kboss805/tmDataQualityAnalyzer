@@ -9,7 +9,7 @@
   -->
 
   <PropertyGroup>
-    <TmDqLicenceScript>$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)..\..\scripts\check_package_licences.ps1'))</TmDqLicenceScript>
+    <TmDqLicenceScript>$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)..\scripts\check_package_licences.ps1'))</TmDqLicenceScript>
   </PropertyGroup>
 
   <!-- The stamp's path is written in the target, not in a property above: a project imports this file before the

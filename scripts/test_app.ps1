@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-    Builds the Avalonia application (dotnet\TmDq.App) and its headless tests, and runs the tests.
+    Builds the Avalonia application (src\TmDq.App) and its headless tests, and runs the tests.
 
 .DESCRIPTION
-    1. `dotnet build` of dotnet\TmDq.App.Tests, which builds the application with it, treating warnings as errors
+    1. `dotnet build` of tests\TmDq.App.Tests, which builds the application with it, treating warnings as errors
        (the projects say so). The build merges the UTF-8 code-page manifest into the application exe with mt.exe
        (the Windows SDK) and runs the package licence check, so the Visual Studio tools must be on PATH:
        scripts\env.ps1 is dot-sourced when mt is not already found.
@@ -39,7 +39,7 @@ if (-not $env:TMDQ_CORE_DLL -and -not (Test-Path (Join-Path $root "native\out\$C
     throw "tmdq_core.dll has not been built for $Configuration`: run scripts\build_core_dll.ps1 -Configuration $Configuration"
 }
 
-$project = Join-Path $root 'dotnet\TmDq.App.Tests'
+$project = Join-Path $root 'tests\TmDq.App.Tests'
 $exe = Join-Path $project "bin\$Configuration\net10.0\TmDq.App.Tests.exe"
 
 $ErrorActionPreference = 'Continue'   # 5.1 turns native stderr into a terminating error

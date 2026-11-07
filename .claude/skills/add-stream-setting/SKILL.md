@@ -15,7 +15,7 @@ description: >-
 
 A per-stream setting is chosen in a stream's setup dialog (Configure Streams' gear) and has to reach
 `FrameProcessor` to affect anything. `Randomized` (Derandomize) takes the whole path, so follow it:
-`grep -rn -i randomized dotnet/TmDq.App dotnet/TmDq.Core native/tmdq_core include src/model`.
+`grep -rn -i randomized src/TmDq.App src/TmDq.Core native/tmdq_core include src/model`.
 
 Decide two things first, because they gate which steps apply:
 
@@ -25,7 +25,7 @@ Decide two things first, because they gate which steps apply:
 
 ## The layers, in order
 
-1. **The app's settings record** — `dotnet/TmDq.App/Streams/StreamSetup.cs` (`StreamSetup`), with its
+1. **The app's settings record** — `src/TmDq.App/Streams/StreamSetup.cs` (`StreamSetup`), with its
    default in `Streams/StreamDefaults.cs` if it has one.
 2. **The setup dialog** — `ViewModels/StreamSetupViewModel.cs` (the field, its property, loading it from
    and writing it to `StreamSetup`, and any validation: a problem is shown as it arises, and OK waits),
@@ -35,7 +35,7 @@ Decide two things first, because they gate which steps apply:
 4. **Templates** — `Templates/TemplateFile.cs`: a template carries every row's settings, in the JSON
    v2.x wrote; read with a default when the key is missing (older templates), write it in the same
    form. `TemplateTests` holds the format byte for byte.
-5. **The C# binding and the ABI** — `dotnet/TmDq.Core/RunTypes.cs` (`StreamConfig`),
+5. **The C# binding and the ABI** — `src/TmDq.Core/RunTypes.cs` (`StreamConfig`),
    `ProcessingRun.cs` (marshalling), `Native.cs` (the struct), and `native/tmdq_core/tmdq_abi.h` plus
    `abi_run.cpp`. A field added to an ABI struct changes its size: append it, bump the ABI revision
    (and `Library.MinimumRevision`), and update the layout pins on both sides (`tmdq_sizeof`).
@@ -64,7 +64,7 @@ Decide two things first, because they gate which steps apply:
 - **app:** `StreamSetupViewModelTests` (shown, validated, kept), `StreamRulesTests` (Apply to all and the
   conversion), `TemplateTests` (the round trip, and an older template without the key), `StreamFilesTests`
   if it persists;
-- **the soak manifest** (`dotnet/TmDq.App.Tests/Soak/soak.json`) states every setting of every run, so
+- **the soak manifest** (`tests/TmDq.App.Tests/Soak/soak.json`) states every setting of every run, so
   add the new one there with its default.
 
 Then mutation-check each layer's line (`scripts\mutate.ps1`): a mutant that drops the field at any one

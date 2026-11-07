@@ -32,7 +32,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\TmDq.Core\TmDq.Core.csproj" />
+    <ProjectReference Include="..\..\src\TmDq.Core\TmDq.Core.csproj" />
   </ItemGroup>
 
   <Target Name="EmbedUtf8Manifest" AfterTargets="Build">

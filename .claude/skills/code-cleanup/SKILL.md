@@ -41,7 +41,7 @@ Before flagging a function, class, file, or constant as unused:
    `.claude/CLAUDE.md`'s "Memory" section). Design decisions and prior review remediation live
    here, not just in the code — the `loadCsvFile` case above is exactly this.
 3. **Check whether it's a test-only symbol.** A helper called only from the test projects
-   (`native/tmdq_core_tests`, `dotnet/*.Tests`) is not orphaned — it's doing its job. Grep them
+   (`native/tmdq_core_tests`, `tests/*.Tests`) is not orphaned — it's doing its job. Grep them
    explicitly rather than trusting a search of the product code alone.
 4. **Check for uses no C# or C++ call site shows.** A property or command bound by name in `.axaml`
    (`{Binding Name}`), a member CommunityToolkit.Mvvm generates (`[ObservableProperty]`, `[RelayCommand]`),
@@ -61,7 +61,7 @@ upstream; this project's job is to wrap it, not tidy it. (See `.claude/CLAUDE.md
 
 ## Finding orphaned code
 
-This is naturally a broad sweep across `include/`, `src/model/`, `native/` and `dotnet/` — if you're running it as an
+This is naturally a broad sweep across `include/`, `src/`, `native/` and `tests/` — if you're running it as an
 agent, consider delegating the initial grep pass to an Explore agent rather than doing dozens of
 searches inline.
 
@@ -92,7 +92,7 @@ it:
   members, camelCase methods/slots — flag drift; don't silently mass-rename if the pattern turns out
   to be widespread, since that's a bigger conversation than a cleanup sweep.
 - Include ordering in the core (Google C++ style) — mechanical, safe to note file-by-file.
-- **MVVM layering**: views (`dotnet/TmDq.App/Views`) hold no rules — look for code-behind that computes
+- **MVVM layering**: views (`src/TmDq.App/Views`) hold no rules — look for code-behind that computes
   rather than displays; view models reach no Avalonia control; the core knows no UI at all, and the
   presentation state is C# while the data and file formats are the core's (plan decision D3). This
   project is explicit about the boundary (see `docs/claude.md` Architecture section), and a leak here
@@ -104,7 +104,7 @@ it:
 (nothing fails to compile when a comment goes stale). Two spots worth checking every sweep:
 
 - **The Test Suites catalog.** Compare its list of suites and coverage claims against the test files
-  actually there (`native/tmdq_core_tests/test_*.cpp`, `dotnet/*.Tests/*Tests.cs`). A suite renamed, extended, or
+  actually there (`native/tmdq_core_tests/test_*.cpp`, `tests/*.Tests/*Tests.cs`). A suite renamed, extended, or
   removed without updating its one-paragraph description is silent drift that compounds over
   releases.
 - **User Story acceptance criteria.** Spot-check a story or two against the behavior it actually

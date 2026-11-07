@@ -39,7 +39,7 @@ namespace TmDq.App.Tests
 
         public void Dispose() => TempFiles.DeleteDirectory(_dir, recursive: true);
 
-        private static string Fixture(string name) => Path.Combine(Repo.Root, "dotnet", "TmDq.App.Tests", "Templates", name);
+        private static string Fixture(string name) => Path.Combine(Repo.Root, "tests", "TmDq.App.Tests", "Templates", name);
 
         private static string Prn => Repo.Recording("prn_testfile, sample.ch10");
 

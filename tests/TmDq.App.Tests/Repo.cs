@@ -16,18 +16,22 @@ namespace TmDq.App.Tests
             return path;
         }
 
+        /// <summary>A .NET project's folder: a test project's under tests\, any other under src\.</summary>
+        public static string Project(string name) =>
+            Path.Combine(Root, name.EndsWith(".Tests", StringComparison.Ordinal) ? "tests" : "src", name);
+
         /// <summary>A committed recording under tests/data/test files (a missing one fails, never skips).</summary>
         public static string Recording(string name) => File(Path.Combine("tests", "data", "test files", name));
 
         /// <summary>The application's output folder for the configuration these tests were built in:
-        /// dotnet\TmDq.App.Tests\bin\Release\net10.0 becomes dotnet\TmDq.App\bin\Release\net10.0.</summary>
+        /// tests\TmDq.App.Tests\bin\Release\net10.0 becomes src\TmDq.App\bin\Release\net10.0.</summary>
         public static string AppOutput
         {
             get
             {
                 var here = new DirectoryInfo(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar));
                 string framework = here.Name, configuration = here.Parent!.Name;
-                return Path.Combine(Root, "dotnet", "TmDq.App", "bin", configuration, framework);
+                return Path.Combine(Root, "src", "TmDq.App", "bin", configuration, framework);
             }
         }
 

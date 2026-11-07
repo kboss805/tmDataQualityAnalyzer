@@ -148,7 +148,7 @@ jobs:
       - name: App tests (Avalonia, headless)
         shell: powershell
         run: |
-          # The Avalonia application (dotnet/TmDq.App) and its tests on the headless platform, which needs
+          # The Avalonia application (src/TmDq.App) and its tests on the headless platform, which needs
           # no window system; the script prints the account and session it runs as, so the log records it.
           $ErrorActionPreference = 'Continue'
           powershell -ExecutionPolicy Bypass -File scripts\test_app.ps1 -Configuration Release

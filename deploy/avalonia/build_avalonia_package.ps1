@@ -43,7 +43,7 @@ $Root = (Resolve-Path (Join-Path $Here '..\..')).Path
 $RunStart = Get-Date
 $Failures = New-Object System.Collections.Generic.List[string]
 
-# --- Version: AppVersion, the one source (dotnet/build/AppVersion.props reads the same three numbers). ---
+# --- Version: AppVersion, the one source (eng/AppVersion.props reads the same three numbers). ---
 $constants = Get-Content (Join-Path $Root 'include\constants.h') -Raw
 $version = ('kMajor', 'kMinor', 'kPatch' | ForEach-Object {
     $m = [regex]::Match($constants, "$_\s*=\s*(\d+)")
@@ -88,7 +88,7 @@ $CoreDll = Join-Path $Root 'native\out\Release\tmdq_core.dll'
 # --- 2. Single-file, self-contained publish. ---
 Write-Host '[2/8] Publishing the application (self-contained, single-file)...'
 if (Test-Path $Stage) { Remove-Item $Stage -Recurse -Force }
-& dotnet publish (Join-Path $Root 'dotnet\TmDq.App') -c Release -r win-x64 --self-contained true `
+& dotnet publish (Join-Path $Root 'src\TmDq.App') -c Release -r win-x64 --self-contained true `
     -p:PublishSingleFile=true -p:DebugType=none -o $Publish -nologo -v minimal
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }
 
@@ -185,7 +185,7 @@ foreach ($name in $crtImports) {
 }
 Write-Host "  VC++ runtime for tmdq_core.dll ($($crtDir.Name)): $($crtImports -join ', ')"
 Copy-Item (Join-Path $Root 'LICENSE') (Join-Path $AppDir 'LICENSE.txt')
-$deps = Join-Path $Root 'dotnet\TmDq.App\obj\Release\net10.0\win-x64\tmDataQualityAnalyzer.deps.json'
+$deps = Join-Path $Root 'src\TmDq.App\obj\Release\net10.0\win-x64\tmDataQualityAnalyzer.deps.json'
 & powershell -ExecutionPolicy Bypass -File (Join-Path $Root 'scripts\gen_third_party_notices.ps1') -DepsFile $deps -Out (Join-Path $AppDir 'THIRD-PARTY-NOTICES.txt')
 if ($LASTEXITCODE -ne 0) { throw 'gen_third_party_notices.ps1 failed' }
 Get-ChildItem $AppDir | ForEach-Object { Write-Host ('  {0,10:N0} KB  {1}' -f ($_.Length / 1KB), $_.Name) }
@@ -220,7 +220,7 @@ foreach ($f in $pe) {
 
 # --- 7. Smoke test: the staged app processes a recording end to end (window, native core, VC++ runtime). ---
 # With a recording on its command line and TMDQ_SMOKE_REPORT set, the app opens it, processes its first PCM channel
-# with the defaults, writes one line and exits (dotnet\TmDq.App\Startup.cs). The committed PRN sample's answer is
+# with the defaults, writes one line and exits (src\TmDq.App\Startup.cs). The committed PRN sample's answer is
 # known: 116 one-second windows of channel 13, mean lock 93.532 %.
 Write-Host '[7/8] Processing a recording with the staged application...'
 $Recording = Join-Path $Root 'tests\data\test files\prn_testfile, sample.ch10'

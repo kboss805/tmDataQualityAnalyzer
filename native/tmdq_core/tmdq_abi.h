@@ -22,7 +22,7 @@
  * STATE: version 2, the full ABI of plan step 2.2 (files, runs, calibration, the file
  * formats, series construction). Version 1 was the interop spike's two calls (probe a
  * file, run one lock stream); they were retired in plan step 2.3 when the C# library
- * (dotnet/TmDq.Core) and its tests replaced the spike's driver. The spike, with its
+ * (src/TmDq.Core) and its tests replaced the spike's driver. The spike, with its
  * copy of the version-1 header, was deleted in plan step 6.5 (docs/changelog.md records
  * what it measured).
  *
