@@ -882,7 +882,8 @@ helper every test cleans up and reads back through, which waits out a virus scan
   (the preferences file and v2.x's INI import), `MainWindowTests`.
 - **The manual:** `ManualFiguresTests` renders every figure and checks each caption's claims.
 - **The build and the release:** `VersionTests`, `VersionBuildTests`, `ManifestTests`, `ThirdPartyNoticesTests`,
-  `PackageLicenceTests`, `LicenceBuildTests`.
+  `PackageLicenceTests`, `LicenceBuildTests`, `IconTests` (the icon's sizes, its images in the built exe, and every
+  window showing it).
 - **The soak:** `SoakTests`, explicit, run by `scripts\run_soak.ps1` (above).
 
 ## Future Feature Candidates

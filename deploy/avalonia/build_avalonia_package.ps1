@@ -92,14 +92,61 @@ if (Test-Path $Stage) { Remove-Item $Stage -Recurse -Force }
     -p:PublishSingleFile=true -p:DebugType=none -o $Publish -nologo -v minimal
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }
 
-# --- 3. The manifest must have reached the bundled host (it once did not; TmDq.App.csproj says why). ---
-Write-Host '[3/8] Checking the published exe''s manifest...'
+# --- 3. The manifest and the icon must have reached the bundled host (the manifest once did not; TmDq.App.csproj says why). ---
+Write-Host '[3/8] Checking the published exe''s manifest and icon...'
 $manifest = Join-Path $Stage 'manifest.xml'
 & mt -nologo "-inputresource:$(Join-Path $Publish 'tmDataQualityAnalyzer.exe');#1" "-out:$manifest" | Out-Null
 $text = if (Test-Path $manifest) { Get-Content $manifest -Raw } else { '' }
 if ($text -notmatch '<activeCodePage[^>]*>\s*UTF-8\s*</activeCodePage>') { throw 'the published exe does not select the UTF-8 code page' }
 if ($text -notmatch '8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a') { throw 'the published exe does not declare Windows 10 compatibility' }
 Write-Host '  OK: UTF-8 code page and Windows 10 compatibility'
+
+# The icon, likewise: v3.0.0 shipped without one, so Explorer, the taskbar and the shortcuts showed a generic exe. The
+# exe's icon group must hold resources\icon.ico's images, byte for byte (TmDq.App.Tests' IconTests hold the build's exe;
+# this holds the single-file host). C# 5 for Windows PowerShell 5.1's Add-Type.
+Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+public static class TmDqExeIcon {
+    delegate bool EnumProc(IntPtr m, IntPtr t, IntPtr n, IntPtr p);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr LoadLibraryExW(string p, IntPtr f, uint fl);
+    [DllImport("kernel32.dll")] static extern bool FreeLibrary(IntPtr m);
+    [DllImport("kernel32.dll")] static extern bool EnumResourceNamesW(IntPtr m, IntPtr t, EnumProc cb, IntPtr p);
+    [DllImport("kernel32.dll")] static extern IntPtr FindResourceW(IntPtr m, IntPtr n, IntPtr t);
+    [DllImport("kernel32.dll")] static extern IntPtr LoadResource(IntPtr m, IntPtr r);
+    [DllImport("kernel32.dll")] static extern IntPtr LockResource(IntPtr d);
+    [DllImport("kernel32.dll")] static extern uint SizeofResource(IntPtr m, IntPtr r);
+    static byte[] Res(IntPtr m, IntPtr n, IntPtr t) {
+        IntPtr r = FindResourceW(m, n, t); if (r == IntPtr.Zero) return null;
+        byte[] b = new byte[SizeofResource(m, r)]; Marshal.Copy(LockResource(LoadResource(m, r)), b, 0, b.Length); return b;
+    }
+    // null when the exe's first icon group holds exactly the icon file's images, else what differs.
+    public static string Compare(string exe, byte[] ico) {
+        IntPtr m = LoadLibraryExW(exe, IntPtr.Zero, 0x22);
+        if (m == IntPtr.Zero) return "cannot open its resources";
+        try {
+            List<IntPtr> groups = new List<IntPtr>();
+            EnumResourceNamesW(m, new IntPtr(14), delegate(IntPtr a, IntPtr b, IntPtr n, IntPtr c) { groups.Add(n); return true; }, IntPtr.Zero);
+            if (groups.Count == 0) return "no icon group (RT_GROUP_ICON)";
+            byte[] g = Res(m, groups[0], new IntPtr(14));
+            int count = BitConverter.ToUInt16(ico, 4);
+            if (BitConverter.ToUInt16(g, 4) != count) return "a different number of images";
+            for (int i = 0; i < count; i++) {
+                int e = 6 + 16 * i, size = BitConverter.ToInt32(ico, e + 8), offset = BitConverter.ToInt32(ico, e + 12);
+                byte[] image = Res(m, new IntPtr(BitConverter.ToUInt16(g, 6 + 14 * i + 12)), new IntPtr(3));
+                if (image == null || image.Length != size) return "image " + i + " differs";
+                for (int j = 0; j < size; j++) if (image[j] != ico[offset + j]) return "image " + i + " differs";
+            }
+            return null;
+        } finally { FreeLibrary(m); }
+    }
+}
+'@
+$iconFile = Join-Path $Root 'resources\icon.ico'
+$iconProblem = [TmDqExeIcon]::Compare((Join-Path $Publish 'tmDataQualityAnalyzer.exe'), [System.IO.File]::ReadAllBytes($iconFile))
+if ($iconProblem) { throw "the published exe does not carry resources\icon.ico: $iconProblem" }
+Write-Host '  OK: the application icon'
 
 # --- 4. Stage the application folder. ---
 Write-Host '[4/8] Staging...'

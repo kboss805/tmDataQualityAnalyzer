@@ -6,6 +6,12 @@
     <FluentTheme />
     <!-- Customize View's colour dialog (plan step 4.4). -->
     <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
+    <!-- Every window's icon, for its title bar and Alt+Tab: a window takes its own, not the exe's. `:is(Window)` reaches
+         every window kind by its type. A plain `Window` selector does as well, but only because Window gives every
+         subclass its own style key (StyleKeyOverride), which a window of ours could override. -->
+    <Style Selector=":is(Window)">
+      <Setter Property="Icon" Value="/Assets/icon.ico" />
+    </Style>
     <!-- A section heading in the main menu (plan step 4.8): small and bold, a heading rather than an entry. Here, not on
          the window, because the menu is a popup of its own. -->
     <Style Selector="MenuItem.section">
