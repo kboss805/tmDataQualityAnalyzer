@@ -11,7 +11,7 @@ using Xunit;
 namespace TmDq.App.Tests
 {
     /// <summary>
-    /// scripts\gen_third_party_notices.ps1, which writes THIRD-PARTY-NOTICES.txt for the packages (plan step 3.3) from
+    /// eng\gen_third_party_notices.ps1, which writes THIRD-PARTY-NOTICES.txt for the packages (plan step 3.3) from
     /// the publish's deps file. Each case writes a deps file and a packages folder of its own and runs the real script.
     /// The licences it reproduces are obligations (MIT and BSD both require the copyright and licence text to travel
     /// with the binaries), so what it leaves out or summarises matters as much as what it writes.
@@ -68,7 +68,7 @@ namespace TmDq.App.Tests
             }));
             string output = Path.Combine(_dir, "out", "THIRD-PARTY-NOTICES.txt");
             var args = new List<string> { "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
-                Repo.File(Path.Combine("scripts", "gen_third_party_notices.ps1")),
+                Repo.File(Path.Combine("eng", "gen_third_party_notices.ps1")),
                 "-DepsFile", deps, "-Out", output, "-PackagesFolder", Path.Combine(_dir, "packages") };
             if (!nativeCore) args.Add("-NoNativeCore");
             var start = new ProcessStartInfo("powershell")

@@ -323,7 +323,7 @@ namespace TmDq.App.Tests
         [Fact]
         public void TheDefaultsComeFromTheHeader()
         {
-            string header = File.ReadAllText(Repo.File(Path.Combine("include", "constants.h")));
+            string header = File.ReadAllText(Repo.File(Path.Combine("src", "core", "include", "constants.h")));
             string Text(string name) => Regex.Match(header, name + @"\s*=\s*""([0-9A-Fa-f]+)""").Groups[1].Value;
             int Number(string name) => int.Parse(Regex.Match(header, @"int\s+" + name + @"\s*=\s*(\d+)\s*;").Groups[1].Value, CultureInfo.InvariantCulture);
             Assert.Equal(FrameSyncDefaults.Pattern, Text("kDefaultFrameSyncLockPattern"));

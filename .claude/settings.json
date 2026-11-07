@@ -1,8 +1,8 @@
 {
   "permissions": {
     "deny": [
-      "Edit(lib/irig106/**)",
-      "Write(lib/irig106/**)"
+      "Edit(third_party/irig106/**)",
+      "Write(third_party/irig106/**)"
     ],
     "allow": [
       "Bash(git status:*)",

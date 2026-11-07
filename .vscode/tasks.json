@@ -5,7 +5,7 @@
             "label": "Build core DLL (Debug)",
             "type": "shell",
             "command": "powershell.exe",
-            "args": ["-ExecutionPolicy", "Bypass", "-File", "scripts/build_core_dll.ps1", "-Configuration", "Debug"],
+            "args": ["-ExecutionPolicy", "Bypass", "-File", "eng/build_core_dll.ps1", "-Configuration", "Debug"],
             "options": { "cwd": "${workspaceFolder}" },
             "group": "build",
             "problemMatcher": "$msCompile"
@@ -14,7 +14,7 @@
             "label": "Build core DLL (Release)",
             "type": "shell",
             "command": "powershell.exe",
-            "args": ["-ExecutionPolicy", "Bypass", "-File", "scripts/build_core_dll.ps1", "-Configuration", "Release"],
+            "args": ["-ExecutionPolicy", "Bypass", "-File", "eng/build_core_dll.ps1", "-Configuration", "Release"],
             "options": { "cwd": "${workspaceFolder}" },
             "group": "build",
             "problemMatcher": "$msCompile"
@@ -25,7 +25,7 @@
             "type": "shell",
             "command": "powershell.exe",
             "args": ["-ExecutionPolicy", "Bypass", "-Command",
-                     "powershell -ExecutionPolicy Bypass -File scripts/build_core_dll.ps1 -Configuration Debug; if ($LASTEXITCODE) { exit $LASTEXITCODE }; $env:Platform = $null; dotnet build src/TmDq.App -c Debug -nologo"],
+                     "powershell -ExecutionPolicy Bypass -File eng/build_core_dll.ps1 -Configuration Debug; if ($LASTEXITCODE) { exit $LASTEXITCODE }; $env:Platform = $null; dotnet build src/TmDq.App -c Debug -nologo"],
             "options": { "cwd": "${workspaceFolder}" },
             "group": { "kind": "build", "isDefault": true },
             "problemMatcher": ["$msCompile"]
@@ -34,7 +34,7 @@
             "label": "Native tests",
             "type": "shell",
             "command": "powershell.exe",
-            "args": ["-ExecutionPolicy", "Bypass", "-File", "scripts/test_native.ps1", "-Configuration", "Debug"],
+            "args": ["-ExecutionPolicy", "Bypass", "-File", "eng/test_native.ps1", "-Configuration", "Debug"],
             "options": { "cwd": "${workspaceFolder}" },
             "group": "test",
             "problemMatcher": "$msCompile"
@@ -43,7 +43,7 @@
             "label": "Managed tests",
             "type": "shell",
             "command": "powershell.exe",
-            "args": ["-ExecutionPolicy", "Bypass", "-File", "scripts/test_dotnet.ps1", "-Configuration", "Debug"],
+            "args": ["-ExecutionPolicy", "Bypass", "-File", "eng/test_dotnet.ps1", "-Configuration", "Debug"],
             "options": { "cwd": "${workspaceFolder}" },
             "group": "test",
             "problemMatcher": "$msCompile"
@@ -52,7 +52,7 @@
             "label": "App tests",
             "type": "shell",
             "command": "powershell.exe",
-            "args": ["-ExecutionPolicy", "Bypass", "-File", "scripts/test_app.ps1", "-Configuration", "Debug"],
+            "args": ["-ExecutionPolicy", "Bypass", "-File", "eng/test_app.ps1", "-Configuration", "Debug"],
             "options": { "cwd": "${workspaceFolder}" },
             "group": "test",
             "problemMatcher": "$msCompile"
@@ -61,7 +61,7 @@
             "label": "Build manual (reuse figures)",
             "type": "shell",
             "command": "powershell.exe",
-            "args": ["-ExecutionPolicy", "Bypass", "-File", "scripts/build_manual.ps1", "-NoCapture"],
+            "args": ["-ExecutionPolicy", "Bypass", "-File", "eng/build_manual.ps1", "-NoCapture"],
             "options": { "cwd": "${workspaceFolder}" },
             "problemMatcher": []
         },
@@ -69,9 +69,9 @@
             "label": "Gen compile_flags.txt (clangd)",
             "type": "shell",
             "command": "py",
-            "args": ["scripts/gen_compile_flags.py"],
+            "args": ["eng/gen_compile_flags.py"],
             "options": { "cwd": "${workspaceFolder}" },
-            "detail": "Generate compile_flags.txt for clangd/clang-tidy IntelliSense over the native core. Re-run after a fresh clone, in each worktree, or after an include/define change.",
+            "detail": "Generate compile_flags.txt for clangd/clang-tidy IntelliSense over the native core. Re-run after a fresh clone, in each worktree, or after an src/core/include/define change.",
             "problemMatcher": []
         }
     ]

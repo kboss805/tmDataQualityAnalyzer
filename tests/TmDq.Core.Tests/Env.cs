@@ -44,14 +44,14 @@ internal static class Env
 
         foreach (string config in new[] { "Release", "Debug" })
         {
-            string candidate = Path.Combine(RepoRoot, "native", "out", config, "tmdq_core.dll");
+            string candidate = Path.Combine(RepoRoot, "out", config, "tmdq_core.dll");
             if (File.Exists(candidate))
             {
                 return candidate;
             }
         }
         throw new FileNotFoundException(
-            "tmdq_core.dll has not been built: run scripts\\build_core_dll.ps1 (or set TMDQ_CORE_DLL)");
+            "tmdq_core.dll has not been built: run eng\\build_core_dll.ps1 (or set TMDQ_CORE_DLL)");
     }
 
     /// <summary>A committed recording under tests/data/test files.</summary>

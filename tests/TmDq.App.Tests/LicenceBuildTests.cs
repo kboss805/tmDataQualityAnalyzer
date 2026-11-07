@@ -138,7 +138,7 @@ namespace TmDq.App.Tests
             foreach (string a in arguments)
                 start.ArgumentList.Add(a);
             // A build started from inside another .NET process must not inherit that process's MSBuild settings, nor
-            // the Platform=x64 that vcvars64 (scripts\env.ps1) puts in the environment: MSBuild reads every variable
+            // the Platform=x64 that vcvars64 (eng\env.ps1) puts in the environment: MSBuild reads every variable
             // as a property, and that one moves the output to bin\x64\.
             foreach (DictionaryEntry e in Environment.GetEnvironmentVariables())
             {

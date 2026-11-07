@@ -3,14 +3,14 @@
   <!--
     The Avalonia application, which replaced v2.x (the Qt application) and ships from v3.0.0. MVVM with CommunityToolkit.Mvvm; the processing core is tmdq_core.dll, reached through TmDq.Core.
 
-    - The version comes from AppVersion in include/constants.h (eng\AppVersion.props, which Directory.Build.props at the root imports into every project); never type one here.
+    - The version comes from AppVersion in src/core/include/constants.h (eng\AppVersion.props, which Directory.Build.props at the root imports into every project); never type one here.
     - Every package must be on the open-source licence allow-list (eng\PackageLicences.targets, imported by Directory.Build.targets):
       no Avalonia Accelerate component, whatever an IDE suggests.
     - The exe carries a manifest selecting the UTF-8 active code page (app.manifest), because the vendored
       irig106 library opens recordings with the C runtime's NARROW open(), which reads that code page. The SDK's
       ApplicationManifest property embeds a manifest in the managed assembly, NOT in the apphost exe that is
       the process (found while the port was being tried out), so mt.exe (the Windows SDK; on PATH after
-      scripts\env.ps1) merges it into every host the SDK creates, which reaches both the build output and a
+      eng\env.ps1) merges it into every host the SDK creates, which reaches both the build output and a
       single-file publish (the targets below). Run the exe, not `dotnet run`, whose process is dotnet.exe with its
       own manifest.
   -->
@@ -28,15 +28,15 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <IsPackable>false</IsPackable>
-    <!-- The exe's icon, for Explorer, the taskbar and the shortcuts (scripts\gen_app_icon.py makes it from the artwork).
+    <!-- The exe's icon, for Explorer, the taskbar and the shortcuts (eng\gen_app_icon.py makes it from the artwork).
          The compiler puts it in the managed assembly's resources, and the SDK copies those into every host it creates,
          singlefilehost included, before the manifest targets below run; mt.exe replaces only the manifest. The windows'
          title bars take the same file as an Avalonia resource (below, and App.axaml). v3.0.0 shipped without either. -->
-    <ApplicationIcon>$(MSBuildThisFileDirectory)..\..\resources\icon.ico</ApplicationIcon>
+    <ApplicationIcon>$(MSBuildThisFileDirectory)..\..\assets\icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
-    <AvaloniaResource Include="$(MSBuildThisFileDirectory)..\..\resources\icon.ico" Link="Assets\icon.ico" />
+    <AvaloniaResource Include="$(MSBuildThisFileDirectory)..\..\assets\icon.ico" Link="Assets\icon.ico" />
   </ItemGroup>
 
   <ItemGroup>
@@ -51,13 +51,13 @@
     <ProjectReference Include="..\TmDq.Core\TmDq.Core.csproj" />
   </ItemGroup>
 
-  <!-- The native core, from the native build of the same configuration (scripts\build_core_dll.ps1), beside the exe in
+  <!-- The native core, from the native build of the same configuration (eng\build_core_dll.ps1), beside the exe in
        the build output, in what references this project (the tests), and in a publish. Kept OUT of a single-file
        bundle: a native library has to be a file on disk to load. The VC++ runtime it imports is added by the packaging
        script (deploy\avalonia\build_avalonia_package.ps1). Missing, the app says so when it first needs the core. -->
   <ItemGroup>
-    <None Include="$(MSBuildThisFileDirectory)..\..\native\out\$(Configuration)\tmdq_core.dll"
-          Condition="Exists('$(MSBuildThisFileDirectory)..\..\native\out\$(Configuration)\tmdq_core.dll')"
+    <None Include="$(MSBuildThisFileDirectory)..\..\out\$(Configuration)\tmdq_core.dll"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\..\out\$(Configuration)\tmdq_core.dll')"
           Link="tmdq_core.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"
           ExcludeFromSingleFile="true" Visible="false" />
   </ItemGroup>
@@ -73,10 +73,10 @@
   </ItemGroup>
 
   <!-- The base user manual, compiled in, so Help > User Manual always has a manual even when the optional full one is
-       not installed (plan step 4.8). Its figures are rendered from this application (scripts\build_manual.ps1, plan
+       not installed (plan step 4.8). Its figures are rendered from this application (eng\build_manual.ps1, plan
        step 4.9). -->
   <ItemGroup>
-    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\resources\usermanual.html" LogicalName="usermanual.html" Visible="false" />
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\assets\usermanual.html" LogicalName="usermanual.html" Visible="false" />
   </ItemGroup>
 
   <!-- The manifest goes into each intermediate host the SDK creates, before anything copies or bundles it: apphost

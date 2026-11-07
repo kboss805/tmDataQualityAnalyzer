@@ -26,7 +26,7 @@
       "name": "Native tests (Debug) - VS Code / MSVC debugger",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/native/out/Debug/tmdq_core_tests.exe",
+      "program": "${workspaceFolder}/out/Debug/tmdq_core_tests.exe",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "preLaunchTask": "Native tests"
@@ -35,7 +35,7 @@
       "name": "Native tests (Debug) - Antigravity / CodeLLDB",
       "type": "lldb",
       "request": "launch",
-      "program": "${workspaceFolder}/native/out/Debug/tmdq_core_tests.exe",
+      "program": "${workspaceFolder}/out/Debug/tmdq_core_tests.exe",
       "cwd": "${workspaceFolder}",
       "terminal": "integrated",
       "preLaunchTask": "Native tests"

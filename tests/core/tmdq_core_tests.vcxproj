@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  tmdq_core_tests.exe - the native core's tests, written with doctest (third_party\doctest).
+
+  Plan step 2.4 ported the core's test suites here one suite per pull request, each with a mutation check. The
+  project compiles the core sources (each a src\core\src\<name>.cpp that tmdq_core.vcxproj also builds) and the C ABI,
+  so the tests exercise the code the DLL is built from.
+
+  The include paths are doctest's, the core's, the ABI's and irig106's, and the only library beyond the C runtime
+  and Windows is ws2_32. eng\test_native.ps1 builds it, requires zero compiler warnings, checks its imports, and
+  runs it.
+
+  Compiler switches are the ones tmdq_core.vcxproj uses, so the sources are compiled the same way here as in the
+  DLL. Intermediates go in a folder per toolset, as there.
+-->
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{B7C3E9A1-52D4-4F68-8A0E-3C9D1F5B7E26}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>tmdq_core_tests</RootNamespace>
+    <ProjectName>tmdq_core_tests</ProjectName>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <UseDebugLibraries Condition="'$(Configuration)' == 'Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)' != 'Debug'">false</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+
+  <PropertyGroup>
+    <!-- At the repository root, in the ignored out\ beside the DLL, and out\obj\ (a folder of its own for the objects). -->
+    <OutDir>$(MSBuildThisFileDirectory)..\..\out\$(Configuration)\</OutDir>
+    <IntDir>$(MSBuildThisFileDirectory)..\..\out\obj\$(PlatformToolset)\$(Configuration)\tests\</IntDir>
+    <TargetName>tmdq_core_tests</TargetName>
+    <LinkIncremental Condition="'$(Configuration)' == 'Debug'">true</LinkIncremental>
+    <LinkIncremental Condition="'$(Configuration)' != 'Debug'">false</LinkIncremental>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <SDLCheck>false</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <ProgramDataBaseFileName>$(IntDir)tmdq_core_tests.pdb</ProgramDataBaseFileName>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\third_party\doctest;$(MSBuildThisFileDirectory)..\..\src\core\include;$(MSBuildThisFileDirectory)..\..\src\core\include\dto;$(MSBuildThisFileDirectory)..\..\src\core\include\model;$(MSBuildThisFileDirectory)..\..\third_party\irig106\include;$(MSBuildThisFileDirectory)..\..\src\core\abi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <!-- DOCTEST_CONFIG_USE_STD_HEADERS: doctest's documented switch to include <tuple> and friends instead of
+           forward-declaring them in namespace std. MSVC 14.51 (Visual Studio 2026, the hosted CI image) rejects the
+           forward declaration with C5285 ("specializing this standard library template is forbidden"); 14.44 does
+           not. Set for the whole project, because the vendored header must not be edited and every translation unit
+           has to see the same doctest.
+           TMDQ_ABI_STATIC: the C ABI is compiled into this executable (below) rather than imported from the DLL, so
+           TMDQ_API is empty. -->
+      <PreprocessorDefinitions>UNICODE;_UNICODE;WIN32;WIN64;_ENABLE_EXTENDED_ALIGNED_STORAGE;DOCTEST_CONFIG_USE_STD_HEADERS;TMDQ_ABI_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/FS /utf-8 /Zc:__cplusplus /Zc:throwingNew /Zc:externConstexpr /w34100 /w34189 /w44456 /w44457 /w44458 /wd4577 /wd4467 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <!-- irig106 uses ntohs and friends; the DLL links the same. -->
+      <AdditionalDependencies>ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <!-- The UTF-8 active code page, as the application has (its app.manifest): the readers hand irig106 the path in the
+         process code page, which its narrow open() reads, so without this a non-ASCII folder could not be opened. -->
+    <Manifest>
+      <AdditionalManifestFiles>$(MSBuildThisFileDirectory)..\..\assets\utf8codepage.manifest;%(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)' == 'Debug'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)' != 'Debug'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <!-- doctest's main (compiled once, here) and one test_<suite>.cpp for each ported suite. -->
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="test_abi.cpp" />
+    <ClCompile Include="test_calibrationextractor.cpp" />
+    <ClCompile Include="test_calibrationrequest.cpp" />
+    <ClCompile Include="test_chartgeometry.cpp" />
+    <ClCompile Include="test_ch10packetreader.cpp" />
+    <ClCompile Include="test_chapter10reader.cpp" />
+    <ClCompile Include="test_constants.cpp" />
+    <ClCompile Include="test_csvseries.cpp" />
+    <ClCompile Include="test_eventreporter.cpp" />
+    <ClCompile Include="test_frameprocessor.cpp" />
+    <ClCompile Include="test_framesetup.cpp" />
+    <ClCompile Include="test_framesync.cpp" />
+    <ClCompile Include="test_framesyncfile.cpp" />
+    <ClCompile Include="test_intervalgate.cpp" />
+    <ClCompile Include="test_packetqueue.cpp" />
+    <ClCompile Include="test_pipelinerunner.cpp" />
+    <ClCompile Include="test_seriesbuild.cpp" />
+    <ClCompile Include="test_seriescolumnschema.cpp" />
+    <ClCompile Include="test_stepdetector.cpp" />
+    <ClCompile Include="test_streamjob.cpp" />
+    <ClCompile Include="test_templatematcher.cpp" />
+    <ClCompile Include="test_textfile.cpp" />
+    <ClCompile Include="test_textformat.cpp" />
+    <ClCompile Include="test_tomldocument.cpp" />
+  </ItemGroup>
+
+  <!-- The core the ported suites exercise: src\core\src\<name>.cpp, each also built by tmdq_core.vcxproj. -->
+  <ItemGroup>
+    <ClCompile Include="..\..\src\core\src\calibrationextractor.cpp" />
+    <ClCompile Include="..\..\src\core\src\calibrationrequest.cpp" />
+    <ClCompile Include="..\..\src\core\src\chartgeometry.cpp" />
+    <ClCompile Include="..\..\src\core\src\ch10packetreader.cpp" />
+    <ClCompile Include="..\..\src\core\src\channeldata.cpp" />
+    <ClCompile Include="..\..\src\core\src\chapter10reader.cpp" />
+    <ClCompile Include="..\..\src\core\src\clocktime.cpp" />
+    <ClCompile Include="..\..\src\core\src\csvseriesparser.cpp" />
+    <ClCompile Include="..\..\src\core\src\csvserieswriter.cpp" />
+    <ClCompile Include="..\..\src\core\src\frameprocessor.cpp" />
+    <ClCompile Include="..\..\src\core\src\framesetup.cpp" />
+    <ClCompile Include="..\..\src\core\src\framesyncfile.cpp" />
+    <ClCompile Include="..\..\src\core\src\pipelinerunner.cpp" />
+    <ClCompile Include="..\..\src\core\src\seriesbuilder.cpp" />
+    <ClCompile Include="..\..\src\core\src\seriescolumnschema.cpp" />
+    <ClCompile Include="..\..\src\core\src\stepdetector.cpp" />
+    <ClCompile Include="..\..\src\core\src\streamjobbuilder.cpp" />
+    <ClCompile Include="..\..\src\core\src\templatematcher.cpp" />
+    <ClCompile Include="..\..\src\core\src\textfile.cpp" />
+    <ClCompile Include="..\..\src\core\src\tomldocument.cpp" />
+  </ItemGroup>
+
+  <!-- The C ABI, src\core\abi\*.cpp: every source tmdq_core.vcxproj builds besides the core, compiled in here so
+       test_abi.cpp calls tmdq_* as a host would, without loading the DLL. NativeProjectTests checks the two lists agree. -->
+  <ItemGroup>
+    <ClCompile Include="..\..\src\core\abi\abi_calibration.cpp" />
+    <ClCompile Include="..\..\src\core\abi\abi_chart.cpp" />
+    <ClCompile Include="..\..\src\core\abi\abi_file.cpp" />
+    <ClCompile Include="..\..\src\core\abi\abi_formats.cpp" />
+    <ClCompile Include="..\..\src\core\abi\abi_run.cpp" />
+    <ClCompile Include="..\..\src\core\abi\abi_series.cpp" />
+    <ClCompile Include="..\..\src\core\abi\tmdq_core.cpp" />
+  </ItemGroup>
+
+  <!-- The vendored irig106 library, for the suites that read recordings: plain C, third-party, no warnings, exactly as
+       tmdq_core.vcxproj compiles it. -->
+  <ItemGroup>
+    <ClCompile Include="..\..\third_party\irig106\src\irig106ch10.c" />
+    <ClCompile Include="..\..\third_party\irig106\src\i106_time.c" />
+    <ClCompile Include="..\..\third_party\irig106\src\i106_data_stream.c" />
+    <ClCompile Include="..\..\third_party\irig106\src\i106_decode_time.c" />
+    <ClCompile Include="..\..\third_party\irig106\src\i106_decode_tmats.c" />
+    <ClCompile Include="..\..\third_party\irig106\src\i106_decode_tmats_g.c" />
+    <ClCompile Include="..\..\third_party\irig106\src\i106_decode_tmats_r.c" />
+    <ClCompile Include="..\..\third_party\irig106\src\i106_decode_tmats_m.c" />
+    <ClCompile Include="..\..\third_party\irig106\src\i106_decode_tmats_p.c" />
+    <ClCompile Include="..\..\third_party\irig106\src\i106_decode_tmats_b.c" />
+    <ClCompile Include="..\..\third_party\irig106\src\i106_decode_tmats_c.c" />
+    <ClCompile Include="..\..\third_party\irig106\src\i106_decode_tmats_d.c" />
+    <ClCompile Include="..\..\third_party\irig106\src\i106_decode_pcmf1.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Update="..\..\third_party\irig106\src\*.c">
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

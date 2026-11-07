@@ -1,7 +1,7 @@
 ; Inno Setup script for the application from v3.0.0 on: the Avalonia application (plan step 5.3).
 ;
 ; Built by deploy\avalonia\build_avalonia_package.ps1, which stages the files, passes the version read from
-; AppVersion (include\constants.h) as /DMyAppVersion, and /DSIGN with /Ssigntool=... to sign the setup and the
+; AppVersion (src\core\include\constants.h) as /DMyAppVersion, and /DSIGN with /Ssigntool=... to sign the setup and the
 ; uninstaller. Requires Inno Setup 6.
 ;
 ; It REPLACES the Qt application (v2.x) rather than installing beside it: the Qt installer's AppId, its folder and
@@ -34,7 +34,7 @@ SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 LicenseFile=..\..\LICENSE
-SetupIconFile=..\..\resources\icon.ico
+SetupIconFile=..\..\assets\icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 PrivilegesRequiredOverridesAllowed=dialog
 WizardStyle=modern

@@ -6,7 +6,7 @@
     through Skia, so a test can measure real layout and read real pixels.
 
     An xunit v3 test project is an executable: run bin\<Configuration>\net10.0\TmDq.App.Tests.exe directly
-    (scripts\test_dotnet.ps1 builds and runs it).
+    (eng\test_dotnet.ps1 builds and runs it).
   -->
 
   <PropertyGroup>

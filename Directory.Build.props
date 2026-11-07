@@ -2,7 +2,7 @@
 
   <!--
     MSBuild imports this file into every project under this folder, before the project's own content. It gives
-    every .NET project the version read from AppVersion (include/constants.h), so no project imports it itself and
+    every .NET project the version read from AppVersion (src/core/include/constants.h), so no project imports it itself and
     none can forget to: never type a version in a .csproj.
 
     Only .csproj: the native projects (tmdq_core.vcxproj, tmdq_core_tests.vcxproj) import this file too, and are

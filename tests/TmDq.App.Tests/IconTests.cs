@@ -14,7 +14,7 @@ using Xunit;
 namespace TmDq.App.Tests
 {
     /// <summary>
-    /// The application's icon (resources\icon.ico, made from docs\design\icon_image.png by scripts\gen_app_icon.py): in the exe,
+    /// The application's icon (assets\icon.ico, made from docs\design\icon_image.png by eng\gen_app_icon.py): in the exe,
     /// where Explorer, the taskbar and the shortcuts find it, and on every window, for the title bar and Alt+Tab. v3.0.0
     /// shipped with neither: the Qt application's icon came from its .rc file, which the port left behind.
     /// </summary>
@@ -40,7 +40,7 @@ namespace TmDq.App.Tests
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern uint SizeofResource(IntPtr module, IntPtr resource);
 
-        private static string IconFile => Repo.File(Path.Combine("resources", "icon.ico"));
+        private static string IconFile => Repo.File(Path.Combine("assets", "icon.ico"));
 
         /// <summary>An icon's images as its file lists them: the size (0 is 256), the bit depth and the image's bytes.</summary>
         private sealed record IconImage(int Width, int Height, int BitCount, byte[] Data);

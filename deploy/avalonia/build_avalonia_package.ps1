@@ -37,17 +37,17 @@ $ErrorActionPreference = 'Stop'
 
 $Here = $PSScriptRoot
 $Root = (Resolve-Path (Join-Path $Here '..\..')).Path
-. (Join-Path $Root 'scripts\env.ps1')
+. (Join-Path $Root 'eng\env.ps1')
 . (Join-Path $Here 'signing.ps1')
 
 $RunStart = Get-Date
 $Failures = New-Object System.Collections.Generic.List[string]
 
 # --- Version: AppVersion, the one source (eng/AppVersion.props reads the same three numbers). ---
-$constants = Get-Content (Join-Path $Root 'include\constants.h') -Raw
+$constants = Get-Content (Join-Path $Root 'src\core\include\constants.h') -Raw
 $version = ('kMajor', 'kMinor', 'kPatch' | ForEach-Object {
     $m = [regex]::Match($constants, "$_\s*=\s*(\d+)")
-    if (-not $m.Success) { throw "AppVersion::$_ not found in include\constants.h" }
+    if (-not $m.Success) { throw "AppVersion::$_ not found in src\core\include\constants.h" }
     $m.Groups[1].Value
 }) -join '.'
 
@@ -65,7 +65,7 @@ Write-Host '============================================'
 # --- Every user-facing version literal agrees with AppVersion, and the changelog has this version's section. ---
 # Before anything is built: a mismatched manual or release-notes header is not something to discover afterwards.
 Write-Host 'Checking release consistency...'
-& powershell -ExecutionPolicy Bypass -File (Join-Path $Root 'scripts\check_release_consistency.ps1') -ReleaseMode
+& powershell -ExecutionPolicy Bypass -File (Join-Path $Root 'eng\check_release_consistency.ps1') -ReleaseMode
 if ($LASTEXITCODE -ne 0) { throw 'check_release_consistency.ps1 failed: fix the inconsistencies above before packaging' }
 
 # --- 0. Signing pre-flight, before anything is built. ---
@@ -81,9 +81,9 @@ if ($SignCertSha1) {
 
 # --- 1. The native core, Release. ---
 Write-Host '[1/8] Building tmdq_core.dll (Release)...'
-& powershell -ExecutionPolicy Bypass -File (Join-Path $Root 'scripts\build_core_dll.ps1') -Configuration Release
+& powershell -ExecutionPolicy Bypass -File (Join-Path $Root 'eng\build_core_dll.ps1') -Configuration Release
 if ($LASTEXITCODE -ne 0) { throw 'build_core_dll.ps1 failed' }
-$CoreDll = Join-Path $Root 'native\out\Release\tmdq_core.dll'
+$CoreDll = Join-Path $Root 'out\Release\tmdq_core.dll'
 
 # --- 2. Single-file, self-contained publish. ---
 Write-Host '[2/8] Publishing the application (self-contained, single-file)...'
@@ -102,7 +102,7 @@ if ($text -notmatch '8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a') { throw 'the publish
 Write-Host '  OK: UTF-8 code page and Windows 10 compatibility'
 
 # The icon, likewise: v3.0.0 shipped without one, so Explorer, the taskbar and the shortcuts showed a generic exe. The
-# exe's icon group must hold resources\icon.ico's images, byte for byte (TmDq.App.Tests' IconTests hold the build's exe;
+# exe's icon group must hold assets\icon.ico's images, byte for byte (TmDq.App.Tests' IconTests hold the build's exe;
 # this holds the single-file host). C# 5 for Windows PowerShell 5.1's Add-Type.
 Add-Type -TypeDefinition @'
 using System;
@@ -143,9 +143,9 @@ public static class TmDqExeIcon {
     }
 }
 '@
-$iconFile = Join-Path $Root 'resources\icon.ico'
+$iconFile = Join-Path $Root 'assets\icon.ico'
 $iconProblem = [TmDqExeIcon]::Compare((Join-Path $Publish 'tmDataQualityAnalyzer.exe'), [System.IO.File]::ReadAllBytes($iconFile))
-if ($iconProblem) { throw "the published exe does not carry resources\icon.ico: $iconProblem" }
+if ($iconProblem) { throw "the published exe does not carry assets\icon.ico: $iconProblem" }
 Write-Host '  OK: the application icon'
 
 # --- 4. Stage the application folder. ---
@@ -186,7 +186,7 @@ foreach ($name in $crtImports) {
 Write-Host "  VC++ runtime for tmdq_core.dll ($($crtDir.Name)): $($crtImports -join ', ')"
 Copy-Item (Join-Path $Root 'LICENSE') (Join-Path $AppDir 'LICENSE.txt')
 $deps = Join-Path $Root 'src\TmDq.App\obj\Release\net10.0\win-x64\tmDataQualityAnalyzer.deps.json'
-& powershell -ExecutionPolicy Bypass -File (Join-Path $Root 'scripts\gen_third_party_notices.ps1') -DepsFile $deps -Out (Join-Path $AppDir 'THIRD-PARTY-NOTICES.txt')
+& powershell -ExecutionPolicy Bypass -File (Join-Path $Root 'eng\gen_third_party_notices.ps1') -DepsFile $deps -Out (Join-Path $AppDir 'THIRD-PARTY-NOTICES.txt')
 if ($LASTEXITCODE -ne 0) { throw 'gen_third_party_notices.ps1 failed' }
 Get-ChildItem $AppDir | ForEach-Object { Write-Host ('  {0,10:N0} KB  {1}' -f ($_.Length / 1KB), $_.Name) }
 
@@ -248,7 +248,7 @@ Copy-Item $AppDir $portable -Recurse
 # The full manual: always in the portable copy (there is no installer to ask), an optional task in the installer, which
 # takes it from beside the staged application rather than from within it (plan step 4.9).
 $manual = Join-Path $Root 'UserManual.html'
-if (-not (Test-Path $manual)) { throw 'UserManual.html is missing: run scripts\build_manual.ps1' }
+if (-not (Test-Path $manual)) { throw 'UserManual.html is missing: run eng\build_manual.ps1' }
 New-Item -ItemType Directory -Force -Path (Join-Path $Stage 'manual') | Out-Null
 Copy-Item $manual (Join-Path $Stage 'manual\UserManual.html') -Force
 Copy-Item $manual (Join-Path $portable 'UserManual.html') -Force

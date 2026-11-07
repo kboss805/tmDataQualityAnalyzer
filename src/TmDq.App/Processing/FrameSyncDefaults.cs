@@ -3,7 +3,7 @@ using TmDq.Core;
 namespace TmDq.App.Processing
 {
     /// <summary>
-    /// The Frame Sync Lock settings a stream starts with: PRN15, as the defaults in include/constants.h
+    /// The Frame Sync Lock settings a stream starts with: PRN15, as the defaults in src/core/include/constants.h
     /// (kDefaultFrameSyncLockPattern, kDefaultFrameSyncMask, kDefaultFrameSyncLockBits) and the shipped
     /// settings/framesync_patterns/framesync_PRN15.toml have them. A test holds these to the header.
     /// </summary>
@@ -23,7 +23,7 @@ namespace TmDq.App.Processing
     /// <summary>
     /// The frame-sync settings a stream switched to Receiver SNR starts with when the shipped
     /// settings/framesync_patterns/framesync_rcvr_default.toml cannot supply them: kDefaultReceiverSNRPattern and
-    /// kDefaultReceiverSNRBits in include/constants.h, which a test holds these to.
+    /// kDefaultReceiverSNRBits in src/core/include/constants.h, which a test holds these to.
     /// </summary>
     public static class ReceiverSnrDefaults
     {

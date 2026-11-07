@@ -47,11 +47,11 @@ version_autogen.h
 *.user
 
 # clangd / clang-tidy IntelliSense DB — generated per-machine (absolute repo
-# paths) by scripts/gen_compile_flags.py; never committed.
+# paths) by eng/gen_compile_flags.py; never committed.
 compile_flags.txt
 compile_commands.json
 
-# The Visual Studio solution the deleted scripts/gen_vs_project.ps1 generated from the .pro files (tmdq.sln is the
+# The Visual Studio solution the deleted eng/gen_vs_project.ps1 generated from the .pro files (tmdq.sln is the
 # committed one); the unrelated per-user .vs/ cache VS itself creates is ignored above.
 /vs/
 /tmDataQualityAnalyzer.sln
@@ -113,13 +113,13 @@ build_and_sign.ps1
 
 # Manual figures: the RENDERED ones in docs/manual_images/ are tracked so the
 # manual can be regenerated, but the downscaled copies are derived output of
-# scripts/build_manual.ps1.
+# eng/build_manual.ps1.
 docs/manual_images/processed/
 
-# Python bytecode cache (scripts/ helpers)
+# Python bytecode cache (eng/ helpers)
 __pycache__/
 *.pyc
 
-# The native core project (native/): build output
-/native/out/
-/native/obj/
+# The native projects' build output (src/core/tmdq_core.vcxproj and tests/core/tmdq_core_tests.vcxproj): the DLL,
+# the test exe and the build logs in out/<config>/ and out/, the objects in out/obj/.
+/out/

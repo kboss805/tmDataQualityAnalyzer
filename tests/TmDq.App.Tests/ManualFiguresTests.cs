@@ -30,7 +30,7 @@ namespace TmDq.App.Tests
     /// The user manual's figures, rendered from the application itself on the headless platform (plan step 4.9): each
     /// test sets up one scene from the committed recordings and shipped settings, checks what the manual's caption says
     /// about it (so a caption cannot outlive the behaviour it describes), and renders it. With TMDQ_MANUAL_FIGURES set
-    /// to a folder the figures are written there (scripts\build_manual.ps1 does this); otherwise to a temporary
+    /// to a folder the figures are written there (eng\build_manual.ps1 does this); otherwise to a temporary
     /// folder, deleted after, so the suite still proves every figure can be made. The names are the ones the v2.x
     /// manual's hand captures had, which the manual's anchors place. The dark theme, which the application opens in, except
     /// where the light one is the subject.

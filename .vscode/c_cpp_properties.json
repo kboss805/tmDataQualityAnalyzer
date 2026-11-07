@@ -3,11 +3,11 @@
     {
       "name": "windows-msvc-x64",
       "includePath": [
-        "${workspaceFolder}/include",
-        "${workspaceFolder}/include/**",
-        "${workspaceFolder}/lib/irig106/include",
-        "${workspaceFolder}/lib/doctest",
-        "${workspaceFolder}/native/tmdq_core"
+        "${workspaceFolder}/src/core/include",
+        "${workspaceFolder}/src/core/include/**",
+        "${workspaceFolder}/third_party/irig106/include",
+        "${workspaceFolder}/third_party/doctest",
+        "${workspaceFolder}/src/core/abi"
       ],
       "defines": [
         "UNICODE",

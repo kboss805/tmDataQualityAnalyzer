@@ -1,0 +1,38 @@
+{
+  "suite": "native",
+  "args": ["-tc=TomlDocument*"],
+  "mutants": [
+    {
+      "id": "E1",
+      "file": "src/core/src/tomldocument.cpp",
+      "old": "return !(v.empty() || v == \"0\" || v == \"false\");",
+      "new": "return !(v.empty() || v == \"0\");",
+      "expect": "caught",
+      "note": "\"false\" read as true"
+    },
+    {
+      "id": "E2",
+      "file": "src/core/src/tomldocument.cpp",
+      "old": "    return ok ? v : fallback;\n}",
+      "new": "    return ok ? v : 0;\n}",
+      "expect": "caught",
+      "note": "an unparseable integer read as 0, as QVariant::toInt() read it, rather than as the caller's fallback"
+    },
+    {
+      "id": "E3",
+      "file": "src/core/src/tomldocument.cpp",
+      "old": "const std::string v = asciiLower(trimmed(it->second));",
+      "new": "const std::string v = trimmed(asciiLower(it->second));",
+      "expect": "survived",
+      "note": "equivalent: lowering touches only A to Z and trimming only white space, so the order does not matter"
+    },
+    {
+      "id": "E4",
+      "file": "src/core/src/tomldocument.cpp",
+      "old": "    return ok ? v : fallback;\n}",
+      "new": "    return ok ? v : fallbak;\n}",
+      "expect": "compile",
+      "note": "a misspelt name: the compiler refuses it, and the harness reports it as COMPILE, not as a survivor"
+    }
+  ]
+}

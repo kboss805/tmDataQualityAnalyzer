@@ -5,13 +5,13 @@ This file provides context and guidelines for AI assistants working on the tmDat
 ## Version Information
 
 - **.NET**: .NET 10 SDK; the application is Avalonia 12 (`src/TmDq.App`).
-- **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, MSVC 14.44 / v143, pinned by `scripts\env.ps1`) for
+- **Compiler**: MSVC 2022 (Visual Studio 2022 C++ Build Tools, MSVC 14.44 / v143, pinned by `eng\env.ps1`) for
   the native core. This is the only supported toolchain; CI builds with it too (`windows-2022`, checked by the job).
 - **C++ Standard**: C++20 (`std::format`, `std::span`, `inline constexpr` throughout `constants.h`).
 - **Shipping application** (from v3.0.0): the Avalonia 12 application on .NET 10 (`src/TmDq.App`) over the native
   core (`tmdq_core.dll`), packaged by `deploy/avalonia/build_avalonia_package.ps1`. Up to v2.14.2 the application was
   Qt 6; `docs/changelog.md` records the move.
-- **Project Version**: 3.0.0 — defined once in the `AppVersion` struct in `include/constants.h`; `eng/AppVersion.props` reads it for every assembly, and the package script and the manual build read it too, so no other file carries a duplicate version literal
+- **Project Version**: 3.0.0 — defined once in the `AppVersion` struct in `src/core/include/constants.h`; `eng/AppVersion.props` reads it for every assembly, and the package script and the manual build read it too, so no other file carries a duplicate version literal
 
 ## User Stories
 
@@ -384,7 +384,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The installer never overwrites an existing user TOML settings file, on upgrade or reinstall. A settings file is written only when it is absent (`onlyifdoesntexist`), and is left behind by uninstall (`uninsneveruninstall`).
 - [x] A settings file written by any earlier version stays usable: every reader supplies its own default for a key the file does not carry, so an older file degrades to "missing keys fall back to defaults" rather than to a wrong result.
 - [x] New fields added to a shipped default therefore reach a **fresh install**, not an existing one. An upgraded install keeps the operator's file exactly as it stands.
-  - **Replaces two criteria that described a merge this project never built.** They claimed the installer saved a conflicting default as `new_x.toml` and carried the user's old values into it. Nothing implements that: the installer script (`deploy/avalonia/tmDataQualityAnalyzer.iss`) is declarative, with no `[Code]` section, and there is no `new_x`, migration, schema-version or merge logic in the core, `deploy/` or `scripts/`. Confirmed on a clean machine by `deploy/sandbox/` - a first run wrote nothing under `settings\` and no registry key.
+  - **Replaces two criteria that described a merge this project never built.** They claimed the installer saved a conflicting default as `new_x.toml` and carried the user's old values into it. Nothing implements that: the installer script (`deploy/avalonia/tmDataQualityAnalyzer.iss`) is declarative, with no `[Code]` section, and there is no `new_x`, migration, schema-version or merge logic in the core, `deploy/` or `eng/`. Confirmed on a clean machine by `deploy/sandbox/` - a first run wrote nothing under `settings\` and no registry key.
   - **The guarantee above is weaker but true, and the defensive readers are what make it safe** - `FrameSetup::readReceiverParams()` accepts both the current `[Receivers]` keys and the older `[Parameters]` spelling, an absent `Randomized` leaves the operator's choice alone rather than clearing it, and the template reader (`TemplateFile`) keeps each key's default for anything omitted. A change that removed that tolerance would look harmless and would not be: it is load-bearing for this criterion, not incidental.
   - **When a merge would become necessary:** a shipped default gaining a field whose absence an old file cannot express - where "missing" and a deliberate choice are indistinguishable. `Randomized` is exactly that shape and was only safe because the reader was written to notice. Option B - building the merge in the installer's `[Code]` section - was scoped and deliberately not taken; see the "Settings on upgrade" row in `docs/future_plans/README.md` for why, and rebuild the sketch from this criterion if that day comes.
 
@@ -404,13 +404,13 @@ The stories below follow the workflow a first-time user takes through the applic
 ## Tech Stack
 
 - **The application**: C# on .NET 10, Avalonia 12 (MIT) with CommunityToolkit.Mvvm - `src/TmDq.App`.
-- **The native core**: C++20, built by MSBuild into `tmdq_core.dll` (`native/tmdq_core`), with a C ABI (`tmdq_abi.h`)
+- **The native core**: C++20, built by MSBuild into `tmdq_core.dll` (`src/core`), with a C ABI (`tmdq_abi.h`)
   that `src/TmDq.Core` binds.
 - **Platform**: Windows x64.
 - **External libraries**: irig106utils (a vendored C library, compiled into the core) and doctest (the native tests'
-  single header, `lib/doctest`). Charting is first-party: the core builds the geometry (`chartgeometry`), the app draws
+  single header, `third_party/doctest`). Charting is first-party: the core builds the geometry (`chartgeometry`), the app draws
   it (`PlotChart`) with Skia. Every .NET package the app ships is open source and on the licence allow-list
-  (`scripts/check_package_licences.ps1`); no licensed tooling is used, and the project stays GPL-3.0.
+  (`eng/check_package_licences.ps1`); no licensed tooling is used, and the project stays GPL-3.0.
 - **History**: up to v2.14.2 the application was Qt 6 (Qt Widgets, qmake) over the same core; v3.0.0 is the first
   release of this one. `docs/changelog.md` records every release and every step of the move.
 
@@ -420,14 +420,14 @@ The following files are third-party library code and **MUST NOT be modified** un
 
 ### Protected Source Files
 
-- `lib/irig106/src/irig106*.c` - All IRIG 106 C source files
-- `lib/irig106/src/i106_*.c` - All i106 prefixed C source files
+- `third_party/irig106/src/irig106*.c` - All IRIG 106 C source files
+- `third_party/irig106/src/i106_*.c` - All i106 prefixed C source files
 
 ### Protected Header Files
 
-- `lib/irig106/include/irig106*.h` - All IRIG 106 header files
-- `lib/irig106/include/i106_*.h` - All i106 prefixed header files
-- `lib/irig106/include/config.h` - IRIG 106 configuration
+- `third_party/irig106/include/irig106*.h` - All IRIG 106 header files
+- `third_party/irig106/include/i106_*.h` - All i106 prefixed header files
+- `third_party/irig106/include/config.h` - IRIG 106 configuration
 
 **File Patterns to Exclude**: Any file containing `i106` or `irig106` in its name
 
@@ -443,11 +443,11 @@ The following files are third-party library code and **MUST NOT be modified** un
 
 Three layers, each tested on its own:
 
-1. **The native core** (`include/`, `src/model/`): reading Chapter 10 recordings, decommutation, calibration, the file
+1. **The native core** (`src/core/include/`, `src/core/src/`): reading Chapter 10 recordings, decommutation, calibration, the file
    formats (TOML settings, the CSV export, the frame-sync pattern file) and the plot's series and geometry. Plain
    C++20 with no UI. The processing pipeline is a **single-reader / parallel-worker** one: a run reads the file exactly
    once while each selected stream is processed on its own worker thread, and the results stay in memory.
-2. **The C ABI and the C# library**: `native/tmdq_core` builds the core into `tmdq_core.dll` behind `tmdq_abi.h`
+2. **The C ABI and the C# library**: `src/core` builds the core into `tmdq_core.dll` behind `tmdq_abi.h`
    (opaque handles, plain structs, a version and revision, every error as a code and a message); `src/TmDq.Core` is
    its C# binding, and nothing above it touches a pointer.
 3. **The application** (`src/TmDq.App`, MVVM): Avalonia views over CommunityToolkit.Mvvm view models. The
@@ -500,7 +500,7 @@ profile, so a batch processes with the linear calibration.
 - **Preferences** (`Settings`: `Preferences`, `PreferencesStore`, `QtSettingsImport`, `QtIni`): `preferences.json` in
   `%APPDATA%\tmDataQualityAnalyzer` (beside the exe for a portable copy), filled once from v2.x's INI file on the first
   run. The import stays through the v3.0.x releases, then goes.
-- **Help**: the manual compiled in (`resources/usermanual.html`), or the full one beside the exe.
+- **Help**: the manual compiled in (`assets/usermanual.html`), or the full one beside the exe.
 
 #### The C# library (`src/TmDq.Core`)
 
@@ -510,7 +510,7 @@ what it produced, with progress, log and cancel), `CalibrationRun` and `StepFile
 `ImportedStreams`) and `ChartGeometry`. `Library` loads `tmdq_core.dll` (the app passes the one beside it, or
 `TMDQ_CORE_DLL`: `NativeCore`) and refuses one whose ABI version or revision it does not know.
 
-#### The native core (`include/`, `src/model/`)
+#### The native core (`src/core/include/`, `src/core/src/`)
 
 1. **Chapter10Reader** (`chapter10reader`) - reads a recording's **metadata** up front: scans TMATS to catalogue its
    time and PCM channels (`ChannelData` values in a map by id, names and data rates), with a failed load's reason in
@@ -548,7 +548,7 @@ what it produced, with progress, log and cancel), `CalibrationRun` and `StepFile
     across sources, imported streams' order, and stream identity; **ChartGeometry** (`chartgeometry`) - the plot's
     envelope, culling, min-max band, transforms and time ticks.
 15. **TemplateMatcher** (`templatematcher`) - a file's PCM channel ids against a template's, exact-set.
-16. **IRIG 106 Library** (`lib/irig106/`) - the third-party C library for the Chapter 10 format (see Protected Files).
+16. **IRIG 106 Library** (`third_party/irig106/`) - the third-party C library for the Chapter 10 format (see Protected Files).
     Its setup is serialised (`irig106lock.h`).
 
 ### Data Flow
@@ -577,14 +577,17 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
 
 ### File Organization
 
-- **The core**: headers in `include/` (`dto/`, `model/`, `constants.h`), sources in `src/model/`; the ABI in
-  `native/tmdq_core/`; the doctest suite in `native/tmdq_core_tests/`. A new core source goes in `tmdq_core.vcxproj`,
+- **The core** (`src/core/`, its project `tmdq_core.vcxproj`): headers in `include/` (`dto/`, `model/`, `constants.h`),
+  sources in `src/`, the ABI in `abi/`; the doctest suite in `tests/core/`. A new core source goes in `tmdq_core.vcxproj`,
   and a new ABI source in both native projects; `NativeProjectTests` fails until they list it.
 - **.NET**: `src/TmDq.Core` (the binding) and `src/TmDq.App` (folders by role: `ViewModels`, `Views`, `Plot`,
   `Streams`, `Processing`, `Settings`, `Templates`, `Services`, `Logging`), each with a `.Tests` project of the same
   name under `tests/`; `eng/` holds the props and targets that `Directory.Build.props` and `Directory.Build.targets`,
   at the root, import into every .NET project.
-- **Resources**: `resources/` (the base manual, the icon, the UTF-8 manifest); shipped settings in `settings/`.
+- **Assets**: `assets/` (the base manual, the icon, the UTF-8 manifest); the full manual, `UserManual.html`, at the
+  root (Windows cannot hold it beside `usermanual.html`, whose name differs only in case); shipped settings in
+  `settings/`; build and test scripts, and the props and targets every .NET project imports, in `eng/`; the vendored
+  libraries in `third_party/`; build output in the ignored `out/`.
 
 ### Naming Conventions
 
@@ -605,10 +608,10 @@ made now:
 1. **Tests first, on the code as it is.** Before changing or reimplementing anything, pin what it does today, run the
    pins against the unchanged code, and only then change it. For a reimplementation, keep the old implementation in
    the test as an oracle and compare the two over generated input.
-2. **Mutation-check every change** (`scripts\mutate.ps1`). A test that cannot fail proves nothing: single-defect
+2. **Mutation-check every change** (`eng\mutate.ps1`). A test that cannot fail proves nothing: single-defect
    mutants per rule, and a survivor is a missing test or a line that does nothing, not a shrug.
 3. **A clean build before believing a result**, zero warnings, and the Release throughput gate
-   (`scripts\run_throughput_bench.ps1`) for anything on the decode path.
+   (`eng\run_throughput_bench.ps1`) for anything on the decode path.
 4. **One implementation of every file format.** The CSV, the TOML settings files and the pattern file are the core's;
    the template JSON and the preferences are the app's. Never two hand-written copies of one format.
 5. **A refactor that needs a test changed has changed behaviour**: say so, or do not do it.
@@ -628,13 +631,13 @@ Order includes in each `.cpp` / `.h` file as follows, with a blank line between 
 
 Everything builds from `tmdq.sln`, which VS Code opens by default; `.claude/CLAUDE.md` gives each script's switches:
 
-- **`tmdq_core.dll`**: `scripts\build_core_dll.ps1 [-Configuration Debug|Release]` (MSBuild over
-  `native/tmdq_core/tmdq_core.vcxproj`, into `native/out/<config>/`), then fails on any compiler warning or on an import
+- **`tmdq_core.dll`**: `eng\build_core_dll.ps1 [-Configuration Debug|Release]` (MSBuild over
+  `src/core/tmdq_core.vcxproj`, into `out/<config>/`), then fails on any compiler warning or on an import
   outside a short allow-list.
 - **The .NET projects**: built by the test scripts; `Directory.Build.props` and `Directory.Build.targets` at the root import
   `eng/AppVersion.props` (the version, read from `AppVersion`) and `eng/PackageLicences.targets` (the
   licence allow-list) into every .NET project, so none imports them itself.
-- **The manuals**: `scripts\build_manual.ps1` renders the figures from the app (`ManualFiguresTests`) and embeds them.
+- **The manuals**: `eng\build_manual.ps1` renders the figures from the app (`ManualFiguresTests`) and embeds them.
 - **The release**: `deploy\avalonia\build_avalonia_package.ps1` (single-file publish, signing, the portable ZIP and the
   Inno installer); `.claude/skills/cut-release` is the procedure.
 
@@ -646,7 +649,7 @@ are machine-specific and absolute), and it is **gitignored**, so a fresh clone h
 no IntelliSense until you run:
 
 ```powershell
-py scripts/gen_compile_flags.py
+py eng/gen_compile_flags.py
 ```
 
 It targets MSVC (`--target=x86_64-pc-windows-msvc`, `-fms-compatibility`), and clangd
@@ -654,7 +657,7 @@ then locates the MSVC and Windows SDK system headers itself — those paths are
 deliberately **not** in the file. Verify with:
 
 ```powershell
-clangd --check=src/model/frameprocessor.cpp
+clangd --check=src/core/src/frameprocessor.cpp
 ```
 
 which should report no diagnostics. (clangd 22 can still end in `1 errors` on a file where one of its own
@@ -741,10 +744,10 @@ that worktrees also need.
 ### Changing What the Core Does
 
 1. Pin the current behaviour with a doctest case first, then change it.
-2. A new function a host needs goes through the ABI (`native/tmdq_core/tmdq_abi.h`, a new revision) and its binding in
+2. A new function a host needs goes through the ABI (`src/core/abi/tmdq_abi.h`, a new revision) and its binding in
    `src/TmDq.Core`, with a native case in `test_abi.cpp` and a managed test.
-3. Mutation-check the change (`scripts\mutate.ps1`), and after a change to processing, the plot's series or the CSV
-   writer, run the soak (`scripts\run_soak.ps1`).
+3. Mutation-check the change (`eng\mutate.ps1`), and after a change to processing, the plot's series or the CSV
+   writer, run the soak (`eng\run_soak.ps1`).
 
 ### Adding a New Per-Stream Setting
 
@@ -763,11 +766,11 @@ The `add-stream-setting` skill is the checklist. In short:
 
 ### Common Issues
 
-1. **A build tool is not found** (`msbuild`, `mt`, `dumpbin`): the scripts dot-source `scripts\env.ps1` when they are
+1. **A build tool is not found** (`msbuild`, `mt`, `dumpbin`): the scripts dot-source `eng\env.ps1` when they are
    missing, which imports the Visual Studio 2022 environment; run them from PowerShell, not a bare `cmd`.
 2. **`dotnet build` fails on `Platform=x64`**: `vcvars` sets it, and a .NET build then looks for an x64 configuration
    that does not exist. The scripts clear it; clear it yourself in a shell that ran `env.ps1`.
-3. **A test sees an old `tmdq_core.dll`**: the managed and app tests load `native\out\<config>\tmdq_core.dll` (or
+3. **A test sees an old `tmdq_core.dll`**: the managed and app tests load `out\<config>\tmdq_core.dll` (or
    `TMDQ_CORE_DLL`), so rebuild the core after changing it.
 4. **A deleted or renamed header still "builds"**: an incremental build relinks stale objects; only `-Rebuild`
    verifies it.
@@ -782,21 +785,21 @@ The `add-stream-setting` skill is the checklist. In short:
 Three suites, each run by its own script; the baselines are in `.claude/CLAUDE.md`, and the `build-and-test` and
 `write-test` skills say how to run and extend them:
 
-- **The native core** (doctest, `native/tmdq_core_tests`): `scripts\test_native.ps1`, filtered with
+- **The native core** (doctest, `tests/core`): `eng\test_native.ps1`, filtered with
   `-tc="<name>*"` while iterating.
-- **The C# library** (xunit v3, `tests/TmDq.Core.Tests`): `scripts\test_dotnet.ps1`.
-- **The application** (xunit v3 on `Avalonia.Headless.XUnit`, `tests/TmDq.App.Tests`): `scripts\test_app.ps1`.
+- **The C# library** (xunit v3, `tests/TmDq.Core.Tests`): `eng\test_dotnet.ps1`.
+- **The application** (xunit v3 on `Avalonia.Headless.XUnit`, `tests/TmDq.App.Tests`): `eng\test_app.ps1`.
 
 The suites read the committed recordings under `tests/data/test files` and the fixtures under `tests/fixtures`. Two
 more checks run by hand:
 
-- **The side-by-side soak** (`scripts\run_soak.ps1`, `SoakTests`): 34 runs over every recording on the development
+- **The side-by-side soak** (`eng\run_soak.ps1`, `SoakTests`): 34 runs over every recording on the development
   machine, each CSV held byte for byte to what v2.14.2 exported (`Soak/soak.json`). Most recordings are not committed,
   so CI never runs it. `docs/records/soak.md` is the record of how it was set up.
-- **Mutation checks** (`scripts\mutate.ps1`, in a worktree): every behaviour change is checked against single-defect
+- **Mutation checks** (`eng\mutate.ps1`, in a worktree): every behaviour change is checked against single-defect
   mutants, and a surviving mutant is a test to write or a line to remove.
 
-A new native test file goes in `native/tmdq_core_tests/tmdq_core_tests.vcxproj` (`NativeProjectTests` fails until it
+A new native test file goes in `tests/core/tmdq_core_tests.vcxproj` (`NativeProjectTests` fails until it
 is); a new .NET test needs nothing but its class.
 
 ### Continuous Integration
@@ -809,7 +812,7 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
 
 ### Test Suites
 
-**The native core** (`native/tmdq_core_tests`, one `test_<suite>.cpp` each):
+**The native core** (`tests/core`, one `test_<suite>.cpp` each):
 
 - **Chapter10Reader and ChannelData** (`test_chapter10reader`) - the five committed recordings' channel ids, names and
   TMATS data rates; every way a load fails, with its message; and edited copies of `step_cal` for what the recordings do
@@ -826,7 +829,7 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
 - **PipelineRunner** (`test_pipelinerunner`) - a run's results and end on `step_cal`, a failing stream beside good ones,
   refusals, cancel at chosen moments (a thread parked on a log line), runs one after another, and destruction while
   running. It also holds **the throughput guard**, opt-in (`TMDQA_RUN_HEAVY_BENCH`) and run at release by
-  `scripts\run_throughput_bench.ps1` on the full PRN recording: four streams in parallel must cost about what the
+  `eng\run_throughput_bench.ps1` on the full PRN recording: four streams in parallel must cost about what the
   slowest costs alone, asserted as ratios, never milliseconds.
 - **EventReporter** (`test_eventreporter`) and **IntervalGate** (`test_intervalgate`) - the null-safe forwarder every
   source reports through, and the progress throttle, with injected time.
@@ -885,7 +888,7 @@ helper every test cleans up and reads back through, which waits out a virus scan
 - **The build and the release:** `VersionTests`, `VersionBuildTests`, `ManifestTests`, `ThirdPartyNoticesTests`,
   `PackageLicenceTests`, `LicenceBuildTests`, `IconTests` (the icon's sizes, its images in the built exe, and every
   window showing it).
-- **The soak:** `SoakTests`, explicit, run by `scripts\run_soak.ps1` (above).
+- **The soak:** `SoakTests`, explicit, run by `eng\run_soak.ps1` (above).
 
 ## Future Feature Candidates
 

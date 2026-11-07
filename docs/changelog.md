@@ -12,6 +12,40 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The native core in src/core, its tests in tests/core, scripts in eng/, libraries in third_party/
+
+The last of the three PRs that tidy the repository's layout. Files move; no code changes, beyond the paths that name
+them. The top level is now `assets/`, `deploy/`, `docs/`, `eng/`, `settings/`, `src/`, `tests/` and `third_party/`.
+
+- **The native core is one folder, `src/core/`:** `include/` became `src/core/include/`, `src/model/` became
+  `src/core/src/`, and the C ABI (`native/tmdq_core/*.cpp`, `*.h`) is in `src/core/abi/`, with the project file at
+  `src/core/tmdq_core.vcxproj`. Its doctest suite, `native/tmdq_core_tests/`, is `tests/core/`. Both projects keep
+  their depth, so only the paths that change folder changed in them. Both now build into **`out/`** at the root
+  (`out/<config>/` for the DLL, the test exe and the logs, `out/obj/` for the objects), where they built into
+  `native/out` and `native/obj`; `TMDQ_CORE_DLL`'s defaults, the app's copy of the DLL and the scripts follow.
+- **`lib/` is `third_party/`** (irig106 and doctest), moved and not edited. The deny rules in `.claude/settings.json`
+  and the never-edit rule follow it to `third_party/irig106/**`.
+- **`scripts/` is `eng/`**, beside the props and targets PR 2 put there; `PackageLicences.targets` now names the
+  licence script beside it.
+- **`resources/` is `assets/`.** The full manual, `UserManual.html`, stays at the root: Windows file names ignore
+  case, and `assets/usermanual.html` (the base manual) is the same name to it.
+- **`tmdq.sln`** puts the two native projects in the `src` and `tests` solution folders too.
+- **Repointed:** both native projects, `NativeProjectTests` (which holds them to `src/core/src`, `src/core/abi` and
+  `tests/core`), `gen_compile_flags.py` and the VS Code IntelliSense paths, the tests that read `constants.h`, the
+  icon, the base manual or a script, the package and installer scripts, CI, `.gitignore`, `.claude/.claudeignore`, and
+  the guides, skills and README. The changelog, `docs/records/` and the shipped-work table in
+  `docs/future_plans/README.md` keep the paths of their day.
+- **`NativeProjectTests` refuses an empty folder.** It compares each folder's `.cpp` files with a project's list, and
+  a path to a folder with none (`src/core` itself, say) made both sides empty, so the comparison passed whatever the
+  project listed. Before the move a wrong path threw; after it, `src/core` exists and holds no source.
+
+**Checked:** the core built in Debug and Release; every suite at its baseline (native 485 test cases, 1 skipped;
+managed 360 passed / 0 failed / 1 skipped; app 608 passed / 0 failed, 34 not run); the release consistency check. The
+manuals and the icon are byte for byte what they were. Three mutants of `NativeProjectTests` (`eng\mutate.ps1`, a
+`C:\tmp` worktree), all caught: the ABI looked for in `src/core`, the sources among the headers, the doctest suite in
+`tests/`. The first survives without the empty-folder guard. Two mutants of the project files, run by hand because the
+test reads them at run time and no binary changes: an ABI source left out of either project, both caught.
+
 #### The .NET projects in src/ and tests/, their build files in eng/
 
 The second of the three PRs that tidy the repository's layout. Files move; no code changes, beyond the paths that name

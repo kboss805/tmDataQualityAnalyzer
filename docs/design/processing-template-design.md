@@ -13,13 +13,13 @@ files whose channel layout matches.
 
 ## 2. What a template is
 
-`ProcessingTemplate` (`include/dto/processingtemplate.h`) = `schemaVersion`,
+`ProcessingTemplate` (`src/core/include/dto/processingtemplate.h`) = `schemaVersion`,
 `appVersion`, optional `name`, `timeChannelIndex`, and an ordered list of
 `TemplateStreamEntry`. Each entry = one `StreamConfig` (reused verbatim) + an
-optional list of `SeriesAppearance` (`include/dto/seriesappearance.h`: name +
+optional list of `SeriesAppearance` (`src/core/include/dto/seriesappearance.h`: name +
 color, keyed by `metricType`/`receiverIndex`/`channelIndex`).
 
-Serialized by `ProcessingTemplateSchema` (`src/model/processingtemplateschema.cpp`),
+Serialized by `ProcessingTemplateSchema` (`src/core/src/processingtemplateschema.cpp`),
 which **delegates each entry's config to `StreamConfigSchema`** so the ~15-field
 `StreamConfig` list is never hand-mapped twice. As with `StreamConfigSchema`,
 `calibrationByWord` is never serialized — only the calibration *input references*
@@ -30,7 +30,7 @@ anywhere in a template.
 
 **A target file is accepted only if its PCM channel-ID set is identical to the
 template's.** Any missing or extra channel rejects the file (with a reason).
-`TemplateMatcher` (`src/model/templatematcher.cpp`) is the pure, disk-free
+`TemplateMatcher` (`src/core/src/templatematcher.cpp`) is the pure, disk-free
 validator (`matchFile()` → `MatchResult{ok, missing, extra}`).
 
 This was a deliberate simplification over positional/name-based mapping: it

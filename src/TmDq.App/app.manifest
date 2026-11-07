@@ -11,7 +11,7 @@
   <!-- Selects the UTF-8 active code page for this process (Windows 10 1903+). The vendored irig106 library
        opens files with the C runtime's NARROW open(), which reads that code page; with this set, a UTF-8 path
        from managed code reaches it intact. The native test executable embeds the same setting
-       (resources/utf8codepage.manifest). -->
+       (assets/utf8codepage.manifest). -->
   <application xmlns="urn:schemas-microsoft-com:asm.v3">
     <windowsSettings>
       <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
