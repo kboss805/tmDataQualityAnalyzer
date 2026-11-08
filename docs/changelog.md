@@ -12,6 +12,24 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The sidebar toggle's glyph is centred in its button
+
+The title bar's sidebar toggle drew its glyph in the button's top-left corner, not centred as the menu button's is. The
+title bar's `Button` styles centre their content, and in Avalonia a `ToggleButton` is not matched by a `Button`
+selector. So the toggle kept the theme's stretched content: its glyph's text box was the whole 30 x 26 button, and the
+glyph drew from its corner.
+
+- **`MainWindow.axaml`:** the toggle centres its content itself. Its glyph box is now 15 x 15 at (8, 6), where the menu
+  button's is (measured after layout; it was 30 x 26 at (0, 0)).
+- **Tests:** `TheTitleBarIsTheApplicationsOwnAndTellsWindowsWhatEachPartIs` now holds every title-bar button's glyph
+  smaller than its button and centred in it. Mutation check (`eng\mutate.ps1`, app suite): the fix undone, centred
+  across only, and aligned left were all CAUGHT (3 of 3). App baseline unchanged (the case was extended, not added).
+- **The manual:** the four figures that show the title bar were re-rendered (`eng\build_manual.ps1`) and the manuals
+  re-embedded: `walk-app-01-hamburger`, `walk-err-01-log-error`, `walk-fs-04-processing` and
+  `walk-theme-01-light-plot`. Below their title bars only the run log's progress percentages and elapsed times
+  differ, which vary between captures (#259). `walk-cust-02-snr-tree` was restored: its only change was the known
+  two-pixel variation.
+
 #### VS Code runs the application on the Release core
 
 Processing in the application run from VS Code took about three times as long as v2.14.2. The application itself was
