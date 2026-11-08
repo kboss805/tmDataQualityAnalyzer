@@ -1,16 +1,12 @@
 # Test artifacts
 *.txt
-scratch_tst.cpp
--
-run_tests.ps1
-nul
 # The .ch10 fixtures are large and mostly gitignored, EXCEPT the small
 # (<100 MB) committed CI fixtures below, which CI needs. The full-size
 # variants (e.g. the full PRN and Safran recordings) stay local-only, read by the
 # release benchmark and the soak. "data/test files/" is the canonical fixture
 # folder - everything else directly under data/ (stray exports, scratch csv/png,
 # one-off recordings) is ignored outright, and within test files/ itself only the
-# four small fixtures below are tracked; the multi-GB "full" siblings next to them
+# five small fixtures below are tracked; the multi-GB "full" siblings next to them
 # stay local-only on purpose.
 data/*
 !data/test files/
@@ -23,8 +19,3 @@ data/test files/*
 # pins the calibration-import resilience fixes against the file that exposed them.
 !data/test files/step_cal, example.ch10
 output/
-!output/.gitkeep
-
-# Test build outputs
-debug/
-release/

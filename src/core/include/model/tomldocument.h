@@ -12,8 +12,9 @@
  *     config file can be read.
  *   - **It writes the file in place**, not through a rename: a path it cannot open for
  *     writing is reported as an error, never silently skipped.
- *   - **It reads arrays of tables** (`arrayTables()`), so `StepDetector::parseStepConfig`
- *     reads `[[Step]]` files through it rather than through a parser of its own - see below.
+ *   - **It reads arrays of tables** (`tables(name)`, or all of them through `arrayTables()`),
+ *     so `StepDetector::parseStepConfig` reads `[[Step]]` files through it rather than
+ *     through a parser of its own - see below.
  *
  * This class is plain file I/O over a map of UTF-8 `std::string`s, with paths as
  * `std::filesystem::path`.

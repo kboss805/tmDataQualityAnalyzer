@@ -31,20 +31,22 @@ public:
     int channelID() const;                   ///< @return The channel identifier.
     const std::string& channelType() const;  ///< @return The TMATS channel type string.
     const std::string& channelName() const;  ///< @return The human-readable channel name.
-    int channelCount() const;                ///< @return Number of packets seen for this channel.
+    int channelCount() const;                ///< @return Packets read for this channel during channel discovery (see incrementChannelCount()).
 
     /// @param[in] channel_type TMATS channel type (e.g., "PCMIN").
     void setChannelType(const std::string& channel_type);
     /// @param[in] channel_name Human-readable name from the TMATS data source.
     void setChannelName(const std::string& channel_name);
-    /// Increments the packet count by one.
+    /// Counts one more packet of this channel read by Chapter10Reader::loadChannels. That scan
+    /// stops at the first TMATS packet that parses, so the count is normally 1 for the TMATS
+    /// channel and 0 for every channel TMATS lists - not the channel's packets in the recording.
     void incrementChannelCount();
 
 private:
     int m_channel_id;            ///< Numeric channel identifier.
     std::string m_channel_type;  ///< TMATS channel type string.
     std::string m_channel_name;  ///< Human-readable channel name.
-    int m_channel_count;         ///< Number of data packets observed.
+    int m_channel_count;         ///< Packets read for this channel during channel discovery.
 };
 
 #endif // CHANNELDATA_H

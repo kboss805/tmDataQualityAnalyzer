@@ -3,12 +3,10 @@
 # HEADERS are intentionally left readable so wrapper code can reference their APIs.
 third_party/irig106/src/*.c
 
-# Build artifacts and generated files
-build/
-debug/
-release/
-*.o
-*.obj
-Makefile
-Makefile.*
-version_autogen.h
+# Build output and generated files
+out/
+**/bin/
+**/obj/
+deploy/avalonia/staging/
+deploy/sandbox/.work/
+docs/manual_images/processed/

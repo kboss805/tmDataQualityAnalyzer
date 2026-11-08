@@ -70,28 +70,31 @@ stop endorsing the change until it moves.
   re-introduces the spiky 98–100% lock artifact.
 - **Missed-frame accounting must not double-count.** Windows that contain real bits already counted
   their misses bit-by-bit (the rollover at `minor_frame_bit_count > bits_in_frame`); only a genuine
-  recording gap (no bits at all) extrapolates from the expected data rate. Watch any edit near
-  `frameprocessor.cpp:307-349` — this guard was added to fix a real bias on long-frame streams.
+  recording gap (no bits at all) extrapolates from the expected data rate. Watch any edit to
+  `FrameProcessor::closeElapsedWindows`, where that guard lives: it was added to fix a real bias on
+  long-frame streams.
 - **Missed frames are monotonic** and counted only within `[start, stop]`. They are a loss-of-lock
   event count, NOT a bit-level/BER metric.
 
-### TOML config boundaries (`tomlconfighelper.cpp`, `streamsubdialogs.h`)
+### TOML config boundaries (`framesyncfile.cpp`, `Models/Streams/StreamFiles.cs`)
 
-- **Frame-sync Load/Save round-trips ONLY** frame sync pattern, sync mask, and words/frame.
-  `Randomized`, `Data Rate`, and `Sample Rate` are per-session operator inputs and are intentionally
-  excluded (the separator line in the setup dialog = this boundary). Do not widen
-  `loadFrameSyncToml`/`saveFrameSyncToml` past it. See US1.0 scope in `docs/claude.md`.
+- **Frame-sync Load/Save round-trips** the sync pattern, sync mask, words/frame and the two
+  **stream-format flags** (`Inverted`, `Randomized`): they describe the recording's PCM code format,
+  like the pattern itself. `Data Rate` and `Sample Rate` are per-session operator inputs and stay out.
+  Do not widen `readFrameSyncFile`/`writeFrameSyncFile` (the core) or the setup dialog's Load/Save
+  (`StreamFiles`) past that. See the TOML boundary invariant in `.claude/CLAUDE.md`.
 - Calibration profiles are **session-only** and never serialized to disk.
 
-### Threading / lifecycle (`processingcoordinator.cpp`, `ch10packetreader.cpp`, `packetqueue.h`)
+### Threading / lifecycle (`pipelinerunner.cpp`, `ch10packetreader.cpp`, `packetqueue.h`)
 
 - One `Ch10PacketReader` thread reads the file **once** and routes packets to bounded per-stream
   queues; one `FrameProcessor` worker per stream consumes concurrently. Don't reintroduce per-worker
   file opens (the old 4× I/O bug).
 - Abort must stay cooperative and deadlock-free: workers/reader check `m_abort_requested`
   (`memory_order_relaxed`) and queues must be closed so no thread blocks forever on enqueue/dequeue.
-- `PacketItem.payload` is a COW `QByteArray`; a worker that mutates bytes (swap/invert/derandomize)
-  must operate on its own detached copy. Verify any new mutate-in-place path detaches first.
+- `PacketItem::payload` is a `PacketPayload`, a shared, read-only `std::vector<uint8_t>` that every
+  stream's queue receives without a copy; a worker that swaps, inverts or derandomizes copies it into
+  its own buffer first. Verify any new mutate-in-place path works on that copy, never the shared bytes.
 
 ### C / irig106 interop (`ch10packetreader.cpp`, `chapter10reader.cpp`)
 

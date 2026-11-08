@@ -226,7 +226,7 @@ std::vector<std::pair<int, std::string>> Chapter10Reader::getPCMChannelList() co
         // label shown in the Configure Streams dialog and the Frame Sync Lock
         // plot series, where the TMATS channel number is just noise. The Receiver
         // SNR plot series re-adds the channel number itself (see
-        // PlotViewModel::addStreamData) since multiple SNR streams in one file
+        // SeriesColumnSchema::snrSeriesName) since multiple SNR streams in one file
         // need it to stay distinguishable.
         list.emplace_back(id, m_channel_data.at(id).channelName());
     }

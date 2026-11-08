@@ -190,7 +190,7 @@ namespace CalibrationConstants {
     /// itself for noise that grows with signal level. On the step_cal recording the
     /// splits run 0.5-2% of a step and the smallest genuine step ~30%, so 10%
     /// sits well clear of both; a synthetic compressed receiver's smallest real
-    /// step is ~16% (TestStepDetector pins that it survives).
+    /// step is ~16% (test_stepdetector.cpp pins that it survives).
     inline constexpr double kSameLevelFractionOfStep = 0.1;
 
     /// A plateau within this fraction of either end of the converter's range is

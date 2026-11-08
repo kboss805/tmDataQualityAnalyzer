@@ -1,8 +1,9 @@
-# Ignore everything in deploy/ except tracked scripts and config
+# Ignore everything in deploy/ except tracked scripts, config and notes
 *
 !.gitignore
-!build_release.ps1
-!tmDataQualityAnalyzer.iss
+# The installer's "What's New" page and the portable ZIP's README.txt.
+!RELEASENOTES.txt
+!README_portable.txt
 
 # The clean-machine install harness. The directory has to be re-included before its
 # contents, because git will not descend into an excluded directory at all. Its own
@@ -10,7 +11,7 @@
 !sandbox/
 !sandbox/**
 
-# The Avalonia package prototype (plan step 3.3), the same way: its own .gitignore keeps
+# The release package (build_avalonia_package.ps1), the same way: its own .gitignore keeps
 # the staged layout and the packages out.
 !avalonia/
 !avalonia/**

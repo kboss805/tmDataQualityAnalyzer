@@ -656,6 +656,11 @@ Everything builds from `tmdq.sln`, which VS Code opens by default; `.claude/CLAU
 - **The manuals**: `eng\build_manual.ps1` renders the figures from the app (`ManualFiguresTests`) and embeds them.
 - **The release**: `deploy\avalonia\build_avalonia_package.ps1` (single-file publish, signing, the portable ZIP and the
   Inno installer); `.claude/skills/cut-release` is the procedure.
+- **A recording that finds no sync**: `py eng\ch10_triage.py <file.ch10>` walks the packets with no build and no
+  irig106, checks the reader's TMATS gates, tries the sixteen combinations of the four bit transforms, and finds the
+  sync word and frame length that actually recur. Its transforms mirror `FrameProcessor`'s; keep them in step.
+- **Markdown lint**: `.pymarkdown.json` configures `python -m pymarkdown scan <files>` for this project's docs (front
+  matter, pipe tables, long lines and bold lead-ins allowed). Nothing runs it automatically.
 
 ### clangd / IntelliSense (`compile_flags.txt`)
 

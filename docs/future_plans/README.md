@@ -26,7 +26,9 @@ prompt to invent work.
 ## Shipped
 
 Plan files deleted on landing; this table is the pointer to where each one's real
-documentation lives.
+documentation lived when it landed. Its paths are of their day, like the changelog's: `scripts\` is now `eng\`,
+`resources\` is `assets\`, and the Qt sources and packaging (`include/view`, `PlotWidget`, `deploy/build_release.ps1`)
+were deleted in v3.
 
 | Initiative | Landed in | Documented in |
 | --- | --- | --- |

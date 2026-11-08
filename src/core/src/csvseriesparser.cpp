@@ -166,7 +166,7 @@ CsvParseResult CsvSeriesParser::parse(const std::filesystem::path& path)
     std::vector<CsvSeries> series(static_cast<std::size_t>(param_count));
 
     // Count channels per (source, stream, receiver) for the channel index (SNR series only) - mirrors
-    // the per-stream counting in PlotViewModel::addStreamData, so multiple SNR streams that reuse
+    // the per-stream counting in buildStreamSeries (seriesbuilder.cpp), so multiple SNR streams that reuse
     // receiver numbers don't accumulate channel indices across the whole file. Keyed
     // [sourceId][streamOrder][receiverIndex]: a multi-source export can have two different sources
     // reuse the same streamOrder, so sourceId must be part of the key or their channel indices would

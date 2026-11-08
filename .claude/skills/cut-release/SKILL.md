@@ -3,7 +3,7 @@ name: cut-release
 description: >-
   Cut a new versioned release of tmDataQualityAnalyzer — bump the version, update the release notes
   and history, and build the signed installer + portable ZIP. Use this WHENEVER the user wants to
-  "cut a release", "bump the version", "do a v2.x release", "build the installer", "ship a new
+  "cut a release", "bump the version", "do a v3.x release", "build the installer", "ship a new
   version", or "update the release notes for the next version". The version is single-sourced in one
   struct and propagated by the build, the release notes live in two separate places with different
   audiences, and packaging runs a specific signing/Inno-Setup script — doing any of these by hand and
@@ -31,8 +31,8 @@ Edit **only** `src/core/include/constants.h`:
 
 ```cpp
 struct AppVersion {
-    static constexpr int kMajor = 2;   // ← bump as decided
-    static constexpr int kMinor = 6;
+    static constexpr int kMajor = 3;   // ← bump as decided
+    static constexpr int kMinor = 1;
     static constexpr int kPatch = 0;
 ```
 
@@ -83,7 +83,7 @@ powershell -ExecutionPolicy Bypass -File eng\check_release_consistency.ps1 -Rele
 It derives the version from `AppVersion` and asserts every user-facing literal matches, that the
 changelog has a `### vX.Y.Z` section, and (in `-ReleaseMode`) that no `Unreleased` section is left
 behind. A **missing marker is a failure**, not a pass, so rewording one of those lines breaks the
-check loudly instead of silently disabling it. `build_release.ps1` runs it before packaging and CI
+check loudly instead of silently disabling it. `build_avalonia_package.ps1` runs it before packaging and CI
 runs it without `-ReleaseMode` on every PR, so drift is caught long before a release.
 
 **What the check cannot judge: whether the screenshots still show the truth.** The figures are rendered
@@ -217,7 +217,7 @@ On Windows Pro/Enterprise with the **Windows Sandbox** feature enabled (one line
 the payload, because the recordings' names contain commas):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File deploy\sandbox\run_sandbox_test.ps1 -Verifier verify_avalonia_install.ps1 -Setup "deploy\avalonia\tmDataQualityAnalyzer-v$v`_setup.exe" -Payload "deploy\avalonia\tmDataQualityAnalyzer-v$v`_portable.zip;deploy\avalonia\staging\unsigned;tests\data\test files\prn_testfile, sample.ch10;deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe"
+powershell -ExecutionPolicy Bypass -File deploy\sandbox\run_sandbox_test.ps1 -Setup "deploy\avalonia\tmDataQualityAnalyzer-v$v`_setup.exe" -Payload "deploy\avalonia\tmDataQualityAnalyzer-v$v`_portable.zip;deploy\avalonia\staging\unsigned;tests\data\test files\prn_testfile, sample.ch10;deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe"
 ```
 
 It generates the `.wsb` (absolute host paths, which is why it is generated rather than committed),
@@ -261,7 +261,7 @@ with the user first. The release artifacts are build outputs and are not tracked
 
 ## Guardrails
 
-- One version source (`constants.h`). Never hand-edit `version_autogen.h`, the `.pro` VERSION, or the
-  `.rc` — they're derived.
+- One version source (`constants.h`). Never type a version into a `.csproj`, the Inno script or a manual:
+  `eng/AppVersion.props`, the package script (Inno's `MyAppVersion`) and `eng\build_manual.ps1` derive it.
 - Two notes files, two audiences: `docs/changelog.md` = developer; `RELEASENOTES.txt` = end user.
 - A release must come from a green, zero-warning, full-suite-passing build.

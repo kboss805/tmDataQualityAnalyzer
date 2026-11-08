@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<!-- Merged into the linker's embedded manifest by codepage.pri. See that file. -->
+<!-- Merged into the native test executable's manifest by tests\core\tmdq_core_tests.vcxproj (the app and each .NET test host merge their own app.manifest, with mt.exe). -->
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
   <application xmlns="urn:schemas-microsoft-com:asm.v3">
     <windowsSettings>

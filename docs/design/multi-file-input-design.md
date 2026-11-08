@@ -1,6 +1,7 @@
 # Design Note — Multi-file input (Phase 1)
 
-**Status:** DECISIONS LOCKED (2026-07-07), ready to implement. Resolved:
+**Status:** implemented (v2.x; carried into v3 as the Plot File selector and the source-qualified CSV columns).
+Written before it was built, so it names v2.x's classes. The decisions it locked (2026-07-07):
 
 - Time alignment = **absolute IRIG time + re-base to the global-earliest sample** (§3). ✔
 - Relative-overlay mode = **deferred post-v1** (§9). ✔

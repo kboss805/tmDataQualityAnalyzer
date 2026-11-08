@@ -74,12 +74,13 @@ public:
     /**
      * @brief Parses an `[[Step]]` array-of-tables step-config TOML file.
      *
-     * `TomlDocument` deliberately does not implement arrays, so this is a dedicated line
-     * parser. It reads the file through the same `textfile` helpers, so a BOM or UTF-16 is
-     * handled alike. Each `[[Step]]` table must provide `db`. The header and the key are
-     * matched without regard to case; the header must be exactly `[[Step]]` (a trailing
-     * comment on it means it is not a step header); a value that is not a bare number is
-     * skipped and leaves the step at 0. `TestStepDetector` pins each of these.
+     * It reads the file through `TomlDocument` (its `tables("step")`), so a BOM or UTF-16 is
+     * handled as for every other settings file. Each `[[Step]]` table is one step, and its
+     * `db` gives the level; a table without a usable `db` still counts, at 0. The header and
+     * the key are matched without regard to ASCII case; the header must be exactly `[[Step]]`
+     * (a trailing comment on it means it is not a step header); a value that is not a bare
+     * number is skipped and leaves the step at 0. The native tests (test_stepdetector.cpp)
+     * pin each of these.
      *
      * @param[in]  path  Path to the step-config TOML file.
      * @param[out] out   Parsed steps, in file order.

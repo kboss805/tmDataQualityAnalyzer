@@ -286,7 +286,7 @@ private:
     bool m_done = false;
 };
 
-/// Builds and runs @p cases over @p f exactly as MainViewModel + ProcessingCoordinator do, with no ABI.
+/// Builds and runs @p cases over @p f through buildStreamJob + PipelineRunner, exactly as abi_run.cpp does, with no ABI.
 std::map<int, ProcessedStreamData> runCore(const StepCal& f, int sourceId, const std::vector<Case>& cases,
                                            const std::string& appRoot, bool& ok, bool swapBytes = true)
 {

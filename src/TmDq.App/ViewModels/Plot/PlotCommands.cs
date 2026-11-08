@@ -18,8 +18,6 @@ namespace TmDq.App.ViewModels.Plot
     /// </summary>
     public sealed class PlotCommands : ObservableObject, IDisposable
     {
-        private const string PlotFileGroup = "plotfile", ReadoutGroup = "readout";
-
         private readonly PlotViewModel _plot;
         private readonly IPlotPrompts _prompts;
         private readonly IRelayCommand[] _all;
