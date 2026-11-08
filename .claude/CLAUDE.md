@@ -53,12 +53,12 @@ Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `
   processed; with `TMDQ_SMOKE_REPORT=<file>` it skips the dialog, runs the first channel with the defaults, writes one
   result line and exits. The repository's `settings/` is copied beside the exe (the app root). Its preferences are
   `%APPDATA%\tmDataQualityAnalyzer\preferences.json` (beside the exe in a `tmDataQualityAnalyzer` folder when a
-  `portable` file sits there), filled once from v2.x's INI there on the first run: to run a dev build without touching
-  yours, put a `portable` file beside it. Its manuals are `assets\usermanual.html` (compiled in) and
+  `portable` file sits there; v3.0.x imported v2.x's INI there on its first run, 3.1.0 does not): to run a dev build
+  without touching yours, put a `portable` file beside it. Its manuals are `assets\usermanual.html` (compiled in) and
   `UserManual.html` (the full one, with `docs\manual\walkthroughs.html`), their figures rendered from the app by
   `ManualFiguresTests` into `docs\manual_images`: after a change to what a figure shows, rebuild with
   `powershell -ExecutionPolicy Bypass -File eng\build_manual.ps1` (`-NoCapture` reuses the figures). CI runs the
-  app suite. Green baseline **613 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases.
+  app suite. Green baseline **577 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases.
   **The side-by-side soak:** `powershell -ExecutionPolicy Bypass -File eng\run_soak.ps1 [-NoBuild]
   [-Only <run>,...]` runs every run in `tests\TmDq.App.Tests\Soak\soak.json` (`SoakTests`, explicit, one process a
   run) and fails unless each CSV export is byte for byte what v2.14.2 exported (the manifest's `qt` blocks). Most

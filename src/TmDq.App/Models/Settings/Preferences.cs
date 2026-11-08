@@ -10,8 +10,8 @@ namespace TmDq.App.Models.Settings
     /// <summary>
     /// What the application remembers between sessions (plan step 4.8): the theme, the log sidebar, the plot's legend,
     /// the recent files, the folder the last recording came from and the folder the last calibration recording came
-    /// from. The Qt application kept the same things in its QSettings INI file; on the first run they are imported from
-    /// it (<see cref="QtSettingsImport"/>).
+    /// from. (v2.x kept the same things in a QSettings INI file, which v3.0.x imported on its first run; from v3.1.0 that
+    /// file is not read.)
     /// </summary>
     public sealed record Preferences
     {
@@ -68,14 +68,13 @@ namespace TmDq.App.Models.Settings
     }
 
     /// <summary>
-    /// The preferences file: JSON, beside the Qt application's INI file, in <c>%APPDATA%\tmDataQualityAnalyzer</c>, or,
-    /// for a portable copy (a file named "portable" beside the exe), in a <c>tmDataQualityAnalyzer</c> folder beside the
-    /// exe, as the Qt application decides where its settings go. Every change is written at once.
+    /// The preferences file: JSON, in <c>%APPDATA%\tmDataQualityAnalyzer</c>, or, for a portable copy (a file named
+    /// "portable" beside the exe), in a <c>tmDataQualityAnalyzer</c> folder beside the exe, where v2.x kept its settings
+    /// too. Every change is written at once.
     /// </summary>
     public sealed class PreferencesStore
     {
         public const string FileName = "preferences.json";
-        public const string QtFileName = "tmDataQualityAnalyzer.ini";
         public const string PortableMarker = "portable";
         public const string FolderName = "tmDataQualityAnalyzer";
 
@@ -96,24 +95,14 @@ namespace TmDq.App.Models.Settings
             File.Exists(Path.Combine(appDirectory, PortableMarker)) ? Path.Combine(appDirectory, FolderName) : Path.Combine(appData, FolderName);
 
         /// <summary>
-        /// The preferences in <paramref name="folder"/>: this application's file when there is one; else, on the first
-        /// run, the Qt application's settings imported from its INI file there, and written as this application's;
-        /// else the defaults. A file that cannot be read is the defaults. Recent files that no longer exist are dropped.
+        /// The preferences in <paramref name="folder"/>: this application's file when there is one, else the defaults,
+        /// written there. A file that cannot be read is the defaults. Recent files that no longer exist are dropped.
         /// </summary>
         public static PreferencesStore Load(string folder, Func<string, bool>? exists = null)
         {
             exists ??= File.Exists;
             string file = Path.Combine(folder, FileName);
-            Preferences loaded;
-            if (File.Exists(file))
-            {
-                loaded = Read(file) ?? new Preferences();
-            }
-            else
-            {
-                string qt = Path.Combine(folder, QtFileName);
-                loaded = File.Exists(qt) ? QtSettingsImport.Read(qt) : new Preferences();
-            }
+            Preferences loaded = File.Exists(file) ? Read(file) ?? new Preferences() : new Preferences();
             var store = new PreferencesStore(loaded with { RecentFiles = RecentFiles.Prune(loaded.RecentFiles, exists) }, file);
             if (!File.Exists(file)) store.Save();
             return store;

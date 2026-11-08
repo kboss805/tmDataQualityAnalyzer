@@ -16,8 +16,8 @@ using Xunit;
 namespace TmDq.App.Tests
 {
     /// <summary>
-    /// What is remembered between sessions (plan step 4.8): the preferences file, v2.x's settings imported
-    /// from INI files QSettings wrote, the recent-files rules, and the main window's view model keeping each preference.
+    /// What is remembered between sessions (plan step 4.8): the preferences file, the recent-files rules, and the main
+    /// window's view model keeping each preference.
     /// </summary>
     [Collection(NativeCoreCollection.Name)]
     public sealed class PreferencesTests : IDisposable
@@ -28,122 +28,7 @@ namespace TmDq.App.Tests
 
         public void Dispose() => TempFiles.DeleteDirectory(_dir, recursive: true);
 
-        private static string Fixture(string name) => Path.Combine(Repo.Root, "tests", "TmDq.App.Tests", "QtSettings", name);
-
         private static string Prn => Repo.Recording("prn_testfile, sample.ch10");
-
-        // ---- v2.x's settings, as QSettings wrote them ---------------------------------------------------------------
-
-        [Fact]
-        public void TheV2SettingsReadAsV214WroteThem()
-        {
-            // Written by Qt 6.12's QSettings in INI format (a throwaway program, kept byte for byte): every key
-            // v2.14.2 keeps, with commas, a semicolon, an equals sign, a quote, a backslash, a leading space and
-            // non-ASCII in the values.
-            Preferences all = QtSettingsImport.Read(Fixture("everything.ini"));
-            Assert.Equal(("light", false, false, false), (all.Theme, all.IsDark, all.SidebarVisible, all.LegendVisible));
-            Assert.Equal(new[]
-            {
-                @"C:\data\prn_testfile, sample.ch10",
-                @"D:\Données\café Ω.ch10",
-                @"C:\odd;name=1 ""q"".csv",
-                @"C:\back\slash.ch10",
-                " C:/leading space.ch10",   // not a full path as written, so kept as it is (and dropped, missing, at start-up)
-            }, all.RecentFiles);
-            Assert.Equal((@"C:\Users\me\flight tests, 2026", @"E:\cal\ü"), (all.LastFolder, all.LastCalibrationFolder));
-
-            // A list of one is written as a plain value; the dark theme; both flags on.
-            Preferences one = QtSettingsImport.Read(Fixture("one-recent.ini"));
-            Assert.Equal(("dark", true, true, true), (one.Theme, one.IsDark, one.SidebarVisible, one.LegendVisible));
-            Assert.Equal(new[] { @"C:\data\only.ch10" }, one.RecentFiles);
-            Assert.Equal(((string?)null, (string?)null), (one.LastFolder, one.LastCalibrationFolder));
-
-            // An empty list is @Invalid(); every other key is missing, so at its default.
-            Preferences empty = QtSettingsImport.Read(Fixture("empty-recent.ini"));
-            Assert.Equal(new Preferences(), empty);
-            Assert.Equal(new Preferences(), QtSettingsImport.Read(Path.Combine(_dir, "missing.ini")));
-
-            // A folder written empty is no folder.
-            string blank = Path.Combine(_dir, "blank.ini");
-            File.WriteAllText(blank, "[General]\r\nLastCh10Directory=\r\n[CalibrationSetupDialog]\r\nlastCalDir=\r\n");
-            Assert.Equal(((string?)null, (string?)null), (QtSettingsImport.Read(blank).LastFolder, QtSettingsImport.Read(blank).LastCalibrationFolder));
-        }
-
-        [Theory]
-        [InlineData("plain", new[] { "plain" }, false)]
-        [InlineData("  padded  ", new[] { "padded" }, false)]
-        [InlineData("a, b,c", new[] { "a", "b", "c" }, true)]
-        [InlineData("\"a, b\", c", new[] { "a, b", "c" }, true)]
-        [InlineData("\" kept \"", new[] { " kept " }, false)]
-        [InlineData("\"half\"way", new[] { "halfway" }, false)]
-        [InlineData("tab\\there\\nnew", new[] { "tab\there\nnew" }, false)]
-        [InlineData("\\x41\\x3A9z", new[] { "A\u03A9z" }, false)]
-        [InlineData("\\101\\60x", new[] { "A0x" }, false)]
-        [InlineData("a\\qb", new[] { "ab" }, false)]
-        [InlineData("q\\\"x\\\\y\\'z\\?", new[] { "q\"x\\y'z?" }, false)]
-        [InlineData("\\a\\b\\f\\r\\v", new[] { "\a\b\f\r\v" }, false)]
-        [InlineData("esc\\ ", new[] { "esc" }, false)]
-        [InlineData("sp\\x20", new[] { "sp " }, false)]
-        [InlineData("@@at", new[] { "@at" }, false)]
-        [InlineData("@@a, @@b", new[] { "@a", "@b" }, true)]
-        [InlineData("@Invalid()", new string[0], false)]
-        [InlineData("", new[] { "" }, false)]
-        [InlineData("a,", new[] { "a", "" }, true)]
-        [InlineData("\\xZ", new[] { "Z" }, false)]
-        [InlineData("x\\", new[] { "x" }, false)]
-        [InlineData("\"a \"b ", new[] { "a b " }, false)]
-        [InlineData("\"x\", y  ", new[] { "x", "y" }, true)]
-        [InlineData("a  , b", new[] { "a", "b" }, true)]
-        [InlineData("\"a\"  , b", new[] { "a", "b" }, true)]
-        [InlineData("a\\x20, b  ", new[] { "a ", "b" }, true)]
-        public void AValueIsReadAsQSettingsReadsOne(string raw, string[] expected, bool isList)
-        {
-            QtIniValue v = QtIni.Value(raw);
-            Assert.Equal(expected, v.AsList());
-            Assert.Equal(isList, v.IsList);
-        }
-
-        [Theory]
-        [InlineData("true", true)]
-        [InlineData("false", false)]
-        [InlineData("FALSE", false)]
-        [InlineData("0", false)]
-        [InlineData("", false)]
-        [InlineData("1", true)]
-        [InlineData("yes", true)]
-        public void AFlagIsReadAsQVariantReadsAStringAsABool(string raw, bool expected) => Assert.Equal(expected, QtIni.Value(raw).AsBool());
-
-        [Fact]
-        public void AStringAndAListConvertAsQVariantConvertsThem()
-        {
-            Assert.Equal("only", QtIni.Value("\"only\"").AsString());
-            Assert.Equal("", QtIni.Value("a, b").AsString());           // a list of two is no string
-            Assert.Equal("", QtIni.Value("@Invalid()").AsString());
-            Assert.Equal(new[] { "one" }, QtIni.Value("one").AsList());   // a string is a list of one
-            Assert.Equal("one", QtIniValue.List(new[] { "one" }).AsString());
-        }
-
-        [Fact]
-        public void SectionsKeysAndCommentsAreReadAsQSettingsReadsThem()
-        {
-            IReadOnlyDictionary<string, QtIniValue> ini = QtIni.Parse(Encoding.UTF8.GetBytes(
-                "\uFEFF; a comment = not a key\r\n[General]\r\nTheme = light \r\nnoequals\r\n=nokey\r\n[ Spaced ]\r\nk=v\r\n" +
-                "[Calibration%20Setup]\nlast%U00FCDir=x\n[%47eneral]\nTheme=dark\n[a\\b]\nc=1\n\n[General]\nLegendVisible=false\n" +
-                "[GENERAL]\nSidebarVisible=0\n[%General]\ny=2"));
-            Assert.Equal("light", ini["Theme"].AsString());
-            Assert.Equal("x", ini["Calibration Setup/lastüDir"].AsString());
-            Assert.Equal("dark", ini["General/Theme"].AsString());      // "%47eneral" is a section that only reads as General
-            Assert.Equal("1", ini["a/b/c"].AsString());
-            Assert.Equal("false", ini["LegendVisible"].AsString());   // [General] again is the top level again
-            Assert.Equal("0", ini["SidebarVisible"].AsString());      // in any case
-            Assert.Equal("2", ini["General/y"].AsString());           // "%General" is a section called General
-            Assert.Equal("v", ini["Spaced/k"].AsString());            // a section's name trimmed
-            Assert.Equal(8, ini.Count);
-            Assert.Equal("%4", QtIni.UnescapeKey("%4"));
-            Assert.Equal("%ZZ", QtIni.UnescapeKey("%ZZ"));
-            Assert.Equal("%U00Z1", QtIni.UnescapeKey("%U00Z1"));
-            Assert.Equal("ab", QtIni.UnescapeKey("%61b"));
-        }
 
         // ---- the recent files ----------------------------------------------------------------------------------------
 
@@ -183,25 +68,17 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
-        public void TheFirstRunImportsTheV2SettingsOnceAndThenKeepsItsOwn()
+        public void TheV2SettingsFileIsLeftAloneAndTheFirstRunStartsFromTheDefaults()
         {
+            // v3.0.x imported v2.x's INI file on the first run; from v3.1.0 it is not read, and not touched.
             string folder = Folder("first");
-            string recording = Path.Combine(_dir, "flight.ch10");
-            File.WriteAllText(recording, "");
-            File.WriteAllText(Path.Combine(folder, PreferencesStore.QtFileName),
-                              "[General]\r\nTheme=light\r\nSidebarVisible=false\r\nRecentFiles=" + recording.Replace('\\', '/') +
-                              ", C:/gone/missing.ch10\r\nLastCh10Directory=" + _dir.Replace('\\', '/') + "\r\n");
+            string ini = Path.Combine(folder, "tmDataQualityAnalyzer.ini");
+            const string v2 = "[General]\r\nTheme=light\r\nSidebarVisible=false\r\nLegendVisible=false\r\n";
+            File.WriteAllText(ini, v2);
             PreferencesStore store = PreferencesStore.Load(folder);
-            Assert.Equal(("light", false, true), (store.Current.Theme, store.Current.SidebarVisible, store.Current.LegendVisible));
-            Assert.Equal(new[] { recording }, store.Current.RecentFiles);   // the missing one dropped
-            Assert.Equal(_dir, store.Current.LastFolder);
-            Assert.True(File.Exists(Path.Combine(folder, PreferencesStore.FileName)), "the import was not written as this application's");
-
-            // From then on, this application's file is the one read, whatever v2.x writes.
-            store.Update(p => p with { Theme = Preferences.DarkTheme });
-            File.WriteAllText(Path.Combine(folder, PreferencesStore.QtFileName), "[General]\r\nTheme=light\r\nLegendVisible=false\r\n");
-            Preferences again = PreferencesStore.Load(folder).Current;
-            Assert.Equal(("dark", false, true), (again.Theme, again.SidebarVisible, again.LegendVisible));
+            Assert.Equal(new Preferences(), store.Current);
+            Assert.True(File.Exists(Path.Combine(folder, PreferencesStore.FileName)), "the defaults were not written");
+            Assert.Equal(v2, File.ReadAllText(ini));
         }
 
         [Fact]
