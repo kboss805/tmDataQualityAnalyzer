@@ -739,10 +739,10 @@ namespace TmDq.App.Tests
                 Window.MouseUp(At(c), MouseButton.Left, RawInputModifiers.None);
                 Dispatcher.UIThread.RunJobs();
             }
-            public void Key(Key key)
+            public void Key(Key key, RawInputModifiers modifiers = RawInputModifiers.None)
             {
-                Window.KeyPress(key, RawInputModifiers.None, PhysicalKey.None, null);
-                Window.KeyRelease(key, RawInputModifiers.None, PhysicalKey.None, null);
+                Window.KeyPress(key, modifiers, PhysicalKey.None, null);
+                Window.KeyRelease(key, modifiers, PhysicalKey.None, null);
                 Dispatcher.UIThread.RunJobs();
             }
         }
@@ -1053,16 +1053,16 @@ namespace TmDq.App.Tests
             s.Window.Close();
         }
 
-        private static MenuItem Item(ItemsControl menu, string header) =>
-            menu.Items.OfType<MenuItem>().Single(i => (string?)i.Header == header);
+        private static MenuItem Item(ItemsControl menu, string header) => Menus.Item(menu, header);
 
-        private static string[] Headers(ItemsControl menu) =>
-            menu.Items.Select(i => i is MenuItem m ? (string)m.Header! : "-").ToArray();
+        private static string[] Headers(ItemsControl menu) => Menus.Headers(menu);
 
+        // What a click on the item runs, with its parameter; an item that asks the user is waited for.
         private static async Task Choose(MenuItem item)
         {
-            if (item.Command is IAsyncRelayCommand asyncCommand) await asyncCommand.ExecuteAsync(null);
-            else item.Command!.Execute(item.CommandParameter);
+            Assert.True(item.Command!.CanExecute(item.CommandParameter), item.Header + " cannot run");
+            if (item.Command is IAsyncRelayCommand asyncCommand) await asyncCommand.ExecuteAsync(item.CommandParameter);
+            else item.Command.Execute(item.CommandParameter);
             Dispatcher.UIThread.RunJobs();
         }
 
@@ -1070,7 +1070,7 @@ namespace TmDq.App.Tests
         public void TheMenuLeadsWithTheTitleAndHoldsEveryPlotControlAndNoExport()
         {
             Shown s = Show(LockPlot(), prompts: new FakePrompts());
-            ContextMenu menu = s.View.BuildContextMenu()!;
+            ContextMenu menu = Menus.Open(s.View);
             Assert.Equal(new[]
             {
                 "Set Plot Title...", "-", "Plot File", "View Mode  (V)", "-", "Customize View...", "Show Legend", "Readout", "-",
@@ -1083,15 +1083,26 @@ namespace TmDq.App.Tests
             Assert.DoesNotContain(Headers(menu), h => h.Contains("Export"));
             // Plot File waits for batch runs (plan step 4.7): one recording has nothing to switch between.
             Assert.False(Item(menu, "Plot File").IsEnabled);
-            Assert.Null(new PlotView().BuildContextMenu());
             s.Window.Close();
+
+            // Without a plot there is nothing to bind to, and no menu.
+            Shown bare = Show(null);
+            Assert.Null(bare.View.Commands);
+            Assert.False(bare.View.ChipBar.IsVisible);
+            Assert.False(bare.View.LoadingLabel.IsVisible);
+            Point p = bare.At(300, 200);
+            bare.Window.MouseDown(p, MouseButton.Right, RawInputModifiers.None);
+            bare.Window.MouseUp(p, MouseButton.Right, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(bare.View.ChartMenu.IsOpen);
+            bare.Window.Close();
         }
 
         [AvaloniaFact]
         public void TheMenuAdvertisesEveryKeyOfThePlot()
         {
             Shown s = Show(LockPlot(), prompts: new FakePrompts());
-            ContextMenu menu = s.View.BuildContextMenu()!;
+            ContextMenu menu = Menus.Open(s.View);
             Assert.Contains("(V)", (string)Item(menu, "View Mode  (V)").Header!);
             Assert.Equal(new KeyGesture(Key.L), Item(menu, "Show Legend").InputGesture);
             Assert.Equal(new KeyGesture(Key.R), Item(menu, "Reset View").InputGesture);
@@ -1107,18 +1118,18 @@ namespace TmDq.App.Tests
         {
             var plot = new PlotViewModel();
             Shown s = Show(plot, prompts: new FakePrompts());
-            ContextMenu empty = s.View.BuildContextMenu()!;
+            ContextMenu empty = Menus.Open(s.View);
             foreach (string h in new[] { "Set Plot Title...", "Plot File", "View Mode  (V)", "Customize View...", "Show Legend", "Readout", "X Axis", "Y Axes", "Reset View" })
-                Assert.False(Item(empty, h).IsEnabled, h + " is enabled without data");
+                Assert.False(Item(empty, h).IsEffectivelyEnabled, h + " is enabled without data");
             Assert.Empty(Item(empty, "Readout").Items);
 
             plot.SetSeries(LockStream(0, "Ch 5", 5, 0));
-            ContextMenu menu = s.View.BuildContextMenu()!;
+            ContextMenu menu = Menus.Open(s.View);
             foreach (string h in new[] { "Set Plot Title...", "View Mode  (V)", "Customize View...", "Show Legend", "Readout", "X Axis", "Y Axes", "Reset View" })
-                Assert.True(Item(menu, h).IsEnabled, h + " is disabled with data");
+                Assert.True(Item(menu, h).IsEffectivelyEnabled, h + " is disabled with data");
             // One metric only: nothing to switch to.
             plot.SetSeries(SnrOnly().Series.ToArray());
-            Assert.False(Item(s.View.BuildContextMenu()!, "View Mode  (V)").IsEnabled);
+            Assert.False(Item(Menus.Open(s.View), "View Mode  (V)").IsEffectivelyEnabled);
             s.Window.Close();
         }
 
@@ -1127,7 +1138,7 @@ namespace TmDq.App.Tests
         {
             PlotViewModel plot = LockPlot();
             Shown s = Show(plot, prompts: new FakePrompts());
-            ContextMenu menu = s.View.BuildContextMenu()!;
+            ContextMenu menu = Menus.Open(s.View);
             MenuItem lockItem = Item(Item(menu, "View Mode  (V)"), "Lock Percentage");
             MenuItem accum = Item(Item(menu, "View Mode  (V)"), "Accumulation");
             Assert.Equal(MenuItemToggleType.Radio, accum.ToggleType);
@@ -1135,8 +1146,8 @@ namespace TmDq.App.Tests
             Assert.False(accum.IsChecked);
             await Choose(accum);
             Assert.Equal(LockAxisView.MissedFrames, plot.LockAxisView);
-            Assert.True(Item(Item(s.View.BuildContextMenu()!, "View Mode  (V)"), "Accumulation").IsChecked);
-            await Choose(Item(Item(s.View.BuildContextMenu()!, "View Mode  (V)"), "Lock Percentage"));
+            Assert.True(Item(Item(Menus.Open(s.View), "View Mode  (V)"), "Accumulation").IsChecked);
+            await Choose(Item(Item(Menus.Open(s.View), "View Mode  (V)"), "Lock Percentage"));
             Assert.Equal(LockAxisView.LockPercent, plot.LockAxisView);
 
             MenuItem legend = Item(menu, "Show Legend");
@@ -1145,8 +1156,8 @@ namespace TmDq.App.Tests
             await Choose(legend);
             Assert.False(plot.LegendVisible);
             Assert.False(s.View.Legend.IsVisible);
-            Assert.False(Item(s.View.BuildContextMenu()!, "Show Legend").IsChecked);
-            await Choose(Item(s.View.BuildContextMenu()!, "Show Legend"));
+            Assert.False(Item(Menus.Open(s.View), "Show Legend").IsChecked);
+            await Choose(Item(Menus.Open(s.View), "Show Legend"));
             Assert.True(s.View.Legend.IsVisible);
             s.Window.Close();
         }
@@ -1158,10 +1169,10 @@ namespace TmDq.App.Tests
             var prompts = new FakePrompts();
             Shown s = Show(plot, prompts: prompts);
 
-            Assert.False(Item(Item(s.View.BuildContextMenu()!, "X Axis"), "Zoom Back").IsEnabled);
+            Assert.False(Item(Item(Menus.Open(s.View), "X Axis"), "Zoom Back").IsEffectivelyEnabled);
             plot.PushXZoom(0.2, 1.8);
-            MenuItem back = Item(Item(s.View.BuildContextMenu()!, "X Axis"), "Zoom Back");
-            Assert.True(back.IsEnabled);
+            MenuItem back = Item(Item(Menus.Open(s.View), "X Axis"), "Zoom Back");
+            Assert.True(back.IsEffectivelyEnabled);
             await Choose(back);
             Assert.Equal((0.0, 2.0), (plot.XViewMin, plot.XViewMax));
             Assert.False(plot.CanZoomBack);
@@ -1171,7 +1182,7 @@ namespace TmDq.App.Tests
             plot.SetLeftMaxOverride(42);
             plot.SetRightMinOverride(2);
             plot.SetRightMaxOverride(24);
-            ContextMenu menu = s.View.BuildContextMenu()!;
+            ContextMenu menu = Menus.Open(s.View);
             await Choose(Item(Item(menu, "X Axis"), "Reset Span"));
             Assert.Equal((0.0, 2.0), (plot.XViewMin, plot.XViewMax));
             Assert.True(plot.HasRangeOverride);   // the span only
@@ -1182,12 +1193,12 @@ namespace TmDq.App.Tests
 
             plot.SetXViewByUser(0.5, 1.5);
             plot.SetRightMaxOverride(24);
-            await Choose(Item(s.View.BuildContextMenu()!, "Reset View"));
+            await Choose(Item(Menus.Open(s.View), "Reset View"));
             Assert.Equal((0.0, 2.0), (plot.XViewMin, plot.XViewMax));
             Assert.False(plot.HasRangeOverride);
 
             // Each asking item reaches its question.
-            menu = s.View.BuildContextMenu()!;
+            menu = Menus.Open(s.View);
             await Choose(Item(menu, "Set Plot Title..."));
             await Choose(Item(Item(menu, "X Axis"), "Set Time Window..."));
             await Choose(Item(Item(menu, "Y Axes"), "Set Left Min..."));
@@ -1209,14 +1220,14 @@ namespace TmDq.App.Tests
             var plot = new PlotViewModel();
             plot.SetSeries(LockStream(0, "Ch 5", 5, 0).Append(Snr(2, 40, 1, 1, 0)));
             Shown s = Show(plot, prompts: new FakePrompts());
-            MenuItem readout = Item(s.View.BuildContextMenu()!, "Readout");
+            MenuItem readout = Item(Menus.Open(s.View), "Readout");
             Assert.Equal(new[] { "Nearest series (automatic)", "-", "Ch 5", plot.Series[2].Name }, Headers(readout));
             Assert.True(Item(readout, "Nearest series (automatic)").IsChecked);
             Assert.All(readout.Items.OfType<MenuItem>(), i => Assert.Equal(MenuItemToggleType.Radio, i.ToggleType));
 
             await Choose(Item(readout, plot.Series[2].Name));
             Assert.Equal(2, plot.ReadoutSeriesId);
-            readout = Item(s.View.BuildContextMenu()!, "Readout");
+            readout = Item(Menus.Open(s.View), "Readout");
             Assert.True(Item(readout, plot.Series[2].Name).IsChecked);
             Assert.False(Item(readout, "Nearest series (automatic)").IsChecked);
             await Choose(Item(readout, "Nearest series (automatic)"));
@@ -1225,7 +1236,7 @@ namespace TmDq.App.Tests
             // A pin to a series since hidden is dropped when the menu opens, so it opens with automatic chosen.
             plot.ReadoutSeriesId = 2;
             plot.SetSeriesVisible(2, false);
-            readout = Item(s.View.BuildContextMenu()!, "Readout");
+            readout = Item(Menus.Open(s.View), "Readout");
             Assert.Null(plot.ReadoutSeriesId);
             Assert.True(Item(readout, "Nearest series (automatic)").IsChecked);
             Assert.Equal(new[] { "Nearest series (automatic)", "-", "Ch 5" }, Headers(readout));
@@ -1305,6 +1316,50 @@ namespace TmDq.App.Tests
             Assert.Equal(0, reachedWindow);
             s.Key(Key.Q);
             Assert.Equal(1, reachedWindow);
+
+            // "+" is Shift with = on most keyboards; any other key with a modifier is not the plot's (Ctrl+R is not R).
+            plot.SetXViewByUser(0.4, 0.6);
+            s.Key(Key.OemPlus, RawInputModifiers.Shift);
+            Assert.Equal(0.16, plot.XViewMax - plot.XViewMin, 12);
+            Assert.Equal(1, reachedWindow);
+            s.Key(Key.R, RawInputModifiers.Control);
+            s.Key(Key.L, RawInputModifiers.Control);
+            Assert.Equal(0.16, plot.XViewMax - plot.XViewMin, 12);
+            Assert.True(plot.LegendVisible);
+            Assert.Equal(3, reachedWindow);
+            s.Window.Close();
+        }
+
+        [AvaloniaFact]
+        public void ThePlotsCommandsAreItsOwnAndLetGoOfAPlotReplaced()
+        {
+            PlotViewModel first = LockPlot();
+            Shown s = Show(first, prompts: new FakePrompts());
+            PlotCommands old = s.View.Commands!;
+            Assert.Same(old, s.View.Root.DataContext);
+            Assert.True(old.CanSwitchViewMode);
+
+            PlotViewModel second = LockPlot();
+            s.View.Plot = second;
+            Assert.NotSame(old, s.View.Commands);
+            Assert.Same(s.View.Commands, s.View.Root.DataContext);
+            var told = new List<string?>();
+            old.PropertyChanged += (_, e) => told.Add(e.PropertyName);
+            first.SetLockAxisView(LockAxisView.MissedFrames);
+            first.SetXViewByUser(0.5, 1.5);
+            Assert.Empty(told);   // the old plot's changes reach nothing
+
+            // The chip follows the plot shown, not the one replaced.
+            Assert.Equal("Show Accumulation", s.View.ViewModeChip.Content);
+            second.SetLockAxisView(LockAxisView.MissedFrames);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Show Lock %", s.View.ViewModeChip.Content);
+
+            // Prompts set later are the ones asked.
+            var prompts = new FakePrompts();
+            s.View.Prompts = prompts;
+            s.View.Commands!.SetTitleCommand.Execute(null);
+            Assert.Equal(new[] { "Set Plot Title" }, prompts.Asked);
             s.Window.Close();
         }
 

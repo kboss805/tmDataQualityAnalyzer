@@ -2,9 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
-using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
@@ -12,8 +9,6 @@ using Avalonia.Threading;
 using TmDq.App.Models.Processing;
 using TmDq.App.Models.Streams;
 using TmDq.App.Models.Templates;
-using TmDq.App.Services;
-using TmDq.App.ViewModels;
 using TmDq.App.ViewModels.Plot;
 using TmDq.App.Views;
 using TmDq.Core;
@@ -413,7 +408,7 @@ namespace TmDq.App.Tests
         }
 
         [AvaloniaFact]
-        public async Task PlotFileListsTheRecordingsAndShowsTheOneChosen()
+        public void PlotFileListsTheRecordingsAndShowsTheOneChosen()
         {
             var plot = new PlotViewModel();
             plot.SetSeries(new[]
@@ -427,33 +422,25 @@ namespace TmDq.App.Tests
             var window = new Window { Content = view };
             window.Show();
             Dispatcher.UIThread.RunJobs();
-            MenuItem plotFile = view.BuildContextMenu()!.Items.OfType<MenuItem>().Single(i => (string)i.Header! == "Plot File");
+            MenuItem plotFile = Menus.Item(Menus.Open(view), "Plot File");
             Assert.True(plotFile.IsEnabled);
-            Assert.Equal(new[] { "All files (overlaid)", "-", "flight 1", "flight 2" },
-                         plotFile.Items.Select(i => i is MenuItem m ? (string)m.Header! : "-"));
-            Assert.True(((MenuItem)plotFile.Items[0]!).IsChecked);
-            MenuItem second = (MenuItem)plotFile.Items[3]!;
-            await ((CommunityToolkit.Mvvm.Input.IRelayCommand)second.Command!).ExecuteAsync();
+            Assert.Equal(new[] { "All files (overlaid)", "-", "flight 1", "flight 2" }, Menus.Headers(plotFile));
+            var entries = Menus.Entries(plotFile).Cast<MenuItem>().ToArray();
+            Assert.True(entries[0].IsChecked);
+            Assert.All(entries, e => Assert.Equal(MenuItemToggleType.Radio, e.ToggleType));
+            Assert.Equal(new[] { false, true, false, false }, entries.Select(e => e.Classes.Contains(":separator")));   // drawn as a line
+            entries[3].Command!.Execute(entries[3].CommandParameter);
+            Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, plot.VisibleSource);
-            plotFile = view.BuildContextMenu()!.Items.OfType<MenuItem>().Single(i => (string)i.Header! == "Plot File");
-            Assert.Equal(new[] { false, true }, new[] { ((MenuItem)plotFile.Items[0]!).IsChecked, ((MenuItem)plotFile.Items[3]!).IsChecked });
-            await ((CommunityToolkit.Mvvm.Input.IRelayCommand)((MenuItem)plotFile.Items[0]!).Command!).ExecuteAsync();
+            Assert.Equal(new[] { false, true }, new[] { entries[0].IsChecked, entries[3].IsChecked });
+            entries[0].Command!.Execute(entries[0].CommandParameter);
             Assert.Equal(-1, plot.VisibleSource);   // all of them again
 
             // One recording has nothing to choose between.
             plot.SetSeries(new[] { PlotFixtures.Make(0, "a", MetricType.Snr, 1, 0, X2, X2) });
-            Assert.False(view.BuildContextMenu()!.Items.OfType<MenuItem>().Single(i => (string)i.Header! == "Plot File").IsEnabled);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(Menus.Item(Menus.Open(view), "Plot File").IsEnabled);
             window.Close();
-        }
-    }
-
-    internal static class CommandExtensions
-    {
-        public static Task ExecuteAsync(this CommunityToolkit.Mvvm.Input.IRelayCommand command)
-        {
-            if (command is CommunityToolkit.Mvvm.Input.IAsyncRelayCommand a) return a.ExecuteAsync(null);
-            command.Execute(null);
-            return Task.CompletedTask;
         }
     }
 }

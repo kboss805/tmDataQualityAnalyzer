@@ -210,11 +210,13 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Each on-chart chip is labelled and carries a tooltip naming the action it performs, so no control on the chart is an unexplained glyph.
 - [x] The crosshair readout can be pinned to a chosen series (context menu > **Readout**) instead of always following whichever curve is nearest the cursor.
 - [x] The most-used view actions have single-key shortcuts while the chart has focus - arrows step the time window, `+`/`-` zoom, `Home` restores the full span, `R` resets both axes, `V` switches metric, `L` toggles the legend - and the context menu advertises each key so they are discoverable rather than hidden.
-  - **The keys are the chart's, not the window's:** they live in `PlotView.OnKeyDown`. A
+  - **The keys are the chart's, not the window's:** they are key bindings on `PlotView`'s root, around the chart. A
     bare-letter window shortcut would be handled ahead of the focused control, so it would
     swallow that character everywhere the user types (the plot-title prompt, the time-window
     fields, any setup dialog). A click on the chart focuses it, which is what makes them
-    reachable (`TheKeysAreTheChartsAndNotTheWindows`, `AClickOnTheChartGivesItTheKeys`).
+    reachable (`TheKeysAreTheChartsAndNotTheWindows`, `AClickOnTheChartGivesItTheKeys`). A key acts only bare (`+`
+    with Shift too, which is how most keyboards type it), and only when its command can run: without data, or with no
+    zoom to step back from, it goes on to the window.
   - **Any further plot control** goes to the context menu or an on-chart overlay, never to a
     control around the chart: that is the standing rule this story sets, and
     `ThePlotViewIsTheChartWithItsControlsOverItAndNothingAround` holds it.
@@ -479,7 +481,12 @@ profile, so a batch processes with the linear calibration.
   Template. Three jobs are types of their own: `ShellPreferences` (Recent Files, the theme, the sidebar, the last
   folder, the legend's choice), `SessionExport` (the data, the image and the log written out) and `BatchRunner` (Apply
   Template's batch and each file's export). Its dialogs, pickers, configurator, clock and preferences are handed in as
-  one `MainWindowServices`; each service left out has the effect its property states.
+  one `MainWindowServices`; each service left out has the effect its property states. The hamburger menu is declared
+  in `MainWindow.axaml` and bound to it; only Help and Exit, which act on the window, are click handlers.
+- **Menus filled from the data** (Recent Files, Plot File, Readout): a list of `MenuChoice` (a header, a command and
+  its parameter, whether it is chosen), shown through the `MenuChoice` and `RadioChoice` item themes in `App.axaml`. A
+  choice whose header is `-` is drawn as the menu's separator. A list is made again only when its entries change, so
+  an open menu's item is never replaced under the pointer.
 - **Configure Streams** (`ConfigureStreamsViewModel` and its window) and the setup dialog (`StreamSetupViewModel`, in
   Frame Sync Lock or Receiver SNR mode), over the rules in `Models/Streams` (`StreamRules`, `StreamDefaults`, `StreamFiles`):
   one row per PCM channel, each problem shown as it arises, OK and Process held until every checked row is ready,
@@ -492,7 +499,10 @@ profile, so a batch processes with the linear calibration.
   window and its zoom history, the gestures and keys that move it), `PlotReadout` (what the readout says), `PlotCsv`
   (the series to and from the core's CSV) and `PlotColors` (the colours). `PlotChart` draws it (from the core's
   geometry, a cached data layer, the gestures), and `PlotView` holds what is over it (the legend, the chip bar, the
-  right-click menu, the keys, Customize View).
+  right-click menu, the keys, Customize View). The menu, the chips and the keys are declared in `PlotView.axaml` and
+  bound to `PlotCommands`, which the view makes for its plot with its prompts: a command for each item, chip and key
+  (none runs without data, which disables the item and lets the key go on), what the chips and the menu show, and the
+  entries of Plot File and Readout.
 - **Export and import** (`ExportViewModel`, `PlotImageExport`): the CSV through the core's writer (every series), the
   image through one Skia renderer for PNG, SVG and PDF (exactly what the chart shows), the log as text; Import CSV
   through the core's parser.
