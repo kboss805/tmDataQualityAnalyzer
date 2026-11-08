@@ -17,6 +17,7 @@ using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using TmDq.App.Models.Settings;
 using TmDq.App.Platform;
 using TmDq.App.Services;
@@ -88,6 +89,17 @@ namespace TmDq.App.Tests
                           (string)window.MaximizeButton.Content!, (string)window.CloseButton.Content!));
             Assert.All(new Control[] { window.MenuButton, window.SidebarButton, window.MinimizeButton, window.MaximizeButton, window.CloseButton },
                        b => Assert.Equal((30.0, 26.0), (b.Bounds.Width, b.Bounds.Height)));
+            // Each glyph is centred in its button: the sidebar toggle's sat in its top-left corner, its content stretched.
+            Assert.All(new Control[] { window.MenuButton, window.SidebarButton, window.MinimizeButton, window.MaximizeButton, window.CloseButton },
+                       b =>
+                       {
+                           TextBlock glyph = b.GetVisualDescendants().OfType<TextBlock>().Single();
+                           Point centre = glyph.TranslatePoint(new Point(glyph.Bounds.Width / 2, glyph.Bounds.Height / 2), b)!.Value;
+                           Assert.True(glyph.Bounds.Width < b.Bounds.Width && glyph.Bounds.Height < b.Bounds.Height,
+                                       $"{b.Name}'s glyph is {glyph.Bounds.Size}, the button {b.Bounds.Size}");
+                           Assert.InRange(centre.X, 14.0, 16.0);
+                           Assert.InRange(centre.Y, 12.0, 14.0);
+                       });
             Assert.Same(window.MainMenu, window.MenuButton.Flyout);
             window.Close();
         }
