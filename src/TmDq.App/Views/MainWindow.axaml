@@ -62,7 +62,45 @@
     <Grid x:Name="TitleBar" x:FieldModifier="public" DockPanel.Dock="Top" Height="40" ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto"
           Margin="2,0,6,0">
       <Button x:Name="MenuButton" x:FieldModifier="public" Grid.Column="0" Classes="glyph" Content="&#xE700;" ToolTip.Tip="Menu"
-              chrome:WindowDecorationProperties.ElementRole="User" />
+              chrome:WindowDecorationProperties.ElementRole="User">
+        <!-- The menu, as v2.x's: the Process section (Open, Recent Files, Save as Template, Apply Template to Files), the
+             Import/Export section (Import CSV, Export), the Settings section (the theme), then Help (User Manual, About)
+             and Exit, each set off by a separator. Every entry is available as its command is. A section's heading is a
+             disabled item in the application's "section" style. -->
+        <Button.Flyout>
+          <MenuFlyout Placement="BottomEdgeAlignedLeft">
+            <MenuItem Header="Process" IsEnabled="False" Classes="section" />
+            <MenuItem Header="Open..." Command="{Binding OpenCommand}" InputGesture="Ctrl+O">
+              <MenuItem.Icon><Image Source="{DynamicResource OpenIcon}" Width="16" Height="16" /></MenuItem.Icon>
+            </MenuItem>
+            <!-- Each by its name, its path as the tooltip, newest first, then Clear Recent Files; or "(No recent files)",
+                 disabled. -->
+            <MenuItem Header="Recent Files" ItemsSource="{Binding RecentMenu}" ItemContainerTheme="{StaticResource MenuChoice}" />
+            <MenuItem Header="Save as Template..." Command="{Binding SaveTemplateCommand}"
+                      ToolTip.Tip="Save the processed recording's stream settings, names and colors as a template">
+              <MenuItem.Icon><Image Source="{DynamicResource SaveIcon}" Width="16" Height="16" /></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Apply Template to Files..." Command="{Binding ApplyTemplateCommand}"
+                      ToolTip.Tip="Process several recordings with a saved template" />
+            <MenuItem Header="Import/Export" IsEnabled="False" Classes="section" />
+            <MenuItem Header="Import CSV..." Command="{Binding ImportCsvCommand}" ToolTip.Tip="Import a previously exported CSV file">
+              <MenuItem.Icon><Image Source="{DynamicResource ImportIcon}" Width="16" Height="16" /></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Export..." Command="{Binding ExportCommand}" ToolTip.Tip="Export plot data and images">
+              <MenuItem.Icon><Image Source="{DynamicResource ExportIcon}" Width="16" Height="16" /></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Settings" IsEnabled="False" Classes="section" />
+            <MenuItem Header="{Binding ThemeMenuText}" Command="{Binding ToggleThemeCommand}" />
+            <Separator />
+            <MenuItem Header="Help">
+              <MenuItem Header="User Manual..." Click="OnUserManual" />
+              <MenuItem Header="About..." Click="OnAbout" />
+            </MenuItem>
+            <Separator />
+            <MenuItem Header="Exit" Click="OnExit" />
+          </MenuFlyout>
+        </Button.Flyout>
+      </Button>
       <ToggleButton x:Name="SidebarButton" x:FieldModifier="public" Grid.Column="1" Width="30" Height="26" Padding="0"
                     VerticalAlignment="Center" Background="Transparent" BorderThickness="0" CornerRadius="5"
                     FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="15" Content="&#xE89F;"

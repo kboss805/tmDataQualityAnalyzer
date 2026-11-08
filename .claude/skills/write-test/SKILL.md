@@ -58,6 +58,11 @@ each suite has its house style and helpers. Build and run with the **build-and-t
 - **A window:** show it, run the dispatcher's jobs (`Dispatcher.UIThread.RunJobs()`), then read its
   controls or capture a frame (`Frames.Capture`, `Frames.Pixel`, `Frames.Near`, `Frames.CountDifferent`).
   `IsEffectivelyEnabled`, not `IsEnabled`, is what the user sees.
+- **A menu:** read it open, through `Menus` (`Menus.Open(view)`, `Menus.Open(window)`, `Menus.Entries`,
+  `Menus.Item`, `Menus.Headers`). The menus are declared in AXAML and bound: closed, an item has no view model and
+  a list's items do not exist; a submenu's items follow their commands only once it is open, which `Menus.Entries`
+  does as the user would. The plot's menu opens by a context request, as a right-click opens it:
+  `ContextMenu.Open` alone skips its `Opening`.
 - **Never await a modal dialog in a test.** Give the code under test a fake (`StreamFakes.cs` and the
   `I*` services in `src/TmDq.App/Services`) and assert on what it was asked.
 - **Classes that load the native core** join `[Collection(NativeCoreCollection.Name)]`, which runs them

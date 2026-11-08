@@ -5,11 +5,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
-using CommunityToolkit.Mvvm.Input;
 using TmDq.App.Models.Settings;
 using TmDq.App.Services;
 using TmDq.App.ViewModels;
@@ -18,27 +16,25 @@ namespace TmDq.App.Views
 {
     /// <summary>
     /// The main window and its shell (plan step 4.8): a title bar of its own in place of the system's, the menu behind
-    /// its hamburger button (v2.x's sections, Recent Files and Help), the log sidebar's toggle, and a
+    /// its hamburger button (v2.x's sections, Recent Files and Help, declared in the AXAML and bound to the view model
+    /// but for Help and Exit, which are the window's), the log sidebar's toggle, and a
     /// recording or exported CSV dropped anywhere on the window opened as Recent Files opens one.
     /// </summary>
     public sealed partial class MainWindow : Window
     {
         public const string AboutTitle = "About";
-        public const string NoRecentFiles = "(No recent files)";
         public const string ManualNotWritten = "Could not open the user manual.";
 
         private MainWindowViewModel? _watched;
 
         /// <summary>The menu behind the hamburger button.</summary>
-        public MenuFlyout MainMenu { get; } = new() { Placement = PlacementMode.BottomEdgeAlignedLeft };
+        public MenuFlyout MainMenu => (MenuFlyout)MenuButton.Flyout!;
 
         private GridLength _sidebarWidth = new(400);
 
         public MainWindow()
         {
             InitializeComponent();
-            MenuButton.Flyout = MainMenu;
-            MainMenu.Opening += (_, _) => BuildMenu();
             AddHandler(DragDrop.DragOverEvent, OnDragOver);
             AddHandler(DragDrop.DropEvent, OnDrop);
         }
@@ -103,72 +99,13 @@ namespace TmDq.App.Views
             ToolTip.SetTip(MaximizeButton, maximized ? "Restore" : "Maximize");
         }
 
-        // ---- the menu ------------------------------------------------------------------------------------------------
+        // ---- the menu (declared in the AXAML) ------------------------------------------------------------------------
 
-        /// <summary>
-        /// The menu, rebuilt each time it opens, as v2.x's: the Process section (Open, Recent Files, Save
-        /// as Template, Apply Template to Files), the Import/Export section (Import CSV, Export), the Settings section
-        /// (the theme), then Help (User Manual, About) and Exit, each set off by a separator. Every entry is available
-        /// as its command is.
-        /// </summary>
-        public void BuildMenu()
-        {
-            MainMenu.Items.Clear();
-            if (Vm is not { } vm) return;
-            MainMenu.Items.Add(Section("Process"));
-            MainMenu.Items.Add(Item("Open...", vm.OpenCommand, icon: "OpenIcon", gesture: new KeyGesture(Key.O, KeyModifiers.Control)));
-            MainMenu.Items.Add(RecentFilesMenu(vm));
-            MainMenu.Items.Add(Item("Save as Template...", vm.SaveTemplateCommand, icon: "SaveIcon",
-                                    tip: "Save the processed recording's stream settings, names and colors as a template"));
-            MainMenu.Items.Add(Item("Apply Template to Files...", vm.ApplyTemplateCommand,
-                                    tip: "Process several recordings with a saved template"));
-            MainMenu.Items.Add(Section("Import/Export"));
-            MainMenu.Items.Add(Item("Import CSV...", vm.ImportCsvCommand, icon: "ImportIcon", tip: "Import a previously exported CSV file"));
-            MainMenu.Items.Add(Item("Export...", vm.ExportCommand, icon: "ExportIcon", tip: "Export plot data and images"));
-            MainMenu.Items.Add(Section("Settings"));
-            MainMenu.Items.Add(Item(vm.ThemeMenuText, vm.ToggleThemeCommand));
-            MainMenu.Items.Add(new Separator());
-            var help = new MenuItem { Header = "Help" };
-            help.Items.Add(Item("User Manual...", new AsyncRelayCommand(() => Help.OpenManualAsync(this))));
-            help.Items.Add(Item("About...", new AsyncRelayCommand(() => Help.ShowAboutAsync(this))));
-            MainMenu.Items.Add(help);
-            MainMenu.Items.Add(new Separator());
-            MainMenu.Items.Add(Item("Exit", new RelayCommand(Close)));
-        }
+        private async void OnUserManual(object? sender, RoutedEventArgs e) => await Help.OpenManualAsync(this);
 
-        // A section's heading: a disabled item in the "section" style, as v2.x's menu drew one.
-        private static MenuItem Section(string title) => new() { Header = title, IsEnabled = false, Classes = { "section" } };
+        private async void OnAbout(object? sender, RoutedEventArgs e) => await Help.ShowAboutAsync(this);
 
-        private MenuItem Item(string header, System.Windows.Input.ICommand command, string? icon = null, string? tip = null,
-                              KeyGesture? gesture = null)
-        {
-            var item = new MenuItem { Header = header, Command = command, InputGesture = gesture };
-            if (icon is not null && this.TryFindResource(icon, ActualThemeVariant, out object? image) && image is Avalonia.Media.IImage source)
-                item.Icon = new Image { Source = source, Width = 16, Height = 16 };
-            if (tip is not null) ToolTip.SetTip(item, tip);
-            return item;
-        }
-
-        /// <summary>Recent Files: each by its name, its path as the tooltip, newest first, then Clear Recent Files; or
-        /// "(No recent files)", disabled.</summary>
-        private MenuItem RecentFilesMenu(MainWindowViewModel vm)
-        {
-            var recent = new MenuItem { Header = "Recent Files" };
-            if (vm.RecentFiles.Count == 0)
-            {
-                recent.Items.Add(new MenuItem { Header = NoRecentFiles, IsEnabled = false });
-                return recent;
-            }
-            foreach (string path in vm.RecentFiles)
-            {
-                var item = new MenuItem { Header = Path.GetFileName(path), Command = vm.OpenRecentCommand, CommandParameter = path };
-                ToolTip.SetTip(item, path);
-                recent.Items.Add(item);
-            }
-            recent.Items.Add(new Separator());
-            recent.Items.Add(new MenuItem { Header = "Clear Recent Files", Command = vm.ClearRecentFilesCommand });
-            return recent;
-        }
+        private void OnExit(object? sender, RoutedEventArgs e) => Close();
 
         // ---- drag and drop -------------------------------------------------------------------------------------------
 

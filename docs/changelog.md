@@ -12,6 +12,37 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The menus, the chips and the keys declared in AXAML and bound
+
+The last of the three steps that bring the application to MVVM's usual shape. The menus look exactly as they did: the
+manual's menu figures render byte for byte as committed.
+
+- **The plot's right-click menu, its chips and its keys** are declared in `PlotView.axaml` (a `ContextMenu` on the
+  chart, the chip bar, `KeyBindings` on the view's root) and bound to `PlotCommands`, which became their view model: a
+  command for each item, chip and key, each unable to run without data (the item disabled, the key passed on); what
+  the chips and the menu show; and Plot File's and Readout's entries. The view makes it for its plot with its prompts
+  and lets the old one go when the plot changes. `PlotView` no longer builds the menu each time it opens
+  (`BuildContextMenu`) or reads keys itself (`OnKeyDown`); its code-behind keeps the legend, and the menu's Opening,
+  where a readout pin gone stale is dropped as before.
+- **The hamburger menu** is declared in `MainWindow.axaml` and bound to `MainWindowViewModel`, its icons as dynamic
+  resources; Help and Exit, which act on the window, are click handlers. `BuildMenu` is gone, and
+  `MainWindow.NoRecentFiles` is now `MainWindowViewModel.NoRecentFiles`.
+- **Menus filled from the data** (Recent Files, Plot File, Readout) are lists of `MenuChoice` (new, in `ViewModels`),
+  shown through the `MenuChoice` and `RadioChoice` item themes in `App.axaml`; a choice headed `-` is drawn as the
+  separator, as Avalonia draws such an item. Plot File's and Readout's lists are made again only when their entries
+  change, so an open menu's items are never replaced under the pointer.
+- **One change a user can notice: a plot key now acts only bare.** It used to ignore the modifiers, so Ctrl+R reset
+  the view and Ctrl+L toggled the legend; now those go on to the window, like any key the plot does not use. `+` still
+  works with Shift, which is how most keyboards type it, and the keypad's `+` and `-` still zoom. Backspace with no
+  zoom to step back from now goes on to the window too (it did nothing there either way).
+- **Tests:** a helper (`Menus`) reads the menus open, as the user sees them: the plot's menu opened by a context
+  request, as a right-click opens it (`ContextMenu.Open` alone does not raise its Opening), and a submenu opened before
+  its items are read (closed, an item does not follow its command, and a list's items do not exist). The cases that
+  read the built menus read the declared ones; new ones hold that a key with Ctrl does nothing and Shift with `+`
+  zooms, that a view's commands let go of a plot replaced and take prompts set later, that a view with no plot has no
+  menu, no chip bar and no "Loading...", and that Plot File's separator is drawn as one. `CommandExtensions` (test
+  code, used only by the old Plot File case) is gone.
+
 #### No brushes in the view models, and a test that holds the layers apart
 
 The second of the three steps that bring the application to MVVM's usual shape. Nothing looks or behaves differently.

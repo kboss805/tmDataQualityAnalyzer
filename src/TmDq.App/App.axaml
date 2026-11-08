@@ -1,5 +1,6 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TmDq.App.ViewModels"
              x:Class="TmDq.App.App"
              RequestedThemeVariant="Default">
   <Application.Styles>
@@ -22,6 +23,20 @@
   </Application.Styles>
   <Application.Resources>
     <ResourceDictionary>
+      <!-- The entries of a menu that come from the data (a MenuChoice each): Recent Files, and the plot's Plot File and
+           Readout. A choice whose header is "-" is drawn as the menu's separator. -->
+      <ControlTheme x:Key="MenuChoice" TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}" x:DataType="vm:MenuChoice">
+        <Setter Property="Header" Value="{Binding Header}" />
+        <Setter Property="Command" Value="{Binding Command}" />
+        <Setter Property="CommandParameter" Value="{Binding Parameter}" />
+        <Setter Property="IsEnabled" Value="{Binding IsEnabled}" />
+        <Setter Property="ToolTip.Tip" Value="{Binding Tip}" />
+      </ControlTheme>
+      <!-- One of a menu's choices, the one chosen checked. -->
+      <ControlTheme x:Key="RadioChoice" TargetType="MenuItem" BasedOn="{StaticResource MenuChoice}" x:DataType="vm:MenuChoice">
+        <Setter Property="ToggleType" Value="Radio" />
+        <Setter Property="IsChecked" Value="{Binding IsChecked, Mode=OneWay}" />
+      </ControlTheme>
       <!-- The menu's icons, drawn after v2.x's: the folder and the floppy disk carry their own
            colours and read in both themes; the export and import arrows are a shade for each theme. -->
       <DrawingImage x:Key="OpenIcon">

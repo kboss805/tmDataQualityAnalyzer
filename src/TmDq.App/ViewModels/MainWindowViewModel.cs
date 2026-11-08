@@ -27,6 +27,9 @@ namespace TmDq.App.ViewModels
     /// </summary>
     public sealed partial class MainWindowViewModel : ObservableObject, IRunHost
     {
+        /// <summary>Recent Files with nothing in it.</summary>
+        public const string NoRecentFiles = "(No recent files)";
+
         private readonly IRecordingPicker? _picker;
         private readonly IStreamConfigurator _configurator;
         private readonly IProcessingDialog? _processingDialog;
@@ -38,6 +41,7 @@ namespace TmDq.App.ViewModels
         private readonly SessionExport _export;
         private readonly BatchRunner _batch;
         private readonly List<ProcessedSource> _sources = new();
+        private List<MenuChoice>? _recentMenu;
         private string _runningFile = string.Empty;
         private ProcessingViewModel? _processing;
         private string _status = "Open a Chapter 10 recording.";
@@ -66,7 +70,15 @@ namespace TmDq.App.ViewModels
             SaveTemplateCommand = new AsyncRelayCommand(SaveTemplateAsync, () => !IsBusy && _sources.Count > 0 && _templateFiles is not null);
             ApplyTemplateCommand = new AsyncRelayCommand(ApplyTemplateAsync, () => !IsBusy && _templateFiles is not null && _templateDialogs is not null);
             OpenRecentCommand = new AsyncRelayCommand<string>(p => OpenPathAsync(p!), p => !IsBusy && p is not null);
-            _shell.PropertyChanged += (_, e) => OnPropertyChanged(e.PropertyName);
+            _shell.PropertyChanged += (_, e) =>
+            {
+                OnPropertyChanged(e.PropertyName);
+                if (e.PropertyName == nameof(RecentFiles))
+                {
+                    _recentMenu = null;
+                    OnPropertyChanged(nameof(RecentMenu));
+                }
+            };
             // The legend's visibility is remembered between sessions (US4.0, US4.1), as v2.x remembered it.
             Plot.LegendVisible = _shell.LegendVisible;
             Log.Add("tmDataQualityAnalyzer v" + AppInfo.Version);
@@ -98,6 +110,19 @@ namespace TmDq.App.ViewModels
         public IAsyncRelayCommand<string> OpenRecentCommand { get; }
 
         public IRelayCommand ClearRecentFilesCommand => _shell.ClearRecentFilesCommand;
+
+        /// <summary>The menu's Recent Files: each by its name, its path as the tooltip, newest first, then Clear Recent
+        /// Files; or <see cref="NoRecentFiles"/>, disabled.</summary>
+        public IReadOnlyList<MenuChoice> RecentMenu => _recentMenu ??= MakeRecentMenu();
+
+        private List<MenuChoice> MakeRecentMenu()
+        {
+            if (RecentFiles.Count == 0) return new List<MenuChoice> { new(NoRecentFiles) { IsEnabled = false } };
+            var menu = RecentFiles.Select(path => new MenuChoice(Path.GetFileName(path), OpenRecentCommand, path) { Tip = path }).ToList();
+            menu.Add(MenuChoice.Separator());
+            menu.Add(new MenuChoice("Clear Recent Files", ClearRecentFilesCommand));
+            return menu;
+        }
 
         /// <summary>
         /// Opens <paramref name="path"/> by its suffix, as v2.x did for Recent Files and a drop: an

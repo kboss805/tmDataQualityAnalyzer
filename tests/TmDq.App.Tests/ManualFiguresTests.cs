@@ -201,10 +201,12 @@ namespace TmDq.App.Tests
         }
 
         /// <summary>A menu's items, as the open menu shows them: a popup of its own, so drawn in a window of its own
-        /// (the headless platform does not draw popups into the window's frame).</summary>
-        private static Window MenuOf(IEnumerable<object?> items)
+        /// (the headless platform does not draw popups into the window's frame).
+        /// <para>Taken out of their menu, the items are given the data context the open menu would have given them, and a
+        /// list's entries the menu item theme they would have been made with.</para></summary>
+        private static Window MenuOf(IEnumerable<object?> items, object? dataContext = null, ControlTheme? theme = null)
         {
-            var presenter = new MenuFlyoutPresenter { ItemsSource = items.ToList() };
+            var presenter = new MenuFlyoutPresenter { ItemsSource = items.ToList(), DataContext = dataContext, ItemContainerTheme = theme };
             return Shown(new Window { Content = presenter, SizeToContent = SizeToContent.WidthAndHeight });
         }
 
@@ -287,8 +289,7 @@ namespace TmDq.App.Tests
             using SKBitmap window = Capture(w);
 
             // The application menu, open under its button.
-            w.BuildMenu();
-            Window app = MenuOf(Take(w.MainMenu));
+            Window app = MenuOf(Take(w.MainMenu), vm);
             using (SKBitmap menu = Capture(app))
             {
                 SKRectI button = Bounds(w.MenuButton, w);
@@ -300,16 +301,16 @@ namespace TmDq.App.Tests
             // The plot's right-click menu, and its Y Axes submenu beside it.
             PlotView view = PlotViewOf(w);
             SKRectI chart = Bounds(view, w);
-            List<object?> items = Take(view.BuildContextMenu()!);
+            List<object?> items = Take(view.ChartMenu);
             var yAxes = (MenuItem)items.OfType<MenuItem>().Single(i => (string)i.Header! == "Y Axes");
+            Window context = MenuOf(items, view.Commands);
             Assert.Contains(items.OfType<MenuItem>(), i => (string)i.Header! == "Plot File" && !i.IsEnabled);   // "stay disabled until they apply"
-            List<object?> sub = Take((MenuItem)view.BuildContextMenu()!.Items.OfType<MenuItem>().Single(i => (string)i.Header! == "Y Axes"));
-            Window context = MenuOf(items);
             var at = new SKPointI(chart.Left + 260, chart.Top + 120);
             using (SKBitmap menu = Capture(context))
             {
                 Save("Main Context Menu.png", window, new[] { (menu, at) }, chart);
-                Window axes = MenuOf(sub);
+                // Its submenu's items, once the menu is drawn with them (an item with none draws no arrow).
+                Window axes = MenuOf(Take(yAxes), view.Commands);
                 Point item = yAxes.TranslatePoint(new Point(yAxes.Bounds.Width, 0), context)!.Value;
                 using (SKBitmap subMenu = Capture(axes))
                     Save("Y Axes Submenu.png", window, new[] { (menu, at), (subMenu, new SKPointI(at.X + (int)item.X - 4, at.Y + (int)item.Y - 4)) }, chart);
@@ -500,11 +501,12 @@ namespace TmDq.App.Tests
             using SKBitmap shot = Capture(w);
             PlotView view = PlotViewOf(w);
             SKRectI chart = Bounds(view, w);
-            List<object?> items = Take(view.BuildContextMenu()!);
+            PlotCommands commands = view.Commands!;
+            List<object?> items = Take(view.ChartMenu);
             var plotFile = (MenuItem)items.OfType<MenuItem>().Single(i => (string)i.Header! == "Plot File");
-            List<object?> files = Take((MenuItem)view.BuildContextMenu()!.Items.OfType<MenuItem>().Single(i => (string)i.Header! == "Plot File"));
-            Assert.Equal(new[] { "All files (overlaid)", "flight 1", "flight 2", "flight 3" }, files.OfType<MenuItem>().Select(i => (string)i.Header!));
-            Window context = MenuOf(items), sub = MenuOf(files);
+            Assert.Equal(new[] { "All files (overlaid)", "flight 1", "flight 2", "flight 3" },
+                         commands.PlotFiles.Where(c => !c.IsSeparator).Select(c => c.Header));
+            Window context = MenuOf(items, commands), sub = MenuOf(commands.PlotFiles, theme: plotFile.ItemContainerTheme);
             var at = new SKPointI(chart.Left + 260, chart.Top + 80);
             Point item = plotFile.TranslatePoint(new Point(plotFile.Bounds.Width, 0), context)!.Value;
             using (SKBitmap menu = Capture(context))
