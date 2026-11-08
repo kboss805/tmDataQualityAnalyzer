@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -34,6 +35,11 @@ namespace TmDq.App.Tests
     /// folder, deleted after, so the suite still proves every figure can be made. The names are the ones the v2.x
     /// manual's hand captures had, which the manual's anchors place. The dark theme, which the application opens in, except
     /// where the light one is the subject.
+    /// <para>A figure is the same in every capture, so a re-capture changes only the figures whose subject changed: the
+    /// log's clock is fixed (<see cref="FigureClock"/>), a dialog shows <see cref="ShownFolder"/> where the files really
+    /// are, and every animation runs out before a capture. The exception is a real run's log, behind the main window's
+    /// figures: the streams are processed in parallel, so the order they start in, the percentages read and the seconds
+    /// elapsed are the run's own.</para>
     /// </summary>
     [Collection(NativeCoreCollection.Name)]
     public sealed class ManualFiguresTests : IDisposable
@@ -59,6 +65,11 @@ namespace TmDq.App.Tests
             if (!_keep) TempFiles.DeleteDirectory(_out, recursive: true);
             TempFiles.DeleteDirectory(_scratch, recursive: true);
         }
+
+        /// <summary>The folder a dialog shows where the scene's files really are (the checkout, or a scratch folder named
+        /// for the run), which would change the figure from one checkout or run to the next and put the user's name in
+        /// the manual.</summary>
+        private const string ShownFolder = @"D:\Flight Tests";
 
         private static string Prn => Repo.Recording("prn_testfile, sample.ch10");
 
@@ -97,7 +108,20 @@ namespace TmDq.App.Tests
         private static MainWindowViewModel WithServices(IStreamConfigurator configurator, IProcessingDialog? progress = null)
         {
             AppServices s = AppServices.Any;
-            return new MainWindowViewModel(new MainWindowServices { Picker = s, Configurator = configurator, ProcessingDialog = progress, Files = s, ExportDialog = s, TemplateFiles = s, TemplateDialogs = s, AppRoot = Repo.Root });
+            return new MainWindowViewModel(new MainWindowServices
+            {
+                Picker = s, Configurator = configurator, ProcessingDialog = progress, Files = s, ExportDialog = s, TemplateFiles = s,
+                TemplateDialogs = s, AppRoot = Repo.Root, Clock = new FigureClock(),
+            });
+        }
+
+        /// <summary>The log's clock in a figure: stopped, so every line has the same time in every capture. (A clock that
+        /// moved on at each line would not do: how many progress lines a run logs before a capture is the run's own.)</summary>
+        private sealed class FigureClock : TimeProvider
+        {
+            public override DateTimeOffset GetUtcNow() => new(2026, 11, 3, 9, 41, 7, TimeSpan.Zero);
+
+            public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
         }
         /// <summary>The progress dialog of a run, shown at the first report past 70 % to <paramref name="at"/>.</summary>
         private sealed class CapturingDialog : IProcessingDialog
@@ -174,9 +198,20 @@ namespace TmDq.App.Tests
 
         // ---- rendering ---------------------------------------------------------------------------------------------
 
+        // Between two drawings of a window that is settling; the theme's animations run for a tenth of a second or so.
+        private const int SettleMs = 150, SettleFrames = 5, SettleRounds = 20;
+
+        // A text box's caret blinks on the clock, so it would be drawn in one capture and not the next: a figure has none.
+        // (One for each window: a style has one parent.)
+        private static Style NoCaret() => new(x => x.OfType<TextBox>())
+        {
+            Setters = { new Setter(TextBox.CaretBrushProperty, Brushes.Transparent) },
+        };
+
         private static T Shown<T>(T window, ThemeVariant? theme = null) where T : Window
         {
             window.RequestedThemeVariant = theme ?? ThemeVariant.Dark;
+            window.Styles.Add(NoCaret());
             window.Show();
             Dispatcher.UIThread.RunJobs();
             return window;
@@ -185,7 +220,30 @@ namespace TmDq.App.Tests
         private static MainWindow MainWindowOf(MainWindowViewModel vm, ThemeVariant? theme = null) =>
             Shown(new MainWindow { DataContext = vm, Width = 1280, Height = 760 }, theme);
 
-        private static SKBitmap Capture(Window window)
+        /// <summary>What <paramref name="window"/> draws once every animation in it has run to its end: a chevron caught
+        /// half turned, or a check box between two colours, would make the figure differ from one capture to the next.
+        /// It is drawn again, time and frames apart (so it holds however the headless platform's animation clock counts),
+        /// until two drawings in a row are the same. Not when <paramref name="settle"/> is false: the processing figure is
+        /// captured from inside a run's progress report, where a wait would let the run finish (and the test go on)
+        /// underneath the capture; nothing in it is animated.</summary>
+        private static SKBitmap Capture(Window window, bool settle = true)
+        {
+            SKBitmap shot = Draw(window);
+            for (int round = 0; settle && round < SettleRounds; round++)
+            {
+                System.Threading.Thread.Sleep(SettleMs);
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick(SettleFrames);
+                SKBitmap next = Draw(window);
+                bool still = shot.Bytes.AsSpan().SequenceEqual(next.Bytes);
+                shot.Dispose();
+                shot = next;
+                if (still && round > 0) return shot;
+            }
+            Assert.False(settle, "the window was still moving after " + SettleRounds + " drawings");
+            return shot;
+        }
+
+        private static SKBitmap Draw(Window window)
         {
             using WriteableBitmap frame = Frames.Capture(window);
             using ILockedFramebuffer fb = frame.Lock();
@@ -336,9 +394,9 @@ namespace TmDq.App.Tests
             bool caught = false;
             var dialog = new CapturingDialog(p =>
             {
-                using SKBitmap window = Capture(main!);
+                using SKBitmap window = Capture(main!, settle: false);
                 Window progress = Shown(new ProcessingWindow { DataContext = p });
-                using (SKBitmap box = Capture(progress))
+                using (SKBitmap box = Capture(progress, settle: false))
                     Save("walk-fs-04-processing.png", window, new[] { (box, new SKPointI((window.Width - box.Width) / 2 + 200, (window.Height - box.Height) / 2)) });
                 progress.Close();
                 caught = true;
@@ -352,7 +410,7 @@ namespace TmDq.App.Tests
             time.Close();
 
             // The Export dialog, on its defaults.
-            (string image, string data, string log) = ExportViewModel.DefaultPaths(Path.GetDirectoryName(Prn)!, vm.Plot.Title);
+            (string image, string data, string log) = ExportViewModel.DefaultPaths(ShownFolder, vm.Plot.Title);
             Window export = Shown(new ExportWindow { DataContext = new ExportViewModel(image, data, log) });
             Save("Export Dialog.png", export);
             export.Close();
@@ -490,7 +548,7 @@ namespace TmDq.App.Tests
             }).ToList();
             IReadOnlyList<FileCheck> checks = TemplateBatch.Validate(template, copies.Append(StepCal).ToList());
             Assert.Equal(new[] { true, true, true, false }, checks.Select(c => c.Ok));   // "three files match and one is rejected"
-            Window window = Shown(new BatchApplyWindow { DataContext = new BatchApplyViewModel(checks, _scratch, AppServices.Any) });
+            Window window = Shown(new BatchApplyWindow { DataContext = new BatchApplyViewModel(checks, Path.Combine(ShownFolder, "Exports"), AppServices.Any) });
             Save("walk-batch-02-apply-dialog.png", window);
             window.Close();
 

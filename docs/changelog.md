@@ -12,6 +12,28 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The manual's figures the same in every capture, and re-captured for 3.0.0
+
+`ManualFiguresTests` made some figures differently from one capture to the next, so a re-capture changed figures whose
+subject had not changed. Rendering every figure several times found five causes:
+
+- **The log's clock** (the main window's figures): it now reads one fixed time (`FigureClock`), not the run's.
+- **Paths** that differ by checkout and by run, and that put the user's name in the manual: the Export dialog showed the
+  repository's folder, the batch confirmation a scratch folder named for the run. Both now show `D:\Flight Tests`.
+- **Animations** caught part way (the Customize View tree's chevrons, a check box's colour): a capture now draws the
+  window again, time and frames apart, until two drawings in a row match, and fails if it never settles.
+- **The text caret**, which blinks on the clock (Set Time Window): figure windows hide it.
+- **What stays the run's own:** the log of a real run, where the streams are processed in parallel, so the order they
+  start in, the percentages read and the seconds elapsed vary. That touches the four figures with that log in view.
+  One check box's corner in the Customize View tree also differs by a few pixels' shade between processes (never
+  within one); its cause was not found.
+
+**The re-capture also brought the manual up to 3.0.0:** the main window's figures still showed "v2.14.2" in the log
+and "Version 2.14.2" in the status bar, having been rendered before the version changed. Eight figures changed (the
+Export dialog, the batch confirmation, Set Time Window, the Customize View tree, and the four with a run's log); the
+other nineteen render byte for byte as before. Checked by rendering every figure five times, in Release as the manual
+build does, and comparing each with the others; the Debug suite passes too.
+
 #### The menus, the chips and the keys declared in AXAML and bound
 
 The last of the three steps that bring the application to MVVM's usual shape. The menus look exactly as they did: the
