@@ -1,0 +1,27 @@
+<Project>
+
+  <!--
+    mt.exe for the targets that merge the UTF-8 code-page manifest into an exe (TmDq.App, TmDq.Core.Tests). It is in
+    the Windows SDK, on PATH only in a developer prompt (eng\env.ps1 makes one), so a build started anywhere else - VS
+    Code's C# tools, a plain `dotnet build` - failed with MSB3073 and exit code 9009 ("not recognized"). TmDqFindMt
+    looks for it where the SDK installs it, the newest version first, and falls back to "mt" on PATH. Imported by
+    Directory.Build.targets into every .csproj; a target that runs mt depends on TmDqFindMt and calls "$(TmDqMt)".
+  -->
+
+  <PropertyGroup>
+    <TmDqKitsRoot>$([MSBuild]::GetRegistryValueFromView('HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Kits\Installed Roots', 'KitsRoot10', null, RegistryView.Registry64, RegistryView.Registry32))</TmDqKitsRoot>
+  </PropertyGroup>
+
+  <Target Name="TmDqFindMt">
+    <ItemGroup Condition="'$(TmDqKitsRoot)' != ''">
+      <!-- bin\<version>\x64\mt.exe for every SDK installed; the versions sort in their order, so the last is the newest. -->
+      <_TmDqMtCandidate Include="$(TmDqKitsRoot)bin\10.*\x64\mt.exe" />
+    </ItemGroup>
+    <PropertyGroup>
+      <TmDqMt Condition="'@(_TmDqMtCandidate)' != ''">%(_TmDqMtCandidate.FullPath)</TmDqMt>
+      <TmDqMt Condition="'$(TmDqMt)' == ''">mt</TmDqMt>
+    </PropertyGroup>
+    <Message Importance="low" Text="mt.exe: $(TmDqMt)" />
+  </Target>
+
+</Project>

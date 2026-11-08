@@ -12,6 +12,20 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### A build outside a developer prompt finds mt.exe
+
+Building in VS Code (its C# tools run a plain `dotnet build`) failed with MSB3073, exit code 9009: the targets that
+merge the UTF-8 code-page manifest into the app's hosts and the managed test exe ran a bare `mt`, which is on PATH only
+in a Visual Studio developer prompt (the repository's scripts make one with `eng\env.ps1`, which is why they worked).
+
+- **`eng\WindowsSdkTools.targets`** (new, imported by `Directory.Build.targets` into every `.csproj`): `TmDqFindMt`
+  looks for `mt.exe` where the Windows SDK installs it (`bin\<version>\x64` under the registry's `KitsRoot10`), the
+  newest version, and falls back to `mt` on PATH. The four manifest targets in `TmDq.App.csproj` and
+  `TmDq.Core.Tests.csproj` depend on it and run `$(TmDqMt)`.
+- **Checked:** with `mt` not on PATH, `dotnet build` of the app, both test projects and a single-file `dotnet publish`
+  all succeed (they failed with 9009 before), and the published exe carries the UTF-8 code page; the managed and app
+  suites pass, `ManifestTests` included, which assert the code page in the built exes.
+
 #### v2.x's preferences are no longer imported
 
 v3.0.0 read the Qt application's INI file on its first run, so an upgrade from v2.x kept the theme, the sidebar and
