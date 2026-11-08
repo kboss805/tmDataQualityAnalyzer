@@ -46,7 +46,7 @@ jobs:
       - name: Release consistency (version literals)
         shell: powershell
         run: |
-          # Four user-facing files carry the version as prose; nothing derives them
+          # Five user-facing files carry the version as prose; nothing derives them
           # from AppVersion, and each has shipped stale. Needs no toolchain, so it
           # runs before the build and fails fast. -ReleaseMode is deliberately NOT
           # passed: an "Unreleased" changelog section is correct between releases and

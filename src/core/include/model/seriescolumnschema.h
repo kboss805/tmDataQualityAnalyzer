@@ -4,7 +4,7 @@
  *
  * The application exports each plot series as a CSV column whose header encodes
  * the series' identity, and re-imports its own exports by parsing that header
- * back. Formatting (PlotViewModel::exportCsv / addStreamData) and parsing
+ * back. Formatting (buildStreamSeries / CsvSeriesWriter) and parsing
  * (CsvSeriesParser) MUST stay inverses — historically they lived apart with a
  * "keep in lockstep" comment. This module owns both sides so they can't drift,
  * and is covered by a round-trip test (tests/core/test_seriescolumnschema.cpp).
@@ -21,7 +21,7 @@
 
 namespace SeriesColumnSchema
 {
-    /// CSV export/import header tokens. The exporter (PlotViewModel::exportCsv) and
+    /// CSV export/import header tokens. The exporter (CsvSeriesWriter) and
     /// the importer (CsvSeriesParser) MUST agree on these so an exported file can be
     /// re-loaded. The first column is the combined day+time stamp; frame-sync series
     /// names are qualified per metric (the bare name is shared by a stream's lock and
@@ -51,7 +51,7 @@ namespace SeriesColumnSchema
     /// The in-memory display name for one Receiver-SNR channel series:
     /// "<pcmChannelId> - <streamLabel> <channelName>". The leading channel id keeps
     /// multiple SNR streams distinct in the legend and across a CSV round-trip.
-    /// Used by PlotViewModel::addStreamData().
+    /// Used by buildStreamSeries() (seriesbuilder.cpp).
     std::string snrSeriesName(int pcmChannelId, const std::string& streamLabel,
                               const std::string& channelName);
 

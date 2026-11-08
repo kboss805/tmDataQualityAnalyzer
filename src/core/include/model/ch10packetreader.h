@@ -46,9 +46,9 @@ typedef struct SuChanInfo
 /**
  * @brief Reads a Ch10 file once and dispatches PCM packets to stream queues.
  *
- * Lifecycle: the coordinator constructs the reader, calls prepare() synchronously
- * (opens the file, parses TMATS, resolves attributes, builds routing), then runs run()
- * on a thread of its own. It is plain C++: progress, log lines and errors go to a
+ * Lifecycle: its owner (PipelineRunner for a run, CalibrationExtractor for an extraction)
+ * constructs the reader, calls prepare() synchronously (opens the file, parses TMATS,
+ * resolves attributes, builds routing), then runs run() on a thread of its own. It is plain C++: progress, log lines and errors go to a
  * ProcessingEvents sink (setEvents()), called on the thread that runs run().
  */
 class Ch10PacketReader

@@ -578,7 +578,7 @@ std::string FrameProcessor::streamTag(const ProcessingParams& params)
     // failure reports are indistinguishable from each other.
     //
     // The channel ID leads because that is what the operator configured the stream
-    // by. The label is appended only when it adds something - MainViewModel falls
+    // by. The label is appended only when it adds something - buildStreamJob falls
     // back to "Ch <id>" when TMATS gives no name, and "[CH 13 Ch 13]" is noise.
     const std::string& label = params.streamLabel;
     const std::string fallback = "Ch " + std::to_string(params.pcmChannelId);

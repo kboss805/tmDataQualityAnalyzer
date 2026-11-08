@@ -39,7 +39,7 @@ is applied.
 
 ## 2. Linear Calibration (default model)
 
-Built in `MainViewModel::buildStreamJob()` from three operator inputs: a **voltage
+Built in `buildStreamJob()` (`src/core/src/streamjobbuilder.cpp`) from three operator inputs: a **voltage
 range** (`slope_idx`), a **polarity** (`polarity_idx`), and a **scale** in dB/V
 (`scale_dB_per_V`).
 
@@ -130,7 +130,7 @@ was extracted and is keyed by word index.
    StreamConfig.calibrationByWord  (word index → profile)
             │
             ▼
-   MainViewModel::buildStreamJob()  attaches valid profiles onto ParameterInfo
+   buildStreamJob()  attaches valid profiles onto ParameterInfo
             │
             ▼
    FrameProcessor main run  ── interpolateCalibration(mean_raw, profile) ──► dB

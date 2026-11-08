@@ -12,6 +12,33 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Pre-release tidy: stale guidance, dead code and Qt-era leftovers
+
+A whole-repository audit before 3.1.0 (the native core, the .NET projects, the scripts, docs and ignore files, and
+GitHub). Nothing behaves differently.
+
+- **Guidance that steered wrong:** `tm-code-review` said frame-sync Load/Save keeps `Randomized` out (it round-trips,
+  with `Inverted`, as `.claude/CLAUDE.md` says), named files that are gone, and called a packet's payload a copy-on-write
+  `QByteArray` (it is a shared, read-only `std::vector<uint8_t>` a worker copies before changing). `cut-release` still
+  named `build_release.ps1` and the Qt build's derived version files. `code-cleanup` cited guidance that does not exist.
+- **Comments in the core** that named classes v3 does not have (`ProcessingCoordinator`, the C++ `MainViewModel`,
+  `PlotViewModel::addStreamData`, `TestStepDetector`) now name what does the job (`PipelineRunner`, `buildStreamJob`,
+  `buildStreamSeries`, `CsvSeriesWriter`, the native tests). `stepdetector.h` no longer says `TomlDocument` has no
+  arrays (the step file is read through its `tables("step")`), and `ChannelData::channelCount` says what it counts now.
+  Checked: every changed native source is identical to before with its comments removed.
+- **Docs:** `SNR_logic.md` names `buildStreamJob`; the template and multi-file design notes say they were written for
+  v2.x and where the code is now; the future-plans table says its paths are of their day; `eng\ch10_triage.py` and
+  `.pymarkdown.json` are documented in `docs/claude.md`'s tooling list.
+- **Dead code:** `PlotViewModel.XMin` and two unused constants in `PlotCommands`; `LegendLabel` uses `ChannelLabel`
+  instead of repeating it; `SetSeries`' and `LegendVisible`'s comments say what is true now. The three Qt-era INI
+  fixtures (`tests/fixtures/test_framesetup*.ini`), which nothing read, are deleted.
+- **Ignore files:** `deploy/.gitignore` re-included two deleted files and not the release notes or the portable
+  README, which were tracked only because they predate its rule; the root, `tests/` and `.claude/.claudeignore` rules
+  for the Qt build (`build/`, `debug/`, `release/`, Makefiles, `version_autogen.h`, the generated solution) are gone,
+  and `.claudeignore` lists the v3 build output instead.
+- **Outside the repository:** the retired self-hosted runner's 357 `test-results-self-hosted` artifacts were deleted
+  from GitHub, and the Qt build output and old packages (about 1.4 GB) from the development machine.
+
 #### The manual's figures the same in every capture, and re-captured for 3.0.0
 
 `ManualFiguresTests` made some figures differently from one capture to the next, so a re-capture changed figures whose

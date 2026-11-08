@@ -77,7 +77,7 @@ ProcessingParams makeTestParams(const fs::path& filename = {},
     return p;
 }
 
-/// Runs the processor through the whole reader-and-queue pipeline, as ProcessingCoordinator does: the reader resolves
+/// Runs the processor through the whole reader-and-queue pipeline, as PipelineRunner does: the reader resolves
 /// the TMATS attributes in prepare(), then reads on its own thread while process() consumes on this one. @p prepared
 /// says whether prepare() succeeded, so a broken fixture is reported as itself rather than as a processing result.
 bool runWithReader(FrameProcessor& fp, ProcessingParams& p, FrameSetup* setup, bool* prepared = nullptr)
@@ -372,8 +372,9 @@ ProcessingParams trcParams(const Trc& t, StreamMode mode)
     return p;
 }
 
-/// PRN-15 is 2^15-1 bits, deliberately NOT a whole number of 16-bit words. MainViewModel::buildStreamJob resolves
-/// that with ceiling division; mirroring the expression keeps the Safran cases honest if the geometry ever changes.
+/// PRN-15 is 2^15-1 bits, deliberately NOT a whole number of 16-bit words. buildStreamJob resolves that with
+/// ceiling division (FrameSetup::wordsInMinorFrame); mirroring the expression keeps the Safran cases honest if the
+/// geometry ever changes.
 /// The floor finds the sync and then extracts no frames, which is a different failure.
 constexpr int kPrnFrameBits  = 32767;
 constexpr int kPrnFrameWords = (kPrnFrameBits + PCMConstants::kCommonWordLen - 1) / PCMConstants::kCommonWordLen;
@@ -494,7 +495,7 @@ TEST_CASE("FrameProcessor: reports exactly these messages")
         {"cancelled", false,
          {tag + "processing...", tag + "processing cancelled by user."},
          {}},
-        // The label "Ch 7" is the fallback MainViewModel uses when TMATS has no name, so the tag drops it; an empty
+        // The label "Ch 7" is the fallback buildStreamJob uses when TMATS has no name, so the tag drops it; an empty
         // label drops it too.
         {"no-packet-queue", false, {}, {"[CH 7] Internal error: no packet queue for stream."}},
         {"attributes-unresolved", false, {}, {"[CH 7] Internal error: PCM attributes not resolved."}},

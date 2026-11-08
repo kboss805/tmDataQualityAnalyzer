@@ -4,6 +4,13 @@ Status: **implemented.** Lets a user capture one configured source's per-stream
 processing settings as a reusable, file-path-independent *template* and apply it
 to many `.ch10` files in one action.
 
+**Written for v2.x (the Qt application): the design stands, the code has moved.** In v3 the template's types
+(`ProcessingTemplate`, `SeriesAppearance`) and its JSON are `src/TmDq.App/Models/Templates/TemplateFile.cs`;
+matching is the core's `TemplateMatcher` (`src/core/src/templatematcher.cpp`) behind `TemplateBatch.Validate`; the
+batch is `BatchRunner`; the appearance reapply is `PlotTemplates.ApplyAppearance`; Plot File is in the plot's
+right-click menu (`PlotViewModel.SetVisibleSource`); and the tests are `TemplateTests` and `TemplateBatchTests`.
+Names below such as `mainviewmodel.cpp`, `PlotWidget` and the `tst_*` suites are v2.x's.
+
 ## 1. Why
 
 Users want to configure the per-stream processing once and run it against many
@@ -13,13 +20,13 @@ files whose channel layout matches.
 
 ## 2. What a template is
 
-`ProcessingTemplate` (`src/core/include/dto/processingtemplate.h`) = `schemaVersion`,
+`ProcessingTemplate` = `schemaVersion`,
 `appVersion`, optional `name`, `timeChannelIndex`, and an ordered list of
 `TemplateStreamEntry`. Each entry = one `StreamConfig` (reused verbatim) + an
-optional list of `SeriesAppearance` (`src/core/include/dto/seriesappearance.h`: name +
+optional list of `SeriesAppearance` (name +
 color, keyed by `metricType`/`receiverIndex`/`channelIndex`).
 
-Serialized by `ProcessingTemplateSchema` (`src/core/src/processingtemplateschema.cpp`),
+Serialized by `ProcessingTemplateSchema`,
 which **delegates each entry's config to `StreamConfigSchema`** so the ~15-field
 `StreamConfig` list is never hand-mapped twice. As with `StreamConfigSchema`,
 `calibrationByWord` is never serialized — only the calibration *input references*

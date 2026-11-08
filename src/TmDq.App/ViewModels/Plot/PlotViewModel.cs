@@ -199,9 +199,9 @@ namespace TmDq.App.ViewModels.Plot
             OnPropertyChanged(nameof(HasData));
         }
 
-        /// <summary>Shows <paramref name="series"/> in place of whatever was shown: series that come from somewhere other
-        /// than a run (an imported CSV, plan step 4.5; a test). They are coloured as a run's would be, and the whole span
-        /// is shown.</summary>
+        /// <summary>Shows <paramref name="series"/> in place of whatever was shown: series made other than by a run (the
+        /// tests build their plots this way; an imported CSV goes through <see cref="LoadCsv"/>). They are coloured as a
+        /// run's would be, and the whole span is shown.</summary>
         public void SetSeries(IEnumerable<PlotSeries> series)
         {
             _series.Clear();
@@ -398,7 +398,6 @@ namespace TmDq.App.ViewModels.Plot
 
         private bool HasVisible(bool left) => _series.Any(s => s.IsLeftAxis == left && EffectiveVisible(s));
 
-        public double XMin => 0.0;
         public double XMax => _window.XMax;
         public double XViewMin => _window.ViewMin;
         public double XViewMax => _window.ViewMax;
@@ -570,7 +569,7 @@ namespace TmDq.App.ViewModels.Plot
         public bool CanSwitchViewMode => HasData && HasLockSeries && HasMissedFramesSeries;
 
         /// <summary>Whether the legend is wanted. It is still drawn only when it has a row; a hidden legend stays out of
-        /// exported images too. Kept for the session; remembering it between sessions is plan step 4.8's (preferences).</summary>
+        /// exported images too. Remembered between sessions by the main window's view model, in the preferences.</summary>
         public bool LegendVisible
         {
             get => _legendVisible;
@@ -646,10 +645,7 @@ namespace TmDq.App.ViewModels.Plot
         public static string LegendLabel(PlotSeries s)
         {
             if (s.Metric != MetricType.Snr) return s.Name;
-            string prefix = s.ChannelIndex >= 0 && s.ChannelIndex < ChannelPrefixes.Length
-                ? ChannelPrefixes[s.ChannelIndex]
-                : (s.ChannelIndex + 1).ToString(CultureInfo.InvariantCulture);
-            return string.Create(CultureInfo.InvariantCulture, $"CH{s.StreamOrder} {prefix}_RCVR{s.ReceiverIndex}");
+            return string.Create(CultureInfo.InvariantCulture, $"CH{s.StreamOrder} {ChannelLabel(s.ChannelIndex)}_RCVR{s.ReceiverIndex}");
         }
 
         /// <summary>A channel's letter as Customize View shows it: L, R or C, else its number from 1.</summary>

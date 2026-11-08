@@ -56,7 +56,7 @@ struct ResolvedPcmAttrs {
  */
 struct ProcessingParams {
     std::filesystem::path filename; ///< Path to the .ch10 input file.
-    int sourceId = 0;             ///< Id of the .ch10 file (multi-file session) this job belongs to; 0 for the first/only source. Carried into the completed ProcessedStreamData by ProcessingCoordinator (mirrors jobIndex).
+    int sourceId = 0;             ///< Id of the .ch10 file (multi-file session) this job belongs to; 0 for the first/only source. Carried into the completed ProcessedStreamData by PipelineRunner (mirrors jobIndex).
     int timeChannelId = -1;       ///< Resolved time channel ID.
     int pcmChannelId = -1;        ///< Resolved PCM channel ID.
     uint64_t frameSync = 0;       ///< Frame sync pattern as a numeric value.
@@ -72,11 +72,11 @@ struct ProcessingParams {
     /// True if each packet's payload should have its byte pairs swapped before any
     /// other transform. **File-scoped, not per-stream**: byte order is a property of
     /// the recorder that produced the file, so every stream in one recording shares
-    /// it. MainViewModel stamps the same value onto every job it builds.
+    /// it. buildStreamJob stamps the run's one value onto every job it builds.
     ///
     /// Defaults true: the swap is what an ordinary Chapter 10 recording needs (three of
     /// the four reference recordings; only a "legacy" file goes without it). Every
-    /// production path still stamps it explicitly (MainViewModel for a run,
+    /// production path still stamps it explicitly (buildStreamJob for a run,
     /// CalibrationExtractor for an extraction), because a caller that merely inherits
     /// the default can silently disagree with the run it is meant to match - which is
     /// how the extractor once came to disagree with the run it was calibrating.
@@ -96,7 +96,7 @@ struct ProcessingParams {
     bool useDataRateClock = false;
 
     ResolvedPcmAttrs resolvedAttrs; ///< Filled by the reader before the worker starts.
-    PacketQueue* packetQueue = nullptr; ///< Worker's input queue (owned by the coordinator).
+    PacketQueue* packetQueue = nullptr; ///< Worker's input queue (owned by the PipelineRunner or CalibrationExtractor).
 };
 
 #endif // PROCESSINGPARAMS_H

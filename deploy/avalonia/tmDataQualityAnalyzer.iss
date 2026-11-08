@@ -19,7 +19,7 @@
 #define ManualFile "staging\manual\UserManual.html"
 
 [Setup]
-; The Qt application's AppId (deploy\tmDataQualityAnalyzer.iss): v3.0.0 is its upgrade, not a second application.
+; The Qt application's AppId (v2.x's deploy\tmDataQualityAnalyzer.iss, since deleted): v3.0.0 is its upgrade, not a second application.
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}

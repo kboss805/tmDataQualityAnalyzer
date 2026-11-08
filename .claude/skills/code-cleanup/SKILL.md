@@ -89,7 +89,7 @@ skill risks the copy going stale while the real rules move on. Read it, then che
 it:
 
 - Naming: PascalCase classes, `kPascalCase` constants in namespaces, `m_`-prefixed snake_case
-  members, camelCase methods/slots — flag drift; don't silently mass-rename if the pattern turns out
+  members, camelCase methods — flag drift; don't silently mass-rename if the pattern turns out
   to be widespread, since that's a bigger conversation than a cleanup sweep.
 - Include ordering in the core (Google C++ style) — mechanical, safe to note file-by-file.
 - **MVVM layering**: views (`src/TmDq.App/Views`) hold no rules — look for code-behind that computes
@@ -124,8 +124,7 @@ failure to find something.
 
 **This sweep proposes; it doesn't delete.** Deletions, renames, and doc rewrites need the user's
 go-ahead before you apply them. Present findings, let the user pick what to act on, then apply only
-those — the same git-safety discipline this project applies everywhere else (see the root
-`.claude/CLAUDE.md` guidance on investigating before removing unfamiliar state).
+those: look at what a deletion removes before removing it, as everywhere else in this project.
 
 ## After applying any fix
 

@@ -1,15 +1,6 @@
 # NOTE: do NOT add a "*.gitignore" rule here — it would ignore every .gitignore
 # (including this one), silently dropping the whole ignore policy from the repo.
 
-# Build directories
-samplefiles/
-
-# What the Qt build (deleted in plan step 6.1) generated, still ignored so a checkout that built it before does
-# not show its leftovers: build/, tests/debug, tests/release, the Makefiles, version_autogen.h and the generated
-# Visual Studio solution below. They are safe to delete.
-.qmake.stash
-version_autogen.h
-
 # Compiled Object files
 *.o
 *.obj
@@ -28,8 +19,6 @@ version_autogen.h
 *.out
 *.app
 
-# External libraries — tracked for reproducible builds
-
 # IDE and editor settings
 # .vscode: track the shared IDE setup, ignore per-machine/generated files.
 # These were fully ignored until 2026-07-30, which is how launch.json kept a
@@ -42,7 +31,6 @@ version_autogen.h
 !.vscode/extensions.json
 !.vscode/c_cpp_properties.json
 .vs/
-*.creator.user*
 *.suo
 *.user
 
@@ -51,11 +39,6 @@ version_autogen.h
 compile_flags.txt
 compile_commands.json
 
-# The Visual Studio solution the deleted eng/gen_vs_project.ps1 generated from the .pro files (tmdq.sln is the
-# committed one); the unrelated per-user .vs/ cache VS itself creates is ignored above.
-/vs/
-/tmDataQualityAnalyzer.sln
-*.ncb
 *.sdf
 *.opensdf
 *.VC.opendb
@@ -73,11 +56,6 @@ compile_commands.json
 *.pdb
 *.ilk
 *.log
-build/
-debug/
-release/
-Makefile
-Makefile.*
 
 # .NET build output, in every project folder under src/ and tests/.
 bin/
@@ -101,15 +79,9 @@ desktop.ini
 
 # Settings TOML/INI files are tracked directly (no settings/.gitignore)
 
-# Source artwork (only icon.ico is needed by the build)
-
 # Input and Output files
 *.csv
 .clangd
-status.txt
-warnings.txt
-# Local build/sign launcher — contains cert thumbprint, not for version control
-build_and_sign.ps1
 
 # Manual figures: the RENDERED ones in docs/manual_images/ are tracked so the
 # manual can be regenerated, but the downscaled copies are derived output of

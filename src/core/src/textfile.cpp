@@ -114,8 +114,8 @@ bool readText(const std::filesystem::path& path, std::string& out)
     return true;
 }
 
-/// The file name of @p path as UTF-8, for messages. u8string() is std::string in C++17
-/// and std::u8string in C++20; copying through iterators reads either.
+/// The file name of @p path as UTF-8, for messages. u8string() is a std::u8string, so its
+/// UTF-8 code units are copied through iterators into a std::string.
 std::string utf8FileName(const std::filesystem::path& path)
 {
     const auto name = path.filename().u8string();

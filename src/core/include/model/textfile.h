@@ -2,10 +2,10 @@
  * @file textfile.h
  * @brief Reading of small text files as UTF-8, and a few path helpers.
  *
- * The settings reader (`TomlDocument`) and the step-file parser
- * (`StepDetector::parseStepConfig`) must both read the encodings Notepad writes, which
+ * The settings reader (`TomlDocument`, which also reads the step files for
+ * `StepDetector::parseStepConfig`) must read the encodings Notepad writes, which
  * reading the bytes with the standard library does not handle, so that handling lives
- * here once instead of in each: a UTF-8 byte-order mark is skipped, and UTF-16 (little
+ * here: a UTF-8 byte-order mark is skipped, and UTF-16 (little
  * or big endian, BOM required) is decoded. A file with no BOM is taken to be UTF-8.
  *
  * Pinned by tests/core/test_textfile.cpp, test_tomldocument.cpp and the
