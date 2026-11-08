@@ -169,7 +169,8 @@ also signed). It reads the version from `constants.h`, so there is no version ar
   a non-zero exit.
 - **The installer replaces a v2.x install** (the Qt installer's AppId and folder): it deletes the Qt
   `bin\`, `UserGuide.txt` and the old `UserManual.html`, keeps `settings\`, and moves the `.ch10`
-  association. Preferences carry over by the app's own first-run import of the Qt INI file.
+  association. The window preferences start from the defaults: v3.0.x imported the Qt INI file on its first run, and
+  3.1.0 dropped that import, so the INI file is left unread.
 - **Inno Setup:** if `iscc` isn't found no installer is produced, and the run says so and fails.
 - Antivirus can briefly lock freshly-built exes; the ZIP step already retries — don't panic on a
   transient "file in use".
@@ -232,7 +233,7 @@ What it establishes that nothing else can:
 - **The upgrade from v2.x:** v2.14.2 installed with its default tasks, a settings file edited and the
   Qt INI written, then this setup over it: the Qt `bin\` and text guide gone, the full manual this
   version's, the edited settings file kept, `.ch10` opening the new exe, one entry in Installed apps,
-  and the first run importing the Qt preferences.
+  and the first run starting from the default preferences with the Qt INI left as it was.
 - **The DLL closure:** the installed app and the portable ZIP open their windows and process the PRN
   sample end to end; `tmdq_core.dll` loads with the VC++ runtime beside it; every PE file verifies.
 - **Uninstall**: program files and the ProgID go, `settings\` stays (`uninsneveruninstall`,

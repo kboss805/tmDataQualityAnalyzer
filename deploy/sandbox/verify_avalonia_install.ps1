@@ -11,8 +11,8 @@
 #
 # What it proves: on a machine that has never seen the application, with Smart App
 # Control ON, the last Qt release installs as a user has it, and the signed installer
-# upgrades it in place - the Qt files gone, the user's settings file and preferences
-# carried over, the .ch10 association moved to the new exe. The installed app and the
+# upgrades it in place - the Qt files gone, the user's settings file kept, the v2.x
+# preferences left alone (3.1.0 starts from the defaults), the .ch10 association moved to the new exe. The installed app and the
 # portable ZIP both open their window, every PE file carries a valid signature, the
 # native core DLL loads, Code Integrity blocked nothing of ours - and an UNSIGNED build
 # of the same exe IS blocked, which is what shows the enforcement was real and not absent.
@@ -129,7 +129,8 @@ else {
     Check 'v2.x installed its full manual' (Test-Path (Join-Path $app 'UserManual.html')) ''
     if (Test-Path $userFile) { Add-Content -Path $userFile -Value $marker }
     Check 'the user''s edit is in a v2.x settings file' ((Test-Path $userFile) -and ((Get-Content $userFile -Raw) -match [regex]::Escape($marker))) ''
-    # What the Qt application keeps, as its QSettings writes it (an INI file, main.cpp sets IniFormat).
+    # What the Qt application keeps, as its QSettings writes it (an INI file, main.cpp sets IniFormat). v3.1.0 does not
+    # read it, so it must be left as it is.
     New-Item -ItemType Directory -Force -Path $prefsDir | Out-Null
     "[General]`r`nTheme=light`r`nLegendVisible=false`r`n" | Out-File -FilePath (Join-Path $prefsDir 'tmDataQualityAnalyzer.ini') -Encoding ASCII
 }
@@ -184,7 +185,8 @@ $sigs = @(Signatures $app)
 foreach ($s in $sigs) { Say ('    {0,-10} {1,-28} {2}' -f $s.Status, $s.Signer, $s.Name) }
 Check 'every PE file validly signed' ((@($sigs | Where-Object { $_.Status -ne 'Valid' })).Count -eq 0) ("$($sigs.Count) files")
 
-# --- 4. The installed app runs under Smart App Control, and takes the Qt application's preferences on its first run. ---
+# --- 4. The installed app runs under Smart App Control; its first run starts from the default preferences and leaves the
+# Qt application's INI file alone. ---
 Say ''
 Say '[4] Launch the installed app'
 $ap = Start-Process $exe -PassThru
@@ -200,7 +202,9 @@ if ($live) {
 }
 $prefs = Join-Path $prefsDir 'preferences.json'
 $json = if (Test-Path $prefs) { Get-Content $prefs -Raw } else { '' }
-Check 'the first run imported the Qt application''s preferences' (($json -match '"[Tt]heme"\s*:\s*"light"') -and ($json -match '"[Ll]egendVisible"\s*:\s*false')) $(if ($json) { ($json -replace '\s+', ' ') } else { 'no preferences.json' })
+Check 'the first run wrote the default preferences' (($json -match '"[Tt]heme"\s*:\s*"dark"') -and ($json -match '"[Ll]egendVisible"\s*:\s*true')) $(if ($json) { ($json -replace '\s+', ' ') } else { 'no preferences.json' })
+$ini = Join-Path $prefsDir 'tmDataQualityAnalyzer.ini'
+Check 'the Qt application''s INI file was left as it was' ((Test-Path $ini) -and ((Get-Content $ini -Raw) -match 'Theme=light')) ''
 Process-Recording $exe 'the installed app'
 
 # --- 5. The native core DLL loads and answers, on its own. ---

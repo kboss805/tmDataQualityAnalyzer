@@ -22,8 +22,8 @@ namespace TmDq.App
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
                 var window = new MainWindow();
-                // What is remembered between sessions, with v2.x's settings imported on the first run (plan
-                // step 4.8). The installer's smoke test keeps nothing: it must not leave its recording in anyone's Recent Files.
+                // What is remembered between sessions (plan step 4.8). The installer's smoke test keeps nothing: it must
+                // not leave its recording in anyone's Recent Files.
                 PreferencesStore preferences = Startup.SmokeReportPath() is null
                     ? PreferencesStore.Load(PreferencesStore.FolderFor(AppContext.BaseDirectory,
                                                                         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)))

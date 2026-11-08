@@ -18,5 +18,3 @@
 # Qt-written templates, compared byte for byte (CR LF included): stored exactly as written
 tests/TmDq.App.Tests/Templates/*.json -text
 
-# The Qt application's preferences as QSettings wrote them, read by the importer: stored exactly as written
-tests/TmDq.App.Tests/QtSettings/*.ini -text

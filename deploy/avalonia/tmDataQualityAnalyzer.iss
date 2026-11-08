@@ -6,8 +6,8 @@
 ;
 ; It REPLACES the Qt application (v2.x) rather than installing beside it: the Qt installer's AppId, its folder and
 ; Start menu name, and the .ch10 association. Installing it over v2.x upgrades that install in place: the Qt
-; application's bin\ folder and its text guide go, and the user's settings files stay (US8.0). The preferences carry
-; over on their own: the application reads the Qt application's INI file on its first run (plan step 4.8).
+; application's bin\ folder and its text guide go, and the user's settings files stay (US8.0). The window
+; preferences (theme, recent files and the like) start from the defaults: v3.0.x imported v2.x's INI file, 3.1.0 does not.
 
 #define MyAppName "tmDataQualityAnalyzer"
 #ifndef MyAppVersion

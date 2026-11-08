@@ -90,7 +90,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 
 ### Deployment
 
-- **Installer & Portable Distribution**: A signed Inno Setup installer with admin/non-admin support that upgrades a v2.x install in place (settings files kept, preferences imported on the first run), a portable ZIP that keeps its preferences beside itself, and an optional `.ch10` file association
+- **Installer & Portable Distribution**: A signed Inno Setup installer with admin/non-admin support that upgrades a v2.x install in place (settings files kept; the window preferences start from the defaults), a portable ZIP that keeps its preferences beside itself, and an optional `.ch10` file association
 
 ## System Requirements
 

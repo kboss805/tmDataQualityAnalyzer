@@ -12,6 +12,26 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### v2.x's preferences are no longer imported
+
+v3.0.0 read the Qt application's INI file on its first run, so an upgrade from v2.x kept the theme, the sidebar and
+legend choices, the recent files and the last folders. `docs/claude.md` planned to keep that import through the 3.0.x
+releases and then drop it; 3.1.0 drops it.
+
+- `QtSettingsImport` and `QtIni` (about 250 lines) and `PreferencesStore.QtFileName` are gone; `PreferencesStore.Load`
+  reads this application's `preferences.json` or starts from the defaults. An INI file v2.x left in the folder is not
+  read and not touched.
+- **Upgrading from v2.x now starts from the default preferences** (dark theme, sidebar and legend shown, no recent
+  files). The settings files under `settings\` are kept as before; only the window preferences are not carried over.
+- The installer's clean-machine check (`deploy\sandbox\verify_avalonia_install.ps1`) still installs v2.14.2 with its INI
+  file and upgrades it; it now checks that the first run wrote the defaults and left the INI file as it was.
+- **Tests:** the importer's tests and their three QSettings fixtures went with it; a new case holds that a v2.x INI file
+  is left alone and the first run starts from the defaults. App baseline 613 -> **577 passed** / 0 failed, 34 not run
+  (the importer's 37 cases out, one in).
+
+Checked: mutation check, 3 mutants, all **caught** (an INI file read again on the first run; the first run's defaults
+not written; the INI file deleted rather than left alone).
+
 #### Pre-release tidy: stale guidance, dead code and Qt-era leftovers
 
 A whole-repository audit before 3.1.0 (the native core, the .NET projects, the scripts, docs and ignore files, and

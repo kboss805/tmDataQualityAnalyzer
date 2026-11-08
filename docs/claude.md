@@ -509,9 +509,9 @@ profile, so a batch processes with the linear calibration.
 - **Templates** (`Models/Templates`): `TemplateFile` (the JSON), `TemplateBatch` (matching, a file's run), and
   beside the plot `PlotTemplates` (`ViewModels/Plot`: building a template from a recording's series, putting its looks
   back); the batch confirmation.
-- **Preferences** (`Models/Settings`: `Preferences`, `PreferencesStore`, `QtSettingsImport`, `QtIni`): `preferences.json` in
-  `%APPDATA%\tmDataQualityAnalyzer` (beside the exe for a portable copy), filled once from v2.x's INI file on the first
-  run. The import stays through the v3.0.x releases, then goes.
+- **Preferences** (`Models/Settings`: `Preferences`, `PreferencesStore`): `preferences.json` in
+  `%APPDATA%\tmDataQualityAnalyzer` (beside the exe for a portable copy), the defaults on a first run. v3.0.x imported
+  v2.x's INI file there on its first run; the import went in v3.1.0, and an INI file left there is not read.
 - **Help**: the manual compiled in (`assets/usermanual.html`), or the full one beside the exe.
 
 #### The C# library (`src/TmDq.Core`)
@@ -904,7 +904,7 @@ helper every test cleans up and reads back through, which waits out a virus scan
 - **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against v2.14.2's, the image pixel by pixel, Import
   CSV), `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports).
 - **The shell:** `ShellTests` (title bar, menu, Recent Files, keys, drag and drop, themes, Help), `PreferencesTests`
-  (the preferences file and v2.x's INI import), `MainWindowTests`.
+  (the preferences file, and v2.x's INI file left unread), `MainWindowTests`.
 - **The layers:** `LayerTests` reads every model, view model and service type as compiled, its methods' code
   included. It fails on a model that reaches a view model, a service, a view or `Platform`; on a view model or service
   that reaches a view or `Platform`; and on any of them that reaches an Avalonia type other than `Color`.
