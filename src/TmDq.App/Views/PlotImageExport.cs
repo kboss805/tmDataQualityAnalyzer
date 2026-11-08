@@ -6,7 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Skia.Helpers;
 using SkiaSharp;
-using TmDq.App.Plot;
+using TmDq.App.ViewModels.Plot;
 
 namespace TmDq.App.Views
 {

@@ -11,9 +11,9 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Platform;
 using Avalonia.Threading;
-using TmDq.App.Plot;
-using TmDq.App.Processing;
+using TmDq.App.Models.Processing;
 using TmDq.App.ViewModels;
+using TmDq.App.ViewModels.Plot;
 using TmDq.App.Views;
 using TmDq.Core;
 using Xunit;
@@ -199,7 +199,7 @@ namespace TmDq.App.Tests
             await vm.LoadAsync(Repo.Recording("step_cal, example.ch10"));
             Assert.Null(Startup.FirstLockSeries(vm.Plot));
             Assert.False(vm.Plot.HasData);
-            Assert.Equal(TmDq.App.Plot.PlotViewModel.DefaultTitle, vm.Plot.Title);
+            Assert.Equal(TmDq.App.ViewModels.Plot.PlotViewModel.DefaultTitle, vm.Plot.Title);
         }
 
         [Fact]
@@ -237,7 +237,7 @@ namespace TmDq.App.Tests
                 Assert.Null(Startup.FirstLockSeries(vm.Plot));
                 Assert.False(vm.IsBusy);
                 Assert.StartsWith("The processing core could not be loaded: ", vm.Status);
-                Assert.Equal((vm.Status, Logging.LogLevel.Error), (vm.Log.Entries[^1].Text, vm.Log.Entries[^1].Level));
+                Assert.Equal((vm.Status, Models.Logging.LogLevel.Error), (vm.Log.Entries[^1].Text, vm.Log.Entries[^1].Level));
             }
             finally
             {

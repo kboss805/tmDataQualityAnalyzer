@@ -1,7 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
-using TmDq.App.Plot;
-using TmDq.App.Services;
+using TmDq.App.Platform;
+using TmDq.App.ViewModels.Plot;
 
 namespace TmDq.App.Views
 {

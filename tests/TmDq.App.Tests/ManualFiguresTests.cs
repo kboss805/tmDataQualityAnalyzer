@@ -13,12 +13,12 @@ using Avalonia.Platform;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using SkiaSharp;
-using TmDq.App.Plot;
-using TmDq.App.Processing;
+using TmDq.App.Models.Processing;
+using TmDq.App.Models.Streams;
+using TmDq.App.Models.Templates;
 using TmDq.App.Services;
-using TmDq.App.Streams;
-using TmDq.App.Templates;
 using TmDq.App.ViewModels;
+using TmDq.App.ViewModels.Plot;
 using TmDq.App.Views;
 using TmDq.Core;
 using TmDq.Core.Tests;
@@ -325,7 +325,7 @@ namespace TmDq.App.Tests
             // A stream configured with the wrong pattern: an error in the log, and one curve fewer on the plot.
             MainWindowViewModel bad = await PrnProcessed(withBadStream: true);
             Assert.Equal(2, PlotFixtures.Locks(bad).Count);
-            Assert.Contains(bad.Log.Entries, e => e.Level == Logging.LogLevel.Error);
+            Assert.Contains(bad.Log.Entries, e => e.Level == Models.Logging.LogLevel.Error);
             MainWindow w = MainWindowOf(bad);
             Save("walk-err-01-log-error.png", w);
             w.Close();

@@ -7,12 +7,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using TmDq.App.Logging;
-using TmDq.App.Plot;
-using TmDq.App.Processing;
+using TmDq.App.Models.Logging;
+using TmDq.App.Models.Processing;
+using TmDq.App.Models.Settings;
+using TmDq.App.Models.Templates;
 using TmDq.App.Services;
-using TmDq.App.Settings;
-using TmDq.App.Templates;
+using TmDq.App.ViewModels.Plot;
 using TmDq.Core;
 
 namespace TmDq.App.ViewModels
@@ -103,7 +103,7 @@ namespace TmDq.App.ViewModels
         /// Opens <paramref name="path"/> by its suffix, as v2.x did for Recent Files and a drop: an
         /// exported CSV is imported, anything else opened as a recording. Ignored while busy, as both are.
         /// </summary>
-        public Task OpenPathAsync(string path) => Settings.RecentFiles.IsCsv(path) ? ImportCsvAsync(path) : LoadAsync(path);
+        public Task OpenPathAsync(string path) => Models.Settings.RecentFiles.IsCsv(path) ? ImportCsvAsync(path) : LoadAsync(path);
 
         /// <summary>The dark theme (v2.x's default too) or the light one (US9.0); the choice is remembered.</summary>
         public bool IsDarkTheme

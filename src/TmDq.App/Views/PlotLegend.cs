@@ -9,7 +9,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.VisualTree;
-using TmDq.App.Plot;
+using TmDq.App.ViewModels.Plot;
 
 namespace TmDq.App.Views
 {

@@ -25,14 +25,14 @@ Decide two things first, because they gate which steps apply:
 
 ## The layers, in order
 
-1. **The app's settings record** — `src/TmDq.App/Streams/StreamSetup.cs` (`StreamSetup`), with its
-   default in `Streams/StreamDefaults.cs` if it has one.
+1. **The app's settings record** — `src/TmDq.App/Models/Streams/StreamSetup.cs` (`StreamSetup`), with its
+   default in `Models/Streams/StreamDefaults.cs` if it has one.
 2. **The setup dialog** — `ViewModels/StreamSetupViewModel.cs` (the field, its property, loading it from
    and writing it to `StreamSetup`, and any validation: a problem is shown as it arises, and OK waits),
    and the control in `Views/StreamSetupWindow.axaml`, with a tooltip like every other field.
-3. **The rules** — `Streams/StreamRules.cs`: the edited row, **Apply to all** (US2.2: a setting that
+3. **The rules** — `Models/Streams/StreamRules.cs`: the edited row, **Apply to all** (US2.2: a setting that
    should not fan out says so in a comment), and the conversion to the run's `StreamConfig`.
-4. **Templates** — `Templates/TemplateFile.cs`: a template carries every row's settings, in the JSON
+4. **Templates** — `Models/Templates/TemplateFile.cs`: a template carries every row's settings, in the JSON
    v2.x wrote; read with a default when the key is missing (older templates), write it in the same
    form. `TemplateTests` holds the format byte for byte.
 5. **The C# binding and the ABI** — `src/TmDq.Core/RunTypes.cs` (`StreamConfig`),
@@ -42,7 +42,7 @@ Decide two things first, because they gate which steps apply:
 6. **Persistence, only if it belongs to the file** — the core's format (`src/core/src/framesyncfile.cpp`
    for a pattern file, the receiver-parameters reader in `framesetup.cpp`), both through
    `TomlDocument`, symmetric in load and save, and its ABI functions and binding (`abi_formats.cpp`,
-   `Formats.cs`). The app's Load/Save is `Streams/StreamFiles.cs`. **The boundary:** a pattern file
+   `Formats.cs`). The app's Load/Save is `Models/Streams/StreamFiles.cs`. **The boundary:** a pattern file
    round-trips the sync pattern, sync mask, words/frame and the two stream-format flags (`Inverted`,
    `Randomized`); Data Rate and Sample Rate are per-session and stay out; calibration profiles are
    never serialised. A file without the new key keeps the operator's choice (US8.0: readers default

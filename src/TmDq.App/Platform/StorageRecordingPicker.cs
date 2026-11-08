@@ -1,0 +1,33 @@
+using System.Linq;
+using System.Threading.Tasks;
+using Avalonia.Controls;
+using Avalonia.Platform.Storage;
+using TmDq.App.Services;
+
+namespace TmDq.App.Platform
+{
+    /// <summary>The platform's open-file dialog, owned by a window.</summary>
+    public sealed class StorageRecordingPicker : IRecordingPicker
+    {
+        private static readonly FilePickerFileType Ch10 = new("Chapter 10 recordings") { Patterns = new[] { "*.ch10" } };
+
+        private readonly TopLevel _owner;
+
+        public StorageRecordingPicker(TopLevel owner) => _owner = owner;
+
+        /// <summary>What Open offers: Chapter 10 recordings and nothing else, as v2.x's did (US6.3: a CSV is imported,
+        /// never opened).</summary>
+        public static FilePickerOpenOptions Options => new()
+        {
+            Title = "Open a Chapter 10 recording",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { Ch10 },
+        };
+
+        public async Task<string?> PickRecordingAsync()
+        {
+            var files = await _owner.StorageProvider.OpenFilePickerAsync(Options);
+            return files.FirstOrDefault()?.TryGetLocalPath();
+        }
+    }
+}

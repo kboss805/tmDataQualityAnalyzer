@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
-using TmDq.App.Plot;
 using TmDq.App.ViewModels;
+using TmDq.App.ViewModels.Plot;
 using TmDq.Core;
 
 namespace TmDq.App.Tests

@@ -1,7 +1,7 @@
 using System;
 using System.IO;
-using TmDq.App.Processing;
-using TmDq.App.Streams;
+using TmDq.App.Models.Processing;
+using TmDq.App.Models.Streams;
 using TmDq.Core;
 using TmDq.Core.Tests;
 using Xunit;

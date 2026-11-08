@@ -8,12 +8,13 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Threading;
-using TmDq.App.Plot;
-using TmDq.App.Processing;
+using TmDq.App.Models.Processing;
+using TmDq.App.Models.Streams;
+using TmDq.App.Models.Templates;
+using TmDq.App.Platform;
 using TmDq.App.Services;
-using TmDq.App.Streams;
-using TmDq.App.Templates;
 using TmDq.App.ViewModels;
+using TmDq.App.ViewModels.Plot;
 using TmDq.App.Views;
 using TmDq.Core;
 using TmDq.Core.Tests;
@@ -242,7 +243,7 @@ namespace TmDq.App.Tests
             // A CSV that cannot be written is said so.
             string nowhere = Path.Combine(_dir, "nowhere");
             await plain.RunBatchAsync(PrnTemplate(), new[] { one }, nowhere, false);
-            Assert.Contains((Logging.LogLevel.Error, "Failed to export CSV: " + Path.Combine(nowhere, "flight 1.csv")),
+            Assert.Contains((Models.Logging.LogLevel.Error, "Failed to export CSV: " + Path.Combine(nowhere, "flight 1.csv")),
                             plain.Log.Entries.Select(e => (e.Level, e.Text)));
         }
 
@@ -367,7 +368,7 @@ namespace TmDq.App.Tests
             Assert.Equal("Template file is not a valid template (unrecognized format).", vm.Log.Entries[^1].Text);
             Assert.Null(vm.ReadTemplate(Fixture("empty.json")));
             Assert.Equal("Template has no stream entries.", vm.Log.Entries[^1].Text);
-            Assert.All(vm.Log.Entries.TakeLast(5), e => Assert.Equal(Logging.LogLevel.Error, e.Level));
+            Assert.All(vm.Log.Entries.TakeLast(5), e => Assert.Equal(Models.Logging.LogLevel.Error, e.Level));
             Assert.NotNull(vm.ReadTemplate(Fixture("prn-sample.json")));
         }
 
@@ -440,7 +441,7 @@ namespace TmDq.App.Tests
             var vm = new MainWindowViewModel(new MainWindowServices { TemplateFiles = files, AppRoot = Repo.Root });
             Assert.False(vm.SaveTemplateCommand.CanExecute(null));   // nothing processed yet
             await vm.SaveTemplateCommand.ExecuteAsync(null);         // run anyway: it says so
-            Assert.Equal((Logging.LogLevel.Warning, "Nothing to save as a template -- no sources have finished processing yet."),
+            Assert.Equal((Models.Logging.LogLevel.Warning, "Nothing to save as a template -- no sources have finished processing yet."),
                          (vm.Log.Entries[^1].Level, vm.Log.Entries[^1].Text));
 
             int told = 0;
@@ -470,7 +471,7 @@ namespace TmDq.App.Tests
             Assert.False(File.Exists(Path.Combine(_dir, "mine.json")));
             string nowhere = Path.Combine(_dir, "missing", "t.json");
             Assert.False(vm.SaveTemplate(vm.Sources[0], nowhere));
-            Assert.Equal((Logging.LogLevel.Error, "Could not write template file: " + nowhere), (vm.Log.Entries[^1].Level, vm.Log.Entries[^1].Text));
+            Assert.Equal((Models.Logging.LogLevel.Error, "Could not write template file: " + nowhere), (vm.Log.Entries[^1].Level, vm.Log.Entries[^1].Text));
         }
 
         [Fact]

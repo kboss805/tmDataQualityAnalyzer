@@ -12,6 +12,29 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The application in folders by MVVM layer
+
+The first of three steps that bring the application to MVVM's usual shape. Files move and their namespaces follow
+them; nothing behaves differently.
+
+- **`Models/`** holds what has no UI: `Streams`, `Processing`, `Settings`, `Templates` and `Logging`, from the top of
+  `src/TmDq.App`, now `TmDq.App.Models.*`.
+- **`ViewModels/Plot/`** holds the plot's view models and their helpers, from `Plot/` (`TmDq.App.ViewModels.Plot`).
+- **`Services/` holds the interfaces a view model asks the user through**, and `IPlotPrompts` (from `Plot/`) and
+  `DialogConfigurator` (from `Processing/`) join them. Each interface shared a file with its Avalonia implementation,
+  so the files view models use imported Avalonia and the views; none does now.
+- **`Platform/`** (`TmDq.App.Platform`) holds those implementations, one a file: the `Storage*` file pickers, the
+  `Window*` dialogs, `WindowPlotPrompts` and `PlotViewImageExporter`.
+- `docs/claude.md` describes the layout, and the `add-stream-setting` skill names the new paths.
+
+Left for the next steps: view models still make brushes, and `PlotSeries`, `IPlotPrompts` and the template's
+`SeriesAppearance` carry Avalonia's `Color` (step 2); `TemplateBatch`, a model, takes the `PlotViewModel`.
+
+Checked: each class moved out of a `Services` file compared with main's text, identical; every other changed line is a
+using, a namespace or a name partly qualified by an old namespace (`Settings.RecentFiles`, `Logging.LogLevel`, a
+cref). A build with unused-using (IDE0005) and doc-comment checks turned on reports nothing the move added. App suite
+**608 passed / 0 failed**, 34 not run. No mutation check: no behaviour changed, and no test reads these paths.
+
 #### The native core in src/core, its tests in tests/core, scripts in eng/, libraries in third_party/
 
 The last of the three PRs that tidy the repository's layout. Files move; no code changes, beyond the paths that name

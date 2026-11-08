@@ -10,8 +10,8 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.Input;
+using TmDq.App.Models.Settings;
 using TmDq.App.Services;
-using TmDq.App.Settings;
 using TmDq.App.ViewModels;
 
 namespace TmDq.App.Views

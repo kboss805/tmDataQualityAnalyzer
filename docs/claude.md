@@ -480,13 +480,13 @@ profile, so a batch processes with the linear calibration.
   Template's batch and each file's export). Its dialogs, pickers, configurator, clock and preferences are handed in as
   one `MainWindowServices`; each service left out has the effect its property states.
 - **Configure Streams** (`ConfigureStreamsViewModel` and its window) and the setup dialog (`StreamSetupViewModel`, in
-  Frame Sync Lock or Receiver SNR mode), over the rules in `Streams` (`StreamRules`, `StreamDefaults`, `StreamFiles`):
+  Frame Sync Lock or Receiver SNR mode), over the rules in `Models/Streams` (`StreamRules`, `StreamDefaults`, `StreamFiles`):
   one row per PCM channel, each problem shown as it arises, OK and Process held until every checked row is ready,
   Apply to all (US2.2), the pattern and receiver-parameter files' Load and Save.
 - **Extract Calibration** (`ExtractCalibrationViewModel`) behind Apply Cal (US5.3).
-- **The run** (`Processing`: `StreamsRun`, `ProcessingViewModel` and its window; `Logging`: `SessionLog`, `LogView`):
+- **The run** (`Models/Processing`: `StreamsRun`, `ProcessingViewModel` and its window; `Models/Logging`: `SessionLog`, `LogView`):
   the core's run on its own threads, the modal progress dialog whose Cancel stops every stream, and the log.
-- **The plot** (`Plot`): `PlotViewModel` (the series built by the core, the axes and overrides, the view mode, the
+- **The plot** (`ViewModels/Plot`): `PlotViewModel` (the series built by the core, the axes and overrides, the view mode, the
   recordings and Plot File, the readout's pin), with four jobs in types of their own: `PlotTimeWindow` (the span, the
   window and its zoom history, the gestures and keys that move it), `PlotReadout` (what the readout says), `PlotCsv`
   (the series to and from the core's CSV) and `PlotColors` (the colours). `PlotChart` draws it (from the core's
@@ -495,9 +495,9 @@ profile, so a batch processes with the linear calibration.
 - **Export and import** (`ExportViewModel`, `PlotImageExport`): the CSV through the core's writer (every series), the
   image through one Skia renderer for PNG, SVG and PDF (exactly what the chart shows), the log as text; Import CSV
   through the core's parser.
-- **Templates** (`Templates`): `TemplateFile` (the JSON), `TemplateBatch` (matching, building a template from a
+- **Templates** (`Models/Templates`): `TemplateFile` (the JSON), `TemplateBatch` (matching, building a template from a
   recording, putting its looks back, a file's run), the batch confirmation.
-- **Preferences** (`Settings`: `Preferences`, `PreferencesStore`, `QtSettingsImport`, `QtIni`): `preferences.json` in
+- **Preferences** (`Models/Settings`: `Preferences`, `PreferencesStore`, `QtSettingsImport`, `QtIni`): `preferences.json` in
   `%APPDATA%\tmDataQualityAnalyzer` (beside the exe for a portable copy), filled once from v2.x's INI file on the first
   run. The import stays through the v3.0.x releases, then goes.
 - **Help**: the manual compiled in (`assets/usermanual.html`), or the full one beside the exe.
@@ -580,10 +580,14 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
 - **The core** (`src/core/`, its project `tmdq_core.vcxproj`): headers in `include/` (`dto/`, `model/`, `constants.h`),
   sources in `src/`, the ABI in `abi/`; the doctest suite in `tests/core/`. A new core source goes in `tmdq_core.vcxproj`,
   and a new ABI source in both native projects; `NativeProjectTests` fails until they list it.
-- **.NET**: `src/TmDq.Core` (the binding) and `src/TmDq.App` (folders by role: `ViewModels`, `Views`, `Plot`,
-  `Streams`, `Processing`, `Settings`, `Templates`, `Services`, `Logging`), each with a `.Tests` project of the same
-  name under `tests/`; `eng/` holds the props and targets that `Directory.Build.props` and `Directory.Build.targets`,
-  at the root, import into every .NET project.
+- **.NET**: `src/TmDq.Core` (the binding) and `src/TmDq.App`, each with a `.Tests` project of the same name
+  under `tests/`; `eng/` holds the props and targets that `Directory.Build.props` and `Directory.Build.targets`, at
+  the root, import into every .NET project. The application is in folders by MVVM layer, each its own namespace:
+  - `Models/` (`Streams`, `Processing`, `Settings`, `Templates`, `Logging`): the rules and the files, no UI.
+  - `ViewModels/`, the plot's in `ViewModels/Plot/`.
+  - `Views/`: the windows and controls.
+  - `Services/`: the interfaces a view model asks the user through (file dialogs, dialogs, prompts).
+  - `Platform/`: their Avalonia implementations, which the application hands in (`App.axaml.cs`) and a test replaces.
 - **Assets**: `assets/` (the base manual, the icon, the UTF-8 manifest); the full manual, `UserManual.html`, at the
   root (Windows cannot hold it beside `usermanual.html`, whose name differs only in case); shipped settings in
   `settings/`; build and test scripts, and the props and targets every .NET project imports, in `eng/`; the vendored
@@ -753,7 +757,7 @@ that worktrees also need.
 
 The `add-stream-setting` skill is the checklist. In short:
 
-1. Add the field to the app's stream setup (`Streams/StreamSetup`, its defaults and rules) and to `StreamConfig`
+1. Add the field to the app's stream setup (`Models/Streams/StreamSetup`, its defaults and rules) and to `StreamConfig`
    (`src/TmDq.Core/RunTypes.cs`), and to the core's job input it travels in, through the ABI.
 2. Surface it in the setup dialog's view model, in Apply to all if it should propagate, and in the template file.
 3. If it must round-trip to a TOML file, add it to the core's format (`framesyncfile` or the receiver-parameters file,

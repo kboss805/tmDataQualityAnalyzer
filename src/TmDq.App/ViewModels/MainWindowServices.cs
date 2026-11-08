@@ -1,7 +1,7 @@
 using System;
-using TmDq.App.Processing;
+using TmDq.App.Models.Processing;
+using TmDq.App.Models.Settings;
 using TmDq.App.Services;
-using TmDq.App.Settings;
 
 namespace TmDq.App.ViewModels
 {
