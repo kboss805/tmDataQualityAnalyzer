@@ -11,7 +11,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Shipping application** (from v3.0.0): the Avalonia 12 application on .NET 10 (`src/TmDq.App`) over the native
   core (`tmdq_core.dll`), packaged by `deploy/avalonia/build_avalonia_package.ps1`. Up to v2.14.2 the application was
   Qt 6; `docs/changelog.md` records the move.
-- **Project Version**: 3.0.0 — defined once in the `AppVersion` struct in `src/core/include/constants.h`; `eng/AppVersion.props` reads it for every assembly, and the package script and the manual build read it too, so no other file carries a duplicate version literal
+- **Project Version**: 3.1.0 — defined once in the `AppVersion` struct in `src/core/include/constants.h`; `eng/AppVersion.props` reads it for every assembly, and the package script and the manual build read it too, so no other file carries a duplicate version literal
 
 ## User Stories
 

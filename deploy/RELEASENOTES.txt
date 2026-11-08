@@ -1,3 +1,35 @@
+tmDataQualityAnalyzer v3.1.0 - What's New
+=================================
+
+  Upgrading from v2.x - please read:
+
+  - Your window preferences now start fresh. v3.0.0 brought over the
+    preferences v2.x kept (the theme, whether the log sidebar and the legend
+    are shown, your recent files, and the folders you last opened files
+    from); v3.1.0 no longer does, and starts with the defaults instead. Your
+    settings files - frame sync patterns, receiver parameter files and
+    calibration step files - are kept, exactly as before.
+
+    To keep your v2.x preferences, install v3.0.0 first and start it once
+    (it brings them over), then install v3.1.0.
+
+  - Upgrading from v3.0.0 keeps everything.
+
+  Improved:
+
+  - The application has its own icon again: in the title bar, the taskbar,
+    Alt+Tab, Explorer and the Start menu. v3.0.0 showed a generic one.
+
+  - The plot's single-key shortcuts - L, V, R, Backspace, Home, the arrow
+    keys, + and - - now act only when pressed on their own. Ctrl+R or Ctrl+L
+    no longer reset the view or hide the legend by accident. + still works
+    with Shift, as most keyboards type it, and the keypad's + and - still
+    zoom.
+
+  - The user manual's pictures show this version. Some still showed the
+    window of v2.14.2.
+
+
 tmDataQualityAnalyzer v3.0.0 - What's New
 =================================
 

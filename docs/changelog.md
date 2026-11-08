@@ -10,7 +10,12 @@ the paths, class names and baselines in an entry are the ones of its day. Two mo
 (`docs/dotnet-migration/avalonia-plan.md`, which the "plan step" numbers below refer to) was deleted in 6.5, its steps
 recorded here; and the parity review and soak records moved from `docs/dotnet-migration/` to `docs/records/`.
 
-### Unreleased
+### v3.1.0 — Clean-up, and v2.x's preferences no longer imported
+
+The first release after the move off Qt: the application gains its icon (v3.0.0 shipped without one), the plot's keys act
+only when pressed alone, the manual's figures show this version, and the one-time import of v2.x's preferences
+goes, as planned for after 3.0.x. Underneath, the repository is in its final layout (`src/`, `tests/`, `eng/`,
+`third_party/`), the application in MVVM's usual shape, and the Qt-era leftovers cleared.
 
 #### A build outside a developer prompt finds mt.exe
 
