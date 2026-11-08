@@ -31,6 +31,17 @@
             "problemMatcher": ["$msCompile"]
         },
         {
+            "label": "Build app (Release)",
+            "detail": "The native core and the Avalonia application in Release: the core runs about three times faster than its Debug build.",
+            "type": "shell",
+            "command": "powershell.exe",
+            "args": ["-ExecutionPolicy", "Bypass", "-Command",
+                     "powershell -ExecutionPolicy Bypass -File eng/build_core_dll.ps1 -Configuration Release; if ($LASTEXITCODE) { exit $LASTEXITCODE }; $env:Platform = $null; dotnet build src/TmDq.App -c Release -nologo"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": "build",
+            "problemMatcher": ["$msCompile"]
+        },
+        {
             "label": "Native tests",
             "type": "shell",
             "command": "powershell.exe",
