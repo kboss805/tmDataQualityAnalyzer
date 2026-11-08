@@ -12,6 +12,36 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### No brushes in the view models, and a test that holds the layers apart
+
+The second of the three steps that bring the application to MVVM's usual shape. Nothing looks or behaves differently.
+
+- **The view models make no brushes.** Customize View's rows, receivers and channels report their `Color`; the batch
+  confirmation's rows already reported whether a file matches; Extract Calibration already reported each status's
+  kind. The windows paint them through three converters in `Views/StatusBrushes.cs`, with the same colours as before
+  (v2.x's green, goldenrod, red and gray). `GlyphBrush`, `StepBrush`, `CalBrush`, `BrushOf` and the three `Brush`
+  properties are gone.
+- **Avalonia's `Color` stays** in the series, the plot's prompts and the template file: a plain four-byte value, and
+  templates read colour text through its parser. Replacing it was weighed and declined.
+- **`TemplateBatch`, a model, no longer takes the plot.** Its `Build` and `ApplyAppearance`, which read and change the
+  `PlotViewModel`, moved unchanged to `ViewModels/Plot/PlotTemplates.cs`.
+- **`LayerTests`** reads every model, view model and service type as compiled: its signatures and the types and
+  members its methods' code names, the compiler's lambdas and state machines included. It fails on a model that reaches
+  a view model, a service, a view or `Platform`; on a view model or service that reaches a view or `Platform`; and on
+  any of them that reaches Avalonia beyond `Color` and `Colors`. A third case proves the reading sees what it must: a
+  view's base type, and a type a picker names only inside its async code.
+- **Tests:** the ones that read the old brushes read the colour, the match or the status instead, and check the
+  converters' colours. Two now check the window as well: the batch confirmation's glyphs are green and red, and
+  Customize View's receiver names are in their colours. A recoloured SNR channel now has to say so (`Color` changed).
+
+Checked: mutation check (`eng\mutate.ps1`, a `C:\tmp` worktree), 12 mutants, all **caught**: a brush made inside a view
+model's method, a brush back in a view model's signature, a model calling into a view model, a view model naming a
+view, a model reaching Avalonia through a brush (`LayerTests`); the glyph colours swapped, the glyph's binding replaced
+by a fixed colour, every swatch gray, the step line painted by the calibration file's status, a recolour not announced,
+a receiver in its last channel's colour (the window and view-model tests); a template's colours not put back by the
+moved `ApplyAppearance` (`TemplateTests`). App suite **612 passed / 0 failed**, 34 not run (was 608: `LayerTests`' three
+cases and the batch window's glyph test).
+
 #### The application in folders by MVVM layer
 
 The first of three steps that bring the application to MVVM's usual shape. Files move and their namespaces follow

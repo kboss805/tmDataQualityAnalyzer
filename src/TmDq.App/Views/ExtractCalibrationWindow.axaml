@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:TmDq.App.ViewModels"
+        xmlns:v="using:TmDq.App.Views"
         x:Class="TmDq.App.Views.ExtractCalibrationWindow"
         x:DataType="vm:ExtractCalibrationViewModel"
         Title="{x:Static vm:ExtractCalibrationViewModel.Title}"
@@ -16,14 +17,14 @@
       <Button x:Name="BrowseStep" Grid.Row="0" Grid.Column="2" Content="Browse..." Command="{Binding BrowseStepCommand}"
               ToolTip.Tip="Browse for the step calibration configuration TOML file that defines the RF signal step levels." />
       <TextBlock x:Name="StepStatus" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding StepStatus}"
-                 Foreground="{Binding StepBrush}" TextWrapping="Wrap" MaxWidth="420" />
+                 Foreground="{Binding StepKind, Converter={x:Static v:StatusBrushes.Calibration}}" TextWrapping="Wrap" MaxWidth="420" />
 
       <TextBlock Grid.Row="3" Grid.Column="0" Text="Calibration Ch10:" VerticalAlignment="Center" />
       <TextBlock x:Name="CalName" Grid.Row="3" Grid.Column="1" Text="{Binding CalName}" MinWidth="260" VerticalAlignment="Center" />
       <Button x:Name="BrowseCal" Grid.Row="3" Grid.Column="2" Content="Browse..." Command="{Binding BrowseCalCommand}"
               ToolTip.Tip="Browse for the calibration Chapter 10 recording file. The last folder you used will be remembered." />
       <TextBlock x:Name="CalStatus" Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding CalStatus}"
-                 Foreground="{Binding CalBrush}" TextWrapping="Wrap" MaxWidth="420" />
+                 Foreground="{Binding CalKind, Converter={x:Static v:StatusBrushes.Calibration}}" TextWrapping="Wrap" MaxWidth="420" />
 
       <TextBlock Grid.Row="6" Grid.Column="0" Text="Clip Start (s):" VerticalAlignment="Center" />
       <NumericUpDown x:Name="ClipStart" Grid.Row="6" Grid.Column="1" Width="150" HorizontalAlignment="Left"

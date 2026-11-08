@@ -60,7 +60,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] A saved template round-trips the same per-stream settings the Configure Streams dialog captures (frame-sync, SNR, calibration references), and — optionally — per-series names/colors.
   - **Scope:** Matching is **exact channel-ID set** (a file must have the same PCM channel IDs as the template, no more/fewer) — decided for simplicity; revisit if a looser "subset" match is ever needed. This story is orthogonal to US2.2 (apply-to-all *within* one file). Templates carry **no file paths** — settings only, applied to whatever files the user picks. The only batch entry point is **Apply Template** (there is no direct multi-file open, and no Add/Remove Source); templates are the sole way to configure a batch.
   - **Config application:** each file's run feeds the template's `StreamConfig`s through unchanged (`TemplateBatch.ToRunRequest`); the reader dispatches each stream by `pcmChannelId`, which is safe precisely because of the exact-set match. **Non-linear calibration:** a template stores only the calibration *input references* (not the extracted profile), so **all batch files process with the linear slope/offset fallback**. Non-linear step calibration is available for single-file processing only; re-extraction on template apply is a possible future add.
-  - **Custom names/colors:** captured only when **saving a template** from an already-processed, customized plot (`TemplateBatch.Build`), and reapplied per file after each run (`TemplateBatch.ApplyAppearance`, matched by channel id + metric/receiver/channel). Every file's copy of a channel intentionally shares the same name/color (they are the same channel across recordings); use the **Plot File** selector to view one file at a time when per-file distinction matters.
+  - **Custom names/colors:** captured only when **saving a template** from an already-processed, customized plot (`PlotTemplates.Build`), and reapplied per file after each run (`PlotTemplates.ApplyAppearance`, matched by channel id + metric/receiver/channel). Every file's copy of a channel intentionally shares the same name/color (they are the same channel across recordings); use the **Plot File** selector to view one file at a time when per-file distinction matters.
   - **Retain-all + file selector:** a batch always keeps every processed file in memory; the plot's right-click **Plot File** submenu chooses which file to view, defaulting to every source overlaid, with "All files (overlaid)" for comparison. The filter is a `PlotViewModel` source gate (`SetVisibleSource`) orthogonal to per-series visibility and the **View Mode** (lock %/accumulation) selector. Optional per-file export runs as a post-pass (`BatchRunner` shows each source alone, then writes its CSV, and a `_framesync_lock.png` and `_missed_frames.png`, through `SessionExport`).
   - **Status: implemented** (Save/Apply Template, one `BatchRunner` batch loop, retain-all + Plot File selector), every part tested in `TemplateTests` and `TemplateBatchTests`, the batch over copies of the committed PRN sample. See `docs/design/processing-template-design.md`.
 
@@ -453,7 +453,8 @@ Three layers, each tested on its own:
 3. **The application** (`src/TmDq.App`, MVVM): Avalonia views over CommunityToolkit.Mvvm view models. The
    presentation state (what is shown, the axes, the legend, the dialogs' rules, preferences, the template JSON) is C#;
    the data and every file format the core reads or writes are the core's. Views hold no rules: code-behind does only
-   what a control must (focus, pointer gestures, popups), and view models reach no control.
+   what a control must (focus, pointer gestures, popups), and view models reach no control. A view model reports
+  state (a colour, a match, a status) and the view paints it (`StatusBrushes`); `LayerTests` holds the layers apart.
 
 **Multi-source plots:** the plot can hold several recordings' series at once, and only the Apply Template batch puts
 them there. Every recording is a source with its own id, so two recordings that reuse a PCM channel id never mix, and
@@ -495,8 +496,9 @@ profile, so a batch processes with the linear calibration.
 - **Export and import** (`ExportViewModel`, `PlotImageExport`): the CSV through the core's writer (every series), the
   image through one Skia renderer for PNG, SVG and PDF (exactly what the chart shows), the log as text; Import CSV
   through the core's parser.
-- **Templates** (`Models/Templates`): `TemplateFile` (the JSON), `TemplateBatch` (matching, building a template from a
-  recording, putting its looks back, a file's run), the batch confirmation.
+- **Templates** (`Models/Templates`): `TemplateFile` (the JSON), `TemplateBatch` (matching, a file's run), and
+  beside the plot `PlotTemplates` (`ViewModels/Plot`: building a template from a recording's series, putting its looks
+  back); the batch confirmation.
 - **Preferences** (`Models/Settings`: `Preferences`, `PreferencesStore`, `QtSettingsImport`, `QtIni`): `preferences.json` in
   `%APPDATA%\tmDataQualityAnalyzer` (beside the exe for a portable copy), filled once from v2.x's INI file on the first
   run. The import stays through the v3.0.x releases, then goes.
@@ -888,6 +890,9 @@ helper every test cleans up and reads back through, which waits out a virus scan
   CSV), `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports).
 - **The shell:** `ShellTests` (title bar, menu, Recent Files, keys, drag and drop, themes, Help), `PreferencesTests`
   (the preferences file and v2.x's INI import), `MainWindowTests`.
+- **The layers:** `LayerTests` reads every model, view model and service type as compiled, its methods' code
+  included. It fails on a model that reaches a view model, a service, a view or `Platform`; on a view model or service
+  that reaches a view or `Platform`; and on any of them that reaches an Avalonia type other than `Color`.
 - **The manual:** `ManualFiguresTests` renders every figure and checks each caption's claims.
 - **The build and the release:** `VersionTests`, `VersionBuildTests`, `ManifestTests`, `ThirdPartyNoticesTests`,
   `PackageLicenceTests`, `LicenceBuildTests`, `IconTests` (the icon's sizes, its images in the built exe, and every

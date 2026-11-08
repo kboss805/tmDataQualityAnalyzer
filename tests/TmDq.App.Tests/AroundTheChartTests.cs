@@ -559,7 +559,7 @@ namespace TmDq.App.Tests
             Assert.Equal(new[] { "RCVR 3" }, s40.RightReceivers.Select(r => r.Label));
             Assert.Equal(new[] { "L", "R", "C" }, s40.LeftReceivers[0].Channels.Select(ch => ch.Label));
             Assert.All(s40.Receivers, r => Assert.False(r.IsExpanded));
-            Assert.Equal(plot.SeriesById(11)!.Color, ((ISolidColorBrush)s40.LeftReceivers[0].Brush).Color);   // channel L of RCVR 1
+            Assert.Equal(plot.SeriesById(11)!.Color, s40.LeftReceivers[0].Color);   // channel L of RCVR 1
             Assert.Equal(true, s40.LeftReceivers[0].IsChecked);
             Assert.Equal("CH 40 — 40 - CH-01 2250.5MHZ AGC C_RCVR1", s40.ToString());
 
@@ -659,8 +659,8 @@ namespace TmDq.App.Tests
             prompts.Answers.Enqueue(Colors.Teal);
             await c.LockRows[0].PickColorCommand.ExecuteAsync(null);
             Assert.Equal(plot.SeriesById(2)!.Color, prompts.LastColor);   // the dialog opens on the stream's colour
-            Assert.Equal(Colors.Teal, ((ISolidColorBrush)c.LockRows[0].Brush).Color);
-            Assert.Contains(nameof(LockStreamRow.Brush), rowSaid);   // the swatch repaints
+            Assert.Equal(Colors.Teal, c.LockRows[0].Color);
+            Assert.Contains(nameof(LockStreamRow.Color), rowSaid);   // the swatch repaints
             await c.LockRows[1].PickColorCommand.ExecuteAsync(null);   // cancelled
             Assert.Equal(plot.SeriesById(0)!.Color, c.LockRows[1].Color);
 
@@ -674,7 +674,8 @@ namespace TmDq.App.Tests
             Assert.Contains(nameof(ChannelItem.ToolTip), chSaid);
             prompts.Answers.Enqueue(Colors.Olive);
             await ch.RecolorCommand.ExecuteAsync(null);
-            Assert.Equal(Colors.Olive, ((ISolidColorBrush)ch.Brush).Color);
+            Assert.Equal(Colors.Olive, ch.Color);
+            Assert.Contains(nameof(ChannelItem.Color), chSaid);   // the name repaints
             // A second rename is seeded with the first.
             await ch.RenameCommand.ExecuteAsync(null);
             Assert.Equal("renamed", prompts.LastText.Initial);
@@ -1540,6 +1541,9 @@ namespace TmDq.App.Tests
             Assert.Equal("Expand All", w.FindControl<Button>("SnrExpand")!.Content);
             CheckBox header = (CheckBox)left[0].Header!;
             Assert.Equal("RCVR 1", header.Content);
+            // Each receiver's name, and each channel's, written in its series' colour.
+            Assert.Equal(c.SnrStreams[0].LeftReceivers[0].Color, ((ISolidColorBrush)header.Foreground!).Color);
+            Assert.Equal(c.SnrStreams[0].LeftReceivers[1].Channels[0].Color, ((ISolidColorBrush)((CheckBox)left[1].Header!).Foreground!).Color);
             header.IsChecked = false;
             Assert.All(c.SnrStreams[0].LeftReceivers[0].Channels, ch => Assert.False(ch.IsChecked));
             Press(w.FindControl<Button>("SnrExpand")!);

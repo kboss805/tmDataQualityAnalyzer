@@ -90,7 +90,7 @@ namespace TmDq.App.ViewModels
                     sources.Add(new ProcessedSource(sourceId, path, template.TimeChannelIndex, template.SwapBytes,
                                                     template.Entries.Select(e => e.Config).ToList()));
                     _plot.SetSourceLabel(sourceId, baseName);
-                    if (reuseAppearance) TemplateBatch.ApplyAppearance(template, sourceId, _plot);
+                    if (reuseAppearance) PlotTemplates.ApplyAppearance(template, sourceId, _plot);
                 }
                 catch (Exception e) when (e is OperationCanceledException or RecordingException)
                 {
