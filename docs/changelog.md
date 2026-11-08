@@ -10,6 +10,32 @@ the paths, class names and baselines in an entry are the ones of its day. Two mo
 (`docs/dotnet-migration/avalonia-plan.md`, which the "plan step" numbers below refer to) was deleted in 6.5, its steps
 recorded here; and the parity review and soak records moved from `docs/dotnet-migration/` to `docs/records/`.
 
+### Unreleased
+
+#### VS Code runs the application on the Release core
+
+Processing in the application run from VS Code took about three times as long as v2.14.2. The application itself was
+not the cause. VS Code's only launch entry, "App (Debug)", builds the native core in Debug, and the app copies that
+`tmdq_core.dll` (`out\Debug`) beside itself. The Debug core is unoptimised.
+
+Timed on the full PRN recording's first stream (`TMDQ_SMOKE_REPORT`, the real exe, unpinned, five rounds each,
+alternating), on an i7-14700KF:
+
+| Build | Time |
+|---|---|
+| Release core, CET on (what ships) | 4.35 s |
+| Release core, `CETCompat=false` (as v2.14.2 ran) | 4.14 s |
+| Debug core | about 14 s |
+
+The 5% between the first two is the CET shadow stack, as the soak measured (`docs/records/soak.md`).
+
+- **`.vscode/launch.json`:** a new first entry, "App (Release)", runs `bin\Release` after a new task, "Build app
+  (Release)" (`.vscode/tasks.json`), which builds the core and the app in Release. "App (Debug)" stays, for stepping
+  through the C#, and the file's header says which entry to use.
+- **Checked:** the new task's command, run from a shell with no developer prompt, builds the Release core and the app,
+  and puts the 666 KB Release `tmdq_core.dll` beside the exe, not the 2.8 MB Debug one. That exe processes the
+  recording to the same result. No code changed, so no suite or mutation check applies.
+
 ### v3.1.0 — Clean-up, and v2.x's preferences no longer imported
 
 The first release after the move off Qt: the application gains its icon (v3.0.0 shipped without one), the plot's keys act

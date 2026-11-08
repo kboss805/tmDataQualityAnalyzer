@@ -11,8 +11,21 @@
   //
   // A dev build keeps its preferences in %APPDATA%\tmDataQualityAnalyzer, which is your installed copy's: put a file
   // named "portable" beside the built exe to keep them beside it instead.
+  //
+  // To use the application, run "App (Release)": it runs on the Release core, as the shipped application does. "App
+  // (Debug)" is for stepping through the C#. It runs on the Debug core, which is unoptimised and processes a recording
+  // about three times slower (the full PRN recording's first stream: 14 s against 4.3 s).
   "version": "0.2.0",
   "configurations": [
+    {
+      "name": "App (Release)",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/TmDq.App/bin/Release/net10.0/tmDataQualityAnalyzer.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "preLaunchTask": "Build app (Release)"
+    },
     {
       "name": "App (Debug)",
       "type": "coreclr",
