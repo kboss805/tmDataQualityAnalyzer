@@ -4,10 +4,10 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using TmDq.App.Logging;
-using TmDq.App.Plot;
-using TmDq.App.Processing;
-using TmDq.App.Templates;
+using TmDq.App.Models.Logging;
+using TmDq.App.Models.Processing;
+using TmDq.App.Models.Templates;
+using TmDq.App.ViewModels.Plot;
 using TmDq.Core;
 
 namespace TmDq.App.ViewModels

@@ -9,7 +9,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Media.Immutable;
-using TmDq.App.Plot;
+using TmDq.App.ViewModels.Plot;
 using TmDq.Core;
 
 namespace TmDq.App.Views

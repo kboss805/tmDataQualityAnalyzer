@@ -4,8 +4,8 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using TmDq.App.Processing;
-using TmDq.App.Streams;
+using TmDq.App.Models.Processing;
+using TmDq.App.Models.Streams;
 using TmDq.Core;
 using Xunit;
 

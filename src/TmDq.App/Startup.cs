@@ -2,8 +2,8 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text;
-using TmDq.App.Plot;
 using TmDq.App.ViewModels;
+using TmDq.App.ViewModels.Plot;
 using TmDq.Core;
 
 namespace TmDq.App

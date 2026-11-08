@@ -7,8 +7,8 @@ using System.Threading.Tasks;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using TmDq.App.Models.Templates;
 using TmDq.App.Services;
-using TmDq.App.Templates;
 
 namespace TmDq.App.ViewModels
 {

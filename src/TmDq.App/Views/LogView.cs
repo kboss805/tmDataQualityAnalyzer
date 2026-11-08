@@ -6,7 +6,7 @@ using Avalonia.Controls.Documents;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Threading;
-using TmDq.App.Logging;
+using TmDq.App.Models.Logging;
 
 namespace TmDq.App.Views
 {

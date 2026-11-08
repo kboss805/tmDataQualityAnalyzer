@@ -6,8 +6,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using CommunityToolkit.Mvvm.Input;
-using TmDq.App.Plot;
+using TmDq.App.Platform;
 using TmDq.App.Services;
+using TmDq.App.ViewModels.Plot;
 
 namespace TmDq.App.Views
 {

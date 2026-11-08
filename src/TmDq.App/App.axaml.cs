@@ -4,9 +4,10 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
-using TmDq.App.Processing;
+using TmDq.App.Models.Processing;
+using TmDq.App.Models.Settings;
+using TmDq.App.Platform;
 using TmDq.App.Services;
-using TmDq.App.Settings;
 using TmDq.App.ViewModels;
 using TmDq.App.Views;
 

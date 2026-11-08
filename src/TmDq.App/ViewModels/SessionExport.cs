@@ -2,9 +2,9 @@ using System;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
-using TmDq.App.Logging;
-using TmDq.App.Plot;
+using TmDq.App.Models.Logging;
 using TmDq.App.Services;
+using TmDq.App.ViewModels.Plot;
 
 namespace TmDq.App.ViewModels
 {

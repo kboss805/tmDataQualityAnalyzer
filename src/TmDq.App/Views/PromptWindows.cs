@@ -4,7 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using TmDq.App.Plot;
+using TmDq.App.ViewModels.Plot;
 
 namespace TmDq.App.Views
 {

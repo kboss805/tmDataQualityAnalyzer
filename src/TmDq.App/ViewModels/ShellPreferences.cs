@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using TmDq.App.Settings;
+using TmDq.App.Models.Settings;
 
 namespace TmDq.App.ViewModels
 {
@@ -38,7 +38,7 @@ namespace TmDq.App.ViewModels
         }
 
         /// <summary><paramref name="path"/>, in full, at the top of Recent Files.</summary>
-        public void AddRecentFile(string path) => SetRecentFiles(Settings.RecentFiles.Add(RecentFiles, Path.GetFullPath(path)));
+        public void AddRecentFile(string path) => SetRecentFiles(Models.Settings.RecentFiles.Add(RecentFiles, Path.GetFullPath(path)));
 
         /// <summary>The dark theme (v2.x's default too) or the light one.</summary>
         public bool IsDarkTheme

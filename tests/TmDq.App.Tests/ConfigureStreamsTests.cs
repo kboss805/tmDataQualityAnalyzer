@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using TmDq.App.Plot;
-using TmDq.App.Processing;
-using TmDq.App.Streams;
+using TmDq.App.Models.Processing;
+using TmDq.App.Models.Streams;
+using TmDq.App.Services;
 using TmDq.App.ViewModels;
+using TmDq.App.ViewModels.Plot;
 using TmDq.Core;
 using Xunit;
 
