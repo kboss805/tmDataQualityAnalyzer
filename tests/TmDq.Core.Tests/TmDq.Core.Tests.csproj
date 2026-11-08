@@ -9,7 +9,7 @@
     library opens files with the C runtime's NARROW open(), which reads that code page: without it a non-ASCII
     path cannot reach the core from managed code. The SDK's ApplicationManifest property embeds a manifest in the
     managed assembly, NOT in the apphost exe that is the actual process, so it is merged into the exe after the
-    build with mt.exe (the Windows SDK; on PATH after eng\env.ps1). A test asserts the code page, so a missing
+    build with mt.exe (the Windows SDK, found by eng\WindowsSdkTools.targets). A test asserts the code page, so a missing
     manifest fails loudly instead of quietly skipping the non-ASCII check.
   -->
 
@@ -35,8 +35,8 @@
     <ProjectReference Include="..\..\src\TmDq.Core\TmDq.Core.csproj" />
   </ItemGroup>
 
-  <Target Name="EmbedUtf8Manifest" AfterTargets="Build">
-    <Exec Command="mt -nologo -manifest &quot;$(MSBuildProjectDirectory)\app.manifest&quot; -outputresource:&quot;$(OutDir)$(AssemblyName).exe;#1&quot;"
+  <Target Name="EmbedUtf8Manifest" AfterTargets="Build" DependsOnTargets="TmDqFindMt">
+    <Exec Command="&quot;$(TmDqMt)&quot; -nologo -manifest &quot;$(MSBuildProjectDirectory)\app.manifest&quot; -outputresource:&quot;$(OutDir)$(AssemblyName).exe;#1&quot;"
           ContinueOnError="false" />
   </Target>
 

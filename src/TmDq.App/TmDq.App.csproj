@@ -9,8 +9,8 @@
     - The exe carries a manifest selecting the UTF-8 active code page (app.manifest), because the vendored
       irig106 library opens recordings with the C runtime's NARROW open(), which reads that code page. The SDK's
       ApplicationManifest property embeds a manifest in the managed assembly, NOT in the apphost exe that is
-      the process (found while the port was being tried out), so mt.exe (the Windows SDK; on PATH after
-      eng\env.ps1) merges it into every host the SDK creates, which reaches both the build output and a
+      the process (found while the port was being tried out), so mt.exe (the Windows SDK, found by
+      eng\WindowsSdkTools.targets with no developer prompt needed) merges it into every host the SDK creates, which reaches both the build output and a
       single-file publish (the targets below). Run the exe, not `dotnet run`, whose process is dotnet.exe with its
       own manifest.
   -->
@@ -85,14 +85,14 @@
        a single-file publish bundles its own host from obj\, and shipped with the SDK's default manifest, no UTF-8 code
        page and no Windows 10 compatibility (found in plan step 3.3). One target per host, because a target runs at
        most once per build and the hosts are created at different points of it. -->
-  <Target Name="TmDqManifestIntoAppHost" AfterTargets="_CreateAppHost" Condition="Exists('$(AppHostIntermediatePath)')">
-    <Exec Command="mt -nologo -manifest &quot;$(MSBuildProjectDirectory)\app.manifest&quot; -outputresource:&quot;$(AppHostIntermediatePath);#1&quot;" />
+  <Target Name="TmDqManifestIntoAppHost" AfterTargets="_CreateAppHost" DependsOnTargets="TmDqFindMt" Condition="Exists('$(AppHostIntermediatePath)')">
+    <Exec Command="&quot;$(TmDqMt)&quot; -nologo -manifest &quot;$(MSBuildProjectDirectory)\app.manifest&quot; -outputresource:&quot;$(AppHostIntermediatePath);#1&quot;" />
   </Target>
-  <Target Name="TmDqManifestIntoSingleFileHost" AfterTargets="_CreateSingleFileHost" Condition="Exists('$(SingleFileHostIntermediatePath)')">
-    <Exec Command="mt -nologo -manifest &quot;$(MSBuildProjectDirectory)\app.manifest&quot; -outputresource:&quot;$(SingleFileHostIntermediatePath);#1&quot;" />
+  <Target Name="TmDqManifestIntoSingleFileHost" AfterTargets="_CreateSingleFileHost" DependsOnTargets="TmDqFindMt" Condition="Exists('$(SingleFileHostIntermediatePath)')">
+    <Exec Command="&quot;$(TmDqMt)&quot; -nologo -manifest &quot;$(MSBuildProjectDirectory)\app.manifest&quot; -outputresource:&quot;$(SingleFileHostIntermediatePath);#1&quot;" />
   </Target>
-  <Target Name="TmDqManifestIntoPublishHost" AfterTargets="_CreateAppHostForPublish" Condition="Exists('$(AppHostForPublishIntermediatePath)')">
-    <Exec Command="mt -nologo -manifest &quot;$(MSBuildProjectDirectory)\app.manifest&quot; -outputresource:&quot;$(AppHostForPublishIntermediatePath);#1&quot;" />
+  <Target Name="TmDqManifestIntoPublishHost" AfterTargets="_CreateAppHostForPublish" DependsOnTargets="TmDqFindMt" Condition="Exists('$(AppHostForPublishIntermediatePath)')">
+    <Exec Command="&quot;$(TmDqMt)&quot; -nologo -manifest &quot;$(MSBuildProjectDirectory)\app.manifest&quot; -outputresource:&quot;$(AppHostForPublishIntermediatePath);#1&quot;" />
   </Target>
 
 </Project>

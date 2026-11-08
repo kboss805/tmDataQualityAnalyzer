@@ -10,4 +10,7 @@
 
   <Import Project="eng\PackageLicences.targets" Condition="'$(MSBuildProjectExtension)' == '.csproj'" />
 
+  <!-- Where mt.exe is, for the manifest merges, without a developer prompt. -->
+  <Import Project="eng\WindowsSdkTools.targets" Condition="'$(MSBuildProjectExtension)' == '.csproj'" />
+
 </Project>
