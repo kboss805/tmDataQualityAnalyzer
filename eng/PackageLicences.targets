@@ -2,14 +2,14 @@
 
   <!--
     Plan decision D5: every NuGet package a project resolves, transitive ones included, must carry an open-source
-    licence on the allow-list in scripts\check_package_licences.ps1, so a proprietary component (an Avalonia
+    licence on the allow-list in eng\check_package_licences.ps1, so a proprietary component (an Avalonia
     Accelerate package, say) cannot arrive through a NuGet suggestion. A package outside it fails the build.
 
     It runs after the package assets are resolved, and again only when the assets file changes (the stamp file).
   -->
 
   <PropertyGroup>
-    <TmDqLicenceScript>$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)..\scripts\check_package_licences.ps1'))</TmDqLicenceScript>
+    <TmDqLicenceScript>$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)check_package_licences.ps1'))</TmDqLicenceScript>
   </PropertyGroup>
 
   <!-- The stamp's path is written in the target, not in a property above: a project imports this file before the

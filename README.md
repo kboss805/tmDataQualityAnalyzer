@@ -100,7 +100,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
   - **.NET 10 SDK** - the application (`src/TmDq.App`, Avalonia 12) and the C# library over the native core
     (`src/TmDq.Core`).
   - **MSVC 2022** (Visual Studio 2022 C++ Build Tools, workload "Desktop development with C++", with the Windows SDK) -
-    the native core, `tmdq_core.dll` (`native/`, C++20, MSBuild).
+    the native core, `tmdq_core.dll` (`src/core`, C++20, MSBuild).
   - **Inno Setup 6** - only for the installer.
 
 ## Building the Project
@@ -109,18 +109,18 @@ Everything is in `tmdq.sln`. From a PowerShell prompt at the repository root:
 
 ```powershell
 # The native core, then its doctest suite
-powershell -ExecutionPolicy Bypass -File scripts\build_core_dll.ps1 -Configuration Release
-powershell -ExecutionPolicy Bypass -File scripts\test_native.ps1 -Configuration Release
+powershell -ExecutionPolicy Bypass -File eng\build_core_dll.ps1 -Configuration Release
+powershell -ExecutionPolicy Bypass -File eng\test_native.ps1 -Configuration Release
 
 # The C# library's tests and the application's tests, against that DLL
-powershell -ExecutionPolicy Bypass -File scripts\test_dotnet.ps1 -Configuration Release
-powershell -ExecutionPolicy Bypass -File scripts\test_app.ps1 -Configuration Release
+powershell -ExecutionPolicy Bypass -File eng\test_dotnet.ps1 -Configuration Release
+powershell -ExecutionPolicy Bypass -File eng\test_app.ps1 -Configuration Release
 
 # The release packages (signed; pass -SignCertSha1 '' for an unsigned build)
 powershell -ExecutionPolicy Bypass -File deploy\avalonia\build_avalonia_package.ps1
 ```
 
-The scripts find MSVC themselves (`scripts\env.ps1`). `.claude/CLAUDE.md` and `docs/claude.md` describe each one, the
+The scripts find MSVC themselves (`eng\env.ps1`). `.claude/CLAUDE.md` and `docs/claude.md` describe each one, the
 test baselines and the release process.
 
 ## Usage
@@ -152,27 +152,28 @@ test baselines and the release process.
 ```text
 tmDataQualityAnalyzer/
 ├── .claude/                    # Claude Code: the session guide (CLAUDE.md), shared settings, project skills
+├── assets/                     # The base user manual (compiled into the app), the icon, the UTF-8 manifest
 ├── deploy/                     # Release packaging and its clean-machine test
 │   ├── avalonia/               # build_avalonia_package.ps1, the Inno Setup script, signing
 │   ├── sandbox/                # Windows Sandbox install-and-upgrade test (Smart App Control)
 │   └── RELEASENOTES.txt        # The installer's "What's New" page
 ├── docs/                       # Developer guide (claude.md), changelog, logic notes, records, manual sources
-├── eng/                        # The MSBuild props and targets every .NET project imports (version, licence check)
-├── include/                    # The native core's headers (no Qt): constants.h, dto/, model/
+├── eng/                        # Build, test, manual and release-check scripts, and the MSBuild props and targets
+├── settings/                   # The shipped TOML settings: frame sync patterns, receiver parameters, step files
 ├── src/                        # The product code
-│   ├── model/                  # The native core: Chapter 10 reading, decommutation, calibration, file formats
+│   ├── core/                   # The native core, tmdq_core.dll (C++20, MSBuild; no Qt)
+│   │   ├── include/            # Its headers: constants.h, dto/, model/
+│   │   ├── src/                # Chapter 10 reading, decommutation, calibration, file formats
+│   │   └── abi/                # The C ABI the .NET side calls (tmdq_abi.h)
 │   ├── TmDq.App/               # The Avalonia 12 application (MVVM, CommunityToolkit.Mvvm)
 │   └── TmDq.Core/              # The C# binding of the native core's C ABI
-├── native/                     # tmdq_core.dll (MSBuild): the C ABI over the core, and the doctest suite
-├── lib/                        # Third-party: irig106 (do NOT edit - adapt in the core) and doctest
-├── tests/                      # The .NET test projects, and what every suite reads
+├── tests/                      # Every test suite, and what they read
+│   ├── core/                   # The native core's doctest suite
 │   ├── TmDq.App.Tests/         # The application's tests, on Avalonia's headless platform (xunit v3)
 │   ├── TmDq.Core.Tests/        # The C# library's tests, running the committed recordings through it
 │   ├── data/                   # The committed .ch10 recordings
 │   └── fixtures/               # Small files the suites read
-├── settings/                   # The shipped TOML settings: frame sync patterns, receiver parameters, step files
-├── resources/                  # The base user manual (compiled into the app), the icon, the UTF-8 manifest
-├── scripts/                    # Build, test, manual and release-check scripts
+├── third_party/                # irig106 (do NOT edit - adapt in the core) and doctest
 ├── UserManual.html             # The full illustrated manual, shipped beside the application
 └── tmdq.sln                    # The solution: the native core, its tests, and the .NET projects
 ```

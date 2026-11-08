@@ -41,7 +41,7 @@ frame.Save(@"C:\tmp\look.png");                // then READ the image back and l
 - **Small chrome** (a chip, a title-bar button): capture, then crop and scale the region up before
   judging; a 1:1 render of a 30 px button is too small to read.
 - **The manual's figures** are this technique already: `ManualFiguresTests` sets up each scene,
-  checks its caption's claims and renders it (`scripts\build_manual.ps1` keeps them).
+  checks its caption's claims and renders it (`eng\build_manual.ps1` keeps them).
 
 Then **actually look at the image**. Do not infer from the numbers.
 

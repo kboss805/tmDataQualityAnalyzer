@@ -29,7 +29,7 @@ namespace TmDq.App.Tests
     /// <para>
     /// Explicit: most runs read recordings that are not committed (the full recordings, gigabytes, and the local ones
     /// under tests/data), so the tests are listed but not run unless asked for, and a missing recording fails rather than
-    /// skips. <c>scripts\run_soak.ps1</c> runs them, one process a run. With <c>TMDQ_SOAK_OUT</c> set each run also writes
+    /// skips. <c>eng\run_soak.ps1</c> runs them, one process a run. With <c>TMDQ_SOAK_OUT</c> set each run also writes
     /// its CSV, a 1600 x 900 image of its plot in the light theme and <c>result.json</c> (the CSV's length and SHA-256, the
     /// time the run took, the process's peak working set, the log) to a folder of its own there; <c>TMDQ_SOAK_ONLY</c>
     /// (run names, comma separated) narrows the runs listed.

@@ -12,7 +12,7 @@ name: CI
 # build still fails if the image ever gains a Qt, so the proof cannot quietly lapse. The
 # small .ch10 fixtures are committed, so every suite runs here. The heavy PRN throughput
 # benchmark is opt-in (TMDQA_RUN_HEAVY_BENCH) and needs the full recording, which is not
-# committed: it is run at release (scripts\run_throughput_bench.ps1), not here.
+# committed: it is run at release (eng\run_throughput_bench.ps1), not here.
 #
 # Windows steps use `shell: powershell` (Windows PowerShell 5.1), NOT `pwsh`: it is the
 # shell the build scripts are written for and tested under (they also run under 7), and
@@ -35,7 +35,7 @@ concurrency:
 
 jobs:
   ci:
-    # windows-2022, not windows-latest: the build is pinned to Visual Studio 2022 (MSVC 14.44, v143; scripts\env.ps1
+    # windows-2022, not windows-latest: the build is pinned to Visual Studio 2022 (MSVC 14.44, v143; eng\env.ps1
     # asks vswhere for [17.0,18.0)), which is what releases are built with. windows-latest carries Visual Studio 2026
     # (MSVC 14.51), so a job there never builds with the release compiler.
     runs-on: windows-2022
@@ -51,7 +51,7 @@ jobs:
           # runs before the build and fails fast. -ReleaseMode is deliberately NOT
           # passed: an "Unreleased" changelog section is correct between releases and
           # is only an error at packaging time (build_avalonia_package.ps1 passes it there).
-          powershell -ExecutionPolicy Bypass -File scripts\check_release_consistency.ps1
+          powershell -ExecutionPolicy Bypass -File eng\check_release_consistency.ps1
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Set up MSVC (cl / msbuild / dumpbin / mt)
@@ -122,7 +122,7 @@ jobs:
           # are gated by explicit $LASTEXITCODE checks.
           $ErrorActionPreference = 'Continue'
           foreach ($cfg in 'Debug', 'Release') {
-            powershell -ExecutionPolicy Bypass -File scripts\build_core_dll.ps1 -Configuration $cfg
+            powershell -ExecutionPolicy Bypass -File eng\build_core_dll.ps1 -Configuration $cfg
             if ($LASTEXITCODE -ne 0) { throw "tmdq_core.dll ($cfg) failed the build or its import check" }
           }
 
@@ -132,7 +132,7 @@ jobs:
           # The core's own tests: doctest, built by MSBuild. The script requires zero compiler
           # warnings and no Qt import, then runs them.
           $ErrorActionPreference = 'Continue'
-          powershell -ExecutionPolicy Bypass -File scripts\test_native.ps1 -Configuration Release
+          powershell -ExecutionPolicy Bypass -File eng\test_native.ps1 -Configuration Release
           if ($LASTEXITCODE -ne 0) { throw "the native tests failed" }
 
       - name: Managed tests (TmDq.Core against the native DLL)
@@ -142,7 +142,7 @@ jobs:
           # above. The script builds with warnings as errors and merges the UTF-8 code-page manifest
           # into the test exe (mt.exe).
           $ErrorActionPreference = 'Continue'
-          powershell -ExecutionPolicy Bypass -File scripts\test_dotnet.ps1 -Configuration Release
+          powershell -ExecutionPolicy Bypass -File eng\test_dotnet.ps1 -Configuration Release
           if ($LASTEXITCODE -ne 0) { throw "the managed tests failed" }
 
       - name: App tests (Avalonia, headless)
@@ -151,5 +151,5 @@ jobs:
           # The Avalonia application (src/TmDq.App) and its tests on the headless platform, which needs
           # no window system; the script prints the account and session it runs as, so the log records it.
           $ErrorActionPreference = 'Continue'
-          powershell -ExecutionPolicy Bypass -File scripts\test_app.ps1 -Configuration Release
+          powershell -ExecutionPolicy Bypass -File eng\test_app.ps1 -Configuration Release
           if ($LASTEXITCODE -ne 0) { throw "the app tests failed" }

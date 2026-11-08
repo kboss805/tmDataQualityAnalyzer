@@ -18,7 +18,7 @@ each suite has its house style and helpers. Build and run with the **build-and-t
 
 | Code under test | Suite | Where |
 | --- | --- | --- |
-| The core (`include/`, `src/model/`) and the C ABI (`native/tmdq_core/`) | doctest | `native/tmdq_core_tests/test_<name>.cpp` |
+| The core (`src/core/include/`, `src/core/src/`) and the C ABI (`src/core/abi/`) | doctest | `tests/core/test_<name>.cpp` |
 | The C# binding (`src/TmDq.Core`) | xunit v3 | `tests/TmDq.Core.Tests/<Name>Tests.cs` |
 | The application (`src/TmDq.App`) | xunit v3 on `Avalonia.Headless.XUnit` | `tests/TmDq.App.Tests/<Name>Tests.cs` |
 
@@ -27,7 +27,7 @@ each suite has its house style and helpers. Build and run with the **build-and-t
 - **A case:** `TEST_CASE("<Suite>: <what it holds, as a sentence>")` with `CHECK`/`REQUIRE`, `INFO`
   for context in loops, `SUBCASE` sparingly. Doubles compare with an explicit tolerance or
   `doctest::Approx`.
-- **A new file must be added to `native/tmdq_core_tests/tmdq_core_tests.vcxproj`** (`<ClCompile
+- **A new file must be added to `tests/core/tmdq_core_tests.vcxproj`** (`<ClCompile
   Include="test_<name>.cpp" />`). MSBuild compiles only what the project lists, so a file left out is
   a suite that silently never runs. `NativeProjectTests` (the managed suite) fails until it is listed.
 - **Files the tests read:** `repoFile("tests/data/test files/<recording>")`, `repoFile("settings/...")`,
@@ -76,6 +76,6 @@ A test that cannot fail proves nothing (`docs/claude.md`, Working Method). For e
 code once and watch the test fail:
 
 - by hand for one or two, restoring the file byte for byte after;
-- for more, with `scripts\mutate.ps1` and a JSON list of exact-text mutants, run from a worktree
-  (`git worktree add C:\tmp\<name>`). Its header documents the list format; `scripts\mutants\example.json`
+- for more, with `eng\mutate.ps1` and a JSON list of exact-text mutants, run from a worktree
+  (`git worktree add C:\tmp\<name>`). Its header documents the list format; `eng\mutants\example.json`
   is the sample. A survivor is a missing test, not a shrug: close it, or record why it is equivalent.

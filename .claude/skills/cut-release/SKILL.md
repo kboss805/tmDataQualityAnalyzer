@@ -23,11 +23,11 @@ build derive the rest, update the human-facing notes, then package. Do the steps
 
 Semantic-ish: patch for fixes/polish, minor for new user-facing features (a new US), major for big
 shifts. Confirm the target version with the user if it isn't explicit. Current version lives in
-`include/constants.h` (`AppVersion::kMajor/kMinor/kPatch`).
+`src/core/include/constants.h` (`AppVersion::kMajor/kMinor/kPatch`).
 
 ## Step 2 — Bump the single source of truth
 
-Edit **only** `include/constants.h`:
+Edit **only** `src/core/include/constants.h`:
 
 ```cpp
 struct AppVersion {
@@ -65,9 +65,9 @@ update it only if install/run instructions changed.)
 
 These reach users but nothing in CI exercises them, so they rot silently:
 
-- **The manuals** — `resources/usermanual.html` (Help > User Manual, compiled into the app) and
+- **The manuals** — `assets/usermanual.html` (Help > User Manual, compiled into the app) and
   `UserManual.html` (the full manual, shipped beside it). Their subtitle and footer carry the version from
-  `AppVersion`, stamped by `powershell -ExecutionPolicy Bypass -File scripts\build_manual.ps1 -NoCapture`
+  `AppVersion`, stamped by `powershell -ExecutionPolicy Bypass -File eng\build_manual.ps1 -NoCapture`
   after the bump (drop `-NoCapture` to re-render the figures when the UI changed). The manual read
   "Version 2.7.0" at v2.9.0; the consistency check below is why that cannot recur.
 - **`README.md`** — the system requirements, the build commands and the repo tree.
@@ -77,7 +77,7 @@ These reach users but nothing in CI exercises them, so they rot silently:
 **Run the consistency check rather than grepping by hand:**
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\check_release_consistency.ps1 -ReleaseMode
+powershell -ExecutionPolicy Bypass -File eng\check_release_consistency.ps1 -ReleaseMode
 ```
 
 It derives the version from `AppVersion` and asserts every user-facing literal matches, that the
@@ -97,13 +97,13 @@ it deliberately every release rather than assuming the figures are fine.
 ## Step 5 — Verify before building
 
 Run every suite, each against the baseline in `.claude/CLAUDE.md`: the native core
-(`scripts\test_native.ps1`, after `scripts\build_core_dll.ps1`), the managed library
-(`scripts\test_dotnet.ps1`) and the app (`scripts\test_app.ps1`), all with zero warnings. After a change
-to processing, the plot's series or the CSV writer, also run the soak (`scripts\run_soak.ps1`), which
+(`eng\test_native.ps1`, after `eng\build_core_dll.ps1`), the managed library
+(`eng\test_dotnet.ps1`) and the app (`eng\test_app.ps1`), all with zero warnings. After a change
+to processing, the plot's series or the CSV writer, also run the soak (`eng\run_soak.ps1`), which
 holds the app to the bytes v2.14.2 exported. Then run the throughput guard:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\run_throughput_bench.ps1
+powershell -ExecutionPolicy Bypass -File eng\run_throughput_bench.ps1
 ```
 
 It builds the native tests in **Release** (the benchmark is only meaningful against an optimised
@@ -112,7 +112,7 @@ cores** and prints a ratio block. It fails unless doctest reports that exactly t
 passed.
 
 **The benchmark is a native doctest case now**, "PipelineRunner throughput: ..." in
-`native/tmdq_core_tests/test_pipelinerunner.cpp`; it measures `PipelineRunner`. It used to be the Qt
+`tests/core/test_pipelinerunner.cpp`; it measures `PipelineRunner`. It used to be the Qt
 suite's one standing skip — opt-in behind `TMDQA_RUN_HEAVY_BENCH`, nothing set that variable, and
 *it asserted nothing even when it ran*, so the decommutation pipeline had no performance guard at
 all and the suite's "413/0/1" baseline was that hole. The script sets the variable, the benchmark

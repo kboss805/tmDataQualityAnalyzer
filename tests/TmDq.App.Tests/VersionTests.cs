@@ -8,7 +8,7 @@ using Xunit;
 namespace TmDq.App.Tests
 {
     /// <summary>
-    /// The version is written once, in AppVersion (include/constants.h), and eng/AppVersion.props reads it
+    /// The version is written once, in AppVersion (src/core/include/constants.h), and eng/AppVersion.props reads it
     /// into every assembly. These tests read the header themselves, with their own pattern, and require every
     /// place the version reaches to agree with it, so a project the import misses (and ships 1.0.0) fails.
     /// </summary>
@@ -17,7 +17,7 @@ namespace TmDq.App.Tests
         /// <summary>"major.minor.patch" from AppVersion's three definitions.</summary>
         public static string HeaderVersion()
         {
-            string text = File.ReadAllText(Repo.File(Path.Combine("include", "constants.h")));
+            string text = File.ReadAllText(Repo.File(Path.Combine("src", "core", "include", "constants.h")));
             string Number(string name)
             {
                 MatchCollection found = Regex.Matches(text, @"static\s+constexpr\s+int\s+" + name + @"\s*=\s*(\d+)\s*;");

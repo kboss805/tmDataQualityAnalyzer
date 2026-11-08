@@ -3,13 +3,13 @@
   <!--
     Tests of TmDq.Core against the real native core: they load tmdq_core.dll and run the committed recordings
     through it. An xunit v3 test project is an executable: run bin\<Configuration>\net10.0\TmDq.Core.Tests.exe
-    directly (scripts\test_dotnet.ps1 builds and runs it).
+    directly (eng\test_dotnet.ps1 builds and runs it).
 
     The exe carries a manifest selecting the UTF-8 active code page (app.manifest), because the vendored irig106
     library opens files with the C runtime's NARROW open(), which reads that code page: without it a non-ASCII
     path cannot reach the core from managed code. The SDK's ApplicationManifest property embeds a manifest in the
     managed assembly, NOT in the apphost exe that is the actual process, so it is merged into the exe after the
-    build with mt.exe (the Windows SDK; on PATH after scripts\env.ps1). A test asserts the code page, so a missing
+    build with mt.exe (the Windows SDK; on PATH after eng\env.ps1). A test asserts the code page, so a missing
     manifest fails loudly instead of quietly skipping the non-ASCII check.
   -->
 

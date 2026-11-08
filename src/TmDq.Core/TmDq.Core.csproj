@@ -2,7 +2,7 @@
 
   <!--
     The managed side of the native core: a typed, disposable wrapper over the flat C ABI in
-    native/tmdq_core/tmdq_abi.h, which tmdq_core.dll implements. No UI, no application logic - what it
+    src/core/abi/tmdq_abi.h, which tmdq_core.dll implements. No UI, no application logic - what it
     adds to the DLL is lifetime (handles that cannot leak or be used after they are released), text
     (UTF-8 in and out), callbacks (native threads delivered to a managed observer) and errors
     (a status becomes an exception carrying the library's own message).

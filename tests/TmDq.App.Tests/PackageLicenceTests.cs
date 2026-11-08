@@ -10,7 +10,7 @@ using Xunit;
 namespace TmDq.App.Tests
 {
     /// <summary>
-    /// scripts\check_package_licences.ps1, which every .NET project here runs after restore (plan decision D5: no
+    /// eng\check_package_licences.ps1, which every .NET project here runs after restore (plan decision D5: no
     /// package outside the open-source allow-list, so no Avalonia Accelerate component can arrive). Each case writes
     /// a packages folder and an assets file of its own and runs the real script, as the build does.
     /// </summary>
@@ -76,7 +76,7 @@ namespace TmDq.App.Tests
                 CreateNoWindow = true,
             };
             foreach (string a in new[] { "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
-                                         Repo.File(Path.Combine("scripts", "check_package_licences.ps1")), "-AssetsFile", assets })
+                                         Repo.File(Path.Combine("eng", "check_package_licences.ps1")), "-AssetsFile", assets })
                 start.ArgumentList.Add(a);
             using Process process = Process.Start(start)!;
             string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
@@ -248,7 +248,7 @@ namespace TmDq.App.Tests
             // project. A project they miss (a condition that is never true for it, a project that opts out) is not
             // checked at all, and ships 1.0.0, and its own build cannot notice either: so ask MSBuild what each project
             // evaluates to.
-            string script = Path.GetFullPath(Repo.File(Path.Combine("scripts", "check_package_licences.ps1")));
+            string script = Path.GetFullPath(Repo.File(Path.Combine("eng", "check_package_licences.ps1")));
             string version = VersionTests.HeaderVersion();
             foreach (string project in new[] { "TmDq.Core", "TmDq.Core.Tests", "TmDq.App", "TmDq.App.Tests" })
             {

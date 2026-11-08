@@ -2,7 +2,7 @@
 
   <!--
     The version of every assembly that ships, read from the one place it is written: AppVersion in
-    include/constants.h (kMajor, kMinor, kPatch). deploy/avalonia/build_avalonia_package.ps1, the installer and
+    src/core/include/constants.h (kMajor, kMinor, kPatch). deploy/avalonia/build_avalonia_package.ps1, the installer and
     the manuals read the same three numbers, so the app cannot drift from its release.
     Never type a version in a .csproj; import this instead.
 
@@ -10,7 +10,7 @@
   -->
 
   <PropertyGroup>
-    <TmDqVersionSource>$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)..\include\constants.h'))</TmDqVersionSource>
+    <TmDqVersionSource>$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)..\src\core\include\constants.h'))</TmDqVersionSource>
     <TmDqVersionText Condition="Exists('$(TmDqVersionSource)')">$([System.IO.File]::ReadAllText('$(TmDqVersionSource)'))</TmDqVersionText>
     <TmDqVersionMajor>$([System.Text.RegularExpressions.Regex]::Match('$(TmDqVersionText)', 'kMajor\s*=\s*\d+').Value)</TmDqVersionMajor>
     <TmDqVersionMinor>$([System.Text.RegularExpressions.Regex]::Match('$(TmDqVersionText)', 'kMinor\s*=\s*\d+').Value)</TmDqVersionMinor>

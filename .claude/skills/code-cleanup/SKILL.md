@@ -41,7 +41,7 @@ Before flagging a function, class, file, or constant as unused:
    `.claude/CLAUDE.md`'s "Memory" section). Design decisions and prior review remediation live
    here, not just in the code — the `loadCsvFile` case above is exactly this.
 3. **Check whether it's a test-only symbol.** A helper called only from the test projects
-   (`native/tmdq_core_tests`, `tests/*.Tests`) is not orphaned — it's doing its job. Grep them
+   (`tests/core`, `tests/*.Tests`) is not orphaned — it's doing its job. Grep them
    explicitly rather than trusting a search of the product code alone.
 4. **Check for uses no C# or C++ call site shows.** A property or command bound by name in `.axaml`
    (`{Binding Name}`), a member CommunityToolkit.Mvvm generates (`[ObservableProperty]`, `[RelayCommand]`),
@@ -55,18 +55,18 @@ planned feature, an in-progress branch).
 
 ## What's off-limits
 
-`lib/irig106/**` is third-party and protected — never edit it, and never flag it for cleanup even if
+`third_party/irig106/**` is third-party and protected — never edit it, and never flag it for cleanup even if
 something in it looks dead, unused, or oddly styled by this project's conventions. It is maintained
 upstream; this project's job is to wrap it, not tidy it. (See `.claude/CLAUDE.md` "Hard rules".)
 
 ## Finding orphaned code
 
-This is naturally a broad sweep across `include/`, `src/`, `native/` and `tests/` — if you're running it as an
+This is naturally a broad sweep across `src/` (the core in `src/core`, the .NET projects beside it) and `tests/` — if you're running it as an
 agent, consider delegating the initial grep pass to an Explore agent rather than doing dozens of
 searches inline.
 
 **Files**: cross-check what's on disk against what's actually built. `NativeProjectTests` already fails on
-a `.cpp` the native projects do not list; a header in `include/` that nothing includes is dead weight it
+a `.cpp` the native projects do not list; a header in `src/core/include/` that nothing includes is dead weight it
 cannot see. The .NET projects compile every `.cs` under their folder, so a dead C# file still builds:
 look for types nothing uses.
 
@@ -104,7 +104,7 @@ it:
 (nothing fails to compile when a comment goes stale). Two spots worth checking every sweep:
 
 - **The Test Suites catalog.** Compare its list of suites and coverage claims against the test files
-  actually there (`native/tmdq_core_tests/test_*.cpp`, `tests/*.Tests/*Tests.cs`). A suite renamed, extended, or
+  actually there (`tests/core/test_*.cpp`, `tests/*.Tests/*Tests.cs`). A suite renamed, extended, or
   removed without updating its one-paragraph description is silent drift that compounds over
   releases.
 - **User Story acceptance criteria.** Spot-check a story or two against the behavior it actually

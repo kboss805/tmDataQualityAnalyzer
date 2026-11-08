@@ -15,7 +15,7 @@ description: >-
 
 A per-stream setting is chosen in a stream's setup dialog (Configure Streams' gear) and has to reach
 `FrameProcessor` to affect anything. `Randomized` (Derandomize) takes the whole path, so follow it:
-`grep -rn -i randomized src/TmDq.App src/TmDq.Core native/tmdq_core include src/model`.
+`grep -rn -i randomized src/TmDq.App src/TmDq.Core src/core`.
 
 Decide two things first, because they gate which steps apply:
 
@@ -36,10 +36,10 @@ Decide two things first, because they gate which steps apply:
    v2.x wrote; read with a default when the key is missing (older templates), write it in the same
    form. `TemplateTests` holds the format byte for byte.
 5. **The C# binding and the ABI** — `src/TmDq.Core/RunTypes.cs` (`StreamConfig`),
-   `ProcessingRun.cs` (marshalling), `Native.cs` (the struct), and `native/tmdq_core/tmdq_abi.h` plus
+   `ProcessingRun.cs` (marshalling), `Native.cs` (the struct), and `src/core/abi/tmdq_abi.h` plus
    `abi_run.cpp`. A field added to an ABI struct changes its size: append it, bump the ABI revision
    (and `Library.MinimumRevision`), and update the layout pins on both sides (`tmdq_sizeof`).
-6. **Persistence, only if it belongs to the file** — the core's format (`src/model/framesyncfile.cpp`
+6. **Persistence, only if it belongs to the file** — the core's format (`src/core/src/framesyncfile.cpp`
    for a pattern file, the receiver-parameters reader in `framesetup.cpp`), both through
    `TomlDocument`, symmetric in load and save, and its ABI functions and binding (`abi_formats.cpp`,
    `Formats.cs`). The app's Load/Save is `Streams/StreamFiles.cs`. **The boundary:** a pattern file
@@ -47,12 +47,12 @@ Decide two things first, because they gate which steps apply:
    `Randomized`); Data Rate and Sample Rate are per-session and stay out; calibration profiles are
    never serialised. A file without the new key keeps the operator's choice (US8.0: readers default
    what a file does not carry).
-7. **The job** — `include/model/streamjobbuilder.h` (`StreamJobConfig`) and `src/model/streamjobbuilder.cpp`,
+7. **The job** — `src/core/include/model/streamjobbuilder.h` (`StreamJobConfig`) and `src/core/src/streamjobbuilder.cpp`,
    into `ProcessingParams` (and `FrameSetup` if it affects the word map). **A raw-affecting setting goes
-   through `applyAcquisition`** (`include/model/framesync.h`), which the calibration extractor shares, so
+   through `applyAcquisition`** (`src/core/include/model/framesync.h`), which the calibration extractor shares, so
    extraction sees it too; then carry it in the calibration request (`calibrationrequest.cpp`,
    `abi_calibration.cpp`, `Calibration.cs`, `ExtractCalibrationViewModel`).
-8. **The effect** — `src/model/frameprocessor.cpp`. Honour the invariants (the **tm-code-review**
+8. **The effect** — `src/core/src/frameprocessor.cpp`. Honour the invariants (the **tm-code-review**
    skill): average raw counts before calibrating, bit-span lock %, no missed-frame double count.
 
 ## Tests, at every layer (the **write-test** skill)
@@ -67,7 +67,7 @@ Decide two things first, because they gate which steps apply:
 - **the soak manifest** (`tests/TmDq.App.Tests/Soak/soak.json`) states every setting of every run, so
   add the new one there with its default.
 
-Then mutation-check each layer's line (`scripts\mutate.ps1`): a mutant that drops the field at any one
+Then mutation-check each layer's line (`eng\mutate.ps1`): a mutant that drops the field at any one
 layer must fail a test.
 
 ## Verify
