@@ -276,7 +276,7 @@ namespace TmDq.App.Tests
                 new StreamSetup { PcmChannelId = 14, Label = "Ch 14" },
                 new StreamSetup { PcmChannelId = 26, Label = "Rx", Mode = StreamMode.ReceiverChannelInfo, Process = true },
             };
-            ProcessingTemplate t = TemplateBatch.Build(new ProcessedSource(1, @"C:\data\flight.12.ch10", 2, false, rows), plot);
+            ProcessingTemplate t = PlotTemplates.Build(new ProcessedSource(1, @"C:\data\flight.12.ch10", 2, false, rows), plot);
             Assert.Equal((AppInfo.Version, "flight", 2, false), (t.AppVersion, t.Name, t.TimeChannelIndex, t.SwapBytes));
             Assert.Equal(rows, t.Entries.Select(e => e.Config));
             Assert.Equal(new[]
@@ -315,7 +315,7 @@ namespace TmDq.App.Tests
             });
             int refreshes = 0;
             plot.SeriesChanged += (_, _) => refreshes++;
-            TemplateBatch.ApplyAppearance(template, 1, plot);
+            PlotTemplates.ApplyAppearance(template, 1, plot);
             Assert.Equal(1, refreshes);
             Assert.Equal(("Thirteen", Colors.Olive), (plot.SeriesById(0)!.Name, plot.SeriesById(0)!.Color));
             Assert.Equal(("Ch 13", before1), (plot.SeriesById(1)!.Name, plot.SeriesById(1)!.Color));   // the other recording's
@@ -324,7 +324,7 @@ namespace TmDq.App.Tests
             Assert.Equal(("Rx", before4), (plot.SeriesById(4)!.Name, plot.SeriesById(4)!.Color));   // the other receiver
 
             // Put back on the second recording, a look goes on its series, not the first recording's.
-            TemplateBatch.ApplyAppearance(new ProcessingTemplate("v", "n", 0, true, new[]
+            PlotTemplates.ApplyAppearance(new ProcessingTemplate("v", "n", 0, true, new[]
             {
                 new TemplateEntry(new StreamSetup { PcmChannelId = 13, Label = "Ch 13" },
                                   new[] { new SeriesAppearance(MetricType.FrameSyncLock, 0, 0, "Second", Colors.Teal) }),

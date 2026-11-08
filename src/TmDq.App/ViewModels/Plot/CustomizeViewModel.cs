@@ -167,7 +167,6 @@ namespace TmDq.App.ViewModels.Plot
         private bool _isChecked;
 
         [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(Brush))]
         private Color _color;
 
         [ObservableProperty]
@@ -188,8 +187,6 @@ namespace TmDq.App.ViewModels.Plot
         public string Label => string.Create(CultureInfo.InvariantCulture, $"CH {Order}");
 
         public IReadOnlyList<int> SeriesIds { get; }
-
-        public IBrush Brush => new SolidColorBrush(Color);
 
         [RelayCommand]
         private async Task PickColor()
@@ -234,7 +231,7 @@ namespace TmDq.App.ViewModels.Plot
         public IReadOnlyList<ChannelItem> Channels { get; }
 
         /// <summary>The group's text is in its first channel's colour.</summary>
-        public IBrush Brush => Channels.Count > 0 ? Channels[0].Brush : Brushes.Gray;
+        public Color Color => Channels.Count > 0 ? Channels[0].Color : Colors.Gray;
 
         /// <summary>True when every channel is checked, false when none is, null when some are. Setting it checks or clears
         /// them all; a click on a partly checked box checks them all, as v2.x's did (AroundTheChartTests).</summary>
@@ -296,7 +293,8 @@ namespace TmDq.App.ViewModels.Plot
         /// <summary>The name to be given on OK, as the channel's tooltip once one is chosen.</summary>
         public string? ToolTip => PendingName;
 
-        public IBrush Brush => new SolidColorBrush(_color);
+        /// <summary>The channel's colour, the recolour chosen once there is one.</summary>
+        public Color Color => _color;
 
         public bool IsChecked
         {
@@ -330,7 +328,7 @@ namespace TmDq.App.ViewModels.Plot
             {
                 PendingColor = picked;
                 _color = picked;
-                OnPropertyChanged(nameof(Brush));
+                OnPropertyChanged(nameof(Color));
             }
         }
     }

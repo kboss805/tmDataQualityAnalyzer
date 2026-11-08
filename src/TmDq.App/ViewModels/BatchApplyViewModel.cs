@@ -4,7 +4,6 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TmDq.App.Models.Templates;
@@ -16,8 +15,6 @@ namespace TmDq.App.ViewModels
     public sealed record BatchFileRow(FileCheck Check)
     {
         public string Glyph => Check.Ok ? "✓" : "✗";
-
-        public IBrush GlyphBrush => Check.Ok ? Brushes.Green : new SolidColorBrush(Color.FromRgb(0xCC, 0x00, 0x00));
 
         /// <summary>The file's name, then "  —  reason" for one that does not match.</summary>
         public string Text => Path.GetFileName(Check.FilePath) + (Check.Ok ? "" : "  —  " + Check.Reason);

@@ -4,7 +4,6 @@ using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TmDq.App.Models.Streams;
@@ -110,10 +109,6 @@ namespace TmDq.App.ViewModels
         public CalibrationStatusKind StepKind => _stepKind;
 
         public CalibrationStatusKind CalKind => _calKind;
-
-        public IBrush StepBrush => BrushOf(_stepKind);
-
-        public IBrush CalBrush => BrushOf(_calKind);
 
         /// <summary>Seconds left off the start of the calibration recording before steps are detected (0 to 100,000, one
         /// decimal); a change extracts again.</summary>
@@ -338,7 +333,6 @@ namespace TmDq.App.ViewModels
             _stepStatus = Marked(kind, text);
             OnPropertyChanged(nameof(StepKind));
             OnPropertyChanged(nameof(StepStatus));
-            OnPropertyChanged(nameof(StepBrush));
         }
 
         private void SetCal(CalibrationStatusKind kind, string text)
@@ -347,7 +341,6 @@ namespace TmDq.App.ViewModels
             _calStatus = Marked(kind, text);
             OnPropertyChanged(nameof(CalKind));
             OnPropertyChanged(nameof(CalStatus));
-            OnPropertyChanged(nameof(CalBrush));
         }
 
         /// <summary>A status line as v2.x wrote it: a tick, a warning sign or a cross before the text.</summary>
@@ -357,15 +350,6 @@ namespace TmDq.App.ViewModels
             CalibrationStatusKind.Warn => "⚠ " + text,
             CalibrationStatusKind.Fail => "✗ " + text,
             _ => text,
-        };
-
-        /// <summary>The status colours, v2.x's: green, the log's goldenrod, red, and gray while pending.</summary>
-        public static IBrush BrushOf(CalibrationStatusKind kind) => kind switch
-        {
-            CalibrationStatusKind.Ok => Brushes.Green,
-            CalibrationStatusKind.Warn => new SolidColorBrush(Color.FromRgb(0xDA, 0xA5, 0x20)),
-            CalibrationStatusKind.Fail => new SolidColorBrush(Color.FromRgb(0xCC, 0x00, 0x00)),
-            _ => Brushes.Gray,
         };
 
         private async Task BrowseStepAsync()

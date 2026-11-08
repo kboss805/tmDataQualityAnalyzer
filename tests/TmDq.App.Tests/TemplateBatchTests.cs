@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using TmDq.App.Models.Processing;
 using TmDq.App.Models.Streams;
 using TmDq.App.Models.Templates;
@@ -515,7 +516,8 @@ namespace TmDq.App.Tests
             Assert.Equal(new[] { @"C:\a\one.ch10" }, vm.Matched);
             Assert.Equal(("✓", "one.ch10", @"C:\a\one.ch10"), (vm.Rows[0].Glyph, vm.Rows[0].Text, vm.Rows[0].ToolTip));
             Assert.Equal(("✗", "two.ch10  —  extra channel(s): 9"), (vm.Rows[1].Glyph, vm.Rows[1].Text));
-            Assert.Equal((Colors.Green, Color.Parse("#CC0000")), (((ISolidColorBrush)vm.Rows[0].GlyphBrush).Color, ((ISolidColorBrush)vm.Rows[1].GlyphBrush).Color));
+            Assert.Equal((true, false), (vm.Rows[0].Check.Ok, vm.Rows[1].Check.Ok));
+            Assert.Equal((Colors.Green, Color.Parse("#CC0000")), (((ISolidColorBrush)StatusBrushes.OfMatch(true)).Color, ((ISolidColorBrush)StatusBrushes.OfMatch(false)).Color));
             Assert.Equal((false, true, @"C:\a"), (vm.ExportPerFile, vm.ReuseAppearance, vm.OutputFolder));
             Assert.True(vm.CanProcess);
             Assert.False(vm.BrowseCommand.CanExecute(null));
@@ -590,6 +592,19 @@ namespace TmDq.App.Tests
             Dispatcher.UIThread.RunJobs();
             Assert.True(shown.IsCompleted, "the confirmation is still open after Cancel.");
             owner.Close();
+        }
+
+        [AvaloniaFact]
+        public void TheConfirmationWindowColoursEachFilesGlyphByWhetherItMatches()
+        {
+            var checks = new[] { new FileCheck(@"C:\a\one.ch10", true, ""), new FileCheck(@"C:\a\two.ch10", false, "extra channel(s): 9") };
+            var window = new BatchApplyWindow { DataContext = new BatchApplyViewModel(checks, @"C:\a", new FakeTemplateFiles()) };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            TextBlock[] glyphs = window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text is "✓" or "✗").ToArray();
+            Assert.Equal(new[] { ("✓", Colors.Green), ("✗", Color.Parse("#CC0000")) },
+                         glyphs.Select(t => (t.Text ?? "", ((ISolidColorBrush)t.Foreground!).Color)));
+            window.Close();
         }
 
         [AvaloniaFact]

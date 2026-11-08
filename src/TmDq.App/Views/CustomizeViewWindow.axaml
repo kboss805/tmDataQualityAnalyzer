@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:plot="using:TmDq.App.ViewModels.Plot"
+        xmlns:v="using:TmDq.App.Views"
         x:Class="TmDq.App.Views.CustomizeViewWindow"
         x:DataType="plot:CustomizeViewModel"
         Title="Customize Plot Series"
@@ -19,12 +20,12 @@
     <DataTemplate x:Key="ReceiverTemplate" x:DataType="plot:ReceiverGroup">
       <Expander IsExpanded="{Binding IsExpanded}" HorizontalAlignment="Stretch" Padding="24,2,4,4">
         <Expander.Header>
-          <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked}" IsThreeState="False" Foreground="{Binding Brush}" />
+          <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked}" IsThreeState="False" Foreground="{Binding Color, Converter={x:Static v:StatusBrushes.FromColor}}" />
         </Expander.Header>
         <ItemsControl ItemsSource="{Binding Channels}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="plot:ChannelItem">
-              <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked}" Foreground="{Binding Brush}"
+              <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked}" Foreground="{Binding Color, Converter={x:Static v:StatusBrushes.FromColor}}"
                         ToolTip.Tip="{Binding ToolTip}">
                 <CheckBox.ContextMenu>
                   <ContextMenu>
@@ -61,7 +62,7 @@
                   <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6" Margin="0,2">
                     <CheckBox Grid.Column="0" Content="{Binding Label}" IsChecked="{Binding IsChecked}" MinWidth="80" />
                     <Button Grid.Column="1" Width="20" Height="14" Padding="0" MinWidth="0" MinHeight="0" Cursor="Hand"
-                            VerticalAlignment="Center" Background="{Binding Brush}" BorderBrush="#3C000000" BorderThickness="1"
+                            VerticalAlignment="Center" Background="{Binding Color, Converter={x:Static v:StatusBrushes.FromColor}}" BorderBrush="#3C000000" BorderThickness="1"
                             CornerRadius="0" Command="{Binding PickColorCommand}" ToolTip.Tip="Change series color" />
                     <TextBox Grid.Column="2" Text="{Binding Name}" ToolTip.Tip="Rename this stream's series" />
                   </Grid>

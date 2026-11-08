@@ -354,7 +354,7 @@ namespace TmDq.App.Tests
             Assert.Equal(("✓ a", "⚠ a", "✗ a", "a"),
                          (ExtractCalibrationViewModel.Marked(CalibrationStatusKind.Ok, "a"), ExtractCalibrationViewModel.Marked(CalibrationStatusKind.Warn, "a"),
                           ExtractCalibrationViewModel.Marked(CalibrationStatusKind.Fail, "a"), ExtractCalibrationViewModel.Marked(CalibrationStatusKind.Pending, "a")));
-            Color Of(CalibrationStatusKind k) => ((ISolidColorBrush)ExtractCalibrationViewModel.BrushOf(k)).Color;
+            Color Of(CalibrationStatusKind k) => ((ISolidColorBrush)StatusBrushes.Of(k)).Color;
             Assert.Equal((Colors.Green, Color.Parse("#DAA520"), Color.Parse("#CC0000"), Colors.Gray),
                          (Of(CalibrationStatusKind.Ok), Of(CalibrationStatusKind.Warn), Of(CalibrationStatusKind.Fail), Of(CalibrationStatusKind.Pending)));
             Assert.Equal("rcvr_cals", StreamFiles.StepCalFolder);

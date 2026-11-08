@@ -308,7 +308,7 @@ namespace TmDq.App.ViewModels
         {
             try
             {
-                TemplateFile.Write(path, TemplateBatch.Build(source, Plot));
+                TemplateFile.Write(path, PlotTemplates.Build(source, Plot));
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
