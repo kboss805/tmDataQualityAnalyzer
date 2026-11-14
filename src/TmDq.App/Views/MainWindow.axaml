@@ -11,6 +11,7 @@
         ExtendClientAreaToDecorationsHint="True"
         WindowDecorations="BorderOnly"
         ExtendClientAreaTitleBarHeightHint="40"
+        Background="{DynamicResource WindowBackground}"
         DragDrop.AllowDrop="True">
   <Window.KeyBindings>
     <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenCommand}" />
@@ -71,6 +72,14 @@
     </Style>
     <Style Selector="GridSplitter#Splitter:pointerover /template/ Border#Grip, GridSplitter#Splitter:pressed /template/ Border#Grip">
       <Setter Property="Background" Value="{DynamicResource SplitterGripHover}" />
+    </Style>
+    <!-- The log and the chart each sit in a panel of the same shape: a hairline border and rounded corners, set off from
+         the window's edges by the same gap (the chart is clipped to the corners in code: a Border does not clip). -->
+    <Style Selector="Border.panel">
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="BorderBrush" Value="{DynamicResource LogPanelBorder}" />
+      <Setter Property="ClipToBounds" Value="True" />
     </Style>
   </Window.Styles>
   <DockPanel>
@@ -147,14 +156,15 @@
         <ColumnDefinition Width="6" />
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
-      <Border x:Name="LogPanel" Grid.Column="0" Margin="2,4,0,4" BorderThickness="1" CornerRadius="4"
-              BorderBrush="{DynamicResource LogPanelBorder}" Background="{DynamicResource LogPanelBackground}"
+      <Border x:Name="LogPanel" Classes="panel" Grid.Column="0" Margin="2,4,0,4" Background="{DynamicResource LogPanelBackground}"
               IsVisible="{Binding SidebarVisible}">
         <views:LogView x:Name="Log" Entries="{Binding Log.Entries}" />
       </Border>
       <GridSplitter x:Name="Splitter" x:FieldModifier="public" Grid.Column="1" ResizeDirection="Columns"
                     IsVisible="{Binding SidebarVisible}" />
-      <views:PlotView x:Name="PlotView" Grid.Column="2" Plot="{Binding Plot}" />
+      <Border x:Name="PlotPanel" x:FieldModifier="public" Classes="panel" Grid.Column="2" Margin="0,4,2,4">
+        <views:PlotView x:Name="PlotView" Plot="{Binding Plot}" />
+      </Border>
     </Grid>
   </DockPanel>
 </Window>
