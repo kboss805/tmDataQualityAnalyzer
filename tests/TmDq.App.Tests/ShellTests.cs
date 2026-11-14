@@ -292,7 +292,7 @@ namespace TmDq.App.Tests
             window.SidebarButton.IsChecked = true;   // the toggle is the preference
             Dispatcher.UIThread.RunJobs();
             Assert.True(vm.SidebarVisible);
-            Assert.Equal((400.0, 4.0, true), (window.Body.ColumnDefinitions[0].Width.Value, window.Body.ColumnDefinitions[1].Width.Value, log.IsVisible));
+            Assert.Equal((400.0, MainWindow.SplitterWidth, true), (window.Body.ColumnDefinitions[0].Width.Value, window.Body.ColumnDefinitions[1].Width.Value, log.IsVisible));
             Assert.True(window.FindControl<GridSplitter>("Splitter")!.IsVisible);
 
             // A width the user dragged it to is the one it returns at.
@@ -319,6 +319,113 @@ namespace TmDq.App.Tests
             hidden.SidebarVisible = true;
             Assert.Equal(300, window.Body.ColumnDefinitions[0].Width.Value);
             window.Close();
+        }
+
+        [AvaloniaFact]
+        public void TheLogWrapsToTheWidthTheDividerDragsItToButNoNarrowerThanItsMinimum()
+        {
+            var vm = new MainWindowViewModel();
+            for (int i = 0; i < 6; i++)
+                vm.Log.Add("[CH 13 CH-01 PRN 15 5M] 67191764 bytes processed, 16369 syncs found, 16331 frames extracted " + i);
+            (MainWindow window, _) = Show(vm);
+            ColumnDefinition column = window.Body.ColumnDefinitions[0];
+            Border log = window.FindControl<Border>("LogPanel")!;
+            SelectableTextBlock text = log.GetVisualDescendants().OfType<SelectableTextBlock>().Single();
+            // Lines as laid out, not the text's bounds: in the scroll viewer it is stretched to the viewport's height.
+            int Lines() => text.TextLayout.TextLines.Count;
+            int at400 = Lines();
+
+            // Dragged by its divider. A minimum on the panel rather than the column kept it 400 wide in a narrower column,
+            // centred and cut off at both edges, its text wrapped as before.
+            void Drag(double dx)
+            {
+                Point from = Frames.InWindow(window.Splitter, window).Center;
+                window.MouseDown(from, MouseButton.Left, RawInputModifiers.None);
+                window.MouseMove(from + new Point(dx / 2, 0), RawInputModifiers.LeftMouseButton);
+                window.MouseMove(from + new Point(dx, 0), RawInputModifiers.LeftMouseButton);
+                window.MouseUp(from + new Point(dx, 0), MouseButton.Left, RawInputModifiers.None);
+                Dispatcher.UIThread.RunJobs();
+            }
+            void FitsItsColumn()
+            {
+                Rect panel = Frames.InWindow(log, window), t = Frames.InWindow(text, window);
+                Assert.True(panel.X >= 0 && panel.Right <= column.ActualWidth + 0.5, $"panel {panel} in a {column.ActualWidth} column");
+                Assert.True(t.X >= panel.X && t.Right <= panel.Right, $"text {t} in panel {panel}");
+            }
+
+            Drag(-150);
+            Assert.Equal(250, column.ActualWidth, 0.5);
+            FitsItsColumn();
+            Assert.True(Lines() > at400, $"{Lines()} lines at 250, {at400} at 400: it did not wrap");
+
+            Drag(-200);
+            Assert.Equal(MainWindow.LogMinWidth, column.ActualWidth, 0.5);
+            FitsItsColumn();
+
+            Drag(500);
+            Assert.Equal(700, column.ActualWidth, 0.5);
+            FitsItsColumn();
+            Assert.True(Lines() < at400, $"{Lines()} lines at 700, {at400} at 400: it did not unwrap");
+
+            // Hidden, the column has no minimum to hold it open; shown, it has it again.
+            vm.SidebarVisible = false;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal((0.0, 0.0), (column.MinWidth, column.ActualWidth));
+            vm.SidebarVisible = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal((MainWindow.LogMinWidth, 700.0), (column.MinWidth, column.ActualWidth));
+            window.Close();
+        }
+
+        [AvaloniaTheory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void TheDividerShowsWhereToDragAndAnswersThePointer(bool dark)
+        {
+            var app = (App)Application.Current!;
+            ThemeVariant? before = app.RequestedThemeVariant;
+            app.ApplyTheme(dark);
+            try
+            {
+                (MainWindow window, _) = Show();
+                GridSplitter splitter = window.Splitter;
+                Border grip = splitter.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "Grip");
+                Color Resource(string key)
+                {
+                    Assert.True(Application.Current!.TryFindResource(key, window.ActualThemeVariant, out object? b), key);
+                    return ((ISolidColorBrush)b!).Color;
+                }
+                Color Of(IBrush? brush) => brush is ISolidColorBrush b ? b.Color : Colors.Transparent;
+
+                // A short grip in the middle of the divider, in a shade off the window's background, drawn.
+                Assert.Equal(new Size(2, 36), grip.Bounds.Size);
+                Point centre = grip.TranslatePoint(new Point(1, 18), splitter)!.Value;
+                Assert.Equal(splitter.Bounds.Width / 2, centre.X, 0.5);
+                Assert.Equal(splitter.Bounds.Height / 2, centre.Y, 1.0);
+                Assert.Equal(MainWindow.SplitterWidth, splitter.Bounds.Width);
+                Assert.Equal(Resource("SplitterGrip"), Of(grip.Background));
+                Assert.Equal(Colors.Transparent, Of(splitter.Background));
+                using (ILockedFramebuffer fb = Frames.Capture(window).Lock())
+                {
+                    Rect g = Frames.InWindow(grip, window);
+                    Color drawn = Color.FromUInt32(0xFF000000 | Frames.Pixel(fb, (int)g.Center.X, (int)g.Center.Y));
+                    Assert.Equal(Resource("SplitterGrip"), drawn);
+                }
+
+                // Under the pointer the strip takes a shade and the grip brightens; away from it, both go back.
+                Point over = Frames.InWindow(splitter, window).Center + new Point(0, 100);
+                window.MouseMove(over, RawInputModifiers.None);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal((Resource("SplitterHover"), Resource("SplitterGripHover")), (Of(splitter.Background), Of(grip.Background)));
+                window.MouseMove(over + new Point(200, 0), RawInputModifiers.None);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal((Colors.Transparent, Resource("SplitterGrip")), (Of(splitter.Background), Of(grip.Background)));
+                window.Close();
+            }
+            finally
+            {
+                app.RequestedThemeVariant = before;
+            }
         }
 
         // ---- drag and drop -------------------------------------------------------------------------------------------
@@ -461,16 +568,19 @@ namespace TmDq.App.Tests
         public void EachThemesBrushesAreV214s()
         {
             string[] keys = { "ChipBackground", "ChipBorder", "ChipForeground", "ChipAccent", "LoadingBackground", "LoadingBorder", "LoadingForeground",
-                              "LogPanelBackground", "LogPanelBorder", "TitleBarHover" };
+                              "LogPanelBackground", "LogPanelBorder", "TitleBarHover", "SplitterGrip", "SplitterGripHover", "SplitterHover" };
             string[] Brushes(ThemeVariant theme) => keys.Select(k =>
             {
                 Assert.True(Application.Current!.TryFindResource(k, theme, out object? b), k);
                 Color c = ((ISolidColorBrush)b!).Color;
                 return $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}";
             }).ToArray();
-            Assert.Equal(new[] { "#B9FFFFFF", "#FFC8C8C8", "#FF1E1E1E", "#FF005FB8", "#E6FFFFFF", "#FFC8C8C8", "#FF1E1E1E", "#FFFFFFFF", "#FFE5E5E5", "#38808080" },
+            // v2.x's, but for the divider's three (v2.x drew its splitter's dotted grip in the style's colour).
+            Assert.Equal(new[] { "#B9FFFFFF", "#FFC8C8C8", "#FF1E1E1E", "#FF005FB8", "#E6FFFFFF", "#FFC8C8C8", "#FF1E1E1E", "#FFFFFFFF", "#FFE5E5E5", "#38808080",
+                                       "#FFC2C2C2", "#FF707070", "#FFE0E0E0" },
                          Brushes(ThemeVariant.Light));
-            Assert.Equal(new[] { "#B9202020", "#FF3C3C3C", "#FFDCDCDC", "#FF60CDFF", "#A0000000", "#FF3C3C3C", "#FFFFFFFF", "#FF202020", "#FF303030", "#38808080" },
+            Assert.Equal(new[] { "#B9202020", "#FF3C3C3C", "#FFDCDCDC", "#FF60CDFF", "#A0000000", "#FF3C3C3C", "#FFFFFFFF", "#FF202020", "#FF303030", "#38808080",
+                                       "#FF505050", "#FF9A9A9A", "#FF2A2A2A" },
                          Brushes(ThemeVariant.Dark));
             // The export and import arrows take each theme's shade; the folder and the floppy disk are the same in both.
             foreach (string icon in new[] { "ExportIcon", "ImportIcon" })

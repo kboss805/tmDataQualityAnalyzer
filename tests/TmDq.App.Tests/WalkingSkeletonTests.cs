@@ -298,13 +298,22 @@ namespace TmDq.App.Tests
             Rect area = Frames.InWindow(chart, window);
             Rect plot = new Rect(area.X + chart.PlotArea.X + 2, area.Y + chart.PlotArea.Y + 2, chart.PlotArea.Width - 4, chart.PlotArea.Height - 4);
 
-            int before;
-            uint background;
-            using (ILockedFramebuffer fb = Frames.Capture(window).Lock())
+            // The series are drawn in colour; the grid, the axes and the background are greys.
+            static int Coloured(ILockedFramebuffer fb, Rect r)
             {
-                background = Frames.Pixel(fb, (int)plot.Center.X, (int)plot.Center.Y);
-                before = Frames.CountDifferent(fb, plot, background);
+                int n = 0;
+                for (int y = (int)r.Top; y < (int)r.Bottom; y++)
+                    for (int x = (int)r.Left; x < (int)r.Right; x++)
+                    {
+                        uint p = Frames.Pixel(fb, x, y);
+                        int red = (int)(p >> 16) & 0xFF, green = (int)(p >> 8) & 0xFF, blue = (int)p & 0xFF;
+                        if (Math.Max(red, Math.Max(green, blue)) - Math.Min(red, Math.Min(green, blue)) > 30) n++;
+                    }
+                return n;
             }
+            int before;
+            using (ILockedFramebuffer fb = Frames.Capture(window).Lock())
+                before = Coloured(fb, plot);
 
             await vm.LoadAsync(Prn);
             Dispatcher.UIThread.RunJobs();
@@ -312,9 +321,9 @@ namespace TmDq.App.Tests
             Assert.Equal("prn_testfile, sample", vm.Plot.Title);
             int after;
             using (ILockedFramebuffer fb = Frames.Capture(window).Lock())
-                after = Frames.CountDifferent(fb, plot, background);
+                after = Coloured(fb, plot);
 
-            // An empty chart is a frame with nothing inside; 116 points across the plot are a line hundreds of pixels long.
+            // An empty chart is its grid with nothing plotted; 116 points across the plot are a line hundreds of pixels long.
             Assert.Equal(0, before);
             Assert.True(after > 500, $"only {after} pixels of the plot were drawn");
             window.Close();

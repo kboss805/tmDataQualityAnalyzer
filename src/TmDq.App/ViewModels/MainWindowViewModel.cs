@@ -166,9 +166,8 @@ namespace TmDq.App.ViewModels
             private set => SetProperty(ref _processing, value);
         }
 
-        public string VersionText => "Version " + AppInfo.Version;
-
-        /// <summary>One line saying what happened last, an error included.</summary>
+        /// <summary>One line saying what happened last, an error included. The window no longer shows it (the log does);
+        /// the tests read it as the last action's outcome.</summary>
         public string Status
         {
             get => _status;

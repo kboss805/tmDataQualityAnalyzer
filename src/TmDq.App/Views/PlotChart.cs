@@ -206,7 +206,7 @@ namespace TmDq.App.Views
             FormattedText title = Text(vm?.Title ?? PlotViewModel.DefaultTitle, Palette.Title, bold: true);
             dc.DrawText(title, new Point((size.Width - title.Width) / 2, OuterMargin / 2));
 
-            // Ticks need the core, which is loaded once there is data; an empty chart is a frame with its labels.
+            // Ticks need the core, which is loaded once there is data; an empty chart draws its own (DrawEmptyTicks).
             double[] xTicks = hasData ? ChartGeometry.TimeTicks(vm!.XViewMin, vm.XViewMax, XTickCount, vm.TimeOrigin) : Array.Empty<double>();
             double[] leftTicks = hasData && leftVisible ? ChartGeometry.Ticks(vm!.LeftMin, vm.LeftMax, YTickCount) : Array.Empty<double>();
             double[] rightTicks = hasData && rightVisible ? ChartGeometry.Ticks(vm!.RightMin, vm.RightMax, YTickCount) : Array.Empty<double>();
@@ -214,6 +214,7 @@ namespace TmDq.App.Views
 
             // The grid: dotted, at the X ticks and at the Y ticks of the axis drawn (the left when both are).
             var gridPen = new ImmutablePen(new ImmutableSolidColorBrush(Palette.Grid), 1, new ImmutableDashStyle(new[] { 1.0, 2.0 }, 0));
+            if (!hasData) DrawEmptyTicks(dc, area, vm, leftVisible, gridPen);
             foreach (double t in xTicks)
             {
                 double px = ChartGeometry.XToPixel(left, t);
@@ -238,6 +239,35 @@ namespace TmDq.App.Views
             }
 
             DrawAxes(dc, size, area, vm, xTicks, leftTicks, rightTicks, left, right, leftVisible, rightVisible);
+        }
+
+        /// <summary>
+        /// The empty chart's grid and ticks, as v2.x drew them before a recording was opened: <see cref="XTickCount"/>
+        /// and <see cref="YTickCount"/> evenly spaced across the plot area, with the left axis's values (0 to 100 for
+        /// lock percentage) beside its ticks. There is no time yet, so the time axis has its marks but no labels (v2.x's
+        /// read "000:00:00:00" nine times over). Drawn here rather than by the core, which is loaded only once a
+        /// recording opens.
+        /// </summary>
+        private void DrawEmptyTicks(DrawingContext dc, Rect area, PlotViewModel? vm, bool leftVisible, IPen gridPen)
+        {
+            var pen = new ImmutablePen(new ImmutableSolidColorBrush(Palette.Foreground), 1);
+            for (int i = 0; i < XTickCount; i++)
+            {
+                double px = area.Left + area.Width * i / (XTickCount - 1);
+                dc.DrawLine(gridPen, new Point(px, area.Top), new Point(px, area.Bottom));
+                dc.DrawLine(pen, new Point(px, area.Bottom), new Point(px, area.Bottom + TickLength));
+            }
+            if (!leftVisible) return;
+            double lower = vm?.LeftMin ?? PlotViewModel.LockAxisMin, upper = vm?.LeftMax ?? PlotViewModel.LockAxisMax;
+            for (int i = 0; i < YTickCount; i++)
+            {
+                double py = area.Bottom - area.Height * i / (YTickCount - 1);
+                dc.DrawLine(gridPen, new Point(area.Left, py), new Point(area.Right, py));
+                dc.DrawLine(pen, new Point(area.Left - TickLength, py), new Point(area.Left, py));
+                double value = lower + (upper - lower) * i / (YTickCount - 1);
+                FormattedText label = Text(value.ToString("F1", CultureInfo.InvariantCulture), Palette.Foreground);
+                dc.DrawText(label, new Point(area.Left - TickLength - 2 - label.Width, py - label.Height / 2));
+            }
         }
 
         private void DrawSeries(DrawingContext dc, PlotSeries s, ChartView view)

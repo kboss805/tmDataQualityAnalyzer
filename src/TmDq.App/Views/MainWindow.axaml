@@ -6,7 +6,7 @@
         x:Class="TmDq.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding Title}"
-        Width="1280" Height="800"
+        Width="1920" Height="1080" WindowStartupLocation="CenterScreen"
         MinWidth="640" MinHeight="400"
         ExtendClientAreaToDecorationsHint="True"
         WindowDecorations="BorderOnly"
@@ -52,6 +52,25 @@
     <Style Selector="Grid#TitleBar ToggleButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource TitleBarHover}" />
       <Setter Property="Foreground" Value="{DynamicResource ToggleButtonForeground}" />
+    </Style>
+    <!-- The divider between the log and the chart: a short grip, a shade off the window's background, that says where to
+         drag; under the pointer, or dragged, the strip takes a shade too and the grip brightens. -->
+    <Style Selector="GridSplitter#Splitter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Name="Track" Background="{TemplateBinding Background}" CornerRadius="3">
+            <Border Name="Grip" Width="2" Height="36" CornerRadius="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="{DynamicResource SplitterGrip}" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="GridSplitter#Splitter:pointerover, GridSplitter#Splitter:pressed">
+      <Setter Property="Background" Value="{DynamicResource SplitterHover}" />
+    </Style>
+    <Style Selector="GridSplitter#Splitter:pointerover /template/ Border#Grip, GridSplitter#Splitter:pressed /template/ Border#Grip">
+      <Setter Property="Background" Value="{DynamicResource SplitterGripHover}" />
     </Style>
   </Window.Styles>
   <DockPanel>
@@ -117,21 +136,23 @@
       <Button x:Name="CloseButton" x:FieldModifier="public" Grid.Column="5" Classes="caption" Content="&#xE8BB;" ToolTip.Tip="Close"
               Click="OnClose" chrome:WindowDecorationProperties.ElementRole="CloseButton" />
     </Grid>
-    <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="8,4">
-      <TextBlock x:Name="StatusText" Grid.Column="0" Text="{Binding Status}" TextTrimming="CharacterEllipsis"
-                 VerticalAlignment="Center" />
-      <TextBlock x:Name="VersionLabel" Grid.Column="1" Text="{Binding VersionText}" Margin="16,0,0,0"
-                 VerticalAlignment="Center" />
-    </Grid>
-    <!-- The log sidebar on the left (v2.x's place and minimum width), the chart beside it; the toggle in the
-         title bar hides it. Progress is in the modal progress dialog while a run goes on, as in v2.x. -->
-    <Grid x:Name="Body" x:FieldModifier="public" ColumnDefinitions="400,4,*">
-      <Border x:Name="LogPanel" Grid.Column="0" MinWidth="400" Margin="2,4,0,4" BorderThickness="1" CornerRadius="4"
+    <!-- No status bar under the log and the chart: what it said, the log says (the version is the log's first line).
+         The log sidebar on the left (v2.x's place and width), the chart beside it; the toggle in the title bar hides it.
+         The divider drags the log as narrow as its column's minimum, and the log wraps to the width it is given (the
+         minimum is the column's, not the panel's: a panel wider than its column was cut off at both edges). Progress is
+         in the modal progress dialog while a run goes on, as in v2.x. -->
+    <Grid x:Name="Body" x:FieldModifier="public">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="400" MinWidth="200" />
+        <ColumnDefinition Width="6" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <Border x:Name="LogPanel" Grid.Column="0" Margin="2,4,0,4" BorderThickness="1" CornerRadius="4"
               BorderBrush="{DynamicResource LogPanelBorder}" Background="{DynamicResource LogPanelBackground}"
               IsVisible="{Binding SidebarVisible}">
         <views:LogView x:Name="Log" Entries="{Binding Log.Entries}" />
       </Border>
-      <GridSplitter x:Name="Splitter" Grid.Column="1" ResizeDirection="Columns" Background="Transparent"
+      <GridSplitter x:Name="Splitter" x:FieldModifier="public" Grid.Column="1" ResizeDirection="Columns"
                     IsVisible="{Binding SidebarVisible}" />
       <views:PlotView x:Name="PlotView" Grid.Column="2" Plot="{Binding Plot}" />
     </Grid>

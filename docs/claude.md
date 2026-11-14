@@ -164,6 +164,8 @@ The stories below follow the workflow a first-time user takes through the applic
 **Acceptance Criteria:**
 
 - [x] The plot fills the central area of the main application window (it is the window's central widget; the log occupies a toggleable left sidebar).
+- [x] Before anything is plotted the chart shows its empty grid, as v2.x's did: the left axis's values (0.0 to 100.0) and the time axis's tick marks, with no time labels until there is a time.
+- [x] The main window opens at 1920 x 1080, centred, as v2.x's did (no larger than the screen's working area), with no status bar under the log and the chart: the log says what one would.
 - [x] The chart occupies the entire plot area: there are no external control rows. Every plot control is reached from a **right-click context menu** on the chart, whose items are disabled until data is loaded.
 - [x] The context menu provides: **Plot File** (which processed file to view), **View Mode** (Lock Percentage / Accumulation), **Customize View…**, **Set Plot Title…**, **Show Legend** (checkable), **X Axis** (Set Time Window… / Zoom Back / Reset Span), **Y Axes** (Set Left Min… / Set Left Max… / Set Right Min… / Set Right Max… / Reset), and **Reset View**. Export is deliberately not here — it writes a CSV, an image and the log, which is a file operation on the session rather than a plot control, so it lives only in the main menu beside Import CSV.
 - [x] The user can specify a custom title for the plot (context menu > Set Plot Title…).
@@ -206,7 +208,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The persistent on-chart controls are gathered into a single chip bar at the chart's top-left (View Mode chip, Reset view chip) rather than scattered around the plot; each chip hides itself when it would be meaningless, and with neither showing the bar collapses to nothing - so it costs no chart space at rest.
 - [x] Frequent actions have chrome-free gestures: Ctrl+drag / middle-drag rubber-bands a time range to zoom, double-click restores the full span, and a crosshair follows the cursor for reading several series at one instant.
 - [x] Mouse-wheel zoom and click-drag pan of the X axis are retained as the primary navigation.
-- [x] The log/console occupies a left sidebar that the user can toggle on and off, and which is open by default.
+- [x] The log/console occupies a left sidebar that the user can toggle on and off, and which is open by default. A grip on the divider beside it shows where to drag it wider or narrower (no narrower than 200 px), and its text wraps to the width it is given.
 - [x] Each on-chart chip is labelled and carries a tooltip naming the action it performs, so no control on the chart is an unexplained glyph.
 - [x] The crosshair readout can be pinned to a chosen series (context menu > **Readout**) instead of always following whichever curve is nearest the cursor.
 - [x] The most-used view actions have single-key shortcuts while the chart has focus - arrows step the time window, `+`/`-` zoom, `Home` restores the full span, `R` resets both axes, `V` switches metric, `L` toggles the legend - and the context menu advertises each key so they are discoverable rather than hidden.
@@ -903,7 +905,7 @@ helper every test cleans up and reads back through, which waits out a virus scan
   gestures), `AroundTheChartTests` (legend, chips, menu, keys, Customize View, prompts).
 - **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against v2.14.2's, the image pixel by pixel, Import
   CSV), `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports).
-- **The shell:** `ShellTests` (title bar, menu, Recent Files, keys, drag and drop, themes, Help), `PreferencesTests`
+- **The shell:** `ShellTests` (title bar, menu, Recent Files, keys, drag and drop, the sidebar and its divider, themes, Help), `PreferencesTests`
   (the preferences file, and v2.x's INI file left unread), `MainWindowTests`.
 - **The layers:** `LayerTests` reads every model, view model and service type as compiled, its methods' code
   included. It fails on a model that reaches a view model, a service, a view or `Platform`; on a view model or service
