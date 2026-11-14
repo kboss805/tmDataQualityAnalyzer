@@ -12,6 +12,75 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The window as it opens: v2.14.2's size and empty grid, a divider that shows, no status bar
+
+The window as it opens, compared side by side with v2.14.2 built from its tag, and the log sidebar's resizing.
+
+- **The empty chart draws its grid again.** Before a recording was processed, v3 drew the chart's frame and labels
+  but no grid, ticks or tick labels: ticks come from the core, which is loaded only once a recording opens (plan step
+  4.3b recorded the choice). v2.14.2 drew them from its default range. The empty chart now draws its own: the dotted
+  grid, 10 by 6, evenly across the plot area, the tick marks on both axes, and the left axis's values (0.0 to 100.0)
+  beside its ticks (`PlotChart.DrawEmptyTicks`). The time axis has its marks but no labels: v2.14.2's read
+  "000:00:00:00" nine times and "000:00:00:01" once, an accident of its 0 to 1 second default range.
+- **The log wraps to the width it is dragged to.** The log panel had a 400 px minimum of its own, and its column none,
+  so the divider dragged the column narrower than the panel: the panel stayed 400 wide, centred in the column and cut
+  off at both edges, its text wrapped as before (measured: at a 250 px column the panel was 400 wide at x = -74). The
+  minimum is now the column's, 200 px (`MainWindow.LogMinWidth`), lifted while the sidebar is hidden so the column can
+  close; the panel takes its column's width and the text re-wraps to it.
+- **The divider shows where to drag.** It was a 4 px transparent strip, found only by the cursor changing over it. It
+  is now 6 px with a short grip (2 x 36) in its middle, a shade off the window's background; under the pointer, or
+  dragged, the strip takes a shade and the grip brightens. New theme brushes `SplitterGrip`, `SplitterGripHover` and
+  `SplitterHover` (dark `#505050`, `#9A9A9A`, `#2A2A2A`; light `#C2C2C2`, `#707070`, `#E0E0E0`). v2.14.2 drew a dotted
+  grip in Qt's style.
+- **The window opens at 1920 x 1080, centred**, v2.14.2's size (it opened at 1280 x 800). On a screen whose working
+  area cannot hold that, it opens at the working area's size (`MainWindow.FitDefaultSize`, in device-independent
+  units): on a 1080p screen it reaches the taskbar rather than going under it, and at 125 % scaling it is 1536 x 825
+  rather than past the screen's edge, both of which v2.14.2's did. Checked on this machine's 2560 x 1440 screen: the
+  window opens 1920 x 1080 at its centre.
+- **No status bar.** The line under the log and the chart repeated what the log says, and was cluttered, so it is gone,
+  with the version label beside it: the version is the log's first line ("tmDataQualityAnalyzer v3.1.0") and is in
+  Help > About. The log and the chart reach the window's bottom. `MainWindowViewModel.Status` stays, unshown: the tests
+  read it as the last action's outcome. `VersionText` is deleted. The manuals' "Status bar" item is removed.
+
+**Tests:**
+- `AnEmptyChartIsAFrameWithNothingInsideAndIgnoresTheWheel` became `AnEmptyChartIsItsGridWithNothingPlottedAndIgnoresTheWheel`:
+  every cell of the grid plain, a dotted line at every tick across and down, a tick mark below the axis at each, no
+  time labels, and the left axis's 100.0 at the top and 0.0 at the bottom.
+- `TheVersionIsDrawnNotOnlyLaidOut` became `TheLogIsDrawnNotOnlyLaidOut`: the log's first line holds drawn text, and a
+  cell of the empty grid (rather than the chart's middle) is plain. `TheWindowShowsTheVersionTheBuildReadFromTheHeader`
+  became `TheVersionTheBuildReadFromTheHeaderIsTheLogsFirstLineAndThereIsNoStatusBar`.
+- `TheWindowOpensAtItsDefaultSizeAndCannotShrinkPastItsMinimum` holds 1920 x 1080 and the centring; new
+  `TheDefaultSizeFitsTheScreensWorkingArea` (six cases) holds the fitting.
+- `TheMainWindowShowsTheLogBesideTheChart` holds the panel at its column's width less its margin (398): it was 400,
+  its own minimum pushing it 2 px past its column. `TheChartDrawsTheSeriesOnceItIsProcessed` counts coloured pixels,
+  since the empty chart is no longer blank.
+- New `TheLogWrapsToTheWidthTheDividerDragsItToButNoNarrowerThanItsMinimum` drags the divider with the mouse: to 250
+  (the panel inside its column, more lines), to the 200 minimum, to 700 (fewer lines), and hides and shows the sidebar.
+- New `TheDividerShowsWhereToDragAndAnswersThePointer` (both themes): the grip's size, centring, brush and drawn colour,
+  and both brushes under the pointer and away from it.
+- `TheSidebarHidesGivingItsWidthToTheChartAndReturnsAsItWas` and `EachThemesBrushesAreV214s` follow the divider's width
+  and the three new brushes.
+
+**Mutation check** (`eng\mutate.ps1`, app suite, 22 mutants): 21 CAUGHT, among them the empty chart without its grid,
+its vertical or horizontal lines, its tick marks or its values, its values upside down, v2.14.2's repeated
+"000:00:00:00" labels; the panel's own 400 px minimum back (the defect), no minimum, a minimum kept while hidden or not
+restored; the grip removed, off-centre or not answering the pointer, the strip not shading; the old default size, the
+screen's scaling ignored, the larger height taken, the window not centred; and the status bar back. One SURVIVED, as
+expected: the fitted size not applied in the constructor. The headless platform's only screen (1920 x 1280) holds
+1920 x 1080, so no test can see that wiring; `FitDefaultSize` itself is held by its cases, and the real app was checked
+on this machine's screen. (A first version of the status-bar mutant put the bar inside an XML comment and survived; the
+corrected one is CAUGHT.)
+
+**Baselines:** app **586 passed / 0 failed / 34 not run** (was 577: nine new cases, the six-case fitting theory, the
+divider's two themes and the log's wrapping). Native and managed unchanged: nothing in the core moved.
+
+**The manual:** figures re-rendered (`enguild_manual.ps1`) and the manuals re-embedded. The eight plot figures are
+874 x 720 instead of 876 x 693 (the chart is taller without the status bar and 2 px narrower beside the wider
+divider); `walk-app-01-hamburger`, `walk-err-01-log-error`, `walk-fs-04-processing` and `walk-theme-01-light-plot`
+lose the status bar and show the grip, and their run logs' progress percentages and elapsed times differ, as they do
+between captures (#259). `walk-cust-02-snr-tree` was restored: its only change was its expanders' chevrons caught
+mid-animation.
+
 #### The sidebar toggle's glyph is centred in its button
 
 The title bar's sidebar toggle drew its glyph in the button's top-left corner, not centred as the menu button's is. The

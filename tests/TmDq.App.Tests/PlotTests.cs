@@ -516,14 +516,54 @@ namespace TmDq.App.Tests
         }
 
         [AvaloniaFact]
-        public void AnEmptyChartIsAFrameWithNothingInsideAndIgnoresTheWheel()
+        public void AnEmptyChartIsItsGridWithNothingPlottedAndIgnoresTheWheel()
         {
+            // As v2.x's was before a recording was opened: the grid and the ticks evenly across the plot area, the left
+            // axis's values beside its ticks, and the time axis's marks without labels (there is no time yet).
             var plot = new PlotViewModel();
             Shown s = Show(plot);
+            Rect a = s.Area;
+            int nx = PlotChart.XTickCount - 1, ny = PlotChart.YTickCount - 1;
+            double cellW = a.Width / nx, cellH = a.Height / ny;
             using (ILockedFramebuffer fb = s.Frame())
             {
-                Rect inside = s.Area.Deflate(2);
-                Assert.Equal(0, Frames.CountDifferent(fb, inside, Frames.Pixel(fb, (int)inside.Center.X, (int)inside.Center.Y)));
+                uint background = Frames.Pixel(fb, (int)(a.X + cellW / 2), (int)(a.Y + cellH / 2));
+                // Nothing plotted: every cell of the grid is plain.
+                for (int i = 0; i < nx; i++)
+                    for (int j = 0; j < ny; j++)
+                    {
+                        var cell = new Rect(a.X + i * cellW, a.Y + j * cellH, cellW, cellH).Deflate(3);
+                        Assert.True(Frames.CountDifferent(fb, cell, background) == 0, $"cell {i},{j} is not plain");
+                    }
+                // The grid: a dotted line at every tick inside the area, across it and down it.
+                for (int i = 1; i < nx; i++)
+                {
+                    double px = a.X + i * cellW;
+                    int dots = Frames.CountDifferent(fb, new Rect(px - 1, a.Y + 2, 2, a.Height - 4), background);
+                    Assert.True(dots > a.Height / 6, $"only {dots} grid pixels at X tick {i}");
+                    // ...and its tick mark below the axis.
+                    Assert.True(Frames.CountDifferent(fb, new Rect(px - 1, a.Bottom + 1, 2, PlotChart.TickLength - 1), background) > 0, $"no tick mark at X tick {i}");
+                }
+                for (int j = 1; j < ny; j++)
+                {
+                    double py = a.Y + j * cellH;
+                    int dots = Frames.CountDifferent(fb, new Rect(a.X + 2, py - 1, a.Width - 4, 2), background);
+                    Assert.True(dots > a.Width / 6, $"only {dots} grid pixels at Y tick {j}");
+                }
+                // No time labels: the row under the tick marks is plain.
+                var labelRow = new Rect(a.X + 10, a.Bottom + PlotChart.TickLength + 1, a.Width - 20, 14);
+                Assert.Equal(0, Frames.CountDifferent(fb, labelRow, background));
+                // The left axis's values, 100.0 at the top and 0.0 at the bottom: "100.0" reaches further left.
+                double LeftmostInk(double py)
+                {
+                    Rect chart = Frames.InWindow(s.Chart, s.Window);
+                    for (int x = (int)chart.X; x < (int)(a.X - PlotChart.TickLength - 1); x++)
+                        for (int y = (int)py - 6; y <= (int)py + 6; y++)
+                            if (Frames.Pixel(fb, x, y) != background) return x;
+                    return double.NaN;
+                }
+                double top = LeftmostInk(a.Y + 1), bottom = LeftmostInk(a.Bottom - 1);
+                Assert.True(top < bottom - 5, $"the top label starts at {top}, the bottom one at {bottom}");
             }
             s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
             s.Window.MouseDown(s.At(300, 200), MouseButton.Left, RawInputModifiers.None);

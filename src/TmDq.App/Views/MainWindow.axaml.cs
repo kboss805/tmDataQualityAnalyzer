@@ -25,6 +25,9 @@ namespace TmDq.App.Views
         public const string AboutTitle = "About";
         public const string ManualNotWritten = "Could not open the user manual.";
 
+        /// <summary>The narrowest the divider drags the log to, and the divider's width.</summary>
+        public const double LogMinWidth = 200, SplitterWidth = 6;
+
         private MainWindowViewModel? _watched;
 
         /// <summary>The menu behind the hamburger button.</summary>
@@ -32,11 +35,33 @@ namespace TmDq.App.Views
 
         private GridLength _sidebarWidth = new(400);
 
+        /// <summary>The size the window opens at, as v2.x's did: a standard high-definition screen's.</summary>
+        public static readonly Size DefaultSize = new(1920, 1080);
+
         public MainWindow()
         {
             InitializeComponent();
+            if (Screens.Primary is { } screen)
+            {
+                Size fitted = FitDefaultSize(screen.WorkingArea, screen.Scaling);
+                Width = Math.Max(fitted.Width, MinWidth);
+                Height = Math.Max(fitted.Height, MinHeight);
+            }
             AddHandler(DragDrop.DragOverEvent, OnDragOver);
             AddHandler(DragDrop.DropEvent, OnDrop);
+        }
+
+        /// <summary>
+        /// <see cref="DefaultSize"/>, no larger than a screen's working area (<paramref name="workingArea"/>, in device
+        /// pixels, at <paramref name="scaling"/>): on a 1920 x 1080 screen the taskbar takes some of the height, and with
+        /// the screen scaled to 125 % there are 1536 x 864 units to fill, so v2.x's window opened under the taskbar or
+        /// past the screen's edge.
+        /// </summary>
+        public static Size FitDefaultSize(PixelRect workingArea, double scaling)
+        {
+            if (scaling <= 0 || workingArea.Width <= 0 || workingArea.Height <= 0) return DefaultSize;
+            return new Size(Math.Min(DefaultSize.Width, Math.Floor(workingArea.Width / scaling)),
+                            Math.Min(DefaultSize.Height, Math.Floor(workingArea.Height / scaling)));
         }
 
         private MainWindowViewModel? Vm => DataContext as MainWindowViewModel;
@@ -65,18 +90,20 @@ namespace TmDq.App.Views
         }
 
         // The log's column (and the splitter's) give their width back to the chart while the sidebar is hidden, and get
-        // the width the user left them when it returns.
+        // the width the user left them when it returns. The log's minimum goes with it: a hidden column has none.
         private void ShowSidebar(bool shown)
         {
             ColumnDefinition log = Body.ColumnDefinitions[0], splitter = Body.ColumnDefinitions[1];
             if (shown)
             {
                 log.Width = _sidebarWidth;
-                splitter.Width = new GridLength(4);
+                log.MinWidth = LogMinWidth;
+                splitter.Width = new GridLength(SplitterWidth);
             }
             else
             {
                 if (log.Width.Value > 0) _sidebarWidth = log.Width;
+                log.MinWidth = 0;
                 log.Width = new GridLength(0);
                 splitter.Width = new GridLength(0);
             }
