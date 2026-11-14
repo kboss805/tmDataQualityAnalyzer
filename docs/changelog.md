@@ -12,6 +12,54 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Every window on v2.14.2's grey, the log and the chart in matching panels, the light theme layered
+
+Asked for after #266: the dark title bar matched to v2.14.2's grey, the log and the chart given the same edges and
+corners, the chart set off from the log, the dialogs made the main window's, and the light theme's panes set apart.
+
+- **Every window is on v2.14.2's background.** The main window and every dialog took Fluent's background, black in
+  the dark theme and white in the light; v2.14.2 drew its windows `#2C2C2C` and `#F3F3F3`. A new theme brush,
+  `WindowBackground`, with those values, is every window's background, set in the application's one `:is(Window)` style
+  beside the icon, so a dialog added later takes it too. Windows 11 and Material Design both use near-greys, never pure
+  black, for dark surfaces, and give a dialog the surface of the application it belongs to. The dark divider's hover
+  shade, `SplitterHover`, was darker than the new grey (`#2A2A2A`) and is now `#383838`.
+- **The log and the chart are panels of one shape.** The log sat in a bordered, rounded panel 4 px in from the window's
+  top and bottom and 2 px from its left; the chart ran square-cornered to the window's right and bottom edges with no
+  border. Both now take one style (`Border.panel`: a 1 px `LogPanelBorder`, 4 px corners) and the same gaps
+  (`MainWindow.PanelGap`, 2 px at the window's sides; 4 px above and below); with the log hidden the chart keeps its gap
+  at the left. A Border does not clip what it holds to its corners, and the chart paints a square bitmap, so the chart
+  is clipped to the inside of its border (radius 3) in `MainWindow`; found in the real app, where the border was round
+  and the chart's corners square inside it.
+- **The chart is set off from the log by a shade.** Dark: the chart's background is `#1C1C1C` (v2.14.2's darkest grey,
+  its log's), against the log's `#202020`, and the legend and the chips over it follow (`#B91C1C1C`). Light, the
+  converse, as layers over the window's `#F3F3F3` (Windows 11's way of setting panes apart in its light theme): the log
+  `#F9F9F9`, the chart white, each with its `#E5E5E5` border. An exported image takes the chart's colours, so a dark
+  export's background is `#1C1C1C` too.
+
+**Tests:** new `TheWindowsBackgroundIsV214sAndTheLogAndTheChartArePanelsOfOneShape` (both themes): the window's brush
+and its drawn colour in the caption and above the log; the panels' gaps, tops and bottoms, the divider as the gap
+between them, the same border, corner radius and brush; for each panel the border drawn along its top, its outer
+corners cut away and the pixel just inside each corner not the panel's fill; the chart a shade darker than the
+log in the dark theme and lighter in the light, as drawn; and the chart's gap at the left with the log hidden.
+`EachThemesBrushesAreV214s`, `ThePalettesAreV214s` and `EachThemeDrawsTheChartTheLegendTheChipsAndTheLogInItsColours`
+follow the new colours. New `EveryDialogIsOnTheMainWindowsBackground` (both themes) shows one window of every kind
+the application declares (the list `EveryWindowShowsTheIcon` used, now `IconTests.EveryWindowKind`) and checks its
+brush and its drawn corner.
+
+**Mutation check** (`eng\mutate.ps1`, app suite, 18 mutants): all 18 CAUGHT: no window given the background, one
+dialog with a black background of its own, the light window white again, the light log the window's grey; the dark
+window black again or not given its brush; the old divider hover shade; the chart out of its panel, either panel
+unrounded or without its border colour, the chart against the window's edges, the wrong left gap with the log shown or
+hidden; the chart not clipped to its corners (the defect the real app showed); and each of the new shades put back to
+the log's or the chart's old colour.
+
+**Baselines:** app **612 passed / 0 failed / 34 not run** (was 608: the two new theories' two themes each). Native and managed
+unchanged.
+
+**The manual:** figures re-rendered and the manuals re-embedded. The plot figures show the darker chart in its
+panel; the main-window figures show the grey window and the panels (`walk-theme-01-light-plot` the light theme's
+layers); the dialogs' figures show them on the grey. `walk-cust-02-snr-tree` was restored, as in #266 (chevrons caught mid-animation).
+
 #### The plot drawn right at display scalings above 100 %
 
 Asked whether the draft's one-pixel lines held at display scalings above 100 %: they were written to (`1 / scaling`
@@ -203,7 +251,7 @@ corrected one is CAUGHT.)
 **Baselines:** app **586 passed / 0 failed / 34 not run** (was 577: nine new cases, the six-case fitting theory, the
 divider's two themes and the log's wrapping). Native and managed unchanged: nothing in the core moved.
 
-**The manual:** figures re-rendered (`enguild_manual.ps1`) and the manuals re-embedded. The eight plot figures are
+**The manual:** figures re-rendered (`eng\build_manual.ps1`) and the manuals re-embedded. The eight plot figures are
 874 x 720 instead of 876 x 693 (the chart is taller without the status bar and 2 px narrower beside the wider
 divider); `walk-app-01-hamburger`, `walk-err-01-log-error`, `walk-fs-04-processing` and `walk-theme-01-light-plot`
 lose the status bar and show the grip, and their run logs' progress percentages and elapsed times differ, as they do

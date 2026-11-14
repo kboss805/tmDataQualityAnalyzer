@@ -141,20 +141,29 @@ namespace TmDq.App.Tests
             [typeof(ColorPromptWindow)] = () => new ColorPromptWindow(Colors.Red),
         };
 
-        [AvaloniaFact]
-        public void EveryWindowShowsTheIcon()
+        /// <summary>
+        /// One window of every kind the application declares, each made as <see cref="NeedArguments"/> says or by its
+        /// constructor without arguments. A window kind added later is included: it must be constructible here.
+        /// </summary>
+        public static IEnumerable<(Type Kind, Window Window)> EveryWindowKind()
         {
-            // The title bar and Alt+Tab take the window's own icon, not the exe's. The dialogs have no taskbar button, but
-            // a title bar each. A window kind added later is held here too: it must be constructible below.
             Type[] kinds = typeof(App).Assembly.GetTypes()
                                       .Where(t => typeof(Window).IsAssignableFrom(t) && !t.IsAbstract && !t.IsGenericTypeDefinition)
                                       .OrderBy(t => t.FullName).ToArray();
             Assert.Contains(typeof(MainWindow), kinds);
             foreach (Type kind in kinds)
-            {
-                Window window = NeedArguments.TryGetValue(kind, out Func<Window>? make) ? make()
+                yield return (kind, NeedArguments.TryGetValue(kind, out Func<Window>? make) ? make()
                     : kind.GetConstructor(Type.EmptyTypes) is { } constructor ? (Window)constructor.Invoke(null)
-                    : throw new InvalidOperationException(kind.Name + " needs arguments: add it to NeedArguments");
+                    : throw new InvalidOperationException(kind.Name + " needs arguments: add it to NeedArguments"));
+        }
+
+        [AvaloniaFact]
+        public void EveryWindowShowsTheIcon()
+        {
+            // The title bar and Alt+Tab take the window's own icon, not the exe's. The dialogs have no taskbar button, but
+            // a title bar each.
+            foreach ((Type kind, Window window) in EveryWindowKind())
+            {
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
                 try
