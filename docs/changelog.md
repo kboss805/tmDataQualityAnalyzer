@@ -12,6 +12,25 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The pan and zoom keys draft a heavy plot too
+
+The draft below came with the wheel and a drag only; the keyboard's pans and zooms (the arrows, `+` and `-`) stepped a
+heavy plot in full each time, and a held key repeats. Now a key bound to one of those four commands is a step of a
+gesture too: while it is held a heavy plot is drafted, and its release paints the full picture at once, as a released
+drag does. Which keys count is read from `PlotView`'s key bindings, the one place that maps keys to commands, so a key
+rebound there follows; only a command that can run counts. `Home`, `Backspace` and `R` jump once and are not drafted.
+`PlotView` watches the keys on their way down, handled or not (the bound ones arrive handled), and calls the chart's
+`Moving`, now internal.
+
+Checked: `PlotDraftTests` holds each of the five bindings (the arrows, `+` with and without Shift, `-`) drafted while
+repeating and settled by its own release and not another key's, the three jumps never drafted, and a pan key pressed with
+nothing plotted leaving no draft behind when data arrives. `eng\mutate.ps1` with `eng/mutants/plot-draft-keys.json`
+(app, 7): all CAUGHT, among them the left arrow or `+` not a step, every bound key a step (K3, caught by `Home` and `R`;
+`Backspace` cannot catch it, since its binding has already run and Zoom Back has nothing left to undo by the time the
+view sees the key, which is why only a pan or zoom key's command, which can always run with data, is asked), any key
+going up settling the gesture, and the handler missing the keys that arrive handled. The kept `plot-draft.json` still
+matches the code. App suite 604 passed with 34 not run (the baseline moves from 595); nothing native or managed changed.
+
 #### A large plot stays responsive while it is panned or zoomed
 
 The user found the plot sluggish on large datasets. Measured first, on the largest recording on the development machine

@@ -178,7 +178,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The user can manually override either end of either Y axis (context menu > Y Axes > Set Left/Right Min… and Set Left/Right Max…). A limit left alone still scales automatically; a minimum is taken as given and the maximum yields to it, never closer than `kMinAxisSpan`, so no entry can invert or collapse an axis. **Y Axes > Reset** clears all four overrides.
 - [x] The mouse wheel zooms the X axis.
 - [x] A mouse click and hold pans the X axis.
-- [x] A large plot stays responsive while the wheel or a drag moves it: a dense series is drawn from each pixel column's minimum, maximum and mean, looked up in an index the core builds once per long series rather than walked sample by sample, and while a gesture moves a plot that takes longer than 30 ms to paint, each band is drawn as its outline and each line one pixel wide, the full picture coming back when the drag is released or 150 ms after the last wheel notch. The draft is still each column's minimum to maximum, so a one-sample dropout shows in it; the series, the readout, the CSV and an exported image never change with it (`PlotDraftTests`, `test_chartgeometry`).
+- [x] A large plot stays responsive while the wheel, a drag or a held pan or zoom key (the arrows, `+` and `-`) moves it: a dense series is drawn from each pixel column's minimum, maximum and mean, looked up in an index the core builds once per long series rather than walked sample by sample, and while a gesture moves a plot that takes longer than 30 ms to paint, each band is drawn as its outline and each line one pixel wide, the full picture coming back when the drag or the key is released or 150 ms after the last wheel notch. Keys that jump once (`Home`, `Backspace`, `R`) are not gestures and are never drafted. The draft is still each column's minimum to maximum, so a one-sample dropout shows in it; the series, the readout, the CSV and an exported image never change with it (`PlotDraftTests`, `test_chartgeometry`).
 - [x] The user can show or hide individual Frame Sync Lock and Receiver SNR series.
 - [x] A movable legend overlay floats inside the chart instead of sitting in a separate panel below it, showing a line-swatch and label for each visible series.
 - [x] The user can click-drag the legend anywhere inside the plot area to keep it clear of data of interest.
@@ -910,8 +910,8 @@ helper every test cleans up and reads back through, which waits out a virus scan
   `StreamSetupViewModelTests`, `ConfigureStreamsTests`, `StreamWindowsTests`; `CalibrationDialogTests` (Extract
   Calibration and Apply Cal).
 - **The plot:** `PlotTests` (series, axes, view mode, the time window and zoom, the readout, the chart's drawing and
-  gestures), `PlotDraftTests` (the draft a gesture paints on a heavy plot and the full picture after it, a dropout in
-  both, an export never drafted, each long series' index and when it goes), `AroundTheChartTests` (legend, chips,
+  gestures), `PlotDraftTests` (the draft a gesture - the wheel, a drag, a held pan or zoom key - paints on a heavy plot
+  and the full picture after it, a dropout in both, an export never drafted, each long series' index and when it goes), `AroundTheChartTests` (legend, chips,
   menu, keys, Customize View, prompts).
 - **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against v2.14.2's, the image pixel by pixel, Import
   CSV), `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports).

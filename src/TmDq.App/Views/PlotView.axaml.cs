@@ -1,7 +1,10 @@
 using System;
 using System.ComponentModel;
+using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using TmDq.App.Platform;
 using TmDq.App.Services;
 using TmDq.App.ViewModels.Plot;
@@ -33,7 +36,45 @@ namespace TmDq.App.Views
                 else e.Cancel = true;
             };
             Overlay.SizeChanged += (_, e) => Legend.HostResized(e.NewSize);
+            // Seen however the key's route treats it (something on the way may have handled it already): what matters is
+            // that the chart hears of the step before it next paints, which comes after both.
+            Root.AddHandler(KeyDownEvent, OnKeyDownSteps, RoutingStrategies.Tunnel, handledEventsToo: true);
+            Root.AddHandler(KeyUpEvent, OnKeyUpSettles, RoutingStrategies.Tunnel, handledEventsToo: true);
         }
+
+        private Key? _steppingKey;
+
+        /// <summary>
+        /// A key bound to panning or zooming the time window is a step of a gesture, as a wheel notch is, and a held one
+        /// repeats: the chart drafts a heavy plot until it is released (<see cref="PlotChart.Moving"/>). Which keys those
+        /// are is read from the key bindings in the AXAML, the one place that says, and only a command that can run counts.
+        /// </summary>
+        private void OnKeyDownSteps(object? sender, KeyEventArgs e)
+        {
+            if (Commands is not { } commands) return;
+            foreach (KeyBinding binding in Root.KeyBindings)
+            {
+                if (binding.Gesture is not { } gesture || !gesture.Matches(e)) continue;
+                if (binding.Command is { } command && IsStep(commands, command) && command.CanExecute(binding.CommandParameter))
+                {
+                    Chart.Moving();
+                    _steppingKey = e.Key;
+                }
+                return;
+            }
+        }
+
+        /// <summary>The key that stepped is released: the full picture at once, as for a released drag.</summary>
+        private void OnKeyUpSettles(object? sender, KeyEventArgs e)
+        {
+            if (_steppingKey != e.Key) return;
+            _steppingKey = null;
+            Chart.Settle();
+        }
+
+        private static bool IsStep(PlotCommands commands, ICommand command) =>
+            command == commands.PanEarlierCommand || command == commands.PanLaterCommand ||
+            command == commands.ZoomInCommand || command == commands.ZoomOutCommand;
 
         public PlotViewModel? Plot
         {
