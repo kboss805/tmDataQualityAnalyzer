@@ -257,6 +257,12 @@ namespace ChartConstants {
     /// hour at 10 ms (360k samples each) took 102 s per repaint drawing every
     /// point.
     inline constexpr int kMaxSamplesPerPixelColumn = 2;
+
+    /// Samples summarised by one leaf of a series' index (chart::SeriesIndex). A column's envelope walks at most this
+    /// many samples at each of its two ends and looks the rest up, so a smaller block walks less and costs more memory:
+    /// at 32 the index holds about 1.5 bytes per sample (three doubles per block, the levels above adding as much
+    /// again), and a full-view frame of 52 one-hour series at 10 ms walks a tenth of the samples it used to.
+    inline constexpr int kIndexBlockSamples = 32;
 }
 
 

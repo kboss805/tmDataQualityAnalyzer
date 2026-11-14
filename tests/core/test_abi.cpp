@@ -1289,7 +1289,7 @@ TEST_CASE("Abi: theStructLayoutsArePinned")
 TEST_CASE("Abi: theVersionAndRevisionAreReported")
 {
     CHECK(tmdq_abi_version() == 2);
-    CHECK(tmdq_abi_revision() == 2);   // 1: the receiver-parameters file (4.1a); 2: the chart's geometry (4.3a)
+    CHECK(tmdq_abi_revision() == 3);   // 1: the receiver-parameters file (4.1a); 2: the chart's geometry (4.3a); 3: a series' index
     CHECK(int(TMDQ_ABI_VERSION) == tmdq_abi_version());
     CHECK(int(TMDQ_ABI_REVISION) == tmdq_abi_revision());
     REQUIRE(tmdq_last_error() != nullptr);
@@ -3875,4 +3875,140 @@ TEST_CASE("Abi: badArgumentsToTheChartFunctionsAreRefused")
     REQUIRE(tmdq_chart_transform(&big.v, TMDQ_X_TO_PIXEL, 1.0, &out) == int(TMDQ_OK));
     CHECK(out == 50.0);
     CHECK(std::string(tmdq_last_error()).empty());   // a successful call clears an earlier error
+}
+
+// ---------------------------------------------------------------------------
+// A series' index (revision 3)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Abi: aSeriesIndexGivesTheCoresIndexedGeometry")
+{
+    // Generated ordered series, dense enough to be drawn from their envelope, through the ABI with an index and
+    // straight through the core with one: bit for bit.
+    std::mt19937 rng(8803);
+    auto uniform = [&](double a, double b) { return std::uniform_real_distribution<double>(a, b)(rng); };
+    int decimated = 0;
+    for (int trial = 0; trial < 120; ++trial)
+    {
+        const int n = 50 + static_cast<int>(uniform(0.0, 60000.0));
+        std::vector<double> xs(static_cast<std::size_t>(n)), ys(static_cast<std::size_t>(n));
+        double x = 0.0;
+        for (int i = 0; i < n; ++i)
+        {
+            x += uniform(0.001, 0.02);
+            xs[static_cast<std::size_t>(i)] = x;
+            ys[static_cast<std::size_t>(i)] = uniform(-5.0, 105.0);
+        }
+        if (trial % 3 == 0) ys[static_cast<std::size_t>(n / 3)] = std::numeric_limits<double>::quiet_NaN();
+        chart::View v;
+        v.xLower = uniform(-1.0, x * 0.5);
+        v.xUpper = v.xLower + uniform(0.5, x);
+        v.yLower = -10.0;
+        v.yUpper = 110.0;
+        v.left = 60.0;
+        v.top = 20.0;
+        v.width = uniform(100.0, 1600.0);
+        v.height = 800.0;
+
+        tmdq_series_index* index = nullptr;
+        REQUIRE(tmdq_series_index_build(ys.data(), n, &index) == int(TMDQ_OK));
+        REQUIRE(index != nullptr);
+        CHECK(tmdq_series_index_count(index) == n);
+        const chart::SeriesIndex core(ys);
+        const chart::SeriesGeometry expected = chart::buildSeriesGeometry(xs, ys, true, v, &core);
+
+        const tmdq_chart_view view = abiView(v);
+        tmdq_geometry* g = nullptr;
+        REQUIRE(tmdq_chart_geometry_indexed(xs.data(), ys.data(), n, 1, index, &view, &g) == int(TMDQ_OK));
+        tmdq_geometry_info info{};
+        info.struct_size = sizeof(info);
+        REQUIRE(tmdq_geometry_info_get(g, &info) == int(TMDQ_OK));
+        CHECK(info.decimated == (expected.decimated ? 1 : 0));
+        REQUIRE(info.segment_count == int(expected.segments.size()));
+        bool same = true;
+        for (std::size_t i = 0; i < expected.segments.size(); ++i)
+        {
+            const chart::Segment& e = expected.segments[i];
+            const double* a = info.segments + 4 * i;
+            same = same && bitsEqual(a[0], e.from.x) && bitsEqual(a[1], e.from.y) && bitsEqual(a[2], e.to.x) &&
+                   bitsEqual(a[3], e.to.y);
+        }
+        CHECK(same);
+        REQUIRE(info.band_count == int(expected.bands.size()));
+        for (int b = 0; b < info.band_count; ++b)
+        {
+            const double* points = nullptr;
+            int32_t count = -1;
+            REQUIRE(tmdq_geometry_band(g, b, &points, &count) == int(TMDQ_OK));
+            const std::vector<chart::Point>& e = expected.bands[static_cast<std::size_t>(b)];
+            REQUIRE(count == int(e.size()));
+            bool band = true;
+            for (std::size_t i = 0; i < e.size(); ++i)
+                band = band && bitsEqual(points[2 * i], e[i].x) && bitsEqual(points[2 * i + 1], e[i].y);
+            CHECK(band);
+        }
+        tmdq_geometry_free(g);
+        tmdq_series_index_free(index);
+        if (expected.decimated) ++decimated;
+    }
+    CHECK(decimated > 100);
+}
+
+TEST_CASE("Abi: aSeriesIndexIsUsedOnlyWhenItFitsAndBadArgumentsAreRefused")
+{
+    std::vector<double> xs(1024), ys(1024, 100.0), zeros(1024, 0.0);
+    for (int i = 0; i < 1024; ++i) xs[static_cast<std::size_t>(i)] = i * 0.125;
+    chart::View v;
+    v.xLower = 0.0;
+    v.xUpper = 128.0;
+    v.yLower = 0.0;
+    v.yUpper = 100.0;
+    v.width = 4.0;    // four columns of 256 samples: looked up from whole blocks
+    v.height = 100.0;
+    const tmdq_chart_view view = abiView(v);
+
+    // Built over other values of the same count, the index shows: its zeros are the bottom of the plot.
+    tmdq_series_index* other = nullptr;
+    REQUIRE(tmdq_series_index_build(zeros.data(), 1024, &other) == int(TMDQ_OK));
+    tmdq_geometry* g = nullptr;
+    REQUIRE(tmdq_chart_geometry_indexed(xs.data(), ys.data(), 1024, 1, other, &view, &g) == int(TMDQ_OK));
+    const double* points = nullptr;
+    int32_t count = 0;
+    REQUIRE(tmdq_geometry_band(g, 0, &points, &count) == int(TMDQ_OK));
+    REQUIRE(count == 8);
+    CHECK(points[1] == 100.0);
+    tmdq_geometry_free(g);
+
+    // Not with times out of order, and not at all through tmdq_chart_geometry or with a NULL index.
+    for (int pass = 0; pass < 3; ++pass)
+    {
+        g = nullptr;
+        const int32_t status = pass == 0   ? tmdq_chart_geometry_indexed(xs.data(), ys.data(), 1024, 0, other, &view, &g)
+                               : pass == 1 ? tmdq_chart_geometry(xs.data(), ys.data(), 1024, 1, &view, &g)
+                                           : tmdq_chart_geometry_indexed(xs.data(), ys.data(), 1024, 1, nullptr, &view, &g);
+        REQUIRE(status == int(TMDQ_OK));
+        REQUIRE(tmdq_geometry_band(g, 0, &points, &count) == int(TMDQ_OK));
+        CHECK(points[1] == 0.0);
+        tmdq_geometry_free(g);
+    }
+
+    // An index over another count is refused, not silently ignored: the host has paired it with the wrong series.
+    g = reinterpret_cast<tmdq_geometry*>(&count);
+    CHECK(tmdq_chart_geometry_indexed(xs.data(), ys.data(), 1000, 1, other, &view, &g) == int(TMDQ_ERR_BADARG));
+    CHECK(g == nullptr);
+    CHECK(std::string(tmdq_last_error()).find("index") != std::string::npos);
+    tmdq_series_index_free(other);
+
+    // Building: a NULL output, a negative count, a NULL array with values; an empty series is an empty index.
+    tmdq_series_index* index = nullptr;
+    CHECK(tmdq_series_index_build(ys.data(), 4, nullptr) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_series_index_build(ys.data(), -1, &index) == int(TMDQ_ERR_BADARG));
+    CHECK(index == nullptr);
+    CHECK(tmdq_series_index_build(nullptr, 4, &index) == int(TMDQ_ERR_BADARG));
+    REQUIRE(tmdq_series_index_build(nullptr, 0, &index) == int(TMDQ_OK));
+    CHECK(tmdq_series_index_count(index) == 0);
+    CHECK(std::string(tmdq_last_error()).empty());
+    tmdq_series_index_free(index);
+    CHECK(tmdq_series_index_count(nullptr) == -1);
+    tmdq_series_index_free(nullptr);
 }

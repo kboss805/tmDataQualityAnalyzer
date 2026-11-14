@@ -25,7 +25,7 @@ public class LayoutTests
     {
         Assert.Equal(2, Library.ExpectedVersion);
         Assert.Equal(2, Library.AbiVersion);
-        Assert.Equal(2, Library.AbiRevision);   // 1: the receiver-parameters file (4.1a); 2: the chart's geometry (4.3a)
+        Assert.Equal(3, Library.AbiRevision);   // 1: the receiver-parameters file (4.1a); 2: the chart's geometry (4.3a); 3: a series' index
         Assert.True(Library.AbiRevision >= Library.MinimumRevision);
         Assert.Equal(Path.GetFullPath(Env.DllPath()), Library.LoadedPath, ignoreCase: true);
     }

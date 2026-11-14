@@ -12,6 +12,58 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### A large plot stays responsive while it is panned or zoomed
+
+The user found the plot sluggish on large datasets. Measured first, on the largest recording on the development machine
+(`prn_agc_testfile, full.ch10`, 4.9 GB: five streams at 10 ms, 52 series shown, 406,000 samples each, 21 million in
+all), Release core, pinned to the performance cores, 1600 x 900: a full-view frame took 359 ms, of which 280 ms was the
+core walking every sample in view to build each pixel column's envelope, 69 ms Skia, and under 2 ms marshalling, the
+legend and the axes together. A pan ran at 3 frames a second zoomed out and 16 at 1 % of the span; the wheel at 6.
+The chart already drew dense series from a per-column min/max band and mean, culled to the view and cached between
+frames (none of that had been lost in the port); what it lacked was a way to build the envelope without visiting every
+sample, and a cheaper picture while a gesture is in flight.
+
+- **A series' index** (`chart::SeriesIndex`, ABI revision 3: `tmdq_series_index_*`, `tmdq_chart_geometry_indexed`;
+  `SeriesIndex` in the binding). A pyramid of each 32-sample block's minimum, maximum and sum, built once per long
+  series (about 1.5 bytes a sample; 35 ms for all 52 series above). A column's envelope is the samples at its two ends
+  plus a handful of blocks, so a frame costs time in proportion to the plot's width, not to the samples in view. It
+  draws exactly the walked envelope's columns and band (the transform to pixels is monotonic, so a column's extreme
+  pixels are the pixels of its extreme values) and its mean line to rounding (the largest difference over the
+  generated series was 3e-11 px). A one-sample dropout is still its column's minimum. `PlotChart` builds an index for
+  each ordered series of 4096 samples or more the first time it draws it, and frees it when the series goes.
+- **A draft while a gesture moves a heavy plot.** While the wheel or a drag moves a plot whose last full paint took
+  longer than 30 ms, the data layer is painted without the bands' fill and with every line one device pixel wide, which
+  Skia draws as a hairline, without its stroker (the 1.5 px mean lines alone were 32 ms of the 69). The draft is still
+  each column's minimum to maximum outline, so dropouts and spikes stay visible. The full picture is painted when a drag
+  is released or 150 ms after the last wheel notch. A light plot (the full PRN recording's four series paint in 8 ms) is
+  never drafted, and an export is never a draft.
+
+Only what is drawn changed: the series, the readout and the CSV are untouched. Before and after, on the recording
+above, in a real window, the two builds run alternately (a game was running on the machine throughout, so both sides
+share its load; two runs each):
+
+| Gesture | Before | Index only | Index and draft |
+|---|---|---|---|
+| Pan at 85 % of the span | 3.1 fps | 10.0-10.3 fps | 23-25 fps |
+| Pan at 50 % | 4.5 | 11.3-11.4 | 28 |
+| Pan at 10 % | 10.7 | 14.1-14.3 | 31-32 |
+| Pan at 1 % | 15 | 15 | 32-33 |
+| Wheel zoom in and out from the whole span | 5.9 | 12.3 | 27-28 |
+| A full-view frame painted in full | ~320 ms | 90-94 ms | (the full picture after a gesture) |
+| The core's envelopes for all 52 series, full view | 288-293 ms | 16-17 ms | |
+
+The cursor's readout is unchanged (33-40 fps before, 36 after, with the game running; 158 fps before it started).
+Below 0.1 % of the span a series is no longer drawn from its envelope and nothing changed there.
+
+Checked: the native suite compares the looked-up envelope with the walked one over 1,500 generated series (up to 200,000
+samples, with dropouts, repeated times, jumps in time and upside-down plot areas) and the index's summaries with a walk
+over every run of short series; the ABI and the binding are held to the core; `PlotDraftTests` renders the draft and the
+full picture (a dropout reaching the bottom of the plot in both, the fill gone and the lines thinner in the draft), the
+release and the delay settling a gesture, only the last step's delay counting, an export during a draft being the full
+picture, and each long series' index (built, used, kept through a shift of the times, freed). MUTATION_RESULTS
+
+Baselines: native 491 test cases (1 skipped), managed 364 passed / 1 skipped, app 595 passed with 34 not run.
+
 #### The run-log tests assert only the order the core promises
 
 `ProcessingTests.TheRunLogsTheJobLinesThenTheSummaryThenWhatTheRunSays` failed once in a full app-suite run (2026-11-13):

@@ -178,6 +178,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The user can manually override either end of either Y axis (context menu > Y Axes > Set Left/Right Min… and Set Left/Right Max…). A limit left alone still scales automatically; a minimum is taken as given and the maximum yields to it, never closer than `kMinAxisSpan`, so no entry can invert or collapse an axis. **Y Axes > Reset** clears all four overrides.
 - [x] The mouse wheel zooms the X axis.
 - [x] A mouse click and hold pans the X axis.
+- [x] A large plot stays responsive while the wheel or a drag moves it: a dense series is drawn from each pixel column's minimum, maximum and mean, looked up in an index the core builds once per long series rather than walked sample by sample, and while a gesture moves a plot that takes longer than 30 ms to paint, each band is drawn as its outline and each line one pixel wide, the full picture coming back when the drag is released or 150 ms after the last wheel notch. The draft is still each column's minimum to maximum, so a one-sample dropout shows in it; the series, the readout, the CSV and an exported image never change with it (`PlotDraftTests`, `test_chartgeometry`).
 - [x] The user can show or hide individual Frame Sync Lock and Receiver SNR series.
 - [x] A movable legend overlay floats inside the chart instead of sitting in a separate panel below it, showing a line-swatch and label for each visible series.
 - [x] The user can click-drag the legend anywhere inside the plot area to keep it clear of data of interest.
@@ -500,7 +501,8 @@ profile, so a batch processes with the linear calibration.
   recordings and Plot File, the readout's pin), with four jobs in types of their own: `PlotTimeWindow` (the span, the
   window and its zoom history, the gestures and keys that move it), `PlotReadout` (what the readout says), `PlotCsv`
   (the series to and from the core's CSV) and `PlotColors` (the colours). `PlotChart` draws it (from the core's
-  geometry, a cached data layer, the gestures), and `PlotView` holds what is over it (the legend, the chip bar, the
+  geometry, each long series' envelope looked up in its `SeriesIndex`, a cached data layer, a draft while a gesture
+  moves a plot that is slow to paint, the gestures), and `PlotView` holds what is over it (the legend, the chip bar, the
   right-click menu, the keys, Customize View). The menu, the chips and the keys are declared in `PlotView.axaml` and
   bound to `PlotCommands`, which the view makes for its plot with its prompts: a command for each item, chip and key
   (none runs without data, which disables the item and lets the key go on), what the chips and the menu show, and the
@@ -521,7 +523,7 @@ profile, so a batch processes with the linear calibration.
 The binding of every ABI function: `Ch10File` (a recording's channels), `ProcessingRun` and `StreamResult` (a run and
 what it produced, with progress, log and cancel), `CalibrationRun` and `StepFile`, the file formats (`FrameSyncFile`,
 `ReceiverParamsFile`, `CsvFile`, `TemplateMatcher`, `ClockTime`), series construction (`SeriesSet`, `TimeBase`,
-`ImportedStreams`) and `ChartGeometry`. `Library` loads `tmdq_core.dll` (the app passes the one beside it, or
+`ImportedStreams`) and `ChartGeometry` with `SeriesIndex` (a series' envelope index, revision 3). `Library` loads `tmdq_core.dll` (the app passes the one beside it, or
 `TMDQ_CORE_DLL`: `NativeCore`) and refuses one whose ABI version or revision it does not know.
 
 #### The native core (`src/core/include/`, `src/core/src/`)
@@ -560,7 +562,9 @@ what it produced, with progress, log and cancel), `CalibrationRun` and `StepFile
     (`seriescolumnschema`) is the single source of the column headers both use.
 14. **SeriesBuilder** (`seriesbuilder`, `seriesrange.h`) - a processed stream's plot series, the shared time base
     across sources, imported streams' order, and stream identity; **ChartGeometry** (`chartgeometry`) - the plot's
-    envelope, culling, min-max band, transforms and time ticks.
+    envelope, culling, min-max band, transforms and time ticks; and `SeriesIndex`, a pyramid of each 32-sample block's
+    minimum, maximum and sum, so a zoomed-out envelope is looked up (the same columns and band as walked, the mean to
+    rounding) at a cost that follows the plot's width rather than the samples in view.
 15. **TemplateMatcher** (`templatematcher`) - a file's PCM channel ids against a template's, exact-set.
 16. **IRIG 106 Library** (`third_party/irig106/`) - the third-party C library for the Chapter 10 format (see Protected Files).
     Its setup is serialised (`irig106lock.h`).
@@ -876,14 +880,17 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
 - **SeriesBuild** (`test_seriesbuild`) - a stream's series, the shared time base across sources, imported streams'
   order.
 - **ChartGeometry** (`test_chartgeometry`) - the envelope, band, transforms and ticks, against the code they replaced
-  over thousands of generated series and views, and worked by hand.
+  over thousands of generated series and views, and worked by hand; a series' index, every run of a short series and
+  random runs of long ones against a walk, and the envelope looked up in it against the one walked over 1,500 generated
+  series (up to 200,000 samples, with gaps, repeated times and jumps).
 - **TemplateMatcher** (`test_templatematcher`) - exact-set matching and its missing and extra lists.
 - **TextFormat** (`test_textformat`) - fixed-point formatting with ties rounded away from zero, as v2.14 printed it.
 - **Constants** (`test_constants`) - every constant something outside the code depends on, read against the shipped
   files that carry the same value.
 - **Abi** (`test_abi`) - the C ABI compiled into the test executable and called as a host would: every struct's size
   and offsets, versioning both ways, each function against the core called directly (runs, calibration, the formats,
-  series construction, the receiver-parameters file), the callbacks' order and threads, cancel and free in flight, bad
+  series construction, the receiver-parameters file, the chart's geometry and a series' index), the callbacks' order
+  and threads, cancel and free in flight, bad
   arguments and the last error.
 
 **The C# library** (`tests/TmDq.Core.Tests`): the struct layout against the native side (`LayoutTests`); the native
@@ -903,7 +910,9 @@ helper every test cleans up and reads back through, which waits out a virus scan
   `StreamSetupViewModelTests`, `ConfigureStreamsTests`, `StreamWindowsTests`; `CalibrationDialogTests` (Extract
   Calibration and Apply Cal).
 - **The plot:** `PlotTests` (series, axes, view mode, the time window and zoom, the readout, the chart's drawing and
-  gestures), `AroundTheChartTests` (legend, chips, menu, keys, Customize View, prompts).
+  gestures), `PlotDraftTests` (the draft a gesture paints on a heavy plot and the full picture after it, a dropout in
+  both, an export never drafted, each long series' index and when it goes), `AroundTheChartTests` (legend, chips,
+  menu, keys, Customize View, prompts).
 - **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against v2.14.2's, the image pixel by pixel, Import
   CSV), `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports).
 - **The shell:** `ShellTests` (title bar, menu, Recent Files, keys, drag and drop, the sidebar and its divider, themes, Help), `PreferencesTests`

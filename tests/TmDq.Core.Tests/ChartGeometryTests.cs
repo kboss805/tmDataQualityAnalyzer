@@ -181,4 +181,63 @@ public sealed class ChartGeometryTests
         Assert.All(g.Bands, b => Assert.Equal(256, b.Length));   // 64 columns, a top and a bottom point each, two values a point
         Assert.Equal(64.125, g.Bands[1][0]);
     }
+
+    // ---- a series' index (revision 3) ------------------------------------------------------------------------------
+
+    /// <summary>The unit view squeezed to four columns: 256 samples to a column, eight whole blocks of the index each.</summary>
+    private static readonly ChartView FourColumns = Unit with { Width = 4 };
+
+    [Fact]
+    public void AnIndexedGeometryIsTheWalkedOneAndADropoutStillShows()
+    {
+        // The dense case above, looked up: column 2 (samples 512 to 767) holds the dropout. The band and the line's x are
+        // the walked geometry's exactly; the mean is the pixel of the mean value, to rounding.
+        (double[] xs, double[] ys) = Dense(i => i == 520 ? 0.0 : 100.0);
+        using var index = new SeriesIndex(ys);
+        Assert.Equal(1024, index.Count);
+        SeriesGeometry looked = ChartGeometry.Build(xs, ys, true, FourColumns, index);
+        SeriesGeometry walked = ChartGeometry.Build(xs, ys, true, FourColumns);
+        Assert.True(looked.Decimated);
+        Assert.Equal(walked.Bands.Count, looked.Bands.Count);
+        Assert.Equal(walked.Bands[0], looked.Bands[0]);
+        Assert.Equal(new[] { 0.0, 0.0, 0.0, 0.0, 0.0, 100.0, 0.0, 0.0 }, Enumerable.Range(0, 8).Select(p => looked.Bands[0][2 * p + 1]));
+        Assert.Equal(walked.SegmentCount, looked.SegmentCount);
+        for (int i = 0; i < walked.Segments.Length; i++)
+            Assert.Equal(walked.Segments[i], looked.Segments[i], 1e-9);
+        Assert.Equal(2.0, looked.Segments[6]);                // the second segment ends at column 2...
+        Assert.Equal(0.390625, looked.Segments[7], 1e-12);   // ...on its mean: 255 samples at 100 and one at 0
+    }
+
+    [Fact]
+    public void TheEnvelopeComesFromTheIndexOnlyWhenItFits()
+    {
+        // Built over other values of the same count - zeros, where the series is at 100 - the index shows in the columns
+        // it answers for: the bottom of the plot, where walking puts the top. So it is consulted, through the binding.
+        (double[] xs, double[] ys) = Dense(_ => 100.0);
+        using var zeros = new SeriesIndex(new double[1024]);
+        Assert.All(Points(ChartGeometry.Build(xs, ys, true, FourColumns, zeros)), y => Assert.Equal(100.0, y));
+        Assert.All(Points(ChartGeometry.Build(xs, ys, true, FourColumns)), y => Assert.Equal(0.0, y));
+        // Not with the times out of order, and not when it was built over another number of values (the binding leaves it
+        // out rather than have the core refuse the call).
+        Assert.All(Points(ChartGeometry.Build(xs, ys, false, FourColumns, zeros)), y => Assert.Equal(0.0, y));
+        using var shorter = new SeriesIndex(new double[1023]);
+        Assert.All(Points(ChartGeometry.Build(xs, ys, true, FourColumns, shorter)), y => Assert.Equal(0.0, y));
+        // The paired values are what it must match: a Y one longer than X, with an index over the 1024 paired values.
+        double[] longer = ys.Append(5.0).ToArray();
+        Assert.All(Points(ChartGeometry.Build(xs, longer, true, FourColumns, zeros)), y => Assert.Equal(100.0, y));
+
+        static IEnumerable<double> Points(SeriesGeometry g) => Enumerable.Range(0, g.Bands[0].Length / 2).Select(p => g.Bands[0][2 * p + 1]);
+    }
+
+    [Fact]
+    public void ADisposedIndexIsRefusedAndDisposingTwiceIsSafe()
+    {
+        (double[] xs, double[] ys) = Dense(_ => 100.0);
+        var index = new SeriesIndex(ys);
+        index.Dispose();
+        index.Dispose();
+        Assert.Throws<ObjectDisposedException>(() => ChartGeometry.Build(xs, ys, true, FourColumns, index));
+        using var empty = new SeriesIndex(ReadOnlySpan<double>.Empty);
+        Assert.Equal(0, empty.Count);
+    }
 }

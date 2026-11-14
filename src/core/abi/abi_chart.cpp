@@ -1,6 +1,7 @@
 /**
  * @file abi_chart.cpp
- * @brief The chart's geometry through the C ABI (revision 2): the transforms, a series' line and band, and the ticks.
+ * @brief The chart's geometry through the C ABI (revision 2): the transforms, a series' line and band, and the ticks;
+ * and a series' index (revision 3), which a geometry may be built with.
  *
  * Only translation of chartgeometry.h, so every host draws the pixels the core's geometry describes. A series'
  * segments and bands are handed out as views into the geometry, without a copy.
@@ -66,8 +67,46 @@ struct tmdq_geometry
     chart::SeriesGeometry geometry;
 };
 
+struct tmdq_series_index
+{
+    chart::SeriesIndex index;
+};
+
 int32_t tmdq_chart_geometry(const double* xs, const double* ys, int32_t count, int32_t sorted_x,
                             const tmdq_chart_view* view, tmdq_geometry** out)
+{
+    return tmdq_chart_geometry_indexed(xs, ys, count, sorted_x, nullptr, view, out);
+}
+
+int32_t tmdq_series_index_build(const double* ys, int32_t count, tmdq_series_index** out)
+{
+    tmdq::clearError();
+    if (!out)
+    {
+        tmdq::setError("null output");
+        return TMDQ_ERR_BADARG;
+    }
+    *out = nullptr;
+    if (badArray(ys, count))
+    {
+        tmdq::setError("a value count does not match its array");
+        return TMDQ_ERR_BADARG;
+    }
+    return tmdq::guarded("tmdq_series_index_build", [&]() -> int32_t {
+        *out = new tmdq_series_index{chart::SeriesIndex(std::span<const double>(ys, static_cast<std::size_t>(count)))};
+        return TMDQ_OK;
+    });
+}
+
+int32_t tmdq_series_index_count(const tmdq_series_index* index)
+{
+    return index ? static_cast<int32_t>(index->index.size()) : -1;
+}
+
+void tmdq_series_index_free(tmdq_series_index* index) { delete index; }
+
+int32_t tmdq_chart_geometry_indexed(const double* xs, const double* ys, int32_t count, int32_t sorted_x,
+                                    const tmdq_series_index* index, const tmdq_chart_view* view, tmdq_geometry** out)
 {
     tmdq::clearError();
     if (!out)
@@ -87,11 +126,16 @@ int32_t tmdq_chart_geometry(const double* xs, const double* ys, int32_t count, i
         tmdq::setError("a sample count does not match its arrays");
         return TMDQ_ERR_BADARG;
     }
+    if (index && index->index.size() != static_cast<std::size_t>(count))
+    {
+        tmdq::setError("the series' index was built over another number of values");
+        return TMDQ_ERR_BADARG;
+    }
     return tmdq::guarded("tmdq_chart_geometry", [&]() -> int32_t {
         const std::size_t n = static_cast<std::size_t>(count);
         auto result = std::make_unique<tmdq_geometry>();
         result->geometry = chart::buildSeriesGeometry(std::span<const double>(xs, n), std::span<const double>(ys, n),
-                                                      sorted_x != 0, v);
+                                                      sorted_x != 0, v, index ? &index->index : nullptr);
         *out = result.release();
         return TMDQ_OK;
     });

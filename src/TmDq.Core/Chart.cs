@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace TmDq.Core;
 
@@ -9,6 +10,58 @@ namespace TmDq.Core;
 /// </summary>
 public readonly record struct ChartView(double XLower, double XUpper, double YLower, double YUpper,
                                         double Left, double Top, double Width, double Height);
+
+/// <summary>
+/// A series' values summarised once by the core (a pyramid of each block's minimum, maximum and sum), so that its
+/// per-pixel-column envelope is looked up rather than walked (<see cref="ChartGeometry.Build(ReadOnlySpan{double},
+/// ReadOnlySpan{double}, bool, ChartView, SeriesIndex?)"/>). It holds no samples, about 1.5 bytes per value, and depends
+/// on the values alone: a series whose times shift keeps its index, and its values are handed over again with each
+/// geometry. Dispose it when the series goes; the finalizer frees one that was not.
+/// </summary>
+public sealed unsafe class SeriesIndex : IDisposable
+{
+    private IntPtr _handle;
+
+    /// <summary>Builds the index of <paramref name="ys"/>.</summary>
+    public SeriesIndex(ReadOnlySpan<double> ys)
+    {
+        Library.RequireLoaded();
+        fixed (double* p = ys)
+        {
+            Library.Check(Native.tmdq_series_index_build(p, ys.Length, out _handle));
+        }
+        Count = ys.Length;
+    }
+
+    /// <summary>How many values it was built over.</summary>
+    public int Count { get; }
+
+    internal IntPtr Handle
+    {
+        get
+        {
+            IntPtr handle = _handle;
+            if (handle == IntPtr.Zero)
+            {
+                throw new ObjectDisposedException(nameof(SeriesIndex));
+            }
+            return handle;
+        }
+    }
+
+    /// <summary>Releases the index. Safe to call twice.</summary>
+    public void Dispose()
+    {
+        IntPtr handle = Interlocked.Exchange(ref _handle, IntPtr.Zero);
+        if (handle != IntPtr.Zero)
+        {
+            Native.tmdq_series_index_free(handle);
+        }
+        GC.SuppressFinalize(this);
+    }
+
+    ~SeriesIndex() => Dispose();
+}
 
 /// <summary>A series' line and band, in pixels.</summary>
 /// <param name="Segments">The line, four values a segment (x0, y0, x1, y1); a gap has no segment across it.</param>
@@ -30,17 +83,28 @@ public static unsafe class ChartGeometry
     /// <summary>The line and band of the series (<paramref name="xs"/>, <paramref name="ys"/>; only their paired prefix
     /// counts) drawn in <paramref name="view"/>. With <paramref name="sortedX"/> (see <see cref="IsSortedX"/>) only the
     /// samples in view, and one each side, are walked.</summary>
-    public static SeriesGeometry Build(ReadOnlySpan<double> xs, ReadOnlySpan<double> ys, bool sortedX, ChartView view)
+    public static SeriesGeometry Build(ReadOnlySpan<double> xs, ReadOnlySpan<double> ys, bool sortedX, ChartView view) =>
+        Build(xs, ys, sortedX, view, null);
+
+    /// <summary><see cref="Build(ReadOnlySpan{double}, ReadOnlySpan{double}, bool, ChartView)"/> with the series'
+    /// <paramref name="index"/>: drawn from its envelope, the series is looked up in the index rather than walked, so a
+    /// zoomed-out view costs time in proportion to the plot's width, not to the samples in view. The same columns and
+    /// band, and the mean line to rounding. The index is used only with <paramref name="sortedX"/> and when it was built
+    /// over the paired values (<see cref="SeriesIndex.Count"/>); otherwise the series is walked.</summary>
+    public static SeriesGeometry Build(ReadOnlySpan<double> xs, ReadOnlySpan<double> ys, bool sortedX, ChartView view,
+                                       SeriesIndex? index)
     {
         Library.RequireLoaded();
         int count = Math.Min(xs.Length, ys.Length);
         ChartViewNative v = ToNative(view);
         IntPtr geometry;
+        IntPtr handle = index is not null && index.Count == count ? index.Handle : IntPtr.Zero;
         fixed (double* px = xs)
         fixed (double* py = ys)
         {
-            Library.Check(Native.tmdq_chart_geometry(px, py, count, sortedX ? 1 : 0, &v, out geometry));
+            Library.Check(Native.tmdq_chart_geometry_indexed(px, py, count, sortedX ? 1 : 0, handle, &v, out geometry));
         }
+        GC.KeepAlive(index);
         try
         {
             GeometryInfoNative info = default;

@@ -716,3 +716,290 @@ TEST_CASE("ChartGeometry: plain ticks divide the range evenly, both ends include
     CHECK(chart::tickValues(1.0, 1.0, 5).empty());
     CHECK(chart::tickValues(0.0, kInf, 5).empty());
 }
+
+// ---------------------------------------------------------------------------
+// A series' index: the envelope looked up rather than walked
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// The geometry built with an index against the one walked: the same columns, so the same number of segments and
+// bands; every band point bit for bit (the extremes of a column are the pixels of its extreme values); the line's x
+// bit for bit and its y within rounding (the mean of the values is summed in another order). Reports the largest
+// difference in a mean.
+bool sameEnvelope(const chart::SeriesGeometry& looked, const chart::SeriesGeometry& walked, double& worst)
+{
+    if (looked.decimated != walked.decimated || looked.segments.size() != walked.segments.size() ||
+        looked.bands.size() != walked.bands.size())
+        return false;
+    for (std::size_t b = 0; b < walked.bands.size(); ++b)
+    {
+        if (looked.bands[b].size() != walked.bands[b].size()) return false;
+        for (std::size_t i = 0; i < walked.bands[b].size(); ++i)
+            if (!same(looked.bands[b][i].x, walked.bands[b][i].x) || !same(looked.bands[b][i].y, walked.bands[b][i].y))
+                return false;
+    }
+    for (std::size_t i = 0; i < walked.segments.size(); ++i)
+    {
+        const chart::Segment& l = looked.segments[i];
+        const chart::Segment& w = walked.segments[i];
+        if (!same(l.from.x, w.from.x) || !same(l.to.x, w.to.x)) return false;
+        const double d = std::max(std::abs(l.from.y - w.from.y), std::abs(l.to.y - w.to.y));
+        if (!(d <= 1e-6)) return false;   // false for a NaN on one side only, too
+        worst = std::max(worst, d);
+    }
+    return true;
+}
+
+bool bitIdentical(const chart::SeriesGeometry& a, const chart::SeriesGeometry& b)
+{
+    if (a.decimated != b.decimated || a.segments.size() != b.segments.size() || a.bands.size() != b.bands.size())
+        return false;
+    for (std::size_t i = 0; i < a.segments.size(); ++i)
+        if (!same(a.segments[i].from.x, b.segments[i].from.x) || !same(a.segments[i].from.y, b.segments[i].from.y) ||
+            !same(a.segments[i].to.x, b.segments[i].to.x) || !same(a.segments[i].to.y, b.segments[i].to.y))
+            return false;
+    for (std::size_t k = 0; k < a.bands.size(); ++k)
+    {
+        if (a.bands[k].size() != b.bands[k].size()) return false;
+        for (std::size_t i = 0; i < a.bands[k].size(); ++i)
+            if (!same(a.bands[k][i].x, b.bands[k][i].x) || !same(a.bands[k][i].y, b.bands[k][i].y)) return false;
+    }
+    return true;
+}
+
+// The unit view squeezed to four columns: 1024 samples at 0.125 apart are 256 to a column, eight whole blocks each,
+// so a column is looked up from the levels rather than walked at its ends.
+chart::View fourColumns()
+{
+    chart::View v = unitView();
+    v.width = 4.0;
+    return v;
+}
+
+}  // namespace
+
+TEST_CASE("ChartGeometry: a series' index summarises any run of finite values as walking it would")
+{
+    // Every run of a short series, across every block boundary; then random runs of long ones. The least and the
+    // greatest exactly, the sum to rounding, and where the next non-finite value lies.
+    constexpr int kBlock = ChartConstants::kIndexBlockSamples;
+    std::mt19937 rng(5501);
+    auto uniform = [&](double a, double b) { return std::uniform_real_distribution<double>(a, b)(rng); };
+    auto chance = [&](double p) { return std::bernoulli_distribution(p)(rng); };
+    auto pick = [&](int a, int b) { return std::uniform_int_distribution<int>(a, b)(rng); };
+
+    auto agrees = [&](const std::vector<double>& ys, const chart::SeriesIndex& index, std::size_t first, std::size_t last) {
+        double mn = kInf, mx = -kInf, sum = 0.0, scale = 0.0;
+        for (std::size_t k = first; k < last; ++k)
+        {
+            mn = std::min(mn, ys[k]);
+            mx = std::max(mx, ys[k]);
+            sum += ys[k];
+            scale += std::abs(ys[k]);
+        }
+        const chart::SeriesIndex::Summary s = index.summarize(ys, first, last);
+        return same(s.min, mn) && same(s.max, mx) && std::abs(s.sum - sum) <= 1e-12 * scale + 1e-300;
+    };
+
+    for (int n : {1, kBlock - 1, kBlock, kBlock + 1, 2 * kBlock, 5 * kBlock + 5})
+    {
+        std::vector<double> ys(static_cast<std::size_t>(n));
+        for (double& v : ys) v = uniform(-100.0, 100.0);
+        const chart::SeriesIndex index(ys);
+        CHECK(index.size() == ys.size());
+        CHECK(index.nextNonFinite(0) == ys.size());
+        bool all = true;
+        for (std::size_t first = 0; first < ys.size(); ++first)
+            for (std::size_t last = first + 1; last <= ys.size(); ++last) all = all && agrees(ys, index, first, last);
+        CHECK(all);
+    }
+    CHECK(chart::SeriesIndex(std::vector<double>{}).size() == 0);
+    CHECK(chart::SeriesIndex(std::vector<double>{}).nextNonFinite(0) == 0);
+
+    int runs = 0, long_runs = 0;
+    for (int trial = 0; trial < 200; ++trial)
+    {
+        const int n = chance(0.5) ? pick(1, 3000) : pick(3000, 200000);
+        std::vector<double> ys(static_cast<std::size_t>(n));
+        for (double& v : ys) v = chance(0.001) ? uniform(-1e6, 1e6) : uniform(-50.0, 150.0);
+        if (chance(0.5))
+            for (int k = pick(1, 6); k > 0; --k) ys[static_cast<std::size_t>(pick(0, n - 1))] = chance(0.5) ? kNaN : -kInf;
+        std::vector<std::size_t> bad;
+        for (std::size_t i = 0; i < ys.size(); ++i)
+            if (!std::isfinite(ys[i])) bad.push_back(i);
+        const chart::SeriesIndex index(ys);
+        for (int q = 0; q < 60; ++q)
+        {
+            const std::size_t from = static_cast<std::size_t>(pick(0, n));
+            const auto next = std::lower_bound(bad.begin(), bad.end(), from);
+            const std::size_t expected = next == bad.end() ? ys.size() : *next;
+            REQUIRE(index.nextNonFinite(from) == expected);
+            if (from >= ys.size() || expected == from) continue;
+            const std::size_t last = from + 1 + static_cast<std::size_t>(pick(0, static_cast<int>(expected - from - 1)));
+            CHECK(agrees(ys, index, from, last));
+            ++runs;
+            if (last - from > 64 * static_cast<std::size_t>(kBlock)) ++long_runs;
+        }
+    }
+    CHECK(runs > 5000);
+    CHECK(long_runs > 1000);
+}
+
+TEST_CASE("ChartGeometry: the envelope looked up in an index is the envelope walked, over generated series and views")
+{
+    std::mt19937 rng(9157);
+    auto uniform = [&](double a, double b) { return std::uniform_real_distribution<double>(a, b)(rng); };
+    auto chance = [&](double p) { return std::bernoulli_distribution(p)(rng); };
+    auto pick = [&](int a, int b) { return std::uniform_int_distribution<int>(a, b)(rng); };
+
+    int looked_up = 0, sparse = 0, with_gaps = 0, first_time_bad = 0, several_bands = 0, beside = 0, big = 0;
+    int upside_down = 0;
+    double worst = 0.0;
+    for (int trial = 0; trial < 1500; ++trial)
+    {
+        // Ordered times, now and then repeated, now and then jumping (a recording that stopped and started again).
+        const int n = chance(0.25) ? pick(3, 400) : chance(0.85) ? pick(400, 20000) : pick(20000, 200000);
+        std::vector<double> xs(static_cast<std::size_t>(n)), ys(static_cast<std::size_t>(n));
+        double x = uniform(-50.0, 50.0);
+        const double level = uniform(-20.0, 120.0);
+        const double step = std::pow(10.0, uniform(-3.0, 0.5));
+        for (int i = 0; i < n; ++i)
+        {
+            x += chance(0.03) ? 0.0 : chance(0.0005) ? uniform(10.0, 5000.0) * step : step * uniform(0.5, 1.5);
+            xs[static_cast<std::size_t>(i)] = x;
+            ys[static_cast<std::size_t>(i)] = chance(0.003) ? uniform(-500.0, 500.0) : level + uniform(-10.0, 10.0);
+        }
+        if (chance(0.25))
+        {
+            // Dropouts: single non-finite values and runs of them.
+            for (int k = pick(1, 8); k > 0; --k)
+            {
+                const int at = pick(0, n - 1), len = chance(0.7) ? 1 : pick(2, 60);
+                for (int j = at; j < std::min(n, at + len); ++j) ys[static_cast<std::size_t>(j)] = chance(0.5) ? kNaN : kInf;
+            }
+            ++with_gaps;
+        }
+        if (chance(0.05))
+        {
+            xs[0] = chance(0.5) ? kNaN : -kInf;   // isSortedX does not look at the first time
+            ++first_time_bad;
+        }
+
+        chart::View v;
+        const double lo = std::isfinite(xs.front()) ? xs.front() : xs[std::min<std::size_t>(1, xs.size() - 1)];
+        const double hi = xs.back();
+        const int how = pick(0, 4);
+        if (how == 0)
+        {
+            v.xLower = lo;
+            v.xUpper = hi;
+        }
+        else if (how <= 2)
+        {
+            const double a = uniform(lo, hi), b = uniform(lo, hi);
+            v.xLower = std::min(a, b);
+            v.xUpper = std::max(a, b) + uniform(0.0, 3.0) * step;
+        }
+        else if (how == 3)
+        {
+            v.xLower = hi + uniform(0.0, 50.0);   // beside the data: only its last sample is walked
+            v.xUpper = v.xLower + uniform(0.1, 50.0);
+            ++beside;
+        }
+        else
+        {
+            v.xLower = uniform(lo, hi);
+            v.xUpper = chance(0.5) ? v.xLower : kNaN;   // an X range that cannot be used: every sample in one column
+        }
+        v.yLower = uniform(-50.0, 50.0);
+        v.yUpper = chance(0.05) ? v.yLower : v.yLower + uniform(1.0, 200.0);
+        v.left = uniform(0.0, 120.0);
+        v.top = uniform(0.0, 60.0);
+        v.width = chance(0.03) ? 0.0 : uniform(1.0, 1600.0);
+        // Now and then a plot area turned upside down: the pixel of a column's greatest value is then its lowest pixel.
+        v.height = chance(0.03) ? 0.0 : chance(0.05) ? -uniform(1.0, 900.0) : uniform(1.0, 900.0);
+        if (v.height < 0.0) ++upside_down;
+
+        REQUIRE(chart::isSortedX(xs));
+        const chart::SeriesIndex index(ys);
+        const chart::SeriesGeometry walked = chart::buildSeriesGeometry(xs, ys, true, v);
+        const chart::SeriesGeometry looked = chart::buildSeriesGeometry(xs, ys, true, v, &index);
+        INFO("trial " << trial << ": " << n << " samples, view " << v.xLower << ".." << v.xUpper << " over " << v.width
+                      << " px; " << looked.segments.size() << " segments vs " << walked.segments.size() << ", "
+                      << looked.bands.size() << " bands vs " << walked.bands.size());
+        CHECK(sameEnvelope(looked, walked, worst));
+        (walked.decimated ? looked_up : sparse)++;
+        if (walked.bands.size() > 1) ++several_bands;
+        if (walked.decimated && n >= 20000) ++big;
+    }
+    INFO("largest difference in a mean: " << worst << " px");
+    CHECK(worst < 1e-9);
+    CHECK(looked_up > 500);
+    CHECK(sparse > 150);
+    CHECK(with_gaps > 300);
+    CHECK(first_time_bad > 40);
+    CHECK(several_bands > 60);
+    CHECK(beside > 150);
+    CHECK(big > 80);
+    CHECK(upside_down > 40);
+}
+
+TEST_CASE("ChartGeometry: the envelope comes from the index when there is one, and only an index that fits is used")
+{
+    // The index is built over values the series does not have - zero where the series is at 100 - so the columns it
+    // answers for show the zeros: the bottom of the plot, pixel row 100, where the series itself is at row 0.
+    std::vector<double> xs(1024), ys(1024, 100.0);
+    for (int i = 0; i < 1024; ++i) xs[i] = i * 0.125;
+    const chart::SeriesIndex other(std::vector<double>(1024, 0.0));
+    const chart::SeriesGeometry g = chart::buildSeriesGeometry(xs, ys, true, fourColumns(), &other);
+    REQUIRE(g.decimated);
+    REQUIRE(g.bands.size() == 1);
+    REQUIRE(g.bands[0].size() == 8);
+    for (const chart::Point& p : g.bands[0]) CHECK(p.y == 100.0);
+    REQUIRE(g.segments.size() == 3);
+    for (const chart::Segment& s : g.segments) CHECK(s.from.y == 100.0);
+    // Walked, the same columns are at the top.
+    for (const chart::Point& p : chart::buildSeriesGeometry(xs, ys, true, fourColumns()).bands[0]) CHECK(p.y == 0.0);
+
+    // Its own index gives what walking gives.
+    const chart::SeriesIndex own(ys);
+    double worst = 0.0;
+    CHECK(sameEnvelope(chart::buildSeriesGeometry(xs, ys, true, fourColumns(), &own),
+                       chart::buildSeriesGeometry(xs, ys, true, fourColumns()), worst));
+
+    // An index built over another number of values is not used; nor is any index when the times are not ordered.
+    const chart::SeriesIndex misfit(std::vector<double>(1023, 0.0));
+    CHECK(bitIdentical(chart::buildSeriesGeometry(xs, ys, true, fourColumns(), &misfit),
+                       chart::buildSeriesGeometry(xs, ys, true, fourColumns())));
+    CHECK(bitIdentical(chart::buildSeriesGeometry(xs, ys, false, fourColumns(), &other),
+                       chart::buildSeriesGeometry(xs, ys, false, fourColumns())));
+    // It is the paired prefix that has to fit: with one more value than times, an index over the paired values is used.
+    std::vector<double> longer = ys;
+    longer.push_back(5.0);
+    CHECK(chart::buildSeriesGeometry(xs, longer, true, fourColumns(), &other).bands[0][0].y == 100.0);
+}
+
+TEST_CASE("ChartGeometry: looked up, a dense series still reaches a single-sample dropout, and its line is each column's mean")
+{
+    // The walked case above, with an index: 1024 samples at 100, one dropping to 0. Four columns of 256 samples, so the
+    // dropout sits inside a block that is looked up, not walked.
+    std::vector<double> xs(1024), ys(1024, 100.0);
+    for (int i = 0; i < 1024; ++i) xs[i] = i * 0.125;
+    ys[520] = 0.0;
+    const chart::SeriesIndex index(ys);
+    const chart::SeriesGeometry g = chart::buildSeriesGeometry(xs, ys, true, fourColumns(), &index);
+    REQUIRE(g.decimated);
+    REQUIRE(g.bands.size() == 1);
+    const std::vector<chart::Point>& band = g.bands[0];
+    REQUIRE(band.size() == 8);
+    for (int c = 0; c < 4; ++c)
+    {
+        CHECK(band[static_cast<std::size_t>(c)].x == c);
+        CHECK(band[static_cast<std::size_t>(c)].y == 0.0);                              // the tops: 100, the top of the plot
+        CHECK(band[static_cast<std::size_t>(7 - c)].y == (c == 2 ? 100.0 : 0.0));       // sample 520 is in column 2
+    }
+    REQUIRE(g.segments.size() == 3);
+    CHECK(g.segments[0].from.y == 0.0);
+    CHECK(std::abs(g.segments[1].to.y - 0.390625) < 1e-12);   // column 2's mean: 255 at 100 and one at 0, 99.609375
+}
