@@ -338,6 +338,98 @@ namespace TmDq.App.Tests
             s.Window.Close();
         }
 
+        // ---- the keys -------------------------------------------------------------------------------------------------
+
+        /// <summary>The plot with its keys (they are <see cref="PlotView"/>'s bindings), the chart focused.</summary>
+        private static (PlotView View, Window Window) ShowView(PlotViewModel plot)
+        {
+            var view = new PlotView { Width = 600, Height = 400, Plot = plot };
+            var window = new Window { Content = view, SizeToContent = SizeToContent.WidthAndHeight };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            view.Chart.Focus();
+            view.Chart.DraftThresholdMs = 0;
+            view.Chart.RefineDelay = TimeSpan.FromHours(1);   // only a release settles it here
+            Paint(window);
+            return (view, window);
+        }
+
+        private static void Paint(Window window)
+        {
+            Dispatcher.UIThread.RunJobs();
+            using (Frames.Capture(window).Lock()) { }
+        }
+
+        [AvaloniaTheory]
+        [InlineData(Key.Left, RawInputModifiers.None)]
+        [InlineData(Key.Right, RawInputModifiers.None)]
+        [InlineData(Key.OemPlus, RawInputModifiers.None)]
+        [InlineData(Key.OemPlus, RawInputModifiers.Shift)]
+        [InlineData(Key.OemMinus, RawInputModifiers.None)]
+        public void AHeldPanOrZoomKeyIsDraftedAndItsReleaseIsTheFullPictureAtOnce(Key key, RawInputModifiers modifiers)
+        {
+            PlotViewModel plot = Dense();
+            plot.SetXViewByUser(300, 500);
+            (PlotView view, Window window) = ShowView(plot);
+            (double, double) before = (plot.XViewMin, plot.XViewMax);
+
+            // Held: the key repeats, each repeat a step.
+            window.KeyPress(key, modifiers, PhysicalKey.None, null);
+            Paint(window);
+            window.KeyPress(key, modifiers, PhysicalKey.None, null);
+            Paint(window);
+            Assert.NotEqual(before, (plot.XViewMin, plot.XViewMax));
+            Assert.True(view.Chart.DraftShown);
+            Assert.Equal(2, view.Chart.DraftLayerRenders);
+
+            // Another key going up is not this one's release.
+            window.KeyPress(Key.LeftCtrl, RawInputModifiers.None, PhysicalKey.None, null);
+            window.KeyRelease(Key.LeftCtrl, RawInputModifiers.None, PhysicalKey.None, null);
+            Paint(window);
+            Assert.True(view.Chart.DraftShown);
+
+            window.KeyRelease(key, modifiers, PhysicalKey.None, null);
+            Paint(window);
+            Assert.False(view.Chart.DraftShown);
+            Assert.Equal(2, view.Chart.DraftLayerRenders);
+            window.Close();
+        }
+
+        [AvaloniaTheory]
+        [InlineData(Key.Home)]
+        [InlineData(Key.Back)]
+        [InlineData(Key.R)]
+        public void AKeyThatIsNotAPanOrAZoomStepIsNeverDrafted(Key key)
+        {
+            // Home, Zoom Back and Reset View jump once: they are not gestures, and a draft would only add a paint.
+            PlotViewModel plot = Dense();
+            (PlotView view, Window window) = ShowView(plot);
+            plot.PushXZoom(300, 500);   // something for Back and Home to undo
+            Paint(window);
+            window.KeyPress(key, RawInputModifiers.None, PhysicalKey.None, null);
+            Paint(window);
+            Assert.Equal((0.0, plot.XMax), (plot.XViewMin, plot.XViewMax));
+            Assert.False(view.Chart.DraftShown);
+            Assert.Equal(0, view.Chart.DraftLayerRenders);
+            window.Close();
+        }
+
+        [AvaloniaFact]
+        public void APanKeyThatCannotRunIsNotAStep()
+        {
+            // With nothing plotted the pan keys do nothing. Held while data arrives, they must not leave the plot drafting.
+            var plot = new PlotViewModel();
+            (PlotView view, Window window) = ShowView(plot);
+            view.Chart.DraftThresholdMs = -1;   // an empty chart is heavy enough to draft, if anything asks
+            window.KeyPress(Key.Left, RawInputModifiers.None, PhysicalKey.None, null);
+            Paint(window);
+            plot.SetSeries(Dense().Series.ToList());
+            Paint(window);
+            Assert.False(view.Chart.DraftShown);
+            Assert.Equal(0, view.Chart.DraftLayerRenders);
+            window.Close();
+        }
+
         [AvaloniaFact]
         public void ALongOrderedSeriesHasAnIndexUntilItGoes()
         {
