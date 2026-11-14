@@ -7,6 +7,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using TmDq.App.Models.Settings;
 using TmDq.App.Services;
@@ -28,6 +29,9 @@ namespace TmDq.App.Views
         /// <summary>The narrowest the divider drags the log to, and the divider's width.</summary>
         public const double LogMinWidth = 200, SplitterWidth = 6;
 
+        /// <summary>The gap between the window's edges and the log's and the chart's panels.</summary>
+        public const double PanelGap = 2;
+
         private MainWindowViewModel? _watched;
 
         /// <summary>The menu behind the hamburger button.</summary>
@@ -47,6 +51,13 @@ namespace TmDq.App.Views
                 Width = Math.Max(fitted.Width, MinWidth);
                 Height = Math.Max(fitted.Height, MinHeight);
             }
+            // A Border does not clip what it holds to its rounded corners, and the chart paints a square bitmap: clip it to
+            // the inside of its panel's border, as the log panel's own background is.
+            PlotView.SizeChanged += (_, e) =>
+            {
+                double r = Math.Max(0, PlotPanel.CornerRadius.TopLeft - PlotPanel.BorderThickness.Left);
+                PlotView.Clip = new RectangleGeometry(new Rect(e.NewSize), r, r);
+            };
             AddHandler(DragDrop.DragOverEvent, OnDragOver);
             AddHandler(DragDrop.DropEvent, OnDrop);
         }
@@ -90,7 +101,8 @@ namespace TmDq.App.Views
         }
 
         // The log's column (and the splitter's) give their width back to the chart while the sidebar is hidden, and get
-        // the width the user left them when it returns. The log's minimum goes with it: a hidden column has none.
+        // the width the user left them when it returns. The log's minimum goes with it: a hidden column has none. The chart's
+        // panel keeps its gap from the window's left edge while the log is not there to give it one.
         private void ShowSidebar(bool shown)
         {
             ColumnDefinition log = Body.ColumnDefinitions[0], splitter = Body.ColumnDefinitions[1];
@@ -99,6 +111,7 @@ namespace TmDq.App.Views
                 log.Width = _sidebarWidth;
                 log.MinWidth = LogMinWidth;
                 splitter.Width = new GridLength(SplitterWidth);
+                PlotPanel.Margin = new Thickness(0, PlotPanel.Margin.Top, PanelGap, PlotPanel.Margin.Bottom);
             }
             else
             {
@@ -106,6 +119,7 @@ namespace TmDq.App.Views
                 log.MinWidth = 0;
                 log.Width = new GridLength(0);
                 splitter.Width = new GridLength(0);
+                PlotPanel.Margin = new Thickness(PanelGap, PlotPanel.Margin.Top, PanelGap, PlotPanel.Margin.Bottom);
             }
         }
 

@@ -79,8 +79,10 @@
         </DrawingGroup>
       </DrawingImage>
       <!-- The colours of what the application draws itself, in each theme (US9.0, plan step 4.8): the chips and the
-           "Loading..." label over the chart, and the log sidebar's panel, each in v2.x's colours; and the divider beside
-           the log, a shade off the window's background. The chart and its legend take theirs from ChartPalette. -->
+           "Loading..." label over the chart, and the log sidebar's panel, each in v2.x's colours (but for the light log's,
+           a shade off the chart's white, and the dark chips', the dark chart's #1C1C1C); the main window's own
+           background, under its title bar and around the log and the chart (v2.x's dark grey, not Fluent's black); and
+           the divider beside the log, a shade off that background. The chart and its legend take theirs from ChartPalette. -->
       <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Light">
           <SolidColorBrush x:Key="ChipBackground" Color="#B9FFFFFF" />
@@ -90,8 +92,9 @@
           <SolidColorBrush x:Key="LoadingBackground" Color="#E6FFFFFF" />
           <SolidColorBrush x:Key="LoadingBorder" Color="#C8C8C8" />
           <SolidColorBrush x:Key="LoadingForeground" Color="#1E1E1E" />
-          <SolidColorBrush x:Key="LogPanelBackground" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="LogPanelBackground" Color="#FBFBFB" />
           <SolidColorBrush x:Key="LogPanelBorder" Color="#E5E5E5" />
+          <SolidColorBrush x:Key="WindowBackground" Color="#FFFFFF" />
           <SolidColorBrush x:Key="TitleBarHover" Color="#38808080" />
           <SolidColorBrush x:Key="SplitterGrip" Color="#C2C2C2" />
           <SolidColorBrush x:Key="SplitterGripHover" Color="#707070" />
@@ -100,7 +103,7 @@
           <DrawingImage x:Key="ImportIcon"><GeometryDrawing Brush="#C7511A" Geometry="M21.2498 4.5C21.6295 4.5 21.9433 4.78215 21.993 5.14823L21.9998 5.25V18.2541C21.9998 18.6683 21.664 19.0041 21.2498 19.0041C20.8701 19.0041 20.5563 18.7219 20.5066 18.3558L20.4998 18.2541V5.25C20.4998 4.83579 20.8356 4.5 21.2498 4.5ZM12.6469 6.30373L12.7195 6.21961C12.9858 5.95338 13.4025 5.92921 13.6961 6.1471L13.7802 6.21972L18.7768 11.2174C19.0429 11.4835 19.0672 11.8999 18.8496 12.1935L18.7771 12.2776L13.7805 17.2811C13.4878 17.5742 13.0129 17.5745 12.7198 17.2818C12.4534 17.0157 12.4289 16.5991 12.6465 16.3053L12.7191 16.2211L16.43 12.504L2.75 12.5049C2.3703 12.5049 2.05651 12.2228 2.00685 11.8567L2 11.7549C2 11.3753 2.28215 11.0615 2.64823 11.0118L2.75 11.0049L16.443 11.004L12.7194 7.28028C12.4532 7.01398 12.429 6.59732 12.6469 6.30373L12.7195 6.21961L12.6469 6.30373Z" /></DrawingImage>
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
-          <SolidColorBrush x:Key="ChipBackground" Color="#B9202020" />
+          <SolidColorBrush x:Key="ChipBackground" Color="#B91C1C1C" />
           <SolidColorBrush x:Key="ChipBorder" Color="#3C3C3C" />
           <SolidColorBrush x:Key="ChipForeground" Color="#DCDCDC" />
           <SolidColorBrush x:Key="ChipAccent" Color="#60CDFF" />
@@ -109,10 +112,11 @@
           <SolidColorBrush x:Key="LoadingForeground" Color="#FFFFFF" />
           <SolidColorBrush x:Key="LogPanelBackground" Color="#202020" />
           <SolidColorBrush x:Key="LogPanelBorder" Color="#303030" />
+          <SolidColorBrush x:Key="WindowBackground" Color="#2C2C2C" />
           <SolidColorBrush x:Key="TitleBarHover" Color="#38808080" />
           <SolidColorBrush x:Key="SplitterGrip" Color="#505050" />
           <SolidColorBrush x:Key="SplitterGripHover" Color="#9A9A9A" />
-          <SolidColorBrush x:Key="SplitterHover" Color="#2A2A2A" />
+          <SolidColorBrush x:Key="SplitterHover" Color="#383838" />
           <DrawingImage x:Key="ExportIcon"><GeometryDrawing Brush="#5EC269" Geometry="M2.7525 4.5C3.1322 4.5 3.44594 4.78227 3.49554 5.14836L3.50237 5.25014L3.5 18.2542C3.49992 18.6684 3.16408 19.0041 2.74986 19.0041C2.37017 19.0041 2.05642 18.7218 2.00683 18.3557L2 18.2539L2.00237 5.24986C2.00244 4.83565 2.33829 4.5 2.7525 4.5ZM15.6471 6.30373L15.7197 6.21961C15.986 5.95338 16.4027 5.92921 16.6963 6.1471L16.7804 6.21972L21.777 11.2174C22.0431 11.4835 22.0674 11.8999 21.8498 12.1935L21.7773 12.2776L16.7807 17.2811C16.488 17.5742 16.0131 17.5745 15.72 17.2818C15.4536 17.0157 15.4291 16.5991 15.6467 16.3053L15.7193 16.2211L19.43 12.504L5.75295 12.5049C5.37326 12.5049 5.05946 12.2228 5.0098 11.8567L5.00295 11.7549C5.00295 11.3752 5.28511 11.0615 5.65118 11.0118L5.75295 11.0049L19.443 11.004L15.7196 7.28028C15.4534 7.01398 15.4292 6.59732 15.6471 6.30373L15.7197 6.21961L15.6471 6.30373Z" /></DrawingImage>
           <DrawingImage x:Key="ImportIcon"><GeometryDrawing Brush="#F2884A" Geometry="M21.2498 4.5C21.6295 4.5 21.9433 4.78215 21.993 5.14823L21.9998 5.25V18.2541C21.9998 18.6683 21.664 19.0041 21.2498 19.0041C20.8701 19.0041 20.5563 18.7219 20.5066 18.3558L20.4998 18.2541V5.25C20.4998 4.83579 20.8356 4.5 21.2498 4.5ZM12.6469 6.30373L12.7195 6.21961C12.9858 5.95338 13.4025 5.92921 13.6961 6.1471L13.7802 6.21972L18.7768 11.2174C19.0429 11.4835 19.0672 11.8999 18.8496 12.1935L18.7771 12.2776L13.7805 17.2811C13.4878 17.5742 13.0129 17.5745 12.7198 17.2818C12.4534 17.0157 12.4289 16.5991 12.6465 16.3053L12.7191 16.2211L16.43 12.504L2.75 12.5049C2.3703 12.5049 2.05651 12.2228 2.00685 11.8567L2 11.7549C2 11.3753 2.28215 11.0615 2.64823 11.0118L2.75 11.0049L16.443 11.004L12.7194 7.28028C12.4532 7.01398 12.429 6.59732 12.6469 6.30373L12.7195 6.21961L12.6469 6.30373Z" /></DrawingImage>
         </ResourceDictionary>

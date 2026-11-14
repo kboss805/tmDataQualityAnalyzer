@@ -404,6 +404,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The selected theme persists across application restarts.
 - [x] All windows, dialogs, and the plot update to match the selected theme immediately.
 - [x] The menu and title-bar icons swap to theme-appropriate variants when the theme changes.
+- [x] In the dark theme the main window is v2.x's grey (#2C2C2C) under its title bar and around its panels, not black; the log and the chart sit in panels of one shape (the same gap from the window's edges, the same hairline border and rounded corners), and the chart is set off from the log by a shade: darker in the dark theme (#1C1C1C against #202020), lighter in the light (white against #FBFBFB).
 
 ## Tech Stack
 
