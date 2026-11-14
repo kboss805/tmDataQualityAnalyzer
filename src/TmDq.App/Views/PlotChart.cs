@@ -245,7 +245,9 @@ namespace TmDq.App.Views
                 _backingValid = true;
                 DataLayerRenders++;
             }
-            context.DrawImage(_backing, new Rect(size));
+            // The source rectangle is in the bitmap's pixels, not units: given as the units' size, above a scaling of 1 only
+            // its top-left part was drawn, magnified across the chart.
+            context.DrawImage(_backing, new Rect(0, 0, pixels.Width, pixels.Height), new Rect(size));
             RenderOverlays(context, size);
         }
 

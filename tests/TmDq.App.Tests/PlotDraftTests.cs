@@ -282,6 +282,100 @@ namespace TmDq.App.Tests
             s.Window.Close();
         }
 
+        /// <summary>Shows <paramref name="plot"/> at a display scaling of <paramref name="scale"/>, painted in full once.</summary>
+        private static Shown ShowScaled(PlotViewModel plot, double scale)
+        {
+            Shown s = Show(plot);
+            s.Window.SetRenderScaling(scale);
+            Dispatcher.UIThread.RunJobs();
+            using (ILockedFramebuffer fb = s.Frame())
+            {
+                // The frame is in device pixels, or the measurements below would be of nothing.
+                Assert.Equal(Math.Ceiling(s.Window.Bounds.Width * scale), fb.Size.Width, 1.0);
+            }
+            return s;
+        }
+
+        /// <summary>How thick, in device pixels, the first series' ink is across the rows within 8 device pixels of
+        /// <paramref name="yInChart"/> (the chart's own coordinates): in each device column of the plot's middle half, the
+        /// pixels' worth of the colour those rows hold (one blended halfway with white counts a half), the median over the
+        /// columns. Pixels of another colour, the grid's grey among them, are not counted.</summary>
+        private static double Thickness(Shown s, double scale, double yInChart, Color colour)
+        {
+            Rect c = Frames.InWindow(s.Chart, s.Window), a = s.Chart.PlotArea;
+            double cr = 255 - colour.R, cg = 255 - colour.G, cb = 255 - colour.B;
+            double cn = Math.Sqrt(cr * cr + cg * cg + cb * cb);
+            int centre = (int)Math.Round((c.Y + yInChart) * scale);
+            int from = (int)((c.X + a.X + a.Width * 0.25) * scale), to = (int)((c.X + a.X + a.Width * 0.75) * scale);
+            using ILockedFramebuffer fb = s.Frame();
+            var columns = new double[to - from];
+            for (int x = from; x < to; x++)
+            {
+                double sum = 0;
+                for (int y = centre - 8; y <= centre + 8; y++)
+                {
+                    uint p = Frames.Pixel(fb, x, y);
+                    double r = 255 - (int)((p >> 16) & 0xFF), g = 255 - (int)((p >> 8) & 0xFF), b = 255 - (int)(p & 0xFF);
+                    double n = Math.Sqrt(r * r + g * g + b * b);
+                    if (n > 8 && (r * cr + g * cg + b * cb) / (n * cn) > 0.99) sum += Math.Min(1.0, n / cn);
+                }
+                columns[x - from] = sum;
+            }
+            Array.Sort(columns);
+            return columns[columns.Length / 2];
+        }
+
+        private static void Draft(Shown s)
+        {
+            s.Chart.DraftThresholdMs = 0;
+            s.Chart.RefineDelay = TimeSpan.FromHours(1);
+            s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+            using (s.Frame()) { }
+            Assert.True(s.Chart.DraftShown);
+        }
+
+        [AvaloniaTheory]
+        [InlineData(2.0)]
+        [InlineData(3.0)]
+        public void ADraftsLineIsOneDevicePixelAtAnyDisplayScaling(double scale)
+        {
+            // A flat line, sparse (no band): at a scaling of 2 the full picture's 1.5 px pen is 3 device pixels thick, and
+            // the draft's line one device pixel, not one unit (which would be 2). The full picture's line must be where
+            // the chart puts it, too: the cached layer was once drawn magnified by the scaling a second time, its top-left
+            // part across the whole chart, and the line then fell far below the rows measured.
+            double[] xs = Enumerable.Range(0, 60).Select(i => (double)i).ToArray();
+            var plot = new PlotViewModel();
+            plot.SetSeries(new[] { PlotFixtures.Lock(0, "flat", 1, 0, xs, xs.Select(_ => 50.0).ToArray()) });
+            Shown s = ShowScaled(plot, scale);
+            Color colour = plot.Series[0].Color;
+            double full = Thickness(s, scale, s.Chart.LeftToPixel(50), colour);
+            Assert.True(full > PlotChart.PenWidth * scale * 0.8, $"the full picture's line is {full} device pixels thick at {scale}x");
+            Draft(s);
+            double draft = Thickness(s, scale, s.Chart.LeftToPixel(50), colour);
+            Assert.InRange(draft, 0.6, 1.4);
+            s.Window.Close();
+        }
+
+        [AvaloniaTheory]
+        [InlineData(2.0)]
+        [InlineData(3.0)]
+        public void ADraftsBandOutlineIsOneDevicePixelAtAnyDisplayScaling(double scale)
+        {
+            // Dense samples alternating 40 and 60: each column's band runs from 40 to 60, so its top edge is a flat line at
+            // 60, well clear of the mean at 50. The draft draws that edge one device pixel thick, at the edge's alpha (an
+            // edge one unit thick would be 2 device pixels at 2x).
+            double[] xs = Enumerable.Range(0, Samples).Select(i => i * 0.01).ToArray();
+            var plot = new PlotViewModel();
+            plot.SetSeries(new[] { PlotFixtures.Lock(0, "band", 1, 0, xs, xs.Select((_, i) => i % 2 == 0 ? 40.0 : 60.0).ToArray()) });
+            Shown s = ShowScaled(plot, scale);
+            Draft(s);
+            double edge = Thickness(s, scale, s.Chart.LeftToPixel(60), plot.Series[0].Color);
+            double expected = PlotChart.BandEdgeAlpha / 255.0;
+            Assert.InRange(edge, expected * 0.6, expected * 1.4);
+            s.Window.Close();
+        }
+
         [AvaloniaFact]
         public void OnlyTheLastStepsDelaySettlesTheGesture()
         {

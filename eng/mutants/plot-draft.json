@@ -16,11 +16,11 @@
       "expect": "caught", "note": "a draft's line at the full 1.5 px" },
     { "id": "A5", "file": "src/TmDq.App/Views/PlotChart.cs",
       "old": "                                            draft ? draftLine : 1);", "new": "                                            1);",
-      "expect": "survived",
-      "note": "equivalent at the scaling the headless suite renders at (1): a band edge of 1 px is then a device pixel either way. Above 1 the edge would not be a hairline; the scaling is not reachable from the suite" },
+      "expect": "caught",
+      "note": "a draft's band edge one unit thick: at scaling 1 that is a device pixel either way, so only the scaled cases (2x, 3x) see it" },
     { "id": "A6", "file": "src/TmDq.App/Views/PlotChart.cs",
       "old": "RenderData(into, size, draft ? 1.0 / scale : 0.0);", "new": "RenderData(into, size, draft ? 1.0 : 0.0);",
-      "expect": "survived", "note": "equivalent at scaling 1, as A5" },
+      "expect": "caught", "note": "a draft's lines one unit wide rather than one device pixel: seen only above scaling 1, as A5" },
     { "id": "A7", "file": "src/TmDq.App/Views/PlotChart.cs",
       "old": "            if (_panning) Settle();   // a released drag is the full picture at once, not after the delay\n", "new": "",
       "expect": "caught", "note": "a released drag stays a draft until the delay runs out" },
@@ -53,6 +53,9 @@
       "expect": "caught", "note": "a draft's paint time taken for the plot's" },
     { "id": "A17", "file": "src/TmDq.App/Views/PlotChart.cs",
       "old": "if (draft) DraftLayerRenders++;", "new": "if (draft) { }",
-      "expect": "caught", "note": "drafts not counted" }
+      "expect": "caught", "note": "drafts not counted" },
+    { "id": "A18", "file": "src/TmDq.App/Views/PlotChart.cs",
+      "old": "context.DrawImage(_backing, new Rect(0, 0, pixels.Width, pixels.Height), new Rect(size));", "new": "context.DrawImage(_backing, new Rect(size));",
+      "expect": "caught", "note": "the cached layer's source taken in units: above scaling 1 its top-left part is drawn across the chart (the defect the scaled cases found)" }
   ]
 }

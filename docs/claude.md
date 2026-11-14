@@ -911,7 +911,8 @@ helper every test cleans up and reads back through, which waits out a virus scan
   Calibration and Apply Cal).
 - **The plot:** `PlotTests` (series, axes, view mode, the time window and zoom, the readout, the chart's drawing and
   gestures), `PlotDraftTests` (the draft a gesture - the wheel, a drag, a held pan or zoom key - paints on a heavy plot
-  and the full picture after it, a dropout in both, an export never drafted, each long series' index and when it goes), `AroundTheChartTests` (legend, chips,
+  and the full picture after it, a dropout in both, the draft's lines and band outlines one device pixel thick at 2x and 3x
+  display scaling, an export never drafted, each long series' index and when it goes), `AroundTheChartTests` (legend, chips,
   menu, keys, Customize View, prompts).
 - **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against v2.14.2's, the image pixel by pixel, Import
   CSV), `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports).

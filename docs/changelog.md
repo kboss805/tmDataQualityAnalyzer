@@ -12,6 +12,25 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The plot drawn right at display scalings above 100 %
+
+Asked whether the draft's one-pixel lines held at display scalings above 100 %: they were written to (`1 / scaling`
+units wide), but the headless suite only ever drew at 1x, where that is 1 either way, so the two mutants that put 1 in its
+place (A5, the band edge; A6, the lines) survived, kept in `eng/mutants/plot-draft.json` as equivalent. Avalonia's
+headless platform can set a window's scaling (`SetRenderScaling`), and the first case written at 2x found a worse
+defect: the chart's cached data layer (painted at the scaling's resolution since plan step 4.3b, so in v3.0.0 and v3.1.0)
+was copied to the screen with its source rectangle in units where `DrawImage` reads pixels, so above 1x only its top-left
+part was drawn, magnified across the chart: at 2x a line at 50 % sat at the bottom of the plot, and the series, the
+grid and the axes were all drawn at four times their size. Every check before ran at 1x, and the development machine's
+displays are at 100 %. The source rectangle is now the bitmap's pixels; at 1x nothing moves.
+
+Checked: two cases in `PlotDraftTests` draw at 2x and 3x and measure, in device pixels, how thick a flat line's ink is
+in the rows where the chart puts it (the full picture's 1.5 px pen at 3 or 4.5, the draft's line at 1; with the defect,
+nothing was there) and a band's top edge in a draft (one device pixel at the edge's alpha). `eng\mutate.ps1` with
+`eng/mutants/plot-draft.json` (app, 18): all CAUGHT, among them A5 and A6 (their `expect` moved from survived to caught)
+and A18, the defect put back. Not seen in a real window above 100 %, which this machine does not run. App suite 608
+passed with 34 not run (the baseline moves from 604).
+
 #### The pan and zoom keys draft a heavy plot too
 
 The draft below came with the wheel and a drag only; the keyboard's pans and zooms (the arrows, `+` and `-`) stepped a
