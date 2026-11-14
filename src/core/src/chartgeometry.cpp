@@ -2,6 +2,7 @@
  * @file chartgeometry.cpp
  * @brief Implementation of the plot's geometry - transcribed expression for expression from the chart code it replaced,
  * which test_chartgeometry.cpp restates and compares it with, so the chart draws exactly the pixels it drew before.
+ * The envelope looked up in a SeriesIndex is held to the walked one by the same tests.
  */
 
 #include "chartgeometry.h"
@@ -9,6 +10,8 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <cstddef>
+#include <limits>
 
 #include "constants.h"
 
@@ -74,8 +77,268 @@ bool isSortedX(std::span<const double> xs)
     return true;
 }
 
+namespace
+{
+
+/// A series' line: each point joined to the one before, a gap breaking it.
+struct LineBuilder
+{
+    std::vector<Segment>& segments;
+    Point prev{};
+    bool  have_prev = false;
+
+    void add(const Point& pt)
+    {
+        if (have_prev)
+        {
+            segments.push_back(Segment{prev, pt});
+        }
+        prev      = pt;
+        have_prev = true;
+    }
+    void breakLine() { have_prev = false; }
+};
+
+/// A series' band, built as two edges: tops left-to-right, bottoms right-to-left, so closing the polygon traces the
+/// outline of the run.
+struct BandBuilder
+{
+    std::vector<std::vector<Point>>& bands;
+    std::vector<Point> tops;
+    std::vector<Point> bottoms;
+
+    void add(double x, double lo, double hi)
+    {
+        tops.push_back(Point{x, lo});
+        bottoms.push_back(Point{x, hi});
+    }
+    void close()
+    {
+        if (tops.size() >= 2)
+        {
+            std::vector<Point> poly;
+            poly.reserve(tops.size() + bottoms.size());
+            poly.insert(poly.end(), tops.begin(), tops.end());
+            poly.insert(poly.end(), bottoms.rbegin(), bottoms.rend());
+            bands.push_back(std::move(poly));
+        }
+        tops.clear();
+        bottoms.clear();
+    }
+};
+
+/// The envelope of samples [begin, end), walked one by one: each sample transformed, and its column's extremes and
+/// the sum of its pixels kept as it goes. Works whether or not the times are ordered.
+void walkEnvelope(std::span<const double> xs, std::span<const double> ys, int begin, int end, const View& view,
+                  LineBuilder& line, BandBuilder& band)
+{
+    int    column = INT_MIN;   ///< Pixel column being accumulated.
+    double col_x  = 0.0;       ///< Its x in pixels.
+    double lo     = 0.0;       ///< Lowest y (in pixels) in the column.
+    double hi     = 0.0;       ///< Highest y (in pixels) in the column.
+    double sum    = 0.0;       ///< Sum of the column's y pixels, for the mean.
+    int    count  = 0;
+
+    auto flushColumn = [&]() {
+        if (column == INT_MIN)
+        {
+            return;
+        }
+        band.add(col_x, lo, hi);
+        line.add(Point{col_x, sum / count});
+        column = INT_MIN;
+    };
+
+    for (int i = begin; i < end; ++i)
+    {
+        const double vx = xs[static_cast<std::size_t>(i)];
+        const double vy = ys[static_cast<std::size_t>(i)];
+        if (!std::isfinite(vx) || !std::isfinite(vy))
+        {
+            flushColumn();
+            band.close();
+            line.breakLine();   // the gap breaks both the line and the band
+            continue;
+        }
+
+        const Point pt{xToPixel(view, vx), yToPixel(view, vy)};
+        const int   col = static_cast<int>(std::floor(pt.x));
+        if (col != column)
+        {
+            flushColumn();
+            column = col;
+            col_x  = pt.x;
+            lo     = pt.y;
+            hi     = pt.y;
+            sum    = pt.y;
+            count  = 1;
+        }
+        else
+        {
+            lo   = std::min(lo, pt.y);
+            hi   = std::max(hi, pt.y);
+            sum += pt.y;
+            ++count;
+        }
+    }
+    flushColumn();
+}
+
+/// The same envelope of ordered samples [begin, end), looked up: each column's samples found by binary search on the
+/// times and summarised by the index, so a column costs about the same whether it holds three samples or three
+/// thousand.
+///
+/// It draws what walkEnvelope draws. The columns are the same: a column is the samples whose x lands in one pixel
+/// column by the very transform walkEnvelope applies (the inverse transform only guesses where a column ends; the
+/// forward one decides), cut short by a non-finite value as walkEnvelope cuts it. The band is the same, bit for bit:
+/// the transform to pixels is monotonic, so the extreme pixels of a column are the pixels of its extreme values. The
+/// mean is the pixel of the mean value, which is the mean of the pixels - equal to rounding (about 1e-12 px), since
+/// the sum is taken in another order.
+void lookUpEnvelope(std::span<const double> xs, std::span<const double> ys, std::size_t begin, std::size_t end,
+                    const View& view, const SeriesIndex& index, LineBuilder& line, BandBuilder& band)
+{
+    std::size_t next_bad = index.nextNonFinite(begin);
+    std::size_t i        = begin;
+    while (i < end)
+    {
+        // A non-finite value breaks the line and the band, as in walkEnvelope. An ordered series has finite times
+        // after the first; isSortedX does not look at the first.
+        if (i == next_bad || !std::isfinite(xs[i]))
+        {
+            band.close();
+            line.breakLine();
+            if (i == next_bad)
+            {
+                next_bad = index.nextNonFinite(i + 1);
+            }
+            ++i;
+            continue;
+        }
+
+        const double px     = xToPixel(view, xs[i]);
+        const double col    = std::floor(px);
+        auto         beyond = [&](double x) { return std::floor(xToPixel(view, x)) > col; };
+
+        // Where the next column starts: guessed from the inverse transform, and kept only if the forward transform
+        // agrees on both sides of it; otherwise searched for with the forward transform alone.
+        const auto  first = xs.begin() + static_cast<std::ptrdiff_t>(i + 1);
+        const auto  last  = xs.begin() + static_cast<std::ptrdiff_t>(end);
+        std::size_t next  = static_cast<std::size_t>(std::lower_bound(first, last, pixelToX(view, col + 1.0)) - xs.begin());
+        if (!((next == end || beyond(xs[next])) && !beyond(xs[next - 1])))
+        {
+            next = static_cast<std::size_t>(std::partition_point(first, last, [&](double x) { return !beyond(x); }) -
+                                            xs.begin());
+        }
+        next = std::min(next, next_bad);
+
+        const SeriesIndex::Summary s      = index.summarize(ys, i, next);
+        const double               at_min = yToPixel(view, s.min);
+        const double               at_max = yToPixel(view, s.max);
+        band.add(px, std::min(at_min, at_max), std::max(at_min, at_max));
+        line.add(Point{px, yToPixel(view, s.sum / static_cast<double>(next - i))});
+        i = next;
+    }
+}
+
+}  // namespace
+
+SeriesIndex::SeriesIndex(std::span<const double> ys) : size_(ys.size())
+{
+    constexpr std::size_t kBlock = ChartConstants::kIndexBlockSamples;
+    constexpr double      kInf   = std::numeric_limits<double>::infinity();
+    std::vector<Node> level((size_ + kBlock - 1) / kBlock, Node{kInf, -kInf, 0.0});
+    for (std::size_t i = 0; i < size_; ++i)
+    {
+        const double v = ys[i];
+        if (!std::isfinite(v))
+        {
+            nonFinite_.push_back(i);
+            continue;
+        }
+        Node& node = level[i / kBlock];
+        node.min   = std::min(node.min, v);
+        node.max   = std::max(node.max, v);
+        node.sum  += v;
+    }
+    while (!level.empty())
+    {
+        const bool top = level.size() == 1;
+        std::vector<Node> above((level.size() + 1) / 2);
+        for (std::size_t k = 0; k < above.size(); ++k)
+        {
+            const Node& a = level[2 * k];
+            above[k]      = a;
+            if (2 * k + 1 < level.size())
+            {
+                const Node& b = level[2 * k + 1];
+                above[k]      = Node{std::min(a.min, b.min), std::max(a.max, b.max), a.sum + b.sum};
+            }
+        }
+        levels_.push_back(std::move(level));
+        if (top)
+        {
+            break;
+        }
+        level = std::move(above);
+    }
+}
+
+SeriesIndex::Summary SeriesIndex::summarize(std::span<const double> ys, std::size_t first, std::size_t last) const
+{
+    constexpr std::size_t kBlock = ChartConstants::kIndexBlockSamples;
+    constexpr double      kInf   = std::numeric_limits<double>::infinity();
+    Summary s{kInf, -kInf, 0.0};
+    auto take = [&](double mn, double mx, double sum) {
+        s.min  = std::min(s.min, mn);
+        s.max  = std::max(s.max, mx);
+        s.sum += sum;
+    };
+
+    // The samples before the first whole block; then, if the run reaches past it, the whole blocks, from the levels,
+    // and the samples after the last whole block.
+    const std::size_t head_end = std::min(last, (first + kBlock - 1) / kBlock * kBlock);
+    for (std::size_t k = first; k < head_end; ++k)
+    {
+        take(ys[k], ys[k], ys[k]);
+    }
+    if (head_end == last)
+    {
+        return s;
+    }
+    const std::size_t tail_begin = last / kBlock * kBlock;   // at or after head_end, which is on a block boundary
+    std::size_t lo = head_end / kBlock;
+    std::size_t hi = tail_begin / kBlock;
+    for (std::size_t level = 0; lo < hi; ++level)
+    {
+        const std::vector<Node>& nodes = levels_[level];
+        if (lo & 1U)
+        {
+            const Node& n = nodes[lo++];
+            take(n.min, n.max, n.sum);
+        }
+        if (hi & 1U)
+        {
+            const Node& n = nodes[--hi];
+            take(n.min, n.max, n.sum);
+        }
+        lo >>= 1U;
+        hi >>= 1U;
+    }
+    for (std::size_t k = tail_begin; k < last; ++k)
+    {
+        take(ys[k], ys[k], ys[k]);
+    }
+    return s;
+}
+
+std::size_t SeriesIndex::nextNonFinite(std::size_t from) const
+{
+    const auto it = std::lower_bound(nonFinite_.begin(), nonFinite_.end(), from);
+    return it == nonFinite_.end() ? size_ : *it;
+}
+
 SeriesGeometry buildSeriesGeometry(std::span<const double> xs, std::span<const double> ys, bool sortedX,
-                                   const View& view)
+                                   const View& view, const SeriesIndex* index)
 {
     SeriesGeometry out;
     const std::size_t n = std::min(xs.size(), ys.size());
@@ -110,111 +373,40 @@ SeriesGeometry buildSeriesGeometry(std::span<const double> xs, std::span<const d
     const bool decimate = columns > 0 && (end - begin) > columns * ChartConstants::kMaxSamplesPerPixelColumn;
     out.decimated = decimate;
 
-    auto pixelFor = [&](double vx, double vy) { return Point{xToPixel(view, vx), yToPixel(view, vy)}; };
-
-    std::vector<Segment>& segments = out.segments;
-    Point prev;
-    bool  have_prev = false;
-
-    auto addPoint = [&](const Point& pt) {
-        if (have_prev)
-        {
-            segments.push_back(Segment{prev, pt});
-        }
-        prev      = pt;
-        have_prev = true;
-    };
+    LineBuilder line{out.segments};
 
     if (!decimate)
     {
-        segments.reserve(static_cast<std::size_t>(std::max(0, end - begin - 1)));
+        out.segments.reserve(static_cast<std::size_t>(std::max(0, end - begin - 1)));
         for (int i = begin; i < end; ++i)
         {
             const double vx = xs[static_cast<std::size_t>(i)];
             const double vy = ys[static_cast<std::size_t>(i)];
             if (!std::isfinite(vx) || !std::isfinite(vy))
             {
-                have_prev = false;   // the gap breaks the line
+                line.breakLine();   // the gap breaks the line
                 continue;
             }
-            addPoint(pixelFor(vx, vy));
+            line.add(Point{xToPixel(view, vx), yToPixel(view, vy)});
         }
         return out;
     }
 
-    segments.reserve(static_cast<std::size_t>(columns));
+    out.segments.reserve(static_cast<std::size_t>(columns));
     out.bands.reserve(1);
-
-    int    column = INT_MIN;   ///< Pixel column being accumulated.
-    double col_x  = 0.0;       ///< Its x in pixels.
-    double lo     = 0.0;       ///< Lowest y (in pixels) in the column.
-    double hi     = 0.0;       ///< Highest y (in pixels) in the column.
-    double sum    = 0.0;       ///< Sum of the column's y pixels, for the mean.
-    int    count  = 0;
-
-    // The band is built as two edges: tops left-to-right, bottoms right-to-left, so closing the polygon traces the
-    // outline of the run.
-    std::vector<Point> tops;
-    std::vector<Point> bottoms;
-
-    auto closeBand = [&]() {
-        if (tops.size() >= 2)
-        {
-            std::vector<Point> poly;
-            poly.reserve(tops.size() + bottoms.size());
-            poly.insert(poly.end(), tops.begin(), tops.end());
-            poly.insert(poly.end(), bottoms.rbegin(), bottoms.rend());
-            out.bands.push_back(std::move(poly));
-        }
-        tops.clear();
-        bottoms.clear();
-    };
-
-    auto flushColumn = [&]() {
-        if (column == INT_MIN)
-        {
-            return;
-        }
-        tops.push_back(Point{col_x, lo});
-        bottoms.push_back(Point{col_x, hi});
-        addPoint(Point{col_x, sum / count});
-        column = INT_MIN;
-    };
-
-    for (int i = begin; i < end; ++i)
+    BandBuilder band{out.bands};
+    // Zoomed out, walking is what a frame paid for: every sample in view, every frame. The index answers the same
+    // question in time that depends on the columns, not the samples.
+    if (sortedX && index && index->size() == n)
     {
-        const double vx = xs[static_cast<std::size_t>(i)];
-        const double vy = ys[static_cast<std::size_t>(i)];
-        if (!std::isfinite(vx) || !std::isfinite(vy))
-        {
-            flushColumn();
-            closeBand();
-            have_prev = false;   // the gap breaks both the line and the band
-            continue;
-        }
-
-        const Point pt  = pixelFor(vx, vy);
-        const int   col = static_cast<int>(std::floor(pt.x));
-        if (col != column)
-        {
-            flushColumn();
-            column = col;
-            col_x  = pt.x;
-            lo     = pt.y;
-            hi     = pt.y;
-            sum    = pt.y;
-            count  = 1;
-        }
-        else
-        {
-            lo   = std::min(lo, pt.y);
-            hi   = std::max(hi, pt.y);
-            sum += pt.y;
-            ++count;
-        }
+        lookUpEnvelope(xs, ys, static_cast<std::size_t>(begin), static_cast<std::size_t>(end), view, *index, line,
+                       band);
     }
-    flushColumn();
-    closeBand();
+    else
+    {
+        walkEnvelope(xs, ys, begin, end, view, line, band);
+    }
+    band.close();
     return out;
 }
 

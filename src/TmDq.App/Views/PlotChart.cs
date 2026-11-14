@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
@@ -9,6 +11,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Media.Immutable;
+using Avalonia.Threading;
 using TmDq.App.ViewModels.Plot;
 using TmDq.Core;
 
@@ -25,6 +28,14 @@ namespace TmDq.App.Views
     /// The data layer is painted once into a bitmap and reused until the data, a range, the size or the labels change,
     /// so moving the cursor costs the crosshair, not every series again. The state is the <see cref="PlotViewModel"/>'s;
     /// the chart only draws it and reports gestures to it.
+    ///
+    /// Two things keep a large plot responsive while it is panned or zoomed. Each long series has an index in the core
+    /// (<see cref="SeriesIndex"/>), so its envelope is looked up rather than walked: what a frame costs no longer grows
+    /// with the samples in view. And while a drag or the wheel is moving a plot whose last full paint took longer than
+    /// <see cref="DraftThresholdMs"/>, the data layer is painted as a draft: each band's outline without its fill and
+    /// every line one device pixel wide, which Skia draws several times faster. The draft is still each column's minimum
+    /// to maximum, so a one-sample dropout shows in it; the full picture is painted when the drag is released or
+    /// <see cref="RefineDelay"/> after the last step. An export never draws a draft.
     /// </summary>
     public sealed class PlotChart : Control
     {
@@ -38,12 +49,29 @@ namespace TmDq.App.Views
         public const double WheelZoomStep = 0.85;
         public const byte BandAlpha = 90, BandEdgeAlpha = 190, CrosshairAlpha = 140, ZoomBandAlpha = 45;
 
+        /// <summary>A series this long or longer gets an index: shorter ones cost next to nothing to walk.</summary>
+        public const int IndexMinSamples = 4096;
+
+        /// <summary>A gesture draws drafts only on a plot whose last full paint took longer than this: about 30 frames a
+        /// second. Measured: 52 one-hour series at 10 ms took about 90 ms to paint in full with their indexes, and a frame
+        /// of their draft about 40 ms; four such series take 8 ms in full, and are never drafted.</summary>
+        public const double DefaultDraftThresholdMs = 30;
+
+        /// <summary>How long after the last step of a wheel or a held drag the full picture is painted.</summary>
+        public static readonly TimeSpan DefaultRefineDelay = TimeSpan.FromMilliseconds(150);
 
         // Keyed by the series itself: a new series reusing an old one's id must not be drawn from the old one's geometry.
         private readonly Dictionary<PlotSeries, (int Version, ChartView View, SeriesGeometry Geometry)> _geometry = new();
+        // Depends on the values alone, which a series never changes: kept until the series goes, through any shift of its times.
+        private readonly Dictionary<PlotSeries, SeriesIndex> _indexes = new();
         private RenderTargetBitmap? _backing;
         private bool _backingValid;
         private PlotViewModel? _watched;
+
+        private bool _moving;          // a gesture is moving the plot, and the plot is heavy enough to draft
+        private bool _draftShown;      // the data layer on screen is a draft
+        private double _lastFullPaintMs;
+        private int _gestureSteps;     // bumped by each step, so that only the last step's delay settles the gesture
 
         private bool _panning;
         private double _panAnchorX;
@@ -74,8 +102,26 @@ namespace TmDq.App.Views
             set => SetValue(PlotProperty, value);
         }
 
-        /// <summary>How many times the data layer has been painted: a cursor move must not add to it.</summary>
+        /// <summary>How many times the data layer has been painted, drafts included: a cursor move must not add to it.</summary>
         public int DataLayerRenders { get; private set; }
+
+        /// <summary>How many of those paints were drafts.</summary>
+        public int DraftLayerRenders { get; private set; }
+
+        /// <summary>Whether the data layer on screen is a draft.</summary>
+        public bool DraftShown => _draftShown;
+
+        /// <summary>How long the last full (not draft) paint of the data layer took, in milliseconds.</summary>
+        public double LastFullPaintMs => _lastFullPaintMs;
+
+        /// <summary>A gesture draws drafts only when the last full paint took longer than this (<see cref="DefaultDraftThresholdMs"/>).</summary>
+        public double DraftThresholdMs { get; set; } = DefaultDraftThresholdMs;
+
+        /// <summary>How long after the last step of a gesture the full picture is painted (<see cref="DefaultRefineDelay"/>).</summary>
+        public TimeSpan RefineDelay { get; set; } = DefaultRefineDelay;
+
+        /// <summary>How many series have an index.</summary>
+        public int IndexCount => _indexes.Count;
 
         public bool CrosshairVisible => _crosshairVisible;
         public double CrosshairX => _crosshairX;
@@ -158,10 +204,16 @@ namespace TmDq.App.Views
 
         private void OnDataChanged(object? sender, EventArgs e)
         {
-            // Forget the geometry of series no longer shown.
+            // Forget the geometry and the index of series no longer shown.
             var current = new HashSet<PlotSeries>(Plot?.Series ?? Array.Empty<PlotSeries>());
             foreach (PlotSeries gone in new List<PlotSeries>(_geometry.Keys))
                 if (!current.Contains(gone)) _geometry.Remove(gone);
+            foreach (PlotSeries gone in new List<PlotSeries>(_indexes.Keys))
+            {
+                if (current.Contains(gone)) continue;
+                _indexes[gone].Dispose();
+                _indexes.Remove(gone);
+            }
             _backingValid = false;
             Cursor = Plot?.HasData == true ? new Cursor(StandardCursorType.Hand) : Cursor.Default;
             InvalidateVisual();
@@ -180,10 +232,16 @@ namespace TmDq.App.Views
             {
                 _backing?.Dispose();
                 _backing = new RenderTargetBitmap(pixels, new Vector(96 * scale, 96 * scale));
+                bool draft = _moving;
+                long started = Stopwatch.GetTimestamp();
                 using (DrawingContext into = _backing.CreateDrawingContext())
                 {
-                    RenderData(into, size);
+                    // A draft's lines are one device pixel wide, whatever the scaling.
+                    RenderData(into, size, draft ? 1.0 / scale : 0.0);
                 }
+                if (draft) DraftLayerRenders++;
+                else _lastFullPaintMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+                _draftShown = draft;
                 _backingValid = true;
                 DataLayerRenders++;
             }
@@ -191,10 +249,38 @@ namespace TmDq.App.Views
             RenderOverlays(context, size);
         }
 
-        /// <summary>The chart at <paramref name="size"/>, without the cursor's crosshair and zoom band: what an export draws.</summary>
-        public void RenderTo(DrawingContext context, Size size) => RenderData(context, size);
+        /// <summary>The chart at <paramref name="size"/>, without the cursor's crosshair and zoom band: what an export draws.
+        /// Always the full picture, never a draft.</summary>
+        public void RenderTo(DrawingContext context, Size size) => RenderData(context, size, 0.0);
 
-        private void RenderData(DrawingContext dc, Size size)
+        /// <summary>A step of a gesture is about to move the plot: on a heavy plot, the frames from here are drafts until
+        /// the gesture settles (<see cref="Settle"/>, which a released drag calls and <see cref="RefineDelay"/> of
+        /// quiet calls too).</summary>
+        private void Moving()
+        {
+            if (_lastFullPaintMs <= DraftThresholdMs) return;
+            _moving = true;
+            // Each step restarts the wait: only the last step's delay, run out, settles the gesture. (A delay posted back
+            // to the UI thread rather than a DispatcherTimer, whose ticks only the dispatcher's main loop delivers.)
+            int step = ++_gestureSteps;
+            _ = Task.Delay(RefineDelay).ContinueWith(_ => Dispatcher.UIThread.Post(() =>
+            {
+                if (step == _gestureSteps) Settle();
+            }), TaskScheduler.Default);
+        }
+
+        /// <summary>The gesture has stopped: the full picture replaces a draft on screen.</summary>
+        public void Settle()
+        {
+            if (!_moving) return;
+            _moving = false;
+            if (!_draftShown) return;
+            _backingValid = false;
+            InvalidateVisual();
+        }
+
+        /// <param name="draftLine">0 for the full picture; otherwise a draft, its lines this wide.</param>
+        private void RenderData(DrawingContext dc, Size size, double draftLine)
         {
             dc.FillRectangle(new ImmutableSolidColorBrush(Palette.Background), new Rect(size));
             PlotViewModel? vm = Plot;
@@ -233,7 +319,7 @@ namespace TmDq.App.Views
                     foreach (PlotSeries s in vm!.Series)
                     {
                         if (!vm.EffectiveVisible(s) || s.X.Length < 2) continue;
-                        DrawSeries(dc, s, s.IsLeftAxis ? left : right);
+                        DrawSeries(dc, s, s.IsLeftAxis ? left : right, draftLine);
                     }
                 }
             }
@@ -270,21 +356,24 @@ namespace TmDq.App.Views
             }
         }
 
-        private void DrawSeries(DrawingContext dc, PlotSeries s, ChartView view)
+        private void DrawSeries(DrawingContext dc, PlotSeries s, ChartView view, double draftLine)
         {
             if (!_geometry.TryGetValue(s, out var cached) || cached.Version != s.Version || cached.View != view)
             {
-                cached = (s.Version, view, ChartGeometry.Build(s.X, s.Y, s.SortedX, view));
+                cached = (s.Version, view, ChartGeometry.Build(s.X, s.Y, s.SortedX, view, IndexFor(s)));
                 _geometry[s] = cached;
             }
             SeriesGeometry g = cached.Geometry;
+            bool draft = draftLine > 0.0;
 
             // The band first, so the mean line reads on top of it. Outlined as well as filled: its edges are the columns'
-            // extremes, and stroking them keeps a one-sample excursion sharp.
+            // extremes, and stroking them keeps a one-sample excursion sharp. A draft keeps the outline and drops the fill,
+            // which costs the most to paint.
             if (g.Bands.Count > 0)
             {
-                var fill = new ImmutableSolidColorBrush(Color.FromArgb(BandAlpha, s.Color.R, s.Color.G, s.Color.B));
-                var edge = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(BandEdgeAlpha, s.Color.R, s.Color.G, s.Color.B)), 1);
+                IBrush? fill = draft ? null : new ImmutableSolidColorBrush(Color.FromArgb(BandAlpha, s.Color.R, s.Color.G, s.Color.B));
+                var edge = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(BandEdgeAlpha, s.Color.R, s.Color.G, s.Color.B)),
+                                            draft ? draftLine : 1);
                 foreach (double[] band in g.Bands)
                 {
                     var outline = new StreamGeometry();
@@ -320,7 +409,21 @@ namespace TmDq.App.Views
                 }
                 if (open) c.EndFigure(false);
             }
-            dc.DrawGeometry(null, new ImmutablePen(new ImmutableSolidColorBrush(s.Color), PenWidth, lineJoin: PenLineJoin.Bevel), line);
+            // A draft's line is one device pixel, which Skia draws as a hairline without its stroker: measured, 52 dense
+            // series' lines went from 32 ms to 4 ms.
+            dc.DrawGeometry(null, new ImmutablePen(new ImmutableSolidColorBrush(s.Color), draft ? draftLine : PenWidth, lineJoin: PenLineJoin.Bevel), line);
+        }
+
+        /// <summary>The index of a long series with ordered times, built the first time it is drawn; null for the rest.</summary>
+        private SeriesIndex? IndexFor(PlotSeries s)
+        {
+            if (!s.SortedX || s.Y.Length < IndexMinSamples) return null;
+            if (!_indexes.TryGetValue(s, out SeriesIndex? index))
+            {
+                index = new SeriesIndex(s.Y);
+                _indexes[s] = index;
+            }
+            return index;
         }
 
         private void DrawAxes(DrawingContext dc, Size size, Rect area, PlotViewModel? vm, double[] xTicks, double[] leftTicks,
@@ -418,6 +521,7 @@ namespace TmDq.App.Views
             double lower = anchor - (anchor - vm.XViewMin) * factor;
             double upper = anchor + (vm.XViewMax - anchor) * factor;
             if (upper - lower < PlotViewModel.MinZoomSpanSeconds) return;
+            Moving();
             vm.SetXViewByUser(lower, upper);
             e.Handled = true;
         }
@@ -475,7 +579,11 @@ namespace TmDq.App.Views
             {
                 // Keep the time grabbed under the cursor.
                 double shift = _panAnchorX - PixelToX(pos.X);
-                if (shift != 0.0) vm.SetXViewByUser(vm.XViewMin + shift, vm.XViewMax + shift);
+                if (shift != 0.0)
+                {
+                    Moving();
+                    vm.SetXViewByUser(vm.XViewMin + shift, vm.XViewMax + shift);
+                }
             }
             double x = PixelToX(pos.X);
             ShowCrosshair(true, x);
@@ -492,6 +600,7 @@ namespace TmDq.App.Views
                 InvalidateVisual();
                 vm?.ApplyBandZoom(_bandFrom, PixelToX(e.GetPosition(this).X));
             }
+            if (_panning) Settle();   // a released drag is the full picture at once, not after the delay
             _panning = false;
             e.Pointer.Capture(null);
             Cursor = vm?.HasData == true ? new Cursor(StandardCursorType.Hand) : Cursor.Default;

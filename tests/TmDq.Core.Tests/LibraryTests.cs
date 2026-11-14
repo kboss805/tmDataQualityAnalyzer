@@ -55,8 +55,17 @@ public class LibraryTests
     {
         // Revision 1 has no tmdq_chart_* (revision 2, plan step 4.3a): the chart would fail at its first draw.
         InvalidOperationException e = Assert.Throws<InvalidOperationException>(() => Library.CheckVersion("old.dll", 2, 1));
-        Assert.Contains("revision 2", e.Message);
-        Library.CheckVersion("new.dll", 2, 2);
+        Assert.Contains("revision 3", e.Message);
+    }
+
+    [Fact]
+    public void ADllWithoutTheSeriesIndexIsRefused()
+    {
+        // Revision 2 has no tmdq_series_index_* or tmdq_chart_geometry_indexed (revision 3): the chart would fail at its
+        // first draw of a long series.
+        InvalidOperationException e = Assert.Throws<InvalidOperationException>(() => Library.CheckVersion("old.dll", 2, 2));
+        Assert.Contains("revision 3", e.Message);
+        Library.CheckVersion("new.dll", 2, 3);
     }
 
     [Fact]

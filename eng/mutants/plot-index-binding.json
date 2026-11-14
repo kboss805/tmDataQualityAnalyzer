@@ -1,0 +1,19 @@
+{
+  "suite": "managed",
+  "args": ["-class", "TmDq.Core.Tests.ChartGeometryTests"],
+  "mutants": [
+    { "id": "M1", "file": "src/TmDq.Core/Chart.cs",
+      "old": "index is not null && index.Count == count ? index.Handle : IntPtr.Zero", "new": "index is not null ? index.Handle : IntPtr.Zero",
+      "expect": "caught", "note": "an index over another count handed to the core, which refuses the call" },
+    { "id": "M2", "file": "src/TmDq.Core/Chart.cs",
+      "old": "index is not null && index.Count == count ? index.Handle : IntPtr.Zero", "new": "IntPtr.Zero",
+      "expect": "caught", "note": "the binding never passes the index" },
+    { "id": "M3", "file": "src/TmDq.Core/Chart.cs",
+      "old": "        Count = ys.Length;", "new": "        Count = ys.Length - 1;",
+      "expect": "caught", "note": "the index's count misreported, so it is never used" },
+    { "id": "M4", "file": "src/TmDq.Core/Library.cs",
+      "old": "public const int MinimumRevision = 3;", "new": "public const int MinimumRevision = 2;",
+      "args": ["-class", "TmDq.Core.Tests.LibraryTests"],
+      "expect": "caught", "note": "a DLL without the series index accepted" }
+  ]
+}

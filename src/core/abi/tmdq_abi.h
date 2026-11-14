@@ -64,7 +64,8 @@ extern "C" {
 ///      clock stamps, series construction, the shared time base, stream identity, imported stream orders.
 ///   1  the receiver-parameters file (read and save) and the words in a minor frame (plan step 4.1a).
 ///   2  the chart's geometry: transforms, a series' line and band, ticks (plan step 4.3a).
-#define TMDQ_ABI_REVISION 2
+///   3  a series' index, and a series' geometry built with it (tmdq_series_index_*, tmdq_chart_geometry_indexed).
+#define TMDQ_ABI_REVISION 3
 
 typedef enum tmdq_status
 {
@@ -746,11 +747,12 @@ TMDQ_API int32_t tmdq_time_base_advance(tmdq_time_base* base, int32_t has_earlie
 TMDQ_API int32_t tmdq_assign_imported_stream_orders(tmdq_imported_series* const* series, int32_t count);
 
 /* ===========================================================================================
- * Chart geometry (revision 2).
+ * Chart geometry (revision 2; a series' index, revision 3).
  *
  * What the plot draws, built by the core so every application strokes the same thing (plan decision D1): the
  * transforms between data and the plot area's pixels, a series' line (the samples in view only; above two samples a
- * pixel column, each column's mean) and the band from each column's minimum to its maximum, and the X ticks.
+ * pixel column, each column's mean) and the band from each column's minimum to its maximum, and the X ticks. A
+ * series' index lets the band and the mean be looked up rather than walked.
  * The core's chartgeometry.h, translated by abi_chart.cpp.
  * ======================================================================================== */
 
@@ -807,6 +809,27 @@ TMDQ_API int32_t tmdq_geometry_info_get(const tmdq_geometry* geometry, tmdq_geom
 TMDQ_API int32_t tmdq_geometry_band(const tmdq_geometry* geometry, int32_t index, const double** points,
                                     int32_t* point_count);
 TMDQ_API void    tmdq_geometry_free(tmdq_geometry* geometry);   ///< Safe on NULL.
+
+/// A series' values summarised once (revision 3), so that its per-pixel-column envelope is looked up rather than
+/// walked: a zoomed-out view then costs time in proportion to the plot's width, not to the samples in view. It holds
+/// no samples and depends on the values alone (not the times), so it outlives a shift of the series' times; it is
+/// handed the values again with each geometry.
+typedef struct tmdq_series_index tmdq_series_index;
+
+/// Builds the index of @p count values @p ys, which are read during the call only. @return TMDQ_OK with *@p out set;
+/// TMDQ_ERR_BADARG for a NULL output, a negative count or a NULL array with a positive count.
+TMDQ_API int32_t tmdq_series_index_build(const double* ys, int32_t count, tmdq_series_index** out);
+/// How many values @p index was built over; -1 for a NULL.
+TMDQ_API int32_t tmdq_series_index_count(const tmdq_series_index* index);
+TMDQ_API void    tmdq_series_index_free(tmdq_series_index* index);   ///< Safe on NULL.
+
+/// tmdq_chart_geometry with an @p index built over the same @p count values @p ys (revision 3): the same line and
+/// the same band, the envelope's columns and band exactly as walked and its mean line equal to rounding. The index is
+/// used only with @p sorted_x; a NULL index is tmdq_chart_geometry. @return as tmdq_chart_geometry, and
+/// TMDQ_ERR_BADARG for an index built over another count.
+TMDQ_API int32_t tmdq_chart_geometry_indexed(const double* xs, const double* ys, int32_t count, int32_t sorted_x,
+                                             const tmdq_series_index* index, const tmdq_chart_view* view,
+                                             tmdq_geometry** out);
 
 /// @return 1 when every time after the first is finite and none is smaller than the one before, else 0; -1 for a
 /// negative count or a NULL array with a positive count.

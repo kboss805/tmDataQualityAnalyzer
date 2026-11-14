@@ -671,4 +671,21 @@ internal static unsafe partial class Native
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
     internal static partial int tmdq_chart_time_ticks(double lower, double upper, int count, double origin, double* ticks, int capacity);
+
+    // --- a series' index (revision 3)
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_series_index_build(double* ys, int count, out IntPtr index);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_series_index_count(IntPtr index);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial void tmdq_series_index_free(IntPtr index);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_chart_geometry_indexed(double* xs, double* ys, int count, int sortedX, IntPtr index, ChartViewNative* view, out IntPtr geometry);
 }

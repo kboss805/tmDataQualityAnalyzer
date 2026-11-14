@@ -10,7 +10,8 @@
  *  - a series' line, built from the samples in view only (with one on each side, so the line still enters and
  *    leaves along the segment the data describes), sample by sample while there are few enough per pixel column;
  *  - above that, its per-pixel-column envelope: a line through each column's MEAN and a band from its minimum to
- *    its maximum, so a one-sample dropout still reaches the edge of the band;
+ *    its maximum, so a one-sample dropout still reaches the edge of the band. With a SeriesIndex the envelope is
+ *    looked up rather than walked: the same columns and the same band, the mean within rounding of the walked one;
  *  - the X ticks, evenly spaced for a plain axis and snapped to round clock times for a time axis.
  *
  * Every value is a double in the coordinates the caller paints in; nothing here draws, holds a series or knows a
@@ -20,6 +21,7 @@
 #ifndef CHARTGEOMETRY_H
 #define CHARTGEOMETRY_H
 
+#include <cstddef>
 #include <span>
 #include <vector>
 
@@ -83,11 +85,61 @@ double pixelToY(const View& view, double py);
 /// geometry skip straight to the samples in view by binary search; computed once per series rather than assumed.
 bool isSortedX(std::span<const double> xs);
 
+/// A series' values summarised once, so that its per-pixel-column envelope can be looked up instead of walked.
+///
+/// Zoomed out, every frame of a pan or a zoom used to visit every sample in view to find each column's minimum,
+/// maximum and mean: 21 million samples, 280 ms, for 52 one-hour series at 10 ms. The index is a pyramid over the
+/// values: the minimum, maximum and sum of each block of ChartConstants::kIndexBlockSamples samples, then of each
+/// pair of blocks, and so on up. A run of samples is the few samples at its ends that do not fill a block, plus a
+/// handful of blocks from the levels: about 2 x 32 samples and 2 x log2(run / 32) blocks, whatever the run's length.
+///
+/// It holds no samples, only what was summarised from them, so it is handed the values again with each question
+/// (the caller's arrays may move between calls). It depends on the values alone, not on the times: a series whose
+/// times shift keeps its index. Non-finite values are left out of every summary and listed, so that a run is never
+/// asked across one.
+class SeriesIndex
+{
+public:
+    /// The least, the greatest and the sum of a run of values.
+    struct Summary
+    {
+        double min;
+        double max;
+        double sum;
+    };
+
+    explicit SeriesIndex(std::span<const double> ys);
+
+    /// How many values it was built over.
+    std::size_t size() const { return size_; }
+
+    /// The summary of @p ys[@p first, @p last), @p ys being the values the index was built over and every one in the
+    /// run finite (nextNonFinite says where the first that is not lies). Requires @p first < @p last <= size().
+    Summary summarize(std::span<const double> ys, std::size_t first, std::size_t last) const;
+
+    /// The first value at or after @p from that is not finite; size() when there is none.
+    std::size_t nextNonFinite(std::size_t from) const;
+
+private:
+    struct Node
+    {
+        double min;
+        double max;
+        double sum;
+    };
+
+    std::size_t size_ = 0;
+    std::vector<std::vector<Node>> levels_;   ///< levels_[0]: one node a block; each level above, one a pair below.
+    std::vector<std::size_t> nonFinite_;      ///< The non-finite values' indices, in order.
+};
+
 /// The line and band of the series (@p xs, @p ys) in @p view. Only the paired prefix of the two is used. With
 /// @p sortedX (see isSortedX) only the samples in view, and one on each side, are walked. Above
-/// ChartConstants::kMaxSamplesPerPixelColumn samples per pixel column the series is drawn from its envelope.
+/// ChartConstants::kMaxSamplesPerPixelColumn samples per pixel column the series is drawn from its envelope; with
+/// @p sortedX and an @p index built over the paired values, the envelope is looked up in it rather than walked. An
+/// index of another size is not used.
 SeriesGeometry buildSeriesGeometry(std::span<const double> xs, std::span<const double> ys, bool sortedX,
-                                   const View& view);
+                                   const View& view, const SeriesIndex* index = nullptr);
 
 /// @p count (at least 2) evenly spaced values from @p lower to @p upper, both ends included; none for a range that
 /// is not usable.

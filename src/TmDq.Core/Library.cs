@@ -27,7 +27,7 @@ public static unsafe class Library
     public const int ExpectedVersion = 2;
 
     /// <summary>The lowest revision of that version this binding needs (TMDQ_ABI_REVISION).</summary>
-    public const int MinimumRevision = 2;   // 1: the receiver-parameters file (plan step 4.1a); 2: the chart's geometry (4.3a)
+    public const int MinimumRevision = 3;   // 1: the receiver-parameters file (plan step 4.1a); 2: the chart's geometry (4.3a); 3: a series' index
 
     private static readonly object s_lock = new();
     private static string? s_path;
