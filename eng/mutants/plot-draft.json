@@ -52,7 +52,7 @@
       "old": "                else _lastFullPaintMs = Stopwatch", "new": "                _lastFullPaintMs = Stopwatch",
       "expect": "caught", "note": "a draft's paint time taken for the plot's" },
     { "id": "A17", "file": "src/TmDq.App/Views/PlotChart.cs",
-      "old": "                if (draft) DraftLayerRenders++;\n", "new": "",
+      "old": "if (draft) DraftLayerRenders++;", "new": "if (draft) { }",
       "expect": "caught", "note": "drafts not counted" }
   ]
 }

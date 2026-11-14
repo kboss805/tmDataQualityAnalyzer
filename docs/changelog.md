@@ -60,7 +60,20 @@ samples, with dropouts, repeated times, jumps in time and upside-down plot areas
 over every run of short series; the ABI and the binding are held to the core; `PlotDraftTests` renders the draft and the
 full picture (a dropout reaching the bottom of the plot in both, the fill gone and the lines thinner in the draft), the
 release and the delay settling a gesture, only the last step's delay counting, an export during a draft being the full
-picture, and each long series' index (built, used, kept through a shift of the times, freed). MUTATION_RESULTS
+picture, and each long series' index (built, used, kept through a shift of the times, freed).
+
+Checked with `eng\mutate.ps1`, the lists kept in `eng/mutants/`. `plot-envelope-index.json` (native, 23): 21 CAUGHT,
+among them the index used for out-of-order times or of the wrong size, each end of a run's blocks rounded the wrong way,
+either odd node or a pair's sum dropped, a run not cut at a dropout, the column end guessed without the forward
+transform's check (N13), and the band's edges taken in the values' order on an upside-down plot area (N15, caught once
+the generator made such areas). Two SURVIVED, both equivalent and marked so: N11 (a node holding a non-finite value is
+never read whole) and N14 (always searching rather than trusting a checked guess finds the same column end; only speed
+differs). `plot-index-binding.json` (managed, 4): all CAUGHT. `plot-draft.json` (app, 17): 15 CAUGHT, among them never
+drafting, a draft keeping its fill or its 1.5 px line (caught by `ADraftsLinesAreAPixelWide`, written for it), a
+released drag left drafted, an earlier step's delay settling a later one (`OnlyTheLastStepsDelaySettlesTheGesture`,
+written for it), and the index built but not drawn from (`ALongSeriesIsDrawnFromItsIndex`, written for it). Two
+SURVIVED, equivalent at the 100 % scaling the headless suite renders at, where a device pixel is a logical one: a
+draft's band edge (A5) and its line width (A6) at 1 logical pixel instead of one device pixel. The side-by-side soak (`eng\run_soak.ps1`): all 34 runs exported what v2.14.2 exported, byte for byte.
 
 Baselines: native 491 test cases (1 skipped), managed 364 passed / 1 skipped, app 595 passed with 34 not run.
 
