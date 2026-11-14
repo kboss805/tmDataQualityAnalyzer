@@ -25,7 +25,11 @@ rebound there follows; only a command that can run counts. `Home`, `Backspace` a
 Checked: `PlotDraftTests` holds each of the five bindings (the arrows, `+` with and without Shift, `-`) drafted while
 repeating and settled by its own release and not another key's, the three jumps never drafted, and a pan key pressed with
 nothing plotted leaving no draft behind when data arrives. `eng\mutate.ps1` with `eng/mutants/plot-draft-keys.json`
-(app, 7): MUTATION_KEYS. The kept `plot-draft.json` still matches the code. App suite APP_KEYS.
+(app, 7): all CAUGHT, among them the left arrow or `+` not a step, every bound key a step (K3, caught by `Home` and `R`;
+`Backspace` cannot catch it, since its binding has already run and Zoom Back has nothing left to undo by the time the
+view sees the key, which is why only a pan or zoom key's command, which can always run with data, is asked), any key
+going up settling the gesture, and the handler missing the keys that arrive handled. The kept `plot-draft.json` still
+matches the code. App suite 604 passed with 34 not run (the baseline moves from 595); nothing native or managed changed.
 
 #### A large plot stays responsive while it is panned or zoomed
 
