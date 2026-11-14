@@ -340,6 +340,15 @@ struct Seen
     bool                    throwing = false;
     bool                    keepResults = true;
 
+    /// A host that waits on its own run from `finished`, which the header forbids: what that call did, seen from the
+    /// callback's thread. The handle (a tmdq_run, or a tmdq_calibration when @c waitOnCalibration) is set by the test
+    /// once start has returned, so `finished` waits for it.
+    bool                    waitFromFinished = false;
+    bool                    waitOnCalibration = false;
+    std::atomic<void*>      waitOn{nullptr};
+    bool                    waitThrew = false;
+    std::string             waitError;
+
     ~Seen()
     {
         for (tmdq_stream_result* r : results)
@@ -383,6 +392,27 @@ struct Seen
     static void onFinished(void* u, int32_t ok)
     {
         Seen* s = self(u);
+        if (s->waitFromFinished)
+        {
+            void* handle = nullptr;
+            for (int i = 0; i < 1000 && (handle = s->waitOn.load()) == nullptr; ++i)
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            try
+            {
+                if (handle == nullptr)                  s->waitError = "no handle was given to wait on";
+                else if (s->waitOnCalibration)          tmdq_calibration_wait(static_cast<tmdq_calibration*>(handle));
+                else                                    tmdq_run_wait(static_cast<tmdq_run*>(handle));
+            }
+            catch (...)
+            {
+                s->waitThrew = true;
+            }
+            if (handle != nullptr)
+            {
+                const char* error = tmdq_last_error();
+                s->waitError = error ? error : "";
+            }
+        }
         {
             std::lock_guard<std::mutex> l(s->mutex);
             s->events.push_back("finished:" + std::to_string(ok));
@@ -1593,6 +1623,28 @@ TEST_CASE("Abi: aRunReportsInTheDocumentedOrder")
     REQUIRE_MESSAGE(seen.any("log:"), events.front());
 }
 
+TEST_CASE("Abi: waitingOnARunFromItsOwnFinishedCallbackIsAnErrorNotAnException")
+{
+    // `finished` is delivered on the thread tmdq_run_wait would join, so the call can never succeed; the header forbids
+    // it. A host that does it anyway is told through the last error: an exception out of an exported function would
+    // cross the C boundary, which is undefined into managed code.
+    const StepCal f = loadStepCal();
+    Request request(f, { lockCase(f) });
+    Seen seen;
+    seen.waitFromFinished = true;
+    const tmdq_callbacks callbacks = seen.callbacks();
+    tmdq_run* run = nullptr;
+    REQUIRE(tmdq_run_start(&request.req, &callbacks, &run) == int(TMDQ_OK));
+    RunGuard guard{run};
+    seen.waitOn = run;
+    REQUIRE_MESSAGE(seen.waitFinished(kTimeoutMs), seen.joined());
+    tmdq_run_wait(run);
+
+    CHECK(!seen.waitThrew);
+    CHECK_MESSAGE(seen.waitError.find("exception in tmdq_run_wait") != std::string::npos, seen.waitError);
+    CHECK(seen.finishedSuccess == 1);   // and the run itself was not disturbed
+}
+
 TEST_CASE("Abi: aNonLinearProfileReachesTheJob")
 {
     const StepCal f = loadStepCal();
@@ -2663,6 +2715,27 @@ TEST_CASE("Abi: waitAloneIsEnoughToSeeACalibrationEnd")
     REQUIRE(tmdq_calibration_result(guard.handle, &info) == int(TMDQ_OK));
     REQUIRE(info.channel_count == 48);
     tmdq_calibration_wait(guard.handle);   // and again is harmless
+}
+
+TEST_CASE("Abi: waitingOnACalibrationFromItsOwnFinishedCallbackIsAnErrorNotAnException")
+{
+    // As for a run: `finished` comes from the thread the wait would join, and the failure is a last error.
+    const StepCal f = loadStepCal();
+
+    CalRequest request{CalCase(f)};
+    Seen seen;
+    seen.waitFromFinished = true;
+    seen.waitOnCalibration = true;
+    const tmdq_callbacks callbacks = seen.callbacks();
+    CalGuard guard;
+    REQUIRE(tmdq_calibration_start(&request.req, &callbacks, &guard.handle) == int(TMDQ_OK));
+    seen.waitOn = guard.handle;
+    REQUIRE_MESSAGE(seen.waitFinished(kTimeoutMs), seen.joined());
+    tmdq_calibration_wait(guard.handle);
+
+    CHECK(!seen.waitThrew);
+    CHECK_MESSAGE(seen.waitError.find("exception in tmdq_calibration_wait") != std::string::npos, seen.waitError);
+    CHECK(seen.finishedSuccess == 1);
 }
 
 TEST_CASE("Abi: aThresholdThatHadToBeRelaxedIsReported")
@@ -3804,6 +3877,29 @@ TEST_CASE("Abi: theTicksAndTheRangeCheckAreTheCores")
     CHECK(two[1] == 25.0);
     CHECK(two[2] == -1.0);
     CHECK(tmdq_chart_time_ticks(0.0, 116.0, 5, 0.0, nullptr, 0) == 4);   // measuring only
+}
+
+TEST_CASE("Abi: aTickCountNoAxisCouldHaveIsRefused")
+{
+    // The count sizes an allocation, so it is bounded before anything is built: a host's mistaken or hostile count
+    // would otherwise ask for gigabytes (and an exception from that must not leave the library either).
+    double ticks[4] = {-1.0, -1.0, -1.0, -1.0};
+    CHECK(tmdq_chart_ticks(0.0, 100.0, 65536, nullptr, 0) == 65536);   // the most there can be, measured
+    CHECK(std::string(tmdq_last_error()).empty());
+
+    CHECK(tmdq_chart_ticks(0.0, 100.0, 65537, ticks, 4) == -1);
+    CHECK(std::string(tmdq_last_error()).find("tick count") != std::string::npos);
+    CHECK(ticks[0] == -1.0);   // nothing written
+    CHECK(tmdq_chart_ticks(0.0, 100.0, std::numeric_limits<int32_t>::max(), nullptr, 0) == -1);
+
+    CHECK(tmdq_chart_time_ticks(0.0, 100.0, 65537, 0.0, ticks, 4) == -1);
+    CHECK(std::string(tmdq_last_error()).find("tick count") != std::string::npos);
+    CHECK(tmdq_chart_time_ticks(0.0, 100.0, std::numeric_limits<int32_t>::max(), 0.0, nullptr, 0) == -1);
+    CHECK(ticks[0] == -1.0);
+
+    // An ordinary call after a refusal leaves no stale message.
+    CHECK(tmdq_chart_ticks(0.0, 100.0, 5, ticks, 4) == 5);
+    CHECK(std::string(tmdq_last_error()).empty());
 }
 
 TEST_CASE("Abi: badArgumentsToTheChartFunctionsAreRefused")

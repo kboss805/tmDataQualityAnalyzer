@@ -1,0 +1,86 @@
+{
+  "suite": "native",
+  "args": ["-tc=Abi: *"],
+  "mutants": [
+    {
+      "id": "G1",
+      "file": "src/core/abi/abi_run.cpp",
+      "old": "        (void)tmdq::guarded(\"tmdq_run_wait\", [&]() -> int32_t {\n            run->runner.wait();\n            return TMDQ_OK;\n        });",
+      "new": "        run->runner.wait();",
+      "expect": "caught",
+      "note": "the run's wait unguarded: from `finished` it joins its own thread and the exception leaves the exported function"
+    },
+    {
+      "id": "G2",
+      "file": "src/core/abi/abi_calibration.cpp",
+      "old": "        (void)tmdq::guarded(\"tmdq_calibration_wait\", [&]() -> int32_t {\n            calibration->extractor.wait();\n            return TMDQ_OK;\n        });",
+      "new": "        calibration->extractor.wait();",
+      "expect": "caught",
+      "note": "the calibration's wait unguarded, likewise"
+    },
+    {
+      "id": "G3",
+      "file": "src/core/abi/abi_chart.cpp",
+      "old": "    if (count > kMaxTickCount)",
+      "new": "    if (count > kMaxTickCount * 2)",
+      "expect": "caught",
+      "note": "the tick count bound doubled: 65,537 ticks are built and returned"
+    },
+    {
+      "id": "G4",
+      "file": "src/core/abi/abi_chart.cpp",
+      "old": "    if (count > kMaxTickCount)",
+      "new": "    if (count >= kMaxTickCount)",
+      "expect": "caught",
+      "note": "the bound off by one: the 65,536 the header allows is refused"
+    },
+    {
+      "id": "G5",
+      "file": "src/core/abi/abi_chart.cpp",
+      "old": "    return status == TMDQ_OK ? written : -1;",
+      "new": "    return status == TMDQ_OK ? written : 0;",
+      "expect": "survived",
+      "note": "equivalent: with the bound in front, nothing tickCall builds can throw (at most 65,536 doubles)"
+    },
+    {
+      "id": "G6",
+      "file": "src/core/abi/abi_chart.cpp",
+      "old": "        tmdq::setError(\"a tick count above 65536 is not an axis\");\n        return -1;",
+      "new": "        return -1;",
+      "expect": "caught",
+      "note": "a refused count that says nothing"
+    },
+    {
+      "id": "G7",
+      "file": "src/core/abi/abi_series.cpp",
+      "old": "    return status == TMDQ_OK ? same : -1;",
+      "new": "    return status == TMDQ_OK ? 1 : -1;",
+      "expect": "caught",
+      "note": "every pair of keys the same stream"
+    },
+    {
+      "id": "D1",
+      "file": "src/core/abi/abi_internal.h",
+      "old": "inline constexpr std::size_t kCallbacksMinimum = sizeof(tmdq_callbacks);",
+      "new": "inline constexpr std::size_t kCallbacksMinimum = sizeof(tmdq_callbacks) + 8;",
+      "expect": "caught",
+      "note": "the shared minimum larger than the struct a host was built with: a run and an extraction refuse every host"
+    },
+    {
+      "id": "D2",
+      "file": "src/core/abi/abi_internal.h",
+      "old": "        case TMDQ_METRIC_FRAME_SYNC_LOCK:           out = MetricType::FrameSyncLock; return true;",
+      "new": "        case TMDQ_METRIC_FRAME_SYNC_LOCK:           out = MetricType::SNR; return true;",
+      "expect": "caught",
+      "note": "a lock column read as SNR, in the CSV and the imported series both"
+    },
+    {
+      "id": "D3",
+      "file": "src/core/abi/tmdq_abi.h",
+      "old": "    TMDQ_CAL_NO_DATA            = 1,",
+      "new": "    TMDQ_CAL_NO_DATA            = 7,",
+      "expect": "compile",
+      "note": "the ABI's outcome renumbered: the core's CalibrationOutcome is held to it at compile time"
+    }
+  ]
+}

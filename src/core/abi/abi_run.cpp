@@ -29,7 +29,6 @@ namespace {
 
 constexpr std::size_t kStreamConfigMinimum = sizeof(tmdq_stream_config);
 constexpr std::size_t kRunRequestMinimum   = sizeof(tmdq_run_request);
-constexpr std::size_t kCallbacksMinimum    = sizeof(tmdq_callbacks);
 constexpr std::size_t kStreamInfoMinimum   = sizeof(tmdq_stream_info);
 constexpr std::size_t kSeriesMinimum       = sizeof(tmdq_channel_series);
 
@@ -155,7 +154,7 @@ int32_t tmdq_run_start(const tmdq_run_request* request, const tmdq_callbacks* ca
         }
 
         tmdq_callbacks cb{};
-        if (callbacks && !tmdq::readStruct(callbacks, kCallbacksMinimum, cb))
+        if (callbacks && !tmdq::readStruct(callbacks, tmdq::kCallbacksMinimum, cb))
         {
             tmdq::setError("a callbacks struct_size that is too small");
             return TMDQ_ERR_BADARG;
@@ -226,7 +225,12 @@ void tmdq_run_wait(tmdq_run* run)
 {
     if (run)
     {
-        run->runner.wait();
+        // From a thread of the run itself (the reader's, which also reports `finished`) this joins the caller, which
+        // throws rather than waits. The header forbids the call; the failure is a last error, not an escape.
+        (void)tmdq::guarded("tmdq_run_wait", [&]() -> int32_t {
+            run->runner.wait();
+            return TMDQ_OK;
+        });
     }
 }
 

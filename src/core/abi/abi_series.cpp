@@ -26,17 +26,6 @@ constexpr std::size_t kStreamKeyMinimum     = sizeof(tmdq_stream_key);
 constexpr std::size_t kTimeBaseInfoMinimum  = sizeof(tmdq_time_base_info);
 constexpr std::size_t kImportedMinimum      = sizeof(tmdq_imported_series);
 
-bool toMetricType(int32_t value, MetricType& out)
-{
-    switch (value)
-    {
-        case TMDQ_METRIC_SNR:                       out = MetricType::SNR; return true;
-        case TMDQ_METRIC_FRAME_SYNC_LOCK:           out = MetricType::FrameSyncLock; return true;
-        case TMDQ_METRIC_ACCUMULATED_MISSED_FRAMES: out = MetricType::AccumulatedMissedFrames; return true;
-        default:                                    return false;
-    }
-}
-
 } // namespace
 
 /// A stream as series. It keeps the stream's data alive: the specs' value spans view it.
@@ -164,9 +153,15 @@ int32_t tmdq_stream_key_equal(const tmdq_stream_key* a, const tmdq_stream_key* b
         tmdq::setError("a null key or a struct_size that is too small");
         return -1;
     }
-    const StreamKey x{ka.source_id, tmdq::textOf(ka.label_utf8), ka.channel};
-    const StreamKey y{kb.source_id, tmdq::textOf(kb.label_utf8), kb.channel};
-    return x == y ? 1 : 0;
+    // The labels are copied into strings, which can throw; nothing may leave the library.
+    int32_t same = -1;
+    const int32_t status = tmdq::guarded("tmdq_stream_key_equal", [&]() -> int32_t {
+        const StreamKey x{ka.source_id, tmdq::textOf(ka.label_utf8), ka.channel};
+        const StreamKey y{kb.source_id, tmdq::textOf(kb.label_utf8), kb.channel};
+        same = x == y ? 1 : 0;
+        return TMDQ_OK;
+    });
+    return status == TMDQ_OK ? same : -1;
 }
 
 // --- the shared time base ------------------------------------------------------------------------------
@@ -291,7 +286,7 @@ int32_t tmdq_assign_imported_stream_orders(tmdq_imported_series* const* series, 
                 return TMDQ_ERR_BADARG;
             }
             ImportedSeries one;
-            if (!toMetricType(wire.metric_type, one.metricType))
+            if (!tmdq::toMetricType(wire.metric_type, one.metricType))
             {
                 tmdq::setError("series " + std::to_string(i) + " has an unknown metric type");
                 return TMDQ_ERR_BADARG;

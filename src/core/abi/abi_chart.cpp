@@ -60,6 +60,30 @@ int32_t writeTicks(const std::vector<double>& values, double* ticks, int32_t cap
     return static_cast<int32_t>(values.size());
 }
 
+/// More ticks than this are no axis (a chart has fewer pixels), so a count above it is refused before anything is
+/// built: it would ask for gigabytes.
+constexpr int32_t kMaxTickCount = 65536;
+
+/// The common body of the two tick functions: the count checked, then @p make's values written to the host's buffer,
+/// whatever @p make throws kept inside the library. @return as writeTicks, or -1 with the reason as the last error.
+template <typename Make>
+int32_t tickCall(const char* what, int32_t count, double* ticks, int32_t capacity, Make&& make)
+{
+    tmdq::clearError();
+    if (count > kMaxTickCount)
+    {
+        tmdq::setError("a tick count above 65536 is not an axis");
+        return -1;
+    }
+    // guarded's own result is a status (5 on an exception), which a count could equal: the count goes out through a local.
+    int32_t written = -1;
+    const int32_t status = tmdq::guarded(what, [&]() -> int32_t {
+        written = writeTicks(make(), ticks, capacity);
+        return TMDQ_OK;
+    });
+    return status == TMDQ_OK ? written : -1;
+}
+
 } // namespace
 
 struct tmdq_geometry
@@ -131,7 +155,7 @@ int32_t tmdq_chart_geometry_indexed(const double* xs, const double* ys, int32_t 
         tmdq::setError("the series' index was built over another number of values");
         return TMDQ_ERR_BADARG;
     }
-    return tmdq::guarded("tmdq_chart_geometry", [&]() -> int32_t {
+    return tmdq::guarded("tmdq_chart_geometry_indexed", [&]() -> int32_t {
         const std::size_t n = static_cast<std::size_t>(count);
         auto result = std::make_unique<tmdq_geometry>();
         result->geometry = chart::buildSeriesGeometry(std::span<const double>(xs, n), std::span<const double>(ys, n),
@@ -221,13 +245,12 @@ int32_t tmdq_chart_transform(const tmdq_chart_view* view, int32_t kind, double v
 
 int32_t tmdq_chart_ticks(double lower, double upper, int32_t count, double* ticks, int32_t capacity)
 {
-    tmdq::clearError();
-    return writeTicks(chart::tickValues(lower, upper, count), ticks, capacity);
+    return tickCall("tmdq_chart_ticks", count, ticks, capacity, [&] { return chart::tickValues(lower, upper, count); });
 }
 
 int32_t tmdq_chart_time_ticks(double lower, double upper, int32_t count, double origin, double* ticks,
                               int32_t capacity)
 {
-    tmdq::clearError();
-    return writeTicks(chart::timeTickValues(lower, upper, count, origin), ticks, capacity);
+    return tickCall("tmdq_chart_time_ticks", count, ticks, capacity,
+                    [&] { return chart::timeTickValues(lower, upper, count, origin); });
 }

@@ -892,8 +892,8 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
 - **Abi** (`test_abi`) - the C ABI compiled into the test executable and called as a host would: every struct's size
   and offsets, versioning both ways, each function against the core called directly (runs, calibration, the formats,
   series construction, the receiver-parameters file, the chart's geometry and a series' index), the callbacks' order
-  and threads, cancel and free in flight, bad
-  arguments and the last error.
+  and threads, cancel and free in flight, a wait from the run's own `finished` callback and an over-large tick count
+  (an error, never an exception), bad arguments and the last error.
 
 **The C# library** (`tests/TmDq.Core.Tests`): the struct layout against the native side (`LayoutTests`); the native
 projects' source lists against the files on disk (`NativeProjectTests`); the recordings' channels (`FileTests`); runs of

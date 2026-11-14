@@ -34,22 +34,6 @@ constexpr std::size_t kReceiverParamsMinimum = sizeof(tmdq_receiver_params);
 
 static_assert(sizeof(int) == sizeof(int32_t), "the ids are handed to the host as the core holds them");
 
-// The core's MetricType is numbered as the ABI's.
-static_assert(static_cast<int>(MetricType::SNR) == TMDQ_METRIC_SNR);
-static_assert(static_cast<int>(MetricType::FrameSyncLock) == TMDQ_METRIC_FRAME_SYNC_LOCK);
-static_assert(static_cast<int>(MetricType::AccumulatedMissedFrames) == TMDQ_METRIC_ACCUMULATED_MISSED_FRAMES);
-
-bool toMetricType(int32_t value, MetricType& out)
-{
-    switch (value)
-    {
-        case TMDQ_METRIC_SNR:                       out = MetricType::SNR; return true;
-        case TMDQ_METRIC_FRAME_SYNC_LOCK:           out = MetricType::FrameSyncLock; return true;
-        case TMDQ_METRIC_ACCUMULATED_MISSED_FRAMES: out = MetricType::AccumulatedMissedFrames; return true;
-        default:                                    return false;
-    }
-}
-
 } // namespace
 
 struct tmdq_frame_sync_file
@@ -403,7 +387,7 @@ int32_t tmdq_csv_write(const char* path_utf8, const tmdq_csv_column* const* colu
                 return TMDQ_ERR_BADARG;
             }
             CsvColumn column;
-            if (!toMetricType(wire.metric_type, column.metricType))
+            if (!tmdq::toMetricType(wire.metric_type, column.metricType))
             {
                 tmdq::setError("column " + std::to_string(i) + " has an unknown metric type");
                 return TMDQ_ERR_BADARG;
