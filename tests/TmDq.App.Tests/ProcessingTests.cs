@@ -686,8 +686,8 @@ namespace TmDq.App.Tests
             Control chart = window.FindControl<PlotView>("PlotView")!;
             Rect p = Frames.InWindow(panel, window), c = Frames.InWindow(chart, window);
             Assert.True(p.Right <= c.Left, $"the log ({p}) is not left of the chart ({c})");
-            // Its 400 px column less its 2 px margin. It was 400 itself, its own minimum pushing it 2 px past its column.
-            Assert.Equal(window.Body.ColumnDefinitions[0].ActualWidth - 2, p.Width);
+            // Its 400 px column, flush: no margin of its own (it was 400 itself once, its own minimum pushing it past its column).
+            Assert.Equal(window.Body.ColumnDefinitions[0].ActualWidth, p.Width);
             Assert.Equal(400, window.Body.ColumnDefinitions[0].ActualWidth);
             Assert.True(p.Height > window.ClientSize.Height * 0.8);
 

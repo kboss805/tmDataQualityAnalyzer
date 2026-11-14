@@ -209,7 +209,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The persistent on-chart controls are gathered into a single chip bar at the chart's top-left (View Mode chip, Reset view chip) rather than scattered around the plot; each chip hides itself when it would be meaningless, and with neither showing the bar collapses to nothing - so it costs no chart space at rest.
 - [x] Frequent actions have chrome-free gestures: Ctrl+drag / middle-drag rubber-bands a time range to zoom, double-click restores the full span, and a crosshair follows the cursor for reading several series at one instant.
 - [x] Mouse-wheel zoom and click-drag pan of the X axis are retained as the primary navigation.
-- [x] The log/console occupies a left sidebar that the user can toggle on and off, and which is open by default. A grip on the divider beside it shows where to drag it wider or narrower (no narrower than 200 px), and its text wraps to the width it is given.
+- [x] The log/console occupies a left sidebar that the user can toggle on and off, and which is open by default. It sits flush beside the chart, divided from it by a one-pixel line that thickens and takes the accent under the pointer, and that can be grabbed a few pixels either side of it, to drag the sidebar wider or narrower (no narrower than 200 px); its text wraps to the width it is given.
 - [x] Each on-chart chip is labelled and carries a tooltip naming the action it performs, so no control on the chart is an unexplained glyph.
 - [x] The crosshair readout can be pinned to a chosen series (context menu > **Readout**) instead of always following whichever curve is nearest the cursor.
 - [x] The most-used view actions have single-key shortcuts while the chart has focus - arrows step the time window, `+`/`-` zoom, `Home` restores the full span, `R` resets both axes, `V` switches metric, `L` toggles the legend - and the context menu advertises each key so they are discoverable rather than hidden.
@@ -405,7 +405,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The selected theme persists across application restarts.
 - [x] All windows, dialogs, and the plot update to match the selected theme immediately.
 - [x] The menu and title-bar icons swap to theme-appropriate variants when the theme changes.
-- [x] Every window, the main window and each dialog, is on one background: v2.x's grey (#2C2C2C) in the dark theme, not black, and v2.x's #F3F3F3 in the light; the log and the chart sit in panels of one shape on it (the same gap from the window's edges, the same hairline border and rounded corners), and the chart is set off from the log by a shade: darker in the dark theme (#1C1C1C against #202020), lighter in the light, where the panels are layers over the window (the log #F9F9F9, the chart white).
+- [x] The application is themed as VS Code's Dark Modern and Light Modern: the main window's chrome (under its title bar, and the log sidebar) is #181818 / #F8F8F8, not black, and the content (the chart, and every dialog) a shade lighter than it, #1F1F1F / white; the title bar, the log and the chart are flush, with no gaps, borders or rounded corners, divided by one-pixel lines (#2B2B2B / #E5E5E5, one under the title bar and one between the log and the chart). Text is #CCCCCC / #3B3B3B, the accent #0078D4 / #005FB8, and the controls Fluent draws (inputs, dropdowns, secondary buttons, checkboxes, menus, tooltips) take VS Code's fills and borders.
 
 ## Tech Stack
 

@@ -4,21 +4,21 @@ using Avalonia.Styling;
 namespace TmDq.App.Views
 {
     /// <summary>
-    /// The plot's colours in each theme (US9.0), v2.x's for the chart and its legend: the chart's
-    /// background, axes and text, grid, title, and the translucent legend and chips over it. A series keeps its own
-    /// colour in both. The dark chart's background is a shade darker than the log panel's (#1C1C1C, v2.x's darkest
-    /// grey, against #202020), and the light chart's a shade lighter (white against #F9F9F9, both on the window's #F3F3F3), to set the chart off.
+    /// The plot's colours in each theme (US9.0): the chart's background, axes and text, grid, title, and the
+    /// translucent legend and chips over it. A series keeps its own colour in both. They are VS Code's Dark Modern and
+    /// Light Modern: the chart is the editor's colour (#1F1F1F and white, a shade lighter than the log beside it in the
+    /// dark theme), its axes and text the editor's (#CCCCCC and #3B3B3B), its title the links' (#4DAAFC and #005FB8).
     /// </summary>
     public sealed record ChartPalette(Color Background, Color Foreground, Color Grid, Color Title,
                                       Color LegendBackground, Color LegendBorder, Color LegendText)
     {
         public static readonly ChartPalette Light = new(
-            Colors.White, Color.FromRgb(30, 30, 30), Color.FromRgb(200, 200, 200), Color.FromRgb(0x00, 0x5F, 0xB8),
-            Color.FromArgb(PlotLegend.BackgroundAlpha, 255, 255, 255), Color.FromRgb(170, 170, 170), Color.FromRgb(30, 30, 30));
+            Colors.White, Color.FromRgb(59, 59, 59), Color.FromRgb(200, 200, 200), Color.FromRgb(0x00, 0x5F, 0xB8),
+            Color.FromArgb(PlotLegend.BackgroundAlpha, 255, 255, 255), Color.FromRgb(206, 206, 206), Color.FromRgb(59, 59, 59));
 
         public static readonly ChartPalette Dark = new(
-            Color.FromRgb(28, 28, 28), Color.FromRgb(220, 220, 220), Color.FromRgb(60, 60, 60), Color.FromRgb(0x60, 0xCD, 0xFF),
-            Color.FromArgb(PlotLegend.BackgroundAlpha, 28, 28, 28), Color.FromRgb(90, 90, 90), Color.FromRgb(230, 230, 230));
+            Color.FromRgb(31, 31, 31), Color.FromRgb(204, 204, 204), Color.FromRgb(60, 60, 60), Color.FromRgb(0x4D, 0xAA, 0xFC),
+            Color.FromArgb(PlotLegend.BackgroundAlpha, 31, 31, 31), Color.FromRgb(60, 60, 60), Color.FromRgb(204, 204, 204));
 
         /// <summary>The palette of <paramref name="theme"/>: the dark one for the dark theme, else the light one.</summary>
         public static ChartPalette For(ThemeVariant? theme) => theme == ThemeVariant.Dark ? Dark : Light;
