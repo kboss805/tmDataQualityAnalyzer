@@ -428,6 +428,75 @@ namespace TmDq.App.Tests
             }
         }
 
+        [AvaloniaTheory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void TheWindowsBackgroundIsV214sAndTheLogAndTheChartArePanelsOfOneShape(bool dark)
+        {
+            var app = (App)Application.Current!;
+            ThemeVariant? before = app.RequestedThemeVariant;
+            app.ApplyTheme(dark);
+            try
+            {
+                (MainWindow window, _) = Show();
+                Assert.True(Application.Current!.TryFindResource("WindowBackground", window.ActualThemeVariant, out object? b));
+                Color background = ((ISolidColorBrush)b!).Color;
+                Assert.Equal(dark ? Color.Parse("#2C2C2C") : Colors.White, background);
+                Assert.Equal(background, ((ISolidColorBrush)window.Background!).Color);
+
+                Assert.True(Application.Current!.TryFindResource("LogPanelBorder", window.ActualThemeVariant, out object? e));
+                Color edge = ((ISolidColorBrush)e!).Color;
+
+                // The log and the chart sit in panels of one shape: the same gap from the window's edges, the same hairline
+                // border, the same rounded corners, the chart clipped to them.
+                Border logPanel = window.FindControl<Border>("LogPanel")!, plotPanel = window.PlotPanel;
+                Rect log = Frames.InWindow(logPanel, window), plot = Frames.InWindow(plotPanel, window), body = Frames.InWindow(window.Body, window);
+                Assert.Equal((MainWindow.PanelGap, MainWindow.PanelGap), (log.Left - body.Left, body.Right - plot.Right));
+                Assert.Equal((log.Top, log.Bottom), (plot.Top, plot.Bottom));
+                Assert.Equal(log.Right + MainWindow.SplitterWidth, plot.Left);   // the divider is the gap between them
+                Assert.Equal((plotPanel.BorderThickness, plotPanel.CornerRadius, plotPanel.BorderBrush),
+                             (logPanel.BorderThickness, logPanel.CornerRadius, logPanel.BorderBrush));
+                Assert.Equal(new CornerRadius(4), logPanel.CornerRadius);
+                using (ILockedFramebuffer fb = Frames.Capture(window).Lock())
+                {
+                    Color At(double x, double y) => Color.FromUInt32(0xFF000000 | Frames.Pixel(fb, (int)x, (int)y));
+                    // The window's background: the caption between the title bar's buttons, and the strip above the log.
+                    Assert.Equal(background, At(window.Caption.Bounds.Center.X, window.Caption.Bounds.Center.Y));
+                    Assert.Equal(background, At(log.Center.X, log.Top - 2));
+                    foreach ((Rect panel, Color fill) in new[] { (log, ((ISolidColorBrush)logPanel.Background!).Color),
+                                                                (plot, ChartPalette.For(window.ActualThemeVariant).Background) })
+                    {
+                        Assert.Equal(edge, At(panel.Center.X, panel.Top));         // the border, along the top
+                        Assert.Equal(background, At(panel.Left, panel.Top));       // the corner, cut away
+                        Assert.Equal(background, At(panel.Right - 1, panel.Bottom - 1));
+                        // Just inside the border, the corner is rounded off: not the panel's fill (in the dark theme,
+                        // where the fills differ from the window's background; the light chart's is the same white).
+                        if (dark)
+                            foreach ((double x, double y) in new[] { (panel.Left + 1, panel.Top + 1), (panel.Right - 2, panel.Top + 1),
+                                                                     (panel.Left + 1, panel.Bottom - 2), (panel.Right - 2, panel.Bottom - 2) })
+                                Assert.NotEqual(fill, At(x, y));
+                    }
+                    // The chart set off from the log: a shade darker in the dark theme, a shade lighter in the light.
+                    Color logInside = At(log.Center.X, log.Bottom - 8), chartInside = At(plot.Right - 30, plot.Bottom - 30);
+                    Assert.Equal(((ISolidColorBrush)logPanel.Background!).Color, logInside);
+                    Assert.Equal(ChartPalette.For(window.ActualThemeVariant).Background, chartInside);
+                    Assert.Equal(dark ? Color.Parse("#1C1C1C") : Colors.White, chartInside);
+                    Assert.Equal(dark ? Color.Parse("#202020") : Color.Parse("#FBFBFB"), logInside);
+                }
+
+                // With the log hidden, the chart keeps its gap from the window's left edge.
+                ((MainWindowViewModel)window.DataContext!).SidebarVisible = false;
+                Dispatcher.UIThread.RunJobs();
+                plot = Frames.InWindow(plotPanel, window);
+                Assert.Equal((MainWindow.PanelGap, MainWindow.PanelGap), (plot.Left - body.Left, body.Right - plot.Right));
+                window.Close();
+            }
+            finally
+            {
+                app.RequestedThemeVariant = before;
+            }
+        }
+
         // ---- drag and drop -------------------------------------------------------------------------------------------
 
         /// <summary>The files as a drag carries them: storage items from the platform (user code cannot make its own).</summary>
@@ -520,8 +589,8 @@ namespace TmDq.App.Tests
 
             foreach ((ThemeVariant theme, ChartPalette palette, string logBackground, string chip) in new[]
                      {
-                         (ThemeVariant.Dark, ChartPalette.Dark, "#FF202020", "#B9202020"),
-                         (ThemeVariant.Light, ChartPalette.Light, "#FFFFFFFF", "#B9FFFFFF"),
+                         (ThemeVariant.Dark, ChartPalette.Dark, "#FF202020", "#B91C1C1C"),
+                         (ThemeVariant.Light, ChartPalette.Light, "#FFFBFBFB", "#B9FFFFFF"),
                      })
             {
                 window.RequestedThemeVariant = theme;
@@ -558,7 +627,7 @@ namespace TmDq.App.Tests
         {
             // v2.14.2's chart and legend colours for each theme, as numbers.
             Assert.Equal(new[] { "#FFFFFFFF", "#FF1E1E1E", "#FFC8C8C8", "#FF005FB8", "#B9FFFFFF", "#FFAAAAAA", "#FF1E1E1E" }, Hex(ChartPalette.Light));
-            Assert.Equal(new[] { "#FF202020", "#FFDCDCDC", "#FF3C3C3C", "#FF60CDFF", "#B9202020", "#FF5A5A5A", "#FFE6E6E6" }, Hex(ChartPalette.Dark));
+            Assert.Equal(new[] { "#FF1C1C1C", "#FFDCDCDC", "#FF3C3C3C", "#FF60CDFF", "#B91C1C1C", "#FF5A5A5A", "#FFE6E6E6" }, Hex(ChartPalette.Dark));
         }
 
         private static string[] Hex(ChartPalette p) => new[] { p.Background, p.Foreground, p.Grid, p.Title, p.LegendBackground, p.LegendBorder, p.LegendText }
@@ -568,19 +637,22 @@ namespace TmDq.App.Tests
         public void EachThemesBrushesAreV214s()
         {
             string[] keys = { "ChipBackground", "ChipBorder", "ChipForeground", "ChipAccent", "LoadingBackground", "LoadingBorder", "LoadingForeground",
-                              "LogPanelBackground", "LogPanelBorder", "TitleBarHover", "SplitterGrip", "SplitterGripHover", "SplitterHover" };
+                              "LogPanelBackground", "LogPanelBorder", "TitleBarHover", "SplitterGrip", "SplitterGripHover", "SplitterHover",
+                              "WindowBackground" };
             string[] Brushes(ThemeVariant theme) => keys.Select(k =>
             {
                 Assert.True(Application.Current!.TryFindResource(k, theme, out object? b), k);
                 Color c = ((ISolidColorBrush)b!).Color;
                 return $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}";
             }).ToArray();
-            // v2.x's, but for the divider's three (v2.x drew its splitter's dotted grip in the style's colour).
-            Assert.Equal(new[] { "#B9FFFFFF", "#FFC8C8C8", "#FF1E1E1E", "#FF005FB8", "#E6FFFFFF", "#FFC8C8C8", "#FF1E1E1E", "#FFFFFFFF", "#FFE5E5E5", "#38808080",
-                                       "#FFC2C2C2", "#FF707070", "#FFE0E0E0" },
+            // v2.x's, but for the divider's three (v2.x drew its splitter's dotted grip in the style's colour), the light
+            // window's background (Fluent's white; v2.x's was #F3F3F3), the light log's (a shade off the chart's white) and
+            // the dark chips' (the dark chart's #1C1C1C).
+            Assert.Equal(new[] { "#B9FFFFFF", "#FFC8C8C8", "#FF1E1E1E", "#FF005FB8", "#E6FFFFFF", "#FFC8C8C8", "#FF1E1E1E", "#FFFBFBFB", "#FFE5E5E5", "#38808080",
+                                       "#FFC2C2C2", "#FF707070", "#FFE0E0E0", "#FFFFFFFF" },
                          Brushes(ThemeVariant.Light));
-            Assert.Equal(new[] { "#B9202020", "#FF3C3C3C", "#FFDCDCDC", "#FF60CDFF", "#A0000000", "#FF3C3C3C", "#FFFFFFFF", "#FF202020", "#FF303030", "#38808080",
-                                       "#FF505050", "#FF9A9A9A", "#FF2A2A2A" },
+            Assert.Equal(new[] { "#B91C1C1C", "#FF3C3C3C", "#FFDCDCDC", "#FF60CDFF", "#A0000000", "#FF3C3C3C", "#FFFFFFFF", "#FF202020", "#FF303030", "#38808080",
+                                       "#FF505050", "#FF9A9A9A", "#FF383838", "#FF2C2C2C" },
                          Brushes(ThemeVariant.Dark));
             // The export and import arrows take each theme's shade; the folder and the floppy disk are the same in both.
             foreach (string icon in new[] { "ExportIcon", "ImportIcon" })
