@@ -406,6 +406,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] All windows, dialogs, and the plot update to match the selected theme immediately.
 - [x] The menu and title-bar icons swap to theme-appropriate variants when the theme changes.
 - [x] The application is themed as VS Code's Dark Modern and Light Modern: the main window's chrome (under its title bar, and the log sidebar) is #181818 / #F8F8F8, not black, and the content (the chart, and every dialog) a shade lighter than it, #1F1F1F / white; the title bar, the log and the chart are flush, with no gaps, borders or rounded corners, divided by one-pixel lines (#2B2B2B / #E5E5E5, one under the title bar and one between the log and the chart). Text is #CCCCCC / #3B3B3B, the accent #0078D4 / #005FB8, and the controls Fluent draws (inputs, dropdowns, secondary buttons, checkboxes, menus, tooltips) take VS Code's fills and borders.
+- [x] The theme is written in Fluent's vocabulary, so it can be extended the way Fluent is: the colours are Fluent's semantic tokens (`SolidBackgroundFillColorBase`, `LayerFillColorDefault`, `ControlFillColorDefault`, the strokes, the text and accent ones) as a Color and a Brush each, and every brush Fluent's controls are looked up under is an alias of the token for its job, never a colour of its own. The font is Segoe UI Variable, the type scale Fluent's (caption 12, body 14), and the corners Fluent's (4 px for a control, 8 for an overlay), each a resource that the application's own text and shapes use.
 
 ## Tech Stack
 

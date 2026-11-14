@@ -23,7 +23,7 @@ namespace TmDq.App.Views
     public sealed class PlotLegend : Border
     {
         public const double EdgeMargin = 8, ContentMargin = 6, RowSpacing = 3, SwatchLength = 22, SwatchThickness = 3;
-        public const double CornerRadiusPx = 6, MaxWidthFraction = 0.45, MaxHeightFraction = 0.60, MinCapWidth = 80, MinCapHeight = 60;
+        public const double CornerRadiusPx = 8, MaxWidthFraction = 0.45, MaxHeightFraction = 0.60, MinCapWidth = 80, MinCapHeight = 60;
         public const byte BackgroundAlpha = 185;
 
         // The Fluent theme's vertical scroll bar, which never auto-hides here, is 16 px wide. The rows always leave that

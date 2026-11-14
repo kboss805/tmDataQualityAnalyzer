@@ -12,6 +12,79 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The theme in Fluent's vocabulary: semantic tokens, Segoe UI Variable, Fluent's type scale and corners
+
+Asked for after #272: keep the VS Code look, but base it on Fluent UX, especially for the dialogs. This is the first of two
+steps (the second is the dialogs' own layout: spacing, footer and button bar, default and cancel keys, switches). The
+colours are unchanged to the pixel; what changes is how they are named and used, and the font, the type scale and the
+corners the application draws with.
+
+- **Colours as Fluent's semantic tokens.** WinUI's token names do not exist in Avalonia's Fluent theme (it has the older
+  `SystemControl*` and `System*Color` names), so the application defines them: a `Color` each in the Light and Dark theme
+  dictionaries, and the `Brush` over it (`SolidBackgroundFillColorBaseBrush`, ...). They replace #272's ad-hoc keys:
+
+  | Token | Dark | Light | Was | Used for |
+  |---|---|---|---|---|
+  | `SolidBackgroundFillColorBase` | `#181818` | `#F8F8F8` | `ChromeBackground` | the window, title bar, log |
+  | `LayerFillColorDefault` | `#1F1F1F` | `#FFFFFF` | `ContentBackground` | the chart, every dialog |
+  | `CardBackgroundFillColorDefault` | `#202020` | `#F8F8F8` | the tooltip's own | widgets |
+  | `ControlFillColorDefault` | `#313131` | `#FFFFFF` | its brushes' own | inputs, dropdowns, empty checkbox |
+  | `ButtonFillColorDefault` / `Hover` | clear / `#2B2B2B` | `#E5E5E5` / `#CCCCCC` | the button's own | the secondary button |
+  | `ControlStrokeColorDefault` | `#3C3C3C` | `#CECECE` | its brushes' own | an input's, a popup's and a chip's border |
+  | `DividerStrokeColorDefault` | `#2B2B2B` | `#E5E5E5` | `Hairline` | the lines between the panes |
+  | `SurfaceStrokeColorDefault`, `ButtonStrokeColorDefault` | `#313131`, 10 % white | `#E5E5E5`, 10 % black | their own | the loading label's, the button's border |
+  | `SubtleFillColorSecondary` | 22 % grey | 22 % grey | `TitleBarHover` | the title bar's buttons under the pointer |
+  | `TextFillColorPrimary` / `Secondary` | `#CCCCCC` / `#9D9D9D` | `#3B3B3B` / `#616161` | the chips' own; `Opacity="0.7"` | text; hints and headers |
+  | `AccentFillColorDefault`, `AccentTextFillColorPrimary` | `#0078D4`, `#4DAAFC` | `#005FB8`, `#005FB8` | `SashHover`, `ChipAccent` | the divider under the pointer; links and the chips' accent |
+
+  The brushes Fluent looks its controls up under (`TextControl*`, `ComboBox*`, `Button*`, `CheckBox*`, `MenuFlyoutPresenter*`,
+  `ToolTip*`: 27 of them) and the chips' and loading label's five are now aliases of these, never colours of their own, so a
+  token changed changes every control on it. `ButtonFillColorDefault` and `Hover`, and the translucent chip and loading
+  fills, are the only colours with no WinUI name.
+- **Segoe UI Variable Text**, Windows 11's Fluent font, is `ContentControlThemeFontFamily`: Fluent's own controls, every
+  window, the log and the plot's text (and so an exported image's) take it. Avalonia's theme asks for Inter, which this
+  application does not bundle, so until now it fell back to the system's Segoe UI: the change is the optical-sized
+  variable face (a few pixels of width, a little lighter), and the font is no longer left to a fallback. Where Segoe UI
+  Variable is not installed (Windows 10, Server) it falls back to Segoe UI, as before.
+- **Fluent's type scale** as tokens, `CaptionTextBlockFontSize` (12) and `BodyTextBlockFontSize` (14), used by the chips, the
+  Stream Setup hint and the "Loading..." label (16 px, which is not on the scale, is now 14); the plot's and the log's 12
+  are held to the token by a test. The hints and Configure Streams' column headers took `TextFillColorSecondary` in place
+  of `Opacity="0.7"`, which dimmed them whatever they were on.
+- **Fluent's corners**: `ControlCornerRadius` is 4 (Avalonia's is 3) and `OverlayCornerRadius` is 8 (Avalonia's 5), so every
+  Fluent control and ours are on them: the chips and the title bar's buttons (were 5 and 6) are 4, the legend and the loading
+  label (6) are 8, and Batch Apply's list border (4, with a hard-coded grey) is on the token and the stroke.
+- **For the second step**: the status colours (the log's, Configure Streams' ready marks, the calibration and batch glyphs)
+  are still three different sets of values in the log, the dialogs and the converters (`#D13438` and `#CC0000` for red, `Green`
+  and `#2E9E44` for green); they become theme-aware Fluent `SystemFillColor*` tokens with the dialogs.
+
+**Tests:**
+- `EachThemesBrushesAreVsCodeModerns` became `EachThemesTokensAreFluentsNamesInVsCodesValues`: all 15 tokens, as a Color and
+  as the resolved Brush, in both themes (a brush over a colour that never arrived would read transparent), the chips' and
+  the loading label's translucent fills, and the icons.
+- New `EveryBrushFluentLooksItsControlsUpUnderIsAnAliasOfTheTokenForItsJob`: each of the 27 control brushes and the chips' and
+  loading label's five, in both themes, is its token's colour.
+- New `TheFontTheTypeAndTheCornersAreFluents`: the font, the two sizes and the two radii; a `TextBox`, a `Button` and a window
+  take the font and the 4 px corners; the chips, the title bar's buttons, the legend and the loading label sit on their
+  radius, and the chart's, the log's, the chip's and the loading label's text on their size, with the constants in code
+  (`PlotChart.FontSize`, `PlotLegend.CornerRadiusPx`) held to the tokens.
+- `EachThemeDrawsTheChartTheLegendTheChipsAndTheLogInItsColours` and the new test load the core themselves: both failed when
+  run alone (a mutation subset, a filter) and passed only after another test had loaded it.
+- The layout tests read the tokens' names. Not held by a test: the two secondary-text uses (Stream Setup's hint, Configure
+  Streams' headers) and Batch Apply's list border, seen in the figures.
+
+**Mutation check** (`eng\mutate.ps1`, app suite, 20 mutants): all 20 CAUGHT (19 the first time; R7
+survived, the sidebar toggle's corners, because the test read the menu button's, and now reads both): a token's value changed
+(a dark and a light one), a Brush over the wrong Color, a dark and a light control brush aliasing the wrong token; the font
+not Fluent's, the caption and body sizes off the scale; Avalonia's control and overlay corners back, the legend's, the chips',
+the loading label's, the title bar buttons' and the sidebar toggle's corners as before; the chips' and the loading label's
+text sizes as before; and the dialogs and the chart's panel on the wrong layer colour.
+
+**Baselines:** app **616 passed / 0 failed / 34 not run** (was 614: the alias test and the font test are new, the brush test
+became the tokens test). Native and managed unchanged.
+
+**The manual:** figures re-rendered and the manuals re-embedded: the type and the 4 px corners show; `walk-cust-02-snr-tree`
+was restored, as before (its chevrons are caught mid-animation).
+
 #### VS Code's Dark Modern and Light Modern: flush panes, hairlines, a grey title bar
 
 Asked for after the user shared a VS Code window and liked its dark contrast, the title bar a dark grey rather than black.

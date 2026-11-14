@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Chrome;
+using Avalonia.Controls.Documents;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -18,6 +19,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using TmDq.App.Models.Processing;
 using TmDq.App.Models.Settings;
 using TmDq.App.Platform;
 using TmDq.App.Services;
@@ -400,7 +402,7 @@ namespace TmDq.App.Tests
                 (MainWindow window, _) = Show();
                 GridSplitter splitter = window.Splitter;
                 Border line = splitter.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "Line");
-                Color hairline = BrushColor(window, "Hairline"), accent = BrushColor(window, "SashHover");
+                Color hairline = BrushColor(window, "DividerStrokeColorDefaultBrush"), accent = BrushColor(window, "AccentFillColorDefaultBrush");
                 Rect log = Frames.InWindow(window.FindControl<Border>("LogPanel")!, window);
                 double lineX = log.Right + MainWindow.SplitterWidth / 2;
 
@@ -452,7 +454,8 @@ namespace TmDq.App.Tests
             try
             {
                 (MainWindow window, MainWindowViewModel vm) = Show();
-                Color chrome = BrushColor(window, "ChromeBackground"), content = BrushColor(window, "ContentBackground"), hairline = BrushColor(window, "Hairline");
+                Color chrome = BrushColor(window, "SolidBackgroundFillColorBaseBrush"), content = BrushColor(window, "LayerFillColorDefaultBrush"),
+                      hairline = BrushColor(window, "DividerStrokeColorDefaultBrush");
                 Assert.Equal(chrome, ((ISolidColorBrush)window.Background!).Color);
                 Border logPanel = window.FindControl<Border>("LogPanel")!;
                 Assert.Equal(chrome, ((ISolidColorBrush)logPanel.Background!).Color);
@@ -560,7 +563,7 @@ namespace TmDq.App.Tests
                     try
                     {
                         // The dialogs are on the surface the chart is; the main window is the chrome around it.
-                        Color expected = BrushColor(window, kind == typeof(MainWindow) ? "ChromeBackground" : "ContentBackground");
+                        Color expected = BrushColor(window, kind == typeof(MainWindow) ? "SolidBackgroundFillColorBaseBrush" : "LayerFillColorDefaultBrush");
                         Assert.True(window.Background is ISolidColorBrush, kind.Name + " has no plain background");
                         Assert.Equal((kind.Name, expected), (kind.Name, ((ISolidColorBrush)window.Background!).Color));
                         // Drawn: the window's top-left corner, inside every window's margins.
@@ -661,6 +664,7 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public void EachThemeDrawsTheChartTheLegendTheChipsAndTheLogInItsColours()
         {
+            NativeCore.EnsureLoaded();   // the plot's series are made through the core
             (MainWindow window, MainWindowViewModel vm) = Show();
             vm.Plot.SetSeries(new[] { PlotFixtures.Lock(0, "a", 1, 0, new[] { 0.0, 1.0 }, new[] { 50.0, 60.0 }) });
             vm.Plot.SetXViewByUser(0.2, 0.8);   // a chip to see
@@ -716,37 +720,126 @@ namespace TmDq.App.Tests
         private static string[] Hex(ChartPalette p) => new[] { p.Background, p.Foreground, p.Grid, p.Title, p.LegendBackground, p.LegendBorder, p.LegendText }
             .Select(c => $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}").ToArray();
 
-        [AvaloniaFact]
-        public void EachThemesBrushesAreVsCodeModerns()
+        /// <summary>Fluent's semantic tokens, with VS Code's Light Modern and Dark Modern values.</summary>
+        private static readonly (string Token, string Light, string Dark)[] Tokens =
         {
-            string[] keys = { "ChipBackground", "ChipBorder", "ChipForeground", "ChipAccent", "LoadingBackground", "LoadingBorder", "LoadingForeground",
-                              "ChromeBackground", "ContentBackground", "Hairline", "SashHover", "TitleBarHover" };
-            string[] Brushes(ThemeVariant theme) => keys.Select(k =>
-            {
-                Assert.True(Application.Current!.TryFindResource(k, theme, out object? b), k);
-                Color c = ((ISolidColorBrush)b!).Color;
-                return $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}";
-            }).ToArray();
-            // VS Code's Light Modern and Dark Modern: the chrome (title bar and side bar), the content (editor), the hairlines
-            // between them, the accent a divider takes, and the widgets and inputs the chips and the loading label borrow from.
-            Assert.Equal(new[] { "#B9FFFFFF", "#FFCECECE", "#FF3B3B3B", "#FF005FB8", "#F2F8F8F8", "#FFE5E5E5", "#FF3B3B3B",
-                                 "#FFF8F8F8", "#FFFFFFFF", "#FFE5E5E5", "#FF005FB8", "#38808080" },
-                         Brushes(ThemeVariant.Light));
-            Assert.Equal(new[] { "#B91F1F1F", "#FF3C3C3C", "#FFCCCCCC", "#FF4DAAFC", "#F2202020", "#FF313131", "#FFCCCCCC",
-                                 "#FF181818", "#FF1F1F1F", "#FF2B2B2B", "#FF0078D4", "#38808080" },
-                         Brushes(ThemeVariant.Dark));
+            ("SolidBackgroundFillColorBase", "#FFF8F8F8", "#FF181818"),        // the window, title bar and log: VS Code's title bar and side bar
+            ("LayerFillColorDefault", "#FFFFFFFF", "#FF1F1F1F"),               // the chart and every dialog: its editor
+            ("CardBackgroundFillColorDefault", "#FFF8F8F8", "#FF202020"),      // its widgets: tooltips
+            ("ControlFillColorDefault", "#FFFFFFFF", "#FF313131"),             // its inputs and dropdowns
+            ("ButtonFillColorDefault", "#FFE5E5E5", "#00000000"),              // its secondary button: grey, or ghost
+            ("ButtonFillColorHover", "#FFCCCCCC", "#FF2B2B2B"),
+            ("SubtleFillColorSecondary", "#38808080", "#38808080"),            // a subtle control under the pointer: the title bar's buttons
+            ("ControlStrokeColorDefault", "#FFCECECE", "#FF3C3C3C"),           // an input's border
+            ("ButtonStrokeColorDefault", "#1A000000", "#1AFFFFFF"),
+            ("DividerStrokeColorDefault", "#FFE5E5E5", "#FF2B2B2B"),           // the lines between the panes
+            ("SurfaceStrokeColorDefault", "#FFE5E5E5", "#FF313131"),           // a widget's border
+            ("TextFillColorPrimary", "#FF3B3B3B", "#FFCCCCCC"),
+            ("TextFillColorSecondary", "#FF616161", "#FF9D9D9D"),
+            ("AccentFillColorDefault", "#FF005FB8", "#FF0078D4"),
+            ("AccentTextFillColorPrimary", "#FF005FB8", "#FF4DAAFC"),          // its links
+        };
+
+        private static string Hex(Color c) => $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}";
+
+        private static object Resource(string key, ThemeVariant theme)
+        {
+            Assert.True(Application.Current!.TryFindResource(key, theme, out object? value), key);
+            return value!;
+        }
+
+        [AvaloniaFact]
+        public void EachThemesTokensAreFluentsNamesInVsCodesValues()
+        {
+            foreach ((ThemeVariant theme, int which) in new[] { (ThemeVariant.Light, 0), (ThemeVariant.Dark, 1) })
+                foreach ((string token, string light, string dark) in Tokens)
+                {
+                    string expected = which == 0 ? light : dark;
+                    // The Color, and the Brush over it (resolved: a brush whose colour never arrived would read transparent).
+                    Assert.Equal((token, theme.Key, expected), (token, theme.Key, Hex((Color)Resource(token, theme))));
+                    Assert.Equal((token + "Brush", theme.Key, expected), (token + "Brush", theme.Key, Hex(((ISolidColorBrush)Resource(token + "Brush", theme)).Color)));
+                }
+            // What the chips and the "Loading..." label over the chart are drawn in, which no token has: a translucent layer.
+            Assert.Equal(new[] { "#B9FFFFFF", "#F2F8F8F8" }, new[] { "ChipBackground", "LoadingBackground" }.Select(k => Hex(((ISolidColorBrush)Resource(k, ThemeVariant.Light)).Color)));
+            Assert.Equal(new[] { "#B91F1F1F", "#F2202020" }, new[] { "ChipBackground", "LoadingBackground" }.Select(k => Hex(((ISolidColorBrush)Resource(k, ThemeVariant.Dark)).Color)));
             // The export and import arrows take each theme's shade; the folder and the floppy disk are the same in both.
             foreach (string icon in new[] { "ExportIcon", "ImportIcon" })
-            {
-                Assert.True(Application.Current!.TryFindResource(icon, ThemeVariant.Light, out object? light));
-                Assert.True(Application.Current!.TryFindResource(icon, ThemeVariant.Dark, out object? dark));
-                Assert.NotSame(light, dark);
-            }
-            Assert.True(Application.Current!.TryFindResource("OpenIcon", ThemeVariant.Dark, out object? open));
-            Assert.True(Application.Current!.TryFindResource("SaveIcon", ThemeVariant.Dark, out object? save));
-            Assert.IsType<DrawingImage>(open);
-            Assert.IsType<DrawingImage>(save);
+                Assert.NotSame(Resource(icon, ThemeVariant.Light), Resource(icon, ThemeVariant.Dark));
+            Assert.IsType<DrawingImage>(Resource("OpenIcon", ThemeVariant.Dark));
+            Assert.IsType<DrawingImage>(Resource("SaveIcon", ThemeVariant.Dark));
         }
+
+        [AvaloniaFact]
+        public void EveryBrushFluentLooksItsControlsUpUnderIsAnAliasOfTheTokenForItsJob()
+        {
+            // The brushes Fluent's controls, and our chips and loading label, are drawn with are never colours of their own:
+            // each is its token's, in both themes, so a token changed changes them all and a control is on the token for its job.
+            var aliases = new (string Token, string[] Brushes)[]
+            {
+                ("ControlFillColorDefault", new[] { "TextControlBackground", "TextControlBackgroundPointerOver", "TextControlBackgroundFocused",
+                    "ComboBoxBackground", "ComboBoxBackgroundPointerOver", "ComboBoxBackgroundPressed",
+                    "CheckBoxCheckBackgroundFillUnchecked", "CheckBoxCheckBackgroundFillUncheckedPointerOver" }),
+                ("ControlStrokeColorDefault", new[] { "TextControlBorderBrush", "TextControlBorderBrushPointerOver", "ComboBoxBorderBrush",
+                    "ComboBoxBorderBrushPointerOver", "ComboBoxBorderBrushPressed", "ComboBoxDropDownBorderBrush", "CheckBoxCheckBackgroundStrokeUnchecked",
+                    "CheckBoxCheckBackgroundStrokeUncheckedPointerOver", "MenuFlyoutPresenterBorderBrush", "ToolTipBorderBrush", "ChipBorder" }),
+                ("LayerFillColorDefault", new[] { "ComboBoxDropDownBackground", "MenuFlyoutPresenterBackground" }),
+                ("CardBackgroundFillColorDefault", new[] { "ToolTipBackground" }),
+                ("ButtonFillColorDefault", new[] { "ButtonBackground" }),
+                ("ButtonFillColorHover", new[] { "ButtonBackgroundPointerOver", "ButtonBackgroundPressed" }),
+                ("ButtonStrokeColorDefault", new[] { "ButtonBorderBrush", "ButtonBorderBrushPointerOver", "ButtonBorderBrushPressed" }),
+                ("TextFillColorPrimary", new[] { "ChipForeground", "LoadingForeground" }),
+                ("AccentTextFillColorPrimary", new[] { "ChipAccent" }),
+                ("SurfaceStrokeColorDefault", new[] { "LoadingBorder" }),
+            };
+            foreach (ThemeVariant theme in new[] { ThemeVariant.Light, ThemeVariant.Dark })
+                foreach ((string token, string[] brushes) in aliases)
+                    foreach (string brush in brushes)
+                        Assert.Equal((brush, theme.Key, Hex((Color)Resource(token, theme))), (brush, theme.Key, Hex(((ISolidColorBrush)Resource(brush, theme)).Color)));
+        }
+
+        [AvaloniaFact]
+        public void TheFontTheTypeAndTheCornersAreFluents()
+        {
+            NativeCore.EnsureLoaded();   // the plot's series are made through the core
+            ThemeVariant theme = ThemeVariant.Dark;
+            double Double(string key) => (double)Resource(key, theme);
+            CornerRadius Radius(string key) => (CornerRadius)Resource(key, theme);
+            // Segoe UI Variable, which Windows 11's Fluent is drawn in (Avalonia's own Fluent theme asks for Inter, which is not
+            // bundled, and so fell back to the system font); a caption of 12 and a body of 14; a control's corners 4 and an
+            // overlay's 8 (Avalonia's are 3 and 5).
+            Assert.Equal("Segoe UI Variable Text", ((FontFamily)Resource("ContentControlThemeFontFamily", theme)).FamilyNames[0]);
+            Assert.Equal((12.0, 14.0), (Double("CaptionTextBlockFontSize"), Double("BodyTextBlockFontSize")));
+            Assert.Equal((new CornerRadius(4), new CornerRadius(8)), (Radius("ControlCornerRadius"), Radius("OverlayCornerRadius")));
+
+            // Fluent's own controls, and every window, take them.
+            var input = new TextBox();
+            var button = new Button { Content = "OK" };
+            var plain = new Window { Content = new StackPanel { Children = { input, button } } };
+            plain.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.All(new Control[] { plain, input, button }, c => Assert.Equal("Segoe UI Variable Text", TextElement.GetFontFamily(c).FamilyNames[0]));
+            Assert.All(new[] { input.CornerRadius, button.CornerRadius }, r => Assert.Equal(new CornerRadius(4), r));
+            plain.Close();
+
+            // And what we draw ourselves: the chips and the title bar's buttons are controls, the legend and the loading label
+            // are overlays; the chart's and the log's text are captions, the loading label's a body. The numbers in code are the
+            // tokens'.
+            (MainWindow window, MainWindowViewModel vm) = Show();
+            vm.Plot.SetSeries(new[] { PlotFixtures.Lock(0, "a", 1, 0, new[] { 0.0, 1.0 }, new[] { 50.0, 60.0 }) });
+            vm.Plot.SetXViewByUser(0.2, 0.8);
+            Dispatcher.UIThread.RunJobs();
+            PlotView view = window.FindControl<PlotView>("PlotView")!;
+            Assert.Equal((4, 4, 4, 4), (view.ResetChip.CornerRadius.TopLeft, window.MinimizeButton.CornerRadius.TopLeft, window.MenuButton.CornerRadius.TopLeft,
+                                       window.SidebarButton.CornerRadius.TopLeft));
+            Assert.Equal((8, 8), (view.Legend.CornerRadius.TopLeft, view.LoadingLabel.CornerRadius.TopLeft));
+            Assert.Equal(PlotLegend.CornerRadiusPx, Radius("OverlayCornerRadius").TopLeft);
+            Assert.Equal(PlotChart.FontSize, Double("CaptionTextBlockFontSize"));
+            Assert.Equal(Double("CaptionTextBlockFontSize"), view.ResetChip.FontSize);
+            Assert.Equal(Double("CaptionTextBlockFontSize"), window.FindControl<Border>("LogPanel")!.GetVisualDescendants().OfType<SelectableTextBlock>().Single().FontSize);
+            Assert.Equal(Double("BodyTextBlockFontSize"), view.LoadingLabel.GetVisualDescendants().OfType<TextBlock>().Single().FontSize);
+            window.Close();
+        }
+
         [AvaloniaFact]
         public void TheApplicationsThemeIsEveryWindowsAndRemembered()
         {
