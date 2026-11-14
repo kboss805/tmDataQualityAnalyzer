@@ -12,6 +12,35 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The packet reader no longer crashes on a TMATS source that lacks a field
+
+Found by the whole-tree cleanup audit and confirmed by a test that crashed before the fix. `Ch10PacketReader::prepare()`
+sets up each data source of the recording's TMATS, and read two of its fields unchecked: `szEnabled[0]` (CHE-n, "channel
+enabled") and `szChannelDataType` (CDT-n, handed to `strcasecmp`). The vendored decoder leaves a field the TMATS does not
+carry NULL, and `Chapter10Reader` deliberately copes with that (a missing CHE-n counts as enabled, a missing CDT-n gives a
+channel no type), so Configure Streams could offer a stream from such a recording and the run then died with a
+segmentation fault in `prepare()`, for any data source in the file, not only the one asked for. The five committed
+recordings carry both fields on every source, so nothing exercised it.
+
+- **The data type is compared only when present.** A source with no CDT-n gets no attributes, so it is not taken for PCM:
+  a stream asked of it is refused with the existing "Unable to load PCM attributes for channel N." A time source with no
+  CDT-n, or any source with no CHE-n, no longer matters to a PCM stream.
+- **`SuChanInfo::bEnabled` and `uChID` are deleted.** The first was the field read unchecked, and nothing read either:
+  the reader never refused a disabled channel, and the metadata reader decides what is listed.
+- **`freeChanInfoTable` is unchanged.** Its own comparison is reached only for a source that was given attributes, which
+  now means one whose data type is present and PCMIN.
+- **`test_support.h` takes `firstPacketLength` and `writePatchedStepCal`** from `test_chapter10reader.cpp`, so the packet
+  reader's test edits step_cal's TMATS the same way (same-length key renames) instead of a second copy of the helper.
+
+**Checked:** `Ch10PacketReader: a data source TMATS does not fully describe is not a crash` runs four edited copies of
+`step_cal` (the PCM source without CHE-n, the time source without CHE-n, the time source without CDT-n, the PCM source
+without CDT-n) and requires the first three to set up and read exactly the unedited recording's packets and the last to be
+refused with its message. Written and run against the unchanged reader first: a segmentation fault on the first row.
+`eng\mutate.ps1` with `eng/mutants/packet-reader-optional-fields.json` (native, 4): **all CAUGHT**: the data type compared
+unchecked (a crash), a missing type taken for PCM, the refusal's message losing its channel, the data source not kept.
+
+Native baseline **492 test cases** (was 491; 1 skipped). Managed and app unchanged.
+
 #### The theme in Fluent's vocabulary: semantic tokens, Segoe UI Variable, Fluent's type scale and corners
 
 Asked for after #272: keep the VS Code look, but base it on Fluent UX, especially for the dialogs. This is the first of two

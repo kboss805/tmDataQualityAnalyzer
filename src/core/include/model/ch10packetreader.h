@@ -37,8 +37,6 @@ class PacketQueue;
  */
 typedef struct SuChanInfo
 {
-    uint16_t                uChID;          ///< Channel identifier.
-    int                     bEnabled;       ///< Non-zero if channel is enabled.
     Irig106::SuRDataSource* psuRDataSrc;    ///< Pointer to the TMATS R-record data source.
     void*                   psuAttributes;  ///< Pointer to decoded attributes (type varies).
 } SuChanInfo;
