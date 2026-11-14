@@ -12,6 +12,32 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The run-log tests assert only the order the core promises
+
+`ProcessingTests.TheRunLogsTheJobLinesThenTheSummaryThenWhatTheRunSays` failed once in a full app-suite run (2026-11-13):
+it expected the reader's "Reading Chapter 10 file..." straight after the summary, and got the stream's
+"[CH 26 RCVR] processing..." there. The test was wrong, not the core. The core keeps each source's lines in order (the
+reader's, each stream's) but not one source's against another's: `tmdq_abi.h` and `pipelinerunner.h` say so, and
+`FrameProcessor::streamTag` exists because the streams' lines interleave differently from run to run. `PipelineRunner::drive`
+starts the stream threads before the reader, so that each is already waiting on its queue, and each logs its first line
+straight away. v2.14.2's `ProcessingCoordinator` did the same ("Start workers first so they are waiting before the reader
+produces"). The reader's first line came first only because the reader usually wins. Making that order a guarantee
+would mean holding every stream until the reader has spoken, for a line nobody depends on, so the core is unchanged.
+
+- `TheRunLogsTheJobLinesThenTheSummaryThenWhatTheRunSays` now asserts that after the job line and the summary, the
+  reader's first line and the stream's first line each appear exactly once, in either order, and that the stream's
+  completed line follows its first line. `pipelinerunner.h` documents that order: a stream's result is reported after
+  its last line.
+- `TheLogTellsTheStoryOfARunAsV214Did` had the same assumption (`lines[12]`) and now asserts the reader's line once
+  after the summary.
+
+Checked with `eng\mutate.ps1` on the app suite's `ProcessingTests` (the list is kept as `eng/mutants/run-log-order.json`).
+R1 holds the reader's first line back 300 ms, so the stream always speaks first: on `main` it is CAUGHT by both old
+tests, which reproduces the failure every time; with the new assertions it SURVIVES, as it should. R2 holds the stream's
+line back instead and also SURVIVES. CAUGHT: the reader's line misworded (M1) or logged twice (M2), what the threads
+said while the run was starting logged before the summary (M3), no line for a completed stream (M4), and the stream's
+first line misworded (M5). App suite 586 passed / 0 failed / 0 skipped, 34 not run: no baseline moved.
+
 #### The window as it opens: v2.14.2's size and empty grid, a divider that shows, no status bar
 
 The window as it opens, compared side by side with v2.14.2 built from its tag, and the log sidebar's resizing.

@@ -1,0 +1,62 @@
+{
+  "suite": "app",
+  "args": ["-class", "TmDq.App.Tests.ProcessingTests"],
+  "mutants": [
+    {
+      "id": "R1",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "    m_report.log(\"Reading Chapter 10 file...\");",
+      "new": "    for (const auto t0 = std::chrono::steady_clock::now(); std::chrono::steady_clock::now() - t0 < std::chrono::milliseconds(300);) {}\n    m_report.log(\"Reading Chapter 10 file...\");",
+      "expect": "survived",
+      "note": "not a defect: the reader's first line held back 300 ms, so the stream's line always comes first - the order the failing run hit"
+    },
+    {
+      "id": "R2",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "    const bool bounded = (start_seconds != 0) || (stop_seconds != UINT64_MAX);",
+      "new": "    const bool bounded = (start_seconds != 0) || (stop_seconds != UINT64_MAX);\n    for (const auto t0 = std::chrono::steady_clock::now(); std::chrono::steady_clock::now() - t0 < std::chrono::milliseconds(300);) {}",
+      "expect": "survived",
+      "note": "not a defect: the stream's first line held back 300 ms, so the reader's always comes first"
+    },
+    {
+      "id": "M1",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "    m_report.log(\"Reading Chapter 10 file...\");",
+      "new": "    m_report.log(\"Reading Chapter 10 file\");",
+      "expect": "caught",
+      "note": "the reader's first line is not what v2.14.2 logged"
+    },
+    {
+      "id": "M2",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "    m_report.log(\"Reading Chapter 10 file...\");",
+      "new": "    m_report.log(\"Reading Chapter 10 file...\");\n    m_report.log(\"Reading Chapter 10 file...\");",
+      "expect": "caught",
+      "note": "the reader's first line logged twice"
+    },
+    {
+      "id": "M3",
+      "file": "src/TmDq.App/Models/Processing/StreamsRun.cs",
+      "old": "                foreach (string line in between) Emit(false, line);\n                foreach ((bool error, string text) in _held ?? new()) Emit(error, text);",
+      "new": "                foreach ((bool error, string text) in _held ?? new()) Emit(error, text);\n                foreach (string line in between) Emit(false, line);",
+      "expect": "caught",
+      "note": "what the run's threads said while it started is logged before the summary"
+    },
+    {
+      "id": "M4",
+      "file": "src/TmDq.App/Models/Processing/StreamsRun.cs",
+      "old": "                Log.Line(Completed(p));",
+      "new": "",
+      "expect": "caught",
+      "note": "a completed stream gets no line"
+    },
+    {
+      "id": "M5",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "                            : std::string(\"processing...\")));",
+      "new": "                            : std::string(\"processing\")));",
+      "expect": "caught",
+      "note": "the stream's first line is not what v2.14.2 logged"
+    }
+  ]
+}

@@ -250,8 +250,15 @@ namespace TmDq.App.Tests
 
             Assert.Equal("  RCVR: no non-linear calibration profiles configured — using linear calibration.", lines[0]);
             Assert.Equal(StreamsRun.Summary(request), lines.Skip(1).Take(6));
-            Assert.Equal("Reading Chapter 10 file...", lines[7]);
-            Assert.Contains($"  RCVR: {s.TimesSec.Length} samples, {s.Channels.Count} channel(s)", lines);
+            // Then the run's threads. The core keeps each source's lines in order but not one source's against
+            // another's (tmdq_abi.h), and the streams start before the reader, as in v2.14.2: the reader's first line
+            // and the stream's first line may come in either order, so each is asserted once, after the summary.
+            List<string> run = lines.Skip(7).ToList();
+            Assert.Single(run, l => l == "Reading Chapter 10 file...");
+            Assert.Single(run, l => l == "[CH 26 RCVR] processing...");
+            // A stream's result is reported after that stream's last line.
+            int completed = run.IndexOf($"  RCVR: {s.TimesSec.Length} samples, {s.Channels.Count} channel(s)");
+            Assert.True(completed > run.IndexOf("[CH 26 RCVR] processing..."), "the stream's line is missing or out of place");
             Assert.True(s.TimesSec.Length > 0 && s.Channels.Count > 0);
             Assert.DoesNotContain(log.Lines, l => l.Error);
         }
@@ -361,7 +368,9 @@ namespace TmDq.App.Tests
             RunRequest request = FirstChannelRun.Request(Prn, Ch10File.Open(Prn));
             string[] opening = { "Opening: prn_testfile, sample.ch10", "  File size: 77.3 MB", "  Time channels: 1", "  PCM channels: 4" };
             Assert.Equal(opening.Concat(StreamsRun.Summary(request)), lines.Skip(2).Take(10));
-            Assert.Equal("Reading Chapter 10 file...", lines[12]);
+            // The reader's first line after the summary; the stream's own first line may come before it (the core keeps
+            // order per source only, as TheRunLogsTheJobLinesThenTheSummaryThenWhatTheRunSays says).
+            Assert.Single(lines.Skip(12), l => l == "Reading Chapter 10 file...");
             int completed = lines.IndexOf("  CH-01 PRN 15 5M: 116 samples, 0 channel(s)");
             Assert.True(completed > 12, "the stream's line is missing or out of place");
             Assert.Equal("Processing complete — results plotted from memory.", lines[^1]);
