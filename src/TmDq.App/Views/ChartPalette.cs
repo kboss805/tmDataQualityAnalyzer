@@ -7,7 +7,7 @@ namespace TmDq.App.Views
     /// The plot's colours in each theme (US9.0), v2.x's for the chart and its legend: the chart's
     /// background, axes and text, grid, title, and the translucent legend and chips over it. A series keeps its own
     /// colour in both. The dark chart's background is a shade darker than the log panel's (#1C1C1C, v2.x's darkest
-    /// grey, against #202020), and the light chart's a shade lighter (white against #FBFBFB), to set the chart off.
+    /// grey, against #202020), and the light chart's a shade lighter (white against #F9F9F9, both on the window's #F3F3F3), to set the chart off.
     /// </summary>
     public sealed record ChartPalette(Color Background, Color Foreground, Color Grid, Color Title,
                                       Color LegendBackground, Color LegendBorder, Color LegendText)
