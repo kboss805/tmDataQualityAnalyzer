@@ -1,0 +1,27 @@
+{
+  "suite": "app",
+  "args": ["-class", "TmDq.App.Tests.PlotDraftTests"],
+  "mutants": [
+    { "id": "K1", "file": "src/TmDq.App/Views/PlotView.axaml.cs",
+      "old": "command == commands.PanEarlierCommand || command == commands.PanLaterCommand ||", "new": "command == commands.PanLaterCommand ||",
+      "expect": "caught", "note": "the left arrow not a step" },
+    { "id": "K2", "file": "src/TmDq.App/Views/PlotView.axaml.cs",
+      "old": "command == commands.ZoomInCommand || command == commands.ZoomOutCommand;", "new": "command == commands.ZoomOutCommand;",
+      "expect": "caught", "note": "+ not a step" },
+    { "id": "K3", "file": "src/TmDq.App/Views/PlotView.axaml.cs",
+      "old": "IsStep(commands, command) && command.CanExecute", "new": "command.CanExecute",
+      "expect": "caught", "note": "every bound key a step: Home, Back and R would draft" },
+    { "id": "K4", "file": "src/TmDq.App/Views/PlotView.axaml.cs",
+      "old": " && command.CanExecute(binding.CommandParameter))", "new": ")",
+      "expect": "caught", "note": "a key whose command cannot run still a step" },
+    { "id": "K5", "file": "src/TmDq.App/Views/PlotView.axaml.cs",
+      "old": "            if (_steppingKey != e.Key) return;\n", "new": "",
+      "expect": "caught", "note": "any key going up settles the gesture" },
+    { "id": "K6", "file": "src/TmDq.App/Views/PlotView.axaml.cs",
+      "old": "            _steppingKey = null;\n            Chart.Settle();", "new": "            _steppingKey = null;",
+      "expect": "caught", "note": "a released key leaves the draft until the delay runs out" },
+    { "id": "K7", "file": "src/TmDq.App/Views/PlotView.axaml.cs",
+      "old": "RoutingStrategies.Tunnel, handledEventsToo: true);\n            Root.AddHandler(KeyUpEvent", "new": "RoutingStrategies.Tunnel);\n            Root.AddHandler(KeyUpEvent",
+      "expect": "caught", "note": "the key-down handler misses keys already handled on the way, as the bound ones are" }
+  ]
+}

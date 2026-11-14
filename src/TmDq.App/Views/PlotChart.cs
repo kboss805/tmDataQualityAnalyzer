@@ -31,10 +31,10 @@ namespace TmDq.App.Views
     ///
     /// Two things keep a large plot responsive while it is panned or zoomed. Each long series has an index in the core
     /// (<see cref="SeriesIndex"/>), so its envelope is looked up rather than walked: what a frame costs no longer grows
-    /// with the samples in view. And while a drag or the wheel is moving a plot whose last full paint took longer than
+    /// with the samples in view. And while a drag, the wheel or a pan or zoom key is moving a plot whose last full paint took longer than
     /// <see cref="DraftThresholdMs"/>, the data layer is painted as a draft: each band's outline without its fill and
     /// every line one device pixel wide, which Skia draws several times faster. The draft is still each column's minimum
-    /// to maximum, so a one-sample dropout shows in it; the full picture is painted when the drag is released or
+    /// to maximum, so a one-sample dropout shows in it; the full picture is painted when the drag or the key is released or
     /// <see cref="RefineDelay"/> after the last step. An export never draws a draft.
     /// </summary>
     public sealed class PlotChart : Control
@@ -253,10 +253,11 @@ namespace TmDq.App.Views
         /// Always the full picture, never a draft.</summary>
         public void RenderTo(DrawingContext context, Size size) => RenderData(context, size, 0.0);
 
-        /// <summary>A step of a gesture is about to move the plot: on a heavy plot, the frames from here are drafts until
-        /// the gesture settles (<see cref="Settle"/>, which a released drag calls and <see cref="RefineDelay"/> of
-        /// quiet calls too).</summary>
-        private void Moving()
+        /// <summary>A step of a gesture is about to move the plot (a wheel notch, a drag's move, or a pan or zoom key, which
+        /// repeats while it is held: <see cref="PlotView"/> reports those): on a heavy plot, the frames from here are
+        /// drafts until the gesture settles (<see cref="Settle"/>, which a released drag or key calls and
+        /// <see cref="RefineDelay"/> of quiet calls too).</summary>
+        internal void Moving()
         {
             if (_lastFullPaintMs <= DraftThresholdMs) return;
             _moving = true;
