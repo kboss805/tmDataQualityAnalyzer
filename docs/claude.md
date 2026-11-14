@@ -897,7 +897,8 @@ helper every test cleans up and reads back through, which waits out a virus scan
 **The application** (`tests/TmDq.App.Tests`, on the headless platform with Skia drawing):
 
 - **The run:** `WalkingSkeletonTests` (Open to the drawn chart on the PRN sample, failures, the smoke report),
-  `ProcessingTests` (the log, the progress dialog and its Cancel, the run's lines in order), `SeveralStreamsTests`.
+  `ProcessingTests` (the log, the progress dialog and its Cancel, the run's lines in the order the core promises: the job lines,
+  the summary, then each thread's own lines in order, the reader's and the streams' interleaving as they come), `SeveralStreamsTests`.
 - **Configure Streams:** `StreamRulesTests` and `StreamFilesTests` (the rules and files without a window),
   `StreamSetupViewModelTests`, `ConfigureStreamsTests`, `StreamWindowsTests`; `CalibrationDialogTests` (Extract
   Calibration and Apply Cal).
