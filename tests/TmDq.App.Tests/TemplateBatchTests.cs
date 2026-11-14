@@ -374,6 +374,30 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
+        public async Task ApplyTemplateWithoutTheNativeCoreSaysSoAndStops()
+        {
+            // As Open, Import CSV and the batch say it: in the status and the log, not thrown out of the command. The
+            // check of the files is the first thing that needs the core, after the template and the recordings are chosen.
+            string? before = Environment.GetEnvironmentVariable("TMDQ_CORE_DLL");
+            Environment.SetEnvironmentVariable("TMDQ_CORE_DLL", Path.Combine(_dir, "no-such-core", "tmdq_core.dll"));
+            try
+            {
+                var files = new FakeTemplateFiles { Template = Fixture("prn-sample.json"), Recordings = new[] { Prn } };
+                var dialogs = new FakeTemplateDialogs();
+                var vm = new MainWindowViewModel(new MainWindowServices { TemplateFiles = files, TemplateDialogs = dialogs, AppRoot = Repo.Root });
+                await vm.ApplyTemplateCommand.ExecuteAsync(null);
+                Assert.StartsWith(MainWindowViewModel.CoreNotLoaded, vm.Status);
+                Assert.Equal((vm.Status, Models.Logging.LogLevel.Error), (vm.Log.Entries[^1].Text, vm.Log.Entries[^1].Level));
+                Assert.Null(dialogs.Shown);   // nothing was asked
+                Assert.False(vm.IsBusy);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("TMDQ_CORE_DLL", before);
+            }
+        }
+
+        [Fact]
         public async Task ApplyTemplateReadsTheTemplateChecksTheFilesAndRunsTheOnesThatMatchOnceConfirmed()
         {
             string one = Copy("flight 1.ch10");

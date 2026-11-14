@@ -12,6 +12,39 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Three app error paths that threw or said nothing
+
+Found by the whole-tree cleanup audit, by reading. Each has a test that fails against the old behaviour (restored as mutants
+E1, O1 and C1 below, since the fixes were written beside their tests).
+
+- **Apply Template with the core missing threw out of its command.** `NativeCore.EnsureLoaded()` and the check of the files
+  (the first thing to need the core, after a template and recordings are chosen) sat outside the handler that Open, Import CSV
+  and the batch have, so as a first action with a missing or mismatched `tmdq_core.dll` the `AsyncRelayCommand` faulted and
+  nothing said why. It now says "The processing core could not be loaded: ..." in the status line and the log and asks nothing
+  more. The message is `MainWindowViewModel.CoreNotLoaded`, one constant where it was typed three times.
+- **An exception the run's observer threw was kept and never read.** The core's bridge catches what an observer method throws,
+  so a run goes on, and the first one waits on `ProcessingRun.ObserverException`; the app never looked, so a completed stream
+  whose report failed to be handled (the log, the status) left no trace. `StreamsRun.Run` now reads it once the run has ended
+  and reports it as an error of the run, "A report from the core could not be handled: ...", in the outcome's errors (so in
+  the status line) and the log.
+- **The status line's numbers used the machine's culture.** `Describe` formatted the mean lock with `{mean:F1}` and the counts
+  through the current culture, so on a comma-decimal machine "33,3 %" ended the smoke report that other tools read (the
+  packaging scripts read only its invariant prefix, so no shipped file was wrong; the tests would have failed there). It is
+  invariant now, as every other number the app writes.
+
+**Not done, and why:** the audit's fourth item, `run.GetResult()` in `ExtractCalibrationViewModel` sitting outside its `try`, is
+left. The calibration run is a static call on the binding and `GetResult()` throws only for a native out-of-memory or an
+internal error, so there is no seam to make it fail, and a catch with no test is the kind of line the mutation check exists to
+refuse. It wants either such a seam or a decision that the guard is worth carrying untested.
+
+**Checked:** three new app cases (`TemplateBatchTests.ApplyTemplateWithoutTheNativeCoreSaysSoAndStops`,
+`ProcessingTests.AReportTheObserverCouldNotHandleIsSaidNotDropped`,
+`ConfigureStreamsTests.TheStatusIsWrittenTheSameInEveryCulture`). `eng\mutate.ps1` with `eng/mutants/app-error-paths.json`
+(app, 8): **7 CAUGHT and 1 COMPILE** (the batch going on after a missing core, which the compiler refuses because the checks
+are unassigned). Native, managed and the shipped smoke report are unchanged.
+
+App baseline **619 passed, 34 not run** (was 616; 653 in all).
+
 #### Nothing leaves the ABI as an exception; the ABI's duplicated pieces are one
 
 The header promises "Nothing throws across the boundary", and four exports could break it (found by the whole-tree cleanup

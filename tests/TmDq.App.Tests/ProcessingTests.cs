@@ -278,6 +278,35 @@ namespace TmDq.App.Tests
             Assert.DoesNotContain(log.Lines, l => l.Text.Contains("samples,", StringComparison.Ordinal));
         }
 
+        /// <summary>A log that fails on the line a completed stream makes, as a log with a bug or a full disk would.</summary>
+        private sealed class FailingLog : IRunLog
+        {
+            public List<(bool Error, string Text)> Lines { get; } = new();
+
+            public void Line(string message)
+            {
+                if (message.Contains("samples,", StringComparison.Ordinal)) throw new InvalidOperationException("the log is full");
+                lock (Lines) Lines.Add((false, message));
+            }
+
+            public void Error(string message) { lock (Lines) Lines.Add((true, message)); }
+        }
+
+        [Fact]
+        public async Task AReportTheObserverCouldNotHandleIsSaidNotDropped()
+        {
+            // The core's bridge catches what an observer throws, so the run goes on and the stream completes; the
+            // exception is kept on the run and, unread, would leave no trace of the report that was lost.
+            NativeCore.EnsureLoaded();
+            RunRequest request = FirstChannelRun.Request(Prn, Ch10File.Open(Prn));
+            var log = new FailingLog();
+            using RunOutcome outcome = await StreamsRun.RunAsync(request, null, log, TestContext.Current.CancellationToken);
+            Assert.Single(outcome.Streams);
+            string said = Assert.Single(outcome.Errors);
+            Assert.Equal("A report from the core could not be handled: the log is full", said);
+            Assert.Contains((true, said), log.Lines);
+        }
+
         [Fact]
         public async Task ARunTheCoreRefusesLogsTheStreamsBuiltBeforeAndSaysWhy()
         {

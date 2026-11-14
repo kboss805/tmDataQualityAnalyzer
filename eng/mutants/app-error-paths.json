@@ -1,0 +1,78 @@
+{
+  "suite": "app",
+  "args": ["-stopOnFail"],
+  "mutants": [
+    {
+      "id": "E1",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "            catch (Exception e) when (e is FileNotFoundException or InvalidOperationException)\n            {\n                // As Open, Import CSV and the batch say it: reported, not thrown out of the command.",
+      "new": "            catch (Exception e) when (e is ArgumentException)\n            {\n                // As Open, Import CSV and the batch say it: reported, not thrown out of the command.",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.TemplateBatchTests"],
+      "expect": "caught",
+      "note": "Apply Template's core check outside any handler, as it was: the missing core escapes the command"
+    },
+    {
+      "id": "E2",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "                Log.Error(Status);\n                return;",
+      "new": "                return;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.TemplateBatchTests"],
+      "expect": "caught",
+      "note": "the missing core said in the status line and not in the log"
+    },
+    {
+      "id": "E3",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "                Log.Error(Status);\n                return;",
+      "new": "                Log.Error(Status);",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.TemplateBatchTests"],
+      "expect": "compile",
+      "note": "after a missing core, the batch goes on: the compiler holds it (the checks are unassigned), as a test would"
+    },
+    {
+      "id": "E4",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "public const string CoreNotLoaded = \"The processing core could not be loaded: \";",
+      "new": "public const string CoreNotLoaded = \"The processing core was not loaded: \";",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.WalkingSkeletonTests"],
+      "expect": "caught",
+      "note": "the shared wording changed: Open's test holds the text itself, not the constant"
+    },
+    {
+      "id": "C1",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "text = string.Create(CultureInfo.InvariantCulture,\n                    $\"{name}: {s.Label}",
+      "new": "text = string.Create(CultureInfo.CurrentCulture,\n                    $\"{name}: {s.Label}",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ConfigureStreamsTests"],
+      "expect": "caught",
+      "note": "the status line formatted with the machine's culture: a decimal comma"
+    },
+    {
+      "id": "O1",
+      "file": "src/TmDq.App/Models/Processing/StreamsRun.cs",
+      "old": "observer.OnError(\"A report from the core could not be handled: \" + failure.Message);",
+      "new": "_ = failure;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ProcessingTests"],
+      "expect": "caught",
+      "note": "the observer's exception read and dropped, as before"
+    },
+    {
+      "id": "O2",
+      "file": "src/TmDq.App/Models/Processing/StreamsRun.cs",
+      "old": "observer.OnError(\"A report from the core could not be handled: \" + failure.Message);",
+      "new": "observer.Errors.Add(\"A report from the core could not be handled: \" + failure.Message);",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ProcessingTests"],
+      "expect": "caught",
+      "note": "said in the outcome but not in the log"
+    },
+    {
+      "id": "O3",
+      "file": "src/TmDq.App/Models/Processing/StreamsRun.cs",
+      "old": "observer.OnError(\"A report from the core could not be handled: \" + failure.Message);",
+      "new": "observer.OnError(\"A report from the core could not be handled.\");",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ProcessingTests"],
+      "expect": "caught",
+      "note": "the reason lost"
+    }
+  ]
+}

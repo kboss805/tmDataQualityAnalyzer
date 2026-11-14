@@ -102,6 +102,10 @@ namespace TmDq.App.Models.Processing
                 {
                     run.Wait();
                 }
+                // A report the core made that the observer could not handle was caught at the boundary and kept; said
+                // here, or the stream it concerned would be missing with no reason.
+                if (run.ObserverException is { } failure)
+                    observer.OnError("A report from the core could not be handled: " + failure.Message);
             }
             var completed = observer.Results.OrderBy(r => r.Copy.JobIndex).ToList();
             List<ProcessedStream> streams = completed.Select(r => r.Copy).ToList();

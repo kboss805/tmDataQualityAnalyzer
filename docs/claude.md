@@ -907,7 +907,7 @@ helper every test cleans up and reads back through, which waits out a virus scan
 
 - **The run:** `WalkingSkeletonTests` (Open to the drawn chart on the PRN sample, failures, the smoke report),
   `ProcessingTests` (the log, the progress dialog and its Cancel, the run's lines in the order the core promises: the job lines,
-  the summary, then each thread's own lines in order, the reader's and the streams' interleaving as they come), `SeveralStreamsTests`.
+  the summary, then each thread's own lines in order, the reader's and the streams' interleaving as they come; a report the observer could not handle, said and not dropped), `SeveralStreamsTests`.
 - **Configure Streams:** `StreamRulesTests` and `StreamFilesTests` (the rules and files without a window),
   `StreamSetupViewModelTests`, `ConfigureStreamsTests`, `StreamWindowsTests`; `CalibrationDialogTests` (Extract
   Calibration and Apply Cal).
@@ -917,7 +917,7 @@ helper every test cleans up and reads back through, which waits out a virus scan
   display scaling, an export never drafted, each long series' index and when it goes), `AroundTheChartTests` (legend, chips,
   menu, keys, Customize View, prompts).
 - **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against v2.14.2's, the image pixel by pixel, Import
-  CSV), `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports).
+  CSV), `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, Apply Template with the core missing).
 - **The shell:** `ShellTests` (title bar, menu, Recent Files, keys, drag and drop, the sidebar and its divider, themes, Help), `PreferencesTests`
   (the preferences file, and v2.x's INI file left unread), `MainWindowTests`.
 - **The layers:** `LayerTests` reads every model, view model and service type as compiled, its methods' code

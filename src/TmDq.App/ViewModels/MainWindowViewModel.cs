@@ -30,6 +30,9 @@ namespace TmDq.App.ViewModels
         /// <summary>Recent Files with nothing in it.</summary>
         public const string NoRecentFiles = "(No recent files)";
 
+        /// <summary>What the status line and the log begin with when tmdq_core.dll is missing or is not the one this build was made for.</summary>
+        public const string CoreNotLoaded = "The processing core could not be loaded: ";
+
         private readonly IRecordingPicker? _picker;
         private readonly IStreamConfigurator _configurator;
         private readonly IProcessingDialog? _processingDialog;
@@ -276,7 +279,7 @@ namespace TmDq.App.ViewModels
             }
             catch (Exception e) when (e is FileNotFoundException or InvalidOperationException)
             {
-                Status = "The processing core could not be loaded: " + e.Message;
+                Status = CoreNotLoaded + e.Message;
                 Log.Error(Status);
             }
             finally
@@ -358,8 +361,19 @@ namespace TmDq.App.ViewModels
 
             IReadOnlyList<string> picked = await _templateFiles.OpenRecordingsAsync(LastFolder);
             if (picked.Count == 0) return;
-            NativeCore.EnsureLoaded();
-            IReadOnlyList<FileCheck> checks = await Task.Run(() => TemplateBatch.Validate(template, picked));
+            IReadOnlyList<FileCheck> checks;
+            try
+            {
+                NativeCore.EnsureLoaded();
+                checks = await Task.Run(() => TemplateBatch.Validate(template, picked));
+            }
+            catch (Exception e) when (e is FileNotFoundException or InvalidOperationException)
+            {
+                // As Open, Import CSV and the batch say it: reported, not thrown out of the command.
+                Status = CoreNotLoaded + e.Message;
+                Log.Error(Status);
+                return;
+            }
             var confirm = new BatchApplyViewModel(checks, LastFolder ?? AppContext.BaseDirectory, _templateFiles);
             await _templateDialogs!.ConfirmBatchAsync(confirm);
             if (!confirm.Accepted || confirm.Matched.Count == 0) return;
@@ -424,7 +438,7 @@ namespace TmDq.App.ViewModels
             }
             catch (Exception e) when (e is FileNotFoundException or InvalidOperationException)
             {
-                Status = "The processing core could not be loaded: " + e.Message;
+                Status = CoreNotLoaded + e.Message;
                 Log.Error(Status);
             }
             finally
@@ -489,7 +503,7 @@ namespace TmDq.App.ViewModels
             {
                 // The native core is missing or does not match this build.
                 ClearRun();
-                Status = "The processing core could not be loaded: " + e.Message;
+                Status = CoreNotLoaded + e.Message;
                 Log.Error(Status);
             }
             finally
@@ -575,13 +589,16 @@ namespace TmDq.App.ViewModels
             {
                 ProcessedStream s = streams[0];
                 double mean = s.LockPercent.Length == 0 ? 0 : s.LockPercent.Average();
-                text = $"{name}: {s.Label} (channel {s.PcmChannelId}), {s.LockPercent.Length} samples, mean lock {mean:F1} %";
+                // Invariant: the line ends the smoke report, which other tools read, and the tests hold its digits.
+                text = string.Create(CultureInfo.InvariantCulture,
+                    $"{name}: {s.Label} (channel {s.PcmChannelId}), {s.LockPercent.Length} samples, mean lock {mean:F1} %");
             }
             else
             {
                 int locks = streams.Count(s => s.Mode == StreamMode.FrameSyncLock);
-                text = $"{name}: {streams.Count} {(streams.Count == 1 ? "stream" : "streams")} processed " +
-                       $"({locks} Frame Sync Lock, {streams.Count - locks} Receiver SNR)";
+                text = string.Create(CultureInfo.InvariantCulture,
+                    $"{name}: {streams.Count} {(streams.Count == 1 ? "stream" : "streams")} processed " +
+                    $"({locks} Frame Sync Lock, {streams.Count - locks} Receiver SNR)");
             }
             return outcome.Errors.Count == 0 ? text : text + ". Not processed: " + string.Join(" ", outcome.Errors);
         }
