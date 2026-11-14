@@ -377,10 +377,20 @@ namespace TmDq.App.Tests
             window.Close();
         }
 
+        private static Color BrushColor(Window window, string key)
+        {
+            Assert.True(Application.Current!.TryFindResource(key, window.ActualThemeVariant, out object? b), key);
+            return ((ISolidColorBrush)b!).Color;
+        }
+
+        /// <summary>The colour drawn at a point of a window's rendered frame.</summary>
+        private static Color DrawnAt(ILockedFramebuffer fb, double x, double y) =>
+            Color.FromUInt32(0xFF000000 | Frames.Pixel(fb, (int)x, (int)y));
+
         [AvaloniaTheory]
         [InlineData(false)]
         [InlineData(true)]
-        public void TheDividerShowsWhereToDragAndAnswersThePointer(bool dark)
+        public void TheDividerIsAHairlineWithAWiderGrabAreaAndTakesTheAccentUnderThePointer(bool dark)
         {
             var app = (App)Application.Current!;
             ThemeVariant? before = app.RequestedThemeVariant;
@@ -389,37 +399,40 @@ namespace TmDq.App.Tests
             {
                 (MainWindow window, _) = Show();
                 GridSplitter splitter = window.Splitter;
-                Border grip = splitter.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "Grip");
-                Color Resource(string key)
-                {
-                    Assert.True(Application.Current!.TryFindResource(key, window.ActualThemeVariant, out object? b), key);
-                    return ((ISolidColorBrush)b!).Color;
-                }
-                Color Of(IBrush? brush) => brush is ISolidColorBrush b ? b.Color : Colors.Transparent;
+                Border line = splitter.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "Line");
+                Color hairline = BrushColor(window, "Hairline"), accent = BrushColor(window, "SashHover");
+                Rect log = Frames.InWindow(window.FindControl<Border>("LogPanel")!, window);
+                double lineX = log.Right + MainWindow.SplitterWidth / 2;
 
-                // A short grip in the middle of the divider, in a shade off the window's background, drawn.
-                Assert.Equal(new Size(2, 36), grip.Bounds.Size);
-                Point centre = grip.TranslatePoint(new Point(1, 18), splitter)!.Value;
-                Assert.Equal(splitter.Bounds.Width / 2, centre.X, 0.5);
-                Assert.Equal(splitter.Bounds.Height / 2, centre.Y, 1.0);
-                Assert.Equal(MainWindow.SplitterWidth, splitter.Bounds.Width);
-                Assert.Equal(Resource("SplitterGrip"), Of(grip.Background));
-                Assert.Equal(Colors.Transparent, Of(splitter.Background));
+                // As VS Code draws a sash: a one-pixel hairline in the divider's column, drawn, and a grab area that reaches a
+                // few pixels into the log and the chart on each side of it.
+                Rect grab = Frames.InWindow(splitter, window);
+                Assert.Equal(MainWindow.SplitterWidth + 2 * MainWindow.SplitterReach, grab.Width);
+                Assert.Equal(lineX, grab.Center.X, 0.01);
+                Assert.Equal(new Size(1, grab.Height), line.Bounds.Size);
+                Assert.Equal(hairline, ((ISolidColorBrush)line.Background!).Color);
                 using (ILockedFramebuffer fb = Frames.Capture(window).Lock())
-                {
-                    Rect g = Frames.InWindow(grip, window);
-                    Color drawn = Color.FromUInt32(0xFF000000 | Frames.Pixel(fb, (int)g.Center.X, (int)g.Center.Y));
-                    Assert.Equal(Resource("SplitterGrip"), drawn);
-                }
+                    Assert.Equal(hairline, DrawnAt(fb, log.Right, grab.Center.Y));
 
-                // Under the pointer the strip takes a shade and the grip brightens; away from it, both go back.
-                Point over = Frames.InWindow(splitter, window).Center + new Point(0, 100);
-                window.MouseMove(over, RawInputModifiers.None);
+                // The grab area answers the pointer across its whole width and not beyond it.
+                double y = grab.Center.Y + 100;
+                window.MouseMove(new Point(grab.Left + 0.5, y), RawInputModifiers.None);
                 Dispatcher.UIThread.RunJobs();
-                Assert.Equal((Resource("SplitterHover"), Resource("SplitterGripHover")), (Of(splitter.Background), Of(grip.Background)));
-                window.MouseMove(over + new Point(200, 0), RawInputModifiers.None);
+                Assert.True(splitter.IsPointerOver);
+                window.MouseMove(new Point(grab.Left - 2, y), RawInputModifiers.None);
                 Dispatcher.UIThread.RunJobs();
-                Assert.Equal((Colors.Transparent, Resource("SplitterGrip")), (Of(splitter.Background), Of(grip.Background)));
+                Assert.False(splitter.IsPointerOver);
+                Assert.Equal(hairline, ((ISolidColorBrush)line.Background!).Color);
+
+                // Under the pointer the line thickens and takes the accent, and is drawn so; away from it, both go back.
+                window.MouseMove(new Point(lineX, y), RawInputModifiers.None);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal((3.0, accent), (line.Bounds.Width, ((ISolidColorBrush)line.Background!).Color));
+                using (ILockedFramebuffer fb = Frames.Capture(window).Lock())
+                    Assert.Equal(accent, DrawnAt(fb, lineX, grab.Center.Y));
+                window.MouseMove(new Point(lineX + 200, y), RawInputModifiers.None);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal((1.0, hairline), (line.Bounds.Width, ((ISolidColorBrush)line.Background!).Color));
                 window.Close();
             }
             finally
@@ -431,62 +444,51 @@ namespace TmDq.App.Tests
         [AvaloniaTheory]
         [InlineData(false)]
         [InlineData(true)]
-        public void TheWindowsBackgroundIsV214sAndTheLogAndTheChartArePanelsOfOneShape(bool dark)
+        public void TheLogIsTheChromeTheChartTheContentFlushBesideOneAnotherAndDividedByHairlines(bool dark)
         {
             var app = (App)Application.Current!;
             ThemeVariant? before = app.RequestedThemeVariant;
             app.ApplyTheme(dark);
             try
             {
-                (MainWindow window, _) = Show();
-                Assert.True(Application.Current!.TryFindResource("WindowBackground", window.ActualThemeVariant, out object? b));
-                Color background = ((ISolidColorBrush)b!).Color;
-                Assert.Equal(Color.Parse(dark ? "#2C2C2C" : "#F3F3F3"), background);
-                Assert.Equal(background, ((ISolidColorBrush)window.Background!).Color);
+                (MainWindow window, MainWindowViewModel vm) = Show();
+                Color chrome = BrushColor(window, "ChromeBackground"), content = BrushColor(window, "ContentBackground"), hairline = BrushColor(window, "Hairline");
+                Assert.Equal(chrome, ((ISolidColorBrush)window.Background!).Color);
+                Border logPanel = window.FindControl<Border>("LogPanel")!;
+                Assert.Equal(chrome, ((ISolidColorBrush)logPanel.Background!).Color);
+                Assert.Equal(content, ((ISolidColorBrush)window.PlotPanel.Background!).Color);
+                // VS Code's way, in both themes: the content a shade lighter than the chrome around it.
+                Assert.True(content.R > chrome.R && content.G > chrome.G && content.B > chrome.B, $"{content} is not lighter than {chrome}");
 
-                Assert.True(Application.Current!.TryFindResource("LogPanelBorder", window.ActualThemeVariant, out object? e));
-                Color edge = ((ISolidColorBrush)e!).Color;
+                // Flush: the title bar, its hairline, then the log, the divider's column and the chart side by side, filling
+                // the window with no gap and no border of their own.
+                Rect title = Frames.InWindow(window.TitleBar, window), rule = Frames.InWindow(window.TitleBarLine, window),
+                     log = Frames.InWindow(logPanel, window), plot = Frames.InWindow(window.PlotPanel, window), body = Frames.InWindow(window.Body, window);
+                Assert.Equal(1, rule.Height);
+                Assert.Equal((title.Bottom, rule.Bottom), (rule.Top, body.Top));
+                Assert.Equal((body.Left, body.Top, body.Bottom), (log.Left, log.Top, log.Bottom));
+                Assert.Equal((body.Right, body.Top, body.Bottom), (plot.Right, plot.Top, plot.Bottom));
+                Assert.Equal(plot.Left, log.Right + MainWindow.SplitterWidth);
+                Assert.Equal(window.ClientSize.Height, body.Bottom);
+                Assert.Equal(new Thickness(0), logPanel.BorderThickness);
+                Assert.Equal(new Thickness(0), window.PlotPanel.BorderThickness);
 
-                // The log and the chart sit in panels of one shape: the same gap from the window's edges, the same hairline
-                // border, the same rounded corners, the chart clipped to them.
-                Border logPanel = window.FindControl<Border>("LogPanel")!, plotPanel = window.PlotPanel;
-                Rect log = Frames.InWindow(logPanel, window), plot = Frames.InWindow(plotPanel, window), body = Frames.InWindow(window.Body, window);
-                Assert.Equal((MainWindow.PanelGap, MainWindow.PanelGap), (log.Left - body.Left, body.Right - plot.Right));
-                Assert.Equal((log.Top, log.Bottom), (plot.Top, plot.Bottom));
-                Assert.Equal(log.Right + MainWindow.SplitterWidth, plot.Left);   // the divider is the gap between them
-                Assert.Equal((plotPanel.BorderThickness, plotPanel.CornerRadius, plotPanel.BorderBrush),
-                             (logPanel.BorderThickness, logPanel.CornerRadius, logPanel.BorderBrush));
-                Assert.Equal(new CornerRadius(4), logPanel.CornerRadius);
+                // Drawn: the chrome under the title bar's buttons and in the log, the hairline under the title bar and between
+                // the log and the chart, the content in the chart's corner.
                 using (ILockedFramebuffer fb = Frames.Capture(window).Lock())
                 {
-                    Color At(double x, double y) => Color.FromUInt32(0xFF000000 | Frames.Pixel(fb, (int)x, (int)y));
-                    // The window's background: the caption between the title bar's buttons, and the strip above the log.
-                    Assert.Equal(background, At(window.Caption.Bounds.Center.X, window.Caption.Bounds.Center.Y));
-                    Assert.Equal(background, At(log.Center.X, log.Top - 2));
-                    foreach ((Rect panel, Color fill) in new[] { (log, ((ISolidColorBrush)logPanel.Background!).Color),
-                                                                (plot, ChartPalette.For(window.ActualThemeVariant).Background) })
-                    {
-                        Assert.Equal(edge, At(panel.Center.X, panel.Top));         // the border, along the top
-                        Assert.Equal(background, At(panel.Left, panel.Top));       // the corner, cut away
-                        Assert.Equal(background, At(panel.Right - 1, panel.Bottom - 1));
-                        // Just inside the border, the corner is rounded off: not the panel's fill.
-                        foreach ((double x, double y) in new[] { (panel.Left + 1, panel.Top + 1), (panel.Right - 2, panel.Top + 1),
-                                                                 (panel.Left + 1, panel.Bottom - 2), (panel.Right - 2, panel.Bottom - 2) })
-                            Assert.NotEqual(fill, At(x, y));
-                    }
-                    // The chart set off from the log: a shade darker in the dark theme, a shade lighter in the light.
-                    Color logInside = At(log.Center.X, log.Bottom - 8), chartInside = At(plot.Right - 30, plot.Bottom - 30);
-                    Assert.Equal(((ISolidColorBrush)logPanel.Background!).Color, logInside);
-                    Assert.Equal(ChartPalette.For(window.ActualThemeVariant).Background, chartInside);
-                    Assert.Equal(dark ? Color.Parse("#1C1C1C") : Colors.White, chartInside);
-                    Assert.Equal(dark ? Color.Parse("#202020") : Color.Parse("#F9F9F9"), logInside);
+                    Assert.Equal(chrome, DrawnAt(fb, window.Caption.Bounds.Center.X, window.Caption.Bounds.Center.Y));
+                    Assert.Equal(hairline, DrawnAt(fb, rule.Center.X, rule.Top));
+                    Assert.Equal(chrome, DrawnAt(fb, log.Center.X, log.Bottom - 8));
+                    Assert.Equal(hairline, DrawnAt(fb, log.Right, log.Center.Y));
+                    Assert.Equal(content, DrawnAt(fb, plot.Left + 6, plot.Top + 6));
+                    Assert.Equal(content, DrawnAt(fb, plot.Right - 30, plot.Bottom - 30));
                 }
 
-                // With the log hidden, the chart keeps its gap from the window's left edge.
-                ((MainWindowViewModel)window.DataContext!).SidebarVisible = false;
+                // With the log hidden the chart fills the window to its left edge.
+                vm.SidebarVisible = false;
                 Dispatcher.UIThread.RunJobs();
-                plot = Frames.InWindow(plotPanel, window);
-                Assert.Equal((MainWindow.PanelGap, MainWindow.PanelGap), (plot.Left - body.Left, body.Right - plot.Right));
+                Assert.Equal((body.Left, body.Right), (Frames.InWindow(window.PlotPanel, window).Left, Frames.InWindow(window.PlotPanel, window).Right));
                 window.Close();
             }
             finally
@@ -498,26 +500,72 @@ namespace TmDq.App.Tests
         [AvaloniaTheory]
         [InlineData(false)]
         [InlineData(true)]
-        public void EveryDialogIsOnTheMainWindowsBackground(bool dark)
+        public void TheControlsFluentDrawsTakeVsCodesInputsButtonsAccentAndText(bool dark)
         {
             var app = (App)Application.Current!;
             ThemeVariant? before = app.RequestedThemeVariant;
             app.ApplyTheme(dark);
             try
             {
-                Assert.True(Application.Current!.TryFindResource("WindowBackground", dark ? ThemeVariant.Dark : ThemeVariant.Light, out object? b));
-                Color background = ((ISolidColorBrush)b!).Color;
+                var input = new TextBox { Width = 160 };
+                var secondary = new Button { Content = "Cancel", Width = 80 };
+                var primary = new Button { Content = "OK", Width = 80, Classes = { "accent" } };
+                var box = new CheckBox { Content = "Option" };
+                var window = new Window
+                {
+                    Width = 300, Height = 260, Content = new StackPanel { Margin = new Thickness(20), Spacing = 10, Children = { input, secondary, primary, box } },
+                };
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                // Drawn, not only looked up: a pixel inside each control's padding, clear of its text and its border.
+                using (ILockedFramebuffer fb = Frames.Capture(window).Lock())
+                {
+                    Color Inside(Control c) => DrawnAt(fb, Frames.InWindow(c, window).Left + 6, Frames.InWindow(c, window).Top + 4);
+                    Assert.Equal(Color.Parse(dark ? "#313131" : "#FFFFFF"), Inside(input));                   // VS Code's inputs
+                    Assert.Equal(Color.Parse(dark ? "#1F1F1F" : "#E5E5E5"), Inside(secondary));               // its secondary button: ghost, or grey
+                    Assert.Equal(Color.Parse(dark ? "#0078D4" : "#005FB8"), Inside(primary));                 // its accent
+                    Color empty = DrawnAt(fb, Frames.InWindow(box, window).Left + 10, Frames.InWindow(box, window).Top + 11);
+                    Assert.Equal(Color.Parse(dark ? "#313131" : "#FFFFFF"), empty);                       // its checkbox
+                }
+
+                // And the text and the accent, and the popups' fills, as Fluent looks them up.
+                string[] keys = { "SystemControlForegroundBaseHighBrush", "CheckBoxCheckBackgroundFillChecked", "TextControlBorderBrushFocused",
+                                  "ComboBoxBackground", "ComboBoxBorderBrush", "ComboBoxDropDownBackground", "MenuFlyoutPresenterBackground", "ToolTipBackground" };
+                string[] found = keys.Select(k => BrushColor(window, k)).Select(c => $"#{c.R:X2}{c.G:X2}{c.B:X2}").ToArray();
+                Assert.Equal(dark ? new[] { "#CCCCCC", "#0078D4", "#0078D4", "#313131", "#3C3C3C", "#1F1F1F", "#1F1F1F", "#202020" }
+                                  : new[] { "#3B3B3B", "#005FB8", "#005FB8", "#FFFFFF", "#CECECE", "#FFFFFF", "#FFFFFF", "#F8F8F8" }, found);
+                window.Close();
+            }
+            finally
+            {
+                app.RequestedThemeVariant = before;
+            }
+        }
+
+        [AvaloniaTheory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void EveryDialogIsOnTheContentBackgroundAndTheMainWindowOnTheChrome(bool dark)
+        {
+            var app = (App)Application.Current!;
+            ThemeVariant? before = app.RequestedThemeVariant;
+            app.ApplyTheme(dark);
+            try
+            {
                 foreach ((Type kind, Window window) in IconTests.EveryWindowKind())
                 {
                     window.Show();
                     Dispatcher.UIThread.RunJobs();
                     try
                     {
+                        // The dialogs are on the surface the chart is; the main window is the chrome around it.
+                        Color expected = BrushColor(window, kind == typeof(MainWindow) ? "ChromeBackground" : "ContentBackground");
                         Assert.True(window.Background is ISolidColorBrush, kind.Name + " has no plain background");
-                        Assert.Equal((kind.Name, background), (kind.Name, ((ISolidColorBrush)window.Background!).Color));
+                        Assert.Equal((kind.Name, expected), (kind.Name, ((ISolidColorBrush)window.Background!).Color));
                         // Drawn: the window's top-left corner, inside every window's margins.
                         using ILockedFramebuffer fb = Frames.Capture(window).Lock();
-                        Assert.Equal((kind.Name, background), (kind.Name, Color.FromUInt32(0xFF000000 | Frames.Pixel(fb, 1, 1))));
+                        Assert.Equal((kind.Name, expected), (kind.Name, DrawnAt(fb, 1, 1)));
                     }
                     finally
                     {
@@ -623,8 +671,8 @@ namespace TmDq.App.Tests
 
             foreach ((ThemeVariant theme, ChartPalette palette, string logBackground, string chip) in new[]
                      {
-                         (ThemeVariant.Dark, ChartPalette.Dark, "#FF202020", "#B91C1C1C"),
-                         (ThemeVariant.Light, ChartPalette.Light, "#FFF9F9F9", "#B9FFFFFF"),
+                         (ThemeVariant.Dark, ChartPalette.Dark, "#FF181818", "#B91F1F1F"),
+                         (ThemeVariant.Light, ChartPalette.Light, "#FFF8F8F8", "#B9FFFFFF"),
                      })
             {
                 window.RequestedThemeVariant = theme;
@@ -657,36 +705,35 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
-        public void ThePalettesAreV214s()
+        public void ThePalettesAreVsCodeModerns()
         {
-            // v2.14.2's chart and legend colours for each theme, as numbers.
-            Assert.Equal(new[] { "#FFFFFFFF", "#FF1E1E1E", "#FFC8C8C8", "#FF005FB8", "#B9FFFFFF", "#FFAAAAAA", "#FF1E1E1E" }, Hex(ChartPalette.Light));
-            Assert.Equal(new[] { "#FF1C1C1C", "#FFDCDCDC", "#FF3C3C3C", "#FF60CDFF", "#B91C1C1C", "#FF5A5A5A", "#FFE6E6E6" }, Hex(ChartPalette.Dark));
+            // VS Code's Light Modern and Dark Modern, as numbers: the chart the editor's colour, its text and axes the editor's
+            // text, its title the links', its legend's border the inputs'.
+            Assert.Equal(new[] { "#FFFFFFFF", "#FF3B3B3B", "#FFC8C8C8", "#FF005FB8", "#B9FFFFFF", "#FFCECECE", "#FF3B3B3B" }, Hex(ChartPalette.Light));
+            Assert.Equal(new[] { "#FF1F1F1F", "#FFCCCCCC", "#FF3C3C3C", "#FF4DAAFC", "#B91F1F1F", "#FF3C3C3C", "#FFCCCCCC" }, Hex(ChartPalette.Dark));
         }
 
         private static string[] Hex(ChartPalette p) => new[] { p.Background, p.Foreground, p.Grid, p.Title, p.LegendBackground, p.LegendBorder, p.LegendText }
             .Select(c => $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}").ToArray();
 
         [AvaloniaFact]
-        public void EachThemesBrushesAreV214s()
+        public void EachThemesBrushesAreVsCodeModerns()
         {
             string[] keys = { "ChipBackground", "ChipBorder", "ChipForeground", "ChipAccent", "LoadingBackground", "LoadingBorder", "LoadingForeground",
-                              "LogPanelBackground", "LogPanelBorder", "TitleBarHover", "SplitterGrip", "SplitterGripHover", "SplitterHover",
-                              "WindowBackground" };
+                              "ChromeBackground", "ContentBackground", "Hairline", "SashHover", "TitleBarHover" };
             string[] Brushes(ThemeVariant theme) => keys.Select(k =>
             {
                 Assert.True(Application.Current!.TryFindResource(k, theme, out object? b), k);
                 Color c = ((ISolidColorBrush)b!).Color;
                 return $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}";
             }).ToArray();
-            // v2.x's, but for the divider's three (v2.x drew its splitter's dotted grip in the style's colour), the light
-            // log's (#F9F9F9, a layer between the window's #F3F3F3 and the chart's white) and the dark chips' (the dark
-            // chart's #1C1C1C).
-            Assert.Equal(new[] { "#B9FFFFFF", "#FFC8C8C8", "#FF1E1E1E", "#FF005FB8", "#E6FFFFFF", "#FFC8C8C8", "#FF1E1E1E", "#FFF9F9F9", "#FFE5E5E5", "#38808080",
-                                       "#FFC2C2C2", "#FF707070", "#FFE0E0E0", "#FFF3F3F3" },
+            // VS Code's Light Modern and Dark Modern: the chrome (title bar and side bar), the content (editor), the hairlines
+            // between them, the accent a divider takes, and the widgets and inputs the chips and the loading label borrow from.
+            Assert.Equal(new[] { "#B9FFFFFF", "#FFCECECE", "#FF3B3B3B", "#FF005FB8", "#F2F8F8F8", "#FFE5E5E5", "#FF3B3B3B",
+                                 "#FFF8F8F8", "#FFFFFFFF", "#FFE5E5E5", "#FF005FB8", "#38808080" },
                          Brushes(ThemeVariant.Light));
-            Assert.Equal(new[] { "#B91C1C1C", "#FF3C3C3C", "#FFDCDCDC", "#FF60CDFF", "#A0000000", "#FF3C3C3C", "#FFFFFFFF", "#FF202020", "#FF303030", "#38808080",
-                                       "#FF505050", "#FF9A9A9A", "#FF383838", "#FF2C2C2C" },
+            Assert.Equal(new[] { "#B91F1F1F", "#FF3C3C3C", "#FFCCCCCC", "#FF4DAAFC", "#F2202020", "#FF313131", "#FFCCCCCC",
+                                 "#FF181818", "#FF1F1F1F", "#FF2B2B2B", "#FF0078D4", "#38808080" },
                          Brushes(ThemeVariant.Dark));
             // The export and import arrows take each theme's shade; the folder and the floppy disk are the same in both.
             foreach (string icon in new[] { "ExportIcon", "ImportIcon" })

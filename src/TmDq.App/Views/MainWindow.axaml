@@ -10,6 +10,7 @@
         MinWidth="640" MinHeight="400"
         ExtendClientAreaToDecorationsHint="True"
         WindowDecorations="BorderOnly"
+        Background="{DynamicResource ChromeBackground}"
         ExtendClientAreaTitleBarHeightHint="40"
         DragDrop.AllowDrop="True">
   <Window.KeyBindings>
@@ -53,32 +54,23 @@
       <Setter Property="Background" Value="{DynamicResource TitleBarHover}" />
       <Setter Property="Foreground" Value="{DynamicResource ToggleButtonForeground}" />
     </Style>
-    <!-- The divider between the log and the chart: a short grip, a shade off the window's background, that says where to
-         drag; under the pointer, or dragged, the strip takes a shade too and the grip brightens. -->
+    <!-- The divider between the log and the chart, as VS Code draws its sashes: a one-pixel hairline, with a wider
+         transparent strip about it (the splitter overlaps the log and the chart by a few pixels, so it is easy to grab,
+         and is declared after both so that it is drawn over them); under the pointer, or dragged, the line thickens and
+         takes the accent. -->
     <Style Selector="GridSplitter#Splitter">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Template">
         <ControlTemplate>
-          <Border Name="Track" Background="{TemplateBinding Background}" CornerRadius="3">
-            <Border Name="Grip" Width="2" Height="36" CornerRadius="1" HorizontalAlignment="Center" VerticalAlignment="Center"
-                    Background="{DynamicResource SplitterGrip}" />
+          <Border Background="Transparent">
+            <Border Name="Line" Width="1" HorizontalAlignment="Center" Background="{DynamicResource Hairline}" />
           </Border>
         </ControlTemplate>
       </Setter>
     </Style>
-    <Style Selector="GridSplitter#Splitter:pointerover, GridSplitter#Splitter:pressed">
-      <Setter Property="Background" Value="{DynamicResource SplitterHover}" />
-    </Style>
-    <Style Selector="GridSplitter#Splitter:pointerover /template/ Border#Grip, GridSplitter#Splitter:pressed /template/ Border#Grip">
-      <Setter Property="Background" Value="{DynamicResource SplitterGripHover}" />
-    </Style>
-    <!-- The log and the chart each sit in a panel of the same shape: a hairline border and rounded corners, set off from
-         the window's edges by the same gap (the chart is clipped to the corners in code: a Border does not clip). -->
-    <Style Selector="Border.panel">
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="4" />
-      <Setter Property="BorderBrush" Value="{DynamicResource LogPanelBorder}" />
-      <Setter Property="ClipToBounds" Value="True" />
+    <Style Selector="GridSplitter#Splitter:pointerover /template/ Border#Line, GridSplitter#Splitter:pressed /template/ Border#Line">
+      <Setter Property="Width" Value="3" />
+      <Setter Property="Background" Value="{DynamicResource SashHover}" />
     </Style>
   </Window.Styles>
   <DockPanel>
@@ -144,26 +136,29 @@
       <Button x:Name="CloseButton" x:FieldModifier="public" Grid.Column="5" Classes="caption" Content="&#xE8BB;" ToolTip.Tip="Close"
               Click="OnClose" chrome:WindowDecorationProperties.ElementRole="CloseButton" />
     </Grid>
+    <!-- The hairline between the title bar and what is under it, as VS Code draws it. -->
+    <Border x:Name="TitleBarLine" x:FieldModifier="public" DockPanel.Dock="Top" Height="1" Background="{DynamicResource Hairline}" />
     <!-- No status bar under the log and the chart: what it said, the log says (the version is the log's first line).
-         The log sidebar on the left (v2.x's place and width), the chart beside it; the toggle in the title bar hides it.
-         The divider drags the log as narrow as its column's minimum, and the log wraps to the width it is given (the
-         minimum is the column's, not the panel's: a panel wider than its column was cut off at both edges). Progress is
-         in the modal progress dialog while a run goes on, as in v2.x. -->
+         The log sidebar on the left (v2.x's place and width), the chart beside it, flush, with no gap or border but the
+         divider's hairline; the sidebar is the window's chrome and the chart the content, a shade lighter (as VS Code's
+         side bar and editor). The toggle in the title bar hides the sidebar. The divider drags the log as narrow as its
+         column's minimum, and the log wraps to the width it is given. Progress is in the modal progress dialog while a
+         run goes on, as in v2.x. -->
     <Grid x:Name="Body" x:FieldModifier="public">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="400" MinWidth="200" />
-        <ColumnDefinition Width="6" />
+        <ColumnDefinition Width="1" />
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
-      <Border x:Name="LogPanel" Classes="panel" Grid.Column="0" Margin="2,4,0,4" Background="{DynamicResource LogPanelBackground}"
+      <Border x:Name="LogPanel" Grid.Column="0" Background="{DynamicResource ChromeBackground}"
               IsVisible="{Binding SidebarVisible}">
         <views:LogView x:Name="Log" Entries="{Binding Log.Entries}" />
       </Border>
-      <GridSplitter x:Name="Splitter" x:FieldModifier="public" Grid.Column="1" ResizeDirection="Columns"
-                    IsVisible="{Binding SidebarVisible}" />
-      <Border x:Name="PlotPanel" x:FieldModifier="public" Classes="panel" Grid.Column="2" Margin="0,4,2,4">
+      <Border x:Name="PlotPanel" x:FieldModifier="public" Grid.Column="2" Background="{DynamicResource ContentBackground}">
         <views:PlotView x:Name="PlotView" Plot="{Binding Plot}" />
       </Border>
+      <GridSplitter x:Name="Splitter" x:FieldModifier="public" Grid.Column="1" ResizeDirection="Columns" Margin="-3,0"
+                    IsVisible="{Binding SidebarVisible}" />
     </Grid>
   </DockPanel>
 </Window>

@@ -12,6 +12,85 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### VS Code's Dark Modern and Light Modern: flush panes, hairlines, a grey title bar
+
+Asked for after the user shared a VS Code window and liked its dark contrast, the title bar a dark grey rather than black.
+The colours are read from the theme files VS Code installs (`dark_modern.json` and `light_modern.json`), not recalled. This
+replaces #268's rounded, floating panels with VS Code's way: panes flush against one another, divided by one-pixel lines,
+the chrome a shade darker than the content.
+
+- **The tokens.** Four brushes per theme, replacing `WindowBackground`, `LogPanelBackground`, `LogPanelBorder`,
+  `SplitterGrip`, `SplitterGripHover` and `SplitterHover`:
+
+  | | Dark | Light | VS Code's |
+  |---|---|---|---|
+  | `ChromeBackground`: the main window under its title bar, and the log | `#181818` | `#F8F8F8` | title bar, side bar |
+  | `ContentBackground`: the chart, and every dialog | `#1F1F1F` | `#FFFFFF` | editor |
+  | `Hairline`: the lines dividing them | `#2B2B2B` | `#E5E5E5` | borders |
+  | `SashHover`: the divider under the pointer | `#0078D4` | `#005FB8` | focus border |
+
+  Text is `#CCCCCC` / `#3B3B3B`, the accent `#0078D4` / `#005FB8`. The chips and the "Loading..." label over the chart take
+  the content's and the widgets' colours, the chips' accent the links' (`#4DAAFC` in the dark theme, where it was `#60CDFF`).
+- **Flush.** The log, the divider's column and the chart fill the window under the title bar with no gap, no border and no
+  rounded corners (#268 gave them 2 and 4 px gaps, a 1 px border and 4 px corners). The title bar is the window's own
+  chrome colour, with a one-pixel line under it (`TitleBarLine`). The code that clipped the chart to its panel's corners,
+  `MainWindow.PanelGap` and the chart's margin juggling while the log is hidden are deleted with the panels.
+- **The divider** is a one-pixel line, as VS Code draws its sashes, with a grab area `MainWindow.SplitterReach` (3 px)
+  either side of it: the splitter overlaps the log and the chart by a negative margin and is declared after both, so it is
+  drawn and hit over them. Under the pointer, or dragged, the line thickens to 3 px and takes the accent. The 6 px strip
+  with its grip, which the user asked for in #266 as the cue to where to drag, is gone: the line, the cursor and the accent
+  are that cue now. `MainWindow.SplitterWidth` is 1.
+- **Dialogs and the main window.** Every window takes `ContentBackground` from the application's one `:is(Window)` style, so a
+  dialog is on the surface the chart is; the main window sets `ChromeBackground` itself.
+- **The controls Fluent draws** follow, two ways. `FluentTheme.Palettes` sets each theme's accent, text (`BaseHigh`) and region
+  colour, which carries to the primary button, checkboxes, focus borders and text. And the brushes Fluent looks its controls up
+  under are overridden in `App.axaml`: inputs `#313131` with a `#3C3C3C` border (`#FFFFFF`, `#CECECE`), the secondary button
+  VS Code's ghost button in the dark theme (no fill, a 10 % white border, `#2B2B2B` under the pointer) and `#E5E5E5` in the
+  light, the empty checkbox as an input, and the dropdown lists, menus and tooltips on the widgets' colours
+  (`TextControl*`, `ComboBox*`, `Button*`, `CheckBox*`, `MenuFlyoutPresenter*`, `ToolTip*`).
+- **The chart's palette** (`ChartPalette`): background `#1F1F1F` / white, axes and text `#CCCCCC` / `#3B3B3B`, title `#4DAAFC` /
+  `#005FB8`, the legend's border the inputs' (`#3C3C3C` / `#CECECE`). An exported image takes the chart's colours, so a dark
+  export is `#1F1F1F` with `#CCCCCC` text now. Series colours, the grid's (`#3C3C3C` / `#C8C8C8`) and the log's per-level
+  colours are unchanged.
+
+Not done, for the user to choose: VS Code's type (Segoe UI at 13 px; the application keeps Fluent's), the menu's item and
+separator styling beyond its fills, a status bar in VS Code's place under the panes (parked: the user wants it back, see the
+status bar's entry in the project notes), and the light theme's title-bar hover.
+
+**Tests:**
+- `TheDividerShowsWhereToDragAndAnswersThePointer` became `TheDividerIsAHairlineWithAWiderGrabAreaAndTakesTheAccentUnderThePointer`
+  (both themes): the one-pixel line and its drawn colour, a grab area `SplitterWidth + 2 * SplitterReach` wide and centred on
+  it, the pointer answered across that width and not beyond, and the line's thickness and colour (drawn) under the pointer and
+  away from it.
+- `TheWindowsBackgroundIsV214s...` became `TheLogIsTheChromeTheChartTheContentFlushBesideOneAnotherAndDividedByHairlines`
+  (both themes): the brushes and the drawn colours of the title bar, the log and the chart, the content lighter than the
+  chrome in both themes, the hairlines drawn under the title bar and between the log and the chart, the layout flush (title
+  bar, line, then log, divider and chart exactly filling the body, no border on either panel), and the chart at the window's
+  left edge with the log hidden.
+- `EveryDialogIsOnTheMainWindowsBackground` became `EveryDialogIsOnTheContentBackgroundAndTheMainWindowOnTheChrome`: one window
+  of every declared kind, by brush and drawn corner.
+- New `TheControlsFluentDrawsTakeVsCodesInputsButtonsAccentAndText` (both themes): a text box, a secondary and a primary button
+  and a checkbox are drawn and their fills read (the input, the ghost or grey secondary button, the accent, the empty checkbox),
+  and the text, accent, focus border and popup fills are looked up.
+- `EachThemesBrushesAreV214s` and `ThePalettesAreV214s` became `...AreVsCodeModerns`, with the new values;
+  `EachThemeDrawsTheChartTheLegendTheChipsAndTheLogInItsColours` and `TheMainWindowShowsTheLogBesideTheChart` (the log is its
+  400 px column, with no margin to take from it) follow.
+
+**Mutation check** (`eng\mutate.ps1`, app suite, 24 mutants): all 24 CAUGHT: the dark chrome black, the dark content no lighter than the chrome, the dark hairlines invisible, no
+line under the title bar or one in the chrome's colour; the dialogs on the chrome, the main window on the content colour,
+the log the chart's colour; a gap back round the log or the chart; the divider with no grab area, not thickening, thickening
+without the accent, its line not drawn, its column 6 wide once shown, and its accent the hairline's colour; the dark text
+white, the dark accent not VS Code's, the dark inputs, secondary button, dropdown list and empty checkbox each in a wrong
+fill; and the chart's dark background and the light chart's text colour changed. (`EachThemeDrawsTheChart...` is left out of
+the subset: it needs the core an earlier test loads, and fails alone.)
+
+**Baselines:** app **614 passed / 0 failed / 34 not run** (was 612: the new controls theory's two themes; the three layout
+theories were replaced one for one). Native and managed unchanged.
+
+**The manual:** figures re-rendered and the manuals re-embedded: every figure that shows the window or a dialog changed (the
+grey chrome, the flush panes, the hairlines, the inputs and buttons). `walk-cust-02-snr-tree` was restored, as before (its
+chevrons are caught mid-animation).
+
 #### Every window on v2.14.2's grey, the log and the chart in matching panels, the light theme layered
 
 Asked for after #266: the dark title bar matched to v2.14.2's grey, the log and the chart given the same edges and
