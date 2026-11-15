@@ -46,6 +46,15 @@ the soak and the throughput gate; D8 gets its own PR.
   managed **364** passed / 1 skipped, app **640** passed / 34 not run. Baseline moved: native 495 to 494 (the messages
   test).
 
+#### Save Template... has its ellipsis
+
+The hamburger menu's **File > Save Template** (#285) is **Save Template...**: it opens a file dialog, which Windows convention marks with an
+ellipsis, and the user asked for it. `About` has none, as it opens a window of its own. The label in the menu, the menu test, and the manual,
+README and guide that name the entry; the manual's menu figure shows it. Nothing else changed.
+
+**Mutation check** (`eng\mutate.ps1`, app suite, 1 mutant): the label without its ellipsis is **caught** (`TheMenuHoldsFourSubmenusAndNoExit`).
+No test was added: app **640 passed / 0 failed / 34 not run**, main's.
+
 #### The settings folders' names and the receiver defaults, each written once
 
 Found by the whole-tree cleanup audit (PR 8 of its list: X2, X3); each finding was re-checked against the tree as of #282.

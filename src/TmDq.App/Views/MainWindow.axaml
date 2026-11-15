@@ -95,7 +95,7 @@
               <Separator />
               <MenuItem Header="Process Multiple Files..." Command="{Binding ApplyTemplateCommand}"
                         ToolTip.Tip="Process several recordings with a saved template" />
-              <MenuItem Header="Save Template" Command="{Binding SaveTemplateCommand}"
+              <MenuItem Header="Save Template..." Command="{Binding SaveTemplateCommand}"
                         ToolTip.Tip="Save the processed recording's stream settings, names and colors as a template" />
             </MenuItem>
             <MenuItem Header="Import/Export">
