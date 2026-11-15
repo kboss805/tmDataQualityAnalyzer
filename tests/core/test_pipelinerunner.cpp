@@ -939,8 +939,7 @@ TEST_CASE("PipelineRunner throughput: four streams on one recording cost about w
                     "need 2 PRN11 and 2 PRN15 channels in " << file.filename().string() << ", found " << prn11_ids.size()
                     << " and " << prn15_ids.size() << ". The committed 'prn_testfile, sample.ch10' holds PCM data for 2 "
                     "of the 4 channels this times, so it cannot produce a throughput number; the full ~640 MB recording "
-                    "is needed, either beside it as 'prn_testfile, full.ch10' or overlaid onto the sample path via "
-                    "TMDQA_CH10_FULL.");
+                    "is needed, beside it as 'prn_testfile, full.ch10'.");
 
     // Time every discovered channel individually so we know the true single-stream cost for each, including the
     // heavier PRN15 20M channel.

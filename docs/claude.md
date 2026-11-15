@@ -499,8 +499,12 @@ profile, so a batch processes with the linear calibration.
 - **Configure Streams** (`ConfigureStreamsViewModel` and its window) and the setup dialog (`StreamSetupViewModel`, in
   Frame Sync Lock or Receiver SNR mode), over the rules in `Models/Streams` (`StreamRules`, `StreamDefaults`, `StreamFiles`):
   one row per PCM channel, each problem shown as it arises, OK and Process held until every checked row is ready,
-  Apply to all (US2.2), the pattern and receiver-parameter files' Load and Save.
-- **Extract Calibration** (`ExtractCalibrationViewModel`) behind Apply Cal (US5.3).
+  Apply to all (US2.2), the pattern and receiver-parameter files' Load and Save. The limits of the setup dialog's
+  fields (bits per frame, data rate, scale, receivers, channels, hex digits) are `StreamRules`' constants and nothing
+  else: its messages are built from them, and the window's spin boxes bind to them through `StreamSetupViewModel`'s
+  `Min*`/`Max*` decimals (`{x:Static}`), so a limit changed there moves the bound and the message together.
+- **Extract Calibration** (`ExtractCalibrationViewModel`) behind Apply Cal (US5.3); its clip fields' maximum is
+  `ClipMaximum`, bound in the window the same way.
 - **The run** (`Models/Processing`: `StreamsRun`, `NativeCore`; `ViewModels/ProcessingViewModel` and its window;
   `Models/Logging/SessionLog` and `Views/LogView`): the core's run on its own threads, the modal progress dialog whose
   Cancel stops every stream, and the log.

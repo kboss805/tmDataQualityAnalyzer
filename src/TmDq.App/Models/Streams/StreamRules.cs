@@ -24,10 +24,13 @@ namespace TmDq.App.Models.Streams
         public const int MinBitsInMinorFrame = 64;
         public const int MaxBitsInMinorFrame = 65536;
         public const int MaxSyncHexDigits = 16;   // 64 bits
+        public const double MinDataRateMbps = 0;   // 0 is the TMATS rate
         public const double MaxDataRateMbps = 1000;
         public const double MinScaleDdBPerV = 0.001;
         public const double MaxScaleDdBPerV = 999.999;
+        public const int MinReceivers = 1;
         public const int MaxReceivers = 100;
+        public const int MinReceiverChannels = 1;
         public const int MaxReceiverChannels = 100;
         public const int MaxSlopeIndex = 3;
 
@@ -204,14 +207,14 @@ namespace TmDq.App.Models.Streams
             if (s.SyncPattern.Trim().Length == 0)
                 problems.Add(PatternRequired);
             else if (!IsHexSync(s.SyncPattern, allowEmpty: false))
-                problems.Add("The frame sync pattern must be 1 to 16 hexadecimal digits.");
+                problems.Add(FormattableString.Invariant($"The frame sync pattern must be 1 to {MaxSyncHexDigits} hexadecimal digits."));
             if (!IsHexSync(s.SyncMask, allowEmpty: true))
-                problems.Add("The frame sync mask must be up to 16 hexadecimal digits.");
+                problems.Add(FormattableString.Invariant($"The frame sync mask must be up to {MaxSyncHexDigits} hexadecimal digits."));
             if (s.BitsInMinorFrame < MinBitsInMinorFrame || s.BitsInMinorFrame > MaxBitsInMinorFrame)
                 problems.Add(FormattableString.Invariant($"Bits Per Frame must be from {MinBitsInMinorFrame} to {MaxBitsInMinorFrame}."));
             // A pattern cannot be longer than its frame: 16 digits are 64 bits, the shortest frame allowed.
-            if (s.DataRateMbps < 0 || s.DataRateMbps > MaxDataRateMbps || double.IsNaN(s.DataRateMbps))
-                problems.Add("Data Rate must be from 0 (the TMATS rate) to 1000 Mbps.");
+            if (s.DataRateMbps < MinDataRateMbps || s.DataRateMbps > MaxDataRateMbps || double.IsNaN(s.DataRateMbps))
+                problems.Add(FormattableString.Invariant($"Data Rate must be from {MinDataRateMbps} (the TMATS rate) to {MaxDataRateMbps} Mbps."));
             if (s.Mode == StreamMode.ReceiverChannelInfo)
             {
                 if (s.PolarityIndex is < 0 or > 1)
@@ -219,11 +222,11 @@ namespace TmDq.App.Models.Streams
                 if (s.SlopeIndex < 0 || s.SlopeIndex > MaxSlopeIndex)
                     problems.Add("Slope is invalid.");
                 if (!(s.ScaleDdBPerV >= MinScaleDdBPerV && s.ScaleDdBPerV <= MaxScaleDdBPerV))
-                    problems.Add("Scale (dB/V) must be from 0.001 to 999.999.");
-                if (s.NumReceivers < 1 || s.NumReceivers > MaxReceivers)
-                    problems.Add("Num Rcvrs must be from 1 to 100.");
-                if (s.ReceiverChannels < 1 || s.ReceiverChannels > MaxReceiverChannels)
-                    problems.Add("Num Channels must be from 1 to 100.");
+                    problems.Add(FormattableString.Invariant($"Scale (dB/V) must be from {MinScaleDdBPerV} to {MaxScaleDdBPerV}."));
+                if (s.NumReceivers < MinReceivers || s.NumReceivers > MaxReceivers)
+                    problems.Add(FormattableString.Invariant($"Num Rcvrs must be from {MinReceivers} to {MaxReceivers}."));
+                if (s.ReceiverChannels < MinReceiverChannels || s.ReceiverChannels > MaxReceiverChannels)
+                    problems.Add(FormattableString.Invariant($"Num Channels must be from {MinReceiverChannels} to {MaxReceiverChannels}."));
             }
             return problems;
         }

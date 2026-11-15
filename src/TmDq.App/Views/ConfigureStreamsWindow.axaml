@@ -71,7 +71,7 @@
               <ComboBox Grid.Column="3" HorizontalAlignment="Stretch" VerticalAlignment="Center"
                         ItemsSource="{x:Static vm:StreamRowViewModel.Modes}" SelectedIndex="{Binding ModeIndex}"
                         ToolTip.Tip="Analysis mode: Receiver SNR measures channel signal quality; Frame Sync Lock measures synchronization stability." />
-              <Button Grid.Column="4" Classes="configure" Content="&#x2699;" FontSize="16" Padding="8,0"
+              <Button Grid.Column="4" Content="&#x2699;" FontSize="16" Padding="8,0"
                       HorizontalAlignment="Center" VerticalAlignment="Center" Command="{Binding ConfigureCommand}"
                       ToolTip.Tip="Open configuration dialog for this stream's frame sync, data rate, and receiver parameters." />
               <TextBlock Grid.Column="5" Classes="ready" Classes.isReady="{Binding IsReady}"

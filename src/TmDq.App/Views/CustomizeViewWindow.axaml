@@ -4,7 +4,7 @@
         xmlns:v="using:TmDq.App.Views"
         x:Class="TmDq.App.Views.CustomizeViewWindow"
         x:DataType="plot:CustomizeViewModel"
-        Title="Customize Plot Series"
+        Title="{x:Static plot:CustomizeViewModel.Title}"
         Width="560" Height="480" MinWidth="500" MinHeight="400"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner">

@@ -12,6 +12,43 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Dialogs: the stream dialog's limits stated once, and the dead ends of the audit's dialog findings
+
+Found by the whole-tree cleanup audit (PR 7 of its list: B6, X1, D9); each finding was re-checked against the tree as of
+#280, after #277 had reworked these very dialogs.
+
+- **B6: dropped, #277 already did it.** The audit found `MinWidth="80"` typed on 18 dialog buttons, six of them not centring
+  their content. #277's `DialogFooter` now owns every dialog's OK, Cancel, Process and Export buttons (XAML and code-built
+  alike, through `Compose`): one style, equal widths of at least 96 px, content centred. No footer button types a width any
+  more, and `DialogAnatomyTests` holds the footer. What is left are the in-body buttons (Load, Save, Browse, Apply Cal,
+  Select All), which take Fluent's own width, and Customize View's Expand button, whose label changes and which keeps its
+  `MinWidth`. Nothing to do, so no manual figure changed (`git status` after the suite shows none).
+- **X1: the setup dialog's limits are `StreamRules`' alone.** Bits per frame (64 to 65536), data rate (0 to 1000), scale
+  (0.001 to 999.999), receivers and channels (1 to 100) and the hex digit count (16) were each a constant in `StreamRules`,
+  again typed in the message text, and again as spin-box literals in `StreamSetupWindow.axaml`. The messages are now built
+  from the constants (the lower bounds 0 and 1 became constants too: `MinDataRateMbps`, `MinReceivers`,
+  `MinReceiverChannels`, and the checks use them), and the spin boxes bind through `{x:Static}` to
+  `StreamSetupViewModel.Min*`/`Max*`, the same constants as the decimals a `NumericUpDown` takes (static readonly, since a
+  decimal of an int or a double is not a constant expression). Extract Calibration's clip fields bind
+  `ExtractCalibrationViewModel.ClipMaximum`, which gives the constant PR #244 left its use; it stays. New test
+  `TheSetupDialogSpinBoxesTakeTheirBoundsFromTheRules`; the existing tests keep the message text as literals, so a changed
+  constant is seen by both.
+- **D9: five things nothing used.** `CustomizeViewModel.Title` is bound by the window as its three siblings do.
+  `PlotChart.ZoomBand` is kept and now asserted: the band-zoom test checks the band's two ends while it is dragged (60 and
+  20), which nothing did (mutant D9a, the far end stuck at the start, is seen only by it). `Classes="configure"` on the
+  gear button is gone (no selector, no code read it). `Env.Rasa` and `Env.Safran` are deleted: using them needs expected
+  numbers from v2.14.2's pipeline, which would be new oracle data and not a cleanup. `$ran` in
+  `eng\run_throughput_bench.ps1` is gone, and so is the `TMDQA_CH10_FULL` variable that its failure message, and the native
+  throughput test's, told the reader to set: nothing reads it (the script's own comment already says nothing overlays the
+  sample any more).
+- **Checked.** Mutation check, `eng\mutate.ps1` on the app suite (the six classes the changes touch), 11 mutants, **11
+  CAUGHT**: X1a a limit moved in `StreamRules` (the message test), X1b to X1d three spin boxes bound to another limit and
+  X1e the decimal read from the wrong rule (the new bounds test), X1f a message built from the wrong constant, X1g the
+  lower receiver limit made exclusive, X1h and X1i the clip's maximum off by one in the window and in the constant, D9a the
+  band's far end, D9b the Customize View title. All three suites in Release, zero warnings: native **495** (1 skipped),
+  managed **364** passed / 1 skipped, app **634** passed / 34 not run (after merging main's 633). Baseline moved: app 633 to 634 (one new test; the
+  band and clip checks are added lines of existing tests).
+
 #### The status bar is back, and says one short sentence
 
 Asked for after #277: the bar under the log and the chart that #266 removed, with what it says simplified. With the log hidden

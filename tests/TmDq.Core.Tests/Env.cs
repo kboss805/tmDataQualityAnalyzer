@@ -68,8 +68,6 @@ internal static class Env
     public static string Prn => Recording("prn_testfile, sample.ch10");
     public static string StepCal => Recording("step_cal, example.ch10");
     public static string Trc => Recording("agc_rnrz-l_trc_testfile.ch10");
-    public static string Rasa => Recording("agc_nzl_rasa_testfile.ch10");
-    public static string Safran => Recording("safran_testfile, sample.ch10");
 
     private static string FindRepoRoot()
     {

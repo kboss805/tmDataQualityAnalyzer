@@ -25,6 +25,19 @@ namespace TmDq.App.ViewModels
         public static readonly IReadOnlyList<string> Polarities = new[] { "Positive", "Negative" };
         public static readonly IReadOnlyList<string> Slopes = new[] { "±10 V", "±5 V", "0–10 V", "0–5 V" };
 
+        // The spin boxes' bounds: StreamRules' limits, as the decimals a NumericUpDown takes, so the window states none of
+        // them (a static readonly rather than a const: a decimal of a double or an int is not a constant expression).
+        public static readonly decimal MinBitsPerFrame = StreamRules.MinBitsInMinorFrame;
+        public static readonly decimal MaxBitsPerFrame = StreamRules.MaxBitsInMinorFrame;
+        public static readonly decimal MinDataRate = (decimal)StreamRules.MinDataRateMbps;
+        public static readonly decimal MaxDataRate = (decimal)StreamRules.MaxDataRateMbps;
+        public static readonly decimal MinScale = (decimal)StreamRules.MinScaleDdBPerV;
+        public static readonly decimal MaxScale = (decimal)StreamRules.MaxScaleDdBPerV;
+        public static readonly decimal MinReceivers = StreamRules.MinReceivers;
+        public static readonly decimal MaxReceivers = StreamRules.MaxReceivers;
+        public static readonly decimal MinReceiverChannels = StreamRules.MinReceiverChannels;
+        public static readonly decimal MaxReceiverChannels = StreamRules.MaxReceiverChannels;
+
         private readonly StreamSetup _start;
         private readonly ISettingsFilePicker? _files;
         private readonly string? _appRoot;
