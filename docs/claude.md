@@ -17,7 +17,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 
 The stories below follow the workflow a first-time user takes through the application: open a file and choose what to process (US1), define the per-stream parameters (US2), view the resulting data-quality metrics (US3), customize the plot (US4), manage configuration files and calibration (US5), export and re-import results (US6), and the cross-cutting concerns of input validation (US7), installation (US8), and theming (US9).
 
-**Status: all user stories are Complete** — implemented, tested and shipped. Every acceptance criterion below is delivered functionality (`[x]`), each held by a test or a recorded manual check (`docs/records/parity.md` maps them), and each story carries a **Complete** marker in its heading. New work is tracked as new stories appended after US9.0.
+**Status: all user stories are Complete** — implemented, tested and shipped. Every acceptance criterion below is delivered functionality (`[x]`), each held by a test or a recorded manual check (`docs/records/parity.md` maps those of v3.0.0; the criteria added since have no row in it), and each story carries a **Complete** marker in its heading. New work is tracked as new stories appended after US9.0.
 
 ### US1.0: Open a Ch10 file and configure which streams to process — Complete
 
@@ -52,7 +52,7 @@ The stories below follow the workflow a first-time user takes through the applic
 
 **Acceptance Criteria:**
 
-- [x] The user can batch-process multiple `.ch10` files in one action by applying a saved template (File > **Apply Template to Files…**): pick a template, then multi-select the files.
+- [x] The user can batch-process multiple `.ch10` files in one action by applying a saved template (the hamburger menu's Process section, **Apply Template to Files…**): pick a template, then multi-select the files.
 - [x] The per-stream processing is configured **once** when the template is created (**Open** a file → configure in the Configure Streams dialog → **Save as Template…**); that configuration is applied to every selected file.
 - [x] Files are matched to the template by PCM channel ID; a file whose channel-ID set differs is skipped and the user is told which channels are missing/extra.
 - [x] All processed files are retained in memory; the user can optionally also export a CSV + Frame Sync Lock and Missed Frames images per file to a chosen folder, auto-named from each source file.
@@ -61,7 +61,7 @@ The stories below follow the workflow a first-time user takes through the applic
   - **Scope:** Matching is **exact channel-ID set** (a file must have the same PCM channel IDs as the template, no more/fewer) — decided for simplicity; revisit if a looser "subset" match is ever needed. This story is orthogonal to US2.2 (apply-to-all *within* one file). Templates carry **no file paths** — settings only, applied to whatever files the user picks. The only batch entry point is **Apply Template** (there is no direct multi-file open, and no Add/Remove Source); templates are the sole way to configure a batch.
   - **Config application:** each file's run feeds the template's `StreamConfig`s through unchanged (`TemplateBatch.ToRunRequest`); the reader dispatches each stream by `pcmChannelId`, which is safe precisely because of the exact-set match. **Non-linear calibration:** a template stores only the calibration *input references* (not the extracted profile), so **all batch files process with the linear slope/offset fallback**. Non-linear step calibration is available for single-file processing only; re-extraction on template apply is a possible future add.
   - **Custom names/colors:** captured only when **saving a template** from an already-processed, customized plot (`PlotTemplates.Build`), and reapplied per file after each run (`PlotTemplates.ApplyAppearance`, matched by channel id + metric/receiver/channel). Every file's copy of a channel intentionally shares the same name/color (they are the same channel across recordings); use the **Plot File** selector to view one file at a time when per-file distinction matters.
-  - **Retain-all + file selector:** a batch always keeps every processed file in memory; the plot's right-click **Plot File** submenu chooses which file to view, defaulting to every source overlaid, with "All files (overlaid)" for comparison. The filter is a `PlotViewModel` source gate (`SetVisibleSource`) orthogonal to per-series visibility and the **View Mode** (lock %/accumulation) selector. Optional per-file export runs as a post-pass (`BatchRunner` shows each source alone, then writes its CSV, and a `_framesync_lock.png` and `_missed_frames.png`, through `SessionExport`).
+  - **Retain-all + file selector:** a batch always keeps every processed file in memory; the plot's right-click **Plot File** submenu chooses which file to view; a batch leaves the plot on the first file (`BatchRunner`), and "All files (overlaid)" is there for comparison. The filter is a `PlotViewModel` source gate (`SetVisibleSource`) orthogonal to per-series visibility and the **View Mode** (lock %/accumulation) selector. Optional per-file export runs as a post-pass (`BatchRunner` shows each source alone, then writes its CSV, and a `_framesync_lock.png` and `_missed_frames.png`, through `SessionExport`).
   - **Status: implemented** (Save/Apply Template, one `BatchRunner` batch loop, retain-all + Plot File selector), every part tested in `TemplateTests` and `TemplateBatchTests`, the batch over copies of the committed PRN sample. See `docs/design/processing-template-design.md`.
 
 ### US2.0: Define the key parameters required to process the framesync lock statistics and frame sync error accumulation — Complete
@@ -137,7 +137,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The user can switch the left-axis view between framesync lock (%) and accumulated missed frames modes (context menu > View Mode).
 - [x] The user can select which telemetry stream's accumulated missed frames to view in the plot window.
 - [x] Missed frames are accumulated per telemetry stream against that stream's own frame parameters.
-  - **Scope:** A "missed frame" is a discrete loss-of-lock event — while in lock, the stream ran past the expected minor-frame boundary (`bits_in_frame`) without a sync match. The metric is a cumulative count of these events per stream, counted only within the selected `[start, stop]` processing window, and only ever increases. It is NOT a bit-level (Hamming/BER) error count. The user-facing label is "Accumulated Missed Frames" (`PlotViewModel.MissedFramesAxisLabel`); this is the canonical term across the UI, release notes, and code.
+  - **Scope:** A "missed frame" is a discrete loss-of-lock event — while in lock, the stream ran past the expected minor-frame boundary (`bits_in_frame`) without a sync match. The metric is a cumulative count of these events per stream, counted over the whole recording (the core's processing window takes a `[start, stop]`, but the ABI always passes the whole recording, so no host can select one), and only ever increases. It is NOT a bit-level (Hamming/BER) error count. The user-facing label is "Accumulated Missed Frames" (`PlotViewModel.MissedFramesAxisLabel`); this is the canonical term across the UI, release notes, and code.
 
 ### US3.2: View SNR signal data from IRIG 106 formatted PCM telemetry streams contained in .ch10 files — Complete
 
@@ -150,7 +150,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The user can view the SNR signal data (right hand y-axis) versus time (x-axis) in a plot window.
 - [x] The user can select which receiver/channels SNR signal data to view in the plot window.
 - [x] The user can select the time window to view the SNR signal data in the plot window.
-- [x] The user can select one of the following time periods to average SNR signal data over: 100 Hz, 10 Hz, 1 Hz.
+- [x] The user can select one of the following time periods to average SNR signal data over: 1 s, 100 ms, 10 ms (the setup dialog's Average Period).
 - [x] Samples are converted from raw integer energy values to Volts (V) using the voltage range and polarity.
 - [x] Volts are then converted to decimal dB values using the scale (dB/V).
 - [x] A progress bar updates as the application is processing the SNR signal data.
@@ -163,11 +163,11 @@ The stories below follow the workflow a first-time user takes through the applic
 
 **Acceptance Criteria:**
 
-- [x] The plot fills the central area of the main application window (it is the window's central widget; the log occupies a toggleable left sidebar).
+- [x] The plot fills the central area of the main application window (the log occupies a toggleable left sidebar).
 - [x] Before anything is plotted the chart shows its empty grid, as v2.x's did: the left axis's values (0.0 to 100.0) and the time axis's tick marks, with no time labels until there is a time.
 - [x] The main window opens at 1920 x 1080, centred, as v2.x's did (no larger than the screen's working area), with no status bar under the log and the chart: the log says what one would.
 - [x] The chart occupies the entire plot area: there are no external control rows. Every plot control is reached from a **right-click context menu** on the chart, whose items are disabled until data is loaded.
-- [x] The context menu provides: **Plot File** (which processed file to view), **View Mode** (Lock Percentage / Accumulation), **Customize View…**, **Set Plot Title…**, **Show Legend** (checkable), **X Axis** (Set Time Window… / Zoom Back / Reset Span), **Y Axes** (Set Left Min… / Set Left Max… / Set Right Min… / Set Right Max… / Reset), and **Reset View**. Export is deliberately not here — it writes a CSV, an image and the log, which is a file operation on the session rather than a plot control, so it lives only in the main menu beside Import CSV.
+- [x] The context menu provides: **Set Plot Title…**, **Plot File** (which processed file to view), **View Mode** (Lock Percentage / Accumulation), **Customize View…**, **Show Legend** (checkable), **Readout** (which series the crosshair reads), **X Axis** (Set Time Window… / Zoom Back / Reset Span), **Y Axes** (Set Left Min… / Set Left Max… / Set Right Min… / Set Right Max… / Reset), and **Reset View**. Export is deliberately not here — it writes a CSV, an image and the log, which is a file operation on the session rather than a plot control, so it lives only in the main menu beside Import CSV.
 - [x] The user can specify a custom title for the plot (context menu > Set Plot Title…).
 - [x] The left Y axis is labeled with its unit of measure, average framesync lock percent.
 - [x] The right Y axis is labeled with its unit of measure, SNR in decibels.
@@ -175,7 +175,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The Y axis automatically scales to the data's min/max values.
 - [x] The X axis automatically scales to the full time span of the loaded data.
 - [x] The user can set a time window to zoom and pan the X axis to just that range (context menu > X Axis > Set Time Window…, entered as DDD:HH:MM:SS; values outside the file range are clamped with a warning in the log). **X Axis > Reset Span** restores the full span.
-- [x] The user can manually override either end of either Y axis (context menu > Y Axes > Set Left/Right Min… and Set Left/Right Max…). A limit left alone still scales automatically; a minimum is taken as given and the maximum yields to it, never closer than `kMinAxisSpan`, so no entry can invert or collapse an axis. **Y Axes > Reset** clears all four overrides.
+- [x] The user can manually override either end of either Y axis (context menu > Y Axes > Set Left/Right Min… and Set Left/Right Max…). A limit left alone still scales automatically; a minimum is taken as given and the maximum yields to it, never closer than `PlotViewModel.MinAxisSpan`, so no entry can invert or collapse an axis. **Y Axes > Reset** clears all four overrides.
 - [x] The mouse wheel zooms the X axis.
 - [x] A mouse click and hold pans the X axis.
 - [x] A large plot stays responsive while the wheel, a drag or a held pan or zoom key (the arrows, `+` and `-`) moves it: a dense series is drawn from each pixel column's minimum, maximum and mean, looked up in an index the core builds once per long series rather than walked sample by sample, and while a gesture moves a plot that takes longer than 30 ms to paint, each band is drawn as its outline and each line one pixel wide, the full picture coming back when the drag or the key is released or 150 ms after the last wheel notch. Keys that jump once (`Home`, `Backspace`, `R`) are not gestures and are never drafted. The draft is still each column's minimum to maximum, so a one-sample dropout shows in it; the series, the readout, the CSV and an exported image never change with it (`PlotDraftTests`, `test_chartgeometry`).
@@ -187,7 +187,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The legend background is translucent so plot data behind it stays visible.
 - [x] The legend's height is capped with a vertical scrollbar for dense plots, such as a Receiver SNR file with 48+ channels.
 - [x] Receiver SNR legend rows show a short label (channel id plus receiver/channel code) instead of the full TMATS-derived stream title, though the full name remains available via tooltip and in CSV export headers.
-- [x] The legend is composited into exported PNG and SVG plot images at its placed position.
+- [x] The legend is composited into exported PNG, SVG and PDF plot images at its placed position.
 - [x] The user can rename or recolor an individual series from the Customize Plot Series dialog.
 - [x] Frame Sync Lock curves are assigned purple, blue, and green primary colors automatically, one per stream.
 - [x] Receiver SNR curves are assigned red, orange, and yellow primary colors automatically, one per receiver.
@@ -204,7 +204,7 @@ The stories below follow the workflow a first-time user takes through the applic
 
 - [x] The plot window has no external control rows: the chart fills the entire plot area.
 - [x] Every plot control is reached from a right-click context menu on the chart, or from a control overlaid on the chart itself.
-- [x] The context menu leads with **Set Plot Title…**, then **Plot File**, **View Mode**, **Customize View…**, **Show Legend**, **X Axis**, **Y Axes** and **Reset View**; entries are disabled until data is loaded. Every entry is a plot control — the menu holds nothing that acts on files.
+- [x] The context menu leads with **Set Plot Title…**, then **Plot File**, **View Mode**, **Customize View…**, **Show Legend**, **Readout**, **X Axis**, **Y Axes** and **Reset View**; entries are disabled until data is loaded. Every entry is a plot control — the menu holds nothing that acts on files.
 - [x] The legend can be shown or hidden from the context menu (or `L`), and the choice persists across sessions.
 - [x] The persistent on-chart controls are gathered into a single chip bar at the chart's top-left (View Mode chip, Reset view chip) rather than scattered around the plot; each chip hides itself when it would be meaningless, and with neither showing the bar collapses to nothing - so it costs no chart space at rest.
 - [x] Frequent actions have chrome-free gestures: Ctrl+drag / middle-drag rubber-bands a time range to zoom, double-click restores the full span, and a crosshair follows the cursor for reading several series at one instant.
@@ -212,7 +212,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The log/console occupies a left sidebar that the user can toggle on and off, and which is open by default. It sits flush beside the chart, divided from it by a one-pixel line that thickens and takes the accent under the pointer, and that can be grabbed a few pixels either side of it, to drag the sidebar wider or narrower (no narrower than 200 px); its text wraps to the width it is given.
 - [x] Each on-chart chip is labelled and carries a tooltip naming the action it performs, so no control on the chart is an unexplained glyph.
 - [x] The crosshair readout can be pinned to a chosen series (context menu > **Readout**) instead of always following whichever curve is nearest the cursor.
-- [x] The most-used view actions have single-key shortcuts while the chart has focus - arrows step the time window, `+`/`-` zoom, `Home` restores the full span, `R` resets both axes, `V` switches metric, `L` toggles the legend - and the context menu advertises each key so they are discoverable rather than hidden.
+- [x] The most-used view actions have single-key shortcuts while the chart has focus - the Left and Right arrows step the time window, `+`/`-` zoom, `Home` restores the full span, `Backspace` steps back through the zoom history, `R` resets both axes, `V` switches metric, `L` toggles the legend - and the context menu advertises the keys it has an item for (`V`, `L`, `R`, `Home`, `Backspace`) so they are discoverable rather than hidden; the arrows and `+`/`-` have no menu item.
   - **The keys are the chart's, not the window's:** they are key bindings on `PlotView`'s root, around the chart. A
     bare-letter window shortcut would be handled ahead of the focused control, so it would
     swallow that character everywhere the user types (the plot-title prompt, the time-window
@@ -223,7 +223,7 @@ The stories below follow the workflow a first-time user takes through the applic
   - **Any further plot control** goes to the context menu or an on-chart overlay, never to a
     control around the chart: that is the standing rule this story sets, and
     `ThePlotViewIsTheChartWithItsControlsOverItAndNothingAround` holds it.
-  - **The menu advertises each key** as its item's gesture, `V` on the View Mode items
+  - **The menu advertises the keys it has an item for** as the item's gesture, `V` on the View Mode items
     (`TheMenuAdvertisesEveryKeyOfThePlot`).
   - **Scope:** This story governs the *placement* of plot controls, not what they do — the underlying behaviors are specified by US4.0 (navigation/appearance), US3.1 (view mode), and US1.1 (Plot File selector). It is deliberately additive to those stories: US4.0's criteria were reworded for the new location, not replaced.
 
@@ -267,8 +267,8 @@ The stories below follow the workflow a first-time user takes through the applic
   - number of receivers
   - number of channels per receiver
   - scale
-  - voltage range
-  - slope
+  - slope (the dialog's Slope box, which holds the voltage ranges)
+  - polarity
 - [x] The dialog window includes a "Save" button to save the key parameters to the configuration file.
 - [x] The dialog window includes a "Cancel" button to cancel the operation.
   - **A criterion removed (plan step 5.1):** "The dialog window includes a "Reset" button to reset the key parameters to their default values." Neither application's Receiver SNR dialog has one. Loading the shipped `settings/receiver_params/default.toml` puts the shipped defaults back, which is what the button would have done. The parity review found it ticked but untrue, and the story now says what ships (`docs/records/parity.md`).
@@ -281,12 +281,12 @@ The stories below follow the workflow a first-time user takes through the applic
 
 **Acceptance Criteria:**
 
-- [x] The user can enable non-linear step calibration for a specific Receiver SNR stream in the per-stream setup dialog (via the "Extract Calibration…" action).
+- [x] The user can enable non-linear step calibration for a specific Receiver SNR stream in the per-stream setup dialog (via the "Apply Cal" button, which opens the Extract Calibration dialog).
 - [x] The user can load a TOML file defining the expected step values (in dB).
 - [x] The user can load a Calibration CH10 file containing the recorded step data.
-- [x] The Apply Cal dialog provides optional Clip Start and Clip End controls to trim leading or trailing seconds from the calibration recording before step detection.
+- [x] The Extract Calibration dialog (opened by Apply Cal) provides optional Clip Start and Clip End controls to trim leading or trailing seconds from the calibration recording before step detection.
 - [x] The application automatically extracts "ideal" steps from the CAL file.
-- [x] The application evaluates step extraction success independently for each receiver channel (up to 48).
+- [x] The application evaluates step extraction success independently for each receiver channel (the default is 48: 16 receivers of 3 channels).
 - [x] Channels that successfully map the expected number of steps are assigned a non-linear calibration profile for the session.
 - [x] Channels that fail step extraction (e.g., due to noise or no data) fall back to the standard linear (slope/offset) calibration.
 - [x] A summary message box informs the user which channels succeeded and which fell back.
@@ -299,7 +299,7 @@ The stories below follow the workflow a first-time user takes through the applic
     mid-sweep is now calibrated over the steps that stayed in scale, with readings clamped at
     the top measured step, instead of losing the whole channel to the linear fallback.
   - **Summary report (v2.12.0):** the summary criterion above is now met literally — the message box names the calibrated receivers ("Calibrated: receivers 1, 3, 5, 6.") and lists each receiver that fell back with its channels and the reason, where it previously reported only a channel count.
-  - **Status (v2.2.5): COMPLETE.** Step selection is polarity-agnostic and robust to real recordings: it takes the first maximal monotonic plateau run and keeps its last `expected` plateaus, which excludes a signal-generator turn-on transient (leading) and the optional operator down-ramp (trailing) for both normal and inverted-polarity receivers — fixing the calibrated-staircase time skew. The extraction sample period is frame-rate-adaptive (100 ms floor) for fast frames, and the Apply Cal dialog adds optional **Clip Start / Clip End** controls so operators can trim leading/trailing seconds before detection. Out-of-range raw values clamp (not extrapolate) to the nearest end-step dB.
+  - **Status (v2.2.5): COMPLETE.** Step selection is polarity-agnostic and robust to real recordings: it takes the first maximal monotonic plateau run and keeps its last `expected` plateaus, which excludes a signal-generator turn-on transient (leading) and the optional operator down-ramp (trailing) for both normal and inverted-polarity receivers — fixing the calibrated-staircase time skew. The extraction sample period is frame-rate-adaptive (100 ms floor) for fast frames, and the Extract Calibration dialog adds optional **Clip Start / Clip End** controls so operators can trim leading/trailing seconds before detection. Out-of-range raw values clamp (not extrapolate) to the nearest end-step dB.
 
 ### US6.0: Export the plot as an image file — Complete
 
@@ -404,7 +404,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The user can toggle between light and dark theme via a menu action.
 - [x] The selected theme persists across application restarts.
 - [x] All windows, dialogs, and the plot update to match the selected theme immediately.
-- [x] The menu and title-bar icons swap to theme-appropriate variants when the theme changes.
+- [x] The Export and Import menu icons are drawn in a variant for each theme and swap when the theme changes; the other menu and title-bar icons are one drawing or font glyphs that take the theme's colours.
 - [x] The application is themed as VS Code's Dark Modern and Light Modern: the main window's chrome (under its title bar, and the log sidebar) is #181818 / #F8F8F8, not black, and the content (the chart, and every dialog) a shade lighter than it, #1F1F1F / white; the title bar, the log and the chart are flush, with no gaps, borders or rounded corners, divided by one-pixel lines (#2B2B2B / #E5E5E5, one under the title bar and one between the log and the chart). Text is #CCCCCC / #3B3B3B, the accent #0078D4 / #005FB8, and the controls Fluent draws (inputs, dropdowns, secondary buttons, checkboxes, menus, tooltips) take VS Code's fills and borders.
 - [x] The theme is written in Fluent's vocabulary, so it can be extended the way Fluent is: the colours are Fluent's semantic tokens (`SolidBackgroundFillColorBase`, `LayerFillColorDefault`, `ControlFillColorDefault`, the strokes, the text and accent ones) as a Color and a Brush each, and every brush Fluent's controls are looked up under is an alias of the token for its job, never a colour of its own. The font is Segoe UI Variable, the type scale Fluent's (caption 12, body 14), and the corners Fluent's (4 px for a control, 8 for an overlay), each a resource that the application's own text and shapes use.
 - [x] Every dialog has Fluent's ContentDialog anatomy: its content in 24 px of padding (`ContentDialogPadding`) above one footer band (`DialogFooter`: the base colour under a divider) with its buttons at the right, in equal widths of at least 96 px, 8 px apart; the default button (Enter) is the accent and Escape cancels (the progress dialog alone has no cancel key, since a run must not be stopped by one). What belongs to the choice and not to the answer ("Apply to all", "All") is at the footer's left. The dialogs built in code (`ChoiceWindow`, the prompts, `ReportWindow`) use the same footer through `DialogFooter.Compose`, so no dialog lays its own buttons out.
@@ -500,14 +500,25 @@ profile, so a batch processes with the linear calibration.
   one row per PCM channel, each problem shown as it arises, OK and Process held until every checked row is ready,
   Apply to all (US2.2), the pattern and receiver-parameter files' Load and Save.
 - **Extract Calibration** (`ExtractCalibrationViewModel`) behind Apply Cal (US5.3).
-- **The run** (`Models/Processing`: `StreamsRun`, `ProcessingViewModel` and its window; `Models/Logging`: `SessionLog`, `LogView`):
-  the core's run on its own threads, the modal progress dialog whose Cancel stops every stream, and the log.
+- **The run** (`Models/Processing`: `StreamsRun`, `NativeCore`; `ViewModels/ProcessingViewModel` and its window;
+  `Models/Logging/SessionLog` and `Views/LogView`): the core's run on its own threads, the modal progress dialog whose
+  Cancel stops every stream, and the log.
+- **Startup and the smoke report** (`Startup`, `Models/Processing/FirstChannelRun`): a recording path on the command
+  line opens that recording, as a file association does. With `TMDQ_SMOKE_REPORT=<file>` set as well, the application skips
+  Configure Streams, runs the recording's first PCM channel with the Frame Sync Lock defaults (`FirstChannelRun`), writes
+  one result line to the file and exits (0 when the stream was processed, 1 when not): the installer's clean-machine test
+  proves the whole path, native core included, with it.
+- **Windows:** every window with a view model is XAML (`MainWindow`, `ConfigureStreamsWindow`, `StreamSetupWindow`,
+  `ExtractCalibrationWindow`, `ProcessingWindow`, `ExportWindow`, `BatchApplyWindow`, `CustomizeViewWindow`); every window
+  without one is built in code (`ChoiceWindow`, the plot's prompts in `PromptWindows`, `ReportWindow`).
 - **The plot** (`ViewModels/Plot`): `PlotViewModel` (the series built by the core, the axes and overrides, the view mode, the
-  recordings and Plot File, the readout's pin), with four jobs in types of their own: `PlotTimeWindow` (the span, the
-  window and its zoom history, the gestures and keys that move it), `PlotReadout` (what the readout says), `PlotCsv`
-  (the series to and from the core's CSV) and `PlotColors` (the colours). `PlotChart` draws it (from the core's
+  recordings and Plot File, the readout's pin), with its jobs in types of their own, the folder's other eight files:
+  `PlotTimeWindow` (the span, the window and its zoom history, the gestures and keys that move it), `PlotReadout` (what
+  the readout says), `PlotCsv` (the series to and from the core's CSV), `PlotColors` (the colours), `PlotCommands` (below),
+  `PlotTemplates` (under Templates), `ImageFiles` (an image export's format, from its file name) and `CustomizeViewModel`
+  (Customize View's state, edited as a copy of the plot and applied only on OK). `PlotChart` draws it (from the core's
   geometry, each long series' envelope looked up in its `SeriesIndex`, a cached data layer, a draft while a gesture
-  moves a plot that is slow to paint, the gestures), and `PlotView` holds what is over it (the legend, the chip bar, the
+  moves a plot that is slow to paint, the gestures), and `PlotView` holds what is over it (the legend, `PlotLegend`, the chip bar, the
   right-click menu, the keys, Customize View). The menu, the chips and the keys are declared in `PlotView.axaml` and
   bound to `PlotCommands`, which the view makes for its plot with its prompts: a command for each item, chip and key
   (none runs without data, which disables the item and lets the key go on), what the chips and the menu show, and the
@@ -517,7 +528,7 @@ profile, so a batch processes with the linear calibration.
   through the core's parser.
 - **Templates** (`Models/Templates`): `TemplateFile` (the JSON), `TemplateBatch` (matching, a file's run), and
   beside the plot `PlotTemplates` (`ViewModels/Plot`: building a template from a recording's series, putting its looks
-  back); the batch confirmation.
+  back); the batch confirmation (`BatchApplyViewModel` and its window).
 - **Preferences** (`Models/Settings`: `Preferences`, `PreferencesStore`): `preferences.json` in
   `%APPDATA%\tmDataQualityAnalyzer` (beside the exe for a portable copy), the defaults on a first run. v3.0.x imported
   v2.x's INI file there on its first run; the import went in v3.1.0, and an INI file left there is not read.
@@ -528,7 +539,8 @@ profile, so a batch processes with the linear calibration.
 The binding of every ABI function: `Ch10File` (a recording's channels), `ProcessingRun` and `StreamResult` (a run and
 what it produced, with progress, log and cancel), `CalibrationRun` and `StepFile`, the file formats (`FrameSyncFile`,
 `ReceiverParamsFile`, `CsvFile`, `TemplateMatcher`, `ClockTime`), series construction (`SeriesSet`, `TimeBase`,
-`ImportedStreams`) and `ChartGeometry` with `SeriesIndex` (a series' envelope index, revision 3). `Library` loads `tmdq_core.dll` (the app passes the one beside it, or
+`ImportedStreams`) and `ChartGeometry` with `SeriesIndex` (a series' envelope index, revision 3). `Native` holds the C ABI's P/Invoke declarations and enums, `Arena` the native memory for one call's arguments, and
+`ObserverBridge` the callbacks a native run calls back into (an exception never unwinds a native thread). `Library` loads `tmdq_core.dll` (the app passes the one beside it, or
 `TMDQ_CORE_DLL`: `NativeCore`) and refuses one whose ABI version or revision it does not know.
 
 #### The native core (`src/core/include/`, `src/core/src/`)
@@ -546,9 +558,11 @@ what it produced, with progress, log and cancel), `CalibrationRun` and `StepFile
    SNR) calibrated channel values into a `ProcessedStreamData`; derandomizes and inverts as told, and applies the linear
    slope and offset or a non-linear `CalibrationProfile` per channel.
 5. **PipelineRunner** (`pipelinerunner`) - owns a run's lifecycle: the queues, the reader and one worker thread per
-   stream, joined before it reports the end.
+   stream, joined before it reports the end. Its input is a `StreamJob` per stream: the validated `ProcessingParams` and
+   the shared `FrameSetup`.
 6. **ProcessingEvents / EventReporter** (`processingevents.h`) - how the reader, the workers and the extractor report
-   log lines, errors, progress and completion; the ABI relays them to the host.
+   log lines, errors, progress and completion; the ABI relays them to the host. **IntervalGate** (`intervalgate.h`) is
+   the clock-injected gate that throttles the reader's progress reports.
 7. **FrameSetup** (`framesetup`) - the frame's word map and calibration table, built per job; reads and writes the
    receiver-parameters file.
 8. **framesync** (`framesync.h`) - the shared decode of a pattern and mask, and `applyAcquisition`, which builds every
@@ -581,7 +595,7 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
                                 │
                    Configure Streams (per-stream settings)
                                 │
-                StreamsRun builds a RunRequest ─► ProcessingRun (TmDq.Core, through the C ABI)
+                StreamRules.ToRunRequest builds a RunRequest, StreamsRun starts it ─► ProcessingRun (TmDq.Core, through the C ABI)
                                                         │
                                        PipelineRunner (the core, its own threads)
                                   ┌─────────────────────┴───────────┐
@@ -600,7 +614,9 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
 
 ### File Organization
 
-- **The core** (`src/core/`, its project `tmdq_core.vcxproj`): headers in `include/` (`dto/`, `model/`, `constants.h`),
+- **The core** (`src/core/`, its project `tmdq_core.vcxproj`): headers in `include/` (`dto/`, `model/`, `constants.h`, and three helper headers at its root: `containerutil.h` for
+  signed indexing, `textformat.h` for fixed-point text that rounds a tie away from zero, `textparse.h` for the forgiving
+  number rules the settings files are read with),
   sources in `src/`, the ABI in `abi/`; the doctest suite in `tests/core/`. A new core source goes in `tmdq_core.vcxproj`,
   and a new ABI source in both native projects; `NativeProjectTests` fails until they list it.
 - **.NET**: `src/TmDq.Core` (the binding) and `src/TmDq.App`, each with a `.Tests` project of the same name
@@ -609,7 +625,9 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
   - `Models/` (`Streams`, `Processing`, `Settings`, `Templates`, `Logging`): the rules and the files, no UI.
   - `ViewModels/`, the plot's in `ViewModels/Plot/`.
   - `Views/`: the windows and controls.
-  - `Services/`: the interfaces a view model asks the user through (file dialogs, dialogs, prompts).
+  - `Services/`: most of the interfaces a view model asks the user through (file dialogs, dialogs, prompts), and two
+    classes (`DialogConfigurator`, `HelpManual`); four interfaces live beside what uses them (`IStreamConfigurator`,
+    `IRunLog` in `Models/Processing`, `IRunHost` in `BatchRunner`, `IHelpActions` in `MainWindow`).
   - `Platform/`: their Avalonia implementations, which the application hands in (`App.axaml.cs`) and a test replaces.
 - **Assets**: `assets/` (the base manual, the icon, the UTF-8 manifest); the full manual, `UserManual.html`, at the
   root (Windows cannot hold it beside `usermanual.html`, whose name differs only in case); shipped settings in
@@ -619,9 +637,9 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
 ### Naming Conventions
 
 - **C++ (the core)**: classes PascalCase (`Chapter10Reader`, `FrameProcessor`); constants `kPascalCase` in namespaces
-  (`PCMConstants::kWordsInMinorFrame`); members `m_` with snake_case (`m_frame_setup`); methods camelCase;
-  `ProcessingParams` fields snake_case, the newer value types (`StreamJob`, `ProcessedStreamData`,
-  `CalibrationProfile`) camelCase.
+  (`PCMConstants::kCommonWordLen`); members `m_` with snake_case (`m_frame_setup`); methods camelCase;
+  value types (`ProcessingParams`, `StreamJob`, `ProcessedStreamData`,
+  `CalibrationProfile`) camelCase fields, snake_case surviving only in the frame processor's private scan state.
 - **C#**: the .NET conventions - PascalCase types, members and properties, `_camelCase` private fields; tests named
   for what they hold, as sentences (`ABatchRunsEachFileInTurnKeepsEachAndExportsEachAsV214Did`).
 - **Comments say what the code does and why**, on their own: a rule is stated, not explained by another library's
@@ -629,8 +647,8 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
 
 ### Working Method
 
-The rules the move off Qt ran on (the plan's rules 2 to 5, which code comments still cite), and how every change is
-made now:
+The rules the move off Qt ran on, and how every change is made now. The plan's rules 2 to 5, which code comments still
+cite, are items 1 to 4 below: a comment citing "plan rule 5" means item 4, one implementation of every format.
 
 1. **Tests first, on the code as it is.** Before changing or reimplementing anything, pin what it does today, run the
    pins against the unchanged code, and only then change it. For a reimplementation, keep the old implementation in
@@ -737,8 +755,9 @@ that worktrees also need.
 ### Time Handling
 
 - Uses IRIG time format and standard time structures
-- Time conversions between different formats (DOY/HMS ↔ uint64)
-- UTC timezone enforced in Chapter10Reader and FrameProcessor constructors
+- Time runs one way: a packet's relative counter becomes IRIG time in the reader (`enI106_RelInt2IrigTime`), and the
+  worker turns that into `double` seconds, interpolated per bit from the packet's anchor
+- No time zone is set or applied anywhere in the core: times are the recording's own IRIG time (`DDD:HH:MM:SS` on screen)
 
 ### AGC / Stream Processing
 
@@ -750,18 +769,9 @@ that worktrees also need.
 
 ### Framesync Lock Statistics Calculation
 
-- **Fundamental Metrics:**
-  - `Frame_Length_Bits = Bits_per_word * Words_per_frame`
-  - `Expected_FPS = Bitrate_bps / Frame_Length_Bits`
-- **Window Processing:** The telemetry stream is processed in discrete time windows based on a user-specified time resolution (`T_res` in seconds).
-- **Expected Frames per Window:** `Expected_Frames = Expected_FPS * T_res`
-- **Calculation:**
-  - During each `T_res` window, the stream is scanned for the valid framesync pattern.
-  - A counter (`Locked_Frames_Count`) increments for each valid framesync found (optionally enforcing correct bit-spacing for strict locks).
-  - At the window boundary, the lock percentage is calculated as `(Locked_Frames_Count / Expected_Frames) * 100` and clamped to a maximum of 100.0%.
-  - The counter resets for the next time window.
-- **What the code really measures** (`.claude/CLAUDE.md`, Domain invariants): lock % is a **bit-span** quantity, the
-  bits spanned by locked frames over the bits in the window, not `time × bitrate`; off-phase syncs are rejected while
+- **What the code measures** (`.claude/CLAUDE.md`, Domain invariants; `docs/framesync_logic.md` §6): lock % is
+  `valid_bits_in_window / total_bits_in_window × 100`, a **bit-span** quantity (the bits scanned while in lock over the
+  bits scanned in the window; it cannot exceed 100, so nothing clamps it), not `time × bitrate`; off-phase syncs are rejected while
   locked; missed frames are extrapolated across a gap only when a window has no bits at all.
 
 ## Common Development Tasks
@@ -801,7 +811,8 @@ The `add-stream-setting` skill is the checklist. In short:
 1. **A build tool is not found** (`msbuild`, `mt`, `dumpbin`): the scripts dot-source `eng\env.ps1` when they are
    missing, which imports the Visual Studio 2022 environment; run them from PowerShell, not a bare `cmd`.
 2. **`dotnet build` fails on `Platform=x64`**: `vcvars` sets it, and a .NET build then looks for an x64 configuration
-   that does not exist. The scripts clear it; clear it yourself in a shell that ran `env.ps1`.
+   that does not exist. Only `eng\build_manual.ps1` and `eng\mutate.ps1` clear it; in a shell that ran `env.ps1`, clear it yourself
+   (`$env:Platform = $null`) before `dotnet build`.
 3. **A test sees an old `tmdq_core.dll`**: the managed and app tests load `out\<config>\tmdq_core.dll` (or
    `TMDQ_CORE_DLL`), so rebuild the core after changing it.
 4. **A deleted or renamed header still "builds"**: an incremental build relinks stale objects; only `-Rebuild`
@@ -875,7 +886,7 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
 - **StepDetector** (`test_stepdetector`) - the step file (against the parser it replaced, over 4,000 generated files),
   plateau detection on clean, noisy, inverted, split, railed and saturated sweeps, and the interpolation and its clamps.
 - **CalibrationExtractor** and **CalibrationRequest** (`test_calibrationextractor`, `test_calibrationrequest`) - whole
-  extractions of `step_cal` and `rnrz-l_testfile` against recorded numbers, clips, the report's exact text in every
+  extractions of `step_cal` and the committed `agc_rnrz-l_trc_testfile` against recorded numbers, clips, the report's exact text in every
   scenario, the lifecycle and cancel; and the request built from the dialog's fields with its refusals.
 - **TomlDocument and textfile** (`test_tomldocument`, `test_textfile`) - the TOML subset (sections in order, arrays of
   tables, comments, escapes, the number and boolean rules, the exact bytes written) and the text encodings.

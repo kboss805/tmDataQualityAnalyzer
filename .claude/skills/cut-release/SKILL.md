@@ -31,9 +31,9 @@ Edit **only** `src/core/include/constants.h`:
 
 ```cpp
 struct AppVersion {
-    static constexpr int kMajor = 3;   // ← bump as decided
-    static constexpr int kMinor = 1;
-    static constexpr int kPatch = 0;
+    static constexpr int kMajor = N;   // ← bump as decided: the three numbers of the new version
+    static constexpr int kMinor = N;
+    static constexpr int kPatch = N;
 ```
 
 Do **not** add a version literal anywhere else. `eng/AppVersion.props` reads these three

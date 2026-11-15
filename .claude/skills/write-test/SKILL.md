@@ -48,6 +48,11 @@ each suite has its house style and helpers. Build and run with the **build-and-t
   fails loudly.
 - **Numbers from the recordings** are compared with what v2.14.2's pipeline produced; a new expected
   number states where it came from.
+- **A file the library just wrote or opened is read back and deleted through `TempFiles`** (`Delete`,
+  `DeleteDirectory`, `ReadAllBytes`, `ReadAllText`; `tests/TmDq.Core.Tests/TempFiles.cs`, linked into the
+  app tests), never a bare `File.Delete` in a `finally`: a virus scanner's hold on a new file fails a test
+  whose every check passes, and `TempFiles` retries for a few seconds yet still throws on a handle the
+  library leaked.
 
 ## The application's suite (headless Avalonia)
 

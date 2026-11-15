@@ -32,14 +32,16 @@ bugs hide and where a generic reviewer is blind.
 
 ## Protected files — a hard stop
 
-**Visual/layout changes need more than a read-through.** If the diff touches control sizes,
-spacing, styles, the themes or the plot's drawing, the test suite asserts little about it — use the
-**verify-ui-change** skill (render it AND measure the controls) rather than reasoning from the code.
-
 `third_party/irig106/**` is third-party and MUST NOT be modified. If the diff
 touches them, that is a Critical finding on its own: the fix belongs in the core that wraps it
 (`chapter10reader.cpp`, `ch10packetreader.cpp`, `frameprocessor.cpp`). Flag it and
 stop endorsing the change until it moves.
+
+## Visual and layout changes
+
+**Visual/layout changes need more than a read-through.** If the diff touches control sizes,
+spacing, styles, the themes or the plot's drawing, the test suite asserts little about it — use the
+**verify-ui-change** skill (render it AND measure the controls) rather than reasoning from the code.
 
 ## Domain invariants to verify (the high-value checks)
 

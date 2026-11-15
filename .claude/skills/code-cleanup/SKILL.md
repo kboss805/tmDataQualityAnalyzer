@@ -9,8 +9,8 @@ description: >-
   periodic health check of the project as a whole — as opposed to reviewing one change, which is
   tm-code-review's job. This is repo-wide and diff-independent: it looks at the whole tree, not just
   what changed recently. The main hazard is false positives — several things in this codebase look
-  orphaned but are deliberately kept (see loadCsvFile in PlotViewModel, kept as the exportCsv partner
-  and a test fixture even with no production caller) — so this skill's first move is always checking
+  orphaned but are deliberately kept (see ExportCsv in PlotViewModel and its partner LoadCsv /
+  LoadCsvAsync, the CSV import's matched pair, kept together) — so this skill's first move is always checking
   docs/claude.md and the project's auto-loaded MEMORY.md for a documented reason before flagging
   anything as dead.
 ---
@@ -84,7 +84,7 @@ directly, once `compile_flags.txt` is regenerated and current.
 ## Readability and coding-standard drift
 
 Don't restate the rules here — `docs/claude.md`'s **Coding Conventions** section (naming, the `m_`
-prefix, include ordering, memory management) is the single source of truth, and copying it into this
+prefix, include ordering, the working method) is the single source of truth, and copying it into this
 skill risks the copy going stale while the real rules move on. Read it, then check the tree against
 it:
 
