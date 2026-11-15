@@ -48,9 +48,25 @@ warning); B4's seam was decided the same day.
   (A1 the lost capture ignored, A2 the band left drawn, A3 the pan carrying on, A4 the pan's draft left up, A6 a drop
   offered while busy, A8 the result's failure unhandled) and **2 SURVIVED**, both reasoned: A5 the legend's cursor
   (Avalonia's `Cursor` exposes no type to assert) and A7 the drop handler's own busy check (the view model refuses a busy
-  open too, so it is defence, not the rule). The soak ran on this change (`engun_soak.ps1`): all 34 runs exported byte for byte what v2.14.2 exported. All three suites in Release, zero
+  open too, so it is defence, not the rule). The soak ran on this change (`eng\run_soak.ps1`): all 34 runs exported byte for byte what v2.14.2 exported. All three suites in Release, zero
   warnings: native **495** (1 skipped), managed **364** passed / 1 skipped, app **643** passed / 34 not run. Baselines
   moved: native 493 to 495, app 640 to 643.
+
+#### A failed msbuild evaluation says what msbuild printed
+
+`PackageLicenceTests.EveryProjectInTheSolutionGetsTheCheckAndTheVersion` failed once on CI with
+`'M' is invalid after a single JSON value` and never again: it could not be reproduced, and the message could not say
+why, because `BuildTool.Evaluate` threw away the output it had failed to parse. It now reports it: a parse failure (or a
+reply without the `Properties` object) raises a test failure naming the project and carrying everything `dotnet msbuild
+-getProperty` printed. The assertions are unchanged, and no test was added or removed (app baseline as it was: 640
+passed, 0 failed, 0 skipped, 34 not run). Checked by making the parse fail on purpose (a stray character put before the
+output): the test then failed with the project, the parser's message and the whole of msbuild's reply.
+
+#### The batch's entry point, named as the menu names it
+
+Docs only, no mutation check needed. `docs/claude.md` (US1.1) still called the batch's one entry point **Apply Template**,
+the menu item's name before #285; it is **File > Process Multiple Files…** now. The concept, the `ApplyTemplate` command and
+the tests keep the template batch's name, and so does the guide wherever it means those.
 
 #### The processing window that nothing could set, and two dead fields on the decode path (audit D2, D1, D3)
 
