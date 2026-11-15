@@ -12,6 +12,42 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Tests that could not fail, and tests that could fail for the wrong reason (audit Q1, Q2, Q3)
+
+Found by the whole-tree cleanup audit; each site was re-read against the tree as of #293. Q4 (test support written several
+times), Q5 (large test files) and Q6 (the smoke branch) are left for their own changes.
+
+- **Q1: bare deletes, and swallowed ones.** Three tests deleted a `.ch10` the core had just opened in a `finally`
+  (`ProcessingTests`, and two in `WalkingSkeletonTests`): now `TempFiles.Delete`, which waits out a virus scanner's hold
+  and still throws on a leaked handle. Four build-tool test classes (`LicenceBuildTests`, `PackageLicenceTests`,
+  `ThirdPartyNoticesTests`, `VersionBuildTests`) swallowed every delete failure in `Dispose` with no stated reason: now
+  `TempFiles.TryDeleteDirectory`, named for what it is (a scratch folder a child process may still hold; a leftover folder
+  in `%TEMP%` is no failure), with its own test. The `write-test` skill says which of the two to use.
+- **Q2: expectations taken from the constant under test.** `StreamRules.PatternRequired`'s text was in no test (three
+  files compared with the constant), so a reworded message passed: two cases now hold the literal. The plot's layout tests
+  built their expected pixels from `PlotChart.OuterMargin`, `TopInset` and `AxisLabelGap`, so a moved margin moved test and
+  chart together: `TheChartsMarginsAreTheValuesTheLayoutTestsAreWrittenIn` pins all five as numbers. `appVersionValues`
+  (three numbers checked as not negative) could not fail; it now also refuses the 0.0.0 of an unset version, with no
+  version typed in it (the managed suite's `VersionTests` hold the number to the packaging's).
+- **Q3: timing and machine dependence.** `OnlyTheLastStepsDelaySettlesTheGesture` failed a plot that was right on a stalled
+  machine ("too slow to tell") and held the settle to 390 ms of a 400 ms `Task.Delay`, which Windows' coarse timer can end a
+  tick early (the same flake as #283 and #287): its delay is 1000 ms, the check has 500 ms of margin, a longer stall is a
+  skip (`Assert.Skip`, shown to report as skipped under `AvaloniaFact`), and the end is held to 3/4 of the delay.
+  `WhileBusyNeitherImportNorExportStartsAndBothAreToldWhenItEnds` polled for a log line with no limit and relied on the run
+  being parked: it now waits for Configure Streams to be asked for (`FakeConfigurator.Waiting` takes a callback), with a
+  60 s limit. The three native cases that slept 100 to 300 ms "so the worker reaches its empty queue" wait for each worker's
+  own "processing..." line first (a stalled worker is no longer cancelled before it has started, which left the wake path
+  unrun) and keep a 50 ms settle for its next call; the cancel-from-another-thread case cancels once the reader has begun
+  and not 100 ms in. `Abi: aCsvIsParsedLikeTheCore` read two CSV exports from `tests/data` only where they existed, so
+  CI covered less than a developer's machine: two real v2.x exports, trimmed to a header and a few rows, are committed in
+  `tests/fixtures` and required.
+- **Checked.** Mutation check, `eng\mutate.ps1`: app suite (four classes), 7 mutants, **7 CAUGHT** (Q2a a reworded message,
+  Q2b to Q2d three margins moved, Q3a an earlier step's delay settling the gesture, Q3b half the delay, Q3c a load that is
+  not busy while Configure Streams is up); native (`Constants*` and the CSV case), 2 mutants, **2 CAUGHT** (V1 an unset
+  0.0.0 version, V2 a negative one). All three suites in Release, zero warnings: native **495** (1 skipped), managed **365**
+  passed / 1 skipped, app **644** passed / 34 not run. Baselines moved: managed 364 to 365 (the `TryDeleteDirectory` test),
+  app 643 to 644 (the margins test).
+
 #### Behaviour bugs: one word-map resolution for both passes, a lost drag, a busy drop, a calibration result the core cannot give (audit B10, B5, B11, B4)
 
 Found by the whole-tree cleanup audit. B10's direction is the owner's of 2026-11-15 (both passes fall back, with a

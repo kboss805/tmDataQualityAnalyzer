@@ -26,6 +26,14 @@ internal static class TempFiles
     /// <summary>Deletes a folder, as Directory.Delete does (a folder that does not exist is an error).</summary>
     public static void DeleteDirectory(string path, bool recursive = false) => DeleteDirectory(path, recursive, Window);
 
+    /// <summary>Removes a scratch folder a test made and does not care whether it goes: for the folders of the tests that
+    /// run a build tool (dotnet, msbuild) or a script, whose child process can still hold a file in it as the test ends,
+    /// and a folder left in %TEMP% is no failure of the product. Waits out the window like <see cref="DeleteDirectory"/>,
+    /// then gives up quietly. Never for a file the library under test opened: that one must fail the test when it is not
+    /// released, which is what <see cref="Delete"/> and <see cref="DeleteDirectory"/> are for.</summary>
+    /// <returns>Whether the folder is gone.</returns>
+    public static bool TryDeleteDirectory(string path) => TryDeleteDirectory(path, Window);
+
     /// <summary>Reads a file, as File.ReadAllBytes does (a file that does not exist is an error at once).</summary>
     public static byte[] ReadAllBytes(string path) => ReadAllBytes(path, Window);
 
@@ -38,6 +46,19 @@ internal static class TempFiles
 
     internal static void DeleteDirectory(string path, bool recursive, TimeSpan window) =>
         Retry(() => Directory.Delete(path, recursive), window);
+
+    internal static bool TryDeleteDirectory(string path, TimeSpan window)
+    {
+        try
+        {
+            DeleteDirectory(path, recursive: true, window);
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return !Directory.Exists(path);   // a folder that was not there is gone, as far as the test cares
+        }
+    }
 
     private static void Retry(Action act, TimeSpan window) => Retry(() => { act(); return true; }, window);
 

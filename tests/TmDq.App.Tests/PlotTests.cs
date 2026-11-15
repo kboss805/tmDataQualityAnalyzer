@@ -575,6 +575,15 @@ namespace TmDq.App.Tests
             s.Window.Close();
         }
 
+        [Fact]
+        public void TheChartsMarginsAreTheValuesTheLayoutTestsAreWrittenIn()
+        {
+            // The layout tests below build their expected pixels from these, so a changed margin would move test and
+            // chart together and pass; this pins them as numbers (audit Q2).
+            Assert.Equal((10.0, 6.0, 4.0, 12.0, 12.0),
+                         (PlotChart.OuterMargin, PlotChart.AxisLabelGap, PlotChart.TickLength, PlotChart.TickLabelGap, PlotChart.TopInset));
+        }
+
         [AvaloniaFact]
         public void AHiddenAxisGivesItsMarginBackAndTheTransformsFollowThePlotArea()
         {

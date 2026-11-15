@@ -32,8 +32,14 @@ namespace TmDq.App.Tests
         public static FakeConfigurator Choosing(Func<string, Ch10File, StreamsChoice> choose) =>
             new((path, file) => Task.FromResult<StreamsChoice?>(choose(path, file)));
 
-        /// <summary>Up until <paramref name="answer"/> completes: the dialog still open.</summary>
-        public static FakeConfigurator Waiting(Task<StreamsChoice?> answer) => new((_, _) => answer);
+        /// <summary>Up until <paramref name="answer"/> completes: the dialog still open. <paramref name="onAsked"/> is called when
+        /// the dialog is asked for, so a test can wait for that instead of polling for what the run logged before it.</summary>
+        public static FakeConfigurator Waiting(Task<StreamsChoice?> answer, Action? onAsked = null) =>
+            new((_, _) =>
+            {
+                onAsked?.Invoke();
+                return answer;
+            });
 
         public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file) => _answer(path, file);
     }

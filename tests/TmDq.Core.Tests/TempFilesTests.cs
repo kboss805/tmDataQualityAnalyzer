@@ -136,6 +136,24 @@ public class TempFilesTests
     }
 
     [Fact]
+    public void ATryDeleteOfAFolderHeldBeyondTheWindowGivesUpQuietlyAndOneNotThereIsGone()
+    {
+        // The scratch folders of the build-tool tests: a child process may still hold a file, and that is no failure.
+        string dir = NewPath("");
+        Directory.CreateDirectory(dir);
+        string file = Path.Combine(dir, "held.bin");
+        File.WriteAllText(file, "x");
+        using (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.False(TempFiles.TryDeleteDirectory(dir, TimeSpan.FromMilliseconds(200)));
+            Assert.True(Directory.Exists(dir));
+        }
+        Assert.True(TempFiles.TryDeleteDirectory(dir));
+        Assert.False(Directory.Exists(dir));
+        Assert.True(TempFiles.TryDeleteDirectory(dir));   // already gone
+    }
+
+    [Fact]
     public void AMissingFolderIsAnErrorAtOnce()
     {
         // As Directory.Delete, and not retried: a folder that is not there will not appear.

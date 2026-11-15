@@ -556,10 +556,15 @@ TEST_CASE("PipelineRunner: a cancel wakes a worker that is waiting for packets")
     std::string error;
     REQUIRE_MESSAGE(runner.start({first, second}, rec, error), error);
     REQUIRE_MESSAGE(rec->waitParked(kRunTimeoutMs), rec->joined());
-    std::this_thread::sleep_for(std::chrono::milliseconds(300)); // the workers reach their empty queues and block there
+    // Each worker's last line before it waits for a packet: both have started. What is left is their call to the queue,
+    // which the short settle covers; the old fixed 300 ms could pass before a stalled worker had started at all, and the
+    // wake path was then never run.
+    const std::string base = "[CH " + std::to_string(fx.pcm_id) + " ";
+    for (const char* label : {"first", "second"})
+        REQUIRE_MESSAGE(rec->waitForEvent({"log:" + base + label + "] processing..."}, kRunTimeoutMs), rec->joined());
+    std::this_thread::sleep_for(std::chrono::milliseconds(50)); // the workers' dequeue calls, the next thing they do
 
     runner.cancel();
-    const std::string base = "[CH " + std::to_string(fx.pcm_id) + " ";
     bool workers_ended = true;
     for (const char* label : {"first", "second"})
     {

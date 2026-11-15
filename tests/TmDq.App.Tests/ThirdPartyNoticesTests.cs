@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using TmDq.Core.Tests;
 using Xunit;
 
 namespace TmDq.App.Tests
@@ -26,7 +27,7 @@ namespace TmDq.App.Tests
 
         public void Dispose()
         {
-            try { Directory.Delete(_dir, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            TempFiles.TryDeleteDirectory(_dir);
         }
 
         /// <summary>A package in the packages folder, listed in the deps file with the given runtime files.</summary>
