@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using TmDq.App.Views;
 
@@ -41,6 +42,12 @@ namespace TmDq.App.Tests
         {
             if (menu is MenuItem { IsSubMenuOpen: false } item && item.ItemCount > 0)
             {
+                // A submenu inside a submenu (Recent Files, in File) is made only when each one above it is open too, outermost first.
+                var above = new List<MenuItem>();
+                for (ILogical? parent = item.GetLogicalParent(); parent is MenuItem p; parent = p.GetLogicalParent()) above.Add(p);
+                above.Reverse();
+                foreach (MenuItem p in above.Where(p => !p.IsSubMenuOpen)) p.IsSubMenuOpen = true;
+                Dispatcher.UIThread.RunJobs();
                 item.IsSubMenuOpen = true;
                 Dispatcher.UIThread.RunJobs();
             }

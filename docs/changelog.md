@@ -12,6 +12,48 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The hamburger menu as four submenus: File, Import/Export, Settings, Help
+
+Asked for after #284, from the user's own concept: a conventional grouping in place of the sections of a toolbar's menu. The
+hamburger now opens four entries, each its own submenu; the theme is two entries of their own, the one in use checked; Exit is gone.
+
+| Submenu | Entries | Was |
+|---|---|---|
+| **File** | `Open...` (Ctrl+O), `Recent Files`, a separator, `Process Multiple Files...`, `Save Template` | the Process section: `Open...`, `Recent Files`, `Save as Template...`, `Apply Template to Files...` |
+| **Import/Export** | `Import from CSV...`, `Export...` | the Import/Export section: `Import CSV...`, `Export...` |
+| **Settings** | `Light Theme`, `Dark Theme` (radio marks; the one in use checked) | the Settings section's one entry that said where it went (`Switch to Light Theme`) |
+| **Help** | `tmDataQualityAnalyzer Help`, a separator, `About` | `Help > User Manual...`, `About...` |
+
+- **The commands are the same**; only their place and their words changed (`ApplyTemplateCommand` is Process Multiple Files, and so on),
+  with the tooltips and Ctrl+O as they were. The labels are the user's, including `Save Template` and `About` with no ellipsis.
+- **The theme** is `Light Theme` and `Dark Theme`, each a radio entry bound to `IsLightTheme` / `IsDarkTheme` (the other half of the
+  stored choice, which is still the one `Preferences.Theme`), with `UseLightThemeCommand` and `UseDarkThemeCommand` in place of
+  `ToggleThemeCommand` and `ThemeMenuText` (gone). Choosing the one in use changes nothing and tells no one. Dark is the default, as before.
+- **No Exit.** The window's close button is it; the `OnExit` handler is gone. The section headings (a disabled, small, bold item, the
+  `MenuItem.section` style) are no longer used by any menu, so the style is gone too.
+- **The words that name the entries** are changed where they are written: the manual (`File > Save Template`, `Process Multiple Files...`,
+  `Import/Export > Import from CSV...`, `Help > tmDataQualityAnalyzer Help`, and the walkthroughs), the README, the installer's and the
+  portable readme's pointers, and the release skill's. The Sandbox script that checks the manual says how to reach it looks for
+  `Help > tmDataQualityAnalyzer Help` now. The manual's menu figure shows the File submenu open beside the menu.
+
+**Tests:**
+- `TheMenuHoldsItsSectionsHelpAndExit` became `TheMenuHoldsFourSubmenusAndNoExit`: the four, what each holds in order, their commands, the
+  shortcut and tooltips, the help and About reaching the help service, and Open reaching the picker. New
+  `TheThemeIsTwoEntriesOfItsOwnAndTheOneInUseIsChecked`: two radio entries bound to the two commands, the checked one following the choice,
+  the window following, the stored theme, and the one in use doing nothing.
+- `TheMenuIsDeclaredOnce...` reads four entries (it had also held the headings' size and weight, now gone with them); `Recent Files`'
+  test reaches it through File; the preferences test uses the two commands and the two notices; `MenuStyleTests` reads all four submenus
+  and what they hold. The `Menus` helper opens the submenus above a nested one first, outermost first, as a nested submenu is made only then.
+
+**Mutation check** (`eng\mutate.ps1`, app suite, 11 mutants): **11 of 11 caught**: a submenu renamed, a separator missing (File, Help), Dark
+checked for light, Light setting dark, no radio mark, the notice missing, the old label, the help named just Help, and the batch entry bound
+to Save Template.
+
+**Baselines:** app **639 passed / 0 failed / 34 not run** (was 638: the theme test is new; two tests were rewritten in place).
+
+**The manual:** figures re-rendered and the manuals re-embedded: the menu figure shows the four submenus and File open; `walk-cust-02-snr-tree`
+was restored, as before.
+
 #### The menus as VS Code draws them: no icons, an accent row, compact and inset
 
 Asked for after #281: the icons in the main menu came from the toolbar the menu replaced and are not needed in a menu, and

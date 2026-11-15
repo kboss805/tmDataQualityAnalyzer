@@ -36,7 +36,7 @@ namespace TmDq.App.Tests
             var plain = new MenuItem { Header = "Export..." };
             var shortcut = new MenuItem { Header = "Open...", InputGesture = new KeyGesture(Key.O, KeyModifiers.Control) };
             var presenter = new MenuFlyoutPresenter();
-            presenter.Items.Add(new MenuItem { Header = "Process", IsEnabled = false, Classes = { "section" } });
+            presenter.Items.Add(new MenuItem { Header = "Process", IsEnabled = false });
             presenter.Items.Add(shortcut);
             presenter.Items.Add(plain);
             presenter.Items.Add(new Separator());
@@ -62,9 +62,11 @@ namespace TmDq.App.Tests
             try
             {
                 MenuFlyout menu = Menus.Open(window);
-                MenuItem[] items = menu.Items.OfType<MenuItem>().ToArray();
-                Assert.True(items.Length >= 9, items.Length + " entries");
-                Assert.All(items.Concat(Menus.Entries(Menus.Item(menu.Items, "Help")).OfType<MenuItem>()), i => Assert.Null(i.Icon));
+                // The four submenus, and what each holds (opened first: a list's items are made only then).
+                MenuItem[] submenus = menu.Items.OfType<MenuItem>().ToArray();
+                MenuItem[] entries = submenus.SelectMany(m => Menus.Entries(m).OfType<MenuItem>()).ToArray();
+                Assert.Equal((4, true), (submenus.Length, entries.Length >= 9));
+                Assert.All(submenus.Concat(entries), i => Assert.Null(i.Icon));
             }
             finally
             {

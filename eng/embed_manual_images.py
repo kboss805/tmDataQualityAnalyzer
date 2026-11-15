@@ -153,11 +153,11 @@ after('to the nearest calibrated step rather than extrapolating.</p>',
 
 after('<h2 id="getting-started">1. Getting started</h2>',
       fig('walk-app-01-hamburger.png',
-          'The application menu. Every command lives here, grouped into Process, Import/Export '
-          'and Settings, with Help as a submenu at the bottom. Entries needing loaded data stay '
-          'greyed out until they apply.',
-          'The hamburger menu open, showing the Process, Import/Export and Settings sections and '
-          'a Help submenu'))
+          'The application menu. Every command lives here, in four submenus: File, Import/Export, '
+          'Settings (the Light and Dark themes) and Help. File is open here. Entries needing loaded '
+          'data stay greyed out until they apply.',
+          'The hamburger menu open, showing the File, Import/Export, Settings and Help submenus, '
+          'with the File submenu open beside it'))
 
 # The installer's page is not a figure: no headless render can make it, and the prose says the same in words.
 
