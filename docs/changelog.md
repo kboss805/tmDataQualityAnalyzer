@@ -12,6 +12,12 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The batch's entry point, named as the menu names it
+
+Docs only, no mutation check needed. `docs/claude.md` (US1.1) still called the batch's one entry point **Apply Template**,
+the menu item's name before #285; it is **File > Process Multiple Files…** now. The concept, the `ApplyTemplate` command and
+the tests keep the template batch's name, and so does the guide wherever it means those.
+
 #### The processing window that nothing could set, and two dead fields on the decode path (audit D2, D1, D3)
 
 Found by the whole-tree cleanup audit. D2 is the owner's decision of 2026-11-15: remove the window and say so in the user
