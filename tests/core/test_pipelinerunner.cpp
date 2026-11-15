@@ -226,8 +226,6 @@ StreamJob lockJob(const Fixture& f, int source_id = 0, std::uint64_t sync = 0xFE
     job.params.syncPatternLength = 32;
     job.params.wordsInMinorFrame = 50;
     job.params.bitsInMinorFrame  = 800;
-    job.params.startSeconds      = 0;
-    job.params.stopSeconds       = UINT64_MAX;
     job.params.samplePeriodSec   = 1.0;
     job.params.swapBytes         = true;
     job.params.isRandomized      = false;
@@ -849,8 +847,6 @@ StreamJob makePrnJob(const fs::path& file, int time_id, int pcm_id, const PrnSpe
     job.params.syncPatternLength = 32;
     job.params.wordsInMinorFrame = spec.wordsInMinorFrame;
     job.params.bitsInMinorFrame  = spec.bitsInMinorFrame;
-    job.params.startSeconds      = 0;
-    job.params.stopSeconds       = UINT64_MAX;
     job.params.samplePeriodSec   = 1.0;
     job.params.isRandomized      = false;
     job.params.mode              = StreamMode::FrameSyncLockStats;

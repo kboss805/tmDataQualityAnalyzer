@@ -294,8 +294,6 @@ std::map<int, ProcessedStreamData> runCore(const StepCal& f, int sourceId, const
     base.filename      = textfile::pathFromUtf8(f.path);
     base.sourceId      = sourceId;
     base.timeChannelId = f.timeId;
-    base.startSeconds  = 0;
-    base.stopSeconds   = std::numeric_limits<uint64_t>::max();
 
     StreamJobContext ctx;
     ctx.appRoot   = appRoot;

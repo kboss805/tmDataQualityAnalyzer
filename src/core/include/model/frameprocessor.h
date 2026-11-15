@@ -74,13 +74,6 @@ public:
     void setEvents(std::shared_ptr<ProcessingEvents> events);
 
 private:
-    /// @brief Per-packet timing information for timestamp computation.
-    struct PacketTimeRef {
-        double   base_abs_seconds; ///< Absolute IRIG seconds at this packet's base time.
-        uint64_t start_bit;        ///< Starting bit position in the continuous stream.
-        uint64_t num_bits;         ///< Number of data bits from this packet.
-    };
-
     /// @brief Run totals/diagnostics collected during a scan, consumed once at the
     /// end to emit the success log or the "no syncs / no frames" error report.
     struct ScanDiagnostics {
@@ -101,15 +94,15 @@ private:
     };
 
     /// @brief Mutable working state of one frame-sync scan, threaded through the
-    /// per-bit helpers. Cached frame geometry + window bounds are set once at the
-    /// start of process(); the rest are the sliding sync/word registers, output
+    /// per-bit helpers. Cached frame geometry and the output cadence are set once at
+    /// the start of process(); the rest are the sliding sync/word registers, output
     /// windowing, lock-percentage counters, and run totals.
     struct ScanState {
         // Frame geometry (cached from ResolvedPcmAttrs; read-only during the scan).
         uint64_t sync_pat = 0, sync_mask = 0, word_mask = 0;
         uint32_t sync_pat_len = 0, bits_in_frame = 0, words_in_frame = 0, word_len = 0, min_syncs = 0;
-        // Processing window bounds + output cadence (read-only during the scan).
-        double start_seconds = 0.0, stop_seconds = 0.0, sample_period = 0.0;
+        // Output cadence (read-only during the scan).
+        double sample_period = 0.0;
         // Sliding sync/word registers.
         uint64_t test_word = 0, bits_loaded = 0;
         uint32_t minor_frame_bit_count = 0, minor_frame_word_count = 0, data_word_bit_count = 0;
@@ -137,8 +130,8 @@ private:
     /// Feeds one decoded PCM bit through the acquire/lock state machine: shifts the
     /// sync register, tracks frame-boundary rollover/missed frames, honors in-phase
     /// sync matches (rejecting off-phase ones while locked), collects data words, and
-    /// tallies lock-percentage bits. @p in_window gates window-bounded accounting.
-    void scanBit(ScanState& s, uint8_t bit_val, bool in_window,
+    /// tallies lock-percentage bits.
+    void scanBit(ScanState& s, uint8_t bit_val,
                  const std::vector<ParameterInfo*>& enabled_params);
 
     /// Caches the enabled parameters for the hot loop and builds the index-aligned

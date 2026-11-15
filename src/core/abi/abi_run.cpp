@@ -165,8 +165,6 @@ int32_t tmdq_run_start(const tmdq_run_request* request, const tmdq_callbacks* ca
         base.filename      = tmdq::pathFromUtf8(req.filename_utf8);
         base.sourceId      = req.source_id;
         base.timeChannelId = req.time_channel_id;
-        base.startSeconds  = 0;
-        base.stopSeconds   = std::numeric_limits<uint64_t>::max();
 
         StreamJobContext context;
         context.appRoot   = tmdq::textOf(req.app_root_utf8);

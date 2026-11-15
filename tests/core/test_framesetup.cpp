@@ -141,7 +141,6 @@ TEST_CASE("FrameSetup: addParameter appends an enabled parameter with nothing el
     const ParameterInfo* p = fs.getParameter(1);
     CHECK(p->name == "R_RCVR1");
     CHECK(p->word == 5);
-    CHECK(p->is_enabled);
     CHECK(p->slope == 0.0);
     CHECK(p->scale == 0.0);
     CHECK(p->sample_sum == 0.0);
@@ -168,7 +167,6 @@ TEST_CASE("FrameSetup: tryLoadingFile reads a valid file")
     REQUIRE(p0 != nullptr);
     CHECK(p0->name == "L_RCVR1");
     CHECK(p0->word == 0);  // TOML Word=1, stored as 0
-    CHECK(p0->is_enabled);
     CHECK(p0->slope == 0.0);
     CHECK(p0->scale == 0.0);
     CHECK(p0->sample_sum == 0.0);
@@ -177,13 +175,11 @@ TEST_CASE("FrameSetup: tryLoadingFile reads a valid file")
     REQUIRE(p1 != nullptr);
     CHECK(p1->name == "R_RCVR1");
     CHECK(p1->word == 1);  // TOML Word=2, stored as 1
-    CHECK(p1->is_enabled);
 
     const ParameterInfo* p2 = fs.getParameter(2);
     REQUIRE(p2 != nullptr);
     CHECK(p2->name == "C_RCVR1");
     CHECK(p2->word == 2);  // TOML Word=3, stored as 2
-    CHECK(p2->is_enabled);
 }
 
 TEST_CASE("FrameSetup: tryLoadingFile keeps the file's order, not a sorted one")
@@ -531,7 +527,6 @@ TEST_CASE("FrameSetup: the linear calibration maps the raw range onto the voltag
         FrameSetup fs;
         fs.addParameter("A", 0);
         fs.addParameter("B", 1);
-        fs.getParameter(0)->is_enabled = false;
         fs.getParameter(0)->sample_sum = 123.0;
         fs.applyLinearCalibration(c.polarity, c.slope_index, c.scale_dB_per_V);
         for (int i = 0; i < fs.length(); i++)
@@ -539,7 +534,6 @@ TEST_CASE("FrameSetup: the linear calibration maps the raw range onto the voltag
             const ParameterInfo* p = fs.getParameter(i);
             CHECK(p->slope == doctest::Approx(c.slope).epsilon(1e-12));
             CHECK(p->scale == doctest::Approx(c.scale).epsilon(1e-12));
-            CHECK(p->is_enabled);              // re-enabled, whatever it was
             CHECK(p->sample_sum == 0.0);       // a fresh window
         }
         // What the worker computes from a raw count: (raw + scale) * slope, so the two ends of the raw range land on

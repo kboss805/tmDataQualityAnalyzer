@@ -64,8 +64,6 @@ struct ProcessingParams {
     int syncPatternLength = 0;    ///< Sync pattern length in bits.
     int wordsInMinorFrame = 0;    ///< Words per PCM minor frame (data words + 1).
     int bitsInMinorFrame = 0;     ///< Total bits per PCM minor frame.
-    uint64_t startSeconds = 0;    ///< Start of extraction window (IRIG seconds).
-    uint64_t stopSeconds = 0;     ///< End of extraction window (IRIG seconds).
     double samplePeriodSec = 0.1; ///< Output sample period in seconds (default 100 ms).
     bool isRandomized = false;    ///< True if RNRZ-L encoding (user-specified).
     bool isInverted   = false;    ///< True if raw data should be bit-inverted before any other processing.

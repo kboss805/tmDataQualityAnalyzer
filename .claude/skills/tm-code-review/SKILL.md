@@ -75,7 +75,7 @@ spacing, styles, the themes or the plot's drawing, the test suite asserts little
   recording gap (no bits at all) extrapolates from the expected data rate. Watch any edit to
   `FrameProcessor::closeElapsedWindows`, where that guard lives: it was added to fix a real bias on
   long-frame streams.
-- **Missed frames are monotonic** and counted only within `[start, stop]`. They are a loss-of-lock
+- **Missed frames are monotonic** and counted over the whole recording. They are a loss-of-lock
   event count, NOT a bit-level/BER metric.
 
 ### TOML config boundaries (`framesyncfile.cpp`, `Models/Streams/StreamFiles.cs`)

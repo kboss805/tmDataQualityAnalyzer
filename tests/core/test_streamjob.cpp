@@ -88,8 +88,6 @@ Built build(const StreamJobConfig& cfg, const std::string& app_root, bool swap_b
     ProcessingParams base;
     base.timeChannelId = 3;
     base.sourceId = 2;
-    base.startSeconds = 11;
-    base.stopSeconds = 99;
     base.filename = "base.ch10";
 
     StreamJobContext context;
@@ -176,9 +174,9 @@ std::string digest(const Built& b)
         return out;
     }
     const ProcessingParams& p = b.job.params;
-    out += std::format(" | file={} src={} time={} pcm={} sync={:x}/{:x}/{} words={} bits={} window={}-{} period={} rand={} inv={} swap={} mode={} rate={} label={}",
+    out += std::format(" | file={} src={} time={} pcm={} sync={:x}/{:x}/{} words={} bits={} period={} rand={} inv={} swap={} mode={} rate={} label={}",
                        p.filename.string(), p.sourceId, p.timeChannelId, p.pcmChannelId, p.frameSync, p.frameSyncMask,
-                       p.syncPatternLength, p.wordsInMinorFrame, p.bitsInMinorFrame, p.startSeconds, p.stopSeconds,
+                       p.syncPatternLength, p.wordsInMinorFrame, p.bitsInMinorFrame,
                        num(p.samplePeriodSec), int(p.isRandomized), int(p.isInverted), int(p.swapBytes), int(p.mode),
                        num(p.dataRateBps), asciiOnly(p.streamLabel));
     out += " | setup:";
@@ -190,8 +188,8 @@ std::string digest(const Built& b)
     for (int i = 0; i < b.job.frameSetup->length(); ++i)
     {
         const ParameterInfo* q = b.job.frameSetup->getParameter(i);
-        out += std::format(" [{} w={} slope={} scale={} en={} profile={}]", q->name, q->word, num(q->slope), num(q->scale),
-                           int(q->is_enabled), int(q->profile.valid));
+        out += std::format(" [{} w={} slope={} scale={} profile={}]", q->name, q->word, num(q->slope), num(q->scale),
+                           int(q->profile.valid));
     }
     return out;
 }
@@ -243,78 +241,78 @@ const std::vector<Case>& cases()
     static const std::vector<Case> list = {
         // --- lock-only: no receiver parameters at all
         { "lock-only-has-an-empty-setup", Adj([](StreamJobConfig& c, const Fixtures&) { c.mode = StreamMode::FrameSyncLockStats; }), DefaultFile::None, true, "ok error='' log=[]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=1 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=1 rate=0 label=Rcvr"
             " | setup: n=0" },
         { "lock-only-ignores-the-receiver-fields", Adj([](StreamJobConfig& c, const Fixtures&) {
               c.mode = StreamMode::FrameSyncLockStats; c.scaleDdBPerV = -1; c.slopeIndex = 99; c.receiverParamsToml = "no-such-file.toml"; }), DefaultFile::None, false, "ok error='' log=[]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=0 mode=1 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=0 mode=1 rate=0 label=Rcvr"
             " | setup: n=0" },
 
         // --- an explicit receiver-parameters file, and the linear calibration
         { "explicit-file-three-parameters", Adj([](StreamJobConfig&, const Fixtures&) {}), DefaultFile::None, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=3"
-            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
         { "negative-polarity", Adj([](StreamJobConfig& c, const Fixtures&) { c.polarityIndex = 1; c.slopeIndex = 1; c.scaleDdBPerV = 12.5; }), DefaultFile::None, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=3"
-            " [L_RCVR1 w=0 slope=-0.00190737773708705 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=-0.00190737773708705 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=-0.00190737773708705 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=-0.00190737773708705 scale=-32767.5 profile=0]"
+            " [R_RCVR1 w=1 slope=-0.00190737773708705 scale=-32767.5 profile=0]"
+            " [C_RCVR1 w=2 slope=-0.00190737773708705 scale=-32767.5 profile=0]" },
         { "any-other-polarity-reads-as-positive", Adj([](StreamJobConfig& c, const Fixtures&) { c.polarityIndex = 5; }), DefaultFile::None, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=3"
-            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
         { "every-valid-slope-index-0", Adj([](StreamJobConfig& c, const Fixtures&) { c.slopeIndex = 0; }), DefaultFile::None, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=3"
-            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
         { "every-valid-slope-index-1", Adj([](StreamJobConfig& c, const Fixtures&) { c.slopeIndex = 1; }), DefaultFile::None, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=3"
-            " [L_RCVR1 w=0 slope=0.00152590218966964 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=0.00152590218966964 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=0.00152590218966964 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.00152590218966964 scale=-32767.5 profile=0]"
+            " [R_RCVR1 w=1 slope=0.00152590218966964 scale=-32767.5 profile=0]"
+            " [C_RCVR1 w=2 slope=0.00152590218966964 scale=-32767.5 profile=0]" },
         { "every-valid-slope-index-2", Adj([](StreamJobConfig& c, const Fixtures&) { c.slopeIndex = 2; }), DefaultFile::None, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=3"
-            " [L_RCVR1 w=0 slope=0.00152590218966964 scale=0 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=0.00152590218966964 scale=0 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=0.00152590218966964 scale=0 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.00152590218966964 scale=0 profile=0]"
+            " [R_RCVR1 w=1 slope=0.00152590218966964 scale=0 profile=0]"
+            " [C_RCVR1 w=2 slope=0.00152590218966964 scale=0 profile=0]" },
         { "every-valid-slope-index-3", Adj([](StreamJobConfig& c, const Fixtures&) { c.slopeIndex = 3; }), DefaultFile::None, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=3"
-            " [L_RCVR1 w=0 slope=0.000762951094834821 scale=0 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=0.000762951094834821 scale=0 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=0.000762951094834821 scale=0 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.000762951094834821 scale=0 profile=0]"
+            " [R_RCVR1 w=1 slope=0.000762951094834821 scale=0 profile=0]"
+            " [C_RCVR1 w=2 slope=0.000762951094834821 scale=0 profile=0]" },
         { "slope-index-below-the-range", Adj([](StreamJobConfig& c, const Fixtures&) { c.slopeIndex = -1; }), DefaultFile::None, true, "rejected error='Rcvr: Slope index is invalid.' log=[]" },
         { "slope-index-above-the-range", Adj([](StreamJobConfig& c, const Fixtures&) { c.slopeIndex = 4; }), DefaultFile::None, true, "rejected error='Rcvr: Slope index is invalid.' log=[]" },
         { "scale-zero", Adj([](StreamJobConfig& c, const Fixtures&) { c.scaleDdBPerV = 0.0; }), DefaultFile::None, true, "rejected error='Rcvr: Scale (dB/V) must be a positive number.' log=[]" },
         { "scale-negative", Adj([](StreamJobConfig& c, const Fixtures&) { c.scaleDdBPerV = -3.0; }), DefaultFile::None, true, "rejected error='Rcvr: Scale (dB/V) must be a positive number.' log=[]" },
         { "scale-not-a-number", Adj([](StreamJobConfig& c, const Fixtures&) { c.scaleDdBPerV = std::numeric_limits<double>::quiet_NaN(); }), DefaultFile::None, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=3"
-            " [L_RCVR1 w=0 slope=nan scale=nan en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=nan scale=nan en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=nan scale=nan en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=nan scale=nan profile=0]"
+            " [R_RCVR1 w=1 slope=nan scale=nan profile=0]"
+            " [C_RCVR1 w=2 slope=nan scale=nan profile=0]" },
         { "scale-tiny", Adj([](StreamJobConfig& c, const Fixtures&) { c.scaleDdBPerV = 1e-9; }), DefaultFile::None, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=3"
-            " [L_RCVR1 w=0 slope=3.05180437933928e-13 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=3.05180437933928e-13 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=3.05180437933928e-13 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=3.05180437933928e-13 scale=-32767.5 profile=0]"
+            " [R_RCVR1 w=1 slope=3.05180437933928e-13 scale=-32767.5 profile=0]"
+            " [C_RCVR1 w=2 slope=3.05180437933928e-13 scale=-32767.5 profile=0]" },
         { "scale-large", Adj([](StreamJobConfig& c, const Fixtures&) { c.scaleDdBPerV = 1e6; }), DefaultFile::None, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=3"
-            " [L_RCVR1 w=0 slope=305.180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=305.180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=305.180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=305.180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR1 w=1 slope=305.180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR1 w=2 slope=305.180437933928 scale=-32767.5 profile=0]" },
 
         // --- an explicit file that cannot be used
         { "file-missing", Adj([](StreamJobConfig& c, const Fixtures& f) { c.receiverParamsToml = f.path("absent.toml"); }), DefaultFile::None, true, "rejected error='Rcvr: Receiver Parameters file 'absent.toml' was not found.' log=[]" },
@@ -329,175 +327,175 @@ const std::vector<Case>& cases()
         { "file-with-word-zero", Adj([](StreamJobConfig& c, const Fixtures& f) { c.receiverParamsToml = f.path("word-zero.toml"); }), DefaultFile::None, true, "rejected error='Rcvr: Failed to load Receiver Parameters from 'word-zero.toml'. Check the word map.' log=[]" },
         { "word-50-in-800-bits", Adj([](StreamJobConfig& c, const Fixtures& f) { c.bitsInMinorFrame = 800; c.receiverParamsToml = f.path("word-50.toml"); }), DefaultFile::None, true, "rejected error='Rcvr: Failed to load Receiver Parameters from 'word-50.toml'. Check the word map.' log=[]" },
         { "word-50-in-801-bits", Adj([](StreamJobConfig& c, const Fixtures& f) { c.bitsInMinorFrame = 801; c.receiverParamsToml = f.path("word-50.toml"); }), DefaultFile::None, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=51 bits=801 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=51 bits=801 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=1"
-            " [L_RCVR1 w=49 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=49 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
         { "word-51-in-800-bits", Adj([](StreamJobConfig& c, const Fixtures& f) { c.bitsInMinorFrame = 800; c.receiverParamsToml = f.path("word-51.toml"); }), DefaultFile::None, true, "rejected error='Rcvr: Failed to load Receiver Parameters from 'word-51.toml'. Check the word map.' log=[]" },
         { "word-51-in-801-bits", Adj([](StreamJobConfig& c, const Fixtures& f) { c.bitsInMinorFrame = 801; c.receiverParamsToml = f.path("word-51.toml"); }), DefaultFile::None, true, "rejected error='Rcvr: Failed to load Receiver Parameters from 'word-51.toml'. Check the word map.' log=[]" },
         { "word-51-in-816-bits", Adj([](StreamJobConfig& c, const Fixtures& f) { c.bitsInMinorFrame = 816; c.receiverParamsToml = f.path("word-51.toml"); }), DefaultFile::None, true, "rejected error='Rcvr: Failed to load Receiver Parameters from 'word-51.toml'. Check the word map.' log=[]" },
         { "file-name-with-non-ascii-letters", Adj([](StreamJobConfig& c, const Fixtures& f) {
               c.receiverParamsToml = f.path("unicode-\xCE\xA9.toml"); }), DefaultFile::None, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=1"
-            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
         { "file-missing-with-a-non-ascii-name", Adj([](StreamJobConfig& c, const Fixtures& f) {
               c.label = "R\xC3\xA9" "cepteur"; c.receiverParamsToml = f.path("absent-\xCE\xA9.toml"); }), DefaultFile::None, true, "rejected error='R<U+00E9>cepteur: Receiver Parameters file 'absent-<U+03A9>.toml' was not found.' log=[]" },
 
         // --- no file named: the shipped default file, then the default word map
         { "no-file-and-no-default-builds-the-default-map", Adj([](StreamJobConfig& c, const Fixtures&) { c.receiverParamsToml.clear(); }), DefaultFile::None, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=6"
-            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [L_RCVR2 w=3 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR2 w=4 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR2 w=5 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [L_RCVR2 w=3 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR2 w=4 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR2 w=5 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
         { "no-file-default-map-one-by-one", Adj([](StreamJobConfig& c, const Fixtures&) { c.receiverParamsToml.clear(); c.numReceivers = 1; c.receiverChannels = 1; }), DefaultFile::None, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=1"
-            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
         { "no-file-default-map-fills-all-but-the-sync-word", Adj([](StreamJobConfig& c, const Fixtures&) {
               c.receiverParamsToml.clear(); c.numReceivers = 7; c.receiverChannels = 7; }), DefaultFile::None, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=49"
-            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH4_RCVR1 w=3 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH5_RCVR1 w=4 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH6_RCVR1 w=5 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH7_RCVR1 w=6 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [L_RCVR2 w=7 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR2 w=8 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR2 w=9 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH4_RCVR2 w=10 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH5_RCVR2 w=11 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH6_RCVR2 w=12 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH7_RCVR2 w=13 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [L_RCVR3 w=14 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR3 w=15 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR3 w=16 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH4_RCVR3 w=17 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH5_RCVR3 w=18 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH6_RCVR3 w=19 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH7_RCVR3 w=20 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [L_RCVR4 w=21 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR4 w=22 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR4 w=23 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH4_RCVR4 w=24 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH5_RCVR4 w=25 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH6_RCVR4 w=26 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH7_RCVR4 w=27 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [L_RCVR5 w=28 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR5 w=29 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR5 w=30 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH4_RCVR5 w=31 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH5_RCVR5 w=32 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH6_RCVR5 w=33 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH7_RCVR5 w=34 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [L_RCVR6 w=35 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR6 w=36 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR6 w=37 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH4_RCVR6 w=38 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH5_RCVR6 w=39 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH6_RCVR6 w=40 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH7_RCVR6 w=41 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [L_RCVR7 w=42 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR7 w=43 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR7 w=44 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH4_RCVR7 w=45 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH5_RCVR7 w=46 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH6_RCVR7 w=47 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [CH7_RCVR7 w=48 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH4_RCVR1 w=3 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH5_RCVR1 w=4 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH6_RCVR1 w=5 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH7_RCVR1 w=6 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [L_RCVR2 w=7 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR2 w=8 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR2 w=9 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH4_RCVR2 w=10 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH5_RCVR2 w=11 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH6_RCVR2 w=12 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH7_RCVR2 w=13 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [L_RCVR3 w=14 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR3 w=15 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR3 w=16 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH4_RCVR3 w=17 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH5_RCVR3 w=18 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH6_RCVR3 w=19 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH7_RCVR3 w=20 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [L_RCVR4 w=21 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR4 w=22 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR4 w=23 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH4_RCVR4 w=24 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH5_RCVR4 w=25 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH6_RCVR4 w=26 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH7_RCVR4 w=27 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [L_RCVR5 w=28 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR5 w=29 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR5 w=30 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH4_RCVR5 w=31 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH5_RCVR5 w=32 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH6_RCVR5 w=33 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH7_RCVR5 w=34 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [L_RCVR6 w=35 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR6 w=36 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR6 w=37 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH4_RCVR6 w=38 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH5_RCVR6 w=39 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH6_RCVR6 w=40 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH7_RCVR6 w=41 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [L_RCVR7 w=42 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR7 w=43 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR7 w=44 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH4_RCVR7 w=45 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH5_RCVR7 w=46 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH6_RCVR7 w=47 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [CH7_RCVR7 w=48 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
         { "no-file-default-map-too-big", Adj([](StreamJobConfig& c, const Fixtures&) { c.receiverParamsToml.clear(); c.numReceivers = 50; c.receiverChannels = 1; }), DefaultFile::None, true, "rejected error='Rcvr: Num Receivers x Receiver Channels exceeds the words available in the minor frame.' log=[]" },
         { "no-file-default-map-no-receivers", Adj([](StreamJobConfig& c, const Fixtures&) { c.receiverParamsToml.clear(); c.numReceivers = 0; }), DefaultFile::None, true, "rejected error='Rcvr: Num Receivers x Receiver Channels exceeds the words available in the minor frame.' log=[]" },
         { "no-file-default-map-negative-channels", Adj([](StreamJobConfig& c, const Fixtures&) { c.receiverParamsToml.clear(); c.receiverChannels = -2; }), DefaultFile::None, true, "rejected error='Rcvr: Num Receivers x Receiver Channels exceeds the words available in the minor frame.' log=[]" },
         { "no-file-default-map-product-overflows", Adj([](StreamJobConfig& c, const Fixtures&) {
               c.receiverParamsToml.clear(); c.numReceivers = 100000; c.receiverChannels = 100000; }), DefaultFile::None, true, "rejected error='Rcvr: Num Receivers x Receiver Channels exceeds the words available in the minor frame.' log=[]" },
         { "no-file-uses-the-default-file", Adj([](StreamJobConfig& c, const Fixtures&) { c.receiverParamsToml.clear(); }), DefaultFile::Good, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=3"
-            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
         { "an-explicit-file-beats-the-default-file", Adj([](StreamJobConfig& c, const Fixtures& f) { c.receiverParamsToml = f.path("unicode-\xCE\xA9.toml"); }), DefaultFile::Good, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=1"
-            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
         // Changed on purpose (plan step 1.5); this built SEVEN parameters, L_RCVR1 twice. A default.toml that
         // loads in part before it hits a word outside the frame leaves the words it did read in the table, and
         // the fallback to the default word map APPENDED to them, so the job processed with a map nobody wrote.
         // FrameSetup::saveReceiverParamsFile already cleared first; building a job did not. It now does, and
         // a partly usable default file falls back to the same six-parameter map as an unusable one.
         { "default-file-partly-outside-the-frame", Adj([](StreamJobConfig& c, const Fixtures&) { c.receiverParamsToml.clear(); }), DefaultFile::PartlyOutsideFrame, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=6"
-            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [L_RCVR2 w=3 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR2 w=4 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR2 w=5 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [L_RCVR2 w=3 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR2 w=4 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR2 w=5 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
         // The word-count boundary applies to the default file as it does to a named one (new in the port, from the
         // mutation check): word 50 is outside an 800-bit frame (50 words) and inside an 801-bit one (51).
         { "default-file-with-a-word-at-the-edge-falls-back", Adj([](StreamJobConfig& c, const Fixtures&) { c.receiverParamsToml.clear(); }), DefaultFile::WordAtTheEdge, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=6"
-            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [L_RCVR2 w=3 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR2 w=4 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR2 w=5 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [L_RCVR2 w=3 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR2 w=4 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR2 w=5 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
         { "default-file-with-a-word-at-the-edge-loads-in-a-longer-frame", Adj([](StreamJobConfig& c, const Fixtures&) { c.receiverParamsToml.clear(); c.bitsInMinorFrame = 801; }), DefaultFile::WordAtTheEdge, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=51 bits=801 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=51 bits=801 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=1"
-            " [L_RCVR1 w=49 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=49 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
         { "default-file-with-only-metadata", Adj([](StreamJobConfig& c, const Fixtures&) { c.receiverParamsToml.clear(); }), DefaultFile::MetadataOnly, true, "rejected error='Rcvr: Receiver Parameters file contains no parameters.' log=[]" },
         { "default-file-is-not-toml", Adj([](StreamJobConfig& c, const Fixtures&) { c.receiverParamsToml.clear(); }), DefaultFile::Garbage, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=6"
-            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [L_RCVR2 w=3 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR2 w=4 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR2 w=5 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [L_RCVR2 w=3 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR2 w=4 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR2 w=5 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
 
         // --- calibration profiles
         { "two-profiles-both-attach", Adj([](StreamJobConfig& c, const Fixtures&) { c.calibrationByWord[0] = profile(); c.calibrationByWord[2] = profile(); }), DefaultFile::None, true, "ok error='' log=[  Rcvr: non-linear calibration <U+2014> provided 2 profile(s), attached 2 to word map.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=3"
-            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 en=1 profile=1]"
-            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 en=1 profile=1]" },
+            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=1]"
+            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 profile=1]" },
         { "a-profile-for-a-word-the-map-lacks", Adj([](StreamJobConfig& c, const Fixtures&) { c.calibrationByWord[9] = profile(); }), DefaultFile::None, true, "ok error='' log=[  Rcvr: non-linear calibration <U+2014> provided 1 profile(s), attached 0 to word map.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=3"
-            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
         { "an-invalid-profile-does-not-attach", Adj([](StreamJobConfig& c, const Fixtures&) { c.calibrationByWord[1] = CalibrationProfile(); }), DefaultFile::None, true, "ok error='' log=[  Rcvr: non-linear calibration <U+2014> provided 1 profile(s), attached 0 to word map.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=3"
-            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
         { "profiles-are-never-looked-at-in-lock-only-mode", Adj([](StreamJobConfig& c, const Fixtures&) {
               c.mode = StreamMode::FrameSyncLockStats; c.calibrationByWord[0] = profile(); }), DefaultFile::None, true, "ok error='' log=[]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=1 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=1 rate=0 label=Rcvr"
             " | setup: n=0" },
         { "profiles-on-the-default-map", Adj([](StreamJobConfig& c, const Fixtures&) {
               c.receiverParamsToml.clear(); c.calibrationByWord[4] = profile(); }), DefaultFile::None, true, "ok error='' log=[  Rcvr: non-linear calibration <U+2014> provided 1 profile(s), attached 1 to word map.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=6"
-            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [L_RCVR2 w=3 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR2 w=4 slope=0.00305180437933928 scale=-32767.5 en=1 profile=1]"
-            " [C_RCVR2 w=5 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [L_RCVR2 w=3 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR2 w=4 slope=0.00305180437933928 scale=-32767.5 profile=1]"
+            " [C_RCVR2 w=5 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
 
         // --- the order the checks run in
         { "a-bad-pattern-is-reported-before-a-bad-file", Adj([](StreamJobConfig& c, const Fixtures& f) { c.syncPattern = "ZZ"; c.receiverParamsToml = f.path("absent.toml"); }), DefaultFile::None, true, "rejected error='Rcvr: Invalid frame sync pattern 'ZZ'.' log=[]" },
@@ -510,23 +508,23 @@ const std::vector<Case>& cases()
         // --- the worker parameters, for a receiver stream
         { "receiver-stream-parameters", Adj([](StreamJobConfig& c, const Fixtures&) {
               c.randomized = true; c.inverted = true; c.dataRateMbps = 2.5; c.samplePeriodIndex = 2; c.pcmChannelId = 21; }), DefaultFile::None, false, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=21 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.01 rand=1 inv=1 swap=0 mode=0 rate=2500000 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=21 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.01 rand=1 inv=1 swap=0 mode=0 rate=2500000 label=Rcvr"
             " | setup: n=3"
-            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
         { "sample-period-1s", Adj([](StreamJobConfig& c, const Fixtures&) { c.samplePeriodIndex = 0; }), DefaultFile::None, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=3"
-            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
         { "sample-period-out-of-range", Adj([](StreamJobConfig& c, const Fixtures&) { c.samplePeriodIndex = 7; }), DefaultFile::None, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 window=11-99 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
+            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=3"
-            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]"
-            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 en=1 profile=0]" },
+            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 profile=0]"
+            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
     };
     return list;
 }

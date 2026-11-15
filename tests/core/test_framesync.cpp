@@ -397,8 +397,7 @@ TEST_CASE("framesync: applyAcquisition leaves everything else alone")
     p.streamLabel    = "label";
     p.samplePeriodSec = 0.25;
     p.mode           = StreamMode::ReceiverChannelInfo;
-    p.startSeconds   = 11;
-    p.stopSeconds    = 22;
+    p.useDataRateClock = true;
 
     Acquisition a;
     a.sync.pattern = 1;
@@ -412,6 +411,5 @@ TEST_CASE("framesync: applyAcquisition leaves everything else alone")
     CHECK(p.streamLabel == "label");
     CHECK(p.samplePeriodSec == 0.25);
     CHECK(p.mode == StreamMode::ReceiverChannelInfo);
-    CHECK(p.startSeconds == 11ull);
-    CHECK(p.stopSeconds == 22ull);
+    CHECK(p.useDataRateClock);
 }
