@@ -55,7 +55,9 @@ spacing, styles, the themes or the plot's drawing, the test suite asserts little
   word map and every raw-count-affecting flag as the real run (`isRandomized`, `isInverted`, sync
   pattern/mask, frame geometry) — only `slope=1.0 / scale=0.0 / profile cleared` and the data-rate
   clock differ. A divergence silently mis-keys or mis-scales every profile. This has bitten the
-  project twice (word-map off-by-one; missing `isInverted`). See `docs/SNR_logic.md` §4.2.
+  project twice (word-map off-by-one; missing `isInverted`). Both resolve the word map through
+  `resolveReceiverWordMap` and the flags through `applyAcquisition`; a word-map rule written anywhere else is a
+  finding. See `docs/SNR_logic.md` §4.2.
 - **Out-of-range interpolation clamps, never extrapolates** — readings past the calibrated range peg
   to the nearest end-step dB (`interpolateCalibration()`), so an out-of-cal receiver reads the
   ceiling/floor instead of diverging per channel.

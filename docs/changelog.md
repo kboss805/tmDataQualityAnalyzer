@@ -12,6 +12,46 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Behaviour bugs: one word-map resolution for both passes, a lost drag, a busy drop, a calibration result the core cannot give (audit B10, B5, B11, B4)
+
+Found by the whole-tree cleanup audit. B10's direction is the owner's of 2026-11-15 (both passes fall back, with a
+warning); B4's seam was decided the same day.
+
+- **B10: the main run and the calibration extractor resolved the word map differently.** With no file named and the
+  shipped `settings\receiver_params\default.toml` present but unusable (a word past the frame, not TOML), the main run
+  passed it over in silence for the sequential map while the extraction failed, though the extractor's profiles are
+  matched to the main run's channels by word. Both now call one `resolveReceiverWordMap` (`framesetup.h`, with
+  `defaultReceiverParamsFile`): the named file, else the default, else the sequential map for the counts; an unusable
+  default is passed over in both, and both say so ("the default Receiver Parameters file 'default.toml' could not be
+  used; the sequential word map for N x M receiver channels is used instead.", in the run's log once its job is accepted,
+  and in the calibration's). `CalibrationExtractor::Request` gains `receiverParamsIsDefault`, which
+  `buildCalibrationRequest` sets when the file it found is the default, so a file the user named is still an error. The
+  extractor's load failure now says what the main run's does ("Failed to load Receiver Parameters from '<file>'. Check
+  the word map."). Tests: `an unusable default word map is passed over for the sequential map, as the main run passes it
+  over` (both passes, the same names on the same words), `a word map the user named is not passed over, even when it is
+  the default file`; the stream-job oracle and three recorded digests gain the warning.
+- **B5: a drag whose capture was lost went on.** `PlotChart` had no `OnPointerCaptureLost`: the plot would pan with no
+  button down, or keep its band drawn, until the next release. Now a lost capture drops a band without zooming, settles a
+  pan where it got to, and gives the cursor back; `PlotLegend`'s override gives its cursor back too. Tests:
+  `ADragWhoseCaptureIsLostEndsWhereItIs`, `ADragWhoseCaptureIsLostIsTheFullPictureAtOnce`.
+- **B11: the drag cursor offered a drop the app would ignore while busy.** The drop is Recent Files' open, so it now
+  follows the command's rule: offered and taken only when `OpenRecentCommand` would take it. The drop test checks that
+  a run in progress is offered nothing.
+- **B4: a calibration result the core could not give.** `GetResult()` sat outside the extraction's `try`; a failure
+  there (out of memory, an internal error) left the status at "Processing calibration file..." with the progress dialog
+  gone. The run now starts through `ICalibrationRunner` (`Services`; the core's `CalibrationRun` by default), so a test
+  can stand in, and the failure is a cross with the core's message. Test:
+  `AResultTheCoreCannotHandBackIsACrossNotAProcessingThatNeverEnds`.
+- **Checked.** Mutation check, `eng\mutate.ps1`: native (stream job, calibration extractor and request, frame setup), 5
+  mutants, **5 CAUGHT** (N1 the warning dropped, N2 an unusable default refused, N3 the extractor ignoring that its file is
+  the default, N4 the request never saying so, N5 the main run silent again); app (four classes), 8 mutants, **6 CAUGHT**
+  (A1 the lost capture ignored, A2 the band left drawn, A3 the pan carrying on, A4 the pan's draft left up, A6 a drop
+  offered while busy, A8 the result's failure unhandled) and **2 SURVIVED**, both reasoned: A5 the legend's cursor
+  (Avalonia's `Cursor` exposes no type to assert) and A7 the drop handler's own busy check (the view model refuses a busy
+  open too, so it is defence, not the rule). The soak ran on this change (`eng\run_soak.ps1`): all 34 runs exported byte for byte what v2.14.2 exported. All three suites in Release, zero
+  warnings: native **495** (1 skipped), managed **364** passed / 1 skipped, app **643** passed / 34 not run. Baselines
+  moved: native 493 to 495, app 640 to 643.
+
 #### The receiver tree's rows on the theme
 
 In the dark theme the Customize View dialog's Receiver SNR tab drew each receiver's row (an `Expander`) in Fluent's own

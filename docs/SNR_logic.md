@@ -155,6 +155,9 @@ run, over the calibration file, with two deliberate configuration choices:
 > reproduces, and calibration silently misattaches or extrapolates. This has bitten
 > us twice: a word-map off-by-one in the extractor mis-keyed every profile, and a
 > missing `isInverted` flag produced offset steps despite profiles attaching cleanly.
+> Both runs therefore build their parameters through `applyAcquisition` and their word map through
+> `resolveReceiverWordMap` (`framesetup.h`), so neither can resolve it differently: until the cleanup audit's B10 an
+> unusable shipped `default.toml` sent the main run to the sequential map and failed the extraction.
 
 The extraction sample period is fixed at `kExtractSamplePeriodSec` (10 ms / 100 Hz).
 

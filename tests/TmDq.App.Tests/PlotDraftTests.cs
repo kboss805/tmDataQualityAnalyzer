@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -139,6 +140,32 @@ namespace TmDq.App.Tests
             (atDropout, elsewhere) = DropoutInk(s, plot);
             Assert.True(atDropout >= 10);
             Assert.Equal(0, elsewhere);
+            s.Window.Close();
+        }
+
+        [AvaloniaFact]
+        public void ADragWhoseCaptureIsLostIsTheFullPictureAtOnce()
+        {
+            // Audit B5: a lost capture ends a pan as its release would, so the draft gives way to the full picture then,
+            // not after the refine delay.
+            PlotViewModel plot = Dense();
+            plot.SetXViewByUser(200, 600);
+            Shown s = Show(plot);
+            s.Chart.DraftThresholdMs = 0;
+            s.Chart.RefineDelay = TimeSpan.FromHours(1);   // only the end of the drag can settle it here
+            IPointer? pointer = null;
+            s.Chart.AddHandler(InputElement.PointerPressedEvent, (_, e) => pointer = e.Pointer, RoutingStrategies.Bubble, handledEventsToo: true);
+            Point grab = s.At(s.Chart.PlotArea.Center.X, s.Chart.PlotArea.Center.Y);
+            s.Window.MouseDown(grab, MouseButton.Left, RawInputModifiers.None);
+            s.Window.MouseMove(grab + new Point(-40, 0), RawInputModifiers.LeftMouseButton);
+            Dispatcher.UIThread.RunJobs();
+            using (s.Frame()) { }
+            Assert.True(s.Chart.DraftShown);
+
+            pointer!.Capture(null);
+            Dispatcher.UIThread.RunJobs();
+            using (s.Frame()) { }
+            Assert.False(s.Chart.DraftShown);
             s.Window.Close();
         }
 
