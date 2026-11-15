@@ -346,13 +346,22 @@ namespace TmDq.App.Tests
             MainWindow w = MainWindowOf(vm);
             using SKBitmap window = Capture(w);
 
-            // The application menu, open under its button.
-            Window app = MenuOf(Take(w.MainMenu), vm);
+            // The application menu, open under its button, and its File submenu beside it.
+            List<object?> menuItems = Take(w.MainMenu);
+            var fileMenu = menuItems.OfType<MenuItem>().Single(i => (string)i.Header! == "File");
+            Window app = MenuOf(menuItems, vm);
             using (SKBitmap menu = Capture(app))
             {
                 SKRectI button = Bounds(w.MenuButton, w);
-                Save("walk-app-01-hamburger.png", window, new[] { (menu, new SKPointI(button.Left, button.Bottom + 2)) },
-                     SKRectI.Create(0, 0, Math.Min(window.Width, button.Left + menu.Width + 220), Math.Min(window.Height, button.Bottom + menu.Height + 60)));
+                // Its entries, once the menu is drawn with them (an item with none draws no arrow).
+                Window file = MenuOf(Take(fileMenu), vm);
+                Point entry = fileMenu.TranslatePoint(new Point(fileMenu.Bounds.Width, 0), app)!.Value;
+                using SKBitmap subMenu = Capture(file);
+                var menuAt = new SKPointI(button.Left, button.Bottom + 2);
+                Save("walk-app-01-hamburger.png", window,
+                     new[] { (menu, menuAt), (subMenu, new SKPointI(menuAt.X + (int)entry.X - 4, menuAt.Y + (int)entry.Y - 4)) },
+                     SKRectI.Create(0, 0, Math.Min(window.Width, button.Left + menu.Width + subMenu.Width + 40), Math.Min(window.Height, button.Bottom + menu.Height + 60)));
+                file.Close();
             }
             app.Close();
 

@@ -16,8 +16,8 @@ namespace TmDq.App.Views
 {
     /// <summary>
     /// The main window and its shell (plan step 4.8): a title bar of its own in place of the system's, the menu behind
-    /// its hamburger button (v2.x's sections, Recent Files and Help, declared in the AXAML and bound to the view model
-    /// but for Help and Exit, which are the window's), the log sidebar's toggle, and a
+    /// its hamburger button (four submenus, declared in the AXAML and bound to the view model
+    /// but for Help, which is the window's), the log sidebar's toggle, and a
     /// recording or exported CSV dropped anywhere on the window opened as Recent Files opens one.
     /// </summary>
     public sealed partial class MainWindow : Window
@@ -134,8 +134,6 @@ namespace TmDq.App.Views
         private async void OnUserManual(object? sender, RoutedEventArgs e) => await Help.OpenManualAsync(this);
 
         private async void OnAbout(object? sender, RoutedEventArgs e) => await Help.ShowAboutAsync(this);
-
-        private void OnExit(object? sender, RoutedEventArgs e) => Close();
 
         // ---- drag and drop -------------------------------------------------------------------------------------------
 

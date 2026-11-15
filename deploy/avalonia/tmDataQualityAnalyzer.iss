@@ -53,7 +53,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
 Name: "fileassoc"; Description: "Associate .ch10 files with {#MyAppName}"; GroupDescription: "File associations:"
-; The BASE manual is compiled into the executable and is always reachable from Help > User Manual, so declining this
+; The BASE manual is compiled into the executable and is always reachable from Help > tmDataQualityAnalyzer Help, so declining this
 ; still leaves the user with a manual (plan step 4.9).
 Name: "fullmanual"; Description: "Install the full illustrated user manual"; GroupDescription: "Documentation:"
 

@@ -200,14 +200,15 @@ namespace TmDq.App.Tests
             // The legend, the theme and the sidebar are kept as they change, and said so.
             told.Clear();
             vm.Plot.LegendVisible = true;
-            vm.ToggleThemeCommand.Execute(null);
+            vm.UseDarkThemeCommand.Execute(null);
             vm.ToggleSidebarCommand.Execute(null);
             Assert.Equal((true, "dark", true), (store.Current.LegendVisible, store.Current.Theme, store.Current.SidebarVisible));
-            Assert.Equal(("Switch to Light Theme", true, true), (vm.ThemeMenuText, vm.IsDarkTheme, vm.SidebarVisible));
-            Assert.Equal(new[] { nameof(MainWindowViewModel.IsDarkTheme), nameof(MainWindowViewModel.ThemeMenuText), nameof(MainWindowViewModel.SidebarVisible) },
-                         told.Where(n => n is nameof(MainWindowViewModel.IsDarkTheme) or nameof(MainWindowViewModel.ThemeMenuText) or nameof(MainWindowViewModel.SidebarVisible)));
-            vm.ToggleThemeCommand.Execute(null);
-            Assert.Equal(("light", "Switch to Dark Theme"), (store.Current.Theme, vm.ThemeMenuText));
+            Assert.Equal((true, false, true), (vm.IsDarkTheme, vm.IsLightTheme, vm.SidebarVisible));
+            // Each change tells its half too: the Settings menu's two entries each follow the one in use.
+            Assert.Equal(new[] { nameof(MainWindowViewModel.IsDarkTheme), nameof(MainWindowViewModel.IsLightTheme), nameof(MainWindowViewModel.SidebarVisible) },
+                         told.Where(n => n is nameof(MainWindowViewModel.IsDarkTheme) or nameof(MainWindowViewModel.IsLightTheme) or nameof(MainWindowViewModel.SidebarVisible)));
+            vm.UseLightThemeCommand.Execute(null);
+            Assert.Equal(("light", true, false), (store.Current.Theme, vm.IsLightTheme, vm.IsDarkTheme));
             told.Clear();
             vm.IsDarkTheme = false;   // no change, no notice
             vm.SidebarVisible = true;
