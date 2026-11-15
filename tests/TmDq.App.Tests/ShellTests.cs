@@ -166,10 +166,8 @@ namespace TmDq.App.Tests
                          ((string)ToolTip.GetTip(Item("Import CSV..."))!, (string)ToolTip.GetTip(Item("Export..."))!));
             Assert.NotNull(ToolTip.GetTip(Item("Save as Template...")));
             Assert.NotNull(ToolTip.GetTip(Item("Apply Template to Files...")));
-            // v2.14.2's menu icons: the folder, the floppy disk, the import and export arrows.
-            foreach (string h in new[] { "Open...", "Save as Template...", "Import CSV...", "Export..." })
-                Assert.NotNull(Assert.IsType<Image>(Item(h).Icon).Source);
-            Assert.Null(Item("Apply Template to Files...").Icon);
+            // No icons (they came from the toolbar the menu replaced): text only. MenuStyleTests holds this for every entry.
+            Assert.All(new[] { "Open...", "Save as Template...", "Apply Template to Files...", "Import CSV...", "Export..." }, h => Assert.Null(Item(h).Icon));
 
             // Help holds the manual and About, and neither is at the top.
             MenuItem helpMenu = Item("Help");
@@ -743,6 +741,7 @@ namespace TmDq.App.Tests
             ("SystemFillColorCaution", "#FF9D5D00", "#FFFCE100"),
             ("SystemFillColorCritical", "#FFC42B1C", "#FFFF99A4"),
             ("SystemFillColorNeutral", "#72000000", "#9CFFFFFF"),
+            ("TextOnAccentFillColorPrimary", "#FFFFFFFF", "#FFFFFFFF"),         // text on the accent: a hovered menu row
         };
 
         private static string Hex(Color c) => $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}";
@@ -767,11 +766,6 @@ namespace TmDq.App.Tests
             // What the chips and the "Loading..." label over the chart are drawn in, which no token has: a translucent layer.
             Assert.Equal(new[] { "#B9FFFFFF", "#F2F8F8F8" }, new[] { "ChipBackground", "LoadingBackground" }.Select(k => Hex(((ISolidColorBrush)Resource(k, ThemeVariant.Light)).Color)));
             Assert.Equal(new[] { "#B91F1F1F", "#F2202020" }, new[] { "ChipBackground", "LoadingBackground" }.Select(k => Hex(((ISolidColorBrush)Resource(k, ThemeVariant.Dark)).Color)));
-            // The export and import arrows take each theme's shade; the folder and the floppy disk are the same in both.
-            foreach (string icon in new[] { "ExportIcon", "ImportIcon" })
-                Assert.NotSame(Resource(icon, ThemeVariant.Light), Resource(icon, ThemeVariant.Dark));
-            Assert.IsType<DrawingImage>(Resource("OpenIcon", ThemeVariant.Dark));
-            Assert.IsType<DrawingImage>(Resource("SaveIcon", ThemeVariant.Dark));
         }
 
         [AvaloniaFact]
@@ -788,6 +782,11 @@ namespace TmDq.App.Tests
                     "ComboBoxBorderBrushPointerOver", "ComboBoxBorderBrushPressed", "ComboBoxDropDownBorderBrush", "CheckBoxCheckBackgroundStrokeUnchecked",
                     "CheckBoxCheckBackgroundStrokeUncheckedPointerOver", "MenuFlyoutPresenterBorderBrush", "ToolTipBorderBrush", "ChipBorder" }),
                 ("LayerFillColorDefault", new[] { "ComboBoxDropDownBackground", "MenuFlyoutPresenterBackground" }),
+                ("AccentFillColorDefault", new[] { "MenuFlyoutItemBackgroundPointerOver", "MenuFlyoutItemBackgroundPressed" }),
+                ("TextOnAccentFillColorPrimary", new[] { "MenuFlyoutItemForegroundPointerOver", "MenuFlyoutItemForegroundPressed",
+                    "MenuFlyoutItemKeyboardAcceleratorTextForegroundPointerOver", "MenuFlyoutItemKeyboardAcceleratorTextForegroundPressed",
+                    "MenuFlyoutSubItemChevronPointerOver", "MenuFlyoutSubItemChevronPressed", "MenuFlyoutSubItemChevronSubMenuOpened" }),
+                ("TextFillColorSecondary", new[] { "MenuFlyoutItemKeyboardAcceleratorTextForeground" }),
                 ("CardBackgroundFillColorDefault", new[] { "ToolTipBackground" }),
                 ("ButtonFillColorDefault", new[] { "ButtonBackground" }),
                 ("ButtonFillColorHover", new[] { "ButtonBackgroundPointerOver", "ButtonBackgroundPressed" }),
