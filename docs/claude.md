@@ -690,10 +690,14 @@ Everything builds from `tmdq.sln`, which VS Code opens by default; `.claude/CLAU
 
 - **`tmdq_core.dll`**: `eng\build_core_dll.ps1 [-Configuration Debug|Release]` (MSBuild over
   `src/core/tmdq_core.vcxproj`, into `out/<config>/`), then fails on any compiler warning or on an import
-  outside a short allow-list.
+  outside a short allow-list. Both native projects compile at warning level 4 with every warning an error
+  (`TreatWarningAsError`), so a build from an IDE is gated as the script is; the vendored irig106 headers are external
+  (`ExternalIncludePath`, no warnings from them) and its `.c` files compile with warnings off.
 - **The .NET projects**: built by the test scripts; `Directory.Build.props` and `Directory.Build.targets` at the root import
   `eng/AppVersion.props` (the version, read from `AppVersion`) and `eng/PackageLicences.targets` (the
-  licence allow-list) into every .NET project, so none imports them itself.
+  licence allow-list) into every .NET project, so none imports them itself. `Directory.Packages.props` holds every
+  package version once (central package management; Avalonia's share `AvaloniaVersion`), and `global.json` names the
+  SDK (10.0.100 or a newer one, no prerelease).
 - **The manuals**: `eng\build_manual.ps1` renders the figures from the app (`ManualFiguresTests`) and embeds them.
 - **The release**: `deploy\avalonia\build_avalonia_package.ps1` (single-file publish, signing, the portable ZIP and the
   Inno installer); `.claude/skills/cut-release` is the procedure.
