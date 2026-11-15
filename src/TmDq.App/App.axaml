@@ -15,13 +15,13 @@
     <!-- Customize View's colour dialog (plan step 4.4). -->
     <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
     <!-- Every window's icon, for its title bar and Alt+Tab: a window takes its own, not the exe's; and every window's
-         background: the content colour (the chart's), so a dialog is on the surface its plot is. The main window sets
-         its own, the chrome's, to be the colour of its title bar and log. `:is(Window)` reaches every window kind by its
+         background: the layer colour (the chart's), so a dialog is on the surface its plot is. The main window sets
+         its own, the base colour, to be the colour of its title bar and log. `:is(Window)` reaches every window kind by its
          type. A plain `Window` selector does as well, but only because Window gives every subclass its own style key
          (StyleKeyOverride), which a window of ours could override. -->
     <Style Selector=":is(Window)">
       <Setter Property="Icon" Value="/Assets/icon.ico" />
-      <Setter Property="Background" Value="{DynamicResource ContentBackground}" />
+      <Setter Property="Background" Value="{DynamicResource LayerFillColorDefaultBrush}" />
     </Style>
     <!-- A section heading in the main menu (plan step 4.8): small and bold, a heading rather than an entry. Here, not on
          the window, because the menu is a popup of its own. -->
@@ -88,101 +88,161 @@
           </GeometryDrawing>
         </DrawingGroup>
       </DrawingImage>
-      <!-- The colours of what the application draws itself, in each theme (US9.0), VS Code's Dark Modern and Light Modern:
-           the chrome (the main window under its title bar, and the log sidebar: #181818 and #F8F8F8), the content (the
-           chart and every dialog: #1F1F1F and #FFFFFF, a shade lighter than the chrome in the dark theme, and lighter
-           than it in the light), the hairlines that divide them (#2B2B2B and #E5E5E5), and the accent a divider takes
-           under the pointer. The chips and the "Loading..." label over the chart follow the content and the widgets.
-           The controls Fluent draws take VS Code's inputs, dropdowns, secondary buttons, menus and tooltips, by the
-           brushes it looks them up under (TextControl*, ComboBox*, Button*, CheckBox*, MenuFlyoutPresenter*, ToolTip*);
-           their accent and text come from the palettes on FluentTheme. The chart and its legend take theirs from
+      <!-- The type, the corners and the colours the application is built on: Fluent's (Windows 11's), in VS Code's Dark Modern
+           and Light Modern values. The font is Segoe UI Variable, which Fluent draws Windows 11 in (Avalonia's Fluent theme
+           asks for Inter, which this application does not bundle, so it fell back to the system's Segoe UI); the type scale is Fluent's (caption 12, body 14), and the corners are Fluent's, 4 px for a
+           control and 8 for an overlay (Avalonia's are 3 and 5). The colours are Fluent's semantic tokens, a Color each and
+           the Brush over it (SolidBackgroundFillColorBase: the window, title bar and log; LayerFillColorDefault: the chart and
+           every dialog; the strokes, fills and text between), so that a control Fluent draws, or one we add, is on the token
+           for its job. The brushes Fluent looks its controls up under (TextControl*, ComboBox*, Button*, CheckBox*,
+           MenuFlyoutPresenter*, ToolTip*) are aliases of the tokens, never colours of their own. The accent and text of
+           Fluent's own controls come from the palettes on FluentTheme. The chart and its legend take theirs from
            ChartPalette. -->
+      <FontFamily x:Key="ContentControlThemeFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
+      <x:Double x:Key="CaptionTextBlockFontSize">12</x:Double>
+      <x:Double x:Key="BodyTextBlockFontSize">14</x:Double>
+      <CornerRadius x:Key="ControlCornerRadius">4</CornerRadius>
+      <CornerRadius x:Key="OverlayCornerRadius">8</CornerRadius>
       <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Light">
+          <!-- Fluent's semantic tokens, in VS Code's values: a Color each, and the Brush over it. -->
+          <Color x:Key="SolidBackgroundFillColorBase">#F8F8F8</Color>
+          <Color x:Key="LayerFillColorDefault">#FFFFFF</Color>
+          <Color x:Key="CardBackgroundFillColorDefault">#F8F8F8</Color>
+          <Color x:Key="ControlFillColorDefault">#FFFFFF</Color>
+          <Color x:Key="ButtonFillColorDefault">#E5E5E5</Color>
+          <Color x:Key="ButtonFillColorHover">#CCCCCC</Color>
+          <Color x:Key="SubtleFillColorSecondary">#38808080</Color>
+          <Color x:Key="ControlStrokeColorDefault">#CECECE</Color>
+          <Color x:Key="ButtonStrokeColorDefault">#1A000000</Color>
+          <Color x:Key="DividerStrokeColorDefault">#E5E5E5</Color>
+          <Color x:Key="SurfaceStrokeColorDefault">#E5E5E5</Color>
+          <Color x:Key="TextFillColorPrimary">#3B3B3B</Color>
+          <Color x:Key="TextFillColorSecondary">#616161</Color>
+          <Color x:Key="AccentFillColorDefault">#005FB8</Color>
+          <Color x:Key="AccentTextFillColorPrimary">#005FB8</Color>
+          <SolidColorBrush x:Key="SolidBackgroundFillColorBaseBrush" Color="{DynamicResource SolidBackgroundFillColorBase}" />
+          <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="{DynamicResource LayerFillColorDefault}" />
+          <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="{DynamicResource CardBackgroundFillColorDefault}" />
+          <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="ButtonFillColorDefaultBrush" Color="{DynamicResource ButtonFillColorDefault}" />
+          <SolidColorBrush x:Key="ButtonFillColorHoverBrush" Color="{DynamicResource ButtonFillColorHover}" />
+          <SolidColorBrush x:Key="SubtleFillColorSecondaryBrush" Color="{DynamicResource SubtleFillColorSecondary}" />
+          <SolidColorBrush x:Key="ControlStrokeColorDefaultBrush" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ButtonStrokeColorDefaultBrush" Color="{DynamicResource ButtonStrokeColorDefault}" />
+          <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="{DynamicResource DividerStrokeColorDefault}" />
+          <SolidColorBrush x:Key="SurfaceStrokeColorDefaultBrush" Color="{DynamicResource SurfaceStrokeColorDefault}" />
+          <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="{DynamicResource TextFillColorPrimary}" />
+          <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="{DynamicResource TextFillColorSecondary}" />
+          <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="{DynamicResource AccentFillColorDefault}" />
+          <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="{DynamicResource AccentTextFillColorPrimary}" />
+          <!-- What the application draws itself: the chips and the "Loading..." label over the chart. -->
           <SolidColorBrush x:Key="ChipBackground" Color="#B9FFFFFF" />
-          <SolidColorBrush x:Key="ChipBorder" Color="#CECECE" />
-          <SolidColorBrush x:Key="ChipForeground" Color="#3B3B3B" />
-          <SolidColorBrush x:Key="ChipAccent" Color="#005FB8" />
+          <SolidColorBrush x:Key="ChipBorder" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ChipForeground" Color="{DynamicResource TextFillColorPrimary}" />
+          <SolidColorBrush x:Key="ChipAccent" Color="{DynamicResource AccentTextFillColorPrimary}" />
           <SolidColorBrush x:Key="LoadingBackground" Color="#F2F8F8F8" />
-          <SolidColorBrush x:Key="LoadingBorder" Color="#E5E5E5" />
-          <SolidColorBrush x:Key="LoadingForeground" Color="#3B3B3B" />
-          <SolidColorBrush x:Key="ChromeBackground" Color="#F8F8F8" />
-          <SolidColorBrush x:Key="ContentBackground" Color="#FFFFFF" />
-          <SolidColorBrush x:Key="Hairline" Color="#E5E5E5" />
-          <SolidColorBrush x:Key="SashHover" Color="#005FB8" />
-          <!-- The controls Fluent draws, in VS Code's inputs, dropdowns, buttons (the secondary kind) and widgets. -->
-          <SolidColorBrush x:Key="TextControlBackground" Color="#FFFFFF" />
-          <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FFFFFF" />
-          <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FFFFFF" />
-          <SolidColorBrush x:Key="TextControlBorderBrush" Color="#CECECE" />
-          <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#CECECE" />
-          <SolidColorBrush x:Key="ComboBoxBackground" Color="#FFFFFF" />
-          <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#CECECE" />
-          <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#FFFFFF" />
-          <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="#CECECE" />
-          <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="#FFFFFF" />
-          <SolidColorBrush x:Key="ComboBoxBorderBrushPressed" Color="#CECECE" />
-          <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FFFFFF" />
-          <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#CECECE" />
-          <SolidColorBrush x:Key="ButtonBackground" Color="#E5E5E5" />
-          <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#CCCCCC" />
-          <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#CCCCCC" />
-          <SolidColorBrush x:Key="ButtonBorderBrush" Color="#1A000000" />
-          <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#1A000000" />
-          <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#1A000000" />
-          <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillUnchecked" Color="#FFFFFF" />
-          <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeUnchecked" Color="#CECECE" />
-          <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillUncheckedPointerOver" Color="#FFFFFF" />
-          <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeUncheckedPointerOver" Color="#CECECE" />
-          <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#FFFFFF" />
-          <SolidColorBrush x:Key="MenuFlyoutPresenterBorderBrush" Color="#CECECE" />
-          <SolidColorBrush x:Key="ToolTipBackground" Color="#F8F8F8" />
-          <SolidColorBrush x:Key="ToolTipBorderBrush" Color="#CECECE" />
-          <SolidColorBrush x:Key="TitleBarHover" Color="#38808080" />
+          <SolidColorBrush x:Key="LoadingBorder" Color="{DynamicResource SurfaceStrokeColorDefault}" />
+          <SolidColorBrush x:Key="LoadingForeground" Color="{DynamicResource TextFillColorPrimary}" />
+          <!-- The controls Fluent draws, by the brushes it looks them up under, each on a token. -->
+          <SolidColorBrush x:Key="TextControlBackground" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="ComboBoxBackground" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillUnchecked" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillUncheckedPointerOver" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="TextControlBorderBrush" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ComboBoxBorderBrushPressed" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeUnchecked" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeUncheckedPointerOver" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="MenuFlyoutPresenterBorderBrush" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ToolTipBorderBrush" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="{DynamicResource LayerFillColorDefault}" />
+          <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="{DynamicResource LayerFillColorDefault}" />
+          <SolidColorBrush x:Key="ToolTipBackground" Color="{DynamicResource CardBackgroundFillColorDefault}" />
+          <SolidColorBrush x:Key="ButtonBackground" Color="{DynamicResource ButtonFillColorDefault}" />
+          <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{DynamicResource ButtonFillColorHover}" />
+          <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{DynamicResource ButtonFillColorHover}" />
+          <SolidColorBrush x:Key="ButtonBorderBrush" Color="{DynamicResource ButtonStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="{DynamicResource ButtonStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="{DynamicResource ButtonStrokeColorDefault}" />
           <DrawingImage x:Key="ExportIcon"><GeometryDrawing Brush="#1A7A2E" Geometry="M2.7525 4.5C3.1322 4.5 3.44594 4.78227 3.49554 5.14836L3.50237 5.25014L3.5 18.2542C3.49992 18.6684 3.16408 19.0041 2.74986 19.0041C2.37017 19.0041 2.05642 18.7218 2.00683 18.3557L2 18.2539L2.00237 5.24986C2.00244 4.83565 2.33829 4.5 2.7525 4.5ZM15.6471 6.30373L15.7197 6.21961C15.986 5.95338 16.4027 5.92921 16.6963 6.1471L16.7804 6.21972L21.777 11.2174C22.0431 11.4835 22.0674 11.8999 21.8498 12.1935L21.7773 12.2776L16.7807 17.2811C16.488 17.5742 16.0131 17.5745 15.72 17.2818C15.4536 17.0157 15.4291 16.5991 15.6467 16.3053L15.7193 16.2211L19.43 12.504L5.75295 12.5049C5.37326 12.5049 5.05946 12.2228 5.0098 11.8567L5.00295 11.7549C5.00295 11.3752 5.28511 11.0615 5.65118 11.0118L5.75295 11.0049L19.443 11.004L15.7196 7.28028C15.4534 7.01398 15.4292 6.59732 15.6471 6.30373L15.7197 6.21961L15.6471 6.30373Z" /></DrawingImage>
           <DrawingImage x:Key="ImportIcon"><GeometryDrawing Brush="#C7511A" Geometry="M21.2498 4.5C21.6295 4.5 21.9433 4.78215 21.993 5.14823L21.9998 5.25V18.2541C21.9998 18.6683 21.664 19.0041 21.2498 19.0041C20.8701 19.0041 20.5563 18.7219 20.5066 18.3558L20.4998 18.2541V5.25C20.4998 4.83579 20.8356 4.5 21.2498 4.5ZM12.6469 6.30373L12.7195 6.21961C12.9858 5.95338 13.4025 5.92921 13.6961 6.1471L13.7802 6.21972L18.7768 11.2174C19.0429 11.4835 19.0672 11.8999 18.8496 12.1935L18.7771 12.2776L13.7805 17.2811C13.4878 17.5742 13.0129 17.5745 12.7198 17.2818C12.4534 17.0157 12.4289 16.5991 12.6465 16.3053L12.7191 16.2211L16.43 12.504L2.75 12.5049C2.3703 12.5049 2.05651 12.2228 2.00685 11.8567L2 11.7549C2 11.3753 2.28215 11.0615 2.64823 11.0118L2.75 11.0049L16.443 11.004L12.7194 7.28028C12.4532 7.01398 12.429 6.59732 12.6469 6.30373L12.7195 6.21961L12.6469 6.30373Z" /></DrawingImage>
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
+          <!-- Fluent's semantic tokens, in VS Code's values: a Color each, and the Brush over it. -->
+          <Color x:Key="SolidBackgroundFillColorBase">#181818</Color>
+          <Color x:Key="LayerFillColorDefault">#1F1F1F</Color>
+          <Color x:Key="CardBackgroundFillColorDefault">#202020</Color>
+          <Color x:Key="ControlFillColorDefault">#313131</Color>
+          <Color x:Key="ButtonFillColorDefault">#00000000</Color>
+          <Color x:Key="ButtonFillColorHover">#2B2B2B</Color>
+          <Color x:Key="SubtleFillColorSecondary">#38808080</Color>
+          <Color x:Key="ControlStrokeColorDefault">#3C3C3C</Color>
+          <Color x:Key="ButtonStrokeColorDefault">#1AFFFFFF</Color>
+          <Color x:Key="DividerStrokeColorDefault">#2B2B2B</Color>
+          <Color x:Key="SurfaceStrokeColorDefault">#313131</Color>
+          <Color x:Key="TextFillColorPrimary">#CCCCCC</Color>
+          <Color x:Key="TextFillColorSecondary">#9D9D9D</Color>
+          <Color x:Key="AccentFillColorDefault">#0078D4</Color>
+          <Color x:Key="AccentTextFillColorPrimary">#4DAAFC</Color>
+          <SolidColorBrush x:Key="SolidBackgroundFillColorBaseBrush" Color="{DynamicResource SolidBackgroundFillColorBase}" />
+          <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="{DynamicResource LayerFillColorDefault}" />
+          <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="{DynamicResource CardBackgroundFillColorDefault}" />
+          <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="ButtonFillColorDefaultBrush" Color="{DynamicResource ButtonFillColorDefault}" />
+          <SolidColorBrush x:Key="ButtonFillColorHoverBrush" Color="{DynamicResource ButtonFillColorHover}" />
+          <SolidColorBrush x:Key="SubtleFillColorSecondaryBrush" Color="{DynamicResource SubtleFillColorSecondary}" />
+          <SolidColorBrush x:Key="ControlStrokeColorDefaultBrush" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ButtonStrokeColorDefaultBrush" Color="{DynamicResource ButtonStrokeColorDefault}" />
+          <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="{DynamicResource DividerStrokeColorDefault}" />
+          <SolidColorBrush x:Key="SurfaceStrokeColorDefaultBrush" Color="{DynamicResource SurfaceStrokeColorDefault}" />
+          <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="{DynamicResource TextFillColorPrimary}" />
+          <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="{DynamicResource TextFillColorSecondary}" />
+          <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="{DynamicResource AccentFillColorDefault}" />
+          <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="{DynamicResource AccentTextFillColorPrimary}" />
+          <!-- What the application draws itself: the chips and the "Loading..." label over the chart. -->
           <SolidColorBrush x:Key="ChipBackground" Color="#B91F1F1F" />
-          <SolidColorBrush x:Key="ChipBorder" Color="#3C3C3C" />
-          <SolidColorBrush x:Key="ChipForeground" Color="#CCCCCC" />
-          <SolidColorBrush x:Key="ChipAccent" Color="#4DAAFC" />
+          <SolidColorBrush x:Key="ChipBorder" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ChipForeground" Color="{DynamicResource TextFillColorPrimary}" />
+          <SolidColorBrush x:Key="ChipAccent" Color="{DynamicResource AccentTextFillColorPrimary}" />
           <SolidColorBrush x:Key="LoadingBackground" Color="#F2202020" />
-          <SolidColorBrush x:Key="LoadingBorder" Color="#313131" />
-          <SolidColorBrush x:Key="LoadingForeground" Color="#CCCCCC" />
-          <SolidColorBrush x:Key="ChromeBackground" Color="#181818" />
-          <SolidColorBrush x:Key="ContentBackground" Color="#1F1F1F" />
-          <SolidColorBrush x:Key="Hairline" Color="#2B2B2B" />
-          <SolidColorBrush x:Key="SashHover" Color="#0078D4" />
-          <!-- The controls Fluent draws, in VS Code's inputs, dropdowns, buttons (the secondary kind) and widgets. -->
-          <SolidColorBrush x:Key="TextControlBackground" Color="#313131" />
-          <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#313131" />
-          <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#313131" />
-          <SolidColorBrush x:Key="TextControlBorderBrush" Color="#3C3C3C" />
-          <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#3C3C3C" />
-          <SolidColorBrush x:Key="ComboBoxBackground" Color="#313131" />
-          <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#3C3C3C" />
-          <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#313131" />
-          <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="#3C3C3C" />
-          <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="#313131" />
-          <SolidColorBrush x:Key="ComboBoxBorderBrushPressed" Color="#3C3C3C" />
-          <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#1F1F1F" />
-          <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#3C3C3C" />
-          <SolidColorBrush x:Key="ButtonBackground" Color="Transparent" />
-          <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#2B2B2B" />
-          <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#2B2B2B" />
-          <SolidColorBrush x:Key="ButtonBorderBrush" Color="#1AFFFFFF" />
-          <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#1AFFFFFF" />
-          <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#1AFFFFFF" />
-          <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillUnchecked" Color="#313131" />
-          <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeUnchecked" Color="#3C3C3C" />
-          <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillUncheckedPointerOver" Color="#313131" />
-          <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeUncheckedPointerOver" Color="#3C3C3C" />
-          <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#1F1F1F" />
-          <SolidColorBrush x:Key="MenuFlyoutPresenterBorderBrush" Color="#3C3C3C" />
-          <SolidColorBrush x:Key="ToolTipBackground" Color="#202020" />
-          <SolidColorBrush x:Key="ToolTipBorderBrush" Color="#3C3C3C" />
-          <SolidColorBrush x:Key="TitleBarHover" Color="#38808080" />
+          <SolidColorBrush x:Key="LoadingBorder" Color="{DynamicResource SurfaceStrokeColorDefault}" />
+          <SolidColorBrush x:Key="LoadingForeground" Color="{DynamicResource TextFillColorPrimary}" />
+          <!-- The controls Fluent draws, by the brushes it looks them up under, each on a token. -->
+          <SolidColorBrush x:Key="TextControlBackground" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="ComboBoxBackground" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillUnchecked" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillUncheckedPointerOver" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="TextControlBorderBrush" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ComboBoxBorderBrushPressed" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeUnchecked" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeUncheckedPointerOver" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="MenuFlyoutPresenterBorderBrush" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ToolTipBorderBrush" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="{DynamicResource LayerFillColorDefault}" />
+          <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="{DynamicResource LayerFillColorDefault}" />
+          <SolidColorBrush x:Key="ToolTipBackground" Color="{DynamicResource CardBackgroundFillColorDefault}" />
+          <SolidColorBrush x:Key="ButtonBackground" Color="{DynamicResource ButtonFillColorDefault}" />
+          <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{DynamicResource ButtonFillColorHover}" />
+          <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{DynamicResource ButtonFillColorHover}" />
+          <SolidColorBrush x:Key="ButtonBorderBrush" Color="{DynamicResource ButtonStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="{DynamicResource ButtonStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="{DynamicResource ButtonStrokeColorDefault}" />
           <DrawingImage x:Key="ExportIcon"><GeometryDrawing Brush="#5EC269" Geometry="M2.7525 4.5C3.1322 4.5 3.44594 4.78227 3.49554 5.14836L3.50237 5.25014L3.5 18.2542C3.49992 18.6684 3.16408 19.0041 2.74986 19.0041C2.37017 19.0041 2.05642 18.7218 2.00683 18.3557L2 18.2539L2.00237 5.24986C2.00244 4.83565 2.33829 4.5 2.7525 4.5ZM15.6471 6.30373L15.7197 6.21961C15.986 5.95338 16.4027 5.92921 16.6963 6.1471L16.7804 6.21972L21.777 11.2174C22.0431 11.4835 22.0674 11.8999 21.8498 12.1935L21.7773 12.2776L16.7807 17.2811C16.488 17.5742 16.0131 17.5745 15.72 17.2818C15.4536 17.0157 15.4291 16.5991 15.6467 16.3053L15.7193 16.2211L19.43 12.504L5.75295 12.5049C5.37326 12.5049 5.05946 12.2228 5.0098 11.8567L5.00295 11.7549C5.00295 11.3752 5.28511 11.0615 5.65118 11.0118L5.75295 11.0049L19.443 11.004L15.7196 7.28028C15.4534 7.01398 15.4292 6.59732 15.6471 6.30373L15.7197 6.21961L15.6471 6.30373Z" /></DrawingImage>
           <DrawingImage x:Key="ImportIcon"><GeometryDrawing Brush="#F2884A" Geometry="M21.2498 4.5C21.6295 4.5 21.9433 4.78215 21.993 5.14823L21.9998 5.25V18.2541C21.9998 18.6683 21.664 19.0041 21.2498 19.0041C20.8701 19.0041 20.5563 18.7219 20.5066 18.3558L20.4998 18.2541V5.25C20.4998 4.83579 20.8356 4.5 21.2498 4.5ZM12.6469 6.30373L12.7195 6.21961C12.9858 5.95338 13.4025 5.92921 13.6961 6.1471L13.7802 6.21972L18.7768 11.2174C19.0429 11.4835 19.0672 11.8999 18.8496 12.1935L18.7771 12.2776L13.7805 17.2811C13.4878 17.5742 13.0129 17.5745 12.7198 17.2818C12.4534 17.0157 12.4289 16.5991 12.6465 16.3053L12.7191 16.2211L16.43 12.504L2.75 12.5049C2.3703 12.5049 2.05651 12.2228 2.00685 11.8567L2 11.7549C2 11.3753 2.28215 11.0615 2.64823 11.0118L2.75 11.0049L16.443 11.004L12.7194 7.28028C12.4532 7.01398 12.429 6.59732 12.6469 6.30373L12.7195 6.21961L12.6469 6.30373Z" /></DrawingImage>
         </ResourceDictionary>

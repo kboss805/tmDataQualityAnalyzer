@@ -10,7 +10,7 @@
         MinWidth="640" MinHeight="400"
         ExtendClientAreaToDecorationsHint="True"
         WindowDecorations="BorderOnly"
-        Background="{DynamicResource ChromeBackground}"
+        Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
         ExtendClientAreaTitleBarHeightHint="40"
         DragDrop.AllowDrop="True">
   <Window.KeyBindings>
@@ -25,13 +25,13 @@
       <Setter Property="Padding" Value="0" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="CornerRadius" Value="{DynamicResource ControlCornerRadius}" />
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Grid#TitleBar Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource TitleBarHover}" />
+      <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
     </Style>
     <Style Selector="Grid#TitleBar Button.caption">
       <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
@@ -51,7 +51,7 @@
       <Setter Property="Foreground" Value="{DynamicResource ToggleButtonForeground}" />
     </Style>
     <Style Selector="Grid#TitleBar ToggleButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource TitleBarHover}" />
+      <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource ToggleButtonForeground}" />
     </Style>
     <!-- The divider between the log and the chart, as VS Code draws its sashes: a one-pixel hairline, with a wider
@@ -63,14 +63,14 @@
       <Setter Property="Template">
         <ControlTemplate>
           <Border Background="Transparent">
-            <Border Name="Line" Width="1" HorizontalAlignment="Center" Background="{DynamicResource Hairline}" />
+            <Border Name="Line" Width="1" HorizontalAlignment="Center" Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
           </Border>
         </ControlTemplate>
       </Setter>
     </Style>
     <Style Selector="GridSplitter#Splitter:pointerover /template/ Border#Line, GridSplitter#Splitter:pressed /template/ Border#Line">
       <Setter Property="Width" Value="3" />
-      <Setter Property="Background" Value="{DynamicResource SashHover}" />
+      <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
     </Style>
   </Window.Styles>
   <DockPanel>
@@ -122,7 +122,7 @@
       </Button>
       <!-- A ToggleButton, which the title bar's Button styles do not reach: it sets their size and centring itself. -->
       <ToggleButton x:Name="SidebarButton" x:FieldModifier="public" Grid.Column="1" Width="30" Height="26" Padding="0"
-                    VerticalAlignment="Center" Background="Transparent" BorderThickness="0" CornerRadius="5"
+                    VerticalAlignment="Center" Background="Transparent" BorderThickness="0" CornerRadius="{DynamicResource ControlCornerRadius}"
                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                     FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="15" Content="&#xE89F;"
                     IsChecked="{Binding SidebarVisible}" ToolTip.Tip="Toggle sidebar (Ctrl+B)"
@@ -137,7 +137,7 @@
               Click="OnClose" chrome:WindowDecorationProperties.ElementRole="CloseButton" />
     </Grid>
     <!-- The hairline between the title bar and what is under it, as VS Code draws it. -->
-    <Border x:Name="TitleBarLine" x:FieldModifier="public" DockPanel.Dock="Top" Height="1" Background="{DynamicResource Hairline}" />
+    <Border x:Name="TitleBarLine" x:FieldModifier="public" DockPanel.Dock="Top" Height="1" Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
     <!-- No status bar under the log and the chart: what it said, the log says (the version is the log's first line).
          The log sidebar on the left (v2.x's place and width), the chart beside it, flush, with no gap or border but the
          divider's hairline; the sidebar is the window's chrome and the chart the content, a shade lighter (as VS Code's
@@ -150,11 +150,11 @@
         <ColumnDefinition Width="1" />
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
-      <Border x:Name="LogPanel" Grid.Column="0" Background="{DynamicResource ChromeBackground}"
+      <Border x:Name="LogPanel" Grid.Column="0" Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
               IsVisible="{Binding SidebarVisible}">
         <views:LogView x:Name="Log" Entries="{Binding Log.Entries}" />
       </Border>
-      <Border x:Name="PlotPanel" x:FieldModifier="public" Grid.Column="2" Background="{DynamicResource ContentBackground}">
+      <Border x:Name="PlotPanel" x:FieldModifier="public" Grid.Column="2" Background="{DynamicResource LayerFillColorDefaultBrush}">
         <views:PlotView x:Name="PlotView" Plot="{Binding Plot}" />
       </Border>
       <GridSplitter x:Name="Splitter" x:FieldModifier="public" Grid.Column="1" ResizeDirection="Columns" Margin="-3,0"

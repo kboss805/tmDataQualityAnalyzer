@@ -8,12 +8,12 @@
     <Style Selector="Button.chip">
       <Setter Property="Height" Value="26" />
       <Setter Property="Padding" Value="8,0" />
-      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontSize" Value="{DynamicResource CaptionTextBlockFontSize}" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="Background" Value="{DynamicResource ChipBackground}" />
       <Setter Property="BorderBrush" Value="{DynamicResource ChipBorder}" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="CornerRadius" Value="{DynamicResource ControlCornerRadius}" />
       <Setter Property="Foreground" Value="{DynamicResource ChipForeground}" />
       <Setter Property="Cursor" Value="Hand" />
     </Style>
@@ -110,9 +110,9 @@
     </Canvas>
     <!-- While a CSV is read for the plot (plan step 4.5); it takes no input. -->
     <Border x:Name="LoadingLabel" x:FieldModifier="public" IsVisible="{Binding IsLoading, FallbackValue=False}" IsHitTestVisible="False"
-            HorizontalAlignment="Center" VerticalAlignment="Center" Padding="16,8" CornerRadius="6"
+            HorizontalAlignment="Center" VerticalAlignment="Center" Padding="16,8" CornerRadius="{DynamicResource OverlayCornerRadius}"
             Background="{DynamicResource LoadingBackground}" BorderBrush="{DynamicResource LoadingBorder}" BorderThickness="1">
-      <TextBlock Text="Loading..." FontSize="16" Foreground="{DynamicResource LoadingForeground}" />
+      <TextBlock Text="Loading..." FontSize="{DynamicResource BodyTextBlockFontSize}" Foreground="{DynamicResource LoadingForeground}" />
     </Border>
   </Grid>
 </UserControl>

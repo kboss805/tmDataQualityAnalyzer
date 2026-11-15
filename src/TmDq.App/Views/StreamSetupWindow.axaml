@@ -50,7 +50,8 @@
       <NumericUpDown x:Name="DataRate" Grid.Row="4" Grid.Column="0" Value="{Binding DataRateMbps}"
                      Minimum="0" Maximum="1000" Increment="0.1" FormatString="0.000"
                      ToolTip.Tip="Telemetry data rate in Mbps. Set to 0 (TMATS) to derive the rate from the file metadata." />
-      <TextBlock x:Name="DataRateHint" Grid.Row="5" Grid.Column="0" Text="{Binding DataRateHint}" Opacity="0.7" FontSize="12" />
+      <TextBlock x:Name="DataRateHint" Grid.Row="5" Grid.Column="0" Text="{Binding DataRateHint}" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                 FontSize="{DynamicResource CaptionTextBlockFontSize}" />
       <TextBlock Grid.Row="3" Grid.Column="1" Text="Average Period" />
       <ComboBox x:Name="Period" Grid.Row="4" Grid.Column="1" ItemsSource="{x:Static vm:StreamSetupViewModel.Periods}"
                 SelectedIndex="{Binding PeriodIndex}"

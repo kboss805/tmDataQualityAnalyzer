@@ -10,7 +10,7 @@
         WindowStartupLocation="CenterOwner">
   <Window.Styles>
     <Style Selector="TextBlock.header">
-      <Setter Property="Opacity" Value="0.7" />
+      <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
       <Setter Property="HorizontalAlignment" Value="Center" />
     </Style>
     <Style Selector="TextBlock.ready">
