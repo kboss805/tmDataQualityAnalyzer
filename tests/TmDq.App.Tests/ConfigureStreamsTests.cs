@@ -342,5 +342,23 @@ namespace TmDq.App.Tests
             Assert.Equal("f.ch10: 2 streams processed (1 Frame Sync Lock, 1 Receiver SNR). Not processed: B: no sync.",
                          MainWindowViewModel.Describe("f.ch10", new RunOutcome(new[] { lockStream, snr }, Array.Empty<StreamResult>(), new[] { "B: no sync." })));
         }
+
+        [Fact]
+        public void TheStatusIsWrittenTheSameInEveryCulture()
+        {
+            // The line ends the smoke report, which other tools read: a decimal comma has no place in it.
+            var lockStream = new ProcessedStream(13, "A", 0, 0, StreamMode.FrameSyncLock, new[] { 0.0 }, new[] { 33.3 }, new[] { 0.0 }, Array.Empty<ChannelData>());
+            var outcome = new RunOutcome(new[] { lockStream }, Array.Empty<StreamResult>(), Array.Empty<string>());
+            System.Globalization.CultureInfo before = System.Globalization.CultureInfo.CurrentCulture;
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+            try
+            {
+                Assert.Equal("f.ch10: A (channel 13), 1 samples, mean lock 33.3 %", MainWindowViewModel.Describe("f.ch10", outcome));
+            }
+            finally
+            {
+                System.Globalization.CultureInfo.CurrentCulture = before;
+            }
+        }
     }
 }
