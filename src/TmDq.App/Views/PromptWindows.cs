@@ -19,8 +19,8 @@ namespace TmDq.App.Views
             CanResize = false;
             ShowInTaskbar = false;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            OkButton = new Button { Content = "OK", IsDefault = true, MinWidth = 80, HorizontalContentAlignment = HorizontalAlignment.Center };
-            CancelButton = new Button { Content = "Cancel", IsCancel = true, MinWidth = 80, HorizontalContentAlignment = HorizontalAlignment.Center };
+            OkButton = new Button { Content = "OK", IsDefault = true };
+            CancelButton = new Button { Content = "Cancel", IsCancel = true };
             OkButton.Click += (_, _) => Close(Answer());
             CancelButton.Click += (_, _) => Close(null);
         }
@@ -32,17 +32,8 @@ namespace TmDq.App.Views
         /// <summary>The answer OK gives.</summary>
         protected abstract T Answer();
 
-        /// <summary>The window's content: <paramref name="body"/> above the buttons, at the right.</summary>
-        protected void Lay(Control body)
-        {
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
-            buttons.Children.Add(OkButton);
-            buttons.Children.Add(CancelButton);
-            var root = new StackPanel { Margin = new Thickness(16), Spacing = 12 };
-            root.Children.Add(body);
-            root.Children.Add(buttons);
-            Content = root;
-        }
+        /// <summary>The window's content: <paramref name="body"/> above the footer with the buttons.</summary>
+        protected void Lay(Control body) => Content = DialogFooter.Compose(body, OkButton, CancelButton);
     }
 
     /// <summary>A line of text.</summary>
@@ -51,7 +42,7 @@ namespace TmDq.App.Views
         public TextPromptWindow(string title, string label, string initial) : base(title)
         {
             Field = new TextBox { Text = initial, MinWidth = 300 };
-            var body = new StackPanel { Spacing = 6 };
+            var body = new StackPanel { Spacing = 8 };
             body.Children.Add(new TextBlock { Text = label });
             body.Children.Add(Field);
             Lay(body);
@@ -87,7 +78,7 @@ namespace TmDq.App.Views
                 FormatString = "F" + decimals.ToString(CultureInfo.InvariantCulture),
                 MinWidth = 200,
             };
-            var body = new StackPanel { Spacing = 6 };
+            var body = new StackPanel { Spacing = 8 };
             body.Children.Add(new TextBlock { Text = label });
             body.Children.Add(Field);
             Lay(body);

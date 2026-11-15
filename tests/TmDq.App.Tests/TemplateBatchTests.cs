@@ -541,7 +541,7 @@ namespace TmDq.App.Tests
             Assert.Equal(("✓", "one.ch10", @"C:\a\one.ch10"), (vm.Rows[0].Glyph, vm.Rows[0].Text, vm.Rows[0].ToolTip));
             Assert.Equal(("✗", "two.ch10  —  extra channel(s): 9"), (vm.Rows[1].Glyph, vm.Rows[1].Text));
             Assert.Equal((true, false), (vm.Rows[0].Check.Ok, vm.Rows[1].Check.Ok));
-            Assert.Equal((Colors.Green, Color.Parse("#CC0000")), (((ISolidColorBrush)StatusBrushes.OfMatch(true)).Color, ((ISolidColorBrush)StatusBrushes.OfMatch(false)).Color));
+            Assert.Equal((StatusLevel.Success, StatusLevel.Critical), (StatusPaint.OfMatch(true), StatusPaint.OfMatch(false)));
             Assert.Equal((false, true, @"C:\a"), (vm.ExportPerFile, vm.ReuseAppearance, vm.OutputFolder));
             Assert.True(vm.CanProcess);
             Assert.False(vm.BrowseCommand.CanExecute(null));
@@ -626,7 +626,8 @@ namespace TmDq.App.Tests
             window.Show();
             Dispatcher.UIThread.RunJobs();
             TextBlock[] glyphs = window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text is "✓" or "✗").ToArray();
-            Assert.Equal(new[] { ("✓", Colors.Green), ("✗", Color.Parse("#CC0000")) },
+            // Fluent's success and critical, in the theme's shade (light here: #0F7B0F and #C42B1C).
+            Assert.Equal(new[] { ("✓", Color.Parse("#0F7B0F")), ("✗", Color.Parse("#C42B1C")) },
                          glyphs.Select(t => (t.Text ?? "", ((ISolidColorBrush)t.Foreground!).Color)));
             window.Close();
         }

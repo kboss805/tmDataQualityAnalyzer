@@ -10,21 +10,26 @@
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner">
   <!-- As v2.x laid it out: the step file, the calibration recording, each with its status beneath, then the clips. -->
-  <StackPanel Margin="16" Spacing="8">
+  <DockPanel>
+    <v:DialogFooter DockPanel.Dock="Bottom">
+      <Button x:Name="OkButton" Content="OK" IsDefault="True" Command="{Binding OkCommand}" />
+      <Button x:Name="CancelButton" Content="Cancel" IsCancel="True" Command="{Binding CancelCommand}" />
+    </v:DialogFooter>
+  <StackPanel Margin="{DynamicResource ContentDialogPadding}" Spacing="8">
     <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,12,Auto,Auto,16,Auto,Auto" ColumnSpacing="12" RowSpacing="4">
       <TextBlock Grid.Row="0" Grid.Column="0" Text="Step Cal File:" VerticalAlignment="Center" />
       <TextBlock x:Name="StepName" Grid.Row="0" Grid.Column="1" Text="{Binding StepName}" MinWidth="260" VerticalAlignment="Center" />
       <Button x:Name="BrowseStep" Grid.Row="0" Grid.Column="2" Content="Browse..." Command="{Binding BrowseStepCommand}"
               ToolTip.Tip="Browse for the step calibration configuration TOML file that defines the RF signal step levels." />
       <TextBlock x:Name="StepStatus" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding StepStatus}"
-                 Foreground="{Binding StepKind, Converter={x:Static v:StatusBrushes.Calibration}}" TextWrapping="Wrap" MaxWidth="420" />
+                 v:StatusPaint.Level="{Binding StepKind, Converter={x:Static v:StatusPaint.Calibration}}" TextWrapping="Wrap" MaxWidth="420" />
 
       <TextBlock Grid.Row="3" Grid.Column="0" Text="Calibration Ch10:" VerticalAlignment="Center" />
       <TextBlock x:Name="CalName" Grid.Row="3" Grid.Column="1" Text="{Binding CalName}" MinWidth="260" VerticalAlignment="Center" />
       <Button x:Name="BrowseCal" Grid.Row="3" Grid.Column="2" Content="Browse..." Command="{Binding BrowseCalCommand}"
               ToolTip.Tip="Browse for the calibration Chapter 10 recording file. The last folder you used will be remembered." />
       <TextBlock x:Name="CalStatus" Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding CalStatus}"
-                 Foreground="{Binding CalKind, Converter={x:Static v:StatusBrushes.Calibration}}" TextWrapping="Wrap" MaxWidth="420" />
+                 v:StatusPaint.Level="{Binding CalKind, Converter={x:Static v:StatusPaint.Calibration}}" TextWrapping="Wrap" MaxWidth="420" />
 
       <TextBlock Grid.Row="6" Grid.Column="0" Text="Clip Start (s):" VerticalAlignment="Center" />
       <NumericUpDown x:Name="ClipStart" Grid.Row="6" Grid.Column="1" Width="150" HorizontalAlignment="Left"
@@ -35,11 +40,6 @@
                      Value="{Binding ClipEnd}" Minimum="0" Maximum="100000" Increment="1" FormatString="0.0"
                      ToolTip.Tip="Ignore this many seconds at the END of the calibration recording before detecting steps." />
     </Grid>
-
-    <Separator Margin="0,8" />
-    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-      <Button x:Name="OkButton" Classes="accent" Content="OK" MinWidth="80" IsDefault="True" Command="{Binding OkCommand}" />
-      <Button x:Name="CancelButton" Content="Cancel" MinWidth="80" IsCancel="True" Command="{Binding CancelCommand}" />
-    </StackPanel>
   </StackPanel>
+  </DockPanel>
 </Window>

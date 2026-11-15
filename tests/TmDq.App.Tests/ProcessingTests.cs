@@ -14,6 +14,7 @@ using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Platform;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using TmDq.App.Models.Logging;
 using TmDq.App.Models.Processing;
@@ -608,22 +609,24 @@ namespace TmDq.App.Tests
         {
             var log = new SessionLog(new StoppedClock());
             log.Add("an ordinary line of information");
-            log.Error("an error line, drawn red");
-            log.Warning("a warning line, in goldenrod");
-            log.Success("a success line, drawn green");
+            log.Error("an error line, in the critical colour");
+            log.Warning("a warning line, in the caution colour");
+            log.Success("a success line, in the success colour");
             var (_, text, _, window) = ShowLog(log.Entries);
 
             Assert.Equal(log.PlainText, Shown(text));
             Run[] runs = text.Inlines!.OfType<Run>().ToArray();
             // Information has no colour of its own: it inherits the text colour, which a theme sets.
-            Assert.Equal(new IBrush?[] { text.Foreground, LogView.ErrorBrush, LogView.WarningBrush, LogView.SuccessBrush }, runs.Select(r => r.Foreground));
+            IBrush? Of(StatusLevel level) => StatusPaint.BrushOf(level, window.ActualThemeVariant);
+            Assert.Equal(new IBrush?[] { text.Foreground, Of(StatusLevel.Critical), Of(StatusLevel.Caution), Of(StatusLevel.Success) }, runs.Select(r => r.Foreground));
             Assert.False(runs[0].IsSet(TextElement.ForegroundProperty));
 
             // Drawn: each line's band holds its colour and none of the others.
             Rect block = Frames.InWindow(text, window);
             var lines = text.TextLayout.TextLines;
             Assert.Equal(4, lines.Count);
-            Color red = Colors.Red, gold = Color.FromRgb(0xDA, 0xA5, 0x20), green = Color.FromRgb(0, 0x80, 0), black = Colors.Black;
+            // Fluent's critical, caution and success in the light theme's shade, and the text colour.
+            Color red = Color.Parse("#C42B1C"), gold = Color.Parse("#9D5D00"), green = Color.Parse("#0F7B0F"), black = Colors.Black;
             using ILockedFramebuffer fb = Frames.Capture(window).Lock();
             double top = block.Top;
             var seen = new List<(int Black, int Red, int Gold, int Green)>();
@@ -640,6 +643,32 @@ namespace TmDq.App.Tests
             Assert.True(seen[2].Gold > 30 && seen[2].Black + seen[2].Red + seen[2].Green == 0, "warning: " + all);
             Assert.True(seen[3].Green > 30 && seen[3].Black + seen[3].Red + seen[3].Gold == 0, "success: " + all);
             window.Close();
+        }
+
+        [AvaloniaFact]
+        public void TheLogDrawsItsLevelsAgainInTheNewThemesColoursWhenTheThemeChanges()
+        {
+            var app = (App)Application.Current!;
+            ThemeVariant? before = app.RequestedThemeVariant;
+            app.ApplyTheme(false);
+            var log = new SessionLog(new StoppedClock());
+            log.Error("an error");
+            log.Add("information");
+            var (_, text, _, window) = ShowLog(log.Entries);
+            try
+            {
+                Assert.Equal(Color.Parse("#C42B1C"), ((ISolidColorBrush)text.Inlines!.OfType<Run>().First().Foreground!).Color);
+                app.ApplyTheme(true);
+                Dispatcher.UIThread.RunJobs();
+                Run[] runs = text.Inlines!.OfType<Run>().ToArray();
+                Assert.Equal(Color.Parse("#FF99A4"), ((ISolidColorBrush)runs[0].Foreground!).Color);
+                Assert.False(runs[1].IsSet(TextElement.ForegroundProperty));
+            }
+            finally
+            {
+                window.Close();
+                app.RequestedThemeVariant = before;
+            }
         }
 
         [AvaloniaFact]

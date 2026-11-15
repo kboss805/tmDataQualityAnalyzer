@@ -407,6 +407,9 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The menu and title-bar icons swap to theme-appropriate variants when the theme changes.
 - [x] The application is themed as VS Code's Dark Modern and Light Modern: the main window's chrome (under its title bar, and the log sidebar) is #181818 / #F8F8F8, not black, and the content (the chart, and every dialog) a shade lighter than it, #1F1F1F / white; the title bar, the log and the chart are flush, with no gaps, borders or rounded corners, divided by one-pixel lines (#2B2B2B / #E5E5E5, one under the title bar and one between the log and the chart). Text is #CCCCCC / #3B3B3B, the accent #0078D4 / #005FB8, and the controls Fluent draws (inputs, dropdowns, secondary buttons, checkboxes, menus, tooltips) take VS Code's fills and borders.
 - [x] The theme is written in Fluent's vocabulary, so it can be extended the way Fluent is: the colours are Fluent's semantic tokens (`SolidBackgroundFillColorBase`, `LayerFillColorDefault`, `ControlFillColorDefault`, the strokes, the text and accent ones) as a Color and a Brush each, and every brush Fluent's controls are looked up under is an alias of the token for its job, never a colour of its own. The font is Segoe UI Variable, the type scale Fluent's (caption 12, body 14), and the corners Fluent's (4 px for a control, 8 for an overlay), each a resource that the application's own text and shapes use.
+- [x] Every dialog has Fluent's ContentDialog anatomy: its content in 24 px of padding (`ContentDialogPadding`) above one footer band (`DialogFooter`: the base colour under a divider) with its buttons at the right, in equal widths of at least 96 px, 8 px apart; the default button (Enter) is the accent and Escape cancels (the progress dialog alone has no cancel key, since a run must not be stopped by one). What belongs to the choice and not to the answer ("Apply to all", "All") is at the footer's left. The dialogs built in code (`ChoiceWindow`, the prompts, `ReportWindow`) use the same footer through `DialogFooter.Compose`, so no dialog lays its own buttons out.
+- [x] A setting that is on or off (Derandomize, Invert Data, Legacy Chapter 10) is Fluent's toggle switch; a choice among several (a stream to process, "Apply to all", "All", what to export) is a check box.
+- [x] A status is painted by what it means, in Fluent's status colours for the theme: success, caution (a warning), critical, or neutral (pending). The log's lines, Configure Streams' ready marks, the setup dialog's problems and calibration label, the batch confirmation's glyphs and Extract Calibration's two status lines all take them (`SystemFillColorSuccess`, `Caution`, `Critical`, `Neutral`), and follow a change of theme; none has a colour of its own.
 
 ## Tech Stack
 
@@ -461,7 +464,7 @@ Three layers, each tested on its own:
    presentation state (what is shown, the axes, the legend, the dialogs' rules, preferences, the template JSON) is C#;
    the data and every file format the core reads or writes are the core's. Views hold no rules: code-behind does only
    what a control must (focus, pointer gestures, popups), and view models reach no control. A view model reports
-  state (a colour, a match, a status) and the view paints it (`StatusBrushes`); `LayerTests` holds the layers apart.
+  state (a colour, a match, a status) and the view paints it (`StatusPaint`, in Fluent's status colours); `LayerTests` holds the layers apart.
 
 **Multi-source plots:** the plot can hold several recordings' series at once, and only the Apply Template batch puts
 them there. Every recording is a source with its own id, so two recordings that reuse a PCM channel id never mix, and
@@ -918,7 +921,8 @@ helper every test cleans up and reads back through, which waits out a virus scan
   menu, keys, Customize View, prompts).
 - **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against v2.14.2's, the image pixel by pixel, Import
   CSV), `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, Apply Template with the core missing).
-- **The shell:** `ShellTests` (title bar, menu, Recent Files, keys, drag and drop, the sidebar and its divider, themes, Help), `PreferencesTests`
+- **The shell:** `ShellTests` (title bar, menu, Recent Files, keys, drag and drop, the sidebar and its divider, themes, Help), `DialogAnatomyTests`
+  (every window kind's footer band, padding, button widths and spacing, accent and cancel, in both themes; a status text following the theme), `PreferencesTests`
   (the preferences file, and v2.x's INI file left unread), `MainWindowTests`.
 - **The layers:** `LayerTests` reads every model, view model and service type as compiled, its methods' code
   included. It fails on a model that reaches a view model, a service, a view or `Platform`; on a view model or service

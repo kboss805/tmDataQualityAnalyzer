@@ -4,23 +4,18 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Media;
-using Avalonia.Media.Immutable;
 using Avalonia.Threading;
 using TmDq.App.Models.Logging;
 
 namespace TmDq.App.Views
 {
     /// <summary>
-    /// The log sidebar: every line of the session's log, timestamped and coloured by level as v2.x's was (an error
-    /// red, a warning goldenrod, a success green, the rest in the text colour), in one block of text so a selection can
+    /// The log sidebar: every line of the session's log, timestamped and coloured by level (an error, a warning and a success
+    /// in Fluent's status colours, in the theme's shade; the rest in the text colour), in one block of text so a selection can
     /// run across lines. A line's own line breaks and runs of spaces are kept. It follows the newest line.
     /// </summary>
     public sealed class LogView : UserControl
     {
-        public static readonly IBrush ErrorBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xFF, 0x00, 0x00));
-        public static readonly IBrush WarningBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xDA, 0xA5, 0x20));
-        public static readonly IBrush SuccessBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x00, 0x80, 0x00));
-
         public static readonly StyledProperty<IList<LogEntry>?> EntriesProperty =
             AvaloniaProperty.Register<LogView, IList<LogEntry>?>(nameof(Entries));
 
@@ -35,6 +30,8 @@ namespace TmDq.App.Views
             // No horizontal scrolling (the default): a long line wraps.
             _scroll = new ScrollViewer { Name = "LogScroll", Content = _text };
             Content = _scroll;
+            // The lines are coloured when they are added, so a change of theme draws them again in the new theme's colours.
+            ActualThemeVariantChanged += (_, _) => Rebuild();
         }
 
         /// <summary>The lines shown; a collection that reports its changes is followed.</summary>
@@ -44,11 +41,12 @@ namespace TmDq.App.Views
             set => SetValue(EntriesProperty, value);
         }
 
-        public static IBrush? BrushOf(LogLevel level) => level switch
+        /// <summary>The status a line's level is drawn as; the rest are in the text colour.</summary>
+        public static StatusLevel? StatusOf(LogLevel level) => level switch
         {
-            LogLevel.Error => ErrorBrush,
-            LogLevel.Warning => WarningBrush,
-            LogLevel.Success => SuccessBrush,
+            LogLevel.Error => StatusLevel.Critical,
+            LogLevel.Warning => StatusLevel.Caution,
+            LogLevel.Success => StatusLevel.Success,
             _ => null,
         };
 
@@ -90,7 +88,7 @@ namespace TmDq.App.Views
             InlineCollection inlines = _text.Inlines!;
             if (inlines.Count > 0) inlines.Add(new LineBreak());
             var run = new Run(entry.Line);
-            if (BrushOf(entry.Level) is { } brush) run.Foreground = brush;
+            if (StatusOf(entry.Level) is { } level && StatusPaint.BrushOf(level, ActualThemeVariant) is { } brush) run.Foreground = brush;
             inlines.Add(run);
             _shown++;
         }

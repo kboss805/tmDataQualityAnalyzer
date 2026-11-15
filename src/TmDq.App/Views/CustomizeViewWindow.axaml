@@ -41,12 +41,12 @@
     </DataTemplate>
   </Window.Resources>
 
-  <DockPanel Margin="12">
-    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,12,0,0">
-      <Button x:Name="OkButton" Content="OK" IsDefault="True" MinWidth="80" HorizontalContentAlignment="Center" />
-      <Button x:Name="CancelButton" Content="Cancel" IsCancel="True" MinWidth="80" HorizontalContentAlignment="Center" />
-    </StackPanel>
-    <TabControl x:Name="Tabs">
+  <DockPanel>
+    <v:DialogFooter DockPanel.Dock="Bottom">
+      <Button x:Name="OkButton" Content="OK" IsDefault="True" />
+      <Button x:Name="CancelButton" Content="Cancel" IsCancel="True" />
+    </v:DialogFooter>
+    <TabControl x:Name="Tabs" Margin="{DynamicResource ContentDialogPadding}">
       <TabItem Header="Frame Sync Lock Streams">
         <DockPanel Margin="0,8,0,0">
           <TextBlock DockPanel.Dock="Top" Text="{x:Static plot:CustomizeViewModel.LockDescription}" TextWrapping="Wrap" />

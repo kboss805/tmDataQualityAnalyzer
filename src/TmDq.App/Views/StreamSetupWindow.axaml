@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:TmDq.App.ViewModels"
+        xmlns:v="using:TmDq.App.Views"
         x:Class="TmDq.App.Views.StreamSetupWindow"
         x:DataType="vm:StreamSetupViewModel"
         Title="{Binding Title}"
@@ -19,14 +20,22 @@
       <Setter Property="Margin" Value="0,0,12,4" />
     </Style>
     <Style Selector="TextBlock.problems">
-      <Setter Property="Foreground" Value="#D13438" />
+      <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
     </Style>
     <Style Selector="TextBlock.uncalibrated">
-      <Setter Property="Foreground" Value="Gray" />
+      <Setter Property="Foreground" Value="{DynamicResource SystemFillColorNeutralBrush}" />
     </Style>
   </Window.Styles>
 
-  <StackPanel Margin="16" Spacing="8" MinWidth="560">
+  <DockPanel>
+    <v:DialogFooter DockPanel.Dock="Bottom">
+      <v:DialogFooter.Leading>
+        <CheckBox x:Name="ApplyToAll" Content="{Binding ApplyToAllText}" IsChecked="{Binding ApplyToAll}" ToolTip.Tip="{Binding ApplyToAllTip}" />
+      </v:DialogFooter.Leading>
+      <Button x:Name="OkButton" Content="OK" IsDefault="True" Command="{Binding OkCommand}" />
+      <Button x:Name="CancelButton" Content="Cancel" IsCancel="True" Command="{Binding CancelCommand}" />
+    </v:DialogFooter>
+  <StackPanel Margin="{DynamicResource ContentDialogPadding}" Spacing="8" MinWidth="560">
     <!-- Frame sync, both modes -->
     <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" RowDefinitions="Auto,Auto,12,Auto,Auto,Auto" Classes="form">
       <TextBlock Grid.Row="0" Grid.Column="0" Text="Frame Sync" />
@@ -58,10 +67,13 @@
                 ToolTip.Tip="Integration window for statistics. Shorter periods give finer time resolution; longer periods smooth noise." />
     </Grid>
 
-    <CheckBox x:Name="Derandomize" Content="Derandomize" IsChecked="{Binding Randomized}"
-              ToolTip.Tip="Apply RNRZ-L self-synchronizing descrambler to the data stream." />
-    <CheckBox x:Name="InvertData" Content="Invert Data" IsChecked="{Binding Inverted}"
-              ToolTip.Tip="Invert every bit of the raw data stream before processing (use when the PCM signal polarity is inverted)." />
+    <!-- The two on-or-off settings of the stream, side by side. -->
+    <StackPanel Orientation="Horizontal" Spacing="32">
+      <ToggleSwitch x:Name="Derandomize" Content="Derandomize" IsChecked="{Binding Randomized}"
+                    ToolTip.Tip="Apply RNRZ-L self-synchronizing descrambler to the data stream." />
+      <ToggleSwitch x:Name="InvertData" Content="Invert Data" IsChecked="{Binding Inverted}"
+                    ToolTip.Tip="Invert every bit of the raw data stream before processing (use when the PCM signal polarity is inverted)." />
+    </StackPanel>
 
     <!-- Receiver SNR only -->
     <StackPanel x:Name="ReceiverGroup" Spacing="8" IsVisible="{Binding IsReceiverSnr}">
@@ -94,7 +106,7 @@
                   ToolTip.Tip="Save receiver parameters to a TOML file" />
         </StackPanel>
       </Grid>
-      <TextBlock x:Name="WordMap" Opacity="0.75">
+      <TextBlock x:Name="WordMap" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
         <Run Text="Word map: " /><Run Text="{Binding ReceiverParamsName}" />
       </TextBlock>
       <!-- Non-linear step calibration (US5.3): Apply Cal, and how many channels it calibrated. -->
@@ -111,13 +123,6 @@
     <TextBlock x:Name="Problems" Classes="problems" Text="{Binding ProblemText}" TextWrapping="Wrap" MaxWidth="560" HorizontalAlignment="Left"
                IsVisible="{Binding !CanAccept}" />
 
-    <Separator Margin="0,8" />
-    <Grid ColumnDefinitions="*,Auto,Auto">
-      <CheckBox x:Name="ApplyToAll" Grid.Column="0" Content="{Binding ApplyToAllText}" IsChecked="{Binding ApplyToAll}"
-                ToolTip.Tip="{Binding ApplyToAllTip}" />
-      <Button x:Name="OkButton" Grid.Column="1" Classes="accent" Content="OK" MinWidth="80" Margin="0,0,8,0"
-              IsDefault="True" Command="{Binding OkCommand}" />
-      <Button x:Name="CancelButton" Grid.Column="2" Content="Cancel" MinWidth="80" IsCancel="True" Command="{Binding CancelCommand}" />
-    </Grid>
   </StackPanel>
+  </DockPanel>
 </Window>
