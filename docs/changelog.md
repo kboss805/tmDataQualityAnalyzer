@@ -12,6 +12,23 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The receiver tree's rows on the theme
+
+In the dark theme the Customize View dialog's Receiver SNR tab drew each receiver's row (an `Expander`) in Fluent's own
+near-black (`#060606`), and an expanded row's channels in a third grey (`#2B2B2B`), against the dialog's `#1F1F1F` and
+the `#313131` of every other control: `App.axaml` overrides the brushes Fluent looks its controls up under, and the
+`Expander*` ones were never among them. The headless render showed it, and re-rendering gave the same pixels, so it was
+the colour and not a capture fault. `ExpanderHeaderBackground` (and its pointer-over and pressed states) is now an alias of
+`ControlFillColorDefault`, the header and content borders of `ControlStrokeColorDefault`, and `ExpanderContentBackground`
+of `CardBackgroundFillColorDefault`, in both themes; the light theme is on the same tokens.
+`EveryBrushFluentLooksItsControlsUpUnderIsAnAliasOfTheTokenForItsJob` lists the new aliases. The manual's
+`walk-cust-02-snr-tree.png`, the one figure that still showed the dialog as it was before #277, is re-captured (the other
+three figures a render changes are the run log's clock, which differs by the time of day, and are left as committed).
+
+Mutation check: three mutants of `App.axaml`, each one of the new aliases pointed at the wrong token (the light theme's
+content background, the dark theme's header background, the dark theme's pressed header border): all three CAUGHT by that
+test.
+
 #### A failed msbuild evaluation says what msbuild printed
 
 `PackageLicenceTests.EveryProjectInTheSolutionGetsTheCheckAndTheVersion` failed once on CI with

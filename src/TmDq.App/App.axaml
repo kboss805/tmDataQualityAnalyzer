@@ -52,7 +52,7 @@
            the Brush over it (SolidBackgroundFillColorBase: the window, title bar and log; LayerFillColorDefault: the chart and
            every dialog; the strokes, fills and text between), so that a control Fluent draws, or one we add, is on the token
            for its job. The brushes Fluent looks its controls up under (TextControl*, ComboBox*, Button*, CheckBox*,
-           MenuFlyoutPresenter*, MenuFlyoutItem*, ToolTip*) are aliases of the tokens, never colours of their own. The accent and text of
+           MenuFlyoutPresenter*, MenuFlyoutItem*, ToolTip*, Expander*) are aliases of the tokens, never colours of their own. The accent and text of
            Fluent's own controls come from the palettes on FluentTheme. The chart and its legend take theirs from
            ChartPalette. -->
       <FontFamily x:Key="ContentControlThemeFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
@@ -151,6 +151,14 @@
           <SolidColorBrush x:Key="MenuFlyoutSubItemChevronPressed" Color="{DynamicResource TextOnAccentFillColorPrimary}" />
           <SolidColorBrush x:Key="MenuFlyoutSubItemChevronSubMenuOpened" Color="{DynamicResource TextOnAccentFillColorPrimary}" />
           <SolidColorBrush x:Key="ToolTipBackground" Color="{DynamicResource CardBackgroundFillColorDefault}" />
+          <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="ExpanderHeaderBackgroundPointerOver" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="ExpanderHeaderBackgroundPressed" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="ExpanderHeaderBorderBrush" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPointerOver" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPressed" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ExpanderContentBackground" Color="{DynamicResource CardBackgroundFillColorDefault}" />
+          <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="{DynamicResource ControlStrokeColorDefault}" />
           <SolidColorBrush x:Key="ButtonBackground" Color="{DynamicResource ButtonFillColorDefault}" />
           <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{DynamicResource ButtonFillColorHover}" />
           <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{DynamicResource ButtonFillColorHover}" />
@@ -240,6 +248,14 @@
           <SolidColorBrush x:Key="MenuFlyoutSubItemChevronPressed" Color="{DynamicResource TextOnAccentFillColorPrimary}" />
           <SolidColorBrush x:Key="MenuFlyoutSubItemChevronSubMenuOpened" Color="{DynamicResource TextOnAccentFillColorPrimary}" />
           <SolidColorBrush x:Key="ToolTipBackground" Color="{DynamicResource CardBackgroundFillColorDefault}" />
+          <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="ExpanderHeaderBackgroundPointerOver" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="ExpanderHeaderBackgroundPressed" Color="{DynamicResource ControlFillColorDefault}" />
+          <SolidColorBrush x:Key="ExpanderHeaderBorderBrush" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPointerOver" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPressed" Color="{DynamicResource ControlStrokeColorDefault}" />
+          <SolidColorBrush x:Key="ExpanderContentBackground" Color="{DynamicResource CardBackgroundFillColorDefault}" />
+          <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="{DynamicResource ControlStrokeColorDefault}" />
           <SolidColorBrush x:Key="ButtonBackground" Color="{DynamicResource ButtonFillColorDefault}" />
           <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{DynamicResource ButtonFillColorHover}" />
           <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{DynamicResource ButtonFillColorHover}" />
