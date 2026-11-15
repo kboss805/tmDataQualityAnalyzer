@@ -190,6 +190,7 @@ namespace TmDq.App.Views
         {
             base.OnPointerCaptureLost(e);
             _dragging = false;
+            Cursor = new Cursor(StandardCursorType.Hand);   // the drag's SizeAll goes with it, as on a release
         }
     }
 }

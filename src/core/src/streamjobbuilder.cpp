@@ -76,49 +76,13 @@ bool buildStreamJob(const StreamJobConfig& cfg, const ProcessingParams& base, co
         return true;
     }
 
-    std::error_code ec; // exists() with an error code never throws on a bad path
-    if (cfg.receiverParamsToml.empty())
+    // The word map: the named file, else the shipped default, else the sequential map - resolved exactly as the
+    // calibration extractor resolves it, since its profiles are matched to these channels by word.
+    WordMapResolution map;
+    if (!resolveReceiverWordMap(*out_job.frameSetup, cfg.receiverParamsToml, defaultReceiverParamsFile(context.appRoot),
+                                cfg.numReceivers, cfg.receiverChannels, words_in_minor_frame, map))
     {
-        // No Receiver Parameters TOML provided: fall back to the shipped default
-        // Receiver Parameters file rather than synthesizing a sequential word map.
-        const std::filesystem::path default_rcvr_params = textfile::pathFromUtf8(
-            context.appRoot + "/" + UIConstants::kSettingsDirName + "/" + UIConstants::kReceiverParamsDirName + "/" +
-            UIConstants::kDefaultTomlFilename);
-        if (std::filesystem::exists(default_rcvr_params, ec) &&
-            out_job.frameSetup->tryLoadingFile(default_rcvr_params, words_in_minor_frame))
-        {
-            // Loaded successfully from the default file.
-        }
-        else
-        {
-            // Default file missing or unusable: build the default word map (sequential words for
-            // NumReceivers x ReceiverChannels parameters). A rejected load can leave a partial map
-            // behind and buildDefaultReceiverMap appends, so start from an empty one.
-            out_job.frameSetup->clearParameters();
-            std::string map_error;
-            if (!out_job.frameSetup->buildDefaultReceiverMap(cfg.numReceivers, cfg.receiverChannels,
-                                                             words_in_minor_frame, map_error))
-            {
-                error = stream_desc + ": " + map_error;
-                return false;
-            }
-        }
-    }
-    else if (!std::filesystem::exists(cfg.receiverParamsToml, ec))
-    {
-        error = stream_desc + ": Receiver Parameters file '" + textfile::utf8FileName(cfg.receiverParamsToml) +
-                "' was not found.";
-        return false;
-    }
-    else if (!out_job.frameSetup->tryLoadingFile(cfg.receiverParamsToml, words_in_minor_frame))
-    {
-        error = stream_desc + ": Failed to load Receiver Parameters from '" +
-                textfile::utf8FileName(cfg.receiverParamsToml) + "'. Check the word map.";
-        return false;
-    }
-    if (out_job.frameSetup->length() == 0)
-    {
-        error = stream_desc + ": Receiver Parameters file contains no parameters.";
+        error = stream_desc + ": " + map.error;
         return false;
     }
 
@@ -135,6 +99,12 @@ bool buildStreamJob(const StreamJobConfig& cfg, const ProcessingParams& base, co
 
     // The linear voltage->dB math lives in FrameSetup so it is single-sourced and unit-testable.
     out_job.frameSetup->applyLinearCalibration(cfg.polarityIndex, cfg.slopeIndex, cfg.scaleDdBPerV);
+
+    // The log is written only once the job is accepted: a passed-over default word map first.
+    if (!map.warning.empty())
+    {
+        report.log.push_back("  " + stream_desc + ": " + map.warning);
+    }
 
     // Attach non-linear step-calibration profiles (US5.3) by word index.
     if (!cfg.calibrationByWord.empty())

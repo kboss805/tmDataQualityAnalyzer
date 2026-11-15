@@ -422,30 +422,21 @@ bool CalibrationExtractor::buildFrameSetup(const Request& request,
 {
     m_frame_setup = std::make_unique<FrameSetup>();
 
-    if (request.receiverParamsToml.empty())
+    // Resolved exactly as the main run resolves it (resolveReceiverWordMap): the profiles are matched to its channels
+    // by word.
+    const std::filesystem::path none;
+    const std::filesystem::path& named = request.receiverParamsIsDefault ? none : request.receiverParamsToml;
+    const std::filesystem::path& fallback = request.receiverParamsIsDefault ? request.receiverParamsToml : none;
+    WordMapResolution map;
+    if (!resolveReceiverWordMap(*m_frame_setup, named, fallback, request.numReceivers, request.receiverChannels,
+                                wordsInMinorFrame, map))
     {
-        if (!m_frame_setup->buildDefaultReceiverMap(request.numReceivers, request.receiverChannels,
-                                                    wordsInMinorFrame, error))
-        {
-            return false;
-        }
-    }
-    else if (std::error_code ec; !std::filesystem::exists(request.receiverParamsToml, ec))
-    {
-        error = "Receiver Parameters file '" + request.receiverParamsToml.filename().string() +
-                "' was not found.";
+        error = map.error;
         return false;
     }
-    else if (!m_frame_setup->tryLoadingFile(request.receiverParamsToml, wordsInMinorFrame))
+    if (!map.warning.empty())
     {
-        error = "Failed to load Receiver Parameters word map. Check the file.";
-        return false;
-    }
-
-    if (m_frame_setup->length() == 0)
-    {
-        error = "Receiver Parameters file contains no parameters.";
-        return false;
+        m_report.log("Calibration: " + map.warning);
     }
 
     // Unit slope / zero offset so FrameProcessor emits raw counts (averaged per

@@ -92,6 +92,9 @@ namespace TmDq.App.ViewModels
         /// <summary>The progress dialog an extraction shows; the window sets it, so it sits over the dialog.</summary>
         public IProcessingDialog? ProgressDialog { get; set; }
 
+        /// <summary>What starts an extraction: the core, unless a test stands in.</summary>
+        public ICalibrationRunner Runner { get; set; } = CoreCalibrationRunner.Instance;
+
         /// <summary>What the calibration run is given besides the files and clips. No view reads it: it is kept public as the
         /// tests' only window onto the request the stream's settings make, as audit D8 decided.</summary>
         public CalibrationBase Base => _base;
@@ -259,10 +262,10 @@ namespace TmDq.App.ViewModels
 
             var progress = new ProcessingViewModel(ProcessingText);
             var observer = new Observer(progress);
-            CalibrationRun run;
+            ICalibrationRunning run;
             try
             {
-                run = CalibrationRun.Start(ToRequest(), observer);
+                run = Runner.Start(ToRequest(), observer);
             }
             catch (TmdqException e)
             {
@@ -284,7 +287,17 @@ namespace TmDq.App.ViewModels
                 {
                     ProgressDialog?.Close();
                 }
-                result = run.GetResult();
+                try
+                {
+                    result = run.GetResult();
+                }
+                catch (TmdqException e)
+                {
+                    // The core could not hand the result back (out of memory, an internal error): said, not left at
+                    // "Processing..." with the progress dialog gone (audit B4).
+                    SetCal(CalibrationStatusKind.Fail, e.Message);
+                    return;
+                }
             }
 
             if (!observer.Success)
@@ -376,6 +389,24 @@ namespace TmDq.App.ViewModels
         }
 
         /// <summary>The extraction's reports, the progress on the dialog's thread.</summary>
+        /// <summary>The product's runner: the core's <see cref="CalibrationRun"/>, member for member.</summary>
+        private sealed class CoreCalibrationRunner : ICalibrationRunner
+        {
+            public static readonly CoreCalibrationRunner Instance = new();
+
+            public ICalibrationRunning Start(CalibrationRequest request, IRunObserver observer) =>
+                new Running(CalibrationRun.Start(request, observer));
+
+            private sealed class Running(CalibrationRun run) : ICalibrationRunning
+            {
+                public bool IsRunning => run.IsRunning;
+                public void Cancel() => run.Cancel();
+                public void Wait() => run.Wait();
+                public CalibrationResult GetResult() => run.GetResult();
+                public void Dispose() => run.Dispose();
+            }
+        }
+
         private sealed class Observer : IRunObserver
         {
             private readonly ProcessingViewModel _progress;

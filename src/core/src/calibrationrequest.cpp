@@ -46,15 +46,16 @@ bool buildCalibrationRequest(const CalibrationInputs& setup, const std::string& 
     // profiles are matched to plot channels by word - a divergent map silently misattaches every
     // profile and the plot falls back to linear calibration.
     req.receiverParamsToml = setup.receiverParamsToml;
+    req.receiverParamsIsDefault = false;
     if (req.receiverParamsToml.empty())
     {
-        const std::filesystem::path defaultParams = textfile::pathFromUtf8(
-            appRoot + "/" + UIConstants::kSettingsDirName + "/" + UIConstants::kReceiverParamsDirName + "/" +
-            UIConstants::kDefaultTomlFilename);
+        const std::filesystem::path defaultParams = defaultReceiverParamsFile(appRoot);
         std::error_code ec;   // exists() with an error code never throws on a bad path
         if (std::filesystem::exists(defaultParams, ec))
         {
             req.receiverParamsToml = defaultParams;
+            // Passed over for the sequential map if it cannot be used, as the main run does (resolveReceiverWordMap).
+            req.receiverParamsIsDefault = true;
         }
     }
 

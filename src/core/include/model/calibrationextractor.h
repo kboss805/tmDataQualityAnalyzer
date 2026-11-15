@@ -75,6 +75,9 @@ public:
         Acquisition acquisition;
         /// Word-map TOML; callers resolve the shipped default.toml here so the map matches the main run (empty only if that file is missing).
         std::filesystem::path receiverParamsToml;
+        /// True when receiverParamsToml is that shipped default rather than a file the user named: an unusable default
+        /// is then passed over for the sequential grid, with a warning, exactly as the main run passes it over.
+        bool    receiverParamsIsDefault = false;
         int     numReceivers = 0;            ///< Sequential-grid fallback, used only when receiverParamsToml is empty.
         int     receiverChannels = 0;        ///< Sequential-grid fallback, used only when receiverParamsToml is empty.
         std::vector<StepDefinition> steps;   ///< Expected steps parsed from the step-config TOML.
