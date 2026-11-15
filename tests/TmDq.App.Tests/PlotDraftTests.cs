@@ -176,10 +176,12 @@ namespace TmDq.App.Tests
             PlotViewModel plot = Dense();
             Shown s = Show(plot);
             s.Chart.DraftThresholdMs = 0;
-            s.Chart.RefineDelay = TimeSpan.FromMilliseconds(30);
+            s.Chart.RefineDelay = TimeSpan.FromMilliseconds(100);
             Assert.Equal(TimeSpan.FromMilliseconds(150), PlotChart.DefaultRefineDelay);
             // The wait starts in the wheel's handler, so the clock starts before it: started after the first frame, it
-            // missed however long that frame took (about 12 ms on a CI runner, which failed the bound below).
+            // missed however long that frame took (about 12 ms on a CI runner). And the wait is a Task.Delay, whose timer
+            // runs on Windows' coarse tick (15.6 ms) and can end up to a tick early (a 30 ms delay was seen to end at 24 ms
+            // on a runner), so the bound leaves a tick and more below the delay.
             var clock = Stopwatch.StartNew();
             s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
             Dispatcher.UIThread.RunJobs();
@@ -192,7 +194,7 @@ namespace TmDq.App.Tests
                 using (s.Frame()) { }
             }
             Assert.False(s.Chart.DraftShown, "the full picture did not come back after the gesture stopped");
-            Assert.True(clock.Elapsed >= TimeSpan.FromMilliseconds(25), $"settled {clock.Elapsed.TotalMilliseconds} ms after the wheel, before its 30 ms delay");
+            Assert.True(clock.Elapsed >= TimeSpan.FromMilliseconds(75), $"settled {clock.Elapsed.TotalMilliseconds} ms after the wheel, well before its 100 ms delay");
             s.Window.Close();
         }
 

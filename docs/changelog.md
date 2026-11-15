@@ -69,6 +69,11 @@ the soak and the throughput gate; D8 gets its own PR.
   and was untested before this change too. All three suites in Release, zero warnings: native **494** (1 skipped),
   managed **364** passed / 1 skipped, app **640** passed / 34 not run. Baseline moved: native 495 to 494 (the messages
   test).
+- **Beside it: the wheel-settle flake again.** CI failed this PR on `TheWheelSettlesOnItsOwnAfterTheRefineDelay` with
+  "settled 24.1 ms after the wheel, before its 30 ms delay": #283's 25 ms bound was too close. The refine wait is a
+  `Task.Delay`, whose timer runs on Windows' coarse tick (15.6 ms) and can end up to a tick early, so no bound within a tick
+  of the delay holds. The test now waits 100 ms and asks for at least 75. Mutants F1 (no delay) and F2 (half of it) are
+  CAUGHT again.
 
 #### Save Template... has its ellipsis
 
