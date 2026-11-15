@@ -183,8 +183,6 @@ void CalibrationExtractor::start(const Request& request, std::shared_ptr<Process
     m_params.mode              = StreamMode::ReceiverChannelInfo;
     m_params.streamLabel       = "Calibration";
     m_params.samplePeriodSec   = m_sample_period_sec;
-    m_params.startSeconds      = 0;
-    m_params.stopSeconds       = UINT64_MAX; // whole file
     // Measure steps over elapsed stream time from zero, independent of the cal
     // file's IRIG time (which may be large/absent and would otherwise derail the
     // per-period sample windowing).
@@ -457,7 +455,6 @@ bool CalibrationExtractor::buildFrameSetup(const Request& request,
         ParameterInfo* p = m_frame_setup->getParameter(i);
         p->slope      = 1.0;
         p->scale      = 0.0;
-        p->is_enabled = true;
         p->sample_sum = 0.0;
         p->profile    = CalibrationProfile{}; // ensure linear (raw) extraction
     }

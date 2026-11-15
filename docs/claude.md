@@ -137,7 +137,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The user can switch the left-axis view between framesync lock (%) and accumulated missed frames modes (context menu > View Mode).
 - [x] The user can select which telemetry stream's accumulated missed frames to view in the plot window.
 - [x] Missed frames are accumulated per telemetry stream against that stream's own frame parameters.
-  - **Scope:** A "missed frame" is a discrete loss-of-lock event — while in lock, the stream ran past the expected minor-frame boundary (`bits_in_frame`) without a sync match. The metric is a cumulative count of these events per stream, counted over the whole recording (the core's processing window takes a `[start, stop]`, but the ABI always passes the whole recording, so no host can select one), and only ever increases. It is NOT a bit-level (Hamming/BER) error count. The user-facing label is "Accumulated Missed Frames" (`PlotViewModel.MissedFramesAxisLabel`); this is the canonical term across the UI, release notes, and code.
+  - **Scope:** A "missed frame" is a discrete loss-of-lock event — while in lock, the stream ran past the expected minor-frame boundary (`bits_in_frame`) without a sync match. The metric is a cumulative count of these events per stream, counted over the whole recording, and only ever increases. It is NOT a bit-level (Hamming/BER) error count. The user-facing label is "Accumulated Missed Frames" (`PlotViewModel.MissedFramesAxisLabel`); this is the canonical term across the UI, release notes, and code.
 
 ### US3.2: View SNR signal data from IRIG 106 formatted PCM telemetry streams contained in .ch10 files — Complete
 
@@ -882,7 +882,7 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
 - **PacketQueue** (`test_packetqueue`) - order, the bound, blocking on either side, `close()`, draining, and 20,000
   items through a small queue under a watchdog.
 - **FrameProcessor** (`test_frameprocessor`) - real recordings in both modes, and synthetic streams at one second per
-  bit with every value worked by hand: the windows on both clocks, a bounded window, lost lock and missed frames, gap
+  bit with every value worked by hand: the windows on both clocks, lost lock and missed frames, gap
   extrapolation, the word map and calibration, the descrambler against an independent randomizer, inversion, and the
   exact text of everything it reports.
 - **PipelineRunner** (`test_pipelinerunner`) - a run's results and end on `step_cal`, a failing stream beside good ones,

@@ -12,6 +12,36 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The processing window that nothing could set, and two dead fields on the decode path (audit D2, D1, D3)
+
+Found by the whole-tree cleanup audit. D2 is the owner's decision of 2026-11-15: remove the window and say so in the user
+story. D1 and the `is_enabled` half of D3 were held back from the dead-code PR because they are on the decode path too.
+
+- **D2: the `[start, stop]` window is gone.** `ProcessingParams::startSeconds`/`stopSeconds` were only ever 0 and the
+  maximum (the ABI has no field for them, and the calibration extractor set the same), so `in_window` was always true, the
+  "processing (Ns to Ms)..." log line never printed, and the state existed for one test. Removed: the two fields and the
+  three places that set them, the per-bit `in_window` test and the four branches it gated in `scanBit` and the bit loop
+  (missed frames, the lock counters, word extraction, closing windows), and `ScanState`'s copies. The IRIG clock's first
+  window is still seeded from the first packet's time (a time before the epoch, which a recording cannot carry, still seeds
+  at zero, exactly as the window's zero start did). Tests: "a bounded window keeps exactly the bits from its start to its
+  stop" and the reporting rows "bounded-window" and "stop-bounded" are removed, and "unsynced bits miss one frame per frame
+  length, counted only inside the window" loses its from-100 s half and the last four words of its name. US3.1's scope now
+  says missed frames are counted over the whole recording, as do `docs/framesync_logic.md` and the `tm-code-review`
+  skill.
+- **D1: `FrameProcessor::PacketTimeRef`.** `prev_time_ref`, `has_time_ref`, `start_bit` and `num_bits` were written and
+  never read; the one field read, the packet's base time, is `item.baseAbsSeconds`, which the loop now reads directly.
+- **D3 (b): `ParameterInfo::is_enabled`.** It was true for every parameter outside tests, so every word of the map is a
+  channel; the filter in `buildEnabledParams` and the three places that set the flag are gone. The test "only enabled words
+  become channels" is now "every word of the map becomes a channel" without its disabled word, and the stream-job digest
+  test's recorded expectations drop the `window=11-99` and `en=1` fields they carried in every case (31 and 135 of them).
+- **Checked.** Mutation check, `eng\mutate.ps1` on the native suite (frame processor, frame sync, stream job and
+  calibration extractor cases), 7 mutants on the code that lost its guards, **7 CAUGHT**: W1 missed frames not counted,
+  W2 the lock denominator not counted, W3 windows never closed, W4 the IRIG clock seeded at zero, T1 a bit's time without
+  its packet's base, E1 a word of the map dropped, X1 no word extracted. The soak (`eng\run_soak.ps1`, all 34 runs) and
+  the throughput gate (`eng\run_throughput_bench.ps1`) ran on this change: all 34 runs exported byte for byte what v2.14.2 exported. The gate passed, pinned to the performance cores: four streams in parallel 12.8 s against 13.2 s for the slowest alone (0.97x) and 20.4 s for all four in sequence (0.63x). All three suites
+  in Release, zero warnings: native **493** (1 skipped), managed **364** passed / 1 skipped, app **640** passed / 34 not
+  run. Baseline moved: native 494 to 493 (the bounded-window case).
+
 #### View-model members only the tests read (audit D8)
 
 Found by the whole-tree cleanup audit; the owner decided on 2026-11-15 to drop them and move their tests onto what the

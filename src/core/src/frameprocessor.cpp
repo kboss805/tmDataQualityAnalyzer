@@ -99,8 +99,6 @@ void FrameProcessor::setEvents(std::shared_ptr<ProcessingEvents> events)
 
 bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_setup)
 {
-    const auto  start_seconds  = params.startSeconds;
-    const auto  stop_seconds   = params.stopSeconds;
     const bool  is_randomized  = params.isRandomized;
     const bool  is_inverted    = params.isInverted;
     const bool  receiver_mode  = (params.mode == StreamMode::ReceiverChannelInfo);
@@ -148,14 +146,11 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     state.words_in_frame  = attrs.wordsInFrame;
     state.word_len        = attrs.wordLen;
     state.min_syncs       = attrs.minSyncs;
-    state.start_seconds   = static_cast<double>(start_seconds);
-    state.stop_seconds    = static_cast<double>(stop_seconds);
     // Output windowing clock. Seeded lazily from the first packet's actual IRIG
-    // timestamp below (not from start_seconds, which is just 0 when the caller has
-    // no real time bound) so the clock doesn't have to "catch up" sample-by-sample
-    // from the IRIG day epoch to wherever the data actually starts.
+    // timestamp below (not from zero) so the clock doesn't have to "catch up"
+    // sample-by-sample from the IRIG day epoch to wherever the data actually starts.
     state.sample_period       = params.samplePeriodSec;
-    state.current_time_sample = static_cast<double>(start_seconds);
+    state.current_time_sample = 0.0;
     state.next_time_sample    = state.current_time_sample + state.sample_period;
     state.frame_words = std::vector<uint64_t>(state.words_in_frame, 0);
 
@@ -173,11 +168,8 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     uint64_t swap_skipped_packets  = 0;
     bool     time_seeded           = false;
 
-    // Timestamp tracking: keep current and previous packet time references.
+    // Bits consumed so far: the data-rate clock's time base.
     uint64_t global_bit_offset = 0;
-    PacketTimeRef current_time_ref = {0.0, 0, 0};
-    PacketTimeRef prev_time_ref = {0.0, 0, 0};
-    bool has_time_ref = false;
 
     // This worker's private, mutable copy of the packet in flight. Queue payloads are shared
     // with every other stream on the channel and are const, but swap / invert / derandomize
@@ -189,12 +181,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
     bool needs_derand = is_randomized;
     uint16_t lfsr_state = 0;
 
-    // Only name the window when it is actually bounded; an unset stop prints as
-    // 18446744073709551615s, which is noise on every ordinary run.
-    const bool bounded = (start_seconds != 0) || (stop_seconds != UINT64_MAX);
-    m_report.log(streamTag(params)
-                 + (bounded ? std::format("processing ({}s to {}s)...", start_seconds, stop_seconds)
-                            : std::string("processing...")));
+    m_report.log(streamTag(params) + "processing...");
 
     // -----------------------------------------------------------------------
     // Consume packets from the queue until the end-of-stream sentinel.
@@ -249,21 +236,10 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
             derandomizeBitstream(raw_data, packet_bits, lfsr_state);
         }
 
-        // Update time references (keep current + previous for boundary frames).
-        if (has_time_ref)
-        {
-            prev_time_ref = current_time_ref;
-        }
-        current_time_ref.base_abs_seconds = item.baseAbsSeconds;
-        current_time_ref.start_bit        = global_bit_offset;
-        current_time_ref.num_bits         = packet_bits;
-        has_time_ref = true;
-
         if (!time_seeded && !use_rate_clock)
         {
-            double seed = item.baseAbsSeconds > state.start_seconds
-                ? item.baseAbsSeconds
-                : state.start_seconds;
+            // A time before the epoch, which a valid recording cannot carry, seeds at zero.
+            double seed = item.baseAbsSeconds > 0.0 ? item.baseAbsSeconds : 0.0;
             state.current_time_sample = seed;
             state.next_time_sample = seed + state.sample_period;
             time_seeded = true;
@@ -283,23 +259,17 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
 
             double current_time_eval = use_rate_clock
                 ? static_cast<double>(global_bit_offset + bit_pos) * time_per_bit
-                : current_time_ref.base_abs_seconds + (static_cast<double>(bit_pos) * time_per_bit);
+                : item.baseAbsSeconds + (static_cast<double>(bit_pos) * time_per_bit);
 
-            // Time only delimits the averaging window; all per-bit accounting below
-            // is gated on the bit falling inside the selected [start, stop] window.
-            const bool in_window = (current_time_eval >= state.start_seconds &&
-                                    current_time_eval <= state.stop_seconds);
-            if (in_window)
-            {
-                closeElapsedWindows(state, current_time_eval, params, enabled_params);
-            }
+            // Time only delimits the averaging windows: every bit of the recording is counted.
+            closeElapsedWindows(state, current_time_eval, params, enabled_params);
 
             uint32_t mbyte_idx = static_cast<uint32_t>(bit_pos / 8);
             constexpr uint8_t kHighBit = 0x80;
             // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
             uint8_t bit_val = ((raw_data[mbyte_idx] & (kHighBit >> (bit_pos % 8))) != 0) ? 1 : 0;
 
-            scanBit(state, bit_val, in_window, enabled_params);
+            scanBit(state, bit_val, enabled_params);
         }
 
         global_bit_offset += packet_bits;
@@ -337,8 +307,8 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
         double lock_pct = 0.0;
         if (state.total_bits_in_window > 0)
         {
-            // valid_bits_in_window is only incremented inside the same window guard
-            // as total_bits_in_window and only while in lock, so it can never exceed
+            // valid_bits_in_window is only incremented together with
+            // total_bits_in_window and only while in lock, so it can never exceed
             // it — lock_pct is already bounded at 100, no clamp needed (matching the
             // in-loop computation above).
             lock_pct = (static_cast<double>(state.valid_bits_in_window) /
@@ -427,7 +397,7 @@ void FrameProcessor::closeElapsedWindows(ScanState& s, double current_time_eval,
     }
 }
 
-void FrameProcessor::scanBit(ScanState& s, uint8_t bit_val, bool in_window,
+void FrameProcessor::scanBit(ScanState& s, uint8_t bit_val,
                              const std::vector<ParameterInfo*>& enabled_params)
 {
     s.test_word = (s.test_word << 1) | bit_val;
@@ -436,10 +406,7 @@ void FrameProcessor::scanBit(ScanState& s, uint8_t bit_val, bool in_window,
 
     if (s.minor_frame_bit_count > s.bits_in_frame)
     {
-        if (in_window)
-        {
-            s.accumulated_missed_frames++;
-        }
+        s.accumulated_missed_frames++;
         s.sync_count = UINT64_MAX; // Loss of lock
         s.minor_frame_bit_count = 1; // Roll over to continuously track missed frames
     }
@@ -477,29 +444,25 @@ void FrameProcessor::scanBit(ScanState& s, uint8_t bit_val, bool in_window,
             // frame, or PRN data can be sampled as if it were locked.
             if (at_boundary && s.sync_count >= s.min_syncs && s.save_data > 1)
             {
-                // We only extract parameters if we are within the selected processing time bounds
-                if (in_window)
+                for (auto* param : enabled_params)
                 {
-                    for (auto* param : enabled_params)
+                    if (param->word >= 0 &&
+                        param->word < static_cast<int>(s.words_in_frame))
                     {
-                        if (param->word >= 0 &&
-                            param->word < static_cast<int>(s.words_in_frame))
-                        {
-                            int64_t raw_value = static_cast<int64_t>(s.frame_words[param->word] & s.word_mask);
-                            // Accumulate RAW counts; calibration (linear or non-linear)
-                            // is applied once to the windowed average in
-                            // recordTimeSample(). Averaging raw first is required for
-                            // the non-linear profile: the profile maps averaged-raw ->
-                            // true dB, so mean(interpolate(raw)) would bias each plateau
-                            // off the true step value. For linear cal the two orders are
-                            // identical.
-                            param->sample_sum += static_cast<double>(raw_value);
-                        }
+                        int64_t raw_value = static_cast<int64_t>(s.frame_words[param->word] & s.word_mask);
+                        // Accumulate RAW counts; calibration (linear or non-linear)
+                        // is applied once to the windowed average in
+                        // recordTimeSample(). Averaging raw first is required for
+                        // the non-linear profile: the profile maps averaged-raw ->
+                        // true dB, so mean(interpolate(raw)) would bias each plateau
+                        // off the true step value. For linear cal the two orders are
+                        // identical.
+                        param->sample_sum += static_cast<double>(raw_value);
                     }
-
-                    s.n_samples++;
-                    s.total_frames_extracted++;
                 }
+
+                s.n_samples++;
+                s.total_frames_extracted++;
             }
 
             s.minor_frame_bit_count = 0;
@@ -532,12 +495,9 @@ void FrameProcessor::scanBit(ScanState& s, uint8_t bit_val, bool in_window,
         }
     }
 
-    if (in_window)
-    {
-        s.total_bits_in_window++;
-        if (in_lock) {
-            s.valid_bits_in_window++;
-        }
+    s.total_bits_in_window++;
+    if (in_lock) {
+        s.valid_bits_in_window++;
     }
 }
 
@@ -549,11 +509,7 @@ std::vector<ParameterInfo*> FrameProcessor::buildEnabledParams(FrameSetup* frame
         enabled_params.reserve(frame_setup->length());
         for (int i = 0; i < frame_setup->length(); i++)
         {
-            ParameterInfo* param = frame_setup->getParameter(i);
-            if (param->is_enabled)
-            {
-                enabled_params.push_back(param);
-            }
+            enabled_params.push_back(frame_setup->getParameter(i));
         }
     }
 

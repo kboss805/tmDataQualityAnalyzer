@@ -243,7 +243,7 @@ Design points as built:
 lock_pct = (valid_bits_in_window / total_bits_in_window) × 100
 ```
 
-It is a pure **bit-domain** quantity, counted bit by bit in `FrameProcessor::scanBit()` while the stream is scanned. Every bit that falls inside the processing window increments `total_bits_in_window`; a bit that arrives while the scanner is in lock (`sync_count >= min_syncs`) also increments `valid_bits_in_window`. So the lock figure is the share of the window's bits that lay in a locked stretch, whatever the frame length: it is not a count of frames, and it does not depend on a bit rate. `valid_bits_in_window` is only incremented under the same guard as `total_bits_in_window`, so it can never exceed it and the result is bounded at 100 without a clamp.
+It is a pure **bit-domain** quantity, counted bit by bit in `FrameProcessor::scanBit()` while the stream is scanned. Every bit scanned increments `total_bits_in_window`; a bit that arrives while the scanner is in lock (`sync_count >= min_syncs`) also increments `valid_bits_in_window`. So the lock figure is the share of the window's bits that lay in a locked stretch, whatever the frame length: it is not a count of frames, and it does not depend on a bit rate. `valid_bits_in_window` is only incremented together with `total_bits_in_window`, so it can never exceed it and the result is bounded at 100 without a clamp.
 
 **Per output window (`samplePeriodSec`):** `closeElapsedWindows()` closes every window the current bit's time has passed, in order:
 
@@ -251,7 +251,7 @@ It is a pure **bit-domain** quantity, counted bit by bit in `FrameProcessor::sca
 - A window that saw **no bits at all** is a genuine recording gap: it records 0.0 and adds the frames the data rate says were lost (`samplePeriodSec × bit rate / bits_in_frame`); this is the only place the data rate enters, and only for missed frames, never for the lock percentage.
 - The counters reset and the window advances by one `samplePeriodSec`; the last, partly filled window is flushed when the stream ends.
 
-Time delimits the averaging window and bounds the processing range (`startSeconds`, `stopSeconds`; the ABI sets them to the whole recording); it does not enter the numerator or the denominator.
+Time only delimits the averaging window (every bit of the recording is scanned); it does not enter the numerator or the denominator.
 
 **Why bit-span instead of `time × bit_rate`:** the value stays correct even if the configured rate (TMATS `dataRateMbps`) is slightly off, because only the bits actually scanned are counted.
 

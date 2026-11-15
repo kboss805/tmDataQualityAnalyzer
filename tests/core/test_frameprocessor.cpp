@@ -165,8 +165,6 @@ void syntheticParams(ProcessingParams& p, PacketQueue& queue)
     p.pcmChannelId     = 7;
     p.streamLabel      = "Rcvr Bus";
     p.mode             = StreamMode::FrameSyncLockStats;
-    p.startSeconds     = 0;
-    p.stopSeconds      = UINT64_MAX;
     p.samplePeriodSec  = 1e9;
     p.useDataRateClock = true;
     p.isRandomized     = false;
@@ -312,7 +310,6 @@ ParameterInfo* addWord0(FrameSetup& setup)
 {
     setup.addParameter("W0", 0);
     ParameterInfo* param = setup.getParameter(0);
-    param->is_enabled = true;
     param->slope      = 1.0;
     param->scale      = 0.0;
     param->sample_sum = 0.0;
@@ -325,14 +322,13 @@ void loadDefaultFrameSetup(FrameSetup& setup)
     REQUIRE(setup.tryLoadingFile(repoFile(fs::path("settings") / "receiver_params" / "default.toml"), 49));
 }
 
-/// Enables every parameter of the shipped word map with this slope and offset.
+/// Gives every parameter of the shipped word map this slope and offset.
 void setupParams(FrameSetup& setup, double slope, double offset)
 {
     loadDefaultFrameSetup(setup);
     for (int i = 0; i < setup.length(); i++)
     {
         ParameterInfo* param = setup.getParameter(i);
-        param->is_enabled = true;
         param->slope      = slope;
         param->scale      = offset;
         param->sample_sum = 0.0;
@@ -364,8 +360,6 @@ Trc loadTrc()
 ProcessingParams trcParams(const Trc& t, StreamMode mode)
 {
     ProcessingParams p = makeTestParams(t.path, t.time_id, t.pcm_id);
-    p.startSeconds    = 0;
-    p.stopSeconds     = UINT64_MAX;
     p.samplePeriodSec = 1.0;
     p.isRandomized    = true;
     p.mode            = mode;
@@ -459,18 +453,6 @@ TEST_CASE("FrameProcessor: reports exactly these messages")
           unicode_tag + "4 bytes processed, 3 syncs found, 2 frames extracted.",
           unicode_tag + "complete — 1 samples extracted, elapsed N.Ns."},
          {}},
-        // A bounded window is named; an unbounded one is not (an unset stop would print as 18446744073709551615s on
-        // every ordinary run).
-        {"bounded-window", false,
-         {tag + "processing (1s to 100s)...",
-          tag + "2 bytes processed, 2 syncs found, 0 frames extracted."},
-         {tag + "sync found but no frames extracted — pattern 0x9 (4 bits), 12 bits/frame; 2 syncs, 1 boundary-aligned."}},
-        // Bounded at the stop alone is still bounded.
-        {"stop-bounded", true,
-         {tag + "processing (0s to 100s)...",
-          tag + "2 bytes processed, 2 syncs found, 1 frames extracted.",
-          tag + "complete — 1 samples extracted, elapsed N.Ns."},
-         {}},
         // A pattern with a leading zero (0110) is not matched against the first three bits of the stream (110),
         // which would equal it before a whole pattern's worth of bits had arrived.
         {"leading-zero-pattern", false,
@@ -532,19 +514,6 @@ TEST_CASE("FrameProcessor: reports exactly these messages")
                 p.streamLabel = unicode_label;
             }
             enqueueBits(q, "1001" "0000" "00001001" "0000" "00001001");
-            enqueueEndOfStream(q);
-        }
-        else if (scenario == "bounded-window")
-        {
-            p.startSeconds = 1;
-            p.stopSeconds  = 100;
-            enqueueBits(q, "1001" "0000" "00001001");
-            enqueueEndOfStream(q);
-        }
-        else if (scenario == "stop-bounded")
-        {
-            p.stopSeconds = 100;
-            enqueueBits(q, "1001" "0000" "00001001");
             enqueueEndOfStream(q);
         }
         else if (scenario == "leading-zero-pattern")
@@ -751,8 +720,6 @@ TEST_CASE("FrameProcessor: an invalid time channel, PCM channel or file fails th
 
         FrameSetup setup;
         ProcessingParams p = makeTestParams(row.file, row.time_id, row.pcm_id);
-        p.startSeconds    = 0;
-        p.stopSeconds     = 100;
         p.samplePeriodSec = 1.0;
         CHECK_FALSE(fp.process(p, &setup));
         CHECK_FALSE(cap.errors.empty());
@@ -1019,7 +986,6 @@ TEST_CASE("FrameProcessor: a calibration round trip on a real recording produces
     for (int i = 0; i < setup.length(); i++)
     {
         ParameterInfo* param = setup.getParameter(i);
-        param->is_enabled = true;
         param->slope      = 1.0;
         param->scale      = 0.0;
         param->sample_sum = 0.0;
@@ -1031,8 +997,6 @@ TEST_CASE("FrameProcessor: a calibration round trip on a real recording produces
     }
 
     ProcessingParams p = makeTestParams(t.path, t.time_id, t.pcm_id, 0xFE6B2840, 32, 500, 8000);
-    p.startSeconds = 0;
-    p.stopSeconds  = UINT64_MAX;
     // A 100 ms window: at this recording's ~8000-bit / ~100 frames-per-second rate the shipped 10 ms period averages
     // only ~1 frame (a sparse, gap-laced series), while 1 s leaves only a few samples per ~4.5 s dwell. 100 ms is the
     // neighbourhood the extractor sizes itself to, giving clean plateaus for the re-detection below. The rate clock
@@ -1220,47 +1184,6 @@ TEST_CASE("FrameProcessor: each window averages its own frames, on either clock"
     }
 }
 
-TEST_CASE("FrameProcessor: a bounded window keeps exactly the bits from its start to its stop")
-{
-    // Bits 0..111, frames ending at 15, 27, ..., 111. From 15 s to 63 s: both ends are bits that carry a frame's
-    // sync, and both are in. The windows start at the start: 15..30, 31..45, 46..60, 61..63. Nothing before the start
-    // or after the stop counts towards anything, and no window is closed after the stop.
-    const std::string bits = stream({1, 4, 5, 6, 7, 15, 8, 10, 11});
-    for (const bool rate_clock : {true, false})
-    {
-        // On the IRIG clock the recording starts at 1000 s, before the window does, so the windows start at the
-        // window's start and not at the first packet's time.
-        INFO((rate_clock ? "the rate clock" : "the IRIG clock"));
-        const double t0 = rate_clock ? 0.0 : 1000.0;
-        const std::vector<Packet> packets = rate_clock ? std::vector<Packet>{{bits}} : split(bits, 7, t0);
-        auto params = [&](StreamMode mode) {
-            ProcessingParams p = timedParams(mode, rate_clock);
-            p.startSeconds = static_cast<uint64_t>(t0) + 15;
-            p.stopSeconds  = static_cast<uint64_t>(t0) + 63;
-            return p;
-        };
-        const std::vector<double> times = {t0 + 15, t0 + 30, t0 + 45, t0 + 60};
-
-        FrameSetup setup;
-        addWord0(setup);
-        Capture cap;
-        const ProcessedStreamData receiver = runPackets(params(StreamMode::ReceiverChannelInfo), &setup, packets, &cap);
-        REQUIRE_FALSE(cap.logs.empty());
-        CHECK(cap.logs.front() == (rate_clock ? "[CH 7 Rcvr Bus] processing (15s to 63s)..."
-                                              : "[CH 7 Rcvr Bus] processing (1015s to 1063s)..."));
-        checkSeries(receiver.timesSec, times, "receiver times");
-        REQUIRE(receiver.channels.size() == 1);
-        checkSeries(receiver.channels[0].values, {2.5, 5, 6, 7}, "receiver values");
-
-        FrameSetup none;
-        const ProcessedStreamData locked = runPackets(params(StreamMode::FrameSyncLockStats), &none, packets);
-        checkSeries(locked.timesSec, times, "lock times");
-        // Every bit in the window is locked; the unlocked first four are before the start and do not count.
-        checkSeries(locked.lockPercent, {100, 100, 100, 100}, "lock percent");
-        checkSeries(locked.accumulatedMissedFrames, {0, 0, 0, 0}, "missed frames");
-    }
-}
-
 TEST_CASE("FrameProcessor: a lost lock counts missed frames and leaves windows with no frames at zero")
 {
     // Two frames, 30 bits with no sync, then a sync off the frame boundary and two more frames. Bits: frames end at 15
@@ -1286,7 +1209,7 @@ TEST_CASE("FrameProcessor: a lost lock counts missed frames and leaves windows w
     checkSeries(locked.accumulatedMissedFrames, {0, 0, 1, 2, 2, 2}, "missed frames");
 }
 
-TEST_CASE("FrameProcessor: unsynced bits miss one frame per frame length, counted only inside the window")
+TEST_CASE("FrameProcessor: unsynced bits miss one frame per frame length")
 {
     // One frame (its sync ends at bit 15), then 169 bits with no sync. The frame counter overruns 13 bits after the
     // sync and every 12 bits after that: at bits 28, 40, ..., 184 - fourteen missed frames.
@@ -1300,16 +1223,6 @@ TEST_CASE("FrameProcessor: unsynced bits miss one frame per frame length, counte
     checkSeries(all.accumulatedMissedFrames, {14}, "missed frames");
     // Locked from bit 4 to bit 27: 24 of 185.
     checkSeries(all.lockPercent, {2400.0 / 185.0}, "lock percent");
-
-    // From 100 s, in 50 s windows: only the overruns at 100, 112, 124, 136 and 148 fall in the one window that closes
-    // (100..150). The final one has no frame and is not recorded.
-    ProcessingParams later = timedParams(StreamMode::FrameSyncLockStats, true);
-    later.startSeconds    = 100;
-    later.samplePeriodSec = 50;
-    const ProcessedStreamData from100 = runPackets(later, &none, {{bits}});
-    checkSeries(from100.timesSec, {100}, "times from 100 s");
-    checkSeries(from100.accumulatedMissedFrames, {5}, "missed frames from 100 s");
-    checkSeries(from100.lockPercent, {0}, "lock percent from 100 s");
 }
 
 TEST_CASE("FrameProcessor: a recording gap extrapolates the missed frames from the data rate")
@@ -1369,21 +1282,19 @@ TEST_CASE("FrameProcessor: frames are extracted only after the minimum number of
     }
 }
 
-TEST_CASE("FrameProcessor: only enabled words become channels, each calibrated as (raw + offset) x slope")
+TEST_CASE("FrameProcessor: every word of the map becomes a channel, each calibrated as (raw + offset) x slope")
 {
     // Word 0 is 5 then 6. A word the frame does not have (before it, or past its two words) stays at zero rather than
-    // reading outside the frame; a disabled word is not a channel at all; a lock-only stream has no channels whatever
-    // its word map says; and a sum left in the map by an earlier run does not leak into this one.
+    // reading outside the frame; a lock-only stream has no channels whatever its word map says; and a sum left in the
+    // map by an earlier run does not leak into this one.
     FrameSetup setup;
     setup.addParameter("W0", 0);
     setup.addParameter("Cal", 0);
     setup.addParameter("Before", -1);
     setup.addParameter("Past", 2);
-    setup.addParameter("Off", 1);
     for (int i = 0; i < setup.length(); i++)
     {
         ParameterInfo* param = setup.getParameter(i);
-        param->is_enabled = param->name != "Off";
         param->slope      = 1.0;
         param->scale      = 0.0;
         param->sample_sum = 1000.0; // left over from a run that was cancelled mid-window
@@ -1501,8 +1412,6 @@ TEST_CASE("FrameProcessor: with the byte swap off a sync is found that the swap 
     };
     auto run = [&](bool swap) -> Outcome {
         ProcessingParams p = makeTestParams(path, time_id, kPrnChannelId, 0x334AABBF, 32, kPrnFrameWords, kPrnFrameBits);
-        p.startSeconds    = 0;
-        p.stopSeconds     = UINT64_MAX;
         p.samplePeriodSec = 1.0;
         p.isRandomized    = false;
         p.swapBytes       = swap;
@@ -1549,8 +1458,6 @@ TEST_CASE("FrameProcessor: an odd payload's skipped swap is reported")
 
     ProcessingParams p = makeTestParams(path, time_id, kOddPayloadChannelId, 0x334AABBF, 32, kPrnFrameWords,
                                         kPrnFrameBits);
-    p.startSeconds    = 0;
-    p.stopSeconds     = UINT64_MAX;
     p.samplePeriodSec = 1.0;
     p.isRandomized    = false;
     p.swapBytes       = true; // asked for - and silently not delivered
@@ -1589,8 +1496,6 @@ TEST_CASE("FrameProcessor: off-phase syncs are not counted as boundary-aligned")
     const Trc t = loadTrc();
     constexpr int kWrongFrameBits = 1234; // real frames are 800 bits
     ProcessingParams p = makeTestParams(t.path, t.time_id, t.pcm_id, 0xFE6B2840, 32, 49, kWrongFrameBits);
-    p.startSeconds    = 0;
-    p.stopSeconds     = UINT64_MAX;
     p.samplePeriodSec = 1.0;
     p.isRandomized    = true;
     p.mode            = StreamMode::FrameSyncLockStats;
@@ -1625,8 +1530,6 @@ TEST_CASE("FrameProcessor: a failure report names the channel and the sync patte
     // Right pattern, wrong frame length: matches occur at the real 800-bit spacing so none is ever boundary-aligned,
     // which lands in the detailed report.
     ProcessingParams p = makeTestParams(t.path, t.time_id, t.pcm_id, 0xFE6B2840, 32, 49, 1234);
-    p.startSeconds    = 0;
-    p.stopSeconds     = UINT64_MAX;
     p.samplePeriodSec = 1.0;
     p.isRandomized    = true;
     p.mode            = StreamMode::FrameSyncLockStats;
