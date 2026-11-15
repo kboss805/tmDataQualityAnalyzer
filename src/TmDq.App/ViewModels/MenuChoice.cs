@@ -12,7 +12,7 @@ namespace TmDq.App.ViewModels
     public sealed partial class MenuChoice : ObservableObject
     {
         /// <summary>The header Avalonia draws as a separator.</summary>
-        public const string SeparatorHeader = "-";
+        private const string SeparatorHeader = "-";
 
         [ObservableProperty]
         private bool _isChecked;

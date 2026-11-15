@@ -62,7 +62,6 @@ namespace PCMConstants {
     /// kDefaultFrameSyncLockPattern; see the note there.
     inline constexpr int kDefaultFrameSyncLockBits   = 32767;
     inline constexpr int kDefaultReceiverSNRBits     = 800;  ///< Default Receiver SNR frame length in bits.
-    inline constexpr int kDefaultBitsPerFrame        = kDefaultFrameSyncLockBits; ///< Alias; matches default mode (Frame Sync Lock).
     /// @}
 
     /// @name Receiver SNR calibration defaults
@@ -82,9 +81,8 @@ namespace UIConstants {
     inline constexpr int kSecondsPerMinute = 60;    ///< Seconds in a minute.
     /// @}
     inline constexpr int kDefaultSlopeIndex           = 3;     ///< Default voltage slope index (0-5V range).
-    inline constexpr int kMaxSlopeIndex               = 3;     ///< Maximum valid voltage slope index.
     inline constexpr std::array<const char*, 3> kChannelPrefixes = {"L", "R", "C"}; ///< Channel prefix labels (L/R/C).
-    inline constexpr int kNumKnownPrefixes            = 3;     ///< Number of known channel prefixes.
+    inline constexpr int kNumKnownPrefixes = static_cast<int>(kChannelPrefixes.size()); ///< Number of known channel prefixes.
 
 
     /// @name Sample period options (seconds)
@@ -99,6 +97,8 @@ namespace UIConstants {
     /// @{
     inline constexpr std::array<double, 4> kSlopeVoltageLower = {-10.0, -5.0, 0.0, 0.0}; ///< Lower voltage bound per scale option.
     inline constexpr std::array<double, 4> kSlopeVoltageUpper = {10.0, 5.0, 10.0, 5.0};  ///< Upper voltage bound per scale option.
+    static_assert(kSlopeVoltageLower.size() == kSlopeVoltageUpper.size());
+    inline constexpr int kMaxSlopeIndex = static_cast<int>(kSlopeVoltageLower.size()) - 1; ///< Maximum valid voltage slope index.
     /// @}
 
 

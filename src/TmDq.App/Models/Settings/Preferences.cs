@@ -76,7 +76,7 @@ namespace TmDq.App.Models.Settings
     {
         public const string FileName = "preferences.json";
         public const string PortableMarker = "portable";
-        public const string FolderName = "tmDataQualityAnalyzer";
+        private const string FolderName = "tmDataQualityAnalyzer";
 
         private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
         private readonly string? _file;

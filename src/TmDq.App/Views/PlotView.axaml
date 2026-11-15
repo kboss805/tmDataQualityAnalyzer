@@ -57,7 +57,7 @@
           <Separator />
           <!-- Which processed file to view: every one overlaid, or one, with more than one, which batch runs bring (plan
                step 4.7, US1.1). -->
-          <MenuItem x:Name="PlotFileMenu" x:FieldModifier="public" Header="Plot File" IsEnabled="{Binding CanChoosePlotFile}"
+          <MenuItem Header="Plot File" IsEnabled="{Binding CanChoosePlotFile}"
                     ItemsSource="{Binding PlotFiles}" ItemContainerTheme="{StaticResource RadioChoice}" />
           <MenuItem Header="View Mode  (V)" IsEnabled="{Binding CanSwitchViewMode}">
             <MenuItem Header="Lock Percentage" ToggleType="Radio" IsChecked="{Binding IsLockPercentView, Mode=OneWay}"
@@ -70,7 +70,7 @@
           <MenuItem Header="Show Legend" ToggleType="CheckBox" IsChecked="{Binding LegendVisible, Mode=OneWay}"
                     InputGesture="L" Command="{Binding ToggleLegendCommand}" />
           <!-- The readout follows the nearest series unless pinned to one of those shown. -->
-          <MenuItem x:Name="ReadoutMenu" x:FieldModifier="public" Header="Readout" IsEnabled="{Binding HasData}"
+          <MenuItem Header="Readout" IsEnabled="{Binding HasData}"
                     ItemsSource="{Binding ReadoutChoices}" ItemContainerTheme="{StaticResource RadioChoice}" />
           <Separator />
           <!-- Zoom Back above Reset Span: one level out, then every level at once. -->

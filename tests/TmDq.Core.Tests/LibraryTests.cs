@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using TmDq.Core;
 using Xunit;
 
 namespace TmDq.Core.Tests;

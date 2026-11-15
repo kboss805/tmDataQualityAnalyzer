@@ -40,7 +40,7 @@
     </HeaderedContentControl>
     <HeaderedContentControl Classes="group" Header="Export Log (Text)">
       <StackPanel Spacing="4">
-        <CheckBox x:Name="LogBox" Content="Export Log" IsChecked="{Binding ExportLog}" />
+        <CheckBox Content="Export Log" IsChecked="{Binding ExportLog}" />
         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
           <TextBox x:Name="LogPathBox" Text="{Binding LogPath}" IsEnabled="{Binding ExportLog}" />
           <Button x:Name="LogBrowse" Grid.Column="1" Content="Browse..." Command="{Binding BrowseLogCommand}" />

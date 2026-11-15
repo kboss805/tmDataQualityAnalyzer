@@ -58,7 +58,7 @@ namespace TmDq.App.ViewModels.Plot
     /// (<see cref="PlotTimeWindow"/>), the readout's text (<see cref="PlotReadout"/>), CSV export and import
     /// (<see cref="PlotCsv"/>), and the colours (<see cref="PlotColors.Assign"/>).</para>
     /// </summary>
-    public sealed partial class PlotViewModel : ObservableObject, IDisposable
+    public sealed class PlotViewModel : ObservableObject, IDisposable
     {
         public const string DefaultTitle = "Framesync/SNR Plot";
         public const string XAxisLabel = "Time (DDD:HH:MM:SS)";

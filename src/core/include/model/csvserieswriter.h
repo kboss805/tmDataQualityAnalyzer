@@ -13,7 +13,6 @@
 #include <filesystem>
 #include <span>
 #include <string>
-#include <vector>
 
 #include "metrictype.h"
 

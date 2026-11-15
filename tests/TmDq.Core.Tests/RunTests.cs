@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using TmDq.Core;
 using Xunit;
 
 namespace TmDq.Core.Tests;

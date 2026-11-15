@@ -139,10 +139,10 @@ namespace TmDq.App.Models.Processing
         }
 
         /// <summary>A stream's name as the core gives it: its label, or "Ch &lt;id&gt;" without one.</summary>
-        public static string LabelOf(StreamConfig s) =>
+        private static string LabelOf(StreamConfig s) =>
             string.IsNullOrEmpty(s.Label) ? "Ch " + s.PcmChannelId.ToString(CultureInfo.InvariantCulture) : s.Label;
 
-        public static int PeriodMilliseconds(SamplePeriod period) => period switch
+        private static int PeriodMilliseconds(SamplePeriod period) => period switch
         {
             SamplePeriod.OneSecond => 1000,
             SamplePeriod.HundredMilliseconds => 100,
@@ -151,7 +151,7 @@ namespace TmDq.App.Models.Processing
         };
 
         /// <summary>The line logged for a stream that completed, in v2.14.2's words.</summary>
-        public static string Completed(ProcessedStream s) =>
+        private static string Completed(ProcessedStream s) =>
             $"  {s.Label}: {s.TimesSec.Length.ToString(CultureInfo.InvariantCulture)} samples, " +
             $"{s.Channels.Count.ToString(CultureInfo.InvariantCulture)} channel(s)";
 

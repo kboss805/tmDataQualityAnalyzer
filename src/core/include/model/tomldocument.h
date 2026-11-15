@@ -65,11 +65,10 @@ public:
     /// An empty, valid document, ready for setValue() + save().
     TomlDocument() = default;
 
-    /// Parses @p path. On failure the document is !ok() and empty; @p error, when
-    /// given, receives a human-readable reason (UTF-8). A file that parses but holds
-    /// nothing is ok() with no keys - "unreadable" and "empty" are different answers,
-    /// and callers here distinguish them.
-    static TomlDocument load(const std::filesystem::path& path, std::string* error = nullptr);
+    /// Parses @p path. On failure the document is !ok() and empty; the callers say what failed in their own words. A file
+    /// that parses but holds nothing is ok() with no keys - "unreadable" and "empty" are different answers, and callers
+    /// here distinguish them.
+    static TomlDocument load(const std::filesystem::path& path);
 
     /// False only when the file could not be read at all.
     bool ok() const { return m_ok; }
@@ -134,7 +133,7 @@ public:
     /// Sections are emitted in the order they were first set, and keys in the order
     /// they were set within each section, so a file this writes reads back in the same
     /// order it was built, not alphabetically.
-    bool save(const std::filesystem::path& path, std::string* error = nullptr) const;
+    bool save(const std::filesystem::path& path) const;
 
 private:
     /// Splits "Section/Key" into its parts; an unqualified key has an empty section.

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -19,7 +18,7 @@ namespace TmDq.App.ViewModels
     /// when <see cref="StreamRules.Problems"/> finds nothing, and the problems are shown as they arise, so a value
     /// v2.x's validators and spin boxes would have refused, or a file would have slipped past them, is named instead.
     /// </summary>
-    public sealed partial class StreamSetupViewModel : ObservableObject
+    public sealed class StreamSetupViewModel : ObservableObject
     {
         public static readonly IReadOnlyList<string> Periods = new[] { "1 s", "100 ms", "10 ms" };
         public static readonly IReadOnlyList<string> Polarities = new[] { "Positive", "Negative" };
@@ -303,10 +302,10 @@ namespace TmDq.App.ViewModels
             Problems = problems;
             OnPropertyChanged(nameof(ProblemText));
             OnPropertyChanged(nameof(CanAccept));
-            OkCommand?.NotifyCanExecuteChanged();
+            OkCommand.NotifyCanExecuteChanged();
             OnPropertyChanged(nameof(CanApplyCal));
             OnPropertyChanged(nameof(ApplyCalTip));
-            ApplyCalCommand?.NotifyCanExecuteChanged();
+            ApplyCalCommand.NotifyCanExecuteChanged();
         }
 
         private void Ok()

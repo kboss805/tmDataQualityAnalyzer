@@ -9,7 +9,7 @@ namespace TmDq.App.ViewModels
     /// every stream. As in v2.x, Cancel only asks: the text becomes "Cancelling..." and
     /// the button is disabled, and the dialog stays until the run has actually stopped.
     /// </summary>
-    public sealed partial class ProcessingViewModel : ObservableObject
+    public sealed class ProcessingViewModel : ObservableObject
     {
         private readonly CancellationTokenSource _cancel = new();
         private int _progress;

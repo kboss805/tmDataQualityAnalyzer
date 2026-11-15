@@ -54,7 +54,7 @@ namespace TmDq.App.Models.Templates
     public static class TemplateFile
     {
         public const int CurrentSchemaVersion = 1;
-        public const int MaxSamplePeriodIndex = 2;
+        private const int MaxSamplePeriodIndex = 2;
         private const string LockMode = "FrameSyncLock", ReceiverMode = "ReceiverChannelInfo";
         /// <summary>What a key a template lacks falls back to: a new row's value (the channel and label are required of a template's
         /// row, so the placeholders here are never read).</summary>
