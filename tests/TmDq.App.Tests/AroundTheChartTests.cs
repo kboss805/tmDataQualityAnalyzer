@@ -89,7 +89,7 @@ namespace TmDq.App.Tests
 
             plot.SetLockAxisView(LockAxisView.MissedFrames);
             Assert.Equal(new[] { 1, 2 }, plot.LegendEntries().Select(r => r.Id));
-            plot.SetSeriesVisible(2, false);
+            plot.SetSeriesVisibleQuiet(2, false); plot.CommitAppearance();
             Assert.Equal(new[] { 1 }, plot.LegendEntries().Select(r => r.Id));
             // A lock series made visible by hand in the wrong view is still not listed.
             plot.Series[0].Visible = true;
@@ -314,7 +314,7 @@ namespace TmDq.App.Tests
             plot.ReadoutSeriesId = 0;
             plot.DropStaleReadoutPin();
             Assert.Equal(0, plot.ReadoutSeriesId);
-            plot.SetSeriesVisible(0, false);
+            plot.SetSeriesVisibleQuiet(0, false); plot.CommitAppearance();
             plot.DropStaleReadoutPin();
             Assert.Null(plot.ReadoutSeriesId);
             plot.ReadoutSeriesId = 42;
@@ -423,9 +423,10 @@ namespace TmDq.App.Tests
             Assert.Equal((plot.FormatTime(0.5), plot.FormatTime(1.5)), prompts.LastWindow);
             Assert.Equal((0.0, 2.0), (plot.XViewMin, plot.XViewMax));
             Assert.Equal(new[] { "Stop \"000:00:00:09\" is outside the file time range - clamped to file bounds." }, warnings);
-            Assert.Equal(1, plot.ZoomDepth);
             await commands.SetTimeWindowAsync();   // cancelled
-            Assert.Equal(1, plot.ZoomDepth);
+            plot.ZoomBack();                       // the one window remembered is the one before the entry
+            Assert.Equal((0.5, 1.5), (plot.XViewMin, plot.XViewMax));
+            Assert.False(plot.CanZoomBack);
         }
 
         [Fact]
@@ -566,7 +567,7 @@ namespace TmDq.App.Tests
             // A stream is checked when any of its series is shown, its missed frames as much as its lock; a hidden SNR
             // channel is unchecked, and its receiver partly checked.
             plot.SetLockAxisView(LockAxisView.MissedFrames);   // Ch 6 now shows only its missed frames
-            plot.SetSeriesVisible(18, false);                  // RCVR 3's channel R
+            plot.SetSeriesVisibleQuiet(18, false); plot.CommitAppearance();                  // RCVR 3's channel R
             var again = new CustomizeViewModel(plot, new FakePrompts());
             Assert.True(again.LockRows[1].IsChecked);
             Assert.False(again.SnrStreams[0].RightReceivers[0].Channels[1].IsChecked);
@@ -1170,7 +1171,7 @@ namespace TmDq.App.Tests
             Shown s = Show(plot, prompts: prompts);
 
             Assert.False(Item(Item(Menus.Open(s.View), "X Axis"), "Zoom Back").IsEffectivelyEnabled);
-            plot.PushXZoom(0.2, 1.8);
+            plot.ApplyBandZoom(0.2, 1.8);
             MenuItem back = Item(Item(Menus.Open(s.View), "X Axis"), "Zoom Back");
             Assert.True(back.IsEffectivelyEnabled);
             await Choose(back);
@@ -1235,7 +1236,7 @@ namespace TmDq.App.Tests
 
             // A pin to a series since hidden is dropped when the menu opens, so it opens with automatic chosen.
             plot.ReadoutSeriesId = 2;
-            plot.SetSeriesVisible(2, false);
+            plot.SetSeriesVisibleQuiet(2, false); plot.CommitAppearance();
             readout = Item(Menus.Open(s.View), "Readout");
             Assert.Null(plot.ReadoutSeriesId);
             Assert.True(Item(readout, "Nearest series (automatic)").IsChecked);
@@ -1296,10 +1297,9 @@ namespace TmDq.App.Tests
             Assert.Equal(0.2, plot.XViewMax - plot.XViewMin, 12);
             Assert.Equal(0.5, (plot.XViewMin + plot.XViewMax) / 2, 12);
 
-            // Backspace steps back one zoom.
-            int depth = plot.ZoomDepth;
+            // Backspace steps back one zoom: to the window before the last key's.
             s.Key(Key.Back);
-            Assert.Equal(depth - 1, plot.ZoomDepth);
+            Assert.Equal(0.16, plot.XViewMax - plot.XViewMin, 12);
 
             // Home: the whole span, a Y limit kept. R: both.
             plot.SetXViewByUser(0.4, 0.6);

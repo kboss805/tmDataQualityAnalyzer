@@ -46,10 +46,8 @@ namespace TmDq.App.ViewModels
         private readonly List<ProcessedSource> _sources = new();
         private List<MenuChoice>? _recentMenu;
         private string _runningFile = string.Empty;
-        private ProcessingViewModel? _processing;
         private string _status = "Open a Chapter 10 recording.";
         private LogLevel _statusLevel = LogLevel.Info;
-        private int _progress;
         private bool _isBusy;
 
         /// <param name="services">What it reaches outside itself; null, or any one left out, as
@@ -103,9 +101,6 @@ namespace TmDq.App.ViewModels
         }
 
         // ---- the shell (plan step 4.8): what is remembered, recent files, the theme and the sidebar --------------------
-
-        /// <summary>What is remembered between sessions.</summary>
-        public Preferences Preferences => _shell.Current;
 
         /// <summary>The recordings and CSVs opened last, the newest first (the menu's Recent Files).</summary>
         public IReadOnlyList<string> RecentFiles => _shell.RecentFiles;
@@ -165,13 +160,6 @@ namespace TmDq.App.ViewModels
         /// <summary>What the chart draws: every stream processed, on one time axis.</summary>
         public PlotViewModel Plot { get; } = new();
 
-        /// <summary>The progress dialog's state while a recording is processed; null otherwise.</summary>
-        public ProcessingViewModel? Processing
-        {
-            get => _processing;
-            private set => SetProperty(ref _processing, value);
-        }
-
         /// <summary>One short line saying what happened last, in plain words, for the status bar under the log and the chart:
         /// what is being done ("Processing x.ch10..."), what finished ("Finished processing x.ch10: 3 streams."), or what
         /// went wrong. The log keeps the detail (every path, every stream); this is the sentence that is still there with the
@@ -203,13 +191,6 @@ namespace TmDq.App.ViewModels
             StatusLevel = level;
         }
 
-        /// <summary>0 to 100 while a recording is processed.</summary>
-        public int Progress
-        {
-            get => _progress;
-            private set => SetProperty(ref _progress, value);
-        }
-
         public bool IsBusy
         {
             get => _isBusy;
@@ -225,7 +206,9 @@ namespace TmDq.App.ViewModels
             }
         }
 
-        /// <summary>The recordings processed this session, as a template is captured from them; cleared by a new run.</summary>
+        /// <summary>The recordings processed this session, as a template is captured from them; cleared by a new run. No view
+        /// reads it: it is kept public as the tests' only window onto what Save Template would capture (a source's id and path
+        /// are not written into the template), as audit D8 decided.</summary>
         public IReadOnlyList<ProcessedSource> Sources => _sources;
 
         /// <summary>Save as Template: one processed recording's rows and its series' looks, to a file (US1.1).</summary>
@@ -477,7 +460,6 @@ namespace TmDq.App.ViewModels
             }
             finally
             {
-                Progress = 0;
                 IsBusy = false;
             }
         }
@@ -491,7 +473,6 @@ namespace TmDq.App.ViewModels
             string name = Path.GetFileName(path);
             LastFolder = Path.GetDirectoryName(Path.GetFullPath(path));
             IsBusy = true;
-            Progress = 0;
             try
             {
                 Report($"Opening {name}...");
@@ -511,7 +492,6 @@ namespace TmDq.App.ViewModels
                 ClearRun();
                 Report($"Processing {name}...");
                 using RunOutcome outcome = await RunWithDialogAsync(choice.Request);
-                Progress = 100;
                 // The core builds each stream's series, in table order, on one shared time axis.
                 foreach (StreamResult result in outcome.Results) Plot.AddStream(result);
                 Plot.Title = BaseName(name);
@@ -557,18 +537,16 @@ namespace TmDq.App.ViewModels
         private async Task<RunOutcome> RunWithDialogAsync(RunRequest request)
         {
             var processing = new ProcessingViewModel();
-            Processing = processing;
             _processingDialog?.Show(processing);
             try
             {
                 // Made here, both post each report back to this (the UI) thread, in order.
-                var progress = new Progress<int>(p => Progress = processing.Progress = p);
+                var progress = new Progress<int>(p => processing.Progress = p);
                 return await StreamsRun.RunAsync(request, progress, new UiRunLog(Log), processing.Token);
             }
             finally
             {
                 _processingDialog?.Close();
-                Processing = null;
             }
         }
 

@@ -90,7 +90,6 @@ namespace TmDq.App.Tests
             var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null);
             Assert.Equal("Extract Calibration", ExtractCalibrationViewModel.Title);
             Assert.Equal(("default.toml", "✓ 11 steps parsed (loaded automatically).", CalibrationStatusKind.Ok), (vm.StepName, vm.StepStatus, vm.StepKind));
-            Assert.Equal(11, vm.Steps.Count);
             Assert.Equal(("", "No file selected.", CalibrationStatusKind.Pending), (vm.CalName, vm.CalStatus, vm.CalKind));
             Assert.Equal((0m, 0m), (vm.ClipStart, vm.ClipEnd));
             Assert.False(vm.CanAccept);
@@ -104,7 +103,6 @@ namespace TmDq.App.Tests
             Assert.Equal("default.toml", gone.StepName);
             var none = new ExtractCalibrationViewModel(StepCalBase(), null, null);
             Assert.Equal(("", "No file selected.", CalibrationStatusKind.Pending), (none.StepName, none.StepStatus, none.StepKind));
-            Assert.Empty(none.Steps);
         }
 
         [Fact]
@@ -116,7 +114,7 @@ namespace TmDq.App.Tests
             var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, bad) { ProgressDialog = progress };
             Assert.Equal(("bad.toml", CalibrationStatusKind.Fail), (vm.StepName, vm.StepKind));
             Assert.StartsWith("✗ ", vm.StepStatus);
-            Assert.Empty(vm.Steps);
+            Assert.Empty(vm.ToRequest().Steps);
 
             await vm.LoadCalibrationAsync(StepCal);
             Assert.Equal(("Select a valid step cal file to process this recording.", CalibrationStatusKind.Pending), (vm.CalStatus, vm.CalKind));
@@ -131,7 +129,7 @@ namespace TmDq.App.Tests
 
             // A bad one after a good one: its steps are gone, and so is the calibration made with them.
             await vm.LoadStepFileAsync(bad);
-            Assert.Empty(vm.Steps);
+            Assert.Empty(vm.ToRequest().Steps);
             Assert.Empty(vm.Profiles);
             Assert.False(vm.CanAccept);
         }
@@ -300,7 +298,7 @@ namespace TmDq.App.Tests
             Assert.Equal((StepCal, 7, 26, "FE6B2840", "FFFF0000", 800), (r.FileName, r.TimeChannelId, r.PcmChannelId, r.SyncPattern, r.SyncMask, r.BitsInMinorFrame));
             Assert.Equal((true, true, 0.8, false, 12, 3), (r.Randomized, r.Inverted, r.DataRateMbps, r.SwapBytes, r.NumReceivers, r.ReceiverChannels));
             Assert.Equal((calibrationBase.ReceiverParamsToml, Repo.Root), (r.ReceiverParamsToml, r.AppRoot));
-            Assert.Equal(vm.Steps, r.Steps);
+            Assert.Equal(11, r.Steps.Count);   // the shipped step file's levels
             // An empty mask and the default word map are left to the core.
             CalibrationRequest plain = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null).ToRequest();
             Assert.Equal(((string?)null, (string?)null), (plain.SyncMask, plain.ReceiverParamsToml));

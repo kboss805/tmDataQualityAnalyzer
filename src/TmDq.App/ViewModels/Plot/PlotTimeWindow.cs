@@ -36,7 +36,6 @@ namespace TmDq.App.ViewModels.Plot
         public double ViewMax { get; private set; }
 
         public bool CanZoomBack => _history.Count > 0;
-        public int Depth => _history.Count;
 
         /// <summary>Whether the window is narrower than the whole span (by <see cref="FuzzyEqual"/>).</summary>
         public bool IsZoomed => _hasData() && (!FuzzyEqual(ViewMin, 0.0) || !FuzzyEqual(ViewMax, XMax));

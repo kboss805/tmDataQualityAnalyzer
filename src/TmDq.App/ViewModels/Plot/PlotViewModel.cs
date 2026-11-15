@@ -310,16 +310,6 @@ namespace TmDq.App.ViewModels.Plot
             OnPropertyChanged(nameof(LeftAxisLabel));
         }
 
-        public void SetSeriesVisible(int id, bool visible)
-        {
-            PlotSeries? s = _series.Find(x => x.Id == id);
-            if (s is null || s.Visible == visible) return;
-            s.Visible = visible;
-            ComputeSnrRange();
-            SeriesChanged?.Invoke(this, EventArgs.Empty);
-            RangesChanged?.Invoke(this, EventArgs.Empty);
-        }
-
         /// <summary>Whether a series is drawn: shown, and of the recording the Plot File selector shows (US1.1), or of any
         /// when it shows them all.</summary>
         public bool EffectiveVisible(PlotSeries s) => s.Visible && (_visibleSource < 0 || s.SourceId == _visibleSource);
@@ -502,15 +492,11 @@ namespace TmDq.App.ViewModels.Plot
         // ---- the time window ----------------------------------------------------------------------------------------
 
         public bool CanZoomBack => _window.CanZoomBack;
-        public int ZoomDepth => _window.Depth;
 
         /// <summary>A continuous gesture (wheel zoom, drag pan) moved the window: kept inside the data, its width kept, and
         /// not remembered in the zoom history.</summary>
         public void SetXViewByUser(double lower, double upper) => _window.SetByUser(lower, upper);
 
-        /// <summary>A discrete zoom (a band dragged out, a time window entered): the window is remembered first, so
-        /// <see cref="ZoomBack"/> returns to it; the oldest of more than <see cref="MaxZoomDepth"/> is forgotten.</summary>
-        public void PushXZoom(double min, double max) => _window.Push(min, max);
 
         public void ZoomBack() => _window.Back();
 

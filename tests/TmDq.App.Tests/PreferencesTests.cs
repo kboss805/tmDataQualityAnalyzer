@@ -164,7 +164,6 @@ namespace TmDq.App.Tests
             var store = new PreferencesStore(new Preferences { LastFolder = @"C:\before", LegendVisible = false, Theme = "light", SidebarVisible = false });
             var vm = new MainWindowViewModel(new MainWindowServices { Configurator = FakeConfigurator.Cancelled(), Preferences = store });
             Assert.Equal((@"C:\before", false, false, false), (vm.LastFolder, vm.Plot.LegendVisible, vm.IsDarkTheme, vm.SidebarVisible));
-            Assert.Same(store.Current, vm.Preferences);
 
             // A recording joins Recent Files once its channels are read, even when Configure Streams is then cancelled, by
             // its full path however it was named.

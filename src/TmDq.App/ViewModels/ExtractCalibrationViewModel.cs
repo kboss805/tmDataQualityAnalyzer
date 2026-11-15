@@ -92,6 +92,8 @@ namespace TmDq.App.ViewModels
         /// <summary>The progress dialog an extraction shows; the window sets it, so it sits over the dialog.</summary>
         public IProcessingDialog? ProgressDialog { get; set; }
 
+        /// <summary>What the calibration run is given besides the files and clips. No view reads it: it is kept public as the
+        /// tests' only window onto the request the stream's settings make, as audit D8 decided.</summary>
         public CalibrationBase Base => _base;
 
         public string StepPath => _stepPath;
@@ -135,8 +137,6 @@ namespace TmDq.App.ViewModels
 
         public double ClipEndSec => (double)(_clipEnd ?? 0m);
 
-        /// <summary>The step levels parsed from the step file, in dB.</summary>
-        public IReadOnlyList<double> Steps => _steps;
 
         /// <summary>The usable profiles of the last extraction; empty until one calibrated a channel.</summary>
         public IReadOnlyList<CalibrationProfile> Profiles { get; private set; } = Array.Empty<CalibrationProfile>();
@@ -229,7 +229,6 @@ namespace TmDq.App.ViewModels
                 _stepOk = false;
                 SetStep(CalibrationStatusKind.Fail, e.Message);
             }
-            OnPropertyChanged(nameof(Steps));
             UpdateOk();
             _ = ExtractAsync();
         }

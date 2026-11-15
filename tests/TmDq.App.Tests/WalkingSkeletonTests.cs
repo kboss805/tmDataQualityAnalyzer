@@ -47,7 +47,6 @@ namespace TmDq.App.Tests
             Assert.Equal(93.531893, s.Y.Average(), 6);
             Assert.Equal(0.0, s.Y.Min());
             Assert.Equal(100.0, s.Y.Max());
-            Assert.Equal(100, vm.Progress);
             Assert.False(vm.IsBusy);
             // The bar's sentence: that it finished and how many streams. Its numbers are on the plot and in the log.
             Assert.Equal(("Finished processing prn_testfile, sample.ch10: 1 stream.", LogLevel.Success), (vm.Status, vm.StatusLevel));
@@ -84,23 +83,18 @@ namespace TmDq.App.Tests
         }
 
         [AvaloniaFact]
-        public async Task ProgressRisesToOneHundredAndBusyIsSetForTheRunOnly()
+        public async Task BusyIsSetForTheRunOnly()
         {
+            // The progress itself is the dialog's (ProcessingTests.TheProgressDialogIsUpForTheRunAndShowsTheCoresProgress).
             var vm = new MainWindowViewModel();
-            var progress = new List<int>();
             var busy = new List<bool>();
             vm.PropertyChanged += (_, e) =>
             {
-                if (e.PropertyName == nameof(MainWindowViewModel.Progress)) progress.Add(vm.Progress);
                 if (e.PropertyName == nameof(MainWindowViewModel.IsBusy)) busy.Add(vm.IsBusy);
             };
             await vm.LoadAsync(Prn);
 
             Assert.Equal(new[] { true, false }, busy);
-            Assert.NotEmpty(progress);
-            Assert.Equal(100, progress[^1]);
-            Assert.True(progress.Zip(progress.Skip(1)).All(p => p.First <= p.Second), "progress went backwards: " + string.Join(",", progress));
-            Assert.All(progress, p => Assert.InRange(p, 0, 100));
         }
 
         [AvaloniaFact]

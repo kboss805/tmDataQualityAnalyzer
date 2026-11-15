@@ -251,7 +251,7 @@ namespace TmDq.App.Tests
                 PlotFixtures.Lock(1, "l", 2, 1, new[] { 0.0, 1.0 }, new[] { 90.0, 100.0 }),
             });
             Assert.Equal((10.0, 20.0), (plot.RightMin, plot.RightMax));
-            plot.SetSeriesVisible(0, false);
+            plot.SetSeriesVisibleQuiet(0, false); plot.CommitAppearance();
             Assert.Equal((0.0, 1.0), (plot.RightMin, plot.RightMax));
         }
 
@@ -266,7 +266,7 @@ namespace TmDq.App.Tests
                 PlotFixtures.Lock(2, "b", 2, 1, x, new[] { 80.0, 85.0 }), PlotFixtures.Missed(3, "b", 2, 1, x, new[] { 0.0, 60.0 }),
             });
             plot.SetSeries(plot.Series.Select(s => { s.Visible = s.Metric == MetricType.FrameSyncLock; return s; }).ToArray());
-            plot.SetSeriesVisible(2, false);   // stream b hidden
+            plot.SetSeriesVisibleQuiet(2, false); plot.CommitAppearance();   // stream b hidden
             plot.SetLeftMaxOverride(99.0);
             Assert.Equal(99.0, plot.LeftMax);
 
@@ -274,7 +274,7 @@ namespace TmDq.App.Tests
             Assert.Equal(PlotViewModel.MissedFramesAxisLabel, plot.LeftAxisLabel);
             Assert.Equal(new[] { false, true, false, false }, plot.Series.Select(s => s.Visible));   // b stays hidden
             Assert.Equal(40.0 * 1.05, plot.LeftMax, 9);    // the visible counts' maximum, plus 5 %; the override was dropped
-            plot.SetSeriesVisible(1, false);
+            plot.SetSeriesVisibleQuiet(1, false); plot.CommitAppearance();
             Assert.Equal(10.0 * 1.05, plot.LeftMax, 9);    // nothing shown: a scale of 10 still
 
             plot.SetLeftMinOverride(50.0);
@@ -296,7 +296,7 @@ namespace TmDq.App.Tests
             Assert.True(plot.RightAxisVisible);
             plot.SetSeries(new[] { PlotFixtures.Snr(0, "s", 1, 0, 1, 0, x, y), PlotFixtures.Lock(1, "l", 2, 1, x, y) });
             Assert.True(plot.LeftAxisVisible && plot.RightAxisVisible);
-            plot.SetSeriesVisible(0, false);
+            plot.SetSeriesVisibleQuiet(0, false); plot.CommitAppearance();
             Assert.True(plot.LeftAxisVisible);
             Assert.False(plot.RightAxisVisible);    // hiding the last SNR series gives its axis back
         }
@@ -342,7 +342,6 @@ namespace TmDq.App.Tests
             Assert.Equal((20.0, 60.0), (plot.XViewMin, plot.XViewMax));
             plot.ApplyBandZoom(-5.0, 30.0);                                // kept inside the data
             Assert.Equal((0.0, 30.0), (plot.XViewMin, plot.XViewMax));
-            Assert.Equal(2, plot.ZoomDepth);
             plot.ZoomBack();
             Assert.Equal((20.0, 60.0), (plot.XViewMin, plot.XViewMax));
             plot.ZoomBack();
@@ -352,16 +351,16 @@ namespace TmDq.App.Tests
             Assert.Equal((0.0, 100.0), (plot.XViewMin, plot.XViewMax));
 
             // At most 32 windows are remembered; the oldest go first.
-            for (int i = 0; i < 40; i++) plot.PushXZoom(i, i + 10);
-            Assert.Equal(PlotViewModel.MaxZoomDepth, plot.ZoomDepth);
-            for (int i = 0; i < 32; i++) plot.ZoomBack();
+            for (int i = 0; i < 40; i++) plot.ApplyBandZoom(i, i + 10);
+            for (int i = 0; i < PlotViewModel.MaxZoomDepth; i++) plot.ZoomBack();
             Assert.Equal((7.0, 17.0), (plot.XViewMin, plot.XViewMax));     // the view before the 9th push
+            Assert.False(plot.CanZoomBack);                                // and nothing older
 
-            plot.PushXZoom(10, 20);
+            plot.ApplyBandZoom(10, 20);
             plot.ResetXRange();
             Assert.Equal((0.0, 100.0), (plot.XViewMin, plot.XViewMax));
             Assert.False(plot.CanZoomBack);                                // the history goes with a reset
-            plot.PushXZoom(10, 20);
+            plot.ApplyBandZoom(10, 20);
             plot.SetSeries(plot.Series.ToArray());
             Assert.False(plot.CanZoomBack);                                // and with new series
         }
@@ -389,7 +388,7 @@ namespace TmDq.App.Tests
             Assert.Equal($"SNR 1  (pinned)\n{time12}\n31.25 dB", plot.Readout(10.4, 104, Pixel));   // not the nearer lock value
 
             plot.ReadoutSeriesId = null;
-            plot.SetSeriesVisible(0, false);
+            plot.SetSeriesVisibleQuiet(0, false); plot.CommitAppearance();
             Assert.Equal($"SNR 1\n{time12}\n31.25 dB", plot.Readout(11.0, 110, Pixel));             // a hidden series says nothing
             plot.SetSeries(new[] { PlotFixtures.Missed(0, "M", 1, 0, new[] { 0.0, 1.0 }, new[] { 0.0, 3.0 }) });
             Assert.Equal($"M\n{plot.FormatTime(1.0)}\n3.00 frames", plot.Readout(1.0, 10, Pixel));
@@ -672,7 +671,6 @@ namespace TmDq.App.Tests
             Assert.False(s.Chart.ZoomBandVisible);
             Assert.Equal(20.0, plot.XViewMin, 6);
             Assert.Equal(60.0, plot.XViewMax, 6);
-            Assert.Equal(1, plot.ZoomDepth);
 
             double q = s.Chart.XToPixel(30), r = s.Chart.XToPixel(40);
             s.Window.MouseDown(s.At(q, a.Center.Y), MouseButton.Middle, RawInputModifiers.None);
@@ -681,7 +679,11 @@ namespace TmDq.App.Tests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(30.0, plot.XViewMin, 6);
             Assert.Equal(40.0, plot.XViewMax, 6);
-            Assert.Equal(2, plot.ZoomDepth);
+            plot.ZoomBack();                                               // each band was one step of the history
+            Assert.Equal((20.0, 60.0), (Math.Round(plot.XViewMin, 6), Math.Round(plot.XViewMax, 6)));
+            plot.ZoomBack();
+            Assert.Equal((0.0, 100.0), (plot.XViewMin, plot.XViewMax));
+            Assert.False(plot.CanZoomBack);
             s.Window.Close();
         }
 
@@ -900,7 +902,7 @@ namespace TmDq.App.Tests
             Assert.Equal(0, RedIn(s, 0.0, 0.1, 0.85, 1.0));
 
             // A hidden series is not drawn.
-            plot.SetSeriesVisible(0, false);
+            plot.SetSeriesVisibleQuiet(0, false); plot.CommitAppearance();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(0, RedIn(s, 0.0, 1.0, 0.0, 1.0));
             s.Window.Close();
