@@ -201,10 +201,11 @@ namespace CalibrationConstants {
     /// the step_cal recording sit at 65472.
     inline constexpr double kSaturatedRawFraction = 0.98;
 
-    /// How far (in dwells) a plateau's end may sit off the regular dwell grid
-    /// before the saturated-top fallback refuses to infer step indices from
-    /// timing. A recording whose steps were not each held for the same length of
-    /// time fails this and keeps the linear fallback, rather than being given a
+    /// How far (in dwells) the spacing between two step transitions may sit off a
+    /// whole number of dwells before the saturated-top fallback refuses to infer
+    /// step indices from timing (the dwell grid is built from the transitions).
+    /// A recording whose steps were not each held for the same length of time
+    /// fails this and keeps the linear fallback, rather than being given a
     /// silently mis-numbered profile.
     inline constexpr double kMaxDwellSlotError = 0.25;
 
@@ -236,7 +237,8 @@ namespace CalibrationConstants {
     /// requires a run to be stable for at least this long (in addition to the
     /// kMinConfirmSamples floor below) before it is even considered a candidate
     /// step; the calibration average is then taken from exactly this many
-    /// samples at the start of the confirmed run.
+    /// samples at the END of the confirmed run, after any settling that followed
+    /// the jump has died out.
     inline constexpr double kStepConfirmSeconds = 1.0;
 
     /// Absolute floor on the confirmation window, in samples, regardless of

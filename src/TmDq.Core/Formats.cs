@@ -89,8 +89,8 @@ public static unsafe class FrameSyncFile
 /// <param name="ReceiverChannels">Channels per receiver.</param>
 public sealed record ReceiverParams(int PolarityIndex, int SlopeIndex, double ScaleDdBPerV, int NumReceivers, int ReceiverChannels);
 
-/// <summary>The receiver-parameters file the Receiver SNR dialog loads and saves, through the core, so both
-/// applications read and write the same bytes.</summary>
+/// <summary>The receiver-parameters file the Receiver SNR dialog loads and saves, through the core, so the file
+/// is read and written in one place.</summary>
 public static unsafe class ReceiverParamsFile
 {
     /// <summary>The application's defaults: what a stream starts with, and what a missing key falls back to.</summary>

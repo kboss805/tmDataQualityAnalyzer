@@ -791,7 +791,7 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public void ThePlotViewIsTheChartWithItsControlsOverItAndNothingAround()
         {
-            // TestPlotWidget's noExternalControlWidgetsRemain (US4.0, US4.1): no control row around the chart. The chart
+            // No control row around the chart (US4.0, US4.1). The chart
             // fills the view, and every control the view holds is in the overlay over it.
             PlotViewModel plot = LockPlot();
             Shown s = Show(plot);

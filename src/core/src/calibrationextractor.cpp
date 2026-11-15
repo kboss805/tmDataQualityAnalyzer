@@ -70,8 +70,8 @@ public:
 
     void errorOccurred(const std::string& message) override
     {
-        // Kept so the end can report the worker's own reason (e.g. "Frame sync pattern was not
-        // found...") instead of a generic one, and passed on as a log line like any other.
+        // Kept so the end can report the worker's own reason (e.g. the "no frame sync found" line, which names
+        // the pattern and the bits per frame) instead of a generic one, and passed on as a log line like any other.
         {
             std::lock_guard<std::mutex> lock(m_owner.m_mutex);
             m_owner.m_error = message;

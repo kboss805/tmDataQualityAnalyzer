@@ -411,10 +411,11 @@ int transitionDirection(double delta, double threshold)
     return 0;
 }
 
-/// Selects one clean calibration sweep: the first run of `expected`
-/// CONSECUTIVE plateaus whose settled averages move strictly in one
-/// direction (a real receiver response is monotonic — increasing or
-/// decreasing dB with raw count). A genuine step transition was already
+/// Selects one clean calibration sweep: the first maximal run of
+/// CONSECUTIVE plateaus, at least `expected` long, whose settled averages move
+/// strictly in one direction (a real receiver response is monotonic —
+/// increasing or decreasing dB with raw count), and returns where that run's
+/// LAST `expected` plateaus start. A genuine step transition was already
 /// large enough to split the plateaus (> `threshold`), so we require each
 /// consecutive level change to exceed that same threshold and keep the
 /// same sign across the whole run.
@@ -495,11 +496,13 @@ return run_start;
 /// alone cannot say once a dwell is missing from the middle (noise can shatter
 /// one into runs too short to confirm, which is what L_RCVR1 does on
 /// the step_cal recording). The generator holds every step for the same length of
-/// time, so plateau END times fall on a regular grid - each level's distance
-/// from the first, in whole dwells, is its step index. Ends rather than starts,
-/// because the pre-sweep level runs for however long the operator took to begin
-/// and only its end lands on the grid. A recording whose dwells are not regular
-/// fails the check and keeps the linear fallback rather than guessing.
+/// time, so the TRANSITIONS between them fall on a regular grid (buildDwellGrid)
+/// - each level's step index is the number of whole dwells between the run's
+/// first level and the dwell its first sample sits in. The grid comes from the
+/// transitions rather than the plateau spans because a plateau's end is not
+/// reliably on it (noise can shatter a dwell's tail), while a plateau's begin is
+/// always inside its own dwell. A recording whose dwells are not regular fails
+/// the check and keeps the linear fallback rather than guessing.
 bool calibrateSaturatedTop(const std::vector<double>& rawValues,
                            const std::vector<double>& deriv,
                            const std::vector<Level>& levels,

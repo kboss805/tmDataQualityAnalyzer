@@ -201,8 +201,9 @@ bool Ch10PacketReader::prepare(const std::filesystem::path& filename,
     const auto setup_lock = lockIrig106Setup();
 
     // The path in the process code page, matching Chapter10Reader: irig106 opens with the
-    // CRT's narrow open(), which reads that code page - UTF-8 under codepage.pri's manifest.
-    // (Once this was toUtf8(), so a path the metadata reader opened could fail here.)
+    // CRT's narrow open(), which reads that code page - UTF-8 under the UTF-8 code-page manifest
+    // (src/TmDq.App/app.manifest, assets/utf8codepage.manifest) merged into the app and every test host.
+    // (UTF-8 bytes whatever the code page would fail for a path the metadata reader opened.)
     const std::string narrow_path = filename.string();
     m_status = enI106Ch10Open(&m_file_handle, narrow_path.c_str(), I106_READ);
     if (m_status != I106_OK && m_status != I106_OPEN_WARNING)

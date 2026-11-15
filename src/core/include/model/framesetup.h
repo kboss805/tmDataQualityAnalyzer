@@ -162,8 +162,8 @@ public:
     /// Applies the linear voltage→dB calibration (slope/scale) to every parameter
     /// and enables it for output. @p polarity_index 0=positive, 1=negative;
     /// @p slope_index selects the voltage range (UIConstants::kSlopeVoltageLower/Upper).
-    /// Inputs must be pre-validated by the caller. Lives in the Model so the
-    /// conversion is single-sourced and unit-testable, not embedded in the ViewModel.
+    /// Inputs must be pre-validated by the caller. Lives in the core so the
+    /// conversion is single-sourced and unit-testable, not reimplemented by a host.
     void applyLinearCalibration(int polarity_index, int slope_index, double scale_dB_per_V);
 
     /// Attaches non-linear step-calibration profiles (US5.3) by word index; only

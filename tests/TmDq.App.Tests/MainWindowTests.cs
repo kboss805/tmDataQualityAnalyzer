@@ -51,8 +51,8 @@ namespace TmDq.App.Tests
         public void TheLogIsDrawnNotOnlyLaidOut()
         {
             // A rendered frame, through Skia, read pixel by pixel: the log's first line holds the drawn text and an empty
-            // patch of the window does not. Layout alone cannot show this, and on the CI runner (a service in
-            // Session 0, no desktop) it is the proof that the headless platform really renders there.
+            // patch of the window does not. Layout alone cannot show this, and on the CI runner (no desktop) it is the
+            // proof that the headless platform really renders there.
             MainWindow window = Show();
             Border log = window.FindControl<Border>("LogPanel")!;
             Control text = window.FindControl<LogView>("Log")!.GetLogicalDescendants().OfType<SelectableTextBlock>().Single();

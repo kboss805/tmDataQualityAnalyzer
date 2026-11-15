@@ -81,7 +81,7 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public void AChannelNameTooLongForItsColumnIsTrimmedWithTheWholeNameAsItsTooltip()
         {
-            // TestStreamConfigDialog's channelLabelShortNameShownInFull and channelLabelLongNameElidedWithFullTooltip.
+            // A short name shows in full; a long one is elided, with the whole name as its tooltip.
             ConfigureStreamsViewModel vm = Configure();
             string longName = "CH-02 PRN 15 20M, recorded on the second antenna of the far ground station";
             vm.Rows[1].Setup = vm.Rows[1].Setup with { Label = longName };
@@ -100,7 +100,7 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public void TheColumnHeadersReadInEitherTheme()
         {
-            // TestStreamConfigDialog's headerLabelsUseThemeableObjectNames: the headers take the theme's text colour, light
+            // The headers take the theme's text colour, light
             // on the dark theme and dark on the light, rather than one colour of their own.
             var app = (App)Application.Current!;
             ThemeVariant? before = app.RequestedThemeVariant;

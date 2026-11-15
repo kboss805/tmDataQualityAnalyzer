@@ -90,9 +90,11 @@ struct CalibrationPoint
 /**
  * @brief Per-channel non-linear calibration profile.
  *
- * @c points are ordered to match the step order in the TOML (Nth detected
- * plateau paired with the Nth step). When @c valid is false the channel falls
- * back to the standard linear calibration math.
+ * Each detected plateau is paired with the step in the TOML at the same place
+ * in the sweep (the Nth plateau with the Nth step), and @c points are then
+ * sorted ascending by raw average, which interpolateCalibration() relies on.
+ * When @c valid is false the channel falls back to the standard linear
+ * calibration math.
  */
 struct CalibrationProfile
 {

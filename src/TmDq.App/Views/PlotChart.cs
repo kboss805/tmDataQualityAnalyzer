@@ -57,7 +57,7 @@ namespace TmDq.App.Views
         /// of their draft about 40 ms; four such series take 8 ms in full, and are never drafted.</summary>
         public const double DefaultDraftThresholdMs = 30;
 
-        /// <summary>How long after the last step of a wheel or a held drag the full picture is painted.</summary>
+        /// <summary>How long after the last step of a gesture (a wheel notch, a drag or a held pan or zoom key) the full picture is painted.</summary>
         public static readonly TimeSpan DefaultRefineDelay = TimeSpan.FromMilliseconds(150);
 
         // Keyed by the series itself: a new series reusing an old one's id must not be drawn from the old one's geometry.
