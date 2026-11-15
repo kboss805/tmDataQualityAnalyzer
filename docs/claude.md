@@ -516,7 +516,8 @@ profile, so a batch processes with the linear calibration.
 - **Startup and the smoke report** (`Startup`, `Models/Processing/FirstChannelRun`): a recording path on the command
   line opens that recording, as a file association does. With `TMDQ_SMOKE_REPORT=<file>` set as well, the application skips
   Configure Streams, runs the recording's first PCM channel with the Frame Sync Lock defaults (`FirstChannelRun`), writes
-  one result line to the file and exits (0 when the stream was processed, 1 when not): the installer's clean-machine test
+  one result line to the file and exits (0 when the stream was processed, 1 when not, 2 when the report could not be
+  written: `Startup.RunSmokeAsync`, which `WalkingSkeletonTests` runs): the installer's clean-machine test
   proves the whole path, native core included, with it.
 - **Windows:** every window with a view model is XAML (`MainWindow`, `ConfigureStreamsWindow`, `StreamSetupWindow`,
   `ExtractCalibrationWindow`, `ProcessingWindow`, `ExportWindow`, `BatchApplyWindow`, `CustomizeViewWindow`); every window

@@ -105,7 +105,7 @@ namespace TmDq.App.Tests
             return plot;
         }
 
-        private static string TempPath(string suffix) => Path.Combine(Path.GetTempPath(), "tmdq-export-" + Guid.NewGuid().ToString("N") + suffix);
+        private static string TempPath(string suffix) => TempFiles.NewPath("export", suffix);
 
         private static string Sha256(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 

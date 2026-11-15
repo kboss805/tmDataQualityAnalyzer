@@ -36,6 +36,8 @@
   <ItemGroup>
     <!-- The library tests' retrying delete, for the temporary files these tests write too. -->
     <Compile Include="..\TmDq.Core.Tests\TempFiles.cs" Link="TempFiles.cs" />
+    <!-- and the one place that finds the repository root and its committed recordings. -->
+    <Compile Include="..\TmDq.Core.Tests\RepoPaths.cs" Link="RepoPaths.cs" />
   </ItemGroup>
 
 </Project>

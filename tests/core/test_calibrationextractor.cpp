@@ -32,11 +32,6 @@ using namespace tmdq_test;
 
 namespace {
 
-fs::path recording(const char* name)
-{
-    return repoFile(fs::path("tests") / "data" / "test files" / name);
-}
-
 /// How the bits are recovered, from the hex text the dialogs hold. The one place these tests make an Acquisition, so it is
 /// decoded the way the application decodes it.
 void setAcquisition(CalibrationExtractor::Request& req, const std::string& pattern, int bits, bool randomized,
@@ -285,7 +280,7 @@ bool runExtraction(CalibrationExtractor& extractor, const CalibrationExtractor::
 /// RCVR3 = words 6/7/8; an empty receiverParamsToml means the extractor builds the 16x3 sequential word map.
 void buildRealRequest(CalibrationExtractor::Request& req)
 {
-    const fs::path file = recording("agc_rnrz-l_trc_testfile.ch10");
+    const fs::path file = recordingFile("agc_rnrz-l_trc_testfile.ch10");
     Chapter10Reader reader;
     REQUIRE_MESSAGE(reader.loadChannels(file), reader.lastError());
     const int pcm_id  = reader.getFirstPCMChannelID();
@@ -316,7 +311,7 @@ void buildRealRequest(CalibrationExtractor::Request& req)
 /// repository root).
 void buildStepCalRequest(CalibrationExtractor::Request& req, const fs::path& step_toml, const fs::path& receiver_params)
 {
-    const fs::path file = recording("step_cal, example.ch10");
+    const fs::path file = recordingFile("step_cal, example.ch10");
     Chapter10Reader reader;
     REQUIRE_MESSAGE(reader.loadChannels(file), reader.lastError());
     std::vector<StepDefinition> steps;

@@ -3,6 +3,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using Xunit;
+using static TmDq.App.Tests.PeResources;
 
 namespace TmDq.App.Tests
 {
@@ -13,21 +14,7 @@ namespace TmDq.App.Tests
     /// </summary>
     public sealed class ManifestTests
     {
-        private const uint LoadLibraryAsDatafile = 0x2, LoadLibraryAsImageResource = 0x20;
         private static readonly IntPtr RtManifest = new IntPtr(24), ManifestId = new IntPtr(1);
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern IntPtr LoadLibraryExW(string path, IntPtr file, uint flags);
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool FreeLibrary(IntPtr module);
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern IntPtr FindResourceW(IntPtr module, IntPtr name, IntPtr type);
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern IntPtr LoadResource(IntPtr module, IntPtr resource);
-        [DllImport("kernel32.dll")]
-        private static extern IntPtr LockResource(IntPtr data);
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern uint SizeofResource(IntPtr module, IntPtr resource);
 
         private static string ExeManifest()
         {

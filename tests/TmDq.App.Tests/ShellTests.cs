@@ -39,7 +39,7 @@ namespace TmDq.App.Tests
     [Collection(NativeCoreCollection.Name)]
     public sealed class ShellTests : IDisposable
     {
-        private readonly string _dir = Path.Combine(Path.GetTempPath(), "tmdq-shell-" + Guid.NewGuid().ToString("N"));
+        private readonly string _dir = TempFiles.NewPath("shell");
 
         public ShellTests() => Directory.CreateDirectory(_dir);
 

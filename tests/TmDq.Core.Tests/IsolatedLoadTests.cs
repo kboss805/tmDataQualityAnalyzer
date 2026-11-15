@@ -93,7 +93,7 @@ public class NotLoadedProbe
         Assert.Null(Library.LoadedPath);
 
         // A file that is not a library is refused, and leaves nothing loaded...
-        string notALibrary = Path.Combine(Path.GetTempPath(), "tmdq-notalib-" + Guid.NewGuid().ToString("N") + ".dll");
+        string notALibrary = TempFiles.NewPath("notalib", ".dll");
         File.WriteAllText(notALibrary, "this is not a dynamic library");
         try
         {

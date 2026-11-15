@@ -12,6 +12,49 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Test support written once, and the smoke branch under test (audit Q4, Q6)
+
+Found by the whole-tree cleanup audit; each site was re-read against the tree as of #295. Q4 is done where the copies
+were byte for byte the same or the same fact; the ones that only look alike are left (below). Q5 (large test files) is
+left for its own change.
+
+- **Q4, native: one `test_support.h`.** `asciiOnly` was written three times byte for byte (`test_csvseries.cpp`,
+  `test_seriesbuild.cpp`, `test_streamjob.cpp`, about 35 lines each) and `utf16le` twice (the CSV tests' proper one, with
+  its UTF-8 decoder `units`, and the frame-sync file tests' ASCII-only one); both are now in the header, the second
+  being the first. The committed recordings were reached five ways (`recording`, `fixturePath`, `repoFile(...)` with the
+  folder spelled out): `recordingFile(name)` is the one way, and `test_calibrationextractor.cpp`,
+  `test_frameprocessor.cpp`, `test_chapter10reader.cpp`, `test_ch10packetreader.cpp` and `test_abi.cpp` use it. The
+  `step_cal` fixture (a `Fixture` struct and `loadFixture()`, the same in `test_ch10packetreader.cpp` and
+  `test_pipelinerunner.cpp`) is `StepCalFixture` / `loadStepCalFixture()`. The ABI test's own `StepCal` is left: its
+  path is UTF-8 text, as a host holds it, and it carries a flag the others have no use for.
+- **Q4, managed: `TempFiles.NewPath` and `RepoPaths`.** 55 tests composed `Path.Combine(Path.GetTempPath(), "tmdq-<x>-" +
+  Guid.NewGuid().ToString("N") ...)` inline; `TempFiles.NewPath("<x>", ".suffix")` says it once (and has a test). The
+  two projects each walked up to `tmdq.sln` and each had a `Recording(name)` (`Env` and `Repo`): `RepoPaths` holds the
+  walk, `File` and `Recording`, the app's tests link it as they do `TempFiles.cs`, and `Env` and `Repo` hand their
+  callers' calls to it, so no call site moved.
+- **Q4, app: `Frames.Shown`.** `Shown<T>(window)` (show, run the pending UI jobs) was written in `ProcessingTests` and
+  `StreamWindowsTests` the same; it is `Frames.Shown`. The six `kernel32` imports that `IconTests` and `ManifestTests`
+  each declared to read a resource out of the exe are `PeResources`. (`ProcessingTests`' other `Shown`, of a text block, is
+  `TextShown`.) **Left on purpose:** the figures' `Shown` (it sets the theme and removes the caret, so it is another
+  routine), the two `FakeImages` (one records the view it was asked for, the other writes a file and can fail), the five
+  `IProcessingDialog` doubles (each does something different at `Show`).
+- **Q6: the smoke branch is a method, and it is tested.** `App.OnFrameworkInitializationCompleted` read
+  `TMDQ_SMOKE_REPORT` three times and ran the smoke inside an `async void` lambda, where a throw from a bad report path
+  would have ended the process with no report. It reads the variable once, and `Startup.RunSmokeAsync(vm, recording,
+  reportPath)` does the work and returns the exit code: 0 a stream processed, 1 not, **2 the report could not be
+  written** (a folder that is not there, a path that is no file name), a code of its own so a bad path is not taken for
+  a failed recording. The packaging and sandbox scripts read any non-zero exit as a failure, as before. Three tests
+  (`TheSmokeRunExitsZero...`, `...ExitsOne...`, `...ExitsTwoNotCrashes`).
+- **Checked.** Mutation check, `eng\mutate.ps1`: managed (`TempFilesTests`), 3 mutants, **3 CAUGHT** (a path that is not
+  unique, one without the `tmdq-` prefix, one without its suffix); app (`WalkingSkeletonTests`), 5 mutants, **5 CAUGHT**
+  (the exit codes swapped, the no-report code the same as the failed one, the write failure not caught, a failed write
+  reporting the recording's outcome, the recording never opened); native (the CSV, frame-sync file, stream job and series
+  tests), 3 mutants, **3 CAUGHT** (an invalid byte spelled differently, the byte order mark reversed, the high byte of a
+  UTF-16 unit shifted). The third was first a SURVIVOR: every UTF-16 file in the CSV cases was ASCII, which has no high
+  byte, so `non-ascii-names-utf16le` now holds the same names as the UTF-8 case. All three suites in Release, zero
+  warnings: native **495** (1 skipped), managed **366** passed / 1 skipped, app **647** passed / 34 not run. Baselines
+  moved: managed 365 to 366 (`NewPath`), app 644 to 647 (the three smoke tests).
+
 #### Tests that could not fail, and tests that could fail for the wrong reason (audit Q1, Q2, Q3)
 
 Found by the whole-tree cleanup audit; each site was re-read against the tree as of #293. Q4 (test support written several

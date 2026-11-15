@@ -116,44 +116,6 @@ std::string num(double v)
     return std::format("{:.15g}", v);
 }
 
-/// UTF-8 text with its non-ASCII characters spelled out as <U+XXXX>.
-std::string asciiOnly(const std::string& s)
-{
-    std::string out;
-    for (std::size_t i = 0; i < s.size();)
-    {
-        const auto b = static_cast<unsigned char>(s[i]);
-        if (b < 0x80)
-        {
-            out += static_cast<char>(b);
-            ++i;
-            continue;
-        }
-        int extra = 0;
-        std::uint32_t cp = 0;
-        if ((b & 0xE0) == 0xC0) { extra = 1; cp = b & 0x1F; }
-        else if ((b & 0xF0) == 0xE0) { extra = 2; cp = b & 0x0F; }
-        else if ((b & 0xF8) == 0xF0) { extra = 3; cp = b & 0x07; }
-        bool ok = extra > 0;
-        for (int k = 1; ok && k <= extra; ++k)
-        {
-            ok = i + static_cast<std::size_t>(k) < s.size() && (static_cast<unsigned char>(s[i + static_cast<std::size_t>(k)]) & 0xC0) == 0x80;
-            if (ok)
-            {
-                cp = (cp << 6) | (static_cast<unsigned char>(s[i + static_cast<std::size_t>(k)]) & 0x3F);
-            }
-        }
-        if (!ok)
-        {
-            cp = 0xFFFD;
-            extra = 0;
-        }
-        out += std::format("<U+{:04X}>", cp);
-        i += 1 + static_cast<std::size_t>(extra);
-    }
-    return out;
-}
-
 std::string joinLog(const std::vector<std::string>& log)
 {
     std::string out;

@@ -58,17 +58,6 @@ std::string frame(const std::string& body)
     return "[Frame]\n" + body;
 }
 
-std::string utf16le(const std::string& ascii)
-{
-    std::string out("\xFF\xFE", 2);
-    for (const char c : ascii)
-    {
-        out += c;
-        out += '\0';
-    }
-    return out;
-}
-
 FrameSyncFile readBytesAs(const TempDir& dir, const std::string& bytes)
 {
     const fs::path path = dir.file("pattern.toml");

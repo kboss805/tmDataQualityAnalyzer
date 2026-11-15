@@ -30,8 +30,9 @@ each suite has its house style and helpers. Build and run with the **build-and-t
 - **A new file must be added to `tests/core/tmdq_core_tests.vcxproj`** (`<ClCompile
   Include="test_<name>.cpp" />`). MSBuild compiles only what the project lists, so a file left out is
   a suite that silently never runs. `NativeProjectTests` (the managed suite) fails until it is listed.
-- **Files the tests read:** `repoFile("tests/data/test files/<recording>")`, `repoFile("settings/...")`,
-  `repoFile("tests/fixtures/...")` (`test_support.h`). A missing committed file is a failure, never a
+- **Files the tests read:** `recordingFile("<recording>")`, `repoFile("settings/...")`,
+  `repoFile("tests/fixtures/...")` (`test_support.h`, which also holds `asciiOnly`, `utf16le` and the `step_cal` fixture,
+  `loadStepCalFixture()`: add a helper there when a second test file needs it, never a second copy). A missing committed file is a failure, never a
   skip: the recordings are in the repository.
 - **The ABI** is compiled into the test executable (`test_abi.cpp` calls `tmdq_*` as a host would),
   so a new ABI function gets its native case there, and its struct layout a pin.
@@ -81,7 +82,9 @@ each suite has its house style and helpers. Build and run with the **build-and-t
   `I*` services in `src/TmDq.App/Services`) and assert on what it was asked.
 - **Classes that load the native core** join `[Collection(NativeCoreCollection.Name)]`, which runs them
   one at a time (one of them points `TMDQ_CORE_DLL` at a missing file for a moment).
-- **Files:** `Repo.Recording("<name>")`, `Repo.File("settings/...")`. A test that writes a preferences
+- **Files:** `Repo.Recording("<name>")`, `Repo.File("settings/...")` (both through `RepoPaths`, which the library tests
+  use too). A temporary path is `TempFiles.NewPath("<stem>", ".ext")`, never composed inline; a window shown for a test
+  is `Frames.Shown`. A test that writes a preferences
   file writes it to a temporary folder, never to `%APPDATA%`.
 
 ## Naming

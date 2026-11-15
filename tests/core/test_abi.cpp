@@ -84,7 +84,7 @@ std::string tempUtf8()
 std::string dataPath(const std::string& name) { return rootUtf8() + "/tests/data/" + name; }
 
 /// A committed recording under tests/data/test files, required to exist.
-std::string recording(const char* name) { return utf8Of(repoFile(fs::path("tests/data/test files") / name)); }
+std::string recording(const char* name) { return utf8Of(recordingFile(name)); }
 
 /// A scratch folder whose paths come back as UTF-8 text.
 struct Scratch

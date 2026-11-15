@@ -65,12 +65,12 @@ public class CalibrationTests
     [Fact]
     public void AStepFileThatCannotBeReadSaysWhatTheParserSays()
     {
-        string missing = Path.Combine(Path.GetTempPath(), "tmdq-no-steps-" + Guid.NewGuid().ToString("N") + ".toml");
+        string missing = TempFiles.NewPath("no-steps", ".toml");
         TmdqException e = Assert.Throws<TmdqException>(() => StepFile.Parse(missing));
         Assert.Equal(Status.Prepare, e.Status);
         Assert.Equal($"Could not open step-config file '{Path.GetFileName(missing)}'.", e.Message);       // the parser quotes the file name
 
-        string empty = Path.Combine(Path.GetTempPath(), "tmdq-empty-steps-" + Guid.NewGuid().ToString("N") + ".toml");
+        string empty = TempFiles.NewPath("empty-steps", ".toml");
         File.WriteAllText(empty, "# no steps here\n");
         try
         {
@@ -89,7 +89,7 @@ public class CalibrationTests
     [Fact]
     public void AStepFileWithItsOwnValuesIsReadInFileOrder()
     {
-        string path = Path.Combine(Path.GetTempPath(), "tmdq-steps-" + Guid.NewGuid().ToString("N") + ".toml");
+        string path = TempFiles.NewPath("steps", ".toml");
         File.WriteAllText(path, "[[Step]]\ndb = 30.5\n[[Step]]\ndb = -3\n[[Step]]\ndb = 12.25\n");
         try
         {
@@ -117,7 +117,7 @@ public class CalibrationTests
         Assert.Equal(trc, StepFile.InitialPath(null, trc));                               // ...unless a file is named
 
         // And with non-ASCII text, which crosses the boundary as UTF-8 and comes back whole.
-        string folder = Path.Combine(Path.GetTempPath(), "tmdq-café-Ω-" + Guid.NewGuid().ToString("N"));
+        string folder = TempFiles.NewPath("café-Ω");
         Directory.CreateDirectory(folder);
         string named = Path.Combine(folder, "steps-é.toml").Replace('\\', '/');
         File.WriteAllText(named, "[[Step]]\ndb = 1\n");
@@ -325,7 +325,7 @@ public class CalibrationTests
     [Fact]
     public void TheReceiverGridIsUsedOnlyWhenNoWordMapIsFound()
     {
-        string noRoot = Path.Combine(Path.GetTempPath(), "tmdq-no-root-" + Guid.NewGuid().ToString("N"));
+        string noRoot = TempFiles.NewPath("no-root");
 
         // Two receivers of one channel are L_RCVR1 and L_RCVR2; one receiver of two channels is L_RCVR1 and R_RCVR1.
         (_, CalibrationResult wide) = RunToTheEnd(Request(r => r with { AppRoot = noRoot, NumReceivers = 2, ReceiverChannels = 1 }));
@@ -340,7 +340,7 @@ public class CalibrationTests
     [Fact]
     public void AWordMapFileAndTheApplicationRootsDefaultAreUsed()
     {
-        string root = Path.Combine(Path.GetTempPath(), "tmdq-cal-root-" + Guid.NewGuid().ToString("N"));
+        string root = TempFiles.NewPath("cal-root");
         Directory.CreateDirectory(Path.Combine(root, "settings", "receiver_params"));
         File.WriteAllText(Path.Combine(root, "settings", "receiver_params", "default.toml"), "[C_RCVR1]\nWord = 3\n[R_RCVR1]\nWord = 4\n");
         string named = Path.Combine(root, "one.toml");
@@ -405,7 +405,7 @@ public class CalibrationTests
     [Fact]
     public void AFailureTheExtractorSeesBeforeItStartsIsReportedBeforeStartReturns()
     {
-        string missing = Path.Combine(Path.GetTempPath(), "tmdq-no-cal-" + Guid.NewGuid().ToString("N") + ".ch10");
+        string missing = TempFiles.NewPath("no-cal", ".ch10");
         var collector = new Collector();
         using CalibrationRun run = CalibrationRun.Start(Request(r => r with { FileName = missing }), collector);
 

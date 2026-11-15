@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using TmDq.App.ViewModels;
 using TmDq.App.ViewModels.Plot;
 using TmDq.Core;
@@ -43,5 +44,30 @@ namespace TmDq.App
 
         public static void WriteSmokeReport(string path, MainWindowViewModel vm) =>
             File.WriteAllText(path, SmokeReport(vm) + Environment.NewLine, new UTF8Encoding(false));
+
+        /// <summary>The smoke run: opens <paramref name="recording"/> in <paramref name="vm"/>, writes the report to
+        /// <paramref name="reportPath"/> and says how the process should exit: <see cref="ExitProcessed"/> when a Frame
+        /// Sync Lock stream was plotted, <see cref="ExitNotProcessed"/> when not, <see cref="ExitNoReport"/> when the
+        /// report could not be written (a folder that is not there, a path that is not a file name). The last is a code of
+        /// its own, so a bad report path is not mistaken for a recording that failed, and nothing is thrown out of the
+        /// window's Opened handler, where it would end the process unreported.</summary>
+        public static async Task<int> RunSmokeAsync(MainWindowViewModel vm, string recording, string reportPath)
+        {
+            await vm.LoadAsync(recording);
+            int exit = FirstLockSeries(vm.Plot) is null ? ExitNotProcessed : ExitProcessed;
+            try
+            {
+                WriteSmokeReport(reportPath, vm);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                return ExitNoReport;
+            }
+            return exit;
+        }
+
+        public const int ExitProcessed = 0;
+        public const int ExitNotProcessed = 1;
+        public const int ExitNoReport = 2;
     }
 }

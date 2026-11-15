@@ -34,7 +34,7 @@ namespace TmDq.App.Tests
 
         private static string TempCsv(string name = "")
         {
-            string path = Path.Combine(Path.GetTempPath(), "tmdq-statusbar-" + Guid.NewGuid().ToString("N") + name + ".csv");
+            string path = TempFiles.NewPath("statusbar", name + ".csv");
             File.WriteAllText(path, Csv, new UTF8Encoding(false));
             return path;
         }

@@ -14,7 +14,7 @@ namespace TmDq.Core.Tests;
 /// </summary>
 public class ReceiverParamsTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "tmdq-rxparams-" + Guid.NewGuid().ToString("N"));
+    private readonly string _dir = TempFiles.NewPath("rxparams");
 
     public ReceiverParamsTests()
     {

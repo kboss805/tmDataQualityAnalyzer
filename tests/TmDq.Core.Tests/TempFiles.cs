@@ -20,6 +20,12 @@ internal static class TempFiles
 
     private static readonly TimeSpan Pause = TimeSpan.FromMilliseconds(50);
 
+    /// <summary>A path in the temp folder that no other test is using: <c>tmdq-&lt;stem&gt;-&lt;guid&gt;&lt;suffix&gt;</c>.
+    /// Nothing is created. The stem says whose it is, so a leftover can be traced; a suffix makes it a file name
+    /// (<c>".csv"</c>), or leave it empty for a folder.</summary>
+    public static string NewPath(string stem, string suffix = "") =>
+        Path.Combine(Path.GetTempPath(), "tmdq-" + stem + "-" + Guid.NewGuid().ToString("N") + suffix);
+
     /// <summary>Deletes a file, as File.Delete does (a file that does not exist is not an error).</summary>
     public static void Delete(string path) => Delete(path, Window);
 

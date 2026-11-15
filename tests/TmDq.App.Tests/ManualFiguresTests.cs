@@ -48,13 +48,13 @@ namespace TmDq.App.Tests
 
         private readonly string _out;
         private readonly bool _keep;
-        private readonly string _scratch = Path.Combine(Path.GetTempPath(), "tmdq-figscratch-" + Guid.NewGuid().ToString("N"));
+        private readonly string _scratch = TempFiles.NewPath("figscratch");
 
         public ManualFiguresTests()
         {
             string? folder = Environment.GetEnvironmentVariable(OutputVariable);
             _keep = !string.IsNullOrEmpty(folder);
-            _out = _keep ? folder! : Path.Combine(Path.GetTempPath(), "tmdq-figures-" + Guid.NewGuid().ToString("N"));
+            _out = _keep ? folder! : TempFiles.NewPath("figures");
             Directory.CreateDirectory(_out);
             Directory.CreateDirectory(_scratch);
             NativeCore.EnsureLoaded();

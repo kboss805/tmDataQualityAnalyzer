@@ -408,7 +408,7 @@ public class SeriesTests
         };
         foreach ((string file, int[] orders) in cases)
         {
-            string path = Path.Combine(Path.GetTempPath(), "tmdq-orders-" + Guid.NewGuid().ToString("N") + ".csv");
+            string path = TempFiles.NewPath("orders", ".csv");
             File.WriteAllBytes(path, Convert.FromBase64String(FormatsDigest.CsvFiles[file]));
             try
             {

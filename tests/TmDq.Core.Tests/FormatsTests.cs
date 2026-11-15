@@ -57,7 +57,7 @@ public class FormatsTests
 
     private static string TempFile(string name, byte[] bytes)
     {
-        string path = Path.Combine(Path.GetTempPath(), "tmdq-formats-" + Guid.NewGuid().ToString("N") + "-" + name);
+        string path = TempFiles.NewPath("formats", "-" + name);
         File.WriteAllBytes(path, bytes);
         return path;
     }
@@ -141,7 +141,7 @@ public class FormatsTests
     [Fact]
     public void AFileThatIsNotThereReadsAsAFileThatSaysNothing()
     {
-        string missing = Path.Combine(Path.GetTempPath(), "tmdq-no-pattern-" + Guid.NewGuid().ToString("N") + ".toml");
+        string missing = TempFiles.NewPath("no-pattern", ".toml");
         Assert.Equal(new FrameSyncFileData(string.Empty, string.Empty, null, false, false, null), FrameSyncFile.Read(missing));
         Assert.Throws<ArgumentNullException>(() => FrameSyncFile.Read(null!));
     }
@@ -149,7 +149,7 @@ public class FormatsTests
     [Fact]
     public void APatternFileInANonAsciiFolderIsRead()
     {
-        string folder = Path.Combine(Path.GetTempPath(), "tmdq-café-Ω-" + Guid.NewGuid().ToString("N"));
+        string folder = TempFiles.NewPath("café-Ω");
         Directory.CreateDirectory(folder);
         string path = Path.Combine(folder, "pattern-é.toml");
         File.WriteAllText(path, "[Frame]\nFrameSync = \"FE6B2840\"\nBitsPerFrame = 800\n");
@@ -175,7 +175,7 @@ public class FormatsTests
         foreach (string[] w in ops.W)
         {
             string[] want = answers.Single(a => a.StartsWith("W|" + w[1] + "|")).Split('|');
-            string path = Path.Combine(Path.GetTempPath(), "tmdq-write-" + Guid.NewGuid().ToString("N") + ".toml");
+            string path = TempFiles.NewPath("write", ".toml");
             try
             {
                 FrameSyncFile.Write(path, Unhex(w[2]), Unhex(w[3]), int.Parse(w[4]), w[5] == "1", w[6] == "1");
@@ -192,7 +192,7 @@ public class FormatsTests
     [Fact]
     public void WhatIsWrittenIsReadBack()
     {
-        string path = Path.Combine(Path.GetTempPath(), "tmdq-roundtrip-" + Guid.NewGuid().ToString("N") + ".toml");
+        string path = TempFiles.NewPath("roundtrip", ".toml");
         try
         {
             FrameSyncFile.Write(path, "334AABBF", "FFFFFFFF", 32767, true, false);
@@ -209,7 +209,7 @@ public class FormatsTests
     [Fact]
     public void APatternThatCannotBeWrittenIsAnIoError()
     {
-        string folder = Path.Combine(Path.GetTempPath(), "tmdq-a-folder-" + Guid.NewGuid().ToString("N"));
+        string folder = TempFiles.NewPath("a-folder");
         Directory.CreateDirectory(folder);
         try
         {
@@ -365,7 +365,7 @@ public class FormatsTests
     {
         // 100,000 rows of four series is about 6 MB of native arrays per parse: thirty parses never freed would be
         // some 190 MB more than thirty that were.
-        string path = Path.Combine(Path.GetTempPath(), "tmdq-bigcsv-" + Guid.NewGuid().ToString("N") + ".csv");
+        string path = TempFiles.NewPath("bigcsv", ".csv");
         try
         {
             double[] x = Enumerable.Range(0, 100_000).Select(i => i * 0.01).ToArray();
@@ -394,7 +394,7 @@ public class FormatsTests
     [Fact]
     public void ACsvThatIsNotThereIsAPrepareErrorAndNullIsRefused()
     {
-        string missing = Path.Combine(Path.GetTempPath(), "tmdq-no-csv-" + Guid.NewGuid().ToString("N") + ".csv");
+        string missing = TempFiles.NewPath("no-csv", ".csv");
         TmdqException e = Assert.Throws<TmdqException>(() => CsvFile.Parse(missing));
         Assert.Equal(Status.Prepare, e.Status);
         Assert.Throws<ArgumentNullException>(() => CsvFile.Parse(null!));
@@ -415,7 +415,7 @@ public class FormatsTests
         foreach ((string[] head, List<string[]> cols) in ops.X)
         {
             string[] want = answers.Single(a => a.StartsWith("X|" + head[1] + "|")).Split('|');
-            string path = Path.Combine(Path.GetTempPath(), "tmdq-csvwrite-" + Guid.NewGuid().ToString("N") + ".csv");
+            string path = TempFiles.NewPath("csvwrite", ".csv");
             try
             {
                 CsvFile.Write(path, Columns(cols), int.Parse(head[2]), D(head[3]));
@@ -432,7 +432,7 @@ public class FormatsTests
     [Fact]
     public void AWrittenCsvIsAnExactFileAndIsReadBackWithTheSameIdentities()
     {
-        string path = Path.Combine(Path.GetTempPath(), "tmdq-csvroundtrip-" + Guid.NewGuid().ToString("N") + ".csv");
+        string path = TempFiles.NewPath("csvroundtrip", ".csv");
         try
         {
             var columns = new List<CsvColumn>
@@ -471,7 +471,7 @@ public class FormatsTests
     [Fact]
     public void ACsvThatCannotBeWrittenIsRefusedForTheRightReason()
     {
-        string path = Path.Combine(Path.GetTempPath(), "tmdq-csvbad-" + Guid.NewGuid().ToString("N") + ".csv");
+        string path = TempFiles.NewPath("csvbad", ".csv");
         var one = new CsvColumn(MetricType.FrameSyncLock, "A", 0, new[] { 0.0 }, new[] { 1.0 });
 
         TmdqException none = Assert.Throws<TmdqException>(() => CsvFile.Write(path, Array.Empty<CsvColumn>(), 1, 0));
@@ -480,7 +480,7 @@ public class FormatsTests
         Assert.Equal(Status.BadArgument, metric.Status);
         Assert.False(File.Exists(path));
 
-        string folder = Path.Combine(Path.GetTempPath(), "tmdq-csv-folder-" + Guid.NewGuid().ToString("N"));
+        string folder = TempFiles.NewPath("csv-folder");
         Directory.CreateDirectory(folder);
         try
         {

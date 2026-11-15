@@ -125,7 +125,7 @@ public class LibraryTests
     [Fact]
     public void AnotherDllCannotBeLoadedBesideTheFirst()
     {
-        string copy = Path.Combine(Path.GetTempPath(), "tmdq-copy-" + Guid.NewGuid().ToString("N") + ".dll");
+        string copy = TempFiles.NewPath("copy", ".dll");
         File.Copy(Env.DllPath(), copy);
         try
         {
