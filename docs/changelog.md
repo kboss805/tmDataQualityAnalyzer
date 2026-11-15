@@ -12,6 +12,35 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The manual's figures the same in every render
+
+Re-rendering the figures (`enguild_manual.ps1`) changed four of them nearly every time. It looked like the run log's
+clock, but that is already fixed (`FigureClock`). What varied, found by rendering the figures repeatedly and comparing them
+pixel by pixel:
+
+- the run log's lines. The core logs a `NN% read...` line at the first progress check past each tenth of the file, and that
+  check is time-gated (`ch10packetreader.cpp`), so it read `42%` in one render and `41%` in the next; a stream's
+  `elapsed N.Ns` is wall-clock time; and the reader's thread and the streams' threads log together, so `Reading Chapter 10
+  file...`, the streams' start lines and their results came in a different order from one run to the next;
+- the progress dialog's bar, which the capture takes at the first report past 70 %, so at 70, 71 or 73;
+- the receiver tree's chevrons, which a new expander makes turned over and brings to rest at the first render ticks, so a
+  capture before or between them caught a chevron half turned.
+
+The harness now sets each right before a capture, and the application is as it was: `ManualFiguresTests.Steady` puts the
+percentages and seconds in one wording and the racing lines in one order (the reader's `Reading...`, the start lines, the
+percentages, then each stream's results, the streams by channel), the progress figure pins the bar at 70, and the
+Customize View scene runs the ticks that bring its chevrons to rest (`AtRest`). The two pure rules have tests (eight
+cases; the app suite is 682 run, 648 passed with 34 not run, from 640 and 34). Rendered seven times, 26 of the 27 figures
+came out the same in every render. The 27th, the receiver tree's, still varies in about one render in four by one level
+of colour in three pixels at a checkbox's edge, a fade that a longer wait did not end; its committed figure is left as it was.
+The three figures that did change (`walk-err-01-log-error`, `walk-fs-04-processing`, `walk-theme-01-light-plot`) show the
+log in its set order and wording, and are re-embedded in both manuals.
+
+Mutation check: seven mutants of the harness. Six CAUGHT (the percentage set to the wrong tenth, the seconds to another
+value, the start lines ranked after the results, the streams not taken by channel, the reader's first line left among the
+percentages, and a capture that does not set the log steady, which the log-error scene asserts). One SURVIVED, as expected: the
+progress bar not pinned at 70, which only the figure's pixels show and no test reads.
+
 #### The receiver tree's rows on the theme
 
 In the dark theme the Customize View dialog's Receiver SNR tab drew each receiver's row (an `Expander`) in Fluent's own

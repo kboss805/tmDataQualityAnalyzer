@@ -37,9 +37,9 @@ namespace TmDq.App.Tests
     /// where the light one is the subject.
     /// <para>A figure is the same in every capture, so a re-capture changes only the figures whose subject changed: the
     /// log's clock is fixed (<see cref="FigureClock"/>), a dialog shows <see cref="ShownFolder"/> where the files really
-    /// are, and every animation runs out before a capture. The exception is a real run's log, behind the main window's
-    /// figures: the streams are processed in parallel, so the order they start in, the percentages read and the seconds
-    /// elapsed are the run's own.</para>
+    /// are, and every animation runs out before a capture. A real run's log, behind the main window's figures, is written
+    /// by threads that race, and says how long it took: <see cref="Steady"/> sets its lines in one order, and its
+    /// percentages and seconds in one wording, before each capture.</para>
     /// </summary>
     [Collection(NativeCoreCollection.Name)]
     public sealed class ManualFiguresTests : IDisposable
@@ -217,6 +217,21 @@ namespace TmDq.App.Tests
             return window;
         }
 
+        /// <summary>An expander's chevron is created turned over (180 degrees) and turns to its rest at the first render ticks, over
+        /// a few tens of milliseconds of the clock: a window drawn before, or between the ticks that carry it there, shows a chevron
+        /// half turned, which is how the receiver tree's figure came out differently from one capture to the next. Not run for
+        /// every window: the progress dialog's capture is taken inside a run's report, where the jobs it runs would be the run's.</summary>
+        private static T AtRest<T>(T window) where T : Window
+        {
+            for (int tick = 0; tick < 3; tick++)
+            {
+                System.Threading.Thread.Sleep(100);
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick(2);
+                Dispatcher.UIThread.RunJobs();
+            }
+            return window;
+        }
+
         private static MainWindow MainWindowOf(MainWindowViewModel vm, ThemeVariant? theme = null) =>
             Shown(new MainWindow { DataContext = vm, Width = 1280, Height = 760 }, theme);
 
@@ -228,6 +243,7 @@ namespace TmDq.App.Tests
         /// underneath the capture; nothing in it is animated.</summary>
         private static SKBitmap Capture(Window window, bool settle = true)
         {
+            if (window.DataContext is MainWindowViewModel vm) SteadyLog(vm);
             SKBitmap shot = Draw(window);
             for (int round = 0; settle && round < SettleRounds; round++)
             {
@@ -241,6 +257,100 @@ namespace TmDq.App.Tests
             }
             Assert.False(settle, "the window was still moving after " + SettleRounds + " drawings");
             return shot;
+        }
+
+        /// <summary>The two wordings in a run's log that differ from one run to the next, as the core words them: a "NN% read..."
+        /// line is logged at the first progress check (time-gated) past each tenth of the file, so NN is 42 in one run and
+        /// 41 in the next; and a stream's "elapsed N.Ns" is wall-clock time. A figure shows the canonical wording (the tenth,
+        /// and two seconds: "41% read...", "elapsed 2.0s").</summary>
+        internal static string SteadyText(string text)
+        {
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"^(\d)\d% read\.\.\.$", "${1}1% read...");
+            return System.Text.RegularExpressions.Regex.Replace(text, @"elapsed \d+\.\d+s\.", "elapsed 2.0s.");
+        }
+
+        /// <summary>The log's lines as a figure shows them: <see cref="SteadyText"/> on each, and the lines the reader's thread and
+        /// the streams' threads log together, which race, set in one order: the reader's "Reading...", the streams' start lines,
+        /// the reader's percentages, then each stream's results; a stream's own lines keep their order and the streams are
+        /// taken in the order of their channels. Any other line ends such a run of lines.</summary>
+        internal static List<Models.Logging.LogEntry> Steady(IReadOnlyList<Models.Logging.LogEntry> entries)
+        {
+            List<Models.Logging.LogEntry> steady = entries.Select(e => e with { Text = SteadyText(e.Text) }).ToList();
+            var byTag = new Dictionary<string, int>();   // "CH-03 PRN 11 1M" -> 15, from the lines that say "[CH 15 CH-03 PRN 11 1M] ..."
+            foreach (Models.Logging.LogEntry e in steady)
+                if (System.Text.RegularExpressions.Regex.Match(e.Text, @"^\[CH (\d+) (.+?)\] ") is { Success: true } m)
+                    byTag[m.Groups[2].Value] = int.Parse(m.Groups[1].Value);
+
+            // The channel of the stream a line belongs to: the one it names, or the one whose sample count it gives.
+            int? Stream(Models.Logging.LogEntry e)
+            {
+                System.Text.RegularExpressions.Match m = System.Text.RegularExpressions.Regex.Match(e.Text, @"^\[CH (\d+) ");
+                if (m.Success) return int.Parse(m.Groups[1].Value);
+                System.Text.RegularExpressions.Match s = System.Text.RegularExpressions.Regex.Match(e.Text, @"^\s*(.+?): \d+ samples, ");
+                return s.Success && byTag.TryGetValue(s.Groups[1].Value, out int channel) ? channel : null;
+            }
+
+            (int Rank, int Channel)? Place(Models.Logging.LogEntry e)
+            {
+                if (e.Text == "Reading Chapter 10 file...") return (0, 0);
+                if (System.Text.RegularExpressions.Regex.IsMatch(e.Text, @"^\d+% read\.\.\.$")) return (2, 0);
+                if (Stream(e) is not { } channel) return null;
+                return (e.Text.EndsWith("] processing...", StringComparison.Ordinal) ? 1 : 3, channel);
+            }
+
+            for (int i = 0; i < steady.Count; i++)
+            {
+                if (Place(steady[i]) is null) continue;
+                int j = i;
+                while (j < steady.Count && Place(steady[j]) is not null) j++;
+                List<Models.Logging.LogEntry> run = steady.GetRange(i, j - i).OrderBy(e => Place(e)!.Value.Rank).ThenBy(e => Place(e)!.Value.Channel).ToList();   // stable
+                steady.RemoveRange(i, j - i);
+                steady.InsertRange(i, run);
+                i = j - 1;
+            }
+            return steady;
+        }
+
+        private static void SteadyLog(MainWindowViewModel vm)
+        {
+            List<Models.Logging.LogEntry> steady = Steady(vm.Log.Entries);
+            for (int i = 0; i < steady.Count; i++)
+                if (steady[i] != vm.Log.Entries[i]) vm.Log.Entries[i] = steady[i];
+        }
+
+        [Theory]
+        [InlineData("42% read...", "41% read...")]
+        [InlineData("11% read...", "11% read...")]
+        [InlineData("93% read...", "91% read...")]
+        [InlineData("[CH 13 CH-01 PRN 15 5M] complete — 116 samples extracted, elapsed 1.9s.", "[CH 13 CH-01 PRN 15 5M] complete — 116 samples extracted, elapsed 2.0s.")]
+        [InlineData("elapsed 12.34s.", "elapsed 2.0s.")]
+        [InlineData("Processing complete — results plotted from memory.", "Processing complete — results plotted from memory.")]
+        [InlineData("File size: 77.3 MB", "File size: 77.3 MB")]
+        public void TheRunsTwoUnsteadyWordingsAreSetToTheirCanonicalForm(string logged, string shown) =>
+            Assert.Equal(shown, SteadyText(logged));
+
+        [Fact]
+        public void TheLinesOfTheThreadsThatRaceAreSetInOneOrderEachStreamKeepingItsOwn()
+        {
+            static Models.Logging.LogEntry L(string text) => new("09:41:07", text, Models.Logging.LogLevel.Info);
+            var logged = new[]
+            {
+                L("--- Processing 3 stream(s) concurrently ---"),
+                L("[CH 15 CH-03 PRN 11 1M] processing..."), L("Reading Chapter 10 file..."), L("[CH 16 CH-04 PRN 11 5M] processing..."),
+                L("11% read..."), L("[CH 13 CH-01 PRN 15 5M] processing..."), L("42% read..."),
+                L("[CH 16 CH-04 PRN 11 5M] 0 bytes processed."), L("[CH 15 CH-03 PRN 11 1M] 5 bytes processed."),
+                L("[CH 15 CH-03 PRN 11 1M] complete — 1 samples extracted, elapsed 1.9s."), L("  CH-03 PRN 11 1M: 109 samples, 0 channel(s)"),
+                L("Processing complete — results plotted from memory."),
+            };
+            Assert.Equal(new[]
+            {
+                "--- Processing 3 stream(s) concurrently ---",
+                "Reading Chapter 10 file...", "[CH 13 CH-01 PRN 15 5M] processing...", "[CH 15 CH-03 PRN 11 1M] processing...",
+                "[CH 16 CH-04 PRN 11 5M] processing...", "11% read...", "41% read...",
+                "[CH 15 CH-03 PRN 11 1M] 5 bytes processed.", "[CH 15 CH-03 PRN 11 1M] complete — 1 samples extracted, elapsed 2.0s.",
+                "  CH-03 PRN 11 1M: 109 samples, 0 channel(s)", "[CH 16 CH-04 PRN 11 5M] 0 bytes processed.",
+                "Processing complete — results plotted from memory.",
+            }, Steady(logged).Select(e => e.Text));
         }
 
         private static SKBitmap Draw(Window window)
@@ -396,6 +506,7 @@ namespace TmDq.App.Tests
             Assert.Contains(bad.Log.Entries, e => e.Level == Models.Logging.LogLevel.Error);
             MainWindow w = MainWindowOf(bad);
             Save("walk-err-01-log-error.png", w);
+            Assert.All(bad.Log.Entries.Where(e => e.Text.Contains("% read")), e => Assert.Matches(@"^\d1% read\.\.\.$", e.Text));   // captured steady
             w.Close();
 
             // Processing under way, caught in a real run: the progress dialog over the window, the log filling in beside it.
@@ -403,6 +514,7 @@ namespace TmDq.App.Tests
             bool caught = false;
             var dialog = new CapturingDialog(p =>
             {
+                p.Progress = 70;   // the first report past 70 % says 70, 71 or 73, by how long the read took: the bar is drawn at 70
                 using SKBitmap window = Capture(main!, settle: false);
                 Window progress = Shown(new ProcessingWindow { DataContext = p });
                 using (SKBitmap box = Capture(progress, settle: false))
@@ -536,7 +648,7 @@ namespace TmDq.App.Tests
             Assert.Null(first.IsChecked);
             window = new CustomizeViewWindow { DataContext = snrView };
             window.FindControl<TabControl>("Tabs")!.SelectedIndex = 1;
-            Shown(window);
+            AtRest(Shown(window));
             Save("walk-cust-02-snr-tree.png", window);
             window.Close();
 
