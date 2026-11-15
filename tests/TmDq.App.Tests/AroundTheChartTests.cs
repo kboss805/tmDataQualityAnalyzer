@@ -1602,7 +1602,7 @@ public sealed class AroundTheChartTests
                      w.FindControl<ItemsControl>("LockRows")!.GetLogicalDescendants().OfType<TextBox>().Select(t => t.Text));
         boxes[1].IsChecked = false;
         Assert.False(c.LockRows[1].IsChecked);
-        Assert.All(w.FindControl<TabControl>("Tabs")!.Items.OfType<TabItem>(), t => Assert.Equal(14, t.FontSize));
+        Assert.All(w.FindControl<TabControl>("Tabs")!.Items.OfType<TabItem>(), t => Assert.Equal(13, t.FontSize));
 
         // A row's swatch is in its colour, and opens the colour dialog over this one rather than the main window.
         Button swatch = w.FindControl<ItemsControl>("LockRows")!.GetLogicalDescendants().OfType<Button>().First(b => b is not ToggleButton);

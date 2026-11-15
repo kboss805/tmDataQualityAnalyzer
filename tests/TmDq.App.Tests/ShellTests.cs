@@ -797,6 +797,33 @@ public sealed class ShellTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void TheTextOfEveryControlIsThirteenPixelsAsVSCodesIs()
+    {
+        // The size Fluent's controls take their text at, and the body token our own text uses, are one: 13, where Fluent's is 14.
+        foreach (ThemeVariant theme in new[] { ThemeVariant.Light, ThemeVariant.Dark })
+        {
+            Assert.True(Application.Current!.TryFindResource("ControlContentThemeFontSize", theme, out object? control));
+            Assert.True(Application.Current!.TryFindResource("BodyTextBlockFontSize", theme, out object? body));
+            Assert.Equal((13.0, 13.0), ((double)control!, (double)body!));
+        }
+        // And the controls do take it, whatever they are: a window's own text, a button, a field, a dropdown, a box, a menu row
+        // (a tab header is display-sized in Fluent, and a dialog's own, in Customize View, is the body size).
+        var text = new TextBlock { Text = "text" };
+        var button = new Button { Content = "OK" };
+        var input = new TextBox { Text = "t" };
+        var combo = new ComboBox { ItemsSource = new[] { "a" }, SelectedIndex = 0 };
+        var box = new CheckBox { Content = "c" };
+        var menu = new MenuFlyoutPresenter { Items = { new MenuItem { Header = "item" } } };
+        var window = new Window { Content = new StackPanel { Children = { text, button, input, combo, box, menu } } };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(13.0, window.FontSize);
+        Assert.All(new Control[] { text, button, input, combo, box, (Control)menu.Items[0]! },
+                   c => Assert.Equal((c.GetType().Name, 13.0), (c.GetType().Name, c is TextBlock t ? t.FontSize : ((Avalonia.Controls.Primitives.TemplatedControl)c).FontSize)));
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void EveryBrushFluentLooksItsControlsUpUnderIsAnAliasOfTheTokenForItsJob()
     {
         // The brushes Fluent's controls, and our chips and loading label, are drawn with are never colours of their own:
@@ -839,10 +866,10 @@ public sealed class ShellTests : IDisposable
         double Double(string key) => (double)Resource(key, theme);
         CornerRadius Radius(string key) => (CornerRadius)Resource(key, theme);
         // Segoe UI Variable, which Windows 11's Fluent is drawn in (Avalonia's own Fluent theme asks for Inter, which is not
-        // bundled, and so fell back to the system font); a caption of 12 and a body of 14; a control's corners 4 and an
+        // bundled, and so fell back to the system font); a caption of 12 and a body of 13 (VS Code's; Fluent's is 14); a control's corners 4 and an
         // overlay's 8 (Avalonia's are 3 and 5).
         Assert.Equal("Segoe UI Variable Text", ((FontFamily)Resource("ContentControlThemeFontFamily", theme)).FamilyNames[0]);
-        Assert.Equal((12.0, 14.0), (Double("CaptionTextBlockFontSize"), Double("BodyTextBlockFontSize")));
+        Assert.Equal((12.0, 13.0), (Double("CaptionTextBlockFontSize"), Double("BodyTextBlockFontSize")));
         Assert.Equal((new CornerRadius(4), new CornerRadius(8)), (Radius("ControlCornerRadius"), Radius("OverlayCornerRadius")));
 
         // Fluent's own controls, and every window, take them.

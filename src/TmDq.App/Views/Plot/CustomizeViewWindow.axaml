@@ -10,9 +10,9 @@
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner">
   <Window.Styles>
-    <!-- Fluent's tab headers are display-sized; these are a dialog's. -->
+    <!-- Fluent's tab headers are display-sized; these are a dialog's: the body size. -->
     <Style Selector="TabItem">
-      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontSize" Value="{DynamicResource BodyTextBlockFontSize}" />
       <Setter Property="MinHeight" Value="32" />
     </Style>
   </Window.Styles>

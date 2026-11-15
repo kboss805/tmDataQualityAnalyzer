@@ -12,6 +12,31 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Body text at 13 px, as VS Code's is
+
+Asked for from the parked VS Code items: the interface's text at 13 px where Fluent's is 14. Captions stay 12.
+
+- **`ControlContentThemeFontSize` is 13** (Fluent's is 14): the size every control Fluent draws takes its text at (a button, a field, a
+  dropdown, a check box, a menu row, a tooltip) and a window's own text, so every dialog and the main menu. `BodyTextBlockFontSize` is
+  13 too (it was 14, the "Loading..." label's), and the two are held equal by a test. Customize View's tab headers, which set their own size
+  because Fluent's are display-sized, use the body token (they were a literal 14).
+- **Not changed**: the captions, the chart's and the log's text, the status bar and the chips (all 12); the glyphs and icons (their own sizes).
+- **Menu rows** stay 28 px: with the smaller text the 4 + 5 px of vertical padding gave 27, so it is 5 + 5.
+- A dialog is a little narrower and shorter, each line about a pixel; checked in the re-rendered figures (Configure Streams, the setup
+  dialog, Customize View, the menu). The type scale's other steps (subtitle 20, title 28) are not used by the application.
+
+**Tests:** new `TheTextOfEveryControlIsThirteenPixelsAsVSCodesIs` (the two sizes in both themes, and a window's text, a button, a field, a
+dropdown, a check box and a menu row at 13); `TheFontTheTypeAndTheCornersAreFluents` reads a body of 13; Customize View's tab headers are
+13 where the test said 14. The menu row test still reads 28.
+
+**Mutation check** (`eng\mutate.ps1`, app suite, 4 mutants): **4 of 4 caught**: the controls' size back at 14, the body token back at 14, the
+tab headers at 14, and the menu rows 27 high.
+
+**Baselines:** app **676 passed / 0 failed / 34 not run** (was 675: the new test).
+
+**The manual:** figures re-rendered and the manuals re-embedded: every dialog and menu figure is at 13 px; `walk-cust-02-snr-tree` was
+restored, as before.
+
 #### The core's headers in one folder, and UIConstants split by subject (layout plan PR 6; audit S1, S5)
 
 The last of the source-layout PRs. Behaviour is the same.
