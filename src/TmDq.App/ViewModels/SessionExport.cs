@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using TmDq.App.Models.Logging;
@@ -17,12 +19,15 @@ namespace TmDq.App.ViewModels
         private readonly PlotViewModel _plot;
         private readonly SessionLog _log;
         private readonly IPlotImageExporter? _images;
+        private readonly Action<string, LogLevel> _report;
 
-        public SessionExport(PlotViewModel plot, SessionLog log, IPlotImageExporter? images)
+        /// <param name="report">The status line: what the Export dialog did, in a sentence.</param>
+        public SessionExport(PlotViewModel plot, SessionLog log, IPlotImageExporter? images, Action<string, LogLevel> report)
         {
             _plot = plot;
             _log = log;
             _images = images;
+            _report = report;
         }
 
         /// <summary>Whether there is anything to write an image with.</summary>
@@ -35,30 +40,46 @@ namespace TmDq.App.ViewModels
         public async Task WriteAsync(ExportViewModel choice)
         {
             if (!_plot.HasData) return;
-            if (choice.ExportData) Csv(choice.DataPath, -1, "Data exported to ", "Error: Failed to export data to ");
-            if (choice.ExportImage) await ImageAsync(choice.ImagePath);
+            var done = new List<string>();
+            var failed = new List<string>();
+            void Note(bool ok, string what) => (ok ? done : failed).Add(what);
+            if (choice.ExportData) Note(Csv(choice.DataPath, -1, "Data exported to ", "Error: Failed to export data to "), "data");
+            if (choice.ExportImage) Note(await ImageAsync(choice.ImagePath), "plot image");
             if (choice.ExportLog)
             {
-                if (WriteLog(choice.LogPath)) _log.Success("Log exported to " + choice.LogPath);
+                bool ok = WriteLog(choice.LogPath);
+                if (ok) _log.Success("Log exported to " + choice.LogPath);
                 else _log.Error("Error: Failed to export log to " + choice.LogPath);
+                Note(ok, "log file");
             }
+            // One sentence for the status bar (the log has each path): what was written, and what was not.
+            if (failed.Count == 0) _report("Exported " + Sentence(done) + ".", LogLevel.Success);
+            else if (done.Count == 0) _report("Could not export " + Sentence(failed) + ". See the log.", LogLevel.Error);
+            else _report("Exported " + Sentence(done) + ". Could not export " + Sentence(failed) + ". See the log.", LogLevel.Warning);
         }
+
+        /// <summary>"data", "data and log file", "data, plot image and log file".</summary>
+        private static string Sentence(IReadOnlyList<string> items) =>
+            items.Count <= 1 ? string.Concat(items) : string.Join(", ", items.Take(items.Count - 1)) + " and " + items[^1];
 
         /// <summary>One recording's series as CSV, as a batch writes each file's: "Exported:" or "Failed to export CSV:".</summary>
         public void SourceCsv(string path, int sourceId) => Csv(path, sourceId, "Exported: ", "Failed to export CSV: ");
 
         /// <summary>The plot as an image at <paramref name="path"/> (its format by its suffix), and the log told which.</summary>
-        public async Task ImageAsync(string path)
+        public async Task<bool> ImageAsync(string path)
         {
             (string Path, ImageFormat Format)? written = _images is null ? null : await _images.ExportAsync(path);
             if (written is { } w) _log.Success($"Plot exported as {w.Format.ToString().ToUpperInvariant()} to {w.Path}");
             else _log.Error("Error: Failed to export plot to " + ImageFiles.Resolve(path).Path);
+            return written is not null;
         }
 
-        private void Csv(string path, int sourceId, string done, string failed)
+        private bool Csv(string path, int sourceId, string done, string failed)
         {
-            if (_plot.ExportCsv(path, sourceId)) _log.Success(done + path);
+            bool ok = _plot.ExportCsv(path, sourceId);
+            if (ok) _log.Success(done + path);
             else _log.Error(failed + path);
+            return ok;
         }
 
         /// <summary>The log as v2.14.2's export wrote it (US6.2): each line as the sidebar shows it, CR LF line ends,

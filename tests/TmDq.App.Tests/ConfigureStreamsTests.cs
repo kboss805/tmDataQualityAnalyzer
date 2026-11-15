@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using TmDq.App.Models.Logging;
 using TmDq.App.Models.Processing;
 using TmDq.App.Models.Streams;
 using TmDq.App.Services;
@@ -228,7 +229,7 @@ namespace TmDq.App.Tests
             Assert.Same(locks[0], Startup.FirstLockSeries(vm.Plot));
             Assert.Equal(116, locks[0].Y.Length);   // channel 13 as FirstChannelRun runs it
             Assert.True(locks[1].Y.Average() > 50, $"PRN11 should lock with its own pattern (mean {locks[1].Y.Average()})");
-            Assert.Equal("prn_testfile, sample.ch10: 2 streams processed (2 Frame Sync Lock, 0 Receiver SNR)", vm.Status);
+            Assert.Equal("Finished processing prn_testfile, sample.ch10: 2 streams.", vm.Status);
             Assert.False(vm.IsBusy);
         }
 
@@ -251,7 +252,7 @@ namespace TmDq.App.Tests
             dialogs.OnConfigure = c => { c.CancelCommand.Execute(null); return Task.CompletedTask; };
             await vm.LoadAsync(Prn);
             Assert.Same(shown, Startup.FirstLockSeries(vm.Plot));
-            Assert.Equal("prn_testfile, sample.ch10: not processed (Configure Streams was cancelled).", vm.Status);
+            Assert.Equal(("Cancelled. prn_testfile, sample.ch10 was not processed.", LogLevel.Info), (vm.Status, vm.StatusLevel));
             Assert.False(vm.IsBusy);
             Assert.Equal(2, dialogs.ConfigureCalls);
         }
@@ -271,7 +272,7 @@ namespace TmDq.App.Tests
             var vm = new MainWindowViewModel(new MainWindowServices { Configurator = new DialogConfigurator(dialogs, null, Repo.Root) });
             await vm.LoadAsync(Repo.Recording("step_cal, example.ch10"));
             Assert.Empty(PlotFixtures.Locks(vm));
-            Assert.Equal("step_cal, example.ch10: 1 stream processed (0 Frame Sync Lock, 1 Receiver SNR)", vm.Status);
+            Assert.Equal("Finished processing step_cal, example.ch10: 1 stream.", vm.Status);
         }
 
         [Fact]
@@ -290,9 +291,9 @@ namespace TmDq.App.Tests
             var vm = new MainWindowViewModel(new MainWindowServices { Configurator = new DialogConfigurator(dialogs, null, Repo.Root) });
             await vm.LoadAsync(Prn);
             Assert.Equal(new[] { 13 }, PlotFixtures.Locks(vm).Select(s => s.StreamOrder));
-            Assert.StartsWith("prn_testfile, sample.ch10: CH-01 PRN 15 5M (channel 13), 116 samples, mean lock ", vm.Status);
-            Assert.Contains(". Not processed: ", vm.Status, StringComparison.Ordinal);
-            Assert.Contains("CH-04", vm.Status, StringComparison.Ordinal);
+            // The bar says how many were not processed and where to look; the log says which, and why.
+            Assert.Equal(("Finished processing prn_testfile, sample.ch10: 1 stream, 1 not processed. See the log.", LogLevel.Warning), (vm.Status, vm.StatusLevel));
+            Assert.Contains(vm.Log.Entries, e => e.Text.Contains("CH-04", StringComparison.Ordinal));
         }
 
         [Fact]
@@ -333,27 +334,33 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
-        public void TheStatusNamesWhatWasNotProcessed()
+        public void TheStatusSaysHowManyStreamsWereProcessedAndHowManyWereNot()
         {
             var lockStream = new ProcessedStream(13, "A", 0, 0, StreamMode.FrameSyncLock, new[] { 0.0 }, new[] { 50.0 }, new[] { 0.0 }, Array.Empty<ChannelData>());
             var snr = lockStream with { Mode = StreamMode.ReceiverChannelInfo, PcmChannelId = 14 };
-            Assert.Equal("f.ch10: A (channel 13), 1 samples, mean lock 50.0 %",
+            // A sentence: that it finished and how many streams; the numbers of each stream are on the plot and in the log.
+            Assert.Equal("Finished processing f.ch10: 1 stream.",
                          MainWindowViewModel.Describe("f.ch10", new RunOutcome(new[] { lockStream }, Array.Empty<StreamResult>(), Array.Empty<string>())));
-            Assert.Equal("f.ch10: 2 streams processed (1 Frame Sync Lock, 1 Receiver SNR). Not processed: B: no sync.",
+            Assert.Equal("Finished processing f.ch10: 2 streams.",
+                         MainWindowViewModel.Describe("f.ch10", new RunOutcome(new[] { lockStream, snr }, Array.Empty<StreamResult>(), Array.Empty<string>())));
+            // What was not processed is counted, and the reasons are in the log, not here.
+            Assert.Equal("Finished processing f.ch10: 2 streams, 1 not processed. See the log.",
                          MainWindowViewModel.Describe("f.ch10", new RunOutcome(new[] { lockStream, snr }, Array.Empty<StreamResult>(), new[] { "B: no sync." })));
+            Assert.Equal("Finished processing f.ch10: 1 stream, 2 not processed. See the log.",
+                         MainWindowViewModel.Describe("f.ch10", new RunOutcome(new[] { lockStream }, Array.Empty<StreamResult>(), new[] { "B: no sync.", "C: no sync." })));
         }
 
         [Fact]
         public void TheStatusIsWrittenTheSameInEveryCulture()
         {
-            // The line ends the smoke report, which other tools read: a decimal comma has no place in it.
+            // The line ends the smoke report: its numbers are written the same whatever the culture.
             var lockStream = new ProcessedStream(13, "A", 0, 0, StreamMode.FrameSyncLock, new[] { 0.0 }, new[] { 33.3 }, new[] { 0.0 }, Array.Empty<ChannelData>());
             var outcome = new RunOutcome(new[] { lockStream }, Array.Empty<StreamResult>(), Array.Empty<string>());
             System.Globalization.CultureInfo before = System.Globalization.CultureInfo.CurrentCulture;
             System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
             try
             {
-                Assert.Equal("f.ch10: A (channel 13), 1 samples, mean lock 33.3 %", MainWindowViewModel.Describe("f.ch10", outcome));
+                Assert.Equal("Finished processing f.ch10: 1 stream.", MainWindowViewModel.Describe("f.ch10", outcome));
             }
             finally
             {

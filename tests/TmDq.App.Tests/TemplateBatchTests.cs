@@ -125,8 +125,13 @@ namespace TmDq.App.Tests
         {
             public MainWindowViewModel? Main;
             public readonly List<string> Seen = new();
+            public readonly List<Models.Logging.LogLevel> Levels = new();
 
-            public void Show(ProcessingViewModel vm) => Seen.Add(Main!.Status);
+            public void Show(ProcessingViewModel vm)
+            {
+                Seen.Add(Main!.Status);
+                Levels.Add(Main.StatusLevel);
+            }
 
             public void Close()
             {
@@ -164,7 +169,9 @@ namespace TmDq.App.Tests
                 "Success Batch complete: 2 processed, 2 skipped. Output written to " + output + ".",
             };
             Assert.Equal(expected, lines.Where(l => expected.Contains(l)));   // in this order, among the runs' own lines
-            Assert.Equal("Batch complete: 2 processed, 2 skipped. Output written to " + output + ".", vm.Status);
+            Assert.Equal("Batch complete: 2 processed, 2 skipped.", vm.Status);
+            Assert.Equal(Models.Logging.LogLevel.Warning, vm.StatusLevel);
+            Assert.Equal("Batch complete: 2 processed, 2 skipped. Output written to " + output + ".", vm.Log.Entries[^1].Text);
 
             // Each image is its own recording, in each metric; the view is put back after.
             Assert.Equal(new[] { (0, LockAxisView.LockPercent), (0, LockAxisView.MissedFrames), (1, LockAxisView.LockPercent), (1, LockAxisView.MissedFrames) },
@@ -197,7 +204,8 @@ namespace TmDq.App.Tests
             await vm.RunBatchAsync(PrnTemplate(), new[] { one, two }, output, reuseAppearance: false);
 
             // Each file's run is shown under the status naming it.
-            Assert.Equal(new[] { "Processing flight 1.ch10 ...", "Processing flight 2.ch10 ..." }, dialog.Seen);
+            Assert.Equal(new[] { "Processing flight 1.ch10...", "Processing flight 2.ch10..." }, dialog.Seen);
+            Assert.All(dialog.Levels, l => Assert.Equal(Models.Logging.LogLevel.Info, l));   // under way: no mark
 
             // Each CSV, and no image tried: no line about a plot image, and no image on disk.
             string[] lines = Lines(vm, before);
@@ -205,7 +213,9 @@ namespace TmDq.App.Tests
             Assert.Contains("Success Exported: " + Path.Combine(output, "flight 2.csv"), lines);
             Assert.DoesNotContain(lines, l => l.Contains("export plot", StringComparison.Ordinal) || l.Contains("Plot exported", StringComparison.Ordinal));
             Assert.Equal(new[] { "flight 1.csv", "flight 2.csv" }, Directory.GetFiles(output).Select(f => Path.GetFileName(f)).Order());
-            Assert.Equal("Batch complete: 2 processed, 0 skipped. Output written to " + output + ".", vm.Status);
+            Assert.Equal("Batch complete: 2 processed, 0 skipped.", vm.Status);
+            Assert.Equal(Models.Logging.LogLevel.Success, vm.StatusLevel);
+            Assert.Equal("Batch complete: 2 processed, 0 skipped. Output written to " + output + ".", vm.Log.Entries[^1].Text);
         }
 
         [Fact]
@@ -298,7 +308,9 @@ namespace TmDq.App.Tests
             Assert.Equal(new[] { false, true }, available);   // Apply Template waits while the batch runs
             Assert.Contains("Warning The most recently added source's recording time ('a day later.ch10') does not overlap the data already loaded. " +
                             "They will share one time axis with a large gap between them.", Lines(vm, before));
-            Assert.Equal("Batch complete: 2 processed, 1 skipped. Output written to " + output + ".", vm.Status);
+            Assert.Equal("Batch complete: 2 processed, 1 skipped.", vm.Status);
+            Assert.Equal(Models.Logging.LogLevel.Warning, vm.StatusLevel);
+            Assert.Equal("Batch complete: 2 processed, 1 skipped. Output written to " + output + ".", vm.Log.Entries[^1].Text);
             // Without frame-sync data, one image per file, named for it.
             Assert.Equal(new[] { Path.Combine(output, "step_cal, example.png"), Path.Combine(output, "a day later.png") }, images.Asked.Select(a => a.Path));
             // Each recording kept as the template ran it, for Save as Template: its time channel's place and byte order.
@@ -370,6 +382,8 @@ namespace TmDq.App.Tests
             Assert.Null(vm.ReadTemplate(Fixture("empty.json")));
             Assert.Equal("Template has no stream entries.", vm.Log.Entries[^1].Text);
             Assert.All(vm.Log.Entries.TakeLast(5), e => Assert.Equal(Models.Logging.LogLevel.Error, e.Level));
+            // The bar has one sentence for every way it can fail; the log has the reason.
+            Assert.Equal(("Could not read the template. See the log.", Models.Logging.LogLevel.Error), (vm.Status, vm.StatusLevel));
             Assert.NotNull(vm.ReadTemplate(Fixture("prn-sample.json")));
         }
 
@@ -426,6 +440,7 @@ namespace TmDq.App.Tests
             Assert.Equal(new[] { (0, "flight 1") }, vm.Plot.SourceList());
             // As the confirmation was left: the template's names and colours, and no export.
             Assert.Equal("Batch complete: 1 processed, 0 skipped.", vm.Status);
+            Assert.Equal(Models.Logging.LogLevel.Success, vm.StatusLevel);
             Assert.Equal("Fifteen", vm.Plot.Series[0].Name);
 
             // Its own names kept, and each file exported to the folder given (spaces trimmed).
@@ -439,7 +454,9 @@ namespace TmDq.App.Tests
                 c.ProcessCommand.Execute(null);
             };
             await vm.ApplyTemplateCommand.ExecuteAsync(null);
-            Assert.Equal("Batch complete: 1 processed, 0 skipped. Output written to " + output + ".", vm.Status);
+            Assert.Equal("Batch complete: 1 processed, 0 skipped.", vm.Status);
+            Assert.Equal(Models.Logging.LogLevel.Success, vm.StatusLevel);
+            Assert.Equal("Batch complete: 1 processed, 0 skipped. Output written to " + output + ".", vm.Log.Entries[^1].Text);
             Assert.True(File.Exists(Path.Combine(output, "flight 1.csv")));
             Assert.Equal("CH-01 PRN 15 5M", vm.Plot.Series[0].Name);
 
@@ -468,6 +485,7 @@ namespace TmDq.App.Tests
             await vm.SaveTemplateCommand.ExecuteAsync(null);         // run anyway: it says so
             Assert.Equal((Models.Logging.LogLevel.Warning, "Nothing to save as a template -- no sources have finished processing yet."),
                          (vm.Log.Entries[^1].Level, vm.Log.Entries[^1].Text));
+            Assert.Equal(("Nothing to save as a template yet.", Models.Logging.LogLevel.Warning), (vm.Status, vm.StatusLevel));
 
             int told = 0;
             vm.SaveTemplateCommand.CanExecuteChanged += (_, _) => told++;
@@ -483,6 +501,7 @@ namespace TmDq.App.Tests
             vm.Plot.RenameSeries(vm.Plot.Series[0].Id, "Renamed");
             await vm.SaveTemplateCommand.ExecuteAsync(null);
             Assert.Equal("Template saved: mine.json", vm.Log.Entries[^1].Text);
+            Assert.Equal(("Saved template mine.json.", Models.Logging.LogLevel.Success), (vm.Status, vm.StatusLevel));
             Assert.Equal(_dir, vm.LastFolder);
             Assert.Equal(TemplateLoad.Loaded, TemplateFile.Read(files.SavePath, out ProcessingTemplate? t, out _));
             Assert.Equal(("prn_testfile, sample", 4), (t!.Name, t.Entries.Count));
@@ -497,6 +516,7 @@ namespace TmDq.App.Tests
             string nowhere = Path.Combine(_dir, "missing", "t.json");
             Assert.False(vm.SaveTemplate(vm.Sources[0], nowhere));
             Assert.Equal((Models.Logging.LogLevel.Error, "Could not write template file: " + nowhere), (vm.Log.Entries[^1].Level, vm.Log.Entries[^1].Text));
+            Assert.Equal(("Could not save the template. See the log.", Models.Logging.LogLevel.Error), (vm.Status, vm.StatusLevel));
         }
 
         [Fact]
