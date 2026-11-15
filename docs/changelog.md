@@ -37,6 +37,12 @@ Found by the whole-tree cleanup audit (PR 8 of its list: X2, X3); each finding w
   the managed suite (three classes), 4 mutants, **4 CAUGHT** (Y1 to Y4: `StreamConfig`'s slope and scale, `CalibrationRequest`'s
   receivers and channels). All three suites in Release, zero warnings: native **495** (1 skipped), managed **364** passed / 1
   skipped, app **635** passed / 34 not run. Baseline moved: app 634 to 635 (one new test).
+- **Beside it: a timing flake CI hit on this PR.** `PlotDraftTests.TheWheelSettlesOnItsOwnAfterTheRefineDelay` failed on the
+  runner with "settled after 18.4942 ms" against a 20 ms bound. The chart starts its 30 ms refine wait in the wheel's handler,
+  and the test started its clock only after the first frame, which took about 12 ms there: the chart was right and the
+  measurement missed the frame. The clock now starts before the wheel and the bound is 25 ms of the 30. Mutants F1 (the delay
+  zero) and F2 (half of it) are both CAUGHT. (The audit's Q3 names the same file's other timing bound, at 400 ms, which is
+  left for that finding.)
 
 #### Dialogs: the stream dialog's limits stated once, and the dead ends of the audit's dialog findings
 
