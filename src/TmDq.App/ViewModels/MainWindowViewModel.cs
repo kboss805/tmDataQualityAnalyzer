@@ -18,7 +18,7 @@ using TmDq.Core;
 namespace TmDq.App.ViewModels
 {
     /// <summary>The main window's state: open a recording, ask what to process (Configure Streams, plan step 4.1; with no
-    /// one to ask, the first PCM channel with the Frame Sync Lock defaults, as the walking skeleton did), process it and
+    /// one to ask, the first PCM channel with the Frame Sync Lock defaults, as <c>FirstChannelRun</c> does), process it and
     /// plot it (plan step 4.3b: <see cref="Plot"/>), with the progress dialog up for the run and every step in the log
     /// (plan step 4.2).
     /// <para>Three jobs are done by types of their own, reached through this one's members: what the shell remembers
@@ -217,7 +217,7 @@ namespace TmDq.App.ViewModels
 
         /// <summary>The folder of the last recording opened, CSV imported or template used: where Import CSV and the
         /// template dialogs start and Export proposes to write, remembered between sessions (v2.x's
-        /// <c>LastCh10Directory</c>, which the first run imports).</summary>
+        /// <c>LastCh10Directory</c>, which v3.1.0 no longer reads).</summary>
         public string? LastFolder
         {
             get => _shell.LastFolder;
@@ -579,7 +579,7 @@ namespace TmDq.App.ViewModels
             SetSources(Array.Empty<ProcessedSource>());
         }
 
-        /// <summary>The status line after a run: one Frame Sync Lock stream as the walking skeleton described it, else how
+        /// <summary>The status line after a run: one Frame Sync Lock stream as the smoke report describes it, else how
         /// many of each mode were processed; then any error the core reported for a stream that was not.</summary>
         public static string Describe(string name, RunOutcome outcome)
         {

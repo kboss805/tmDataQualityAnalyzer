@@ -41,8 +41,8 @@
 #
 # WHY RELEASE AND NOT CI
 #
-# CI was deliberately cut from 286 s to 93 s (PR #48, jom). This run takes minutes,
-# so it would more than triple every PR for a property that is not correctness. A
+# CI is one hosted job that runs the three suites on every PR. This run takes minutes
+# more and needs a recording CI does not have, for a property that is not correctness. A
 # release is the right gate: it is where check_release_consistency.ps1 already runs,
 # and a release must come from a green full-suite build regardless. CI therefore
 # leaves the benchmark off.

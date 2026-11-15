@@ -31,9 +31,9 @@
  * extraction is handled by FrameProcessor.
  *
  * A plain class: text is UTF-8 `std::string`, the path is a
- * `std::filesystem::path`, and a failed load leaves its reason in lastError() rather
- * than emitting a signal - loading is synchronous, on the caller's thread, so the caller
- * already knows when to look. A host reads the channel lists through the C ABI.
+ * `std::filesystem::path`, and a failed load leaves its reason in lastError():
+ * loading is synchronous, on the caller's thread, so the caller already knows when
+ * to look. A host reads the channel lists through the C ABI.
  */
 class Chapter10Reader
 {

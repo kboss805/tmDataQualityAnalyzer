@@ -8,11 +8,11 @@
        (the Windows SDK) and runs the package licence check, so the Visual Studio tools must be on PATH:
        eng\env.ps1 is dot-sourced when mt is not already found.
     2. Says which account, Windows session and kind of process the tests run under. The tests run on Avalonia's
-       headless platform, which needs no window system; on the CI runner that is a service (NETWORK SERVICE,
-       Session 0, no desktop), and this line is the record that the UI tests pass there.
+       headless platform, which needs no window system; a CI runner has no desktop to show, and this line is the
+       record of what the UI tests ran under there.
     3. Runs the test exe directly (an xunit v3 test project is an executable) and fails on a non-zero exit.
 
-    The walking-skeleton tests process a committed recording through out\<Configuration>\tmdq_core.dll (build it
+    WalkingSkeletonTests process a committed recording through out\<Configuration>\tmdq_core.dll (build it
     with eng\build_core_dll.ps1; TMDQ_CORE_DLL overrides). Works under Windows PowerShell 5.1 and PowerShell 7.
 
     Usage:

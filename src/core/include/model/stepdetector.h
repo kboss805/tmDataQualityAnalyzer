@@ -117,11 +117,17 @@ public:
      * confirmed as a real step once it holds for at least
      * CalibrationConstants::kStepConfirmSeconds (and kMinConfirmSamples,
      * whichever is larger); shorter runs are discarded as transition/partial-
-     * jump noise rather than counted as a step. The Nth confirmed plateau
-     * (time order) is paired with @p steps[N]. The channel is valid only if at
-     * least @p steps.size() plateaus are confirmed; if more are found (e.g. a
-     * technician ran the step sequence two or three times back to back), only
-     * the first steps.size() are used and the rest are discarded.
+     * jump noise rather than counted as a step. Plateaus whose averages are
+     * within the edge threshold (or a small fraction of a step) of each other
+     * are merged into one level. The sweep is the first maximal run of levels
+     * that move strictly in one direction and is at least @p steps.size() long;
+     * its LAST steps.size() levels are used, which drops a signal-generator
+     * turn-on transient ahead of step 0 (it extends the run at its start) and
+     * ignores a technician's back-to-back repeats and the return ramp after the
+     * sweep. The Nth level of the sweep (time order) is paired with
+     * @p steps[N]. The channel is valid only if such a run exists, or, when the
+     * top of the sweep ran onto the converter's rail, as a partial profile over
+     * the steps that stayed in range.
      *
      * @param[in] rawValues       Per-sample raw counts for one channel.
      * @param[in] samplePeriodSec Seconds between consecutive samples.

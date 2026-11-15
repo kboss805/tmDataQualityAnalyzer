@@ -62,7 +62,8 @@ bool FrameSetup::tryLoadingFile(const std::filesystem::path& filename, int num_w
         // DATA word is index num_words_in_minor_frame - 2 (the final slot is the
         // sync word's, never populated as a parameter). Hence the "- 1" upper bound
         // here. This intentionally rejects Word == num_words_in_minor_frame; see the
-        // tryLoadingFileWordEqualsFrameSize / ...RejectsBoundary tests.
+        // "tryLoadingFile with word equal to the frame size fails" and "tryLoadingFile with a
+        // smaller frame rejects the boundary" test cases.
         if (!word_ok || parameter_word < 0 || parameter_word >= num_words_in_minor_frame - 1)
         {
             return false;

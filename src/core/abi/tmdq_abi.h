@@ -15,16 +15,16 @@
  *      silent bug this project's domain invariants exist to catch - except here it
  *      would sit at a seam no other test looks at. Hence tmdq_sizeof_* below, so the
  *      managed side can ASSERT agreement rather than assume it.
- *   3. The boundary is cheap. Only RESULTS cross: flat double arrays, worst realistic
- *      case ~34 MB once per run against a 640 MB recording that is read and scanned
- *      entirely on this side.
+ *   3. The boundary is cheap. A run's RESULTS cross as flat double arrays, worst
+ *      realistic case ~34 MB once per run against a 640 MB recording that is read and
+ *      scanned entirely on this side. From revision 2 the chart's geometry crosses too,
+ *      on every redraw: a series' samples go in by pointer, read during the call only,
+ *      and the line and band built from them (a point or so per pixel column) come back.
  *
  * STATE: version 2, the full ABI of plan step 2.2 (files, runs, calibration, the file
- * formats, series construction). Version 1 was the interop spike's two calls (probe a
- * file, run one lock stream); they were retired in plan step 2.3 when the C# library
- * (src/TmDq.Core) and its tests replaced the spike's driver. The spike, with its
- * copy of the version-1 header, was deleted in plan step 6.5 (docs/changelog.md records
- * what it measured).
+ * formats, series construction), with the revisions listed at TMDQ_ABI_REVISION below.
+ * Version 1 was the interop spike's two calls, retired in plan step 2.3 (docs/changelog.md
+ * records what the spike measured).
  *
  * The conventions every function follows are written out below, at the head of the
  * "files and runs" section. tmdq_last_error() is per-thread.

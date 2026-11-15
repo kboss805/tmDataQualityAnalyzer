@@ -5,8 +5,8 @@ namespace TmDq.App.Views
 {
     /// <summary>
     /// The plot's colours in each theme (US9.0): the chart's background, axes and text, grid, title, and the
-    /// translucent legend and chips over it. A series keeps its own colour in both. They are VS Code's Dark Modern and
-    /// Light Modern: the chart is the editor's colour (#1F1F1F and white, a shade lighter than the log beside it in the
+    /// translucent legend over it (the chips' brushes are App.axaml's). A series keeps its own colour in both.
+    /// They are VS Code's Dark Modern and Light Modern: the chart is the editor's colour (#1F1F1F and white, a shade lighter than the log beside it in the
     /// dark theme), its axes and text the editor's (#CCCCCC and #3B3B3B), its title the links' (#4DAAFC and #005FB8).
     /// </summary>
     public sealed record ChartPalette(Color Background, Color Foreground, Color Grid, Color Title,

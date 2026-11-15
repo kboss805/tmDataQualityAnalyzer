@@ -658,7 +658,7 @@ void FrameProcessor::recordTimeSample(double current_time_sample,
         m_result.accumulatedMissedFrames.push_back(accumulated_missed_frames);
     }
 
-    // enabled_params is index-aligned to m_result.channels (built in process()).
+    // enabled_params is index-aligned to m_result.channels (built by buildEnabledParams()).
     // sample_sum holds the running sum of RAW counts for this window; calibration
     // is applied here, once, to the windowed average — see the sampling loop for
     // why averaging precedes calibration (required for non-linear profiles).

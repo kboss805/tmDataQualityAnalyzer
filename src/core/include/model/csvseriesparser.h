@@ -22,8 +22,8 @@
 /**
  * @brief One column of the CSV: a series' identity and its samples.
  *
- * What the plot's `PlotSeriesData` carries that the file determines; presentation (colour,
- * visibility, id) is the plot's to add.
+ * What the application's plot series (`PlotSeries`) carries that the file determines;
+ * presentation (colour, visibility, id) is the plot's to add.
  */
 struct CsvSeries
 {

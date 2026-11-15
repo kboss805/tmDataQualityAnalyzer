@@ -803,7 +803,7 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public void ADenseSeriesStillDrawsASingleSampleDropoutAndItsSpread()
         {
-            // TestTmChart's two dense cases. 200,000 samples at 100 %, one mid-column at 0: the band reaches the bottom.
+            // Two dense cases. 200,000 samples at 100 %, one mid-column at 0: the band reaches the bottom.
             double[] xs = Range(200000, i => i);
             double[] ys = Range(200000, _ => 100.0);
             var plot = new PlotViewModel();
@@ -843,7 +843,7 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public void EveryKindOfSeriesIsDrawnFromTheCoresGeometryInItsPlace()
         {
-            // TestTmChart's hand-over cases: a series on its own axis's range, a segment's both ends, a band only where the
+            // The hand-over cases: a series on its own axis's range, a segment's both ends, a band only where the
             // series is, an unordered series in a zoomed view, and a line through a view with no sample inside.
             var plot = new PlotViewModel();
             Shown s = Show(plot);
@@ -945,7 +945,7 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public void ALeftMinimumSetMovesTheChartsBottom()
         {
-            // TestPlotWidget's yMinOverrideReachesTheChartAxis: a flat 50 % line sits mid-plot until the left minimum is set
+            // A flat 50 % line sits mid-plot until the left minimum is set
             // to 40, when it drops to a sixth of the way up (the axis then 40 to 100); Reset puts it back.
             var plot = new PlotViewModel();
             plot.SetSeries(new[] { PlotFixtures.Lock(0, "flat", 1, 0, new[] { 0.0, 1.0, 2.0 }, new[] { 50.0, 50.0, 50.0 }) });

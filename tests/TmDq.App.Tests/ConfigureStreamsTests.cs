@@ -226,7 +226,7 @@ namespace TmDq.App.Tests
             IReadOnlyList<PlotSeries> locks = PlotFixtures.Locks(vm);
             Assert.Equal(new[] { 13, 15 }, locks.Select(s => s.StreamOrder));
             Assert.Same(locks[0], Startup.FirstLockSeries(vm.Plot));
-            Assert.Equal(116, locks[0].Y.Length);   // channel 13 as the walking skeleton ran it
+            Assert.Equal(116, locks[0].Y.Length);   // channel 13 as FirstChannelRun runs it
             Assert.True(locks[1].Y.Average() > 50, $"PRN11 should lock with its own pattern (mean {locks[1].Y.Average()})");
             Assert.Equal("prn_testfile, sample.ch10: 2 streams processed (2 Frame Sync Lock, 0 Receiver SNR)", vm.Status);
             Assert.False(vm.IsBusy);

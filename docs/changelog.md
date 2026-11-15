@@ -12,6 +12,41 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Comments that contradicted the code, or still described the Qt application (audit C1 and C2)
+
+Found by the whole-tree cleanup audit. **Comments only; no code changed.** Each comment now says what the code does today,
+read from the code rather than taken from the finding's wording.
+
+- **C1, seven comments that contradicted the code beside them.** `constants.h` said the calibration average is taken at the
+  *start* of a confirmed run (`levelsOf` takes the end); `constants.h` (`kMaxDwellSlotError`) and `calibrateSaturatedTop`'s
+  header put the dwell grid on plateau end times (`buildDwellGrid` builds it from the transitions, because a plateau's end is
+  not reliably on it); `StepDetector::detectSteps`'s header said "the first `steps.size()` plateaus" (the code takes the last
+  `expected` levels of the first monotonic run, the US5.3 rule; `selectSweepStart`'s header said "the first run of `expected`
+  plateaus", the same slip, and is corrected with it); `CalibrationProfile` said its points are in TOML step order (they are
+  sorted by raw average); `calibrationextractor.h` said a "fine (10 ms) window" (the period is clamped to 100 to 200 ms);
+  `calibrationextractor.cpp` quoted an error that `frameprocessor.cpp` words differently; `frameprocessor.cpp` said the
+  parameters are "built in process()" (`buildEnabledParams`).
+- **C2, comments that still described the Qt application.** Core: `ch10packetreader.cpp` (`codepage.pri`, "once this was
+  `toUtf8()`"), `chapter10reader.h` ("emitting a signal"), `framesetup.h` ("embedded in the ViewModel"), `framesyncfile.h`
+  ("widgets", "the dialogs"), `csvseriesparser.h` (`PlotSeriesData`, now `PlotSeries`), `framesetup.cpp` (cited two test names
+  that do not exist; now quotes the two cases), `tomldocument.h` (described the class by what `QSettings` did without naming
+  it; now names it). ABI: `tmdq_abi.h` said only results cross, once per run (the chart's geometry crosses on every redraw
+  since revision 2) and spent four lines on the deleted spike; `Formats.cs` ("both applications"). App: `MainWindowViewModel`
+  ("which the first run imports", gone in v3.1.0), `TemplateBatch` (described work that moved to `PlotTemplates`),
+  `ChartPalette` (claimed chip colours it does not hold), `PlotChart` ("a wheel or a held drag"; keys too since #270), and the
+  "walking skeleton" in `MainWindowViewModel` (twice) and `ConfigureStreamsTests`, which now name what they mean; the mentions
+  that carry a plan step number were left, as the audit asked. Scripts: `run_throughput_bench.ps1` (jom, PR #48),
+  `test_app.ps1`, `TmDq.App.Tests.csproj`, `MainWindowTests` (the self-hosted runner's service account), the core tests'
+  `.vcxproj` ("the hosted CI image" for VS 2026; CI is `windows-2022`), and the test project's note that named the wrong script.
+  Tests: five comments that cited deleted Qt test classes as their origin (`AroundTheChartTests`, `PlotTests` x3,
+  `StreamWindowsTests` x2) now say what the test shows.
+- **Dropped:** none; every location of the two findings was still stale on `origin/main` (`389e5de`).
+
+**Checked:** a comment-stripping diff of every changed source, script and project file against `origin/main` is empty (C++ and C#
+`//`, `///`, `/* */` with string and character literals, interpolated, verbatim and raw strings honoured; PowerShell `#` and `<# #>`;
+XML `<!-- -->`; a planted one-token code change in each of two files was reported). The script is a scratch file, not in the
+repository. `enguild_core_dll.ps1 -Rebuild` (Release): 0 warnings; native 495 passed / 0 failed / 1 skipped; managed 364 passed / 0 failed / 1 skipped; app 619 passed / 0 failed / 0 skipped (34 not run); all at their baselines, Release. No mutation check (comments only).
+
 #### The guide's statements about the present, corrected
 
 Docs only (no code, test or project file changed), from the whole-tree cleanup audit's findings M1, M2, M3, M5 and M6, each

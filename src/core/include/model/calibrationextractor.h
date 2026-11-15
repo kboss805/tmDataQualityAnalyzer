@@ -5,7 +5,9 @@
  *
  * Reuses the production pipeline (Ch10PacketReader + FrameProcessor) on its own
  * worker threads, but configures the word map with unit slope / zero offset so
- * the per-channel output is the raw count averaged over a fine (10 ms) window.
+ * the per-channel output is the raw count averaged over a short window, sized
+ * from the frame rate (kFramesPerExtractWindow frames) and clamped to 100 to
+ * 200 ms.
  * StepDetector then turns each channel's raw series into a CalibrationProfile.
  *
  * A plain class. Lifecycle: construct, call start() with a `ProcessingEvents` sink,

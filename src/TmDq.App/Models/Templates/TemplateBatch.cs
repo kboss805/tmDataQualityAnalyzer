@@ -17,10 +17,10 @@ namespace TmDq.App.Models.Templates
     public sealed record FileCheck(string FilePath, bool Ok, string Reason);
 
     /// <summary>
-    /// The batch's rules without a window (plan step 4.7, US1.1), as v2.x had them: a file matches a
-    /// template when its PCM channel ids are exactly the template's (the core's <c>TemplateMatcher</c>), a template is
-    /// captured from one processed recording and the plot's series, and a template's names and colours are put back on a
-    /// recording's fresh series.
+    /// The batch's rules without a window or a plot (plan step 4.7, US1.1), as v2.x had them: a file matches a
+    /// template when its PCM channel ids are exactly the template's (the core's <c>TemplateMatcher</c>), each file of a
+    /// batch is checked, and a template gives the run for a recording. What reads or changes the plot's series, capturing
+    /// a template from them and putting its names and colours back, is <c>PlotTemplates</c>'s.
     /// </summary>
     public static class TemplateBatch
     {
