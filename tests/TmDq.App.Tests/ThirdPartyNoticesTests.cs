@@ -106,6 +106,38 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
+        public void ACopyrightThatStartsWithTheSignIsNotPrefixedAgain()
+        {
+            // The generator always runs under Windows PowerShell 5.1, which reads a script with no byte order mark in
+            // the active code page: a raw © in its source becomes two other characters, the pattern stops
+            // matching "(c) X" and the shipped notice read "Copyright (c) © X".
+            AddPackage("Sign.First", "1.0.0", Mit, copyright: "© Sign First");
+            var r = Run();
+            Assert.True(r.Exit == 0, r.Output);
+            Assert.Contains("© Sign First", r.Notices);
+            Assert.DoesNotContain("Copyright (c) ©", r.Notices);
+        }
+
+        [Fact]
+        public void TheScriptsWindowsPowerShellRunsHoldOnlyAscii()
+        {
+            // Windows PowerShell 5.1 decodes a script that lacks a byte order mark in the active code page, so a
+            // non-ASCII character in its source is not the character that was typed (it once stopped setup-env.ps1
+            // parsing). Write such a character as an escape; a comment gets a plain hyphen.
+            var offenders = new List<string>();
+            foreach (string folder in new[] { "eng", Path.Combine("deploy") })
+            {
+                foreach (string path in Directory.EnumerateFiles(Path.Combine(Repo.Root, folder), "*.ps1", SearchOption.AllDirectories))
+                {
+                    byte[] bytes = File.ReadAllBytes(path);
+                    bool bom = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF;
+                    if (!bom && bytes.Any(b => b > 0x7F)) offenders.Add(Path.GetRelativePath(Repo.Root, path));
+                }
+            }
+            Assert.True(offenders.Count == 0, "not ASCII, and no byte order mark: " + string.Join(", ", offenders));
+        }
+
+        [Fact]
         public void APackagesOwnLicenceFileIsQuotedInsteadOfATemplate()
         {
             string folder = AddPackage("Native.Lib", "2.0.0", "<license type=\"file\">LICENSE</license>");

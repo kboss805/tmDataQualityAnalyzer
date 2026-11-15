@@ -60,7 +60,7 @@ Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `
   `UserManual.html` (the full one, with `docs\manual\walkthroughs.html`), their figures rendered from the app by
   `ManualFiguresTests` into `docs\manual_images`: after a change to what a figure shows, rebuild with
   `powershell -ExecutionPolicy Bypass -File eng\build_manual.ps1` (`-NoCapture` reuses the figures). CI runs the
-  app suite. Green baseline **625 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases.
+  app suite. Green baseline **627 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases.
   **The side-by-side soak:** `powershell -ExecutionPolicy Bypass -File eng\run_soak.ps1 [-NoBuild]
   [-Only <run>,...]` runs every run in `tests\TmDq.App.Tests\Soak\soak.json` (`SoakTests`, explicit, one process a
   run) and fails unless each CSV export is byte for byte what v2.14.2 exported (the manifest's `qt` blocks). Most
@@ -80,10 +80,11 @@ Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `
   installer (`deploy\avalonia\tmDataQualityAnalyzer.iss`: v2.x's AppId and folder, so it upgrades a v2.x
   install in place, deleting its `bin\`, keeping `settings\`, and taking the `.ch10` association). It runs
   `check_release_consistency.ps1 -ReleaseMode` first. **Unlock SimplySign first.** Clean-machine test under Smart App
-  Control, which installs v2.14.2 and upgrades it: `deploy\sandbox\run_sandbox_test.ps1 -Setup <setup.exe> -Payload
-  "<zip>;deploy\avalonia\staging\unsigned;tests\data\test files\prn_testfile, sample.ch10;deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe"`
-  (semicolons: recording names contain commas; v2.14.2's setup is its GitHub release's asset) (an unsigned build must
-  be BLOCKED, or the pass means nothing). The UTF-8 manifest is merged into every SDK host (`apphost`,
+  Control, which installs v2.14.2 and upgrades it: `deploy\sandbox\run_sandbox_test.ps1 [-Setup <setup.exe>]`, which
+  tests the newest setup in `deploy\avalonia\` with the payload it needs by default (the portable ZIP beside it,
+  `staging\unsigned`, the PRN sample, and v2.14.2's setup from `deploy\` of this checkout or the main one: it is its
+  GitHub release's asset; `-Payload` overrides the list, separated by semicolons because recording names contain
+  commas) (an unsigned build must be BLOCKED, or the pass means nothing). The UTF-8 manifest is merged into every SDK host (`apphost`,
   `singlefilehost`, `apphost_publish`): patching `bin\` misses a single-file publish.
 - **Mutation check (every behaviour change):** `powershell -ExecutionPolicy Bypass -File eng\mutate.ps1 -List <mutants.json>
   [-Only <id>,...] [-Parts 2 -Part <k>] [-Out <file>]`. For each exact-text mutant in a JSON list it applies the

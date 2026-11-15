@@ -4,9 +4,10 @@
 # Control, including the UPGRADE from the Qt application.
 #
 # Runs INSIDE Windows Sandbox, launched by
-#   run_sandbox_test.ps1 -Verifier verify_avalonia_install.ps1 -Setup <setup.exe>
-#       -Payload "<zip>;deploy\avalonia\staging\unsigned;tests\data\test files\prn_testfile, sample.ch10;deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe"
-# (the list is separated by semicolons: the committed recordings' names contain commas)
+#   run_sandbox_test.ps1 [-Setup <setup.exe>]
+# which copies in the payload this script reads from C:\tmdqa: the portable ZIP, deploy\avalonia\staging\unsigned, the
+# PRN sample and v2.x's setup.exe (run_sandbox_test.ps1 -Payload overrides the list; semicolon-separated, because the
+# committed recordings' names contain commas)
 # Do not run it on a developer machine: it installs to Program Files and uninstalls again.
 #
 # What it proves: on a machine that has never seen the application, with Smart App

@@ -12,6 +12,62 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Repository configuration: a lint config that was never read, ignore rules that would drop files, a solution platform that cannot build
+
+Found by the whole-tree cleanup audit (PR 5 of its list); each finding was re-run against the tree as of #276 before it was
+touched. No product code changed. The one behaviour change, B7, has a test that fails against the old script (restored as
+mutants B1-B4 below).
+
+- **T1: `.pymarkdown.json` was never read.** pymarkdown 0.9.39 auto-discovers `.pymarkdown`, not `.pymarkdown.json`:
+  `python -m pymarkdown scan docs/claude.md` reported 446 lines before and none after the rename (`git mv`). Every document
+  outside the changelog and the records is clean with the config applied. `docs/claude.md` says which name it is.
+- **T2 and the dead rules of D11: ignore rules that would hide a new file.** `git check-ignore -v` named `tests/.gitignore:2`
+  (`*.txt`), `.gitignore:83` (`*.csv`) and `.gitignore:20` (`*.app`, which matches a folder `Foo.App/`, case-blind on
+  Windows, and needed a `!TmDq.App/` re-include) for `tests/fixtures/x.txt`, `tests/fixtures/x.csv` and `Foo.App/x.cs`; after
+  the change nothing names the first and third, and `*.csv` is `/*.csv` (the root only). Gone too: `*.o *.slo *.lo *.so
+  *.dylib *.a *.lai *.la`, `*.sdf`, `*.opensdf`, `compile_commands.json`, `.clangd` (which would have hidden a real clangd
+  config), `tests/.gitignore`'s `output/`, the `.vscode/c_cpp_properties.json` re-include, and four `.gitattributes` rules
+  (`*.sh`, `*.bat`, `*.cmd`, `*.rc`) that match no tracked file. `git status` lists no file that was not listed before.
+  Kept: `*.VC.opendb`, `*.out`, and the binary rules for `*.exe`/`*.dll` (ignored anyway, but they say what a stray one is).
+- **T3: the solution's `x86` platform built nothing.** It mapped both native projects to `Win32`, which neither vcxproj
+  defines: `msbuild tmdq.sln -p:Platform=x86` failed with MSB8013 on both. The `x86` solution platform and its 26 mappings are
+  gone, so it now fails at once with MSB4126 (an invalid solution configuration), and `x64` and `Any CPU` validate.
+  `Any CPU` stays, because `dotnet build` of the solution defaults to it and it maps the native projects to `x64`.
+- **T5: `eng\test_dotnet.ps1` computed a fallback DLL and never used it.** With `-Configuration Debug` and only a Release
+  core built it went on, and `Env.DllPath` (Release first, then Debug) ran the suite against the other configuration's core.
+  It now throws as `test_app.ps1` does, and hands the test exe the DLL of its own configuration through `TMDQ_CORE_DLL`
+  (removed again afterwards, so a later run in the same session is not pinned to it). Checked by running it for Debug with only
+  Release built: it stops, naming `eng\build_core_dll.ps1 -Configuration Debug`.
+- **T8: editor configuration.** `.vscode/c_cpp_properties.json` was inert (`C_Cpp.intelliSenseEngine` is `disabled`, clangd
+  reads `compile_flags.txt`) and is deleted. The extension recommendation `eclipse-cdt.cdt-gdb-vscode` (a GDB adapter, which
+  cannot read MSVC PDBs) is replaced by the two debuggers `launch.json` uses: `ms-vscode.cpptools` (`cppvsdbg`) and
+  `vadimcn.vscode-lldb`. The repository has no `.clang-format`, so clangd's `--fallback-style=llvm` would have reflowed a
+  core file to two-space LLVM style on "Format Document": it is `none` now (not run here: no clangd binary on this machine).
+  `settings.json` loses what served other projects (CMake, WSL, CUDA, doxygen, CodeSnap, Error Lens, IntelliCode,
+  better-comments, a second C/C++ formatter, `*.in` as C++) and the default terminal is PowerShell, as the guide says to
+  use. `dotnet.defaultSolution` stays. The trim of the personal editor preferences is the owner's to adjust.
+- **T9: the Sandbox script failed as its header said to run it.** `run_sandbox_test.ps1` with no arguments installed into
+  a Sandbox whose verifier needed four payload items it had not been given. With `-Payload` omitted it now supplies them:
+  the portable ZIP beside the setup, `deploy\avalonia\staging\unsigned`, the PRN sample, and v2.x's setup (from `deploy\`
+  of the checkout, or of the main checkout in a worktree, since `deploy\` ignores it), and stops naming the missing one
+  otherwise. `-Verifier`, which nothing passed, is now a constant. `.claude/CLAUDE.md` and the `cut-release` skill carry
+  the short command instead of the 300-character one. Checked with a stand-in setup: the ZIP it looked for was the default's.
+- **B7: a copyright pattern Windows PowerShell 5.1 cannot match.** `eng\gen_third_party_notices.ps1` held a raw `©`
+  (UTF-8 bytes C2 A9) in a file with no byte order mark, and the packaging always runs it under 5.1, which reads those two
+  bytes as two other characters: a package with no licence file whose copyright begins with the sign was written as
+  `Copyright (c) © X`. The pattern now says `\u00A9`, and the em dash in `eng\env.ps1`'s first comment is a hyphen.
+  New tests: `ACopyrightThatStartsWithTheSignIsNotPrefixedAgain` (fails against the old script) and
+  `TheScriptsWindowsPowerShellRunsHoldOnlyAscii` (every `eng` and `deploy` script that has no byte order mark).
+  The app suite's `ThirdPartyNoticesTests` runs the real script in `powershell` (5.1).
+- **`eng\mutate.ps1` can mutate a script a test runs.** A file under `eng\` is read by the test as a child process and
+  built into nothing, so the "product newer than the mutated file" check reported every such mutant STALE; it now skips the
+  check for those files.
+
+Checked, Release, zero warnings: native 495 test cases passed, 1 skipped (unchanged); managed 364 passed, 1 skipped
+(unchanged); app **627 passed**, 34 not run (was 625: +2 above). Mutation check (`eng\mutate.ps1`, app suite,
+`ThirdPartyNoticesTests`): B1 the sign dropped from the pattern, CAUGHT; B2 the raw sign put back, CAUGHT by both new
+tests; B3 the em dash put back in `env.ps1`, CAUGHT; B4 every copyright line prefixed, CAUGHT; none survived.
+
 #### Comments that contradicted the code, or still described the Qt application (audit C1 and C2)
 
 Found by the whole-tree cleanup audit. **Comments only; no code changed.** Each comment now says what the code does today,
@@ -46,7 +102,6 @@ read from the code rather than taken from the finding's wording.
 `//`, `///`, `/* */` with string and character literals, interpolated, verbatim and raw strings honoured; PowerShell `#` and `<# #>`;
 XML `<!-- -->`; a planted one-token code change in each of two files was reported). The script is a scratch file, not in the
 repository. `enguild_core_dll.ps1 -Rebuild` (Release): 0 warnings; native 495 passed / 0 failed / 1 skipped; managed 364 passed / 0 failed / 1 skipped; app 619 passed / 0 failed / 0 skipped (34 not run); all at their baselines, Release. No mutation check (comments only).
-
 #### The guide's statements about the present, corrected
 
 Docs only (no code, test or project file changed), from the whole-tree cleanup audit's findings M1, M2, M3, M5 and M6, each

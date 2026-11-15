@@ -1,5 +1,5 @@
 # =============================================================================
-# env.ps1  —  Shared environment configuration for tmDataQualityAnalyzer builds.
+# env.ps1  -  Shared environment configuration for tmDataQualityAnalyzer builds.
 #
 # Imports the Visual Studio 2022 C++ environment (cl, msbuild, mt, dumpbin, the Windows
 # SDK) from vcvars64.bat, located via vswhere, then a direct path probe. The build and

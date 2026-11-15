@@ -2,7 +2,8 @@
     "recommendations": [
         "ms-dotnettools.csharp",
         "AvaloniaTeam.vscode-avalonia",
-        "eclipse-cdt.cdt-gdb-vscode",
+        "ms-vscode.cpptools",
+        "vadimcn.vscode-lldb",
         "llvm-vs-code-extensions.vscode-clangd",
         "mohsen1.prettify-json",
         "AyushSaini.json-crack",

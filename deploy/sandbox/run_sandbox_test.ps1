@@ -2,7 +2,11 @@
 # run_sandbox_test.ps1 - install the shipped setup.exe on a genuinely clean
 # machine and report what it did.
 #
-#   powershell -ExecutionPolicy Bypass -File deploy\sandbox\run_sandbox_test.ps1
+#   powershell -ExecutionPolicy Bypass -File deploy\sandbox\run_sandbox_test.ps1 [-Setup <setup.exe>] [-Payload <list>]
+#
+# With no arguments it tests the newest setup.exe in deploy\avalonia\, with the payload the verifier needs: the portable
+# ZIP beside that setup, deploy\avalonia\staging\unsigned, the committed PRN sample, and v2.x's setup.exe (the one the
+# upgrade starts from; deploy\ of this checkout, or of the main checkout when this is a worktree).
 #
 # WHY THIS EXISTS
 #
@@ -26,18 +30,19 @@ param(
     # older release, or an artifact downloaded from a GitHub release.
     [string]$Setup,
     [int]$TimeoutSeconds = 600,
-    # The script the Sandbox runs, from this folder: verify_avalonia_install.ps1 tests the packages and the upgrade
-    # from v2.x, and needs the -Payload its header lists.
-    [string]$Verifier = 'verify_avalonia_install.ps1',
-    # More files or folders the verifier needs, copied beside the setup (a folder keeps its name). Separate them
-    # with semicolons; a recording's name may contain a comma.
+    # Files or folders the verifier needs, copied beside the setup (a folder keeps its name). Separate them with
+    # semicolons; a recording's name may contain a comma. Omitted, it is the default list described above.
     [string[]]$Payload = @()
 )
 
 $ErrorActionPreference = 'Stop'
 
+# The script the Sandbox runs, from this folder: it tests the packages and the upgrade from v2.x.
+$Verifier  = 'verify_avalonia_install.ps1'
+
 $here      = Split-Path -Parent $MyInvocation.MyCommand.Path
 $deployDir = Split-Path -Parent $here
+$repoRoot  = Split-Path -Parent $deployDir
 $work      = Join-Path $here '.work'
 $inDir     = Join-Path $work 'in'
 $outDir    = Join-Path $work 'out'
@@ -69,6 +74,29 @@ if (-not $Setup) {
 }
 if (-not $Setup -or -not (Test-Path $Setup)) {
     throw "No setup.exe found. Run deploy\avalonia\build_avalonia_package.ps1 first, or pass -Setup <path>."
+}
+
+if (-not $Payload -or $Payload.Count -eq 0) {
+    # v2.x's setup.exe is not committed (deploy\ ignores it), so a worktree has none: look in the main checkout too.
+    $oldSetup = $null
+    $folders = @($deployDir)
+    $common = & git -C $repoRoot rev-parse --path-format=absolute --git-common-dir 2>$null
+    if ($LASTEXITCODE -eq 0 -and $common) { $folders += (Join-Path (Split-Path -Parent ($common | Select-Object -First 1)) 'deploy') }
+    foreach ($folder in $folders) {
+        $oldSetup = Get-ChildItem (Join-Path $folder 'tmDataQualityAnalyzer-v2.*_setup.exe') -ErrorAction SilentlyContinue |
+                    Sort-Object LastWriteTime | Select-Object -Last 1
+        if ($oldSetup) { break }
+    }
+    if (-not $oldSetup) {
+        throw ("No v2.x setup.exe (tmDataQualityAnalyzer-v2.*_setup.exe) in " + ($folders -join ' or ') +
+               ". The upgrade test starts from it: take v2.14.2's from its GitHub release, or pass -Payload.")
+    }
+    $Payload = @(
+        ($Setup -replace '_setup\.exe$', '_portable.zip'),
+        (Join-Path $deployDir 'avalonia\staging\unsigned'),
+        (Join-Path $repoRoot 'tests\data\test files\prn_testfile, sample.ch10'),
+        $oldSetup.FullName
+    )
 }
 
 Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
