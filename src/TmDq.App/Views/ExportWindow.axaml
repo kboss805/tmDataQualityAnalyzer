@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:TmDq.App.ViewModels"
+        xmlns:v="using:TmDq.App.Views"
         x:Class="TmDq.App.Views.ExportWindow"
         x:DataType="vm:ExportViewModel"
         Title="{x:Static vm:ExportViewModel.Title}"
@@ -13,7 +14,12 @@
     </Style>
   </Window.Styles>
   <!-- As v2.x laid it out: the plot image first (the default export), then the data, then the log. -->
-  <StackPanel Margin="12" Spacing="2">
+  <DockPanel>
+    <v:DialogFooter DockPanel.Dock="Bottom">
+      <Button x:Name="ExportButton" Content="Export" IsDefault="True" Command="{Binding ExportCommand}" />
+      <Button x:Name="CancelButton" Content="Cancel" IsCancel="True" Command="{Binding CancelCommand}" />
+    </v:DialogFooter>
+  <StackPanel Margin="{DynamicResource ContentDialogPadding}" Spacing="2">
     <HeaderedContentControl Classes="group" Header="Export Plot Image">
       <StackPanel Spacing="4">
         <CheckBox x:Name="ImageBox" Content="Export Image" IsChecked="{Binding ExportImage}" />
@@ -41,11 +47,6 @@
         </Grid>
       </StackPanel>
     </HeaderedContentControl>
-    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,6,0,0">
-      <Button x:Name="ExportButton" Content="Export" IsDefault="True" MinWidth="80" HorizontalContentAlignment="Center"
-              Command="{Binding ExportCommand}" />
-      <Button x:Name="CancelButton" Content="Cancel" IsCancel="True" MinWidth="80" HorizontalContentAlignment="Center"
-              Command="{Binding CancelCommand}" />
-    </StackPanel>
   </StackPanel>
+  </DockPanel>
 </Window>

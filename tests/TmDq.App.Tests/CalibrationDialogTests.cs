@@ -354,8 +354,8 @@ namespace TmDq.App.Tests
             Assert.Equal(("✓ a", "⚠ a", "✗ a", "a"),
                          (ExtractCalibrationViewModel.Marked(CalibrationStatusKind.Ok, "a"), ExtractCalibrationViewModel.Marked(CalibrationStatusKind.Warn, "a"),
                           ExtractCalibrationViewModel.Marked(CalibrationStatusKind.Fail, "a"), ExtractCalibrationViewModel.Marked(CalibrationStatusKind.Pending, "a")));
-            Color Of(CalibrationStatusKind k) => ((ISolidColorBrush)StatusBrushes.Of(k)).Color;
-            Assert.Equal((Colors.Green, Color.Parse("#DAA520"), Color.Parse("#CC0000"), Colors.Gray),
+            StatusLevel Of(CalibrationStatusKind k) => StatusPaint.Of(k);
+            Assert.Equal((StatusLevel.Success, StatusLevel.Caution, StatusLevel.Critical, StatusLevel.Neutral),
                          (Of(CalibrationStatusKind.Ok), Of(CalibrationStatusKind.Warn), Of(CalibrationStatusKind.Fail), Of(CalibrationStatusKind.Pending)));
             Assert.Equal("rcvr_cals", StreamFiles.StepCalFolder);
         }
@@ -639,8 +639,8 @@ namespace TmDq.App.Tests
             Assert.Equal("Extract Calibration", window.Title);
             Assert.Equal("default.toml", window.FindControl<TextBlock>("StepName")!.Text);
             TextBlock step = window.FindControl<TextBlock>("StepStatus")!, cal = window.FindControl<TextBlock>("CalStatus")!;
-            Assert.Equal(("✓ 11 steps parsed (loaded automatically).", Colors.Green), (step.Text, ((ISolidColorBrush)step.Foreground!).Color));
-            Assert.Equal(("No file selected.", Colors.Gray), (cal.Text, ((ISolidColorBrush)cal.Foreground!).Color));
+            Assert.Equal(("✓ 11 steps parsed (loaded automatically).", Color.Parse("#0F7B0F")), (step.Text, ((ISolidColorBrush)step.Foreground!).Color));
+            Assert.Equal(("No file selected.", Color.Parse("#72000000")), (cal.Text, ((ISolidColorBrush)cal.Foreground!).Color));
             NumericUpDown start = window.FindControl<NumericUpDown>("ClipStart")!, end = window.FindControl<NumericUpDown>("ClipEnd")!;
             Assert.Equal((0m, 0m, 100000m, "0.0"), (start.Value, start.Minimum, start.Maximum, start.FormatString));
             Assert.Equal((0m, 100000m), (end.Value, end.Maximum));
@@ -669,7 +669,7 @@ namespace TmDq.App.Tests
             Assert.True(apply.IsEffectivelyVisible);
             TextBlock label = window.FindControl<TextBlock>("CalibrationLabel")!;
             Assert.Equal("(none — using linear calibration)", label.Text);
-            Assert.Equal(Colors.Gray, ((ISolidColorBrush)label.Foreground!).Color);
+            Assert.Equal(Color.Parse("#72000000"), ((ISolidColorBrush)label.Foreground!).Color);   // Fluent's neutral, light
             window.Close();
 
             var calibrated = new StreamSetupViewModel(StepCalRow() with { Calibration = new[] { new CalibrationProfile(0, true, Array.Empty<CalibrationPoint>()) } },

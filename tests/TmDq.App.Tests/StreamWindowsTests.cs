@@ -71,7 +71,7 @@ namespace TmDq.App.Tests
 
             ComboBox time = w.FindControl<ComboBox>("TimeChannel")!;
             Assert.Equal("1 - IRIG-B", time.SelectedItem);
-            Assert.False(w.FindControl<CheckBox>("LegacyChapter10")!.IsChecked);
+            Assert.False(w.FindControl<ToggleSwitch>("LegacyChapter10")!.IsChecked);
             Assert.False(w.FindControl<Button>("ProcessButton")!.IsEffectivelyEnabled);
             Assert.True(w.FindControl<Button>("CancelButton")!.IsEffectivelyEnabled);
             Assert.Equal("Check at least one stream to process.", w.FindControl<TextBlock>("WhyNot")!.Text);
@@ -168,12 +168,62 @@ namespace TmDq.App.Tests
             ConfigureStreamsViewModel vm = Configure();
             var w = Shown(new ConfigureStreamsWindow { DataContext = vm });
             w.FindControl<CheckBox>("All")!.IsChecked = true;
-            w.FindControl<CheckBox>("LegacyChapter10")!.IsChecked = true;
+            w.FindControl<ToggleSwitch>("LegacyChapter10")!.IsChecked = true;
             Dispatcher.UIThread.RunJobs();
             Assert.All(vm.Rows, r => Assert.True(r.Process));
             Assert.All(RowGrids(w), r => Assert.True(InRow<CheckBox>(r, 0).IsChecked));
             Assert.True(vm.LegacyChapter10);
             w.Close();
+        }
+
+        [AvaloniaFact]
+        public async Task EachRowsReadyMarkIsInTheStatusColourOfItsState()
+        {
+            // Light theme: Fluent's success (ready), critical (blocks processing) and neutral (the rest).
+            ConfigureStreamsViewModel vm = Configure(new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok(d => d.DataRateMbps = 4) });
+            vm.Rows[0].Process = true;
+            await vm.Rows[0].ConfigureCommand.ExecuteAsync(null);   // configured: ready
+            vm.Rows[1].Process = true;                              // selected, not configured: blocks
+            var w = Shown(new ConfigureStreamsWindow { DataContext = vm });
+            var seen = new List<(string, string)>();
+            foreach (Grid row in RowGrids(w))
+            {
+                var r = (StreamRowViewModel)row.DataContext!;
+                TextBlock mark = InRow<TextBlock>(row, 5);
+                string expected = r.IsReady ? "#0F7B0F" : r.IsBlocking ? "#C42B1C" : "#72000000";
+                Assert.Equal((r.Label, Color.Parse(expected)), (r.Label, ((ISolidColorBrush)mark.Foreground!).Color));
+                seen.Add((mark.Text!, expected));
+            }
+            // The three states are all on show, so the mapping is held for each.
+            Assert.Equal(new[] { "#0F7B0F", "#72000000", "#C42B1C" }, seen.Select(x => x.Item2).Distinct().OrderBy(x => x, StringComparer.Ordinal));
+            w.Close();
+        }
+
+        [AvaloniaFact]
+        public void TheOnOffSettingsAreSwitchesAndTheChoicesAreBoxes()
+        {
+            // Fluent's toggle switch is for a setting that is on or off (Derandomize, Invert Data, Legacy Chapter 10); a box is
+            // for choosing among several (a stream to process, Apply to all, All).
+            var vm = new StreamSetupViewModel(Row(StreamMode.FrameSyncLock), new FakeFilePicker(), null, null);
+            var w = Shown(new StreamSetupWindow { DataContext = vm });
+            var derandomize = w.FindControl<ToggleSwitch>("Derandomize")!;
+            var invert = w.FindControl<ToggleSwitch>("InvertData")!;
+            derandomize.IsChecked = true;
+            invert.IsChecked = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal((true, true), (vm.Randomized, vm.Inverted));
+            vm.Randomized = false;
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(derandomize.IsChecked);
+            Assert.True(invert.IsChecked);
+            Assert.IsType<CheckBox>(w.FindControl<Control>("ApplyToAll"));
+            w.Close();
+
+            var configure = Shown(new ConfigureStreamsWindow { DataContext = Configure() });
+            Assert.IsType<ToggleSwitch>(configure.FindControl<Control>("LegacyChapter10"));
+            Assert.IsType<CheckBox>(configure.FindControl<Control>("All"));
+            Assert.All(RowGrids(configure), r => Assert.IsType<CheckBox>(r.Children[0]));
+            configure.Close();
         }
 
         [AvaloniaFact]
@@ -228,6 +278,7 @@ namespace TmDq.App.Tests
             TextBlock problems = w.FindControl<TextBlock>("Problems")!;
             Assert.True(problems.IsVisible);
             Assert.Equal(StreamRules.PatternRequired, problems.Text);
+            Assert.Equal(Color.Parse("#C42B1C"), ((ISolidColorBrush)problems.Foreground!).Color);   // Fluent's critical, light
             Assert.False(w.FindControl<Button>("OkButton")!.IsEffectivelyEnabled);
 
             sync.Text = "FE6B2840";

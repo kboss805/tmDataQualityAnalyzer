@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:TmDq.App.ViewModels"
+        xmlns:v="using:TmDq.App.Views"
         x:Class="TmDq.App.Views.ProcessingWindow"
         x:DataType="vm:ProcessingViewModel"
         Title="Processing"
@@ -9,11 +10,14 @@
         CanResize="False" CanMinimize="False" CanMaximize="False"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner">
-  <StackPanel Margin="12" Spacing="8">
+  <DockPanel>
+    <!-- Not IsCancel: Escape must not stop a run, as in v2.x. Cancel is the only way out. -->
+    <v:DialogFooter DockPanel.Dock="Bottom">
+      <Button x:Name="CancelButton" Content="Cancel" Command="{Binding CancelCommand}" />
+    </v:DialogFooter>
+  <StackPanel Margin="{DynamicResource ContentDialogPadding}" Spacing="12">
     <TextBlock x:Name="StatusText" Text="{Binding Text}" />
     <ProgressBar x:Name="Progress" Minimum="0" Maximum="100" Value="{Binding Progress}" />
-    <!-- Not IsCancel: Escape must not stop a run, as in v2.x. Cancel is the only way out. -->
-    <Button x:Name="CancelButton" Content="Cancel" HorizontalAlignment="Right" MinWidth="80"
-            HorizontalContentAlignment="Center" Command="{Binding CancelCommand}" />
   </StackPanel>
+  </DockPanel>
 </Window>

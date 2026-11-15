@@ -1,6 +1,4 @@
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Layout;
 using Avalonia.Media;
 
 namespace TmDq.App.Views
@@ -17,22 +15,9 @@ namespace TmDq.App.Views
             ShowInTaskbar = false;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             Body = new SelectableTextBlock { Text = text, TextWrapping = TextWrapping.Wrap, MaxWidth = 640 };
-            OkButton = new Button
-            {
-                Content = "OK",
-                IsDefault = true,
-                IsCancel = true,
-                MinWidth = 80,
-                HorizontalContentAlignment = HorizontalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Right,
-            };
+            OkButton = new Button { Content = "OK", IsDefault = true, IsCancel = true };
             OkButton.Click += (_, _) => Close();
-            var layout = new DockPanel { Margin = new Thickness(16) };
-            DockPanel.SetDock(OkButton, Dock.Bottom);
-            OkButton.Margin = new Thickness(0, 12, 0, 0);
-            layout.Children.Add(OkButton);
-            layout.Children.Add(new ScrollViewer { Content = Body, MaxHeight = 480 });
-            Content = layout;
+            Content = DialogFooter.Compose(new ScrollViewer { Content = Body, MaxHeight = 480 }, OkButton);
         }
 
         public SelectableTextBlock Body { get; }

@@ -12,6 +12,73 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The dialogs in Fluent's anatomy: one footer, 24 px of padding, switches for settings, Fluent's status colours
+
+The second of the two steps asked for after #272 (the first, below, named the colours, the font, the type scale and the
+corners): every dialog laid out as Fluent's ContentDialog is, a setting that is on or off drawn as Fluent's toggle switch,
+and every status painted in one set of theme-aware colours. The dialogs stay windows with their own title bars.
+
+- **One footer, `DialogFooter`.** Every dialog had laid its own buttons out (a `Grid` here, a `StackPanel` there, a
+  `MinWidth` of 80, the margins 10, 12 or 16, and the accent only where someone had remembered it). Now each has the
+  same band across the foot of its window: the base colour under a divider (`DividerStrokeColorDefault`), the buttons at
+  the right in equal widths, none narrower than 96 px, 8 px apart (`ContentDialogButtonSpacing`), with 24 px round it. The
+  default button (Enter) takes the accent on its own (a `DialogFooter` adds the class to whichever of its buttons
+  `IsDefault`), so it cannot be forgotten; Escape cancels everywhere except the progress dialog, where it must not stop a
+  run. What belongs to the choice rather than the answer ("Apply to all Frame Sync Lock streams", "All") is `Leading`, at
+  the left. The content has 24 px of padding (`ContentDialogPadding`; was 12 to 16). `DialogFooter.Compose` builds the
+  same for the dialogs made in code (`ChoiceWindow`, the four prompts, `ReportWindow`), which had a copy of the layout
+  each. The `Separator`s that stood in for the divider are gone.
+- **Fluent's toggle switch** for the three settings that are on or off: Derandomize and Invert Data (side by side now, in
+  one row, since a switch carries its label above it) and Legacy Chapter 10. A check box remains where one chooses among
+  several (a stream to process, "Apply to all", "All", what to export, the batch's options), as Fluent has it. The switches
+  bind to the same properties, so nothing in the view models moved.
+- **One status palette.** The application had three sets of values for success, warning and error: the log's (pure
+  `#FF0000`, goldenrod, a dark `#008000` that was hard to read on the dark chrome), the converters' (`Brushes.Green`,
+  `#CC0000`, goldenrod, `Gray`) and literals in two dialogs (`#2E9E44`, `#D13438`, `Gray`), none of them theme-aware. They
+  are Fluent's four status tokens, with Fluent's values (success `#0F7B0F` light / `#6CCB5F` dark, caution `#9D5D00` /
+  `#FCE100`, critical `#C42B1C` / `#FF99A4`, neutral `#72000000` / `#9CFFFFFF`): `SystemFillColorSuccess`, `Caution`,
+  `Critical` and `Neutral`, a Color and a Brush each. `StatusPaint` is the one place a state becomes a colour: the view
+  model's state maps to a `StatusLevel` (`StatusPaint.Match`, `StatusPaint.Calibration` for the converters), and the
+  attached `StatusPaint.Level` binds a text's foreground to the level's token, so it follows the theme live. `StatusBrushes`
+  keeps only `FromColor` (a series' colour is the user's, not a theme's). The log picks its lines' brushes when it adds
+  them and draws them again when the theme changes (`LogView.ActualThemeVariantChanged`). The log's `ErrorBrush`,
+  `WarningBrush` and `SuccessBrush` and the converters' `Of` and `OfMatch` are gone. **This is a visible change:** the dark
+  theme's error is a light pink and its warning a yellow, which are Fluent's, where they were a saturated red and a gold.
+  Configure Streams' ready marks, the setup dialog's problem text and calibration label, the batch confirmation's glyphs and
+  Extract Calibration's two status lines take them too. The Export and Import icons' greens are the icons', and stay.
+- **Secondary text.** The word map (Stream Setup) and the line saying why a stream cannot be processed (Configure Streams)
+  were `Opacity="0.75"` of whatever they sat on; they take `TextFillColorSecondary`, as the hints and headers did.
+
+**Tests:**
+- New `DialogAnatomyTests.EveryDialogHasTheOneFooterBandWithItsButtonsAtTheRightInEqualWidths`, in both themes, for **every
+  window kind the application has** (`IconTests.EveryWindowKind`, so a dialog added later is held without being listed): the
+  one footer, spanning the window's width and ending at its foot; the band drawn in the base colour and its top row in the
+  divider's, pixel by pixel; the content's 24 px margin; the buttons in one width of at least 96, 8 apart, the last 24 px from the
+  right edge; the leading item at 24 px and clear of the buttons; the default accented and the only accent; a cancel button,
+  except in the progress dialog, which has no default and no cancel.
+- New `DialogAnatomyTests.ATextShowsItsStatusInTheThemesColourAndFollowsAChangeOfTheme` (a status text, light, dark,
+  another level, then none) and `ProcessingTests.TheLogDrawsItsLevelsAgainInTheNewThemesColoursWhenTheThemeChanges`.
+- New `StreamWindowsTests.TheOnOffSettingsAreSwitchesAndTheChoicesAreBoxes`: the three switches are switches and bind both ways;
+  "Apply to all", "All" and each row's Process are check boxes.
+- `EachThemesTokensAreFluentsNamesInVsCodesValues` has the four status tokens (as a Color and a Brush, both themes). The tests
+  that pinned the old colours (the log's, the batch glyphs', the calibration labels', Extract Calibration's status lines)
+  read the tokens' values, and `StatusBrushes.Of`/`OfMatch` became `StatusPaint.Of`/`OfMatch`, which return a level.
+
+**Mutation check** (`eng\mutate.ps1`, app suite, 21 mutants): **21 of 21 caught**. The first pass caught 18; the footer's band colour, divider,
+padding, button spacing, minimum width, accent and the leading item, the code-built dialogs' padding, Escape in a code-built dialog,
+the status tokens, a warning mapped to critical, a status colour that does not follow the theme, the log not redrawn on a theme
+change, a warning line drawn critical, the batch glyphs unpainted and a switch turned back into a box were all caught at once. Two
+survived, which were gaps: the ready marks' colours (Configure Streams) and the setup dialog's problem text were held by no test;
+`EachRowsReadyMarkIsInTheStatusColourOfItsState` (a ready, a blocking and an idle row) and a colour assertion in
+`TypingAnInvalidPatternShowsTheProblemAndHoldsOk` hold them now. One mutant (Legacy Chapter 10 back to a box) did not compile, because
+a tag has two ends; it became "no longer bound", which is caught.
+
+**Baselines:** app **622 passed / 0 failed / 34 not run** (was 616: the anatomy theory (two cases), the status-follows-the-theme
+test, the log's theme test, the switches test and the ready marks' test are new). Native and managed unchanged.
+
+**The manual:** figures re-rendered and the manuals re-embedded: the footer bands, the switches and the status colours show;
+`walk-cust-02-snr-tree` was restored, as before (its chevrons are caught mid-animation).
+
 #### Three app error paths that threw or said nothing
 
 Found by the whole-tree cleanup audit, by reading. Each has a test that fails against the old behaviour (restored as mutants

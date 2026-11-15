@@ -720,7 +720,7 @@ namespace TmDq.App.Tests
         private static string[] Hex(ChartPalette p) => new[] { p.Background, p.Foreground, p.Grid, p.Title, p.LegendBackground, p.LegendBorder, p.LegendText }
             .Select(c => $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}").ToArray();
 
-        /// <summary>Fluent's semantic tokens, with VS Code's Light Modern and Dark Modern values.</summary>
+        /// <summary>Fluent's semantic tokens, with VS Code's Light Modern and Dark Modern values (and Fluent's own for a status).</summary>
         private static readonly (string Token, string Light, string Dark)[] Tokens =
         {
             ("SolidBackgroundFillColorBase", "#FFF8F8F8", "#FF181818"),        // the window, title bar and log: VS Code's title bar and side bar
@@ -738,6 +738,10 @@ namespace TmDq.App.Tests
             ("TextFillColorSecondary", "#FF616161", "#FF9D9D9D"),
             ("AccentFillColorDefault", "#FF005FB8", "#FF0078D4"),
             ("AccentTextFillColorPrimary", "#FF005FB8", "#FF4DAAFC"),          // its links
+            ("SystemFillColorSuccess", "#FF0F7B0F", "#FF6CCB5F"),              // what a status is painted in: the log, the dialogs' marks
+            ("SystemFillColorCaution", "#FF9D5D00", "#FFFCE100"),
+            ("SystemFillColorCritical", "#FFC42B1C", "#FFFF99A4"),
+            ("SystemFillColorNeutral", "#72000000", "#9CFFFFFF"),
         };
 
         private static string Hex(Color c) => $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}";
