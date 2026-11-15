@@ -232,7 +232,7 @@ namespace TmDq.App.Tests
             plot.RecolorSeries(1, red);
             plot.SetRightMinOverride(0);
             plot.SetRightMaxOverride(100);
-            plot.SetSeriesVisible(1, false);
+            plot.SetSeriesVisibleQuiet(1, false); plot.CommitAppearance();
             plot.LegendVisible = false;
             (PlotView view, Window window) = Show(plot);
             Rect Row(double value) => new(0, view.Chart.RightToPixel(value) - 3, 600, 6);
@@ -251,7 +251,7 @@ namespace TmDq.App.Tests
 
             // Shown again, the hidden series is drawn.
             plot.ResetXRange();
-            plot.SetSeriesVisible(1, true);
+            plot.SetSeriesVisibleQuiet(1, true); plot.CommitAppearance();
             Dispatcher.UIThread.RunJobs();
             using SKBitmap both = await PngOf(view);
             Assert.True(Near(both, Row(50), red) > 100);
@@ -373,8 +373,8 @@ namespace TmDq.App.Tests
                 // The CSV is the data, not the view (US6.1): the other metric in view, every series hidden, zoomed in,
                 // it is the same file.
                 plot.SetLockAxisView(LockAxisView.MissedFrames);
-                plot.SetSeriesVisible(0, false);
-                plot.SetSeriesVisible(1, false);
+                plot.SetSeriesVisibleQuiet(0, false); plot.CommitAppearance();
+                plot.SetSeriesVisibleQuiet(1, false); plot.CommitAppearance();
                 plot.SetXViewByUser(0.2, 0.4);
                 Assert.True(plot.ExportCsv(path));
                 Assert.Equal(everything, File.ReadAllBytes(path));
@@ -466,7 +466,7 @@ namespace TmDq.App.Tests
             {
                 var plot = new PlotViewModel();
                 plot.SetSeries(new[] { PlotFixtures.Lock(0, "earlier", 1, 0, X2, X2) });
-                plot.PushXZoom(0.2, 0.4);
+                plot.ApplyBandZoom(0.2, 0.4);
                 plot.ReadoutSeriesId = 0;
                 int seriesChanged = 0, hasData = 0;
                 plot.SeriesChanged += (_, _) => seriesChanged++;

@@ -486,8 +486,8 @@ namespace TmDq.App.Tests
 
             // Extract Calibration as it opens: the shipped step file loaded and confirmed, the recording still to choose.
             var opening = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null, AppServices.Any);
-            Assert.Equal(("default.toml", 11, ""), (opening.StepName, opening.Steps.Count, opening.CalPath));
-            Assert.Contains("loaded automatically", opening.StepStatus);
+            Assert.Equal(("default.toml", ""), (opening.StepName, opening.CalPath));
+            Assert.Equal("✓ 11 steps parsed (loaded automatically).", opening.StepStatus);
             Window window = Shown(new ExtractCalibrationWindow { DataContext = opening });
             Save("walk-cal-01-extract-button.png", window);
             window.Close();

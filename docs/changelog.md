@@ -12,6 +12,30 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### View-model members only the tests read (audit D8)
+
+Found by the whole-tree cleanup audit; the owner decided on 2026-11-15 to drop them and move their tests onto what the
+product uses, after a re-count with the status bar back (it binds `Status`, `StatusLevel` and `HasStatusMark` only).
+
+- **Dropped, seven.** `MainWindowViewModel.Progress` (the dialog's own progress is what the user sees),
+  `Processing` and `Preferences`; `PlotViewModel.SetSeriesVisible`, `PushXZoom` and `ZoomDepth`, with
+  `PlotTimeWindow.Depth`; `ExtractCalibrationViewModel.Steps`. Their tests now go through the product's paths: a visibility
+  change through `SetSeriesVisibleQuiet` and `CommitAppearance`, as Customize View makes it; a discrete zoom through
+  `ApplyBandZoom`; the zoom history's depth through what `ZoomBack` returns to and `CanZoomBack` (the cap now checks that
+  nothing older than the 32nd window is left, which the depth count never said); the progress through the dialog's
+  (`ProgressRisesToOneHundredAndBusyIsSetForTheRunOnly` is now `BusyIsSetForTheRunOnly`, since
+  `TheProgressDialogIsUpForTheRunAndShowsTheCoresProgress` already holds the dialog's progress); the steps through the
+  status that counts them and the request that carries them.
+- **Kept, two.** `MainWindowViewModel.Sources` and `ExtractCalibrationViewModel.Base` have no product path a test could
+  read them through (a saved template does not record a source's id or path; the calibration request is built inside the
+  run), so dropping them would have weakened ten tests. Each now says in its comment that it is kept as the tests' window.
+- **Checked.** Mutation check, `eng\mutate.ps1` on the app suite (six classes), 6 mutants on the product paths the tests
+  moved to, **6 CAUGHT**: H1 a discrete zoom not remembered, H2 the history holding 33 windows, H3 a band zoom not
+  remembered, P1 the core's progress not reaching the dialog, S1 a bad step file keeping the old steps, V1 the SNR range
+  not recomputed after a visibility change. The app suite in Release, zero warnings: **640** passed / 34 not run. Nothing
+  else changed: native (494) and managed (364 / 1 skipped) are as on this PR's base. No baseline moved (one test renamed,
+  none added).
+
 #### Dead code: what nothing in the product reaches
 
 Found by the whole-tree cleanup audit (PR 9 of this series, the audit's own "dead code" PR: D3, D4, D5, D10, D11); each

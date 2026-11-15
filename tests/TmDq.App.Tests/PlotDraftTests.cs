@@ -500,7 +500,7 @@ namespace TmDq.App.Tests
             // Home, Zoom Back and Reset View jump once: they are not gestures, and a draft would only add a paint.
             PlotViewModel plot = Dense();
             (PlotView view, Window window) = ShowView(plot);
-            plot.PushXZoom(300, 500);   // something for Back and Home to undo
+            plot.ApplyBandZoom(300, 500);   // something for Back and Home to undo
             Paint(window);
             window.KeyPress(key, RawInputModifiers.None, PhysicalKey.None, null);
             Paint(window);

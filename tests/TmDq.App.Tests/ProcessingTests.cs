@@ -445,13 +445,12 @@ namespace TmDq.App.Tests
             var dialog = new FakeProcessingDialog();
             var vm = new MainWindowViewModel(new MainWindowServices { ProcessingDialog = dialog });
             bool upDuringTheRun = false;
-            dialog.OnShow = p => upDuringTheRun = ReferenceEquals(vm.Processing, p) && vm.IsBusy && dialog.Closed == 0;
+            dialog.OnShow = _ => upDuringTheRun = vm.IsBusy && dialog.Closed == 0;
             await vm.LoadAsync(Prn);
 
             ProcessingViewModel shown = Assert.Single(dialog.Shown);
             Assert.True(upDuringTheRun);
             Assert.Equal(1, dialog.Closed);
-            Assert.Null(vm.Processing);
             Assert.Equal("Processing...", shown.Text);
             // The reader reports 100 at the end of every run; the dialog has only the core's reports, so this shows
             // they reach it.
@@ -487,7 +486,6 @@ namespace TmDq.App.Tests
             await vm.LoadAsync(Prn);
             Assert.Empty(dialog.Shown);
             Assert.Equal(0, dialog.Closed);
-            Assert.Null(vm.Processing);
         }
 
         [AvaloniaFact]
