@@ -48,7 +48,7 @@ warning); B4's seam was decided the same day.
   (A1 the lost capture ignored, A2 the band left drawn, A3 the pan carrying on, A4 the pan's draft left up, A6 a drop
   offered while busy, A8 the result's failure unhandled) and **2 SURVIVED**, both reasoned: A5 the legend's cursor
   (Avalonia's `Cursor` exposes no type to assert) and A7 the drop handler's own busy check (the view model refuses a busy
-  open too, so it is defence, not the rule). The soak ran on this change (`engun_soak.ps1`): all 34 runs exported byte for byte what v2.14.2 exported. All three suites in Release, zero
+  open too, so it is defence, not the rule). The soak ran on this change (`engun_soak.ps1`): all 34 runs exported byte for byte what v2.14.2 exported. All three suites in Release, zero
   warnings: native **495** (1 skipped), managed **364** passed / 1 skipped, app **643** passed / 34 not run. Baselines
   moved: native 493 to 495, app 640 to 643.
 
