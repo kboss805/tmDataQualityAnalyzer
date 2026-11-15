@@ -46,7 +46,7 @@ TEST_CASE("Constants: pcmDefaultFrameSync")
     // PRN15. Both halves are pinned because they are only meaningful as a pair: a pattern with the wrong frame length
     // never locks, and nothing else in the build would catch them drifting apart.
     CHECK(is(PCMConstants::kDefaultFrameSyncLockPattern, "334AABBF"));
-    CHECK(PCMConstants::kDefaultBitsPerFrame == 32767);
+    CHECK(PCMConstants::kDefaultFrameSyncLockBits == 32767);
 }
 
 TEST_CASE("Constants: pcmCommonWordLen")
@@ -86,9 +86,7 @@ TEST_CASE("Constants: uiChannelPrefixes")
 
 TEST_CASE("Constants: uiNumKnownPrefixes")
 {
-    CHECK(UIConstants::kNumKnownPrefixes == 3);
-    // The count names the array's length; the two are separate constants, so pin that they agree.
-    CHECK(static_cast<std::size_t>(UIConstants::kNumKnownPrefixes) == UIConstants::kChannelPrefixes.size());
+    CHECK(UIConstants::kNumKnownPrefixes == 3);   // derived from the array's length
 }
 
 TEST_CASE("Constants: appVersionValues")

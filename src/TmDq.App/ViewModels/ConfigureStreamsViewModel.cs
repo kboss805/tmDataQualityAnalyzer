@@ -16,7 +16,7 @@ namespace TmDq.App.ViewModels
     /// recording, and Process. Every rule is <see cref="StreamRules"/>'s; this holds the rows and opens a row's setup
     /// dialog through <see cref="IStreamDialogs"/>.
     /// </summary>
-    public sealed partial class ConfigureStreamsViewModel : ObservableObject
+    public sealed class ConfigureStreamsViewModel : ObservableObject
     {
         private readonly IStreamDialogs? _dialogs;
         private readonly ISettingsFilePicker? _files;
@@ -141,7 +141,7 @@ namespace TmDq.App.ViewModels
     }
 
     /// <summary>One row of Configure Streams.</summary>
-    public sealed partial class StreamRowViewModel : ObservableObject
+    public sealed class StreamRowViewModel : ObservableObject
     {
         public static readonly IReadOnlyList<string> Modes = new[] { "Receiver SNR", "Frame Sync Lock" };
 

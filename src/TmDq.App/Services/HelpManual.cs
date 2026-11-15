@@ -11,7 +11,7 @@ namespace TmDq.App.Services
     public static class HelpManual
     {
         public const string FullManualName = "UserManual.html";
-        public const string BaseManualResource = "usermanual.html";
+        private const string BaseManualResource = "usermanual.html";
         public const string TempName = "tmDataQualityAnalyzer_manual.html";
 
         /// <summary>The full manual beside the application, or null when it is not installed.</summary>

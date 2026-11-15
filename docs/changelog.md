@@ -12,6 +12,40 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Dead code: what nothing in the product reaches
+
+Found by the whole-tree cleanup audit (PR 9 of this series, the audit's own "dead code" PR: D3, D4, D5, D10, D11); each
+finding was re-counted against the tree as of #283, and the decisions on D3 are the owner's of 2026-11-15. D1 and the
+`is_enabled` half of D3 are on the decode path (`FrameProcessor`), so they wait for the processing PR with D2, which runs
+the soak and the throughput gate; D8 gets its own PR.
+
+- **D3: core parameters and branches no product caller reaches.** `TomlDocument::load` and `save` lose the `error`
+  out-parameter no product caller passed (its three messages were unreachable; the callers say what failed in their own
+  words). The test "the messages name the file and say what failed" went with them; "a missing file and an unwritable path
+  report errors" became "a missing file is not ok and an unwritable path does not save". `SeriesTimeBase::recomputeClock`
+  loses its `gmtime_r` branch for a platform this project does not build on. Kept, as decided: the test-only accessors
+  (`FrameProcessor::result()`, `TomlDocument::arrayTables()`, `Chapter10Reader::clearSettings()`).
+- **D4: three aliases in `constants.h`.** `kDefaultBitsPerFrame` (an alias of `kDefaultFrameSyncLockBits`) is gone and its
+  one user names the original; `kNumKnownPrefixes` is now the prefix array's size and `kMaxSlopeIndex` the voltage table's
+  size less one, with a `static_assert` that the two voltage tables agree.
+- **D5: five unused includes** (`<algorithm>`, `<cmath>`, `<vector>`, `<unordered_map>`, `<utility>`), settled by a
+  `-Rebuild` of the core and the native tests in Release with zero warnings.
+- **D10: unused `using` lines.** A compiler pass with IDE0005 on (`AnalysisLevelStyle=latest-all`, built to a scratch
+  folder) named 29 today (the audit's 26 plus three from files added since): 6 in the app and the binding, 23 in the tests.
+- **D11: wider than needed, or never null.** Nine members used only in their own file are private (`StreamsRun.LabelOf`,
+  `PeriodMilliseconds`, `Completed`; `MainWindowViewModel.NotAnExportedCsv`; `TemplateFile.MaxSamplePeriodIndex`;
+  `MenuChoice.SeparatorHeader`; `PreferencesStore.FolderName`; `HelpManual.BaseManualResource`;
+  `Startup.SmokeReportVariable`). `OkCommand?.` and `ApplyCalCommand?.` lose the `?`, since both constructors assign
+  them before anything can call those methods. `partial` comes off the seven view models with no source generator behind
+  them (the audit counted eight; one has gained a generator since). Nine `x:Name`s nothing references are gone
+  (`RowsScroller`, the four Select All/None buttons, `LogBox`, `PlotFileMenu`, `ReadoutMenu`, `WordMap`).
+- **Checked.** Mutation check, `eng\mutate.ps1` on the native suite (constants, TOML, stream job and frame setup cases),
+  5 mutants: **4 CAUGHT** (D4a/D4b each derived count off by one, D3a1 a missing file read as ok, D3a2 an unwritable path
+  reported as saved), **1 SURVIVED**: D3a3, a failure at close reported as saved, which needs a disk that fills mid-write
+  and was untested before this change too. All three suites in Release, zero warnings: native **494** (1 skipped),
+  managed **364** passed / 1 skipped, app **640** passed / 34 not run. Baseline moved: native 495 to 494 (the messages
+  test).
+
 #### The settings folders' names and the receiver defaults, each written once
 
 Found by the whole-tree cleanup audit (PR 8 of its list: X2, X3); each finding was re-checked against the tree as of #282.

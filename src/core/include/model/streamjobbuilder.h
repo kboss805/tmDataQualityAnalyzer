@@ -32,7 +32,7 @@ struct StreamJobConfig
     // Frame-sync fields, as typed (hex text) and as chosen.
     std::string syncPattern;
     std::string syncMask;              ///< Empty = every bit of the pattern.
-    int         bitsInMinorFrame = PCMConstants::kDefaultBitsPerFrame;
+    int         bitsInMinorFrame = PCMConstants::kDefaultFrameSyncLockBits;
     bool        randomized = false;
     bool        inverted = false;
     double      dataRateMbps = 0.0;    ///< 0 = use the TMATS-declared rate.

@@ -155,15 +155,10 @@ double SeriesTimeBase::advance(std::optional<double> earliestElapsed)
 
 void SeriesTimeBase::recomputeClock()
 {
-    // Use a reentrant gmtime variant - plain gmtime() returns a pointer to a shared static tm and is not
-    // thread-safe.
+    // gmtime_s, the reentrant one: plain gmtime() returns a pointer to a shared static tm and is not thread-safe.
     std::time_t epoch = static_cast<std::time_t>(m_abs_seconds);
     std::tm tm_buf{};
-#if defined(_WIN32)
     const bool ok = (gmtime_s(&tm_buf, &epoch) == 0);
-#else
-    const bool ok = (gmtime_r(&epoch, &tm_buf) != nullptr);
-#endif
     if (ok)
     {
         m_day = tm_buf.tm_yday + 1;

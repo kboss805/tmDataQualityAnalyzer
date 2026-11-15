@@ -16,7 +16,7 @@ namespace TmDq.App
     /// </summary>
     public static class Startup
     {
-        public const string SmokeReportVariable = "TMDQ_SMOKE_REPORT";
+        private const string SmokeReportVariable = "TMDQ_SMOKE_REPORT";
 
         /// <summary>The recording the command line names: its first argument that is not an option, or null.</summary>
         public static string? RecordingFromArguments(string[]? args)

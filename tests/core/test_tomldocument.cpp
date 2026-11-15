@@ -21,9 +21,9 @@ using namespace tmdq_test;
 
 namespace {
 
-TomlDocument loadDoc(const fs::path& path, std::string* error = nullptr)
+TomlDocument loadDoc(const fs::path& path)
 {
-    return TomlDocument::load(path, error);
+    return TomlDocument::load(path);
 }
 
 } // namespace
@@ -268,12 +268,11 @@ TEST_CASE("TomlDocument: non-ASCII values and paths round-trip")
 
     TomlDocument out;
     out.setValue("S/Name", value);
-    std::string error;
-    REQUIRE_MESSAGE(out.save(path, &error), error);
+    REQUIRE(out.save(path));
 
     CHECK(contains(readBytes(path), value));
-    const TomlDocument in = loadDoc(path, &error);
-    REQUIRE_MESSAGE(in.ok(), error);
+    const TomlDocument in = loadDoc(path);
+    REQUIRE(in.ok());
     CHECK(in.string("S/Name") == value);
 }
 
@@ -448,19 +447,16 @@ TEST_CASE("TomlDocument: save truncates an existing file")
     CHECK(!back.contains("Old/Word"));
 }
 
-TEST_CASE("TomlDocument: a missing file and an unwritable path report errors")
+TEST_CASE("TomlDocument: a missing file is not ok and an unwritable path does not save")
 {
     TempDir tmp;
-    std::string error;
-    const TomlDocument missing = loadDoc(tmp.file("absent.toml"), &error);
+    const TomlDocument missing = loadDoc(tmp.file("absent.toml"));
     CHECK(!missing.ok());
-    CHECK_MESSAGE(contains(error, "absent.toml"), error);
+    CHECK(missing.sectionsInFileOrder().empty());
 
     TomlDocument doc;
     doc.setValue("A/B", 1);
-    error.clear();
-    CHECK(!doc.save(tmp.file("no/such/dir/out.toml"), &error));
-    CHECK_MESSAGE(contains(error, "out.toml"), error);
+    CHECK(!doc.save(tmp.file("no/such/dir/out.toml")));
 }
 
 // --- cases added in the port: each closes a gap its mutation check found (plan step 2.4)
@@ -661,21 +657,3 @@ TEST_CASE("TomlDocument: a loaded file saves back in its own order, empty sectio
                             "M = true\r\n");
 }
 
-TEST_CASE("TomlDocument: the messages name the file and say what failed")
-{
-    TempDir tmp;
-    std::string error;
-    const TomlDocument missing = loadDoc(tmp.path() / "deep" / "absent.toml", &error);
-    CHECK(!missing.ok());
-    CHECK(error == "Could not open 'absent.toml'.");        // the name, not the whole path
-
-    TomlDocument doc;
-    doc.setValue("A/B", 1);
-    error.clear();
-    CHECK(!doc.save(tmp.path() / "no" / "such" / "dir" / "out.toml", &error));
-    CHECK(error == "Could not write 'out.toml'.");
-
-    // And with no place to put a message, nothing goes wrong.
-    CHECK(!loadDoc(tmp.file("absent.toml")).ok());
-    CHECK(!doc.save(tmp.path() / "no" / "such" / "dir" / "out.toml"));
-}

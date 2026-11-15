@@ -170,7 +170,7 @@ void TomlDocument::rememberOrder(const std::string& section, const std::string& 
 // load()
 // ---------------------------------------------------------------------------
 
-TomlDocument TomlDocument::load(const std::filesystem::path& path, std::string* error)
+TomlDocument TomlDocument::load(const std::filesystem::path& path)
 {
     TomlDocument doc;
 
@@ -178,10 +178,6 @@ TomlDocument TomlDocument::load(const std::filesystem::path& path, std::string* 
     if (!textfile::readText(path, text))
     {
         doc.m_ok = false;
-        if (error)
-        {
-            *error = "Could not open '" + textfile::utf8FileName(path) + "'.";
-        }
         return doc;
     }
 
@@ -373,7 +369,7 @@ void TomlDocument::setValue(const std::string& key, bool value)
     setValue(key, std::string(value ? "true" : "false"));
 }
 
-bool TomlDocument::save(const std::filesystem::path& path, std::string* error) const
+bool TomlDocument::save(const std::filesystem::path& path) const
 {
     // Truncate rather than merge, or an old word map would survive beside the new one.
     //
@@ -382,10 +378,6 @@ bool TomlDocument::save(const std::filesystem::path& path, std::string* error) c
     std::ofstream out(path, std::ios::out | std::ios::trunc);
     if (!out.is_open())
     {
-        if (error)
-        {
-            *error = "Could not write '" + textfile::utf8FileName(path) + "'.";
-        }
         return false;
     }
 
@@ -428,13 +420,5 @@ bool TomlDocument::save(const std::filesystem::path& path, std::string* error) c
     }
 
     out.close();
-    if (out.fail())
-    {
-        if (error)
-        {
-            *error = "Error writing '" + textfile::utf8FileName(path) + "'.";
-        }
-        return false;
-    }
-    return true;
+    return !out.fail();
 }

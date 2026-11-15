@@ -60,7 +60,7 @@
     </Grid>
     <Separator />
 
-    <ScrollViewer x:Name="RowsScroller" MaxHeight="320" HorizontalScrollBarVisibility="Disabled">
+    <ScrollViewer MaxHeight="320" HorizontalScrollBarVisibility="Disabled">
       <ItemsControl x:Name="Rows" ItemsSource="{Binding Rows}">
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:StreamRowViewModel">

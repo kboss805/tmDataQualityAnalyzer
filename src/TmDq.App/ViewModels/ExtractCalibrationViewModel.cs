@@ -45,7 +45,7 @@ namespace TmDq.App.ViewModels
     /// extracted, with the progress dialog up and Cancel stopping it. OK is available once the step file parsed and at
     /// least one channel calibrated; it gives the profiles, the two files, the clips and the report.
     /// </summary>
-    public sealed partial class ExtractCalibrationViewModel : ObservableObject
+    public sealed class ExtractCalibrationViewModel : ObservableObject
     {
         public const string Title = "Extract Calibration";
         public const string ProcessingText = "Processing calibration file…";
@@ -324,7 +324,7 @@ namespace TmDq.App.ViewModels
         private void UpdateOk()
         {
             OnPropertyChanged(nameof(CanAccept));
-            OkCommand?.NotifyCanExecuteChanged();
+            OkCommand.NotifyCanExecuteChanged();
         }
 
         private void SetStep(CalibrationStatusKind kind, string text)

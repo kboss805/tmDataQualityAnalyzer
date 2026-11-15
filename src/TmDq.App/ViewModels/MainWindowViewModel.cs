@@ -25,7 +25,7 @@ namespace TmDq.App.ViewModels
     /// (<see cref="ShellPreferences"/>), Export (<see cref="SessionExport"/>) and Apply Template's batch
     /// (<see cref="BatchRunner"/>). What it reaches outside itself is handed in as one <see cref="MainWindowServices"/>.</para>
     /// </summary>
-    public sealed partial class MainWindowViewModel : ObservableObject, IRunHost
+    public sealed class MainWindowViewModel : ObservableObject, IRunHost
     {
         /// <summary>Recent Files with nothing in it.</summary>
         public const string NoRecentFiles = "(No recent files)";
@@ -259,7 +259,7 @@ namespace TmDq.App.ViewModels
         /// US6.2). Available once there is data.</summary>
         public IAsyncRelayCommand ExportCommand { get; }
 
-        public const string NotAnExportedCsv =
+        private const string NotAnExportedCsv =
             "ERROR: '{0}' is not a recognized exported CSV (expected a 'Time (DOY:HH:MM:SS.mmm)' column with data rows). Nothing was imported.";
 
         private async Task OpenAsync()

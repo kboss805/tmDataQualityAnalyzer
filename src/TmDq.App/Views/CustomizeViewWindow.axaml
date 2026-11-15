@@ -51,8 +51,8 @@
         <DockPanel Margin="0,8,0,0">
           <TextBlock DockPanel.Dock="Top" Text="{x:Static plot:CustomizeViewModel.LockDescription}" TextWrapping="Wrap" />
           <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,8">
-            <Button x:Name="LockSelectAll" Content="Select All" Command="{Binding SelectAllLockCommand}" />
-            <Button x:Name="LockSelectNone" Content="Select None" Command="{Binding SelectNoneLockCommand}" />
+            <Button Content="Select All" Command="{Binding SelectAllLockCommand}" />
+            <Button Content="Select None" Command="{Binding SelectNoneLockCommand}" />
           </StackPanel>
           <ScrollViewer MinHeight="200">
             <!-- A row: its box ("CH <id>"), its colour, and its name. -->
@@ -82,8 +82,8 @@
           <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,8">
             <Button x:Name="SnrExpand" Content="{Binding ExpandText}" MinWidth="90" HorizontalContentAlignment="Center"
                     Command="{Binding ToggleExpandCommand}" IsEnabled="{Binding HasSnrStreams}" />
-            <Button x:Name="SnrSelectAll" Content="Select All" Command="{Binding SelectAllSnrCommand}" />
-            <Button x:Name="SnrSelectNone" Content="Select None" Command="{Binding SelectNoneSnrCommand}" />
+            <Button Content="Select All" Command="{Binding SelectAllSnrCommand}" />
+            <Button Content="Select None" Command="{Binding SelectNoneSnrCommand}" />
           </StackPanel>
           <!-- The stream's receivers in two columns. -->
           <ScrollViewer>

@@ -106,7 +106,7 @@
                   ToolTip.Tip="Save receiver parameters to a TOML file" />
         </StackPanel>
       </Grid>
-      <TextBlock x:Name="WordMap" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+      <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}">
         <Run Text="Word map: " /><Run Text="{Binding ReceiverParamsName}" />
       </TextBlock>
       <!-- Non-linear step calibration (US5.3): Apply Cal, and how many channels it calibrated. -->
