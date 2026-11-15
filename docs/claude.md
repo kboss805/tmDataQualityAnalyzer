@@ -960,7 +960,10 @@ helper every test cleans up and reads back through, which waits out a virus scan
 - **The layers:** `LayerTests` reads every model, view model and service type as compiled, its methods' code
   included. It fails on a model that reaches a view model, a service, a view or `Platform`; on a view model or service
   that reaches a view or `Platform`; and on any of them that reaches an Avalonia type other than `Color`.
-- **The manual:** `ManualFiguresTests` renders every figure and checks each caption's claims.
+- **The manual:** `ManualFiguresTests` renders every figure and checks each caption's claims. A re-render is the same, byte for
+  byte in the pixels, but for one level of colour in three pixels at a checkbox's edge in the receiver tree's figure: the run log's
+  racing lines and its percentages and seconds are set in one order and wording before each capture (`Steady`, which
+  the class tests), the progress bar is drawn at 70 %, and the chevrons are at rest (`AtRest`).
 - **The build and the release:** `VersionTests`, `VersionBuildTests`, `ManifestTests`, `ThirdPartyNoticesTests`,
   `PackageLicenceTests`, `LicenceBuildTests`, `IconTests` (the icon's sizes, its images in the built exe, and every
   window showing it).
