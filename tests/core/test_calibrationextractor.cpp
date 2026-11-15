@@ -1555,10 +1555,11 @@ TEST_CASE("CalibrationExtractor: a cancel can come from another thread")
     CalibrationExtractor extractor;
     auto recorder = std::make_shared<Recorder>(extractor);
     recorder->start(req);
-    // The extraction takes about a second; cancel a tenth of one in, from a thread that is not the caller's and not the
-    // extraction's.
-    std::thread canceller([&extractor]() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // The extraction takes about a second; cancel it once it has begun (its reader's first line), from a thread that is
+    // not the caller's and not the extraction's. Not after a fixed time: a slow start would then cancel nothing yet, and
+    // a fast machine would cancel after it had finished.
+    std::thread canceller([&extractor, &recorder]() {
+        recorder->waitForLog("Reading Chapter 10 file", 60000);
         extractor.cancel();
     });
     const bool finished = recorder->wait();
@@ -1867,7 +1868,11 @@ TEST_CASE("CalibrationExtractor: a cancel wakes a worker that is waiting for pac
     ReleaseOnExit guard{recorder};
     recorder->start(req);
     REQUIRE(recorder->waitParked(60000));
-    std::this_thread::sleep_for(std::chrono::milliseconds(300)); // the worker reaches its empty queue and blocks there
+    // The worker's last line before it waits for a packet: it has started. What is left is its call to the queue, which
+    // the short settle covers; the old fixed 300 ms could pass before a stalled worker had started at all, and the wake
+    // path was then never run.
+    REQUIRE_MESSAGE(recorder->waitForLog("processing...", 60000), joinLines(recorder->log));
+    std::this_thread::sleep_for(std::chrono::milliseconds(50)); // the worker's dequeue call, the next thing it does
 
     extractor.cancel();
     const bool worker_ended = recorder->waitForLog("no frame sync found", 15000);

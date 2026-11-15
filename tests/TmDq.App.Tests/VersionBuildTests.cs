@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Reflection;
+using TmDq.Core.Tests;
 using Xunit;
 
 namespace TmDq.App.Tests
@@ -19,7 +20,7 @@ namespace TmDq.App.Tests
 
         public void Dispose()
         {
-            try { Directory.Delete(_dir, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            TempFiles.TryDeleteDirectory(_dir);
         }
 
         private (int Exit, string Output, string Dll) Build(string header)

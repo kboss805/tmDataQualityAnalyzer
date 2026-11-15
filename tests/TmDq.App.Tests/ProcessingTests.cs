@@ -22,6 +22,7 @@ using TmDq.App.Services;
 using TmDq.App.ViewModels;
 using TmDq.App.Views;
 using TmDq.Core;
+using TmDq.Core.Tests;
 using Xunit;
 
 namespace TmDq.App.Tests
@@ -435,7 +436,7 @@ namespace TmDq.App.Tests
             }
             finally
             {
-                File.Delete(junk);
+                TempFiles.Delete(junk);
             }
         }
 

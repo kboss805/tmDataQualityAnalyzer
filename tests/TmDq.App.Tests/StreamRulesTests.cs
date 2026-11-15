@@ -269,8 +269,8 @@ namespace TmDq.App.Tests
         }
 
         [Theory]
-        [InlineData("", "FFFFFFFF", 800, StreamRules.PatternRequired)]
-        [InlineData("  ", "FFFFFFFF", 800, StreamRules.PatternRequired)]
+        [InlineData("", "FFFFFFFF", 800, "A frame sync pattern is required (e.g. FE6B2840).")]
+        [InlineData("  ", "FFFFFFFF", 800, "A frame sync pattern is required (e.g. FE6B2840).")]
         [InlineData("FE6B28G0", "FFFFFFFF", 800, "The frame sync pattern must be 1 to 16 hexadecimal digits.")]
         [InlineData("FE6B2840", "FFFFFFFFX", 800, "The frame sync mask must be up to 16 hexadecimal digits.")]
         [InlineData("FE6B2840", "FFFFFFFF", 63, "Bits Per Frame must be from 64 to 65536.")]

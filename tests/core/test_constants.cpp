@@ -91,9 +91,12 @@ TEST_CASE("Constants: uiNumKnownPrefixes")
 
 TEST_CASE("Constants: appVersionValues")
 {
+    // No version is typed here (it changes at every release, and the managed suite's VersionTests hold the number to
+    // the packaging's), so what can fail is a version that is not one: negative parts, or the 0.0.0 of an unset one.
     CHECK(AppVersion::kMajor >= 0);
     CHECK(AppVersion::kMinor >= 0);
     CHECK(AppVersion::kPatch >= 0);
+    CHECK(AppVersion::kMajor + AppVersion::kMinor + AppVersion::kPatch > 0);
 }
 
 TEST_CASE("Constants: appVersionToString")

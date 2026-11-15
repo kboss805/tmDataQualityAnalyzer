@@ -52,7 +52,16 @@ each suite has its house style and helpers. Build and run with the **build-and-t
   `DeleteDirectory`, `ReadAllBytes`, `ReadAllText`; `tests/TmDq.Core.Tests/TempFiles.cs`, linked into the
   app tests), never a bare `File.Delete` in a `finally`: a virus scanner's hold on a new file fails a test
   whose every check passes, and `TempFiles` retries for a few seconds yet still throws on a handle the
-  library leaked.
+  library leaked. A scratch folder of a test that runs a build tool or a script goes through
+  `TempFiles.TryDeleteDirectory`, which gives up quietly because a child process may still hold a file in it (a
+  leftover folder in `%TEMP%` is no failure of the product): never an empty `catch` in a `Dispose`.
+
+- **Expected values are literals, and no assertion sits within a timer tick of what it measures.** A test that builds
+  its expectation from the constant it tests passes when the constant changes (pin the number once, in its own test);
+  an elapsed-time bound within a `Task.Delay`'s 15.6 ms Windows tick of the delay fails a correct chart on a CI runner
+  (hold it to 3/4 of a delay of 100 ms or more); and a stall too long to tell two cases apart is `Assert.Skip`, not a
+  failure. Wait for the event a thread is about to produce (a log line, a callback), not for a fixed time or a poll with
+  no limit.
 
 ## The application's suite (headless Avalonia)
 
