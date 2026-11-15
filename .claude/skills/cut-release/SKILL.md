@@ -214,11 +214,13 @@ signed and versioned. Whether the installer **works somewhere new** is a differe
 and v2.13.1 could not make it: that needed "a genuinely clean Windows target; Windows 11
 Home offers neither Sandbox nor Hyper-V."
 
-On Windows Pro/Enterprise with the **Windows Sandbox** feature enabled (one line; semicolons separate
-the payload, because the recordings' names contain commas):
+On Windows Pro/Enterprise with the **Windows Sandbox** feature enabled. The payload the verifier reads defaults to the
+portable ZIP beside the setup, `deploy\avalonia\staging\unsigned`, the committed PRN sample and v2.14.2's setup (the
+main checkout's `deploy\` when this is a worktree); `-Payload` overrides it, separated by semicolons because the
+recordings' names contain commas:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File deploy\sandbox\run_sandbox_test.ps1 -Setup "deploy\avalonia\tmDataQualityAnalyzer-v$v`_setup.exe" -Payload "deploy\avalonia\tmDataQualityAnalyzer-v$v`_portable.zip;deploy\avalonia\staging\unsigned;tests\data\test files\prn_testfile, sample.ch10;deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe"
+powershell -ExecutionPolicy Bypass -File deploy\sandbox\run_sandbox_test.ps1 -Setup "deploy\avalonia\tmDataQualityAnalyzer-v$v`_setup.exe"
 ```
 
 It generates the `.wsb` (absolute host paths, which is why it is generated rather than committed),

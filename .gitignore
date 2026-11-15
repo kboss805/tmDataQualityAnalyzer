@@ -1,23 +1,14 @@
 # NOTE: do NOT add a "*.gitignore" rule here — it would ignore every .gitignore
 # (including this one), silently dropping the whole ignore policy from the repo.
 
-# Compiled Object files
-*.o
+# Compiled objects and executables (MSVC)
 *.obj
-*.slo
-*.lo
-*.so
-*.dylib
 *.dll
-*.a
 *.lib
-*.lai
-*.la
-
-# Executables
 *.exe
 *.out
-*.app
+
+# NOTE: do not add "*.app": git on Windows ignores case, so it matches a folder named ".App" (src/TmDq.App/ was one).
 
 # IDE and editor settings
 # .vscode: track the shared IDE setup, ignore per-machine/generated files.
@@ -29,7 +20,6 @@
 !.vscode/tasks.json
 !.vscode/settings.json
 !.vscode/extensions.json
-!.vscode/c_cpp_properties.json
 .vs/
 *.suo
 *.user
@@ -37,10 +27,7 @@
 # clangd / clang-tidy IntelliSense DB — generated per-machine (absolute repo
 # paths) by eng/gen_compile_flags.py; never committed.
 compile_flags.txt
-compile_commands.json
 
-*.sdf
-*.opensdf
 *.VC.opendb
 
 # Deployment — see deploy/.gitignore for per-file rules
@@ -60,9 +47,6 @@ compile_commands.json
 # .NET build output, in every project folder under src/ and tests/.
 bin/
 obj/
-# "*.app" above (a macOS app bundle) also matches src/TmDq.App/, because git on Windows ignores case. Without this line
-# git status does not even list the folder, and a commit silently leaves it out.
-!TmDq.App/
 
 # Temporary files
 *~
@@ -75,13 +59,13 @@ obj/
 Thumbs.db
 desktop.ini
 
-# Test artifacts — see tests/.gitignore for per-file rules
+# Test fixtures — see tests/.gitignore for the recordings
 
 # Settings TOML/INI files are tracked directly (no settings/.gitignore)
 
-# Input and Output files
-*.csv
-.clangd
+# Stray CSV exports in the repository root only. A rule for every folder would also hide a fixture added under tests/
+# (tests/data/ is ignored by its own rule), which git status would then not even list.
+/*.csv
 
 # Manual figures: the RENDERED ones in docs/manual_images/ are tracked so the
 # manual can be regenerated, but the downscaled copies are derived output of

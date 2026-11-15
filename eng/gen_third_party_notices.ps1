@@ -100,7 +100,7 @@ foreach ($p in ($shipped | Sort-Object Id)) {
         if (-not $licence) { $licence = 'see licence text' }
     } elseif ($licence -eq 'MIT') {
         if (-not $copyright) { throw "$($p.Id) $($p.Version): MIT without a licence file or a copyright line to fill it with" }
-        $line = if ($copyright -match '^(Copyright|\(c\)|©)') { $copyright } else { "Copyright (c) $copyright" }
+        $line = if ($copyright -match '^(Copyright|\(c\)|\u00A9)') { $copyright } else { "Copyright (c) $copyright" }
         $body = "MIT License`r`n`r`n$line`r`n`r`n$MitText"
     } else {
         throw "$($p.Id) $($p.Version): licence '$licence' has no licence file to quote and no template here; add one deliberately"

@@ -688,8 +688,9 @@ Everything builds from `tmdq.sln`, which VS Code opens by default; `.claude/CLAU
 - **A recording that finds no sync**: `py eng\ch10_triage.py <file.ch10>` walks the packets with no build and no
   irig106, checks the reader's TMATS gates, tries the sixteen combinations of the four bit transforms, and finds the
   sync word and frame length that actually recur. Its transforms mirror `FrameProcessor`'s; keep them in step.
-- **Markdown lint**: `.pymarkdown.json` configures `python -m pymarkdown scan <files>` for this project's docs (front
-  matter, pipe tables, long lines and bold lead-ins allowed). Nothing runs it automatically.
+- **Markdown lint**: `.pymarkdown` (pymarkdown auto-discovers that name, not `.pymarkdown.json`) configures `python -m pymarkdown
+  scan <files>` for this project's docs (front matter, pipe tables, long lines and bold lead-ins allowed). Nothing runs it
+  automatically.
 
 ### clangd / IntelliSense (`compile_flags.txt`)
 
@@ -712,6 +713,11 @@ clangd --check=src/core/src/frameprocessor.cpp
 
 which should report no diagnostics. (clangd 22 can still end in `1 errors` on a file where one of its own
 refactoring self-tests, a "tweak", fails: that line is not a problem in the code.)
+
+The repository has no `.clang-format`, so `.vscode/settings.json` runs clangd with `--fallback-style=none`: "Format
+Document" leaves a core file as it is, where the usual `llvm` fallback would reflow it to two-space LLVM style. The
+workspace recommends the C/C++ extension only for its Windows debugger (`cppvsdbg` in `launch.json`) and turns its
+IntelliSense engine off, so clangd is the only one; there is no `c_cpp_properties.json`.
 
 **Worktree trap.** The paths in `compile_flags.txt` are absolute into the checkout that
 generated it, and `.claude/worktrees/<name>/` sits *inside* the main checkout — so

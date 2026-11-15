@@ -29,13 +29,17 @@ if (-not (Get-Command mt -ErrorAction SilentlyContinue)) {
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { throw 'dotnet not found (install the .NET 10 SDK)' }
 if (-not (Get-Command mt -ErrorAction SilentlyContinue)) { throw 'mt.exe not found (it ships with the Windows SDK; use a developer prompt or eng\env.ps1)' }
 
+# The suite runs against the DLL of ITS configuration. The library's own search prefers Release, then Debug, so a
+# Debug run with only a Release DLL built (or with both) would pass against the other configuration's core: refuse,
+# as test_app.ps1 does, and hand the test exe the DLL it was asked for.
+$setDllVariable = $false
 if (-not $env:TMDQ_CORE_DLL) {
     $dll = Join-Path $root "out\$Configuration\tmdq_core.dll"
     if (-not (Test-Path $dll)) {
-        $other = Join-Path $root 'out\Release\tmdq_core.dll'
-        if (-not (Test-Path $other)) { $other = Join-Path $root 'out\Debug\tmdq_core.dll' }
-        if (-not (Test-Path $other)) { throw "tmdq_core.dll has not been built: run eng\build_core_dll.ps1" }
+        throw "tmdq_core.dll has not been built for $Configuration`: run eng\build_core_dll.ps1 -Configuration $Configuration"
     }
+    $env:TMDQ_CORE_DLL = $dll
+    $setDllVariable = $true
 }
 
 $project = Join-Path $root 'tests\TmDq.Core.Tests'
@@ -50,7 +54,7 @@ if (-not $NoBuild) {
 if (-not (Test-Path $exe)) { throw "the test executable was not produced: $exe" }
 
 Write-Host "Running $exe ..."
-& $exe
-$code = $LASTEXITCODE
+try { & $exe; $code = $LASTEXITCODE }
+finally { if ($setDllVariable) { Remove-Item Env:TMDQ_CORE_DLL -ErrorAction SilentlyContinue } }   # not the caller's session
 if ($code -ne 0) { throw "the managed tests failed (exit $code)" }
 Write-Host 'Managed tests passed.'

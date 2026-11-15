@@ -228,6 +228,7 @@ function Get-Product([string]$file) {
         }
         return $testExe
     }
+    if ($file -match '^eng[\/]') { return '' }   # a script a test runs as a child process: read at run time, built into nothing
     if ($suite -eq 'native') { return $testExe }
     return $coreDll
 }
@@ -326,7 +327,7 @@ foreach ($m in $mutants) {
                 if ($b.Locked) { $verdict = 'LOCKED'; $detail = $b.Detail } else { $verdict = 'COMPILE'; $detail = $b.Detail }
             } else {
                 $product = Get-Product $m.file
-                if (-not (Test-Path $product) -or (Get-Item $product).LastWriteTimeUtc -le $stamp) {
+                if ($product -and (-not (Test-Path $product) -or (Get-Item $product).LastWriteTimeUtc -le $stamp)) {
                     $verdict = 'STALE'; $detail = "$product is not newer than the mutated file"
                 } else {
                     $arguments = $listArgs
