@@ -464,7 +464,7 @@ namespace TmDq.App.Tests
                 Assert.True(content.R > chrome.R && content.G > chrome.G && content.B > chrome.B, $"{content} is not lighter than {chrome}");
 
                 // Flush: the title bar, its hairline, then the log, the divider's column and the chart side by side, filling
-                // the window with no gap and no border of their own.
+                // the window down to the status bar with no gap and no border of their own.
                 Rect title = Frames.InWindow(window.TitleBar, window), rule = Frames.InWindow(window.TitleBarLine, window),
                      log = Frames.InWindow(logPanel, window), plot = Frames.InWindow(window.PlotPanel, window), body = Frames.InWindow(window.Body, window);
                 Assert.Equal(1, rule.Height);
@@ -472,7 +472,8 @@ namespace TmDq.App.Tests
                 Assert.Equal((body.Left, body.Top, body.Bottom), (log.Left, log.Top, log.Bottom));
                 Assert.Equal((body.Right, body.Top, body.Bottom), (plot.Right, plot.Top, plot.Bottom));
                 Assert.Equal(plot.Left, log.Right + MainWindow.SplitterWidth);
-                Assert.Equal(window.ClientSize.Height, body.Bottom);
+                Assert.Equal(Frames.InWindow(window.StatusBar, window).Top, body.Bottom);
+                Assert.Equal(window.ClientSize.Height, Frames.InWindow(window.StatusBar, window).Bottom);
                 Assert.Equal(new Thickness(0), logPanel.BorderThickness);
                 Assert.Equal(new Thickness(0), window.PlotPanel.BorderThickness);
 
@@ -638,7 +639,7 @@ namespace TmDq.App.Tests
             window.DragDrop(at, RawDragEventType.DragOver, await Files(window, notes, Prn), DragDropEffects.Copy, RawInputModifiers.None);
             Assert.Equal(DragDropEffects.Copy, offered);
             window.DragDrop(at, RawDragEventType.Drop, await Files(window, notes, Prn), DragDropEffects.Copy, RawInputModifiers.None);
-            await Until(() => vm.Status.Contains("Configure Streams was cancelled", StringComparison.Ordinal), () => vm.Status);
+            await Until(() => vm.Status.StartsWith("Cancelled.", StringComparison.Ordinal), () => vm.Status);
             Assert.Equal(new[] { Prn }, vm.RecentFiles);
 
             // An exported CSV is imported.
@@ -647,7 +648,7 @@ namespace TmDq.App.Tests
             Assert.True(vm.Plot.ExportCsv(csv));
             window.DragDrop(at, RawDragEventType.DragEnter, await Files(window, csv), DragDropEffects.Copy, RawInputModifiers.None);
             window.DragDrop(at, RawDragEventType.Drop, await Files(window, csv), DragDropEffects.Copy, RawInputModifiers.None);
-            await Until(() => vm.Status == "Imported CSV: dropped.csv", () => vm.Status);
+            await Until(() => vm.Status == "Imported dropped.csv.", () => vm.Status);
 
             // Without a view model nothing is offered.
             window.DataContext = null;

@@ -477,7 +477,7 @@ namespace TmDq.App.Tests
             Assert.Equal(1, dialog.Closed);
             Assert.NotEmpty(dialog.Progress);
             Assert.Equal(100, dialog.Progress[^1]);
-            Assert.Equal("step_cal, example.ch10: 1 stream processed (0 Frame Sync Lock, 1 Receiver SNR)", vm.Status);
+            Assert.Equal("Finished processing step_cal, example.ch10: 1 stream.", vm.Status);
         }
 
         [AvaloniaFact]
@@ -508,7 +508,7 @@ namespace TmDq.App.Tests
             Assert.Equal(2, dialog.Closed);
             Assert.Empty(PlotFixtures.Locks(vm));
             Assert.False(vm.IsBusy);
-            Assert.Equal("prn_testfile, sample.ch10: processing was cancelled.", vm.Status);
+            Assert.Equal(("Cancelled. prn_testfile, sample.ch10 was not processed.", LogLevel.Warning), (vm.Status, vm.StatusLevel));   // a run stopped is a warning; a dialog closed is not
             List<string> lines = Texts(vm);
             int second = lines.LastIndexOf("Opening: prn_testfile, sample.ch10");
             Assert.DoesNotContain(lines.Skip(second), t => t.StartsWith("Processing complete", StringComparison.Ordinal));

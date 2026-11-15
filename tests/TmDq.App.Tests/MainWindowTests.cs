@@ -32,18 +32,20 @@ namespace TmDq.App.Tests
         }
 
         [AvaloniaFact]
-        public void TheVersionTheBuildReadFromTheHeaderIsTheLogsFirstLineAndThereIsNoStatusBar()
+        public void TheVersionTheBuildReadFromTheHeaderIsTheLogsFirstLineAndTheStatusBarSaysTheStatusNotTheVersion()
         {
             var vm = new MainWindowViewModel();
             var window = new MainWindow { DataContext = vm };
             window.Show();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("tmDataQualityAnalyzer v" + VersionTests.HeaderVersion(), vm.Log.Entries[0].Text);
-            // No status bar (it said what the log says): nothing under the log and the chart, which reach the window's
-            // bottom but for the log panel's margin.
-            Assert.Null(window.FindControl<TextBlock>("StatusText"));
+            // The status bar under the log and the chart says the status (the first prompt), not the version: that is the log's
+            // first line and Help > About. The log and the chart reach the bar, and the bar the window's bottom.
+            Assert.Equal(vm.Status, window.FindControl<TextBlock>("StatusText")!.Text);
             Assert.Null(window.FindControl<TextBlock>("VersionLabel"));
-            Assert.Equal(window.ClientSize.Height, Frames.InWindow(window.Body, window).Bottom, 0.5);
+            Rect bar = Frames.InWindow(window.StatusBar, window);
+            Assert.Equal(bar.Top, Frames.InWindow(window.Body, window).Bottom, 0.5);
+            Assert.Equal(window.ClientSize.Height, bar.Bottom, 0.5);
             window.Close();
         }
 

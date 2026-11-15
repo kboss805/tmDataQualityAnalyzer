@@ -11,6 +11,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using TmDq.App.Models.Logging;
 using TmDq.App.Models.Processing;
 using TmDq.App.ViewModels;
 using TmDq.App.ViewModels.Plot;
@@ -49,8 +50,8 @@ namespace TmDq.App.Tests
             Assert.Equal(100.0, s.Y.Max());
             Assert.Equal(100, vm.Progress);
             Assert.False(vm.IsBusy);
-            string mean = s.Y.Average().ToString("F1", CultureInfo.CurrentCulture);
-            Assert.Equal($"prn_testfile, sample.ch10: CH-01 PRN 15 5M (channel 13), 116 samples, mean lock {mean} %", vm.Status);
+            // The bar's sentence: that it finished and how many streams. Its numbers are on the plot and in the log.
+            Assert.Equal(("Finished processing prn_testfile, sample.ch10: 1 stream.", LogLevel.Success), (vm.Status, vm.StatusLevel));
         }
 
         [AvaloniaFact]
@@ -379,7 +380,7 @@ namespace TmDq.App.Tests
             var vm = new MainWindowViewModel();
             await vm.LoadAsync(Prn);
             string report = Startup.SmokeReport(vm);
-            Assert.StartsWith("ok samples=116 mean=93.532 channel=13 | prn_testfile, sample.ch10: ", report);
+            Assert.StartsWith("ok samples=116 mean=93.532 channel=13 | Finished processing prn_testfile, sample.ch10: ", report);
             string file = Path.Combine(Path.GetTempPath(), "tmdq-smoke-" + Guid.NewGuid().ToString("N") + ".txt");
             try
             {
