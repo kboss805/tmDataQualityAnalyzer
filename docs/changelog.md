@@ -44,6 +44,7 @@ standards work (A2 and A3, the `.editorconfig` and the .NET analyzers; the `.cla
   warnings, imports on the allow-list. All three suites: native **495** (1 skipped, Release; the tests project also
   compiled in Debug), managed **366** passed / 1 skipped, app **647** passed / 34 not run, Release, zero warnings. No
   baseline moved. No product code changed, so no soak or throughput run.
+
 #### The manual's figures the same in every render
 
 Re-rendering the figures (`enguild_manual.ps1`) changed four of them nearly every time. It looked like the run log's
