@@ -12,6 +12,59 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The status bar is back, and says one short sentence
+
+Asked for after #277: the bar under the log and the chart that #266 removed, with what it says simplified. With the log hidden
+(Ctrl+B or the title-bar toggle) the window had no status at all; the bar is the answer that is still there. `Status` had been kept
+by #266 (the tests read it), so the data was there; it said too much.
+
+- **The bar.** 24 px across the foot of the window, in the chrome's colour (`SolidBackgroundFillColorBase`) under a hairline
+  (`DividerStrokeColorDefault`), the log and the chart ending where it begins. It is always shown (not only while the log is
+  hidden). A success, a warning (finished with something left out) or an error draws a mark before the sentence, a tick, a warning
+  sign or a cross, in Fluent's status colour (`StatusPaint.Level`, bound to the new `MainWindowViewModel.StatusLevel`, which is a
+  `LogLevel`); what is under way, and the first prompt, has no mark. A sentence longer than the bar is cut with an ellipsis and whole in the
+  tooltip. The version is not in it (it is the log's first line and in Help > About, as #266 had it).
+- **One sentence each, the detail in the log.** The status was a technical line (`prn_testfile, sample.ch10: CH-01 PRN 15 5M
+  (channel 13), 116 samples, mean lock 93.5 %`, a path in the batch's, a reason per stream). Now:
+
+  | Action | Was | Is |
+  |---|---|---|
+  | Opening, processing | `Opening x ...`, `Processing x ...` | `Opening x...`, `Processing x...` |
+  | A run finished | `x: CH-01 ... (channel 13), 116 samples, mean lock 93.5 %` / `x: 2 streams processed (2 Frame Sync Lock, 0 Receiver SNR)` | `Finished processing x: 2 streams.` |
+  | ... with some not processed | `... Not processed: <every reason>` | `Finished processing x: 2 streams, 1 not processed. See the log.` (a warning) |
+  | Cancelled | `x: not processed (Configure Streams was cancelled).` / `x: processing was cancelled.` | `Cancelled. x was not processed.` (a warning once a run was stopped) |
+  | Import CSV | `Imported CSV: x` | `Imported x.` |
+  | Batch | `Batch complete: 2 processed, 1 skipped. Output written to <folder>.` | `Batch complete: 2 processed, 1 skipped.` (a warning when any was skipped); the folder is in the log's line |
+  | Save as Template | nothing | `Saved template t.json.`; `Could not save the template. See the log.`; `Nothing to save as a template yet.` |
+  | Reading a template | nothing | `Could not read the template. See the log.` for every way it fails; the log keeps v2.14.2's reasons |
+  | Export | nothing | `Exported data, plot image and log file.`; `Exported log file. Could not export data and plot image. See the log.`; `Could not export plot image. See the log.` |
+  | Errors (no core, not a recording, not an exported CSV) | the message | the message, as an error |
+
+  The log's lines are unchanged (the batch's and the import's `Success` lines keep their text). The smoke report's tail
+  (`ok samples=... | <status>`) follows the status, and its prefix, which the package script and the Sandbox check, is untouched.
+- **Where the code is.** `MainWindowViewModel.Report(text, level)` sets both; `SessionExport` takes the report callback and
+  says one sentence for the whole Export dialog (it returns a success flag from `Csv` and `ImageAsync` now); `BatchResult`
+  carries the short `Headline` and the skips; `ReadTemplate`'s failures go through `CouldNotRead`. The status colours are the
+  ones of the dialogs (`StatusPaint`, #277), so the bar, the log and the dialogs agree.
+
+**Tests:**
+- New `StatusBarTests`: the bar's place (24 px, across the window, the body ending where it begins), its colour and hairline
+  drawn, in both themes, and there with the log hidden; the text, the caption size and the tooltip; a success and an error marked in
+  the status colours, in both themes, and drawn; each level's mark and status; a long sentence trimmed, whole in the tooltip.
+- The tests that read `Status` read the new sentences, and `StatusLevel` where it matters (the batch's warning, the cancelled run's
+  warning, the failed export's, the partial run's). Export, Save as Template, reading a template, import and the batch's files under
+  way are held for the sentence and its level. `MainWindowTests`' "there is no status bar" and `ShellTests`' layout, which ended at
+  the body's foot, read the bar.
+
+**Mutation check** (`eng\mutate.ps1`, app suite, 21 mutants): **21 of 21 caught.** The first pass left two: a batch file's "Opening"
+marked as a success (the test read the sentence, not its level; the progress dialog's stand-in now records the level), and a stopped run
+marked as information (a subset that left out the class that holds it; run again with it).
+
+**Baselines:** app **631 passed / 0 failed / 34 not run** (was 625: the bar's six tests). Native and managed unchanged.
+
+**The manual:** figures re-rendered and the manuals re-embedded: every figure of the main window has the bar;
+`walk-cust-02-snr-tree` was restored, as before.
+
 #### Repository configuration: a lint config that was never read, ignore rules that would drop files, a solution platform that cannot build
 
 Found by the whole-tree cleanup audit (PR 5 of its list); each finding was re-run against the tree as of #276 before it was

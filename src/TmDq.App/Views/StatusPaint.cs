@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 using Avalonia.Styling;
+using TmDq.App.Models.Logging;
 using TmDq.App.ViewModels;
 
 namespace TmDq.App.Views
@@ -28,6 +29,12 @@ namespace TmDq.App.Views
         public static readonly AttachedProperty<StatusLevel?> LevelProperty =
             AvaloniaProperty.RegisterAttached<TextBlock, StatusLevel?>("Level", typeof(StatusPaint));
 
+        /// <summary>A status line's level (the log's levels: information has no colour of its own) as a status.</summary>
+        public static readonly IValueConverter OfLog = new FuncValueConverter<LogLevel, StatusLevel?>(l => LogView.StatusOf(l));
+
+        /// <summary>The mark before a status line: a tick for a success, a warning sign, a cross for an error.</summary>
+        public static readonly IValueConverter Mark = new FuncValueConverter<LogLevel, string>(l => MarkOf(l));
+
         /// <summary>The batch confirmation's glyph (<see cref="OfMatch"/>).</summary>
         public static readonly IValueConverter Match = new FuncValueConverter<bool, StatusLevel?>(ok => OfMatch(ok));
 
@@ -43,6 +50,14 @@ namespace TmDq.App.Views
         public static StatusLevel? GetLevel(TextBlock text) => text.GetValue(LevelProperty);
 
         public static void SetLevel(TextBlock text, StatusLevel? level) => text.SetValue(LevelProperty, level);
+
+        public static string MarkOf(LogLevel level) => level switch
+        {
+            LogLevel.Success => "✓",
+            LogLevel.Warning => "⚠",
+            LogLevel.Error => "✗",
+            _ => "",
+        };
 
         /// <summary>Success for a file that matches the template, critical for one that does not.</summary>
         public static StatusLevel OfMatch(bool ok) => ok ? StatusLevel.Success : StatusLevel.Critical;

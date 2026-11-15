@@ -225,13 +225,13 @@ namespace TmDq.App.Tests
             Assert.False(vm.OpenRecentCommand.CanExecute(null));
             Assert.True(vm.OpenRecentCommand.CanExecute(Prn));
             await vm.OpenRecentCommand.ExecuteAsync(Prn);
-            Assert.Equal("prn_testfile, sample.ch10: not processed (Configure Streams was cancelled).", vm.Status);
+            Assert.Equal("Cancelled. prn_testfile, sample.ch10 was not processed.", vm.Status);
 
             vm.Plot.SetSeries(new[] { PlotFixtures.Lock(0, "a", 1, 0, new[] { 0.0, 1.0 }, new[] { 50.0, 60.0 }) });
             string csv = Path.Combine(_dir, "Upper.CSV");
             Assert.True(vm.Plot.ExportCsv(csv));
             await vm.OpenPathAsync(csv);
-            Assert.Equal("Imported CSV: Upper.CSV", vm.Status);
+            Assert.Equal("Imported Upper.CSV.", vm.Status);
 
             // Busy, it is unavailable, and a path given anyway does nothing; it is told when that ends.
             var gate = new TaskCompletionSource<StreamsChoice?>();

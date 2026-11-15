@@ -48,6 +48,7 @@ namespace TmDq.App.ViewModels
         private string _runningFile = string.Empty;
         private ProcessingViewModel? _processing;
         private string _status = "Open a Chapter 10 recording.";
+        private LogLevel _statusLevel = LogLevel.Info;
         private int _progress;
         private bool _isBusy;
 
@@ -65,7 +66,7 @@ namespace TmDq.App.ViewModels
             _templateFiles = services.TemplateFiles;
             _templateDialogs = services.TemplateDialogs;
             Log = new SessionLog(services.Clock);
-            _export = new SessionExport(Plot, Log, services.ImageExporter);
+            _export = new SessionExport(Plot, Log, services.ImageExporter, Report);
             _batch = new BatchRunner(this, Plot, Log, _export, services.AppRoot ?? AppContext.BaseDirectory);
             OpenCommand = new AsyncRelayCommand(OpenAsync, () => !IsBusy && _picker is not null);
             ImportCsvCommand = new AsyncRelayCommand(PickAndImportAsync, () => !IsBusy && _files is not null);
@@ -169,12 +170,35 @@ namespace TmDq.App.ViewModels
             private set => SetProperty(ref _processing, value);
         }
 
-        /// <summary>One line saying what happened last, an error included. The window no longer shows it (the log does);
-        /// the tests read it as the last action's outcome.</summary>
+        /// <summary>One short line saying what happened last, in plain words, for the status bar under the log and the chart:
+        /// what is being done ("Processing x.ch10..."), what finished ("Finished processing x.ch10: 3 streams."), or what
+        /// went wrong. The log keeps the detail (every path, every stream); this is the sentence that is still there with the
+        /// log hidden.</summary>
         public string Status
         {
             get => _status;
             private set => SetProperty(ref _status, value);
+        }
+
+        /// <summary>How <see cref="Status"/> went: a success, a warning (done, with something left out) or an error draw a mark
+        /// and a colour in the status bar; information (what is under way, the first prompt) does not.</summary>
+        public LogLevel StatusLevel
+        {
+            get => _statusLevel;
+            private set
+            {
+                if (SetProperty(ref _statusLevel, value)) OnPropertyChanged(nameof(HasStatusMark));
+            }
+        }
+
+        /// <summary>Whether the status bar draws a mark (a tick, a warning sign, a cross) before the status.</summary>
+        public bool HasStatusMark => _statusLevel != LogLevel.Info;
+
+        /// <summary>Sets the status line and how it went.</summary>
+        private void Report(string text, LogLevel level = LogLevel.Info)
+        {
+            Status = text;
+            StatusLevel = level;
         }
 
         /// <summary>0 to 100 while a recording is processed.</summary>
@@ -268,19 +292,21 @@ namespace TmDq.App.ViewModels
                 {
                     _shell.AddRecentFile(path);
                     Plot.Title = BaseName(name);
-                    Status = "Imported CSV: " + name;
-                    Log.Success(Status);
+                    Report("Imported " + name + ".", LogLevel.Success);
+                    Log.Success("Imported CSV: " + name);
                 }
                 else
                 {
-                    Status = string.Format(CultureInfo.InvariantCulture, NotAnExportedCsv, name);
-                    Log.Error(Status);
+                    string error = string.Format(CultureInfo.InvariantCulture, NotAnExportedCsv, name);
+                    Report(error, LogLevel.Error);
+                    Log.Error(error);
                 }
             }
             catch (Exception e) when (e is FileNotFoundException or InvalidOperationException)
             {
-                Status = CoreNotLoaded + e.Message;
-                Log.Error(Status);
+                string error = CoreNotLoaded + e.Message;
+                Report(error, LogLevel.Error);
+                Log.Error(error);
             }
             finally
             {
@@ -313,6 +339,7 @@ namespace TmDq.App.ViewModels
         {
             if (_sources.Count == 0)
             {
+                Report("Nothing to save as a template yet.", LogLevel.Warning);
                 Log.Warning("Nothing to save as a template -- no sources have finished processing yet.");
                 return;
             }
@@ -339,10 +366,12 @@ namespace TmDq.App.ViewModels
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
+                Report("Could not save the template. See the log.", LogLevel.Error);
                 Log.Error("Could not write template file: " + path);
                 return false;
             }
             LastFolder = Path.GetDirectoryName(Path.GetFullPath(path));
+            Report("Saved template " + Path.GetFileName(path) + ".", LogLevel.Success);
             Log.Success("Template saved: " + Path.GetFileName(path));
             return true;
         }
@@ -370,8 +399,9 @@ namespace TmDq.App.ViewModels
             catch (Exception e) when (e is FileNotFoundException or InvalidOperationException)
             {
                 // As Open, Import CSV and the batch say it: reported, not thrown out of the command.
-                Status = CoreNotLoaded + e.Message;
-                Log.Error(Status);
+                string error = CoreNotLoaded + e.Message;
+                Report(error, LogLevel.Error);
+                Log.Error(error);
                 return;
             }
             var confirm = new BatchApplyViewModel(checks, LastFolder ?? AppContext.BaseDirectory, _templateFiles);
@@ -393,27 +423,27 @@ namespace TmDq.App.ViewModels
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
-                Log.Error("Could not open template file: " + path);
-                return null;
+                return CouldNotRead("Could not open template file: " + path);
             }
             switch (load)
             {
                 case TemplateLoad.InvalidJson:
-                    Log.Error("Template file is not valid JSON: " + error);
-                    return null;
+                    return CouldNotRead("Template file is not valid JSON: " + error);
                 case TemplateLoad.UnsupportedSchemaVersion:
-                    Log.Error("Template file uses an unsupported schema version.");
-                    return null;
+                    return CouldNotRead("Template file uses an unsupported schema version.");
                 case TemplateLoad.InvalidFormat:
-                    Log.Error("Template file is not a valid template (unrecognized format).");
-                    return null;
+                    return CouldNotRead("Template file is not a valid template (unrecognized format).");
             }
-            if (template!.Entries.Count == 0)
-            {
-                Log.Error("Template has no stream entries.");
-                return null;
-            }
+            if (template!.Entries.Count == 0) return CouldNotRead("Template has no stream entries.");
             return template;
+        }
+
+        /// <summary>The log gets the reason, in v2.14.2's words; the status bar says only that the template could not be read.</summary>
+        private ProcessingTemplate? CouldNotRead(string reason)
+        {
+            Report("Could not read the template. See the log.", LogLevel.Error);
+            Log.Error(reason);
+            return null;
         }
 
         /// <summary>
@@ -433,13 +463,15 @@ namespace TmDq.App.ViewModels
                 ClearRun();
                 BatchResult result = await _batch.RunAsync(template, files, outputFolder, reuseAppearance);
                 SetSources(result.Sources);
-                Status = result.Summary;
-                Log.Success(Status);
+                // The bar says how many; the log also says where the output went.
+                Report(result.Headline, result.Skipped > 0 ? LogLevel.Warning : LogLevel.Success);
+                Log.Success(result.Summary);
             }
             catch (Exception e) when (e is FileNotFoundException or InvalidOperationException)
             {
-                Status = CoreNotLoaded + e.Message;
-                Log.Error(Status);
+                string error = CoreNotLoaded + e.Message;
+                Report(error, LogLevel.Error);
+                Log.Error(error);
             }
             finally
             {
@@ -460,7 +492,7 @@ namespace TmDq.App.ViewModels
             Progress = 0;
             try
             {
-                Status = $"Opening {name} ...";
+                Report($"Opening {name}...");
                 Log.Add("Opening: " + name);
                 Ch10File file = await StreamsRun.OpenAsync(path);
                 // A recording joins Recent Files once its channels are read, as in v2.x.
@@ -471,11 +503,11 @@ namespace TmDq.App.ViewModels
                 StreamsChoice? choice = await _configurator.ConfigureAsync(path, file);
                 if (choice is null)
                 {
-                    Status = $"{name}: not processed (Configure Streams was cancelled).";
+                    Report($"Cancelled. {name} was not processed.");
                     return;
                 }
                 ClearRun();
-                Status = $"Processing {name} ...";
+                Report($"Processing {name}...");
                 using RunOutcome outcome = await RunWithDialogAsync(choice.Request);
                 Progress = 100;
                 // The core builds each stream's series, in table order, on one shared time axis.
@@ -484,18 +516,18 @@ namespace TmDq.App.ViewModels
                 // The recording, as a template is captured from it, named in the Plot File selector.
                 SetSources(new[] { new ProcessedSource(choice.Request.SourceId, path, choice.TimeChannelIndex, choice.Request.SwapBytes, choice.Rows) });
                 Plot.SetSourceLabel(choice.Request.SourceId, BaseName(name));
-                Status = Describe(name, outcome);
+                Report(Describe(name, outcome), outcome.Errors.Count == 0 ? LogLevel.Success : LogLevel.Warning);
                 Log.Success("Processing complete — results plotted from memory.");
             }
             catch (OperationCanceledException)
             {
                 ClearRun();
-                Status = $"{name}: processing was cancelled.";
+                Report($"Cancelled. {name} was not processed.", LogLevel.Warning);
             }
             catch (RecordingException e)
             {
                 ClearRun();
-                Status = e.Message;
+                Report(e.Message, LogLevel.Error);
                 // A run with nothing processed has logged the core's own reasons already.
                 if (e is not NothingProcessedException) Log.Error(e.Message);
             }
@@ -503,8 +535,9 @@ namespace TmDq.App.ViewModels
             {
                 // The native core is missing or does not match this build.
                 ClearRun();
-                Status = CoreNotLoaded + e.Message;
-                Log.Error(Status);
+                string error = CoreNotLoaded + e.Message;
+                Report(error, LogLevel.Error);
+                Log.Error(error);
             }
             finally
             {
@@ -512,7 +545,7 @@ namespace TmDq.App.ViewModels
             }
         }
 
-        void IRunHost.SetStatus(string status) => Status = status;
+        void IRunHost.SetStatus(string status) => Report(status);
 
         void IRunHost.SetRunningFile(string name) => _runningFile = name;
 
@@ -579,28 +612,14 @@ namespace TmDq.App.ViewModels
             SetSources(Array.Empty<ProcessedSource>());
         }
 
-        /// <summary>The status line after a run: one Frame Sync Lock stream as the smoke report describes it, else how
-        /// many of each mode were processed; then any error the core reported for a stream that was not.</summary>
+        /// <summary>The status line after a run: that it finished and how many streams it processed, and how many it could not
+        /// (the log says which, and why). The numbers of each stream are in the log and on the plot, not here.</summary>
         public static string Describe(string name, RunOutcome outcome)
         {
-            IReadOnlyList<ProcessedStream> streams = outcome.Streams;
-            string text;
-            if (streams.Count == 1 && streams[0].Mode == StreamMode.FrameSyncLock)
-            {
-                ProcessedStream s = streams[0];
-                double mean = s.LockPercent.Length == 0 ? 0 : s.LockPercent.Average();
-                // Invariant: the line ends the smoke report, which other tools read, and the tests hold its digits.
-                text = string.Create(CultureInfo.InvariantCulture,
-                    $"{name}: {s.Label} (channel {s.PcmChannelId}), {s.LockPercent.Length} samples, mean lock {mean:F1} %");
-            }
-            else
-            {
-                int locks = streams.Count(s => s.Mode == StreamMode.FrameSyncLock);
-                text = string.Create(CultureInfo.InvariantCulture,
-                    $"{name}: {streams.Count} {(streams.Count == 1 ? "stream" : "streams")} processed " +
-                    $"({locks} Frame Sync Lock, {streams.Count - locks} Receiver SNR)");
-            }
-            return outcome.Errors.Count == 0 ? text : text + ". Not processed: " + string.Join(" ", outcome.Errors);
+            int done = outcome.Streams.Count, failed = outcome.Errors.Count;
+            string text = string.Create(CultureInfo.InvariantCulture,
+                $"Finished processing {name}: {done} {(done == 1 ? "stream" : "streams")}");
+            return failed == 0 ? text + "." : string.Create(CultureInfo.InvariantCulture, $"{text}, {failed} not processed. See the log.");
         }
     }
 }

@@ -16,6 +16,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
 using SkiaSharp;
+using TmDq.App.Models.Logging;
 using TmDq.App.Models.Processing;
 using TmDq.App.Platform;
 using TmDq.App.Services;
@@ -743,7 +744,7 @@ namespace TmDq.App.Tests
                 Assert.Equal(new[] { "Info Importing CSV: " + name, "Success Imported CSV: " + name }, LinesOf(vm, before));
                 Assert.Equal(5, vm.Plot.Series.Count);
                 Assert.Equal(MainWindowViewModel.BaseName(name), vm.Plot.Title);
-                Assert.Equal("Imported CSV: " + name, vm.Status);
+                Assert.Equal(("Imported " + name + ".", LogLevel.Success), (vm.Status, vm.StatusLevel));
                 Assert.Equal(Path.GetDirectoryName(path), vm.LastFolder);
                 Assert.False(vm.IsBusy);
             }
@@ -916,6 +917,7 @@ namespace TmDq.App.Tests
                     "Success Log exported to " + log,
                 }, LinesOf(vm, before));
                 Assert.Equal(new[] { image }, images.Asked);
+                Assert.Equal(("Exported data, plot image and log file.", LogLevel.Success), (vm.Status, vm.StatusLevel));
 
                 // The data is the plot's own export.
                 string again = TempPath(".csv");
@@ -959,11 +961,14 @@ namespace TmDq.App.Tests
                     "Error Error: Failed to export plot to " + nowhere + ".bogus.pdf",
                     "Success Log exported to " + Path.Combine(folder, "log.txt"),
                 }, LinesOf(vm, before));
+                // One sentence for the bar: what was written, what was not, and where the reasons are.
+                Assert.Equal(("Exported log file. Could not export data and plot image. See the log.", LogLevel.Warning), (vm.Status, vm.StatusLevel));
 
                 choice = new ExportViewModel("a.png", "a.csv", nowhere + ".txt") { ExportImage = false, ExportLog = true };
                 before = vm.Log.Entries.Count;
                 await vm.ExportAsync(choice);
                 Assert.Equal(new[] { "Error Error: Failed to export log to " + nowhere + ".txt" }, LinesOf(vm, before));
+                Assert.Equal(("Could not export log file. See the log.", LogLevel.Error), (vm.Status, vm.StatusLevel));
 
                 // With nothing to draw the image, it is a failure, not a success.
                 var noImages = new MainWindowViewModel();
@@ -971,12 +976,14 @@ namespace TmDq.App.Tests
                 before = noImages.Log.Entries.Count;
                 await noImages.ExportAsync(new ExportViewModel(Path.Combine(folder, "n.png"), "n.csv", "n.txt"));
                 Assert.Equal(new[] { "Error Error: Failed to export plot to " + Path.Combine(folder, "n.png") }, LinesOf(noImages, before));
+                Assert.Equal("Could not export plot image. See the log.", noImages.Status);
 
                 // Without data, nothing is written.
                 var empty = new MainWindowViewModel(new MainWindowServices { ImageExporter = new FakeImages() });
                 before = empty.Log.Entries.Count;
                 await empty.ExportAsync(new ExportViewModel(Path.Combine(folder, "e.png"), "e.csv", "e.txt"));
                 Assert.Equal(before, empty.Log.Entries.Count);
+                Assert.Equal(("Open a Chapter 10 recording.", LogLevel.Info), (empty.Status, empty.StatusLevel));   // nothing said, nothing written
                 Assert.False(File.Exists(Path.Combine(folder, "e.png")));
             }
             finally

@@ -138,12 +138,27 @@
     </Grid>
     <!-- The hairline between the title bar and what is under it, as VS Code draws it. -->
     <Border x:Name="TitleBarLine" x:FieldModifier="public" DockPanel.Dock="Top" Height="1" Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
-    <!-- No status bar under the log and the chart: what it said, the log says (the version is the log's first line).
+    <!-- The status bar under the log and the chart: one short sentence for the last thing that happened (Status), so that
+         there is an answer with the log hidden, in the chrome's colour under a hairline. A success, a warning or an error
+         is marked (a tick, a warning sign, a cross) in Fluent's status colour; what is under way is not. The sentence is the
+         bar's alone: the log keeps every path and every stream, and the version is the log's first line and Help > About.
          The log sidebar on the left (v2.x's place and width), the chart beside it, flush, with no gap or border but the
          divider's hairline; the sidebar is the window's chrome and the chart the content, a shade lighter (as VS Code's
          side bar and editor). The toggle in the title bar hides the sidebar. The divider drags the log as narrow as its
          column's minimum, and the log wraps to the width it is given. Progress is in the modal progress dialog while a
          run goes on, as in v2.x. -->
+    <Border x:Name="StatusBar" x:FieldModifier="public" DockPanel.Dock="Bottom" Height="24"
+            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}" BorderThickness="0,1,0,0"
+            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+      <Grid ColumnDefinitions="Auto,*" Margin="12,0" VerticalAlignment="Center">
+        <TextBlock x:Name="StatusMark" x:FieldModifier="public" Grid.Column="0" Margin="0,0,6,0" IsVisible="{Binding HasStatusMark}"
+                   Text="{Binding StatusLevel, Converter={x:Static views:StatusPaint.Mark}}"
+                   views:StatusPaint.Level="{Binding StatusLevel, Converter={x:Static views:StatusPaint.OfLog}}"
+                   FontSize="{DynamicResource CaptionTextBlockFontSize}" />
+        <TextBlock x:Name="StatusText" x:FieldModifier="public" Grid.Column="1" Text="{Binding Status}" TextTrimming="CharacterEllipsis"
+                   ToolTip.Tip="{Binding Status}" FontSize="{DynamicResource CaptionTextBlockFontSize}" />
+      </Grid>
+    </Border>
     <Grid x:Name="Body" x:FieldModifier="public">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="400" MinWidth="200" />

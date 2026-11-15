@@ -12,7 +12,7 @@ using TmDq.Core;
 
 namespace TmDq.App.ViewModels
 {
-    /// <summary>What a batch needs from the window it runs in: the status line, the file being run (named in the warning
+    /// <summary>What a batch needs from the window it runs in: the status line (information; the batch's own end is its result), the file being run (named in the warning
     /// that a recording shares no time with the others), and a run with the progress dialog up.</summary>
     internal interface IRunHost
     {
@@ -24,7 +24,7 @@ namespace TmDq.App.ViewModels
     }
 
     /// <summary>What a batch did: the recordings it kept, and the summary for the status line.</summary>
-    internal sealed record BatchResult(IReadOnlyList<ProcessedSource> Sources, string Summary);
+    internal sealed record BatchResult(IReadOnlyList<ProcessedSource> Sources, string Summary, string Headline, int Skipped);
 
     /// <summary>
     /// Apply Template's batch (US1.1), as v2.x's ran it: the template over several recordings, one after another, each
@@ -72,7 +72,7 @@ namespace TmDq.App.ViewModels
                 int sourceId = nextSourceId++;
                 try
                 {
-                    _host.SetStatus($"Opening {name} ...");
+                    _host.SetStatus($"Opening {name}...");
                     _log.Add("Opening: " + name);
                     Ch10File file = await StreamsRun.OpenAsync(path);
                     // Checked again at its turn: the file may have changed since it was chosen.
@@ -82,7 +82,7 @@ namespace TmDq.App.ViewModels
                         skipped++;
                         continue;
                     }
-                    _host.SetStatus($"Processing {name} ...");
+                    _host.SetStatus($"Processing {name}...");
                     _host.SetRunningFile(name);
                     using RunOutcome outcome = await _host.RunWithDialogAsync(TemplateBatch.ToRunRequest(template, path, file, sourceId, _appRoot));
                     foreach (StreamResult result in outcome.Results) _plot.AddStream(result);
@@ -104,9 +104,9 @@ namespace TmDq.App.ViewModels
             // The plot opens on the first file; "All files (overlaid)" is in the Plot File selector.
             if (sources.Count > 1) _plot.SetVisibleSource(sources[0].SourceId);
             if (sources.Count > 0) _plot.Title = MainWindowViewModel.BaseName(Path.GetFileName(sources[0].FilePath));
-            string summary = string.Create(CultureInfo.InvariantCulture, $"Batch complete: {processed} processed, {skipped} skipped.") +
-                             (outputFolder is null ? "" : " Output written to " + outputFolder + ".");
-            return new BatchResult(sources, summary);
+            string headline = string.Create(CultureInfo.InvariantCulture, $"Batch complete: {processed} processed, {skipped} skipped.");
+            string summary = headline + (outputFolder is null ? "" : " Output written to " + outputFolder + ".");
+            return new BatchResult(sources, summary, headline, skipped);
         }
 
         /// <summary>
