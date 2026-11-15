@@ -2,7 +2,7 @@
 
 What changed in each release, and in each step of the move from Qt to Avalonia, newest first: the developer's record.
 The user's is `deploy/RELEASENOTES.txt`. Work that has landed but not shipped goes under **Unreleased**, and is folded
-into the release's section when it is cut (`scripts\check_release_consistency.ps1 -ReleaseMode` refuses a release
+into the release's section when it is cut (`eng\check_release_consistency.ps1 -ReleaseMode` refuses a release
 with an Unreleased section left).
 
 Until plan step 6.5 this history was the Version History section of `docs/claude.md`, and it is kept as it was written:
@@ -11,6 +11,38 @@ the paths, class names and baselines in an entry are the ones of its day. Two mo
 recorded here; and the parity review and soak records moved from `docs/dotnet-migration/` to `docs/records/`.
 
 ### Unreleased
+
+#### The guide's statements about the present, corrected
+
+Docs only (no code, test or project file changed), from the whole-tree cleanup audit's findings M1, M2, M3, M5 and M6, each
+re-checked against the tree first. No mutation check is needed.
+
+- **`docs/claude.md`** (M1): the menu and file names, the context-menu and key lists (the order, the Readout entry, `Backspace`,
+  and that the arrows and `+`/`-` have no menu item), `PlotViewModel.MinAxisSpan`, the legend in PDF as well, the setup dialog's
+  fields (the Slope box holds the voltage ranges; Polarity is the fifth), Apply Cal and Extract Calibration the right way round,
+  which icons swap per theme, where `LogView` and `ProcessingViewModel` live, who builds the `RunRequest`, what is at the root
+  of `include/` and in `Services/`, the naming rules, which of the list's items "plan rule 2 to 5" are, the time handling (no
+  time zone is set), and the lock % section, which carried a fossil formula (locked over expected frames, clamped) beside the true
+  one. A batch leaves the plot on its first file; no host selects a `[start, stop]` window; the averaging periods are 1 s, 100 ms
+  and 10 ms; the committed calibration recording is `agc_rnrz-l_trc_testfile`; only two scripts clear `Platform`.
+- **`docs/framesync_logic.md`** (M2): section 6 gave `lock_pct = n_samples / expected_in_window` with identifiers the core has
+  not had since lock % became valid bits over total bits. It now describes `scanBit` and `closeElapsedWindows` as they are, and
+  the Qt signal paragraph of section 5 says what it meant.
+- **`docs/claude.md`** (M3): the components it never named are in it: `Startup` and the smoke report, `FirstChannelRun`,
+  `BatchApplyViewModel`, `CustomizeViewModel`, `PlotLegend`, the code-built windows with the rule that decides them, `textformat`,
+  `textparse`, `containerutil`, `IntervalGate`, `StreamJob`, and the binding's `Native`, `Arena` and `ObserverBridge`; the plot
+  paragraph names the folder's nine files.
+- **Skills and `.claude/CLAUDE.md`** (M5): `build-and-test` says what CI runs (one job, Debug and Release core, three suites in
+  Release); `code-cleanup` no longer cites the Qt `loadCsvFile` as a present case or a "memory management" section that does not
+  exist; `tm-code-review`'s visual-changes paragraph has its own heading; `cut-release`'s snippet carries placeholders, not a
+  version nothing checks; `write-test` says to use `TempFiles`; `CLAUDE.md` no longer says every test host has the UTF-8 manifest
+  (the app's test host has none).
+- **`README.md`, this header** (M6): results join the plot when the run ends; the consistency check is in `eng\`.
+
+**Not done, and why:** M6's comments in `eng/check_release_consistency.ps1` and `eng/embed_manual_images.py` are left for the
+repo-config PR that edits `eng/`; the `Contributing [TBD]` placeholder in the README needs the owner's policy, not a guess; the
+v3.0.0 line in `deploy/RELEASENOTES.txt` is true of the shipped version and belongs to the next release's notes. Before the next
+release, run `eng\build_manual.ps1` and read `git status`: whether #269 and #270 changed a manual figure is unchecked.
 
 #### The dialogs in Fluent's anatomy: one footer, 24 px of padding, switches for settings, Fluent's status colours
 

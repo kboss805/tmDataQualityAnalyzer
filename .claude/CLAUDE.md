@@ -132,7 +132,7 @@ MSVC 14.51 and left two compilers' objects in one tree. Override with `TMDQ_VS_R
 
 - **Ch10 paths:** both readers pass irig106 the path in the process code page (`path.string()`),
   never as UTF-8 bytes - its narrow `open()` reads that code page, which the UTF-8 code-page manifest
-  merged into the app and every test host (`src/TmDq.App/app.manifest`, `assets/utf8codepage.manifest`) makes UTF-8.
+  merged into the app and the managed library's test host (`src/TmDq.App/app.manifest`, `tests/TmDq.Core.Tests/app.manifest`; the app's own test host has none) makes UTF-8.
 - **SNR:** average raw counts first, calibrate once per window. Out-of-range interpolation **clamps**,
   never extrapolates. The calibration extractor must mirror the main run's word map + raw-affecting
   flags exactly: both build them through `applyAcquisition` (`src/core/include/model/framesync.h`), so a new

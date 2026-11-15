@@ -42,7 +42,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **Per-Stream Configuration**: One row per PCM channel in the Configure Streams dialog, each independently set to Frame Sync Lock or Receiver SNR mode with its own setup
 - **Concurrent Processing**: A single reader thread reads the file once and routes packets to per-stream queues; each stream is processed on its own worker thread in parallel
 - **Single-Pass I/O**: The Chapter 10 file is read exactly once regardless of how many streams are selected
-- **Accumulating Plot**: Each stream's results are added to the plot as it completes
+- **Accumulating Plot**: Each stream's results are added to the plot when the run ends
 - **Cancellation**: A cancel cleanly stops the reader and all worker threads
 
 ### Batch Processing & Templates

@@ -231,7 +231,7 @@ Design points as built:
 - **Progress tracking** moved from the per-FrameProcessor file position to the reader's file position, since only the reader held the handle.
 - **Cancellation**: cancel aborted the reader and all workers and closed every queue, so no thread could deadlock on a blocking enqueue/dequeue.
 
-**Qt signal emission** was already windowed correctly: `recordTimeSample()` emits once per output window (at 10 Hz, that is one emission per ~970 frames at 20 Mbps / 2047 bits per frame). No batching change was needed there.
+**Window output** is already windowed correctly: `FrameProcessor::recordTimeSample()` appends once per output window (at 10 Hz, that is one sample per ~970 frames at 20 Mbps / 2047 bits per frame). No batching change was needed there.
 
 ---
 
@@ -240,29 +240,22 @@ Design points as built:
 **Lock percentage definition (current implementation):**
 
 ```text
-lock_pct = (frames_locked_in_window / expected_frames_in_window) × 100
+lock_pct = (valid_bits_in_window / total_bits_in_window) × 100
 ```
 
-The denominator is computed from the **actual bit span traversed**, not a theoretical time-based estimate. As each locked frame is recorded, the scanner captures the global bit offset of the first frame (`first_frame_bit_in_window`) and continuously updates the last frame (`last_frame_bit_in_window`) in the current averaging window. When the window closes:
+It is a pure **bit-domain** quantity, counted bit by bit in `FrameProcessor::scanBit()` while the stream is scanned. Every bit that falls inside the processing window increments `total_bits_in_window`; a bit that arrives while the scanner is in lock (`sync_count >= min_syncs`) also increments `valid_bits_in_window`. So the lock figure is the share of the window's bits that lay in a locked stretch, whatever the frame length: it is not a count of frames, and it does not depend on a bit rate. `valid_bits_in_window` is only incremented under the same guard as `total_bits_in_window`, so it can never exceed it and the result is bounded at 100 without a clamp.
 
-```text
-bit_span           = last_frame_bit_in_window − next_expected_frame_bit + bits_in_frame
-expected_in_window = bit_span / bits_in_frame
-lock_pct           = (n_samples / expected_in_window) × 100        // capped at 100%
-next_expected_frame_bit = last_frame_bit_in_window + bits_in_frame  // carried to next window
-```
+**Per output window (`samplePeriodSec`):** `closeElapsedWindows()` closes every window the current bit's time has passed, in order:
 
-`next_expected_frame_bit` carries across windows so there is neither a gap nor a double-count at window seams: one window's expected-frame denominator begins exactly where the previous window's last frame ended.
+- A window that saw bits records `lock_pct` as above, with `n_samples` (the frames locked in it) and the accumulated missed frames so far. A window with bits but no lock records 0.0 here, and its missed frames were already counted by the in-stream rollover in `scanBit()`, so nothing is extrapolated for it.
+- A window that saw **no bits at all** is a genuine recording gap: it records 0.0 and adds the frames the data rate says were lost (`samplePeriodSec × bit rate / bits_in_frame`); this is the only place the data rate enters, and only for missed frames, never for the lock percentage.
+- The counters reset and the window advances by one `samplePeriodSec`; the last, partly filled window is flushed when the stream ends.
 
-**Why bit-span instead of `time × bit_rate`:** the lock percentage is now a pure bit-domain quantity — locked frames divided by the number of `bits_in_frame`-sized frame slots that physically fit in the bitstream span actually covered. **Time is used only to delimit the averaging window** (`sample_rate_hz`); it no longer enters the numerator or denominator. This removes the lock figure's dependency on an accurate TMATS / `dataRateMbps` bit rate — the value is correct even if the configured rate is slightly off. Lock percentage can still nudge above 100% (e.g. a boundary frame counted twice across a seam); the output is capped at 100%.
+Time delimits the averaging window and bounds the processing range (`startSeconds`, `stopSeconds`; the ABI sets them to the whole recording); it does not enter the numerator or the denominator.
 
-**Per output window (set by `sample_rate_hz`):**
+**Why bit-span instead of `time × bit_rate`:** the value stays correct even if the configured rate (TMATS `dataRateMbps`) is slightly off, because only the bits actually scanned are counted.
 
-- Frames locked in window (`n_samples`)
-- Expected frames from bit span (`bit_span / bits_in_frame`)
-- Lock percentage (capped at 100%)
-
-These map to `ProcessedStreamData` series entries emitted by `FrameProcessor`.
+These values become the `ProcessedStreamData` series entries (`lockPercent`, `accumulatedMissedFrames`) that `FrameProcessor` emits.
 
 ---
 
