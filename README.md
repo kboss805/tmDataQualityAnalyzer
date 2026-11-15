@@ -47,7 +47,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 
 ### Batch Processing & Templates
 
-- **Processing Templates**: Save one configured file's complete per-stream setup — modes, frame-sync/SNR parameters, calibration references, plus each series' custom name and color — as a file-path-independent template (☰ menu > File > **Save Template**)
+- **Processing Templates**: Save one configured file's complete per-stream setup — modes, frame-sync/SNR parameters, calibration references, plus each series' custom name and color — as a file-path-independent template (☰ menu > File > **Save Template…**)
 - **Apply Template to Many Files**: Run a saved template against any number of `.ch10` files in one action (☰ menu > File > **Process Multiple Files…**). Each file's PCM channel-ID set must exactly match the template's; non-matching files are flagged (with the missing/extra channels) and skipped
 - **Retain-All + Plot File Selector**: Every processed file stays in memory; the plot's **Plot File** selector switches between any single file's results and an "All files (overlaid)" comparison view
 - **Optional Per-File Export**: A batch run can auto-write, per file, a CSV plus Frame Sync Lock and Missed Frames plot images to a chosen folder

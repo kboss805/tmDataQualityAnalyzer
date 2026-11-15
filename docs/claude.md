@@ -53,7 +53,7 @@ The stories below follow the workflow a first-time user takes through the applic
 **Acceptance Criteria:**
 
 - [x] The user can batch-process multiple `.ch10` files in one action by applying a saved template (the hamburger menu's **File > Process Multiple Files…**): pick a template, then multi-select the files.
-- [x] The per-stream processing is configured **once** when the template is created (**File > Open** a file → configure in the Configure Streams dialog → **File > Save Template**); that configuration is applied to every selected file.
+- [x] The per-stream processing is configured **once** when the template is created (**File > Open** a file → configure in the Configure Streams dialog → **File > Save Template…**); that configuration is applied to every selected file.
 - [x] Files are matched to the template by PCM channel ID; a file whose channel-ID set differs is skipped and the user is told which channels are missing/extra.
 - [x] All processed files are retained in memory; the user can optionally also export a CSV + Frame Sync Lock and Missed Frames images per file to a chosen folder, auto-named from each source file.
 - [x] Progress is shown while the batch runs, and a summary reports how many files were processed vs. skipped.
@@ -404,7 +404,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The user can toggle between light and dark theme via a menu action.
 - [x] The selected theme persists across application restarts.
 - [x] All windows, dialogs, and the plot update to match the selected theme immediately.
-- [x] The hamburger menu opens four submenus, as a conventional application's menu does: **File** (Open…, Recent Files, then Process Multiple Files… and Save Template), **Import/Export** (Import from CSV…, Export…), **Settings** (the theme) and **Help** (tmDataQualityAnalyzer Help, then About). There is no Exit: the window's close button is it.
+- [x] The hamburger menu opens four submenus, as a conventional application's menu does: **File** (Open…, Recent Files, then Process Multiple Files… and Save Template…), **Import/Export** (Import from CSV…, Export…), **Settings** (the theme) and **Help** (tmDataQualityAnalyzer Help, then About). There is no Exit: the window's close button is it.
 - [x] The theme is two entries of their own under Settings, **Light Theme** and **Dark Theme**, the one in use checked (a radio mark); choosing one switches every window at once and is remembered, and choosing the one in use changes nothing. Dark is the default.
 - [x] The main menu has no icons: its entries are text under section headings, as VS Code's are (the icons came from the toolbar the menu replaced, and four of nine entries had one). The title bar's own buttons are font glyphs that take the theme's colours.
 - [x] The menus (the main menu and the plot's) are drawn as VS Code's are: a row is 28 px high with 12 px of text padding at the sides and sits inset 4 px from the menu's edges; the row under the pointer, or reached by the keys, or whose submenu is open, is the accent (`AccentFillColorDefault`) with its text, its shortcut and its chevron white (`TextOnAccentFillColorPrimary`); the shortcut is the secondary text until then. They are the `MenuFlyoutItem*` brushes as aliases of the tokens, the paddings as resources, and a margin on every `MenuItem`.
@@ -476,7 +476,7 @@ all share one elapsed-seconds X axis based at the earliest sample of any of them
 one processing run at a time: a batch is N runs into one accumulating plot. The plot's **Plot File** selector shows one
 recording or all (`PlotViewModel.SetVisibleSource`), orthogonal to per-series visibility and the View Mode.
 
-**Processing templates** (US1.1, `docs/design/processing-template-design.md`): **File > Save Template** captures one processed
+**Processing templates** (US1.1, `docs/design/processing-template-design.md`): **File > Save Template…** captures one processed
 recording's rows of Configure Streams, its time channel's place and byte order, and each series' name and colour
 (`TemplateFile`, the same JSON v2.x wrote); **File > Process Multiple Files…** checks each chosen file's PCM channel ids
 against the template's (the core's `TemplateMatcher`, exact-set match), then runs every match in turn (`BatchRunner`),
