@@ -12,6 +12,41 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The menus as VS Code draws them: no icons, an accent row, compact and inset
+
+Asked for after #281: the icons in the main menu came from the toolbar the menu replaced and are not needed in a menu, and
+the rest of VS Code's menu look with them. Chosen from the parked VS Code items (the others, 13 px text, VS Code's typeface and
+the light title-bar hover, were not asked for and are not done).
+
+- **No icons.** Four of the menu's nine entries had one (Open, Save as Template, Import CSV, Export): uneven, and a gutter wasted
+  on the rest. The four are gone, with their eight drawings (`OpenIcon`, `SaveIcon`, and `ExportIcon` and `ImportIcon` in each theme's
+  shade) from `App.axaml`. The title bar's buttons are font glyphs and are not touched.
+- **The accent row.** The row under the pointer (or reached by the keys, or whose submenu is open) is the accent, `#0078D4` dark and
+  `#005FB8` light, with its text, its shortcut and its chevron white, as VS Code's `menu.selectionBackground` is; Fluent's was a
+  subtle grey. The shortcut ("Ctrl+O") is the secondary text until then. New token `TextOnAccentFillColorPrimary` (white, WinUI's
+  name), and `MenuFlyoutItemBackgroundPointerOver/Pressed`, `MenuFlyoutItemForeground*`, `MenuFlyoutItemKeyboardAcceleratorTextForeground*` and
+  `MenuFlyoutSubItemChevron*` are aliases of the tokens, as every brush Fluent looks its controls up under is.
+- **Compact and inset.** A row is 28 px (was 30): `MenuFlyoutItemThemePadding` and `...Narrow` are `12,4,12,5` (Fluent's was `11,4,11,7`),
+  and every `MenuItem` has a margin of `4,0` so the highlight sits 4 px inside the menu's edges, with the corners of the control radius.
+  The presenter's own items margin is set in its template and could not be changed by a style or by the resource that looks as if it
+  sets it, so the margin is on the items. It reaches the plot's right-click menu too, which is a menu of the same items.
+
+**Tests:** new `MenuStyleTests` (4 cases): the main menu, and its Help submenu, have no icons; a row under the pointer is the accent
+as drawn, in both themes, with white text and a white shortcut, and at rest the layer colour, the text colour and the dim shortcut; a row is
+28 high and at least 4 px inside the menu's edges. `EachThemesTokensAreFluentsNamesInVsCodesValues` has the new token (both themes) and
+`EveryBrushFluentLooksItsControlsUpUnderIsAnAliasOfTheTokenForItsJob` the new aliases. The assertions about the four icon
+drawings are gone with them.
+
+**Mutation check** (`eng\mutate.ps1`, app suite, 11 mutants): **11 of 11 caught**: a hovered row, a pressed row, its text, its shortcut (at
+rest and on the accent) and its chevron in the wrong token, in either theme; the rows 30 high again; the rows to the menu's edges; an
+icon back in the menu; and the text on the accent off-white. (Each alias is in both themes' dictionaries, so a mutant's text runs to the
+end of its dictionary to match once.)
+
+**Baselines:** app **637 passed / 0 failed / 34 not run** (was 633: the four menu tests; the icon assertions were part of a test that stays).
+
+**The manual:** figures re-rendered and the manuals re-embedded: the menus have no icons, and are compact; `walk-cust-02-snr-tree` was
+restored, as before.
+
 #### Dialogs: the stream dialog's limits stated once, and the dead ends of the audit's dialog findings
 
 Found by the whole-tree cleanup audit (PR 7 of its list: B6, X1, D9); each finding was re-checked against the tree as of
