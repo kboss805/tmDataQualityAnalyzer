@@ -52,8 +52,8 @@ The stories below follow the workflow a first-time user takes through the applic
 
 **Acceptance Criteria:**
 
-- [x] The user can batch-process multiple `.ch10` files in one action by applying a saved template (the hamburger menu's Process section, **Apply Template to Files…**): pick a template, then multi-select the files.
-- [x] The per-stream processing is configured **once** when the template is created (**Open** a file → configure in the Configure Streams dialog → **Save as Template…**); that configuration is applied to every selected file.
+- [x] The user can batch-process multiple `.ch10` files in one action by applying a saved template (the hamburger menu's **File > Process Multiple Files…**): pick a template, then multi-select the files.
+- [x] The per-stream processing is configured **once** when the template is created (**File > Open** a file → configure in the Configure Streams dialog → **File > Save Template**); that configuration is applied to every selected file.
 - [x] Files are matched to the template by PCM channel ID; a file whose channel-ID set differs is skipped and the user is told which channels are missing/extra.
 - [x] All processed files are retained in memory; the user can optionally also export a CSV + Frame Sync Lock and Missed Frames images per file to a chosen folder, auto-named from each source file.
 - [x] Progress is shown while the batch runs, and a summary reports how many files were processed vs. skipped.
@@ -349,9 +349,9 @@ The stories below follow the workflow a first-time user takes through the applic
 
 **Acceptance Criteria:**
 
-- [x] The user can open a previously exported CSV file via the menu's **Import CSV…** entry (Import/Export section), drag-and-drop of a `.csv` file, or the Recent Files list.
-- [x] Import CSV… opens a CSV-only file dialog and is disabled while processing.
-- [x] **Open…** remains Chapter-10-only; Import CSV… is the dedicated CSV entry point.
+- [x] The user can open a previously exported CSV file via the menu's **Import/Export > Import from CSV…** entry, drag-and-drop of a `.csv` file, or the Recent Files list.
+- [x] Import from CSV… opens a CSV-only file dialog and is disabled while processing.
+- [x] **Open…** remains Chapter-10-only; Import from CSV… is the dedicated CSV entry point.
 - [x] Importing a CSV bypasses the Configure Streams dialog and processing pipeline, parsing the file straight into the plot.
 - [x] The importer accepts the application's own export format: a `Time (DOY:HH:MM:SS.mmm)` first column followed by one column per series.
 - [x] Frame Sync Lock (`Lock (%)` suffix), Accumulated Missed Frames (`Accumulated Missed Frames` suffix), and Receiver SNR (`_RCVR<N>`) series are recognized by their column headers and routed to the correct axis, metric type, and color.
@@ -404,6 +404,8 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The user can toggle between light and dark theme via a menu action.
 - [x] The selected theme persists across application restarts.
 - [x] All windows, dialogs, and the plot update to match the selected theme immediately.
+- [x] The hamburger menu opens four submenus, as a conventional application's menu does: **File** (Open…, Recent Files, then Process Multiple Files… and Save Template), **Import/Export** (Import from CSV…, Export…), **Settings** (the theme) and **Help** (tmDataQualityAnalyzer Help, then About). There is no Exit: the window's close button is it.
+- [x] The theme is two entries of their own under Settings, **Light Theme** and **Dark Theme**, the one in use checked (a radio mark); choosing one switches every window at once and is remembered, and choosing the one in use changes nothing. Dark is the default.
 - [x] The main menu has no icons: its entries are text under section headings, as VS Code's are (the icons came from the toolbar the menu replaced, and four of nine entries had one). The title bar's own buttons are font glyphs that take the theme's colours.
 - [x] The menus (the main menu and the plot's) are drawn as VS Code's are: a row is 28 px high with 12 px of text padding at the sides and sits inset 4 px from the menu's edges; the row under the pointer, or reached by the keys, or whose submenu is open, is the accent (`AccentFillColorDefault`) with its text, its shortcut and its chevron white (`TextOnAccentFillColorPrimary`); the shortcut is the secondary text until then. They are the `MenuFlyoutItem*` brushes as aliases of the tokens, the paddings as resources, and a margin on every `MenuItem`.
 - [x] The application is themed as VS Code's Dark Modern and Light Modern: the main window's chrome (under its title bar, and the log sidebar) is #181818 / #F8F8F8, not black, and the content (the chart, and every dialog) a shade lighter than it, #1F1F1F / white; the title bar, the log and the chart are flush, with no gaps, borders or rounded corners, divided by one-pixel lines (#2B2B2B / #E5E5E5, one under the title bar and one between the log and the chart). Text is #CCCCCC / #3B3B3B, the accent #0078D4 / #005FB8, and the controls Fluent draws (inputs, dropdowns, secondary buttons, checkboxes, menus, tooltips) take VS Code's fills and borders.
@@ -474,9 +476,9 @@ all share one elapsed-seconds X axis based at the earliest sample of any of them
 one processing run at a time: a batch is N runs into one accumulating plot. The plot's **Plot File** selector shows one
 recording or all (`PlotViewModel.SetVisibleSource`), orthogonal to per-series visibility and the View Mode.
 
-**Processing templates** (US1.1, `docs/design/processing-template-design.md`): **Save as Template…** captures one processed
+**Processing templates** (US1.1, `docs/design/processing-template-design.md`): **File > Save Template** captures one processed
 recording's rows of Configure Streams, its time channel's place and byte order, and each series' name and colour
-(`TemplateFile`, the same JSON v2.x wrote); **Apply Template to Files…** checks each chosen file's PCM channel ids
+(`TemplateFile`, the same JSON v2.x wrote); **File > Process Multiple Files…** checks each chosen file's PCM channel ids
 against the template's (the core's `TemplateMatcher`, exact-set match), then runs every match in turn (`BatchRunner`),
 optionally exporting a CSV and the plot images per file. A template stores only a calibration's inputs, never its
 profile, so a batch processes with the linear calibration.
@@ -486,13 +488,13 @@ profile, so a batch processes with the linear calibration.
 #### The application (`src/TmDq.App`)
 
 - **`MainWindow` / `MainWindowViewModel`** (`ViewModels`, `Views`): the shell - its own title bar (snap layouts on the
-  maximize button), the hamburger menu (Process, Import/Export, Settings, Help, Exit), Recent Files, drag and drop, the
-  log sidebar (Ctrl+B), the themes, and the commands behind them: Open, Import CSV, Export, Save as Template, Apply
-  Template. Three jobs are types of their own: `ShellPreferences` (Recent Files, the theme, the sidebar, the last
+  maximize button), the hamburger menu (four submenus: File, Import/Export, Settings, Help; no Exit), Recent Files, drag and drop, the
+  log sidebar (Ctrl+B), the themes, and the commands behind them: Open, Import from CSV, Export, Save Template, Process
+  Multiple Files. Three jobs are types of their own: `ShellPreferences` (Recent Files, the theme, the sidebar, the last
   folder, the legend's choice), `SessionExport` (the data, the image and the log written out) and `BatchRunner` (Apply
   Template's batch and each file's export). Its dialogs, pickers, configurator, clock and preferences are handed in as
   one `MainWindowServices`; each service left out has the effect its property states. The hamburger menu is declared
-  in `MainWindow.axaml` and bound to it; only Help and Exit, which act on the window, are click handlers.
+  in `MainWindow.axaml` and bound to it; only the help and About entries, which act on the window, are click handlers.
 - **Menus filled from the data** (Recent Files, Plot File, Readout): a list of `MenuChoice` (a header, a command and
   its parameter, whether it is chosen), shown through the `MenuChoice` and `RadioChoice` item themes in `App.axaml`. A
   choice whose header is `-` is drawn as the menu's separator. A list is made again only when its entries change, so

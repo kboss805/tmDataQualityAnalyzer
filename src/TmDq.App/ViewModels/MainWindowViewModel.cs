@@ -141,10 +141,12 @@ namespace TmDq.App.ViewModels
             set => _shell.IsDarkTheme = value;
         }
 
-        /// <summary>The menu item that switches the theme, named for where it goes.</summary>
-        public string ThemeMenuText => _shell.ThemeMenuText;
+        /// <summary>The light theme, as the Settings menu's Light Theme entry shows it: checked when it is the one in use.</summary>
+        public bool IsLightTheme => _shell.IsLightTheme;
 
-        public IRelayCommand ToggleThemeCommand => _shell.ToggleThemeCommand;
+        public IRelayCommand UseLightThemeCommand => _shell.UseLightThemeCommand;
+
+        public IRelayCommand UseDarkThemeCommand => _shell.UseDarkThemeCommand;
 
         /// <summary>The log sidebar shown (the title bar's toggle, Ctrl+B); the choice is remembered.</summary>
         public bool SidebarVisible

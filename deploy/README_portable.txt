@@ -14,7 +14,7 @@ does.
 
 Documentation: UserManual.html is the full illustrated manual, with a
 walkthrough of each job - open it in any browser, or from the application under
-Help > User Manual.
+Help > tmDataQualityAnalyzer Help.
 
 Source code: https://github.com/kboss805/tmDataQualityAnalyzer
 License:     GPLv3 (see LICENSE.txt); the libraries it uses are listed, with

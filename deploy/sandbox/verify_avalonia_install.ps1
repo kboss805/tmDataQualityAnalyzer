@@ -149,7 +149,7 @@ foreach ($f in 'tmDataQualityAnalyzer.exe', 'tmdq_core.dll', 'libSkiaSharp.dll',
 Check 'the Qt application''s bin\ folder is gone' (-not (Test-Path (Join-Path $app 'bin'))) ''
 Check 'the Qt application''s text guide is gone' (-not (Test-Path (Join-Path $app 'UserGuide.txt'))) ''
 $manualFile = Join-Path $app 'UserManual.html'
-Check 'the full manual (a task v2.x had chosen) is this version''s' ((Test-Path $manualFile) -and ((Get-Content $manualFile -Raw) -match 'Help .{1,3} User Manual') -and ((Get-Content $manualFile -Raw) -notmatch 'Version 2\.')) ''
+Check 'the full manual (a task v2.x had chosen) is this version''s' ((Test-Path $manualFile) -and ((Get-Content $manualFile -Raw) -match 'Help .{1,3} tmDataQualityAnalyzer Help') -and ((Get-Content $manualFile -Raw) -notmatch 'Version 2\.')) ''
 Check 'the user''s edited settings file survived the upgrade' ((Test-Path $userFile) -and ((Get-Content $userFile -Raw) -match [regex]::Escape($marker))) ''
 $command = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\tmDataQualityAnalyzer.ch10\shell\open\command' -ErrorAction SilentlyContinue).'(default)'
 Check '.ch10 opens the new exe' ($command -eq ('"' + $exe + '" "%1"')) ([string]$command)

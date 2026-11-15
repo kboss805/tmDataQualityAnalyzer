@@ -17,9 +17,9 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 
 - **Chapter 10 File Support**: Read, parse, and process IRIG 106 Chapter 10 telemetry files
 - **Channel Selection**: Choose the time channel and one or more PCM channels for processing
-- **Drag-and-Drop**: Drop `.ch10` or exported `.csv` files directly onto the application window, or open them from the ☰ menu (**Open…** for recordings, **Import CSV…** for exports)
-- **Recent Files**: Up to 5 entries under the ☰ menu (Process section), persisted across sessions
-- **CSV Import**: Re-open a CSV this application previously exported straight into the plot — no re-processing of the source `.ch10` file (☰ menu > **Import CSV…**, or drag-and-drop a `.csv`)
+- **Drag-and-Drop**: Drop `.ch10` or exported `.csv` files directly onto the application window, or open them from the ☰ menu (**File > Open…** for recordings, **Import/Export > Import from CSV…** for exports)
+- **Recent Files**: Up to 5 entries under the ☰ menu (File > Recent Files), persisted across sessions
+- **CSV Import**: Re-open a CSV this application previously exported straight into the plot — no re-processing of the source `.ch10` file (☰ menu > Import/Export > **Import from CSV…**, or drag-and-drop a `.csv`)
 
 ### Frame Sync Lock
 
@@ -47,8 +47,8 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 
 ### Batch Processing & Templates
 
-- **Processing Templates**: Save one configured file's complete per-stream setup — modes, frame-sync/SNR parameters, calibration references, plus each series' custom name and color — as a file-path-independent template (☰ menu > **Save as Template…**)
-- **Apply Template to Many Files**: Run a saved template against any number of `.ch10` files in one action (☰ menu > **Apply Template to Files…**). Each file's PCM channel-ID set must exactly match the template's; non-matching files are flagged (with the missing/extra channels) and skipped
+- **Processing Templates**: Save one configured file's complete per-stream setup — modes, frame-sync/SNR parameters, calibration references, plus each series' custom name and color — as a file-path-independent template (☰ menu > File > **Save Template**)
+- **Apply Template to Many Files**: Run a saved template against any number of `.ch10` files in one action (☰ menu > File > **Process Multiple Files…**). Each file's PCM channel-ID set must exactly match the template's; non-matching files are flagged (with the missing/extra channels) and skipped
 - **Retain-All + Plot File Selector**: Every processed file stays in memory; the plot's **Plot File** selector switches between any single file's results and an "All files (overlaid)" comparison view
 - **Optional Per-File Export**: A batch run can auto-write, per file, a CSV plus Frame Sync Lock and Missed Frames plot images to a chosen folder
 
@@ -83,8 +83,8 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **Single Hamburger Menu**: Every command lives in one ☰ menu in the window's title bar, grouped into Process, Import/Export, Settings, and Help sections
 - **Custom Title Bar**: The window's own title bar with minimize/maximize/close buttons; native Windows drag, resize, snap layouts and double-click-maximize are preserved
 - **Toggleable Sidebar**: Show or hide the log sidebar from the title bar or with **Ctrl+B**; the choice persists across sessions
-- **Dark & Light Themes**: Fluent dark and light themes with runtime toggle (Settings section); every window, dialog and the plot follow it, and the menu icons swap per theme
-- **Built-in User Manual**: An HTML user manual opens in the default browser from ☰ menu > Help > **User Manual…**
+- **Dark & Light Themes**: Fluent dark and light themes, chosen under ☰ menu > Settings; every window, dialog and the plot follow it
+- **Built-in User Manual**: An HTML user manual opens in the default browser from ☰ menu > Help > **tmDataQualityAnalyzer Help**
 - **Keyboard Shortcuts**: Ctrl+O (open a file), Ctrl+B (toggle the sidebar), and on the focused chart the arrows, +/-, Home, Backspace, R, V and L
 - **Tooltips**: Descriptive tooltips on plot controls and dialog fields
 

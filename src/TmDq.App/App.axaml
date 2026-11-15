@@ -28,13 +28,6 @@
     <Style Selector="MenuItem">
       <Setter Property="Margin" Value="4,0" />
     </Style>
-    <!-- A section heading in the main menu (plan step 4.8): small and bold, a heading rather than an entry. Here, not on
-         the window, because the menu is a popup of its own. -->
-    <Style Selector="MenuItem.section">
-      <Setter Property="FontSize" Value="11" />
-      <Setter Property="FontWeight" Value="Bold" />
-      <Setter Property="MinHeight" Value="24" />
-    </Style>
   </Application.Styles>
   <Application.Resources>
     <ResourceDictionary>

@@ -131,7 +131,6 @@ namespace TmDq.App.Tests
         private static string Header(object? item) => item switch
         {
             Separator => "-",
-            MenuItem { Classes: var c } m when c.Contains("section") => "[" + m.Header + "]",
             MenuItem m => (string)m.Header!,
             _ => "?",
         };
@@ -139,81 +138,85 @@ namespace TmDq.App.Tests
         private static MenuItem Find(IEnumerable<object?> items, string header) =>
             items.OfType<MenuItem>().Single(m => (string)m.Header! == header);
 
+        /// <summary>An entry of the main menu by its path: its submenu, then the entry ("File", "Open...").</summary>
+        private static MenuItem Entry(MainWindow window, string submenu, string header) => Find(Find(window.MainMenu.Items, submenu).Items, header);
+
         [AvaloniaFact]
-        public async Task TheMenuHoldsItsSectionsHelpAndExit()
+        public async Task TheMenuHoldsFourSubmenusAndNoExit()
         {
             var help = new FakeHelp();
             var picker = new FakeRecordingPicker();
             (MainWindow window, MainWindowViewModel vm) = Show(new MainWindowViewModel(new MainWindowServices { Picker = picker }));
             window.Help = help;
             Menus.Open(window);
-            Assert.Equal(new[]
-            {
-                "[Process]", "Open...", "Recent Files", "Save as Template...", "Apply Template to Files...",
-                "[Import/Export]", "Import CSV...", "Export...",
-                "[Settings]", "Switch to Light Theme",
-                "-", "Help", "-", "Exit",
-            }, window.MainMenu.Items.Select(Header));
-            // A section is a heading: never something to click.
-            Assert.All(window.MainMenu.Items.OfType<MenuItem>().Where(m => m.Classes.Contains("section")), s => Assert.False(s.IsEnabled));
-            MenuItem Item(string h) => window.MainMenu.Items.OfType<MenuItem>().Single(m => (string)m.Header! == h);
+            // File, Import/Export, Settings, Help: each opens its own list; there is no Exit (the window's close button is it).
+            Assert.Equal(new[] { "File", "Import/Export", "Settings", "Help" }, window.MainMenu.Items.Select(Header));
+            Assert.Equal(new[] { "Open...", "Recent Files", "-", "Process Multiple Files...", "Save Template" }, Menus.Headers(Find(window.MainMenu.Items, "File")));
+            Assert.Equal(new[] { "Import from CSV...", "Export..." }, Menus.Headers(Find(window.MainMenu.Items, "Import/Export")));
+            Assert.Equal(new[] { "Light Theme", "Dark Theme" }, Menus.Headers(Find(window.MainMenu.Items, "Settings")));
+            Assert.Equal(new[] { "tmDataQualityAnalyzer Help", "-", "About" }, Menus.Headers(Find(window.MainMenu.Items, "Help")));
             static void Click(MenuItem item) => item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-            Assert.Equal((vm.OpenCommand, vm.SaveTemplateCommand, vm.ApplyTemplateCommand, vm.ImportCsvCommand, vm.ExportCommand, vm.ToggleThemeCommand),
-                         (Item("Open...").Command, Item("Save as Template...").Command, Item("Apply Template to Files...").Command,
-                          Item("Import CSV...").Command, Item("Export...").Command, Item("Switch to Light Theme").Command));
-            Assert.Equal(new KeyGesture(Key.O, KeyModifiers.Control), Item("Open...").InputGesture);
+            Assert.Equal((vm.OpenCommand, vm.ApplyTemplateCommand, vm.SaveTemplateCommand, vm.ImportCsvCommand, vm.ExportCommand),
+                         (Entry(window, "File", "Open...").Command, Entry(window, "File", "Process Multiple Files...").Command,
+                          Entry(window, "File", "Save Template").Command, Entry(window, "Import/Export", "Import from CSV...").Command,
+                          Entry(window, "Import/Export", "Export...").Command));
+            Assert.Equal(new KeyGesture(Key.O, KeyModifiers.Control), Entry(window, "File", "Open...").InputGesture);
             Assert.Equal(("Import a previously exported CSV file", "Export plot data and images"),
-                         ((string)ToolTip.GetTip(Item("Import CSV..."))!, (string)ToolTip.GetTip(Item("Export..."))!));
-            Assert.NotNull(ToolTip.GetTip(Item("Save as Template...")));
-            Assert.NotNull(ToolTip.GetTip(Item("Apply Template to Files...")));
-            // No icons (they came from the toolbar the menu replaced): text only. MenuStyleTests holds this for every entry.
-            Assert.All(new[] { "Open...", "Save as Template...", "Apply Template to Files...", "Import CSV...", "Export..." }, h => Assert.Null(Item(h).Icon));
+                         ((string)ToolTip.GetTip(Entry(window, "Import/Export", "Import from CSV..."))!, (string)ToolTip.GetTip(Entry(window, "Import/Export", "Export..."))!));
+            Assert.NotNull(ToolTip.GetTip(Entry(window, "File", "Save Template")));
+            Assert.NotNull(ToolTip.GetTip(Entry(window, "File", "Process Multiple Files...")));
 
-            // Help holds the manual and About, and neither is at the top.
-            MenuItem helpMenu = Item("Help");
-            Assert.Equal(new[] { "User Manual...", "About..." }, helpMenu.Items.Select(Header));
-            Click(Find(helpMenu.Items, "User Manual..."));
-            Click(Find(helpMenu.Items, "About..."));
+            // The help and About are the window's: each asks the help service.
+            MenuItem helpMenu = Find(window.MainMenu.Items, "Help");
+            Click(Find(helpMenu.Items, "tmDataQualityAnalyzer Help"));
+            Click(Find(helpMenu.Items, "About"));
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(new[] { "manual", "about" }, help.Asked);
 
-            // The theme item says where it goes, and goes there: the same item, renamed.
-            MenuItem theme = Item("Switch to Light Theme");
-            theme.Command!.Execute(null);
-            Assert.Equal("Switch to Dark Theme", theme.Header);
-            Assert.False(vm.IsDarkTheme);
-
-            // Open is the view model's; Exit, the last entry, closes the window.
-            Item("Open...").Command!.Execute(null);
+            // Open is the view model's.
+            Entry(window, "File", "Open...").Command!.Execute(null);
             Assert.Equal(1, picker.Asked);
-            bool closed = false;
-            window.Closed += (_, _) => closed = true;
-            Click(Item("Exit"));
-            Assert.True(closed);
+            window.Close();
         }
 
         [AvaloniaFact]
-        public void TheMenuIsDeclaredOnceAndItsHeadingsAreSmallAndBold()
+        public void TheThemeIsTwoEntriesOfItsOwnAndTheOneInUseIsChecked()
         {
-            (MainWindow window, MainWindowViewModel vm) = Show();
+            var store = new PreferencesStore(new Preferences());
+            (MainWindow window, MainWindowViewModel vm) = Show(new MainWindowViewModel(new MainWindowServices { Preferences = store }));
+            Menus.Open(window);
+            MenuItem light = Entry(window, "Settings", "Light Theme"), dark = Entry(window, "Settings", "Dark Theme");
+            // Two radio entries (a check mark on one), bound to the view model's commands, not one entry that says where it goes.
+            Assert.Equal((MenuItemToggleType.Radio, MenuItemToggleType.Radio), (light.ToggleType, dark.ToggleType));
+            Assert.Equal((vm.UseLightThemeCommand, vm.UseDarkThemeCommand), (light.Command, dark.Command));
+            // Dark is the default (v2.x's too).
+            Assert.Equal((false, true), (light.IsChecked, dark.IsChecked));
+
+            light.Command!.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal((true, false, false, "light"), (light.IsChecked, dark.IsChecked, vm.IsDarkTheme, store.Current.Theme));
+            Assert.Equal(ThemeVariant.Light, window.ActualThemeVariant);   // the window follows
+
+            dark.Command!.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal((false, true, true, "dark"), (light.IsChecked, dark.IsChecked, vm.IsDarkTheme, store.Current.Theme));
+
+            // Choosing the one in use changes nothing.
+            dark.Command.Execute(null);
+            Assert.Equal((false, true), (light.IsChecked, dark.IsChecked));
+            window.Close();
+        }
+
+        [AvaloniaFact]
+        public void TheMenuIsDeclaredOnceAndOpensTheSameItemsEachTime()
+        {
+            (MainWindow window, _) = Show();
             // The same items each time it opens: bound, not built.
             List<object?> first = Menus.Open(window).Items.ToList();
             window.MainMenu.Hide();
-            Assert.Equal(14, first.Count);
+            Assert.Equal(4, first.Count);
             Assert.Equal(first, Menus.Open(window).Items.ToList());
             window.MainMenu.Hide();
-
-            // A section's heading is small and bold wherever the menu is shown (the style is the application's: a menu is
-            // a popup of its own).
-            var items = window.MainMenu.Items.ToList();
-            window.MainMenu.Items.Clear();
-            var host = new Window { Content = new MenuFlyoutPresenter { ItemsSource = items, DataContext = vm } };
-            host.Show();
-            Dispatcher.UIThread.RunJobs();
-            var heading = (MenuItem)items[0]!;
-            Assert.Equal((FontWeight.Bold, 11.0), (heading.FontWeight, heading.FontSize));
-            Assert.NotEqual(FontWeight.Bold, ((MenuItem)items[1]!).FontWeight);
-            host.Close();
             window.Close();
         }
 
@@ -240,7 +243,7 @@ namespace TmDq.App.Tests
         {
             var store = new PreferencesStore(new Preferences());
             (MainWindow window, MainWindowViewModel vm) = Show(new MainWindowViewModel(new MainWindowServices { Preferences = store }));
-            MenuItem recent = Find(Menus.Open(window).Items, "Recent Files");
+            MenuItem recent = Find(Find(Menus.Open(window).Items, "File").Items, "Recent Files");
             MenuItem none = Assert.IsType<MenuItem>(Assert.Single(Menus.Entries(recent)));
             Assert.Equal((MainWindowViewModel.NoRecentFiles, false), ((string)none.Header!, none.IsEnabled));
             window.Close();
@@ -248,7 +251,7 @@ namespace TmDq.App.Tests
             // Two files remembered: each by its name, newest first, and the menu follows a change while it is open.
             store.Update(p => p with { RecentFiles = new[] { @"C:\data\flight 2.ch10", @"D:\out\export.csv" } });
             (window, vm) = Show(new MainWindowViewModel(new MainWindowServices { Preferences = store }));
-            recent = Find(Menus.Open(window).Items, "Recent Files");
+            recent = Find(Find(Menus.Open(window).Items, "File").Items, "Recent Files");
             Assert.Equal(new[] { "flight 2.ch10", "export.csv", "-", "Clear Recent Files" }, Menus.Headers(recent));
             IReadOnlyList<object?> entries = Menus.Entries(recent);
             var first = (MenuItem)entries[0]!;
