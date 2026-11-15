@@ -14,9 +14,30 @@
 #include <filesystem>
 #include <string>
 
+#include "metrictype.h"
 #include "tmdq_abi.h"
 
 namespace tmdq {
+
+/// The size of tmdq_callbacks as first released: what a run or an extraction accepts from a host.
+inline constexpr std::size_t kCallbacksMinimum = sizeof(tmdq_callbacks);
+
+// The core's MetricType is numbered as the ABI's.
+static_assert(static_cast<int>(MetricType::SNR) == TMDQ_METRIC_SNR);
+static_assert(static_cast<int>(MetricType::FrameSyncLock) == TMDQ_METRIC_FRAME_SYNC_LOCK);
+static_assert(static_cast<int>(MetricType::AccumulatedMissedFrames) == TMDQ_METRIC_ACCUMULATED_MISSED_FRAMES);
+
+/// A wire metric as the core's, or false for a number that is none.
+inline bool toMetricType(int32_t value, MetricType& out)
+{
+    switch (value)
+    {
+        case TMDQ_METRIC_SNR:                       out = MetricType::SNR; return true;
+        case TMDQ_METRIC_FRAME_SYNC_LOCK:           out = MetricType::FrameSyncLock; return true;
+        case TMDQ_METRIC_ACCUMULATED_MISSED_FRAMES: out = MetricType::AccumulatedMissedFrames; return true;
+        default:                                    return false;
+    }
+}
 
 /// Records the calling thread's last error (what tmdq_last_error returns) / clears it.
 void setError(const std::string& message);

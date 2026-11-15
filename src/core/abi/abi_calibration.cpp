@@ -26,7 +26,6 @@
 namespace {
 
 constexpr std::size_t kCalibrationRequestMinimum = sizeof(tmdq_calibration_request);
-constexpr std::size_t kCallbacksMinimum          = sizeof(tmdq_callbacks);
 constexpr std::size_t kInfoMinimum               = sizeof(tmdq_calibration_info);
 constexpr std::size_t kChannelMinimum            = sizeof(tmdq_calibration_channel);
 
@@ -34,6 +33,13 @@ constexpr std::size_t kChannelMinimum            = sizeof(tmdq_calibration_chann
 static_assert(sizeof(CalibrationPoint) == sizeof(tmdq_cal_point), "CalibrationPoint and tmdq_cal_point differ in size");
 static_assert(offsetof(CalibrationPoint, rawAvg) == offsetof(tmdq_cal_point, raw_avg), "raw_avg is not where rawAvg is");
 static_assert(offsetof(CalibrationPoint, trueDb) == offsetof(tmdq_cal_point, true_db), "true_db is not where trueDb is");
+
+// The core's CalibrationOutcome is numbered as the ABI's; a channel's outcome is handed over as that number.
+static_assert(static_cast<int>(CalibrationOutcome::Calibrated) == TMDQ_CAL_CALIBRATED);
+static_assert(static_cast<int>(CalibrationOutcome::NoData) == TMDQ_CAL_NO_DATA);
+static_assert(static_cast<int>(CalibrationOutcome::FlatNoSignal) == TMDQ_CAL_FLAT_NO_SIGNAL);
+static_assert(static_cast<int>(CalibrationOutcome::TooFewPlateaus) == TMDQ_CAL_TOO_FEW_PLATEAUS);
+static_assert(static_cast<int>(CalibrationOutcome::NoMonotonicSweep) == TMDQ_CAL_NO_MONOTONIC_SWEEP);
 
 } // namespace
 
@@ -143,7 +149,7 @@ int32_t tmdq_calibration_start(const tmdq_calibration_request* request, const tm
         }
 
         tmdq_callbacks cb{};
-        if (callbacks && !tmdq::readStruct(callbacks, kCallbacksMinimum, cb))
+        if (callbacks && !tmdq::readStruct(callbacks, tmdq::kCallbacksMinimum, cb))
         {
             tmdq::setError("a callbacks struct_size that is too small");
             return TMDQ_ERR_BADARG;
@@ -208,7 +214,11 @@ void tmdq_calibration_wait(tmdq_calibration* calibration)
 {
     if (calibration)
     {
-        calibration->extractor.wait();
+        // As tmdq_run_wait: from the extraction's own thread the join throws, and is reported as a last error.
+        (void)tmdq::guarded("tmdq_calibration_wait", [&]() -> int32_t {
+            calibration->extractor.wait();
+            return TMDQ_OK;
+        });
     }
 }
 

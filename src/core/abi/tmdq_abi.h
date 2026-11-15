@@ -219,7 +219,9 @@ typedef struct tmdq_stream_result tmdq_stream_result;   ///< One stream's finish
 
 /// Where a run reports to. Any member may be NULL. The functions are called from the library's own
 /// threads (see tmdq_run_start for which) and must not throw. A callback must NOT call tmdq_run_free
-/// or tmdq_run_wait on its own run (they wait for the thread the callback is running on).
+/// or tmdq_run_wait on its own run (they wait for the thread the callback is running on). From `progress` and
+/// `finished`, which come from the reader's thread, tmdq_run_wait returns at once with the reason as the last error;
+/// from a stream's thread it would wait for itself.
 typedef struct tmdq_callbacks
 {
     uint32_t struct_size;
@@ -841,7 +843,8 @@ TMDQ_API int32_t tmdq_chart_usable_range(double lower, double upper);
 TMDQ_API int32_t tmdq_chart_transform(const tmdq_chart_view* view, int32_t kind, double value, double* out);
 /// @p count (at least 2) evenly spaced values from @p lower to @p upper, both ends included; none for a range that is
 /// not usable. Written into @p ticks, snprintf-style: the return is how many there are, and at most @p capacity are
-/// written. -1 for a negative capacity or a NULL buffer with a positive one.
+/// written. -1 for a negative capacity, a NULL buffer with a positive one, or a @p count above 65,536 (more than a chart
+/// has pixels).
 TMDQ_API int32_t tmdq_chart_ticks(double lower, double upper, int32_t count, double* ticks, int32_t capacity);
 /// Ticks for a time axis: a round step at least the span divided evenly into @p count, on the round clock times inside
 /// [@p lower, @p upper], @p origin being the clock time of x = 0 (below a second a step, tmdq_chart_ticks). Written

@@ -12,6 +12,36 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Nothing leaves the ABI as an exception; the ABI's duplicated pieces are one
+
+The header promises "Nothing throws across the boundary", and four exports could break it (found by the whole-tree cleanup
+audit, read from the code, not seen to fail from a host). A C++ exception unwinding into managed code is undefined, so each
+now answers with a status or a last error.
+
+- **`tmdq_run_wait` and `tmdq_calibration_wait`** join the run's driver thread, and `progress`, `log` (from the reader) and
+  `finished` are all delivered on it, so a host that waited from one joined its own thread and `std::thread::join` threw.
+  The header already forbade the call; now it returns at once with `exception in tmdq_run_wait: ...` as the last error. A
+  wait from a stream's callback would still wait for itself, and the header says so.
+- **`tmdq_chart_ticks` and `tmdq_chart_time_ticks`** built `max(2, count)` doubles with no guard, so a large count threw
+  `std::bad_alloc`. A count above **65,536** (more ticks than a chart has pixels; the app asks for under ten) is now refused
+  with -1 and "a tick count above 65536 is not an axis", before anything is built, and the call is guarded as well. This is
+  the one narrowing of a documented contract here (the header's line for the two says so); the ABI revision is unchanged.
+- **`tmdq_stream_key_equal`** copies two labels into strings and is guarded now (out-of-memory only).
+- **`tmdq_chart_geometry_indexed`** reported its exceptions under its sibling's name, `tmdq_chart_geometry`.
+- **Written once:** `toMetricType` (it was in `abi_formats.cpp` and `abi_series.cpp`, verbatim, with its `static_assert`s
+  beside only one copy) and `kCallbacksMinimum` (`abi_run.cpp`, `abi_calibration.cpp`) are in `abi_internal.h`; the
+  calibration outcome, a bare `static_cast` before, is held to the ABI's numbering by `static_assert`s as the metric is.
+
+**Checked:** three native cases, each red against the old code: a run and a calibration waited on from their own `finished`
+callback (the test sees the exception that used to leave, and the last error that replaces it), and a tick count at and
+over the bound. `eng\mutate.ps1` with `eng/mutants/abi-boundary-guards.json` (native, 10): **8 CAUGHT, 1 COMPILE** (the ABI's
+outcome renumbered, which the new asserts refuse) **and 1 equivalent survivor**: the ticks' result mapped to 0 instead of -1
+when guarded code throws, which nothing can reach with the bound in front. The key compare's guard has no test of its own
+(only an out-of-memory throws there). Not changed: the other ABI boilerplate the audit listed (the repeated "null output or
+a struct_size that is too small" text, the index-wrap cast).
+
+Native baseline **495 test cases** (was 492; 1 skipped). Managed and app unchanged.
+
 #### The packet reader no longer crashes on a TMATS source that lacks a field
 
 Found by the whole-tree cleanup audit and confirmed by a test that crashed before the fix. `Ch10PacketReader::prepare()`
