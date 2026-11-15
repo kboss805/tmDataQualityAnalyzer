@@ -126,8 +126,7 @@ if ($FixtureMB -lt 600) {
     Write-Host "FAILED - that is the committed sample, not the full recording." -ForegroundColor Red
     Write-Host "It holds PCM data for channels 13 and 15 only; 14 and 16 are in its TMATS" -ForegroundColor Red
     Write-Host "with nothing behind them, so the benchmark cannot time four streams and would" -ForegroundColor Red
-    Write-Host "fail. Put 'prn_testfile, full.ch10' (~640 MB, gitignored) beside it, or set" -ForegroundColor Red
-    Write-Host "TMDQA_CH10_FULL and overlay it onto the sample path as CI does." -ForegroundColor Red
+    Write-Host "fail. Put 'prn_testfile, full.ch10' (~640 MB, gitignored) beside it." -ForegroundColor Red
     exit 1
 }
 Write-Host ("  cores     {0}" -f [Environment]::ProcessorCount)
@@ -261,7 +260,7 @@ if (-not $summary) {
     exit 1
 }
 $m = $summary.Matches[0]
-$ran = [int]$m.Groups[1].Value; $passed = [int]$m.Groups[2].Value; $failed = [int]$m.Groups[3].Value
+$passed = [int]$m.Groups[2].Value; $failed = [int]$m.Groups[3].Value
 Write-Host ''
 Write-Host "Results: $passed passed, $failed failed (exit $code)"
 if ($passed -ne 1 -or $failed -ne 0) {

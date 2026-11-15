@@ -663,6 +663,8 @@ namespace TmDq.App.Tests
             s.Window.MouseMove(s.At(p20, a.Center.Y), RawInputModifiers.LeftMouseButton | RawInputModifiers.Control);
             Dispatcher.UIThread.RunJobs();
             Assert.True(s.Chart.ZoomBandVisible);
+            Assert.Equal(60.0, s.Chart.ZoomBand.From, 6);                      // the band runs from where it was pressed
+            Assert.Equal(20.0, s.Chart.ZoomBand.To, 6);                        // to where the pointer is
             Assert.False(s.Chart.CrosshairVisible);                           // no crosshair under the band
             Assert.Equal((0.0, 100.0), (plot.XViewMin, plot.XViewMax));        // nothing moves until it is let go
             s.Window.MouseUp(s.At(p20, a.Center.Y), MouseButton.Left, RawInputModifiers.Control);

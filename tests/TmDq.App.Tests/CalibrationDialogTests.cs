@@ -644,6 +644,8 @@ namespace TmDq.App.Tests
             NumericUpDown start = window.FindControl<NumericUpDown>("ClipStart")!, end = window.FindControl<NumericUpDown>("ClipEnd")!;
             Assert.Equal((0m, 0m, 100000m, "0.0"), (start.Value, start.Minimum, start.Maximum, start.FormatString));
             Assert.Equal((0m, 100000m), (end.Value, end.Maximum));
+            Assert.Equal(ExtractCalibrationViewModel.ClipMaximum, start.Maximum);   // the window states no limit of its own
+            Assert.Equal(ExtractCalibrationViewModel.ClipMaximum, end.Maximum);
             Assert.Same(vm.BrowseStepCommand, window.FindControl<Button>("BrowseStep")!.Command);
             Assert.Same(vm.BrowseCalCommand, window.FindControl<Button>("BrowseCal")!.Command);
             Button ok = window.FindControl<Button>("OkButton")!;

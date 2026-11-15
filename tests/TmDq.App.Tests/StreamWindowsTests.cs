@@ -244,6 +244,29 @@ namespace TmDq.App.Tests
         }
 
         [AvaloniaFact]
+        public void TheSetupDialogSpinBoxesTakeTheirBoundsFromTheRules()
+        {
+            // The window states none of the limits: each is StreamRules' (the one place the rules and their messages
+            // read), through the view model's decimals.
+            var vm = new StreamSetupViewModel(Row(StreamMode.ReceiverChannelInfo), new FakeFilePicker(), null, null);
+            var w = Shown(new StreamSetupWindow { DataContext = vm });
+            var expected = new (string Name, decimal Min, decimal Max)[]
+            {
+                ("BitsPerFrame", StreamRules.MinBitsInMinorFrame, StreamRules.MaxBitsInMinorFrame),
+                ("DataRate", (decimal)StreamRules.MinDataRateMbps, (decimal)StreamRules.MaxDataRateMbps),
+                ("Scale", (decimal)StreamRules.MinScaleDdBPerV, (decimal)StreamRules.MaxScaleDdBPerV),
+                ("NumReceivers", StreamRules.MinReceivers, StreamRules.MaxReceivers),
+                ("ReceiverChannels", StreamRules.MinReceiverChannels, StreamRules.MaxReceiverChannels),
+            };
+            foreach ((string name, decimal min, decimal max) in expected)
+            {
+                NumericUpDown box = w.FindControl<NumericUpDown>(name)!;
+                Assert.Equal((min, max), (box.Minimum, box.Maximum));
+            }
+            w.Close();
+        }
+
+        [AvaloniaFact]
         public void TheReceiverSnrDialogShowsTheReceiverSettingsLaidOut()
         {
             var vm = new StreamSetupViewModel(Row(StreamMode.ReceiverChannelInfo) with { PolarityIndex = 1, SlopeIndex = 2 },
