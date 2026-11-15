@@ -54,8 +54,11 @@ namespace TmDq.App.Models.Templates
     public static class TemplateFile
     {
         public const int CurrentSchemaVersion = 1;
-        public const int MaxSamplePeriodIndex = 2, MaxSlopeIndex = 3;
+        public const int MaxSamplePeriodIndex = 2;
         private const string LockMode = "FrameSyncLock", ReceiverMode = "ReceiverChannelInfo";
+        /// <summary>What a key a template lacks falls back to: a new row's value (the channel and label are required of a template's
+        /// row, so the placeholders here are never read).</summary>
+        private static readonly StreamSetup Fallback = new() { PcmChannelId = 0, Label = "" };
 
         // ---- reading ---------------------------------------------------------------------------------------------------
 
@@ -108,6 +111,7 @@ namespace TmDq.App.Models.Templates
         private static StreamSetup? ReadConfig(JsonElement json)
         {
             if (!json.TryGetProperty("pcmChannelId", out _) || !json.TryGetProperty("label", out _)) return null;
+            StreamSetup d = Fallback;
             StreamMode mode = Str(json, "mode", LockMode) == LockMode ? StreamMode.FrameSyncLock : StreamMode.ReceiverChannelInfo;
             string pattern = FrameSyncDefaults.Pattern, mask = FrameSyncDefaults.Mask;
             int bits = FrameSyncDefaults.BitsInMinorFrame;
@@ -148,11 +152,11 @@ namespace TmDq.App.Models.Templates
                 // Indices a newer or hand-edited template could carry out of range are clamped, as v2.x clamped them.
                 SamplePeriod = (SamplePeriod)Math.Clamp(Int(json, "samplePeriodIndex", 0), 0, MaxSamplePeriodIndex),
                 TmatsDataRateMbps = Double(json, "tmatsDataRateMbps", 0.0),
-                PolarityIndex = Int(json, "polarityIndex", 0),
-                SlopeIndex = Math.Clamp(Int(json, "slopeIndex", 3), 0, MaxSlopeIndex),
-                ScaleDdBPerV = Double(json, "scaleDdBPerV", 20.0),
-                NumReceivers = Int(json, "numReceivers", 16),
-                ReceiverChannels = Int(json, "receiverChannels", 3),
+                PolarityIndex = Int(json, "polarityIndex", d.PolarityIndex),
+                SlopeIndex = Math.Clamp(Int(json, "slopeIndex", d.SlopeIndex), 0, StreamRules.MaxSlopeIndex),
+                ScaleDdBPerV = Double(json, "scaleDdBPerV", d.ScaleDdBPerV),
+                NumReceivers = Int(json, "numReceivers", d.NumReceivers),
+                ReceiverChannels = Int(json, "receiverChannels", d.ReceiverChannels),
                 ReceiverParamsToml = Str(json, "receiverParamsToml", ""),
                 CalCh10Path = calCh10,
                 StepTomlPath = stepToml,

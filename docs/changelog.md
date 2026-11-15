@@ -12,6 +12,32 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The settings folders' names and the receiver defaults, each written once
+
+Found by the whole-tree cleanup audit (PR 8 of its list: X2, X3); each finding was re-checked against the tree as of #282.
+
+- **X2: the settings folder names.** `"settings"` was a bare literal twice (`StreamFiles.LoadFolder`, `StreamDefaults`), and
+  `StreamDefaults` retyped `"framesync_patterns"` beside the constant that holds it. `StreamFiles.SettingsFolder` is now the
+  one constant and both sites use it and `FrameSyncFolder`. The new test `TheSettingsFolderNamesAreTheCoresAndAreShipped`
+  holds `SettingsFolder`, `ReceiverParamsFolder` and `StepCalFolder` to `constants.h` (`kSettingsDirName`,
+  `kReceiverParamsDirName`, `kRcvrCalsDirName`), as the frame-sync defaults already were, and all four folders to the shipped
+  tree (the frame-sync folder is the app's alone: the core is handed a pattern file's contents). `receiver_params` had no
+  managed test before; `rcvr_cals` was held by a literal in the calibration dialog test, which that test no longer needs.
+- **X3: the receiver defaults.** Polarity 0, slope 3, 20.0 dB/V, 16 receivers and 3 channels are the core's
+  (`ReceiverParamsFile.Defaults()` reads them across the ABI) and are copied in `StreamConfig`, `CalibrationRequest` and
+  `StreamSetup`, with a fourth set of fallbacks in `TemplateFile`. The copies stay (each is a default of a type made
+  without the core), but now follow one source: the three tests that held them to literals compare with `Defaults()`
+  (`TheDefaultsAreTheApplicationsDefaults`, `ARunWithNoObserverJustRunsAndTheDefaultsAreTheApplicationsDefaults`,
+  `ANewRowTakesTheChannelAndTheReceiverDefaults`, which now also checks a hand-built row), the literals being
+  `ReceiverParamsTests`' alone; `TemplateFile` reads its fallbacks from a default `StreamSetup` (held to nothing before), and
+  the template test for a missing key compares with `Defaults()`. `TemplateFile.MaxSlopeIndex`, the second copy of
+  `StreamRules.MaxSlopeIndex`, is gone.
+- **Checked.** Mutation check, `eng\mutate.ps1`: the app suite (five classes), 10 mutants, **10 CAUGHT** (X2a-X2e each folder
+  name changed, X3a/X3b a template fallback, X3c/X3d `StreamSetup`'s slope and scale default, X3e the template's slope clamp);
+  the managed suite (three classes), 4 mutants, **4 CAUGHT** (Y1 to Y4: `StreamConfig`'s slope and scale, `CalibrationRequest`'s
+  receivers and channels). All three suites in Release, zero warnings: native **495** (1 skipped), managed **364** passed / 1
+  skipped, app **635** passed / 34 not run. Baseline moved: app 634 to 635 (one new test).
+
 #### Dialogs: the stream dialog's limits stated once, and the dead ends of the audit's dialog findings
 
 Found by the whole-tree cleanup audit (PR 7 of its list: B6, X1, D9); each finding was re-checked against the tree as of

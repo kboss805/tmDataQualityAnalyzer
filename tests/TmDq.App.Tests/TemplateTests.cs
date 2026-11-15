@@ -176,8 +176,9 @@ namespace TmDq.App.Tests
             Assert.Equal((5, "x", false, StreamMode.FrameSyncLock), (s.PcmChannelId, s.Label, s.Process, s.Mode));
             Assert.Equal((FrameSyncDefaults.Pattern, "FFFFFFFF", FrameSyncDefaults.BitsInMinorFrame, false, false, 0.0),
                          (s.SyncPattern, s.SyncMask, s.BitsInMinorFrame, s.Randomized, s.Inverted, s.DataRateMbps));
-            Assert.Equal((SamplePeriod.OneSecond, 0.0, 0, 3, 20.0, 16, 3, ""),
-                         (s.SamplePeriod, s.TmatsDataRateMbps, s.PolarityIndex, s.SlopeIndex, s.ScaleDdBPerV, s.NumReceivers, s.ReceiverChannels, s.ReceiverParamsToml));
+            // A key the template lacks is a new row's value, which is the core's default (the literals are ReceiverParamsTests').
+            Assert.Equal((SamplePeriod.OneSecond, 0.0, ReceiverParamsFile.Defaults(), ""),
+                         (s.SamplePeriod, s.TmatsDataRateMbps, StreamFiles.ReceiverParamsOf(s), s.ReceiverParamsToml));
             Assert.Equal(("", "", 0.0, 0.0), (s.CalCh10Path, s.StepTomlPath, s.ClipStartSec, s.ClipEndSec));
             Assert.Empty(t.Entries[0].Appearance);
         }

@@ -357,7 +357,6 @@ namespace TmDq.App.Tests
             StatusLevel Of(CalibrationStatusKind k) => StatusPaint.Of(k);
             Assert.Equal((StatusLevel.Success, StatusLevel.Caution, StatusLevel.Critical, StatusLevel.Neutral),
                          (Of(CalibrationStatusKind.Ok), Of(CalibrationStatusKind.Warn), Of(CalibrationStatusKind.Fail), Of(CalibrationStatusKind.Pending)));
-            Assert.Equal("rcvr_cals", StreamFiles.StepCalFolder);
         }
 
         // ---- Apply Cal, in the Receiver SNR setup dialog ------------------------------------------------------------------

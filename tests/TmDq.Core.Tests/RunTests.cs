@@ -708,11 +708,8 @@ public class RunTests
         Assert.Equal(StreamMode.FrameSyncLock, d.Mode);
         Assert.Equal(32767, d.BitsInMinorFrame);
         Assert.Equal(SamplePeriod.OneSecond, d.SamplePeriod);
-        Assert.Equal(0, d.PolarityIndex);
-        Assert.Equal(3, d.SlopeIndex);
-        Assert.Equal(20.0, d.ScaleDdBPerV);
-        Assert.Equal(16, d.NumReceivers);
-        Assert.Equal(3, d.ReceiverChannels);
+        // The receiver settings are the core's defaults (ReceiverParamsTests holds those to their values).
+        Assert.Equal(ReceiverParamsFile.Defaults(), new ReceiverParams(d.PolarityIndex, d.SlopeIndex, d.ScaleDdBPerV, d.NumReceivers, d.ReceiverChannels));
         Assert.False(d.Randomized);
         Assert.False(d.Inverted);
         Assert.Equal(0.0, d.DataRateMbps);
