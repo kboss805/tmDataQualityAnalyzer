@@ -49,37 +49,6 @@ Strings pcmChannelsWithRates(const Chapter10Reader& reader)
     return out;
 }
 
-/// The length of the recording's first packet (its TMATS record), from the header's packet-length field.
-std::uint32_t firstPacketLength(const std::string& bytes)
-{
-    std::uint32_t length = 0;
-    std::memcpy(&length, bytes.data() + 4, 4);
-    return length;
-}
-
-/// Copies step_cal's recording with edits made to its TMATS text. Each edit is a (needle, replacement) pair of the SAME
-/// length, so no packet length or checksum changes (this recording carries no data checksum, and the header is
-/// untouched). Fails the case when an edit does not apply exactly once.
-fs::path writePatchedStepCal(const TempDir& dir, const std::vector<std::pair<std::string, std::string>>& edits)
-{
-    const std::string all = readBytes(fixturePath("step_cal, example.ch10"));
-    const std::uint32_t first = firstPacketLength(all);
-    REQUIRE(first > 200);
-    std::string tmats = all.substr(0, first);
-    for (const auto& [needle, replacement] : edits)
-    {
-        INFO("edit: " << needle);
-        REQUIRE(needle.size() == replacement.size());
-        const std::size_t at = tmats.find(needle);
-        REQUIRE(at != std::string::npos);
-        REQUIRE(tmats.find(needle, at + 1) == std::string::npos);
-        tmats.replace(at, replacement.size(), replacement);
-    }
-    const fs::path path = dir.file("patched.ch10");
-    writeBytes(path, tmats + all.substr(first));
-    return path;
-}
-
 } // namespace
 
 // ---------------------------------------------------------------------------

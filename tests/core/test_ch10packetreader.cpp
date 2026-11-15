@@ -285,6 +285,53 @@ TEST_CASE("Ch10PacketReader: prepare reports why it failed")
     }
 }
 
+TEST_CASE("Ch10PacketReader: a data source TMATS does not fully describe is not a crash")
+{
+    // Chapter10Reader lists a channel whose R-record has no CHE-n ("channel enabled") as enabled, and one with no CDT-n
+    // (data type) as no channel at all, so the operator can be offered a stream from such a recording. The decoder
+    // leaves an absent field NULL, and the packet reader used to read it unchecked. The edits are same-length key
+    // renames of step_cal's TMATS: its PCM source is R-1 data source 27 (PCM channel 26), its time source is 1.
+    const Fixture fx = loadFixture();
+    REQUIRE(fx.pcm_id == 26);
+    REQUIRE(fx.time_id == 1);
+
+    struct Row { const char* name; std::pair<std::string, std::string> edit; bool prepared; const char* error; };
+    const Row rows[] = {
+        {"the PCM source has no CHE-n", {R"(R-1\CHE-27:T;)", R"(R-1\CHX-27:T;)"}, true, ""},
+        {"the time source has no CHE-n", {R"(R-1\CHE-1:T;)", R"(R-1\CHX-1:T;)"}, true, ""},
+        {"the time source has no CDT-n", {R"(R-1\CDT-1:TIMEIN;)", R"(R-1\CDX-1:TIMEIN;)"}, true, ""},
+        // Without its data type the PCM source cannot be taken for PCM, so the stream cannot be set up: said, not crashed.
+        {"the PCM source has no CDT-n", {R"(R-1\CDT-27:PCMIN;)", R"(R-1\CDX-27:PCMIN;)"}, false,
+         "Unable to load PCM attributes for channel 26."},
+    };
+    for (const Row& row : rows)
+    {
+        INFO(row.name);
+        TempDir dir;
+        const fs::path path = writePatchedStepCal(dir, {row.edit});
+        PacketQueue q;
+        ProcessingParams p = paramsFor(fx, &q);
+        std::vector<ProcessingParams*> list{&p};
+        Ch10PacketReader r;
+        std::string error;
+        CHECK(r.prepare(path, fx.time_id, list, error) == row.prepared);
+        CHECK(error == row.error);
+        if (!row.prepared)
+        {
+            continue;
+        }
+
+        // A stream that sets up reads the same packets as the unedited recording.
+        Drain drain(q);
+        r.run();
+        drain.join();
+        REQUIRE_MESSAGE(!drain.m_timed_out, "the reader never posted its end marker");
+        CHECK(drain.m_packets.load() == kFixturePackets);
+        CHECK(drain.m_bytes.load() == kFixtureBytes);
+        CHECK(drain.m_end_markers.load() == 1);
+    }
+}
+
 TEST_CASE("Ch10PacketReader: a full run reports its start and ends at one hundred percent")
 {
     const Fixture fx = loadFixture();

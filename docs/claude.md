@@ -847,8 +847,8 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
   TMATS data rates; every way a load fails, with its message; and edited copies of `step_cal` for what the recordings do
   not reach (the enabled flag, the type codes, the name priority, a non-ASCII name, a second time channel).
 - **Ch10PacketReader** (`test_ch10packetreader`) - the single pass over `step_cal`: every packet once with one end
-  marker, progress, abort, files cut or damaged at each kind of place, routing and shared payloads, the attributes
-  `prepare()` resolves, and serialised setup across threads.
+  marker, progress, abort, files cut or damaged at each kind of place, data sources whose TMATS lacks a CHE-n or CDT-n,
+  routing and shared payloads, the attributes `prepare()` resolves, and serialised setup across threads.
 - **PacketQueue** (`test_packetqueue`) - order, the bound, blocking on either side, `close()`, draining, and 20,000
   items through a small queue under a watchdog.
 - **FrameProcessor** (`test_frameprocessor`) - real recordings in both modes, and synthetic streams at one second per

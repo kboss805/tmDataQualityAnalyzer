@@ -138,12 +138,12 @@ EnI106Status Ch10PacketReader::assembleAttributesFromTMATS(SuTmatsInfo* tmats_in
                 channel_info[iTrackNumber] = new SuChanInfo();
                 memset(channel_info[iTrackNumber], 0, sizeof(SuChanInfo));
 
-                channel_info[iTrackNumber]->uChID = static_cast<uint16_t>(iTrackNumber);
-                // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-                channel_info[iTrackNumber]->bEnabled = (psuRDataSrc->szEnabled[0] == 'T') ? 1 : 0;
                 channel_info[iTrackNumber]->psuRDataSrc = psuRDataSrc;
 
-                if (strcasecmp(psuRDataSrc->szChannelDataType, "PCMIN") == 0)
+                // The decoder leaves a field the TMATS does not carry NULL, and Chapter10Reader lists such a channel
+                // (a missing CHE-n counts as enabled), so the data type is checked before it is compared. A source with
+                // none is not taken for PCM: it gets no attributes, and a stream asked of it is refused in prepare().
+                if (psuRDataSrc->szChannelDataType != nullptr && strcasecmp(psuRDataSrc->szChannelDataType, "PCMIN") == 0)
                 {
                     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory, cppcoreguidelines-no-malloc)
                     channel_info[iTrackNumber]->psuAttributes = calloc(1, sizeof(SuPcmF1_Attributes));
