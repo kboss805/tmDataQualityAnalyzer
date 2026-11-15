@@ -118,11 +118,21 @@ namespace TmDq.App.Tests
                 new[] { "msbuild", project, "-nologo" }.Concat(properties.Select(p => "-getProperty:" + p)));
             Assert.True(exit == 0, "evaluating " + project + " failed:\n" + output);
             // With more than one property MSBuild prints {"Properties": {name: value, ...}}.
-            using JsonDocument json = JsonDocument.Parse(output);
-            var values = new Dictionary<string, string>();
-            foreach (JsonProperty p in json.RootElement.GetProperty("Properties").EnumerateObject())
-                values[p.Name] = p.Value.GetString() ?? "";
-            return values;
+            // A parse failure must say what MSBuild printed: "an 'M' is invalid after a single JSON value" alone cannot
+            // be traced to the stray line behind it.
+            try
+            {
+                using JsonDocument json = JsonDocument.Parse(output);
+                var values = new Dictionary<string, string>();
+                foreach (JsonProperty p in json.RootElement.GetProperty("Properties").EnumerateObject())
+                    values[p.Name] = p.Value.GetString() ?? "";
+                return values;
+            }
+            catch (Exception e) when (e is JsonException || e is KeyNotFoundException || e is InvalidOperationException)
+            {
+                throw new Xunit.Sdk.XunitException(
+                    "evaluating " + project + " printed something that is not the expected JSON (" + e.Message + "). MSBuild printed:\n" + output);
+            }
         }
 
         private static (int Exit, string Output) Dotnet(string workingDirectory, IEnumerable<string> arguments)

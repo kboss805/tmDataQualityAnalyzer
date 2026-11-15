@@ -12,6 +12,16 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### A failed msbuild evaluation says what msbuild printed
+
+`PackageLicenceTests.EveryProjectInTheSolutionGetsTheCheckAndTheVersion` failed once on CI with
+`'M' is invalid after a single JSON value` and never again: it could not be reproduced, and the message could not say
+why, because `BuildTool.Evaluate` threw away the output it had failed to parse. It now reports it: a parse failure (or a
+reply without the `Properties` object) raises a test failure naming the project and carrying everything `dotnet msbuild
+-getProperty` printed. The assertions are unchanged, and no test was added or removed (app baseline as it was: 640
+passed, 0 failed, 0 skipped, 34 not run). Checked by making the parse fail on purpose (a stray character put before the
+output): the test then failed with the project, the parser's message and the whole of msbuild's reply.
+
 #### The batch's entry point, named as the menu names it
 
 Docs only, no mutation check needed. `docs/claude.md` (US1.1) still called the batch's one entry point **Apply Template**,
