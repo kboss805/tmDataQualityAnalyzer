@@ -175,4 +175,30 @@ private:
     std::vector<ParameterInfo> m_parameters;               ///< Ordered list of frame parameters.
 };
 
+/// `<appRoot>/settings/receiver_params/default.toml`, from UTF-8 @p appRoot: the word map a Receiver SNR stream falls
+/// back to when it names none.
+std::filesystem::path defaultReceiverParamsFile(const std::string& appRoot);
+
+/// What resolveReceiverWordMap() left to say besides the map.
+struct WordMapResolution
+{
+    std::string error;   ///< Why no map could be had; empty on success.
+    std::string warning; ///< Set when an unusable default file was passed over for the sequential map.
+};
+
+/**
+ * @brief The word map of a Receiver SNR stream, into @p setup (emptied first), resolved the ONE way both passes use: the
+ * main run's job builder and the calibration extractor. They must agree, because the extractor's profiles are matched to
+ * the main run's channels by word (audit B10).
+ *
+ * A named @p explicitFile must exist and load ("... was not found." / "Failed to load ... Check the word map."). With
+ * none named, @p defaultFile is loaded when it exists; when it is missing, or exists but cannot be used (the warning then
+ * names it), the sequential map for @p numReceivers x @p receiverChannels is built. A map with no parameters is an error.
+ *
+ * @return false with the reason in @p out.error.
+ */
+bool resolveReceiverWordMap(FrameSetup& setup, const std::filesystem::path& explicitFile,
+                            const std::filesystem::path& defaultFile, int numReceivers, int receiverChannels,
+                            int wordsInMinorFrame, WordMapResolution& out);
+
 #endif // FRAMESETUP_H

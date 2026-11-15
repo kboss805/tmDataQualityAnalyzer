@@ -52,7 +52,7 @@ public class FileTests
     [Fact]
     public void ARecordingThatIsNotThereIsAPrepareError()
     {
-        string missing = Path.Combine(Path.GetTempPath(), "tmdq-no-such-" + Guid.NewGuid().ToString("N") + ".ch10");
+        string missing = TempFiles.NewPath("no-such", ".ch10");
         TmdqException e = Assert.Throws<TmdqException>(() => Ch10File.Open(missing));
         Assert.Equal(Status.Prepare, e.Status);
         Assert.NotEmpty(e.Message);
@@ -61,7 +61,7 @@ public class FileTests
     [Fact]
     public void AFileThatIsNotARecordingIsAPrepareError()
     {
-        string junk = Path.Combine(Path.GetTempPath(), "tmdq-junk-" + Guid.NewGuid().ToString("N") + ".ch10");
+        string junk = TempFiles.NewPath("junk", ".ch10");
         File.WriteAllBytes(junk, new byte[4096]);
         try
         {
@@ -80,7 +80,7 @@ public class FileTests
         // The native handle is closed before Open returns: a file still held open could not be deleted. TempFiles waits
         // out a moment's hold by another process (a virus scan of the fresh copy), but a handle the library leaked is
         // never released, so this still fails once its window is over.
-        string dir = Path.Combine(Path.GetTempPath(), "tmdq-held-" + Guid.NewGuid().ToString("N"));
+        string dir = TempFiles.NewPath("held");
         Directory.CreateDirectory(dir);
         string copy = Path.Combine(dir, "recording.ch10");
         File.Copy(Env.StepCal, copy);
@@ -105,7 +105,7 @@ public class FileTests
     [Fact]
     public void ANonAsciiFolderOpensWhenTheHostRunsUnderTheUtf8CodePage()
     {
-        string dir = Path.Combine(Path.GetTempPath(), "tmdq-café-Ω-" + Guid.NewGuid().ToString("N"));
+        string dir = TempFiles.NewPath("café-Ω");
         Directory.CreateDirectory(dir);
         string copy = Path.Combine(dir, "recording.ch10");
         File.Copy(Env.StepCal, copy);

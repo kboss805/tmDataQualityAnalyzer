@@ -11,6 +11,7 @@
 
 #include "constants.h"
 #include "containerutil.h"
+#include "textfile.h"
 #include "textparse.h"
 #include "tomldocument.h"
 
@@ -322,4 +323,62 @@ void FrameSetup::writeWordMap(TomlDocument& doc) const
     {
         doc.setValue(param.name + "/Word", param.word + 1);
     }
+}
+
+std::filesystem::path defaultReceiverParamsFile(const std::string& appRoot)
+{
+    return textfile::pathFromUtf8(appRoot + "/" + UIConstants::kSettingsDirName + "/" +
+                                  UIConstants::kReceiverParamsDirName + "/" + UIConstants::kDefaultTomlFilename);
+}
+
+bool resolveReceiverWordMap(FrameSetup& setup, const std::filesystem::path& explicitFile,
+                            const std::filesystem::path& defaultFile, int numReceivers, int receiverChannels,
+                            int wordsInMinorFrame, WordMapResolution& out)
+{
+    out = WordMapResolution{};
+    setup.clearParameters();
+    std::error_code ec; // exists() with an error code never throws on a bad path
+    if (!explicitFile.empty())
+    {
+        if (!std::filesystem::exists(explicitFile, ec))
+        {
+            out.error = "Receiver Parameters file '" + textfile::utf8FileName(explicitFile) + "' was not found.";
+            return false;
+        }
+        if (!setup.tryLoadingFile(explicitFile, wordsInMinorFrame))
+        {
+            out.error = "Failed to load Receiver Parameters from '" + textfile::utf8FileName(explicitFile) +
+                        "'. Check the word map.";
+            return false;
+        }
+    }
+    else
+    {
+        bool loaded = false;
+        if (!defaultFile.empty() && std::filesystem::exists(defaultFile, ec))
+        {
+            loaded = setup.tryLoadingFile(defaultFile, wordsInMinorFrame);
+            if (!loaded)
+            {
+                out.warning = "the default Receiver Parameters file '" + textfile::utf8FileName(defaultFile) +
+                              "' could not be used; the sequential word map for " + std::to_string(numReceivers) +
+                              " x " + std::to_string(receiverChannels) + " receiver channels is used instead.";
+            }
+        }
+        if (!loaded)
+        {
+            // A rejected load can leave a partial map behind and buildDefaultReceiverMap appends, so start empty.
+            setup.clearParameters();
+            if (!setup.buildDefaultReceiverMap(numReceivers, receiverChannels, wordsInMinorFrame, out.error))
+            {
+                return false;
+            }
+        }
+    }
+    if (setup.length() == 0)
+    {
+        out.error = "Receiver Parameters file contains no parameters.";
+        return false;
+    }
+    return true;
 }

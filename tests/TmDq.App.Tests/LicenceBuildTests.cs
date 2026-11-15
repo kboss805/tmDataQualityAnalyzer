@@ -6,6 +6,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text.Json;
+using TmDq.Core.Tests;
 using Xunit;
 
 namespace TmDq.App.Tests
@@ -18,7 +19,7 @@ namespace TmDq.App.Tests
     /// </summary>
     public sealed class LicenceBuildTests : IDisposable
     {
-        private readonly string _dir = Path.Combine(Path.GetTempPath(), "tmdq-licbuild-" + Guid.NewGuid().ToString("N"));
+        private readonly string _dir = TempFiles.NewPath("licbuild");
 
         public LicenceBuildTests()
         {
@@ -32,7 +33,7 @@ namespace TmDq.App.Tests
 
         public void Dispose()
         {
-            try { Directory.Delete(_dir, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            TempFiles.TryDeleteDirectory(_dir);
         }
 
         /// <summary>A package with no assemblies and the given licence metadata, written straight into the feed.</summary>

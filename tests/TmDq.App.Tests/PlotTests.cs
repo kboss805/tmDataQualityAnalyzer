@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -574,6 +575,15 @@ namespace TmDq.App.Tests
             s.Window.Close();
         }
 
+        [Fact]
+        public void TheChartsMarginsAreTheValuesTheLayoutTestsAreWrittenIn()
+        {
+            // The layout tests below build their expected pixels from these, so a changed margin would move test and
+            // chart together and pass; this pins them as numbers (audit Q2).
+            Assert.Equal((10.0, 6.0, 4.0, 12.0, 12.0),
+                         (PlotChart.OuterMargin, PlotChart.AxisLabelGap, PlotChart.TickLength, PlotChart.TickLabelGap, PlotChart.TopInset));
+        }
+
         [AvaloniaFact]
         public void AHiddenAxisGivesItsMarginBackAndTheTransformsFollowThePlotArea()
         {
@@ -645,6 +655,46 @@ namespace TmDq.App.Tests
             Assert.Equal(grabbed, s.Chart.PixelToX(to), 6);
             Assert.Equal(45.0, plot.XViewMin, 6);
             Assert.False(plot.CanZoomBack);
+            s.Window.Close();
+        }
+
+        [AvaloniaFact]
+        public void ADragWhoseCaptureIsLostEndsWhereItIs()
+        {
+            // Audit B5: the capture taken away mid-drag (here by the pointer itself, as another window would) ends the
+            // drag. A band is dropped without zooming; a pan stops where it got to, and the next move with no button down
+            // does not carry on panning.
+            PlotViewModel plot = HundredSeconds();
+            Shown s = Show(plot);
+            IPointer? pointer = null;
+            s.Chart.AddHandler(InputElement.PointerPressedEvent, (_, e) => pointer = e.Pointer, RoutingStrategies.Bubble, handledEventsToo: true);
+            Rect a = s.Chart.PlotArea;
+            double p20 = s.Chart.XToPixel(20), p50 = s.Chart.XToPixel(50), p60 = s.Chart.XToPixel(60);
+
+            s.Window.MouseDown(s.At(p60, a.Center.Y), MouseButton.Left, RawInputModifiers.Control);
+            s.Window.MouseMove(s.At(p20, a.Center.Y), RawInputModifiers.LeftMouseButton | RawInputModifiers.Control);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(s.Chart.ZoomBandVisible);
+            Assert.NotNull(pointer);
+            pointer!.Capture(null);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(s.Chart.ZoomBandVisible);
+            Assert.Equal((0.0, 100.0), (plot.XViewMin, plot.XViewMax));      // the band was dropped, not applied
+            s.Window.MouseUp(s.At(p20, a.Center.Y), MouseButton.Left, RawInputModifiers.Control);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal((0.0, 100.0), (plot.XViewMin, plot.XViewMax));      // and the release after it zooms nothing either
+
+            plot.SetXViewByUser(20, 80);
+            s.Window.MouseDown(s.At(p50, a.Center.Y), MouseButton.Left, RawInputModifiers.None);
+            s.Window.MouseMove(s.At(s.Chart.XToPixel(45), a.Center.Y), RawInputModifiers.LeftMouseButton);
+            Dispatcher.UIThread.RunJobs();
+            double panned = plot.XViewMin;
+            Assert.NotEqual(20.0, panned);
+            pointer!.Capture(null);
+            Dispatcher.UIThread.RunJobs();
+            s.Window.MouseMove(s.At(s.Chart.XToPixel(30), a.Center.Y), RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(panned, plot.XViewMin);                              // no button, no pan
             s.Window.Close();
         }
 

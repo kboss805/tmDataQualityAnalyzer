@@ -30,8 +30,9 @@ each suite has its house style and helpers. Build and run with the **build-and-t
 - **A new file must be added to `tests/core/tmdq_core_tests.vcxproj`** (`<ClCompile
   Include="test_<name>.cpp" />`). MSBuild compiles only what the project lists, so a file left out is
   a suite that silently never runs. `NativeProjectTests` (the managed suite) fails until it is listed.
-- **Files the tests read:** `repoFile("tests/data/test files/<recording>")`, `repoFile("settings/...")`,
-  `repoFile("tests/fixtures/...")` (`test_support.h`). A missing committed file is a failure, never a
+- **Files the tests read:** `recordingFile("<recording>")`, `repoFile("settings/...")`,
+  `repoFile("tests/fixtures/...")` (`test_support.h`, which also holds `asciiOnly`, `utf16le` and the `step_cal` fixture,
+  `loadStepCalFixture()`: add a helper there when a second test file needs it, never a second copy). A missing committed file is a failure, never a
   skip: the recordings are in the repository.
 - **The ABI** is compiled into the test executable (`test_abi.cpp` calls `tmdq_*` as a host would),
   so a new ABI function gets its native case there, and its struct layout a pin.
@@ -52,7 +53,16 @@ each suite has its house style and helpers. Build and run with the **build-and-t
   `DeleteDirectory`, `ReadAllBytes`, `ReadAllText`; `tests/TmDq.Core.Tests/TempFiles.cs`, linked into the
   app tests), never a bare `File.Delete` in a `finally`: a virus scanner's hold on a new file fails a test
   whose every check passes, and `TempFiles` retries for a few seconds yet still throws on a handle the
-  library leaked.
+  library leaked. A scratch folder of a test that runs a build tool or a script goes through
+  `TempFiles.TryDeleteDirectory`, which gives up quietly because a child process may still hold a file in it (a
+  leftover folder in `%TEMP%` is no failure of the product): never an empty `catch` in a `Dispose`.
+
+- **Expected values are literals, and no assertion sits within a timer tick of what it measures.** A test that builds
+  its expectation from the constant it tests passes when the constant changes (pin the number once, in its own test);
+  an elapsed-time bound within a `Task.Delay`'s 15.6 ms Windows tick of the delay fails a correct chart on a CI runner
+  (hold it to 3/4 of a delay of 100 ms or more); and a stall too long to tell two cases apart is `Assert.Skip`, not a
+  failure. Wait for the event a thread is about to produce (a log line, a callback), not for a fixed time or a poll with
+  no limit.
 
 ## The application's suite (headless Avalonia)
 
@@ -72,7 +82,9 @@ each suite has its house style and helpers. Build and run with the **build-and-t
   `I*` services in `src/TmDq.App/Services`) and assert on what it was asked.
 - **Classes that load the native core** join `[Collection(NativeCoreCollection.Name)]`, which runs them
   one at a time (one of them points `TMDQ_CORE_DLL` at a missing file for a moment).
-- **Files:** `Repo.Recording("<name>")`, `Repo.File("settings/...")`. A test that writes a preferences
+- **Files:** `Repo.Recording("<name>")`, `Repo.File("settings/...")` (both through `RepoPaths`, which the library tests
+  use too). A temporary path is `TempFiles.NewPath("<stem>", ".ext")`, never composed inline; a window shown for a test
+  is `Frames.Shown`. A test that writes a preferences
   file writes it to a temporary folder, never to `%APPDATA%`.
 
 ## Naming

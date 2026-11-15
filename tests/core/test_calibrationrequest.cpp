@@ -275,22 +275,26 @@ TEST_CASE("CalibrationRequest: the default word map is used only when none is na
     std::string error;
     CalibrationInputs s = typicalSetup();
 
-    // None named, the root has one: it is used.
+    // None named, the root has one: it is used, and marked as the default (an unusable one is passed over).
     CHECK(buildCalibrationRequest(s, withDefault.path(), req, error));
     CHECK(!req.receiverParamsToml.empty());
     CHECK(req.receiverParamsToml.filename().string() == "default.toml");
     CHECK(fs::exists(req.receiverParamsToml));
+    CHECK(req.receiverParamsIsDefault);
 
     // None named, the root has none: the request names no file (the extractor builds its grid).
     CHECK(buildCalibrationRequest(s, without.path(), req, error));
     CHECK(req.receiverParamsToml.empty());
+    CHECK_FALSE(req.receiverParamsIsDefault);
 
     // A named file wins, whether or not the root has a default - and is not checked for existence here.
     s.receiverParamsToml = "named.toml";
     CHECK(buildCalibrationRequest(s, withDefault.path(), req, error));
     CHECK(req.receiverParamsToml == fs::path("named.toml"));
+    CHECK_FALSE(req.receiverParamsIsDefault);
     CHECK(buildCalibrationRequest(s, without.path(), req, error));
     CHECK(req.receiverParamsToml == fs::path("named.toml"));
+    CHECK_FALSE(req.receiverParamsIsDefault);
 
     // An empty or unusable app root is no root: nothing is found.
     s.receiverParamsToml.clear();

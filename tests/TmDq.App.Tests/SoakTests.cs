@@ -18,6 +18,7 @@ using TmDq.App.Platform;
 using TmDq.App.Services;
 using TmDq.App.ViewModels;
 using TmDq.App.Views;
+using TmDq.Core.Tests;
 using TmDq.Core;
 using Xunit;
 
@@ -59,7 +60,7 @@ namespace TmDq.App.Tests
         {
             JsonObject run = LoadRuns().Single(r => (string)r!["name"]! == name)!.AsObject();
             string? outRoot = Environment.GetEnvironmentVariable("TMDQ_SOAK_OUT");
-            string dir = outRoot is { Length: > 0 } ? Path.Combine(outRoot, name) : Path.Combine(Path.GetTempPath(), "tmdq-soak-" + Guid.NewGuid().ToString("N"));
+            string dir = outRoot is { Length: > 0 } ? Path.Combine(outRoot, name) : TempFiles.NewPath("soak");
             if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
             Directory.CreateDirectory(dir);
 

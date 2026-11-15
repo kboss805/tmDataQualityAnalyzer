@@ -201,7 +201,7 @@ public class RunTests
     [Fact]
     public void ARecordingThatCannotBeUsedIsAPrepareError()
     {
-        string missing = Path.Combine(Path.GetTempPath(), "tmdq-no-such-" + Guid.NewGuid().ToString("N") + ".ch10");
+        string missing = TempFiles.NewPath("no-such", ".ch10");
         TmdqException e = Assert.Throws<TmdqException>(() => ProcessingRun.Start(Request(missing, Prn())));
         Assert.Equal(Status.Prepare, e.Status);
 
@@ -398,7 +398,7 @@ public class RunTests
     [Fact]
     public void ANonAsciiFolderRunsUnderTheUtf8CodePage()
     {
-        string dir = Path.Combine(Path.GetTempPath(), "tmdq-café-Ω-" + Guid.NewGuid().ToString("N"));
+        string dir = TempFiles.NewPath("café-Ω");
         Directory.CreateDirectory(dir);
         string copy = Path.Combine(dir, "recording.ch10");
         File.Copy(Env.StepCal, copy);
@@ -486,7 +486,7 @@ public class RunTests
     [Fact]
     public void TheApplicationRootsOwnWordMapIsUsedWhenNoFileIsNamed()
     {
-        string root = Path.Combine(Path.GetTempPath(), "tmdq-root-" + Guid.NewGuid().ToString("N"));
+        string root = TempFiles.NewPath("root");
         Directory.CreateDirectory(Path.Combine(root, "settings", "receiver_params"));
         File.WriteAllText(Path.Combine(root, "settings", "receiver_params", "default.toml"), "[C_RCVR1]\nWord = 7\n");
         try
@@ -668,7 +668,7 @@ public class RunTests
     [Fact]
     public void AWordMapFileNamedOnTheStreamIsTheOneUsed()
     {
-        string path = Path.Combine(Path.GetTempPath(), "tmdq-wordmap-" + Guid.NewGuid().ToString("N") + ".toml");
+        string path = TempFiles.NewPath("wordmap", ".toml");
         File.WriteAllText(path, "[L_RCVR1]\nWord = 2\n[R_RCVR1]\nWord = 5\n");
         try
         {

@@ -193,29 +193,8 @@ struct ReleaseOnExit
     ~ReleaseOnExit() { recorder.release(); }
 };
 
-/// A small, committed, ordinary Chapter 10 recording with one PCM channel of interest.
-struct Fixture
-{
-    fs::path path;
-    int      time_id = -1;
-    int      pcm_id  = -1;
-};
-
-Fixture loadFixture()
-{
-    Fixture f;
-    f.path = repoFile(fs::path("tests") / "data" / "test files" / "step_cal, example.ch10");
-    Chapter10Reader meta;
-    REQUIRE_MESSAGE(meta.loadChannels(f.path), meta.lastError());
-    f.time_id = meta.getCurrentTimeChannelID();
-    f.pcm_id  = meta.getFirstPCMChannelID();
-    REQUIRE(f.time_id >= 0);
-    REQUIRE(f.pcm_id >= 0);
-    return f;
-}
-
 /// A lock-only stream over the fixture. @p sync other than the recording's own finds nothing.
-StreamJob lockJob(const Fixture& f, int source_id = 0, std::uint64_t sync = 0xFE6B2840)
+StreamJob lockJob(const StepCalFixture& f, int source_id = 0, std::uint64_t sync = 0xFE6B2840)
 {
     StreamJob job;
     job.params.filename          = f.path;
@@ -237,13 +216,13 @@ StreamJob lockJob(const Fixture& f, int source_id = 0, std::uint64_t sync = 0xFE
 
 constexpr int kRunTimeoutMs = 120000;
 
-std::string tagOf(const Fixture& f) { return "[CH " + std::to_string(f.pcm_id) + "] "; }
+std::string tagOf(const StepCalFixture& f) { return "[CH " + std::to_string(f.pcm_id) + "] "; }
 
 } // namespace
 
 TEST_CASE("PipelineRunner: a single stream delivers its result, then the end")
 {
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
 
     auto rec = std::make_shared<Recorder>();
     PipelineRunner runner;
@@ -287,7 +266,7 @@ TEST_CASE("PipelineRunner: a single stream delivers its result, then the end")
 
 TEST_CASE("PipelineRunner: several streams on one channel each deliver their own result")
 {
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
 
     auto rec = std::make_shared<Recorder>();
     PipelineRunner runner;
@@ -321,7 +300,7 @@ TEST_CASE("PipelineRunner: several streams on one channel each deliver their own
 
 TEST_CASE("PipelineRunner: a stream that finds no sync does not stop the others")
 {
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
 
     auto rec = std::make_shared<Recorder>();
     PipelineRunner runner;
@@ -344,7 +323,7 @@ TEST_CASE("PipelineRunner: a stream that fails after another delivered does not 
     // Which stream finishes first is up to the scheduler, so the order is made: the stream that looks for the wrong
     // pattern is parked on its report ("0 syncs found" is said by it alone) until the good stream has delivered. The
     // run succeeded because one stream earned a result; a later failure must not take that back.
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
 
     auto rec = std::make_shared<Recorder>();
     rec->parkOn("processed, 0 syncs found");
@@ -372,7 +351,7 @@ TEST_CASE("PipelineRunner: the first job names the recording")
     // Every job must name the same recording and time channel; the first job's are the ones used. A later job naming
     // something else is not consulted (and not an error), and a first job naming a recording that is not there
     // refuses the start whatever the rest say.
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
     TempDir dir;
 
     {
@@ -400,7 +379,7 @@ TEST_CASE("PipelineRunner: the first job names the recording")
 
 TEST_CASE("PipelineRunner: a run in which every stream fails ends unsuccessfully")
 {
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
 
     auto rec = std::make_shared<Recorder>();
     PipelineRunner runner;
@@ -418,7 +397,7 @@ TEST_CASE("PipelineRunner: a run in which every stream fails ends unsuccessfully
 
 TEST_CASE("PipelineRunner: a recording that cannot be opened fails before anything runs")
 {
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
 
     TempDir dir;
     StreamJob missing = lockJob(fx);
@@ -451,7 +430,7 @@ TEST_CASE("PipelineRunner: no jobs is refused")
     CHECK(rec->events().empty());
 
     // Refused, not stuck: the runner is free for a real run straight afterwards.
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
     error.clear();
     REQUIRE_MESSAGE(runner.start({lockJob(fx)}, rec, error), error);
     REQUIRE_MESSAGE(rec->waitFinished(kRunTimeoutMs), rec->joined());
@@ -461,7 +440,7 @@ TEST_CASE("PipelineRunner: no jobs is refused")
 
 TEST_CASE("PipelineRunner: a second start while running is refused")
 {
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
 
     auto first = std::make_shared<Recorder>();
     auto second = std::make_shared<Recorder>();
@@ -483,7 +462,7 @@ TEST_CASE("PipelineRunner: a second start while running is refused")
 
 TEST_CASE("PipelineRunner: cancel ends the run unsuccessfully with no result")
 {
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
 
     auto rec = std::make_shared<Recorder>();
     PipelineRunner runner;
@@ -509,7 +488,7 @@ TEST_CASE("PipelineRunner: a cancel after one stream delivered drops the rest an
     // after the cancel was asked for still delivers nothing, and a run that was cancelled fails even though another
     // stream had already delivered. Freeing that moment: job 1's worker is parked on its last log line ("complete"),
     // after its work and before it reports, while job 0 runs through and delivers.
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
 
     auto rec = std::make_shared<Recorder>();
     rec->parkOn("second] complete");
@@ -540,7 +519,7 @@ TEST_CASE("PipelineRunner: a cancel wakes a worker that is waiting for packets")
     // A worker waiting on an empty queue is woken by closing it; the abort flag alone cannot reach it. The reader is
     // parked before it has produced anything, so nothing else can end the worker: it has to be the cancel, and it has
     // to be seen before the reader is released.
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
 
     // Two streams, so that closing only some of the queues would leave one worker waiting.
     auto rec = std::make_shared<Recorder>();
@@ -556,10 +535,15 @@ TEST_CASE("PipelineRunner: a cancel wakes a worker that is waiting for packets")
     std::string error;
     REQUIRE_MESSAGE(runner.start({first, second}, rec, error), error);
     REQUIRE_MESSAGE(rec->waitParked(kRunTimeoutMs), rec->joined());
-    std::this_thread::sleep_for(std::chrono::milliseconds(300)); // the workers reach their empty queues and block there
+    // Each worker's last line before it waits for a packet: both have started. What is left is their call to the queue,
+    // which the short settle covers; the old fixed 300 ms could pass before a stalled worker had started at all, and the
+    // wake path was then never run.
+    const std::string base = "[CH " + std::to_string(fx.pcm_id) + " ";
+    for (const char* label : {"first", "second"})
+        REQUIRE_MESSAGE(rec->waitForEvent({"log:" + base + label + "] processing..."}, kRunTimeoutMs), rec->joined());
+    std::this_thread::sleep_for(std::chrono::milliseconds(50)); // the workers' dequeue calls, the next thing they do
 
     runner.cancel();
-    const std::string base = "[CH " + std::to_string(fx.pcm_id) + " ";
     bool workers_ended = true;
     for (const char* label : {"first", "second"})
     {
@@ -582,7 +566,7 @@ TEST_CASE("PipelineRunner: a cancel stops a worker that has not started reading"
 {
     // The other half of cancelling a worker: its own abort flag. One parked just before its read loop would otherwise
     // go on to drain whatever is already queued and finish as if nothing had happened.
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
 
     auto rec = std::make_shared<Recorder>();
     rec->parkOn("processing..."); // the worker's line just before its loop
@@ -608,7 +592,7 @@ TEST_CASE("PipelineRunner: the runner is not running by the time it reports the 
     // `running()` goes false BEFORE the end is reported, so a handler that wants to start the next run is not turned
     // away by the run that is still reporting it. A race to start again cannot pin that, so the sink looks at the
     // runner from inside the report.
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
 
     auto rec = std::make_shared<Recorder>();
     PipelineRunner runner;
@@ -636,7 +620,7 @@ TEST_CASE("PipelineRunner: a stream that ends early does not leave the reader bl
     // drain it - so the reader, which hands every packet to every stream, has to be let go by the stream's thread
     // closing its own queue. Without that the reader blocks forever on the dead stream's full queue and the OTHER
     // stream, which is perfectly healthy, never finishes.
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
 
     auto rec = std::make_shared<Recorder>();
     StreamJob doomed = lockJob(fx, 1);
@@ -662,7 +646,7 @@ TEST_CASE("PipelineRunner: a stream that ends early does not leave the reader bl
 
 TEST_CASE("PipelineRunner: the runner runs again after a run ends")
 {
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
 
     PipelineRunner runner;
     for (int round = 0; round < 2; ++round)
@@ -686,7 +670,7 @@ TEST_CASE("PipelineRunner: nothing of one run is left over in the next")
 {
     // A success, a failure and a cancel in turn: a run starts from a clean slate, so a stream that delivered in one run
     // does not make the next run (in which none does) succeed, and a cancel does not make the run after it fail.
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
     PipelineRunner runner;
 
     auto runOnce = [&](StreamJob job, bool cancel_at_once) {
@@ -716,7 +700,7 @@ TEST_CASE("PipelineRunner: a run lets go of its frame setups, however it ends")
 {
     // The runner keeps each job's frame setup alive only as long as its stream can run: after the end is reported, and
     // after a start that failed, nothing of the jobs is held.
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
 
     auto released = [](StreamJob job, std::weak_ptr<FrameSetup>& watch) {
         watch = job.frameSetup;
@@ -750,7 +734,7 @@ TEST_CASE("PipelineRunner: a run lets go of its frame setups, however it ends")
 
 TEST_CASE("PipelineRunner: destroying a running runner stops it and reports the end")
 {
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
 
     auto rec = std::make_shared<Recorder>();
     {

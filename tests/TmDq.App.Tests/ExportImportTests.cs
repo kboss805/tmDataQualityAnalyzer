@@ -105,7 +105,7 @@ namespace TmDq.App.Tests
             return plot;
         }
 
-        private static string TempPath(string suffix) => Path.Combine(Path.GetTempPath(), "tmdq-export-" + Guid.NewGuid().ToString("N") + suffix);
+        private static string TempPath(string suffix) => TempFiles.NewPath("export", suffix);
 
         private static string Sha256(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
@@ -815,14 +815,17 @@ namespace TmDq.App.Tests
             {
                 // Configure Streams up over a plot that has data: Export must wait too, though there is data to export.
                 var answer = new TaskCompletionSource<StreamsChoice?>();
-                var vm = new MainWindowViewModel(new MainWindowServices { Configurator = FakeConfigurator.Waiting(answer.Task), Files = new FakeFiles(), ExportDialog = new FakeExportDialog() });
+                var reached = new TaskCompletionSource();   // Configure Streams is up: the run is parked there until answered
+                var vm = new MainWindowViewModel(new MainWindowServices { Configurator = FakeConfigurator.Waiting(answer.Task, () => reached.TrySetResult()), Files = new FakeFiles(), ExportDialog = new FakeExportDialog() });
                 vm.Plot.SetSeries(new[] { PlotFixtures.Lock(0, "earlier", 1, 0, X2, X2) });
                 int import = 0, export = 0;
                 vm.ImportCsvCommand.CanExecuteChanged += (_, _) => import++;
                 vm.ExportCommand.CanExecuteChanged += (_, _) => export++;
                 string recording = Repo.Recording("prn_testfile, sample.ch10");
                 Task open = vm.LoadAsync(recording);
-                while (!open.IsCompleted && vm.Log.Entries.All(e => !e.Text.StartsWith("  PCM channels", StringComparison.Ordinal))) await Task.Delay(10, TestContext.Current.CancellationToken);
+                // The run is parked at Configure Streams: its recording is read and the dialog is the one thing it waits for.
+                // Waited for as that, not polled for a log line in a run that might have finished first (audit Q3).
+                await reached.Task.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
                 Assert.True(vm.IsBusy);
                 Assert.Equal(Path.GetDirectoryName(recording), vm.LastFolder);   // where Export and Import CSV will start
                 Assert.False(vm.ImportCsvCommand.CanExecute(null));

@@ -24,13 +24,14 @@ namespace TmDq.App
                 var window = new MainWindow();
                 // What is remembered between sessions (plan step 4.8). The installer's smoke test keeps nothing: it must
                 // not leave its recording in anyone's Recent Files.
-                PreferencesStore preferences = Startup.SmokeReportPath() is null
+                string? smokeReport = Startup.SmokeReportPath();
+                PreferencesStore preferences = smokeReport is null
                     ? PreferencesStore.Load(PreferencesStore.FolderFor(AppContext.BaseDirectory,
                                                                         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)))
                     : new PreferencesStore(new Preferences());
                 ApplyTheme(preferences.Current.IsDark);
                 // The installer's smoke test has no one to answer Configure Streams, so it runs the defaults.
-                IStreamConfigurator configurator = Startup.SmokeReportPath() is null
+                IStreamConfigurator configurator = smokeReport is null
                     ? new DialogConfigurator(new WindowStreamDialogs(window), new StorageSettingsFilePicker(window), AppContext.BaseDirectory,
                                              new StorageCalibrationFilePicker(window), preferences)
                     : new FirstChannelRun();
@@ -59,12 +60,8 @@ namespace TmDq.App
                 {
                     window.Opened += async (_, _) =>
                     {
-                        await vm.LoadAsync(recording);
-                        if (Startup.SmokeReportPath() is { } report)
-                        {
-                            Startup.WriteSmokeReport(report, vm);
-                            desktop.Shutdown(Startup.FirstLockSeries(vm.Plot) is null ? 1 : 0);
-                        }
+                        if (smokeReport is not null) desktop.Shutdown(await Startup.RunSmokeAsync(vm, recording, smokeReport));
+                        else await vm.LoadAsync(recording);
                     };
                 }
             }

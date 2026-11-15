@@ -22,7 +22,9 @@ using TmDq.App.Services;
 using TmDq.App.ViewModels;
 using TmDq.App.Views;
 using TmDq.Core;
+using TmDq.Core.Tests;
 using Xunit;
+using static TmDq.App.Tests.Frames;
 
 namespace TmDq.App.Tests
 {
@@ -422,7 +424,7 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public async Task AFileThatCannotBeOpenedIsLoggedInRed()
         {
-            string junk = Path.Combine(Path.GetTempPath(), "tmdq-app-junk-" + Guid.NewGuid().ToString("N") + ".ch10");
+            string junk = TempFiles.NewPath("app-junk", ".ch10");
             File.WriteAllBytes(junk, new byte[4096]);
             try
             {
@@ -435,7 +437,7 @@ namespace TmDq.App.Tests
             }
             finally
             {
-                File.Delete(junk);
+                TempFiles.Delete(junk);
             }
         }
 
@@ -514,13 +516,6 @@ namespace TmDq.App.Tests
 
         // ---- The windows ------------------------------------------------------------------------------------------------
 
-        private static T Shown<T>(T window) where T : Window
-        {
-            window.Show();
-            Dispatcher.UIThread.RunJobs();
-            return window;
-        }
-
         [AvaloniaFact]
         public void TheProgressDialogShowsTheRunAndCancelOnlyAsks()
         {
@@ -598,7 +593,7 @@ namespace TmDq.App.Tests
                     view.GetLogicalDescendants().OfType<ScrollViewer>().Single(), window);
         }
 
-        private static string Shown(SelectableTextBlock text) =>
+        private static string TextShown(SelectableTextBlock text) =>
             string.Concat(text.Inlines!.Select(i => i switch { Run r => r.Text, LineBreak => "\n", _ => "?" }));
 
         [AvaloniaFact]
@@ -611,7 +606,7 @@ namespace TmDq.App.Tests
             log.Success("a success line, in the success colour");
             var (_, text, _, window) = ShowLog(log.Entries);
 
-            Assert.Equal(log.PlainText, Shown(text));
+            Assert.Equal(log.PlainText, TextShown(text));
             Run[] runs = text.Inlines!.OfType<Run>().ToArray();
             // Information has no colour of its own: it inherits the text colour, which a theme sets.
             IBrush? Of(StatusLevel level) => StatusPaint.BrushOf(level, window.ActualThemeVariant);
@@ -677,7 +672,7 @@ namespace TmDq.App.Tests
             log.Error("first line\n  second line\n  third line");
             log.Add("next entry");
             var (_, text, _, window) = ShowLog(log.Entries);
-            Assert.Equal("13:05:09  first line\n  second line\n  third line\n13:05:09  next entry", Shown(text));
+            Assert.Equal("13:05:09  first line\n  second line\n  third line\n13:05:09  next entry", TextShown(text));
             var lines = text.TextLayout.TextLines;
             Assert.Equal(4, lines.Count);
             window.Close();
@@ -707,13 +702,13 @@ namespace TmDq.App.Tests
             // The old log first, alone: a line the view drew from it could not be hidden by a redraw of the new one.
             first.Add("added to the first log later");
             Dispatcher.UIThread.RunJobs();
-            Assert.Equal("13:05:09  from the second log", Shown(text));
+            Assert.Equal("13:05:09  from the second log", TextShown(text));
             second.Add("added to the second log later");
             Dispatcher.UIThread.RunJobs();
-            Assert.Equal("13:05:09  from the second log\n13:05:09  added to the second log later", Shown(text));
+            Assert.Equal("13:05:09  from the second log\n13:05:09  added to the second log later", TextShown(text));
             view.Entries = null;
             Dispatcher.UIThread.RunJobs();
-            Assert.Equal("", Shown(text));
+            Assert.Equal("", TextShown(text));
             window.Close();
         }
 
@@ -747,10 +742,10 @@ namespace TmDq.App.Tests
             Assert.True(p.Height > window.ClientSize.Height * 0.8);
 
             SelectableTextBlock text = window.FindControl<LogView>("Log")!.GetLogicalDescendants().OfType<SelectableTextBlock>().Single();
-            Assert.Equal(vm.Log.PlainText, Shown(text));
+            Assert.Equal(vm.Log.PlainText, TextShown(text));
             vm.Log.Warning("added later");
             Dispatcher.UIThread.RunJobs();
-            Assert.EndsWith("13:05:09  added later", Shown(text));
+            Assert.EndsWith("13:05:09  added later", TextShown(text));
             window.Close();
         }
     }

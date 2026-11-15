@@ -609,6 +609,21 @@ namespace TmDq.App.Views
             Cursor = vm?.HasData == true ? new Cursor(StandardCursorType.Hand) : Cursor.Default;
         }
 
+        /// <summary>The capture went elsewhere mid-drag (a window took the mouse, the plot was replaced): the drag ends where
+        /// it is. A band is dropped without zooming, a pan settles where it got to, and the cursor is the plot's again;
+        /// otherwise the plot would pan with no button down, or keep its band drawn, until the next release (audit B5).
+        /// A release reaches here too, after it has ended the drag itself, and finds nothing to end.</summary>
+        protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+        {
+            base.OnPointerCaptureLost(e);
+            if (!_bandZooming && !_panning) return;
+            if (_panning) Settle();
+            _bandZooming = false;
+            _panning = false;
+            Cursor = Plot?.HasData == true ? new Cursor(StandardCursorType.Hand) : Cursor.Default;
+            InvalidateVisual();
+        }
+
         protected override void OnPointerExited(PointerEventArgs e)
         {
             base.OnPointerExited(e);

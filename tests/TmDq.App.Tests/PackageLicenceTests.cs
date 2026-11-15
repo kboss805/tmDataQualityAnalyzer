@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text.Json;
+using TmDq.Core.Tests;
 using Xunit;
 
 namespace TmDq.App.Tests
@@ -16,14 +17,14 @@ namespace TmDq.App.Tests
     /// </summary>
     public sealed class PackageLicenceTests : IDisposable
     {
-        private readonly string _dir = Path.Combine(Path.GetTempPath(), "tmdq-licences-" + Guid.NewGuid().ToString("N"));
+        private readonly string _dir = TempFiles.NewPath("licences");
         private readonly List<(string Id, string Version)> _packages = new();
 
         public PackageLicenceTests() => Directory.CreateDirectory(Path.Combine(_dir, "packages"));
 
         public void Dispose()
         {
-            try { Directory.Delete(_dir, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            TempFiles.TryDeleteDirectory(_dir);
         }
 
         /// <summary>Puts a package in the packages folder with the given licence metadata (the inner XML of

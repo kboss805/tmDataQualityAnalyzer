@@ -141,13 +141,17 @@ namespace TmDq.App.Views
         public static string? FirstSupported(IDataTransfer? data) =>
             data?.TryGetFiles()?.Select(f => f.TryGetLocalPath()).FirstOrDefault(p => p is not null && RecentFiles.IsSupported(p));
 
+        // A drop is Recent Files' open, so its rule is the command's: a drop is offered only when the command would take
+        // it (not while a run is busy, audit B11), and taken through the command.
         private void OnDragOver(object? sender, DragEventArgs e) =>
-            e.DragEffects = FirstSupported(e.DataTransfer) is not null && Vm is not null ? DragDropEffects.Copy : DragDropEffects.None;
+            e.DragEffects = FirstSupported(e.DataTransfer) is { } path && Vm is { } vm && vm.OpenRecentCommand.CanExecute(path)
+                ? DragDropEffects.Copy
+                : DragDropEffects.None;
 
         private async void OnDrop(object? sender, DragEventArgs e)
         {
-            if (FirstSupported(e.DataTransfer) is not { } path || Vm is not { } vm) return;
-            await vm.OpenPathAsync(path);
+            if (FirstSupported(e.DataTransfer) is not { } path || Vm is not { } vm || !vm.OpenRecentCommand.CanExecute(path)) return;
+            await vm.OpenRecentCommand.ExecuteAsync(path);
         }
     }
 

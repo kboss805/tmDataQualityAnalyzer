@@ -19,7 +19,7 @@ namespace TmDq.App.Tests
     [Collection(NativeCoreCollection.Name)]
     public sealed class StreamFilesTests : IDisposable
     {
-        private readonly string _dir = Path.Combine(Path.GetTempPath(), "tmdq-streamfiles-" + Guid.NewGuid().ToString("N"));
+        private readonly string _dir = TempFiles.NewPath("streamfiles");
 
         public StreamFilesTests()
         {

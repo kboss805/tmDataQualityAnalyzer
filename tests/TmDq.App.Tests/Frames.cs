@@ -6,6 +6,7 @@ using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using Avalonia.Threading;
 using Xunit;
 
 namespace TmDq.App.Tests
@@ -13,6 +14,15 @@ namespace TmDq.App.Tests
     /// <summary>Reading a rendered frame: what a window drew, through Skia, pixel by pixel.</summary>
     internal static class Frames
     {
+        /// <summary>Shows a window and runs the UI thread's pending jobs, so its layout and first frame exist; the window
+        /// is returned for the test to read.</summary>
+        public static T Shown<T>(T window) where T : Window
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            return window;
+        }
+
         public static WriteableBitmap Capture(TopLevel window)
         {
             WriteableBitmap? frame = window.CaptureRenderedFrame();

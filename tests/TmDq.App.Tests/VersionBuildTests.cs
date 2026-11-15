@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Reflection;
+using TmDq.Core.Tests;
 using Xunit;
 
 namespace TmDq.App.Tests
@@ -13,13 +14,13 @@ namespace TmDq.App.Tests
     /// </summary>
     public sealed class VersionBuildTests : IDisposable
     {
-        private readonly string _dir = Path.Combine(Path.GetTempPath(), "tmdq-version-" + Guid.NewGuid().ToString("N"));
+        private readonly string _dir = TempFiles.NewPath("version");
 
         public VersionBuildTests() => Directory.CreateDirectory(_dir);
 
         public void Dispose()
         {
-            try { Directory.Delete(_dir, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            TempFiles.TryDeleteDirectory(_dir);
         }
 
         private (int Exit, string Output, string Dll) Build(string header)

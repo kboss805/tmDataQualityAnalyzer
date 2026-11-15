@@ -24,12 +24,10 @@ namespace {
 
 int currentPcm(const Chapter10Reader& r) { return Chapter10ReaderTestAccess::currentPcmChannel(r); }
 
-fs::path fixturePath(const std::string& name) { return repoFile(fs::path("tests") / "data" / "test files" / name); }
-
 /// Loads a fixture and requires it to open.
 void loadFixture(Chapter10Reader& reader, const std::string& name)
 {
-    REQUIRE_MESSAGE(reader.loadChannels(fixturePath(name)), name << ": " << reader.lastError());
+    REQUIRE_MESSAGE(reader.loadChannels(recordingFile(name)), name << ": " << reader.lastError());
     REQUIRE(reader.lastError().empty());
 }
 
@@ -299,7 +297,7 @@ TEST_CASE("Chapter10Reader: loading a file that does not exist fails")
 TEST_CASE("Chapter10Reader: a failed load reports its reason and leaves no channels")
 {
     // A real recording to cut up: its first packet is the TMATS record.
-    const std::string all = readBytes(fixturePath("step_cal, example.ch10"));
+    const std::string all = readBytes(recordingFile("step_cal, example.ch10"));
     const std::uint32_t first = firstPacketLength(all);
     REQUIRE((first > 200 && first < all.size()));
 
@@ -449,7 +447,7 @@ TEST_CASE("Chapter10Reader: a second load replaces what the first left behind")
     TempDir dir;
     CHECK(!reader.loadChannels(dir.file("missing.ch10")));
     CHECK(!reader.lastError().empty());
-    CHECK(reader.loadChannels(fixturePath("prn_testfile, sample.ch10")));
+    CHECK(reader.loadChannels(recordingFile("prn_testfile, sample.ch10")));
     CHECK(reader.lastError().empty());
 }
 

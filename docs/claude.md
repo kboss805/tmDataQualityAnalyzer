@@ -516,7 +516,8 @@ profile, so a batch processes with the linear calibration.
 - **Startup and the smoke report** (`Startup`, `Models/Processing/FirstChannelRun`): a recording path on the command
   line opens that recording, as a file association does. With `TMDQ_SMOKE_REPORT=<file>` set as well, the application skips
   Configure Streams, runs the recording's first PCM channel with the Frame Sync Lock defaults (`FirstChannelRun`), writes
-  one result line to the file and exits (0 when the stream was processed, 1 when not): the installer's clean-machine test
+  one result line to the file and exits (0 when the stream was processed, 1 when not, 2 when the report could not be
+  written: `Startup.RunSmokeAsync`, which `WalkingSkeletonTests` runs): the installer's clean-machine test
   proves the whole path, native core included, with it.
 - **Windows:** every window with a view model is XAML (`MainWindow`, `ConfigureStreamsWindow`, `StreamSetupWindow`,
   `ExtractCalibrationWindow`, `ProcessingWindow`, `ExportWindow`, `BatchApplyWindow`, `CustomizeViewWindow`); every window
@@ -574,12 +575,13 @@ what it produced, with progress, log and cancel), `CalibrationRun` and `StepFile
    log lines, errors, progress and completion; the ABI relays them to the host. **IntervalGate** (`intervalgate.h`) is
    the clock-injected gate that throttles the reader's progress reports.
 7. **FrameSetup** (`framesetup`) - the frame's word map and calibration table, built per job; reads and writes the
-   receiver-parameters file.
+   receiver-parameters file. `resolveReceiverWordMap` is the one resolution of a Receiver SNR stream's word map (the
+   named file, else the shipped default, else the sequential map; an unusable default is passed over with a warning),
+   called by both the job builder and the calibration extractor, whose profiles are matched to the run's words.
 8. **framesync** (`framesync.h`) - the shared decode of a pattern and mask, and `applyAcquisition`, which builds every
    raw-affecting field of a run's parameters (the main run and the calibration extractor both go through it).
 9. **StreamJobBuilder** (`streamjobbuilder`) - turns one stream's settings into a processing job: validates the pattern,
-   mask and frame length, builds the word map (the named receiver-parameters file, else the shipped default, else the
-   default map), applies the linear calibration and attaches step-calibration profiles, or says why it refuses.
+   mask and frame length, builds the word map (through `resolveReceiverWordMap`), applies the linear calibration and attaches step-calibration profiles, or says why it refuses.
 10. **StepDetector** (`stepdetector`) - *US5.3*: parses the `[[Step]]` step file and finds the step plateaus in a raw
     series, building a per-channel `CalibrationProfile`.
 11. **CalibrationExtractor** (`calibrationextractor`, with `calibrationrequest`) - *US5.3*: a raw extraction over a

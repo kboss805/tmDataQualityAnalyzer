@@ -29,7 +29,7 @@ namespace TmDq.App.Tests
     [Collection(NativeCoreCollection.Name)]
     public sealed class CalibrationDialogTests : IDisposable
     {
-        private readonly string _dir = Path.Combine(Path.GetTempPath(), "tmdq-cal-" + Guid.NewGuid().ToString("N"));
+        private readonly string _dir = TempFiles.NewPath("cal");
 
         public CalibrationDialogTests()
         {
@@ -62,6 +62,23 @@ namespace TmDq.App.Tests
             }
 
             public void Close() => Closed++;
+        }
+
+        /// <summary>A run whose result the core cannot hand back (audit B4): it starts, runs, and throws on GetResult.</summary>
+        private sealed class ResultlessRunner : ICalibrationRunner
+        {
+            public int Disposed;
+
+            public ICalibrationRunning Start(CalibrationRequest request, IRunObserver observer) => new Running(this);
+
+            private sealed class Running(ResultlessRunner owner) : ICalibrationRunning
+            {
+                public bool IsRunning => true;
+                public void Cancel() { }
+                public void Wait() { }
+                public CalibrationResult GetResult() => throw new TmdqException(Status.Internal, "out of memory in the core");
+                public void Dispose() => owner.Disposed++;
+            }
         }
 
         private sealed class FakeCalFiles : ICalibrationFilePicker
@@ -103,6 +120,20 @@ namespace TmDq.App.Tests
             Assert.Equal("default.toml", gone.StepName);
             var none = new ExtractCalibrationViewModel(StepCalBase(), null, null);
             Assert.Equal(("", "No file selected.", CalibrationStatusKind.Pending), (none.StepName, none.StepStatus, none.StepKind));
+        }
+
+        [Fact]
+        public async Task AResultTheCoreCannotHandBackIsACrossNotAProcessingThatNeverEnds()
+        {
+            var progress = new FakeProgress();
+            var runner = new ResultlessRunner();
+            var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null) { ProgressDialog = progress, Runner = runner };
+            await vm.LoadCalibrationAsync(StepCal);
+            Assert.Equal((CalibrationStatusKind.Fail, "✗ out of memory in the core"), (vm.CalKind, vm.CalStatus));
+            Assert.Equal((1, 1), (progress.Shown.Count, progress.Closed));   // the dialog went, and the status says why
+            Assert.Equal(1, runner.Disposed);
+            Assert.False(vm.CanAccept);
+            Assert.Empty(vm.Profiles);
         }
 
         [Fact]

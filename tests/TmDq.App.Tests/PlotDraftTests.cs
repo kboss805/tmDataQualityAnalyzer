@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -139,6 +140,32 @@ namespace TmDq.App.Tests
             (atDropout, elsewhere) = DropoutInk(s, plot);
             Assert.True(atDropout >= 10);
             Assert.Equal(0, elsewhere);
+            s.Window.Close();
+        }
+
+        [AvaloniaFact]
+        public void ADragWhoseCaptureIsLostIsTheFullPictureAtOnce()
+        {
+            // Audit B5: a lost capture ends a pan as its release would, so the draft gives way to the full picture then,
+            // not after the refine delay.
+            PlotViewModel plot = Dense();
+            plot.SetXViewByUser(200, 600);
+            Shown s = Show(plot);
+            s.Chart.DraftThresholdMs = 0;
+            s.Chart.RefineDelay = TimeSpan.FromHours(1);   // only the end of the drag can settle it here
+            IPointer? pointer = null;
+            s.Chart.AddHandler(InputElement.PointerPressedEvent, (_, e) => pointer = e.Pointer, RoutingStrategies.Bubble, handledEventsToo: true);
+            Point grab = s.At(s.Chart.PlotArea.Center.X, s.Chart.PlotArea.Center.Y);
+            s.Window.MouseDown(grab, MouseButton.Left, RawInputModifiers.None);
+            s.Window.MouseMove(grab + new Point(-40, 0), RawInputModifiers.LeftMouseButton);
+            Dispatcher.UIThread.RunJobs();
+            using (s.Frame()) { }
+            Assert.True(s.Chart.DraftShown);
+
+            pointer!.Capture(null);
+            Dispatcher.UIThread.RunJobs();
+            using (s.Frame()) { }
+            Assert.False(s.Chart.DraftShown);
             s.Window.Close();
         }
 
@@ -383,24 +410,31 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public void OnlyTheLastStepsDelaySettlesTheGesture()
         {
-            // Two wheel notches 300 ms apart with a 400 ms delay: the first notch's delay runs out 100 ms after the second
-            // notch, and must not settle the gesture the second one is still part of. (If the machine is so slow that the
-            // first delay has run out before the second notch, the plot is drafted again by the second, and the check
-            // still holds.)
+            // Two wheel notches 300 ms apart with a 1000 ms delay: the first notch's delay runs out 700 ms after the
+            // second notch, and must not settle the gesture the second one is still part of. The check is made 200 ms
+            // after the second notch, so it holds unless the machine stalled for most of 500 ms between the notches and
+            // the check; a stall that long cannot tell the cases apart, and the test says so (a skip) rather than fail
+            // a plot that is right (audit Q3). The delay is a Task.Delay, which Windows' coarse timer can end up to a
+            // tick (15.6 ms) early, so the end is held to 3/4 of the delay, not to the whole of it.
             PlotViewModel plot = Dense();
             Shown s = Show(plot);
             s.Chart.DraftThresholdMs = 0;
-            s.Chart.RefineDelay = TimeSpan.FromMilliseconds(400);
+            s.Chart.RefineDelay = TimeSpan.FromMilliseconds(1000);
+            var sinceFirst = Stopwatch.StartNew();
             s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
             Pump(s, TimeSpan.FromMilliseconds(300));
             s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
             var sinceSecond = Stopwatch.StartNew();
             Pump(s, TimeSpan.FromMilliseconds(200));
-            Assert.True(sinceSecond.Elapsed < TimeSpan.FromMilliseconds(400), "too slow to tell: the second delay may have run out too");
+            if (sinceFirst.Elapsed >= TimeSpan.FromMilliseconds(900))
+            {
+                s.Window.Close();
+                Assert.Skip($"the machine stalled ({sinceFirst.ElapsedMilliseconds} ms to the check): the first delay may have run out");
+            }
             Assert.True(s.Chart.DraftShown, "an earlier step's delay settled the gesture");
             while (s.Chart.DraftShown && sinceSecond.Elapsed < TimeSpan.FromSeconds(5)) Pump(s, TimeSpan.FromMilliseconds(10));
             Assert.False(s.Chart.DraftShown);
-            Assert.True(sinceSecond.Elapsed >= TimeSpan.FromMilliseconds(390), $"settled {sinceSecond.Elapsed.TotalMilliseconds} ms after the last step");
+            Assert.True(sinceSecond.Elapsed >= TimeSpan.FromMilliseconds(750), $"settled {sinceSecond.Elapsed.TotalMilliseconds} ms after the last step");
             s.Window.Close();
 
             static void Pump(Shown s, TimeSpan time)

@@ -25,16 +25,12 @@
 #include "framesetup.h"
 #include "framesync.h"
 #include "stepdetector.h"
+#include "streamjobbuilder.h"
 #include "test_support.h"
 
 using namespace tmdq_test;
 
 namespace {
-
-fs::path recording(const char* name)
-{
-    return repoFile(fs::path("tests") / "data" / "test files" / name);
-}
 
 /// How the bits are recovered, from the hex text the dialogs hold. The one place these tests make an Acquisition, so it is
 /// decoded the way the application decodes it.
@@ -284,7 +280,7 @@ bool runExtraction(CalibrationExtractor& extractor, const CalibrationExtractor::
 /// RCVR3 = words 6/7/8; an empty receiverParamsToml means the extractor builds the 16x3 sequential word map.
 void buildRealRequest(CalibrationExtractor::Request& req)
 {
-    const fs::path file = recording("agc_rnrz-l_trc_testfile.ch10");
+    const fs::path file = recordingFile("agc_rnrz-l_trc_testfile.ch10");
     Chapter10Reader reader;
     REQUIRE_MESSAGE(reader.loadChannels(file), reader.lastError());
     const int pcm_id  = reader.getFirstPCMChannelID();
@@ -315,7 +311,7 @@ void buildRealRequest(CalibrationExtractor::Request& req)
 /// repository root).
 void buildStepCalRequest(CalibrationExtractor::Request& req, const fs::path& step_toml, const fs::path& receiver_params)
 {
-    const fs::path file = recording("step_cal, example.ch10");
+    const fs::path file = recordingFile("step_cal, example.ch10");
     Chapter10Reader reader;
     REQUIRE_MESSAGE(reader.loadChannels(file), reader.lastError());
     std::vector<StepDefinition> steps;
@@ -1312,8 +1308,8 @@ TEST_CASE("CalibrationExtractor: a word map that cannot be used is reported befo
     };
     const Row rows[] = {
         {"missing", "Receiver Parameters file 'map.toml' was not found."},
-        {"word-outside-frame", "Failed to load Receiver Parameters word map. Check the file."},
-        {"word-just-past-the-frame", "Failed to load Receiver Parameters word map. Check the file."},
+        {"word-outside-frame", "Failed to load Receiver Parameters from 'map.toml'. Check the word map."},
+        {"word-just-past-the-frame", "Failed to load Receiver Parameters from 'map.toml'. Check the word map."},
         {"no-parameters", "Receiver Parameters file contains no parameters."},
     };
     for (const Row& row : rows)
@@ -1341,6 +1337,68 @@ TEST_CASE("CalibrationExtractor: a word map that cannot be used is reported befo
         CHECK(extractor.error() == row.expected);
         CHECK(recorder->events == std::vector<std::string>{"finished"});
     }
+}
+
+TEST_CASE("CalibrationExtractor: an unusable default word map is passed over for the sequential map, as the main run passes it over")
+{
+    // Audit B10. The shipped default.toml exists but names a word past the 800-bit (50-word) frame. The main run used to
+    // pass it over in silence for the sequential map while the extraction failed, though the extractor's profiles are
+    // matched to the main run's channels by word. Now both resolve it the one way, and both say so.
+    TempDir dir;
+    const fs::path settings = dir.path() / "settings" / "receiver_params";
+    fs::create_directories(settings);
+    writeBytes(settings / "default.toml", "[L_RCVR1]\nWord = 9999\n");
+    const std::string warning = "the default Receiver Parameters file 'default.toml' could not be used; the sequential "
+                                "word map for 16 x 3 receiver channels is used instead.";
+
+    CalibrationExtractor::Request req = stepCalRequest();
+    req.receiverParamsToml      = settings / "default.toml";
+    req.receiverParamsIsDefault = true;
+    CalibrationExtractor extractor;
+    auto recorder = std::make_shared<Recorder>(extractor);
+    REQUIRE_MESSAGE(recorder->run(req), recorder->summary);
+    CHECK(std::find(recorder->log.begin(), recorder->log.end(), "Calibration: " + warning) != recorder->log.end());
+
+    StreamJobConfig cfg;
+    cfg.pcmChannelId     = req.pcmChannelId;
+    cfg.label            = "Rcvr";
+    cfg.mode             = StreamMode::ReceiverChannelInfo;
+    cfg.syncPattern      = "FE6B2840";
+    cfg.bitsInMinorFrame = 800;
+    StreamJobContext context;
+    context.appRoot = dir.path().string();
+    StreamJob job;
+    StreamJobReport report;
+    REQUIRE_MESSAGE(buildStreamJob(cfg, ProcessingParams{}, context, job, report), report.error);
+    REQUIRE(!report.log.empty());
+    CHECK(report.log.front() == "  Rcvr: " + warning);
+
+    // The two maps agree, channel by channel: the same names on the same words.
+    const std::vector<CalibrationChannelResult>& channels = extractor.results();
+    REQUIRE(static_cast<int>(channels.size()) == job.frameSetup->length());
+    for (int i = 0; i < job.frameSetup->length(); i++)
+    {
+        INFO("channel " << i);
+        CHECK(channels[static_cast<std::size_t>(i)].name == job.frameSetup->getParameter(i)->name);
+        CHECK(channels[static_cast<std::size_t>(i)].word == job.frameSetup->getParameter(i)->word);
+    }
+    CHECK(job.frameSetup->getParameter(47)->name == "C_RCVR16");
+    CHECK(job.frameSetup->getParameter(47)->word == 47);
+}
+
+TEST_CASE("CalibrationExtractor: a word map the user named is not passed over, even when it is the default file")
+{
+    // Only the default the request found for itself is passed over; the same file named by the user is an error.
+    TempDir dir;
+    const fs::path toml = dir.path() / "default.toml";
+    writeBytes(toml, "[L_RCVR1]\nWord = 9999\n");
+    CalibrationExtractor::Request req = stepCalRequest();
+    req.receiverParamsToml      = toml;
+    req.receiverParamsIsDefault = false;
+    CalibrationExtractor extractor;
+    auto recorder = std::make_shared<Recorder>(extractor);
+    CHECK_FALSE(recorder->run(req));
+    CHECK(recorder->summary == "Failed to load Receiver Parameters from 'default.toml'. Check the word map.");
 }
 
 TEST_CASE("CalibrationExtractor: a default word map that does not fit the frame is reported")
@@ -1492,10 +1550,11 @@ TEST_CASE("CalibrationExtractor: a cancel can come from another thread")
     CalibrationExtractor extractor;
     auto recorder = std::make_shared<Recorder>(extractor);
     recorder->start(req);
-    // The extraction takes about a second; cancel a tenth of one in, from a thread that is not the caller's and not the
-    // extraction's.
-    std::thread canceller([&extractor]() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // The extraction takes about a second; cancel it once it has begun (its reader's first line), from a thread that is
+    // not the caller's and not the extraction's. Not after a fixed time: a slow start would then cancel nothing yet, and
+    // a fast machine would cancel after it had finished.
+    std::thread canceller([&extractor, &recorder]() {
+        recorder->waitForLog("Reading Chapter 10 file", 60000);
         extractor.cancel();
     });
     const bool finished = recorder->wait();
@@ -1804,7 +1863,11 @@ TEST_CASE("CalibrationExtractor: a cancel wakes a worker that is waiting for pac
     ReleaseOnExit guard{recorder};
     recorder->start(req);
     REQUIRE(recorder->waitParked(60000));
-    std::this_thread::sleep_for(std::chrono::milliseconds(300)); // the worker reaches its empty queue and blocks there
+    // The worker's last line before it waits for a packet: it has started. What is left is its call to the queue, which
+    // the short settle covers; the old fixed 300 ms could pass before a stalled worker had started at all, and the wake
+    // path was then never run.
+    REQUIRE_MESSAGE(recorder->waitForLog("processing...", 60000), joinLines(recorder->log));
+    std::this_thread::sleep_for(std::chrono::milliseconds(50)); // the worker's dequeue call, the next thing it does
 
     extractor.cancel();
     const bool worker_ended = recorder->waitForLog("no frame sync found", 15000);

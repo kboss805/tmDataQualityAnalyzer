@@ -39,7 +39,7 @@ namespace TmDq.App.Tests
     [Collection(NativeCoreCollection.Name)]
     public sealed class ShellTests : IDisposable
     {
-        private readonly string _dir = Path.Combine(Path.GetTempPath(), "tmdq-shell-" + Guid.NewGuid().ToString("N"));
+        private readonly string _dir = TempFiles.NewPath("shell");
 
         public ShellTests() => Directory.CreateDirectory(_dir);
 
@@ -650,6 +650,24 @@ namespace TmDq.App.Tests
             window.DragDrop(at, RawDragEventType.DragEnter, await Files(window, csv), DragDropEffects.Copy, RawInputModifiers.None);
             window.DragDrop(at, RawDragEventType.Drop, await Files(window, csv), DragDropEffects.Copy, RawInputModifiers.None);
             await Until(() => vm.Status == "Imported dropped.csv.", () => vm.Status);
+
+            // While a run is busy nothing is offered, and a drop is not taken (audit B11): the drop follows Recent Files'
+            // rule, which is the command's.
+            var answer = new TaskCompletionSource<StreamsChoice?>();
+            (MainWindow busyWindow, MainWindowViewModel busy) = Show(new MainWindowViewModel(new MainWindowServices { Configurator = FakeConfigurator.Waiting(answer.Task) }));
+            busyWindow.AddHandler(DragDrop.DragOverEvent, (_, e) => offered = e.DragEffects, RoutingStrategies.Bubble, handledEventsToo: true);
+            Task running = busy.LoadAsync(Prn);
+            await Until(() => busy.IsBusy, () => busy.Status);
+            offered = DragDropEffects.Move;
+            busyWindow.DragDrop(at, RawDragEventType.DragEnter, await Files(busyWindow, csv), DragDropEffects.Copy, RawInputModifiers.None);
+            busyWindow.DragDrop(at, RawDragEventType.DragOver, await Files(busyWindow, csv), DragDropEffects.Copy, RawInputModifiers.None);
+            Assert.Equal(DragDropEffects.None, offered);
+            busyWindow.DragDrop(at, RawDragEventType.Drop, await Files(busyWindow, csv), DragDropEffects.Copy, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain(csv, busy.RecentFiles);
+            answer.SetResult(null);
+            await running;
+            busyWindow.Close();
 
             // Without a view model nothing is offered.
             window.DataContext = null;

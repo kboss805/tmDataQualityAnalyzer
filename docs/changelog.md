@@ -41,6 +41,125 @@ value, the start lines ranked after the results, the streams not taken by channe
 percentages, and a capture that does not set the log steady, which the log-error scene asserts). One SURVIVED, as expected: the
 progress bar not pinned at 70, which only the figure's pixels show and no test reads.
 
+#### Test support written once, and the smoke branch under test (audit Q4, Q6)
+
+Found by the whole-tree cleanup audit; each site was re-read against the tree as of #295. Q4 is done where the copies
+were byte for byte the same or the same fact; the ones that only look alike are left (below). Q5 (large test files) is
+left for its own change.
+
+- **Q4, native: one `test_support.h`.** `asciiOnly` was written three times byte for byte (`test_csvseries.cpp`,
+  `test_seriesbuild.cpp`, `test_streamjob.cpp`, about 35 lines each) and `utf16le` twice (the CSV tests' proper one, with
+  its UTF-8 decoder `units`, and the frame-sync file tests' ASCII-only one); both are now in the header, the second
+  being the first. The committed recordings were reached five ways (`recording`, `fixturePath`, `repoFile(...)` with the
+  folder spelled out): `recordingFile(name)` is the one way, and `test_calibrationextractor.cpp`,
+  `test_frameprocessor.cpp`, `test_chapter10reader.cpp`, `test_ch10packetreader.cpp` and `test_abi.cpp` use it. The
+  `step_cal` fixture (a `Fixture` struct and `loadFixture()`, the same in `test_ch10packetreader.cpp` and
+  `test_pipelinerunner.cpp`) is `StepCalFixture` / `loadStepCalFixture()`. The ABI test's own `StepCal` is left: its
+  path is UTF-8 text, as a host holds it, and it carries a flag the others have no use for.
+- **Q4, managed: `TempFiles.NewPath` and `RepoPaths`.** 55 tests composed `Path.Combine(Path.GetTempPath(), "tmdq-<x>-" +
+  Guid.NewGuid().ToString("N") ...)` inline; `TempFiles.NewPath("<x>", ".suffix")` says it once (and has a test). The
+  two projects each walked up to `tmdq.sln` and each had a `Recording(name)` (`Env` and `Repo`): `RepoPaths` holds the
+  walk, `File` and `Recording`, the app's tests link it as they do `TempFiles.cs`, and `Env` and `Repo` hand their
+  callers' calls to it, so no call site moved.
+- **Q4, app: `Frames.Shown`.** `Shown<T>(window)` (show, run the pending UI jobs) was written in `ProcessingTests` and
+  `StreamWindowsTests` the same; it is `Frames.Shown`. The six `kernel32` imports that `IconTests` and `ManifestTests`
+  each declared to read a resource out of the exe are `PeResources`. (`ProcessingTests`' other `Shown`, of a text block, is
+  `TextShown`.) **Left on purpose:** the figures' `Shown` (it sets the theme and removes the caret, so it is another
+  routine), the two `FakeImages` (one records the view it was asked for, the other writes a file and can fail), the five
+  `IProcessingDialog` doubles (each does something different at `Show`).
+- **Q6: the smoke branch is a method, and it is tested.** `App.OnFrameworkInitializationCompleted` read
+  `TMDQ_SMOKE_REPORT` three times and ran the smoke inside an `async void` lambda, where a throw from a bad report path
+  would have ended the process with no report. It reads the variable once, and `Startup.RunSmokeAsync(vm, recording,
+  reportPath)` does the work and returns the exit code: 0 a stream processed, 1 not, **2 the report could not be
+  written** (a folder that is not there, a path that is no file name), a code of its own so a bad path is not taken for
+  a failed recording. The packaging and sandbox scripts read any non-zero exit as a failure, as before. Three tests
+  (`TheSmokeRunExitsZero...`, `...ExitsOne...`, `...ExitsTwoNotCrashes`).
+- **Checked.** Mutation check, `eng\mutate.ps1`: managed (`TempFilesTests`), 3 mutants, **3 CAUGHT** (a path that is not
+  unique, one without the `tmdq-` prefix, one without its suffix); app (`WalkingSkeletonTests`), 5 mutants, **5 CAUGHT**
+  (the exit codes swapped, the no-report code the same as the failed one, the write failure not caught, a failed write
+  reporting the recording's outcome, the recording never opened); native (the CSV, frame-sync file, stream job and series
+  tests), 3 mutants, **3 CAUGHT** (an invalid byte spelled differently, the byte order mark reversed, the high byte of a
+  UTF-16 unit shifted). The third was first a SURVIVOR: every UTF-16 file in the CSV cases was ASCII, which has no high
+  byte, so `non-ascii-names-utf16le` now holds the same names as the UTF-8 case. All three suites in Release, zero
+  warnings: native **495** (1 skipped), managed **366** passed / 1 skipped, app **647** passed / 34 not run. Baselines
+  moved: managed 365 to 366 (`NewPath`), app 644 to 647 (the three smoke tests).
+
+#### Tests that could not fail, and tests that could fail for the wrong reason (audit Q1, Q2, Q3)
+
+Found by the whole-tree cleanup audit; each site was re-read against the tree as of #293. Q4 (test support written several
+times), Q5 (large test files) and Q6 (the smoke branch) are left for their own changes.
+
+- **Q1: bare deletes, and swallowed ones.** Three tests deleted a `.ch10` the core had just opened in a `finally`
+  (`ProcessingTests`, and two in `WalkingSkeletonTests`): now `TempFiles.Delete`, which waits out a virus scanner's hold
+  and still throws on a leaked handle. Four build-tool test classes (`LicenceBuildTests`, `PackageLicenceTests`,
+  `ThirdPartyNoticesTests`, `VersionBuildTests`) swallowed every delete failure in `Dispose` with no stated reason: now
+  `TempFiles.TryDeleteDirectory`, named for what it is (a scratch folder a child process may still hold; a leftover folder
+  in `%TEMP%` is no failure), with its own test. The `write-test` skill says which of the two to use.
+- **Q2: expectations taken from the constant under test.** `StreamRules.PatternRequired`'s text was in no test (three
+  files compared with the constant), so a reworded message passed: two cases now hold the literal. The plot's layout tests
+  built their expected pixels from `PlotChart.OuterMargin`, `TopInset` and `AxisLabelGap`, so a moved margin moved test and
+  chart together: `TheChartsMarginsAreTheValuesTheLayoutTestsAreWrittenIn` pins all five as numbers. `appVersionValues`
+  (three numbers checked as not negative) could not fail; it now also refuses the 0.0.0 of an unset version, with no
+  version typed in it (the managed suite's `VersionTests` hold the number to the packaging's).
+- **Q3: timing and machine dependence.** `OnlyTheLastStepsDelaySettlesTheGesture` failed a plot that was right on a stalled
+  machine ("too slow to tell") and held the settle to 390 ms of a 400 ms `Task.Delay`, which Windows' coarse timer can end a
+  tick early (the same flake as #283 and #287): its delay is 1000 ms, the check has 500 ms of margin, a longer stall is a
+  skip (`Assert.Skip`, shown to report as skipped under `AvaloniaFact`), and the end is held to 3/4 of the delay.
+  `WhileBusyNeitherImportNorExportStartsAndBothAreToldWhenItEnds` polled for a log line with no limit and relied on the run
+  being parked: it now waits for Configure Streams to be asked for (`FakeConfigurator.Waiting` takes a callback), with a
+  60 s limit. The three native cases that slept 100 to 300 ms "so the worker reaches its empty queue" wait for each worker's
+  own "processing..." line first (a stalled worker is no longer cancelled before it has started, which left the wake path
+  unrun) and keep a 50 ms settle for its next call; the cancel-from-another-thread case cancels once the reader has begun
+  and not 100 ms in. `Abi: aCsvIsParsedLikeTheCore` read two CSV exports from `tests/data` only where they existed, so
+  CI covered less than a developer's machine: two real v2.x exports, trimmed to a header and a few rows, are committed in
+  `tests/fixtures` and required.
+- **Checked.** Mutation check, `eng\mutate.ps1`: app suite (four classes), 7 mutants, **7 CAUGHT** (Q2a a reworded message,
+  Q2b to Q2d three margins moved, Q3a an earlier step's delay settling the gesture, Q3b half the delay, Q3c a load that is
+  not busy while Configure Streams is up); native (`Constants*` and the CSV case), 2 mutants, **2 CAUGHT** (V1 an unset
+  0.0.0 version, V2 a negative one). All three suites in Release, zero warnings: native **495** (1 skipped), managed **365**
+  passed / 1 skipped, app **644** passed / 34 not run. Baselines moved: managed 364 to 365 (the `TryDeleteDirectory` test),
+  app 643 to 644 (the margins test).
+
+#### Behaviour bugs: one word-map resolution for both passes, a lost drag, a busy drop, a calibration result the core cannot give (audit B10, B5, B11, B4)
+
+Found by the whole-tree cleanup audit. B10's direction is the owner's of 2026-11-15 (both passes fall back, with a
+warning); B4's seam was decided the same day.
+
+- **B10: the main run and the calibration extractor resolved the word map differently.** With no file named and the
+  shipped `settings\receiver_params\default.toml` present but unusable (a word past the frame, not TOML), the main run
+  passed it over in silence for the sequential map while the extraction failed, though the extractor's profiles are
+  matched to the main run's channels by word. Both now call one `resolveReceiverWordMap` (`framesetup.h`, with
+  `defaultReceiverParamsFile`): the named file, else the default, else the sequential map for the counts; an unusable
+  default is passed over in both, and both say so ("the default Receiver Parameters file 'default.toml' could not be
+  used; the sequential word map for N x M receiver channels is used instead.", in the run's log once its job is accepted,
+  and in the calibration's). `CalibrationExtractor::Request` gains `receiverParamsIsDefault`, which
+  `buildCalibrationRequest` sets when the file it found is the default, so a file the user named is still an error. The
+  extractor's load failure now says what the main run's does ("Failed to load Receiver Parameters from '<file>'. Check
+  the word map."). Tests: `an unusable default word map is passed over for the sequential map, as the main run passes it
+  over` (both passes, the same names on the same words), `a word map the user named is not passed over, even when it is
+  the default file`; the stream-job oracle and three recorded digests gain the warning.
+- **B5: a drag whose capture was lost went on.** `PlotChart` had no `OnPointerCaptureLost`: the plot would pan with no
+  button down, or keep its band drawn, until the next release. Now a lost capture drops a band without zooming, settles a
+  pan where it got to, and gives the cursor back; `PlotLegend`'s override gives its cursor back too. Tests:
+  `ADragWhoseCaptureIsLostEndsWhereItIs`, `ADragWhoseCaptureIsLostIsTheFullPictureAtOnce`.
+- **B11: the drag cursor offered a drop the app would ignore while busy.** The drop is Recent Files' open, so it now
+  follows the command's rule: offered and taken only when `OpenRecentCommand` would take it. The drop test checks that
+  a run in progress is offered nothing.
+- **B4: a calibration result the core could not give.** `GetResult()` sat outside the extraction's `try`; a failure
+  there (out of memory, an internal error) left the status at "Processing calibration file..." with the progress dialog
+  gone. The run now starts through `ICalibrationRunner` (`Services`; the core's `CalibrationRun` by default), so a test
+  can stand in, and the failure is a cross with the core's message. Test:
+  `AResultTheCoreCannotHandBackIsACrossNotAProcessingThatNeverEnds`.
+- **Checked.** Mutation check, `eng\mutate.ps1`: native (stream job, calibration extractor and request, frame setup), 5
+  mutants, **5 CAUGHT** (N1 the warning dropped, N2 an unusable default refused, N3 the extractor ignoring that its file is
+  the default, N4 the request never saying so, N5 the main run silent again); app (four classes), 8 mutants, **6 CAUGHT**
+  (A1 the lost capture ignored, A2 the band left drawn, A3 the pan carrying on, A4 the pan's draft left up, A6 a drop
+  offered while busy, A8 the result's failure unhandled) and **2 SURVIVED**, both reasoned: A5 the legend's cursor
+  (Avalonia's `Cursor` exposes no type to assert) and A7 the drop handler's own busy check (the view model refuses a busy
+  open too, so it is defence, not the rule). The soak ran on this change (`eng\run_soak.ps1`): all 34 runs exported byte for byte what v2.14.2 exported. All three suites in Release, zero
+  warnings: native **495** (1 skipped), managed **364** passed / 1 skipped, app **643** passed / 34 not run. Baselines
+  moved: native 493 to 495, app 640 to 643.
+
 #### The receiver tree's rows on the theme
 
 In the dark theme the Customize View dialog's Receiver SNR tab drew each receiver's row (an `Expander`) in Fluent's own

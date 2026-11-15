@@ -116,44 +116,6 @@ std::string num(double v)
     return std::format("{:.15g}", v);
 }
 
-/// UTF-8 text with its non-ASCII characters spelled out as <U+XXXX>.
-std::string asciiOnly(const std::string& s)
-{
-    std::string out;
-    for (std::size_t i = 0; i < s.size();)
-    {
-        const auto b = static_cast<unsigned char>(s[i]);
-        if (b < 0x80)
-        {
-            out += static_cast<char>(b);
-            ++i;
-            continue;
-        }
-        int extra = 0;
-        std::uint32_t cp = 0;
-        if ((b & 0xE0) == 0xC0) { extra = 1; cp = b & 0x1F; }
-        else if ((b & 0xF0) == 0xE0) { extra = 2; cp = b & 0x0F; }
-        else if ((b & 0xF8) == 0xF0) { extra = 3; cp = b & 0x07; }
-        bool ok = extra > 0;
-        for (int k = 1; ok && k <= extra; ++k)
-        {
-            ok = i + static_cast<std::size_t>(k) < s.size() && (static_cast<unsigned char>(s[i + static_cast<std::size_t>(k)]) & 0xC0) == 0x80;
-            if (ok)
-            {
-                cp = (cp << 6) | (static_cast<unsigned char>(s[i + static_cast<std::size_t>(k)]) & 0x3F);
-            }
-        }
-        if (!ok)
-        {
-            cp = 0xFFFD;
-            extra = 0;
-        }
-        out += std::format("<U+{:04X}>", cp);
-        i += 1 + static_cast<std::size_t>(extra);
-    }
-    return out;
-}
-
 std::string joinLog(const std::vector<std::string>& log)
 {
     std::string out;
@@ -428,7 +390,7 @@ const std::vector<Case>& cases()
         // the fallback to the default word map APPENDED to them, so the job processed with a map nobody wrote.
         // FrameSetup::saveReceiverParamsFile already cleared first; building a job did not. It now does, and
         // a partly usable default file falls back to the same six-parameter map as an unusable one.
-        { "default-file-partly-outside-the-frame", Adj([](StreamJobConfig& c, const Fixtures&) { c.receiverParamsToml.clear(); }), DefaultFile::PartlyOutsideFrame, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
+        { "default-file-partly-outside-the-frame", Adj([](StreamJobConfig& c, const Fixtures&) { c.receiverParamsToml.clear(); }), DefaultFile::PartlyOutsideFrame, true, "ok error='' log=[  Rcvr: the default Receiver Parameters file 'default.toml' could not be used; the sequential word map for 2 x 3 receiver channels is used instead. |   Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
             " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=6"
             " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]"
@@ -439,7 +401,7 @@ const std::vector<Case>& cases()
             " [C_RCVR2 w=5 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
         // The word-count boundary applies to the default file as it does to a named one (new in the port, from the
         // mutation check): word 50 is outside an 800-bit frame (50 words) and inside an 801-bit one (51).
-        { "default-file-with-a-word-at-the-edge-falls-back", Adj([](StreamJobConfig& c, const Fixtures&) { c.receiverParamsToml.clear(); }), DefaultFile::WordAtTheEdge, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
+        { "default-file-with-a-word-at-the-edge-falls-back", Adj([](StreamJobConfig& c, const Fixtures&) { c.receiverParamsToml.clear(); }), DefaultFile::WordAtTheEdge, true, "ok error='' log=[  Rcvr: the default Receiver Parameters file 'default.toml' could not be used; the sequential word map for 2 x 3 receiver channels is used instead. |   Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
             " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=6"
             " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]"
@@ -453,7 +415,7 @@ const std::vector<Case>& cases()
             " | setup: n=1"
             " [L_RCVR1 w=49 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
         { "default-file-with-only-metadata", Adj([](StreamJobConfig& c, const Fixtures&) { c.receiverParamsToml.clear(); }), DefaultFile::MetadataOnly, true, "rejected error='Rcvr: Receiver Parameters file contains no parameters.' log=[]" },
-        { "default-file-is-not-toml", Adj([](StreamJobConfig& c, const Fixtures&) { c.receiverParamsToml.clear(); }), DefaultFile::Garbage, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
+        { "default-file-is-not-toml", Adj([](StreamJobConfig& c, const Fixtures&) { c.receiverParamsToml.clear(); }), DefaultFile::Garbage, true, "ok error='' log=[  Rcvr: the default Receiver Parameters file 'default.toml' could not be used; the sequential word map for 2 x 3 receiver channels is used instead. |   Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
             " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
             " | setup: n=6"
             " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]"
@@ -608,6 +570,7 @@ bool buildStreamJob(const StreamJobConfig& cfg, const ProcessingParams& base, co
     }
 
     out_job.frameSetup = std::make_shared<FrameSetup>();
+    std::string map_warning;
     if (cfg.receiverParamsToml.empty())
     {
         const fs::path default_rcvr_params = fs::path(m_app_root) / UIConstants::kSettingsDirName /
@@ -618,7 +581,14 @@ bool buildStreamJob(const StreamJobConfig& cfg, const ProcessingParams& base, co
         }
         else
         {
-            out_job.frameSetup->clearParameters();   // THE ONE CHANGED LINE: the original appended to a partial map
+            // CHANGED (audit B10): a default file that exists but cannot be used is no longer passed over in silence.
+            if (fs::exists(default_rcvr_params, ec))
+            {
+                map_warning = "the default Receiver Parameters file 'default.toml' could not be used; the sequential word map for " +
+                              std::to_string(cfg.numReceivers) + " x " + std::to_string(cfg.receiverChannels) +
+                              " receiver channels is used instead.";
+            }
+            out_job.frameSetup->clearParameters();   // CHANGED: the original appended to a partial map
             std::string map_error;
             if (!out_job.frameSetup->buildDefaultReceiverMap(cfg.numReceivers, cfg.receiverChannels, words_in_minor_frame, map_error))
             {
@@ -661,6 +631,10 @@ bool buildStreamJob(const StreamJobConfig& cfg, const ProcessingParams& base, co
 
     out_job.frameSetup->applyLinearCalibration(polarity_idx, slope_idx, scale_dB_per_V);
 
+    if (!map_warning.empty())
+    {
+        log.push_back("  " + stream_desc + ": " + map_warning);
+    }
     if (!cfg.calibrationByWord.empty())
     {
         const int attached = out_job.frameSetup->attachCalibrationProfiles(cfg.calibrationByWord);

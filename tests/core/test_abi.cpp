@@ -84,7 +84,7 @@ std::string tempUtf8()
 std::string dataPath(const std::string& name) { return rootUtf8() + "/tests/data/" + name; }
 
 /// A committed recording under tests/data/test files, required to exist.
-std::string recording(const char* name) { return utf8Of(repoFile(fs::path("tests/data/test files") / name)); }
+std::string recording(const char* name) { return utf8Of(recordingFile(name)); }
 
 /// A scratch folder whose paths come back as UTF-8 text.
 struct Scratch
@@ -2949,13 +2949,16 @@ TEST_CASE("Abi: templateMatchingAgreesWithTheCore")
 
 TEST_CASE("Abi: aCsvIsParsedLikeTheCore")
 {
-    // The CSV exports kept in tests/data are not committed (that folder is ignored apart from the recordings), so
-    // they are extra coverage where they exist and nothing is skipped or required where they do not. The files
-    // written below are what the comparison stands on.
+    // Two real exports of v2.x, trimmed to their header and a few rows (tests/fixtures): a wide one of one stream's
+    // receiver channels, and a sparse one of four streams' lock and missed frames, one row to a stream. Committed, so the
+    // case covers the same files on every machine; the files written below are what the rest of the comparison stands on.
     std::vector<std::string> files;
-    for (const char* name : { "Framesync_SNR Plot.csv", "PRN_TEST_FILE0001 - Copy.csv" })
-        if (fs::exists(textfile::pathFromUtf8(dataPath(name))))
-            files.push_back(dataPath(name));
+    for (const char* name : { "csv_export_snr_plot.csv", "csv_export_four_streams.csv" })
+    {
+        const std::string path = rootUtf8() + "/tests/fixtures/" + name;
+        REQUIRE_MESSAGE(fs::exists(textfile::pathFromUtf8(path)), path);
+        files.push_back(path);
+    }
 
     // One written by the writer too, with every metric and a second source.
     Scratch dir;

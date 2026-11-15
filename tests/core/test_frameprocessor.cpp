@@ -48,11 +48,6 @@ struct FrameProcessorTestAccess
 
 namespace {
 
-fs::path recording(const char* name)
-{
-    return repoFile(fs::path("tests") / "data" / "test files" / name);
-}
-
 /// A ProcessingParams with this suite's defaults: the TRC recording's 32-bit sync, 49 words, 800-bit frames.
 ProcessingParams makeTestParams(const fs::path& filename = {},
                                 int time_channel_id = -1,
@@ -346,7 +341,7 @@ struct Trc
 Trc loadTrc()
 {
     Trc t;
-    t.path = recording("agc_rnrz-l_trc_testfile.ch10");
+    t.path = recordingFile("agc_rnrz-l_trc_testfile.ch10");
     Chapter10Reader reader;
     REQUIRE_MESSAGE(reader.loadChannels(t.path), reader.lastError());
     t.pcm_id  = reader.getFirstPCMChannelID();
@@ -398,7 +393,7 @@ TEST_CASE("FrameProcessor: a non-ASCII path opens in both readers")
     // page, which this executable's manifest makes UTF-8, as the application's does.
     REQUIRE_MESSAGE(GetACP() == 65001u, "the test executable must run in the UTF-8 code page (its manifest)");
 
-    const fs::path src = recording("step_cal, example.ch10");
+    const fs::path src = recordingFile("step_cal, example.ch10");
     const std::u8string folders[] = {
         u8"caf\u00E9",     // in the Windows-1252 code page: the ANSI path API can spell it
         u8"omega-\u03A9",  // outside it: no ANSI code page on a Western system can spell it at all
@@ -1397,7 +1392,7 @@ TEST_CASE("FrameProcessor: with the byte swap off a sync is found that the swap 
     //
     // Both directions are asserted. Checking only that swap=false locks would pass against a build that ignored the
     // flag and never swapped anything, which would silently break every other recording in this suite.
-    const fs::path path = recording("safran_testfile, sample.ch10");
+    const fs::path path = recordingFile("safran_testfile, sample.ch10");
     const int time_id = safranTimeChannel(path);
 
     // Channel 13 specifically. Channels 11 and 12 carry no PRN-15 under any transform, and channel 14's payloads are
@@ -1452,7 +1447,7 @@ TEST_CASE("FrameProcessor: an odd payload's skipped swap is reported")
     //
     // Channel 14 is the all-odd case: every payload is 875 bytes, so the swap is inert for the whole stream and the
     // operator's setting has no effect at all.
-    const fs::path path = recording("safran_testfile, sample.ch10");
+    const fs::path path = recordingFile("safran_testfile, sample.ch10");
     const int time_id = safranTimeChannel(path);
     constexpr int kOddPayloadChannelId = 14;
 

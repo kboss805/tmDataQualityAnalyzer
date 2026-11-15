@@ -57,28 +57,7 @@ void listen(Ch10PacketReader& r, Events& e)
     r.setEvents(std::make_shared<EventsSink>(e));
 }
 
-/// A small, committed, ordinary Chapter 10 recording with one PCM channel of interest.
-struct Fixture
-{
-    fs::path path;
-    int      time_id = -1;
-    int      pcm_id  = -1;
-};
-
-Fixture loadFixture()
-{
-    Fixture f;
-    f.path = repoFile(fs::path("tests") / "data" / "test files" / "step_cal, example.ch10");
-    Chapter10Reader meta;
-    REQUIRE_MESSAGE(meta.loadChannels(f.path), meta.lastError());
-    f.time_id = meta.getCurrentTimeChannelID();
-    f.pcm_id  = meta.getFirstPCMChannelID();
-    REQUIRE(f.time_id >= 0);
-    REQUIRE(f.pcm_id >= 0);
-    return f;
-}
-
-ProcessingParams paramsFor(const Fixture& f, PacketQueue* queue)
+ProcessingParams paramsFor(const StepCalFixture& f, PacketQueue* queue)
 {
     ProcessingParams p;
     p.filename          = f.path;
@@ -195,7 +174,7 @@ std::vector<PacketAt> walkPackets(const std::string& bytes)
 }
 
 /// Runs one reader's setup against @p path: the metadata reader's loadChannels(), or the packet reader's prepare().
-bool runSetup(bool via_prepare, const Fixture& fx, const fs::path& path)
+bool runSetup(bool via_prepare, const StepCalFixture& fx, const fs::path& path)
 {
     if (via_prepare)
     {
@@ -216,7 +195,7 @@ TEST_CASE("Ch10PacketReader: prepare reports why it failed")
 {
     // Each way setup can fail has its own message, and prepare() returns false rather than leaving a half-open reader to
     // be run. These are what the operator reads in the log.
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
     struct Row { const char* name; const char* what; const char* error; };
     const Row rows[] = {
         {"missing file",        "missing", "Error opening data file."},
@@ -235,7 +214,7 @@ TEST_CASE("Ch10PacketReader: prepare reports why it failed")
         const std::string what = row.what;
         TempDir dir;
         fs::path path = fx.path;
-        Fixture used = fx;
+        StepCalFixture used = fx;
         if (what == "missing")
         {
             path = dir.file("absent.ch10");
@@ -291,7 +270,7 @@ TEST_CASE("Ch10PacketReader: a data source TMATS does not fully describe is not 
     // (data type) as no channel at all, so the operator can be offered a stream from such a recording. The decoder
     // leaves an absent field NULL, and the packet reader used to read it unchecked. The edits are same-length key
     // renames of step_cal's TMATS: its PCM source is R-1 data source 27 (PCM channel 26), its time source is 1.
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
     REQUIRE(fx.pcm_id == 26);
     REQUIRE(fx.time_id == 1);
 
@@ -334,7 +313,7 @@ TEST_CASE("Ch10PacketReader: a data source TMATS does not fully describe is not 
 
 TEST_CASE("Ch10PacketReader: a full run reports its start and ends at one hundred percent")
 {
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
     PacketQueue q;
     ProcessingParams p = paramsFor(fx, &q);
     std::vector<ProcessingParams*> list{&p};
@@ -384,7 +363,7 @@ TEST_CASE("Ch10PacketReader: cancel reports it and still ends the stream")
 {
     // An abort is not a failure: it says so, reports 100% (the read is over), and still posts the end marker - without
     // it the worker would wait forever on its queue.
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
     PacketQueue q;
     ProcessingParams p = paramsFor(fx, &q);
     std::vector<ProcessingParams*> list{&p};
@@ -415,7 +394,7 @@ TEST_CASE("Ch10PacketReader: a truncated file reports a read error and still end
     // A file that ends inside a packet HEADER is read as a clean end of file: no error is reported, so a copy cut off
     // there looks complete. Pinned as the behaviour it is, not necessarily the one it should have - changing it deserves
     // its own decision.
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
     const std::string original = readBytes(fx.path);
     const std::vector<PacketAt> packets = walkPackets(original);
     REQUIRE_MESSAGE(!packets.empty(), "the header walk must tile the fixture exactly");
@@ -488,7 +467,7 @@ TEST_CASE("Ch10PacketReader: a damaged header stops the read, or costs one packe
     // everything after is lost. A damaged SYNC pattern is different: the library scans forward to the next sync, so the
     // read carries on, no error is reported, and exactly the one packet is missing. Pinned as the behaviour it is - a
     // silently dropped packet may deserve a warning, which would be its own decision.
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
     const std::string original = readBytes(fx.path);
     const std::vector<PacketAt> packets = walkPackets(original);
     REQUIRE_MESSAGE(!packets.empty(), "the header walk must tile the fixture exactly");
@@ -564,7 +543,7 @@ TEST_CASE("Ch10PacketReader: every queue gets every packet, and they share one c
     // Two streams on one channel (two queues). The reader dispatches each packet to both, and the payload must be ONE
     // buffer shared between them: a by-value copy per queue would be made on this, the pipeline's single bottleneck
     // thread, for nothing.
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
     PacketQueue qa;
     PacketQueue qb;
     ProcessingParams pa = paramsFor(fx, &qa);
@@ -600,7 +579,7 @@ TEST_CASE("Ch10PacketReader: every queue gets every packet, and they share one c
 /// matter.
 TEST_CASE("Ch10PacketReader: many threads setting up at once all succeed and agree")
 {
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
 
     Chapter10Reader baseline;
     REQUIRE(baseline.loadChannels(fx.path));
@@ -663,7 +642,7 @@ TEST_CASE("Ch10PacketReader: many threads setting up at once all succeed and agr
 // open then succeeds.
 TEST_CASE("Ch10PacketReader: setup waits for the lock another thread holds")
 {
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
     for (const bool via_prepare : {false, true})
     {
         INFO((via_prepare ? "Ch10PacketReader::prepare" : "Chapter10Reader::loadChannels"));
@@ -698,7 +677,7 @@ TEST_CASE("Ch10PacketReader: setup waits for the lock another thread holds")
 // (a path that does not exist) must not leave the next one waiting forever.
 TEST_CASE("Ch10PacketReader: a failed setup still releases the lock")
 {
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
     for (const bool via_prepare : {false, true})
     {
         INFO((via_prepare ? "Ch10PacketReader::prepare" : "Chapter10Reader::loadChannels"));
@@ -726,7 +705,7 @@ TEST_CASE("Ch10PacketReader: a failed setup still releases the lock")
 
 TEST_CASE("Ch10PacketReader: prepare resolves every attribute a worker reads")
 {
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
 
     // The mask: an explicit one is used as given; none means every bit of the pattern.
     PacketQueue q1;
@@ -772,7 +751,7 @@ TEST_CASE("Ch10PacketReader: prepare resolves every attribute a worker reads")
 
 TEST_CASE("Ch10PacketReader: each packet carries its bit count and a base time that never runs backwards")
 {
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
     PacketQueue q;
     ProcessingParams p = paramsFor(fx, &q);
     std::vector<ProcessingParams*> list{&p};
@@ -817,7 +796,7 @@ TEST_CASE("Ch10PacketReader: a queue shared by two streams gets each packet twic
 {
     // Two streams handed the same queue: the reader routes the packet to it once per stream, but the end of the stream
     // is posted once per QUEUE - a second marker would be read by the worker as a second, empty stream ending.
-    const Fixture fx = loadFixture();
+    const StepCalFixture fx = loadStepCalFixture();
     PacketQueue shared;
     ProcessingParams pa = paramsFor(fx, &shared);
     ProcessingParams pb = paramsFor(fx, &shared);
@@ -847,7 +826,7 @@ TEST_CASE("Ch10PacketReader: only the channels a stream asked for reach its queu
     // The committed PRN sample carries PCM data on channels 13 and 15. A stream on 13 must receive exactly 13's packets
     // - counted here by walking the headers - and none of 15's. The file is large enough (77 MB) that the read outlasts
     // the 100 ms progress gate, so its progress reports are real intermediate values too.
-    const fs::path path = repoFile(fs::path("tests") / "data" / "test files" / "prn_testfile, sample.ch10");
+    const fs::path path = recordingFile("prn_testfile, sample.ch10");
     Chapter10Reader meta;
     REQUIRE_MESSAGE(meta.loadChannels(path), meta.lastError());
     const int time_id = meta.getCurrentTimeChannelID();
@@ -869,7 +848,7 @@ TEST_CASE("Ch10PacketReader: only the channels a stream asked for reach its queu
     REQUIRE(on_13 > 0);
     REQUIRE(on_15 > 0);   // the other channel really has data to leak
 
-    Fixture fx;
+    StepCalFixture fx;
     fx.path = path;
     fx.time_id = time_id;
     fx.pcm_id = 13;

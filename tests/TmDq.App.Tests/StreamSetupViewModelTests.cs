@@ -18,7 +18,7 @@ namespace TmDq.App.Tests
     [Collection(NativeCoreCollection.Name)]
     public sealed class StreamSetupViewModelTests : IDisposable
     {
-        private readonly string _dir = Path.Combine(Path.GetTempPath(), "tmdq-setupvm-" + Guid.NewGuid().ToString("N"));
+        private readonly string _dir = TempFiles.NewPath("setupvm");
 
         public StreamSetupViewModelTests()
         {

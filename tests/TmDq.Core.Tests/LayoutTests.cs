@@ -252,7 +252,7 @@ public class LayoutTests
     {
         Library.Load(Env.DllPath());   // the same path again: nothing happens
 
-        string copy = Path.Combine(Path.GetTempPath(), "tmdq-load-" + Guid.NewGuid().ToString("N") + ".dll");
+        string copy = TempFiles.NewPath("load", ".dll");
         File.Copy(Env.DllPath(), copy);
         try
         {
@@ -268,7 +268,7 @@ public class LayoutTests
     [Fact]
     public void LoadingAFileThatIsNotThereIsAClearError()
     {
-        string missing = Path.Combine(Path.GetTempPath(), "tmdq-no-such-" + Guid.NewGuid().ToString("N") + ".dll");
+        string missing = TempFiles.NewPath("no-such", ".dll");
         Assert.Throws<FileNotFoundException>(() => Library.Load(missing));
         Assert.Throws<ArgumentException>(() => Library.Load(""));
     }
