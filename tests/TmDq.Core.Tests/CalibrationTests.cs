@@ -513,8 +513,8 @@ public class CalibrationTests
         Assert.True(d.SwapBytes);
         Assert.False(d.Randomized);
         Assert.False(d.Inverted);
-        Assert.Equal(16, d.NumReceivers);
-        Assert.Equal(3, d.ReceiverChannels);
+        ReceiverParams core = ReceiverParamsFile.Defaults();   // the word map's fallback counts are the core's defaults
+        Assert.Equal((core.NumReceivers, core.ReceiverChannels), (d.NumReceivers, d.ReceiverChannels));
         Assert.Equal(0.0, d.DataRateMbps);
         Assert.Equal(0.0, d.ClipStartSec);
         Assert.Equal(0.0, d.ClipEndSec);

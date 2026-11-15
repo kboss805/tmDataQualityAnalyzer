@@ -42,7 +42,7 @@ namespace TmDq.App.Models.Streams
             int bits = ReceiverSnrDefaults.BitsInMinorFrame;
             if (!string.IsNullOrEmpty(appRoot))
             {
-                FrameSyncFileData file = FrameSyncFile.Read(Path.Combine(appRoot, "settings", "framesync_patterns", ReceiverSnrDefaults.FileName));
+                FrameSyncFileData file = FrameSyncFile.Read(Path.Combine(appRoot, StreamFiles.SettingsFolder, StreamFiles.FrameSyncFolder, ReceiverSnrDefaults.FileName));
                 if (file.Pattern.Length > 0) pattern = file.Pattern.ToUpperInvariant();
                 if (file.Mask.Length > 0) mask = file.Mask.ToUpperInvariant();
                 if (file.BitsPerFrame is int b && !file.BitsFromLegacyKey) bits = b;

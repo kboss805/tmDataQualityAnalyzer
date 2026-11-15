@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text.RegularExpressions;
 using TmDq.App.Models.Processing;
 using TmDq.App.Models.Streams;
 using TmDq.Core;
@@ -38,6 +39,22 @@ namespace TmDq.App.Tests
 
         private static StreamSetup Row() => new() { PcmChannelId = 1, Label = "Ch 01" };
 
+        // --- the settings folders ---
+
+        [Fact]
+        public void TheSettingsFolderNamesAreTheCoresAndAreShipped()
+        {
+            string header = File.ReadAllText(Repo.File(Path.Combine("src", "core", "include", "constants.h")));
+            string Name(string constant) => Regex.Match(header, constant + @"\s*=\s*""([^""]+)""").Groups[1].Value;
+            Assert.Equal(StreamFiles.SettingsFolder, Name("kSettingsDirName"));
+            Assert.Equal(StreamFiles.ReceiverParamsFolder, Name("kReceiverParamsDirName"));
+            Assert.Equal(StreamFiles.StepCalFolder, Name("kRcvrCalsDirName"));
+            // The frame-sync folder is the app's alone (the core is handed a pattern file's contents), so what holds it is
+            // the shipped tree.
+            foreach (string folder in new[] { StreamFiles.FrameSyncFolder, StreamFiles.ReceiverParamsFolder, StreamFiles.StepCalFolder })
+                Assert.True(Directory.Exists(Path.Combine(Repo.Root, StreamFiles.SettingsFolder, folder)), folder);
+        }
+
         // --- defaults ---
 
         [Fact]
@@ -46,8 +63,9 @@ namespace TmDq.App.Tests
             StreamSetup row = StreamDefaults.NewStream(new ChannelInfo(13, "CH-01 PRN 15 5M", 5_000_000));
             Assert.Equal((13, "CH-01 PRN 15 5M", 5.0), (row.PcmChannelId, row.Label, row.TmatsDataRateMbps));
             Assert.Equal(ReceiverParamsFile.Defaults(), StreamFiles.ReceiverParamsOf(row));
-            Assert.Equal(new ReceiverParams(0, 3, 20.0, 16, 3), StreamFiles.ReceiverParamsOf(row));
-            Assert.Equal(StreamFiles.ReceiverParamsOf(Row()), StreamFiles.ReceiverParamsOf(row));
+            // A row built by hand starts with the same receiver settings: the defaults live in the core (the literal that
+            // pins them is ReceiverParamsTests'), and StreamSetup's own copies are held to them here.
+            Assert.Equal(ReceiverParamsFile.Defaults(), StreamFiles.ReceiverParamsOf(Row()));
             Assert.Equal(0.0, StreamDefaults.NewStream(new ChannelInfo(2, "NO RATE", 0)).TmatsDataRateMbps);
         }
 

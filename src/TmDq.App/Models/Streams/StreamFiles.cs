@@ -74,6 +74,10 @@ namespace TmDq.App.Models.Streams
         public static ReceiverParams ReceiverParamsOf(StreamSetup s) =>
             new(s.PolarityIndex, s.SlopeIndex, s.ScaleDdBPerV, s.NumReceivers, s.ReceiverChannels);
 
+        /// <summary>The settings folder, beside the exe (the app root). The names below are folders of it; the core's own
+        /// copies are in constants.h (<c>kSettingsDirName</c>, <c>kReceiverParamsDirName</c>, <c>kRcvrCalsDirName</c>), and a
+        /// test holds these to them.</summary>
+        public const string SettingsFolder = "settings";
         public const string FrameSyncFolder = "framesync_patterns";
         public const string ReceiverParamsFolder = "receiver_params";
         public const string StepCalFolder = "rcvr_cals";
@@ -84,7 +88,7 @@ namespace TmDq.App.Models.Streams
         public static string? LoadFolder(string? appRoot, string subfolder, string? lastFolder)
         {
             if (string.IsNullOrEmpty(appRoot)) return lastFolder;
-            string shipped = Path.Combine(appRoot, "settings", subfolder);
+            string shipped = Path.Combine(appRoot, SettingsFolder, subfolder);
             return Directory.Exists(shipped) ? shipped : lastFolder;
         }
 

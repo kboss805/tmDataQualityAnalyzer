@@ -12,6 +12,38 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The settings folders' names and the receiver defaults, each written once
+
+Found by the whole-tree cleanup audit (PR 8 of its list: X2, X3); each finding was re-checked against the tree as of #282.
+
+- **X2: the settings folder names.** `"settings"` was a bare literal twice (`StreamFiles.LoadFolder`, `StreamDefaults`), and
+  `StreamDefaults` retyped `"framesync_patterns"` beside the constant that holds it. `StreamFiles.SettingsFolder` is now the
+  one constant and both sites use it and `FrameSyncFolder`. The new test `TheSettingsFolderNamesAreTheCoresAndAreShipped`
+  holds `SettingsFolder`, `ReceiverParamsFolder` and `StepCalFolder` to `constants.h` (`kSettingsDirName`,
+  `kReceiverParamsDirName`, `kRcvrCalsDirName`), as the frame-sync defaults already were, and all four folders to the shipped
+  tree (the frame-sync folder is the app's alone: the core is handed a pattern file's contents). `receiver_params` had no
+  managed test before; `rcvr_cals` was held by a literal in the calibration dialog test, which that test no longer needs.
+- **X3: the receiver defaults.** Polarity 0, slope 3, 20.0 dB/V, 16 receivers and 3 channels are the core's
+  (`ReceiverParamsFile.Defaults()` reads them across the ABI) and are copied in `StreamConfig`, `CalibrationRequest` and
+  `StreamSetup`, with a fourth set of fallbacks in `TemplateFile`. The copies stay (each is a default of a type made
+  without the core), but now follow one source: the three tests that held them to literals compare with `Defaults()`
+  (`TheDefaultsAreTheApplicationsDefaults`, `ARunWithNoObserverJustRunsAndTheDefaultsAreTheApplicationsDefaults`,
+  `ANewRowTakesTheChannelAndTheReceiverDefaults`, which now also checks a hand-built row), the literals being
+  `ReceiverParamsTests`' alone; `TemplateFile` reads its fallbacks from a default `StreamSetup` (held to nothing before), and
+  the template test for a missing key compares with `Defaults()`. `TemplateFile.MaxSlopeIndex`, the second copy of
+  `StreamRules.MaxSlopeIndex`, is gone.
+- **Checked.** Mutation check, `eng\mutate.ps1`: the app suite (five classes), 10 mutants, **10 CAUGHT** (X2a-X2e each folder
+  name changed, X3a/X3b a template fallback, X3c/X3d `StreamSetup`'s slope and scale default, X3e the template's slope clamp);
+  the managed suite (three classes), 4 mutants, **4 CAUGHT** (Y1 to Y4: `StreamConfig`'s slope and scale, `CalibrationRequest`'s
+  receivers and channels). All three suites in Release, zero warnings: native **495** (1 skipped), managed **364** passed / 1
+  skipped, app **640** passed / 34 not run (after merging main's 639). Baseline moved: app 639 to 640 (one new test).
+- **Beside it: a timing flake CI hit on this PR.** `PlotDraftTests.TheWheelSettlesOnItsOwnAfterTheRefineDelay` failed on the
+  runner with "settled after 18.4942 ms" against a 20 ms bound. The chart starts its 30 ms refine wait in the wheel's handler,
+  and the test started its clock only after the first frame, which took about 12 ms there: the chart was right and the
+  measurement missed the frame. The clock now starts before the wheel and the bound is 25 ms of the 30. Mutants F1 (the delay
+  zero) and F2 (half of it) are both CAUGHT. (The audit's Q3 names the same file's other timing bound, at 400 ms, which is
+  left for that finding.)
+
 #### The hamburger menu as four submenus: File, Import/Export, Settings, Help
 
 Asked for after #284, from the user's own concept: a conventional grouping in place of the sections of a toolbar's menu. The
