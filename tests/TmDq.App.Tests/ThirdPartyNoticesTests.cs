@@ -19,7 +19,7 @@ namespace TmDq.App.Tests
     /// </summary>
     public sealed class ThirdPartyNoticesTests : IDisposable
     {
-        private readonly string _dir = Path.Combine(Path.GetTempPath(), "tmdq-notices-" + Guid.NewGuid().ToString("N"));
+        private readonly string _dir = TempFiles.NewPath("notices");
         private readonly Dictionary<string, object> _target = new();
         private readonly Dictionary<string, object> _libraries = new();
 

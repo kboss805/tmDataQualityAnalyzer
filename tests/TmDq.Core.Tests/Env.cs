@@ -11,7 +11,7 @@ internal static class Env
     private static readonly object s_lock = new();
     private static bool s_loaded;
 
-    public static string RepoRoot { get; } = FindRepoRoot();
+    public static string RepoRoot => RepoPaths.Root;
 
     [DllImport("kernel32")]
     private static extern uint GetACP();
@@ -54,29 +54,9 @@ internal static class Env
     }
 
     /// <summary>A committed recording under tests/data/test files.</summary>
-    public static string Recording(string name)
-    {
-        string path = Path.Combine(RepoRoot, "tests", "data", "test files", name);
-        if (!File.Exists(path))
-        {
-            throw new FileNotFoundException("a committed test recording is missing", path);
-        }
-        return path;
-    }
+    public static string Recording(string name) => RepoPaths.Recording(name);
 
     public static string Prn => Recording("prn_testfile, sample.ch10");
     public static string StepCal => Recording("step_cal, example.ch10");
     public static string Trc => Recording("agc_rnrz-l_trc_testfile.ch10");
-
-    private static string FindRepoRoot()
-    {
-        for (DirectoryInfo? d = new(AppContext.BaseDirectory); d is not null; d = d.Parent)
-        {
-            if (File.Exists(Path.Combine(d.FullName, "tmdq.sln")))
-            {
-                return d.FullName;
-            }
-        }
-        throw new DirectoryNotFoundException("the repository root (the folder holding tmdq.sln) was not found above " + AppContext.BaseDirectory);
-    }
 }

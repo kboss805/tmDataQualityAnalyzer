@@ -64,45 +64,6 @@ std::string escaped(const std::string& bytes)
     return out;
 }
 
-/// UTF-8 text with its non-ASCII characters spelled out as <U+XXXX>; a byte that does not start a valid sequence is
-/// U+FFFD (as the conversion behind the recorded answers made it).
-std::string asciiOnly(const std::string& s)
-{
-    std::string out;
-    for (std::size_t i = 0; i < s.size();)
-    {
-        const auto b = static_cast<unsigned char>(s[i]);
-        if (b < 0x80)
-        {
-            out += static_cast<char>(b);
-            ++i;
-            continue;
-        }
-        int extra = 0;
-        std::uint32_t cp = 0;
-        if ((b & 0xE0) == 0xC0) { extra = 1; cp = b & 0x1F; }
-        else if ((b & 0xF0) == 0xE0) { extra = 2; cp = b & 0x0F; }
-        else if ((b & 0xF8) == 0xF0) { extra = 3; cp = b & 0x07; }
-        bool ok = extra > 0;
-        for (int k = 1; ok && k <= extra; ++k)
-        {
-            ok = i + static_cast<std::size_t>(k) < s.size() && (static_cast<unsigned char>(s[i + static_cast<std::size_t>(k)]) & 0xC0) == 0x80;
-            if (ok)
-            {
-                cp = (cp << 6) | (static_cast<unsigned char>(s[i + static_cast<std::size_t>(k)]) & 0x3F);
-            }
-        }
-        if (!ok)
-        {
-            cp = 0xFFFD;
-            extra = 0;
-        }
-        out += std::format("<U+{:04X}>", cp);
-        i += 1 + static_cast<std::size_t>(extra);
-    }
-    return out;
-}
-
 /// `v` in %g with 12 significant digits; a NaN prints "nan" and an infinity "inf" or "-inf".
 std::string num(double v)
 {
@@ -165,44 +126,6 @@ using Strings = std::vector<std::string>;
 // ---------------------------------------------------------------------------
 // Text encodings, for the files a spreadsheet or an editor might have saved
 // ---------------------------------------------------------------------------
-
-/// The UTF-16 code units of UTF-8 text (the basic plane only, which is all any file here uses).
-std::u16string units(const std::string& utf8)
-{
-    std::u16string out;
-    for (std::size_t i = 0; i < utf8.size();)
-    {
-        const auto b = static_cast<unsigned char>(utf8[i]);
-        if (b < 0x80)
-        {
-            out += static_cast<char16_t>(b);
-            ++i;
-        }
-        else if ((b & 0xE0) == 0xC0)
-        {
-            out += static_cast<char16_t>(((b & 0x1F) << 6) | (static_cast<unsigned char>(utf8[i + 1]) & 0x3F));
-            i += 2;
-        }
-        else
-        {
-            out += static_cast<char16_t>(((b & 0x0F) << 12) | ((static_cast<unsigned char>(utf8[i + 1]) & 0x3F) << 6) |
-                                         (static_cast<unsigned char>(utf8[i + 2]) & 0x3F));
-            i += 3;
-        }
-    }
-    return out;
-}
-
-std::string utf16le(const std::string& text, bool bom = true)
-{
-    std::string out = bom ? std::string("\xFF\xFE", 2) : std::string();
-    for (const char16_t c : units(text))
-    {
-        out += static_cast<char>(c & 0xFF);
-        out += static_cast<char>(c >> 8);
-    }
-    return out;
-}
 
 std::string utf16be(const std::string& text)
 {
@@ -435,6 +358,9 @@ const std::vector<ImportCase>& importCases()
             " | [0] A label=A L order=1 rcv=0 ch=0 src=0 : 0,1"
             " | [1] A label=A L order=1 rcv=0 ch=0 src=0 : 0,2" },
         { "non-ascii-names", kTimeHeader + ",R\xC3\xA9" "cepteur \xCE\xA9 Lock (%)\n1:00:00:00.000,50\n", "ok skipped=0 base=1/0 xmax=0 n=1"
+            " | [0] R<U+00E9>cepteur <U+03A9> label=R<U+00E9>cepteur <U+03A9> L order=1 rcv=0 ch=0 src=0 : 0,50" },
+        // The same names saved as UTF-16: a character above U+00FF carries a high byte, which ASCII text never does.
+        { "non-ascii-names-utf16le", utf16le(kTimeHeader + ",R\xC3\xA9" "cepteur \xCE\xA9 Lock (%)\n1:00:00:00.000,50\n"), "ok skipped=0 base=1/0 xmax=0 n=1"
             " | [0] R<U+00E9>cepteur <U+03A9> label=R<U+00E9>cepteur <U+03A9> L order=1 rcv=0 ch=0 src=0 : 0,50" },
         // Changed on purpose (plan step 1.2); the whole file failed to load before. A byte that is not
         // valid UTF-8 (a Latin-1 "e-acute" from a re-saved file) made v2.14.2's text read give up on

@@ -18,6 +18,7 @@ using TmDq.App.ViewModels;
 using TmDq.App.Views;
 using TmDq.Core;
 using Xunit;
+using static TmDq.App.Tests.Frames;
 
 namespace TmDq.App.Tests
 {
@@ -33,13 +34,6 @@ namespace TmDq.App.Tests
         private static string Prn => Repo.Recording("prn_testfile, sample.ch10");
 
         public StreamWindowsTests() => NativeCore.EnsureLoaded();
-
-        private static T Shown<T>(T window) where T : Window
-        {
-            window.Show();
-            Dispatcher.UIThread.RunJobs();
-            return window;
-        }
 
         private static ConfigureStreamsViewModel Configure(FakeStreamDialogs? dialogs = null) =>
             new(Prn, StreamsRun.Open(Prn), dialogs ?? new FakeStreamDialogs(), new FakeFilePicker(), Repo.Root);

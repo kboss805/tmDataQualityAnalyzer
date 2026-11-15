@@ -31,7 +31,7 @@ namespace TmDq.App.Tests
     [Collection(NativeCoreCollection.Name)]
     public sealed class TemplateBatchTests : IDisposable
     {
-        private readonly string _dir = Path.Combine(Path.GetTempPath(), "tmdq-batch-" + Guid.NewGuid().ToString("N"));
+        private readonly string _dir = TempFiles.NewPath("batch");
 
         public TemplateBatchTests()
         {

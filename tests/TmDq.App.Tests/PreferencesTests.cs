@@ -20,7 +20,7 @@ namespace TmDq.App.Tests
     [Collection(NativeCoreCollection.Name)]
     public sealed class PreferencesTests : IDisposable
     {
-        private readonly string _dir = Path.Combine(Path.GetTempPath(), "tmdq-prefs-" + Guid.NewGuid().ToString("N"));
+        private readonly string _dir = TempFiles.NewPath("prefs");
 
         public PreferencesTests() => Directory.CreateDirectory(_dir);
 

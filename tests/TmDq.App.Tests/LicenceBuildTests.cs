@@ -19,7 +19,7 @@ namespace TmDq.App.Tests
     /// </summary>
     public sealed class LicenceBuildTests : IDisposable
     {
-        private readonly string _dir = Path.Combine(Path.GetTempPath(), "tmdq-licbuild-" + Guid.NewGuid().ToString("N"));
+        private readonly string _dir = TempFiles.NewPath("licbuild");
 
         public LicenceBuildTests()
         {

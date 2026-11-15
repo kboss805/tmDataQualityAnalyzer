@@ -14,7 +14,7 @@ namespace TmDq.App.Tests
     /// </summary>
     public sealed class VersionBuildTests : IDisposable
     {
-        private readonly string _dir = Path.Combine(Path.GetTempPath(), "tmdq-version-" + Guid.NewGuid().ToString("N"));
+        private readonly string _dir = TempFiles.NewPath("version");
 
         public VersionBuildTests() => Directory.CreateDirectory(_dir);
 

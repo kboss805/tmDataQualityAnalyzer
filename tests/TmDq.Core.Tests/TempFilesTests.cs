@@ -14,7 +14,7 @@ namespace TmDq.Core.Tests;
 public class TempFilesTests
 {
     private static string NewPath(string suffix = ".tmp") =>
-        Path.Combine(Path.GetTempPath(), "tmdq-tempfiles-" + Guid.NewGuid().ToString("N") + suffix);
+        TempFiles.NewPath("tempfiles", suffix);
 
     /// <summary>Holds a file open with no sharing at all, as a scanner can, and lets go after the delay, on a thread of
     /// its own. Not a thread-pool task: on a two-core CI runner with the suite running in parallel, a task waited
@@ -29,6 +29,18 @@ public class TempFilesTests
         }) { IsBackground = true, Name = "TempFilesTests hold" };
         release.Start();
         return release;
+    }
+
+    [Fact]
+    public void ANewPathIsUniqueUnderTheTempFolderAndNothingIsCreatedThere()
+    {
+        string a = TempFiles.NewPath("probe", ".csv"), b = TempFiles.NewPath("probe", ".csv"), folder = TempFiles.NewPath("probe");
+        Assert.NotEqual(a, b);
+        Assert.Equal(Path.GetFullPath(Path.GetTempPath()), Path.GetFullPath(Path.GetDirectoryName(a)!) + Path.DirectorySeparatorChar);
+        Assert.StartsWith("tmdq-probe-", Path.GetFileName(a), StringComparison.Ordinal);
+        Assert.EndsWith(".csv", a, StringComparison.Ordinal);
+        Assert.DoesNotContain('.', Path.GetFileName(folder));
+        Assert.False(File.Exists(a) || Directory.Exists(folder));
     }
 
     [Fact]

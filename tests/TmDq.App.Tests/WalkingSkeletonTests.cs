@@ -101,7 +101,7 @@ namespace TmDq.App.Tests
         [AvaloniaFact]
         public async Task AFileThatIsNotARecordingSaysSoAndShowsNothing()
         {
-            string junk = Path.Combine(Path.GetTempPath(), "tmdq-app-junk-" + Guid.NewGuid().ToString("N") + ".ch10");
+            string junk = TempFiles.NewPath("app-junk", ".ch10");
             File.WriteAllBytes(junk, new byte[4096]);
             try
             {
@@ -155,7 +155,7 @@ namespace TmDq.App.Tests
             int at = IndexOf(bytes, from);
             Assert.True(at >= 0 && IndexOf(bytes, from, at + 1) < 0, "the channel-enabled key is not in the recording exactly once");
             to.CopyTo(bytes, at);
-            string copy = Path.Combine(Path.GetTempPath(), "tmdq-app-nopcm-" + Guid.NewGuid().ToString("N") + ".ch10");
+            string copy = TempFiles.NewPath("app-nopcm", ".ch10");
             File.WriteAllBytes(copy, bytes);
             try
             {
@@ -369,13 +369,59 @@ namespace TmDq.App.Tests
         }
 
         [AvaloniaFact]
+        public async Task TheSmokeRunExitsZeroAndWritesTheReportWhenTheStreamIsProcessed()
+        {
+            string file = TempFiles.NewPath("smoke", ".txt");
+            try
+            {
+                var vm = new MainWindowViewModel();
+                Assert.Equal(0, await Startup.RunSmokeAsync(vm, Prn, file));
+                Assert.Equal(Startup.SmokeReport(vm) + Environment.NewLine, File.ReadAllText(file));
+                Assert.StartsWith("ok samples=116 ", File.ReadAllText(file));
+            }
+            finally
+            {
+                TempFiles.Delete(file);
+            }
+        }
+
+        [AvaloniaFact]
+        public async Task TheSmokeRunExitsOneAndStillReportsWhenTheRecordingIsNotProcessed()
+        {
+            string junk = TempFiles.NewPath("smoke-junk", ".ch10"), file = TempFiles.NewPath("smoke", ".txt");
+            File.WriteAllText(junk, "not a recording");
+            try
+            {
+                var vm = new MainWindowViewModel();
+                Assert.Equal(1, await Startup.RunSmokeAsync(vm, junk, file));
+                Assert.StartsWith("failed | ", File.ReadAllText(file));
+            }
+            finally
+            {
+                TempFiles.Delete(junk);
+                TempFiles.Delete(file);
+            }
+        }
+
+        [AvaloniaFact]
+        public async Task TheSmokeRunWithAReportPathItCannotWriteExitsTwoNotCrashes()
+        {
+            // The report goes into a folder that is not there: the write throws, and that must be the exit code, not an
+            // exception out of the window's Opened handler (an async void, where it would end the process unreported).
+            string unwritable = Path.Combine(TempFiles.NewPath("smoke-nofolder"), "report.txt");
+            var vm = new MainWindowViewModel();
+            Assert.Equal(2, await Startup.RunSmokeAsync(vm, Prn, unwritable));
+            Assert.False(File.Exists(unwritable));
+        }
+
+        [AvaloniaFact]
         public async Task TheSmokeReportOfAProcessedRecordingCarriesItsNumbers()
         {
             var vm = new MainWindowViewModel();
             await vm.LoadAsync(Prn);
             string report = Startup.SmokeReport(vm);
             Assert.StartsWith("ok samples=116 mean=93.532 channel=13 | Finished processing prn_testfile, sample.ch10: ", report);
-            string file = Path.Combine(Path.GetTempPath(), "tmdq-smoke-" + Guid.NewGuid().ToString("N") + ".txt");
+            string file = TempFiles.NewPath("smoke", ".txt");
             try
             {
                 Startup.WriteSmokeReport(file, vm);

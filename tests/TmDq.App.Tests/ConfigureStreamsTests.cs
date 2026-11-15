@@ -10,6 +10,7 @@ using TmDq.App.Services;
 using TmDq.App.ViewModels;
 using TmDq.App.ViewModels.Plot;
 using TmDq.Core;
+using TmDq.Core.Tests;
 using Xunit;
 
 namespace TmDq.App.Tests
@@ -300,7 +301,7 @@ namespace TmDq.App.Tests
         public async Task ASecondTimeChannelIsListedAndCanBeChosen()
         {
             // The PRN sample with CH-04 retyped as a time channel: two time channels and three PCM ones.
-            string copy = Recordings.WriteTwoTimeChannels(Path.Combine(Path.GetTempPath(), "tmdq-app-twotime-" + Guid.NewGuid().ToString("N") + ".ch10"));
+            string copy = Recordings.WriteTwoTimeChannels(TempFiles.NewPath("app-twotime", ".ch10"));
             try
             {
                 var vm = new ConfigureStreamsViewModel(copy, StreamsRun.Open(copy), new FakeStreamDialogs(), null, Repo.Root);
