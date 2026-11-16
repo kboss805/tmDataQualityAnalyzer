@@ -24,7 +24,7 @@
       "id": "D3",
       "file": "src/TmDq.App/ViewModels/Dialogs/DialogViewModel.cs",
       "old": "        private void Close() => CloseRequested?.Invoke(this, EventArgs.Empty);",
-      "new": "        private void Close() { }",
+      "new": "        private void Close() => _ = CloseRequested;",
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.CalibrationDialogTests"],
       "expect": "caught",
       "note": "the dialog is never asked to close"
