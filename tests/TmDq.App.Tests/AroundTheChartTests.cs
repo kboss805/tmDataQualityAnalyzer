@@ -14,6 +14,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Platform;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Input;
@@ -991,6 +992,36 @@ namespace TmDq.App.Tests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(800 - s.View.Legend.Bounds.Width - PlotLegend.EdgeMargin, s.View.Legend.Position.X, 6);
             Assert.Equal(PlotLegend.EdgeMargin, s.View.Legend.Position.Y);
+            s.Window.Close();
+        }
+
+        [AvaloniaFact]
+        public void ALegendSwatchIsInTheColourTheLineIsDrawnInAndFollowsAChangeOfTheme()
+        {
+            Color yellow = PlotColors.Snr[2];
+            var plot = new PlotViewModel();
+            plot.SetSeries(new[] { PlotFixtures.Snr(0, "yellow", 1, 0, 1, 0, new[] { 0.0, 2.0 }, new[] { 50.0, 50.0 }) });
+            plot.RecolorSeries(0, yellow);
+            Shown s = Show(plot);
+            Color Swatch() => ((ImmutableSolidColorBrush)((Border)((Panel)s.View.Legend.Rows[0]).Children[0]).Background!).Color;
+            Assert.Equal(ChartPalette.Light.SeriesColor(yellow), Swatch());
+            Assert.NotEqual(yellow, Swatch());
+            // A row built after the view is shown (a recolour rebuilds them) is in the theme's version of its colour from the start.
+            Color pale = Color.FromRgb(250, 250, 150);
+            plot.RecolorSeries(0, pale);
+            plot.CommitAppearance();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(ChartPalette.Light.SeriesColor(pale), Swatch());
+            Assert.NotEqual(pale, Swatch());
+            plot.RecolorSeries(0, yellow);
+            plot.CommitAppearance();
+            Dispatcher.UIThread.RunJobs();
+            s.Window.RequestedThemeVariant = ThemeVariant.Dark;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(yellow, Swatch());
+            s.Window.RequestedThemeVariant = ThemeVariant.Light;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(ChartPalette.Light.SeriesColor(yellow), Swatch());
             s.Window.Close();
         }
 

@@ -56,8 +56,42 @@ Found by the whole-tree cleanup audit; each item was re-read against the tree as
   (MSB3073, which the harness counts as LOCKED: the build itself refuses). App (`ManifestTests`), 1 mutant, **CAUGHT**
   (the app tests' merge target never running). All three suites in Release, zero warnings, the .NET ones
   with `Platform=x64` set and no developer prompt: native **498** (1 skipped), managed **376** passed / 1 skipped, app
-  **665** passed / 34 not run. Baselines moved: managed 370 to 376 (`RepoFilesTests`, the header list), app 664 to 665.
+  **669** passed / 34 not run. Baselines moved: managed 370 to 376 (`RepoFilesTests`, the header list), app 668 to 669 (with #303 and #304 merged in).
   No product code changed: no soak.
+
+#### The Help menu's first entry is User Manual; no invitation in the README's Contributing
+
+The Help submenu's first entry read `tmDataQualityAnalyzer Help`; it now reads `User Manual`, which is what it opens (the
+base manual compiled into the application, or the full one the installer put beside it) and what the README and the release
+notes call it. Every place that named the entry says the new name: `MainWindow.axaml`, the two menu tests, US9.0 in
+`docs/claude.md`, the README, `deploy/README_portable.txt`, the installer script's comment, the `cut-release` skill, both
+manuals' "Open it any time from" line, and the clean-machine test's check that the installed full manual names the entry
+(`verify_avalonia_install.ps1`; it matches the manual's text, so the two change together). The v3.0.0 section of
+`deploy/RELEASENOTES.txt` already said `Help > User Manual` and is untouched; older changelog entries keep the name the menu had
+then. The README's `Contributing` no longer says that issues and pull requests are welcome: what a change needs stays, and who may
+contribute is the owner's policy to write.
+
+Checked by the two menu tests (they find the entry by its header, so the old name fails them), the consistency check, and a full
+app suite. The mutation check does not apply: no behaviour changed.
+
+#### The Receiver SNR yellow legible on the light theme
+
+The yellow of the Receiver SNR primaries, `(230, 200, 30)`, is 1.7 to 1 against the light theme's white (WCAG's contrast ratio),
+and the paler shades beyond the primaries are fainter still, so a yellow receiver's line and its legend swatch were hard to
+see there. `ChartPalette.SeriesColor` now gives the colour a series is drawn in: its own, or, where its contrast against the
+chart's background is below `MinSeriesContrast` (2.0 for the light theme, none for the dark), the same colour with its channels
+scaled down by the least that reaches it. The line, the band and the legend's swatch use it, and the swatch follows a change of
+theme. Of the primaries only the yellow is below 2.0 (the orange, the next lowest, is 2.3), so the other five are as they were.
+The stored colour, the template, the Customize View swatch and the CSV are untouched, and the dark theme is unchanged;
+a pale colour a user picks is drawn darker on the light theme too. `PlotColors`, and the 84 shades `PlotTests` holds to v2.14.2's,
+are as they were.
+
+Mutation check: eight mutants, the list kept outside the repository. Seven CAUGHT (the light theme's least set
+to none, the contrast ratio flattened to 1, the scale starting too low, the threshold raised so the orange and green are
+darkened, the line in the stored colour, and the legend's swatch in the stored colour at build and at a theme change). One
+SURVIVED, as expected: the band's fill in the stored colour, which only the line's pixels, read back, test. The first run of the
+legend mutant survived: the swatch was set right by the theme change when the view attached, so a recolour after the view was
+shown, which rebuilds the rows, was added to the test. The app suite's baseline moves by four tests (664 to 668 with #301 and #302).
 
 #### The application's and the library's literals beside what names them (audit C4, X5 in part)
 
