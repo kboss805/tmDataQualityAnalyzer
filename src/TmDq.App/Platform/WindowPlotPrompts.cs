@@ -3,7 +3,8 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using TmDq.App.Services;
 using TmDq.App.ViewModels.Plot;
-using TmDq.App.Views;
+using TmDq.App.Views.Dialogs;
+using TmDq.App.Views.Plot;
 
 namespace TmDq.App.Platform
 {

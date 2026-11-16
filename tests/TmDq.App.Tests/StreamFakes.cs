@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using TmDq.App.Services;
-using TmDq.App.ViewModels;
+using TmDq.App.ViewModels.Dialogs;
 
 namespace TmDq.App.Tests
 {

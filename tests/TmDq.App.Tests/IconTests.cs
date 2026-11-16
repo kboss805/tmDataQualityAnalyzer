@@ -9,6 +9,7 @@ using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using TmDq.App.Views;
+using TmDq.App.Views.Dialogs;
 using Xunit;
 using static TmDq.App.Tests.PeResources;
 

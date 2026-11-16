@@ -10,7 +10,7 @@ using TmDq.App.Models.Processing;
 using TmDq.App.Models.Streams;
 using TmDq.App.Models.Templates;
 using TmDq.App.ViewModels.Plot;
-using TmDq.App.Views;
+using TmDq.App.Views.Plot;
 using TmDq.Core;
 using TmDq.Core.Tests;
 using Xunit;

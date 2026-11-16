@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using TmDq.App.Models.Export;
 using TmDq.App.Models.Logging;
 using TmDq.App.Services;
+using TmDq.App.ViewModels.Dialogs;
 using TmDq.App.ViewModels.Plot;
 
 namespace TmDq.App.ViewModels

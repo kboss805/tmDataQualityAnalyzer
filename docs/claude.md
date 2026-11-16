@@ -511,8 +511,8 @@ profile, so a batch processes with the linear calibration.
   holds them to `constants.h`' (`kSettingsDirName`, `kReceiverParamsDirName`, `kRcvrCalsDirName`) and to the shipped tree.
 - **Extract Calibration** (`ExtractCalibrationViewModel`) behind Apply Cal (US5.3); its clip fields' maximum is
   `ClipMaximum`, bound in the window the same way.
-- **The run** (`Models/Processing`: `StreamsRun`, `NativeCore`; `ViewModels/ProcessingViewModel` and its window;
-  `Models/Logging/SessionLog` and `Views/LogView`): the core's run on its own threads, the modal progress dialog whose
+- **The run** (`Models/Processing`: `StreamsRun`, `NativeCore`; `ViewModels/Dialogs/ProcessingViewModel` and its window;
+  `Models/Logging/SessionLog` and `Views/Controls/LogView`): the core's run on its own threads, the modal progress dialog whose
   Cancel stops every stream, and the log.
 - **Startup and the smoke report** (`Startup`, `Models/Processing/FirstChannelRun`): a recording path on the command
   line opens that recording, as a file association does. With `TMDQ_SMOKE_REPORT=<file>` set as well, the application skips
@@ -640,9 +640,14 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
   - `Models/` (`Streams`, `Processing`, `Settings`, `Templates`, `Logging`, `Export`, `Help`): the rules, the files and
     the core's runs, no UI. A seam a model implements is a model's too: `IStreamConfigurator`, `IRunLog` and
     `ICalibrationRunner` (with the product's `CoreCalibrationRunner`) are in `Models/Processing`.
-  - `ViewModels/`, the plot's in `ViewModels/Plot/`; `DialogConfigurator`, which builds Configure Streams' view model,
-    is here too, and `IRunHost` sits beside `BatchRunner`, its one user.
-  - `Views/`: the windows and controls.
+  - `ViewModels/`: the main window's view model and its parts (`MainWindowServices`, `ShellPreferences`,
+    `SessionExport`, `BatchRunner`, with `IRunHost` beside it) and `MenuChoice`, which both menus use; the dialogs'
+    in `ViewModels/Dialogs/` (with `DialogConfigurator`, which builds Configure Streams' view model), the plot's in
+    `ViewModels/Plot/`.
+  - `Views/`: `MainWindow`; the dialogs' windows, XAML and built in code, in `Views/Dialogs/`; the plot's view, chart,
+    legend, image export, palette and Customize View in `Views/Plot/`; the controls the windows share (`LogView`,
+    `DialogFooter`) in `Views/Controls/`; and what turns a view model's state into paint (`StatusPaint`,
+    `StatusBrushes`) in `Views/Converters/`. Each folder of `Views/` mirrors the one of `ViewModels/` it shows.
   - `Services/`: the interfaces a view model asks the user through (file dialogs, dialogs, prompts, Help) and nothing
     else; `LayerTests` holds it to interfaces.
   - `Platform/`: their Avalonia implementations, which the application hands in (`App.axaml.cs`) and a test replaces.

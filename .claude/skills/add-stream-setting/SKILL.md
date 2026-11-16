@@ -27,9 +27,9 @@ Decide two things first, because they gate which steps apply:
 
 1. **The app's settings record** — `src/TmDq.App/Models/Streams/StreamSetup.cs` (`StreamSetup`), with its
    default in `Models/Streams/StreamDefaults.cs` if it has one.
-2. **The setup dialog** — `ViewModels/StreamSetupViewModel.cs` (the field, its property, loading it from
+2. **The setup dialog** — `ViewModels/Dialogs/StreamSetupViewModel.cs` (the field, its property, loading it from
    and writing it to `StreamSetup`, and any validation: a problem is shown as it arises, and OK waits),
-   and the control in `Views/StreamSetupWindow.axaml`, with a tooltip like every other field.
+   and the control in `Views/Dialogs/StreamSetupWindow.axaml`, with a tooltip like every other field.
 3. **The rules** — `Models/Streams/StreamRules.cs`: the edited row, **Apply to all** (US2.2: a setting that
    should not fan out says so in a comment), and the conversion to the run's `StreamConfig`.
 4. **Templates** — `Models/Templates/TemplateFile.cs`: a template carries every row's settings, in the JSON

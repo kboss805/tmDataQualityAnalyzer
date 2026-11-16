@@ -9,6 +9,9 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using TmDq.App.Views;
+using TmDq.App.Views.Controls;
+using TmDq.App.Views.Converters;
+using TmDq.App.Views.Dialogs;
 using Xunit;
 
 namespace TmDq.App.Tests

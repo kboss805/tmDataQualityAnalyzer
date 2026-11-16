@@ -8,7 +8,9 @@ using TmDq.App.Models.Processing;
 using TmDq.App.Models.Settings;
 using TmDq.App.Platform;
 using TmDq.App.ViewModels;
+using TmDq.App.ViewModels.Dialogs;
 using TmDq.App.Views;
+using TmDq.App.Views.Plot;
 
 namespace TmDq.App
 {

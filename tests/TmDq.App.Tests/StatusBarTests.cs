@@ -13,6 +13,8 @@ using TmDq.App.Models.Logging;
 using TmDq.App.Models.Processing;
 using TmDq.App.ViewModels;
 using TmDq.App.Views;
+using TmDq.App.Views.Controls;
+using TmDq.App.Views.Converters;
 using TmDq.Core.Tests;
 using Xunit;
 

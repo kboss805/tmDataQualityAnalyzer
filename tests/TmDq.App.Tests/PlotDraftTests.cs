@@ -16,7 +16,7 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using TmDq.App.Models.Processing;
 using TmDq.App.ViewModels.Plot;
-using TmDq.App.Views;
+using TmDq.App.Views.Plot;
 using Xunit;
 
 namespace TmDq.App.Tests
