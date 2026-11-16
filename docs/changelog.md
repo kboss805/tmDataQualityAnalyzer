@@ -12,6 +12,39 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The compiler's gate and the package versions, in the files that build (audit A1, T7, A5 in part)
+
+Found by the whole-tree cleanup audit; each claim was re-measured on the tree as of #297. The rest of the audit's
+standards work (A2 and A3, the `.editorconfig` and the .NET analyzers; the `.clang-format` of A4 and T8; the shared
+`eng/common.ps1` and PSScriptAnalyzer of A5) is left for the next change, which has to fix what those rules find.
+
+- **A1, T7: level 4, and every warning an error, in the project files.** `tmdq_core.vcxproj` and `tmdq_core_tests.vcxproj`
+  compiled at level 3 with five warnings raised to level 3 by switch, and with `TreatWarningAsError` false: the
+  zero-warning rule lived in the scripts' scan of their own log, so a build from an IDE or VS Code was not gated, and an
+  incremental scripted build did not recompile unchanged files, whose warnings were therefore not in the log. Both now
+  have `WarningLevel` `Level4` and `TreatWarningAsError` true, and the five `/w3` switches go (C4100, C4189 and
+  C4456 to C4458 are level 4 warnings). The audit's measurement held: the core's first-party code was already clean at
+  level 4 (Debug and Release, `-Rebuild`, zero warnings), and the only cost was marking the vendored irig106 headers
+  external (`ExternalIncludePath`, `ExternalWarningLevel` `TurnOffAllWarnings`), whose C4201 would otherwise fail every
+  first-party file that includes them. The irig106 `.c` files still compile with warnings off. The scripts' scan stays,
+  as a second line.
+- **The tests' own code was not clean.** `test_framesync.cpp` had eight string literals in which an octal escape is
+  followed by a digit (`"\0117\012"`, read as `\011` then `7`: C4125, a level 4 warning); each is now split at the
+  escape (`"\011" "7\012"`), the same bytes. No other test file warned.
+- **A5: `Directory.Packages.props` and `global.json`.** The Avalonia version `12.1.4` was typed six times in two project
+  files and xunit's twice, and a bump that missed the test project would have been a run-time mismatch, not a build
+  error. Every version is now in `Directory.Packages.props` (central package management; Avalonia's packages share one
+  `AvaloniaVersion`), the projects name their packages without one, and a version typed in a project is refused
+  (NU1008). The licence check still runs over whatever resolves, transitive packages included. `global.json` asks for
+  the 10.0.100 SDK or a newer one (`latestFeature`, no prerelease): it stops an older SDK building the repository, but it
+  does not pin the feature band, which CI's `10.0.x` would then have to follow.
+- **Checked.** Negative checks with `eng\mutate.ps1`: a level 4 warning in a first-party source (an assignment in a
+  condition, C4706, in `clocktime.cpp`) fails the native build (C2220), and a version typed in `TmDq.Core.Tests.csproj`
+  fails the managed one (NU1008): both COMPILE, as expected. The core in Debug and Release with `-Rebuild`: zero
+  warnings, imports on the allow-list. All three suites: native **495** (1 skipped, Release; the tests project also
+  compiled in Debug), managed **366** passed / 1 skipped, app **647** passed / 34 not run, Release, zero warnings. No
+  baseline moved. No product code changed, so no soak or throughput run.
+
 #### The manual's figures the same in every render
 
 Re-rendering the figures (`enguild_manual.ps1`) changed four of them nearly every time. It looked like the run log's

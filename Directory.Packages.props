@@ -1,0 +1,28 @@
+<Project>
+
+  <!--
+    Every NuGet package version in the repository, once (central package management). A project names a package
+    without a version; a version typed in a .csproj is an error. Avalonia's packages move together, so they share one
+    property: a bump that missed the test project would be a run-time mismatch, not a build error.
+
+    The licence check (eng/PackageLicences.targets) still runs on whatever these resolve to, transitive packages
+    included: a new package needs its licence reviewed in eng/check_package_licences.ps1 first.
+  -->
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <AvaloniaVersion>12.1.4</AvaloniaVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageVersion Include="Avalonia" Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Desktop" Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Controls.ColorPicker" Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Headless.XUnit" Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Skia" Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageVersion Include="xunit.v3" Version="3.2.2" />
+  </ItemGroup>
+
+</Project>

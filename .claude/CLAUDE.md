@@ -66,7 +66,8 @@ Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `
   run) and fails unless each CSV export is byte for byte what v2.14.2 exported (the manifest's `qt` blocks). Most
   runs read the full and local recordings under `tests\data`, which are not committed, so CI never runs it, and a
   missing recording fails. Run it after a change to processing, the plot's series or the CSV writer.
-  **Never type a version in a .csproj**: `Directory.Build.props` at the root imports
+  **Never type a version in a .csproj** (nor a package's: `Directory.Packages.props` holds those, Avalonia's as one
+  `AvaloniaVersion`): `Directory.Build.props` at the root imports
   `eng/AppVersion.props`, which reads `AppVersion`, into every .NET project, and **`Directory.Build.targets`**
   **imports `eng/PackageLicences.targets`** (no licensed tooling; the project stays GPL-3.0): a package (transitive ones too) outside the open-source allow-list
   in `eng/check_package_licences.ps1` fails the build, and a licence *file* passes only when its SHA-256 is in that

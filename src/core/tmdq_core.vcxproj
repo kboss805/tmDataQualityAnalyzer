@@ -10,8 +10,8 @@
   src/core/src, and every ABI source in src/core/abi, must be listed, and the native tests must compile exactly the same list.
 
   Compiler switches, kept from v2.x's build when plan step 6.1 removed it: C++20, /utf-8, /permissive-, warning
-  level 3, the warnings in AdditionalOptions promoted, and UNICODE. The vendored irig106 C library is compiled
-  with warnings off.
+  level 4 with warnings as errors (the irig106 headers external, audit A1 and T7), and UNICODE. The vendored irig106
+  C library is compiled with warnings off.
 
   The toolset is whatever MSBuild brings: v143 from the Visual Studio 2022 tools that eng\env.ps1 pins, v145
   from Visual Studio 2026. Intermediates go in a folder per toolset, so objects from two compilers never share
@@ -60,10 +60,16 @@
     <LinkIncremental Condition="'$(Configuration)' != 'Debug'">false</LinkIncremental>
   </PropertyGroup>
 
+  <!-- The vendored irig106 headers are external: their warnings (C4201 and the rest) are the library's own. -->
+  <PropertyGroup>
+    <ExternalIncludePath>$(MSBuildThisFileDirectory)..\..\third_party\irig106\include;$(ExternalIncludePath)</ExternalIncludePath>
+  </PropertyGroup>
+
   <ItemDefinitionGroup>
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <TreatWarningAsError>false</TreatWarningAsError>
+      <WarningLevel>Level4</WarningLevel>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <TreatWarningAsError>true</TreatWarningAsError>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <ExceptionHandling>Sync</ExceptionHandling>
@@ -72,9 +78,10 @@
       <ProgramDataBaseFileName>$(IntDir)tmdq_core.pdb</ProgramDataBaseFileName>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)abi;$(MSBuildThisFileDirectory)include;$(MSBuildThisFileDirectory)include\dto;$(MSBuildThisFileDirectory)include\model;$(MSBuildThisFileDirectory)..\..\third_party\irig106\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>TMDQ_ABI_BUILD;UNICODE;_UNICODE;WIN32;WIN64;_ENABLE_EXTENDED_ALIGNED_STORAGE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <!-- Strict conformance, the listed warnings raised to level 3, and two kept off (C4577, C4467)
-           as v2.x's build had them. -->
-      <AdditionalOptions>/FS /utf-8 /Zc:__cplusplus /Zc:throwingNew /Zc:externConstexpr /w34100 /w34189 /w44456 /w44457 /w44458 /wd4577 /wd4467 %(AdditionalOptions)</AdditionalOptions>
+      <!-- Strict conformance, level 4 with every warning an error (audit A1, T7: a build from an IDE is gated as the
+           scripted one is), and two kept off (C4577, C4467) as v2.x's build had them. The vendored irig106 headers are
+           external (ExternalIncludePath, above) and the .c files below compile with warnings off. -->
+      <AdditionalOptions>/FS /utf-8 /Zc:__cplusplus /Zc:throwingNew /Zc:externConstexpr /wd4577 /wd4467 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
