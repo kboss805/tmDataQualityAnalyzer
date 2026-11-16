@@ -40,4 +40,12 @@
     <Compile Include="..\TmDq.Core.Tests\RepoPaths.cs" Link="RepoPaths.cs" />
   </ItemGroup>
 
+  <!-- The test exe selects the UTF-8 active code page, as the application and the other test hosts do (the shared
+       assets\utf8codepage.manifest, merged with mt.exe, which eng\WindowsSdkTools.targets finds): a test that hands the
+       core a non-ASCII path can then run here, and a test asserts the code page. -->
+  <Target Name="EmbedUtf8Manifest" AfterTargets="Build" DependsOnTargets="TmDqFindMt">
+    <Exec Command="&quot;$(TmDqMt)&quot; -nologo -manifest &quot;$(MSBuildThisFileDirectory)..\..\assets\utf8codepage.manifest&quot; -outputresource:&quot;$(OutDir)$(AssemblyName).exe;#1&quot;"
+          ContinueOnError="false" />
+  </Target>
+
 </Project>

@@ -12,6 +12,53 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The tools say what they do: the test hosts' manifest, Platform, CI, and the docs that pointed nowhere (audit T6, T10, T11, M4 in part, F4 in part, F5 in part)
+
+Found by the whole-tree cleanup audit; each item was re-read against the tree as of #302.
+
+- **T6: every test host runs on the UTF-8 code page.** The app's test host had no manifest, though `.claude/CLAUDE.md`
+  and the shared manifest's own header said each .NET test host merged one, and the library tests merged a second copy
+  of it (`tests/TmDq.Core.Tests/app.manifest`). Both .NET test projects now merge `assets/utf8codepage.manifest`, as
+  the native tests do, and the copy is gone; `ManifestTests.ThisTestHostRunsOnTheUtf8CodePageToo` holds the app's, as
+  `FileTests` holds the library's. The application keeps its own `app.manifest` (it also declares Windows 10).
+- **T10: `Platform=x64` is harmless, and the texts now say so.** Four places said a .NET build fails on the variable
+  vcvars leaves behind (or goes to `bin\x64`) and that "the scripts clear it"; two of five did. Measured: with
+  `Platform=x64` set and no developer prompt, `test_dotnet.ps1` and `test_app.ps1` build and pass, because every
+  `.csproj` sets `AppendPlatformToOutputPath=false`. So nothing clears it: the two lines that did (`build_manual.ps1`,
+  `mutate.ps1`) are gone, `env.ps1`, `docs/claude.md` and the build-and-test skill say why, and
+  `RepoFilesTests.EveryDotnetProjectKeepsItsOutputWhereItAlwaysIs` holds the property. `test_dotnet.ps1`,
+  `test_app.ps1` and `build_manual.ps1` no longer import the whole MSVC environment or demand `mt` on PATH: since #262
+  the projects find `mt.exe` themselves.
+- **T11: CI.** The 29-line "Prove there is no Qt on this machine" step guarded plan step 2.4 while Qt code still existed;
+  none does now, and the import allow-list in `build_core_dll.ps1` catches a new dependency. The job has
+  `timeout-minutes: 45` (a run is about eleven) and the workflow `permissions: contents: read`. The ASCII rule that the
+  workflow's header states, and that audit B7 broke in a script, is a test: `RepoFilesTests` reads every `.ps1`, `.iss`
+  and workflow file under `eng/`, `deploy/` and `.github/` and fails on a byte above 127 (all are ASCII today), and a
+  second case fails if that walk finds nothing.
+- **M4, the broken pointer.** US8.0 sent the reader to the "Settings on upgrade" row of `docs/future_plans/README.md`
+  for why the installer merge was not built; the row gave no reason, and its "Landed in" cell still read "this change".
+  The reason (no custom installer code, and no one asked) is now in the criterion, pointing at the v2.14.2 entry that
+  gave it, and the cell says v2.14.2. Moving the stories' other history into the changelog is left for the user's call.
+- **F4.** `docs/SNR_logic.md` is `docs/snr_logic.md`, beside `framesync_logic.md` (the review skill's two links follow;
+  the changelog's old mentions are history and stay). `docs/design/multi-file-input-design.md` said "implemented" of a
+  design whose Add Source and per-source removal were never in the application: its status now says what survived (the
+  shared time base, the source ids, the source-qualified CSV columns, the Plot File selector), and its line recommending
+  a model is gone. Left for the user: the three unreferenced `docs/design/Wireframe*.png`.
+- **F5.** The DLL's project lists its 35 core headers as it lists its sources (so they show in Solution Explorer), and
+  `NativeProjectTests.TheDllListsEveryHeader` holds the list to the folders. The two inner `.gitignore` files under
+  `deploy/` are folded into `deploy/.gitignore` (checked with `git check-ignore`: the staged layout, the packages and
+  the sandbox payload ignored, every tracked script kept). Left: renaming `WalkingSkeletonTests` and `MainWindowTests`.
+- **Checked.** Mutation check, `eng\mutate.ps1`: managed (`RepoFilesTests`, `NativeProjectTests`), 6 mutants: a non-ASCII character in `env.ps1` **CAUGHT** by
+  the harness; the workflow's time limit removed, its `permissions` removed, `AppendPlatformToOutputPath` removed from
+  the app's project and a header left out of the DLL's project, all **CAUGHT**, run by hand (the harness reports a
+  mutant in a file nothing compiles as STALE, since no binary is rebuilt from it: each was applied, the test exe run,
+  and the file put back byte for byte); the library tests pointed at a missing manifest stop the build at `mt.exe`
+  (MSB3073, which the harness counts as LOCKED: the build itself refuses). App (`ManifestTests`), 1 mutant, **CAUGHT**
+  (the app tests' merge target never running). All three suites in Release, zero warnings, the .NET ones
+  with `Platform=x64` set and no developer prompt: native **498** (1 skipped), managed **376** passed / 1 skipped, app
+  **665** passed / 34 not run. Baselines moved: managed 370 to 376 (`RepoFilesTests`, the header list), app 664 to 665.
+  No product code changed: no soak.
+
 #### The application's and the library's literals beside what names them (audit C4, X5 in part)
 
 Found by the whole-tree cleanup audit; each site was re-read against the tree as of #301, and several had already gone

@@ -1,4 +1,0 @@
-# Build output of build_avalonia_package.ps1: the staged layout and the packages it produces.
-staging/
-*.zip
-*_setup.exe

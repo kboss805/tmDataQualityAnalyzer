@@ -62,9 +62,8 @@ every .NET project treats warnings as errors.
 - **The binary must be newer than the source.** A failed link can leave the previous executable in
   place and a script can print a stale result; after a build, check the test exe's time, and for the
   app or managed suite that the DLL it loads was rebuilt too.
-- **`Platform=x64`.** `vcvars` sets it, and a `dotnet build` in that shell then looks for a solution
-  platform that does not exist. The scripts clear it; clear it yourself (`$env:Platform = $null`)
-  before calling `dotnet` by hand in a shell that sourced `env.ps1`.
+- **`Platform=x64`.** `vcvars` sets it, and it does no harm: every project sets `AppendPlatformToOutputPath=false`
+  (a test holds that), so a `dotnet build` in a shell that sourced `env.ps1` puts its output where it always does.
 - **An IDE's design-time build shares `obj` and `bin`.** VS Code's C# Dev Kit builds the projects in
   the background, and two builds racing over one `obj` fail or test the wrong thing. Run long loops
   (mutation checks) in a worktree: `git worktree add C:\tmp\<name>`.
@@ -77,7 +76,7 @@ every .NET project treats warnings as errors.
 ## Running the application
 
 ```powershell
-$env:Platform = $null; dotnet build src\TmDq.App -c Debug
+dotnet build src\TmDq.App -c Debug
 src\TmDq.App\bin\Debug\net10.0\tmDataQualityAnalyzer.exe "tests\data\test files\prn_testfile, sample.ch10"
 ```
 

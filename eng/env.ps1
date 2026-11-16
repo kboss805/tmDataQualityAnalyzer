@@ -12,8 +12,8 @@
 # compilers then sit in one build tree. Set TMDQ_VS_RANGE (a vswhere version range, e.g.
 # '[18.0,19.0)') to choose another on purpose.
 #
-# vcvars sets Platform=x64, which a .NET build then takes for a solution platform that
-# does not exist; the scripts that run dotnet clear it after sourcing this one.
+# vcvars also sets Platform=x64. That is left alone: the native builds pass /p:Platform=x64 themselves, and a .NET
+# build is not troubled by it, because every .csproj sets AppendPlatformToOutputPath=false (a test holds that).
 # =============================================================================
 
 # Import the MSVC + Windows SDK environment from vcvars64.bat, once per shell.

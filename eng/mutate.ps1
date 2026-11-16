@@ -162,8 +162,6 @@ function Say([string]$line) {
 # ---- the tools ----------------------------------------------------------------------------------------------
 if (-not (Get-Command msbuild -ErrorAction SilentlyContinue)) { . (Join-Path $root 'eng\env.ps1') *> $null }
 if (-not (Get-Command msbuild -ErrorAction SilentlyContinue)) { Fail 2 'msbuild not found (install the Visual Studio 2022 C++ build tools)' }
-# vcvars sets Platform=x64, which sends a dotnet build's output to bin\x64\. The native builds pass it explicitly.
-[Environment]::SetEnvironmentVariable('Platform', $null)
 
 $outDir = Join-Path $root 'out\Release'
 $coreDll = Join-Path $outDir 'tmdq_core.dll'

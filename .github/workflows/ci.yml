@@ -4,12 +4,8 @@ name: CI
 # Avalonia application's tests on every push to main and every PR, in one job on a
 # GitHub-hosted Windows runner (plan step 6.4).
 #
-# One job, on a machine that has never had Qt. Until 6.4 there were three: a self-hosted
-# runner (preferred when online), a hosted fallback, and core-without-qt beside either,
-# which proved the core and the app need no Qt (plan step 2.4). The self-hosted machine
-# still held the Qt kit the deleted application needed, so only the hosted job could prove
-# that; with the Qt application gone (6.1, 6.2) it is the only job, and a step before the
-# build still fails if the image ever gains a Qt, so the proof cannot quietly lapse. The
+# One job, on a GitHub-hosted machine (plan step 6.4; the Qt application it once also covered is gone, and a new
+# dependency on anything outside the Windows SDK is caught by the import allow-list in eng\build_core_dll.ps1). The
 # small .ch10 fixtures are committed, so every suite runs here. The heavy PRN throughput
 # benchmark is opt-in (TMDQA_RUN_HEAVY_BENCH) and needs the full recording, which is not
 # committed: it is run at release (eng\run_throughput_bench.ps1), not here.
@@ -33,12 +29,18 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# The job reads the repository and writes nothing to it.
+permissions:
+  contents: read
+
 jobs:
   ci:
     # windows-2022, not windows-latest: the build is pinned to Visual Studio 2022 (MSVC 14.44, v143; eng\env.ps1
     # asks vswhere for [17.0,18.0)), which is what releases are built with. windows-latest carries Visual Studio 2026
     # (MSVC 14.51), so a job there never builds with the release compiler.
     runs-on: windows-2022
+    # A run takes about eleven minutes; a hung headless test must not hold a runner for the default six hours.
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -81,36 +83,6 @@ jobs:
           # cl exits non-zero when given no input file, and GitHub appends
           # "exit $LASTEXITCODE" to powershell steps, so end it explicitly successful.
           exit 0
-
-      - name: Prove there is no Qt on this machine
-        shell: powershell
-        run: |
-          # Runs after the toolchain steps, so the PATH they built is the one checked. Looks for
-          # Qt the ways a build could find it: a qmake or a Qt DLL on PATH, a Qt variable, an
-          # install in the usual places.
-          $ErrorActionPreference = 'Continue'
-          $found = @()
-          foreach ($tool in 'qmake', 'qmake6', 'qtpaths', 'windeployqt') {
-            $c = Get-Command $tool -ErrorAction SilentlyContinue
-            if ($c) { $found += "$tool on PATH: $($c.Source)" }
-          }
-          foreach ($dir in ($env:PATH -split ';' | Where-Object { $_ -and (Test-Path -LiteralPath $_) })) {
-            Get-ChildItem -LiteralPath $dir -Filter 'Qt6Core*.dll' -ErrorAction SilentlyContinue |
-              ForEach-Object { $found += "Qt DLL on PATH: $($_.FullName)" }
-          }
-          Get-ChildItem env: | Where-Object { $_.Name -match '^(QTDIR|QT_ROOT|QT_ROOT_DIR|QT_PLUGIN_PATH|Qt6_DIR)$' } |
-            ForEach-Object { $found += "variable $($_.Name)=$($_.Value)" }
-          # Each base must be set: an empty one would make "\Qt", which resolves to the drive's root.
-          $roots = @('C:\Qt', 'D:\a\Qt')
-          foreach ($base in $env:USERPROFILE, $env:RUNNER_WORKSPACE) { if ($base) { $roots += (Join-Path $base 'Qt') } }
-          foreach ($root in $roots) {
-            if (Test-Path -LiteralPath $root) { $found += "install folder: $root" }
-          }
-          if ($found.Count -gt 0) {
-            $found | ForEach-Object { Write-Host "  $_" }
-            throw "This job must run where Qt is not installed, and found $($found.Count) trace(s) of it"
-          }
-          Write-Host 'No Qt on this machine: no qmake or Qt DLL on PATH, no Qt variable, no install folder.'
 
       - name: Build native core (tmdq_core.dll)
         shell: powershell

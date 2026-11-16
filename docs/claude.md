@@ -391,7 +391,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] New fields added to a shipped default therefore reach a **fresh install**, not an existing one. An upgraded install keeps the operator's file exactly as it stands.
   - **Replaces two criteria that described a merge this project never built.** They claimed the installer saved a conflicting default as `new_x.toml` and carried the user's old values into it. Nothing implements that: the installer script (`deploy/avalonia/tmDataQualityAnalyzer.iss`) is declarative, with no `[Code]` section, and there is no `new_x`, migration, schema-version or merge logic in the core, `deploy/` or `eng/`. Confirmed on a clean machine by `deploy/sandbox/` - a first run wrote nothing under `settings\` and no registry key.
   - **The guarantee above is weaker but true, and the defensive readers are what make it safe** - `FrameSetup::readReceiverParams()` accepts both the current `[Receivers]` keys and the older `[Parameters]` spelling, an absent `Randomized` leaves the operator's choice alone rather than clearing it, and the template reader (`TemplateFile`) keeps each key's default for anything omitted (a new row's value, read from a default `StreamSetup`, which `StreamFilesTests` holds to the core's `ReceiverParamsFile.Defaults()`). A change that removed that tolerance would look harmless and would not be: it is load-bearing for this criterion, not incidental.
-  - **When a merge would become necessary:** a shipped default gaining a field whose absence an old file cannot express - where "missing" and a deliberate choice are indistinguishable. `Randomized` is exactly that shape and was only safe because the reader was written to notice. Option B - building the merge in the installer's `[Code]` section - was scoped and deliberately not taken; see the "Settings on upgrade" row in `docs/future_plans/README.md` for why, and rebuild the sketch from this criterion if that day comes.
+  - **When a merge would become necessary:** a shipped default gaining a field whose absence an old file cannot express - where "missing" and a deliberate choice are indistinguishable. `Randomized` is exactly that shape and was only safe because the reader was written to notice. Building the merge in the installer's `[Code]` section was scoped and deliberately not taken: it would move the installer from no custom code to scripted code, which is what keeps it cheap to maintain, and no one has asked for it (the v2.14.2 entry "US8.0 now describes the installer that exists" in `docs/changelog.md`). Rebuild the sketch from this criterion if that day comes.
 
 ### US9.0: Switch between light and dark theme — Complete
 
@@ -836,11 +836,12 @@ The `add-stream-setting` skill is the checklist. In short:
 
 ### Common Issues
 
-1. **A build tool is not found** (`msbuild`, `mt`, `dumpbin`): the scripts dot-source `eng\env.ps1` when they are
-   missing, which imports the Visual Studio 2022 environment; run them from PowerShell, not a bare `cmd`.
-2. **`dotnet build` fails on `Platform=x64`**: `vcvars` sets it, and a .NET build then looks for an x64 configuration
-   that does not exist. Only `eng\build_manual.ps1` and `eng\mutate.ps1` clear it; in a shell that ran `env.ps1`, clear it yourself
-   (`$env:Platform = $null`) before `dotnet build`.
+1. **A build tool is not found** (`msbuild`, `dumpbin`): the native scripts dot-source `eng\env.ps1` when `msbuild` is
+   missing, which imports the Visual Studio 2022 environment; run them from PowerShell, not a bare `cmd`. (The .NET
+   scripts need no such environment: the projects find `mt.exe` themselves.)
+2. **`Platform=x64` in the shell**: `vcvars` sets it. A .NET build is not troubled by it (every project sets
+   `AppendPlatformToOutputPath=false`, which a test holds), and the native builds pass `/p:Platform=x64` themselves, so
+   nothing clears it.
 3. **A test sees an old `tmdq_core.dll`**: the managed and app tests load `out\<config>\tmdq_core.dll` (or
    `TMDQ_CORE_DLL`), so rebuild the core after changing it.
 4. **A deleted or renamed header still "builds"**: an incremental build relinks stale objects; only `-Rebuild`
@@ -876,9 +877,10 @@ is); a new .NET test needs nothing but its class.
 ### Continuous Integration
 
 `.github/workflows/ci.yml` is one job, `ci`, on GitHub-hosted `windows-2022` (Visual Studio 2022, as releases are
-built, which the job checks), on every push to `main` and every PR: the release consistency check, a check that the
-machine has no Qt, the core built Debug and Release, then the native, managed and app suites. The workflow's own
-constraints (ASCII-only, Windows PowerShell 5.1) are in its header comment. The self-hosted runner CI used until plan
+built, which the job checks), on every push to `main` and every PR: the release consistency check, the core built
+Debug and Release, then the native, managed and app suites. It runs with a read-only token (`permissions: contents:
+read`) and stops after 45 minutes. The workflow's own constraints (ASCII-only, Windows PowerShell 5.1) are in its
+header comment, and `RepoFilesTests` holds the scripts, the installer script and the workflow to ASCII. The self-hosted runner CI used until plan
 step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_runner.md) records how, and why it must not come back.
 
 ### Test Suites
@@ -938,7 +940,9 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
   (an error, never an exception), bad arguments and the last error.
 
 **The C# library** (`tests/TmDq.Core.Tests`): the struct layout against the native side (`LayoutTests`); the native
-projects' source lists against the files on disk (`NativeProjectTests`); the recordings' channels (`FileTests`); runs of
+projects' source and header lists against the files on disk (`NativeProjectTests`); the repository's own files
+(`RepoFilesTests`: the scripts, the installer script and the workflow ASCII-only, every .NET project's output out of a
+platform folder, both .NET test hosts merging the shared UTF-8 manifest, the workflow's time limit and read-only token); the recordings' channels (`FileTests`); runs of
 the committed recordings against numbers v2.14.2 produced, every setting reaching the job, failures, observers, cancel
 and lifetimes (`RunTests`); calibration against the core's extractor (`CalibrationTests`); the file formats byte for
 byte against the core (`FormatsTests`); loading the DLL (`LibraryTests`, `IsolatedLoadTests` in a child process, the
@@ -971,7 +975,8 @@ helper every test cleans up and reads back through, which waits out a virus scan
   byte in the pixels, but for one level of colour in three pixels at a checkbox's edge in the receiver tree's figure: the run log's
   racing lines and its percentages and seconds are set in one order and wording before each capture (`Steady`, which
   the class tests), the progress bar is drawn at 70 %, and the chevrons are at rest (`AtRest`).
-- **The build and the release:** `VersionTests`, `VersionBuildTests`, `ManifestTests`, `ThirdPartyNoticesTests`,
+- **The build and the release:** `VersionTests`, `VersionBuildTests`, `ManifestTests` (the exe's manifest, and this
+  test host on the UTF-8 code page too), `ThirdPartyNoticesTests`,
   `PackageLicenceTests`, `LicenceBuildTests`, `IconTests` (the icon's sizes, its images in the built exe, and every
   window showing it).
 - **The soak:** `SoakTests`, explicit, run by `eng\run_soak.ps1` (above).
