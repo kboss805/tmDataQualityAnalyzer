@@ -12,6 +12,42 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Each type in its layer: Services holds only interfaces, and Help is two commands (layout plan PR 1; audit S9, S10, S17 in part)
+
+The first of the source-layout PRs. The application's folders were right; some types sat in a folder whose rule they
+broke, and four interfaces lived beside whatever used them first.
+
+- **`Services/` is interfaces only, and a test holds it.** `DialogConfigurator`, which builds Configure Streams' view
+  model and keeps the last calibration folder, is a view model's helper with no Avalonia in it: it moves to
+  `ViewModels/`. `HelpManual` (which manual to open, and the compiled-in one written out) is file I/O no view model
+  touches: `Models/Help/`. `ICalibrationRunner` is not something a view model asks the user through but the seam over
+  the core's calibration run, so it joins `Models/Processing/` beside the product's runner, `CoreCalibrationRunner`,
+  which leaves the view model's file it was nested in. `LayerTests.ServicesHoldOnlyInterfaces` fails on any type in
+  `Services` that is not an interface.
+- **Help is two view-model commands, like every other menu entry.** User Manual and About were the one pair of entries
+  wired as click handlers in `MainWindow`'s code-behind, through an `IHelpActions` that took the window and was declared
+  inside `MainWindow.axaml.cs`. `IHelpActions` is now in `Services/` without the window, `WindowHelpActions(owner)` in
+  `Platform/`, handed in through `MainWindowServices.Help`, and the menu binds `OpenManualCommand` and
+  `ShowAboutCommand`. Without a help service both entries are unavailable, as every other service's are; the
+  application always hands one in. They stay available while a run goes on, as before.
+- **Plain data out of view-model files** (S17 in part): `CalibrationBase` to `Models/Processing/`; `ImageFiles` (with
+  `ImageFormat`) and `ExportKind` to `Models/Export/` (new), since a view, a service, `Platform` and the export use them.
+- **One type per file in `Models/Processing`:** `IStreamConfigurator`, `StreamsChoice` and `RecordingException` leave
+  `FirstChannelRun.cs`. `IStreamConfigurator` stays a model's, not a service's, because a model implements it
+  (`FirstChannelRun`) and a model may not reach `Services`.
+- **S10: `FrameSyncDefaults` (and `ReceiverSnrDefaults`) move to `Models/Streams/`**, beside `StreamDefaults`, the
+  only place outside `Processing` that read them; `Models.Streams` and `Models.Processing` no longer depend on each
+  other both ways.
+- `docs/claude.md`'s File Organization, the main window's and Help's paragraphs and the `LayerTests` description say
+  where each type is now.
+- **Checked.** Mutation check, `eng\mutate.ps1` (`eng/mutants/app-layer-homes.json`), app, 6 mutants, all **CAUGHT**:
+  User Manual or About offered with no help service (2), User Manual showing About, the User Manual entry bound to
+  About's command, About bound to nothing (`ShellTests.TheMenuHoldsFourSubmenusAndNoExit`), and a class filed in
+  `Services` (`LayerTests.ServicesHoldOnlyInterfaces`). The rest is moves: each moved type's body is as it was, and the
+  compiler (with IDE0005, an unused `using` as an error) found every reference. Native **498** passed / 1 skipped
+  (Release; no native change), managed **376** passed / 1 skipped, app **670** passed / 34 not run, zero warnings.
+  Baseline moved: app 669 to 670 (the new layer test). No processing, series or CSV change: no soak.
+
 #### The tools say what they do: the test hosts' manifest, Platform, CI, and the docs that pointed nowhere (audit T6, T10, T11, M4 in part, F4 in part, F5 in part)
 
 Found by the whole-tree cleanup audit; each item was re-read against the tree as of #302.
