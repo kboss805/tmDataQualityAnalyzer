@@ -191,7 +191,7 @@ namespace TmDq.App.ViewModels
         /// <summary>A checked row that cannot be processed yet (a red cross; an unchecked row's cross is gray).</summary>
         public bool IsBlocking => Readiness is Readiness.NeedsConfiguration or Readiness.MissingPattern;
 
-        public string ReadyGlyph => IsReady ? "✓" : "✗";
+        public string ReadyGlyph => IsReady ? Glyphs.Ok : Glyphs.Fail;
 
         public string ReadyTip => StreamRules.ReadinessTip(Readiness);
 

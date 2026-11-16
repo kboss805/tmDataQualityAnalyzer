@@ -52,9 +52,9 @@ namespace TmDq.App.Views
 
         public static string MarkOf(LogLevel level) => level switch
         {
-            LogLevel.Success => "✓",
-            LogLevel.Warning => "⚠",
-            LogLevel.Error => "✗",
+            LogLevel.Success => Glyphs.Ok,
+            LogLevel.Warning => Glyphs.Warn,
+            LogLevel.Error => Glyphs.Fail,
             _ => "",
         };
 

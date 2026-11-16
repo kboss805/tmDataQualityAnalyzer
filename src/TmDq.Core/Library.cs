@@ -97,14 +97,14 @@ public static unsafe class Library
                 return;
             }
 
-            // DllImport("tmdq_core") resolves by bare name through the OS search order, which need not include the
+            // DllImport(Native.Dll) resolves by bare name through the OS search order, which need not include the
             // folder the DLL is in. Resolving it to the full path is both the fix and the point: one module, known.
             // The runtime allows one resolver per assembly, so it is installed once and reads the candidate path.
             s_candidate = full;
             if (!s_resolverInstalled)
             {
                 NativeLibrary.SetDllImportResolver(typeof(Library).Assembly,
-                    (name, _, _) => name == "tmdq_core" && s_candidate is not null ? NativeLibrary.Load(s_candidate) : IntPtr.Zero);
+                    (name, _, _) => name == Native.Dll && s_candidate is not null ? NativeLibrary.Load(s_candidate) : IntPtr.Zero);
                 s_resolverInstalled = true;
             }
 

@@ -15,7 +15,7 @@ namespace TmDq.App.Models.Processing
 
         /// <summary>PRN15's frame, 2^15 - 1 bits. Change it with the pattern or not at all: a PRN15 pattern with another
         /// frame length never locks.</summary>
-        public const int BitsInMinorFrame = 32767;
+        public const int BitsInMinorFrame = StreamConfig.DefaultBitsInMinorFrame;
 
         public const SamplePeriod Period = SamplePeriod.OneSecond;
     }

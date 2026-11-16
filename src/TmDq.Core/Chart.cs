@@ -140,16 +140,16 @@ public static unsafe class ChartGeometry
     }
 
     /// <summary>An X value as a pixel column; the area's left edge for an X range that is not usable.</summary>
-    public static double XToPixel(ChartView view, double x) => Transform(view, 0, x);
+    public static double XToPixel(ChartView view, double x) => Transform(view, TransformKind.XToPixel, x);
 
     /// <summary>A pixel column as an X value; the X range's lower end for an area with no width.</summary>
-    public static double PixelToX(ChartView view, double px) => Transform(view, 1, px);
+    public static double PixelToX(ChartView view, double px) => Transform(view, TransformKind.PixelToX, px);
 
     /// <summary>A Y value as a pixel row, larger values higher; the area's bottom for a Y range that is not usable.</summary>
-    public static double YToPixel(ChartView view, double y) => Transform(view, 2, y);
+    public static double YToPixel(ChartView view, double y) => Transform(view, TransformKind.YToPixel, y);
 
     /// <summary>A pixel row as a Y value; the Y range's lower end for an area with no height.</summary>
-    public static double PixelToY(ChartView view, double py) => Transform(view, 3, py);
+    public static double PixelToY(ChartView view, double py) => Transform(view, TransformKind.PixelToY, py);
 
     /// <summary><paramref name="count"/> (at least 2) evenly spaced values from <paramref name="lower"/> to
     /// <paramref name="upper"/>, both ends included; none for a range that is not usable.</summary>
@@ -176,11 +176,20 @@ public static unsafe class ChartGeometry
         return ticks;
     }
 
-    private static double Transform(ChartView view, int kind, double value)
+    /// <summary>tmdq_chart_transform_kind: which way tmdq_chart_transform converts.</summary>
+    private enum TransformKind
+    {
+        XToPixel = 0,
+        PixelToX = 1,
+        YToPixel = 2,
+        PixelToY = 3,
+    }
+
+    private static double Transform(ChartView view, TransformKind kind, double value)
     {
         Library.RequireLoaded();
         ChartViewNative v = ToNative(view);
-        Library.Check(Native.tmdq_chart_transform(&v, kind, value, out double result));
+        Library.Check(Native.tmdq_chart_transform(&v, (int)kind, value, out double result));
         return result;
     }
 
