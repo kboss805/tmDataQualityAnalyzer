@@ -24,7 +24,7 @@ namespace TmDq.App.Services
     /// <summary>Shows the template commands' dialogs modally. An interface so the view model can be tested without windows.</summary>
     public interface ITemplateDialogs
     {
-        /// <summary>Shows the batch confirmation; returns when it closes (<see cref="BatchApplyViewModel.Accepted"/> says how).</summary>
+        /// <summary>Shows the batch confirmation; returns when it closes (<see cref="DialogViewModel.Accepted"/> says how).</summary>
         Task ConfirmBatchAsync(BatchApplyViewModel vm);
 
         /// <summary>Which of <paramref name="choices"/> to capture a template from; null if the user cancelled.</summary>

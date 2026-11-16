@@ -5,7 +5,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using TmDq.App.Platform;
 using TmDq.App.Services;
 using TmDq.App.ViewModels.Plot;
 
@@ -82,10 +81,11 @@ namespace TmDq.App.Views.Plot
             set => SetValue(PlotProperty, value);
         }
 
-        /// <summary>The questions the menu asks; the windows unless a test sets its own.</summary>
+        /// <summary>The questions the menu asks: the application hands it the windows that ask the user, and until it does
+        /// every question is answered "cancel" (<see cref="NoPlotPrompts"/>).</summary>
         public IPlotPrompts Prompts
         {
-            get => _prompts ??= new WindowPlotPrompts(this);
+            get => _prompts ??= new NoPlotPrompts();
             set
             {
                 _prompts = value;

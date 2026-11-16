@@ -16,9 +16,7 @@ namespace TmDq.App.Platform
 
         public async Task ConfirmBatchAsync(BatchApplyViewModel vm)
         {
-            var window = new BatchApplyWindow { DataContext = vm };
-            vm.CloseRequested += (_, _) => window.Close();
-            await window.ShowDialog(_owner);
+            await Modal.ShowAsync(new BatchApplyWindow(), vm, _owner);
         }
 
         public Task<int?> ChooseSourceAsync(IReadOnlyList<string> choices) =>

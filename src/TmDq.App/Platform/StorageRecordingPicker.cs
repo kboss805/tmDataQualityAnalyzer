@@ -26,7 +26,7 @@ namespace TmDq.App.Platform
         public async Task<string?> PickRecordingAsync()
         {
             var files = await _owner.StorageProvider.OpenFilePickerAsync(Options);
-            return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+            return StorageDialogs.FirstPath(files);
         }
     }
 }

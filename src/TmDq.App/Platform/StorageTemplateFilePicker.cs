@@ -1,6 +1,4 @@
-using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -26,9 +24,9 @@ namespace TmDq.App.Platform
                 Title = "Apply Template to Files",
                 AllowMultiple = false,
                 FileTypeFilter = new[] { Templates },
-                SuggestedStartLocation = await FolderAsync(folder),
+                SuggestedStartLocation = await StorageDialogs.StartFolderAsync(_owner.StorageProvider, folder),
             });
-            return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+            return StorageDialogs.FirstPath(files);
         }
 
         public async Task<string?> SaveTemplateAsync(string? folder)
@@ -38,7 +36,7 @@ namespace TmDq.App.Platform
                 Title = "Save as Template",
                 FileTypeChoices = new[] { Templates },
                 DefaultExtension = "json",
-                SuggestedStartLocation = await FolderAsync(folder),
+                SuggestedStartLocation = await StorageDialogs.StartFolderAsync(_owner.StorageProvider, folder),
             });
             return file?.TryGetLocalPath();
         }
@@ -50,7 +48,7 @@ namespace TmDq.App.Platform
                 Title = "Select Chapter 10 Files",
                 AllowMultiple = true,
                 FileTypeFilter = new[] { Ch10 },
-                SuggestedStartLocation = await FolderAsync(folder),
+                SuggestedStartLocation = await StorageDialogs.StartFolderAsync(_owner.StorageProvider, folder),
             });
             return files.Select(f => f.TryGetLocalPath()).OfType<string>().ToList();
         }
@@ -61,14 +59,9 @@ namespace TmDq.App.Platform
             {
                 Title = "Select Output Folder",
                 AllowMultiple = false,
-                SuggestedStartLocation = await FolderAsync(folder),
+                SuggestedStartLocation = await StorageDialogs.StartFolderAsync(_owner.StorageProvider, folder),
             });
-            return folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
+            return StorageDialogs.FirstPath(folders);
         }
-
-        private async Task<IStorageFolder?> FolderAsync(string? folder) =>
-            string.IsNullOrEmpty(folder) || !Directory.Exists(folder)
-                ? null
-                : await _owner.StorageProvider.TryGetFolderFromPathAsync(new Uri(Path.GetFullPath(folder)));
     }
 }

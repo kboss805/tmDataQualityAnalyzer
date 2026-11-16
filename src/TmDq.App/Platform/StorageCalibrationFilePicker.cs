@@ -1,5 +1,3 @@
-using System;
-using System.IO;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
@@ -30,11 +28,9 @@ namespace TmDq.App.Platform
                 Title = title,
                 AllowMultiple = false,
                 FileTypeFilter = new[] { type, FilePickerFileTypes.All },
-                SuggestedStartLocation = string.IsNullOrEmpty(folder) || !Directory.Exists(folder)
-                    ? null
-                    : await _owner.StorageProvider.TryGetFolderFromPathAsync(new Uri(Path.GetFullPath(folder))),
+                SuggestedStartLocation = await StorageDialogs.StartFolderAsync(_owner.StorageProvider, folder),
             });
-            return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+            return StorageDialogs.FirstPath(files);
         }
     }
 }

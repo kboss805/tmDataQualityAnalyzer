@@ -6,15 +6,10 @@ namespace TmDq.App.Views.Dialogs
 {
     /// <summary>A report with OK, which a calibration's summary is shown in (plan step 4.6, US5.3).
     /// The text is selectable, and scrolls when it is long, as a report of 16 receivers can be.</summary>
-    public sealed class ReportWindow : Window
+    public sealed class ReportWindow : DialogWindow
     {
-        public ReportWindow(string title, string text)
+        public ReportWindow(string title, string text) : base(title)
         {
-            Title = title;
-            SizeToContent = SizeToContent.WidthAndHeight;
-            CanResize = false;
-            ShowInTaskbar = false;
-            WindowStartupLocation = WindowStartupLocation.CenterOwner;
             Body = new SelectableTextBlock { Text = text, TextWrapping = TextWrapping.Wrap, MaxWidth = 640 };
             OkButton = new Button { Content = "OK", IsDefault = true, IsCancel = true };
             OkButton.Click += (_, _) => Close();
