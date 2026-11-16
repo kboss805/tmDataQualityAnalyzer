@@ -1,0 +1,153 @@
+{
+  "suite": "managed",
+  "args": [
+    "-class",
+    "TmDq.Core.Tests.HandleTests"
+  ],
+  "mutants": [
+    {
+      "id": "H1",
+      "file": "src/TmDq.Core/Interop/Handles.cs",
+      "old": "        Native.tmdq_series_index_free(handle);",
+      "new": "        _ = handle;   // tmdq_series_index_free dropped",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.HandleTests"
+      ],
+      "expect": "caught",
+      "note": "an index is never freed"
+    },
+    {
+      "id": "H2",
+      "file": "src/TmDq.Core/ProcessingRun.cs",
+      "old": "        Cancel();\n        _handle.Dispose();",
+      "new": "        _handle.Dispose();",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.HandleTests"
+      ],
+      "expect": "caught",
+      "note": "Dispose does not cancel first: a Wait on another thread holds the run open to its natural end"
+    },
+    {
+      "id": "H3",
+      "file": "src/TmDq.Core/Interop/Handles.cs",
+      "old": "        Native.tmdq_run_free(handle);   // cancels and waits, so no native thread can still hold the context",
+      "new": "        _ = handle;",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.RunTests"
+      ],
+      "expect": "caught",
+      "note": "a run is never freed, so never cancelled or waited for"
+    },
+    {
+      "id": "H4",
+      "file": "src/TmDq.Core/Interop/Handles.cs",
+      "old": "        Native.tmdq_calibration_free(handle);   // cancels and waits, so no native thread can still call back",
+      "new": "        _ = handle;",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.CalibrationTests"
+      ],
+      "expect": "caught",
+      "note": "an extraction is never freed"
+    },
+    {
+      "id": "H5",
+      "file": "src/TmDq.Core/Interop/Handles.cs",
+      "old": "        Native.tmdq_stream_result_free(handle);",
+      "new": "        _ = handle;   // tmdq_stream_result_free dropped",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.RunTests"
+      ],
+      "expect": "caught",
+      "note": "a result is never freed"
+    },
+    {
+      "id": "H6",
+      "file": "src/TmDq.Core/Interop/Handles.cs",
+      "old": "        Native.tmdq_series_set_free(handle);",
+      "new": "        _ = handle;   // tmdq_series_set_free dropped",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.RunTests"
+      ],
+      "expect": "caught",
+      "note": "a series set is never freed (it pins its stream's data)"
+    },
+    {
+      "id": "H7",
+      "file": "src/TmDq.Core/Interop/Handles.cs",
+      "old": "        Native.tmdq_time_base_free(handle);",
+      "new": "        _ = handle;   // tmdq_time_base_free dropped",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.SeriesTests"
+      ],
+      "expect": "survived",
+      "note": "a time base (a few bytes) is never freed: a leak nothing can see"
+    },
+    {
+      "id": "H8",
+      "file": "src/TmDq.Core/Interop/Handles.cs",
+      "old": ": base(ownsHandle: true)",
+      "new": ": base(ownsHandle: false)",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.HandleTests"
+      ],
+      "expect": "caught",
+      "note": "no handle is owned, so none is ever released"
+    },
+    {
+      "id": "H9",
+      "file": "src/TmDq.Core/ProcessingRun.cs",
+      "old": "        catch (ObjectDisposedException)\n        {\n            // released: nothing is running\n        }",
+      "new": "        catch (InvalidOperationException)\n        {\n        }",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.RunTests"
+      ],
+      "expect": "caught",
+      "note": "Cancel after Dispose throws"
+    },
+    {
+      "id": "H10",
+      "file": "src/TmDq.Core/ProcessingRun.cs",
+      "old": "                return false;   // released",
+      "new": "                return true;",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.RunTests"
+      ],
+      "expect": "caught",
+      "note": "a released run is still running"
+    },
+    {
+      "id": "H11",
+      "file": "src/TmDq.Core/CalibrationRun.cs",
+      "old": "        catch (ObjectDisposedException)\n        {\n            // released: every thread has ended\n        }",
+      "new": "        catch (InvalidOperationException)\n        {\n        }",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.CalibrationTests"
+      ],
+      "expect": "caught",
+      "note": "Wait after Dispose throws"
+    },
+    {
+      "id": "H12",
+      "file": "src/TmDq.Core/StreamResult.cs",
+      "old": "        ObjectDisposedException.ThrowIf(_handle.IsClosed, this);\n    }",
+      "new": "    }",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.RunTests"
+      ],
+      "expect": "caught",
+      "note": "a disposed result is still read"
+    }
+  ]
+}

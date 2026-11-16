@@ -3,10 +3,10 @@
   "args": ["-class", "TmDq.Core.Tests.ChartGeometryTests"],
   "mutants": [
     { "id": "M1", "file": "src/TmDq.Core/Chart.cs",
-      "old": "index is not null && index.Count == count ? index.Handle : IntPtr.Zero", "new": "index is not null ? index.Handle : IntPtr.Zero",
+      "old": "index is not null && index.Count == count ? index.Handle : SeriesIndexHandle.None", "new": "index is not null ? index.Handle : SeriesIndexHandle.None",
       "expect": "caught", "note": "an index over another count handed to the core, which refuses the call" },
     { "id": "M2", "file": "src/TmDq.Core/Chart.cs",
-      "old": "index is not null && index.Count == count ? index.Handle : IntPtr.Zero", "new": "IntPtr.Zero",
+      "old": "index is not null && index.Count == count ? index.Handle : SeriesIndexHandle.None", "new": "SeriesIndexHandle.None",
       "expect": "caught", "note": "the binding never passes the index" },
     { "id": "M3", "file": "src/TmDq.Core/Chart.cs",
       "old": "        Count = ys.Length;", "new": "        Count = ys.Length - 1;",
