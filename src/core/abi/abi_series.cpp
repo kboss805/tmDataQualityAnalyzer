@@ -77,12 +77,7 @@ int32_t tmdq_series_set_info_get(const tmdq_series_set* set, tmdq_series_set_inf
     info.series_count  = static_cast<int32_t>(set->series.series.size());
     info.elapsed_count = static_cast<int32_t>(set->series.elapsed.size());
     info.elapsed       = set->series.elapsed.data();
-    if (!tmdq::writeStruct(info, kSeriesSetInfoMinimum, out))
-    {
-        tmdq::setError("null output or a struct_size that is too small");
-        return TMDQ_ERR_BADARG;
-    }
-    return TMDQ_OK;
+    return tmdq::writeOut(info, kSeriesSetInfoMinimum, out);
 }
 
 int32_t tmdq_series_set_spec(const tmdq_series_set* set, int32_t index, tmdq_series_spec* out)
@@ -113,12 +108,7 @@ int32_t tmdq_series_set_spec(const tmdq_series_set* set, int32_t index, tmdq_ser
     spec.stream_sequence   = s.streamSequence;
     spec.source_id         = s.sourceId;
     spec.y_count           = static_cast<int32_t>(s.yValues.size());
-    if (!tmdq::writeStruct(spec, kSeriesSpecMinimum, out))
-    {
-        tmdq::setError("null output or a struct_size that is too small");
-        return TMDQ_ERR_BADARG;
-    }
-    return TMDQ_OK;
+    return tmdq::writeOut(spec, kSeriesSpecMinimum, out);
 }
 
 void tmdq_series_set_free(tmdq_series_set* set) { delete set; }
@@ -136,12 +126,7 @@ int32_t tmdq_stream_result_key(const tmdq_stream_result* result, tmdq_stream_key
     key.source_id  = d.sourceId;
     key.label_utf8 = d.streamLabel.c_str();
     key.channel    = d.pcmChannelId;
-    if (!tmdq::writeStruct(key, kStreamKeyMinimum, out))
-    {
-        tmdq::setError("null output or a struct_size that is too small");
-        return TMDQ_ERR_BADARG;
-    }
-    return TMDQ_OK;
+    return tmdq::writeOut(key, kStreamKeyMinimum, out);
 }
 
 int32_t tmdq_stream_key_equal(const tmdq_stream_key* a, const tmdq_stream_key* b)
@@ -195,12 +180,7 @@ int32_t tmdq_time_base_info_get(const tmdq_time_base* base, tmdq_time_base_info*
     info.base_day         = base->base.baseDay();
     info.base_abs_seconds = base->base.baseAbsSeconds();
     info.base_time_offset = base->base.baseTimeOffset();
-    if (!tmdq::writeStruct(info, kTimeBaseInfoMinimum, out))
-    {
-        tmdq::setError("null output or a struct_size that is too small");
-        return TMDQ_ERR_BADARG;
-    }
-    return TMDQ_OK;
+    return tmdq::writeOut(info, kTimeBaseInfoMinimum, out);
 }
 
 int32_t tmdq_time_base_reset(tmdq_time_base* base)

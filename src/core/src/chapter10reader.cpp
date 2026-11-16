@@ -17,19 +17,6 @@ using namespace Irig106;
 
 namespace {
 
-/// ASCII upper-casing, enough for the TMATS "channel enabled" flag (T / TRUE / Y / 1).
-std::string upperAscii(std::string text)
-{
-    for (char& c : text)
-    {
-        if (c >= 'a' && c <= 'z')
-        {
-            c = static_cast<char>(c - 'a' + 'A');
-        }
-    }
-    return text;
-}
-
 /// A TMATS field as text; a missing field is the empty string.
 std::string fieldText(const char* field)
 {
@@ -270,7 +257,7 @@ void Chapter10Reader::applyTmatsNames()
             // this recording. Skip explicitly-disabled sources so they don't show
             // up as selectable channels; treat a missing CHE-n (common on older
             // TMATS revisions) as enabled, since omission isn't a disable signal.
-            const std::string che = upperAscii(textparse::trimmed(fieldText(data_source->szEnabled)));
+            const std::string che = textparse::asciiUpper(textparse::trimmed(fieldText(data_source->szEnabled)));
             const bool channel_enabled = che.empty() || che == "T" || che == "TRUE" || che == "Y" || che == "1";
 
             if (data_source->szTrackNumber != nullptr && channel_enabled)
@@ -300,9 +287,9 @@ void Chapter10Reader::applyTmatsNames()
                 if (data_source->szChannelDataType != nullptr)
                 {
                     const std::string cdt = textparse::trimmed(data_source->szChannelDataType);
-                    if (cdt == "11" || cdt == "TIMEIN") {
+                    if (cdt == "11" || cdt == PCMConstants::kChannelTypeTime) {
                         channel.setChannelType(PCMConstants::kChannelTypeTime);
-                    } else if (cdt == "01" || cdt == "09" || cdt == "PCMIN") {
+                    } else if (cdt == "01" || cdt == "09" || cdt == PCMConstants::kChannelTypePcm) {
                         channel.setChannelType(PCMConstants::kChannelTypePcm);
                     } else {
                         channel.setChannelType(cdt);

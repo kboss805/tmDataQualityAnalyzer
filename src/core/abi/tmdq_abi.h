@@ -192,7 +192,7 @@ typedef struct tmdq_stream_config
     int32_t     bits_in_minor_frame;
     int32_t     randomized;                 ///< 0/1.
     int32_t     inverted;                   ///< 0/1.
-    int32_t     sample_period_index;        ///< Index into the application's list of sample periods.
+    int32_t     sample_period_index;        ///< 0 = 1 s, 1 = 100 ms, 2 = 10 ms; any other value refuses the stream.
     int32_t     polarity_index;             ///< Receiver SNR.
     int32_t     slope_index;                ///< Receiver SNR.
     int32_t     num_receivers;              ///< Receiver SNR, used only when no word-map file is found.

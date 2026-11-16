@@ -261,12 +261,7 @@ int32_t tmdq_calibration_result(const tmdq_calibration* calibration, tmdq_calibr
         info.report_utf8       = c.report.c_str();
         info.recording_seconds = c.extractor.recordingSeconds();
         info.clip_ignored      = c.extractor.clipIgnored() ? 1 : 0;
-        if (!tmdq::writeStruct(info, kInfoMinimum, out))
-        {
-            tmdq::setError("null output or a struct_size that is too small");
-            return TMDQ_ERR_BADARG;
-        }
-        return TMDQ_OK;
+        return tmdq::writeOut(info, kInfoMinimum, out);
     });
 }
 
@@ -309,10 +304,5 @@ int32_t tmdq_calibration_channel_result(const tmdq_calibration* calibration, int
     channel.threshold_relaxed   = r.thresholdRelaxed ? 1 : 0;
     channel.saturated           = r.saturated ? 1 : 0;
     channel.sweep_levels        = r.sweepLevels;
-    if (!tmdq::writeStruct(channel, kChannelMinimum, out))
-    {
-        tmdq::setError("null output or a struct_size that is too small");
-        return TMDQ_ERR_BADARG;
-    }
-    return TMDQ_OK;
+    return tmdq::writeOut(channel, kChannelMinimum, out);
 }

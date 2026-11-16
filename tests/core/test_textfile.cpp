@@ -10,6 +10,7 @@
 #include "doctest.h"
 #include "test_support.h"
 #include "textfile.h"
+#include "textparse.h"
 
 using namespace tmdq_test;
 
@@ -165,4 +166,15 @@ TEST_CASE("textfile: a UTF-8 string is a path whatever the code page")
     const fs::path file = tmp.path() / textfile::pathFromUtf8(utf8(u8"café-Ω.toml"));
     writeBytes(file, "K=1\n");
     CHECK(fs::exists(file));
+}
+
+TEST_CASE("textparse: ASCII case folding touches only the ASCII letters")
+{
+    // One copy of each, where a TOML key, a step file's key and a TMATS flag are folded: the bytes of a UTF-8 text
+    // (every one of them 0x80 or above) and the characters either side of the letters must come back as they went in.
+    CHECK(textparse::asciiLower("Slope_dB [A-Z] ÃÎ© @[`{") == "slope_db [a-z] ÃÎ© @[`{");
+    CHECK(textparse::asciiUpper("Slope_dB [a-z] Ã©Î© @[`{") == "SLOPE_DB [A-Z] Ã©Î© @[`{");
+    CHECK(textparse::asciiLower("").empty());
+    CHECK(textparse::asciiUpper("true") == "TRUE");
+    CHECK(textparse::asciiLower("TRUE") == "true");
 }

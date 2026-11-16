@@ -481,12 +481,10 @@ const std::vector<Case>& cases()
             " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]"
             " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 profile=0]"
             " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
-        { "sample-period-out-of-range", Adj([](StreamJobConfig& c, const Fixtures&) { c.samplePeriodIndex = 7; }), DefaultFile::None, true, "ok error='' log=[  Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
-            " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"
-            " | setup: n=3"
-            " [L_RCVR1 w=0 slope=0.00305180437933928 scale=-32767.5 profile=0]"
-            " [R_RCVR1 w=1 slope=0.00305180437933928 scale=-32767.5 profile=0]"
-            " [C_RCVR1 w=2 slope=0.00305180437933928 scale=-32767.5 profile=0]" },
+        { "sample-period-above-the-range", Adj([](StreamJobConfig& c, const Fixtures&) { c.samplePeriodIndex = 7; }), DefaultFile::None, true, "rejected error='Rcvr: Sample period index is invalid.' log=[]" },
+        { "sample-period-below-the-range", Adj([](StreamJobConfig& c, const Fixtures&) { c.samplePeriodIndex = -1; }), DefaultFile::None, true, "rejected error='Rcvr: Sample period index is invalid.' log=[]" },
+        { "sample-period-just-above-the-range", Adj([](StreamJobConfig& c, const Fixtures&) { c.samplePeriodIndex = 3; }), DefaultFile::None, true, "rejected error='Rcvr: Sample period index is invalid.' log=[]" },
+        { "sample-period-refused-for-a-lock-stream-too", Adj([](StreamJobConfig& c, const Fixtures&) { c.mode = StreamMode::FrameSyncLockStats; c.samplePeriodIndex = 9; }), DefaultFile::None, true, "rejected error='Rcvr: Sample period index is invalid.' log=[]" },
     };
     return list;
 }
@@ -560,7 +558,10 @@ bool buildStreamJob(const StreamJobConfig& cfg, const ProcessingParams& base, co
         case 0: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod1s;    break;
         case 1: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod100ms; break;
         case 2: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod10ms;  break;
-        default: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod100ms; break;
+        default:
+            // CHANGED (audit X4): an index that is not 0, 1 or 2 was 100 ms in silence; it is refused.
+            error = stream_desc + ": Sample period index is invalid.";
+            return false;
     }
 
     if (cfg.mode == StreamMode::FrameSyncLockStats)
@@ -699,7 +700,7 @@ TEST_CASE("streamjob: the builder makes every generated job as the code it repla
         cfg.randomized = rng.chance(30);
         cfg.inverted = rng.chance(30);
         cfg.dataRateMbps = rng.chance(50) ? 0.0 : rng.below(100) / 8.0;
-        cfg.samplePeriodIndex = rng.below(6) - 1;
+        cfg.samplePeriodIndex = rng.below(12) == 0 ? rng.below(6) + 3 : rng.below(3);   // an unknown index is refused, so it is rare
         cfg.polarityIndex = rng.below(4) - 1;
         cfg.slopeIndex = rng.chance(80) ? rng.below(4) : rng.below(8) - 2;
         cfg.scaleDdBPerV = rng.chance(70) ? 10.0 : rng.pick(scales);

@@ -124,6 +124,19 @@ bool writeStruct(const T& value, std::size_t minimum, T* out)
     return true;
 }
 
+/// writeStruct as every getter ends: TMDQ_OK, or the one last error and TMDQ_ERR_BADARG for a NULL output or a
+/// struct_size below @p minimum.
+template <typename T>
+int32_t writeOut(const T& value, std::size_t minimum, T* out)
+{
+    if (writeStruct(value, minimum, out))
+    {
+        return TMDQ_OK;
+    }
+    setError("null output or a struct_size that is too small");
+    return TMDQ_ERR_BADARG;
+}
+
 } // namespace tmdq
 
 #endif // TMDQ_ABI_INTERNAL_H
