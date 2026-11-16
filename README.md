@@ -188,7 +188,15 @@ GPL v3
 
 ## Contributing
 
-[TBD]
+[Building the Project](#building-the-project) says how to build and run the three test suites. The developer guide,
+`docs/claude.md`, describes the architecture, the conventions and the test catalog. A change:
+
+- comes with tests in the suite its code belongs to, and leaves all three green with no compiler warnings;
+- gets an entry under `### Unreleased` at the top of `docs/changelog.md`, saying what changed and why;
+- does not edit `third_party/irig106/**` - adapt it in the core instead;
+- is offered under the same licence as the rest, GPL v3.
+
+Issues and pull requests are welcome on the project's GitHub page.
 
 ## Support
 
