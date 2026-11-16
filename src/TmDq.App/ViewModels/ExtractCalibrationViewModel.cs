@@ -358,9 +358,9 @@ namespace TmDq.App.ViewModels
         /// <summary>A status line as v2.x wrote it: a tick, a warning sign or a cross before the text.</summary>
         public static string Marked(CalibrationStatusKind kind, string text) => kind switch
         {
-            CalibrationStatusKind.Ok => "✓ " + text,
-            CalibrationStatusKind.Warn => "⚠ " + text,
-            CalibrationStatusKind.Fail => "✗ " + text,
+            CalibrationStatusKind.Ok => Glyphs.Ok + " " + text,
+            CalibrationStatusKind.Warn => Glyphs.Warn + " " + text,
+            CalibrationStatusKind.Fail => Glyphs.Fail + " " + text,
             _ => text,
         };
 

@@ -473,6 +473,15 @@ public class RunTests
         }
     }
 
+    [Fact]
+    public void AStreamStartsWithPrn15sFrameLength()
+    {
+        // The core's kDefaultFrameSyncLockBits; the application's FrameSyncDefaults is this constant, and a test of the
+        // application holds it to the core's header.
+        Assert.Equal(32767, StreamConfig.DefaultBitsInMinorFrame);
+        Assert.Equal(32767, new StreamConfig { PcmChannelId = 1, SyncPattern = "334AABBF" }.BitsInMinorFrame);
+    }
+
     [Theory]
     [InlineData(-1)]
     [InlineData(3)]

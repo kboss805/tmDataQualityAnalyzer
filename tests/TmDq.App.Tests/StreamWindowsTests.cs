@@ -70,6 +70,22 @@ namespace TmDq.App.Tests
         }
 
         [AvaloniaFact]
+        public void TheHeaderAndTheRowsOfTheStreamListHaveTheSameColumns()
+        {
+            // The two grids each spell their columns in the XAML (a header and a row template cannot share one), and the
+            // header sits over the rows only while the two spellings are one.
+            var w = Shown(new ConfigureStreamsWindow { DataContext = Configure() });
+            Grid header = w.GetVisualDescendants().OfType<Grid>()
+                .Single(g => g.Children.OfType<TextBlock>().Any(t => t.Text == "Process"));
+            List<Grid> rows = RowGrids(w);
+            Assert.NotEmpty(rows);
+            string Widths(Grid g) => string.Join(",", g.ColumnDefinitions.Select(c => c.Width.ToString()));
+            Assert.Equal(6, header.ColumnDefinitions.Count);
+            Assert.All(rows, r => Assert.Equal(Widths(header), Widths(r)));
+            w.Close();
+        }
+
+        [AvaloniaFact]
         public void AChannelNameTooLongForItsColumnIsTrimmedWithTheWholeNameAsItsTooltip()
         {
             // A short name shows in full; a long one is elided, with the whole name as its tooltip.

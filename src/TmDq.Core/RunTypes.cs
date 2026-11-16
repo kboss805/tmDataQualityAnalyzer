@@ -47,7 +47,11 @@ public sealed record StreamConfig
     /// <summary>Hex text; null or empty means every bit of the pattern.</summary>
     public string? SyncMask { get; init; }
 
-    public int BitsInMinorFrame { get; init; } = 32767;
+    /// <summary>The frame length a stream starts with: PRN15's, 2^15 - 1 bits, as the core's
+    /// kDefaultFrameSyncLockBits (a test holds the two together).</summary>
+    public const int DefaultBitsInMinorFrame = 32767;
+
+    public int BitsInMinorFrame { get; init; } = DefaultBitsInMinorFrame;
 
     public bool Randomized { get; init; }
 

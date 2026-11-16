@@ -12,6 +12,38 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The application's and the library's literals beside what names them (audit C4, X5 in part)
+
+Found by the whole-tree cleanup audit; each site was re-read against the tree as of #301, and several had already gone
+(the export and import icons' 900-character paths left `App.axaml` with the menu redo; the "could not be loaded"
+sentence is one constant, `MainWindowViewModel.CoreNotLoaded`, and the test that spells it out does so on purpose). The
+core's half of C4 and X4 is #301.
+
+- **The tick, the warning sign and the cross, once.** `Glyphs.Ok`, `Warn` and `Fail` (`src/TmDq.App/Glyphs.cs`, written as
+  `\u2713`, `\u26A0`, `\u2717`) replace the characters typed in `BatchApplyViewModel`, `ConfigureStreamsViewModel`,
+  `ExtractCalibrationViewModel` (which also typed the warning sign, as `StatusPaint` did) and `StatusPaint`. The two
+  private-use glyphs of the caption buttons in `MainWindow.axaml.cs`, which no editor shows, are `RestoreGlyph` and
+  `MaximizeGlyph` (`\uE923`, `\uE922`: Segoe MDL2 Assets' ChromeRestore and ChromeMaximize), named and commented.
+- **The stream list's columns.** The header and the row template of `ConfigureStreamsWindow.axaml` each spell
+  `70,260,12,160,80,60` and cannot share one spelling (a grid's columns cannot be a shared resource, and a shared size
+  group would size them from their content, which moves the manual's figures). A test now holds the two together:
+  `TheHeaderAndTheRowsOfTheStreamListHaveTheSameColumns`.
+- **In the library (X5).** `Native.Dll` is the one spelling of `"tmdq_core"`, for the 75 `LibraryImport`s and the resolver in
+  `Library.cs`; the chart's four transform kinds are a private `TransformKind` enum (the ABI's
+  `tmdq_chart_transform_kind`, the one ABI enum with no mirror) in place of `0` to `3`; `StreamConfig.DefaultBitsInMinorFrame`
+  is the library's 32767, which the application's `FrameSyncDefaults.BitsInMinorFrame` now is (it was a third typed copy;
+  the existing test that reads the core's `kDefaultFrameSyncLockBits` out of `constants.h` holds the chain together).
+  Not done: the channel letters L, R, C of `PlotViewModel` (the legend's own v2.x wording, and the core's fallback differs
+  on purpose) and the `"FrameSyncLock"` strings of `TemplateFile` (the file format's words, which a `nameof` would let a
+  rename change).
+- **Checked.** Mutation check, `eng\mutate.ps1`: managed (`ChartGeometryTests`, `RunTests`), 4 mutants, **4 CAUGHT** (the X and
+  the Y transform kinds swapped, the default frame length off by one, the resolver not answering to the library name); app
+  (`StreamWindowsTests`, `StatusBarTests`, `CalibrationDialogTests`, `TemplateBatchTests`, `WalkingSkeletonTests`,
+  `ShellTests`), 6 mutants, **6 CAUGHT** (each of the three glyphs changed, the caption glyphs swapped, a row one pixel off
+  its header, the lock default made the receiver's). All three suites in Release, zero warnings: native **498** (1 skipped,
+  unchanged, the core not touched), managed **370** passed / 1 skipped, app **664** passed / 34 not run. Baselines moved:
+  managed 369 to 370, app 663 to 664. Product behaviour did not change (the same characters, numbers and names), so no soak.
+
 #### One fact in one place in the core: the receiver number, the sample period, the ABI getters, the units (audit X4, S6, S7, C4 in part)
 
 Found by the whole-tree cleanup audit; each site was re-read against the tree as of #299. Some of S6 and S7 had already

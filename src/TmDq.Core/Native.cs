@@ -385,7 +385,8 @@ internal unsafe struct ImportedSeriesNative
 
 internal static unsafe partial class Native
 {
-    private const string Dll = "tmdq_core";
+    /// <summary>The library's name as every DllImport and the resolver in Library.cs spell it.</summary>
+    internal const string Dll = "tmdq_core";
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]

@@ -14,7 +14,7 @@ namespace TmDq.App.ViewModels
     /// <summary>One file in the batch confirmation: ✓ and its name, or ✗, its name and why it does not match.</summary>
     public sealed record BatchFileRow(FileCheck Check)
     {
-        public string Glyph => Check.Ok ? "✓" : "✗";
+        public string Glyph => Check.Ok ? Glyphs.Ok : Glyphs.Fail;
 
         /// <summary>The file's name, then "  —  reason" for one that does not match.</summary>
         public string Text => Path.GetFileName(Check.FilePath) + (Check.Ok ? "" : "  —  " + Check.Reason);
