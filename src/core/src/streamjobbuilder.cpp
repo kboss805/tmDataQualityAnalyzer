@@ -59,13 +59,16 @@ bool buildStreamJob(const StreamJobConfig& cfg, const ProcessingParams& base, co
     out_job.params.mode         = cfg.mode;
     out_job.params.streamLabel  = stream_desc;
 
-    // Set per-stream sample period.
+    // Set per-stream sample period: 0 = 1 s, 1 = 100 ms, 2 = 10 ms (tmdq_abi.h). Any other index is refused: it used to
+    // mean 100 ms in silence, which no host could have meant (the application clamps what it reads).
     switch (cfg.samplePeriodIndex)
     {
         case 0: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod1s;    break;
         case 1: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod100ms; break;
         case 2: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod10ms;  break;
-        default: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod100ms; break;
+        default:
+            error = stream_desc + ": Sample period index is invalid.";
+            return false;
     }
 
     // ---- Frame parameter table (word map + calibration) ----

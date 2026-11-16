@@ -26,7 +26,6 @@
 using namespace Irig106;
 
 namespace {
-    constexpr double k100NsToSeconds = 1.0e-7;
     constexpr double kTimeGapThreshold = 2.0;
     constexpr int    kPercent100 = 100;
     constexpr int    kPercent10  = 10;
@@ -79,7 +78,7 @@ void Ch10PacketReader::freeChanInfoTable(std::vector<SuChanInfo*>& channel_info)
         {
             if (info->psuAttributes != nullptr)
             {
-                if (strcasecmp(info->psuRDataSrc->szChannelDataType, "PCMIN") == 0)
+                if (strcasecmp(info->psuRDataSrc->szChannelDataType, PCMConstants::kChannelTypePcm) == 0)
                 {
                     FreeOutputBuffers_PcmF1(static_cast<SuPcmF1_Attributes*>(info->psuAttributes));
                 }
@@ -143,7 +142,7 @@ EnI106Status Ch10PacketReader::assembleAttributesFromTMATS(SuTmatsInfo* tmats_in
                 // The decoder leaves a field the TMATS does not carry NULL, and Chapter10Reader lists such a channel
                 // (a missing CHE-n counts as enabled), so the data type is checked before it is compared. A source with
                 // none is not taken for PCM: it gets no attributes, and a stream asked of it is refused in prepare().
-                if (psuRDataSrc->szChannelDataType != nullptr && strcasecmp(psuRDataSrc->szChannelDataType, "PCMIN") == 0)
+                if (psuRDataSrc->szChannelDataType != nullptr && strcasecmp(psuRDataSrc->szChannelDataType, PCMConstants::kChannelTypePcm) == 0)
                 {
                     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory, cppcoreguidelines-no-malloc)
                     channel_info[iTrackNumber]->psuAttributes = calloc(1, sizeof(SuPcmF1_Attributes));
@@ -318,8 +317,7 @@ bool Ch10PacketReader::prepare(const std::filesystem::path& filename,
         double delta_100ns = pcm_attrs->dDelta100NanoSeconds;
         if (p->dataRateBps > 0.0)
         {
-            constexpr double k100NsPerSecond = 1e7;
-            delta_100ns = k100NsPerSecond / p->dataRateBps;
+            delta_100ns = PCMConstants::k100NsPerSecond / p->dataRateBps;
         }
         ra.delta100ns = delta_100ns;
 
@@ -421,7 +419,7 @@ void Ch10PacketReader::run()
             enI106_SetRelTime(m_file_handle, &m_irig_time, m_header.aubyRefTime);
 
             double pkt_time = static_cast<double>(m_irig_time.ulSecs) +
-                              (k100NsToSeconds * static_cast<double>(m_irig_time.ulFrac));
+                              (PCMConstants::k100NsToSeconds * static_cast<double>(m_irig_time.ulFrac));
             if (prev_time_seconds >= 0)
             {
                 double gap = pkt_time - prev_time_seconds;
@@ -471,7 +469,7 @@ void Ch10PacketReader::run()
             vTimeArray2LLInt(m_header.aubyRefTime, &pkt_base_rel);
             enI106_RelInt2IrigTime(m_file_handle, pkt_base_rel, &m_irig_time);
             double base_abs_seconds = static_cast<double>(m_irig_time.ulSecs) +
-                                      (k100NsToSeconds * static_cast<double>(m_irig_time.ulFrac));
+                                      (PCMConstants::k100NsToSeconds * static_cast<double>(m_irig_time.ulFrac));
 
             PacketItem item;
             item.payload       = std::make_shared<const std::vector<uint8_t>>(raw_data, raw_data + raw_len);

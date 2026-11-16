@@ -269,7 +269,7 @@ namespace {
     constexpr std::size_t kReceiverTokenLength = 5;
 }
 
-int FrameSetup::receiverIndexFromName(const std::string& name)
+int FrameSetup::receiverNumberInName(const std::string& name)
 {
     const std::size_t at = name.rfind(kReceiverToken);
     if (at == std::string::npos)
@@ -283,7 +283,13 @@ int FrameSetup::receiverIndexFromName(const std::string& name)
     const bool ok = textparse::parseInteger(name.substr(at + kReceiverTokenLength), receiver);
     // A name ending in "_RCVR" with no number, or with trailing non-digits, is
     // not a receiver name — treat it as unparseable rather than guessing.
-    return (ok && receiver > 0) ? receiver : 0;
+    return ok ? receiver : 0;
+}
+
+int FrameSetup::receiverIndexFromName(const std::string& name)
+{
+    const int receiver = receiverNumberInName(name);
+    return receiver > 0 ? receiver : 0;
 }
 
 std::string FrameSetup::channelPartOfName(const std::string& name)

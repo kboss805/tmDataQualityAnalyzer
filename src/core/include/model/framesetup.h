@@ -146,6 +146,13 @@ public:
     /// rather than inventing a receiver number.
     static int receiverIndexFromName(const std::string& name);
 
+    /// The number after the LAST "_RCVR" in a name, as written: 0 when there is no token or the text after it is not
+    /// a whole decimal number, and a negative number kept as it is. The series builder and the CSV column schema
+    /// read names with this (a hand-edited CSV header "_RCVR-7" was a receiver -7 in v2.14.2, and the recorded
+    /// digests of SeriesColumnSchema keep it so); receiverIndexFromName() is this, with a number that is not
+    /// positive made 0, because a calibration summary has no use for a receiver 0 or -7.
+    static int receiverNumberInName(const std::string& name);
+
     /// The channel-position part of a "<prefix>_RCVR<N>" name ("L", "R", "C", …),
     /// or the whole name when it carries no "_RCVR<N>" suffix.
     static std::string channelPartOfName(const std::string& name);

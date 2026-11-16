@@ -412,6 +412,18 @@ TEST_CASE("FrameSetup: receiverIndexFromName inverts receiverParameterName")
     CHECK(FrameSetup::channelPartOfName("") == "");
 }
 
+TEST_CASE("FrameSetup: receiverNumberInName is receiverIndexFromName with a negative number kept")
+{
+    CHECK(FrameSetup::receiverNumberInName("L_RCVR-1") == -1);
+    CHECK(FrameSetup::receiverIndexFromName("L_RCVR-1") == 0);
+    CHECK(FrameSetup::receiverNumberInName("L_RCVR0") == 0);
+    CHECK(FrameSetup::receiverNumberInName("L_RCVR 3") == 3);
+    CHECK(FrameSetup::receiverNumberInName("L_RCVR3x") == 0);
+    CHECK(FrameSetup::receiverNumberInName("A_RCVR1_RCVR2") == 2);
+    CHECK(FrameSetup::receiverNumberInName("AGC_LEFT") == 0);
+    CHECK(FrameSetup::receiverNumberInName("") == 0);
+}
+
 TEST_CASE("FrameSetup: a receiver number in a name is a whole decimal number, or none")
 {
     // The text after "_RCVR" is read by textparse::parseInteger: base 10, the whole text digits after one optional

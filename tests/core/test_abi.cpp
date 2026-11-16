@@ -1399,6 +1399,10 @@ TEST_CASE("Abi: aStructFromANewerHostIsAcceptedAndOneFromAnOlderHostIsRefused")
     tmdq_channel_info small{};
     small.struct_size = sizeof(small) - 1;
     CHECK(tmdq_file_pcm_channel(file, 0, &small) == int(TMDQ_ERR_BADARG));
+    // Every getter says the same thing about a short or missing output (tmdq::writeOut).
+    CHECK(std::string(tmdq_last_error()) == "null output or a struct_size that is too small");
+    CHECK(tmdq_file_pcm_channel(file, 0, nullptr) == int(TMDQ_ERR_BADARG));
+    CHECK(std::string(tmdq_last_error()) == "null output or a struct_size that is too small");
     tmdq_file_close(file);
 }
 

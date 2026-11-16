@@ -30,6 +30,32 @@ inline bool isAsciiSpace(char c)
     return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r';
 }
 
+/// @p s with the ASCII letters A to Z made lower case; every other byte (UTF-8 included) is left as it is.
+inline std::string asciiLower(std::string s)
+{
+    for (char& c : s)
+    {
+        if (c >= 'A' && c <= 'Z')
+        {
+            c = static_cast<char>(c - 'A' + 'a');
+        }
+    }
+    return s;
+}
+
+/// @p s with the ASCII letters a to z made upper case; every other byte is left as it is.
+inline std::string asciiUpper(std::string s)
+{
+    for (char& c : s)
+    {
+        if (c >= 'a' && c <= 'z')
+        {
+            c = static_cast<char>(c - 'a' + 'A');
+        }
+    }
+    return s;
+}
+
 /// @p s without its leading and trailing ASCII whitespace (space, \t, \n, \v, \f, \r).
 inline std::string trimmed(const std::string& s)
 {
@@ -121,11 +147,7 @@ inline bool parseDouble(const std::string& text, double& out)
         const char c = s[sign];
         if (c == 'n' || c == 'N' || c == 'i' || c == 'I')
         {
-            std::string word;
-            for (char ch : s)
-            {
-                word += (ch >= 'A' && ch <= 'Z') ? static_cast<char>(ch - 'A' + 'a') : ch;
-            }
+            const std::string word = asciiLower(s);
             if (word == "nan")
             {
                 out = std::numeric_limits<double>::quiet_NaN();

@@ -93,12 +93,7 @@ int32_t tmdq_frame_sync_file_info_get(const tmdq_frame_sync_file* file, tmdq_fra
     info.randomized           = f.randomized.value_or(false) ? 1 : 0;
     info.pattern_utf8         = f.pattern.c_str();
     info.mask_utf8            = f.mask.c_str();
-    if (!tmdq::writeStruct(info, kFrameSyncInfoMinimum, out))
-    {
-        tmdq::setError("null output or a struct_size that is too small");
-        return TMDQ_ERR_BADARG;
-    }
-    return TMDQ_OK;
+    return tmdq::writeOut(info, kFrameSyncInfoMinimum, out);
 }
 
 void tmdq_frame_sync_file_free(tmdq_frame_sync_file* file) { delete file; }
@@ -261,12 +256,7 @@ int32_t tmdq_match_info_get(const tmdq_match* match, tmdq_match_info* out)
     info.extra_count   = static_cast<int32_t>(r.extra.size());
     info.missing       = r.missing.data();
     info.extra         = r.extra.data();
-    if (!tmdq::writeStruct(info, kMatchInfoMinimum, out))
-    {
-        tmdq::setError("null output or a struct_size that is too small");
-        return TMDQ_ERR_BADARG;
-    }
-    return TMDQ_OK;
+    return tmdq::writeOut(info, kMatchInfoMinimum, out);
 }
 
 void tmdq_match_free(tmdq_match* match) { delete match; }
@@ -315,12 +305,7 @@ int32_t tmdq_csv_info_get(const tmdq_csv* csv, tmdq_csv_info* out)
     info.skipped_rows      = r.skippedRows;
     info.base_time_offset  = r.baseTimeOffset;
     info.x_max             = r.xMax;
-    if (!tmdq::writeStruct(info, kCsvInfoMinimum, out))
-    {
-        tmdq::setError("null output or a struct_size that is too small");
-        return TMDQ_ERR_BADARG;
-    }
-    return TMDQ_OK;
+    return tmdq::writeOut(info, kCsvInfoMinimum, out);
 }
 
 int32_t tmdq_csv_series_get(const tmdq_csv* csv, int32_t index, tmdq_csv_series_info* out)
@@ -351,12 +336,7 @@ int32_t tmdq_csv_series_get(const tmdq_csv* csv, int32_t index, tmdq_csv_series_
     info.stream_order      = s.streamOrder;
     info.source_id         = s.sourceId;
     info.point_count       = static_cast<int32_t>(s.xValues.size());
-    if (!tmdq::writeStruct(info, kCsvSeriesMinimum, out))
-    {
-        tmdq::setError("null output or a struct_size that is too small");
-        return TMDQ_ERR_BADARG;
-    }
-    return TMDQ_OK;
+    return tmdq::writeOut(info, kCsvSeriesMinimum, out);
 }
 
 void tmdq_csv_free(tmdq_csv* csv) { delete csv; }

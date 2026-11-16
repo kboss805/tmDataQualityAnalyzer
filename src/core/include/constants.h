@@ -49,6 +49,12 @@ namespace PCMConstants {
     /// Minimum milliseconds between progress position queries (time-based throttle).
     inline constexpr int kProgressReportIntervalMs = 100;
 
+    /// @name IRIG 106 time units: the 100 ns tick the recording's attributes count in
+    /// @{
+    inline constexpr double k100NsToSeconds = 1.0e-7; ///< Seconds in one 100 ns unit.
+    inline constexpr double k100NsPerSecond = 1.0e7;  ///< 100 ns units in one second.
+    /// @}
+
     /// @name Channel type identifiers from TMATS records
     /// @{
     inline constexpr const char* kChannelTypeTime = "TIMEIN"; ///< TMATS type for time channels.

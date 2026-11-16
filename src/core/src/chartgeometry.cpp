@@ -442,7 +442,7 @@ std::vector<double> timeTickValues(double lower, double upper, int count, double
         1, 2, 5, 10, 15, 30,                         // seconds
         60, 120, 300, 600, 900, 1800,                // 1, 2, 5, 10, 15, 30 minutes
         3600, 7200, 10800, 21600, 43200,             // 1, 2, 3, 6, 12 hours
-        86400                                        // 1 day
+        UIConstants::kSecondsPerDay                  // 1 day
     };
 
     const int    n   = std::max(2, count);
@@ -468,7 +468,7 @@ std::vector<double> timeTickValues(double lower, double upper, int count, double
     {
         // Longer than a day per tick: whole days, which stay round however many the span needs. Without this the
         // ladder's top entry would be reused and a multi-week recording would grow ticks without bound.
-        step = std::ceil(raw / 86400.0) * 86400.0;
+        step = std::ceil(raw / UIConstants::kSecondsPerDay) * UIConstants::kSecondsPerDay;
     }
 
     // Start at the first round time at or after the range, not at the range itself - and round in the domain the

@@ -121,11 +121,15 @@ namespace TmDq.App.Views
 
         private void OnClose(object? sender, RoutedEventArgs e) => Close();
 
+        // Segoe MDL2 Assets, the icon font of the caption buttons: ChromeRestore and ChromeMaximize (private-use code points,
+        // so they are written as escapes, not as characters no editor shows).
+        private const string RestoreGlyph = "\uE923", MaximizeGlyph = "\uE922";
+
         /// <summary>The maximize button shows restore, and says so, while the window is maximized.</summary>
         private void UpdateMaximizeButton()
         {
             bool maximized = WindowState == WindowState.Maximized;
-            MaximizeButton.Content = maximized ? "" : "";
+            MaximizeButton.Content = maximized ? RestoreGlyph : MaximizeGlyph;
             ToolTip.SetTip(MaximizeButton, maximized ? "Restore" : "Maximize");
         }
 

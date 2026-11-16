@@ -284,6 +284,8 @@ TEST_CASE("SeriesColumnSchema: parse edge cases keep their recorded behaviour")
         { "rcvr-trailing-junk",         "5 - A L_RCVR3x",   0, "5 - A L_RCVR3x", "A",  5, 0, 0 },
         { "rcvr-overflows",             "5 - A L_RCVR99999999999", 0, "5 - A L_RCVR99999999999", "A", 5, 0, 0 },
         { "rcvr-without-number",        "5 - A L_RCVR",     0, "5 - A L_RCVR", "A",    5, 0, 0 },
+        { "rcvr-zero-is-none",          "5 - A L_RCVR0",    0, "5 - A L_RCVR0", "A",   5, 0, 0 },
+        { "rcvr-negative-is-kept",      "5 - A L_RCVR-3",   0, "5 - A L_RCVR-3", "A",  5, -3, 0 },
         { "last-rcvr-token-wins",       "5 - A L_RCVR1_RCVR2", 0, "5 - A L_RCVR1_RCVR2", "A", 5, 2, 0 },
         { "rcvr-without-id-prefix",     "L_RCVR4",          0, "L_RCVR4",      "",     0, 4, 0 },
         { "rcvr-token-needs-underscore", "5 - A LRCVR3",    0, "5 - A LRCVR3", "A",    5, 0, 0 },

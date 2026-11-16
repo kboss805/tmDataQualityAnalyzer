@@ -1325,6 +1325,27 @@ TEST_CASE("seriesbuild: a spec views the processed data without copying it")
     CHECK(built.series[2].name == "40 - Rcvr L_RCVR1");
 }
 
+TEST_CASE("seriesbuild: a receiver number is the whole decimal number after the last _RCVR, as written, or none")
+{
+    // The series builder, the CSV column schema and FrameSetup read the number after "_RCVR" with one function
+    // (FrameSetup::receiverNumberInName, pinned in test_framesetup.cpp); unlike receiverIndexFromName it keeps a
+    // negative number, as v2.14.2 did, which only a hand-edited name can carry.
+    ProcessedStreamData d = stream("Rcvr", 40, 0, 0, { kT0, kT0 + 1 }, { 90, 95 }, { 0, 3 },
+                                   { { "L_RCVR-3", { -80, -79 } }, { "L_RCVR0", { -80, -79 } }, { "L_RCVR3x", { -80, -79 } },
+                                     { "L_RCVR 2", { -80, -79 } }, { "R_RCVR+4", { -80, -79 } } });
+    const StreamSeries built = buildStreamSeries(d, kT0);
+    REQUIRE(built.series.size() == 7);
+    CHECK(built.series[2].receiverIndex == -3);
+    CHECK(built.series[3].receiverIndex == 0);
+    CHECK(built.series[4].receiverIndex == 0);
+    CHECK(built.series[5].receiverIndex == 2);
+    CHECK(built.series[6].receiverIndex == 4);
+    // Channels are counted per receiver number, in order: the two that are no receiver are channels 0 and 1 of 0.
+    CHECK(built.series[2].channelIndex == 0);
+    CHECK(built.series[3].channelIndex == 0);
+    CHECK(built.series[4].channelIndex == 1);
+}
+
 TEST_CASE("seriesbuild: the time base reports how far the series must shift")
 {
     SeriesTimeBase base;
