@@ -1,10 +1,10 @@
 using System.Threading.Tasks;
 using TmDq.App.Models.Processing;
 using TmDq.App.Models.Settings;
-using TmDq.App.ViewModels;
+using TmDq.App.Services;
 using TmDq.Core;
 
-namespace TmDq.App.Services
+namespace TmDq.App.ViewModels
 {
     /// <summary>Asks the user, through Configure Streams, what to process (US1.0).</summary>
     public sealed class DialogConfigurator : IStreamConfigurator

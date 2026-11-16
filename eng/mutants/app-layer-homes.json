@@ -1,0 +1,55 @@
+{
+  "suite": "app",
+  "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ShellTests"],
+  "mutants": [
+    {
+      "id": "H1",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "OpenManualCommand = new AsyncRelayCommand(() => _help!.OpenManualAsync(), () => _help is not null);",
+      "new": "OpenManualCommand = new AsyncRelayCommand(() => _help!.OpenManualAsync(), () => true);",
+      "expect": "caught",
+      "note": "User Manual offered with no help service to answer it"
+    },
+    {
+      "id": "H2",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "ShowAboutCommand = new AsyncRelayCommand(() => _help!.ShowAboutAsync(), () => _help is not null);",
+      "new": "ShowAboutCommand = new AsyncRelayCommand(() => _help!.ShowAboutAsync(), () => true);",
+      "expect": "caught",
+      "note": "About offered with no help service to answer it"
+    },
+    {
+      "id": "H3",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "OpenManualCommand = new AsyncRelayCommand(() => _help!.OpenManualAsync(),",
+      "new": "OpenManualCommand = new AsyncRelayCommand(() => _help!.ShowAboutAsync(),",
+      "expect": "caught",
+      "note": "User Manual shows About"
+    },
+    {
+      "id": "H4",
+      "file": "src/TmDq.App/Views/MainWindow.axaml",
+      "old": "<MenuItem Header=\"User Manual\" Command=\"{Binding OpenManualCommand}\" />",
+      "new": "<MenuItem Header=\"User Manual\" Command=\"{Binding ShowAboutCommand}\" />",
+      "expect": "caught",
+      "note": "the User Manual entry bound to About's command"
+    },
+    {
+      "id": "H5",
+      "file": "src/TmDq.App/Views/MainWindow.axaml",
+      "old": "<MenuItem Header=\"About\" Command=\"{Binding ShowAboutCommand}\" />",
+      "new": "<MenuItem Header=\"About\" />",
+      "expect": "caught",
+      "note": "About bound to nothing: the entry does nothing"
+    },
+    {
+      "id": "L1",
+      "file": "src/TmDq.App/Services/IHelpActions.cs",
+      "old": "    public interface IHelpActions",
+      "new": "    public static class HelpNote { } public interface IHelpActions",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.LayerTests"],
+      "expect": "caught",
+      "note": "a class filed in Services, as DialogConfigurator and HelpManual were"
+    }
+  ]
+}

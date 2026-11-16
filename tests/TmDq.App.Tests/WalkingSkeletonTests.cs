@@ -12,6 +12,7 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using TmDq.App.Models.Logging;
 using TmDq.App.Models.Processing;
+using TmDq.App.Models.Streams;
 using TmDq.App.ViewModels;
 using TmDq.App.ViewModels.Plot;
 using TmDq.App.Views;

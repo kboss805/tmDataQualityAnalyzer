@@ -40,6 +40,9 @@ namespace TmDq.App.ViewModels
         /// <summary>The batch confirmation and the choice of recording; without them Apply Template is unavailable.</summary>
         public ITemplateDialogs? TemplateDialogs { get; init; }
 
+        /// <summary>Help's User Manual and About; without it both are unavailable.</summary>
+        public IHelpActions? Help { get; init; }
+
         /// <summary>Where <c>settings/</c> is, for a batch's runs; without it the application's folder.</summary>
         public string? AppRoot { get; init; }
 

@@ -1,6 +1,6 @@
 using TmDq.Core;
 
-namespace TmDq.App.Models.Processing
+namespace TmDq.App.Models.Streams
 {
     /// <summary>
     /// The Frame Sync Lock settings a stream starts with: PRN15, as the defaults in src/core/include/constants.h

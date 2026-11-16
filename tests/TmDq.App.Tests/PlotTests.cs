@@ -12,6 +12,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using TmDq.App.Models.Processing;
+using TmDq.App.Models.Streams;
 using TmDq.App.ViewModels.Plot;
 using TmDq.App.Views;
 using TmDq.Core;

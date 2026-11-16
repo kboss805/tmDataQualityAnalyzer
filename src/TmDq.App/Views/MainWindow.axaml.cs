@@ -1,15 +1,12 @@
 using System;
 using System.ComponentModel;
-using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using TmDq.App.Models.Settings;
-using TmDq.App.Services;
 using TmDq.App.ViewModels;
 
 namespace TmDq.App.Views
@@ -68,9 +65,6 @@ namespace TmDq.App.Views
         }
 
         private MainWindowViewModel? Vm => DataContext as MainWindowViewModel;
-
-        /// <summary>What the window does with Help &gt; User Manual and Help &gt; About; the tests replace it.</summary>
-        public IHelpActions Help { get; set; } = new WindowHelpActions();
 
         protected override void OnDataContextChanged(EventArgs e)
         {
@@ -133,12 +127,6 @@ namespace TmDq.App.Views
             ToolTip.SetTip(MaximizeButton, maximized ? "Restore" : "Maximize");
         }
 
-        // ---- the menu (declared in the AXAML) ------------------------------------------------------------------------
-
-        private async void OnUserManual(object? sender, RoutedEventArgs e) => await Help.OpenManualAsync(this);
-
-        private async void OnAbout(object? sender, RoutedEventArgs e) => await Help.ShowAboutAsync(this);
-
         // ---- drag and drop -------------------------------------------------------------------------------------------
 
         /// <summary>The first recording or exported CSV among the files dragged, by suffix; null when there is none.</summary>
@@ -157,31 +145,5 @@ namespace TmDq.App.Views
             if (FirstSupported(e.DataTransfer) is not { } path || Vm is not { } vm || !vm.OpenRecentCommand.CanExecute(path)) return;
             await vm.OpenRecentCommand.ExecuteAsync(path);
         }
-    }
-
-    /// <summary>Help &gt; User Manual and Help &gt; About.</summary>
-    public interface IHelpActions
-    {
-        Task OpenManualAsync(Window owner);
-
-        Task ShowAboutAsync(Window owner);
-    }
-
-    /// <summary>The manual opened in the browser, About in a box over the window.</summary>
-    public sealed class WindowHelpActions : IHelpActions
-    {
-        public static string AboutText =>
-            "TM Data Quality Analyzer\n\nVersion " + AppInfo.Version + "\n\n" +
-            "Analyzes framesync lock statistics and receiver SNR data from IRIG 106 Chapter 10 PCM recordings and plots the " +
-            "results over time.";
-
-        public async Task OpenManualAsync(Window owner)
-        {
-            string? path = HelpManual.PathToOpen(AppContext.BaseDirectory, Path.GetTempPath());
-            if (path is null || !await owner.Launcher.LaunchFileInfoAsync(new FileInfo(path)))
-                await new ReportWindow("User Manual", MainWindow.ManualNotWritten).ShowDialog(owner);
-        }
-
-        public Task ShowAboutAsync(Window owner) => new ReportWindow(MainWindow.AboutTitle, AboutText).ShowDialog(owner);
     }
 }
