@@ -12,6 +12,21 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### What #278 left: two script headers and the README's Contributing section
+
+Docs and comments only; no code, test or project file changed. `eng/check_release_consistency.ps1`'s header said four files
+carry the version as prose and left out `UserManual.html`, which the script has checked since the full manual was added (five
+files, and it also checks the changelog's section); `eng/embed_manual_images.py`'s docstring said it embeds into
+`assets/usermanual.html` and left out `UserManual.html`, the second manual it writes. The README's `Contributing` was `[TBD]`;
+it now points at the build section and `docs/claude.md` and states what a change needs (tests, a changelog entry, no edit of
+`third_party/irig106/**`, GPL v3). It says nothing about who may contribute or how a pull request is reviewed: that is the
+owner's policy to add.
+
+Not changed, and why: the `1920x1080` line in `deploy/RELEASENOTES.txt` is written when the next release is cut (a section for
+a version the source does not yet name fails `check_release_consistency.ps1`); the series colours (`PlotColors`, whose
+lighter shades `PlotTests` holds to the 84 v2.14.2 printed, and whose yellow and its shades are faint on the light theme's
+white) are a design choice, not a defect.
+
 #### The compiler's gate and the package versions, in the files that build (audit A1, T7, A5 in part)
 
 Found by the whole-tree cleanup audit; each claim was re-measured on the tree as of #297. The rest of the audit's

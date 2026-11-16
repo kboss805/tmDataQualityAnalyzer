@@ -1,4 +1,6 @@
-"""Embed docs/manual_images/processed/*.png into assets/usermanual.html.
+"""Embed docs/manual_images/processed/*.png into the two manuals: assets/usermanual.html
+(the base manual, compiled into the exe) and UserManual.html (the full one, with the
+walkthroughs from docs/manual/walkthroughs.html).
 
 Called by eng/build_manual.ps1, which renders the figures from the application
 and downscales them first - run that rather than this directly.
