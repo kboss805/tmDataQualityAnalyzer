@@ -48,6 +48,14 @@ namespace TmDq.App.Tests
         }
 
         [Fact]
+        public void ThisTestHostRunsOnTheUtf8CodePageToo()
+        {
+            // Merged from the shared assets\utf8codepage.manifest as the library tests' host is: without it this fails and
+            // says so, instead of a non-ASCII path quietly never reaching the core from a test here.
+            Assert.Equal(65001u, PeResources.GetACP());
+        }
+
+        [Fact]
         public void TheExeDeclaresWindows10Compatibility()
         {
             // mt.exe replaces the apphost's manifest, so anything the process needs must be in app.manifest.

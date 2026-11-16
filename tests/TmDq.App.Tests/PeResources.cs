@@ -21,5 +21,7 @@ namespace TmDq.App.Tests
         public static extern IntPtr LockResource(IntPtr data);
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern uint SizeofResource(IntPtr module, IntPtr resource);
+        [DllImport("kernel32.dll")]
+        public static extern uint GetACP();
     }
 }

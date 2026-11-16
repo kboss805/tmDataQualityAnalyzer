@@ -6,8 +6,8 @@
     1. Requires out\<Configuration>\tmdq_core.dll (build it with eng\build_core_dll.ps1). The tests find
        it themselves; TMDQ_CORE_DLL overrides.
     2. `dotnet build` of the test project, treating warnings as errors (the project says so). The build merges a
-       UTF-8 active-code-page manifest into the test exe with mt.exe (the Windows SDK), so the Visual Studio
-       tools must be on PATH: eng\env.ps1 is dot-sourced when mt is not already found.
+       UTF-8 active-code-page manifest (assets\utf8codepage.manifest) into the test exe with mt.exe, which the
+       project finds itself (eng\WindowsSdkTools.targets): no developer prompt is needed.
     3. Runs the test exe directly (an xunit v3 test project is an executable) and fails on a non-zero exit.
 
     Works under Windows PowerShell 5.1 and PowerShell 7.
@@ -23,11 +23,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-if (-not (Get-Command mt -ErrorAction SilentlyContinue)) {
-    . (Join-Path $PSScriptRoot 'env.ps1')
-}
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { throw 'dotnet not found (install the .NET 10 SDK)' }
-if (-not (Get-Command mt -ErrorAction SilentlyContinue)) { throw 'mt.exe not found (it ships with the Windows SDK; use a developer prompt or eng\env.ps1)' }
 
 # The suite runs against the DLL of ITS configuration. The library's own search prefers Release, then Debug, so a
 # Debug run with only a Release DLL built (or with both) would pass against the other configuration's core: refuse,

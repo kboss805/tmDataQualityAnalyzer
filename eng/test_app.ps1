@@ -4,9 +4,9 @@
 
 .DESCRIPTION
     1. `dotnet build` of tests\TmDq.App.Tests, which builds the application with it, treating warnings as errors
-       (the projects say so). The build merges the UTF-8 code-page manifest into the application exe with mt.exe
-       (the Windows SDK) and runs the package licence check, so the Visual Studio tools must be on PATH:
-       eng\env.ps1 is dot-sourced when mt is not already found.
+       (the projects say so). The build merges the UTF-8 code-page manifest into the application exe and into the
+       test exe with mt.exe, which the projects find themselves (eng\WindowsSdkTools.targets), and runs the package
+       licence check: no developer prompt is needed.
     2. Says which account, Windows session and kind of process the tests run under. The tests run on Avalonia's
        headless platform, which needs no window system; a CI runner has no desktop to show, and this line is the
        record of what the UI tests ran under there.
@@ -26,11 +26,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-if (-not (Get-Command mt -ErrorAction SilentlyContinue)) {
-    . (Join-Path $PSScriptRoot 'env.ps1')
-}
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { throw 'dotnet not found (install the .NET 10 SDK)' }
-if (-not (Get-Command mt -ErrorAction SilentlyContinue)) { throw 'mt.exe not found (it ships with the Windows SDK; use a developer prompt or eng\env.ps1)' }
 
 # The walking-skeleton tests process a recording through the native core, which the app finds beside itself: the
 # build copies out\<Configuration>\tmdq_core.dll there when it exists. Say so here rather than let a dozen

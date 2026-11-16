@@ -112,6 +112,46 @@
     </Link>
   </ItemDefinitionGroup>
 
+  <!-- Every header, listed as the sources are, so each shows in Solution Explorer; NativeProjectTests holds the list
+       to the folders on disk. -->
+  <ItemGroup>
+    <ClInclude Include="include\constants.h" />
+    <ClInclude Include="include\containerutil.h" />
+    <ClInclude Include="include\textformat.h" />
+    <ClInclude Include="include\textparse.h" />
+    <ClInclude Include="include\dto\calibrationprofile.h" />
+    <ClInclude Include="include\dto\metrictype.h" />
+    <ClInclude Include="include\dto\processedstreamdata.h" />
+    <ClInclude Include="include\dto\processingparams.h" />
+    <ClInclude Include="include\dto\streammode.h" />
+    <ClInclude Include="include\model\calibrationextractor.h" />
+    <ClInclude Include="include\model\calibrationrequest.h" />
+    <ClInclude Include="include\model\ch10packetreader.h" />
+    <ClInclude Include="include\model\channeldata.h" />
+    <ClInclude Include="include\model\chapter10reader.h" />
+    <ClInclude Include="include\model\chartgeometry.h" />
+    <ClInclude Include="include\model\clocktime.h" />
+    <ClInclude Include="include\model\csvseriesparser.h" />
+    <ClInclude Include="include\model\csvserieswriter.h" />
+    <ClInclude Include="include\model\frameprocessor.h" />
+    <ClInclude Include="include\model\framesetup.h" />
+    <ClInclude Include="include\model\framesync.h" />
+    <ClInclude Include="include\model\framesyncfile.h" />
+    <ClInclude Include="include\model\intervalgate.h" />
+    <ClInclude Include="include\model\irig106lock.h" />
+    <ClInclude Include="include\model\packetqueue.h" />
+    <ClInclude Include="include\model\pipelinerunner.h" />
+    <ClInclude Include="include\model\processingevents.h" />
+    <ClInclude Include="include\model\seriesbuilder.h" />
+    <ClInclude Include="include\model\seriescolumnschema.h" />
+    <ClInclude Include="include\model\seriesrange.h" />
+    <ClInclude Include="include\model\stepdetector.h" />
+    <ClInclude Include="include\model\streamjobbuilder.h" />
+    <ClInclude Include="include\model\templatematcher.h" />
+    <ClInclude Include="include\model\textfile.h" />
+    <ClInclude Include="include\model\tomldocument.h" />
+  </ItemGroup>
+
   <ItemGroup>
     <ClInclude Include="abi\tmdq_abi.h" />
     <ClInclude Include="abi\abi_internal.h" />

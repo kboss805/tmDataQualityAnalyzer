@@ -47,8 +47,6 @@ $Kept = @('walk-cal-05-step-toml.png')
 if (-not $NoCapture) {
     Write-Host "Rendering the figures from the application (ManualFiguresTests)..."
     Get-ChildItem $SrcDir -Filter *.png | Where-Object { $Kept -notcontains $_.Name } | Remove-Item -Force
-    . (Join-Path $ProjectDir 'eng\env.ps1') *> $null
-    $env:Platform = $null
     $tests = Join-Path $ProjectDir 'tests\TmDq.App.Tests'
     & dotnet build $tests -c Release -nologo -v q
     if ($LASTEXITCODE -ne 0) { throw "the tests did not build ($LASTEXITCODE)" }

@@ -1,15 +1,16 @@
 # Design Note — Multi-file input (Phase 1)
 
-**Status:** implemented (v2.x; carried into v3 as the Plot File selector and the source-qualified CSV columns).
-Written before it was built, so it names v2.x's classes. The decisions it locked (2026-07-07):
+**Status:** written before it was built, in v2.x, and only part of it is in the application now. What survives in v3:
+the shared elapsed time base, based at the earliest sample of any source (§3); a source id on every recording, so two
+recordings that reuse a PCM channel id never mix; the source-qualified CSV columns (§7); and the Plot File selector.
+Sources reach the plot only through the template batch (US1.1): "Add Source…" and the per-source removal of §5 are not
+in it, so read §5 as the design that was dropped, not as a description of the application. The note names v2.x's
+classes. Its decisions of 2026-07-07, as taken then:
 
-- Time alignment = **absolute IRIG time + re-base to the global-earliest sample** (§3). ✔
-- Relative-overlay mode = **deferred post-v1** (§9). ✔
-- **Source removal = IN v1** (§5). ✔
-- **Source-qualified CSV export = IN v1** (§7). ✔
-
-Recommended implementation model: **Sonnet, medium effort** — the hard decisions
-are settled here; the rest is layered plumbing guarded by CI + the 267-test suite.
+- Time alignment = **absolute IRIG time + re-base to the global-earliest sample** (§3).
+- Relative-overlay mode = **deferred post-v1** (§9).
+- **Source removal = IN v1** (§5), since dropped.
+- **Source-qualified CSV export = IN v1** (§7).
 
 **Goal:** let one plot draw from more than one `.ch10` file — e.g. Receiver SNR
 in file A and Frame Sync Lock in file B — merged onto a single time axis. Today,

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<!-- Merged into the native test executable's manifest by tests\core\tmdq_core_tests.vcxproj (the app and each .NET test host merge their own app.manifest, with mt.exe). -->
+<!-- The UTF-8 active code page, for the three test hosts: merged into the native test executable by tests\core\tmdq_core_tests.vcxproj and, with mt.exe, into the two .NET ones (tests\TmDq.Core.Tests, tests\TmDq.App.Tests). The application has its own, src\TmDq.App\app.manifest, which also declares Windows 10. -->
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
   <application xmlns="urn:schemas-microsoft-com:asm.v3">
     <windowsSettings>

@@ -68,6 +68,23 @@ public class NativeProjectTests
     }
 
     [Fact]
+    public void TheDllListsEveryHeader()
+    {
+        // Listed for Solution Explorer, so nothing but this test notices a header left out.
+        string project = Path.Combine(CoreFolder, "tmdq_core.vcxproj");
+        XDocument doc = XDocument.Load(project);
+        string[] listed = doc.Descendants().Where(e => e.Name.LocalName == "ClInclude" && e.Attribute("Include") is not null)
+                             .Select(e => Path.GetFullPath(Path.Combine(CoreFolder, e.Attribute("Include")!.Value)))
+                             .ToArray();
+        Assert.All(listed, p => Assert.True(File.Exists(p), p + " is listed but does not exist"));
+        foreach (string folder in new[] { "include", Path.Combine("include", "dto"), Path.Combine("include", "model"), "abi" })
+        {
+            string full = Path.Combine(CoreFolder, folder);
+            Assert.Equal(OnDisk(full, "*.h"), Under(full, listed));
+        }
+    }
+
+    [Fact]
     public void TheNativeTestsCompileEveryTestFileAndTheDllsOwnSources()
     {
         string tests = TestsFolder;

@@ -14,8 +14,9 @@ Up to v2.14.2 it was a Qt application; `docs/changelog.md` records the move. **C
 
 ## Build & test
 
-Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `eng\env.ps1` (which imports
-`vcvars64.bat`) when `msbuild` or `mt` is not on PATH. Use the **PowerShell** tool.
+Everything is in `tmdq.sln`. The native scripts find MSVC themselves: they dot-source `eng\env.ps1` (which imports
+`vcvars64.bat`) when `msbuild` is not on PATH; the .NET scripts need only `dotnet` (the projects find `mt.exe`
+themselves). Use the **PowerShell** tool.
 
 - **Native core DLL:** `powershell -ExecutionPolicy Bypass -File eng\build_core_dll.ps1
   [-Configuration Debug|Release] [-Rebuild]` builds `src/core/` (MSBuild) into
@@ -45,7 +46,7 @@ Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `
   project is an executable; the build merges a UTF-8 code-page manifest into it with `mt.exe`, because the vendored
   irig106 opens files with a narrow `open()` that reads the active code page. The .NET projects find `mt.exe` in the
   Windows SDK themselves (`eng\WindowsSdkTools.targets`), so a plain `dotnet build` (VS Code's) needs no developer
-  prompt. Green baseline **370 passed / 0
+  prompt. Green baseline **376 passed / 0
   failed / 1 skipped** (the skip is the probe `IsolatedLoadTests` runs in a child process). CI runs it.
 - **The app:** `src/TmDq.App` (Avalonia 12, CommunityToolkit.Mvvm) and `tests/TmDq.App.Tests` (xunit v3 on
   `Avalonia.Headless.XUnit`), both in `tmdq.sln`, which VS Code opens by default (`dotnet.defaultSolution`).
@@ -60,7 +61,7 @@ Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `
   `UserManual.html` (the full one, with `docs\manual\walkthroughs.html`), their figures rendered from the app by
   `ManualFiguresTests` into `docs\manual_images`: after a change to what a figure shows, rebuild with
   `powershell -ExecutionPolicy Bypass -File eng\build_manual.ps1` (`-NoCapture` reuses the figures). CI runs the
-  app suite. Green baseline **668 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases.
+  app suite. Green baseline **669 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases.
   **The side-by-side soak:** `powershell -ExecutionPolicy Bypass -File eng\run_soak.ps1 [-NoBuild]
   [-Only <run>,...]` runs every run in `tests\TmDq.App.Tests\Soak\soak.json` (`SoakTests`, explicit, one process a
   run) and fails unless each CSV export is byte for byte what v2.14.2 exported (the manifest's `qt` blocks). Most
@@ -137,7 +138,7 @@ MSVC 14.51 and left two compilers' objects in one tree. Override with `TMDQ_VS_R
 
 - **Ch10 paths:** both readers pass irig106 the path in the process code page (`path.string()`),
   never as UTF-8 bytes - its narrow `open()` reads that code page, which the UTF-8 code-page manifest
-  merged into the app and the managed library's test host (`src/TmDq.App/app.manifest`, `tests/TmDq.Core.Tests/app.manifest`; the app's own test host has none) makes UTF-8.
+  merged into the app (`src/TmDq.App/app.manifest`) and into all three test hosts (the shared `assets/utf8codepage.manifest`) makes UTF-8.
 - **SNR:** average raw counts first, calibrate once per window. Out-of-range interpolation **clamps**,
   never extrapolates. The calibration extractor must mirror the main run's word map + raw-affecting
   flags exactly: both build them through `applyAcquisition` (`src/core/include/model/framesync.h`), so a new
