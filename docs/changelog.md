@@ -31,7 +31,7 @@ broke, and four interfaces lived beside whatever used them first.
   `ShowAboutCommand`. Without a help service both entries are unavailable, as every other service's are; the
   application always hands one in. They stay available while a run goes on, as before.
 - **Plain data out of view-model files** (S17 in part): `CalibrationBase` to `Models/Processing/`; `ImageFiles` (with
-  `ImageFormat`) and `ExportKind` to `Models/Export/` (new), since a view, a service, `Platform` and the export use them.
+  `ImageFormat`) and `ExportKind` to a new `Models/Export/`: a view, a service, `Platform` and the export use them.
 - **One type per file in `Models/Processing`:** `IStreamConfigurator`, `StreamsChoice` and `RecordingException` leave
   `FirstChannelRun.cs`. `IStreamConfigurator` stays a model's, not a service's, because a model implements it
   (`FirstChannelRun`) and a model may not reach `Services`.
