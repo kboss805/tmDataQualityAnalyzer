@@ -7,7 +7,7 @@ using TmDq.App.Views;
 
 namespace TmDq.App.Platform
 {
-    /// <summary>The plot's questions as windows, modal to the window that holds <paramref name="host"/> (plan step 4.4). A
+    /// <summary>The plot's questions as windows, modal to the window that holds the host control (plan step 4.4). A
     /// question with no window to sit over is answered "cancel".</summary>
     public sealed class WindowPlotPrompts : IPlotPrompts
     {

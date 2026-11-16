@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Avalonia;
@@ -591,5 +592,33 @@ namespace TmDq.App.Tests
             Assert.Equal(0, s.Chart.IndexCount);
             s.Window.Close();
         }
+
+        [AvaloniaFact]
+        public void TheCachedLayerAndTheIndexesAreReleasedWhenTheChartLeavesTheWindowAndMadeAgainIfItReturns()
+        {
+            PlotViewModel plot = Dense(1);
+            Shown s = Show(plot);
+            int inked = InkInArea(s, plot);
+            Assert.True(inked > 0);
+            Assert.Equal(1, s.Chart.IndexCount);
+            Assert.NotNull(Backing(s.Chart));
+
+            s.Window.Content = null;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, s.Chart.IndexCount);
+            Assert.Null(Backing(s.Chart));
+
+            s.Window.Content = s.Chart;
+            Dispatcher.UIThread.RunJobs();
+            // The picture is the same, painted again from the geometry the chart kept; an index is made again only when a
+            // draft needs one.
+            Assert.Equal(inked, InkInArea(s, plot));
+            Assert.NotNull(Backing(s.Chart));
+            s.Window.Close();
+        }
+
+        /// <summary>The chart's cached data layer, which only the chart's own release can be seen through.</summary>
+        private static object? Backing(PlotChart chart) =>
+            typeof(PlotChart).GetField("_backing", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(chart);
     }
 }

@@ -27,6 +27,60 @@ a version the source does not yet name fails `check_release_consistency.ps1`); t
 lighter shades `PlotTests` holds to the 84 v2.14.2 printed, and whose yellow and its shades are faint on the light theme's
 white) are a design choice, not a defect.
 
+#### The analyzers and the editor settings, in the files that build (audit A2, A3)
+
+Found by the whole-tree cleanup audit; each count was re-measured on the tree as of #298 (the audit's 414 findings
+were 140 once the rules it called noise were off, and the test projects, which it did not measure, added more).
+The rest of the audit's standards work (the `.clang-format` of A4 and T8, the shared `eng/common.ps1` and
+PSScriptAnalyzer of A5, the namespace style of C6) is left for the next change.
+
+- **A2: the .NET analyzers are on, and every finding breaks the build.** `Directory.Build.props` sets `AnalysisLevel`
+  `latest-recommended` and `EnforceCodeStyleInBuild`; the new root `.editorconfig` adds four rules the recommended
+  set leaves off (CA2000 undisposed, CA1031 catch of `Exception`, CA1307 implicit culture, CA5392 P/Invoke search path)
+  and switches off, each with its reason beside it, the ones that measured as noise (CA1515, CA2007, CA1062 and the
+  API-shape opinions CA1003, CA1032, CA1308, CA1711, CA1716, CA1819, CA2227). A whole category cannot be switched on
+  from the file (a rule the recommended set leaves off stays off under `category-X.severity`), so each rule is named.
+  The tests have a short extra list (`[tests/**.cs]`: CA1305, CA1307, CA1310, CA1861, CA2000, CA1031, CA5392, about
+  450 findings in ASCII fixtures, none a defect).
+- **What the analyzers found, and was fixed.** `ProcessingViewModel` owned a `CancellationTokenSource` and was not
+  disposable: it is now, and the run and the calibration extraction dispose it (a Cancel after that does nothing);
+  `PlotChart` held its cached bitmap and its native indexes until the garbage collector reached them: both are
+  released when the chart leaves the visual tree, and made again if it returns (the one suppression, of CA1001, says so);
+  `StreamResult.Dispose` now suppresses the finalizer it made pointless; five `throw new ObjectDisposedException` are
+  `ObjectDisposedException.ThrowIf`; the 75 P/Invokes carry one assembly-level `DefaultDllImportSearchPaths`
+  (assembly folder only; the resolver loads by full path before it is used); `string.IndexOf(char)` and `Replace`
+  take `StringComparison.Ordinal`; six `FirstOrDefault()` on indexable lists are indexers; the "not an exported CSV"
+  message is a cached `CompositeFormat`; two dash arrays are static fields; three return and parameter types are the
+  concrete ones (`ConfigToJson`, `Sentence`, the legend's `Row`). Left as suppressions with their reasons: the observer
+  bridge's five `catch (Exception)` (an exception must never unwind a native thread), its ownership hand-over of a
+  `StreamResult` (CA2000), and the two window titles that the XAML binds to (CA1822).
+- **A3: the editor settings, and an unused `using` is an error.** `.editorconfig` holds the charset, final newline,
+  trailing whitespace and indentation (4 spaces; 2 for JSON, XAML, project files, YAML and Markdown), the brace and
+  `using` order rules as the code already has them, and IDE0005 as a warning. Line ends stay with `.gitattributes`
+  (the blobs are LF; a Windows checkout CRLF). The compiler reports IDE0005 in a build only when it also checks the
+  doc comments, so the projects now generate the documentation file (`TmDq.Core.csproj` said `false`, and no longer
+  does); it is not published (`PublishDocumentationFile`, `PublishReferencesDocumentationFiles`: a `dotnet publish`
+  as the package script runs it was checked, and has no `.xml`), and a missing doc comment is no warning (CS1591,
+  CS1573). The eight unused usings it found are gone (the audit's 26 had mostly gone with earlier changes).
+- **Malformed doc comments, which the same switch found.** `StreamRules.TimeChannelText` had a raw `<id> - <name>`
+  in its summary; two `paramref` named a parameter that is not there; `TempFiles` had three ambiguous `cref`s. And
+  `CalibrationDigest.cs`, `FormatsDigest.cs` and `SeriesDigest.cs` were stored with CR CR LF line ends, which broke
+  their doc comments: they are ordinary now (a whole-file diff, nothing else in them changed).
+- **Checked.** Mutation check, `eng\mutate.ps1`: app (`ProcessingTests`, `PlotDraftTests`, `CalibrationDialogTests`,
+  `ExportImportTests`), 11 mutants, **8 CAUGHT** (the token source not disposed in the run, in the extraction and in
+  `Dispose`; a Cancel after Dispose not ignored; the bitmap and the indexes kept on detach; the "not a recognised"
+  message; the plot title cut at the last dot, which was a **survivor** until `APlotTitleTakesTheFileNameUpToItsFirstDot`
+  was written; the log written without CR LF), **2 COMPILE** where an analyzer holds the rule before any test (a run's
+  view model not disposed, CA2000; an owner of a disposable with no reason, CA1001) and **1 SURVIVED**, equivalent
+  (the cached layer's flag left set on detach: the layer is made again whenever the bitmap is null); managed
+  (`RunTests`, `SeriesTests`, `CalibrationTests`, `ChartGeometryTests`), 4 mutants, **4 CAUGHT** (each disposed-object
+  check removed). Negative checks, all COMPILE as they should be: an unused `using` (IDE0005), the search-path attribute
+  removed (CA5392), a `catch (Exception)` with no reason (CA1031), a `Dispose` without `SuppressFinalize` (CA1816).
+  All three suites in Release, zero warnings: native **495** (1 skipped), managed **366** passed / 1 skipped, app
+  **663** passed / 34 not run. Baselines moved: app 655 to 663 (three disposal and detach tests, five title cases).
+  A `dotnet publish` of the app, as the package script runs it, was compared by its file list: no `.xml`. No product
+  behaviour changed, so no soak or throughput run.
+
 #### The compiler's gate and the package versions, in the files that build (audit A1, T7, A5 in part)
 
 Found by the whole-tree cleanup audit; each claim was re-measured on the tree as of #297. The rest of the audit's

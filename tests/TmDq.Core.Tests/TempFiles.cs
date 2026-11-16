@@ -34,9 +34,9 @@ internal static class TempFiles
 
     /// <summary>Removes a scratch folder a test made and does not care whether it goes: for the folders of the tests that
     /// run a build tool (dotnet, msbuild) or a script, whose child process can still hold a file in it as the test ends,
-    /// and a folder left in %TEMP% is no failure of the product. Waits out the window like <see cref="DeleteDirectory"/>,
+    /// and a folder left in %TEMP% is no failure of the product. Waits out the window like <see cref="DeleteDirectory(string, bool)"/>,
     /// then gives up quietly. Never for a file the library under test opened: that one must fail the test when it is not
-    /// released, which is what <see cref="Delete"/> and <see cref="DeleteDirectory"/> are for.</summary>
+    /// released, which is what <see cref="Delete(string)"/> and <see cref="DeleteDirectory(string, bool)"/> are for.</summary>
     /// <returns>Whether the folder is gone.</returns>
     public static bool TryDeleteDirectory(string path) => TryDeleteDirectory(path, Window);
 

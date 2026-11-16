@@ -83,7 +83,7 @@ namespace TmDq.App.Tests
             return (p.ExitCode, text, File.Exists(output) ? File.ReadAllText(output) : "");
         }
 
-        private static int Count(string text, string what) => Regex.Matches(text, Regex.Escape(what)).Count;
+        private static int Count(string text, string what) => Regex.Count(text, Regex.Escape(what));
 
         [Fact]
         public void AnMitPackageWithoutALicenceFileGetsTheMitTextWithItsOwnCopyright()

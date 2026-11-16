@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
-using TmDq.Core;
 
 namespace TmDq.Core.Tests;
 

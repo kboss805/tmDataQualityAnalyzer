@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
@@ -25,7 +24,7 @@ namespace TmDq.App.Platform
                 FileTypeFilter = new[] { Toml, FilePickerFileTypes.All },
                 SuggestedStartLocation = await StartAt(folder),
             });
-            return files.FirstOrDefault()?.TryGetLocalPath();
+            return files.Count > 0 ? files[0].TryGetLocalPath() : null;
         }
 
         public async Task<string?> SaveAsync(string title, string? folder)

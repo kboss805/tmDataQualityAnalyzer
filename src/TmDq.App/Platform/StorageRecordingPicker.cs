@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
@@ -27,7 +26,7 @@ namespace TmDq.App.Platform
         public async Task<string?> PickRecordingAsync()
         {
             var files = await _owner.StorageProvider.OpenFilePickerAsync(Options);
-            return files.FirstOrDefault()?.TryGetLocalPath();
+            return files.Count > 0 ? files[0].TryGetLocalPath() : null;
         }
     }
 }

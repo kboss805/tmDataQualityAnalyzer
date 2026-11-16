@@ -28,7 +28,7 @@ namespace TmDq.App.Platform
                 FileTypeFilter = new[] { Templates },
                 SuggestedStartLocation = await FolderAsync(folder),
             });
-            return files.FirstOrDefault()?.TryGetLocalPath();
+            return files.Count > 0 ? files[0].TryGetLocalPath() : null;
         }
 
         public async Task<string?> SaveTemplateAsync(string? folder)
@@ -63,7 +63,7 @@ namespace TmDq.App.Platform
                 AllowMultiple = false,
                 SuggestedStartLocation = await FolderAsync(folder),
             });
-            return folders.FirstOrDefault()?.TryGetLocalPath();
+            return folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
         }
 
         private async Task<IStorageFolder?> FolderAsync(string? folder) =>

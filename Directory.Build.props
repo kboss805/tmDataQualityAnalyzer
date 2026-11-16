@@ -13,4 +13,17 @@
 
   <Import Project="eng\AppVersion.props" Condition="'$(MSBuildProjectExtension)' == '.csproj'" />
 
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.csproj'">
+    <!-- The SDK's recommended analyzer set; the groups added to it and the rules left out are in .editorconfig. -->
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- IDE0005 (an unused using) is reported by the build only when the compiler checks the doc comments too
+         (https://github.com/dotnet/roslyn/issues/41640). The XML file itself is not wanted: it is not published, and a
+         missing or partial doc comment is no error (CS1591, CS1573). -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PublishDocumentationFile>false</PublishDocumentationFile>
+    <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
+    <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
+  </PropertyGroup>
+
 </Project>

@@ -51,7 +51,7 @@ public class FormatsTests
 
     private static bool Same(double a, double b) => double.IsNaN(a) ? double.IsNaN(b) : a.Equals(b);
 
-    private static bool Same(IReadOnlyList<double> a, IReadOnlyList<double> b) => a.Count == b.Count && a.Zip(b, Same).All(x => x);
+    private static bool Same(double[] a, double[] b) => a.Length == b.Length && a.Zip(b, Same).All(x => x);
 
     private static string[] Answers(string kind) => FormatsDigest.Lines.Where(l => l.StartsWith(kind + "|")).ToArray();
 
@@ -180,7 +180,7 @@ public class FormatsTests
             {
                 FrameSyncFile.Write(path, Unhex(w[2]), Unhex(w[3]), int.Parse(w[4]), w[5] == "1", w[6] == "1");
                 Assert.True(want[2] == "1", w[1]);
-                Assert.True(want[3] == Convert.ToHexString(TempFiles.ReadAllBytes(path)).ToLowerInvariant(), $"{w[1]}: the file differs from the core's");
+                Assert.True(string.Equals(want[3], Convert.ToHexString(TempFiles.ReadAllBytes(path)), StringComparison.OrdinalIgnoreCase), $"{w[1]}: the file differs from the core's");
             }
             finally
             {
@@ -420,7 +420,7 @@ public class FormatsTests
             {
                 CsvFile.Write(path, Columns(cols), int.Parse(head[2]), D(head[3]));
                 Assert.True(want[2] == "1", head[1]);
-                Assert.True(want[3] == Convert.ToHexString(TempFiles.ReadAllBytes(path)).ToLowerInvariant(), $"{head[1]}: the file differs from the core's");
+                Assert.True(string.Equals(want[3], Convert.ToHexString(TempFiles.ReadAllBytes(path)), StringComparison.OrdinalIgnoreCase), $"{head[1]}: the file differs from the core's");
             }
             finally
             {
