@@ -15,16 +15,12 @@
 #include "i106_decode_tmats.h" // IWYU pragma: keep
 #include "i106_decode_pcmf1.h"
 
+#include "constants.h"
 #include "containerutil.h"
 #include "framesetup.h"
 #include "packetqueue.h"
 
 using namespace Irig106;
-
-namespace {
-    // Conversion factor from 100ns units to seconds
-    constexpr double k100NsToSeconds = 1.0e-7;
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 //                          PCM BIT-LEVEL HELPERS                             //
@@ -245,7 +241,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
             time_seeded = true;
         }
 
-        double time_per_bit = delta_100ns * k100NsToSeconds;
+        double time_per_bit = delta_100ns * PCMConstants::k100NsToSeconds;
 
         constexpr uint64_t kAbortCheckMask = 0xFFFF;
         for (uint64_t bit_pos = 0; bit_pos < packet_bits; bit_pos++)
@@ -372,7 +368,7 @@ void FrameProcessor::closeElapsedWindows(ScanState& s, double current_time_eval,
             double bit_rate = params.dataRateBps;
             if (bit_rate <= 0.0 && params.resolvedAttrs.delta100ns > 0.0)
             {
-                bit_rate = 1e7 / params.resolvedAttrs.delta100ns;
+                bit_rate = PCMConstants::k100NsPerSecond / params.resolvedAttrs.delta100ns;
             }
 
             if (bit_rate > 0.0)

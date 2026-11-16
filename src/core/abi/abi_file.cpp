@@ -52,12 +52,7 @@ int32_t describe(const std::vector<ChannelRecord>& list, int32_t index, tmdq_cha
     info.channel_id          = record.id;
     info.tmats_data_rate_bps = record.dataRateBps;
     info.name_utf8           = record.name.c_str();
-    if (!tmdq::writeStruct(info, kChannelInfoMinimum, out))
-    {
-        tmdq::setError("null output or a struct_size that is too small");
-        return TMDQ_ERR_BADARG;
-    }
-    return TMDQ_OK;
+    return tmdq::writeOut(info, kChannelInfoMinimum, out);
 }
 
 } // namespace

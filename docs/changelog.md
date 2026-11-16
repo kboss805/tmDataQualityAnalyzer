@@ -12,6 +12,48 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### One fact in one place in the core: the receiver number, the sample period, the ABI getters, the units (audit X4, S6, S7, C4 in part)
+
+Found by the whole-tree cleanup audit; each site was re-read against the tree as of #299. Some of S6 and S7 had already
+been done by earlier changes (the default settings path is `defaultReceiverParamsFile`; `toMetricType`,
+`kCallbacksMinimum` and the enum asserts are in `abi_internal.h`; the chart wrapper reports under its own name): they
+are not repeated here. The managed and app halves of C4 and X5 are left for the next change.
+
+- **S6: the number after `_RCVR`, read in one place.** The series builder, the CSV column schema and
+  `FrameSetup::receiverIndexFromName` each parsed it, and the first two kept a negative number where the third made
+  it 0. That difference is recorded (the schema's 40000-header digest is the v2.14.2 parity oracle, and it keeps
+  `_RCVR-7` as receiver -7), so it stays: `FrameSetup::receiverNumberInName` is the one reading, `receiverIndexFromName`
+  is it with a number that is not positive made 0, and the other two call the first. Pinned before the move: a
+  `_RCVR-3` row in the schema's parse table, a builder case for `-3`, `0`, `3x`, ` 2` and `+4`, and one for the two
+  functions beside each other in `FrameSetup`'s tests. `asciiLower` (two copies), `upperAscii` and an inline
+  lower-casing loop in `parseDouble` are `textparse::asciiLower` and `asciiUpper`, with a test that only A to Z and a to
+  z move (UTF-8 bytes and the characters either side of the letters do not). Not done: the BOM sniffing in
+  `textfile.cpp` and `csvseriesparser.cpp` (one reads a whole file's bytes, the other the head of a stream: two shapes
+  of the same four bytes), and the step file's default path (a different folder from the receiver parameters').
+- **X4: the sample period, said and enforced.** `tmdq_abi.h` now says `0 = 1 s, 1 = 100 ms, 2 = 10 ms`, and
+  `buildStreamJob` refuses any other index (`<label>: Sample period index is invalid.`, as it refuses a slope index)
+  where it ran the stream at 100 ms in silence. The application cannot send one (a template's index is clamped to
+  0 to 2 when it is read), so the change is for a host of the ABI. The recorded `sample-period-out-of-range` case, which
+  expected the silent 100 ms, is three rejected cases (-1, 3, 7) and one for a lock stream; the builder's oracle is
+  marked CHANGED as the others are, and the generated configurations draw an unknown index only one time in twelve so
+  that the volume of accepted ones the test asserts stays. A managed test refuses -1, 3 and 99 through the binding.
+- **S7: one ending for every getter.** Thirteen getters ended with the same four lines (`writeStruct`, else the
+  last error "null output or a struct_size that is too small" and `TMDQ_ERR_BADARG`); they are `tmdq::writeOut`. A test
+  pins the shared message for a short struct and a NULL one.
+- **C4, the core's literals beside the constants that name them.** `PCMConstants::k100NsToSeconds` and
+  `k100NsPerSecond` replace five uses in three spellings (`frameprocessor.cpp`, `ch10packetreader.cpp`,
+  `calibrationextractor.cpp`); `UIConstants::kSecondsPerDay` is the 86400 in the tick ladder and in the multi-day rule
+  of `chartgeometry.cpp`; `PCMConstants::kChannelTypePcm` and `kChannelTypeTime` replace `"PCMIN"` and `"TIMEIN"` in
+  `ch10packetreader.cpp` and `chapter10reader.cpp`. Same values, so no behaviour moved.
+- **Checked.** Mutation check, `eng\mutate.ps1`, native: 18 mutants, **17 CAUGHT** (the shared parse dropping a negative,
+  the calibration reading keeping one, the builder and the schema each reading the other's way; an unknown period
+  accepted, 10 ms read as 100 ms, the refusal reworded; a getter reporting success without writing, or not setting
+  the last error; each case-folding bound; NaN read only in lower case; the 100 ns unit and the per-second constant,
+  the multi-day tick, a PCM source taken for a time source, the extractor's bit period) and **1 SURVIVED**, equivalent
+  (a `TIMEIN` data type not taken for a time channel: the `else` branch stores the same text). All three suites in Release, zero warnings: native **498** (1 skipped), managed
+  **369** passed / 1 skipped, app **663** passed / 34 not run. Soak 34 of 34 identical to v2.14.2's; throughput gate
+  passed. Baselines moved: native 495 to 498, managed 366 to 369.
+
 #### The analyzers and the editor settings, in the files that build (audit A2, A3)
 
 Found by the whole-tree cleanup audit; each count was re-measured on the tree as of #298 (the audit's 414 findings

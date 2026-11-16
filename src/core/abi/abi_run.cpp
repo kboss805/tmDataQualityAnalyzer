@@ -255,12 +255,7 @@ int32_t tmdq_stream_result_info(const tmdq_stream_result* result, tmdq_stream_in
                                                                     : TMDQ_MODE_RECEIVER_CHANNEL_INFO;
     info.sample_count   = static_cast<int32_t>(d.timesSec.size());
     info.channel_count  = static_cast<int32_t>(d.channels.size());
-    if (!tmdq::writeStruct(info, kStreamInfoMinimum, out))
-    {
-        tmdq::setError("null output or a struct_size that is too small");
-        return TMDQ_ERR_BADARG;
-    }
-    return TMDQ_OK;
+    return tmdq::writeOut(info, kStreamInfoMinimum, out);
 }
 
 int32_t tmdq_stream_result_channel(const tmdq_stream_result* result, int32_t index, tmdq_channel_series* out)
@@ -282,12 +277,7 @@ int32_t tmdq_stream_result_channel(const tmdq_stream_result* result, int32_t ind
     series.word_index = s.word;
     series.name_utf8  = s.name.c_str();
     series.values     = s.values.data();
-    if (!tmdq::writeStruct(series, kSeriesMinimum, out))
-    {
-        tmdq::setError("null output or a struct_size that is too small");
-        return TMDQ_ERR_BADARG;
-    }
-    return TMDQ_OK;
+    return tmdq::writeOut(series, kSeriesMinimum, out);
 }
 
 void tmdq_stream_result_free(tmdq_stream_result* result) { delete result; }

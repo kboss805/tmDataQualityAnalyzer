@@ -210,7 +210,7 @@ void CalibrationExtractor::start(const Request& request, std::shared_ptr<Process
     // Both bounds are load-bearing and neither is arbitrary - see the constants,
     // which carry the measured calibrated-channel counts. Finer windows are worse,
     // not better: they resolve each dwell's settling ramp into sub-plateaus.
-    const double bit_period_sec = m_params.resolvedAttrs.delta100ns * 1e-7;
+    const double bit_period_sec = m_params.resolvedAttrs.delta100ns * PCMConstants::k100NsToSeconds;
     if (bit_period_sec > 0.0 && m_params.bitsInMinorFrame > 0)
     {
         const double frame_duration_sec =

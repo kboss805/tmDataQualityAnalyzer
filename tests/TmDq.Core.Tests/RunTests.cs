@@ -473,6 +473,17 @@ public class RunTests
         }
     }
 
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(3)]
+    [InlineData(99)]
+    public void ASamplePeriodTheCoreDoesNotKnowIsRefusedNotRunAs100Milliseconds(int index)
+    {
+        Env.EnsureLoaded();
+        TmdqException e = Assert.Throws<TmdqException>(() => RunToTheEnd(Request(Env.StepCal, StepCal() with { SamplePeriod = (SamplePeriod)index })));
+        Assert.Contains("Sample period index is invalid.", e.Message);
+    }
+
     [Fact]
     public void TheByteOrderOfTheFileReachesTheJob()
     {

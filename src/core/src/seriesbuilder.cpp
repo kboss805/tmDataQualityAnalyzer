@@ -10,9 +10,9 @@
 #include <map>
 
 #include "constants.h"
+#include "framesetup.h"
 #include "seriescolumnschema.h"
 #include "seriesrange.h"
-#include "textparse.h"
 
 namespace {
 
@@ -81,12 +81,7 @@ StreamSeries buildStreamSeries(const ProcessedStreamData& data, double baseAbsSe
         // distinct; the Configure Streams dialog and Frame Sync Lock series intentionally drop it. The exact
         // name format - and its inverse for CSV import - is owned by SeriesColumnSchema.
         s.name = SeriesColumnSchema::snrSeriesName(data.pcmChannelId, data.streamLabel, ch.name);
-        const std::size_t rcvr_pos = ch.name.rfind("_RCVR");
-        if (rcvr_pos != std::string::npos)
-        {
-            int rcvr_num = 0;
-            s.receiverIndex = textparse::parseInteger(ch.name.substr(rcvr_pos + 5), rcvr_num) ? rcvr_num : 0;
-        }
+        s.receiverIndex = FrameSetup::receiverNumberInName(ch.name);
         int& count = receiver_channel_count[s.receiverIndex];
         s.channelIndex = count;
         ++count;

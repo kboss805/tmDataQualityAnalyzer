@@ -27,19 +27,6 @@ namespace {
 /// rather than a saving.
 using Flags = std::vector<char>;
 
-/// ASCII lower-casing, enough for the key name matched here.
-std::string asciiLower(std::string s)
-{
-    for (char& c : s)
-    {
-        if (c >= 'A' && c <= 'Z')
-        {
-            c = static_cast<char>(c - 'A' + 'a');
-        }
-    }
-    return s;
-}
-
 /// Median of a copy of @p values (returns 0 for an empty input).
 double median(std::vector<double> values)
 {
@@ -688,7 +675,7 @@ bool StepDetector::parseStepConfig(const std::filesystem::path& path,
         for (const auto& [key, value] : table->entries)
         {
             double num = 0.0;
-            if (asciiLower(key) == "db" && textparse::parseDouble(value, num))
+            if (textparse::asciiLower(key) == "db" && textparse::parseDouble(value, num))
             {
                 step.db = num;
             }

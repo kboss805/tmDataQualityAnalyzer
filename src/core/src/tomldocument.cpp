@@ -20,6 +20,7 @@
 
 namespace {
 
+using textparse::asciiLower;
 using textparse::parseDouble;
 using textparse::parseInteger;
 using textparse::trimmed;
@@ -32,18 +33,6 @@ bool startsWith(const std::string& s, char c)
 bool endsWith(const std::string& s, char c)
 {
     return !s.empty() && s.back() == c;
-}
-
-std::string asciiLower(std::string s)
-{
-    for (char& c : s)
-    {
-        if (c >= 'A' && c <= 'Z')
-        {
-            c = static_cast<char>(c - 'A' + 'a');
-        }
-    }
-    return s;
 }
 
 /// Removes an unquoted trailing `# comment` from a value.
