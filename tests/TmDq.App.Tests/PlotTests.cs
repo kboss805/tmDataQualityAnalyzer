@@ -471,10 +471,11 @@ namespace TmDq.App.Tests
             public ILockedFramebuffer Frame() => Frames.Capture(Window).Lock();
         }
 
-        private static Shown Show(PlotViewModel? plot, double width = 600, double height = 400)
+        private static Shown Show(PlotViewModel? plot, double width = 600, double height = 400, Avalonia.Styling.ThemeVariant? theme = null)
         {
             var chart = new PlotChart { Width = width, Height = height, Plot = plot };
             var window = new Window { Content = chart, SizeToContent = SizeToContent.WidthAndHeight };
+            if (theme is not null) window.RequestedThemeVariant = theme;
             TextOptions.SetTextRenderingMode(window, TextRenderingMode.Antialias);
             window.Show();
             Dispatcher.UIThread.RunJobs();
@@ -891,6 +892,59 @@ namespace TmDq.App.Tests
                 var inside = new Rect(a.X + a.Width * 0.1, a.Y + a.Height * 0.25, a.Width * 0.8, a.Height * 0.15);
                 Assert.True(Frames.Near(fb, inside, PlotColors.Snr[0]) > inside.Width * inside.Height * 0.5, "the band is not filled in the series' colour");
             }
+            s.Window.Close();
+        }
+
+        [AvaloniaFact]
+        public void ThePaleYellowLineIsDrawnDarkerInTheLightThemeAndAsItWasInTheDark()
+        {
+            Color yellow = PlotColors.Snr[2];
+            Color darker = ChartPalette.Light.SeriesColor(yellow);
+            Assert.NotEqual(yellow, darker);
+            var plot = new PlotViewModel();
+            plot.SetSeries(new[] { PlotFixtures.Snr(0, "yellow", 1, 0, 1, 0, new[] { 0.0, 2.0 }, new[] { 45.0, 45.0 }) });
+            plot.RecolorSeries(0, yellow);
+            plot.SetRightMinOverride(0);
+            plot.SetRightMaxOverride(100);
+            Shown s = Show(plot);
+
+            // The colour the line is drawn in, read back: down a column through the line its coverage adds up to the pen's width
+            // wherever it falls on the pixels, so the column's pixels less the background, over the width, are the colour less it.
+            // The median of several columns, so that a vertical grid line in one does not count.
+            (double R, double G, double B) Drawn(Color background)
+            {
+                using ILockedFramebuffer fb = s.Frame();
+                Rect a = s.Area;
+                int lineY = (int)(s.Chart.RightToPixel(45) + Frames.InWindow(s.Chart, s.Window).Y);   // off the grid's lines
+                var columns = new List<(double R, double G, double B)>();
+                for (int x = (int)a.X + 20; x < a.Right - 20; x += 37)
+                {
+                    double r = 0, g = 0, bl = 0;
+                    for (int y = lineY - 5; y <= lineY + 5; y++)
+                    {
+                        uint p = Frames.Pixel(fb, x, y);
+                        r += (int)((p >> 16) & 0xFF) - background.R;
+                        g += (int)((p >> 8) & 0xFF) - background.G;
+                        bl += (int)(p & 0xFF) - background.B;
+                    }
+                    columns.Add((background.R + r / PlotChart.PenWidth, background.G + g / PlotChart.PenWidth, background.B + bl / PlotChart.PenWidth));
+                }
+                double Median(Func<(double R, double G, double B), double> f) => columns.Select(f).OrderBy(v => v).ElementAt(columns.Count / 2);
+                return (Median(c => c.R), Median(c => c.G), Median(c => c.B));
+            }
+            void AssertDrawn(Color expected, Color background, string what)
+            {
+                (double r, double g, double b) = Drawn(background);
+                Assert.True(Math.Abs(r - expected.R) < 8 && Math.Abs(g - expected.G) < 8 && Math.Abs(b - expected.B) < 8,
+                            $"{what}: drawn ({r:F0}, {g:F0}, {b:F0}), expected {expected}");
+            }
+
+            AssertDrawn(darker, ChartPalette.Light.Background, "the light theme's line");
+            Assert.Equal(yellow, plot.Series[0].Color);   // what is stored, saved in a template and shown in Customize View is its own
+            s.Window.Close();
+
+            s = Show(plot, theme: Avalonia.Styling.ThemeVariant.Dark);
+            AssertDrawn(yellow, ChartPalette.Dark.Background, "the dark theme's line");
             s.Window.Close();
         }
 

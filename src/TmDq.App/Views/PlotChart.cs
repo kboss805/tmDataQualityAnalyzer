@@ -389,14 +389,15 @@ namespace TmDq.App.Views
             }
             SeriesGeometry g = cached.Geometry;
             bool draft = draftLine > 0.0;
+            Color color = Palette.SeriesColor(s.Color);   // the light theme draws a pale colour darker
 
             // The band first, so the mean line reads on top of it. Outlined as well as filled: its edges are the columns'
             // extremes, and stroking them keeps a one-sample excursion sharp. A draft keeps the outline and drops the fill,
             // which costs the most to paint.
             if (g.Bands.Count > 0)
             {
-                IBrush? fill = draft ? null : new ImmutableSolidColorBrush(Color.FromArgb(BandAlpha, s.Color.R, s.Color.G, s.Color.B));
-                var edge = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(BandEdgeAlpha, s.Color.R, s.Color.G, s.Color.B)),
+                IBrush? fill = draft ? null : new ImmutableSolidColorBrush(Color.FromArgb(BandAlpha, color.R, color.G, color.B));
+                var edge = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(BandEdgeAlpha, color.R, color.G, color.B)),
                                             draft ? draftLine : 1);
                 foreach (double[] band in g.Bands)
                 {
@@ -435,7 +436,7 @@ namespace TmDq.App.Views
             }
             // A draft's line is one device pixel, which Skia draws as a hairline without its stroker: measured, 52 dense
             // series' lines went from 32 ms to 4 ms.
-            dc.DrawGeometry(null, new ImmutablePen(new ImmutableSolidColorBrush(s.Color), draft ? draftLine : PenWidth, lineJoin: PenLineJoin.Bevel), line);
+            dc.DrawGeometry(null, new ImmutablePen(new ImmutableSolidColorBrush(color), draft ? draftLine : PenWidth, lineJoin: PenLineJoin.Bevel), line);
         }
 
         /// <summary>The index of a long series with ordered times, built the first time it is drawn; null for the rest.</summary>

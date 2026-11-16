@@ -24,6 +24,7 @@ using TmDq.App.Models.Settings;
 using TmDq.App.Platform;
 using TmDq.App.Services;
 using TmDq.App.ViewModels;
+using TmDq.App.ViewModels.Plot;
 using TmDq.App.Views;
 using TmDq.Core.Tests;
 using Xunit;
@@ -886,6 +887,41 @@ namespace TmDq.App.Tests
             Assert.Same(ChartPalette.Dark, ChartPalette.For(ThemeVariant.Dark));
             Assert.Same(ChartPalette.Light, ChartPalette.For(ThemeVariant.Light));
             Assert.Same(ChartPalette.Light, ChartPalette.For(null));
+        }
+
+        // ---- The series colours the light theme draws darker ---------------------------------------------------------
+
+        [Fact]
+        public void TheLightThemeDrawsOnlyTheYellowOfThePrimariesDarkerAndTheDarkThemeNone()
+        {
+            Color yellow = PlotColors.Snr[2];
+            foreach (Color primary in PlotColors.FrameSyncLock.Concat(PlotColors.Snr).Where(c => c != yellow))
+            {
+                Assert.Equal(primary, ChartPalette.Light.SeriesColor(primary));
+                Assert.True(ChartPalette.Contrast(primary, Colors.White) >= ChartPalette.Light.MinSeriesContrast, $"{primary} is below the least");
+            }
+            Color drawn = ChartPalette.Light.SeriesColor(yellow);
+            Assert.NotEqual(yellow, drawn);
+            Assert.True(ChartPalette.Contrast(drawn, Colors.White) >= ChartPalette.Light.MinSeriesContrast);
+            Assert.True(ChartPalette.Contrast(Color.FromRgb((byte)(drawn.R + 3), (byte)(drawn.G + 3), (byte)(drawn.B + 3)), Colors.White) < ChartPalette.Light.MinSeriesContrast + 0.05,
+                        "darker than it need be");
+            Assert.True(drawn.R <= yellow.R && drawn.G <= yellow.G && drawn.B <= yellow.B);
+            Assert.True(drawn.R > drawn.G && drawn.G > drawn.B, "no longer a yellow");
+
+            foreach (Color c in PlotColors.FrameSyncLock.Concat(PlotColors.Snr).Concat(new[] { Colors.White, Colors.Yellow }))
+                Assert.Equal(c, ChartPalette.Dark.SeriesColor(c));
+        }
+
+        [Fact]
+        public void EveryShadeIsLegibleInTheLightThemeAndTheShadesOfAPrimaryStayDistinct()
+        {
+            foreach (Color primary in PlotColors.FrameSyncLock.Concat(PlotColors.Snr))
+            {
+                var shades = Enumerable.Range(0, 9).Select(level => PlotColors.Shade(primary, level)).ToList();
+                var drawn = shades.Select(ChartPalette.Light.SeriesColor).ToList();
+                Assert.All(drawn, c => Assert.True(ChartPalette.Contrast(c, Colors.White) >= ChartPalette.Light.MinSeriesContrast, $"{c} of {primary}"));
+                Assert.Equal(shades.Distinct().Count(), drawn.Distinct().Count());
+            }
         }
 
         // ---- Help ----------------------------------------------------------------------------------------------------

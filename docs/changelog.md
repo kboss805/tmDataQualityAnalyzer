@@ -27,6 +27,25 @@ contribute is the owner's policy to write.
 Checked by the two menu tests (they find the entry by its header, so the old name fails them), the consistency check, and a full
 app suite. The mutation check does not apply: no behaviour changed.
 
+#### The Receiver SNR yellow legible on the light theme
+
+The yellow of the Receiver SNR primaries, `(230, 200, 30)`, is 1.7 to 1 against the light theme's white (WCAG's contrast ratio),
+and the paler shades beyond the primaries are fainter still, so a yellow receiver's line and its legend swatch were hard to
+see there. `ChartPalette.SeriesColor` now gives the colour a series is drawn in: its own, or, where its contrast against the
+chart's background is below `MinSeriesContrast` (2.0 for the light theme, none for the dark), the same colour with its channels
+scaled down by the least that reaches it. The line, the band and the legend's swatch use it, and the swatch follows a change of
+theme. Of the primaries only the yellow is below 2.0 (the orange, the next lowest, is 2.3), so the other five are as they were.
+The stored colour, the template, the Customize View swatch and the CSV are untouched, and the dark theme is unchanged;
+a pale colour a user picks is drawn darker on the light theme too. `PlotColors`, and the 84 shades `PlotTests` holds to v2.14.2's,
+are as they were.
+
+Mutation check: eight mutants, the list kept outside the repository. Seven CAUGHT (the light theme's least set
+to none, the contrast ratio flattened to 1, the scale starting too low, the threshold raised so the orange and green are
+darkened, the line in the stored colour, and the legend's swatch in the stored colour at build and at a theme change). One
+SURVIVED, as expected: the band's fill in the stored colour, which only the line's pixels, read back, test. The first run of the
+legend mutant survived: the swatch was set right by the theme change when the view attached, so a recolour after the view was
+shown, which rebuilds the rows, was added to the test. The app suite's baseline moves by four tests (664 to 668 with #301 and #302).
+
 #### The application's and the library's literals beside what names them (audit C4, X5 in part)
 
 Found by the whole-tree cleanup audit; each site was re-read against the tree as of #301, and several had already gone
