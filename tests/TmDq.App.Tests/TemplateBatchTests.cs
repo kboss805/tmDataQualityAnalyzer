@@ -598,6 +598,28 @@ public sealed class TemplateBatchTests : IDisposable
         Assert.Equal((2, true), (closed, vm.Accepted));
     }
 
+    [Fact]
+    public void ProcessIsAskedAgainWhenExportingPerFileOrTheFolderChanges()
+    {
+        var vm = new BatchApplyViewModel(new[] { new FileCheck(@"C:\a\one.ch10", true, "") }, "", new FakeTemplateFiles());
+        var said = new List<string?>();
+        vm.PropertyChanged += (_, e) => said.Add(e.PropertyName);
+        int asked = 0;
+        vm.ProcessCommand.CanExecuteChanged += (_, _) => asked++;
+
+        vm.ExportPerFile = true;   // with no folder, Process now needs one
+        Assert.Contains(nameof(BatchApplyViewModel.CanProcess), said);
+        Assert.True(asked > 0);
+        Assert.False(vm.ProcessCommand.CanExecute(null));
+
+        said.Clear();
+        asked = 0;
+        vm.OutputFolder = @"D:\out";
+        Assert.Contains(nameof(BatchApplyViewModel.CanProcess), said);
+        Assert.True(asked > 0);
+        Assert.True(vm.ProcessCommand.CanExecute(null));
+    }
+
     // ---- the windows ----------------------------------------------------------------------------------------------------
 
     [AvaloniaFact]

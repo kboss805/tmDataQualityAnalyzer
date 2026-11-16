@@ -649,6 +649,17 @@ public sealed class AroundTheChartTests
     }
 
     [Fact]
+    public void AStreamRowsBoxAndNameEachSayTheyChanged()
+    {
+        var c = new CustomizeViewModel(Mixed(), new FakePrompts());
+        var said = new List<string?>();
+        c.LockRows[0].PropertyChanged += (_, e) => said.Add(e.PropertyName);
+        c.LockRows[0].IsChecked = !c.LockRows[0].IsChecked;
+        c.LockRows[0].Name = "Five";
+        Assert.Equal(new[] { nameof(LockStreamRow.IsChecked), nameof(LockStreamRow.Name) }, said);
+    }
+
+    [Fact]
     public async Task OkShowsOnlyTheMetricInViewAndAppliesTheNamesAndColours()
     {
         PlotViewModel plot = Mixed();

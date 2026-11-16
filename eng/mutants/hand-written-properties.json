@@ -61,8 +61,8 @@
     {
       "id": "E5",
       "file": "src/TmDq.App/ViewModels/Dialogs/ExportViewModel.cs",
-      "old": "            if (SetProperty(ref _imagePath, value)) OnPropertyChanged(nameof(CanExport));",
-      "new": "            SetProperty(ref _imagePath, value);",
+      "old": "            if (!SetProperty(ref _imagePath, value)) return;\n            OnPropertyChanged(nameof(CanExport));\n",
+      "new": "            if (!SetProperty(ref _imagePath, value)) return;\n",
       "args": [
         "-stopOnFail",
         "-class",

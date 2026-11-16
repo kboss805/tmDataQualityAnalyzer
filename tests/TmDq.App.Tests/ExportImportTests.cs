@@ -643,6 +643,37 @@ public sealed class ExportImportTests
     }
 
     [Fact]
+    public void EachRowsBoxAndPathSayTheyChangedSoExportAndBrowseAreAskedAgain()
+    {
+        var vm = new ExportViewModel("a.png", "a.csv", "a_log.txt", new FakeFiles());
+        var said = new List<string?>();
+        vm.PropertyChanged += (_, e) => said.Add(e.PropertyName);
+        int[] asked = new int[4];   // Export, then Browse for the image, the data and the log
+        vm.ExportCommand.CanExecuteChanged += (_, _) => asked[0]++;
+        vm.BrowseImageCommand.CanExecuteChanged += (_, _) => asked[1]++;
+        vm.BrowseDataCommand.CanExecuteChanged += (_, _) => asked[2]++;
+        vm.BrowseLogCommand.CanExecuteChanged += (_, _) => asked[3]++;
+
+        void Check(string property, Action change, int browse)   // browse: the Browse that follows the box, 0 for a path
+        {
+            said.Clear();
+            Array.Clear(asked);
+            change();
+            Assert.Contains(property, said);
+            Assert.Contains(nameof(ExportViewModel.CanExport), said);
+            Assert.True(asked[0] > 0, property + ": Export");
+            if (browse > 0) Assert.True(asked[browse] > 0, property + ": Browse");
+        }
+
+        Check(nameof(ExportViewModel.ExportImage), () => vm.ExportImage = false, 1);
+        Check(nameof(ExportViewModel.ExportData), () => vm.ExportData = true, 2);
+        Check(nameof(ExportViewModel.ExportLog), () => vm.ExportLog = true, 3);
+        Check(nameof(ExportViewModel.ImagePath), () => vm.ImagePath = "b.png", 0);
+        Check(nameof(ExportViewModel.DataPath), () => vm.DataPath = "b.csv", 0);
+        Check(nameof(ExportViewModel.LogPath), () => vm.LogPath = "b.txt", 0);
+    }
+
+    [Fact]
     public void ExportWaitsForATickedRowAndAPathForEach()
     {
         var vm = new ExportViewModel("a.png", "a.csv", "a_log.txt");

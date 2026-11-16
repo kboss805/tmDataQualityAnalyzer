@@ -12,6 +12,38 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### File-scoped namespaces everywhere, and view models that write their own properties (layout plan PR 4; audit C6)
+
+The fourth of the source-layout PRs: the two style rules the audit asked for, after the moves so that git still sees
+the renames. Behaviour is the same.
+
+- **C6: one namespace form.** 119 files declared a block namespace and 33 a file-scoped one. All 134 block ones are
+  file-scoped now (`dotnet format style --diagnostics IDE0161`: a namespace line and one level of indentation less), and
+  `.editorconfig` says `csharp_style_namespace_declarations = file_scoped:warning`, so a block namespace is a build
+  error.
+- **C6: hand-written properties and commands.** The four classes that used CommunityToolkit.Mvvm's generator
+  (`[ObservableProperty]`,
+  `[NotifyPropertyChangedFor]`, `[RelayCommand]`: `BatchApplyViewModel`, `ExportViewModel`, `MenuChoice`, and in
+  `CustomizeViewModel.cs` `LockStreamRow`, `CustomizeViewModel` and `ChannelItem`) write them out, in the form the other
+  view models already had (`SetProperty`, then the `OnPropertyChanged` and `NotifyCanExecuteChanged` the attributes and
+  `partial` hooks stood for). The toolkit's generators are used nowhere now, so nothing is `partial` but a window beside
+  its
+  XAML. A command's property is the same type as the generator's (`IRelayCommand`, `IAsyncRelayCommand`), so no binding
+  or
+  test changed; `LockStreamRow`'s `PickColor` is `PickColorAsync`, and `ChannelItem`'s `Rename` and `Recolor` are
+  `RenameAsync`
+  and `RecolorAsync`.
+- **Checked.** Mutation check, `eng\mutate.ps1` (`eng/mutants/hand-written-properties.json`), app, 14 mutants over the
+  notifications and commands now written by hand: 8 **CAUGHT** and 6 **SURVIVED** on the first run, the survivors being
+  tests the generator had always hidden. Each survivor was a notification no test listened for: the log row's Browse
+  following its box, the image box and the three paths re-asking whether Export is possible, Process re-asked when
+  exporting per file is ticked or the folder changes, and a stream row's box saying it changed. Three tests were added
+  (`EachRowsBoxAndPathSayTheyChangedSoExportAndBrowseAreAskedAgain`,
+  `ProcessIsAskedAgainWhenExportingPerFileOrTheFolderChanges`, `AStreamRowsBoxAndNameEachSayTheyChanged`) and all 14 are
+  **CAUGHT** (one mutant had its text wrong and was rewritten). The conversion to file-scoped namespaces was checked as
+  a diff that changes only the namespace lines and the indentation they cause (`git diff -w`). Managed **376** passed /
+  1 skipped, app **675** passed / 34 not run, zero warnings; native not affected. Baseline moved: app 672 to 675.
+
 #### The dialogs' shared scaffolding written once, and the views reach no Platform (layout plan PR 3; audit S11, S13, S15)
 
 The third of the source-layout PRs, and the first that changes more than where a type lives. Behaviour is the same.
