@@ -59,7 +59,7 @@ namespace TmDq.App.ViewModels
         }
 
         /// <summary>"data", "data and log file", "data, plot image and log file".</summary>
-        private static string Sentence(IReadOnlyList<string> items) =>
+        private static string Sentence(List<string> items) =>
             items.Count <= 1 ? string.Concat(items) : string.Join(", ", items.Take(items.Count - 1)) + " and " + items[^1];
 
         /// <summary>One recording's series as CSV, as a batch writes each file's: "Exported:" or "Failed to export CSV:".</summary>
@@ -86,7 +86,7 @@ namespace TmDq.App.ViewModels
         /// UTF-8 without a byte-order mark, ending with a line end.</summary>
         private bool WriteLog(string path)
         {
-            string text = _log.PlainText.Replace("\n", "\r\n");
+            string text = _log.PlainText.Replace("\n", "\r\n", StringComparison.Ordinal);
             if (!text.EndsWith("\r\n", StringComparison.Ordinal)) text += "\r\n";
             try
             {

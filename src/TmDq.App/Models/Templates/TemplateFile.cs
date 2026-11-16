@@ -243,7 +243,7 @@ namespace TmDq.App.Models.Templates
             return o;
         }
 
-        private static object ConfigToJson(StreamSetup s)
+        private static SortedDictionary<string, object> ConfigToJson(StreamSetup s)
         {
             var o = new SortedDictionary<string, object>(StringComparer.Ordinal)
             {

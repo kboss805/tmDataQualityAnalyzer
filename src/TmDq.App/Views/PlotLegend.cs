@@ -104,7 +104,7 @@ namespace TmDq.App.Views
                     label.Foreground = new ImmutableSolidColorBrush(p.LegendText);
         }
 
-        private Control Row(LegendEntry e)
+        private StackPanel Row(LegendEntry e)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Background = Brushes.Transparent };
             row.Children.Add(new Border

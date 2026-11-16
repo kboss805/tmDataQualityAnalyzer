@@ -118,10 +118,7 @@ public sealed unsafe class CalibrationRun : IDisposable
     public CalibrationResult GetResult()
     {
         IntPtr handle = _handle;
-        if (handle == IntPtr.Zero)
-        {
-            throw new ObjectDisposedException(nameof(CalibrationRun));
-        }
+        ObjectDisposedException.ThrowIf(handle == IntPtr.Zero, this);
 
         CalibrationInfoNative info = default;
         info.StructSize = (uint)sizeof(CalibrationInfoNative);

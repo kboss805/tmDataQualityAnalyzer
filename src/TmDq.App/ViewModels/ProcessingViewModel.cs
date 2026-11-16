@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -9,9 +10,10 @@ namespace TmDq.App.ViewModels
     /// every stream. As in v2.x, Cancel only asks: the text becomes "Cancelling..." and
     /// the button is disabled, and the dialog stays until the run has actually stopped.
     /// </summary>
-    public sealed class ProcessingViewModel : ObservableObject
+    public sealed class ProcessingViewModel : ObservableObject, IDisposable
     {
         private readonly CancellationTokenSource _cancel = new();
+        private bool _disposed;
         private int _progress;
         private string _text;
 
@@ -43,9 +45,16 @@ namespace TmDq.App.ViewModels
 
         public IRelayCommand CancelCommand { get; }
 
+        /// <summary>Releases the token source once the run has stopped and the dialog is gone; Cancel then does nothing.</summary>
+        public void Dispose()
+        {
+            _disposed = true;
+            _cancel.Dispose();
+        }
+
         private void Cancel()
         {
-            if (IsCancelling) return;
+            if (_disposed || IsCancelling) return;
             Text = "Cancelling...";
             _cancel.Cancel();
             OnPropertyChanged(nameof(IsCancelling));

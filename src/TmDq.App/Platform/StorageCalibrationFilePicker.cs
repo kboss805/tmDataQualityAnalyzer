@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
@@ -35,7 +34,7 @@ namespace TmDq.App.Platform
                     ? null
                     : await _owner.StorageProvider.TryGetFolderFromPathAsync(new Uri(Path.GetFullPath(folder))),
             });
-            return files.FirstOrDefault()?.TryGetLocalPath();
+            return files.Count > 0 ? files[0].TryGetLocalPath() : null;
         }
     }
 }

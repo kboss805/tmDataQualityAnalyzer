@@ -143,10 +143,7 @@ public sealed unsafe class StreamResult : IDisposable
 
     private void ThrowIfDisposed()
     {
-        if (_handle == IntPtr.Zero)
-        {
-            throw new ObjectDisposedException(nameof(StreamResult));
-        }
+        ObjectDisposedException.ThrowIf(_handle == IntPtr.Zero, this);
     }
 
     /// <summary>Releases the native result. Safe to call twice.</summary>
@@ -157,6 +154,7 @@ public sealed unsafe class StreamResult : IDisposable
         {
             Native.tmdq_stream_result_free(handle);
         }
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>The native handle, for the calls that build on a result (series construction).</summary>

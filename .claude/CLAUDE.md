@@ -60,12 +60,15 @@ Everything is in `tmdq.sln`. The scripts find MSVC themselves: they dot-source `
   `UserManual.html` (the full one, with `docs\manual\walkthroughs.html`), their figures rendered from the app by
   `ManualFiguresTests` into `docs\manual_images`: after a change to what a figure shows, rebuild with
   `powershell -ExecutionPolicy Bypass -File eng\build_manual.ps1` (`-NoCapture` reuses the figures). CI runs the
-  app suite. Green baseline **655 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases.
+  app suite. Green baseline **663 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases.
   **The side-by-side soak:** `powershell -ExecutionPolicy Bypass -File eng\run_soak.ps1 [-NoBuild]
   [-Only <run>,...]` runs every run in `tests\TmDq.App.Tests\Soak\soak.json` (`SoakTests`, explicit, one process a
   run) and fails unless each CSV export is byte for byte what v2.14.2 exported (the manifest's `qt` blocks). Most
   runs read the full and local recordings under `tests\data`, which are not committed, so CI never runs it, and a
   missing recording fails. Run it after a change to processing, the plot's series or the CSV writer.
+  **The analyzers are on and every finding breaks the build:** `AnalysisLevel` `latest-recommended` plus the rules in
+  the root `.editorconfig` (CA2000, CA1031, CA1307, CA5392 and IDE0005, an unused `using`); a rule is switched off, or a
+  finding suppressed, with its reason beside it (tests have a shorter list: the `[tests/**.cs]` section).
   **Never type a version in a .csproj** (nor a package's: `Directory.Packages.props` holds those, Avalonia's as one
   `AvaloniaVersion`): `Directory.Build.props` at the root imports
   `eng/AppVersion.props`, which reads `AppVersion`, into every .NET project, and **`Directory.Build.targets`**

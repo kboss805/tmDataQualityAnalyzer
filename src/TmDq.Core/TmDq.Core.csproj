@@ -20,7 +20,6 @@
     <PlatformTarget>x64</PlatformTarget>
     <AppendPlatformToOutputPath>false</AppendPlatformToOutputPath>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
 </Project>

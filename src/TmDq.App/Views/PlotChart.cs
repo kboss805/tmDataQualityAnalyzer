@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Threading.Tasks;
 using Avalonia;
@@ -37,6 +38,8 @@ namespace TmDq.App.Views
     /// to maximum, so a one-sample dropout shows in it; the full picture is painted when the drag or the key is released or
     /// <see cref="RefineDelay"/> after the last step. An export never draws a draft.
     /// </summary>
+    [SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable",
+        Justification = "A control is not disposed by its owner: the bitmap is released when it leaves the visual tree (OnDetachedFromVisualTree).")]
     public sealed class PlotChart : Control
     {
         public static readonly StyledProperty<PlotViewModel?> PlotProperty =
@@ -47,6 +50,10 @@ namespace TmDq.App.Views
         public const double FontSize = 12, PenWidth = 1.5;
         public const int XTickCount = 10, YTickCount = 6;
         public const double WheelZoomStep = 0.85;
+        // The dotted grid's and the crosshair's dash patterns (a pen reads them and never changes them).
+        private static readonly double[] GridDashes = { 1.0, 2.0 };
+        private static readonly double[] CrosshairDashes = { 4.0, 2.0 };
+
         public const byte BandAlpha = 90, BandEdgeAlpha = 190, CrosshairAlpha = 140, ZoomBandAlpha = 45;
 
         /// <summary>A series this long or longer gets an index: shorter ones cost next to nothing to walk.</summary>
@@ -172,6 +179,20 @@ namespace TmDq.App.Views
         public double RightToPixel(double y) => ChartGeometry.YToPixel(ViewFor(false, PlotArea), y);
 
         // ---- the model --------------------------------------------------------------------------------------------
+
+        /// <summary>
+        /// The cached layer is a bitmap and each index is native memory: both go when the chart leaves the window, and
+        /// are made again, from the series, if it returns.
+        /// </summary>
+        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnDetachedFromVisualTree(e);
+            _backing?.Dispose();
+            _backing = null;
+            _backingValid = false;
+            foreach (SeriesIndex index in _indexes.Values) index.Dispose();
+            _indexes.Clear();
+        }
 
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
@@ -302,7 +323,7 @@ namespace TmDq.App.Views
             ChartView left = ViewFor(true, area), right = ViewFor(false, area);
 
             // The grid: dotted, at the X ticks and at the Y ticks of the axis drawn (the left when both are).
-            var gridPen = new ImmutablePen(new ImmutableSolidColorBrush(Palette.Grid), 1, new ImmutableDashStyle(new[] { 1.0, 2.0 }, 0));
+            var gridPen = new ImmutablePen(new ImmutableSolidColorBrush(Palette.Grid), 1, new ImmutableDashStyle(GridDashes, 0));
             if (!hasData) DrawEmptyTicks(dc, area, vm, leftVisible, gridPen);
             foreach (double t in xTicks)
             {
@@ -505,7 +526,7 @@ namespace TmDq.App.Views
             if (_crosshairVisible)
             {
                 var pen = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(CrosshairAlpha, Palette.Foreground.R, Palette.Foreground.G, Palette.Foreground.B)),
-                                           1, new ImmutableDashStyle(new[] { 4.0, 2.0 }, 0));
+                                           1, new ImmutableDashStyle(CrosshairDashes, 0));
                 double px = ChartGeometry.XToPixel(view, _crosshairX);
                 dc.DrawLine(pen, new Point(px, area.Top), new Point(px, area.Bottom));
             }

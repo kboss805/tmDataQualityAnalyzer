@@ -112,10 +112,7 @@ public sealed unsafe class SeriesSet : IDisposable
 
     private void ThrowIfDisposed()
     {
-        if (_handle == IntPtr.Zero)
-        {
-            throw new ObjectDisposedException(nameof(SeriesSet));
-        }
+        ObjectDisposedException.ThrowIf(_handle == IntPtr.Zero, this);
     }
 
     /// <summary>Releases the set. Safe to call twice.</summary>
@@ -247,10 +244,7 @@ public sealed unsafe class TimeBase : IDisposable
         get
         {
             IntPtr handle = _handle;
-            if (handle == IntPtr.Zero)
-            {
-                throw new ObjectDisposedException(nameof(TimeBase));
-            }
+            ObjectDisposedException.ThrowIf(handle == IntPtr.Zero, this);
             return handle;
         }
     }
