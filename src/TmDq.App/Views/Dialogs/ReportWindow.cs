@@ -2,22 +2,21 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using TmDq.App.Views.Controls;
 
-namespace TmDq.App.Views.Dialogs
+namespace TmDq.App.Views.Dialogs;
+
+/// <summary>A report with OK, which a calibration's summary is shown in (plan step 4.6, US5.3).
+/// The text is selectable, and scrolls when it is long, as a report of 16 receivers can be.</summary>
+public sealed class ReportWindow : DialogWindow
 {
-    /// <summary>A report with OK, which a calibration's summary is shown in (plan step 4.6, US5.3).
-    /// The text is selectable, and scrolls when it is long, as a report of 16 receivers can be.</summary>
-    public sealed class ReportWindow : DialogWindow
+    public ReportWindow(string title, string text) : base(title)
     {
-        public ReportWindow(string title, string text) : base(title)
-        {
-            Body = new SelectableTextBlock { Text = text, TextWrapping = TextWrapping.Wrap, MaxWidth = 640 };
-            OkButton = new Button { Content = "OK", IsDefault = true, IsCancel = true };
-            OkButton.Click += (_, _) => Close();
-            Content = DialogFooter.Compose(new ScrollViewer { Content = Body, MaxHeight = 480 }, OkButton);
-        }
-
-        public SelectableTextBlock Body { get; }
-
-        public Button OkButton { get; }
+        Body = new SelectableTextBlock { Text = text, TextWrapping = TextWrapping.Wrap, MaxWidth = 640 };
+        OkButton = new Button { Content = "OK", IsDefault = true, IsCancel = true };
+        OkButton.Click += (_, _) => Close();
+        Content = DialogFooter.Compose(new ScrollViewer { Content = Body, MaxHeight = 480 }, OkButton);
     }
+
+    public SelectableTextBlock Body { get; }
+
+    public Button OkButton { get; }
 }

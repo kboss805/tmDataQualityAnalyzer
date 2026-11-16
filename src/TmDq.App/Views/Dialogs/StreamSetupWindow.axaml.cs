@@ -1,9 +1,8 @@
 using Avalonia.Controls;
 
-namespace TmDq.App.Views.Dialogs
+namespace TmDq.App.Views.Dialogs;
+
+public sealed partial class StreamSetupWindow : Window
 {
-    public sealed partial class StreamSetupWindow : Window
-    {
-        public StreamSetupWindow() => InitializeComponent();
-    }
+    public StreamSetupWindow() => InitializeComponent();
 }

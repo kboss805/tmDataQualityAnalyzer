@@ -9,141 +9,140 @@ using Avalonia.Platform.Storage;
 using TmDq.App.Models.Settings;
 using TmDq.App.ViewModels;
 
-namespace TmDq.App.Views
+namespace TmDq.App.Views;
+
+/// <summary>
+/// The main window and its shell (plan step 4.8): a title bar of its own in place of the system's, the menu behind
+/// its hamburger button (four submenus, declared in the AXAML and bound to the view model
+/// but for Help, which is the window's), the log sidebar's toggle, and a
+/// recording or exported CSV dropped anywhere on the window opened as Recent Files opens one.
+/// </summary>
+public sealed partial class MainWindow : Window
 {
-    /// <summary>
-    /// The main window and its shell (plan step 4.8): a title bar of its own in place of the system's, the menu behind
-    /// its hamburger button (four submenus, declared in the AXAML and bound to the view model
-    /// but for Help, which is the window's), the log sidebar's toggle, and a
-    /// recording or exported CSV dropped anywhere on the window opened as Recent Files opens one.
-    /// </summary>
-    public sealed partial class MainWindow : Window
+    public const string AboutTitle = "About";
+    public const string ManualNotWritten = "Could not open the user manual.";
+
+    /// <summary>The narrowest the divider drags the log to, and the divider's width: a hairline.</summary>
+    public const double LogMinWidth = 200, SplitterWidth = 1;
+
+    /// <summary>How far the divider's grab area reaches into the log and the chart on each side of its hairline.</summary>
+    public const double SplitterReach = 3;
+
+    private MainWindowViewModel? _watched;
+
+    /// <summary>The menu behind the hamburger button.</summary>
+    public MenuFlyout MainMenu => (MenuFlyout)MenuButton.Flyout!;
+
+    private GridLength _sidebarWidth = new(400);
+
+    /// <summary>The size the window opens at, as v2.x's did: a standard high-definition screen's.</summary>
+    public static readonly Size DefaultSize = new(1920, 1080);
+
+    public MainWindow()
     {
-        public const string AboutTitle = "About";
-        public const string ManualNotWritten = "Could not open the user manual.";
-
-        /// <summary>The narrowest the divider drags the log to, and the divider's width: a hairline.</summary>
-        public const double LogMinWidth = 200, SplitterWidth = 1;
-
-        /// <summary>How far the divider's grab area reaches into the log and the chart on each side of its hairline.</summary>
-        public const double SplitterReach = 3;
-
-        private MainWindowViewModel? _watched;
-
-        /// <summary>The menu behind the hamburger button.</summary>
-        public MenuFlyout MainMenu => (MenuFlyout)MenuButton.Flyout!;
-
-        private GridLength _sidebarWidth = new(400);
-
-        /// <summary>The size the window opens at, as v2.x's did: a standard high-definition screen's.</summary>
-        public static readonly Size DefaultSize = new(1920, 1080);
-
-        public MainWindow()
+        InitializeComponent();
+        if (Screens.Primary is { } screen)
         {
-            InitializeComponent();
-            if (Screens.Primary is { } screen)
-            {
-                Size fitted = FitDefaultSize(screen.WorkingArea, screen.Scaling);
-                Width = Math.Max(fitted.Width, MinWidth);
-                Height = Math.Max(fitted.Height, MinHeight);
-            }
-            AddHandler(DragDrop.DragOverEvent, OnDragOver);
-            AddHandler(DragDrop.DropEvent, OnDrop);
+            Size fitted = FitDefaultSize(screen.WorkingArea, screen.Scaling);
+            Width = Math.Max(fitted.Width, MinWidth);
+            Height = Math.Max(fitted.Height, MinHeight);
         }
+        AddHandler(DragDrop.DragOverEvent, OnDragOver);
+        AddHandler(DragDrop.DropEvent, OnDrop);
+    }
 
-        /// <summary>
-        /// <see cref="DefaultSize"/>, no larger than a screen's working area (<paramref name="workingArea"/>, in device
-        /// pixels, at <paramref name="scaling"/>): on a 1920 x 1080 screen the taskbar takes some of the height, and with
-        /// the screen scaled to 125 % there are 1536 x 864 units to fill, so v2.x's window opened under the taskbar or
-        /// past the screen's edge.
-        /// </summary>
-        public static Size FitDefaultSize(PixelRect workingArea, double scaling)
+    /// <summary>
+    /// <see cref="DefaultSize"/>, no larger than a screen's working area (<paramref name="workingArea"/>, in device
+    /// pixels, at <paramref name="scaling"/>): on a 1920 x 1080 screen the taskbar takes some of the height, and with
+    /// the screen scaled to 125 % there are 1536 x 864 units to fill, so v2.x's window opened under the taskbar or
+    /// past the screen's edge.
+    /// </summary>
+    public static Size FitDefaultSize(PixelRect workingArea, double scaling)
+    {
+        if (scaling <= 0 || workingArea.Width <= 0 || workingArea.Height <= 0) return DefaultSize;
+        return new Size(Math.Min(DefaultSize.Width, Math.Floor(workingArea.Width / scaling)),
+                        Math.Min(DefaultSize.Height, Math.Floor(workingArea.Height / scaling)));
+    }
+
+    private MainWindowViewModel? Vm => DataContext as MainWindowViewModel;
+
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+        if (_watched is not null) _watched.PropertyChanged -= OnModelPropertyChanged;
+        _watched = Vm;
+        if (_watched is not null) _watched.PropertyChanged += OnModelPropertyChanged;
+        ShowSidebar(_watched?.SidebarVisible ?? true);
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == WindowStateProperty) UpdateMaximizeButton();
+    }
+
+    private void OnModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainWindowViewModel.SidebarVisible)) ShowSidebar(((MainWindowViewModel)sender!).SidebarVisible);
+    }
+
+    // The log's column (and the splitter's) give their width back to the chart while the sidebar is hidden, and get
+    // the width the user left them when it returns. The log's minimum goes with it: a hidden column has none.
+    private void ShowSidebar(bool shown)
+    {
+        ColumnDefinition log = Body.ColumnDefinitions[0], splitter = Body.ColumnDefinitions[1];
+        if (shown)
         {
-            if (scaling <= 0 || workingArea.Width <= 0 || workingArea.Height <= 0) return DefaultSize;
-            return new Size(Math.Min(DefaultSize.Width, Math.Floor(workingArea.Width / scaling)),
-                            Math.Min(DefaultSize.Height, Math.Floor(workingArea.Height / scaling)));
+            log.Width = _sidebarWidth;
+            log.MinWidth = LogMinWidth;
+            splitter.Width = new GridLength(SplitterWidth);
         }
-
-        private MainWindowViewModel? Vm => DataContext as MainWindowViewModel;
-
-        protected override void OnDataContextChanged(EventArgs e)
+        else
         {
-            base.OnDataContextChanged(e);
-            if (_watched is not null) _watched.PropertyChanged -= OnModelPropertyChanged;
-            _watched = Vm;
-            if (_watched is not null) _watched.PropertyChanged += OnModelPropertyChanged;
-            ShowSidebar(_watched?.SidebarVisible ?? true);
+            if (log.Width.Value > 0) _sidebarWidth = log.Width;
+            log.MinWidth = 0;
+            log.Width = new GridLength(0);
+            splitter.Width = new GridLength(0);
         }
+    }
 
-        protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
-        {
-            base.OnPropertyChanged(change);
-            if (change.Property == WindowStateProperty) UpdateMaximizeButton();
-        }
+    // ---- the window's buttons ------------------------------------------------------------------------------------
 
-        private void OnModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
-        {
-            if (e.PropertyName == nameof(MainWindowViewModel.SidebarVisible)) ShowSidebar(((MainWindowViewModel)sender!).SidebarVisible);
-        }
+    private void OnMinimize(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
-        // The log's column (and the splitter's) give their width back to the chart while the sidebar is hidden, and get
-        // the width the user left them when it returns. The log's minimum goes with it: a hidden column has none.
-        private void ShowSidebar(bool shown)
-        {
-            ColumnDefinition log = Body.ColumnDefinitions[0], splitter = Body.ColumnDefinitions[1];
-            if (shown)
-            {
-                log.Width = _sidebarWidth;
-                log.MinWidth = LogMinWidth;
-                splitter.Width = new GridLength(SplitterWidth);
-            }
-            else
-            {
-                if (log.Width.Value > 0) _sidebarWidth = log.Width;
-                log.MinWidth = 0;
-                log.Width = new GridLength(0);
-                splitter.Width = new GridLength(0);
-            }
-        }
+    private void OnMaximize(object? sender, RoutedEventArgs e) =>
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
-        // ---- the window's buttons ------------------------------------------------------------------------------------
+    private void OnClose(object? sender, RoutedEventArgs e) => Close();
 
-        private void OnMinimize(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    // Segoe MDL2 Assets, the icon font of the caption buttons: ChromeRestore and ChromeMaximize (private-use code points,
+    // so they are written as escapes, not as characters no editor shows).
+    private const string RestoreGlyph = "\uE923", MaximizeGlyph = "\uE922";
 
-        private void OnMaximize(object? sender, RoutedEventArgs e) =>
-            WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    /// <summary>The maximize button shows restore, and says so, while the window is maximized.</summary>
+    private void UpdateMaximizeButton()
+    {
+        bool maximized = WindowState == WindowState.Maximized;
+        MaximizeButton.Content = maximized ? RestoreGlyph : MaximizeGlyph;
+        ToolTip.SetTip(MaximizeButton, maximized ? "Restore" : "Maximize");
+    }
 
-        private void OnClose(object? sender, RoutedEventArgs e) => Close();
+    // ---- drag and drop -------------------------------------------------------------------------------------------
 
-        // Segoe MDL2 Assets, the icon font of the caption buttons: ChromeRestore and ChromeMaximize (private-use code points,
-        // so they are written as escapes, not as characters no editor shows).
-        private const string RestoreGlyph = "\uE923", MaximizeGlyph = "\uE922";
+    /// <summary>The first recording or exported CSV among the files dragged, by suffix; null when there is none.</summary>
+    public static string? FirstSupported(IDataTransfer? data) =>
+        data?.TryGetFiles()?.Select(f => f.TryGetLocalPath()).FirstOrDefault(p => p is not null && RecentFiles.IsSupported(p));
 
-        /// <summary>The maximize button shows restore, and says so, while the window is maximized.</summary>
-        private void UpdateMaximizeButton()
-        {
-            bool maximized = WindowState == WindowState.Maximized;
-            MaximizeButton.Content = maximized ? RestoreGlyph : MaximizeGlyph;
-            ToolTip.SetTip(MaximizeButton, maximized ? "Restore" : "Maximize");
-        }
+    // A drop is Recent Files' open, so its rule is the command's: a drop is offered only when the command would take
+    // it (not while a run is busy, audit B11), and taken through the command.
+    private void OnDragOver(object? sender, DragEventArgs e) =>
+        e.DragEffects = FirstSupported(e.DataTransfer) is { } path && Vm is { } vm && vm.OpenRecentCommand.CanExecute(path)
+            ? DragDropEffects.Copy
+            : DragDropEffects.None;
 
-        // ---- drag and drop -------------------------------------------------------------------------------------------
-
-        /// <summary>The first recording or exported CSV among the files dragged, by suffix; null when there is none.</summary>
-        public static string? FirstSupported(IDataTransfer? data) =>
-            data?.TryGetFiles()?.Select(f => f.TryGetLocalPath()).FirstOrDefault(p => p is not null && RecentFiles.IsSupported(p));
-
-        // A drop is Recent Files' open, so its rule is the command's: a drop is offered only when the command would take
-        // it (not while a run is busy, audit B11), and taken through the command.
-        private void OnDragOver(object? sender, DragEventArgs e) =>
-            e.DragEffects = FirstSupported(e.DataTransfer) is { } path && Vm is { } vm && vm.OpenRecentCommand.CanExecute(path)
-                ? DragDropEffects.Copy
-                : DragDropEffects.None;
-
-        private async void OnDrop(object? sender, DragEventArgs e)
-        {
-            if (FirstSupported(e.DataTransfer) is not { } path || Vm is not { } vm || !vm.OpenRecentCommand.CanExecute(path)) return;
-            await vm.OpenRecentCommand.ExecuteAsync(path);
-        }
+    private async void OnDrop(object? sender, DragEventArgs e)
+    {
+        if (FirstSupported(e.DataTransfer) is not { } path || Vm is not { } vm || !vm.OpenRecentCommand.CanExecute(path)) return;
+        await vm.OpenRecentCommand.ExecuteAsync(path);
     }
 }
