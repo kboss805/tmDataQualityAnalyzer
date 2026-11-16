@@ -54,6 +54,21 @@ are not repeated here. The managed and app halves of C4 and X5 are left for the 
   **369** passed / 1 skipped, app **663** passed / 34 not run. Soak 34 of 34 identical to v2.14.2's; throughput gate
   passed. Baselines moved: native 495 to 498, managed 366 to 369.
 
+#### What #278 left: two script headers and the README's Contributing section
+
+Docs and comments only; no code, test or project file changed. `eng/check_release_consistency.ps1`'s header said four files
+carry the version as prose and left out `UserManual.html`, which the script has checked since the full manual was added (five
+files, and it also checks the changelog's section); `eng/embed_manual_images.py`'s docstring said it embeds into
+`assets/usermanual.html` and left out `UserManual.html`, the second manual it writes. The README's `Contributing` was `[TBD]`;
+it now points at the build section and `docs/claude.md` and states what a change needs (tests, a changelog entry, no edit of
+`third_party/irig106/**`, GPL v3). It says nothing about who may contribute or how a pull request is reviewed: that is the
+owner's policy to add.
+
+Not changed, and why: the `1920x1080` line in `deploy/RELEASENOTES.txt` is written when the next release is cut (a section for
+a version the source does not yet name fails `check_release_consistency.ps1`); the series colours (`PlotColors`, whose
+lighter shades `PlotTests` holds to the 84 v2.14.2 printed, and whose yellow and its shades are faint on the light theme's
+white) are a design choice, not a defect.
+
 #### The analyzers and the editor settings, in the files that build (audit A2, A3)
 
 Found by the whole-tree cleanup audit; each count was re-measured on the tree as of #298 (the audit's 414 findings

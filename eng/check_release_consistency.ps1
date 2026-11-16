@@ -6,12 +6,16 @@
 #
 # The version has ONE source of truth (AppVersion in src/core/include/constants.h), and the
 # build derives the assemblies' versions from it (eng/AppVersion.props). But
-# four files carry the version as PROSE, and nothing derives those:
+# these files carry the version as PROSE, and nothing derives those:
 #
 #   .claude/CLAUDE.md          "Current version: X.Y.Z"   (sat at 2.7.0 for 2 releases)
 #   docs/claude.md             "Project Version: X.Y.Z"
-#   assets/usermanual.html  subtitle + footer          (read 2.7.0 at v2.9.0)
+#   assets/usermanual.html     subtitle + footer          (read 2.7.0 at v2.9.0)
+#   UserManual.html            subtitle + footer          (the full manual, built beside the base one)
 #   deploy/RELEASENOTES.txt    top section header
+#
+# It also checks that docs/changelog.md has a section for the version (and, with
+# -ReleaseMode, no Unreleased one).
 #
 # Every one of those has shipped stale at least once. The cut-release skill says to
 # grep for the old version by hand, which works exactly as long as someone remembers
