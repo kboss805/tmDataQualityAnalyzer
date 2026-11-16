@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using TmDq.App.Models.Processing;
 using TmDq.App.Models.Settings;
 using TmDq.App.ViewModels;
+using TmDq.App.ViewModels.Dialogs;
 using TmDq.Core;
 using TmDq.Core.Tests;
 using Xunit;

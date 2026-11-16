@@ -1,8 +1,8 @@
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using TmDq.App.Services;
-using TmDq.App.ViewModels;
-using TmDq.App.Views;
+using TmDq.App.ViewModels.Dialogs;
+using TmDq.App.Views.Dialogs;
 
 namespace TmDq.App.Platform
 {

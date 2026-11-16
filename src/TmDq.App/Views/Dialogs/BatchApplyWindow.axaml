@@ -1,0 +1,48 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:TmDq.App.ViewModels.Dialogs"
+        xmlns:c="using:TmDq.App.Views.Controls"
+        xmlns:cv="using:TmDq.App.Views.Converters"
+        x:Class="TmDq.App.Views.Dialogs.BatchApplyWindow"
+        x:DataType="vm:BatchApplyViewModel"
+        Title="{x:Static vm:BatchApplyViewModel.Title}"
+        Width="600" SizeToContent="Height" MinWidth="480"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner">
+  <!-- As v2.x laid it out: how many match, a row per file, the output options, then Process and Cancel. -->
+  <DockPanel>
+    <c:DialogFooter DockPanel.Dock="Bottom">
+      <Button x:Name="ProcessButton" Content="Process" IsDefault="True" Command="{Binding ProcessCommand}" />
+      <Button x:Name="CancelButton" Content="Cancel" IsCancel="True" Command="{Binding CancelCommand}" />
+    </c:DialogFooter>
+  <StackPanel Margin="{DynamicResource ContentDialogPadding}" Spacing="12">
+    <TextBlock x:Name="Summary" Text="{Binding Summary}" TextWrapping="Wrap" />
+    <Border BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="{DynamicResource ControlCornerRadius}" MinHeight="120" MaxHeight="260">
+      <ScrollViewer>
+        <ItemsControl x:Name="Files" ItemsSource="{Binding Rows}" Margin="6,4">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:BatchFileRow">
+              <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2" Background="Transparent" ToolTip.Tip="{Binding ToolTip}">
+                <TextBlock Text="{Binding Glyph}" cv:StatusPaint.Level="{Binding Check.Ok, Converter={x:Static cv:StatusPaint.Match}}" FontWeight="Bold" />
+                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Border>
+    <HeaderedContentControl Header="Output">
+      <StackPanel Spacing="6" Margin="0,4,0,0">
+        <CheckBox x:Name="ExportBox" IsChecked="{Binding ExportPerFile}"
+                  Content="Also export a CSV + plot images (Frame Sync Lock and Missed Frames) per file" />
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+          <TextBlock Text="Output folder:" VerticalAlignment="Center" />
+          <TextBox x:Name="FolderBox" Grid.Column="1" Text="{Binding OutputFolder}" IsEnabled="{Binding ExportPerFile}" />
+          <Button x:Name="BrowseButton" Grid.Column="2" Content="Browse..." Command="{Binding BrowseCommand}" />
+        </Grid>
+      </StackPanel>
+    </HeaderedContentControl>
+    <CheckBox x:Name="ReuseBox" IsChecked="{Binding ReuseAppearance}" Content="Reuse the template's saved series names and colors" />
+  </StackPanel>
+  </DockPanel>
+</Window>

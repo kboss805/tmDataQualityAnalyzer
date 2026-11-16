@@ -1,4 +1,4 @@
-using TmDq.App.ViewModels;
+using TmDq.App.ViewModels.Dialogs;
 
 namespace TmDq.App.Services
 {

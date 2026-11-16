@@ -7,6 +7,7 @@ using TmDq.App.Models.Logging;
 using TmDq.App.Models.Processing;
 using TmDq.App.Models.Streams;
 using TmDq.App.ViewModels;
+using TmDq.App.ViewModels.Dialogs;
 using TmDq.App.ViewModels.Plot;
 using TmDq.Core;
 using TmDq.Core.Tests;

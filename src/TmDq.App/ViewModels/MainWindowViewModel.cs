@@ -14,6 +14,7 @@ using TmDq.App.Models.Processing;
 using TmDq.App.Models.Settings;
 using TmDq.App.Models.Templates;
 using TmDq.App.Services;
+using TmDq.App.ViewModels.Dialogs;
 using TmDq.App.ViewModels.Plot;
 using TmDq.Core;
 

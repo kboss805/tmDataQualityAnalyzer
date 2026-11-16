@@ -7,6 +7,8 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using TmDq.App.ViewModels;
 using TmDq.App.Views;
+using TmDq.App.Views.Controls;
+using TmDq.App.Views.Plot;
 using Xunit;
 
 namespace TmDq.App.Tests

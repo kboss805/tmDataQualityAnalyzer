@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using TmDq.App.Views;
+using TmDq.App.Views.Plot;
 
 namespace TmDq.App.Tests
 {

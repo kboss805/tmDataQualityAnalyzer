@@ -6,6 +6,7 @@ using Avalonia.Platform.Storage;
 using TmDq.App.Models.Help;
 using TmDq.App.Services;
 using TmDq.App.Views;
+using TmDq.App.Views.Dialogs;
 
 namespace TmDq.App.Platform
 {

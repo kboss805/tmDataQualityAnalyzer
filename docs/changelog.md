@@ -12,6 +12,37 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The application's views and view models in folders that mirror each other (layout plan PR 2)
+
+The second of the source-layout PRs: a move, and nothing else. `Views/` held 29 files of five kinds side by side
+(XAML windows, windows built in code, the plot's controls, shared controls, and what paints a status), and
+`ViewModels/` held the dialogs' view models beside the main window's.
+
+- **`Views/`:** `MainWindow` stays at the root. `Dialogs/` holds the dialogs' windows, the six XAML ones and the three
+  built in code (`ChoiceWindow`, `PromptWindows`, `ReportWindow`). `Plot/` holds `PlotView`, `PlotChart`, `PlotLegend`,
+  `PlotImageExport`, `ChartPalette` and `CustomizeViewWindow`. `Controls/` holds the controls the windows share
+  (`LogView`, `DialogFooter`), and `Converters/` what turns a view model's state into paint (`StatusPaint`,
+  `StatusBrushes`).
+- **`ViewModels/`:** the main window's view model and its parts stay at the root (`MainWindowServices`,
+  `ShellPreferences`, `SessionExport`, `BatchRunner`), with `MenuChoice`, which both menus use. The six dialogs' view
+  models and `DialogConfigurator` go to `Dialogs/`; `Plot/` is as it was. Each folder of `Views/` now mirrors the one
+  of `ViewModels/` it shows. (The plan had a `ViewModels/Main/`; the root mirrors `MainWindow` at the root of `Views/`
+  with fewer moves.)
+- **Each folder its own namespace** (`TmDq.App.Views.Dialogs`, `.Plot`, `.Controls`, `.Converters`,
+  `TmDq.App.ViewModels.Dialogs`), so a XAML file's prefixes name what they hold: `c:` for the shared controls, `cv:`
+  for the converters, `pv:` for the plot's views. All are under `Views` or `ViewModels`, so `LayerTests` holds them
+  without a change.
+- The two kept mutant lists that name a moved file (`plot-draft.json`, `plot-draft-keys.json`), the add-stream-setting
+  skill and `docs/claude.md` (File Organization, the run) follow the files; the changelog and `docs/records/` keep the
+  paths of their day.
+- **Checked.** A move only: every changed line but the docs' is a `using`, a namespace, an `x:Class`, an `xmlns`, a
+  `cref` or a XAML prefix, and git sees the 34 files as renames. Mutation check, `eng\mutate.ps1`, the kept
+  `plot-draft-keys.json` (its file moved): 7 of 7 **CAUGHT**, as recorded. Its first run stopped at the baseline on
+  `PlotDraftTests.AHeavyPlotIsDraftedWhileTheWheelMovesItAndDrawnInFullWhenItSettles`, which passed in the full suite
+  and on the rerun: the wheel-settle test is still timing-sensitive. Managed **376** passed / 1 skipped, app **670**
+  passed / 34 not run, zero warnings, and no manual figure changed; native not affected (no native change). No baseline
+  moved.
+
 #### Each random draw in a native test on its own statement, so Debug generates what Release does
 
 In a Debug build, `csvseries: the clock stamp is what v2.14 wrote, for every generated time` failed (three

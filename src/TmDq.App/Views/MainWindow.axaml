@@ -1,7 +1,9 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:TmDq.App.ViewModels"
-        xmlns:views="using:TmDq.App.Views"
+        xmlns:c="using:TmDq.App.Views.Controls"
+        xmlns:cv="using:TmDq.App.Views.Converters"
+        xmlns:pv="using:TmDq.App.Views.Plot"
         xmlns:chrome="using:Avalonia.Controls.Chrome"
         x:Class="TmDq.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
@@ -146,8 +148,8 @@
             BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
       <Grid ColumnDefinitions="Auto,*" Margin="12,0" VerticalAlignment="Center">
         <TextBlock x:Name="StatusMark" x:FieldModifier="public" Grid.Column="0" Margin="0,0,6,0" IsVisible="{Binding HasStatusMark}"
-                   Text="{Binding StatusLevel, Converter={x:Static views:StatusPaint.Mark}}"
-                   views:StatusPaint.Level="{Binding StatusLevel, Converter={x:Static views:StatusPaint.OfLog}}"
+                   Text="{Binding StatusLevel, Converter={x:Static cv:StatusPaint.Mark}}"
+                   cv:StatusPaint.Level="{Binding StatusLevel, Converter={x:Static cv:StatusPaint.OfLog}}"
                    FontSize="{DynamicResource CaptionTextBlockFontSize}" />
         <TextBlock x:Name="StatusText" x:FieldModifier="public" Grid.Column="1" Text="{Binding Status}" TextTrimming="CharacterEllipsis"
                    ToolTip.Tip="{Binding Status}" FontSize="{DynamicResource CaptionTextBlockFontSize}" />
@@ -161,10 +163,10 @@
       </Grid.ColumnDefinitions>
       <Border x:Name="LogPanel" Grid.Column="0" Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
               IsVisible="{Binding SidebarVisible}">
-        <views:LogView x:Name="Log" Entries="{Binding Log.Entries}" />
+        <c:LogView x:Name="Log" Entries="{Binding Log.Entries}" />
       </Border>
       <Border x:Name="PlotPanel" x:FieldModifier="public" Grid.Column="2" Background="{DynamicResource LayerFillColorDefaultBrush}">
-        <views:PlotView x:Name="PlotView" Plot="{Binding Plot}" />
+        <pv:PlotView x:Name="PlotView" Plot="{Binding Plot}" />
       </Border>
       <GridSplitter x:Name="Splitter" x:FieldModifier="public" Grid.Column="1" ResizeDirection="Columns" Margin="-3,0"
                     IsVisible="{Binding SidebarVisible}" />
