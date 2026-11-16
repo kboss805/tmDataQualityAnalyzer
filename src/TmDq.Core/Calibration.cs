@@ -147,3 +147,12 @@ public static unsafe class StepFile
         return Text.Snprintf((buffer, capacity) => Native.tmdq_step_config_initial_path((byte*)root, (byte*)wanted, (byte*)buffer, capacity));
     }
 }
+
+/// <summary>One measured calibration point: a raw count average and the true dB it stands for.</summary>
+public sealed record CalibrationPoint(double RawAvg, double TrueDb);
+
+/// <summary>A non-linear calibration profile for one receiver word.</summary>
+/// <param name="WordIndex">Zero-based word within the minor frame.</param>
+/// <param name="Valid">False means the profile is ignored and the word is calibrated linearly.</param>
+/// <param name="Points">Sorted ascending by <see cref="CalibrationPoint.RawAvg"/>.</param>
+public sealed record CalibrationProfile(int WordIndex, bool Valid, IReadOnlyList<CalibrationPoint> Points);

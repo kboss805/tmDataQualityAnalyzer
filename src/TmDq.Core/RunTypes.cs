@@ -21,15 +21,6 @@ public enum SamplePeriod
     TenMilliseconds = 2,
 }
 
-/// <summary>One measured calibration point: a raw count average and the true dB it stands for.</summary>
-public sealed record CalibrationPoint(double RawAvg, double TrueDb);
-
-/// <summary>A non-linear calibration profile for one receiver word.</summary>
-/// <param name="WordIndex">Zero-based word within the minor frame.</param>
-/// <param name="Valid">False means the profile is ignored and the word is calibrated linearly.</param>
-/// <param name="Points">Sorted ascending by <see cref="CalibrationPoint.RawAvg"/>.</param>
-public sealed record CalibrationProfile(int WordIndex, bool Valid, IReadOnlyList<CalibrationPoint> Points);
-
 /// <summary>One stream's settings, as the user gives them. The defaults are the application's.</summary>
 public sealed record StreamConfig
 {

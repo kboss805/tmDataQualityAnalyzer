@@ -98,26 +98,21 @@ internal sealed unsafe class ObserverBridge : IDisposable
     }
 
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
-        Justification = "The wrapper takes ownership of the native result and passes it to the observer, which disposes it (or the finalizer does); it is freed here only when the wrapper could not be made.")]
+        Justification = "The wrapper takes ownership of the native result and passes it to the observer, which disposes it (or its handle's finalizer does); a wrapper that could not be made released the result itself.")]
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
     private static void OnStreamDone(void* user, void* result)
     {
         Context? c = From(user);
         // Ownership of the native result has passed to this callback: it is wrapped first, so it is released
-        // whatever happens next.
-        StreamResult? wrapped = null;
+        // whatever happens next (the wrapper releases it itself if it cannot be made).
         try
         {
-            wrapped = new StreamResult((IntPtr)result);
+            var wrapped = new StreamResult((IntPtr)result);
             c?.Observer?.OnStreamCompleted(wrapped);
         }
         catch (Exception e)
         {
-            c?.Remember(e);
-            if (wrapped is null)
-            {
-                Native.tmdq_stream_result_free((IntPtr)result);
-            }
+            c?.Remember(e);   // a result that could not be wrapped was released by its constructor
         }
     }
 

@@ -46,7 +46,7 @@ themselves). Use the **PowerShell** tool.
   project is an executable; the build merges a UTF-8 code-page manifest into it with `mt.exe`, because the vendored
   irig106 opens files with a narrow `open()` that reads the active code page. The .NET projects find `mt.exe` in the
   Windows SDK themselves (`eng\WindowsSdkTools.targets`), so a plain `dotnet build` (VS Code's) needs no developer
-  prompt. Green baseline **376 passed / 0
+  prompt. Green baseline **380 passed / 0
   failed / 1 skipped** (the skip is the probe `IsolatedLoadTests` runs in a child process). CI runs it.
 - **The app:** `src/TmDq.App` (Avalonia 12, CommunityToolkit.Mvvm) and `tests/TmDq.App.Tests` (xunit v3 on
   `Avalonia.Headless.XUnit`), both in `tmdq.sln`, which VS Code opens by default (`dotnet.defaultSolution`).

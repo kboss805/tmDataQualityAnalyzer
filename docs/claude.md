@@ -558,8 +558,15 @@ profile, so a batch processes with the linear calibration.
 The binding of every ABI function: `Ch10File` (a recording's channels), `ProcessingRun` and `StreamResult` (a run and
 what it produced, with progress, log and cancel), `CalibrationRun` and `StepFile`, the file formats (`FrameSyncFile`,
 `ReceiverParamsFile`, `CsvFile`, `TemplateMatcher`, `ClockTime`), series construction (`SeriesSet`, `TimeBase`,
-`ImportedStreams`) and `ChartGeometry` with `SeriesIndex` (a series' envelope index, revision 3). `Native` holds the C ABI's P/Invoke declarations and enums, `Arena` the native memory for one call's arguments, and
-`ObserverBridge` the callbacks a native run calls back into (an exception never unwinds a native thread). `Library` loads `tmdq_core.dll` (the app passes the one beside it, or
+`ImportedStreams`) and `ChartGeometry` with `SeriesIndex` (a series' envelope index, revision 3). The public types are in
+the folder's root and the file formats in `Formats/` (a type to a file); what touches the DLL is in `Interop/`: `Native`
+(the C ABI's P/Invoke declarations) and `NativeStructs` (its structs and the struct ids), `Arena` the native memory for one
+call's arguments, `Text` the strings that cross, `ObserverBridge` the callbacks a native run calls back into (an exception
+never unwinds a native thread), and `Handles`: a `SafeHandle` for each kind of native handle (run, calibration run, stream
+result, series set, series index, time base), so one kind cannot be passed for another, a handle is released exactly once,
+when it is disposed and the last call using it has returned, and a call on a released one throws
+`ObjectDisposedException` rather than reaching a freed pointer. A run's handle owns its `ObserverBridge`, freed with it.
+`Library` loads `tmdq_core.dll` (the app passes the one beside it, or
 `TMDQ_CORE_DLL`: `NativeCore`) and refuses one whose ABI version or revision it does not know.
 
 #### The native core (`src/core/include/`, `src/core/src/`)
@@ -967,7 +974,8 @@ platform folder, both .NET test hosts merging the shared UTF-8 manifest, the wor
 the committed recordings against numbers v2.14.2 produced, every setting reaching the job, failures, observers, cancel
 and lifetimes (`RunTests`); calibration against the core's extractor (`CalibrationTests`); the file formats byte for
 byte against the core (`FormatsTests`); loading the DLL (`LibraryTests`, `IsolatedLoadTests` in a child process, the
-suite's one skip); `ChartGeometryTests`, `ReceiverParamsTests`, `SeriesTests`, `ArenaTests`; and `TempFilesTests`, the
+suite's one skip); `ChartGeometryTests`, `ReceiverParamsTests`, `SeriesTests`, `ArenaTests`, `HandleTests` (a handle released once, when it is disposed and the last call using it has
+returned; a Dispose while another thread waits on a run); and `TempFilesTests`, the
 helper every test cleans up and reads back through, which waits out a virus scanner's moment's hold.
 
 **The application** (`tests/TmDq.App.Tests`, on the headless platform with Skia drawing):

@@ -12,6 +12,52 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### TmDq.Core: the native plumbing in Interop/, a type to a file, and a SafeHandle for each kind of handle (layout plan PR 5; audit S8)
+
+The fifth of the source-layout PRs: the binding's files arranged the way the application's now are, and the one change
+of behaviour the audit asked of it, handles that cannot be used while they are freed.
+
+- **Moves.** What touches the DLL is in `Interop/`: `Native` (the P/Invoke declarations) and `NativeStructs` (its
+  structs and
+  the struct ids), `Arena`, `Text` (which lived in `Arena.cs`) and `ObserverBridge`. `Formats.cs` held thirteen types
+  for five
+  unrelated formats and is `Formats/` now, a file to a type; `MetricType` (used by the series and the plot, not only by
+  the formats) and the public `Status` (six lines under a comment saying everything in `Native.cs` is internal) are
+  files of the root, and `CalibrationPoint` and `CalibrationProfile` moved from `RunTypes.cs` to `Calibration.cs`. The
+  namespace is still `TmDq.Core`, so no caller changed.
+- **S8: a SafeHandle for each kind of native handle** (`Interop/Handles.cs`: run, calibration run, stream result, series
+  set, series index, time base). The wrappers kept a raw `IntPtr`, three ways of behaving once disposed, a finalizer
+  that
+  one of them (`StreamResult`) forgot to suppress, and a `Cancel` that read the handle and then called native, so a
+  `Cancel` racing a `Dispose` could pass a freed handle although the documentation said "safe from any thread". Now the
+  P/Invoke declarations take the typed handle (the source-generated marshaller holds it open for the length of the call,
+  so a handle cannot be freed under a call, nor one kind passed for another), only the free functions, which run in
+  `ReleaseHandle`, take the raw value, and there is no finalizer on the wrappers (the handle's is the one). A call on a
+  released handle throws `ObjectDisposedException`, which `Cancel`, `Wait` and `IsRunning` turn into "nothing is
+  running", as
+  they did. A run's or an extraction's handle owns its `ObserverBridge` and frees it after the native free, which
+  cancels
+  and waits, so the callbacks' context outlives every native thread that could use it.
+- **One behaviour moves.** `Dispose` on a run or an extraction now cancels first. A `Wait` on another thread holds the
+  handle open, and without the cancel the release would wait for the run to end by itself; with it, the wait returns at
+  once and the release follows. With no other thread waiting nothing differs: `Dispose` still cancels, waits and frees
+  before it returns, so an observer can be torn down straight after.
+- **Not done.** The list-to-arena copy (three times), the pointer-array allocation (three times) and "negative means
+  BadArgument" (four times) that S8 also lists are small repeats and are left; a handle's transient kinds (a parsed CSV,
+  a geometry, a step list) are still freed in `try`/`finally`, being used within one call.
+- **Checked.** Mutation check, `eng\mutate.ps1`, managed: `eng/mutants/safe-handles.json`, 12 mutants over the handles'
+  lifetime, and the plot-index list (`eng/mutants/plot-index-binding.json`, repathed to the new handle's name) as a
+  regression check. Safe handles: 11 **CAUGHT** and 1 **SURVIVED**, which was expected: a time base never freed leaks a
+  few bytes that nothing can see. Caught: an index, a run, an extraction, a result and a series set never freed (the
+  first by `HandleTests`, memory measured with disposed and with abandoned indexes; the run and extraction by their
+  Dispose tests; the result and series set by the 30-result memory test), no handle owned, Dispose that does not cancel
+  first while another thread waits on the run (`HandleTests`), Cancel and Wait after Dispose throwing, a released run
+  reading as running, and a disposed result still read. Three mutants of mine were wrong and rewritten (a catch of
+  `InvalidOperationException` is `ObjectDisposedException`'s base, so it changed nothing; and one the analyzer refused
+  to compile). The four plot-index mutants are **CAUGHT**. The moves were checked by a build with zero warnings and the
+  suite unchanged. Managed **380** passed / 1 skipped, zero warnings; app and native not affected (`clocktime.h` changed
+  in a comment only). Baseline moved: managed 376 to 380 (`HandleTests`).
+
 #### File-scoped namespaces everywhere, and view models that write their own properties (layout plan PR 4; audit C6)
 
 The fourth of the source-layout PRs: the two style rules the audit asked for, after the moves so that git still sees

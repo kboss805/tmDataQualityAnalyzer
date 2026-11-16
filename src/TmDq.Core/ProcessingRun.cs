@@ -1,5 +1,4 @@
 using System;
-using System.Threading;
 
 namespace TmDq.Core;
 
@@ -10,12 +9,13 @@ namespace TmDq.Core;
 /// </summary>
 public sealed unsafe class ProcessingRun : IDisposable
 {
-    private IntPtr _handle;
+    private readonly RunHandle _handle;
     private readonly ObserverBridge _bridge;
 
-    private ProcessingRun(ObserverBridge bridge)
+    private ProcessingRun(ObserverBridge bridge, RunHandle handle)
     {
         _bridge = bridge;
+        _handle = handle;
     }
 
     /// <summary>
@@ -32,27 +32,41 @@ public sealed unsafe class ProcessingRun : IDisposable
         Library.RequireLoaded();
         ArgumentNullException.ThrowIfNull(request);
 
-        var run = new ProcessingRun(new ObserverBridge(observer));
+        var bridge = new ObserverBridge(observer);
         try
         {
             using var arena = new Arena();
             RunRequestNative native = ToNative(request, arena);
 
             CallbacksNative callbacks;
-            CallbacksNative* callbacksPointer = run._bridge.Fill(&callbacks, observer is not null);
+            CallbacksNative* callbacksPointer = bridge.Fill(&callbacks, observer is not null);
 
-            Library.Check(Native.tmdq_run_start(&native, callbacksPointer, out run._handle));
-            return run;
+            Library.Check(Native.tmdq_run_start(&native, callbacksPointer, out RunHandle handle));
+            handle.Bridge = bridge;   // freed with the run, once no native thread can call back
+            return new ProcessingRun(bridge, handle);
         }
         catch
         {
-            run._bridge.Dispose();
+            bridge.Dispose();
             throw;
         }
     }
 
     /// <summary>True from a successful start until just before the observer is told the run has finished.</summary>
-    public bool IsRunning => _handle != IntPtr.Zero && Native.tmdq_run_running(_handle) != 0;
+    public bool IsRunning
+    {
+        get
+        {
+            try
+            {
+                return Native.tmdq_run_running(_handle) != 0;
+            }
+            catch (ObjectDisposedException)
+            {
+                return false;   // released
+            }
+        }
+    }
 
     /// <summary>The first exception an observer method threw, or null. It was caught, not allowed to unwind the native thread.</summary>
     public Exception? ObserverException => _bridge.ObserverException;
@@ -60,36 +74,38 @@ public sealed unsafe class ProcessingRun : IDisposable
     /// <summary>Asks the run to stop; it ends with <see cref="IRunObserver.OnFinished"/>(false). Safe from any thread.</summary>
     public void Cancel()
     {
-        IntPtr handle = _handle;
-        if (handle != IntPtr.Zero)
+        try
         {
-            Native.tmdq_run_cancel(handle);
+            Native.tmdq_run_cancel(_handle);
+        }
+        catch (ObjectDisposedException)
+        {
+            // released: nothing is running
         }
     }
 
     /// <summary>Blocks until every thread of the run has ended, so every observer call has returned.</summary>
     public void Wait()
     {
-        IntPtr handle = _handle;
-        if (handle != IntPtr.Zero)
+        try
         {
-            Native.tmdq_run_wait(handle);
+            Native.tmdq_run_wait(_handle);
+        }
+        catch (ObjectDisposedException)
+        {
+            // released: every thread has ended
         }
     }
 
-    /// <summary>Cancels a run still in flight, waits for it, and releases it. Safe to call twice.</summary>
+    /// <summary>
+    /// Cancels a run still in flight, waits for it, and releases it. Safe to call twice. A <see cref="Wait"/> on another
+    /// thread keeps the run open until it returns, so the run is cancelled first.
+    /// </summary>
     public void Dispose()
     {
-        IntPtr handle = Interlocked.Exchange(ref _handle, IntPtr.Zero);
-        if (handle != IntPtr.Zero)
-        {
-            Native.tmdq_run_free(handle);   // cancels and waits, so no native thread can still hold the context
-            _bridge.Dispose();
-        }
-        GC.SuppressFinalize(this);
+        Cancel();
+        _handle.Dispose();
     }
-
-    ~ProcessingRun() => Dispose();
 
     private static RunRequestNative ToNative(RunRequest request, Arena arena)
     {
