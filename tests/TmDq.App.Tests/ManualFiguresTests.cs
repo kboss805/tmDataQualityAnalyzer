@@ -14,6 +14,7 @@ using Avalonia.Platform;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using SkiaSharp;
+using TmDq.App.Models.Export;
 using TmDq.App.Models.Processing;
 using TmDq.App.Models.Streams;
 using TmDq.App.Models.Templates;

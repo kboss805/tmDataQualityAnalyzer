@@ -15,11 +15,10 @@ using TmDq.App.Models.Processing;
 using TmDq.App.Models.Streams;
 using TmDq.App.Models.Templates;
 using TmDq.App.Platform;
-using TmDq.App.Services;
 using TmDq.App.ViewModels;
 using TmDq.App.Views;
-using TmDq.Core.Tests;
 using TmDq.Core;
+using TmDq.Core.Tests;
 using Xunit;
 
 namespace TmDq.App.Tests

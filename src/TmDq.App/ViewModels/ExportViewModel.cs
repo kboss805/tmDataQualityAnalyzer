@@ -3,18 +3,11 @@ using System.IO;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using TmDq.App.Models.Export;
 using TmDq.App.Services;
 
 namespace TmDq.App.ViewModels
 {
-    /// <summary>What an export writes: the plot as an image, its data as CSV, or the log as text.</summary>
-    public enum ExportKind
-    {
-        Image,
-        Data,
-        Log,
-    }
-
     /// <summary>
     /// The Export dialog's state (plan step 4.5; US6.0 to US6.2): three rows, the plot image (ticked by
     /// default), the data and the log, each a box and a path with Browse. A row's path and Browse are enabled only while

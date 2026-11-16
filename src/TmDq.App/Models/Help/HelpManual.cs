@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace TmDq.App.Services
+namespace TmDq.App.Models.Help
 {
     /// <summary>
     /// Help &gt; User Manual, as v2.x opened it: the full illustrated manual when the installer put it beside

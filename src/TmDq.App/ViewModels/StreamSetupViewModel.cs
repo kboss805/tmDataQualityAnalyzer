@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using TmDq.App.Models.Processing;
 using TmDq.App.Models.Streams;
 using TmDq.App.Services;
 using TmDq.Core;

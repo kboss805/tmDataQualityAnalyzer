@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace TmDq.App.ViewModels.Plot
+namespace TmDq.App.Models.Export
 {
     /// <summary>An image format the plot is exported in.</summary>
     public enum ImageFormat

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 using TmDq.App.ViewModels;
 using Xunit;
 
@@ -45,6 +46,18 @@ namespace TmDq.App.Tests
             string[] wrong = Breaches(t => InLayer(t, "ViewModels") || InLayer(t, "Services"),
                                       r => InLayer(r, "Views") || InLayer(r, "Platform") || ForbiddenAvalonia(r));
             Assert.True(wrong.Length == 0, "a view model or service reaches a view or Avalonia:\n" + string.Join("\n", wrong));
+        }
+
+        /// <summary><c>Services</c> is the interfaces a view model asks the user through, and nothing else: an implementation
+        /// belongs in <c>Platform</c>, a rule, a file or a run of the core in <c>Models</c>, and what builds a view model in
+        /// <c>ViewModels</c> (docs/claude.md, File Organization).</summary>
+        [Fact]
+        public void ServicesHoldOnlyInterfaces()
+        {
+            string[] wrong = AppAssembly.GetTypes()
+                .Where(t => t.DeclaringType is null && InLayer(t, "Services") && !t.IsInterface && !t.IsDefined(typeof(CompilerGeneratedAttribute), false))
+                .Select(t => t.FullName!).Order(StringComparer.Ordinal).ToArray();
+            Assert.True(wrong.Length == 0, "Services holds a type that is not an interface:\n" + string.Join("\n", wrong));
         }
 
         /// <summary>The reading can see: a view's base type, a type a method's code alone names (a platform picker's
