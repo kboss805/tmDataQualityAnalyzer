@@ -19,606 +19,605 @@ using TmDq.App.ViewModels.Plot;
 using TmDq.App.Views.Plot;
 using Xunit;
 
-namespace TmDq.App.Tests
+namespace TmDq.App.Tests;
+
+/// <summary>
+/// A large plot kept responsive: each long series' index in the core, and the draft a gesture paints on a heavy plot
+/// (an outline of each band without its fill, lines a device pixel wide) until it settles. The draft must still show
+/// a one-sample dropout, the full picture must come back when the gesture stops, a light plot is never drafted, and
+/// an export is never a draft.
+/// </summary>
+[Collection(NativeCoreCollection.Name)]
+public sealed class PlotDraftTests
 {
-    /// <summary>
-    /// A large plot kept responsive: each long series' index in the core, and the draft a gesture paints on a heavy plot
-    /// (an outline of each band without its fill, lines a device pixel wide) until it settles. The draft must still show
-    /// a one-sample dropout, the full picture must come back when the gesture stops, a light plot is never drafted, and
-    /// an export is never a draft.
-    /// </summary>
-    [Collection(NativeCoreCollection.Name)]
-    public sealed class PlotDraftTests
+    public PlotDraftTests() => NativeCore.EnsureLoaded();
+
+    private const int Samples = 100_000;      // 0.01 s apart: 1000 s, about 200 samples a pixel column
+    private const int DropoutAt = 61_234;     // one sample at 0 where the rest are 30 to 70
+
+    private sealed record Shown(PlotChart Chart, Window Window)
     {
-        public PlotDraftTests() => NativeCore.EnsureLoaded();
+        public Point At(double x, double y) => Frames.InWindow(Chart, Window).TopLeft + new Point(x, y);
 
-        private const int Samples = 100_000;      // 0.01 s apart: 1000 s, about 200 samples a pixel column
-        private const int DropoutAt = 61_234;     // one sample at 0 where the rest are 30 to 70
-
-        private sealed record Shown(PlotChart Chart, Window Window)
+        public Rect Area
         {
-            public Point At(double x, double y) => Frames.InWindow(Chart, Window).TopLeft + new Point(x, y);
-
-            public Rect Area
+            get
             {
-                get
-                {
-                    Rect c = Frames.InWindow(Chart, Window), a = Chart.PlotArea;
-                    return new Rect(c.X + a.X, c.Y + a.Y, a.Width, a.Height);
-                }
+                Rect c = Frames.InWindow(Chart, Window), a = Chart.PlotArea;
+                return new Rect(c.X + a.X, c.Y + a.Y, a.Width, a.Height);
             }
-
-            /// <summary>Renders the window (which is what makes the chart paint) and reads it.</summary>
-            public ILockedFramebuffer Frame() => Frames.Capture(Window).Lock();
         }
 
-        /// <summary>A dense noisy lock series with a single-sample dropout, and, when asked, more series like it.</summary>
-        private static PlotViewModel Dense(int series = 1)
+        /// <summary>Renders the window (which is what makes the chart paint) and reads it.</summary>
+        public ILockedFramebuffer Frame() => Frames.Capture(Window).Lock();
+    }
+
+    /// <summary>A dense noisy lock series with a single-sample dropout, and, when asked, more series like it.</summary>
+    private static PlotViewModel Dense(int series = 1)
+    {
+        var rng = new Random(17);
+        double[] xs = Enumerable.Range(0, Samples).Select(i => i * 0.01).ToArray();
+        var plot = new PlotViewModel();
+        plot.SetSeries(Enumerable.Range(0, series).Select(k =>
         {
-            var rng = new Random(17);
-            double[] xs = Enumerable.Range(0, Samples).Select(i => i * 0.01).ToArray();
-            var plot = new PlotViewModel();
-            plot.SetSeries(Enumerable.Range(0, series).Select(k =>
+            double[] ys = Enumerable.Range(0, Samples).Select(_ => 50.0 + rng.NextDouble() * 40.0 - 20.0).ToArray();
+            if (k == 0) ys[DropoutAt] = 0.0;
+            return PlotFixtures.Lock(k, "s" + k, k + 1, k, xs, ys);
+        }).ToList());
+        return plot;
+    }
+
+    private static Shown Show(PlotViewModel plot)
+    {
+        var chart = new PlotChart { Width = 600, Height = 400, Plot = plot };
+        var window = new Window { Content = chart, SizeToContent = SizeToContent.WidthAndHeight };
+        TextOptions.SetTextRenderingMode(window, TextRenderingMode.Antialias);
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        using (new Shown(chart, window).Frame()) { }   // the first, full, paint
+        return new Shown(chart, window);
+    }
+
+    /// <summary>Pixels of the first series' colour (blended with white, as its fill and antialiased edges are) in a
+    /// rectangle given in the plot area's own pixels.</summary>
+    private static int Ink(Shown s, PlotViewModel plot, Rect inArea)
+    {
+        Rect a = s.Area;
+        using ILockedFramebuffer fb = s.Frame();
+        return Frames.Near(fb, new Rect(a.X + inArea.X, a.Y + inArea.Y, inArea.Width, inArea.Height), plot.Series[0].Color);
+    }
+
+    private static int InkInArea(Shown s, PlotViewModel plot) => Ink(s, plot, new Rect(0, 0, s.Area.Width, s.Area.Height));
+
+    /// <summary>The first series' ink just above the bottom of the plot, in the dropout's column and away from it:
+    /// only the dropout reaches down there.</summary>
+    private static (int AtDropout, int Elsewhere) DropoutInk(Shown s, PlotViewModel plot)
+    {
+        double px = s.Chart.XToPixel(DropoutAt * 0.01) - s.Chart.PlotArea.X;
+        double h = s.Area.Height;
+        var low = new Rect(px - 3, h * 0.8, 6, h * 0.2 - 3);
+        int at = Ink(s, plot, low);
+        int elsewhere = Ink(s, plot, new Rect(5, h * 0.8, px - 15, h * 0.2 - 3)) +
+                        Ink(s, plot, new Rect(px + 10, h * 0.8, s.Area.Width - px - 15, h * 0.2 - 3));
+        return (at, elsewhere);
+    }
+
+    [AvaloniaFact]
+    public void AHeavyPlotIsDraftedWhileTheWheelMovesItAndDrawnInFullWhenItSettles()
+    {
+        PlotViewModel plot = Dense();
+        Shown s = Show(plot);
+        s.Chart.DraftThresholdMs = 0;   // every plot is heavy
+        int full = InkInArea(s, plot);
+        Assert.False(s.Chart.DraftShown);
+        double fullPaint = s.Chart.LastFullPaintMs;
+        Assert.True(fullPaint > 0);
+
+        s.Window.MouseWheel(s.At(s.Chart.PlotArea.Center.X, s.Chart.PlotArea.Center.Y), new Vector(0, 1), RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        int draft = InkInArea(s, plot);
+        Assert.True(s.Chart.DraftShown);
+        Assert.Equal(1, s.Chart.DraftLayerRenders);
+        // What a draft costs says nothing about whether the plot is heavy: only a full paint is timed.
+        Assert.Equal(fullPaint, s.Chart.LastFullPaintMs);
+        // No fill: the band's inside is background, its outline and the line hairlines.
+        Assert.True(draft * 3 < full, $"the draft drew {draft} pixels of the series, the full picture {full}");
+        // The dropout still reaches the bottom of the plot, and nothing else does.
+        (int atDropout, int elsewhere) = DropoutInk(s, plot);
+        Assert.True(atDropout >= 10, $"the dropout's column has {atDropout} pixels of the series near the bottom");
+        Assert.Equal(0, elsewhere);
+
+        // A cursor move is neither a step of the gesture nor a repaint.
+        int renders = s.Chart.DataLayerRenders;
+        s.Window.MouseMove(s.At(100, 100), RawInputModifiers.None);
+        using (s.Frame()) { }
+        Assert.Equal(renders, s.Chart.DataLayerRenders);
+
+        s.Chart.Settle();
+        int settled = InkInArea(s, plot);
+        Assert.False(s.Chart.DraftShown);
+        Assert.Equal(1, s.Chart.DraftLayerRenders);
+        Assert.True(settled * 2 > full * 1.5, $"settled the plot drew {settled} pixels of the series; before the gesture, {full}");
+        (atDropout, elsewhere) = DropoutInk(s, plot);
+        Assert.True(atDropout >= 10);
+        Assert.Equal(0, elsewhere);
+        s.Window.Close();
+    }
+
+    [AvaloniaFact]
+    public void ADragWhoseCaptureIsLostIsTheFullPictureAtOnce()
+    {
+        // Audit B5: a lost capture ends a pan as its release would, so the draft gives way to the full picture then,
+        // not after the refine delay.
+        PlotViewModel plot = Dense();
+        plot.SetXViewByUser(200, 600);
+        Shown s = Show(plot);
+        s.Chart.DraftThresholdMs = 0;
+        s.Chart.RefineDelay = TimeSpan.FromHours(1);   // only the end of the drag can settle it here
+        IPointer? pointer = null;
+        s.Chart.AddHandler(InputElement.PointerPressedEvent, (_, e) => pointer = e.Pointer, RoutingStrategies.Bubble, handledEventsToo: true);
+        Point grab = s.At(s.Chart.PlotArea.Center.X, s.Chart.PlotArea.Center.Y);
+        s.Window.MouseDown(grab, MouseButton.Left, RawInputModifiers.None);
+        s.Window.MouseMove(grab + new Point(-40, 0), RawInputModifiers.LeftMouseButton);
+        Dispatcher.UIThread.RunJobs();
+        using (s.Frame()) { }
+        Assert.True(s.Chart.DraftShown);
+
+        pointer!.Capture(null);
+        Dispatcher.UIThread.RunJobs();
+        using (s.Frame()) { }
+        Assert.False(s.Chart.DraftShown);
+        s.Window.Close();
+    }
+
+    [AvaloniaFact]
+    public void ADragIsDraftedAndItsReleaseIsTheFullPictureAtOnce()
+    {
+        PlotViewModel plot = Dense();
+        plot.SetXViewByUser(200, 600);
+        Shown s = Show(plot);
+        s.Chart.DraftThresholdMs = 0;
+        s.Chart.RefineDelay = TimeSpan.FromHours(1);   // only the release can settle it here
+        Point grab = s.At(s.Chart.PlotArea.Center.X, s.Chart.PlotArea.Center.Y);
+        s.Window.MouseDown(grab, MouseButton.Left, RawInputModifiers.None);
+        s.Window.MouseMove(grab + new Point(-40, 0), RawInputModifiers.LeftMouseButton);
+        Dispatcher.UIThread.RunJobs();
+        using (s.Frame()) { }
+        Assert.True(plot.XViewMin > 200, "the drag moved the window");
+        Assert.True(s.Chart.DraftShown);
+        s.Window.MouseMove(grab + new Point(-80, 0), RawInputModifiers.LeftMouseButton);
+        using (s.Frame()) { }
+        Assert.True(s.Chart.DraftShown);
+        Assert.Equal(2, s.Chart.DraftLayerRenders);
+
+        s.Window.MouseUp(grab + new Point(-80, 0), MouseButton.Left, RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        using (s.Frame()) { }
+        Assert.False(s.Chart.DraftShown);
+        Assert.Equal(2, s.Chart.DraftLayerRenders);
+        s.Window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheWheelSettlesOnItsOwnAfterTheRefineDelay()
+    {
+        PlotViewModel plot = Dense();
+        Shown s = Show(plot);
+        s.Chart.DraftThresholdMs = 0;
+        s.Chart.RefineDelay = TimeSpan.FromMilliseconds(100);
+        Assert.Equal(TimeSpan.FromMilliseconds(150), PlotChart.DefaultRefineDelay);
+        // The wait starts in the wheel's handler, so the clock starts before it: started after the first frame, it
+        // missed however long that frame took (about 12 ms on a CI runner). And the wait is a Task.Delay, whose timer
+        // runs on Windows' coarse tick (15.6 ms) and can end up to a tick early (a 30 ms delay was seen to end at 24 ms
+        // on a runner), so the bound leaves a tick and more below the delay.
+        var clock = Stopwatch.StartNew();
+        s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        using (s.Frame()) { }
+        Assert.True(s.Chart.DraftShown);
+        while (s.Chart.DraftShown && clock.Elapsed < TimeSpan.FromSeconds(5))
+        {
+            Thread.Sleep(10);
+            Dispatcher.UIThread.RunJobs();
+            using (s.Frame()) { }
+        }
+        Assert.False(s.Chart.DraftShown, "the full picture did not come back after the gesture stopped");
+        Assert.True(clock.Elapsed >= TimeSpan.FromMilliseconds(75), $"settled {clock.Elapsed.TotalMilliseconds} ms after the wheel, well before its 100 ms delay");
+        s.Window.Close();
+    }
+
+    [AvaloniaFact]
+    public void APlotThatPaintsQuicklyIsNeverDrafted()
+    {
+        // The rule: a draft only when the last full paint took longer than the threshold.
+        Assert.Equal(30.0, PlotChart.DefaultDraftThresholdMs);
+        PlotViewModel plot = Dense();
+        Shown s = Show(plot);
+        s.Chart.DraftThresholdMs = double.MaxValue;
+        s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        using (s.Frame()) { }
+        Assert.False(s.Chart.DraftShown);
+        Assert.Equal(0, s.Chart.DraftLayerRenders);
+
+        // A small plot at the default threshold: it paints in a few milliseconds, so it is not drafted.
+        var small = new PlotViewModel();
+        small.SetSeries(new[] { PlotFixtures.Lock(0, "s", 1, 0, Enumerable.Range(0, 200).Select(i => (double)i).ToArray(),
+                                                  Enumerable.Range(0, 200).Select(i => 50.0 + i % 7).ToArray()) });
+        Shown t = Show(small);
+        Assert.True(t.Chart.LastFullPaintMs < PlotChart.DefaultDraftThresholdMs, $"a 200-sample plot took {t.Chart.LastFullPaintMs} ms");
+        t.Window.MouseWheel(t.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        using (t.Frame()) { }
+        Assert.False(t.Chart.DraftShown);
+        Assert.Equal(0, t.Chart.DraftLayerRenders);
+        s.Window.Close();
+        t.Window.Close();
+    }
+
+    [AvaloniaFact]
+    public void AnExportDuringADraftIsTheFullPicture()
+    {
+        PlotViewModel plot = Dense();
+        Shown s = Show(plot);
+        s.Chart.DraftThresholdMs = 0;
+        s.Chart.RefineDelay = TimeSpan.FromHours(1);
+        s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        using (s.Frame()) { }
+        Assert.True(s.Chart.DraftShown);
+        byte[] during = Export(s.Chart);
+        s.Chart.Settle();
+        using (s.Frame()) { }
+        Assert.False(s.Chart.DraftShown);
+        Assert.Equal(Export(s.Chart), during);
+
+        static byte[] Export(PlotChart chart)
+        {
+            using var bitmap = new RenderTargetBitmap(new PixelSize(600, 400));
+            using (DrawingContext dc = bitmap.CreateDrawingContext()) chart.RenderTo(dc, chart.Bounds.Size);
+            var pixels = new byte[600 * 400 * 4];
+            GCHandle pin = GCHandle.Alloc(pixels, GCHandleType.Pinned);
+            try
             {
-                double[] ys = Enumerable.Range(0, Samples).Select(_ => 50.0 + rng.NextDouble() * 40.0 - 20.0).ToArray();
-                if (k == 0) ys[DropoutAt] = 0.0;
-                return PlotFixtures.Lock(k, "s" + k, k + 1, k, xs, ys);
-            }).ToList());
-            return plot;
+                bitmap.CopyPixels(new PixelRect(0, 0, 600, 400), pin.AddrOfPinnedObject(), pixels.Length, 600 * 4);
+            }
+            finally
+            {
+                pin.Free();
+            }
+            return pixels;
         }
+        s.Window.Close();
+    }
 
-        private static Shown Show(PlotViewModel plot)
+    [AvaloniaFact]
+    public void ADraftsLinesAreAPixelWide()
+    {
+        // A sparse zigzag (no bands, only the line): steep segments whose ink is about as wide as the pen. The draft
+        // draws them a device pixel wide, the full picture at the chart's 1.5 px.
+        double[] xs = Enumerable.Range(0, 60).Select(i => (double)i).ToArray();
+        double[] ys = xs.Select(x => (int)x % 2 == 0 ? 10.0 : 90.0).ToArray();
+        var plot = new PlotViewModel();
+        plot.SetSeries(new[] { PlotFixtures.Lock(0, "zigzag", 1, 0, xs, ys) });
+        Shown s = Show(plot);
+        s.Chart.DraftThresholdMs = 0;
+        s.Chart.RefineDelay = TimeSpan.FromHours(1);
+        s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        int draft = InkInArea(s, plot);
+        Assert.True(s.Chart.DraftShown);
+        s.Chart.Settle();
+        int full = InkInArea(s, plot);
+        Assert.False(s.Chart.DraftShown);
+        Assert.True(full > draft * 1.2, $"the full picture drew {full} pixels of the line, the draft {draft}");
+        s.Window.Close();
+    }
+
+    /// <summary>Shows <paramref name="plot"/> at a display scaling of <paramref name="scale"/>, painted in full once.</summary>
+    private static Shown ShowScaled(PlotViewModel plot, double scale)
+    {
+        Shown s = Show(plot);
+        s.Window.SetRenderScaling(scale);
+        Dispatcher.UIThread.RunJobs();
+        using (ILockedFramebuffer fb = s.Frame())
         {
-            var chart = new PlotChart { Width = 600, Height = 400, Plot = plot };
-            var window = new Window { Content = chart, SizeToContent = SizeToContent.WidthAndHeight };
-            TextOptions.SetTextRenderingMode(window, TextRenderingMode.Antialias);
-            window.Show();
-            Dispatcher.UIThread.RunJobs();
-            using (new Shown(chart, window).Frame()) { }   // the first, full, paint
-            return new Shown(chart, window);
+            // The frame is in device pixels, or the measurements below would be of nothing.
+            Assert.Equal(Math.Ceiling(s.Window.Bounds.Width * scale), fb.Size.Width, 1.0);
         }
+        return s;
+    }
 
-        /// <summary>Pixels of the first series' colour (blended with white, as its fill and antialiased edges are) in a
-        /// rectangle given in the plot area's own pixels.</summary>
-        private static int Ink(Shown s, PlotViewModel plot, Rect inArea)
+    /// <summary>How thick, in device pixels, the first series' ink is across the rows within 8 device pixels of
+    /// <paramref name="yInChart"/> (the chart's own coordinates): in each device column of the plot's middle half, the
+    /// pixels' worth of the colour those rows hold (one blended halfway with white counts a half), the median over the
+    /// columns. Pixels of another colour, the grid's grey among them, are not counted.</summary>
+    private static double Thickness(Shown s, double scale, double yInChart, Color colour)
+    {
+        Rect c = Frames.InWindow(s.Chart, s.Window), a = s.Chart.PlotArea;
+        double cr = 255 - colour.R, cg = 255 - colour.G, cb = 255 - colour.B;
+        double cn = Math.Sqrt(cr * cr + cg * cg + cb * cb);
+        int centre = (int)Math.Round((c.Y + yInChart) * scale);
+        int from = (int)((c.X + a.X + a.Width * 0.25) * scale), to = (int)((c.X + a.X + a.Width * 0.75) * scale);
+        using ILockedFramebuffer fb = s.Frame();
+        var columns = new double[to - from];
+        for (int x = from; x < to; x++)
         {
-            Rect a = s.Area;
-            using ILockedFramebuffer fb = s.Frame();
-            return Frames.Near(fb, new Rect(a.X + inArea.X, a.Y + inArea.Y, inArea.Width, inArea.Height), plot.Series[0].Color);
+            double sum = 0;
+            for (int y = centre - 8; y <= centre + 8; y++)
+            {
+                uint p = Frames.Pixel(fb, x, y);
+                double r = 255 - (int)((p >> 16) & 0xFF), g = 255 - (int)((p >> 8) & 0xFF), b = 255 - (int)(p & 0xFF);
+                double n = Math.Sqrt(r * r + g * g + b * b);
+                if (n > 8 && (r * cr + g * cg + b * cb) / (n * cn) > 0.99) sum += Math.Min(1.0, n / cn);
+            }
+            columns[x - from] = sum;
         }
+        Array.Sort(columns);
+        return columns[columns.Length / 2];
+    }
 
-        private static int InkInArea(Shown s, PlotViewModel plot) => Ink(s, plot, new Rect(0, 0, s.Area.Width, s.Area.Height));
+    private static void Draft(Shown s)
+    {
+        s.Chart.DraftThresholdMs = 0;
+        s.Chart.RefineDelay = TimeSpan.FromHours(1);
+        s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        using (s.Frame()) { }
+        Assert.True(s.Chart.DraftShown);
+    }
 
-        /// <summary>The first series' ink just above the bottom of the plot, in the dropout's column and away from it:
-        /// only the dropout reaches down there.</summary>
-        private static (int AtDropout, int Elsewhere) DropoutInk(Shown s, PlotViewModel plot)
+    [AvaloniaTheory]
+    [InlineData(2.0)]
+    [InlineData(3.0)]
+    public void ADraftsLineIsOneDevicePixelAtAnyDisplayScaling(double scale)
+    {
+        // A flat line, sparse (no band): at a scaling of 2 the full picture's 1.5 px pen is 3 device pixels thick, and
+        // the draft's line one device pixel, not one unit (which would be 2). The full picture's line must be where
+        // the chart puts it, too: the cached layer was once drawn magnified by the scaling a second time, its top-left
+        // part across the whole chart, and the line then fell far below the rows measured.
+        double[] xs = Enumerable.Range(0, 60).Select(i => (double)i).ToArray();
+        var plot = new PlotViewModel();
+        plot.SetSeries(new[] { PlotFixtures.Lock(0, "flat", 1, 0, xs, xs.Select(_ => 50.0).ToArray()) });
+        Shown s = ShowScaled(plot, scale);
+        Color colour = plot.Series[0].Color;
+        double full = Thickness(s, scale, s.Chart.LeftToPixel(50), colour);
+        Assert.True(full > PlotChart.PenWidth * scale * 0.8, $"the full picture's line is {full} device pixels thick at {scale}x");
+        Draft(s);
+        double draft = Thickness(s, scale, s.Chart.LeftToPixel(50), colour);
+        Assert.InRange(draft, 0.6, 1.4);
+        s.Window.Close();
+    }
+
+    [AvaloniaTheory]
+    [InlineData(2.0)]
+    [InlineData(3.0)]
+    public void ADraftsBandOutlineIsOneDevicePixelAtAnyDisplayScaling(double scale)
+    {
+        // Dense samples alternating 40 and 60: each column's band runs from 40 to 60, so its top edge is a flat line at
+        // 60, well clear of the mean at 50. The draft draws that edge one device pixel thick, at the edge's alpha (an
+        // edge one unit thick would be 2 device pixels at 2x).
+        double[] xs = Enumerable.Range(0, Samples).Select(i => i * 0.01).ToArray();
+        var plot = new PlotViewModel();
+        plot.SetSeries(new[] { PlotFixtures.Lock(0, "band", 1, 0, xs, xs.Select((_, i) => i % 2 == 0 ? 40.0 : 60.0).ToArray()) });
+        Shown s = ShowScaled(plot, scale);
+        Draft(s);
+        double edge = Thickness(s, scale, s.Chart.LeftToPixel(60), plot.Series[0].Color);
+        double expected = PlotChart.BandEdgeAlpha / 255.0;
+        Assert.InRange(edge, expected * 0.6, expected * 1.4);
+        s.Window.Close();
+    }
+
+    [AvaloniaFact]
+    public void OnlyTheLastStepsDelaySettlesTheGesture()
+    {
+        // Two wheel notches 300 ms apart with a 1000 ms delay: the first notch's delay runs out 700 ms after the
+        // second notch, and must not settle the gesture the second one is still part of. The check is made 200 ms
+        // after the second notch, so it holds unless the machine stalled for most of 500 ms between the notches and
+        // the check; a stall that long cannot tell the cases apart, and the test says so (a skip) rather than fail
+        // a plot that is right (audit Q3). The delay is a Task.Delay, which Windows' coarse timer can end up to a
+        // tick (15.6 ms) early, so the end is held to 3/4 of the delay, not to the whole of it.
+        PlotViewModel plot = Dense();
+        Shown s = Show(plot);
+        s.Chart.DraftThresholdMs = 0;
+        s.Chart.RefineDelay = TimeSpan.FromMilliseconds(1000);
+        var sinceFirst = Stopwatch.StartNew();
+        s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
+        Pump(s, TimeSpan.FromMilliseconds(300));
+        s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
+        var sinceSecond = Stopwatch.StartNew();
+        Pump(s, TimeSpan.FromMilliseconds(200));
+        if (sinceFirst.Elapsed >= TimeSpan.FromMilliseconds(900))
         {
-            double px = s.Chart.XToPixel(DropoutAt * 0.01) - s.Chart.PlotArea.X;
-            double h = s.Area.Height;
-            var low = new Rect(px - 3, h * 0.8, 6, h * 0.2 - 3);
-            int at = Ink(s, plot, low);
-            int elsewhere = Ink(s, plot, new Rect(5, h * 0.8, px - 15, h * 0.2 - 3)) +
-                            Ink(s, plot, new Rect(px + 10, h * 0.8, s.Area.Width - px - 15, h * 0.2 - 3));
-            return (at, elsewhere);
-        }
-
-        [AvaloniaFact]
-        public void AHeavyPlotIsDraftedWhileTheWheelMovesItAndDrawnInFullWhenItSettles()
-        {
-            PlotViewModel plot = Dense();
-            Shown s = Show(plot);
-            s.Chart.DraftThresholdMs = 0;   // every plot is heavy
-            int full = InkInArea(s, plot);
-            Assert.False(s.Chart.DraftShown);
-            double fullPaint = s.Chart.LastFullPaintMs;
-            Assert.True(fullPaint > 0);
-
-            s.Window.MouseWheel(s.At(s.Chart.PlotArea.Center.X, s.Chart.PlotArea.Center.Y), new Vector(0, 1), RawInputModifiers.None);
-            Dispatcher.UIThread.RunJobs();
-            int draft = InkInArea(s, plot);
-            Assert.True(s.Chart.DraftShown);
-            Assert.Equal(1, s.Chart.DraftLayerRenders);
-            // What a draft costs says nothing about whether the plot is heavy: only a full paint is timed.
-            Assert.Equal(fullPaint, s.Chart.LastFullPaintMs);
-            // No fill: the band's inside is background, its outline and the line hairlines.
-            Assert.True(draft * 3 < full, $"the draft drew {draft} pixels of the series, the full picture {full}");
-            // The dropout still reaches the bottom of the plot, and nothing else does.
-            (int atDropout, int elsewhere) = DropoutInk(s, plot);
-            Assert.True(atDropout >= 10, $"the dropout's column has {atDropout} pixels of the series near the bottom");
-            Assert.Equal(0, elsewhere);
-
-            // A cursor move is neither a step of the gesture nor a repaint.
-            int renders = s.Chart.DataLayerRenders;
-            s.Window.MouseMove(s.At(100, 100), RawInputModifiers.None);
-            using (s.Frame()) { }
-            Assert.Equal(renders, s.Chart.DataLayerRenders);
-
-            s.Chart.Settle();
-            int settled = InkInArea(s, plot);
-            Assert.False(s.Chart.DraftShown);
-            Assert.Equal(1, s.Chart.DraftLayerRenders);
-            Assert.True(settled * 2 > full * 1.5, $"settled the plot drew {settled} pixels of the series; before the gesture, {full}");
-            (atDropout, elsewhere) = DropoutInk(s, plot);
-            Assert.True(atDropout >= 10);
-            Assert.Equal(0, elsewhere);
             s.Window.Close();
+            Assert.Skip($"the machine stalled ({sinceFirst.ElapsedMilliseconds} ms to the check): the first delay may have run out");
         }
+        Assert.True(s.Chart.DraftShown, "an earlier step's delay settled the gesture");
+        while (s.Chart.DraftShown && sinceSecond.Elapsed < TimeSpan.FromSeconds(5)) Pump(s, TimeSpan.FromMilliseconds(10));
+        Assert.False(s.Chart.DraftShown);
+        Assert.True(sinceSecond.Elapsed >= TimeSpan.FromMilliseconds(750), $"settled {sinceSecond.Elapsed.TotalMilliseconds} ms after the last step");
+        s.Window.Close();
 
-        [AvaloniaFact]
-        public void ADragWhoseCaptureIsLostIsTheFullPictureAtOnce()
+        static void Pump(Shown s, TimeSpan time)
         {
-            // Audit B5: a lost capture ends a pan as its release would, so the draft gives way to the full picture then,
-            // not after the refine delay.
-            PlotViewModel plot = Dense();
-            plot.SetXViewByUser(200, 600);
-            Shown s = Show(plot);
-            s.Chart.DraftThresholdMs = 0;
-            s.Chart.RefineDelay = TimeSpan.FromHours(1);   // only the end of the drag can settle it here
-            IPointer? pointer = null;
-            s.Chart.AddHandler(InputElement.PointerPressedEvent, (_, e) => pointer = e.Pointer, RoutingStrategies.Bubble, handledEventsToo: true);
-            Point grab = s.At(s.Chart.PlotArea.Center.X, s.Chart.PlotArea.Center.Y);
-            s.Window.MouseDown(grab, MouseButton.Left, RawInputModifiers.None);
-            s.Window.MouseMove(grab + new Point(-40, 0), RawInputModifiers.LeftMouseButton);
-            Dispatcher.UIThread.RunJobs();
-            using (s.Frame()) { }
-            Assert.True(s.Chart.DraftShown);
-
-            pointer!.Capture(null);
-            Dispatcher.UIThread.RunJobs();
-            using (s.Frame()) { }
-            Assert.False(s.Chart.DraftShown);
-            s.Window.Close();
-        }
-
-        [AvaloniaFact]
-        public void ADragIsDraftedAndItsReleaseIsTheFullPictureAtOnce()
-        {
-            PlotViewModel plot = Dense();
-            plot.SetXViewByUser(200, 600);
-            Shown s = Show(plot);
-            s.Chart.DraftThresholdMs = 0;
-            s.Chart.RefineDelay = TimeSpan.FromHours(1);   // only the release can settle it here
-            Point grab = s.At(s.Chart.PlotArea.Center.X, s.Chart.PlotArea.Center.Y);
-            s.Window.MouseDown(grab, MouseButton.Left, RawInputModifiers.None);
-            s.Window.MouseMove(grab + new Point(-40, 0), RawInputModifiers.LeftMouseButton);
-            Dispatcher.UIThread.RunJobs();
-            using (s.Frame()) { }
-            Assert.True(plot.XViewMin > 200, "the drag moved the window");
-            Assert.True(s.Chart.DraftShown);
-            s.Window.MouseMove(grab + new Point(-80, 0), RawInputModifiers.LeftMouseButton);
-            using (s.Frame()) { }
-            Assert.True(s.Chart.DraftShown);
-            Assert.Equal(2, s.Chart.DraftLayerRenders);
-
-            s.Window.MouseUp(grab + new Point(-80, 0), MouseButton.Left, RawInputModifiers.None);
-            Dispatcher.UIThread.RunJobs();
-            using (s.Frame()) { }
-            Assert.False(s.Chart.DraftShown);
-            Assert.Equal(2, s.Chart.DraftLayerRenders);
-            s.Window.Close();
-        }
-
-        [AvaloniaFact]
-        public void TheWheelSettlesOnItsOwnAfterTheRefineDelay()
-        {
-            PlotViewModel plot = Dense();
-            Shown s = Show(plot);
-            s.Chart.DraftThresholdMs = 0;
-            s.Chart.RefineDelay = TimeSpan.FromMilliseconds(100);
-            Assert.Equal(TimeSpan.FromMilliseconds(150), PlotChart.DefaultRefineDelay);
-            // The wait starts in the wheel's handler, so the clock starts before it: started after the first frame, it
-            // missed however long that frame took (about 12 ms on a CI runner). And the wait is a Task.Delay, whose timer
-            // runs on Windows' coarse tick (15.6 ms) and can end up to a tick early (a 30 ms delay was seen to end at 24 ms
-            // on a runner), so the bound leaves a tick and more below the delay.
             var clock = Stopwatch.StartNew();
-            s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
-            Dispatcher.UIThread.RunJobs();
-            using (s.Frame()) { }
-            Assert.True(s.Chart.DraftShown);
-            while (s.Chart.DraftShown && clock.Elapsed < TimeSpan.FromSeconds(5))
+            do
             {
-                Thread.Sleep(10);
+                Thread.Sleep(5);
                 Dispatcher.UIThread.RunJobs();
                 using (s.Frame()) { }
-            }
-            Assert.False(s.Chart.DraftShown, "the full picture did not come back after the gesture stopped");
-            Assert.True(clock.Elapsed >= TimeSpan.FromMilliseconds(75), $"settled {clock.Elapsed.TotalMilliseconds} ms after the wheel, well before its 100 ms delay");
-            s.Window.Close();
+            } while (clock.Elapsed < time);
         }
-
-        [AvaloniaFact]
-        public void APlotThatPaintsQuicklyIsNeverDrafted()
-        {
-            // The rule: a draft only when the last full paint took longer than the threshold.
-            Assert.Equal(30.0, PlotChart.DefaultDraftThresholdMs);
-            PlotViewModel plot = Dense();
-            Shown s = Show(plot);
-            s.Chart.DraftThresholdMs = double.MaxValue;
-            s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
-            Dispatcher.UIThread.RunJobs();
-            using (s.Frame()) { }
-            Assert.False(s.Chart.DraftShown);
-            Assert.Equal(0, s.Chart.DraftLayerRenders);
-
-            // A small plot at the default threshold: it paints in a few milliseconds, so it is not drafted.
-            var small = new PlotViewModel();
-            small.SetSeries(new[] { PlotFixtures.Lock(0, "s", 1, 0, Enumerable.Range(0, 200).Select(i => (double)i).ToArray(),
-                                                      Enumerable.Range(0, 200).Select(i => 50.0 + i % 7).ToArray()) });
-            Shown t = Show(small);
-            Assert.True(t.Chart.LastFullPaintMs < PlotChart.DefaultDraftThresholdMs, $"a 200-sample plot took {t.Chart.LastFullPaintMs} ms");
-            t.Window.MouseWheel(t.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
-            Dispatcher.UIThread.RunJobs();
-            using (t.Frame()) { }
-            Assert.False(t.Chart.DraftShown);
-            Assert.Equal(0, t.Chart.DraftLayerRenders);
-            s.Window.Close();
-            t.Window.Close();
-        }
-
-        [AvaloniaFact]
-        public void AnExportDuringADraftIsTheFullPicture()
-        {
-            PlotViewModel plot = Dense();
-            Shown s = Show(plot);
-            s.Chart.DraftThresholdMs = 0;
-            s.Chart.RefineDelay = TimeSpan.FromHours(1);
-            s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
-            Dispatcher.UIThread.RunJobs();
-            using (s.Frame()) { }
-            Assert.True(s.Chart.DraftShown);
-            byte[] during = Export(s.Chart);
-            s.Chart.Settle();
-            using (s.Frame()) { }
-            Assert.False(s.Chart.DraftShown);
-            Assert.Equal(Export(s.Chart), during);
-
-            static byte[] Export(PlotChart chart)
-            {
-                using var bitmap = new RenderTargetBitmap(new PixelSize(600, 400));
-                using (DrawingContext dc = bitmap.CreateDrawingContext()) chart.RenderTo(dc, chart.Bounds.Size);
-                var pixels = new byte[600 * 400 * 4];
-                GCHandle pin = GCHandle.Alloc(pixels, GCHandleType.Pinned);
-                try
-                {
-                    bitmap.CopyPixels(new PixelRect(0, 0, 600, 400), pin.AddrOfPinnedObject(), pixels.Length, 600 * 4);
-                }
-                finally
-                {
-                    pin.Free();
-                }
-                return pixels;
-            }
-            s.Window.Close();
-        }
-
-        [AvaloniaFact]
-        public void ADraftsLinesAreAPixelWide()
-        {
-            // A sparse zigzag (no bands, only the line): steep segments whose ink is about as wide as the pen. The draft
-            // draws them a device pixel wide, the full picture at the chart's 1.5 px.
-            double[] xs = Enumerable.Range(0, 60).Select(i => (double)i).ToArray();
-            double[] ys = xs.Select(x => (int)x % 2 == 0 ? 10.0 : 90.0).ToArray();
-            var plot = new PlotViewModel();
-            plot.SetSeries(new[] { PlotFixtures.Lock(0, "zigzag", 1, 0, xs, ys) });
-            Shown s = Show(plot);
-            s.Chart.DraftThresholdMs = 0;
-            s.Chart.RefineDelay = TimeSpan.FromHours(1);
-            s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
-            Dispatcher.UIThread.RunJobs();
-            int draft = InkInArea(s, plot);
-            Assert.True(s.Chart.DraftShown);
-            s.Chart.Settle();
-            int full = InkInArea(s, plot);
-            Assert.False(s.Chart.DraftShown);
-            Assert.True(full > draft * 1.2, $"the full picture drew {full} pixels of the line, the draft {draft}");
-            s.Window.Close();
-        }
-
-        /// <summary>Shows <paramref name="plot"/> at a display scaling of <paramref name="scale"/>, painted in full once.</summary>
-        private static Shown ShowScaled(PlotViewModel plot, double scale)
-        {
-            Shown s = Show(plot);
-            s.Window.SetRenderScaling(scale);
-            Dispatcher.UIThread.RunJobs();
-            using (ILockedFramebuffer fb = s.Frame())
-            {
-                // The frame is in device pixels, or the measurements below would be of nothing.
-                Assert.Equal(Math.Ceiling(s.Window.Bounds.Width * scale), fb.Size.Width, 1.0);
-            }
-            return s;
-        }
-
-        /// <summary>How thick, in device pixels, the first series' ink is across the rows within 8 device pixels of
-        /// <paramref name="yInChart"/> (the chart's own coordinates): in each device column of the plot's middle half, the
-        /// pixels' worth of the colour those rows hold (one blended halfway with white counts a half), the median over the
-        /// columns. Pixels of another colour, the grid's grey among them, are not counted.</summary>
-        private static double Thickness(Shown s, double scale, double yInChart, Color colour)
-        {
-            Rect c = Frames.InWindow(s.Chart, s.Window), a = s.Chart.PlotArea;
-            double cr = 255 - colour.R, cg = 255 - colour.G, cb = 255 - colour.B;
-            double cn = Math.Sqrt(cr * cr + cg * cg + cb * cb);
-            int centre = (int)Math.Round((c.Y + yInChart) * scale);
-            int from = (int)((c.X + a.X + a.Width * 0.25) * scale), to = (int)((c.X + a.X + a.Width * 0.75) * scale);
-            using ILockedFramebuffer fb = s.Frame();
-            var columns = new double[to - from];
-            for (int x = from; x < to; x++)
-            {
-                double sum = 0;
-                for (int y = centre - 8; y <= centre + 8; y++)
-                {
-                    uint p = Frames.Pixel(fb, x, y);
-                    double r = 255 - (int)((p >> 16) & 0xFF), g = 255 - (int)((p >> 8) & 0xFF), b = 255 - (int)(p & 0xFF);
-                    double n = Math.Sqrt(r * r + g * g + b * b);
-                    if (n > 8 && (r * cr + g * cg + b * cb) / (n * cn) > 0.99) sum += Math.Min(1.0, n / cn);
-                }
-                columns[x - from] = sum;
-            }
-            Array.Sort(columns);
-            return columns[columns.Length / 2];
-        }
-
-        private static void Draft(Shown s)
-        {
-            s.Chart.DraftThresholdMs = 0;
-            s.Chart.RefineDelay = TimeSpan.FromHours(1);
-            s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
-            Dispatcher.UIThread.RunJobs();
-            using (s.Frame()) { }
-            Assert.True(s.Chart.DraftShown);
-        }
-
-        [AvaloniaTheory]
-        [InlineData(2.0)]
-        [InlineData(3.0)]
-        public void ADraftsLineIsOneDevicePixelAtAnyDisplayScaling(double scale)
-        {
-            // A flat line, sparse (no band): at a scaling of 2 the full picture's 1.5 px pen is 3 device pixels thick, and
-            // the draft's line one device pixel, not one unit (which would be 2). The full picture's line must be where
-            // the chart puts it, too: the cached layer was once drawn magnified by the scaling a second time, its top-left
-            // part across the whole chart, and the line then fell far below the rows measured.
-            double[] xs = Enumerable.Range(0, 60).Select(i => (double)i).ToArray();
-            var plot = new PlotViewModel();
-            plot.SetSeries(new[] { PlotFixtures.Lock(0, "flat", 1, 0, xs, xs.Select(_ => 50.0).ToArray()) });
-            Shown s = ShowScaled(plot, scale);
-            Color colour = plot.Series[0].Color;
-            double full = Thickness(s, scale, s.Chart.LeftToPixel(50), colour);
-            Assert.True(full > PlotChart.PenWidth * scale * 0.8, $"the full picture's line is {full} device pixels thick at {scale}x");
-            Draft(s);
-            double draft = Thickness(s, scale, s.Chart.LeftToPixel(50), colour);
-            Assert.InRange(draft, 0.6, 1.4);
-            s.Window.Close();
-        }
-
-        [AvaloniaTheory]
-        [InlineData(2.0)]
-        [InlineData(3.0)]
-        public void ADraftsBandOutlineIsOneDevicePixelAtAnyDisplayScaling(double scale)
-        {
-            // Dense samples alternating 40 and 60: each column's band runs from 40 to 60, so its top edge is a flat line at
-            // 60, well clear of the mean at 50. The draft draws that edge one device pixel thick, at the edge's alpha (an
-            // edge one unit thick would be 2 device pixels at 2x).
-            double[] xs = Enumerable.Range(0, Samples).Select(i => i * 0.01).ToArray();
-            var plot = new PlotViewModel();
-            plot.SetSeries(new[] { PlotFixtures.Lock(0, "band", 1, 0, xs, xs.Select((_, i) => i % 2 == 0 ? 40.0 : 60.0).ToArray()) });
-            Shown s = ShowScaled(plot, scale);
-            Draft(s);
-            double edge = Thickness(s, scale, s.Chart.LeftToPixel(60), plot.Series[0].Color);
-            double expected = PlotChart.BandEdgeAlpha / 255.0;
-            Assert.InRange(edge, expected * 0.6, expected * 1.4);
-            s.Window.Close();
-        }
-
-        [AvaloniaFact]
-        public void OnlyTheLastStepsDelaySettlesTheGesture()
-        {
-            // Two wheel notches 300 ms apart with a 1000 ms delay: the first notch's delay runs out 700 ms after the
-            // second notch, and must not settle the gesture the second one is still part of. The check is made 200 ms
-            // after the second notch, so it holds unless the machine stalled for most of 500 ms between the notches and
-            // the check; a stall that long cannot tell the cases apart, and the test says so (a skip) rather than fail
-            // a plot that is right (audit Q3). The delay is a Task.Delay, which Windows' coarse timer can end up to a
-            // tick (15.6 ms) early, so the end is held to 3/4 of the delay, not to the whole of it.
-            PlotViewModel plot = Dense();
-            Shown s = Show(plot);
-            s.Chart.DraftThresholdMs = 0;
-            s.Chart.RefineDelay = TimeSpan.FromMilliseconds(1000);
-            var sinceFirst = Stopwatch.StartNew();
-            s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
-            Pump(s, TimeSpan.FromMilliseconds(300));
-            s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
-            var sinceSecond = Stopwatch.StartNew();
-            Pump(s, TimeSpan.FromMilliseconds(200));
-            if (sinceFirst.Elapsed >= TimeSpan.FromMilliseconds(900))
-            {
-                s.Window.Close();
-                Assert.Skip($"the machine stalled ({sinceFirst.ElapsedMilliseconds} ms to the check): the first delay may have run out");
-            }
-            Assert.True(s.Chart.DraftShown, "an earlier step's delay settled the gesture");
-            while (s.Chart.DraftShown && sinceSecond.Elapsed < TimeSpan.FromSeconds(5)) Pump(s, TimeSpan.FromMilliseconds(10));
-            Assert.False(s.Chart.DraftShown);
-            Assert.True(sinceSecond.Elapsed >= TimeSpan.FromMilliseconds(750), $"settled {sinceSecond.Elapsed.TotalMilliseconds} ms after the last step");
-            s.Window.Close();
-
-            static void Pump(Shown s, TimeSpan time)
-            {
-                var clock = Stopwatch.StartNew();
-                do
-                {
-                    Thread.Sleep(5);
-                    Dispatcher.UIThread.RunJobs();
-                    using (s.Frame()) { }
-                } while (clock.Elapsed < time);
-            }
-        }
-
-        [AvaloniaFact]
-        public void ALongSeriesIsDrawnFromItsIndex()
-        {
-            // A probe, not a use: a series never changes its values, so the index built from them stays right. Here they
-            // are changed after it was built - from 95 to 0 - to show what the chart draws from. The whole blocks inside
-            // each column come from the index (95, near the top); walked, every sample would be at the bottom.
-            double[] xs = Enumerable.Range(0, Samples).Select(i => i * 0.01).ToArray();
-            double[] ys = Enumerable.Repeat(95.0, Samples).ToArray();
-            var plot = new PlotViewModel();
-            plot.SetSeries(new[] { PlotFixtures.Lock(0, "s", 1, 0, xs, ys) });
-            Shown s = Show(plot);
-            Assert.Equal(1, s.Chart.IndexCount);
-            var top = new Rect(5, 0, s.Area.Width - 10, s.Area.Height * 0.1);
-            Assert.True(Ink(s, plot, top) > 0);
-            Array.Fill(ys, 0.0);
-            plot.SetXViewByUser(1, 999);   // a new view, so the geometry is built again
-            using (s.Frame()) { }
-            Assert.True(Ink(s, plot, top) > 100, "the band's top is not the index's 95: the chart walked the samples");
-            s.Window.Close();
-        }
-
-        // ---- the keys -------------------------------------------------------------------------------------------------
-
-        /// <summary>The plot with its keys (they are <see cref="PlotView"/>'s bindings), the chart focused.</summary>
-        private static (PlotView View, Window Window) ShowView(PlotViewModel plot)
-        {
-            var view = new PlotView { Width = 600, Height = 400, Plot = plot };
-            var window = new Window { Content = view, SizeToContent = SizeToContent.WidthAndHeight };
-            window.Show();
-            Dispatcher.UIThread.RunJobs();
-            view.Chart.Focus();
-            view.Chart.DraftThresholdMs = 0;
-            view.Chart.RefineDelay = TimeSpan.FromHours(1);   // only a release settles it here
-            Paint(window);
-            return (view, window);
-        }
-
-        private static void Paint(Window window)
-        {
-            Dispatcher.UIThread.RunJobs();
-            using (Frames.Capture(window).Lock()) { }
-        }
-
-        [AvaloniaTheory]
-        [InlineData(Key.Left, RawInputModifiers.None)]
-        [InlineData(Key.Right, RawInputModifiers.None)]
-        [InlineData(Key.OemPlus, RawInputModifiers.None)]
-        [InlineData(Key.OemPlus, RawInputModifiers.Shift)]
-        [InlineData(Key.OemMinus, RawInputModifiers.None)]
-        public void AHeldPanOrZoomKeyIsDraftedAndItsReleaseIsTheFullPictureAtOnce(Key key, RawInputModifiers modifiers)
-        {
-            PlotViewModel plot = Dense();
-            plot.SetXViewByUser(300, 500);
-            (PlotView view, Window window) = ShowView(plot);
-            (double, double) before = (plot.XViewMin, plot.XViewMax);
-
-            // Held: the key repeats, each repeat a step.
-            window.KeyPress(key, modifiers, PhysicalKey.None, null);
-            Paint(window);
-            window.KeyPress(key, modifiers, PhysicalKey.None, null);
-            Paint(window);
-            Assert.NotEqual(before, (plot.XViewMin, plot.XViewMax));
-            Assert.True(view.Chart.DraftShown);
-            Assert.Equal(2, view.Chart.DraftLayerRenders);
-
-            // Another key going up is not this one's release.
-            window.KeyPress(Key.LeftCtrl, RawInputModifiers.None, PhysicalKey.None, null);
-            window.KeyRelease(Key.LeftCtrl, RawInputModifiers.None, PhysicalKey.None, null);
-            Paint(window);
-            Assert.True(view.Chart.DraftShown);
-
-            window.KeyRelease(key, modifiers, PhysicalKey.None, null);
-            Paint(window);
-            Assert.False(view.Chart.DraftShown);
-            Assert.Equal(2, view.Chart.DraftLayerRenders);
-            window.Close();
-        }
-
-        [AvaloniaTheory]
-        [InlineData(Key.Home)]
-        [InlineData(Key.Back)]
-        [InlineData(Key.R)]
-        public void AKeyThatIsNotAPanOrAZoomStepIsNeverDrafted(Key key)
-        {
-            // Home, Zoom Back and Reset View jump once: they are not gestures, and a draft would only add a paint.
-            PlotViewModel plot = Dense();
-            (PlotView view, Window window) = ShowView(plot);
-            plot.ApplyBandZoom(300, 500);   // something for Back and Home to undo
-            Paint(window);
-            window.KeyPress(key, RawInputModifiers.None, PhysicalKey.None, null);
-            Paint(window);
-            Assert.Equal((0.0, plot.XMax), (plot.XViewMin, plot.XViewMax));
-            Assert.False(view.Chart.DraftShown);
-            Assert.Equal(0, view.Chart.DraftLayerRenders);
-            window.Close();
-        }
-
-        [AvaloniaFact]
-        public void APanKeyThatCannotRunIsNotAStep()
-        {
-            // With nothing plotted the pan keys do nothing. Held while data arrives, they must not leave the plot drafting.
-            var plot = new PlotViewModel();
-            (PlotView view, Window window) = ShowView(plot);
-            view.Chart.DraftThresholdMs = -1;   // an empty chart is heavy enough to draft, if anything asks
-            window.KeyPress(Key.Left, RawInputModifiers.None, PhysicalKey.None, null);
-            Paint(window);
-            plot.SetSeries(Dense().Series.ToList());
-            Paint(window);
-            Assert.False(view.Chart.DraftShown);
-            Assert.Equal(0, view.Chart.DraftLayerRenders);
-            window.Close();
-        }
-
-        [AvaloniaFact]
-        public void ALongOrderedSeriesHasAnIndexUntilItGoes()
-        {
-            // Two long ordered series get one; a short one and one whose times are out of order do not.
-            PlotViewModel plot = Dense(2);
-            double[] shortXs = Enumerable.Range(0, 100).Select(i => i * 10.0).ToArray();
-            double[] unordered = Enumerable.Range(0, Samples).Select(i => i * 0.01).ToArray();
-            (unordered[10], unordered[20]) = (unordered[20], unordered[10]);
-            plot.SetSeries(plot.Series.Concat(new[]
-            {
-                PlotFixtures.Lock(5, "short", 6, 5, shortXs, shortXs.Select(_ => 40.0).ToArray()),
-                PlotFixtures.Lock(6, "unordered", 7, 6, unordered, unordered.Select(_ => 60.0).ToArray()),
-            }).ToList());
-            Assert.Equal(4, plot.Series.Count);
-            Shown s = Show(plot);
-            Assert.Equal(2, s.Chart.IndexCount);
-
-            // A shift of the times keeps it (it depends on the values alone); a new set of series replaces it; none, none.
-            plot.SetXViewByUser(100, 200);
-            using (s.Frame()) { }
-            Assert.Equal(2, s.Chart.IndexCount);
-            plot.SetSeries(Dense(1).Series.ToList());
-            using (s.Frame()) { }
-            Assert.Equal(1, s.Chart.IndexCount);
-            plot.Clear();
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal(0, s.Chart.IndexCount);
-            s.Window.Close();
-        }
-
-        [AvaloniaFact]
-        public void TheCachedLayerAndTheIndexesAreReleasedWhenTheChartLeavesTheWindowAndMadeAgainIfItReturns()
-        {
-            PlotViewModel plot = Dense(1);
-            Shown s = Show(plot);
-            int inked = InkInArea(s, plot);
-            Assert.True(inked > 0);
-            Assert.Equal(1, s.Chart.IndexCount);
-            Assert.NotNull(Backing(s.Chart));
-
-            s.Window.Content = null;
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal(0, s.Chart.IndexCount);
-            Assert.Null(Backing(s.Chart));
-
-            s.Window.Content = s.Chart;
-            Dispatcher.UIThread.RunJobs();
-            // The picture is the same, painted again from the geometry the chart kept; an index is made again only when a
-            // draft needs one.
-            Assert.Equal(inked, InkInArea(s, plot));
-            Assert.NotNull(Backing(s.Chart));
-            s.Window.Close();
-        }
-
-        /// <summary>The chart's cached data layer, which only the chart's own release can be seen through.</summary>
-        private static object? Backing(PlotChart chart) =>
-            typeof(PlotChart).GetField("_backing", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(chart);
     }
+
+    [AvaloniaFact]
+    public void ALongSeriesIsDrawnFromItsIndex()
+    {
+        // A probe, not a use: a series never changes its values, so the index built from them stays right. Here they
+        // are changed after it was built - from 95 to 0 - to show what the chart draws from. The whole blocks inside
+        // each column come from the index (95, near the top); walked, every sample would be at the bottom.
+        double[] xs = Enumerable.Range(0, Samples).Select(i => i * 0.01).ToArray();
+        double[] ys = Enumerable.Repeat(95.0, Samples).ToArray();
+        var plot = new PlotViewModel();
+        plot.SetSeries(new[] { PlotFixtures.Lock(0, "s", 1, 0, xs, ys) });
+        Shown s = Show(plot);
+        Assert.Equal(1, s.Chart.IndexCount);
+        var top = new Rect(5, 0, s.Area.Width - 10, s.Area.Height * 0.1);
+        Assert.True(Ink(s, plot, top) > 0);
+        Array.Fill(ys, 0.0);
+        plot.SetXViewByUser(1, 999);   // a new view, so the geometry is built again
+        using (s.Frame()) { }
+        Assert.True(Ink(s, plot, top) > 100, "the band's top is not the index's 95: the chart walked the samples");
+        s.Window.Close();
+    }
+
+    // ---- the keys -------------------------------------------------------------------------------------------------
+
+    /// <summary>The plot with its keys (they are <see cref="PlotView"/>'s bindings), the chart focused.</summary>
+    private static (PlotView View, Window Window) ShowView(PlotViewModel plot)
+    {
+        var view = new PlotView { Width = 600, Height = 400, Plot = plot };
+        var window = new Window { Content = view, SizeToContent = SizeToContent.WidthAndHeight };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        view.Chart.Focus();
+        view.Chart.DraftThresholdMs = 0;
+        view.Chart.RefineDelay = TimeSpan.FromHours(1);   // only a release settles it here
+        Paint(window);
+        return (view, window);
+    }
+
+    private static void Paint(Window window)
+    {
+        Dispatcher.UIThread.RunJobs();
+        using (Frames.Capture(window).Lock()) { }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(Key.Left, RawInputModifiers.None)]
+    [InlineData(Key.Right, RawInputModifiers.None)]
+    [InlineData(Key.OemPlus, RawInputModifiers.None)]
+    [InlineData(Key.OemPlus, RawInputModifiers.Shift)]
+    [InlineData(Key.OemMinus, RawInputModifiers.None)]
+    public void AHeldPanOrZoomKeyIsDraftedAndItsReleaseIsTheFullPictureAtOnce(Key key, RawInputModifiers modifiers)
+    {
+        PlotViewModel plot = Dense();
+        plot.SetXViewByUser(300, 500);
+        (PlotView view, Window window) = ShowView(plot);
+        (double, double) before = (plot.XViewMin, plot.XViewMax);
+
+        // Held: the key repeats, each repeat a step.
+        window.KeyPress(key, modifiers, PhysicalKey.None, null);
+        Paint(window);
+        window.KeyPress(key, modifiers, PhysicalKey.None, null);
+        Paint(window);
+        Assert.NotEqual(before, (plot.XViewMin, plot.XViewMax));
+        Assert.True(view.Chart.DraftShown);
+        Assert.Equal(2, view.Chart.DraftLayerRenders);
+
+        // Another key going up is not this one's release.
+        window.KeyPress(Key.LeftCtrl, RawInputModifiers.None, PhysicalKey.None, null);
+        window.KeyRelease(Key.LeftCtrl, RawInputModifiers.None, PhysicalKey.None, null);
+        Paint(window);
+        Assert.True(view.Chart.DraftShown);
+
+        window.KeyRelease(key, modifiers, PhysicalKey.None, null);
+        Paint(window);
+        Assert.False(view.Chart.DraftShown);
+        Assert.Equal(2, view.Chart.DraftLayerRenders);
+        window.Close();
+    }
+
+    [AvaloniaTheory]
+    [InlineData(Key.Home)]
+    [InlineData(Key.Back)]
+    [InlineData(Key.R)]
+    public void AKeyThatIsNotAPanOrAZoomStepIsNeverDrafted(Key key)
+    {
+        // Home, Zoom Back and Reset View jump once: they are not gestures, and a draft would only add a paint.
+        PlotViewModel plot = Dense();
+        (PlotView view, Window window) = ShowView(plot);
+        plot.ApplyBandZoom(300, 500);   // something for Back and Home to undo
+        Paint(window);
+        window.KeyPress(key, RawInputModifiers.None, PhysicalKey.None, null);
+        Paint(window);
+        Assert.Equal((0.0, plot.XMax), (plot.XViewMin, plot.XViewMax));
+        Assert.False(view.Chart.DraftShown);
+        Assert.Equal(0, view.Chart.DraftLayerRenders);
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void APanKeyThatCannotRunIsNotAStep()
+    {
+        // With nothing plotted the pan keys do nothing. Held while data arrives, they must not leave the plot drafting.
+        var plot = new PlotViewModel();
+        (PlotView view, Window window) = ShowView(plot);
+        view.Chart.DraftThresholdMs = -1;   // an empty chart is heavy enough to draft, if anything asks
+        window.KeyPress(Key.Left, RawInputModifiers.None, PhysicalKey.None, null);
+        Paint(window);
+        plot.SetSeries(Dense().Series.ToList());
+        Paint(window);
+        Assert.False(view.Chart.DraftShown);
+        Assert.Equal(0, view.Chart.DraftLayerRenders);
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void ALongOrderedSeriesHasAnIndexUntilItGoes()
+    {
+        // Two long ordered series get one; a short one and one whose times are out of order do not.
+        PlotViewModel plot = Dense(2);
+        double[] shortXs = Enumerable.Range(0, 100).Select(i => i * 10.0).ToArray();
+        double[] unordered = Enumerable.Range(0, Samples).Select(i => i * 0.01).ToArray();
+        (unordered[10], unordered[20]) = (unordered[20], unordered[10]);
+        plot.SetSeries(plot.Series.Concat(new[]
+        {
+            PlotFixtures.Lock(5, "short", 6, 5, shortXs, shortXs.Select(_ => 40.0).ToArray()),
+            PlotFixtures.Lock(6, "unordered", 7, 6, unordered, unordered.Select(_ => 60.0).ToArray()),
+        }).ToList());
+        Assert.Equal(4, plot.Series.Count);
+        Shown s = Show(plot);
+        Assert.Equal(2, s.Chart.IndexCount);
+
+        // A shift of the times keeps it (it depends on the values alone); a new set of series replaces it; none, none.
+        plot.SetXViewByUser(100, 200);
+        using (s.Frame()) { }
+        Assert.Equal(2, s.Chart.IndexCount);
+        plot.SetSeries(Dense(1).Series.ToList());
+        using (s.Frame()) { }
+        Assert.Equal(1, s.Chart.IndexCount);
+        plot.Clear();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(0, s.Chart.IndexCount);
+        s.Window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheCachedLayerAndTheIndexesAreReleasedWhenTheChartLeavesTheWindowAndMadeAgainIfItReturns()
+    {
+        PlotViewModel plot = Dense(1);
+        Shown s = Show(plot);
+        int inked = InkInArea(s, plot);
+        Assert.True(inked > 0);
+        Assert.Equal(1, s.Chart.IndexCount);
+        Assert.NotNull(Backing(s.Chart));
+
+        s.Window.Content = null;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(0, s.Chart.IndexCount);
+        Assert.Null(Backing(s.Chart));
+
+        s.Window.Content = s.Chart;
+        Dispatcher.UIThread.RunJobs();
+        // The picture is the same, painted again from the geometry the chart kept; an index is made again only when a
+        // draft needs one.
+        Assert.Equal(inked, InkInArea(s, plot));
+        Assert.NotNull(Backing(s.Chart));
+        s.Window.Close();
+    }
+
+    /// <summary>The chart's cached data layer, which only the chart's own release can be seen through.</summary>
+    private static object? Backing(PlotChart chart) =>
+        typeof(PlotChart).GetField("_backing", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(chart);
 }

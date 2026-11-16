@@ -5,21 +5,20 @@ using TmDq.App.Services;
 using TmDq.App.ViewModels.Dialogs;
 using TmDq.App.Views.Dialogs;
 
-namespace TmDq.App.Platform
+namespace TmDq.App.Platform;
+
+/// <summary>The template commands' dialogs as windows, modal to the main window.</summary>
+public sealed class WindowTemplateDialogs : ITemplateDialogs
 {
-    /// <summary>The template commands' dialogs as windows, modal to the main window.</summary>
-    public sealed class WindowTemplateDialogs : ITemplateDialogs
+    private readonly Window _owner;
+
+    public WindowTemplateDialogs(Window owner) => _owner = owner;
+
+    public async Task ConfirmBatchAsync(BatchApplyViewModel vm)
     {
-        private readonly Window _owner;
-
-        public WindowTemplateDialogs(Window owner) => _owner = owner;
-
-        public async Task ConfirmBatchAsync(BatchApplyViewModel vm)
-        {
-            await Modal.ShowAsync(new BatchApplyWindow(), vm, _owner);
-        }
-
-        public Task<int?> ChooseSourceAsync(IReadOnlyList<string> choices) =>
-            new ChoiceWindow("Save as Template", "Capture the per-stream settings from which source?", choices).ShowDialog<int?>(_owner);
+        await Modal.ShowAsync(new BatchApplyWindow(), vm, _owner);
     }
+
+    public Task<int?> ChooseSourceAsync(IReadOnlyList<string> choices) =>
+        new ChoiceWindow("Save as Template", "Capture the per-stream settings from which source?", choices).ShowDialog<int?>(_owner);
 }

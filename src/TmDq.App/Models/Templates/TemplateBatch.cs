@@ -4,77 +4,76 @@ using System.Linq;
 using TmDq.App.Models.Streams;
 using TmDq.Core;
 
-namespace TmDq.App.Models.Templates
+namespace TmDq.App.Models.Templates;
+
+/// <summary>A recording processed this session, as a template is captured from it: the rows Configure Streams had (every
+/// one, processed or not), the time channel's place in its list, and the byte order.</summary>
+public sealed record ProcessedSource(int SourceId, string FilePath, int TimeChannelIndex, bool SwapBytes,
+                                     IReadOnlyList<StreamSetup> Rows);
+
+/// <summary>A file checked against a template: whether its channels match, and why not.</summary>
+public sealed record FileCheck(string FilePath, bool Ok, string Reason);
+
+/// <summary>
+/// The batch's rules without a window or a plot (plan step 4.7, US1.1), as v2.x had them: a file matches a
+/// template when its PCM channel ids are exactly the template's (the core's <c>TemplateMatcher</c>), each file of a
+/// batch is checked, and a template gives the run for a recording. What reads or changes the plot's series, capturing
+/// a template from them and putting its names and colours back, is <c>PlotTemplates</c>'s.
+/// </summary>
+public static class TemplateBatch
 {
-    /// <summary>A recording processed this session, as a template is captured from it: the rows Configure Streams had (every
-    /// one, processed or not), the time channel's place in its list, and the byte order.</summary>
-    public sealed record ProcessedSource(int SourceId, string FilePath, int TimeChannelIndex, bool SwapBytes,
-                                         IReadOnlyList<StreamSetup> Rows);
+    /// <summary>The template's channel ids against <paramref name="fileChannelIds"/>: the ids only, never the names.</summary>
+    public static TemplateMatchResult Match(ProcessingTemplate template, IEnumerable<int> fileChannelIds) =>
+        TemplateMatcher.Match(template.Entries.Select(e => e.Config.PcmChannelId).ToList(), fileChannelIds.ToList());
 
-    /// <summary>A file checked against a template: whether its channels match, and why not.</summary>
-    public sealed record FileCheck(string FilePath, bool Ok, string Reason);
-
-    /// <summary>
-    /// The batch's rules without a window or a plot (plan step 4.7, US1.1), as v2.x had them: a file matches a
-    /// template when its PCM channel ids are exactly the template's (the core's <c>TemplateMatcher</c>), each file of a
-    /// batch is checked, and a template gives the run for a recording. What reads or changes the plot's series, capturing
-    /// a template from them and putting its names and colours back, is <c>PlotTemplates</c>'s.
-    /// </summary>
-    public static class TemplateBatch
+    /// <summary>A mismatch as the confirmation dialog states it: the channels the template expects and the file lacks,
+    /// then those the file has spare.</summary>
+    public static string Describe(TemplateMatchResult match)
     {
-        /// <summary>The template's channel ids against <paramref name="fileChannelIds"/>: the ids only, never the names.</summary>
-        public static TemplateMatchResult Match(ProcessingTemplate template, IEnumerable<int> fileChannelIds) =>
-            TemplateMatcher.Match(template.Entries.Select(e => e.Config.PcmChannelId).ToList(), fileChannelIds.ToList());
+        var parts = new List<string>();
+        if (match.Missing.Count > 0) parts.Add("missing channel(s): " + string.Join(", ", match.Missing));
+        if (match.Extra.Count > 0) parts.Add("extra channel(s): " + string.Join(", ", match.Extra));
+        return string.Join("; ", parts);
+    }
 
-        /// <summary>A mismatch as the confirmation dialog states it: the channels the template expects and the file lacks,
-        /// then those the file has spare.</summary>
-        public static string Describe(TemplateMatchResult match)
+    /// <summary>Each file's channels read and matched against <paramref name="template"/>, in the order given.</summary>
+    public static IReadOnlyList<FileCheck> Validate(ProcessingTemplate template, IEnumerable<string> files)
+    {
+        var checks = new List<FileCheck>();
+        foreach (string path in files)
         {
-            var parts = new List<string>();
-            if (match.Missing.Count > 0) parts.Add("missing channel(s): " + string.Join(", ", match.Missing));
-            if (match.Extra.Count > 0) parts.Add("extra channel(s): " + string.Join(", ", match.Extra));
-            return string.Join("; ", parts);
-        }
-
-        /// <summary>Each file's channels read and matched against <paramref name="template"/>, in the order given.</summary>
-        public static IReadOnlyList<FileCheck> Validate(ProcessingTemplate template, IEnumerable<string> files)
-        {
-            var checks = new List<FileCheck>();
-            foreach (string path in files)
+            Ch10File file;
+            try
             {
-                Ch10File file;
-                try
-                {
-                    file = Ch10File.Open(path);
-                }
-                catch (TmdqException)
-                {
-                    checks.Add(new FileCheck(path, false, "could not read channels"));
-                    continue;
-                }
-                TemplateMatchResult match = Match(template, file.PcmChannels.Select(c => c.Id));
-                checks.Add(new FileCheck(path, match.Ok, match.Ok ? "" : Describe(match)));
+                file = Ch10File.Open(path);
             }
-            return checks;
+            catch (TmdqException)
+            {
+                checks.Add(new FileCheck(path, false, "could not read channels"));
+                continue;
+            }
+            TemplateMatchResult match = Match(template, file.PcmChannels.Select(c => c.Id));
+            checks.Add(new FileCheck(path, match.Ok, match.Ok ? "" : Describe(match)));
         }
+        return checks;
+    }
 
-        /// <summary>A file name up to its first dot (all of it without one), as v2.x named a template.</summary>
-        public static string BaseName(string fileName)
-        {
-            int dot = fileName.IndexOf('.', StringComparison.Ordinal);
-            return dot < 0 ? fileName : fileName[..dot];
-        }
+    /// <summary>A file name up to its first dot (all of it without one), as v2.x named a template.</summary>
+    public static string BaseName(string fileName)
+    {
+        int dot = fileName.IndexOf('.', StringComparison.Ordinal);
+        return dot < 0 ? fileName : fileName[..dot];
+    }
 
-        /// <summary>The run a template gives for a recording: its processed rows, over the time channel at the template's
-        /// place in the recording's list (the default when the list is shorter), in the template's byte order.</summary>
-        public static RunRequest ToRunRequest(ProcessingTemplate template, string path, Ch10File file, int sourceId, string? appRoot)
-        {
-            IReadOnlyList<ChannelInfo> times = file.TimeChannels;
-            int timeChannelId = template.TimeChannelIndex >= 0 && template.TimeChannelIndex < times.Count
-                ? times[template.TimeChannelIndex].Id
-                : file.DefaultTimeChannel;
-            return StreamRules.ToRunRequest(path, timeChannelId, template.Entries.Select(e => e.Config).ToList(), !template.SwapBytes, appRoot)
-                with { SourceId = sourceId };
-        }
+    /// <summary>The run a template gives for a recording: its processed rows, over the time channel at the template's
+    /// place in the recording's list (the default when the list is shorter), in the template's byte order.</summary>
+    public static RunRequest ToRunRequest(ProcessingTemplate template, string path, Ch10File file, int sourceId, string? appRoot)
+    {
+        IReadOnlyList<ChannelInfo> times = file.TimeChannels;
+        int timeChannelId = template.TimeChannelIndex >= 0 && template.TimeChannelIndex < times.Count
+            ? times[template.TimeChannelIndex].Id
+            : file.DefaultTimeChannel;
+        return StreamRules.ToRunRequest(path, timeChannelId, template.Entries.Select(e => e.Config).ToList(), !template.SwapBytes, appRoot)
+            with { SourceId = sourceId };
     }
 }

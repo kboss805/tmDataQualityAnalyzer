@@ -19,352 +19,351 @@ using TmDq.Core;
 using Xunit;
 using static TmDq.App.Tests.Frames;
 
-namespace TmDq.App.Tests
+namespace TmDq.App.Tests;
+
+/// <summary>
+/// The stream dialogs as windows on the headless platform (plan step 4.1b): what each shows and how its controls are
+/// bound, laid out by the real theme, and the windows opened and closed modally by <see cref="WindowStreamDialogs"/>.
+/// The rules behind them are tested without windows (StreamRulesTests, ConfigureStreamsTests,
+/// StreamSetupViewModelTests); these hold the windows to them.
+/// </summary>
+[Collection(NativeCoreCollection.Name)]
+public sealed class StreamWindowsTests
 {
-    /// <summary>
-    /// The stream dialogs as windows on the headless platform (plan step 4.1b): what each shows and how its controls are
-    /// bound, laid out by the real theme, and the windows opened and closed modally by <see cref="WindowStreamDialogs"/>.
-    /// The rules behind them are tested without windows (StreamRulesTests, ConfigureStreamsTests,
-    /// StreamSetupViewModelTests); these hold the windows to them.
-    /// </summary>
-    [Collection(NativeCoreCollection.Name)]
-    public sealed class StreamWindowsTests
+    private static string Prn => Repo.Recording("prn_testfile, sample.ch10");
+
+    public StreamWindowsTests() => NativeCore.EnsureLoaded();
+
+    private static ConfigureStreamsViewModel Configure(FakeStreamDialogs? dialogs = null) =>
+        new(Prn, StreamsRun.Open(Prn), dialogs ?? new FakeStreamDialogs(), new FakeFilePicker(), Repo.Root);
+
+    private static StreamSetup Row(StreamMode mode) =>
+        new() { PcmChannelId = 13, Label = "CH-01 PRN 15 5M", Mode = mode, SettingsMode = mode, Process = true, TmatsDataRateMbps = 5 };
+
+    private static List<Grid> RowGrids(Window w) =>
+        w.FindControl<ItemsControl>("Rows")!.GetVisualDescendants().OfType<Grid>()
+         .Where(g => g.DataContext is StreamRowViewModel && g.Parent is ContentPresenter).ToList();
+
+    private static T InRow<T>(Grid row, int column) where T : Control =>
+        row.Children.OfType<T>().Single(c => Grid.GetColumn(c) == column);
+
+    [AvaloniaFact]
+    public void ConfigureStreamsShowsARowPerChannelAndTheRecordingsSettings()
     {
-        private static string Prn => Repo.Recording("prn_testfile, sample.ch10");
+        ConfigureStreamsViewModel vm = Configure();
+        var w = Shown(new ConfigureStreamsWindow { DataContext = vm });
+        Assert.Equal("Configure Streams", w.Title);
+        List<Grid> rows = RowGrids(w);
+        Assert.Equal(4, rows.Count);
+        Assert.Equal(new[] { "CH-01 PRN 15 5M", "CH-02 PRN 15 20M", "CH-03 PRN 11 1M", "CH-04 PRN 11 5M" },
+                     rows.Select(r => InRow<TextBlock>(r, 1).Text));
+        Assert.All(rows, r => Assert.Equal("Frame Sync Lock", InRow<ComboBox>(r, 3).SelectedItem));
+        Assert.All(rows, r => Assert.False(InRow<Button>(r, 4).IsEffectivelyEnabled));
 
-        public StreamWindowsTests() => NativeCore.EnsureLoaded();
+        ComboBox time = w.FindControl<ComboBox>("TimeChannel")!;
+        Assert.Equal("1 - IRIG-B", time.SelectedItem);
+        Assert.False(w.FindControl<ToggleSwitch>("LegacyChapter10")!.IsChecked);
+        Assert.False(w.FindControl<Button>("ProcessButton")!.IsEffectivelyEnabled);
+        Assert.True(w.FindControl<Button>("CancelButton")!.IsEffectivelyEnabled);
+        Assert.Equal("Check at least one stream to process.", w.FindControl<TextBlock>("WhyNot")!.Text);
+        w.Close();
+    }
 
-        private static ConfigureStreamsViewModel Configure(FakeStreamDialogs? dialogs = null) =>
-            new(Prn, StreamsRun.Open(Prn), dialogs ?? new FakeStreamDialogs(), new FakeFilePicker(), Repo.Root);
+    [AvaloniaFact]
+    public void TheHeaderAndTheRowsOfTheStreamListHaveTheSameColumns()
+    {
+        // The two grids each spell their columns in the XAML (a header and a row template cannot share one), and the
+        // header sits over the rows only while the two spellings are one.
+        var w = Shown(new ConfigureStreamsWindow { DataContext = Configure() });
+        Grid header = w.GetVisualDescendants().OfType<Grid>()
+            .Single(g => g.Children.OfType<TextBlock>().Any(t => t.Text == "Process"));
+        List<Grid> rows = RowGrids(w);
+        Assert.NotEmpty(rows);
+        string Widths(Grid g) => string.Join(",", g.ColumnDefinitions.Select(c => c.Width.ToString()));
+        Assert.Equal(6, header.ColumnDefinitions.Count);
+        Assert.All(rows, r => Assert.Equal(Widths(header), Widths(r)));
+        w.Close();
+    }
 
-        private static StreamSetup Row(StreamMode mode) =>
-            new() { PcmChannelId = 13, Label = "CH-01 PRN 15 5M", Mode = mode, SettingsMode = mode, Process = true, TmatsDataRateMbps = 5 };
+    [AvaloniaFact]
+    public void AChannelNameTooLongForItsColumnIsTrimmedWithTheWholeNameAsItsTooltip()
+    {
+        // A short name shows in full; a long one is elided, with the whole name as its tooltip.
+        ConfigureStreamsViewModel vm = Configure();
+        string longName = "CH-02 PRN 15 20M, recorded on the second antenna of the far ground station";
+        vm.Rows[1].Setup = vm.Rows[1].Setup with { Label = longName };
+        var w = Shown(new ConfigureStreamsWindow { DataContext = vm });
+        TextBlock shortLabel = InRow<TextBlock>(RowGrids(w)[0], 1), longLabel = InRow<TextBlock>(RowGrids(w)[1], 1);
 
-        private static List<Grid> RowGrids(Window w) =>
-            w.FindControl<ItemsControl>("Rows")!.GetVisualDescendants().OfType<Grid>()
-             .Where(g => g.DataContext is StreamRowViewModel && g.Parent is ContentPresenter).ToList();
+        Assert.False(shortLabel.TextLayout.TextLines.Any(l => l.HasCollapsed), "a short name was trimmed");
+        Assert.Equal(longName, longLabel.Text);
+        Assert.True(longLabel.TextLayout.TextLines.Single().HasCollapsed, "a long name was not trimmed");
+        Assert.True(longLabel.Bounds.Width <= 260, "the name runs past its column");
+        Assert.Equal(longName, ToolTip.GetTip(longLabel));
+        Assert.Equal("CH-01 PRN 15 5M", ToolTip.GetTip(shortLabel));
+        w.Close();
+    }
 
-        private static T InRow<T>(Grid row, int column) where T : Control =>
-            row.Children.OfType<T>().Single(c => Grid.GetColumn(c) == column);
-
-        [AvaloniaFact]
-        public void ConfigureStreamsShowsARowPerChannelAndTheRecordingsSettings()
+    [AvaloniaFact]
+    public void TheColumnHeadersReadInEitherTheme()
+    {
+        // The headers take the theme's text colour, light
+        // on the dark theme and dark on the light, rather than one colour of their own.
+        var app = (App)Application.Current!;
+        ThemeVariant? before = app.RequestedThemeVariant;
+        try
         {
-            ConfigureStreamsViewModel vm = Configure();
-            var w = Shown(new ConfigureStreamsWindow { DataContext = vm });
-            Assert.Equal("Configure Streams", w.Title);
-            List<Grid> rows = RowGrids(w);
-            Assert.Equal(4, rows.Count);
-            Assert.Equal(new[] { "CH-01 PRN 15 5M", "CH-02 PRN 15 20M", "CH-03 PRN 11 1M", "CH-04 PRN 11 5M" },
-                         rows.Select(r => InRow<TextBlock>(r, 1).Text));
-            Assert.All(rows, r => Assert.Equal("Frame Sync Lock", InRow<ComboBox>(r, 3).SelectedItem));
-            Assert.All(rows, r => Assert.False(InRow<Button>(r, 4).IsEffectivelyEnabled));
-
-            ComboBox time = w.FindControl<ComboBox>("TimeChannel")!;
-            Assert.Equal("1 - IRIG-B", time.SelectedItem);
-            Assert.False(w.FindControl<ToggleSwitch>("LegacyChapter10")!.IsChecked);
-            Assert.False(w.FindControl<Button>("ProcessButton")!.IsEffectivelyEnabled);
-            Assert.True(w.FindControl<Button>("CancelButton")!.IsEffectivelyEnabled);
-            Assert.Equal("Check at least one stream to process.", w.FindControl<TextBlock>("WhyNot")!.Text);
-            w.Close();
-        }
-
-        [AvaloniaFact]
-        public void TheHeaderAndTheRowsOfTheStreamListHaveTheSameColumns()
-        {
-            // The two grids each spell their columns in the XAML (a header and a row template cannot share one), and the
-            // header sits over the rows only while the two spellings are one.
-            var w = Shown(new ConfigureStreamsWindow { DataContext = Configure() });
-            Grid header = w.GetVisualDescendants().OfType<Grid>()
-                .Single(g => g.Children.OfType<TextBlock>().Any(t => t.Text == "Process"));
-            List<Grid> rows = RowGrids(w);
-            Assert.NotEmpty(rows);
-            string Widths(Grid g) => string.Join(",", g.ColumnDefinitions.Select(c => c.Width.ToString()));
-            Assert.Equal(6, header.ColumnDefinitions.Count);
-            Assert.All(rows, r => Assert.Equal(Widths(header), Widths(r)));
-            w.Close();
-        }
-
-        [AvaloniaFact]
-        public void AChannelNameTooLongForItsColumnIsTrimmedWithTheWholeNameAsItsTooltip()
-        {
-            // A short name shows in full; a long one is elided, with the whole name as its tooltip.
-            ConfigureStreamsViewModel vm = Configure();
-            string longName = "CH-02 PRN 15 20M, recorded on the second antenna of the far ground station";
-            vm.Rows[1].Setup = vm.Rows[1].Setup with { Label = longName };
-            var w = Shown(new ConfigureStreamsWindow { DataContext = vm });
-            TextBlock shortLabel = InRow<TextBlock>(RowGrids(w)[0], 1), longLabel = InRow<TextBlock>(RowGrids(w)[1], 1);
-
-            Assert.False(shortLabel.TextLayout.TextLines.Any(l => l.HasCollapsed), "a short name was trimmed");
-            Assert.Equal(longName, longLabel.Text);
-            Assert.True(longLabel.TextLayout.TextLines.Single().HasCollapsed, "a long name was not trimmed");
-            Assert.True(longLabel.Bounds.Width <= 260, "the name runs past its column");
-            Assert.Equal(longName, ToolTip.GetTip(longLabel));
-            Assert.Equal("CH-01 PRN 15 5M", ToolTip.GetTip(shortLabel));
-            w.Close();
-        }
-
-        [AvaloniaFact]
-        public void TheColumnHeadersReadInEitherTheme()
-        {
-            // The headers take the theme's text colour, light
-            // on the dark theme and dark on the light, rather than one colour of their own.
-            var app = (App)Application.Current!;
-            ThemeVariant? before = app.RequestedThemeVariant;
-            try
+            foreach (bool dark in new[] { true, false })
             {
-                foreach (bool dark in new[] { true, false })
+                app.ApplyTheme(dark);
+                var w = Shown(new ConfigureStreamsWindow { DataContext = Configure() });
+                TextBlock[] headers = w.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Classes.Contains("header")).ToArray();
+                Assert.Equal(new[] { "Process", "Channel", "Mode", "Configure", "Ready" }, headers.Select(h => h.Text));
+                Assert.All(headers, h =>
                 {
-                    app.ApplyTheme(dark);
-                    var w = Shown(new ConfigureStreamsWindow { DataContext = Configure() });
-                    TextBlock[] headers = w.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Classes.Contains("header")).ToArray();
-                    Assert.Equal(new[] { "Process", "Channel", "Mode", "Configure", "Ready" }, headers.Select(h => h.Text));
-                    Assert.All(headers, h =>
-                    {
-                        Color c = Assert.IsAssignableFrom<ISolidColorBrush>(h.Foreground).Color;
-                        double luminance = (0.299 * c.R + 0.587 * c.G + 0.114 * c.B) / 255;
-                        Assert.True(dark ? luminance > 0.6 : luminance < 0.4, $"'{h.Text}' is {c} in the {(dark ? "dark" : "light")} theme");
-                    });
-                    w.Close();
-                }
-            }
-            finally
-            {
-                app.RequestedThemeVariant = before;
+                    Color c = Assert.IsAssignableFrom<ISolidColorBrush>(h.Foreground).Color;
+                    double luminance = (0.299 * c.R + 0.587 * c.G + 0.114 * c.B) / 255;
+                    Assert.True(dark ? luminance > 0.6 : luminance < 0.4, $"'{h.Text}' is {c} in the {(dark ? "dark" : "light")} theme");
+                });
+                w.Close();
             }
         }
-
-        [AvaloniaFact]
-        public async Task TheReadyColumnAndProcessFollowTheRows()
+        finally
         {
-            var dialogs = new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok() };
-            ConfigureStreamsViewModel vm = Configure(dialogs);
-            var w = Shown(new ConfigureStreamsWindow { DataContext = vm });
-            Grid first = RowGrids(w)[0];
-            TextBlock ready = InRow<TextBlock>(first, 5);
-            Assert.DoesNotContain("isBlocking", ready.Classes);
-
-            InRow<CheckBox>(first, 0).IsChecked = true;   // as a click does
-            Dispatcher.UIThread.RunJobs();
-            Assert.True(vm.Rows[0].Process);
-            Assert.Contains("isBlocking", ready.Classes);
-            Assert.Equal("✗", ready.Text);
-            Assert.Equal("Click the gear icon to configure this stream.", ToolTip.GetTip(ready));
-            Button gear = InRow<Button>(first, 4);
-            Assert.True(gear.IsEffectivelyEnabled);
-
-            await vm.Rows[0].ConfigureCommand.ExecuteAsync(null);
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal("✓", ready.Text);
-            Assert.Contains("isReady", ready.Classes);
-            Assert.DoesNotContain("isBlocking", ready.Classes);
-            Assert.True(w.FindControl<Button>("ProcessButton")!.IsEffectivelyEnabled);
-            Assert.Equal("", w.FindControl<TextBlock>("WhyNot")!.Text);
-
-            InRow<ComboBox>(first, 3).SelectedIndex = 0;   // Receiver SNR
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal(StreamMode.ReceiverChannelInfo, vm.Rows[0].Setup.Mode);
-            Assert.Contains("isBlocking", ready.Classes);
-            Assert.False(w.FindControl<Button>("ProcessButton")!.IsEffectivelyEnabled);
-            w.Close();
+            app.RequestedThemeVariant = before;
         }
+    }
 
-        [AvaloniaFact]
-        public void TheAllBoxAndLegacyChapter10ReachTheViewModel()
+    [AvaloniaFact]
+    public async Task TheReadyColumnAndProcessFollowTheRows()
+    {
+        var dialogs = new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok() };
+        ConfigureStreamsViewModel vm = Configure(dialogs);
+        var w = Shown(new ConfigureStreamsWindow { DataContext = vm });
+        Grid first = RowGrids(w)[0];
+        TextBlock ready = InRow<TextBlock>(first, 5);
+        Assert.DoesNotContain("isBlocking", ready.Classes);
+
+        InRow<CheckBox>(first, 0).IsChecked = true;   // as a click does
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(vm.Rows[0].Process);
+        Assert.Contains("isBlocking", ready.Classes);
+        Assert.Equal("✗", ready.Text);
+        Assert.Equal("Click the gear icon to configure this stream.", ToolTip.GetTip(ready));
+        Button gear = InRow<Button>(first, 4);
+        Assert.True(gear.IsEffectivelyEnabled);
+
+        await vm.Rows[0].ConfigureCommand.ExecuteAsync(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("✓", ready.Text);
+        Assert.Contains("isReady", ready.Classes);
+        Assert.DoesNotContain("isBlocking", ready.Classes);
+        Assert.True(w.FindControl<Button>("ProcessButton")!.IsEffectivelyEnabled);
+        Assert.Equal("", w.FindControl<TextBlock>("WhyNot")!.Text);
+
+        InRow<ComboBox>(first, 3).SelectedIndex = 0;   // Receiver SNR
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(StreamMode.ReceiverChannelInfo, vm.Rows[0].Setup.Mode);
+        Assert.Contains("isBlocking", ready.Classes);
+        Assert.False(w.FindControl<Button>("ProcessButton")!.IsEffectivelyEnabled);
+        w.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheAllBoxAndLegacyChapter10ReachTheViewModel()
+    {
+        ConfigureStreamsViewModel vm = Configure();
+        var w = Shown(new ConfigureStreamsWindow { DataContext = vm });
+        w.FindControl<CheckBox>("All")!.IsChecked = true;
+        w.FindControl<ToggleSwitch>("LegacyChapter10")!.IsChecked = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.All(vm.Rows, r => Assert.True(r.Process));
+        Assert.All(RowGrids(w), r => Assert.True(InRow<CheckBox>(r, 0).IsChecked));
+        Assert.True(vm.LegacyChapter10);
+        w.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task EachRowsReadyMarkIsInTheStatusColourOfItsState()
+    {
+        // Light theme: Fluent's success (ready), critical (blocks processing) and neutral (the rest).
+        ConfigureStreamsViewModel vm = Configure(new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok(d => d.DataRateMbps = 4) });
+        vm.Rows[0].Process = true;
+        await vm.Rows[0].ConfigureCommand.ExecuteAsync(null);   // configured: ready
+        vm.Rows[1].Process = true;                              // selected, not configured: blocks
+        var w = Shown(new ConfigureStreamsWindow { DataContext = vm });
+        var seen = new List<(string, string)>();
+        foreach (Grid row in RowGrids(w))
         {
-            ConfigureStreamsViewModel vm = Configure();
-            var w = Shown(new ConfigureStreamsWindow { DataContext = vm });
-            w.FindControl<CheckBox>("All")!.IsChecked = true;
-            w.FindControl<ToggleSwitch>("LegacyChapter10")!.IsChecked = true;
-            Dispatcher.UIThread.RunJobs();
-            Assert.All(vm.Rows, r => Assert.True(r.Process));
-            Assert.All(RowGrids(w), r => Assert.True(InRow<CheckBox>(r, 0).IsChecked));
-            Assert.True(vm.LegacyChapter10);
-            w.Close();
+            var r = (StreamRowViewModel)row.DataContext!;
+            TextBlock mark = InRow<TextBlock>(row, 5);
+            string expected = r.IsReady ? "#0F7B0F" : r.IsBlocking ? "#C42B1C" : "#72000000";
+            Assert.Equal((r.Label, Color.Parse(expected)), (r.Label, ((ISolidColorBrush)mark.Foreground!).Color));
+            seen.Add((mark.Text!, expected));
         }
+        // The three states are all on show, so the mapping is held for each.
+        Assert.Equal(new[] { "#0F7B0F", "#72000000", "#C42B1C" }, seen.Select(x => x.Item2).Distinct().OrderBy(x => x, StringComparer.Ordinal));
+        w.Close();
+    }
 
-        [AvaloniaFact]
-        public async Task EachRowsReadyMarkIsInTheStatusColourOfItsState()
+    [AvaloniaFact]
+    public void TheOnOffSettingsAreSwitchesAndTheChoicesAreBoxes()
+    {
+        // Fluent's toggle switch is for a setting that is on or off (Derandomize, Invert Data, Legacy Chapter 10); a box is
+        // for choosing among several (a stream to process, Apply to all, All).
+        var vm = new StreamSetupViewModel(Row(StreamMode.FrameSyncLock), new FakeFilePicker(), null, null);
+        var w = Shown(new StreamSetupWindow { DataContext = vm });
+        var derandomize = w.FindControl<ToggleSwitch>("Derandomize")!;
+        var invert = w.FindControl<ToggleSwitch>("InvertData")!;
+        derandomize.IsChecked = true;
+        invert.IsChecked = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal((true, true), (vm.Randomized, vm.Inverted));
+        vm.Randomized = false;
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(derandomize.IsChecked);
+        Assert.True(invert.IsChecked);
+        Assert.IsType<CheckBox>(w.FindControl<Control>("ApplyToAll"));
+        w.Close();
+
+        var configure = Shown(new ConfigureStreamsWindow { DataContext = Configure() });
+        Assert.IsType<ToggleSwitch>(configure.FindControl<Control>("LegacyChapter10"));
+        Assert.IsType<CheckBox>(configure.FindControl<Control>("All"));
+        Assert.All(RowGrids(configure), r => Assert.IsType<CheckBox>(r.Children[0]));
+        configure.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheFrameSyncLockDialogHidesTheReceiverSettings()
+    {
+        var vm = new StreamSetupViewModel(Row(StreamMode.FrameSyncLock), new FakeFilePicker(), null, null);
+        var w = Shown(new StreamSetupWindow { DataContext = vm });
+        Assert.Equal("Configure Frame Sync Lock — CH-01 PRN 15 5M", w.Title);
+        Assert.False(w.FindControl<Control>("ReceiverGroup")!.IsVisible);
+        Assert.Equal("334AABBF", w.FindControl<TextBox>("SyncPattern")!.Text);
+        Assert.Equal(32767m, w.FindControl<NumericUpDown>("BitsPerFrame")!.Value);
+        Assert.Equal("1 s", w.FindControl<ComboBox>("Period")!.SelectedItem);
+        Assert.Equal("Apply to all Frame Sync Lock streams", w.FindControl<CheckBox>("ApplyToAll")!.Content);
+        Assert.Equal("0 = TMATS (5.000 Mbps)", w.FindControl<TextBlock>("DataRateHint")!.Text);
+        Assert.False(w.FindControl<TextBlock>("Problems")!.IsVisible);
+        Assert.True(w.FindControl<Button>("OkButton")!.IsEffectivelyEnabled);
+        w.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheSetupDialogSpinBoxesTakeTheirBoundsFromTheRules()
+    {
+        // The window states none of the limits: each is StreamRules' (the one place the rules and their messages
+        // read), through the view model's decimals.
+        var vm = new StreamSetupViewModel(Row(StreamMode.ReceiverChannelInfo), new FakeFilePicker(), null, null);
+        var w = Shown(new StreamSetupWindow { DataContext = vm });
+        var expected = new (string Name, decimal Min, decimal Max)[]
         {
-            // Light theme: Fluent's success (ready), critical (blocks processing) and neutral (the rest).
-            ConfigureStreamsViewModel vm = Configure(new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok(d => d.DataRateMbps = 4) });
-            vm.Rows[0].Process = true;
-            await vm.Rows[0].ConfigureCommand.ExecuteAsync(null);   // configured: ready
-            vm.Rows[1].Process = true;                              // selected, not configured: blocks
-            var w = Shown(new ConfigureStreamsWindow { DataContext = vm });
-            var seen = new List<(string, string)>();
-            foreach (Grid row in RowGrids(w))
-            {
-                var r = (StreamRowViewModel)row.DataContext!;
-                TextBlock mark = InRow<TextBlock>(row, 5);
-                string expected = r.IsReady ? "#0F7B0F" : r.IsBlocking ? "#C42B1C" : "#72000000";
-                Assert.Equal((r.Label, Color.Parse(expected)), (r.Label, ((ISolidColorBrush)mark.Foreground!).Color));
-                seen.Add((mark.Text!, expected));
-            }
-            // The three states are all on show, so the mapping is held for each.
-            Assert.Equal(new[] { "#0F7B0F", "#72000000", "#C42B1C" }, seen.Select(x => x.Item2).Distinct().OrderBy(x => x, StringComparer.Ordinal));
-            w.Close();
-        }
-
-        [AvaloniaFact]
-        public void TheOnOffSettingsAreSwitchesAndTheChoicesAreBoxes()
+            ("BitsPerFrame", StreamRules.MinBitsInMinorFrame, StreamRules.MaxBitsInMinorFrame),
+            ("DataRate", (decimal)StreamRules.MinDataRateMbps, (decimal)StreamRules.MaxDataRateMbps),
+            ("Scale", (decimal)StreamRules.MinScaleDdBPerV, (decimal)StreamRules.MaxScaleDdBPerV),
+            ("NumReceivers", StreamRules.MinReceivers, StreamRules.MaxReceivers),
+            ("ReceiverChannels", StreamRules.MinReceiverChannels, StreamRules.MaxReceiverChannels),
+        };
+        foreach ((string name, decimal min, decimal max) in expected)
         {
-            // Fluent's toggle switch is for a setting that is on or off (Derandomize, Invert Data, Legacy Chapter 10); a box is
-            // for choosing among several (a stream to process, Apply to all, All).
-            var vm = new StreamSetupViewModel(Row(StreamMode.FrameSyncLock), new FakeFilePicker(), null, null);
-            var w = Shown(new StreamSetupWindow { DataContext = vm });
-            var derandomize = w.FindControl<ToggleSwitch>("Derandomize")!;
-            var invert = w.FindControl<ToggleSwitch>("InvertData")!;
-            derandomize.IsChecked = true;
-            invert.IsChecked = true;
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal((true, true), (vm.Randomized, vm.Inverted));
-            vm.Randomized = false;
-            Dispatcher.UIThread.RunJobs();
-            Assert.False(derandomize.IsChecked);
-            Assert.True(invert.IsChecked);
-            Assert.IsType<CheckBox>(w.FindControl<Control>("ApplyToAll"));
-            w.Close();
-
-            var configure = Shown(new ConfigureStreamsWindow { DataContext = Configure() });
-            Assert.IsType<ToggleSwitch>(configure.FindControl<Control>("LegacyChapter10"));
-            Assert.IsType<CheckBox>(configure.FindControl<Control>("All"));
-            Assert.All(RowGrids(configure), r => Assert.IsType<CheckBox>(r.Children[0]));
-            configure.Close();
+            NumericUpDown box = w.FindControl<NumericUpDown>(name)!;
+            Assert.Equal((min, max), (box.Minimum, box.Maximum));
         }
+        w.Close();
+    }
 
-        [AvaloniaFact]
-        public void TheFrameSyncLockDialogHidesTheReceiverSettings()
+    [AvaloniaFact]
+    public void TheReceiverSnrDialogShowsTheReceiverSettingsLaidOut()
+    {
+        var vm = new StreamSetupViewModel(Row(StreamMode.ReceiverChannelInfo) with { PolarityIndex = 1, SlopeIndex = 2 },
+                                          new FakeFilePicker(), null, null);
+        var w = Shown(new StreamSetupWindow { DataContext = vm });
+        Control group = w.FindControl<Control>("ReceiverGroup")!;
+        Assert.True(group.IsVisible);
+        Assert.True(group.Bounds.Height > 60, $"receiver group {group.Bounds}");
+        Assert.Equal("Negative", w.FindControl<ComboBox>("Polarity")!.SelectedItem);
+        Assert.Equal("0–10 V", w.FindControl<ComboBox>("Slope")!.SelectedItem);
+        Assert.Equal(20m, w.FindControl<NumericUpDown>("Scale")!.Value);
+        Assert.Equal(16m, w.FindControl<NumericUpDown>("NumReceivers")!.Value);
+        Assert.Equal(3m, w.FindControl<NumericUpDown>("ReceiverChannels")!.Value);
+        // Everything fits in the window the content sized.
+        foreach (string name in new[] { "SyncPattern", "LoadFrameSync", "SaveReceiverParams", "OkButton", "CancelButton" })
         {
-            var vm = new StreamSetupViewModel(Row(StreamMode.FrameSyncLock), new FakeFilePicker(), null, null);
-            var w = Shown(new StreamSetupWindow { DataContext = vm });
-            Assert.Equal("Configure Frame Sync Lock — CH-01 PRN 15 5M", w.Title);
-            Assert.False(w.FindControl<Control>("ReceiverGroup")!.IsVisible);
-            Assert.Equal("334AABBF", w.FindControl<TextBox>("SyncPattern")!.Text);
-            Assert.Equal(32767m, w.FindControl<NumericUpDown>("BitsPerFrame")!.Value);
-            Assert.Equal("1 s", w.FindControl<ComboBox>("Period")!.SelectedItem);
-            Assert.Equal("Apply to all Frame Sync Lock streams", w.FindControl<CheckBox>("ApplyToAll")!.Content);
-            Assert.Equal("0 = TMATS (5.000 Mbps)", w.FindControl<TextBlock>("DataRateHint")!.Text);
-            Assert.False(w.FindControl<TextBlock>("Problems")!.IsVisible);
-            Assert.True(w.FindControl<Button>("OkButton")!.IsEffectivelyEnabled);
-            w.Close();
+            Rect r = Frames.InWindow(w.FindControl<Control>(name)!, w);
+            Assert.True(r.Right <= w.ClientSize.Width + 0.5 && r.Bottom <= w.ClientSize.Height + 0.5, $"{name} {r} in {w.ClientSize}");
         }
+        w.Close();
+    }
 
-        [AvaloniaFact]
-        public void TheSetupDialogSpinBoxesTakeTheirBoundsFromTheRules()
-        {
-            // The window states none of the limits: each is StreamRules' (the one place the rules and their messages
-            // read), through the view model's decimals.
-            var vm = new StreamSetupViewModel(Row(StreamMode.ReceiverChannelInfo), new FakeFilePicker(), null, null);
-            var w = Shown(new StreamSetupWindow { DataContext = vm });
-            var expected = new (string Name, decimal Min, decimal Max)[]
-            {
-                ("BitsPerFrame", StreamRules.MinBitsInMinorFrame, StreamRules.MaxBitsInMinorFrame),
-                ("DataRate", (decimal)StreamRules.MinDataRateMbps, (decimal)StreamRules.MaxDataRateMbps),
-                ("Scale", (decimal)StreamRules.MinScaleDdBPerV, (decimal)StreamRules.MaxScaleDdBPerV),
-                ("NumReceivers", StreamRules.MinReceivers, StreamRules.MaxReceivers),
-                ("ReceiverChannels", StreamRules.MinReceiverChannels, StreamRules.MaxReceiverChannels),
-            };
-            foreach ((string name, decimal min, decimal max) in expected)
-            {
-                NumericUpDown box = w.FindControl<NumericUpDown>(name)!;
-                Assert.Equal((min, max), (box.Minimum, box.Maximum));
-            }
-            w.Close();
-        }
+    [AvaloniaFact]
+    public void TypingAnInvalidPatternShowsTheProblemAndHoldsOk()
+    {
+        var vm = new StreamSetupViewModel(Row(StreamMode.FrameSyncLock), new FakeFilePicker(), null, null);
+        var w = Shown(new StreamSetupWindow { DataContext = vm });
+        TextBox sync = w.FindControl<TextBox>("SyncPattern")!;
+        sync.Text = "";
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("", vm.SyncPattern);
+        TextBlock problems = w.FindControl<TextBlock>("Problems")!;
+        Assert.True(problems.IsVisible);
+        Assert.Equal(StreamRules.PatternRequired, problems.Text);
+        Assert.Equal(Color.Parse("#C42B1C"), ((ISolidColorBrush)problems.Foreground!).Color);   // Fluent's critical, light
+        Assert.False(w.FindControl<Button>("OkButton")!.IsEffectivelyEnabled);
 
-        [AvaloniaFact]
-        public void TheReceiverSnrDialogShowsTheReceiverSettingsLaidOut()
-        {
-            var vm = new StreamSetupViewModel(Row(StreamMode.ReceiverChannelInfo) with { PolarityIndex = 1, SlopeIndex = 2 },
-                                              new FakeFilePicker(), null, null);
-            var w = Shown(new StreamSetupWindow { DataContext = vm });
-            Control group = w.FindControl<Control>("ReceiverGroup")!;
-            Assert.True(group.IsVisible);
-            Assert.True(group.Bounds.Height > 60, $"receiver group {group.Bounds}");
-            Assert.Equal("Negative", w.FindControl<ComboBox>("Polarity")!.SelectedItem);
-            Assert.Equal("0–10 V", w.FindControl<ComboBox>("Slope")!.SelectedItem);
-            Assert.Equal(20m, w.FindControl<NumericUpDown>("Scale")!.Value);
-            Assert.Equal(16m, w.FindControl<NumericUpDown>("NumReceivers")!.Value);
-            Assert.Equal(3m, w.FindControl<NumericUpDown>("ReceiverChannels")!.Value);
-            // Everything fits in the window the content sized.
-            foreach (string name in new[] { "SyncPattern", "LoadFrameSync", "SaveReceiverParams", "OkButton", "CancelButton" })
-            {
-                Rect r = Frames.InWindow(w.FindControl<Control>(name)!, w);
-                Assert.True(r.Right <= w.ClientSize.Width + 0.5 && r.Bottom <= w.ClientSize.Height + 0.5, $"{name} {r} in {w.ClientSize}");
-            }
-            w.Close();
-        }
+        sync.Text = "FE6B2840";
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(problems.IsVisible);
+        Assert.True(w.FindControl<Button>("OkButton")!.IsEffectivelyEnabled);
+        w.Close();
+    }
 
-        [AvaloniaFact]
-        public void TypingAnInvalidPatternShowsTheProblemAndHoldsOk()
-        {
-            var vm = new StreamSetupViewModel(Row(StreamMode.FrameSyncLock), new FakeFilePicker(), null, null);
-            var w = Shown(new StreamSetupWindow { DataContext = vm });
-            TextBox sync = w.FindControl<TextBox>("SyncPattern")!;
-            sync.Text = "";
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal("", vm.SyncPattern);
-            TextBlock problems = w.FindControl<TextBlock>("Problems")!;
-            Assert.True(problems.IsVisible);
-            Assert.Equal(StreamRules.PatternRequired, problems.Text);
-            Assert.Equal(Color.Parse("#C42B1C"), ((ISolidColorBrush)problems.Foreground!).Color);   // Fluent's critical, light
-            Assert.False(w.FindControl<Button>("OkButton")!.IsEffectivelyEnabled);
+    [AvaloniaFact]
+    public async Task TheDialogsOpenModallyAndCloseOnOkOrCancel()
+    {
+        var owner = Shown(new Window());
+        var dialogs = new WindowStreamDialogs(owner);
 
-            sync.Text = "FE6B2840";
-            Dispatcher.UIThread.RunJobs();
-            Assert.False(problems.IsVisible);
-            Assert.True(w.FindControl<Button>("OkButton")!.IsEffectivelyEnabled);
-            w.Close();
-        }
+        var setup = new StreamSetupViewModel(Row(StreamMode.FrameSyncLock), new FakeFilePicker(), null, null);
+        Task edit = dialogs.EditStreamAsync(setup);
+        Dispatcher.UIThread.RunJobs();
+        Window open = Assert.IsType<StreamSetupWindow>(owner.OwnedWindows.Single());
+        Assert.False(edit.IsCompleted);
+        setup.OkCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        await Closed(edit, "the setup dialog");
+        Assert.True(setup.Accepted);
+        Assert.False(open.IsVisible);
 
-        [AvaloniaFact]
-        public async Task TheDialogsOpenModallyAndCloseOnOkOrCancel()
-        {
-            var owner = Shown(new Window());
-            var dialogs = new WindowStreamDialogs(owner);
+        ConfigureStreamsViewModel configure = Configure();
+        Task shown = dialogs.ConfigureStreamsAsync(configure);
+        Dispatcher.UIThread.RunJobs();
+        Assert.IsType<ConfigureStreamsWindow>(owner.OwnedWindows.Single());
+        configure.CancelCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        await Closed(shown, "Configure Streams (Cancel)");
+        Assert.False(configure.Accepted);
+        Assert.Empty(owner.OwnedWindows);
 
-            var setup = new StreamSetupViewModel(Row(StreamMode.FrameSyncLock), new FakeFilePicker(), null, null);
-            Task edit = dialogs.EditStreamAsync(setup);
-            Dispatcher.UIThread.RunJobs();
-            Window open = Assert.IsType<StreamSetupWindow>(owner.OwnedWindows.Single());
-            Assert.False(edit.IsCompleted);
-            setup.OkCommand.Execute(null);
-            Dispatcher.UIThread.RunJobs();
-            await Closed(edit, "the setup dialog");
-            Assert.True(setup.Accepted);
-            Assert.False(open.IsVisible);
+        ConfigureStreamsViewModel ready = Configure(new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok() });
+        ready.Rows[0].Process = true;
+        await ready.Rows[0].ConfigureCommand.ExecuteAsync(null);
+        shown = dialogs.ConfigureStreamsAsync(ready);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Single(owner.OwnedWindows);
+        ready.ProcessCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        await Closed(shown, "Configure Streams (Process)");
+        Assert.True(ready.Accepted);
+        Assert.Empty(owner.OwnedWindows);
+        owner.Close();
+    }
 
-            ConfigureStreamsViewModel configure = Configure();
-            Task shown = dialogs.ConfigureStreamsAsync(configure);
-            Dispatcher.UIThread.RunJobs();
-            Assert.IsType<ConfigureStreamsWindow>(owner.OwnedWindows.Single());
-            configure.CancelCommand.Execute(null);
-            Dispatcher.UIThread.RunJobs();
-            await Closed(shown, "Configure Streams (Cancel)");
-            Assert.False(configure.Accepted);
-            Assert.Empty(owner.OwnedWindows);
-
-            ConfigureStreamsViewModel ready = Configure(new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok() });
-            ready.Rows[0].Process = true;
-            await ready.Rows[0].ConfigureCommand.ExecuteAsync(null);
-            shown = dialogs.ConfigureStreamsAsync(ready);
-            Dispatcher.UIThread.RunJobs();
-            Assert.Single(owner.OwnedWindows);
-            ready.ProcessCommand.Execute(null);
-            Dispatcher.UIThread.RunJobs();
-            await Closed(shown, "Configure Streams (Process)");
-            Assert.True(ready.Accepted);
-            Assert.Empty(owner.OwnedWindows);
-            owner.Close();
-        }
-
-        // A dialog that is not closed would leave its task pending, and awaiting it would hang the run;
-        // once the dispatcher has run, the task must already be done.
-        private static async Task Closed(Task dialog, string what)
-        {
-            Assert.True(dialog.IsCompleted, what + " is still open.");
-            await dialog;
-        }
+    // A dialog that is not closed would leave its task pending, and awaiting it would hang the run;
+    // once the dispatcher has run, the task must already be done.
+    private static async Task Closed(Task dialog, string what)
+    {
+        Assert.True(dialog.IsCompleted, what + " is still open.");
+        await dialog;
     }
 }

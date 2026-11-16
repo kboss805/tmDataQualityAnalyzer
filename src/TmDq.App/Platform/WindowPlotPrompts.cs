@@ -6,44 +6,43 @@ using TmDq.App.ViewModels.Plot;
 using TmDq.App.Views.Dialogs;
 using TmDq.App.Views.Plot;
 
-namespace TmDq.App.Platform
+namespace TmDq.App.Platform;
+
+/// <summary>The plot's questions as windows, modal to the window that holds the host control (plan step 4.4). A
+/// question with no window to sit over is answered "cancel".</summary>
+public sealed class WindowPlotPrompts : IPlotPrompts
 {
-    /// <summary>The plot's questions as windows, modal to the window that holds the host control (plan step 4.4). A
-    /// question with no window to sit over is answered "cancel".</summary>
-    public sealed class WindowPlotPrompts : IPlotPrompts
+    private readonly Control _host;
+
+    public WindowPlotPrompts(Control host) => _host = host;
+
+    private Window? Owner => TopLevel.GetTopLevel(_host) as Window;
+
+    public Task<string?> AskTextAsync(string title, string label, string initial) =>
+        Ask<string?>(new TextPromptWindow(title, label, initial));
+
+    public Task<double?> AskNumberAsync(string title, string label, double value, double min, double max, int decimals) =>
+        Ask<double?>(new NumberPromptWindow(title, label, value, min, max, decimals));
+
+    public Task<(string Start, string Stop)?> AskTimeWindowAsync(string start, string stop) =>
+        Ask<(string Start, string Stop)?>(new TimeWindowPromptWindow(start, stop));
+
+    public Task<Color?> PickColorAsync(Color initial) => Ask<Color?>(new ColorPromptWindow(initial));
+
+    public async Task<bool> CustomizeAsync(CustomizeViewModel customize)
     {
-        private readonly Control _host;
+        Window? owner = Owner;
+        if (owner is null) return false;
+        var window = new CustomizeViewWindow { DataContext = customize };
+        // The dialog's own questions (a colour, a name) sit over the dialog, not over the main window.
+        customize.AskThrough(new WindowPlotPrompts(window));
+        return await window.ShowDialog<bool>(owner);
+    }
 
-        public WindowPlotPrompts(Control host) => _host = host;
-
-        private Window? Owner => TopLevel.GetTopLevel(_host) as Window;
-
-        public Task<string?> AskTextAsync(string title, string label, string initial) =>
-            Ask<string?>(new TextPromptWindow(title, label, initial));
-
-        public Task<double?> AskNumberAsync(string title, string label, double value, double min, double max, int decimals) =>
-            Ask<double?>(new NumberPromptWindow(title, label, value, min, max, decimals));
-
-        public Task<(string Start, string Stop)?> AskTimeWindowAsync(string start, string stop) =>
-            Ask<(string Start, string Stop)?>(new TimeWindowPromptWindow(start, stop));
-
-        public Task<Color?> PickColorAsync(Color initial) => Ask<Color?>(new ColorPromptWindow(initial));
-
-        public async Task<bool> CustomizeAsync(CustomizeViewModel customize)
-        {
-            Window? owner = Owner;
-            if (owner is null) return false;
-            var window = new CustomizeViewWindow { DataContext = customize };
-            // The dialog's own questions (a colour, a name) sit over the dialog, not over the main window.
-            customize.AskThrough(new WindowPlotPrompts(window));
-            return await window.ShowDialog<bool>(owner);
-        }
-
-        private async Task<T?> Ask<T>(Window window)
-        {
-            Window? owner = Owner;
-            if (owner is null) return default;
-            return await window.ShowDialog<T?>(owner);
-        }
+    private async Task<T?> Ask<T>(Window window)
+    {
+        Window? owner = Owner;
+        if (owner is null) return default;
+        return await window.ShowDialog<T?>(owner);
     }
 }

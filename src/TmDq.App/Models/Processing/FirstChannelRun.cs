@@ -4,38 +4,37 @@ using System.Threading.Tasks;
 using TmDq.App.Models.Streams;
 using TmDq.Core;
 
-namespace TmDq.App.Models.Processing
+namespace TmDq.App.Models.Processing;
+
+/// <summary>
+/// The run with no dialog: a recording's first PCM channel with the Frame Sync Lock defaults, over its default time
+/// channel. The walking skeleton's processing (plan step 3.4), kept for the installer's smoke test, which has no one
+/// to answer Configure Streams, and as the configuration the view model uses when it is given none.
+/// </summary>
+public sealed class FirstChannelRun : IStreamConfigurator
 {
-    /// <summary>
-    /// The run with no dialog: a recording's first PCM channel with the Frame Sync Lock defaults, over its default time
-    /// channel. The walking skeleton's processing (plan step 3.4), kept for the installer's smoke test, which has no one
-    /// to answer Configure Streams, and as the configuration the view model uses when it is given none.
-    /// </summary>
-    public sealed class FirstChannelRun : IStreamConfigurator
+    /// <summary>The stream it runs for a channel.</summary>
+    public static StreamConfig DefaultStream(ChannelInfo channel) => new()
     {
-        /// <summary>The stream it runs for a channel.</summary>
-        public static StreamConfig DefaultStream(ChannelInfo channel) => new()
-        {
-            PcmChannelId = channel.Id,
-            Label = channel.Name,
-            Mode = StreamMode.FrameSyncLock,
-            SyncPattern = FrameSyncDefaults.Pattern,
-            SyncMask = FrameSyncDefaults.Mask,
-            BitsInMinorFrame = FrameSyncDefaults.BitsInMinorFrame,
-            SamplePeriod = FrameSyncDefaults.Period,
-        };
+        PcmChannelId = channel.Id,
+        Label = channel.Name,
+        Mode = StreamMode.FrameSyncLock,
+        SyncPattern = FrameSyncDefaults.Pattern,
+        SyncMask = FrameSyncDefaults.Mask,
+        BitsInMinorFrame = FrameSyncDefaults.BitsInMinorFrame,
+        SamplePeriod = FrameSyncDefaults.Period,
+    };
 
-        public static RunRequest Request(string path, Ch10File file) =>
-            new(path, file.DefaultTimeChannel, new[] { DefaultStream(file.PcmChannels[0]) });
+    public static RunRequest Request(string path, Ch10File file) =>
+        new(path, file.DefaultTimeChannel, new[] { DefaultStream(file.PcmChannels[0]) });
 
-        /// <summary>The run with the rows it stands for: the first channel processed with the defaults, the rest not.</summary>
-        public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file)
-        {
-            var rows = file.PcmChannels.Select((c, i) => i == 0
-                ? StreamDefaults.NewStream(c) with { Process = true, Configured = true }
-                : StreamDefaults.NewStream(c)).ToList();
-            int timeIndex = Math.Max(0, file.TimeChannels.ToList().FindIndex(c => c.Id == file.DefaultTimeChannel));
-            return Task.FromResult<StreamsChoice?>(new StreamsChoice(Request(path, file), rows, timeIndex));
-        }
+    /// <summary>The run with the rows it stands for: the first channel processed with the defaults, the rest not.</summary>
+    public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file)
+    {
+        var rows = file.PcmChannels.Select((c, i) => i == 0
+            ? StreamDefaults.NewStream(c) with { Process = true, Configured = true }
+            : StreamDefaults.NewStream(c)).ToList();
+        int timeIndex = Math.Max(0, file.TimeChannels.ToList().FindIndex(c => c.Id == file.DefaultTimeChannel));
+        return Task.FromResult<StreamsChoice?>(new StreamsChoice(Request(path, file), rows, timeIndex));
     }
 }

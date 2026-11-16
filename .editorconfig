@@ -98,8 +98,8 @@ dotnet_diagnostic.CA5392.severity = none
 # C#: code style, set to how the code is already written
 # ---------------------------------------------------------------------------------------------------------------
 [*.cs]
-# 119 files declare a block namespace and 33 a file-scoped one (audit C6 will pick one): silent until it does.
-csharp_style_namespace_declarations = block_scoped:silent
+# One namespace a file, declared with a semicolon (audit C6): the whole tree is file-scoped, and a block one is a build error.
+csharp_style_namespace_declarations = file_scoped:warning
 
 # Unused usings are a warning (and, with warnings as errors, a build error).
 dotnet_diagnostic.IDE0005.severity = warning

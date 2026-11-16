@@ -670,7 +670,11 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
   value types (`ProcessingParams`, `StreamJob`, `ProcessedStreamData`,
   `CalibrationProfile`) camelCase fields, snake_case surviving only in the frame processor's private scan state.
 - **C#**: the .NET conventions - PascalCase types, members and properties, `_camelCase` private fields; tests named
-  for what they hold, as sentences (`ABatchRunsEachFileInTurnKeepsEachAndExportsEachAsV214Did`).
+  for what they hold, as sentences (`ABatchRunsEachFileInTurnKeepsEachAndExportsEachAsV214Did`). One namespace a
+  file, file-scoped (`namespace X;`): `.editorconfig` makes a block one a build error. A view model writes its
+  properties (`SetProperty`, and the `OnPropertyChanged` for what depends on them) and its commands
+  (`new RelayCommand`) by hand; CommunityToolkit.Mvvm's source generators are not used, so nothing is `partial` but a
+  window beside its XAML.
 - **Comments say what the code does and why**, on their own: a rule is stated, not explained by another library's
   behaviour. A test whose expected answer was recorded from v2.14.2 says so once ("as v2.14").
 

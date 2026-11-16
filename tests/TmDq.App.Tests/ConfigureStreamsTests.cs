@@ -13,360 +13,359 @@ using TmDq.Core;
 using TmDq.Core.Tests;
 using Xunit;
 
-namespace TmDq.App.Tests
+namespace TmDq.App.Tests;
+
+/// <summary>
+/// Configure Streams without a window (plan step 4.1b), on the committed PRN sample (PCM channels 13 to 16, data on
+/// 13, PRN15, and 15, PRN11), and the whole path from Open through it to the chart: the rows, the recording's own
+/// settings, the gear and its dialog, Apply to all, Process, Cancel, and what a run of several streams shows.
+/// </summary>
+[Collection(NativeCoreCollection.Name)]
+public sealed class ConfigureStreamsTests
 {
-    /// <summary>
-    /// Configure Streams without a window (plan step 4.1b), on the committed PRN sample (PCM channels 13 to 16, data on
-    /// 13, PRN15, and 15, PRN11), and the whole path from Open through it to the chart: the rows, the recording's own
-    /// settings, the gear and its dialog, Apply to all, Process, Cancel, and what a run of several streams shows.
-    /// </summary>
-    [Collection(NativeCoreCollection.Name)]
-    public sealed class ConfigureStreamsTests
+    private static string Prn => Repo.Recording("prn_testfile, sample.ch10");
+
+    private static string Prn11 => Path.Combine(Repo.Root, "settings", "framesync_patterns", "framesync_PRN11.toml");
+
+    public ConfigureStreamsTests() => NativeCore.EnsureLoaded();
+
+    private static ConfigureStreamsViewModel Dialog(FakeStreamDialogs? dialogs = null, FakeFilePicker? files = null) =>
+        new(Prn, StreamsRun.Open(Prn), dialogs ?? new FakeStreamDialogs(), files ?? new FakeFilePicker(), Repo.Root);
+
+    [Fact]
+    public void EveryPcmChannelIsARowAndNothingIsCheckedYet()
     {
-        private static string Prn => Repo.Recording("prn_testfile, sample.ch10");
-
-        private static string Prn11 => Path.Combine(Repo.Root, "settings", "framesync_patterns", "framesync_PRN11.toml");
-
-        public ConfigureStreamsTests() => NativeCore.EnsureLoaded();
-
-        private static ConfigureStreamsViewModel Dialog(FakeStreamDialogs? dialogs = null, FakeFilePicker? files = null) =>
-            new(Prn, StreamsRun.Open(Prn), dialogs ?? new FakeStreamDialogs(), files ?? new FakeFilePicker(), Repo.Root);
-
-        [Fact]
-        public void EveryPcmChannelIsARowAndNothingIsCheckedYet()
+        ConfigureStreamsViewModel vm = Dialog();
+        Assert.Equal(new[] { "CH-01 PRN 15 5M", "CH-02 PRN 15 20M", "CH-03 PRN 11 1M", "CH-04 PRN 11 5M" }, vm.Rows.Select(r => r.Label));
+        Assert.All(vm.Rows, r =>
         {
-            ConfigureStreamsViewModel vm = Dialog();
-            Assert.Equal(new[] { "CH-01 PRN 15 5M", "CH-02 PRN 15 20M", "CH-03 PRN 11 1M", "CH-04 PRN 11 5M" }, vm.Rows.Select(r => r.Label));
-            Assert.All(vm.Rows, r =>
+            Assert.False(r.Process);
+            Assert.Equal(1, r.ModeIndex);   // Frame Sync Lock
+            Assert.False(r.CanConfigure);
+            Assert.Equal(Readiness.Idle, r.Readiness);
+            Assert.Equal("✗", r.ReadyGlyph);
+            Assert.False(r.IsBlocking);
+        });
+        Assert.Equal(new[] { 5.0, 20.0, 1.0, 5.0 }, vm.Rows.Select(r => r.Setup.TmatsDataRateMbps));
+        Assert.Equal(new[] { "1 - IRIG-B" }, vm.TimeChannelItems);
+        Assert.Equal((0, 1, true), (vm.TimeChannelIndex, vm.TimeChannelId, vm.HasTimeChannels));
+        Assert.False(vm.LegacyChapter10);
+        Assert.False(vm.CanProcess);
+        Assert.False(vm.ProcessCommand.CanExecute(null));
+        Assert.Equal("Check at least one stream to process.", vm.WhyNotProcess);
+        Assert.Equal("Configure Streams", vm.Title);
+    }
+
+    [Fact]
+    public void ACheckedRowWaitsForItsGear()
+    {
+        ConfigureStreamsViewModel vm = Dialog();
+        StreamRowViewModel row = vm.Rows[0];
+        row.Process = true;
+        Assert.True(row.CanConfigure);
+        Assert.True(row.ConfigureCommand.CanExecute(null));
+        Assert.Equal(Readiness.NeedsConfiguration, row.Readiness);
+        Assert.True(row.IsBlocking);
+        Assert.Equal("Click the gear icon to configure this stream.", row.ReadyTip);
+        Assert.False(vm.CanProcess);
+        Assert.Equal("CH-01 PRN 15 5M: click the gear icon to configure this stream.", vm.WhyNotProcess);
+    }
+
+    [Fact]
+    public async Task TheGearOpensTheRowsDialogAndOkMakesItReady()
+    {
+        var dialogs = new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok(d => d.DataRateMbps = 4) };
+        ConfigureStreamsViewModel vm = Dialog(dialogs);
+        StreamRowViewModel row = vm.Rows[0];
+        row.Process = true;
+        await row.ConfigureCommand.ExecuteAsync(null);
+
+        StreamSetupViewModel opened = Assert.Single(dialogs.Edited);
+        Assert.Equal("Configure Frame Sync Lock — CH-01 PRN 15 5M", opened.Title);
+        Assert.Equal(Readiness.Ready, row.Readiness);
+        Assert.Equal("✓", row.ReadyGlyph);
+        Assert.True(row.IsReady);
+        Assert.Equal(4.0, row.Setup.DataRateMbps);
+        Assert.True(vm.CanProcess);
+        Assert.True(vm.ProcessCommand.CanExecute(null));
+        Assert.Equal("", vm.WhyNotProcess);
+    }
+
+    [Fact]
+    public async Task CancellingTheDialogChangesNothing()
+    {
+        var dialogs = new FakeStreamDialogs { OnEdit = d => { d.DataRateMbps = 4; d.CancelCommand.Execute(null); return Task.CompletedTask; } };
+        ConfigureStreamsViewModel vm = Dialog(dialogs);
+        vm.Rows[0].Process = true;
+        StreamSetup before = vm.Rows[0].Setup;
+        await vm.Rows[0].ConfigureCommand.ExecuteAsync(null);
+        Assert.Same(before, vm.Rows[0].Setup);
+    }
+
+    [Fact]
+    public async Task AnUncheckedRowsGearDoesNothing()
+    {
+        var dialogs = new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok() };
+        ConfigureStreamsViewModel vm = Dialog(dialogs);
+        await vm.ConfigureAsync(vm.Rows[0]);
+        Assert.Empty(dialogs.Edited);
+        Assert.False(vm.Rows[0].Setup.Configured);
+    }
+
+    [Fact]
+    public async Task TheDialogOpensOnTheOtherModesDefaultsAfterAModeChange()
+    {
+        var dialogs = new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok() };
+        ConfigureStreamsViewModel vm = Dialog(dialogs);
+        StreamRowViewModel row = vm.Rows[0];
+        row.Process = true;
+        await row.ConfigureCommand.ExecuteAsync(null);
+        Assert.True(row.IsReady);
+
+        row.ModeIndex = 0;   // Receiver SNR
+        Assert.Equal(Readiness.NeedsConfiguration, row.Readiness);
+        await row.ConfigureCommand.ExecuteAsync(null);
+        StreamSetupViewModel snr = dialogs.Edited[1];
+        Assert.True(snr.IsReceiverSnr);
+        // The shipped Receiver SNR defaults file, read from the application root.
+        Assert.Equal(("FE6B2840", "FFFFFFFF", 800m), (snr.SyncPattern, snr.SyncMask, snr.BitsInMinorFrame));
+        Assert.True(row.IsReady);
+        Assert.Equal(StreamMode.ReceiverChannelInfo, row.Setup.SettingsMode);
+    }
+
+    [Fact]
+    public async Task ApplyToAllCopiesToTheOtherCheckedRowsOfTheMode()
+    {
+        var dialogs = new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok(d => { d.SyncPattern = "A345CA5C"; d.ApplyToAll = true; }) };
+        ConfigureStreamsViewModel vm = Dialog(dialogs);
+        vm.Rows[0].Process = true;
+        vm.Rows[1].Process = true;
+        vm.Rows[2].Process = true;
+        vm.Rows[2].ModeIndex = 0;   // Receiver SNR: another mode
+        await vm.Rows[0].ConfigureCommand.ExecuteAsync(null);
+        Assert.Equal(new[] { "A345CA5C", "A345CA5C", "334AABBF", "334AABBF" }, vm.Rows.Select(r => r.Setup.SyncPattern));
+        Assert.Equal(new[] { true, true, false, false }, vm.Rows.Select(r => r.IsReady));
+    }
+
+    [Fact]
+    public void TheAllBoxSetsEveryRow()
+    {
+        ConfigureStreamsViewModel vm = Dialog();
+        vm.All = true;
+        Assert.All(vm.Rows, r => Assert.True(r.Process));
+        vm.Rows[1].Process = false;
+        Assert.True(vm.All);   // one-way, as in v2.14.2's dialog
+        vm.All = false;
+        Assert.All(vm.Rows, r => Assert.False(r.Process));
+    }
+
+    [Fact]
+    public async Task TheRunIsTheCheckedRowsWithTheRecordingsSettings()
+    {
+        var dialogs = new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok() };
+        ConfigureStreamsViewModel vm = Dialog(dialogs);
+        vm.Rows[2].Process = true;
+        await vm.Rows[2].ConfigureCommand.ExecuteAsync(null);
+        vm.LegacyChapter10 = true;
+        RunRequest run = vm.ToRunRequest();
+        Assert.Equal((Prn, 1, false, Repo.Root), (run.FileName, run.TimeChannelId, run.SwapBytes, run.AppRoot));
+        Assert.Equal(new[] { 15 }, run.Streams.Select(s => s.PcmChannelId));
+    }
+
+    [Fact]
+    public void ProcessAndCancelCloseTheDialog()
+    {
+        ConfigureStreamsViewModel vm = Dialog();
+        int closed = 0;
+        vm.CloseRequested += (_, _) => closed++;
+        vm.ProcessCommand.Execute(null);   // nothing checked: refused
+        Assert.Equal((0, false), (closed, vm.Accepted));
+        vm.CancelCommand.Execute(null);
+        Assert.Equal((1, false), (closed, vm.Accepted));
+    }
+
+    [Fact]
+    public async Task TheLastFolderCarriesFromOneDialogToTheNext()
+    {
+        var files = new FakeFilePicker(Prn11, null);
+        int edits = 0;
+        var dialogs = new FakeStreamDialogs
+        {
+            OnEdit = async d =>
             {
-                Assert.False(r.Process);
-                Assert.Equal(1, r.ModeIndex);   // Frame Sync Lock
-                Assert.False(r.CanConfigure);
-                Assert.Equal(Readiness.Idle, r.Readiness);
-                Assert.Equal("✗", r.ReadyGlyph);
-                Assert.False(r.IsBlocking);
-            });
-            Assert.Equal(new[] { 5.0, 20.0, 1.0, 5.0 }, vm.Rows.Select(r => r.Setup.TmatsDataRateMbps));
-            Assert.Equal(new[] { "1 - IRIG-B" }, vm.TimeChannelItems);
-            Assert.Equal((0, 1, true), (vm.TimeChannelIndex, vm.TimeChannelId, vm.HasTimeChannels));
-            Assert.False(vm.LegacyChapter10);
-            Assert.False(vm.CanProcess);
-            Assert.False(vm.ProcessCommand.CanExecute(null));
-            Assert.Equal("Check at least one stream to process.", vm.WhyNotProcess);
-            Assert.Equal("Configure Streams", vm.Title);
-        }
+                if (edits++ == 0) await d.LoadFrameSyncCommand.ExecuteAsync(null);
+                else await d.SaveFrameSyncCommand.ExecuteAsync(null);
+                d.OkCommand.Execute(null);
+            },
+        };
+        ConfigureStreamsViewModel vm = Dialog(dialogs, files);
+        vm.Rows[0].Process = true;
+        await vm.Rows[0].ConfigureCommand.ExecuteAsync(null);
+        await vm.Rows[0].ConfigureCommand.ExecuteAsync(null);
+        Assert.Equal(Path.GetDirectoryName(Prn11), files.Asked[1].Folder);
+    }
 
-        [Fact]
-        public void ACheckedRowWaitsForItsGear()
+    // --- the whole path ---
+
+    [Fact]
+    public async Task TwoStreamsConfiguredAndProcessedAreBothDrawn()
+    {
+        var files = new FakeFilePicker(Prn11);
+        var dialogs = new FakeStreamDialogs();
+        dialogs.OnConfigure = async c =>
         {
-            ConfigureStreamsViewModel vm = Dialog();
-            StreamRowViewModel row = vm.Rows[0];
-            row.Process = true;
-            Assert.True(row.CanConfigure);
-            Assert.True(row.ConfigureCommand.CanExecute(null));
-            Assert.Equal(Readiness.NeedsConfiguration, row.Readiness);
-            Assert.True(row.IsBlocking);
-            Assert.Equal("Click the gear icon to configure this stream.", row.ReadyTip);
-            Assert.False(vm.CanProcess);
-            Assert.Equal("CH-01 PRN 15 5M: click the gear icon to configure this stream.", vm.WhyNotProcess);
-        }
+            c.Rows[0].Process = true;   // CH-01, PRN15: the defaults
+            dialogs.OnEdit = FakeStreamDialogs.Ok();
+            await c.Rows[0].ConfigureCommand.ExecuteAsync(null);
+            c.Rows[2].Process = true;   // CH-03, PRN11: loaded from the shipped pattern
+            dialogs.OnEdit = async d => { await d.LoadFrameSyncCommand.ExecuteAsync(null); d.OkCommand.Execute(null); };
+            await c.Rows[2].ConfigureCommand.ExecuteAsync(null);
+            c.ProcessCommand.Execute(null);
+        };
+        var vm = new MainWindowViewModel(new MainWindowServices { Configurator = new DialogConfigurator(dialogs, files, Repo.Root) });
+        await vm.LoadAsync(Prn);
 
-        [Fact]
-        public async Task TheGearOpensTheRowsDialogAndOkMakesItReady()
+        IReadOnlyList<PlotSeries> locks = PlotFixtures.Locks(vm);
+        Assert.Equal(new[] { 13, 15 }, locks.Select(s => s.StreamOrder));
+        Assert.Same(locks[0], Startup.FirstLockSeries(vm.Plot));
+        Assert.Equal(116, locks[0].Y.Length);   // channel 13 as FirstChannelRun runs it
+        Assert.True(locks[1].Y.Average() > 50, $"PRN11 should lock with its own pattern (mean {locks[1].Y.Average()})");
+        Assert.Equal("Finished processing prn_testfile, sample.ch10: 2 streams.", vm.Status);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public async Task CancellingConfigureStreamsKeepsTheLastResult()
+    {
+        var dialogs = new FakeStreamDialogs();
+        var vm = new MainWindowViewModel(new MainWindowServices { Configurator = new DialogConfigurator(dialogs, null, Repo.Root) });
+        dialogs.OnConfigure = async c =>
         {
-            var dialogs = new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok(d => d.DataRateMbps = 4) };
-            ConfigureStreamsViewModel vm = Dialog(dialogs);
-            StreamRowViewModel row = vm.Rows[0];
-            row.Process = true;
-            await row.ConfigureCommand.ExecuteAsync(null);
+            c.Rows[0].Process = true;
+            dialogs.OnEdit = FakeStreamDialogs.Ok();
+            await c.Rows[0].ConfigureCommand.ExecuteAsync(null);
+            c.ProcessCommand.Execute(null);
+        };
+        await vm.LoadAsync(Prn);
+        PlotSeries? shown = Startup.FirstLockSeries(vm.Plot);
+        Assert.NotNull(shown);
 
-            StreamSetupViewModel opened = Assert.Single(dialogs.Edited);
-            Assert.Equal("Configure Frame Sync Lock — CH-01 PRN 15 5M", opened.Title);
-            Assert.Equal(Readiness.Ready, row.Readiness);
-            Assert.Equal("✓", row.ReadyGlyph);
-            Assert.True(row.IsReady);
-            Assert.Equal(4.0, row.Setup.DataRateMbps);
-            Assert.True(vm.CanProcess);
-            Assert.True(vm.ProcessCommand.CanExecute(null));
-            Assert.Equal("", vm.WhyNotProcess);
-        }
+        dialogs.OnConfigure = c => { c.CancelCommand.Execute(null); return Task.CompletedTask; };
+        await vm.LoadAsync(Prn);
+        Assert.Same(shown, Startup.FirstLockSeries(vm.Plot));
+        Assert.Equal(("Cancelled. prn_testfile, sample.ch10 was not processed.", LogLevel.Info), (vm.Status, vm.StatusLevel));
+        Assert.False(vm.IsBusy);
+        Assert.Equal(2, dialogs.ConfigureCalls);
+    }
 
-        [Fact]
-        public async Task CancellingTheDialogChangesNothing()
+    [Fact]
+    public async Task AReceiverSnrStreamIsProcessedAndCounted()
+    {
+        var dialogs = new FakeStreamDialogs();
+        dialogs.OnConfigure = async c =>
         {
-            var dialogs = new FakeStreamDialogs { OnEdit = d => { d.DataRateMbps = 4; d.CancelCommand.Execute(null); return Task.CompletedTask; } };
-            ConfigureStreamsViewModel vm = Dialog(dialogs);
-            vm.Rows[0].Process = true;
-            StreamSetup before = vm.Rows[0].Setup;
-            await vm.Rows[0].ConfigureCommand.ExecuteAsync(null);
-            Assert.Same(before, vm.Rows[0].Setup);
-        }
+            c.Rows[0].Process = true;
+            c.Rows[0].ModeIndex = 0;
+            dialogs.OnEdit = FakeStreamDialogs.Ok();
+            await c.Rows[0].ConfigureCommand.ExecuteAsync(null);
+            c.ProcessCommand.Execute(null);
+        };
+        var vm = new MainWindowViewModel(new MainWindowServices { Configurator = new DialogConfigurator(dialogs, null, Repo.Root) });
+        await vm.LoadAsync(Repo.Recording("step_cal, example.ch10"));
+        Assert.Empty(PlotFixtures.Locks(vm));
+        Assert.Equal("Finished processing step_cal, example.ch10: 1 stream.", vm.Status);
+    }
 
-        [Fact]
-        public async Task AnUncheckedRowsGearDoesNothing()
+    [Fact]
+    public async Task AStreamThatFailsIsNamedBesideTheOneThatWorked()
+    {
+        // CH-01 locks on PRN15; CH-04 (PRN11) given PRN15 cannot, and the core says why. The run still shows CH-01.
+        var dialogs = new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok() };
+        dialogs.OnConfigure = async c =>
         {
-            var dialogs = new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok() };
-            ConfigureStreamsViewModel vm = Dialog(dialogs);
-            await vm.ConfigureAsync(vm.Rows[0]);
-            Assert.Empty(dialogs.Edited);
-            Assert.False(vm.Rows[0].Setup.Configured);
-        }
+            c.Rows[0].Process = true;
+            await c.Rows[0].ConfigureCommand.ExecuteAsync(null);
+            c.Rows[3].Process = true;
+            await c.Rows[3].ConfigureCommand.ExecuteAsync(null);
+            c.ProcessCommand.Execute(null);
+        };
+        var vm = new MainWindowViewModel(new MainWindowServices { Configurator = new DialogConfigurator(dialogs, null, Repo.Root) });
+        await vm.LoadAsync(Prn);
+        Assert.Equal(new[] { 13 }, PlotFixtures.Locks(vm).Select(s => s.StreamOrder));
+        // The bar says how many were not processed and where to look; the log says which, and why.
+        Assert.Equal(("Finished processing prn_testfile, sample.ch10: 1 stream, 1 not processed. See the log.", LogLevel.Warning), (vm.Status, vm.StatusLevel));
+        Assert.Contains(vm.Log.Entries, e => e.Text.Contains("CH-04", StringComparison.Ordinal));
+    }
 
-        [Fact]
-        public async Task TheDialogOpensOnTheOtherModesDefaultsAfterAModeChange()
+    [Fact]
+    public async Task ASecondTimeChannelIsListedAndCanBeChosen()
+    {
+        // The PRN sample with CH-04 retyped as a time channel: two time channels and three PCM ones.
+        string copy = Recordings.WriteTwoTimeChannels(TempFiles.NewPath("app-twotime", ".ch10"));
+        try
         {
-            var dialogs = new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok() };
-            ConfigureStreamsViewModel vm = Dialog(dialogs);
-            StreamRowViewModel row = vm.Rows[0];
-            row.Process = true;
-            await row.ConfigureCommand.ExecuteAsync(null);
-            Assert.True(row.IsReady);
+            var vm = new ConfigureStreamsViewModel(copy, StreamsRun.Open(copy), new FakeStreamDialogs(), null, Repo.Root);
+            Assert.Equal(new[] { "1 - IRIG-B", "16 - CH-04 PRN 11 5M" }, vm.TimeChannelItems);
+            Assert.Equal(3, vm.Rows.Count);
+            Assert.Equal((0, 1), (vm.TimeChannelIndex, vm.TimeChannelId));   // the core's default: the first
+            vm.TimeChannelIndex = 1;
+            Assert.Equal(16, vm.TimeChannelId);
+            Assert.Equal(16, vm.ToRunRequest().TimeChannelId);
 
-            row.ModeIndex = 0;   // Receiver SNR
-            Assert.Equal(Readiness.NeedsConfiguration, row.Readiness);
-            await row.ConfigureCommand.ExecuteAsync(null);
-            StreamSetupViewModel snr = dialogs.Edited[1];
-            Assert.True(snr.IsReceiverSnr);
-            // The shipped Receiver SNR defaults file, read from the application root.
-            Assert.Equal(("FE6B2840", "FFFFFFFF", 800m), (snr.SyncPattern, snr.SyncMask, snr.BitsInMinorFrame));
-            Assert.True(row.IsReady);
-            Assert.Equal(StreamMode.ReceiverChannelInfo, row.Setup.SettingsMode);
-        }
-
-        [Fact]
-        public async Task ApplyToAllCopiesToTheOtherCheckedRowsOfTheMode()
-        {
-            var dialogs = new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok(d => { d.SyncPattern = "A345CA5C"; d.ApplyToAll = true; }) };
-            ConfigureStreamsViewModel vm = Dialog(dialogs);
-            vm.Rows[0].Process = true;
-            vm.Rows[1].Process = true;
-            vm.Rows[2].Process = true;
-            vm.Rows[2].ModeIndex = 0;   // Receiver SNR: another mode
-            await vm.Rows[0].ConfigureCommand.ExecuteAsync(null);
-            Assert.Equal(new[] { "A345CA5C", "A345CA5C", "334AABBF", "334AABBF" }, vm.Rows.Select(r => r.Setup.SyncPattern));
-            Assert.Equal(new[] { true, true, false, false }, vm.Rows.Select(r => r.IsReady));
-        }
-
-        [Fact]
-        public void TheAllBoxSetsEveryRow()
-        {
-            ConfigureStreamsViewModel vm = Dialog();
-            vm.All = true;
-            Assert.All(vm.Rows, r => Assert.True(r.Process));
-            vm.Rows[1].Process = false;
-            Assert.True(vm.All);   // one-way, as in v2.14.2's dialog
-            vm.All = false;
-            Assert.All(vm.Rows, r => Assert.False(r.Process));
-        }
-
-        [Fact]
-        public async Task TheRunIsTheCheckedRowsWithTheRecordingsSettings()
-        {
-            var dialogs = new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok() };
-            ConfigureStreamsViewModel vm = Dialog(dialogs);
-            vm.Rows[2].Process = true;
-            await vm.Rows[2].ConfigureCommand.ExecuteAsync(null);
-            vm.LegacyChapter10 = true;
-            RunRequest run = vm.ToRunRequest();
-            Assert.Equal((Prn, 1, false, Repo.Root), (run.FileName, run.TimeChannelId, run.SwapBytes, run.AppRoot));
-            Assert.Equal(new[] { 15 }, run.Streams.Select(s => s.PcmChannelId));
-        }
-
-        [Fact]
-        public void ProcessAndCancelCloseTheDialog()
-        {
-            ConfigureStreamsViewModel vm = Dialog();
-            int closed = 0;
-            vm.CloseRequested += (_, _) => closed++;
-            vm.ProcessCommand.Execute(null);   // nothing checked: refused
-            Assert.Equal((0, false), (closed, vm.Accepted));
-            vm.CancelCommand.Execute(null);
-            Assert.Equal((1, false), (closed, vm.Accepted));
-        }
-
-        [Fact]
-        public async Task TheLastFolderCarriesFromOneDialogToTheNext()
-        {
-            var files = new FakeFilePicker(Prn11, null);
-            int edits = 0;
-            var dialogs = new FakeStreamDialogs
-            {
-                OnEdit = async d =>
-                {
-                    if (edits++ == 0) await d.LoadFrameSyncCommand.ExecuteAsync(null);
-                    else await d.SaveFrameSyncCommand.ExecuteAsync(null);
-                    d.OkCommand.Execute(null);
-                },
-            };
-            ConfigureStreamsViewModel vm = Dialog(dialogs, files);
-            vm.Rows[0].Process = true;
-            await vm.Rows[0].ConfigureCommand.ExecuteAsync(null);
-            await vm.Rows[0].ConfigureCommand.ExecuteAsync(null);
-            Assert.Equal(Path.GetDirectoryName(Prn11), files.Asked[1].Folder);
-        }
-
-        // --- the whole path ---
-
-        [Fact]
-        public async Task TwoStreamsConfiguredAndProcessedAreBothDrawn()
-        {
-            var files = new FakeFilePicker(Prn11);
+            // What is handed back carries the place chosen, which a template keeps; with no dialog, the default's.
+            Ch10File file = StreamsRun.Open(copy);
             var dialogs = new FakeStreamDialogs();
             dialogs.OnConfigure = async c =>
             {
-                c.Rows[0].Process = true;   // CH-01, PRN15: the defaults
-                dialogs.OnEdit = FakeStreamDialogs.Ok();
-                await c.Rows[0].ConfigureCommand.ExecuteAsync(null);
-                c.Rows[2].Process = true;   // CH-03, PRN11: loaded from the shipped pattern
-                dialogs.OnEdit = async d => { await d.LoadFrameSyncCommand.ExecuteAsync(null); d.OkCommand.Execute(null); };
-                await c.Rows[2].ConfigureCommand.ExecuteAsync(null);
-                c.ProcessCommand.Execute(null);
-            };
-            var vm = new MainWindowViewModel(new MainWindowServices { Configurator = new DialogConfigurator(dialogs, files, Repo.Root) });
-            await vm.LoadAsync(Prn);
-
-            IReadOnlyList<PlotSeries> locks = PlotFixtures.Locks(vm);
-            Assert.Equal(new[] { 13, 15 }, locks.Select(s => s.StreamOrder));
-            Assert.Same(locks[0], Startup.FirstLockSeries(vm.Plot));
-            Assert.Equal(116, locks[0].Y.Length);   // channel 13 as FirstChannelRun runs it
-            Assert.True(locks[1].Y.Average() > 50, $"PRN11 should lock with its own pattern (mean {locks[1].Y.Average()})");
-            Assert.Equal("Finished processing prn_testfile, sample.ch10: 2 streams.", vm.Status);
-            Assert.False(vm.IsBusy);
-        }
-
-        [Fact]
-        public async Task CancellingConfigureStreamsKeepsTheLastResult()
-        {
-            var dialogs = new FakeStreamDialogs();
-            var vm = new MainWindowViewModel(new MainWindowServices { Configurator = new DialogConfigurator(dialogs, null, Repo.Root) });
-            dialogs.OnConfigure = async c =>
-            {
+                c.TimeChannelIndex = 1;
                 c.Rows[0].Process = true;
                 dialogs.OnEdit = FakeStreamDialogs.Ok();
                 await c.Rows[0].ConfigureCommand.ExecuteAsync(null);
                 c.ProcessCommand.Execute(null);
             };
-            await vm.LoadAsync(Prn);
-            PlotSeries? shown = Startup.FirstLockSeries(vm.Plot);
-            Assert.NotNull(shown);
-
-            dialogs.OnConfigure = c => { c.CancelCommand.Execute(null); return Task.CompletedTask; };
-            await vm.LoadAsync(Prn);
-            Assert.Same(shown, Startup.FirstLockSeries(vm.Plot));
-            Assert.Equal(("Cancelled. prn_testfile, sample.ch10 was not processed.", LogLevel.Info), (vm.Status, vm.StatusLevel));
-            Assert.False(vm.IsBusy);
-            Assert.Equal(2, dialogs.ConfigureCalls);
+            StreamsChoice? chosen = await new DialogConfigurator(dialogs, null, Repo.Root).ConfigureAsync(copy, file);
+            Assert.Equal((1, 16), (chosen!.TimeChannelIndex, chosen.Request.TimeChannelId));
+            StreamsChoice? defaults = await new FirstChannelRun().ConfigureAsync(copy, file);
+            Assert.Equal((0, 1), (defaults!.TimeChannelIndex, defaults.Request.TimeChannelId));
         }
-
-        [Fact]
-        public async Task AReceiverSnrStreamIsProcessedAndCounted()
+        finally
         {
-            var dialogs = new FakeStreamDialogs();
-            dialogs.OnConfigure = async c =>
-            {
-                c.Rows[0].Process = true;
-                c.Rows[0].ModeIndex = 0;
-                dialogs.OnEdit = FakeStreamDialogs.Ok();
-                await c.Rows[0].ConfigureCommand.ExecuteAsync(null);
-                c.ProcessCommand.Execute(null);
-            };
-            var vm = new MainWindowViewModel(new MainWindowServices { Configurator = new DialogConfigurator(dialogs, null, Repo.Root) });
-            await vm.LoadAsync(Repo.Recording("step_cal, example.ch10"));
-            Assert.Empty(PlotFixtures.Locks(vm));
-            Assert.Equal("Finished processing step_cal, example.ch10: 1 stream.", vm.Status);
+            Core.Tests.TempFiles.Delete(copy);
         }
+    }
 
-        [Fact]
-        public async Task AStreamThatFailsIsNamedBesideTheOneThatWorked()
+    [Fact]
+    public void TheStatusSaysHowManyStreamsWereProcessedAndHowManyWereNot()
+    {
+        var lockStream = new ProcessedStream(13, "A", 0, 0, StreamMode.FrameSyncLock, new[] { 0.0 }, new[] { 50.0 }, new[] { 0.0 }, Array.Empty<ChannelData>());
+        var snr = lockStream with { Mode = StreamMode.ReceiverChannelInfo, PcmChannelId = 14 };
+        // A sentence: that it finished and how many streams; the numbers of each stream are on the plot and in the log.
+        Assert.Equal("Finished processing f.ch10: 1 stream.",
+                     MainWindowViewModel.Describe("f.ch10", new RunOutcome(new[] { lockStream }, Array.Empty<StreamResult>(), Array.Empty<string>())));
+        Assert.Equal("Finished processing f.ch10: 2 streams.",
+                     MainWindowViewModel.Describe("f.ch10", new RunOutcome(new[] { lockStream, snr }, Array.Empty<StreamResult>(), Array.Empty<string>())));
+        // What was not processed is counted, and the reasons are in the log, not here.
+        Assert.Equal("Finished processing f.ch10: 2 streams, 1 not processed. See the log.",
+                     MainWindowViewModel.Describe("f.ch10", new RunOutcome(new[] { lockStream, snr }, Array.Empty<StreamResult>(), new[] { "B: no sync." })));
+        Assert.Equal("Finished processing f.ch10: 1 stream, 2 not processed. See the log.",
+                     MainWindowViewModel.Describe("f.ch10", new RunOutcome(new[] { lockStream }, Array.Empty<StreamResult>(), new[] { "B: no sync.", "C: no sync." })));
+    }
+
+    [Fact]
+    public void TheStatusIsWrittenTheSameInEveryCulture()
+    {
+        // The line ends the smoke report: its numbers are written the same whatever the culture.
+        var lockStream = new ProcessedStream(13, "A", 0, 0, StreamMode.FrameSyncLock, new[] { 0.0 }, new[] { 33.3 }, new[] { 0.0 }, Array.Empty<ChannelData>());
+        var outcome = new RunOutcome(new[] { lockStream }, Array.Empty<StreamResult>(), Array.Empty<string>());
+        System.Globalization.CultureInfo before = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+        try
         {
-            // CH-01 locks on PRN15; CH-04 (PRN11) given PRN15 cannot, and the core says why. The run still shows CH-01.
-            var dialogs = new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok() };
-            dialogs.OnConfigure = async c =>
-            {
-                c.Rows[0].Process = true;
-                await c.Rows[0].ConfigureCommand.ExecuteAsync(null);
-                c.Rows[3].Process = true;
-                await c.Rows[3].ConfigureCommand.ExecuteAsync(null);
-                c.ProcessCommand.Execute(null);
-            };
-            var vm = new MainWindowViewModel(new MainWindowServices { Configurator = new DialogConfigurator(dialogs, null, Repo.Root) });
-            await vm.LoadAsync(Prn);
-            Assert.Equal(new[] { 13 }, PlotFixtures.Locks(vm).Select(s => s.StreamOrder));
-            // The bar says how many were not processed and where to look; the log says which, and why.
-            Assert.Equal(("Finished processing prn_testfile, sample.ch10: 1 stream, 1 not processed. See the log.", LogLevel.Warning), (vm.Status, vm.StatusLevel));
-            Assert.Contains(vm.Log.Entries, e => e.Text.Contains("CH-04", StringComparison.Ordinal));
+            Assert.Equal("Finished processing f.ch10: 1 stream.", MainWindowViewModel.Describe("f.ch10", outcome));
         }
-
-        [Fact]
-        public async Task ASecondTimeChannelIsListedAndCanBeChosen()
+        finally
         {
-            // The PRN sample with CH-04 retyped as a time channel: two time channels and three PCM ones.
-            string copy = Recordings.WriteTwoTimeChannels(TempFiles.NewPath("app-twotime", ".ch10"));
-            try
-            {
-                var vm = new ConfigureStreamsViewModel(copy, StreamsRun.Open(copy), new FakeStreamDialogs(), null, Repo.Root);
-                Assert.Equal(new[] { "1 - IRIG-B", "16 - CH-04 PRN 11 5M" }, vm.TimeChannelItems);
-                Assert.Equal(3, vm.Rows.Count);
-                Assert.Equal((0, 1), (vm.TimeChannelIndex, vm.TimeChannelId));   // the core's default: the first
-                vm.TimeChannelIndex = 1;
-                Assert.Equal(16, vm.TimeChannelId);
-                Assert.Equal(16, vm.ToRunRequest().TimeChannelId);
-
-                // What is handed back carries the place chosen, which a template keeps; with no dialog, the default's.
-                Ch10File file = StreamsRun.Open(copy);
-                var dialogs = new FakeStreamDialogs();
-                dialogs.OnConfigure = async c =>
-                {
-                    c.TimeChannelIndex = 1;
-                    c.Rows[0].Process = true;
-                    dialogs.OnEdit = FakeStreamDialogs.Ok();
-                    await c.Rows[0].ConfigureCommand.ExecuteAsync(null);
-                    c.ProcessCommand.Execute(null);
-                };
-                StreamsChoice? chosen = await new DialogConfigurator(dialogs, null, Repo.Root).ConfigureAsync(copy, file);
-                Assert.Equal((1, 16), (chosen!.TimeChannelIndex, chosen.Request.TimeChannelId));
-                StreamsChoice? defaults = await new FirstChannelRun().ConfigureAsync(copy, file);
-                Assert.Equal((0, 1), (defaults!.TimeChannelIndex, defaults.Request.TimeChannelId));
-            }
-            finally
-            {
-                Core.Tests.TempFiles.Delete(copy);
-            }
-        }
-
-        [Fact]
-        public void TheStatusSaysHowManyStreamsWereProcessedAndHowManyWereNot()
-        {
-            var lockStream = new ProcessedStream(13, "A", 0, 0, StreamMode.FrameSyncLock, new[] { 0.0 }, new[] { 50.0 }, new[] { 0.0 }, Array.Empty<ChannelData>());
-            var snr = lockStream with { Mode = StreamMode.ReceiverChannelInfo, PcmChannelId = 14 };
-            // A sentence: that it finished and how many streams; the numbers of each stream are on the plot and in the log.
-            Assert.Equal("Finished processing f.ch10: 1 stream.",
-                         MainWindowViewModel.Describe("f.ch10", new RunOutcome(new[] { lockStream }, Array.Empty<StreamResult>(), Array.Empty<string>())));
-            Assert.Equal("Finished processing f.ch10: 2 streams.",
-                         MainWindowViewModel.Describe("f.ch10", new RunOutcome(new[] { lockStream, snr }, Array.Empty<StreamResult>(), Array.Empty<string>())));
-            // What was not processed is counted, and the reasons are in the log, not here.
-            Assert.Equal("Finished processing f.ch10: 2 streams, 1 not processed. See the log.",
-                         MainWindowViewModel.Describe("f.ch10", new RunOutcome(new[] { lockStream, snr }, Array.Empty<StreamResult>(), new[] { "B: no sync." })));
-            Assert.Equal("Finished processing f.ch10: 1 stream, 2 not processed. See the log.",
-                         MainWindowViewModel.Describe("f.ch10", new RunOutcome(new[] { lockStream }, Array.Empty<StreamResult>(), new[] { "B: no sync.", "C: no sync." })));
-        }
-
-        [Fact]
-        public void TheStatusIsWrittenTheSameInEveryCulture()
-        {
-            // The line ends the smoke report: its numbers are written the same whatever the culture.
-            var lockStream = new ProcessedStream(13, "A", 0, 0, StreamMode.FrameSyncLock, new[] { 0.0 }, new[] { 33.3 }, new[] { 0.0 }, Array.Empty<ChannelData>());
-            var outcome = new RunOutcome(new[] { lockStream }, Array.Empty<StreamResult>(), Array.Empty<string>());
-            System.Globalization.CultureInfo before = System.Globalization.CultureInfo.CurrentCulture;
-            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
-            try
-            {
-                Assert.Equal("Finished processing f.ch10: 1 stream.", MainWindowViewModel.Describe("f.ch10", outcome));
-            }
-            finally
-            {
-                System.Globalization.CultureInfo.CurrentCulture = before;
-            }
+            System.Globalization.CultureInfo.CurrentCulture = before;
         }
     }
 }
