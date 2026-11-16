@@ -481,6 +481,33 @@ namespace TmDq.App.Tests
         }
 
         [AvaloniaFact]
+        public async Task TheProgressDialogsTokenSourceIsReleasedWhenTheRunEnds()
+        {
+            var dialog = new FakeProcessingDialog();
+            var vm = new MainWindowViewModel(new MainWindowServices { ProcessingDialog = dialog });
+            await vm.LoadAsync(Prn);
+            ProcessingViewModel shown = Assert.Single(dialog.Shown);
+            Assert.Throws<ObjectDisposedException>(() => shown.Token);
+            // A click on Cancel that comes after the end (a dialog still on screen) asks for nothing and does not throw.
+            shown.CancelCommand.Execute(null);
+            Assert.False(shown.IsCancelling);
+            Assert.Equal("Processing...", shown.Text);
+        }
+
+        [Fact]
+        public void ADisposedProgressViewModelIgnoresCancelAndASecondDispose()
+        {
+            var vm = new ProcessingViewModel();
+            CancellationToken token = vm.Token;
+            vm.Dispose();
+            vm.Dispose();
+            vm.CancelCommand.Execute(null);
+            Assert.False(token.IsCancellationRequested);
+            Assert.False(vm.IsCancelling);
+            Assert.Equal("Processing...", vm.Text);
+        }
+
+        [AvaloniaFact]
         public async Task NoProgressDialogWhenNothingIsProcessed()
         {
             var dialog = new FakeProcessingDialog();

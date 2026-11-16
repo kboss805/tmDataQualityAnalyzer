@@ -12,7 +12,7 @@ namespace TmDq.Core.Tests;
 /// functions byte for byte; these hold the binding to the ABI, with values chosen so that a field passed in the wrong
 /// slot reads back as a different number.
 /// </summary>
-public class ReceiverParamsTests : IDisposable
+public sealed class ReceiverParamsTests : IDisposable
 {
     private readonly string _dir = TempFiles.NewPath("rxparams");
 

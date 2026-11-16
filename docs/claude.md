@@ -697,7 +697,13 @@ Everything builds from `tmdq.sln`, which VS Code opens by default; `.claude/CLAU
   `eng/AppVersion.props` (the version, read from `AppVersion`) and `eng/PackageLicences.targets` (the
   licence allow-list) into every .NET project, so none imports them itself. `Directory.Packages.props` holds every
   package version once (central package management; Avalonia's share `AvaloniaVersion`), and `global.json` names the
-  SDK (10.0.100 or a newer one, no prerelease).
+  SDK (10.0.100 or a newer one, no prerelease). The root `.editorconfig` holds the editor settings (charset, final
+  newline, indentation; line ends are `.gitattributes`') and the analyzers: `AnalysisLevel` is `latest-recommended`
+  (`Directory.Build.props`), plus the rules the file names (CA2000, CA1031, CA1307, CA5392) and minus the ones it
+  switches off with a reason; with warnings as errors, every one of them breaks the build. An unused `using` (IDE0005)
+  is a build error too, which the compiler reports only when it also checks the doc comments, so the projects generate
+  the documentation file (not published) and a malformed doc comment is a warning. A suppression carries its reason
+  (`SuppressMessage` with `Justification`).
 - **The manuals**: `eng\build_manual.ps1` renders the figures from the app (`ManualFiguresTests`) and embeds them.
 - **The release**: `deploy\avalonia\build_avalonia_package.ps1` (single-file publish, signing, the portable ZIP and the
   Inno installer); `.claude/skills/cut-release` is the procedure.
@@ -942,7 +948,7 @@ helper every test cleans up and reads back through, which waits out a virus scan
 **The application** (`tests/TmDq.App.Tests`, on the headless platform with Skia drawing):
 
 - **The run:** `WalkingSkeletonTests` (Open to the drawn chart on the PRN sample, failures, the smoke report),
-  `ProcessingTests` (the log, the progress dialog and its Cancel, the run's lines in the order the core promises: the job lines,
+  `ProcessingTests` (the log, the progress dialog and its Cancel, its token source released with the run, the run's lines in the order the core promises: the job lines,
   the summary, then each thread's own lines in order, the reader's and the streams' interleaving as they come; a report the observer could not handle, said and not dropped), `SeveralStreamsTests`.
 - **Configure Streams:** `StreamRulesTests` and `StreamFilesTests` (the rules and files without a window),
   `StreamSetupViewModelTests`, `ConfigureStreamsTests`, `StreamWindowsTests`; `CalibrationDialogTests` (Extract
@@ -950,7 +956,8 @@ helper every test cleans up and reads back through, which waits out a virus scan
 - **The plot:** `PlotTests` (series, axes, view mode, the time window and zoom, the readout, the chart's drawing and
   gestures), `PlotDraftTests` (the draft a gesture - the wheel, a drag, a held pan or zoom key - paints on a heavy plot
   and the full picture after it, a dropout in both, the draft's lines and band outlines one device pixel thick at 2x and 3x
-  display scaling, an export never drafted, each long series' index and when it goes), `AroundTheChartTests` (legend, chips,
+  display scaling, an export never drafted, each long series' index and when it goes, the cached layer and the indexes
+  released when the chart leaves the window), `AroundTheChartTests` (legend, chips,
   menu, keys, Customize View, prompts).
 - **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against v2.14.2's, the image pixel by pixel, Import
   CSV), `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, Apply Template with the core missing).

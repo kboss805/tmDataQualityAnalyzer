@@ -6,7 +6,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Headless.XUnit;
-using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;

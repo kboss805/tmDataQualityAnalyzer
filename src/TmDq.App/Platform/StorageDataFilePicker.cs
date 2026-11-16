@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
@@ -35,7 +34,7 @@ namespace TmDq.App.Platform
         public async Task<string?> OpenCsvAsync(string? folder)
         {
             var files = await _owner.StorageProvider.OpenFilePickerAsync(CsvOptions(await FolderAsync(folder)));
-            return files.FirstOrDefault()?.TryGetLocalPath();
+            return files.Count > 0 ? files[0].TryGetLocalPath() : null;
         }
 
         public async Task<string?> SaveExportAsync(ExportKind kind, string current)

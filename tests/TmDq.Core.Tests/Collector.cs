@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 
 namespace TmDq.Core.Tests;
 
 /// <summary>An observer that remembers everything a run says, with managed copies of the results.</summary>
+[SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable",
+    Justification = "The event's wait handle is made only if a caller asks for it, and none does: it is collected with the observer.")]
 internal sealed class Collector : IRunObserver
 {
     private readonly object _lock = new();

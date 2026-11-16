@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -152,6 +154,7 @@ namespace TmDq.App.ViewModels
 
         public IRelayCommand ToggleSidebarCommand => _shell.ToggleSidebarCommand;
 
+        [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Bound from the window's XAML, which binds to an instance.")]
         public string Title => AppInfo.Title;
 
         /// <summary>The log sidebar's contents.</summary>
@@ -242,8 +245,8 @@ namespace TmDq.App.ViewModels
         /// US6.2). Available once there is data.</summary>
         public IAsyncRelayCommand ExportCommand { get; }
 
-        private const string NotAnExportedCsv =
-            "ERROR: '{0}' is not a recognized exported CSV (expected a 'Time (DOY:HH:MM:SS.mmm)' column with data rows). Nothing was imported.";
+        private static readonly CompositeFormat NotAnExportedCsv = CompositeFormat.Parse(
+            "ERROR: '{0}' is not a recognized exported CSV (expected a 'Time (DOY:HH:MM:SS.mmm)' column with data rows). Nothing was imported.");
 
         private async Task OpenAsync()
         {
@@ -536,7 +539,7 @@ namespace TmDq.App.ViewModels
         /// <summary>Runs <paramref name="request"/> with the progress dialog up until it has stopped.</summary>
         private async Task<RunOutcome> RunWithDialogAsync(RunRequest request)
         {
-            var processing = new ProcessingViewModel();
+            using var processing = new ProcessingViewModel();
             _processingDialog?.Show(processing);
             try
             {
@@ -581,7 +584,7 @@ namespace TmDq.App.ViewModels
         /// <summary>A file name as the plot's title takes it: up to its first dot (all of it without one).</summary>
         public static string BaseName(string fileName)
         {
-            int dot = fileName.IndexOf('.');
+            int dot = fileName.IndexOf('.', StringComparison.Ordinal);
             return dot < 0 ? fileName : fileName[..dot];
         }
 

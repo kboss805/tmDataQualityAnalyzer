@@ -1,0 +1,113 @@
+# The repository's editor and analyzer settings. VS Code (with the C# extension), Visual Studio, Rider and the
+# compiler itself all read this file; "root = true" stops the search here.
+#
+# Line endings are left to .gitattributes (`* text=auto`): the blobs are LF and a Windows checkout is CRLF, so
+# an end_of_line here would fight git. Nothing under third_party/ is ours to format; see its section below.
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+max_line_length = 120
+
+# The formats that were written with two spaces. The Qt-written templates under tests/ are compared byte for byte
+# (.gitattributes marks them -text), so nothing here may rewrite them.
+[*.{json,axaml,xaml,props,targets,csproj,vcxproj,yml,yaml,md,xml}]
+indent_size = 2
+
+# Markdown's two trailing spaces are a line break, and prose wraps at 120 by hand (.vscode/settings.json says the same).
+[*.md]
+trim_trailing_whitespace = false
+
+[tests/TmDq.App.Tests/Templates/*.json]
+charset = unset
+indent_style = unset
+indent_size = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+
+[third_party/**]
+charset = unset
+indent_style = unset
+indent_size = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+max_line_length = unset
+
+# ---------------------------------------------------------------------------------------------------------------
+# C#: the analyzers
+#
+# Directory.Build.props sets AnalysisLevel to latest-recommended, the SDK's "recommended" set, and every .NET
+# project already treats warnings as errors, so each rule left on below breaks the build. The rules added on top of
+# the recommended set are the ones that found real defects here; the rest of the "all" set was measured at 414
+# findings, of which about 30 were worth having. (A whole category cannot be switched on from here: a rule the
+# recommended set leaves off stays off under `category-X.severity`, so each is named.)
+# ---------------------------------------------------------------------------------------------------------------
+[*.cs]
+
+# On, beyond the recommended set.
+# CA2000: an IDisposable created and not disposed (the processing view model's token source, the chart's bitmap).
+dotnet_diagnostic.CA2000.severity = warning
+# CA1031: catch (Exception). Each one is a boundary that must not throw (the observer bridge calls back from native
+# threads), and says so where it is suppressed.
+dotnet_diagnostic.CA1031.severity = warning
+# CA1307: a string comparison or search that takes the culture implicitly.
+dotnet_diagnostic.CA1307.severity = warning
+# CA5392: a P/Invoke with no DefaultDllImportSearchPaths (the library is loaded by full path by the resolver).
+dotnet_diagnostic.CA5392.severity = warning
+
+# Off, and why.
+# CA1515 (make public types internal): the tests reference the application's types, so they stay public.
+dotnet_diagnostic.CA1515.severity = none
+# CA2007 (ConfigureAwait): wrong for UI code, which must come back to the UI thread; the library has no
+# synchronisation context of its own to leave.
+dotnet_diagnostic.CA2007.severity = none
+# CA1062 (validate arguments): the nullable annotations are on in every project and are the contract.
+dotnet_diagnostic.CA1062.severity = none
+# The API-shape opinions: array properties, exception constructors, collection suffixes, settable collections and
+# the like describe a public library's surface, and this one is an application's internals.
+dotnet_diagnostic.CA1003.severity = none
+dotnet_diagnostic.CA1032.severity = none
+dotnet_diagnostic.CA1308.severity = none
+dotnet_diagnostic.CA1711.severity = none
+dotnet_diagnostic.CA1716.severity = none
+dotnet_diagnostic.CA1819.severity = none
+dotnet_diagnostic.CA2227.severity = none
+
+# The tests, on top of the above. The rules left off here fire hundreds of times and found nothing: the tests'
+# strings are ASCII fixtures, parsed and compared the one way the product does, and what a test creates it
+# creates for the length of the test.
+[tests/**.cs]
+# CA1305, CA1307, CA1310: culture-sensitive parse, search and compare of an ASCII fixture.
+dotnet_diagnostic.CA1305.severity = none
+dotnet_diagnostic.CA1307.severity = none
+dotnet_diagnostic.CA1310.severity = none
+# CA1861: an array literal in an argument, once per test, reads better than a field.
+dotnet_diagnostic.CA1861.severity = none
+# CA2000: windows, files and streams made for one test and closed with it (the harness owns the rest).
+dotnet_diagnostic.CA2000.severity = none
+# CA1031: a test that catches everything does so to fail on it, or to keep a cleanup from hiding the failure.
+dotnet_diagnostic.CA1031.severity = none
+# CA5392: the one kernel32 import reads a PE file's resources.
+dotnet_diagnostic.CA5392.severity = none
+
+# ---------------------------------------------------------------------------------------------------------------
+# C#: code style, set to how the code is already written
+# ---------------------------------------------------------------------------------------------------------------
+[*.cs]
+# 119 files declare a block namespace and 33 a file-scoped one (audit C6 will pick one): silent until it does.
+csharp_style_namespace_declarations = block_scoped:silent
+
+# Unused usings are a warning (and, with warnings as errors, a build error).
+dotnet_diagnostic.IDE0005.severity = warning
+
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true

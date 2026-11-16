@@ -260,7 +260,7 @@ namespace TmDq.App.ViewModels
             SetCalibrated(false, Array.Empty<CalibrationProfile>(), string.Empty);
             SetCal(CalibrationStatusKind.Pending, ProcessingText);
 
-            var progress = new ProcessingViewModel(ProcessingText);
+            using var progress = new ProcessingViewModel(ProcessingText);
             var observer = new Observer(progress);
             ICalibrationRunning run;
             try

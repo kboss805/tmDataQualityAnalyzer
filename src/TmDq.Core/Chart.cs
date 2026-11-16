@@ -41,10 +41,7 @@ public sealed unsafe class SeriesIndex : IDisposable
         get
         {
             IntPtr handle = _handle;
-            if (handle == IntPtr.Zero)
-            {
-                throw new ObjectDisposedException(nameof(SeriesIndex));
-            }
+            ObjectDisposedException.ThrowIf(handle == IntPtr.Zero, this);
             return handle;
         }
     }

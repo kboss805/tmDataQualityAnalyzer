@@ -623,6 +623,7 @@ namespace TmDq.App.Tests
             Assert.NotNull(shown);
             Assert.Equal(ExtractCalibrationViewModel.ProcessingText, shown!.Text);
             Assert.True(shown.Progress > 0, $"the progress dialog stayed at {shown.Progress}");
+            Assert.Throws<ObjectDisposedException>(() => shown.Token);   // released once the extraction is over
         }
 
         [AvaloniaFact]

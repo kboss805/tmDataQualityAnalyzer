@@ -265,7 +265,7 @@ namespace TmDq.App.Models.Streams
                 AppRoot = string.IsNullOrEmpty(appRoot) ? null : appRoot,
             };
 
-        /// <summary>The time-channel list's text for a channel: "<id> - <name>", as v2.x listed it (the PCM rows
+        /// <summary>The time-channel list's text for a channel: "&lt;id&gt; - &lt;name&gt;", as v2.x listed it (the PCM rows
         /// show the bare name).</summary>
         public static string TimeChannelText(ChannelInfo channel) =>
             channel.Id.ToString(CultureInfo.InvariantCulture) + " - " + channel.Name;

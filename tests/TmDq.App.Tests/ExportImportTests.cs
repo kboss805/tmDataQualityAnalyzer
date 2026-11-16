@@ -507,6 +507,15 @@ namespace TmDq.App.Tests
             }
         }
 
+        [Theory]
+        [InlineData("sample.ch10", "sample")]
+        [InlineData("prn_testfile, sample.ch10", "prn_testfile, sample")]
+        [InlineData("a.b.c", "a")]
+        [InlineData("noextension", "noextension")]
+        [InlineData(".hidden", "")]
+        public void APlotTitleTakesTheFileNameUpToItsFirstDot(string fileName, string expected) =>
+            Assert.Equal(expected, MainWindowViewModel.BaseName(fileName));
+
         public static IEnumerable<object[]> NotExports() => new[]
         {
             new object[] { "Day,Time,A Lock (%)\r\n001,00:00:00.000,90\r\n" },   // the legacy layout

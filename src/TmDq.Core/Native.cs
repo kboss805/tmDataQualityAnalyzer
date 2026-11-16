@@ -2,6 +2,10 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+// The runtime's own resolver (Library.cs) loads the DLL by its full path before this search is ever used; the
+// attribute says what a bare-name lookup would be allowed to do if it were: look in this assembly's folder only.
+[assembly: DefaultDllImportSearchPaths(DllImportSearchPath.AssemblyDirectory)]
+
 namespace TmDq.Core;
 
 // The ABI in tmdq_abi.h, declared for the CLR. Everything here is internal: the public surface is the

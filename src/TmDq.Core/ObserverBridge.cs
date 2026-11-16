@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -10,6 +11,8 @@ namespace TmDq.Core;
 /// library is given, a <see cref="GCHandle"/> to find the observer again, and the first exception the observer
 /// threw. An exception must never unwind a native thread, so each callback catches and keeps it.
 /// </summary>
+[SuppressMessage("Design", "CA1031:Do not catch general exception types",
+    Justification = "An exception must never unwind a native thread: each callback catches everything the observer throws and keeps the first (Context.Remember).")]
 internal sealed unsafe class ObserverBridge : IDisposable
 {
     private readonly Context _state;
@@ -94,6 +97,8 @@ internal sealed unsafe class ObserverBridge : IDisposable
         try { c?.Observer?.OnProgress(percent); } catch (Exception e) { c?.Remember(e); }
     }
 
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "The wrapper takes ownership of the native result and passes it to the observer, which disposes it (or the finalizer does); it is freed here only when the wrapper could not be made.")]
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
     private static void OnStreamDone(void* user, void* result)
     {

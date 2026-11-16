@@ -123,7 +123,7 @@ namespace TmDq.App.Tests
 
             public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
         }
-        /// <summary>The progress dialog of a run, shown at the first report past 70 % to <paramref name="at"/>.</summary>
+        /// <summary>The progress dialog of a run, shown at the first report past 70 % to the callback it is made with.</summary>
         private sealed class CapturingDialog : IProcessingDialog
         {
             private readonly Action<ProcessingViewModel> _at;
@@ -544,7 +544,7 @@ namespace TmDq.App.Tests
             // Three streams selected, two configured; the fourth off. Each Ready mark in its state.
             Ch10File prn = StreamsRun.Open(Prn);
             var configure = new ConfigureStreamsViewModel(Prn, prn, new FakeStreamDialogs(), AppServices.Any, Repo.Root, AppServices.Any);
-            IReadOnlyList<StreamSetup> template = PrnTemplate().Entries.Select(e => e.Config).ToList();
+            List<StreamSetup> template = PrnTemplate().Entries.Select(e => e.Config).ToList();
             configure.Rows[0].Setup = template[0] with { Process = true };
             configure.Rows[1].Process = true;
             configure.Rows[2].Setup = template[2] with { Process = true };
