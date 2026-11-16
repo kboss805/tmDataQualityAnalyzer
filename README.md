@@ -84,7 +84,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **Custom Title Bar**: The window's own title bar with minimize/maximize/close buttons; native Windows drag, resize, snap layouts and double-click-maximize are preserved
 - **Toggleable Sidebar**: Show or hide the log sidebar from the title bar or with **Ctrl+B**; the choice persists across sessions
 - **Dark & Light Themes**: Fluent dark and light themes, chosen under ☰ menu > Settings; every window, dialog and the plot follow it
-- **Built-in User Manual**: An HTML user manual opens in the default browser from ☰ menu > Help > **tmDataQualityAnalyzer Help**
+- **Built-in User Manual**: An HTML user manual opens in the default browser from ☰ menu > Help > **User Manual**
 - **Keyboard Shortcuts**: Ctrl+O (open a file), Ctrl+B (toggle the sidebar), and on the focused chart the arrows, +/-, Home, Backspace, R, V and L
 - **Tooltips**: Descriptive tooltips on plot controls and dialog fields
 
@@ -195,8 +195,6 @@ GPL v3
 - gets an entry under `### Unreleased` at the top of `docs/changelog.md`, saying what changed and why;
 - does not edit `third_party/irig106/**` - adapt it in the core instead;
 - is offered under the same licence as the rest, GPL v3.
-
-Issues and pull requests are welcome on the project's GitHub page.
 
 ## Support
 
