@@ -142,15 +142,6 @@ namespace TmDq.App.Tests
             public void Close() { }
         }
 
-        private sealed class NoPrompts : IPlotPrompts
-        {
-            public Task<string?> AskTextAsync(string title, string label, string initial) => Task.FromResult<string?>(null);
-            public Task<double?> AskNumberAsync(string title, string label, double value, double min, double max, int decimals) => Task.FromResult<double?>(null);
-            public Task<(string Start, string Stop)?> AskTimeWindowAsync(string start, string stop) => Task.FromResult<(string, string)?>(null);
-            public Task<Color?> PickColorAsync(Color initial) => Task.FromResult<Color?>(null);
-            public Task<bool> CustomizeAsync(CustomizeViewModel customize) => Task.FromResult(false);
-        }
-
         /// <summary>The PRN sample's two streams that carry data, as the template v2.14.2 saved has them
         /// (CH-01 on PRN 15, CH-03 on PRN 11), processed; and, with <paramref name="withBadStream"/>, CH-04 on PRN 15,
         /// which finds no sync.</summary>
@@ -638,14 +629,14 @@ namespace TmDq.App.Tests
         public async Task CustomizeViewItsReceiverTreeAndTheColourDialog()
         {
             MainWindowViewModel lockVm = await PrnProcessed();
-            var lockView = new CustomizeViewModel(lockVm.Plot, new NoPrompts());
+            var lockView = new CustomizeViewModel(lockVm.Plot, new NoPlotPrompts());
             Window window = Shown(new CustomizeViewWindow { DataContext = lockView });
             Save("walk-cust-01-lock-tab.png", window);
             window.Close();
 
             // The Receiver SNR tab: one receiver expanded, two of its three channels shown, so its box is partly set.
             MainWindowViewModel snr = await StepCalProcessed();
-            var snrView = new CustomizeViewModel(snr.Plot, new NoPrompts());
+            var snrView = new CustomizeViewModel(snr.Plot, new NoPlotPrompts());
             ReceiverGroup first = snrView.SelectedSnrStream!.Receivers.First();
             first.IsExpanded = true;
             first.Channels[2].IsChecked = false;

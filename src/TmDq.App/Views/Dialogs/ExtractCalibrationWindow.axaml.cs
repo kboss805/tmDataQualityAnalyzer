@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Markup.Xaml;
 
 namespace TmDq.App.Views.Dialogs
 {
@@ -7,6 +6,6 @@ namespace TmDq.App.Views.Dialogs
     /// <see cref="ViewModels.Dialogs.ExtractCalibrationViewModel"/>.</summary>
     public sealed partial class ExtractCalibrationWindow : Window
     {
-        public ExtractCalibrationWindow() => AvaloniaXamlLoader.Load(this);
+        public ExtractCalibrationWindow() => InitializeComponent();
     }
 }

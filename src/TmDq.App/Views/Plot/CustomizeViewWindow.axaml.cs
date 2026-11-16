@@ -1,7 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Markup.Xaml;
-using TmDq.App.Platform;
-using TmDq.App.ViewModels.Plot;
 
 namespace TmDq.App.Views.Plot
 {
@@ -11,10 +8,9 @@ namespace TmDq.App.Views.Plot
     {
         public CustomizeViewWindow()
         {
-            AvaloniaXamlLoader.Load(this);
-            this.FindControl<Button>("OkButton")!.Click += (_, _) => Close(true);
-            this.FindControl<Button>("CancelButton")!.Click += (_, _) => Close(false);
-            DataContextChanged += (_, _) => (DataContext as CustomizeViewModel)?.AskThrough(new WindowPlotPrompts(this));
+            InitializeComponent();
+            OkButton.Click += (_, _) => Close(true);
+            CancelButton.Click += (_, _) => Close(false);
         }
     }
 }

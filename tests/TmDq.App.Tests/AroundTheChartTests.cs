@@ -1548,6 +1548,9 @@ namespace TmDq.App.Tests
         {
             PlotViewModel plot = LockPlot();
             Shown s = Show(plot);
+            // What the application hands the view: until it does, every question is answered "cancel".
+            Assert.IsType<NoPlotPrompts>(s.View.Prompts);
+            s.View.Prompts = new WindowPlotPrompts(s.View);
             Task title = new PlotCommands(plot, s.View.Prompts).SetTitleAsync();
             Dispatcher.UIThread.RunJobs();
             var w = Assert.IsType<TextPromptWindow>(s.Window.OwnedWindows.Single());

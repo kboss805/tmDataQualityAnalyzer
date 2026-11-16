@@ -4,7 +4,6 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TmDq.App.Models.Processing;
 using TmDq.App.Models.Streams;
@@ -19,7 +18,7 @@ namespace TmDq.App.ViewModels.Dialogs
     /// when <see cref="StreamRules.Problems"/> finds nothing, and the problems are shown as they arise, so a value
     /// v2.x's validators and spin boxes would have refused, or a file would have slipped past them, is named instead.
     /// </summary>
-    public sealed class StreamSetupViewModel : ObservableObject
+    public sealed class StreamSetupViewModel : DialogViewModel
     {
         public static readonly IReadOnlyList<string> Periods = new[] { "1 s", "100 ms", "10 ms" };
         public static readonly IReadOnlyList<string> Polarities = new[] { "Positive", "Negative" };
@@ -113,12 +112,8 @@ namespace TmDq.App.ViewModels.Dialogs
             LoadReceiverParamsCommand = new AsyncRelayCommand(LoadReceiverParamsAsync, () => _files is not null);
             SaveReceiverParamsCommand = new AsyncRelayCommand(SaveReceiverParamsAsync, () => _files is not null);
             OkCommand = new RelayCommand(Ok, () => CanAccept);
-            CancelCommand = new RelayCommand(() => CloseRequested?.Invoke(this, EventArgs.Empty));
             Recheck();
         }
-
-        /// <summary>Raised when OK or Cancel closes the dialog; <see cref="Accepted"/> says which.</summary>
-        public event EventHandler? CloseRequested;
 
         public bool IsReceiverSnr => _start.Mode == StreamMode.ReceiverChannelInfo;
 
@@ -176,8 +171,6 @@ namespace TmDq.App.ViewModels.Dialogs
 
         public bool CanAccept => Problems.Count == 0;
 
-        public bool Accepted { get; private set; }
-
         /// <summary>The folder a settings file was last loaded from or saved to, for the next dialog.</summary>
         public string? LastFolder => _lastFolder;
 
@@ -190,8 +183,6 @@ namespace TmDq.App.ViewModels.Dialogs
         public IAsyncRelayCommand SaveReceiverParamsCommand { get; }
 
         public IRelayCommand OkCommand { get; }
-
-        public IRelayCommand CancelCommand { get; }
 
         // ---- non-linear step calibration (plan step 4.6, US5.3) ---------------------------------------------------------
 
@@ -312,8 +303,7 @@ namespace TmDq.App.ViewModels.Dialogs
         private void Ok()
         {
             if (!CanAccept) return;
-            Accepted = true;
-            CloseRequested?.Invoke(this, EventArgs.Empty);
+            Accept();
         }
 
         /// <summary>Puts a row's fields back on the dialog (after a Load).</summary>

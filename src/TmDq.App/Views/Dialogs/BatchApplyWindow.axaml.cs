@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Markup.Xaml;
 
 namespace TmDq.App.Views.Dialogs
 {
@@ -7,6 +6,6 @@ namespace TmDq.App.Views.Dialogs
     /// <see cref="ViewModels.Dialogs.BatchApplyViewModel"/>.</summary>
     public sealed partial class BatchApplyWindow : Window
     {
-        public BatchApplyWindow() => AvaloniaXamlLoader.Load(this);
+        public BatchApplyWindow() => InitializeComponent();
     }
 }

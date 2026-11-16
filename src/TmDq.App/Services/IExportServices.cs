@@ -17,7 +17,7 @@ namespace TmDq.App.Services
         Task<string?> SaveExportAsync(ExportKind kind, string current);
     }
 
-    /// <summary>Shows the Export dialog modally; returns when it closes (<see cref="ExportViewModel.Accepted"/> says how).</summary>
+    /// <summary>Shows the Export dialog modally; returns when it closes (<see cref="DialogViewModel.Accepted"/> says how).</summary>
     public interface IExportDialog
     {
         Task ShowAsync(ExportViewModel vm);

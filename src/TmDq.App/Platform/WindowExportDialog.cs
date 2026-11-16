@@ -15,9 +15,7 @@ namespace TmDq.App.Platform
 
         public async Task ShowAsync(ExportViewModel vm)
         {
-            var window = new ExportWindow { DataContext = vm };
-            vm.CloseRequested += (_, _) => window.Close();
-            await window.ShowDialog(_owner);
+            await Modal.ShowAsync(new ExportWindow(), vm, _owner);
         }
     }
 }

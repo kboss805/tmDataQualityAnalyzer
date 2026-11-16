@@ -10,15 +10,10 @@ namespace TmDq.App.Views.Dialogs
 {
     /// <summary>A small modal question with OK and Cancel (Enter and Escape), closing with its answer or null: the base of the
     /// plot's prompts (plan step 4.4): text, a number, a time window and a colour.</summary>
-    public abstract class PromptWindow<T> : Window
+    public abstract class PromptWindow<T> : DialogWindow
     {
-        protected PromptWindow(string title)
+        protected PromptWindow(string title) : base(title)
         {
-            Title = title;
-            SizeToContent = SizeToContent.WidthAndHeight;
-            CanResize = false;
-            ShowInTaskbar = false;
-            WindowStartupLocation = WindowStartupLocation.CenterOwner;
             OkButton = new Button { Content = "OK", IsDefault = true };
             CancelButton = new Button { Content = "Cancel", IsCancel = true };
             OkButton.Click += (_, _) => Close(Answer());

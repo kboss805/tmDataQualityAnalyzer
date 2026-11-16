@@ -1091,6 +1091,7 @@ namespace TmDq.App.Tests
             Dispatcher.UIThread.RunJobs();
             var window = Assert.IsType<ExportWindow>(Assert.Single(owner.OwnedWindows));
             Assert.True(window.IsDialog);
+            Assert.Same(vm, window.DataContext);   // the host gives the window its view model (Modal)
             vm.ExportCommand.Execute(null);
             Dispatcher.UIThread.RunJobs();
             Assert.True(shown.IsCompleted, "the Export dialog is still open.");

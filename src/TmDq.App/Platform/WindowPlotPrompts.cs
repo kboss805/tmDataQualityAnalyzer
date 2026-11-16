@@ -33,8 +33,10 @@ namespace TmDq.App.Platform
         {
             Window? owner = Owner;
             if (owner is null) return false;
+            var window = new CustomizeViewWindow { DataContext = customize };
             // The dialog's own questions (a colour, a name) sit over the dialog, not over the main window.
-            return await new CustomizeViewWindow { DataContext = customize }.ShowDialog<bool>(owner);
+            customize.AskThrough(new WindowPlotPrompts(window));
+            return await window.ShowDialog<bool>(owner);
         }
 
         private async Task<T?> Ask<T>(Window window)

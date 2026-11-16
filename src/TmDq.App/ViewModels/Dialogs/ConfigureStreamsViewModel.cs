@@ -17,7 +17,7 @@ namespace TmDq.App.ViewModels.Dialogs
     /// recording, and Process. Every rule is <see cref="StreamRules"/>'s; this holds the rows and opens a row's setup
     /// dialog through <see cref="IStreamDialogs"/>.
     /// </summary>
-    public sealed class ConfigureStreamsViewModel : ObservableObject
+    public sealed class ConfigureStreamsViewModel : DialogViewModel
     {
         private readonly IStreamDialogs? _dialogs;
         private readonly ISettingsFilePicker? _files;
@@ -45,11 +45,7 @@ namespace TmDq.App.ViewModels.Dialogs
             _timeChannelIndex = Math.Max(0, _timeChannels.ToList().FindIndex(c => c.Id == file.DefaultTimeChannel));
             Rows = new ObservableCollection<StreamRowViewModel>(file.PcmChannels.Select(c => new StreamRowViewModel(this, StreamDefaults.NewStream(c))));
             ProcessCommand = new RelayCommand(Process, () => CanProcess);
-            CancelCommand = new RelayCommand(() => CloseRequested?.Invoke(this, EventArgs.Empty));
         }
-
-        /// <summary>Raised when Process or Cancel closes the dialog; <see cref="Accepted"/> says which.</summary>
-        public event EventHandler? CloseRequested;
 
         public string Recording { get; }
 
@@ -91,14 +87,10 @@ namespace TmDq.App.ViewModels.Dialogs
         /// <summary>Why Process is not available, as the dialog says it; empty when it is.</summary>
         public string WhyNotProcess => StreamRules.WhyNotProcess(Setups) ?? string.Empty;
 
-        public bool Accepted { get; private set; }
-
         /// <summary>Where Extract Calibration's last calibration recording came from, for the next session.</summary>
         public string? LastCalFolder => _lastCalFolder;
 
         public IRelayCommand ProcessCommand { get; }
-
-        public IRelayCommand CancelCommand { get; }
 
         public IReadOnlyList<StreamSetup> Setups => Rows.Select(r => r.Setup).ToList();
 
@@ -137,8 +129,7 @@ namespace TmDq.App.ViewModels.Dialogs
         private void Process()
         {
             if (!CanProcess) return;
-            Accepted = true;
-            CloseRequested?.Invoke(this, EventArgs.Empty);
+            Accept();
         }
     }
 

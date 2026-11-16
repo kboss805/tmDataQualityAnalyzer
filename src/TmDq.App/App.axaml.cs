@@ -1,6 +1,5 @@
 using System;
 using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
@@ -10,7 +9,6 @@ using TmDq.App.Platform;
 using TmDq.App.ViewModels;
 using TmDq.App.ViewModels.Dialogs;
 using TmDq.App.Views;
-using TmDq.App.Views.Plot;
 
 namespace TmDq.App
 {
@@ -25,6 +23,7 @@ namespace TmDq.App
                 var window = new MainWindow();
                 // What is remembered between sessions (plan step 4.8). The installer's smoke test keeps nothing: it must
                 // not leave its recording in anyone's Recent Files.
+                window.PlotView.Prompts = new WindowPlotPrompts(window.PlotView);
                 string? smokeReport = Startup.SmokeReportPath();
                 PreferencesStore preferences = smokeReport is null
                     ? PreferencesStore.Load(PreferencesStore.FolderFor(AppContext.BaseDirectory,
@@ -43,7 +42,7 @@ namespace TmDq.App
                     ProcessingDialog = new WindowProcessingDialog(window),
                     Files = new StorageDataFilePicker(window),
                     ExportDialog = new WindowExportDialog(window),
-                    ImageExporter = new PlotViewImageExporter(window.FindControl<PlotView>("PlotView")!),
+                    ImageExporter = new PlotViewImageExporter(window.PlotView),
                     TemplateFiles = new StorageTemplateFilePicker(window),
                     TemplateDialogs = new WindowTemplateDialogs(window),
                     Help = new WindowHelpActions(window),

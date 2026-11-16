@@ -48,6 +48,15 @@ namespace TmDq.App.Tests
             Assert.True(wrong.Length == 0, "a view model or service reaches a view or Avalonia:\n" + string.Join("\n", wrong));
         }
 
+        /// <summary>A view asks for what it needs and is handed it: it reaches no <c>Platform</c> type (the application hands
+        /// each view the platform objects it works with, as it does every other).</summary>
+        [Fact]
+        public void ViewsReachNoPlatformType()
+        {
+            string[] wrong = Breaches(t => InLayer(t, "Views"), r => InLayer(r, "Platform"));
+            Assert.True(wrong.Length == 0, "a view reaches Platform:\n" + string.Join("\n", wrong));
+        }
+
         /// <summary><c>Services</c> is the interfaces a view model asks the user through, and nothing else: an implementation
         /// belongs in <c>Platform</c>, a rule, a file or a run of the core in <c>Models</c>, and what builds a view model in
         /// <c>ViewModels</c> (docs/claude.md, File Organization).</summary>

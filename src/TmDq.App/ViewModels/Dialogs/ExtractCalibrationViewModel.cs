@@ -4,7 +4,6 @@ using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TmDq.App.Models.Processing;
 using TmDq.App.Models.Streams;
@@ -29,7 +28,7 @@ namespace TmDq.App.ViewModels.Dialogs
     /// extracted, with the progress dialog up and Cancel stopping it. OK is available once the step file parsed and at
     /// least one channel calibrated; it gives the profiles, the two files, the clips and the report.
     /// </summary>
-    public sealed class ExtractCalibrationViewModel : ObservableObject
+    public sealed class ExtractCalibrationViewModel : DialogViewModel
     {
         public const string Title = "Extract Calibration";
         public const string ProcessingText = "Processing calibration file…";
@@ -60,7 +59,6 @@ namespace TmDq.App.ViewModels.Dialogs
             BrowseStepCommand = new AsyncRelayCommand(BrowseStepAsync, () => _files is not null);
             BrowseCalCommand = new AsyncRelayCommand(BrowseCalAsync, () => _files is not null);
             OkCommand = new RelayCommand(Ok, () => CanAccept);
-            CancelCommand = new RelayCommand(() => CloseRequested?.Invoke(this, EventArgs.Empty));
             SetStep(CalibrationStatusKind.Pending, "No file selected.");
             SetCal(CalibrationStatusKind.Pending, "No file selected.");
 
@@ -69,9 +67,6 @@ namespace TmDq.App.ViewModels.Dialogs
             string initial = StepFile.InitialPath(appRoot, initialStepPath);
             if (initial.Length > 0) LoadStepFile(initial, automatic: true);
         }
-
-        /// <summary>Raised when OK or Cancel closes the dialog; <see cref="Accepted"/> says which.</summary>
-        public event EventHandler? CloseRequested;
 
         /// <summary>The progress dialog an extraction shows; the window sets it, so it sits over the dialog.</summary>
         public IProcessingDialog? ProgressDialog { get; set; }
@@ -134,8 +129,6 @@ namespace TmDq.App.ViewModels.Dialogs
 
         public bool CanAccept => _stepOk && _calOk;
 
-        public bool Accepted { get; private set; }
-
         /// <summary>The folders the two Browse buttons last used, for the next dialog.</summary>
         public string? StepFolder { get; private set; }
 
@@ -149,8 +142,6 @@ namespace TmDq.App.ViewModels.Dialogs
         public IAsyncRelayCommand BrowseCalCommand { get; }
 
         public IRelayCommand OkCommand { get; }
-
-        public IRelayCommand CancelCommand { get; }
 
         /// <summary>Loads <paramref name="path"/> as the step file and extracts again (what Browse does once a file is chosen).</summary>
         public Task LoadStepFileAsync(string path)
@@ -368,8 +359,7 @@ namespace TmDq.App.ViewModels.Dialogs
         private void Ok()
         {
             if (!CanAccept) return;
-            Accepted = true;
-            CloseRequested?.Invoke(this, EventArgs.Empty);
+            Accept();
         }
 
         /// <summary>The extraction's reports, the progress on the dialog's thread.</summary>

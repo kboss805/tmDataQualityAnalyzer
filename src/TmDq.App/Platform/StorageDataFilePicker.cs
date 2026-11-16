@@ -1,4 +1,3 @@
-using System;
 using System.IO;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -33,8 +32,8 @@ namespace TmDq.App.Platform
 
         public async Task<string?> OpenCsvAsync(string? folder)
         {
-            var files = await _owner.StorageProvider.OpenFilePickerAsync(CsvOptions(await FolderAsync(folder)));
-            return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+            var files = await _owner.StorageProvider.OpenFilePickerAsync(CsvOptions(await StorageDialogs.StartFolderAsync(_owner.StorageProvider, folder)));
+            return StorageDialogs.FirstPath(files);
         }
 
         public async Task<string?> SaveExportAsync(ExportKind kind, string current)
@@ -50,14 +49,9 @@ namespace TmDq.App.Platform
                 Title = title,
                 FileTypeChoices = types,
                 SuggestedFileName = Path.GetFileName(current),
-                SuggestedStartLocation = await FolderAsync(Path.GetDirectoryName(current)),
+                SuggestedStartLocation = await StorageDialogs.StartFolderAsync(_owner.StorageProvider, Path.GetDirectoryName(current)),
             });
             return file?.TryGetLocalPath();
         }
-
-        private async Task<IStorageFolder?> FolderAsync(string? folder) =>
-            string.IsNullOrEmpty(folder) || !Directory.Exists(folder)
-                ? null
-                : await _owner.StorageProvider.TryGetFolderFromPathAsync(new Uri(Path.GetFullPath(folder)));
     }
 }

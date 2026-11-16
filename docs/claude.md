@@ -521,8 +521,13 @@ profile, so a batch processes with the linear calibration.
   written: `Startup.RunSmokeAsync`, which `WalkingSkeletonTests` runs): the installer's clean-machine test
   proves the whole path, native core included, with it.
 - **Windows:** every window with a view model is XAML (`MainWindow`, `ConfigureStreamsWindow`, `StreamSetupWindow`,
-  `ExtractCalibrationWindow`, `ProcessingWindow`, `ExportWindow`, `BatchApplyWindow`, `CustomizeViewWindow`); every window
-  without one is built in code (`ChoiceWindow`, the plot's prompts in `PromptWindows`, `ReportWindow`).
+  `ExtractCalibrationWindow`, `ProcessingWindow`, `ExportWindow`, `BatchApplyWindow`, `CustomizeViewWindow`), each
+  loading itself through the generated `InitializeComponent()` (which fills its named controls; `AvaloniaXamlLoader.Load`
+  alone leaves them null); every window without one is built in code on `DialogWindow` (`ChoiceWindow` and the plot's
+  prompts, which are `PromptWindow<T>`s, in `PromptWindows`, and `ReportWindow`). The five dialogs with an accepting
+  command (Configure Streams, the setup dialog, Extract Calibration, Export, the batch confirmation) have
+  `DialogViewModel` as their base: `CloseRequested`, `Accepted`, Cancel and `Accept()`; `Platform/Modal` shows such a
+  dialog the way every host does, the view model reaching no window.
 - **The plot** (`ViewModels/Plot`): `PlotViewModel` (the series built by the core, the axes and overrides, the view mode, the
   recordings and Plot File, the readout's pin), with its jobs in types of their own, the folder's other seven files:
   `PlotTimeWindow` (the span, the window and its zoom history, the gestures and keys that move it), `PlotReadout` (what
@@ -642,15 +647,17 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
     `ICalibrationRunner` (with the product's `CoreCalibrationRunner`) are in `Models/Processing`.
   - `ViewModels/`: the main window's view model and its parts (`MainWindowServices`, `ShellPreferences`,
     `SessionExport`, `BatchRunner`, with `IRunHost` beside it) and `MenuChoice`, which both menus use; the dialogs'
-    in `ViewModels/Dialogs/` (with `DialogConfigurator`, which builds Configure Streams' view model), the plot's in
-    `ViewModels/Plot/`.
+    in `ViewModels/Dialogs/` (with `DialogViewModel`, their base, and `DialogConfigurator`, which builds Configure
+    Streams' view model), the plot's in `ViewModels/Plot/` (with `NoPlotPrompts`, what a `PlotView` asks through until
+    the application hands it the windows).
   - `Views/`: `MainWindow`; the dialogs' windows, XAML and built in code, in `Views/Dialogs/`; the plot's view, chart,
     legend, image export, palette and Customize View in `Views/Plot/`; the controls the windows share (`LogView`,
     `DialogFooter`) in `Views/Controls/`; and what turns a view model's state into paint (`StatusPaint`,
     `StatusBrushes`) in `Views/Converters/`. Each folder of `Views/` mirrors the one of `ViewModels/` it shows.
   - `Services/`: the interfaces a view model asks the user through (file dialogs, dialogs, prompts, Help) and nothing
     else; `LayerTests` holds it to interfaces.
-  - `Platform/`: their Avalonia implementations, which the application hands in (`App.axaml.cs`) and a test replaces.
+  - `Platform/`: their Avalonia implementations, which the application hands in (`App.axaml.cs`, to the view models and
+    to `PlotView`) and a test replaces; `Modal` and `StorageDialogs` are what the hosts and the pickers share.
 - **Assets**: `assets/` (the base manual, the icon, the UTF-8 manifest); the full manual, `UserManual.html`, at the
   root (Windows cannot hold it beside `usermanual.html`, whose name differs only in case); shipped settings in
   `settings/`; build and test scripts, and the props and targets every .NET project imports, in `eng/`; the vendored
@@ -980,8 +987,8 @@ helper every test cleans up and reads back through, which waits out a virus scan
   (the preferences file, and v2.x's INI file left unread), `MainWindowTests`.
 - **The layers:** `LayerTests` reads every model, view model and service type as compiled, its methods' code
   included. It fails on a model that reaches a view model, a service, a view or `Platform`; on a view model or service
-  that reaches a view or `Platform`; on any of them that reaches an Avalonia type other than `Color`; and on a type in
-  `Services` that is not an interface.
+  that reaches a view or `Platform`; on a view that reaches `Platform`; on any model, view model or service that reaches
+  an Avalonia type other than `Color`; and on a type in `Services` that is not an interface.
 - **The manual:** `ManualFiguresTests` renders every figure and checks each caption's claims. A re-render is the same, byte for
   byte in the pixels, but for one level of colour in three pixels at a checkbox's edge in the receiver tree's figure: the run log's
   racing lines and its percentages and seconds are set in one order and wording before each capture (`Steady`, which

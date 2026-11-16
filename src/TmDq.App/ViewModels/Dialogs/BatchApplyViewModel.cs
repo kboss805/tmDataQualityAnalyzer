@@ -28,7 +28,7 @@ namespace TmDq.App.ViewModels.Dialogs
     /// template, a row for each, and the options: a CSV and plot images per file into a folder, and the template's series
     /// names and colours reused (on at first). Process needs a matching file, and a folder while exporting.
     /// </summary>
-    public sealed partial class BatchApplyViewModel : ObservableObject
+    public sealed partial class BatchApplyViewModel : DialogViewModel
     {
         public const string Title = "Batch Process Files";
 
@@ -52,11 +52,7 @@ namespace TmDq.App.ViewModels.Dialogs
             _files = files;
             BrowseCommand = new AsyncRelayCommand(BrowseAsync, () => _files is not null && ExportPerFile);
             ProcessCommand = new RelayCommand(Process, () => CanProcess);
-            CancelCommand = new RelayCommand(() => CloseRequested?.Invoke(this, EventArgs.Empty));
         }
-
-        /// <summary>Raised when Process or Cancel closes the dialog; <see cref="Accepted"/> says which.</summary>
-        public event EventHandler? CloseRequested;
 
         public IReadOnlyList<BatchFileRow> Rows { get; }
 
@@ -70,13 +66,9 @@ namespace TmDq.App.ViewModels.Dialogs
 
         public bool CanProcess => MatchCount > 0 && (!ExportPerFile || OutputFolder.Trim().Length > 0);
 
-        public bool Accepted { get; private set; }
-
         public IAsyncRelayCommand BrowseCommand { get; }
 
         public IRelayCommand ProcessCommand { get; }
-
-        public IRelayCommand CancelCommand { get; }
 
         partial void OnExportPerFileChanged(bool value) => BrowseCommand.NotifyCanExecuteChanged();
 
@@ -95,8 +87,7 @@ namespace TmDq.App.ViewModels.Dialogs
         private void Process()
         {
             if (!CanProcess) return;
-            Accepted = true;
-            CloseRequested?.Invoke(this, EventArgs.Empty);
+            Accept();
         }
     }
 }

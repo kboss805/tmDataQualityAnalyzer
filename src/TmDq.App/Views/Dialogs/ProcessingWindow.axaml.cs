@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Markup.Xaml;
 
 namespace TmDq.App.Views.Dialogs
 {
@@ -12,7 +11,7 @@ namespace TmDq.App.Views.Dialogs
 
         public ProcessingWindow()
         {
-            AvaloniaXamlLoader.Load(this);
+            InitializeComponent();
             // The owner closing, or the application or Windows shutting down, still takes it with them.
             Closing += (_, e) => e.Cancel = !_done && e.CloseReason == WindowCloseReason.WindowClosing;
         }

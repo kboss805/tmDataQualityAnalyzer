@@ -1,0 +1,105 @@
+{
+  "suite": "app",
+  "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ShellTests"],
+  "mutants": [
+    {
+      "id": "D1",
+      "file": "src/TmDq.App/ViewModels/Dialogs/DialogViewModel.cs",
+      "old": "            Accepted = true;\n            Close();",
+      "new": "            Close();",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ExportImportTests"],
+      "expect": "caught",
+      "note": "an accepted dialog closes without saying it was accepted: Export would never run"
+    },
+    {
+      "id": "D2",
+      "file": "src/TmDq.App/ViewModels/Dialogs/DialogViewModel.cs",
+      "old": "        protected DialogViewModel() => CancelCommand = new RelayCommand(Close);",
+      "new": "        protected DialogViewModel() => CancelCommand = new RelayCommand(Accept);",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.CalibrationDialogTests"],
+      "expect": "caught",
+      "note": "Cancel accepts"
+    },
+    {
+      "id": "D3",
+      "file": "src/TmDq.App/ViewModels/Dialogs/DialogViewModel.cs",
+      "old": "        private void Close() => CloseRequested?.Invoke(this, EventArgs.Empty);",
+      "new": "        private void Close() => _ = CloseRequested;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.CalibrationDialogTests"],
+      "expect": "caught",
+      "note": "the dialog is never asked to close"
+    },
+    {
+      "id": "D4",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "            if (!CanAccept) return;\n            Accept();",
+      "new": "            Accept();",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.StreamSetupViewModelTests"],
+      "expect": "caught",
+      "note": "OK accepts a setup with problems"
+    },
+    {
+      "id": "M1",
+      "file": "src/TmDq.App/Platform/Modal.cs",
+      "old": "            vm.CloseRequested += (_, _) => window.Close();\n",
+      "new": "",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ExportImportTests"],
+      "expect": "caught",
+      "note": "the host never closes the window when the view model asks"
+    },
+    {
+      "id": "M2",
+      "file": "src/TmDq.App/Platform/Modal.cs",
+      "old": "            window.DataContext = vm;\n",
+      "new": "",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ExportImportTests"],
+      "expect": "caught",
+      "note": "the window is shown with no view model"
+    },
+    {
+      "id": "P1",
+      "file": "src/TmDq.App/Platform/StorageDialogs.cs",
+      "old": "string.IsNullOrEmpty(folder) || !Directory.Exists(folder)",
+      "new": "string.IsNullOrEmpty(folder)",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ShellTests"],
+      "expect": "caught",
+      "note": "a folder that is not there is asked of the provider"
+    },
+    {
+      "id": "P2",
+      "file": "src/TmDq.App/Platform/StorageDialogs.cs",
+      "old": "chosen.Count > 0 ? chosen[0].TryGetLocalPath() : null",
+      "new": "chosen.Count >= 0 ? chosen[0].TryGetLocalPath() : null",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ShellTests"],
+      "expect": "caught",
+      "note": "nothing chosen read as a first item"
+    },
+    {
+      "id": "C1",
+      "file": "src/TmDq.App/Views/Dialogs/ChoiceWindow.cs",
+      "old": "Choices.SelectedIndex >= 0 ? Choices.SelectedIndex : null;",
+      "new": "Choices.SelectedIndex;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.TemplateBatchTests"],
+      "expect": "survived",
+      "note": "an empty list answers -1 instead of nothing: no test presses OK over an empty list, and the host never offers one (a recording always has a source)"
+    },
+    {
+      "id": "S1",
+      "file": "src/TmDq.App/Platform/WindowPlotPrompts.cs",
+      "old": "            customize.AskThrough(new WindowPlotPrompts(window));\n",
+      "new": "",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AroundTheChartTests"],
+      "expect": "caught",
+      "note": "Customize View's own questions (a colour, a name) are asked over the main window, not over the dialog"
+    },
+    {
+      "id": "S2",
+      "file": "src/TmDq.App/Views/Plot/PlotView.axaml.cs",
+      "old": "get => _prompts ??= new NoPlotPrompts();",
+      "new": "get => _prompts ??= null!;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AroundTheChartTests"],
+      "expect": "caught",
+      "note": "a view with no prompts handed in has none to ask through"
+    }
+  ]
+}

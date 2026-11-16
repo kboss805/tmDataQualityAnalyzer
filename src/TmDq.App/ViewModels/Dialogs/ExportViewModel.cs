@@ -1,4 +1,3 @@
-using System;
 using System.IO;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -14,7 +13,7 @@ namespace TmDq.App.ViewModels.Dialogs
     /// its box is ticked, and Export only while some box is ticked and every ticked row has a path. There is no format
     /// choice: an image's suffix decides it.
     /// </summary>
-    public sealed partial class ExportViewModel : ObservableObject
+    public sealed partial class ExportViewModel : DialogViewModel
     {
         public const string Title = "Export Data";
 
@@ -55,7 +54,6 @@ namespace TmDq.App.ViewModels.Dialogs
             BrowseDataCommand = new AsyncRelayCommand(() => BrowseAsync(ExportKind.Data), () => _files is not null && ExportData);
             BrowseLogCommand = new AsyncRelayCommand(() => BrowseAsync(ExportKind.Log), () => _files is not null && ExportLog);
             ExportCommand = new RelayCommand(Accept, () => CanExport);
-            CancelCommand = new RelayCommand(() => CloseRequested?.Invoke(this, EventArgs.Empty));
         }
 
         /// <summary>
@@ -70,11 +68,6 @@ namespace TmDq.App.ViewModels.Dialogs
             return (Path.Combine(folder, name + ".png"), Path.Combine(folder, name + ".csv"), Path.Combine(folder, name + "_log.txt"));
         }
 
-        /// <summary>Raised when Export or Cancel closes the dialog; <see cref="Accepted"/> says which.</summary>
-        public event EventHandler? CloseRequested;
-
-        public bool Accepted { get; private set; }
-
         /// <summary>Some box ticked, and every ticked row with a path.</summary>
         public bool CanExport =>
             (ExportImage || ExportData || ExportLog) &&
@@ -87,8 +80,6 @@ namespace TmDq.App.ViewModels.Dialogs
         public IAsyncRelayCommand BrowseLogCommand { get; }
 
         public IRelayCommand ExportCommand { get; }
-
-        public IRelayCommand CancelCommand { get; }
 
         partial void OnExportImageChanged(bool value) => BrowseImageCommand.NotifyCanExecuteChanged();
 
@@ -116,12 +107,6 @@ namespace TmDq.App.ViewModels.Dialogs
                 case ExportKind.Data: DataPath = chosen; break;
                 default: LogPath = chosen; break;
             }
-        }
-
-        private void Accept()
-        {
-            Accepted = true;
-            CloseRequested?.Invoke(this, EventArgs.Empty);
         }
     }
 }

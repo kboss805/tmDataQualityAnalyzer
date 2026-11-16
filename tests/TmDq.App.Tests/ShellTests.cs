@@ -967,6 +967,18 @@ namespace TmDq.App.Tests
             Assert.Contains("Join-Path $portable '" + HelpManual.FullManualName + "'", package);
         }
 
+        [Fact]
+        public async Task ADialogOpensAtAFolderOnlyWhenThereIsOneAndAnswersWithTheFirstItemChosen()
+        {
+            // No folder, an empty name and a folder that is not there all mean the platform's own choice, and are decided
+            // without asking the storage provider (there is none here to ask).
+            Assert.Null(await StorageDialogs.StartFolderAsync(null!, null));
+            Assert.Null(await StorageDialogs.StartFolderAsync(null!, ""));
+            Assert.Null(await StorageDialogs.StartFolderAsync(null!, Path.Combine(_dir, "no such folder")));
+            // Nothing chosen is no path.
+            Assert.Null(StorageDialogs.FirstPath(Array.Empty<IStorageItem>()));
+        }
+
         [AvaloniaFact]
         public async Task AboutSaysTheVersionAndWhatTheApplicationDoes()
         {

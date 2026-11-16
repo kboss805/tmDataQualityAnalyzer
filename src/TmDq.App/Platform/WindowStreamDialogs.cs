@@ -18,12 +18,11 @@ namespace TmDq.App.Platform
 
         public async Task ConfigureStreamsAsync(ConfigureStreamsViewModel vm)
         {
-            var window = new ConfigureStreamsWindow { DataContext = vm };
-            vm.CloseRequested += (_, _) => window.Close();
+            var window = new ConfigureStreamsWindow();
             _configure = window;
             try
             {
-                await window.ShowDialog(_owner);
+                await Modal.ShowAsync(window, vm, _owner);
             }
             finally
             {
@@ -33,13 +32,12 @@ namespace TmDq.App.Platform
 
         public async Task EditStreamAsync(StreamSetupViewModel vm)
         {
-            var window = new StreamSetupWindow { DataContext = vm };
-            vm.CloseRequested += (_, _) => window.Close();
+            var window = new StreamSetupWindow();
             Window owner = Top;
             _setup = window;
             try
             {
-                await window.ShowDialog(owner);
+                await Modal.ShowAsync(window, vm, owner);
             }
             finally
             {
@@ -49,11 +47,10 @@ namespace TmDq.App.Platform
 
         public async Task ExtractCalibrationAsync(ExtractCalibrationViewModel vm)
         {
-            var window = new ExtractCalibrationWindow { DataContext = vm };
-            vm.CloseRequested += (_, _) => window.Close();
+            var window = new ExtractCalibrationWindow();
             // The extraction's progress sits over this dialog, modal to it, as in v2.x.
             vm.ProgressDialog = new WindowProcessingDialog(window);
-            await window.ShowDialog(Top);
+            await Modal.ShowAsync(window, vm, Top);
         }
 
         public Task ShowReportAsync(string title, string text) => new ReportWindow(title, text).ShowDialog(Top);
