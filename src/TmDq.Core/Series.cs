@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Threading;
 
 namespace TmDq.Core;
 
@@ -37,13 +36,13 @@ public sealed record SeriesSpec(
 /// </summary>
 public sealed unsafe class SeriesSet : IDisposable
 {
-    private IntPtr _handle;
+    private readonly SeriesSetHandle _handle;
     private readonly double* _elapsed;
     private readonly int _elapsedCount;
     private readonly SeriesSpec[] _specs;
     private readonly double*[] _values;
 
-    internal SeriesSet(IntPtr handle)
+    internal SeriesSet(SeriesSetHandle handle)
     {
         _handle = handle;
         try
@@ -112,21 +111,11 @@ public sealed unsafe class SeriesSet : IDisposable
 
     private void ThrowIfDisposed()
     {
-        ObjectDisposedException.ThrowIf(_handle == IntPtr.Zero, this);
+        ObjectDisposedException.ThrowIf(_handle.IsClosed, this);
     }
 
     /// <summary>Releases the set. Safe to call twice.</summary>
-    public void Dispose()
-    {
-        IntPtr handle = Interlocked.Exchange(ref _handle, IntPtr.Zero);
-        if (handle != IntPtr.Zero)
-        {
-            Native.tmdq_series_set_free(handle);
-        }
-        GC.SuppressFinalize(this);
-    }
-
-    ~SeriesSet() => Dispose();
+    public void Dispose() => _handle.Dispose();
 }
 
 /// <summary>
@@ -178,12 +167,13 @@ public sealed record TimeBaseInfo(int BaseDay, double BaseAbsSeconds, double Bas
 /// </summary>
 public sealed unsafe class TimeBase : IDisposable
 {
-    private IntPtr _handle;
+    private readonly TimeBaseHandle _handle;
 
     public TimeBase()
     {
         Library.RequireLoaded();
-        Library.Check(Native.tmdq_time_base_create(out _handle));
+        Library.Check(Native.tmdq_time_base_create(out TimeBaseHandle handle));
+        _handle = handle;
     }
 
     /// <summary>The base as it stands.</summary>
@@ -239,28 +229,17 @@ public sealed unsafe class TimeBase : IDisposable
         return shift;
     }
 
-    private IntPtr Handle
+    private TimeBaseHandle Handle
     {
         get
         {
-            IntPtr handle = _handle;
-            ObjectDisposedException.ThrowIf(handle == IntPtr.Zero, this);
-            return handle;
+            ObjectDisposedException.ThrowIf(_handle.IsClosed, this);
+            return _handle;
         }
     }
 
     /// <summary>Releases the base. Safe to call twice.</summary>
-    public void Dispose()
-    {
-        IntPtr handle = Interlocked.Exchange(ref _handle, IntPtr.Zero);
-        if (handle != IntPtr.Zero)
-        {
-            Native.tmdq_time_base_free(handle);
-        }
-        GC.SuppressFinalize(this);
-    }
-
-    ~TimeBase() => Dispose();
+    public void Dispose() => _handle.Dispose();
 }
 
 /// <summary>One series of an imported CSV, as far as giving its stream an order is concerned.</summary>

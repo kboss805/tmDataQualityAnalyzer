@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Threading;
 
 namespace TmDq.Core;
 
@@ -20,7 +19,7 @@ public readonly record struct ChartView(double XLower, double XUpper, double YLo
 /// </summary>
 public sealed unsafe class SeriesIndex : IDisposable
 {
-    private IntPtr _handle;
+    private readonly SeriesIndexHandle _handle;
 
     /// <summary>Builds the index of <paramref name="ys"/>.</summary>
     public SeriesIndex(ReadOnlySpan<double> ys)
@@ -28,7 +27,8 @@ public sealed unsafe class SeriesIndex : IDisposable
         Library.RequireLoaded();
         fixed (double* p = ys)
         {
-            Library.Check(Native.tmdq_series_index_build(p, ys.Length, out _handle));
+            Library.Check(Native.tmdq_series_index_build(p, ys.Length, out SeriesIndexHandle handle));
+            _handle = handle;
         }
         Count = ys.Length;
     }
@@ -36,28 +36,17 @@ public sealed unsafe class SeriesIndex : IDisposable
     /// <summary>How many values it was built over.</summary>
     public int Count { get; }
 
-    internal IntPtr Handle
+    internal SeriesIndexHandle Handle
     {
         get
         {
-            IntPtr handle = _handle;
-            ObjectDisposedException.ThrowIf(handle == IntPtr.Zero, this);
-            return handle;
+            ObjectDisposedException.ThrowIf(_handle.IsClosed, this);
+            return _handle;
         }
     }
 
     /// <summary>Releases the index. Safe to call twice.</summary>
-    public void Dispose()
-    {
-        IntPtr handle = Interlocked.Exchange(ref _handle, IntPtr.Zero);
-        if (handle != IntPtr.Zero)
-        {
-            Native.tmdq_series_index_free(handle);
-        }
-        GC.SuppressFinalize(this);
-    }
-
-    ~SeriesIndex() => Dispose();
+    public void Dispose() => _handle.Dispose();
 }
 
 /// <summary>A series' line and band, in pixels.</summary>
@@ -95,13 +84,12 @@ public static unsafe class ChartGeometry
         int count = Math.Min(xs.Length, ys.Length);
         ChartViewNative v = ToNative(view);
         IntPtr geometry;
-        IntPtr handle = index is not null && index.Count == count ? index.Handle : IntPtr.Zero;
+        SeriesIndexHandle handle = index is not null && index.Count == count ? index.Handle : SeriesIndexHandle.None;
         fixed (double* px = xs)
         fixed (double* py = ys)
         {
             Library.Check(Native.tmdq_chart_geometry_indexed(px, py, count, sortedX ? 1 : 0, handle, &v, out geometry));
         }
-        GC.KeepAlive(index);
         try
         {
             GeometryInfoNative info = default;

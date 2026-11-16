@@ -25,18 +25,27 @@ public sealed record ProcessedStream(
 /// </summary>
 public sealed unsafe class StreamResult : IDisposable
 {
-    private IntPtr _handle;
+    private readonly StreamResultHandle _handle;
     private StreamInfoNative _info;
     private readonly string _label;
 
+    /// <summary>Takes ownership of <paramref name="handle"/>: it is released if this cannot be made.</summary>
     internal StreamResult(IntPtr handle)
     {
-        _handle = handle;
-        StreamInfoNative info = default;
-        info.StructSize = (uint)sizeof(StreamInfoNative);
-        Library.Check(Native.tmdq_stream_result_info(handle, &info));
-        _info = info;
-        _label = Text.Read(info.LabelUtf8);
+        _handle = new StreamResultHandle(handle);
+        try
+        {
+            StreamInfoNative info = default;
+            info.StructSize = (uint)sizeof(StreamInfoNative);
+            Library.Check(Native.tmdq_stream_result_info(_handle, &info));
+            _info = info;
+            _label = Text.Read(info.LabelUtf8);
+        }
+        catch
+        {
+            _handle.Dispose();
+            throw;
+        }
     }
 
     /// <summary>The PCM channel this stream was processed from.</summary>
@@ -116,7 +125,7 @@ public sealed unsafe class StreamResult : IDisposable
     /// </summary>
     public SeriesSet BuildSeries(double baseAbsSeconds)
     {
-        Library.Check(Native.tmdq_stream_result_series(Handle, baseAbsSeconds, out IntPtr set));
+        Library.Check(Native.tmdq_stream_result_series(Handle, baseAbsSeconds, out SeriesSetHandle set));
         return new SeriesSet(set);
     }
 
@@ -143,22 +152,14 @@ public sealed unsafe class StreamResult : IDisposable
 
     private void ThrowIfDisposed()
     {
-        ObjectDisposedException.ThrowIf(_handle == IntPtr.Zero, this);
+        ObjectDisposedException.ThrowIf(_handle.IsClosed, this);
     }
 
     /// <summary>Releases the native result. Safe to call twice.</summary>
-    public void Dispose()
-    {
-        IntPtr handle = System.Threading.Interlocked.Exchange(ref _handle, IntPtr.Zero);
-        if (handle != IntPtr.Zero)
-        {
-            Native.tmdq_stream_result_free(handle);
-        }
-        GC.SuppressFinalize(this);
-    }
+    public void Dispose() => _handle.Dispose();
 
     /// <summary>The native handle, for the calls that build on a result (series construction).</summary>
-    internal IntPtr Handle
+    internal StreamResultHandle Handle
     {
         get
         {
@@ -166,6 +167,4 @@ public sealed unsafe class StreamResult : IDisposable
             return _handle;
         }
     }
-
-    ~StreamResult() => Dispose();
 }

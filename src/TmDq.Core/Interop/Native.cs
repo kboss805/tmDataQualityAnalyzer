@@ -61,19 +61,19 @@ internal static unsafe partial class Native
     // --- runs
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_run_start(RunRequestNative* request, CallbacksNative* callbacks, out IntPtr run);
+    internal static partial int tmdq_run_start(RunRequestNative* request, CallbacksNative* callbacks, out RunHandle run);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial void tmdq_run_cancel(IntPtr run);
+    internal static partial void tmdq_run_cancel(RunHandle run);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_run_running(IntPtr run);
+    internal static partial int tmdq_run_running(RunHandle run);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial void tmdq_run_wait(IntPtr run);
+    internal static partial void tmdq_run_wait(RunHandle run);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
@@ -81,11 +81,11 @@ internal static unsafe partial class Native
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_stream_result_info(IntPtr result, StreamInfoNative* info);
+    internal static partial int tmdq_stream_result_info(StreamResultHandle result, StreamInfoNative* info);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_stream_result_channel(IntPtr result, int index, ChannelSeriesNative* series);
+    internal static partial int tmdq_stream_result_channel(StreamResultHandle result, int index, ChannelSeriesNative* series);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
@@ -114,19 +114,19 @@ internal static unsafe partial class Native
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_calibration_start(CalibrationRequestNative* request, CallbacksNative* callbacks, out IntPtr calibration);
+    internal static partial int tmdq_calibration_start(CalibrationRequestNative* request, CallbacksNative* callbacks, out CalibrationRunHandle calibration);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial void tmdq_calibration_cancel(IntPtr calibration);
+    internal static partial void tmdq_calibration_cancel(CalibrationRunHandle calibration);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_calibration_running(IntPtr calibration);
+    internal static partial int tmdq_calibration_running(CalibrationRunHandle calibration);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial void tmdq_calibration_wait(IntPtr calibration);
+    internal static partial void tmdq_calibration_wait(CalibrationRunHandle calibration);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
@@ -134,11 +134,11 @@ internal static unsafe partial class Native
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_calibration_result(IntPtr calibration, CalibrationInfoNative* info);
+    internal static partial int tmdq_calibration_result(CalibrationRunHandle calibration, CalibrationInfoNative* info);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_calibration_channel_result(IntPtr calibration, int index, CalibrationChannelNative* channel);
+    internal static partial int tmdq_calibration_channel_result(CalibrationRunHandle calibration, int index, CalibrationChannelNative* channel);
 
     // --- the formats
     [LibraryImport(Dll)]
@@ -207,15 +207,15 @@ internal static unsafe partial class Native
     // --- series construction
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_stream_result_series(IntPtr result, double baseAbsSeconds, out IntPtr set);
+    internal static partial int tmdq_stream_result_series(StreamResultHandle result, double baseAbsSeconds, out SeriesSetHandle set);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_series_set_info_get(IntPtr set, SeriesSetInfoNative* info);
+    internal static partial int tmdq_series_set_info_get(SeriesSetHandle set, SeriesSetInfoNative* info);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_series_set_spec(IntPtr set, int index, SeriesSpecNative* spec);
+    internal static partial int tmdq_series_set_spec(SeriesSetHandle set, int index, SeriesSpecNative* spec);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
@@ -223,7 +223,7 @@ internal static unsafe partial class Native
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_stream_result_key(IntPtr result, StreamKeyNative* key);
+    internal static partial int tmdq_stream_result_key(StreamResultHandle result, StreamKeyNative* key);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
@@ -231,7 +231,7 @@ internal static unsafe partial class Native
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_time_base_create(out IntPtr timeBase);
+    internal static partial int tmdq_time_base_create(out TimeBaseHandle timeBase);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
@@ -239,27 +239,27 @@ internal static unsafe partial class Native
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_time_base_info_get(IntPtr timeBase, TimeBaseInfoNative* info);
+    internal static partial int tmdq_time_base_info_get(TimeBaseHandle timeBase, TimeBaseInfoNative* info);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_time_base_reset(IntPtr timeBase);
+    internal static partial int tmdq_time_base_reset(TimeBaseHandle timeBase);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_time_base_set_clock(IntPtr timeBase, int day, double offset);
+    internal static partial int tmdq_time_base_set_clock(TimeBaseHandle timeBase, int day, double offset);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_time_base_overlaps(IntPtr timeBase, double newMinAbs, double newMaxAbs, double existingMaxElapsed, out int overlaps);
+    internal static partial int tmdq_time_base_overlaps(TimeBaseHandle timeBase, double newMinAbs, double newMaxAbs, double existingMaxElapsed, out int overlaps);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_time_base_adopt(IntPtr timeBase, double firstAbsSeconds, int hasSeries, out double shift);
+    internal static partial int tmdq_time_base_adopt(TimeBaseHandle timeBase, double firstAbsSeconds, int hasSeries, out double shift);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_time_base_advance(IntPtr timeBase, int hasEarliest, double earliestElapsed, out double shift);
+    internal static partial int tmdq_time_base_advance(TimeBaseHandle timeBase, int hasEarliest, double earliestElapsed, out double shift);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
@@ -305,11 +305,11 @@ internal static unsafe partial class Native
     // --- a series' index (revision 3)
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_series_index_build(double* ys, int count, out IntPtr index);
+    internal static partial int tmdq_series_index_build(double* ys, int count, out SeriesIndexHandle index);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_series_index_count(IntPtr index);
+    internal static partial int tmdq_series_index_count(SeriesIndexHandle index);
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
@@ -317,5 +317,5 @@ internal static unsafe partial class Native
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_chart_geometry_indexed(double* xs, double* ys, int count, int sortedX, IntPtr index, ChartViewNative* view, out IntPtr geometry);
+    internal static partial int tmdq_chart_geometry_indexed(double* xs, double* ys, int count, int sortedX, SeriesIndexHandle index, ChartViewNative* view, out IntPtr geometry);
 }
