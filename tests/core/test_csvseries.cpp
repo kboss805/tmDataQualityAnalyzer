@@ -970,7 +970,14 @@ TEST_CASE("csvseries: the clock stamp is what v2.14 wrote, for every generated t
         case 0: elapsed = rng.below(2000000) / 1000.0; break;
         case 1: elapsed = -rng.below(200000) / 1000.0; break;
         case 2: elapsed = (rng.below(2000000) - 1000000) / 1024.0; break;
-        default: elapsed = (double(rng.below(1000000)) - 500000.0) * 0.001 + rng.below(1000) * 1e-7; break;
+        default:
+        {
+            // Two draws, one statement each: in one expression C++ leaves their order to the compiler, and a Debug
+            // build drew them the other way round from the Release build these answers were recorded with.
+            const double whole = (double(rng.below(1000000)) - 500000.0) * 0.001;
+            elapsed = whole + rng.below(1000) * 1e-7;
+            break;
+        }
         }
         for (const bool ms : { false, true })
         {

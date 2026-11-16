@@ -12,6 +12,26 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Each random draw in a native test on its own statement, so Debug generates what Release does
+
+In a Debug build, `csvseries: the clock stamp is what v2.14 wrote, for every generated time` failed (three
+assertions: the stamps' hash and two counts), on `main` as on any branch. CI runs the native suite in Release only, so
+it never showed. The test drew two random numbers in one expression (`a + b`, each a `rng.below`), and C++ leaves
+the order of the two operands to the compiler: the Debug build drew them the other way round from the Release build
+the hash was recorded with, so it generated different times.
+
+- **Found by a scan of every native test** for a statement with two draws whose order nothing fixes (a `?:`, `&&`, `||`
+  and separate declarations all fix it). Two sites: that test (`test_csvseries.cpp`), and
+  `seriesbuild: the plot's sequences ...` (`test_seriesbuild.cpp`, `bases[rng.below(8)] + (rng.chance(50) ? ...)`),
+  which passed either way because it compares each sequence with the replaced code's answer in the same run, but
+  generated different sequences in Debug and Release.
+- **Each draw is now a statement of its own**, left to right: the order Release took, so no recorded value changes.
+- **Checked.** Native, full suite in Debug: **498** passed / 1 skipped (was 497 and one failure); the two cases in
+  Release pass. Mutation check, `eng\mutate.ps1` (`eng/mutants/random-draw-order.json`), 2 mutants: the clock-stamp
+  test's two draws taken the other way round **CAUGHT** (the hash holds the order); the series test's the other way
+  round **SURVIVED**, equivalent (that test holds no recorded order). Test code only: managed, app and soak not
+  affected. No baseline moved.
+
 #### The tools say what they do: the test hosts' manifest, Platform, CI, and the docs that pointed nowhere (audit T6, T10, T11, M4 in part, F4 in part, F5 in part)
 
 Found by the whole-tree cleanup audit; each item was re-read against the tree as of #302.

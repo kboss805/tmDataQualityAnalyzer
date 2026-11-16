@@ -1,0 +1,22 @@
+{
+  "suite": "native",
+  "args": ["-tc=csvseries: the clock stamp*,seriesbuild: the plot*"],
+  "mutants": [
+    {
+      "id": "R1",
+      "file": "tests/core/test_csvseries.cpp",
+      "old": "            const double whole = (double(rng.below(1000000)) - 500000.0) * 0.001;\n            elapsed = whole + rng.below(1000) * 1e-7;",
+      "new": "            const double fraction = rng.below(1000) * 1e-7;\n            elapsed = (double(rng.below(1000000)) - 500000.0) * 0.001 + fraction;",
+      "expect": "caught",
+      "note": "the two draws taken the other way round, as the Debug build took them from the one expression: the recorded hash and counts hold the order"
+    },
+    {
+      "id": "R2",
+      "file": "tests/core/test_seriesbuild.cpp",
+      "old": "    double t = bases[rng.below(8)];\n    t += rng.chance(50) ? 0.0 : rng.below(200000) / 10.0;",
+      "new": "    const double jump = rng.chance(50) ? 0.0 : rng.below(200000) / 10.0;\n    double t = bases[rng.below(8)] + jump;",
+      "expect": "survived",
+      "note": "equivalent for this test: it compares each generated sequence with the replaced code's answer in the same run and asserts only lower bounds on the counts, so any draw order holds"
+    }
+  ]
+}
