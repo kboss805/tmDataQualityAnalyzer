@@ -107,7 +107,7 @@
               <MenuItem Header="Dark Theme" ToggleType="Radio" IsChecked="{Binding IsDarkTheme, Mode=OneWay}" Command="{Binding UseDarkThemeCommand}" />
             </MenuItem>
             <MenuItem Header="Help">
-              <MenuItem Header="tmDataQualityAnalyzer Help" Click="OnUserManual" />
+              <MenuItem Header="User Manual" Click="OnUserManual" />
               <Separator />
               <MenuItem Header="About" Click="OnAbout" />
             </MenuItem>

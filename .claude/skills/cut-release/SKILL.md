@@ -65,7 +65,7 @@ update it only if install/run instructions changed.)
 
 These reach users but nothing in CI exercises them, so they rot silently:
 
-- **The manuals** — `assets/usermanual.html` (Help > tmDataQualityAnalyzer Help, compiled into the app) and
+- **The manuals** — `assets/usermanual.html` (Help > User Manual, compiled into the app) and
   `UserManual.html` (the full manual, shipped beside it). Their subtitle and footer carry the version from
   `AppVersion`, stamped by `powershell -ExecutionPolicy Bypass -File eng\build_manual.ps1 -NoCapture`
   after the bump (drop `-NoCapture` to re-render the figures when the UI changed). The manual read

@@ -155,7 +155,7 @@ namespace TmDq.App.Tests
             Assert.Equal(new[] { "Open...", "Recent Files", "-", "Process Multiple Files...", "Save Template..." }, Menus.Headers(Find(window.MainMenu.Items, "File")));
             Assert.Equal(new[] { "Import from CSV...", "Export..." }, Menus.Headers(Find(window.MainMenu.Items, "Import/Export")));
             Assert.Equal(new[] { "Light Theme", "Dark Theme" }, Menus.Headers(Find(window.MainMenu.Items, "Settings")));
-            Assert.Equal(new[] { "tmDataQualityAnalyzer Help", "-", "About" }, Menus.Headers(Find(window.MainMenu.Items, "Help")));
+            Assert.Equal(new[] { "User Manual", "-", "About" }, Menus.Headers(Find(window.MainMenu.Items, "Help")));
             static void Click(MenuItem item) => item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             Assert.Equal((vm.OpenCommand, vm.ApplyTemplateCommand, vm.SaveTemplateCommand, vm.ImportCsvCommand, vm.ExportCommand),
                          (Entry(window, "File", "Open...").Command, Entry(window, "File", "Process Multiple Files...").Command,
@@ -169,7 +169,7 @@ namespace TmDq.App.Tests
 
             // The help and About are the window's: each asks the help service.
             MenuItem helpMenu = Find(window.MainMenu.Items, "Help");
-            Click(Find(helpMenu.Items, "tmDataQualityAnalyzer Help"));
+            Click(Find(helpMenu.Items, "User Manual"));
             Click(Find(helpMenu.Items, "About"));
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(new[] { "manual", "about" }, help.Asked);

@@ -12,6 +12,21 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The Help menu's first entry is User Manual; no invitation in the README's Contributing
+
+The Help submenu's first entry read `tmDataQualityAnalyzer Help`; it now reads `User Manual`, which is what it opens (the
+base manual compiled into the application, or the full one the installer put beside it) and what the README and the release
+notes call it. Every place that named the entry says the new name: `MainWindow.axaml`, the two menu tests, US9.0 in
+`docs/claude.md`, the README, `deploy/README_portable.txt`, the installer script's comment, the `cut-release` skill, both
+manuals' "Open it any time from" line, and the clean-machine test's check that the installed full manual names the entry
+(`verify_avalonia_install.ps1`; it matches the manual's text, so the two change together). The v3.0.0 section of
+`deploy/RELEASENOTES.txt` already said `Help > User Manual` and is untouched; older changelog entries keep the name the menu had
+then. The README's `Contributing` no longer says that issues and pull requests are welcome: what a change needs stays, and who may
+contribute is the owner's policy to write.
+
+Checked by the two menu tests (they find the entry by its header, so the old name fails them), the consistency check, and a full
+app suite. The mutation check does not apply: no behaviour changed.
+
 #### The Receiver SNR yellow legible on the light theme
 
 The yellow of the Receiver SNR primaries, `(230, 200, 30)`, is 1.7 to 1 against the light theme's white (WCAG's contrast ratio),
