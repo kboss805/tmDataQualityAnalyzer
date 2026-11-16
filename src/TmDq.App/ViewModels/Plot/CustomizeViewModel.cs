@@ -16,7 +16,7 @@ namespace TmDq.App.ViewModels.Plot;
 /// series are shown, and their names and colours, edited as a copy of the plot and applied only on OK. Rows hold
 /// series ids, not positions, so a list that changed while the dialog was open cannot send an edit to another series.
 /// </summary>
-public sealed partial class CustomizeViewModel : ObservableObject
+public sealed class CustomizeViewModel : ObservableObject
 {
     public const string Title = "Customize Plot Series";
     public const string LockDescription =
@@ -30,6 +30,11 @@ public sealed partial class CustomizeViewModel : ObservableObject
     {
         _plot = plot;
         _prompts = prompts;
+        SelectAllLockCommand = new RelayCommand(SelectAllLock);
+        SelectNoneLockCommand = new RelayCommand(SelectNoneLock);
+        SelectAllSnrCommand = new RelayCommand(() => SetAllSnr(true));
+        SelectNoneSnrCommand = new RelayCommand(() => SetAllSnr(false));
+        ToggleExpandCommand = new RelayCommand(ToggleExpand);
 
         // Grouped by PCM channel, the groups in ascending stream order, as v2.x's dialog grouped them.
         var labels = new Dictionary<int, string>();
@@ -76,24 +81,27 @@ public sealed partial class CustomizeViewModel : ObservableObject
     /// <summary>"Expand All" while any receiver of the stream shown is collapsed, else "Collapse All".</summary>
     public string ExpandText => SelectedSnrStream?.Receivers.Any(r => !r.IsExpanded) != false ? "Expand All" : "Collapse All";
 
-    [RelayCommand]
+    public IRelayCommand SelectAllLockCommand { get; }
+
+    public IRelayCommand SelectNoneLockCommand { get; }
+
+    /// <summary>Every channel of the stream shown; the other streams are left as they are.</summary>
+    public IRelayCommand SelectAllSnrCommand { get; }
+
+    public IRelayCommand SelectNoneSnrCommand { get; }
+
+    /// <summary>Expands every receiver of the stream shown if any is collapsed, else collapses them all.</summary>
+    public IRelayCommand ToggleExpandCommand { get; }
+
     private void SelectAllLock()
     {
         foreach (LockStreamRow row in LockRows) row.IsChecked = true;
     }
 
-    [RelayCommand]
     private void SelectNoneLock()
     {
         foreach (LockStreamRow row in LockRows) row.IsChecked = false;
     }
-
-    /// <summary>Every channel of the stream shown; the other streams are left as they are.</summary>
-    [RelayCommand]
-    private void SelectAllSnr() => SetAllSnr(true);
-
-    [RelayCommand]
-    private void SelectNoneSnr() => SetAllSnr(false);
 
     private void SetAllSnr(bool value)
     {
@@ -101,8 +109,6 @@ public sealed partial class CustomizeViewModel : ObservableObject
         foreach (ReceiverGroup r in SelectedSnrStream.Receivers) r.IsChecked = value;
     }
 
-    /// <summary>Expands every receiver of the stream shown if any is collapsed, else collapses them all.</summary>
-    [RelayCommand]
     private void ToggleExpand()
     {
         if (SelectedSnrStream is null) return;
@@ -159,17 +165,12 @@ public sealed partial class CustomizeViewModel : ObservableObject
 }
 
 /// <summary>A Frame Sync Lock stream's row: its box (both metrics), its colour and its name.</summary>
-public sealed partial class LockStreamRow : ObservableObject
+public sealed class LockStreamRow : ObservableObject
 {
     private readonly CustomizeViewModel _owner;
 
-    [ObservableProperty]
     private bool _isChecked;
-
-    [ObservableProperty]
     private Color _color;
-
-    [ObservableProperty]
     private string _name;
 
     internal LockStreamRow(CustomizeViewModel owner, int order, IReadOnlyList<int> seriesIds, bool isChecked, string name, Color color)
@@ -180,6 +181,7 @@ public sealed partial class LockStreamRow : ObservableObject
         _isChecked = isChecked;
         _name = name;
         _color = color;
+        PickColorCommand = new AsyncRelayCommand(PickColorAsync);
     }
 
     public int Order { get; }
@@ -188,8 +190,15 @@ public sealed partial class LockStreamRow : ObservableObject
 
     public IReadOnlyList<int> SeriesIds { get; }
 
-    [RelayCommand]
-    private async Task PickColor()
+    public bool IsChecked { get => _isChecked; set => SetProperty(ref _isChecked, value); }
+
+    public Color Color { get => _color; set => SetProperty(ref _color, value); }
+
+    public string Name { get => _name; set => SetProperty(ref _name, value); }
+
+    public IAsyncRelayCommand PickColorCommand { get; }
+
+    private async Task PickColorAsync()
     {
         if (await _owner.PickColorAsync(Color) is Color picked) Color = picked;
     }
@@ -213,7 +222,7 @@ public sealed class SnrStreamGroup
 }
 
 /// <summary>A receiver's group: a box for all its channels (partly checked when only some are), collapsed at first.</summary>
-public sealed partial class ReceiverGroup : ObservableObject
+public sealed class ReceiverGroup : ObservableObject
 {
     private bool _isExpanded;
 
@@ -264,7 +273,7 @@ public sealed partial class ReceiverGroup : ObservableObject
 }
 
 /// <summary>One SNR channel: its box, in its colour, with a rename and a recolour kept until OK.</summary>
-public sealed partial class ChannelItem : ObservableObject
+public sealed class ChannelItem : ObservableObject
 {
     private bool _isChecked;
     private Color _color;
@@ -276,6 +285,8 @@ public sealed partial class ChannelItem : ObservableObject
         Label = PlotViewModel.ChannelLabel(s.ChannelIndex);
         _isChecked = s.Visible;
         _color = s.Color;
+        RenameCommand = new AsyncRelayCommand(RenameAsync);
+        RecolorCommand = new AsyncRelayCommand(RecolorAsync);
     }
 
     internal CustomizeViewModel Owner { get; }
@@ -307,8 +318,11 @@ public sealed partial class ChannelItem : ObservableObject
 
     internal bool SetChecked(bool value) => SetProperty(ref _isChecked, value, nameof(IsChecked));
 
-    [RelayCommand]
-    private async Task Rename()
+    public IAsyncRelayCommand RenameCommand { get; }
+
+    public IAsyncRelayCommand RecolorCommand { get; }
+
+    private async Task RenameAsync()
     {
         PlotSeries? s = Owner.SeriesById(SeriesId);
         if (s is null) return;   // gone since the dialog opened
@@ -319,8 +333,7 @@ public sealed partial class ChannelItem : ObservableObject
         }
     }
 
-    [RelayCommand]
-    private async Task Recolor()
+    private async Task RecolorAsync()
     {
         PlotSeries? s = Owner.SeriesById(SeriesId);
         if (s is null) return;

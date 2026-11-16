@@ -1,6 +1,5 @@
 using System.IO;
 using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TmDq.App.Models.Export;
 using TmDq.App.Services;
@@ -13,34 +12,17 @@ namespace TmDq.App.ViewModels.Dialogs;
 /// its box is ticked, and Export only while some box is ticked and every ticked row has a path. There is no format
 /// choice: an image's suffix decides it.
 /// </summary>
-public sealed partial class ExportViewModel : DialogViewModel
+public sealed class ExportViewModel : DialogViewModel
 {
     public const string Title = "Export Data";
 
     private readonly IDataFilePicker? _files;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanExport))]
     private bool _exportImage = true;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanExport))]
     private bool _exportData;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanExport))]
     private bool _exportLog;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanExport))]
     private string _imagePath;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanExport))]
     private string _dataPath;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanExport))]
     private string _logPath;
 
     /// <param name="files">The save dialogs Browse opens; null leaves Browse unavailable.</param>
@@ -68,6 +50,69 @@ public sealed partial class ExportViewModel : DialogViewModel
         return (Path.Combine(folder, name + ".png"), Path.Combine(folder, name + ".csv"), Path.Combine(folder, name + "_log.txt"));
     }
 
+    public bool ExportImage
+    {
+        get => _exportImage;
+        set
+        {
+            if (!SetProperty(ref _exportImage, value)) return;
+            OnPropertyChanged(nameof(CanExport));
+            BrowseImageCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    public bool ExportData
+    {
+        get => _exportData;
+        set
+        {
+            if (!SetProperty(ref _exportData, value)) return;
+            OnPropertyChanged(nameof(CanExport));
+            BrowseDataCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    public bool ExportLog
+    {
+        get => _exportLog;
+        set
+        {
+            if (!SetProperty(ref _exportLog, value)) return;
+            OnPropertyChanged(nameof(CanExport));
+            BrowseLogCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    public string ImagePath
+    {
+        get => _imagePath;
+        set
+        {
+            if (!SetProperty(ref _imagePath, value)) return;
+            OnPropertyChanged(nameof(CanExport));
+        }
+    }
+
+    public string DataPath
+    {
+        get => _dataPath;
+        set
+        {
+            if (!SetProperty(ref _dataPath, value)) return;
+            OnPropertyChanged(nameof(CanExport));
+        }
+    }
+
+    public string LogPath
+    {
+        get => _logPath;
+        set
+        {
+            if (!SetProperty(ref _logPath, value)) return;
+            OnPropertyChanged(nameof(CanExport));
+        }
+    }
+
     /// <summary>Some box ticked, and every ticked row with a path.</summary>
     public bool CanExport =>
         (ExportImage || ExportData || ExportLog) &&
@@ -80,12 +125,6 @@ public sealed partial class ExportViewModel : DialogViewModel
     public IAsyncRelayCommand BrowseLogCommand { get; }
 
     public IRelayCommand ExportCommand { get; }
-
-    partial void OnExportImageChanged(bool value) => BrowseImageCommand.NotifyCanExecuteChanged();
-
-    partial void OnExportDataChanged(bool value) => BrowseDataCommand.NotifyCanExecuteChanged();
-
-    partial void OnExportLogChanged(bool value) => BrowseLogCommand.NotifyCanExecuteChanged();
 
     protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
     {

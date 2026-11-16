@@ -4,7 +4,6 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TmDq.App.Models.Templates;
 using TmDq.App.Services;
@@ -28,21 +27,14 @@ public sealed record BatchFileRow(FileCheck Check)
 /// template, a row for each, and the options: a CSV and plot images per file into a folder, and the template's series
 /// names and colours reused (on at first). Process needs a matching file, and a folder while exporting.
 /// </summary>
-public sealed partial class BatchApplyViewModel : DialogViewModel
+public sealed class BatchApplyViewModel : DialogViewModel
 {
     public const string Title = "Batch Process Files";
 
     private readonly ITemplateFilePicker? _files;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanProcess))]
     private bool _exportPerFile;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanProcess))]
     private string _outputFolder;
-
-    [ObservableProperty]
     private bool _reuseAppearance = true;
 
     public BatchApplyViewModel(IReadOnlyList<FileCheck> checks, string outputFolder, ITemplateFilePicker? files = null)
@@ -55,6 +47,29 @@ public sealed partial class BatchApplyViewModel : DialogViewModel
     }
 
     public IReadOnlyList<BatchFileRow> Rows { get; }
+
+    public bool ExportPerFile
+    {
+        get => _exportPerFile;
+        set
+        {
+            if (!SetProperty(ref _exportPerFile, value)) return;
+            OnPropertyChanged(nameof(CanProcess));
+            BrowseCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    public string OutputFolder
+    {
+        get => _outputFolder;
+        set
+        {
+            if (!SetProperty(ref _outputFolder, value)) return;
+            OnPropertyChanged(nameof(CanProcess));
+        }
+    }
+
+    public bool ReuseAppearance { get => _reuseAppearance; set => SetProperty(ref _reuseAppearance, value); }
 
     public int MatchCount => Rows.Count(r => r.Check.Ok);
 
@@ -69,8 +84,6 @@ public sealed partial class BatchApplyViewModel : DialogViewModel
     public IAsyncRelayCommand BrowseCommand { get; }
 
     public IRelayCommand ProcessCommand { get; }
-
-    partial void OnExportPerFileChanged(bool value) => BrowseCommand.NotifyCanExecuteChanged();
 
     protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
     {

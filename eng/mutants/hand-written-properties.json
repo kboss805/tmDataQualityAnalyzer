@@ -1,0 +1,192 @@
+{
+  "suite": "app",
+  "args": [
+    "-stopOnFail",
+    "-class",
+    "TmDq.App.Tests.AroundTheChartTests"
+  ],
+  "mutants": [
+    {
+      "id": "E1",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExportViewModel.cs",
+      "old": "            OnPropertyChanged(nameof(CanExport));\n            BrowseImageCommand.NotifyCanExecuteChanged();",
+      "new": "            OnPropertyChanged(nameof(CanExport));",
+      "args": [
+        "-stopOnFail",
+        "-class",
+        "TmDq.App.Tests.ExportImportTests"
+      ],
+      "expect": "caught",
+      "note": "Browse stays enabled when the image row is unticked"
+    },
+    {
+      "id": "E2",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExportViewModel.cs",
+      "old": "            OnPropertyChanged(nameof(CanExport));\n            BrowseDataCommand.NotifyCanExecuteChanged();",
+      "new": "            OnPropertyChanged(nameof(CanExport));",
+      "args": [
+        "-stopOnFail",
+        "-class",
+        "TmDq.App.Tests.ExportImportTests"
+      ],
+      "expect": "caught",
+      "note": "Browse stays enabled when the data row is unticked"
+    },
+    {
+      "id": "E3",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExportViewModel.cs",
+      "old": "            OnPropertyChanged(nameof(CanExport));\n            BrowseLogCommand.NotifyCanExecuteChanged();",
+      "new": "            OnPropertyChanged(nameof(CanExport));",
+      "args": [
+        "-stopOnFail",
+        "-class",
+        "TmDq.App.Tests.ExportImportTests"
+      ],
+      "expect": "caught",
+      "note": "Browse stays enabled when the log row is unticked"
+    },
+    {
+      "id": "E4",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExportViewModel.cs",
+      "old": "            if (!SetProperty(ref _exportImage, value)) return;\n            OnPropertyChanged(nameof(CanExport));\n",
+      "new": "            if (!SetProperty(ref _exportImage, value)) return;\n",
+      "args": [
+        "-stopOnFail",
+        "-class",
+        "TmDq.App.Tests.ExportImportTests"
+      ],
+      "expect": "caught",
+      "note": "ticking or unticking the image row does not re-ask whether Export is possible"
+    },
+    {
+      "id": "E5",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExportViewModel.cs",
+      "old": "            if (SetProperty(ref _imagePath, value)) OnPropertyChanged(nameof(CanExport));",
+      "new": "            SetProperty(ref _imagePath, value);",
+      "args": [
+        "-stopOnFail",
+        "-class",
+        "TmDq.App.Tests.ExportImportTests"
+      ],
+      "expect": "caught",
+      "note": "emptying the image path does not disable Export"
+    },
+    {
+      "id": "B1",
+      "file": "src/TmDq.App/ViewModels/Dialogs/BatchApplyViewModel.cs",
+      "old": "            OnPropertyChanged(nameof(CanProcess));\n            BrowseCommand.NotifyCanExecuteChanged();",
+      "new": "            OnPropertyChanged(nameof(CanProcess));",
+      "args": [
+        "-stopOnFail",
+        "-class",
+        "TmDq.App.Tests.TemplateBatchTests"
+      ],
+      "expect": "caught",
+      "note": "Browse stays disabled after Export per file is ticked"
+    },
+    {
+      "id": "B2",
+      "file": "src/TmDq.App/ViewModels/Dialogs/BatchApplyViewModel.cs",
+      "old": "            if (!SetProperty(ref _exportPerFile, value)) return;\n            OnPropertyChanged(nameof(CanProcess));\n",
+      "new": "            if (!SetProperty(ref _exportPerFile, value)) return;\n",
+      "args": [
+        "-stopOnFail",
+        "-class",
+        "TmDq.App.Tests.TemplateBatchTests"
+      ],
+      "expect": "caught",
+      "note": "Process is not re-asked when exporting per file is ticked with no folder"
+    },
+    {
+      "id": "B3",
+      "file": "src/TmDq.App/ViewModels/Dialogs/BatchApplyViewModel.cs",
+      "old": "            if (!SetProperty(ref _outputFolder, value)) return;\n            OnPropertyChanged(nameof(CanProcess));\n",
+      "new": "            if (!SetProperty(ref _outputFolder, value)) return;\n",
+      "args": [
+        "-stopOnFail",
+        "-class",
+        "TmDq.App.Tests.TemplateBatchTests"
+      ],
+      "expect": "caught",
+      "note": "Process is not re-asked when the folder is typed or emptied"
+    },
+    {
+      "id": "M1",
+      "file": "src/TmDq.App/ViewModels/MenuChoice.cs",
+      "old": "    public bool IsChecked { get => _isChecked; set => SetProperty(ref _isChecked, value); }",
+      "new": "    public bool IsChecked { get => _isChecked; set => _isChecked = value; }",
+      "args": [
+        "-stopOnFail",
+        "-class",
+        "TmDq.App.Tests.AroundTheChartTests"
+      ],
+      "expect": "caught",
+      "note": "a choice in an open menu is never told it was checked"
+    },
+    {
+      "id": "L1",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "    public bool IsChecked { get => _isChecked; set => SetProperty(ref _isChecked, value); }\n\n    public Color Color",
+      "new": "    public bool IsChecked { get => _isChecked; set => _isChecked = value; }\n\n    public Color Color",
+      "args": [
+        "-stopOnFail",
+        "-class",
+        "TmDq.App.Tests.AroundTheChartTests"
+      ],
+      "expect": "caught",
+      "note": "a stream row's box says nothing when it changes"
+    },
+    {
+      "id": "L2",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "    public Color Color { get => _color; set => SetProperty(ref _color, value); }",
+      "new": "    public Color Color { get => _color; set => _color = value; }",
+      "args": [
+        "-stopOnFail",
+        "-class",
+        "TmDq.App.Tests.AroundTheChartTests"
+      ],
+      "expect": "caught",
+      "note": "a stream row's swatch does not repaint when a colour is picked"
+    },
+    {
+      "id": "C1",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "        PickColorCommand = new AsyncRelayCommand(PickColorAsync);\n",
+      "new": "        PickColorCommand = new AsyncRelayCommand(() => Task.CompletedTask);\n",
+      "args": [
+        "-stopOnFail",
+        "-class",
+        "TmDq.App.Tests.AroundTheChartTests"
+      ],
+      "expect": "caught",
+      "note": "a stream row's swatch picks nothing"
+    },
+    {
+      "id": "C2",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "        SelectNoneSnrCommand = new RelayCommand(() => SetAllSnr(false));",
+      "new": "        SelectNoneSnrCommand = new RelayCommand(() => SetAllSnr(true));",
+      "args": [
+        "-stopOnFail",
+        "-class",
+        "TmDq.App.Tests.AroundTheChartTests"
+      ],
+      "expect": "caught",
+      "note": "Select None checks every SNR channel"
+    },
+    {
+      "id": "C3",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "        RecolorCommand = new AsyncRelayCommand(RecolorAsync);",
+      "new": "        RecolorCommand = new AsyncRelayCommand(RenameAsync);",
+      "args": [
+        "-stopOnFail",
+        "-class",
+        "TmDq.App.Tests.AroundTheChartTests"
+      ],
+      "expect": "caught",
+      "note": "Change color renames"
+    }
+  ]
+}

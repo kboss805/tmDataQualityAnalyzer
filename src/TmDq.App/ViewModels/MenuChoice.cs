@@ -9,12 +9,11 @@ namespace TmDq.App.ViewModels;
 /// drawn as the menu's line. Only whether it is chosen changes once made, so a choice in an open menu is never
 /// replaced under the pointer.
 /// </summary>
-public sealed partial class MenuChoice : ObservableObject
+public sealed class MenuChoice : ObservableObject
 {
     /// <summary>The header Avalonia draws as a separator.</summary>
     private const string SeparatorHeader = "-";
 
-    [ObservableProperty]
     private bool _isChecked;
 
     public MenuChoice(string header, ICommand? command = null, object? parameter = null)
@@ -39,4 +38,6 @@ public sealed partial class MenuChoice : ObservableObject
     public string? Tip { get; init; }
 
     public bool IsSeparator => Header == SeparatorHeader;
+
+    public bool IsChecked { get => _isChecked; set => SetProperty(ref _isChecked, value); }
 }
