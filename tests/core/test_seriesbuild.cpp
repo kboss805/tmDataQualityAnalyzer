@@ -1153,7 +1153,9 @@ ProcessedStreamData generateStream(Rng& rng)
 
     // a clock: epoch-ish, a day boundary, a leap day, a far-future date, a fraction of a second
     static const double bases[] = { 1700000000.0, 0.0, 86399.5, 1709164800.0, 4102444800.0, 1704067199.75, -50.0, 1700000000.3 };
-    double t = bases[rng.below(8)] + (rng.chance(50) ? 0.0 : rng.below(200000) / 10.0);
+    // One draw a statement: in one expression C++ leaves their order to the compiler (Debug and Release differed).
+    double t = bases[rng.below(8)];
+    t += rng.chance(50) ? 0.0 : rng.below(200000) / 10.0;
     const int n = rng.chance(5) ? 0 : 1 + rng.below(6);
     for (int i = 0; i < n; ++i)
     {
