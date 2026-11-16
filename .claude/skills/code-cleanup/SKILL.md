@@ -45,7 +45,7 @@ Before flagging a function, class, file, or constant as unused:
    explicitly rather than trusting a search of the product code alone.
 4. **Check for uses no C# or C++ call site shows.** A property or command bound by name in `.axaml`
    (`{Binding Name}`), a member CommunityToolkit.Mvvm generates (`[ObservableProperty]`, `[RelayCommand]`),
-   an ABI export reached by P/Invoke (`Native.cs`), and a test discovered by its attribute all look
+   an ABI export reached by P/Invoke (`Interop/Native.cs`), and a test discovered by its attribute all look
    unreferenced to a plain grep for a call.
 
 If none of the four account for it, it's a real candidate — but report it as "no caller found in

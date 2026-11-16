@@ -105,7 +105,7 @@
       "id": "H9",
       "file": "src/TmDq.Core/ProcessingRun.cs",
       "old": "        catch (ObjectDisposedException)\n        {\n            // released: nothing is running\n        }",
-      "new": "        catch (InvalidOperationException)\n        {\n        }",
+      "new": "        catch (ArgumentException)\n        {\n        }",
       "args": [
         "-class",
         "TmDq.Core.Tests.RunTests"
@@ -129,7 +129,7 @@
       "id": "H11",
       "file": "src/TmDq.Core/CalibrationRun.cs",
       "old": "        catch (ObjectDisposedException)\n        {\n            // released: every thread has ended\n        }",
-      "new": "        catch (InvalidOperationException)\n        {\n        }",
+      "new": "        catch (ArgumentException)\n        {\n        }",
       "args": [
         "-class",
         "TmDq.Core.Tests.CalibrationTests"
@@ -141,7 +141,8 @@
       "id": "H12",
       "file": "src/TmDq.Core/StreamResult.cs",
       "old": "        ObjectDisposedException.ThrowIf(_handle.IsClosed, this);\n    }",
-      "new": "    }",
+      "new": "        ObjectDisposedException.ThrowIf(false, this);
+    }",
       "args": [
         "-class",
         "TmDq.Core.Tests.RunTests"

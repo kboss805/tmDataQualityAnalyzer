@@ -36,13 +36,13 @@ Decide two things first, because they gate which steps apply:
    v2.x wrote; read with a default when the key is missing (older templates), write it in the same
    form. `TemplateTests` holds the format byte for byte.
 5. **The C# binding and the ABI** — `src/TmDq.Core/RunTypes.cs` (`StreamConfig`),
-   `ProcessingRun.cs` (marshalling), `Native.cs` (the struct), and `src/core/abi/tmdq_abi.h` plus
+   `ProcessingRun.cs` (marshalling), `Interop/NativeStructs.cs` (the struct) and `Interop/Native.cs` (the functions), and `src/core/abi/tmdq_abi.h` plus
    `abi_run.cpp`. A field added to an ABI struct changes its size: append it, bump the ABI revision
    (and `Library.MinimumRevision`), and update the layout pins on both sides (`tmdq_sizeof`).
 6. **Persistence, only if it belongs to the file** — the core's format (`src/core/src/framesyncfile.cpp`
    for a pattern file, the receiver-parameters reader in `framesetup.cpp`), both through
    `TomlDocument`, symmetric in load and save, and its ABI functions and binding (`abi_formats.cpp`,
-   `Formats.cs`). The app's Load/Save is `Models/Streams/StreamFiles.cs`. **The boundary:** a pattern file
+   `Formats/FrameSyncFile.cs`, `Formats/ReceiverParamsFile.cs`). The app's Load/Save is `Models/Streams/StreamFiles.cs`. **The boundary:** a pattern file
    round-trips the sync pattern, sync mask, words/frame and the two stream-format flags (`Inverted`,
    `Randomized`); Data Rate and Sample Rate are per-session and stay out; calibration profiles are
    never serialised. A file without the new key keeps the operator's choice (US8.0: readers default
