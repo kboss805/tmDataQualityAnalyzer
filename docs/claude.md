@@ -495,7 +495,7 @@ profile, so a batch processes with the linear calibration.
   folder, the legend's choice), `SessionExport` (the data, the image and the log written out) and `BatchRunner` (Apply
   Template's batch and each file's export). Its dialogs, pickers, configurator, clock and preferences are handed in as
   one `MainWindowServices`; each service left out has the effect its property states. The hamburger menu is declared
-  in `MainWindow.axaml` and bound to it; only the help and About entries, which act on the window, are click handlers.
+  in `MainWindow.axaml` and bound to it, every entry a command, Help's two too (through `IHelpActions`).
 - **Menus filled from the data** (Recent Files, Plot File, Readout): a list of `MenuChoice` (a header, a command and
   its parameter, whether it is chosen), shown through the `MenuChoice` and `RadioChoice` item themes in `App.axaml`. A
   choice whose header is `-` is drawn as the menu's separator. A list is made again only when its entries change, so
@@ -524,10 +524,10 @@ profile, so a batch processes with the linear calibration.
   `ExtractCalibrationWindow`, `ProcessingWindow`, `ExportWindow`, `BatchApplyWindow`, `CustomizeViewWindow`); every window
   without one is built in code (`ChoiceWindow`, the plot's prompts in `PromptWindows`, `ReportWindow`).
 - **The plot** (`ViewModels/Plot`): `PlotViewModel` (the series built by the core, the axes and overrides, the view mode, the
-  recordings and Plot File, the readout's pin), with its jobs in types of their own, the folder's other eight files:
+  recordings and Plot File, the readout's pin), with its jobs in types of their own, the folder's other seven files:
   `PlotTimeWindow` (the span, the window and its zoom history, the gestures and keys that move it), `PlotReadout` (what
   the readout says), `PlotCsv` (the series to and from the core's CSV), `PlotColors` (the colours), `PlotCommands` (below),
-  `PlotTemplates` (under Templates), `ImageFiles` (an image export's format, from its file name) and `CustomizeViewModel`
+  `PlotTemplates` (under Templates) and `CustomizeViewModel`
   (Customize View's state, edited as a copy of the plot and applied only on OK). `PlotChart` draws it (from the core's
   geometry, each long series' envelope looked up in its `SeriesIndex`, a cached data layer, a draft while a gesture
   moves a plot that is slow to paint, the gestures), and `PlotView` holds what is over it (the legend, `PlotLegend`, the chip bar, the
@@ -535,7 +535,8 @@ profile, so a batch processes with the linear calibration.
   bound to `PlotCommands`, which the view makes for its plot with its prompts: a command for each item, chip and key
   (none runs without data, which disables the item and lets the key go on), what the chips and the menu show, and the
   entries of Plot File and Readout.
-- **Export and import** (`ExportViewModel`, `PlotImageExport`): the CSV through the core's writer (every series), the
+- **Export and import** (`ExportViewModel`, `PlotImageExport`; `Models/Export`: `ImageFiles`, an image export's format
+  from its file name, and `ExportKind`): the CSV through the core's writer (every series), the
   image through one Skia renderer for PNG, SVG and PDF (exactly what the chart shows), the log as text; Import CSV
   through the core's parser.
 - **Templates** (`Models/Templates`): `TemplateFile` (the JSON), `TemplateBatch` (matching, a file's run), and
@@ -544,7 +545,8 @@ profile, so a batch processes with the linear calibration.
 - **Preferences** (`Models/Settings`: `Preferences`, `PreferencesStore`): `preferences.json` in
   `%APPDATA%\tmDataQualityAnalyzer` (beside the exe for a portable copy), the defaults on a first run. v3.0.x imported
   v2.x's INI file there on its first run; the import went in v3.1.0, and an INI file left there is not read.
-- **Help**: the manual compiled in (`assets/usermanual.html`), or the full one beside the exe.
+- **Help** (`Models/Help/HelpManual`, `Platform/WindowHelpActions`): the manual compiled in (`assets/usermanual.html`),
+  or the full one beside the exe; About in a box over the main window.
 
 #### The C# library (`src/TmDq.Core`)
 
@@ -635,12 +637,14 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
 - **.NET**: `src/TmDq.Core` (the binding) and `src/TmDq.App`, each with a `.Tests` project of the same name
   under `tests/`; `eng/` holds the props and targets that `Directory.Build.props` and `Directory.Build.targets`, at
   the root, import into every .NET project. The application is in folders by MVVM layer, each its own namespace:
-  - `Models/` (`Streams`, `Processing`, `Settings`, `Templates`, `Logging`): the rules and the files, no UI.
-  - `ViewModels/`, the plot's in `ViewModels/Plot/`.
+  - `Models/` (`Streams`, `Processing`, `Settings`, `Templates`, `Logging`, `Export`, `Help`): the rules, the files and
+    the core's runs, no UI. A seam a model implements is a model's too: `IStreamConfigurator`, `IRunLog` and
+    `ICalibrationRunner` (with the product's `CoreCalibrationRunner`) are in `Models/Processing`.
+  - `ViewModels/`, the plot's in `ViewModels/Plot/`; `DialogConfigurator`, which builds Configure Streams' view model,
+    is here too, and `IRunHost` sits beside `BatchRunner`, its one user.
   - `Views/`: the windows and controls.
-  - `Services/`: most of the interfaces a view model asks the user through (file dialogs, dialogs, prompts), and two
-    classes (`DialogConfigurator`, `HelpManual`); four interfaces live beside what uses them (`IStreamConfigurator`,
-    `IRunLog` in `Models/Processing`, `IRunHost` in `BatchRunner`, `IHelpActions` in `MainWindow`).
+  - `Services/`: the interfaces a view model asks the user through (file dialogs, dialogs, prompts, Help) and nothing
+    else; `LayerTests` holds it to interfaces.
   - `Platform/`: their Avalonia implementations, which the application hands in (`App.axaml.cs`) and a test replaces.
 - **Assets**: `assets/` (the base manual, the icon, the UTF-8 manifest); the full manual, `UserManual.html`, at the
   root (Windows cannot hold it beside `usermanual.html`, whose name differs only in case); shipped settings in
@@ -971,7 +975,8 @@ helper every test cleans up and reads back through, which waits out a virus scan
   (the preferences file, and v2.x's INI file left unread), `MainWindowTests`.
 - **The layers:** `LayerTests` reads every model, view model and service type as compiled, its methods' code
   included. It fails on a model that reaches a view model, a service, a view or `Platform`; on a view model or service
-  that reaches a view or `Platform`; and on any of them that reaches an Avalonia type other than `Color`.
+  that reaches a view or `Platform`; on any of them that reaches an Avalonia type other than `Color`; and on a type in
+  `Services` that is not an interface.
 - **The manual:** `ManualFiguresTests` renders every figure and checks each caption's claims. A re-render is the same, byte for
   byte in the pixels, but for one level of colour in three pixels at a checkbox's edge in the receiver tree's figure: the run log's
   racing lines and its percentages and seconds are set in one order and wording before each capture (`Steady`, which

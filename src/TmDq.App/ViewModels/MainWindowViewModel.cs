@@ -42,6 +42,7 @@ namespace TmDq.App.ViewModels
         private readonly IExportDialog? _exportDialog;
         private readonly ITemplateFilePicker? _templateFiles;
         private readonly ITemplateDialogs? _templateDialogs;
+        private readonly IHelpActions? _help;
         private readonly ShellPreferences _shell;
         private readonly SessionExport _export;
         private readonly BatchRunner _batch;
@@ -65,6 +66,7 @@ namespace TmDq.App.ViewModels
             _exportDialog = services.ExportDialog;
             _templateFiles = services.TemplateFiles;
             _templateDialogs = services.TemplateDialogs;
+            _help = services.Help;
             Log = new SessionLog(services.Clock);
             _export = new SessionExport(Plot, Log, services.ImageExporter, Report);
             _batch = new BatchRunner(this, Plot, Log, _export, services.AppRoot ?? AppContext.BaseDirectory);
@@ -74,6 +76,9 @@ namespace TmDq.App.ViewModels
             SaveTemplateCommand = new AsyncRelayCommand(SaveTemplateAsync, () => !IsBusy && _sources.Count > 0 && _templateFiles is not null);
             ApplyTemplateCommand = new AsyncRelayCommand(ApplyTemplateAsync, () => !IsBusy && _templateFiles is not null && _templateDialogs is not null);
             OpenRecentCommand = new AsyncRelayCommand<string>(p => OpenPathAsync(p!), p => !IsBusy && p is not null);
+            // Help is there while a run goes on, as v2.x's was: it touches nothing a run uses.
+            OpenManualCommand = new AsyncRelayCommand(() => _help!.OpenManualAsync(), () => _help is not null);
+            ShowAboutCommand = new AsyncRelayCommand(() => _help!.ShowAboutAsync(), () => _help is not null);
             _shell.PropertyChanged += (_, e) =>
             {
                 OnPropertyChanged(e.PropertyName);
@@ -237,6 +242,12 @@ namespace TmDq.App.ViewModels
         }
 
         public IAsyncRelayCommand OpenCommand { get; }
+
+        /// <summary>Help &gt; User Manual: the full manual beside the application, else the base one.</summary>
+        public IAsyncRelayCommand OpenManualCommand { get; }
+
+        /// <summary>Help &gt; About: the version and what the application does.</summary>
+        public IAsyncRelayCommand ShowAboutCommand { get; }
 
         /// <summary>Import CSV: an exported CSV shown without processing anything (US6.3).</summary>
         public IAsyncRelayCommand ImportCsvCommand { get; }

@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
+using TmDq.App.Models.Export;
 using TmDq.App.ViewModels;
-using TmDq.App.ViewModels.Plot;
 
 namespace TmDq.App.Services
 {

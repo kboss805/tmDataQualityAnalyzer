@@ -6,7 +6,6 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using Avalonia.Media;
-using TmDq.App.Models.Processing;
 using TmDq.App.Models.Streams;
 using TmDq.Core;
 

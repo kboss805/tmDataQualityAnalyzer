@@ -9,6 +9,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using TmDq.App.Models.Export;
 using TmDq.App.Models.Processing;
 using TmDq.App.Models.Streams;
 using TmDq.App.Models.Templates;

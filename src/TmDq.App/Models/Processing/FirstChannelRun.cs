@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using TmDq.App.Models.Streams;
@@ -7,14 +6,6 @@ using TmDq.Core;
 
 namespace TmDq.App.Models.Processing
 {
-    /// <summary>A recording the core could not process, with the reason in words for the user.</summary>
-    public class RecordingException : Exception
-    {
-        public RecordingException(string message) : base(message) { }
-
-        public RecordingException(string message, Exception inner) : base(message, inner) { }
-    }
-
     /// <summary>
     /// The run with no dialog: a recording's first PCM channel with the Frame Sync Lock defaults, over its default time
     /// channel. The walking skeleton's processing (plan step 3.4), kept for the installer's smoke test, which has no one
@@ -47,15 +38,4 @@ namespace TmDq.App.Models.Processing
             return Task.FromResult<StreamsChoice?>(new StreamsChoice(Request(path, file), rows, timeIndex));
         }
     }
-
-    /// <summary>Decides what a recording is processed with: Configure Streams, or (with no one to ask) the defaults.</summary>
-    public interface IStreamConfigurator
-    {
-        /// <summary>The run to start for <paramref name="file"/>, and the choices it came from; null when the user cancelled.</summary>
-        Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file);
-    }
-
-    /// <summary>What Configure Streams settled: the run, every row (processed or not) and the time channel's place in its
-    /// list, which a template captures (plan step 4.7).</summary>
-    public sealed record StreamsChoice(RunRequest Request, IReadOnlyList<StreamSetup> Rows, int TimeChannelIndex);
 }

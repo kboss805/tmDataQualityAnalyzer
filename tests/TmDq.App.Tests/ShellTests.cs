@@ -19,6 +19,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using TmDq.App.Models.Help;
 using TmDq.App.Models.Processing;
 using TmDq.App.Models.Settings;
 using TmDq.App.Platform;
@@ -60,8 +61,8 @@ namespace TmDq.App.Tests
         private sealed class FakeHelp : IHelpActions
         {
             public readonly List<string> Asked = new();
-            public Task OpenManualAsync(Window owner) { Asked.Add("manual"); return Task.CompletedTask; }
-            public Task ShowAboutAsync(Window owner) { Asked.Add("about"); return Task.CompletedTask; }
+            public Task OpenManualAsync() { Asked.Add("manual"); return Task.CompletedTask; }
+            public Task ShowAboutAsync() { Asked.Add("about"); return Task.CompletedTask; }
         }
 
         // ---- the title bar -------------------------------------------------------------------------------------------
@@ -147,8 +148,7 @@ namespace TmDq.App.Tests
         {
             var help = new FakeHelp();
             var picker = new FakeRecordingPicker();
-            (MainWindow window, MainWindowViewModel vm) = Show(new MainWindowViewModel(new MainWindowServices { Picker = picker }));
-            window.Help = help;
+            (MainWindow window, MainWindowViewModel vm) = Show(new MainWindowViewModel(new MainWindowServices { Picker = picker, Help = help }));
             Menus.Open(window);
             // File, Import/Export, Settings, Help: each opens its own list; there is no Exit (the window's close button is it).
             Assert.Equal(new[] { "File", "Import/Export", "Settings", "Help" }, window.MainMenu.Items.Select(Header));
@@ -167,12 +167,16 @@ namespace TmDq.App.Tests
             Assert.NotNull(ToolTip.GetTip(Entry(window, "File", "Save Template...")));
             Assert.NotNull(ToolTip.GetTip(Entry(window, "File", "Process Multiple Files...")));
 
-            // The help and About are the window's: each asks the help service.
+            // The help and About are the view model's commands, as every other entry is: each asks the help service.
+            Assert.Equal((vm.OpenManualCommand, vm.ShowAboutCommand), (Entry(window, "Help", "User Manual").Command, Entry(window, "Help", "About").Command));
             MenuItem helpMenu = Find(window.MainMenu.Items, "Help");
             Click(Find(helpMenu.Items, "User Manual"));
             Click(Find(helpMenu.Items, "About"));
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(new[] { "manual", "about" }, help.Asked);
+            // Without the service to answer them, both are unavailable.
+            var bare = new MainWindowViewModel();
+            Assert.False(bare.OpenManualCommand.CanExecute(null) || bare.ShowAboutCommand.CanExecute(null));
 
             // Open is the view model's.
             Entry(window, "File", "Open...").Command!.Execute(null);
@@ -968,8 +972,8 @@ namespace TmDq.App.Tests
             Assert.Contains("Version " + AppInfo.Version, WindowHelpActions.AboutText);
             Assert.Contains("IRIG 106 Chapter 10 PCM recordings", WindowHelpActions.AboutText);
             (MainWindow window, _) = Show();
-            Assert.IsType<WindowHelpActions>(window.Help);
-            Task about = window.Help.ShowAboutAsync(window);
+            var help = new WindowHelpActions(window);
+            Task about = help.ShowAboutAsync();
             Dispatcher.UIThread.RunJobs();
             var box = Assert.IsType<ReportWindow>(Assert.Single(window.OwnedWindows));
             Assert.Equal((MainWindow.AboutTitle, WindowHelpActions.AboutText), (box.Title, box.Body.Text));
@@ -978,7 +982,7 @@ namespace TmDq.App.Tests
             Assert.True(about.IsCompleted);
 
             // The headless platform has no browser: a manual that cannot be shown is said so.
-            Task manual = window.Help.OpenManualAsync(window);
+            Task manual = help.OpenManualAsync();
             Dispatcher.UIThread.RunJobs();
             await Until(() => window.OwnedWindows.Count == 1);
             var failed = Assert.IsType<ReportWindow>(Assert.Single(window.OwnedWindows));

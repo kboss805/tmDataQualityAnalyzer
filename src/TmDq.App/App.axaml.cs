@@ -7,7 +7,6 @@ using Avalonia.Styling;
 using TmDq.App.Models.Processing;
 using TmDq.App.Models.Settings;
 using TmDq.App.Platform;
-using TmDq.App.Services;
 using TmDq.App.ViewModels;
 using TmDq.App.Views;
 
@@ -45,6 +44,7 @@ namespace TmDq.App
                     ImageExporter = new PlotViewImageExporter(window.FindControl<PlotView>("PlotView")!),
                     TemplateFiles = new StorageTemplateFilePicker(window),
                     TemplateDialogs = new WindowTemplateDialogs(window),
+                    Help = new WindowHelpActions(window),
                     AppRoot = AppContext.BaseDirectory,
                     Preferences = preferences,
                 });

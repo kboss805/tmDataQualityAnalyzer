@@ -16,6 +16,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
 using SkiaSharp;
+using TmDq.App.Models.Export;
 using TmDq.App.Models.Logging;
 using TmDq.App.Models.Processing;
 using TmDq.App.Platform;

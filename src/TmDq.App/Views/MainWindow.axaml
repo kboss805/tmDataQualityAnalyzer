@@ -107,9 +107,9 @@
               <MenuItem Header="Dark Theme" ToggleType="Radio" IsChecked="{Binding IsDarkTheme, Mode=OneWay}" Command="{Binding UseDarkThemeCommand}" />
             </MenuItem>
             <MenuItem Header="Help">
-              <MenuItem Header="User Manual" Click="OnUserManual" />
+              <MenuItem Header="User Manual" Command="{Binding OpenManualCommand}" />
               <Separator />
-              <MenuItem Header="About" Click="OnAbout" />
+              <MenuItem Header="About" Command="{Binding ShowAboutCommand}" />
             </MenuItem>
           </MenuFlyout>
         </Button.Flyout>

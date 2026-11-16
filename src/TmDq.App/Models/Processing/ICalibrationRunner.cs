@@ -1,7 +1,7 @@
 using System;
 using TmDq.Core;
 
-namespace TmDq.App.Services
+namespace TmDq.App.Models.Processing
 {
     /// <summary>Starts a calibration extraction. The Extract Calibration view model starts its run through this, so a test
     /// can stand in for the core and make a run fail where the core cannot be made to (audit B4); the product's is the

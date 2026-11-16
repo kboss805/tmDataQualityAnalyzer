@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using TmDq.App.Models.Processing;
 using TmDq.App.Models.Settings;
-using TmDq.App.Services;
 using TmDq.App.ViewModels;
 using TmDq.Core;
 using TmDq.Core.Tests;
