@@ -100,8 +100,12 @@ namespace TmDq.App.Views
             Background = new ImmutableSolidColorBrush(p.LegendBackground);
             BorderBrush = new ImmutableSolidColorBrush(p.LegendBorder);
             foreach (Control row in _rows.Children)
+            {
                 foreach (TextBlock label in ((Panel)row).Children.OfType<TextBlock>())
                     label.Foreground = new ImmutableSolidColorBrush(p.LegendText);
+                foreach (Border swatch in ((Panel)row).Children.OfType<Border>())
+                    swatch.Background = new ImmutableSolidColorBrush(p.SeriesColor((Color)swatch.Tag!));
+            }
         }
 
         private StackPanel Row(LegendEntry e)
@@ -112,7 +116,8 @@ namespace TmDq.App.Views
                 Width = SwatchLength,
                 Height = SwatchThickness,
                 CornerRadius = new CornerRadius(1),
-                Background = new ImmutableSolidColorBrush(e.Color),
+                Tag = e.Color,   // the series' own colour; the swatch is drawn in the theme's version of it
+                Background = new ImmutableSolidColorBrush(Palette.SeriesColor(e.Color)),
                 VerticalAlignment = VerticalAlignment.Center,
             });
             row.Children.Add(new TextBlock
