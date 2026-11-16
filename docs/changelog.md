@@ -12,6 +12,51 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The dialogs' shared scaffolding written once, and the views reach no Platform (layout plan PR 3; audit S11, S13, S15)
+
+The third of the source-layout PRs, and the first that changes more than where a type lives. Behaviour is the same.
+
+- **S13: the seven dialogs call the generated `InitializeComponent()`.** `ConfigureStreamsWindow`, `StreamSetupWindow`,
+  `ExtractCalibrationWindow`, `ProcessingWindow`, `ExportWindow`, `BatchApplyWindow` and `CustomizeViewWindow` called
+  `AvaloniaXamlLoader.Load(this)`, which the changelog's v3.0.0 entry records as leaving named controls null; only
+  `MainWindow` and `PlotView` used the call that fills them. Customize View's OK and Cancel were looked up by string and
+  are now the fields. `App.axaml.cs` takes the plot from `window.PlotView`. The tests' string lookups (111 in all) still
+  work and
+  can move at leisure.
+- **S15: the repeated scaffolding is written once.**
+  - `DialogViewModel` holds `CloseRequested`, `Accepted`, `CancelCommand` and `Accept()` for the five dialog view models
+    that each declared them (about 40 lines); a command's own guard still comes first.
+  - `Platform/Modal.ShowAsync` is the one "give the window its view model, close it when asked, show it modal" the five
+    host sites wrote out.
+  - `Platform/StorageDialogs` holds the start-folder rule (written four times under three names) and the first-path rule
+    the five pickers copied; the five classes stay, since tests use their options.
+  - `DialogWindow` holds the setup the code-built windows each typed (title, sized to content, not resizable, not in the
+    taskbar, centred over its owner), `ChoiceWindow` is a `PromptWindow<int?>` (it was exactly one), and `ReportWindow`
+  is
+    a `DialogWindow`.
+  - Not done: the two near-identical Load and Save pairs in `StreamSetupViewModel`, whose merge is a rewrite, not a
+    move.
+- **S11: no view reaches `Platform`.** Customize View built a `WindowPlotPrompts` in its own window on every
+  `DataContextChanged`; the comment explaining that sat in `WindowPlotPrompts`, above a line that did not do it. It is
+  done there now (`CustomizeAsync` hands the dialog its own prompts). `PlotView` made `WindowPlotPrompts` as its default
+  and now asks through `NoPlotPrompts` (every question answered "cancel") until `App.axaml.cs` hands it the windows, as
+  it
+  hands every other platform object. `LayerTests.ViewsReachNoPlatformType` holds the views' side.
+- **Checked.** Mutation check, `eng\mutate.ps1` (`eng/mutants/app-dialog-scaffolding.json`), app, 11 mutants: 10
+  **CAUGHT**, 1 **SURVIVED**. Caught: an accepted dialog closing without saying so
+  (`TheExportDialogsAnswerIsCarriedOut`), Cancel accepting, a dialog never asked to close, OK accepting a setup with
+  problems, the host never closing the window or never giving it its view model, a start folder that is not there asked
+  of the provider, nothing chosen read as a first item, Customize View's own questions asked over the main window, and a
+  `PlotView` with no prompts handed in. Survived: `ChoiceWindow` answering -1 for an empty list instead of nothing,
+  which no test presses OK over and no caller offers (a recording always has a source). The mutation check found two
+  gaps, both closed: nothing asserted that the host gives its window the view model
+  (`TheExportDialogClosesOnExportAndOnCancel` does now), and a mutant of mine that left an event unused was refused by
+  the compiler and was rewritten. The real file dialogs cannot run headlessly, so the pickers' shared helpers are held
+  only where they decide without a provider (a missing folder, nothing chosen: `ShellTests`); the rest of them is
+  checked by the compiler and by reading. App **672** passed / 34 not run, zero warnings, no manual figure changed;
+  native and managed not affected (no change in either). Baseline moved: app 670 to 672 (`ViewsReachNoPlatformType`,
+  `ADialogOpensAtAFolderOnly...`).
+
 #### The application's views and view models in folders that mirror each other (layout plan PR 2)
 
 The second of the source-layout PRs: a move, and nothing else. `Views/` held 29 files of five kinds side by side
