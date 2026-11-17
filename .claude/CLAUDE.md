@@ -46,7 +46,7 @@ themselves). Use the **PowerShell** tool.
   project is an executable; the build merges a UTF-8 code-page manifest into it with `mt.exe`, because the vendored
   irig106 opens files with a narrow `open()` that reads the active code page. The .NET projects find `mt.exe` in the
   Windows SDK themselves (`eng\WindowsSdkTools.targets`), so a plain `dotnet build` (VS Code's) needs no developer
-  prompt. Green baseline **397 passed / 0
+  prompt. Green baseline **398 passed / 0
   failed / 1 skipped** (the skip is the probe `IsolatedLoadTests` runs in a child process). CI runs it.
 - **The app:** `src/TmDq.App` (Avalonia 12, CommunityToolkit.Mvvm) and `tests/TmDq.App.Tests` (xunit v3 on
   `Avalonia.Headless.XUnit`), both in `tmdq.sln`, which VS Code opens by default (`dotnet.defaultSolution`).
@@ -78,15 +78,15 @@ themselves). Use the **PowerShell** tool.
   script's `$Reviewed` table, so read it before adding it. That script runs under Windows PowerShell 5.1 inside builds
   started from PowerShell 7, which inherits 7's `PSModulePath`: avoid cmdlets from script modules (`Get-FileHash` fails).
 - **The release package:** `powershell -ExecutionPolicy Bypass -File
-  deploy\avalonia\build_avalonia_package.ps1 [-SignCertSha1 '']` publishes **single-file** (every managed assembly
+  deploy\build_package.ps1 [-SignCertSha1 '']` publishes **single-file** (every managed assembly
   inside our exe, so the certificate signs only our own code: the exe and `tmdq_core.dll`; it refuses to sign any other
   unsigned file), adds the VC++ runtime DLLs `tmdq_core.dll` imports, generates `THIRD-PARTY-NOTICES.txt`
   (`eng\gen_third_party_notices.ps1`, from the publish's deps file), and builds the portable ZIP and the Inno
-  installer (`deploy\avalonia\tmDataQualityAnalyzer.iss`: v2.x's AppId and folder, so it upgrades a v2.x
+  installer (`deploy\tmDataQualityAnalyzer.iss`: v2.x's AppId and folder, so it upgrades a v2.x
   install in place, deleting its `bin\`, keeping `settings\`, and taking the `.ch10` association). It runs
   `check_release_consistency.ps1 -ReleaseMode` first. **Unlock SimplySign first.** Clean-machine test under Smart App
   Control, which installs v2.14.2 and upgrades it: `deploy\sandbox\run_sandbox_test.ps1 [-Setup <setup.exe>]`, which
-  tests the newest setup in `deploy\avalonia\` with the payload it needs by default (the portable ZIP beside it,
+  tests the newest setup in `deploy\` with the payload it needs by default (the portable ZIP beside it,
   `staging\unsigned`, the PRN sample, and v2.14.2's setup from `deploy\` of this checkout or the main one: it is its
   GitHub release's asset; `-Payload` overrides the list, separated by semicolons because recording names contain
   commas) (an unsigned build must be BLOCKED, or the pass means nothing). The UTF-8 manifest is merged into every SDK host (`apphost`,

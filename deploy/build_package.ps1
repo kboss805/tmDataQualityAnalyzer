@@ -1,5 +1,5 @@
 # =============================================================================
-# build_avalonia_package.ps1 - the release packages from v3.0.0 on: the Avalonia
+# build_package.ps1 - the release packages from v3.0.0 on: the Avalonia
 # application (plan step 3.3 built it as a preview beside the Qt application; step 5.3
 # made it the release; docs/changelog.md records both).
 #
@@ -26,7 +26,7 @@
 #   -SignTimestamp timestamp server (default http://timestamp.digicert.com)
 #
 # Usage (Windows PowerShell 5.1, as the release scripts run):
-#   powershell -ExecutionPolicy Bypass -File deploy\avalonia\build_avalonia_package.ps1
+#   powershell -ExecutionPolicy Bypass -File deploy\build_package.ps1
 # =============================================================================
 
 param(
@@ -36,7 +36,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $Here = $PSScriptRoot
-$Root = (Resolve-Path (Join-Path $Here '..\..')).Path
+$Root = (Resolve-Path (Join-Path $Here '..')).Path
 . (Join-Path $Root 'eng\env.ps1')
 . (Join-Path $Here 'signing.ps1')
 

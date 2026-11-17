@@ -20,6 +20,30 @@
       "new": "\"-tc=Abi: nothing is named so*\"",
       "expect": "caught",
       "note": "a filter whose pattern matches no case"
+    },
+    {
+      "id": "N3",
+      "file": "tests/core/test_abi.cpp",
+      "old": "TEST_CASE(\"Abi: the struct layouts are pinned\")",
+      "new": "TEST_CASE(\"Abi: theStructLayoutsArePinned\")",
+      "expect": "caught",
+      "note": "a case named as an identifier"
+    },
+    {
+      "id": "N4",
+      "file": "tests/core/test_tomldocument.cpp",
+      "old": "TEST_CASE(\"TomlDocument: writes the exact file format\")",
+      "new": "TEST_CASE(\"TomlDocument writes the exact file format\")",
+      "expect": "caught",
+      "note": "a case with no suite and colon"
+    },
+    {
+      "id": "N5",
+      "file": "tests/core/test_constants.cpp",
+      "old": "TEST_CASE(\"Constants: polarity constants\")",
+      "new": "TEST_CASE(\"Constants: polarity\")",
+      "expect": "caught",
+      "note": "a case whose words are one"
     }
   ]
 }

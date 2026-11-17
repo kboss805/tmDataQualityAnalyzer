@@ -10,14 +10,13 @@
 !sandbox/
 !sandbox/**
 
-# The release package (build_avalonia_package.ps1), the same way.
-!avalonia/
-!avalonia/**
+# The release package's script, the installer script and the signing helpers.
+!build_package.ps1
+!signing.ps1
+!tmDataQualityAnalyzer.iss
 
 # What the two produce, ignored again after the re-includes above (a later rule wins): the
-# sandbox payload run_sandbox_test.ps1 stages (and the .wsb, which carries absolute host paths),
-# and the package's staged layout and the packages themselves.
+# sandbox payload run_sandbox_test.ps1 stages (and the .wsb, which carries absolute host paths).
+# The package's staged layout (staging/) and the packages themselves (*.zip, *_setup.exe) are
+# ignored by the "*" at the top: nothing above re-includes them.
 sandbox/.work/
-avalonia/staging/
-avalonia/*.zip
-avalonia/*_setup.exe

@@ -118,7 +118,7 @@ powershell -ExecutionPolicy Bypass -File eng\test_dotnet.ps1 -Configuration Rele
 powershell -ExecutionPolicy Bypass -File eng\test_app.ps1 -Configuration Release
 
 # The release packages (signed; pass -SignCertSha1 '' for an unsigned build)
-powershell -ExecutionPolicy Bypass -File deploy\avalonia\build_avalonia_package.ps1
+powershell -ExecutionPolicy Bypass -File deploy\build_package.ps1
 ```
 
 The scripts find MSVC themselves (`eng\env.ps1`). `.claude/CLAUDE.md` and `docs/guide.md` describe each one, the
@@ -155,8 +155,9 @@ tmDataQualityAnalyzer/
 ├── .claude/                    # Claude Code: the session guide (CLAUDE.md), shared settings, project skills
 ├── assets/                     # The base user manual (compiled into the app), the icon, the UTF-8 manifest
 ├── deploy/                     # Release packaging and its clean-machine test
-│   ├── avalonia/               # build_avalonia_package.ps1, the Inno Setup script, signing
 │   ├── sandbox/                # Windows Sandbox install-and-upgrade test (Smart App Control)
+│   ├── build_package.ps1       # The release packages: publish, signing, the portable ZIP and the installer
+│   ├── tmDataQualityAnalyzer.iss  # The Inno Setup script (signing.ps1 beside it is the signing helpers)
 │   └── RELEASENOTES.txt        # The installer's "What's New" page
 ├── docs/                       # Developer guide (guide.md), changelog, logic notes, records, manual sources
 ├── eng/                        # Build, test, manual and release-check scripts, and the MSBuild props and targets

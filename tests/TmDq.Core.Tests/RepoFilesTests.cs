@@ -75,6 +75,32 @@ public class RepoFilesTests
     }
 
     [Fact]
+    public void TheInstallerScriptAndThePackageScriptFindWhatTheyNameFromWhereTheyAre()
+    {
+        // Inno Setup resolves a file the script names from the script's own folder, and nothing but compiling the installer
+        // (a release-time step, with Inno Setup installed) shows one that no longer resolves: moving deploy/avalonia/ up a
+        // level (audit F1) left the release notes' path pointing at a folder above the repository until a compile said so.
+        string deploy = Path.Combine(RepoPaths.Root, "deploy");
+        string iss = File.ReadAllText(Path.Combine(deploy, "tmDataQualityAnalyzer.iss"));
+        var named = new[] { "LicenseFile", "SetupIconFile", "InfoBeforeFile" };
+        foreach (string directive in named)
+        {
+            Match m = Regex.Match(iss, "^" + directive + @"=(.+?)\s*$", RegexOptions.Multiline);
+            Assert.True(m.Success, $"the installer script has no {directive}");
+            string path = Path.GetFullPath(Path.Combine(deploy, m.Groups[1].Value));
+            Assert.True(File.Exists(path), $"{directive}={m.Groups[1].Value} resolves to {path}, which does not exist");
+        }
+
+        // The package script's root is the folder holding the solution, found from its own: it must walk up exactly as far
+        // as it sits below it.
+        string package = File.ReadAllText(Path.Combine(deploy, "build_package.ps1"));
+        Match root = Regex.Match(package, @"\$Root = \(Resolve-Path \(Join-Path \$Here '([^']*)'\)\)\.Path");
+        Assert.True(root.Success, "the package script does not set $Root from $Here");
+        Assert.True(File.Exists(Path.GetFullPath(Path.Combine(deploy, root.Groups[1].Value, "tmdq.sln"))),
+                    $"the package script's $Root ('{root.Groups[1].Value}' from deploy) is not the folder with tmdq.sln");
+    }
+
+    [Fact]
     public void EveryDotnetProjectKeepsItsOutputWhereItAlwaysIs()
     {
         // vcvars leaves Platform=x64 in the shell; with AppendPlatformToOutputPath=false a dotnet build puts its output

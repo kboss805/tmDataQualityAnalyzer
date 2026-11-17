@@ -2,7 +2,7 @@
 
   <!--
     The version of every assembly that ships, read from the one place it is written: AppVersion in
-    src/core/include/constants.h (kMajor, kMinor, kPatch). deploy/avalonia/build_avalonia_package.ps1, the installer and
+    src/core/include/constants.h (kMajor, kMinor, kPatch). deploy/build_package.ps1, the installer and
     the manuals read the same three numbers, so the app cannot drift from its release.
     Never type a version in a .csproj; import this instead.
 

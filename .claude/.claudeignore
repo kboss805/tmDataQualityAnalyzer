@@ -7,6 +7,6 @@ third_party/irig106/src/*.c
 out/
 **/bin/
 **/obj/
-deploy/avalonia/staging/
+deploy/staging/
 deploy/sandbox/.work/
 docs/manual_images/processed/

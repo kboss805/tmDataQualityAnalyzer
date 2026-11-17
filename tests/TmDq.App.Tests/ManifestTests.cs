@@ -69,7 +69,7 @@ public sealed class ManifestTests
         // and other publishes use apphost_publish. Patching only the build output shipped a single-file app with the
         // SDK's default manifest (no UTF-8 code page; found in plan step 3.3). A real publish needs the runtime packs
         // (about 100 MB per CI run), so this holds the project to its three hooks, and the packaging script
-        // (deploy\avalonia\build_avalonia_package.ps1) reads the manifest back out of the published exe. Each hook runs
+        // (deploy\build_package.ps1) reads the manifest back out of the published exe. Each hook runs
         // the mt.exe TmDqFindMt found (eng\WindowsSdkTools.targets), so a build outside a developer prompt works too.
         string csproj = File.ReadAllText(Repo.File(Path.Combine("src", "TmDq.App", "TmDq.App.csproj")));
         foreach ((string after, string host) in new[] { ("_CreateAppHost", "AppHostIntermediatePath"),
