@@ -1,0 +1,105 @@
+{
+  "suite": "app",
+  "args": [
+    "-class",
+    "TmDq.App.Tests.StreamSetupViewModelTests"
+  ],
+  "mutants": [
+    {
+      "id": "L1",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "        _lastFolder = Path.GetDirectoryName(path);\n        Show(load(",
+      "new": "        Show(load(",
+      "expect": "caught",
+      "note": "a Load does not remember its folder"
+    },
+    {
+      "id": "L2",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "        Show(load(ToSetup(), path));",
+      "new": "        _ = load(ToSetup(), path);",
+      "expect": "caught",
+      "note": "a Load shows nothing"
+    },
+    {
+      "id": "L3",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "FileMessage = \"Loaded \" + Path.GetFileName(path) + \".\";",
+      "new": "FileMessage = \"Saved \" + Path.GetFileName(path) + \".\";",
+      "expect": "caught",
+      "note": "a Load says Saved"
+    },
+    {
+      "id": "L4",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "LoadAsync(\"Load Receiver Parameters\", StreamFiles.ReceiverParamsFolder,",
+      "new": "LoadAsync(\"Load Receiver Parameters\", StreamFiles.FrameSyncFolder,",
+      "expect": "caught",
+      "note": "receiver parameters open in the frame sync folder"
+    },
+    {
+      "id": "L5",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "StreamFiles.LoadFolder(_appRoot, folder, _lastFolder)",
+      "new": "StreamFiles.LoadFolder(_appRoot, folder, null)",
+      "expect": "caught",
+      "note": "a Load never opens where the last one was"
+    },
+    {
+      "id": "L6",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "LoadAsync(\"Load Receiver Parameters\", StreamFiles.ReceiverParamsFolder, StreamFiles.LoadReceiverParams)",
+      "new": "LoadAsync(\"Load Receiver Parameters\", StreamFiles.ReceiverParamsFolder, StreamFiles.LoadFrameSync)",
+      "expect": "caught",
+      "note": "the receiver Load reads a frame sync file"
+    },
+    {
+      "id": "S1",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "            _lastFolder = Path.GetDirectoryName(written);\n",
+      "new": "",
+      "expect": "caught",
+      "note": "a Save does not remember its folder"
+    },
+    {
+      "id": "S2",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "            FileMessage = \"Could not save: \" + e.Message;",
+      "new": "            _ = e;",
+      "expect": "caught",
+      "note": "a failed Save says nothing"
+    },
+    {
+      "id": "S3",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "_files!.SaveAsync(title, _lastFolder)",
+      "new": "_files!.SaveAsync(title, null)",
+      "expect": "caught",
+      "note": "a Save never opens at the last folder"
+    },
+    {
+      "id": "S4",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "SaveAsync(\"Save Receiver Parameters\", StreamFiles.SaveReceiverParams)",
+      "new": "SaveAsync(\"Save Receiver Parameters\", StreamFiles.SaveFrameSync)",
+      "expect": "caught",
+      "note": "the receiver Save writes a frame sync file"
+    },
+    {
+      "id": "S5",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "FileMessage = \"Saved \" + Path.GetFileName(written) + \".\";",
+      "new": "FileMessage = \"Saved \" + Path.GetFileName(path) + \".\";",
+      "expect": "caught",
+      "note": "the Saved message names the typed name, not the file written"
+    },
+    {
+      "id": "T1",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "LoadAsync(\"Load Frame Sync Parameters\"",
+      "new": "LoadAsync(\"Load Receiver Parameters\"",
+      "expect": "caught",
+      "note": "the frame sync Load carries the other title"
+    }
+  ]
+}

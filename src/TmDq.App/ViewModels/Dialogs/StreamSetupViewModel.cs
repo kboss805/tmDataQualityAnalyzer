@@ -324,49 +324,36 @@ public sealed class StreamSetupViewModel : DialogViewModel
         Recheck();
     }
 
-    private async Task LoadFrameSyncAsync()
+    private Task LoadFrameSyncAsync() =>
+        LoadAsync("Load Frame Sync Parameters", StreamFiles.FrameSyncFolder, StreamFiles.LoadFrameSync);
+
+    private Task SaveFrameSyncAsync() => SaveAsync("Save Frame Sync Parameters", StreamFiles.SaveFrameSync);
+
+    private Task LoadReceiverParamsAsync() =>
+        LoadAsync("Load Receiver Parameters", StreamFiles.ReceiverParamsFolder, StreamFiles.LoadReceiverParams);
+
+    private Task SaveReceiverParamsAsync() => SaveAsync("Save Receiver Parameters", StreamFiles.SaveReceiverParams);
+
+    /// <summary>The two Load buttons' shared body: ask for a file (opening in the settings subfolder, then wherever the
+    /// last one was), put what it holds on the dialog, and say so. A file that cannot be read is the caller's to see.</summary>
+    private async Task LoadAsync(string title, string folder, Func<StreamSetup, string, StreamSetup> load)
     {
-        string? path = await _files!.OpenAsync("Load Frame Sync Parameters",
-                                               StreamFiles.LoadFolder(_appRoot, StreamFiles.FrameSyncFolder, _lastFolder));
+        string? path = await _files!.OpenAsync(title, StreamFiles.LoadFolder(_appRoot, folder, _lastFolder));
         if (path is null) return;
         _lastFolder = Path.GetDirectoryName(path);
-        Show(StreamFiles.LoadFrameSync(ToSetup(), path));
+        Show(load(ToSetup(), path));
         FileMessage = "Loaded " + Path.GetFileName(path) + ".";
     }
 
-    private async Task SaveFrameSyncAsync()
+    /// <summary>The two Save buttons' shared body: ask where, write the dialog's fields there, and say what was written, or
+    /// why it could not be.</summary>
+    private async Task SaveAsync(string title, Func<StreamSetup, string, string> save)
     {
-        string? path = await _files!.SaveAsync("Save Frame Sync Parameters", _lastFolder);
+        string? path = await _files!.SaveAsync(title, _lastFolder);
         if (path is null) return;
         try
         {
-            string written = StreamFiles.SaveFrameSync(ToSetup(), path);
-            _lastFolder = Path.GetDirectoryName(written);
-            FileMessage = "Saved " + Path.GetFileName(written) + ".";
-        }
-        catch (TmdqException e)
-        {
-            FileMessage = "Could not save: " + e.Message;
-        }
-    }
-
-    private async Task LoadReceiverParamsAsync()
-    {
-        string? path = await _files!.OpenAsync("Load Receiver Parameters",
-                                               StreamFiles.LoadFolder(_appRoot, StreamFiles.ReceiverParamsFolder, _lastFolder));
-        if (path is null) return;
-        _lastFolder = Path.GetDirectoryName(path);
-        Show(StreamFiles.LoadReceiverParams(ToSetup(), path));
-        FileMessage = "Loaded " + Path.GetFileName(path) + ".";
-    }
-
-    private async Task SaveReceiverParamsAsync()
-    {
-        string? path = await _files!.SaveAsync("Save Receiver Parameters", _lastFolder);
-        if (path is null) return;
-        try
-        {
-            string written = StreamFiles.SaveReceiverParams(ToSetup(), path);
+            string written = save(ToSetup(), path);
             _lastFolder = Path.GetDirectoryName(written);
             FileMessage = "Saved " + Path.GetFileName(written) + ".";
         }

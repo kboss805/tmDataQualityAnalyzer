@@ -12,6 +12,24 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### StreamSetupViewModel: the four Load and Save methods written twice, not four times (audit S15's leftover)
+
+What PR 3 listed as "not done": the stream setup dialog's two near-identical Load and Save pairs, one for the frame sync
+  file and one for the receiver parameters. Behaviour is the same.
+
+- `LoadAsync` (ask for a file, opening in the settings subfolder and then wherever the last one was; show what it holds;
+  remember the folder; say "Loaded ...") and `SaveAsync` (ask where; write; remember the folder; say "Saved ..." or
+  "Could not save: ...") hold the body once. Each of the four commands' methods is one line naming its dialog title and,
+  for a Load, its settings subfolder, and handing over the `StreamFiles` function that reads or writes its kind of file.
+  Neither was a rewrite: the only difference between the pairs was those three names.
+- **Checked.** Mutation check, `eng\mutate.ps1`, app, `eng/mutants/stream-setup-load-save.json` (12 mutants,
+  `StreamSetupViewModelTests`): 12 **CAUGHT**: a Load that does not remember its folder, shows nothing, says Saved, or
+  never opens at the last folder; the receiver Load opening in the frame sync folder or reading a frame sync file; a
+  Save that does not remember its folder, says nothing when it fails, never opens at the last folder, writes a frame
+  sync file for the receiver parameters, or names the typed name in its message; the frame sync Load carrying the other
+  title. App **676** passed / 34 not run, zero warnings; native and managed not affected. No test added, none needed:
+  the four commands were already held end to end by those tests.
+
 #### TmDq.Core: the interop's small repeats written once (audit S8's leftovers)
 
 What PR 5 left of S8: three copies of the same few lines each, in the binding's calls into the DLL. Behaviour is the
