@@ -169,6 +169,15 @@ public sealed class ChartGeometryTests
     }
 
     [Fact]
+    public void ATickCountThatIsNotAnAxisIsABadArgumentForBothKindsOfTick()
+    {
+        // The library answers -1 above 65536 ticks, which the binding must not read as "no ticks".
+        Assert.Equal(Status.BadArgument, Assert.Throws<TmdqException>(() => ChartGeometry.Ticks(0, 1, 65537)).Status);
+        Assert.Equal(Status.BadArgument, Assert.Throws<TmdqException>(() => ChartGeometry.TimeTicks(0, 1, 65537)).Status);
+        Assert.Equal(65536, ChartGeometry.Ticks(0, 1, 65536).Length);
+    }
+
+    [Fact]
     public void AGapInADenseSeriesMakesTwoBands()
     {
         (double[] xs, double[] ys) = Dense(_ => 50.0);

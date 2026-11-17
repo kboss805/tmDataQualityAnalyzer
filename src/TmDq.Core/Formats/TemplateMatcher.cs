@@ -20,8 +20,8 @@ public static unsafe class TemplateMatcher
         ArgumentNullException.ThrowIfNull(fileIds);
 
         using var arena = new Arena();
-        int* template = Copy(arena, templateIds);
-        int* file = Copy(arena, fileIds);
+        int* template = arena.Copy(templateIds);
+        int* file = arena.Copy(fileIds);
         Library.Check(Native.tmdq_template_match(template, templateIds.Count, file, fileIds.Count, out IntPtr match));
         try
         {
@@ -37,20 +37,5 @@ public static unsafe class TemplateMatcher
         {
             Native.tmdq_match_free(match);
         }
-    }
-
-    private static int* Copy(Arena arena, IReadOnlyList<int> ids)
-    {
-        if (ids.Count == 0)
-        {
-            return null;
-        }
-
-        int* copy = arena.Alloc<int>(ids.Count);
-        for (int i = 0; i < ids.Count; i++)
-        {
-            copy[i] = ids[i];
-        }
-        return copy;
     }
 }

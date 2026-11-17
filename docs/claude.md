@@ -561,7 +561,7 @@ what it produced, with progress, log and cancel), `CalibrationRun` and `StepFile
 `ImportedStreams`) and `ChartGeometry` with `SeriesIndex` (a series' envelope index, revision 3). The public types are in
 the folder's root and the file formats in `Formats/` (a type to a file); what touches the DLL is in `Interop/`: `Native`
 (the C ABI's P/Invoke declarations) and `NativeStructs` (its structs and the struct ids), `Arena` the native memory for one
-call's arguments, `Text` the strings that cross, `ObserverBridge` the callbacks a native run calls back into (an exception
+call's arguments (strings, a copy of a list, an array of pointers, a boxed struct), `Text` the strings that cross, `ObserverBridge` the callbacks a native run calls back into (an exception
 never unwinds a native thread), and `Handles`: a `SafeHandle` for each kind of native handle (run, calibration run, stream
 result, series set, series index, time base), so one kind cannot be passed for another, a handle is released exactly once,
 when it is disposed and the last call using it has returned, and a call on a released one throws

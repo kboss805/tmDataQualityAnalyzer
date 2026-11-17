@@ -1,0 +1,109 @@
+{
+  "suite": "managed",
+  "args": [],
+  "mutants": [
+    {
+      "id": "R1",
+      "file": "src/TmDq.Core/Interop/Arena.cs",
+      "old": "        if (values.Count == 0)\n        {\n            return null;\n        }\n\n        T* copy",
+      "new": "        if (values.Count < 0)\n        {\n            return null;\n        }\n\n        T* copy",
+      "expect": "caught",
+      "note": "Copy of nothing is not null"
+    },
+    {
+      "id": "R2",
+      "file": "src/TmDq.Core/Interop/Arena.cs",
+      "old": "        for (int i = 0; i < values.Count; i++)\n        {\n            copy[i] = values[i];",
+      "new": "        for (int i = 0; i < values.Count - 1; i++)\n        {\n            copy[i] = values[i];",
+      "expect": "caught",
+      "note": "Copy leaves the last value out"
+    },
+    {
+      "id": "R3",
+      "file": "src/TmDq.Core/Interop/Arena.cs",
+      "old": "        *one = value;\n",
+      "new": "        _ = value;\n",
+      "expect": "caught",
+      "note": "Box stores nothing"
+    },
+    {
+      "id": "R4",
+      "file": "src/TmDq.Core/Interop/Arena.cs",
+      "old": "(Math.Max(count, 0) * sizeof(void*)))",
+      "new": "(Math.Max(count, 0) * sizeof(byte)))",
+      "expect": "caught",
+      "note": "pointer array one byte to a pointer"
+    },
+    {
+      "id": "R5",
+      "file": "src/TmDq.Core/Library.cs",
+      "old": "        if (result < 0)\n        {\n            throw new TmdqException(Status.BadArgument",
+      "new": "        if (result < -1)\n        {\n            throw new TmdqException(Status.BadArgument",
+      "expect": "caught",
+      "note": "-1 no longer an error"
+    },
+    {
+      "id": "R6",
+      "file": "src/TmDq.Core/Library.cs",
+      "old": "        return result;\n    }\n\n    /// <summary>Turns",
+      "new": "        return 0;\n    }\n\n    /// <summary>Turns",
+      "expect": "caught",
+      "note": "the result is not given back"
+    },
+    {
+      "id": "R7",
+      "file": "src/TmDq.Core/Interop/Text.cs",
+      "old": "int written = Library.NonNegative(call((IntPtr)p, buffer.Length));",
+      "new": "int written = call((IntPtr)p, buffer.Length);",
+      "expect": "caught",
+      "note": "second call's error not checked"
+    },
+    {
+      "id": "R8",
+      "file": "src/TmDq.Core/Series.cs",
+      "old": "Native.tmdq_stream_key_equal(&a, &b)) != 0;",
+      "new": "Native.tmdq_stream_key_equal(&a, &b)) == 0;",
+      "expect": "caught",
+      "note": "same stream inverted"
+    },
+    {
+      "id": "R9",
+      "file": "src/TmDq.Core/Chart.cs",
+      "old": "int needed = Library.NonNegative(write(null, 0));",
+      "new": "int needed = Math.Max(write(null, 0), 0);",
+      "note": "tick count error ignored"
+    },
+    {
+      "id": "R10",
+      "file": "src/TmDq.Core/CalibrationRun.cs",
+      "old": "StepCount = request.Steps.Count,",
+      "new": "StepCount = 0,",
+      "expect": "caught",
+      "note": "step count not passed"
+    },
+    {
+      "id": "R11",
+      "file": "src/TmDq.Core/Formats/TemplateMatcher.cs",
+      "old": "int* template = arena.Copy(templateIds);",
+      "new": "int* template = arena.Copy(fileIds);",
+      "expect": "caught",
+      "note": "template ids copied from the file's"
+    },
+    {
+      "id": "R12",
+      "file": "src/TmDq.Core/Formats/CsvFile.cs",
+      "old": "YValues = arena.Copy(c.Y),",
+      "new": "YValues = arena.Copy(c.X),",
+      "expect": "caught",
+      "note": "y column written from x"
+    },
+    {
+      "id": "R13",
+      "file": "src/TmDq.Core/ProcessingRun.cs",
+      "old": "streams[i] = arena.Box(StreamToNative(request.Streams[i], arena));",
+      "new": "streams[i] = arena.Box(StreamToNative(request.Streams[0], arena));",
+      "expect": "caught",
+      "note": "every stream the first"
+    }
+  ]
+}

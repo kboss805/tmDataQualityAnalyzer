@@ -15,11 +15,7 @@ internal static unsafe class Text
     /// </summary>
     public static string Snprintf(Func<IntPtr, int, int> call)
     {
-        int needed = call(IntPtr.Zero, 0);
-        if (needed < 0)
-        {
-            throw new TmdqException(Status.BadArgument, Library.LastError());
-        }
+        int needed = Library.NonNegative(call(IntPtr.Zero, 0));
         if (needed == 0)
         {
             return string.Empty;
@@ -28,11 +24,7 @@ internal static unsafe class Text
         var buffer = new byte[needed + 1];
         fixed (byte* p = buffer)
         {
-            int written = call((IntPtr)p, buffer.Length);
-            if (written < 0)
-            {
-                throw new TmdqException(Status.BadArgument, Library.LastError());
-            }
+            int written = Library.NonNegative(call((IntPtr)p, buffer.Length));
             return Encoding.UTF8.GetString(buffer, 0, Math.Min(written, buffer.Length - 1));
         }
     }

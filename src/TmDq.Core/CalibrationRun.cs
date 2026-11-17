@@ -39,12 +39,7 @@ public sealed unsafe class CalibrationRun : IDisposable
         try
         {
             using var arena = new Arena();
-            int stepCount = request.Steps.Count;
-            double* steps = arena.Alloc<double>(stepCount);
-            for (int i = 0; i < stepCount; i++)
-            {
-                steps[i] = request.Steps[i];
-            }
+            double* steps = arena.Copy(request.Steps);
 
             var native = new CalibrationRequestNative
             {
@@ -55,7 +50,7 @@ public sealed unsafe class CalibrationRun : IDisposable
                 SyncPatternUtf8 = arena.Utf8(request.SyncPattern),
                 SyncMaskUtf8 = arena.Utf8(request.SyncMask),
                 ReceiverParamsTomlUtf8 = arena.Utf8(request.ReceiverParamsToml),
-                StepDb = stepCount == 0 ? null : steps,
+                StepDb = steps,
                 DataRateMbps = request.DataRateMbps,
                 ClipStartSec = request.ClipStartSec,
                 ClipEndSec = request.ClipEndSec,
@@ -66,7 +61,7 @@ public sealed unsafe class CalibrationRun : IDisposable
                 SwapBytes = request.SwapBytes ? 1 : 0,
                 NumReceivers = request.NumReceivers,
                 ReceiverChannels = request.ReceiverChannels,
-                StepCount = stepCount,
+                StepCount = request.Steps.Count,
             };
 
             CallbacksNative callbacks;

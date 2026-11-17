@@ -200,6 +200,18 @@ public static unsafe class Library
         return p is null ? string.Empty : Marshal.PtrToStringUTF8((IntPtr)p) ?? string.Empty;
     }
 
+    /// <summary>A count or length the library returns, where a negative one is its way of saying the arguments were
+    /// bad: throws <see cref="Status.BadArgument"/> with the library's message for a negative <paramref name="result"/>,
+    /// and gives the result back otherwise.</summary>
+    internal static int NonNegative(int result)
+    {
+        if (result < 0)
+        {
+            throw new TmdqException(Status.BadArgument, LastError());
+        }
+        return result;
+    }
+
     /// <summary>Turns a non-OK status into a <see cref="TmdqException"/> carrying the library's message.</summary>
     internal static void Check(int status)
     {

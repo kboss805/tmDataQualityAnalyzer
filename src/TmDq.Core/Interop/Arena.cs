@@ -24,6 +24,35 @@ internal sealed unsafe class Arena : IDisposable
     /// <summary>An array of <paramref name="count"/> zeroed <typeparamref name="T"/>.</summary>
     public T* Alloc<T>(int count) where T : unmanaged => (T*)Alloc((nuint)(Math.Max(count, 0) * sizeof(T)));
 
+    /// <summary>A native copy of <paramref name="values"/>, or null for none (the library reads nothing from a pointer
+    /// whose count is 0).</summary>
+    public T* Copy<T>(IReadOnlyList<T> values) where T : unmanaged
+    {
+        if (values.Count == 0)
+        {
+            return null;
+        }
+
+        T* copy = Alloc<T>(values.Count);
+        for (int i = 0; i < values.Count; i++)
+        {
+            copy[i] = values[i];
+        }
+        return copy;
+    }
+
+    /// <summary>An array of <paramref name="count"/> zeroed pointers to <typeparamref name="T"/>, for the arrays of
+    /// structs the library takes by pointer.</summary>
+    public T** AllocPointers<T>(int count) where T : unmanaged => (T**)Alloc((nuint)(Math.Max(count, 0) * sizeof(void*)));
+
+    /// <summary>A native block holding <paramref name="value"/>, and the pointer to it.</summary>
+    public T* Box<T>(T value) where T : unmanaged
+    {
+        T* one = Alloc<T>(1);
+        *one = value;
+        return one;
+    }
+
     /// <summary>A NUL-terminated UTF-8 copy of <paramref name="text"/>, or null for a null string.</summary>
     public byte* Utf8(string? text)
     {
