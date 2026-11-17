@@ -69,7 +69,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     public const double AxisMarginFactor = 0.05, MinAxisSpan = 1.0;
     public const int MaxZoomDepth = 32;
     public const double MinZoomSpanSeconds = 1e-6;
-    public const double KeyPanFraction = 0.10, KeyZoomFactor = 0.80;
+    public const double KeyPanFraction = 0.10, KeyZoomFactor = 0.80, WheelZoomFactor = 0.85;
     public const double MissedFramesOverrideMax = 10000000.0, SnrOverrideLimit = 999.0;
     private static readonly string[] ChannelPrefixes = { "L", "R", "C" };
 
@@ -496,6 +496,13 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     /// <summary>A continuous gesture (wheel zoom, drag pan) moved the window: kept inside the data, its width kept, and
     /// not remembered in the zoom history.</summary>
     public void SetXViewByUser(double lower, double upper) => _window.SetByUser(lower, upper);
+
+    /// <summary>The window a zoom by <paramref name="factor"/> (below 1 zooms in) about <paramref name="anchorSeconds"/>
+    /// gives, the time at the anchor staying put; null when it would be narrower than <see cref="MinZoomSpanSeconds"/>.
+    /// The wheel's rule (<see cref="WheelZoomFactor"/> a notch, the pointer's time the anchor): what the view then does with
+    /// it is its own, a continuous gesture (<see cref="SetXViewByUser"/>).</summary>
+    public (double Lower, double Upper)? WindowZoomedAbout(double anchorSeconds, double factor) =>
+        _window.ZoomedAbout(anchorSeconds, factor);
 
 
     public void ZoomBack() => _window.Back();

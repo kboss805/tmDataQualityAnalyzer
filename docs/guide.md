@@ -540,6 +540,13 @@ profile, so a batch processes with the linear calibration.
   bound to `PlotCommands`, which the view makes for its plot with its prompts: a command for each item, chip and key
   (none runs without data, which disables the item and lets the key go on), what the chips and the menu show, and the
   entries of Plot File and Readout.
+  Two rules the plot keeps in one place each: the **zoom** (`PlotTimeWindow.ZoomedAbout`, reached as
+  `PlotViewModel.WindowZoomedAbout`, with the `KeyZoomFactor` and `WheelZoomFactor` steps) is the keys' about the window's
+  centre and the wheel's about the pointer's time, refused below `MinZoomSpanSeconds` for both, the chart keeping only the
+  pixel maths and the direction; and **each view listens to what it depends on**: the legend to `SeriesChanged` (the
+  series, their names, colours and visibility, and the lock axis's view) and `LegendVisible`, the chart to `SeriesChanged`
+  (it drops what it built for series no longer shown), `RangesChanged` (it paints its data layer again) and the title,
+  so a pan step rebuilds no legend row and the legend's switch repaints no line.
 - **Export and import** (`ExportViewModel`, `PlotImageExport`; `Models/Export`: `ImageFiles`, an image export's format
   from its file name, and `ExportKind`): the CSV through the core's writer (every series), the
   image through one Skia renderer for PNG, SVG and PDF (exactly what the chart shows), the log as text; Import CSV
@@ -1041,8 +1048,8 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
   gestures), `PlotDraftTests` (the draft a gesture - the wheel, a drag, a held pan or zoom key - paints on a heavy plot
   and the full picture after it, a dropout in both, the draft's lines and band outlines one device pixel thick at 2x and 3x
   display scaling, an export never drafted, each long series' index and when it goes, the cached layer and the indexes
-  released when the chart leaves the window), `AroundTheChartTests` (legend, chips,
-  menu, keys, Customize View, prompts).
+  released when the chart leaves the window), `AroundTheChartTests` (legend and what rebuilds it, the zoom rule, chips,
+  menu, keys, Customize View, prompts, and which notifications repaint the data layer).
 - **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against v2.14.2's, the image pixel by pixel, Import
   CSV), `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, Apply Template with the core missing).
 - **The shell:** `ShellTests` (title bar, menu, Recent Files, keys, drag and drop, the sidebar and its divider, themes, Help), `StatusBarTests` (the bar's place, colour and hairline, its marks, its trimming), `MenuStyleTests` (no icons, the accent row and white text, the dimmed shortcut, the row height and inset), `DialogAnatomyTests`

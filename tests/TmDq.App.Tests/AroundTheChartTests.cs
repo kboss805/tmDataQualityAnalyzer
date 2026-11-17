@@ -223,6 +223,28 @@ public sealed class AroundTheChartTests
     }
 
     [Fact]
+    public void AZoomAboutAnAnchorKeepsTheAnchorWhereItIsAndBothGesturesRefuseTheSameNarrowWindow()
+    {
+        // One rule for the wheel (the anchor is the pointer's time) and the keys (the window's centre): the view model's.
+        PlotViewModel plot = LockPlot();   // the window is the whole recording, 0 to 2 s
+        Assert.Equal((0.25, 1.25), plot.WindowZoomedAbout(0.5, 0.5));    // in: the anchor's fraction of the window is kept
+        Assert.Equal((-0.5, 3.5), plot.WindowZoomedAbout(0.5, 2.0));     // out: not clamped here, the gesture's setter does that
+        Assert.Equal((0.0, 2.0), plot.WindowZoomedAbout(0.5, 1.0));
+
+        // The keys are the same rule about the centre.
+        plot.SetXViewByUser(0.4, 0.6);
+        (double lower, double upper) = plot.WindowZoomedAbout(0.5, PlotViewModel.KeyZoomFactor)!.Value;
+        plot.ZoomWindow(PlotViewModel.KeyZoomFactor);
+        Assert.Equal((lower, upper), (plot.XViewMin, plot.XViewMax));
+
+        // Neither may leave a window narrower than a band zoom may be; zooming out of one is allowed.
+        plot.SetXViewByUser(1.0, 1.0 + 1.1e-6);
+        Assert.Null(plot.WindowZoomedAbout(1.0, PlotViewModel.KeyZoomFactor));
+        Assert.Null(plot.WindowZoomedAbout(1.0 + 1e-6, PlotViewModel.WheelZoomFactor));
+        Assert.NotNull(plot.WindowZoomedAbout(1.0, 1.0 / PlotViewModel.WheelZoomFactor));
+    }
+
+    [Fact]
     public void TheViewModeSwitchesOnlyWhenBothMetricsExistAndResetViewResetsBothAxes()
     {
         PlotViewModel plot = LockPlot();
@@ -910,6 +932,86 @@ public sealed class AroundTheChartTests
         Dispatcher.UIThread.RunJobs();
         Assert.False(legend.IsVisible);
         Assert.Equal(0, legend.RowCount);
+        s.Window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheLegendIsBuiltAgainForWhatItListsAndNotWhenTheWindowOrAnAxisMoves()
+    {
+        PlotViewModel plot = LockPlot();
+        Shown s = Show(plot);
+        PlotLegend legend = s.View.Legend;
+        Control row = legend.Rows[0];
+        string Label() => ((Panel)legend.Rows[0]).Children.OfType<TextBlock>().Single().Text!;
+        Assert.Equal("Ch 5", Label());
+
+        // The window and the axes have nothing to do with the rows: a pan step must not rebuild them (twice a step, it
+        // once did: every row, for the notifications of the window and of the properties it raised).
+        double span = plot.XViewMax - plot.XViewMin;
+        plot.SetXViewByUser(plot.XViewMin + span * 0.1, plot.XViewMax - span * 0.1);
+        plot.ApplyTimeWindow(plot.XViewMin + span * 0.05, plot.XViewMax - span * 0.05, "a", "b");
+        plot.ZoomBack();
+        plot.SetLeftMinOverride(10.0);
+        plot.ResetXRange();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Same(row, legend.Rows[0]);
+
+        // What it lists does rebuild them: a rename, the metric in view, a series hidden, the legend switched off.
+        plot.RenameSeries(0, "Renamed");
+        plot.CommitAppearance();
+        Dispatcher.UIThread.RunJobs();
+        Assert.NotSame(row, legend.Rows[0]);
+        Assert.Equal("Renamed", Label());
+
+        plot.SetLockAxisView(LockAxisView.MissedFrames);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, legend.RowCount);
+        Assert.Equal("Renamed", Label());   // the missed-frames series: a stream's two are renamed together
+
+        plot.SetSeriesVisibleQuiet(1, false);
+        plot.CommitAppearance();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(0, legend.RowCount);
+        Assert.False(legend.IsVisible);
+
+        plot.SetSeriesVisibleQuiet(1, true);
+        plot.CommitAppearance();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(legend.IsVisible);
+        plot.LegendVisible = false;
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(legend.IsVisible);
+        plot.LegendVisible = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(legend.IsVisible);
+        s.Window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheDataLayerIsPaintedAgainForAWindowOrATitleAndNotForAPropertyItDoesNotDraw()
+    {
+        PlotViewModel plot = LockPlot();
+        Shown s = Show(plot);
+        PlotChart chart = s.View.Chart;
+        Frames.Capture(s.Window);
+        int renders = chart.DataLayerRenders;
+
+        // The legend's switch is a property of the plot the chart does not draw, and so is a zoom's history: the cached
+        // layer stays (a toggle with L on a heavy plot repainted every line).
+        plot.LegendVisible = false;
+        Frames.Capture(s.Window);
+        plot.LegendVisible = true;
+        Frames.Capture(s.Window);
+        Assert.Equal(renders, chart.DataLayerRenders);
+
+        // What it does draw: the window, and the title.
+        double span = plot.XViewMax - plot.XViewMin;
+        plot.SetXViewByUser(plot.XViewMin + span * 0.1, plot.XViewMax - span * 0.1);
+        Frames.Capture(s.Window);
+        Assert.Equal(renders + 1, chart.DataLayerRenders);
+        plot.Title = "A different title";
+        Frames.Capture(s.Window);
+        Assert.Equal(renders + 2, chart.DataLayerRenders);
         s.Window.Close();
     }
 

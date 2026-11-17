@@ -49,7 +49,6 @@ public sealed class PlotChart : Control
     public const double OuterMargin = 10, AxisLabelGap = 6, TickLength = 4, TickLabelGap = 12, TopInset = 12;
     public const double FontSize = 12, PenWidth = 1.5;
     public const int XTickCount = 10, YTickCount = 6;
-    public const double WheelZoomStep = 0.85;
     // The dotted grid's and the crosshair's dash patterns (a pen reads them and never changes them).
     private static readonly double[] GridDashes = { 1.0, 2.0 };
     private static readonly double[] CrosshairDashes = { 4.0, 2.0 };
@@ -201,18 +200,18 @@ public sealed class PlotChart : Control
         {
             if (_watched is not null)
             {
-                _watched.SeriesChanged -= OnDataChanged;
-                _watched.RangesChanged -= OnDataChanged;
+                _watched.SeriesChanged -= OnSeriesChanged;
+                _watched.RangesChanged -= OnRangesChanged;
                 _watched.PropertyChanged -= OnModelPropertyChanged;
             }
             _watched = Plot;
             if (_watched is not null)
             {
-                _watched.SeriesChanged += OnDataChanged;
-                _watched.RangesChanged += OnDataChanged;
+                _watched.SeriesChanged += OnSeriesChanged;
+                _watched.RangesChanged += OnRangesChanged;
                 _watched.PropertyChanged += OnModelPropertyChanged;
             }
-            OnDataChanged(this, EventArgs.Empty);
+            OnSeriesChanged(this, EventArgs.Empty);
         }
         else if (change.Property == BoundsProperty)
         {
@@ -221,9 +220,22 @@ public sealed class PlotChart : Control
 
     }
 
-    private void OnModelPropertyChanged(object? sender, PropertyChangedEventArgs e) => OnDataChanged(sender, e);
+    // The data layer is reused until the data, a range, the size or the labels change, so each notification does what it
+    // means: the series changing drops what was built for series no longer shown; a range paints the layer again; and of
+    // the plot's properties only the title is drawn (the axis label changes with the series, the zoom history, the
+    // legend's switch and the rest are not drawn).
+    private void OnModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(PlotViewModel.Title)) OnRangesChanged(sender, e);
+    }
 
-    private void OnDataChanged(object? sender, EventArgs e)
+    private void OnRangesChanged(object? sender, EventArgs e)
+    {
+        _backingValid = false;
+        InvalidateVisual();
+    }
+
+    private void OnSeriesChanged(object? sender, EventArgs e)
     {
         // Forget the geometry and the index of series no longer shown.
         var current = new HashSet<PlotSeries>(Plot?.Series ?? Array.Empty<PlotSeries>());
@@ -542,10 +554,8 @@ public sealed class PlotChart : Control
         if (vm?.HasData != true || e.Delta.Y == 0 || !ChartGeometry.UsableRange(vm.XViewMin, vm.XViewMax)) return;
         // About the cursor, not the centre: the time under the pointer stays put.
         double anchor = PixelToX(e.GetPosition(this).X);
-        double factor = e.Delta.Y > 0 ? WheelZoomStep : 1.0 / WheelZoomStep;
-        double lower = anchor - (anchor - vm.XViewMin) * factor;
-        double upper = anchor + (vm.XViewMax - anchor) * factor;
-        if (upper - lower < PlotViewModel.MinZoomSpanSeconds) return;
+        double factor = e.Delta.Y > 0 ? PlotViewModel.WheelZoomFactor : 1.0 / PlotViewModel.WheelZoomFactor;
+        if (vm.WindowZoomedAbout(anchor, factor) is not (double lower, double upper)) return;
         Moving();
         vm.SetXViewByUser(lower, upper);
         e.Handled = true;
