@@ -255,21 +255,17 @@ public static unsafe class ImportedStreams
         ArgumentNullException.ThrowIfNull(series);
 
         using var arena = new Arena();
-        ImportedSeriesNative** wire = (ImportedSeriesNative**)arena.Alloc((nuint)(series.Count * sizeof(void*)));
-        var natives = new ImportedSeriesNative*[series.Count];
+        ImportedSeriesNative** wire = arena.AllocPointers<ImportedSeriesNative>(series.Count);
         for (int i = 0; i < series.Count; i++)
         {
-            ImportedSeriesNative* one = arena.Alloc<ImportedSeriesNative>(1);
-            *one = new ImportedSeriesNative
+            wire[i] = arena.Box(new ImportedSeriesNative
             {
                 StructSize = (uint)sizeof(ImportedSeriesNative),
                 MetricType = (int)series[i].Metric,
                 StreamLabelUtf8 = arena.Utf8(series[i].StreamLabel),
                 SourceId = series[i].SourceId,
                 StreamOrder = series[i].StreamOrder,
-            };
-            wire[i] = one;
-            natives[i] = one;
+            });
         }
 
         Library.Check(Native.tmdq_assign_imported_stream_orders(wire, series.Count));
@@ -277,7 +273,7 @@ public static unsafe class ImportedStreams
         var orders = new int[series.Count];
         for (int i = 0; i < orders.Length; i++)
         {
-            orders[i] = natives[i]->StreamOrder;
+            orders[i] = wire[i]->StreamOrder;
         }
         return orders;
     }

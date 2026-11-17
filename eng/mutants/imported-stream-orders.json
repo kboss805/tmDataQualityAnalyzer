@@ -1,0 +1,30 @@
+{
+  "suite": "managed",
+  "args": [],
+  "mutants": [
+    {
+      "id": "O1",
+      "file": "src/TmDq.Core/Series.cs",
+      "old": "            orders[i] = wire[i]->StreamOrder;",
+      "new": "            orders[i] = 0;",
+      "expect": "caught",
+      "note": "the orders are not read back",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.SeriesTests"
+      ]
+    },
+    {
+      "id": "O2",
+      "file": "src/TmDq.Core/Series.cs",
+      "old": "                StreamOrder = series[i].StreamOrder,\n            });",
+      "new": "                StreamOrder = 0,\n            });",
+      "expect": "caught",
+      "note": "the orders are not sent",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.SeriesTests"
+      ]
+    }
+  ]
+}

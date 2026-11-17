@@ -21,9 +21,9 @@ public sealed class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var window = new MainWindow();
+            window.PlotView.Prompts = new WindowPlotPrompts(window.PlotView);
             // What is remembered between sessions (plan step 4.8). The installer's smoke test keeps nothing: it must
             // not leave its recording in anyone's Recent Files.
-            window.PlotView.Prompts = new WindowPlotPrompts(window.PlotView);
             string? smokeReport = Startup.SmokeReportPath();
             PreferencesStore preferences = smokeReport is null
                 ? PreferencesStore.Load(PreferencesStore.FolderFor(AppContext.BaseDirectory,

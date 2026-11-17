@@ -1,0 +1,90 @@
+{
+  "suite": "app",
+  "args": [],
+  "mutants": [
+    {
+      "id": "B1",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "        IsBusy = true;\n        try\n        {\n            NativeCore.EnsureLoaded();\n            checks",
+      "new": "        try\n        {\n            NativeCore.EnsureLoaded();\n            checks",
+      "expect": "caught",
+      "note": "the check of the files is not busy",
+      "args": [
+        "-class",
+        "TmDq.App.Tests.TemplateBatchTests"
+      ]
+    },
+    {
+      "id": "B2",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "        finally\n        {\n            IsBusy = false;\n        }\n        var confirm",
+      "new": "        finally\n        {\n        }\n        var confirm",
+      "expect": "caught",
+      "note": "the window stays busy after the check",
+      "args": [
+        "-class",
+        "TmDq.App.Tests.TemplateBatchTests"
+      ]
+    },
+    {
+      "id": "B3",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "        var confirm = new BatchApplyViewModel(checks,",
+      "new": "        IsBusy = true;\n        var confirm = new BatchApplyViewModel(checks,",
+      "expect": "caught",
+      "note": "busy while the confirmation dialog is up (the batch would refuse itself)",
+      "args": [
+        "-class",
+        "TmDq.App.Tests.TemplateBatchTests"
+      ]
+    },
+    {
+      "id": "B4",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "        finally\n        {\n            IsBusy = false;\n        }\n        var confirm",
+      "new": "        finally\n        {\n            IsBusy = true;\n        }\n        var confirm",
+      "expect": "caught",
+      "note": "the check leaves the window busy for good",
+      "args": [
+        "-class",
+        "TmDq.App.Tests.TemplateBatchTests"
+      ]
+    },
+    {
+      "id": "P1",
+      "file": "src/TmDq.App/Models/Settings/Preferences.cs",
+      "old": "public const string FileName = \"preferences.json\";",
+      "new": "public const string FileName = \"prefs.json\";",
+      "expect": "caught",
+      "note": "the preferences file renamed",
+      "args": [
+        "-class",
+        "TmDq.App.Tests.PreferencesTests"
+      ]
+    },
+    {
+      "id": "P2",
+      "file": "src/TmDq.App/Models/Settings/Preferences.cs",
+      "old": "public const string PortableMarker = \"portable\";",
+      "new": "public const string PortableMarker = \"portable.txt\";",
+      "expect": "caught",
+      "note": "the portable marker renamed",
+      "args": [
+        "-class",
+        "TmDq.App.Tests.PreferencesTests"
+      ]
+    },
+    {
+      "id": "P3",
+      "file": "src/TmDq.App/Models/Settings/Preferences.cs",
+      "old": "private const string FolderName = \"tmDataQualityAnalyzer\";",
+      "new": "private const string FolderName = \"tmDQ\";",
+      "expect": "caught",
+      "note": "the preferences folder renamed",
+      "args": [
+        "-class",
+        "TmDq.App.Tests.PreferencesTests"
+      ]
+    }
+  ]
+}

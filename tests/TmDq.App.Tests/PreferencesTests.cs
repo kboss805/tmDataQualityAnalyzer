@@ -131,6 +131,16 @@ public sealed class PreferencesTests : IDisposable
     }
 
     [Fact]
+    public void TheFileAndTheMarkerAreNamedAsEveryUsersFolderAlreadyHasThem()
+    {
+        // Compared with the constants elsewhere, so a rename would pass: these are what exists on disk already. A different
+        // file name starts every user from the defaults, and a different marker turns every portable copy into an installed one.
+        Assert.Equal(("preferences.json", "portable"), (PreferencesStore.FileName, PreferencesStore.PortableMarker));
+        string app = Folder("named-app"), appData = Folder("named-appdata");
+        Assert.Equal(Path.Combine(appData, "tmDataQualityAnalyzer"), PreferencesStore.FolderFor(app, appData));
+    }
+
+    [Fact]
     public void APortableCopyKeepsItsPreferencesBesideItself()
     {
         string app = Folder("app"), appData = Folder("appdata");
