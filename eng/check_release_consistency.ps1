@@ -9,7 +9,7 @@
 # these files carry the version as PROSE, and nothing derives those:
 #
 #   .claude/CLAUDE.md          "Current version: X.Y.Z"   (sat at 2.7.0 for 2 releases)
-#   docs/claude.md             "Project Version: X.Y.Z"
+#   docs/guide.md             "Project Version: X.Y.Z"
 #   assets/usermanual.html     subtitle + footer          (read 2.7.0 at v2.9.0)
 #   UserManual.html            subtitle + footer          (the full manual, built beside the base one)
 #   deploy/RELEASENOTES.txt    top section header
@@ -76,7 +76,7 @@ $checks = @(
        Pattern = '\*\*Current version:\s*([0-9]+\.[0-9]+\.[0-9]+)\.\*\*'
        What = 'Current version line' }
 
-    @{ File = 'docs\claude.md'
+    @{ File = 'docs\guide.md'
        Pattern = '\*\*Project Version\*\*:\s*([0-9]+\.[0-9]+\.[0-9]+)'
        What = 'Project Version line' }
 

@@ -107,6 +107,21 @@ public class RepoFilesTests
     }
 
     [Fact]
+    public void NoFileButTheProjectsOwnIsNamedClaudeMdWhereClaudeCodeWouldLoadItAsInstructions()
+    {
+        // Claude Code loads a file named CLAUDE.md as instructions the first time anything under its folder is read, and
+        // Windows' case-insensitive names make "claude.md" one too: docs/claude.md put its 81 KB into every session (and every
+        // subagent) that opened a file in docs (audit T4). The developer guide is docs/guide.md; the instructions are
+        // .claude/CLAUDE.md, and nothing else may carry the name.
+        var offenders = Files(".", "*.md")
+            .Where(f => string.Equals(Path.GetFileName(f), "claude.md", StringComparison.OrdinalIgnoreCase))
+            .Select(f => Path.GetRelativePath(RepoPaths.Root, f))
+            .ToList();
+        Assert.True(offenders.Count == 0, "named like Claude Code's instructions file: " + string.Join(", ", offenders));
+        Assert.True(File.Exists(RepoPaths.File(Path.Combine("docs", "guide.md"))), "the developer guide is not where the docs say");
+    }
+
+    [Fact]
     public void EveryKeptMutantStillNamesTextThatIsInItsFileExactlyOnce()
     {
         // A kept list (eng\mutants) is a regression check only while each mutant's "old" text is still in its file: after

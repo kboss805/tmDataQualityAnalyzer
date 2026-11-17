@@ -10,7 +10,7 @@ using Xunit;
 namespace TmDq.App.Tests;
 
 /// <summary>
-/// The application's layers (docs/claude.md, File Organization): the models know no view model, view or service; the
+/// The application's layers (docs/guide.md, File Organization): the models know no view model, view or service; the
 /// view models and the service interfaces know no view. None of them knows Avalonia but its <c>Color</c>, a plain
 /// value the series, the prompts and the template file carry. Only the views and <c>Platform</c> reach Avalonia. Each type
 /// is read as compiled: its signatures (base, interfaces, fields, properties, events, parameters and results) and
@@ -59,7 +59,7 @@ public sealed class LayerTests
 
     /// <summary><c>Services</c> is the interfaces a view model asks the user through, and nothing else: an implementation
     /// belongs in <c>Platform</c>, a rule, a file or a run of the core in <c>Models</c>, and what builds a view model in
-    /// <c>ViewModels</c> (docs/claude.md, File Organization).</summary>
+    /// <c>ViewModels</c> (docs/guide.md, File Organization).</summary>
     [Fact]
     public void ServicesHoldOnlyInterfaces()
     {
