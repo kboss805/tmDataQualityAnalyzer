@@ -16,6 +16,7 @@
 #endif
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <psapi.h>
 
 #include "doctest.h"
 #include "ch10packetreader.h"
@@ -695,6 +696,151 @@ TEST_CASE("Ch10PacketReader: a failed setup still releases the lock")
         }
 
         CHECK_MESSAGE(runSetup(via_prepare, fx, fx.path), "a setup after a failed one did not succeed");
+    }
+}
+
+// Closing gives a slot back to irig106's handle table, which is what the lock guards: the library marks the slot free
+// before its last writes to it, so an open on another thread could claim the slot and then have it marked closed. Both
+// of the packet reader's closes (its destructor's, for a reader that was prepared and never run, and the one at the end
+// of run()) must therefore wait for the lock, as its setup does.
+TEST_CASE("Ch10PacketReader: closing waits for the lock another thread holds")
+{
+    const StepCalFixture fx = loadStepCalFixture();
+    for (const bool via_run : {false, true})
+    {
+        INFO((via_run ? "the close at the end of run()" : "the destructor's close"));
+        PacketQueue q;
+        std::unique_ptr<Drain> drain = via_run ? std::make_unique<Drain>(q) : nullptr;
+        std::atomic<bool> prepared{false};
+        std::atomic<bool> go{false};
+        std::atomic<bool> closed{false};
+        std::atomic<bool> ok{false};
+        std::thread worker([&]() {
+            {
+                ProcessingParams p = paramsFor(fx, &q);
+                std::vector<ProcessingParams*> list{&p};
+                Ch10PacketReader r;
+                std::string err;
+                ok = r.prepare(fx.path, fx.time_id, list, err);
+                prepared = true;
+                while (!go.load())
+                {
+                    std::this_thread::sleep_for(1ms);
+                }
+                if (via_run)
+                {
+                    r.run();          // reads to the end, posts the end marker, then closes
+                    closed = true;
+                }
+            }                         // a reader that was not run closes here
+            closed = true;
+        });
+        const auto deadline = std::chrono::steady_clock::now() + 20000ms;
+        while (!prepared.load() && std::chrono::steady_clock::now() < deadline)
+        {
+            std::this_thread::sleep_for(1ms);
+        }
+        REQUIRE(prepared.load());
+
+        bool closed_while_held = false;
+        {
+            const auto held = lockIrig106Setup();
+            go = true;
+            if (via_run)
+            {
+                // The end marker is posted before the close, so once it is seen the reader has nothing left but to close.
+                while (drain->m_end_markers.load() == 0 && std::chrono::steady_clock::now() < deadline)
+                {
+                    std::this_thread::sleep_for(1ms);
+                }
+            }
+            std::this_thread::sleep_for(300ms);   // a close takes microseconds
+            closed_while_held = closed.load();
+        }                                         // lock released here
+        worker.join();
+        if (drain)
+        {
+            drain->join();
+        }
+
+        CHECK(ok.load());
+        CHECK_MESSAGE(!closed_while_held, "the recording was closed while another thread held the irig106 lock");
+        CHECK(closed.load());
+        CHECK((!drain || (drain->m_end_markers.load() == 1 && !drain->m_timed_out)));
+    }
+}
+
+namespace {
+
+/// The process's private bytes: what a leak grows and a free gives back to the heap for the next allocation.
+std::size_t privateBytes()
+{
+    PROCESS_MEMORY_COUNTERS_EX counters{};
+    counters.cb = sizeof(counters);
+    REQUIRE(GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&counters), sizeof(counters)));
+    return counters.PrivateUsage;
+}
+
+/// How far private memory grew over @p rounds calls of @p once, after a few to warm the heap up.
+template <typename Once>
+std::size_t growthOver(int rounds, Once&& once)
+{
+    for (int i = 0; i < 20; ++i)
+    {
+        once();
+    }
+    const std::size_t before = privateBytes();
+    for (int i = 0; i < rounds; ++i)
+    {
+        once();
+    }
+    const std::size_t after = privateBytes();
+    return after > before ? after - before : 0;
+}
+
+} // namespace
+
+// irig106 allocates the decoded TMATS (one tree of records and the lines they were read from) and gives it back only
+// when asked. A reader that is destroyed, and a reader that decodes again, must each ask: every file opened, every run
+// and every extraction makes a reader, so a tree kept for each would grow a long session without limit.
+TEST_CASE("Ch10PacketReader: a reader gives its decoded TMATS back")
+{
+    const StepCalFixture fx = loadStepCalFixture();
+    constexpr int         kRounds = 400;
+    constexpr std::size_t kLimit  = 2u * 1024u * 1024u;   // 400 trees kept would be several times this
+
+    SUBCASE("Chapter10Reader, destroyed")
+    {
+        const std::size_t grown = growthOver(kRounds, [&]() {
+            Chapter10Reader r;
+            REQUIRE(r.loadChannels(fx.path));
+        });
+        INFO("private memory grew by " << grown / 1024 << " KiB");
+        CHECK(grown < kLimit);
+    }
+    SUBCASE("Chapter10Reader, loaded again")
+    {
+        Chapter10Reader r;
+        const std::size_t grown = growthOver(kRounds, [&]() { REQUIRE(r.loadChannels(fx.path)); });
+        INFO("private memory grew by " << grown / 1024 << " KiB");
+        CHECK(grown < kLimit);
+    }
+    SUBCASE("Ch10PacketReader, destroyed")
+    {
+        const std::size_t grown = growthOver(kRounds, [&]() { REQUIRE(runSetup(true, fx, fx.path)); });
+        INFO("private memory grew by " << grown / 1024 << " KiB");
+        CHECK(grown < kLimit);
+    }
+    SUBCASE("Ch10PacketReader, prepared again")
+    {
+        PacketQueue q;
+        ProcessingParams p = paramsFor(fx, &q);
+        std::vector<ProcessingParams*> list{&p};
+        Ch10PacketReader r;
+        std::string err;
+        const std::size_t grown = growthOver(kRounds, [&]() { REQUIRE(r.prepare(fx.path, fx.time_id, list, err)); });
+        INFO("private memory grew by " << grown / 1024 << " KiB");
+        CHECK(grown < kLimit);
     }
 }
 

@@ -12,6 +12,42 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The core: a reader's TMATS freed, the close inside the lock, and a free from a callback refused (follow-up audit)
+
+Three defects the follow-up audit found by reading, each now held by a test. The first is a leak every session had; the
+  other two are a race and a crash no committed test or product path was known to reach.
+
+- **The decoded TMATS was never freed.** irig106 allocates the tree a decode builds and gives it back only through
+  `enI106_Free_TmatsInfo`, which nothing in the core called; both readers also zeroed the struct before each decode,
+  which defeats the free the decoder itself does of an earlier tree. So every file opened, every run and every
+  extraction kept one tree. Both readers now free it in their destructor (`Ch10PacketReader` after its channel table,
+  whose entries point into the tree) and no longer zero it; `prepare()` on a reader prepared before closes the earlier
+  handle and frees the earlier table first.
+- **`Ch10PacketReader` closed its handle outside `lockIrig106Setup()`** (in its destructor and at the end of `run()`).
+  The library's close marks the slot free before its last two writes to it, so an open on another thread could claim the
+  slot and then have it marked closed. Both closes go through one `closeFile()`, which takes the lock; `irig106lock.h`
+  and the domain invariant in `.claude/CLAUDE.md` now say the lock covers the close as well as the setup.
+- **`tmdq_run_free` and `tmdq_calibration_free` from one of the handle's own callbacks** joined their own thread out of
+  a destructor, which ends the process (from `finished`), or waited for a thread that was waiting for the callback (from
+  a stream's). The header forbade the call and nothing refused it. The ABI's callback sink now knows which thread is
+  inside one of its callbacks (`CallbackEvents::delivering()`), and free and wait both refuse there with a last error,
+  releasing nothing; `tmdq_abi.h` says so. **A change of wording:** a wait from a callback used to fail inside the join
+  and report "exception in tmdq_run_wait"; it now reports "tmdq_run_wait was called from one of the run's own callbacks
+  and did not wait". Another run's callback, and a thread whose callback has returned, are refused nothing.
+- **Not done.** The C# binding still frees a run's `ObserverBridge` after a free the library refused, so a managed
+  observer that disposes its own run from a callback is still wrong (it was a crash before, and no product code does
+  it); that is the binding's to refuse, in its own change.
+- **Checked.** Mutation check, `eng\mutate.ps1`, native, `eng/mutants/reader-lifetime.json` (15 mutants): 15 **CAUGHT**.
+  The leak: neither destructor freeing, either reader zeroing the tree before a second decode, a reader prepared again
+  keeping its earlier handle (`a reader gives its decoded TMATS back`: private memory over 400 rounds, four ways). The
+  lock: the close taking no lock, the destructor's or `run()`'s close going round `closeFile()` (`closing waits for the
+  lock another thread holds`). The callbacks: a free from `finished` not refused (the test process dies), refused
+  silently, or refused and freed anyway; a wait not refused; a thread left "inside a callback" after it returned; any
+  run's callback counted as this run's (`onlyARunsOwnCallbackIsRefusedAndOnlyWhileItIsRunning` and the four
+  `...FromItsOwnFinishedCallback...` cases). `-Rebuild` was not needed (no header deleted or renamed). Native **503**
+  test cases passed / 1 skipped, managed **385** passed / 1 skipped, app **676** passed / 34 not run, zero warnings,
+  imports on the allow-list. Baseline moved: native 498 to 503.
+
 #### StreamSetupViewModel: the four Load and Save methods written twice, not four times (audit S15's leftover)
 
 What PR 3 listed as "not done": the stream setup dialog's two near-identical Load and Save pairs, one for the frame sync

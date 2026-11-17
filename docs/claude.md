@@ -806,7 +806,8 @@ that worktrees also need.
 - Be careful with C/C++ interop (no exceptions in C code)
 - File handles managed through `m_file_handle`
 - Buffer management for reading packets
-- irig106 setup is serialised (`lockIrig106Setup()`), and the path is passed in the process code page, which the UTF-8
+- irig106 setup and close are serialised (`lockIrig106Setup()`), the decoded TMATS is freed with the reader, and the path
+  is passed in the process code page, which the UTF-8
   manifest makes UTF-8 (`.claude/CLAUDE.md`, Domain invariants)
 
 ### Time Handling
@@ -921,7 +922,8 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
   not reach (the enabled flag, the type codes, the name priority, a non-ASCII name, a second time channel).
 - **Ch10PacketReader** (`test_ch10packetreader`) - the single pass over `step_cal`: every packet once with one end
   marker, progress, abort, files cut or damaged at each kind of place, data sources whose TMATS lacks a CHE-n or CDT-n,
-  routing and shared payloads, the attributes `prepare()` resolves, and serialised setup across threads.
+  routing and shared payloads, the attributes `prepare()` resolves, serialised setup across threads, a close that waits
+  for the lock, and readers (destroyed, or set up again) whose decoded TMATS does not grow the process.
 - **PacketQueue** (`test_packetqueue`) - order, the bound, blocking on either side, `close()`, draining, and 20,000
   items through a small queue under a watchdog.
 - **FrameProcessor** (`test_frameprocessor`) - real recordings in both modes, and synthetic streams at one second per
@@ -965,8 +967,9 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
 - **Abi** (`test_abi`) - the C ABI compiled into the test executable and called as a host would: every struct's size
   and offsets, versioning both ways, each function against the core called directly (runs, calibration, the formats,
   series construction, the receiver-parameters file, the chart's geometry and a series' index), the callbacks' order
-  and threads, cancel and free in flight, a wait from the run's own `finished` callback and an over-large tick count
-  (an error, never an exception), bad arguments and the last error.
+  and threads, cancel and free in flight, a wait or a free from the run's own `finished` callback (refused with a last
+  error; another run's callback, or a callback that has returned, refuses nothing) and an over-large tick count (an
+  error, never an exception), bad arguments and the last error.
 
 **The C# library** (`tests/TmDq.Core.Tests`): the struct layout against the native side (`LayoutTests`); the native
 projects' source and header lists against the files on disk (`NativeProjectTests`); the repository's own files

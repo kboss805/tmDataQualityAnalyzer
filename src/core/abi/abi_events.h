@@ -32,6 +32,11 @@ class CallbackEvents final : public PipelineEvents
 public:
     explicit CallbackEvents(const tmdq_callbacks& callbacks) : m_callbacks(callbacks) {}
 
+    /// Whether the calling thread is inside one of this sink's callbacks. A handle's wait and free join the
+    /// threads its callbacks arrive on, so from a callback they would join their own thread (which ends the
+    /// process, out of a destructor) or a thread that is waiting for this callback to return.
+    bool delivering() const { return t_delivering == this; }
+
     void logMessage(const std::string& message) override
     {
         if (m_callbacks.log)
@@ -75,9 +80,21 @@ public:
     }
 
 private:
+    /// The sink whose callback this thread is inside (the innermost, if a callback started another run).
+    static inline thread_local const CallbackEvents* t_delivering = nullptr;
+
     template <typename Call>
-    static void deliver(Call&& call)
+    void deliver(Call&& call) const
     {
+        struct Inside
+        {
+            explicit Inside(const CallbackEvents* sink) : outer(t_delivering) { t_delivering = sink; }
+            ~Inside() { t_delivering = outer; }
+            Inside(const Inside&) = delete;
+            Inside& operator=(const Inside&) = delete;
+            const CallbackEvents* outer;
+        };
+        const Inside inside(this);
         try
         {
             call();

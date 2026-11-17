@@ -214,7 +214,12 @@ void tmdq_calibration_wait(tmdq_calibration* calibration)
 {
     if (calibration)
     {
-        // As tmdq_run_wait: from the extraction's own thread the join throws, and is reported as a last error.
+        // As tmdq_run_wait: refused from one of the extraction's own callbacks, with a last error.
+        if (calibration->events && calibration->events->delivering())
+        {
+            tmdq::setError("tmdq_calibration_wait was called from one of the extraction's own callbacks and did not wait");
+            return;
+        }
         (void)tmdq::guarded("tmdq_calibration_wait", [&]() -> int32_t {
             calibration->extractor.wait();
             return TMDQ_OK;
@@ -222,7 +227,16 @@ void tmdq_calibration_wait(tmdq_calibration* calibration)
     }
 }
 
-void tmdq_calibration_free(tmdq_calibration* calibration) { delete calibration; }
+void tmdq_calibration_free(tmdq_calibration* calibration)
+{
+    // As tmdq_run_free: refused from one of the extraction's own callbacks, with a last error.
+    if (calibration && calibration->events && calibration->events->delivering())
+    {
+        tmdq::setError("tmdq_calibration_free was called from one of the extraction's own callbacks: the extraction was not released");
+        return;
+    }
+    delete calibration;
+}
 
 namespace {
 

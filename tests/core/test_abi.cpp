@@ -342,6 +342,7 @@ struct Seen
     /// callback's thread. The handle (a tmdq_run, or a tmdq_calibration when @c waitOnCalibration) is set by the test
     /// once start has returned, so `finished` waits for it.
     bool                    waitFromFinished = false;
+    bool                    freeFromFinished = false;    ///< as waitFromFinished, but the forbidden call is the free
     bool                    waitOnCalibration = false;
     std::atomic<void*>      waitOn{nullptr};
     bool                    waitThrew = false;
@@ -390,7 +391,7 @@ struct Seen
     static void onFinished(void* u, int32_t ok)
     {
         Seen* s = self(u);
-        if (s->waitFromFinished)
+        if (s->waitFromFinished || s->freeFromFinished)
         {
             void* handle = nullptr;
             for (int i = 0; i < 1000 && (handle = s->waitOn.load()) == nullptr; ++i)
@@ -398,6 +399,11 @@ struct Seen
             try
             {
                 if (handle == nullptr)                  s->waitError = "no handle was given to wait on";
+                else if (s->freeFromFinished)
+                {
+                    if (s->waitOnCalibration)           tmdq_calibration_free(static_cast<tmdq_calibration*>(handle));
+                    else                                tmdq_run_free(static_cast<tmdq_run*>(handle));
+                }
                 else if (s->waitOnCalibration)          tmdq_calibration_wait(static_cast<tmdq_calibration*>(handle));
                 else                                    tmdq_run_wait(static_cast<tmdq_run*>(handle));
             }
@@ -1643,8 +1649,74 @@ TEST_CASE("Abi: waitingOnARunFromItsOwnFinishedCallbackIsAnErrorNotAnException")
     tmdq_run_wait(run);
 
     CHECK(!seen.waitThrew);
-    CHECK_MESSAGE(seen.waitError.find("exception in tmdq_run_wait") != std::string::npos, seen.waitError);
+    CHECK_MESSAGE(seen.waitError == "tmdq_run_wait was called from one of the run's own callbacks and did not wait", seen.waitError);
     CHECK(seen.finishedSuccess == 1);   // and the run itself was not disturbed
+}
+
+TEST_CASE("Abi: freeingARunFromItsOwnFinishedCallbackIsRefusedAndTheRunIsStillThere")
+{
+    // The free joins the run's threads from a destructor; from `finished` that is a join of the caller, which ends the
+    // process. The header forbids the call; a host that makes it is told through the last error, and the run is left
+    // whole: it still answers, and the free from outside (the guard's) is the one that releases it.
+    const StepCal f = loadStepCal();
+    Request request(f, { lockCase(f) });
+    Seen seen;
+    seen.freeFromFinished = true;
+    const tmdq_callbacks callbacks = seen.callbacks();
+    tmdq_run* run = nullptr;
+    REQUIRE(tmdq_run_start(&request.req, &callbacks, &run) == int(TMDQ_OK));
+    RunGuard guard{run};
+    seen.waitOn = run;
+    REQUIRE_MESSAGE(seen.waitFinished(kTimeoutMs), seen.joined());
+    tmdq_run_wait(run);
+
+    CHECK(!seen.waitThrew);
+    CHECK_MESSAGE(seen.waitError == "tmdq_run_free was called from one of the run's own callbacks: the run was not released", seen.waitError);
+    CHECK(seen.finishedSuccess == 1);
+    CHECK(seen.finishedCount == 1);
+    CHECK(tmdq_run_running(run) == 0);
+}
+
+TEST_CASE("Abi: onlyARunsOwnCallbackIsRefusedAndOnlyWhileItIsRunning")
+{
+    const StepCal f = loadStepCal();
+    const std::thread::id caller = std::this_thread::get_id();
+
+    // A callback that has returned leaves nothing behind on its thread: start delivers the job builder's lines to `log`
+    // on the calling thread, and that same thread may then wait, which really waits (the run has ended when it returns).
+    // (a calibration profile gives the job builder something to say).
+    Case profiled = receiverCase(f);
+    profiled.calibration[1] = { {0.0, -10.0}, {1000.0, 0.0}, {30000.0, 40.0}, {65535.0, 60.0} };
+    Request request(f, { profiled });
+    Seen seen;
+    const tmdq_callbacks callbacks = seen.callbacks();
+    tmdq_run* other = nullptr;
+    REQUIRE(tmdq_run_start(&request.req, &callbacks, &other) == int(TMDQ_OK));
+    RunGuard otherGuard{other};
+    {
+        std::lock_guard<std::mutex> l(seen.mutex);
+        REQUIRE_MESSAGE(std::find(seen.logThreads.begin(), seen.logThreads.end(), caller) != seen.logThreads.end(),
+                        "the fixture should log on the calling thread during start");
+    }
+    tmdq_run_wait(other);
+    CHECK(seen.finishedCount == 1);
+    CHECK(tmdq_run_running(other) == 0);
+
+    // And a callback of one run is not a callback of another: from its `finished`, a second run frees the first (which
+    // has ended), and that free is carried out, saying nothing.
+    Request request2(f, { lockCase(f) });
+    Seen seen2;
+    seen2.freeFromFinished = true;
+    const tmdq_callbacks callbacks2 = seen2.callbacks();
+    tmdq_run* run = nullptr;
+    REQUIRE(tmdq_run_start(&request2.req, &callbacks2, &run) == int(TMDQ_OK));
+    RunGuard guard{run};
+    otherGuard.run = nullptr;             // freed by the second run's callback instead
+    seen2.waitOn = other;
+    REQUIRE_MESSAGE(seen2.waitFinished(kTimeoutMs), seen2.joined());
+    tmdq_run_wait(run);
+    CHECK(!seen2.waitThrew);
+    CHECK_MESSAGE(seen2.waitError.empty(), seen2.waitError);
 }
 
 TEST_CASE("Abi: aNonLinearProfileReachesTheJob")
@@ -2736,8 +2808,35 @@ TEST_CASE("Abi: waitingOnACalibrationFromItsOwnFinishedCallbackIsAnErrorNotAnExc
     tmdq_calibration_wait(guard.handle);
 
     CHECK(!seen.waitThrew);
-    CHECK_MESSAGE(seen.waitError.find("exception in tmdq_calibration_wait") != std::string::npos, seen.waitError);
+    CHECK_MESSAGE(seen.waitError == "tmdq_calibration_wait was called from one of the extraction's own callbacks and did not wait",
+                  seen.waitError);
     CHECK(seen.finishedSuccess == 1);
+}
+
+TEST_CASE("Abi: freeingACalibrationFromItsOwnFinishedCallbackIsRefusedAndItsResultIsStillThere")
+{
+    // As for a run. What shows the extraction was not released is that its result can still be read afterwards.
+    const StepCal f = loadStepCal();
+
+    CalRequest request{CalCase(f)};
+    Seen seen;
+    seen.freeFromFinished = true;
+    seen.waitOnCalibration = true;
+    const tmdq_callbacks callbacks = seen.callbacks();
+    CalGuard guard;
+    REQUIRE(tmdq_calibration_start(&request.req, &callbacks, &guard.handle) == int(TMDQ_OK));
+    seen.waitOn = guard.handle;
+    REQUIRE_MESSAGE(seen.waitFinished(kTimeoutMs), seen.joined());
+    tmdq_calibration_wait(guard.handle);
+
+    CHECK(!seen.waitThrew);
+    CHECK_MESSAGE(seen.waitError == "tmdq_calibration_free was called from one of the extraction's own callbacks: the extraction was not released",
+                  seen.waitError);
+    CHECK(seen.finishedSuccess == 1);
+    tmdq_calibration_info info{};
+    info.struct_size = sizeof(info);
+    REQUIRE(tmdq_calibration_result(guard.handle, &info) == int(TMDQ_OK));
+    CHECK(info.channel_count == 48);
 }
 
 TEST_CASE("Abi: aThresholdThatHadToBeRelaxedIsReported")

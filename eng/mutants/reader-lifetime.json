@@ -1,0 +1,171 @@
+{
+  "suite": "native",
+  "args": [],
+  "mutants": [
+    {
+      "id": "T1",
+      "file": "src/core/src/chapter10reader.cpp",
+      "old": "    enI106_Free_TmatsInfo(&m_tmats_info);\n}\n\nvoid Chapter10Reader::closeFile()",
+      "new": "    (void)m_tmats_info;\n}\n\nvoid Chapter10Reader::closeFile()",
+      "args": [
+        "-tc=*decoded TMATS*"
+      ],
+      "expect": "caught",
+      "note": "the metadata reader's destructor does not free its TMATS"
+    },
+    {
+      "id": "T2",
+      "file": "src/core/src/chapter10reader.cpp",
+      "old": "    // zeroing it would orphan that tree.\n",
+      "new": "    // zeroing it would orphan that tree.\n    m_tmats_info = Irig106::SuTmatsInfo{};\n",
+      "args": [
+        "-tc=*decoded TMATS*"
+      ],
+      "expect": "caught",
+      "note": "the metadata reader zeroes the tree before decoding again (the old leak)"
+    },
+    {
+      "id": "T3",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "    freeChanInfoTable(m_channel_info);\n    // After the table, whose entries point into the tree. irig106 allocates the tree and only gives it back when\n    // asked; it touches only this reader's tree, so it needs no lock.\n    enI106_Free_TmatsInfo(&m_tmats_info);",
+      "new": "    freeChanInfoTable(m_channel_info);",
+      "args": [
+        "-tc=*decoded TMATS*"
+      ],
+      "expect": "caught",
+      "note": "the packet reader's destructor does not free its TMATS"
+    },
+    {
+      "id": "T4",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "    freeChanInfoTable(m_channel_info);\n    m_status = enI106_Decode_Tmats(",
+      "new": "    freeChanInfoTable(m_channel_info);\n    m_tmats_info = Irig106::SuTmatsInfo{};\n    m_status = enI106_Decode_Tmats(",
+      "args": [
+        "-tc=*decoded TMATS*"
+      ],
+      "expect": "caught",
+      "note": "the packet reader zeroes the tree before decoding again"
+    },
+    {
+      "id": "T5",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "    closeFile();   // a reader prepared again gives its earlier handle back first (before the lock: the close takes it)\n",
+      "new": "",
+      "args": [
+        "-tc=*decoded TMATS*"
+      ],
+      "expect": "caught",
+      "note": "a reader prepared again keeps its earlier handle open"
+    },
+    {
+      "id": "K1",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "    const auto setup_lock = lockIrig106Setup();\n    enI106Ch10Close(m_file_handle);",
+      "new": "    enI106Ch10Close(m_file_handle);",
+      "args": [
+        "-tc=*closing waits*,*setup waits*,*still releases*"
+      ],
+      "expect": "caught",
+      "note": "the close does not take the lock"
+    },
+    {
+      "id": "K2",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "    closeFile();\n    freeChanInfoTable(m_channel_info);\n    // After the table",
+      "new": "    if (m_file_open) { enI106Ch10Close(m_file_handle); m_file_open = false; }\n    freeChanInfoTable(m_channel_info);\n    // After the table",
+      "args": [
+        "-tc=*closing waits*,*setup waits*,*still releases*"
+      ],
+      "expect": "caught",
+      "note": "the destructor closes outside the lock"
+    },
+    {
+      "id": "K3",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "    closeFile();\n\n    m_report.progress(kPercent100);",
+      "new": "    if (m_file_open) { enI106Ch10Close(m_file_handle); m_file_open = false; }\n\n    m_report.progress(kPercent100);",
+      "args": [
+        "-tc=*closing waits*,*setup waits*,*still releases*"
+      ],
+      "expect": "caught",
+      "note": "the close at the end of run() is outside the lock"
+    },
+    {
+      "id": "F1",
+      "file": "src/core/abi/abi_run.cpp",
+      "old": "    if (run && run->events && run->events->delivering())\n    {\n        tmdq::setError(\"tmdq_run_free",
+      "new": "    if (run && run->events && !run->events->delivering())\n    {\n        tmdq::setError(\"tmdq_run_free",
+      "args": [
+        "-tc=*FinishedCallback*"
+      ],
+      "expect": "caught",
+      "note": "a free from outside is refused, one from a callback is not"
+    },
+    {
+      "id": "F2",
+      "file": "src/core/abi/abi_run.cpp",
+      "old": "        tmdq::setError(\"tmdq_run_free was called from one of the run's own callbacks: the run was not released\");\n        return;",
+      "new": "        return;",
+      "args": [
+        "-tc=*FinishedCallback*"
+      ],
+      "expect": "caught",
+      "note": "the refused free says nothing"
+    },
+    {
+      "id": "F3",
+      "file": "src/core/abi/abi_run.cpp",
+      "old": "        if (run->events && run->events->delivering())\n        {",
+      "new": "        if (run->events && false)\n        {",
+      "args": [
+        "-tc=*FinishedCallback*"
+      ],
+      "expect": "caught",
+      "note": "the wait from a callback is not refused"
+    },
+    {
+      "id": "F4",
+      "file": "src/core/abi/abi_calibration.cpp",
+      "old": "    if (calibration && calibration->events && calibration->events->delivering())\n    {\n        tmdq::setError(\"tmdq_calibration_free was called from one of the extraction's own callbacks: the extraction was not released\");\n        return;\n    }\n    delete calibration;",
+      "new": "    if (calibration && calibration->events && calibration->events->delivering())\n    {\n        tmdq::setError(\"tmdq_calibration_free was called from one of the extraction's own callbacks: the extraction was not released\");\n    }\n    delete calibration;",
+      "args": [
+        "-tc=*FinishedCallback*"
+      ],
+      "expect": "caught",
+      "note": "the calibration free says it refused and frees anyway"
+    },
+    {
+      "id": "F5",
+      "file": "src/core/abi/abi_calibration.cpp",
+      "old": "        if (calibration->events && calibration->events->delivering())\n        {",
+      "new": "        if (calibration->events && false)\n        {",
+      "args": [
+        "-tc=*FinishedCallback*"
+      ],
+      "expect": "caught",
+      "note": "the calibration wait from a callback is not refused"
+    },
+    {
+      "id": "F6",
+      "file": "src/core/abi/abi_events.h",
+      "old": "            ~Inside() { t_delivering = outer; }",
+      "new": "            ~Inside() { }",
+      "args": [
+        "-tc=Abi*"
+      ],
+      "expect": "caught",
+      "note": "a thread stays 'inside a callback' after the callback returned"
+    },
+    {
+      "id": "F7",
+      "file": "src/core/abi/abi_events.h",
+      "old": "    bool delivering() const { return t_delivering == this; }",
+      "new": "    bool delivering() const { return t_delivering != nullptr; }",
+      "args": [
+        "-tc=Abi*"
+      ],
+      "expect": "caught",
+      "note": "any run's callback counts as this run's"
+    }
+  ]
+}

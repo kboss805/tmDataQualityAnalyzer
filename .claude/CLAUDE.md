@@ -29,7 +29,7 @@ themselves). Use the **PowerShell** tool.
 - **Native core tests (doctest):** `powershell -ExecutionPolicy Bypass -File eng\test_native.ps1
   [-Configuration Debug|Release] [-Rebuild] [-NoBuild] [<doctest args>]` builds `tests/core`
   (MSBuild; the framework is the single header in `third_party/doctest`) with **zero warnings and no Qt import**, then runs it.
-  Run it **filtered** while iterating: `-tc="TomlDocument*"`. Green baseline **498 test cases** (1 skipped: the
+  Run it **filtered** while iterating: `-tc="TomlDocument*"`. Green baseline **503 test cases** (1 skipped: the
   benchmark below). The suites read `tests/data/test files` (committed recordings) and `tests/fixtures`; in a
   worktree, junction `tests/data` to the main checkout's or the full-recording tests have nothing to read.
   **The throughput guard:** the heavy PRN benchmark ("PipelineRunner throughput", `test_pipelinerunner.cpp`) is
@@ -143,10 +143,12 @@ MSVC 14.51 and left two compilers' objects in one tree. Override with `TMDQ_VS_R
   never extrapolates. The calibration extractor must mirror the main run's word map + raw-affecting
   flags exactly: both build them through `applyAcquisition` (`src/core/include/framesync.h`), so a new
   raw-affecting field goes there and nowhere else.
-- **irig106 setup is serialised:** the vendored library keeps unlocked process-wide state (the handle
+- **irig106 setup and close are serialised:** the vendored library keeps unlocked process-wide state (the handle
   table, the TMATS decoder's statics), so two simultaneous setups can crash. `Chapter10Reader::loadChannels`
   and `Ch10PacketReader::prepare` hold `lockIrig106Setup()` (`src/core/include/irig106lock.h`) for their whole
-  setup; anything new that opens a recording must too. Reading from an open handle needs no lock.
+  setup, and a close takes it too (it gives a slot back to that table); anything new that opens or closes a
+  recording must too. Reading from an open handle needs no lock. **The decoded TMATS is the reader's to free**
+  (`enI106_Free_TmatsInfo` in its destructor): never zero the struct before a decode, which orphans the old tree.
 - **Frame sync:** lock % is a **bit-span** quantity, not `time × bitrate`. Reject off-phase syncs
   while locked. Don't double-count missed frames (gap extrapolation only when a window has zero bits).
 - **TOML boundary:** frame-sync Load/Save round-trips the sync pattern, sync mask, words/frame and
