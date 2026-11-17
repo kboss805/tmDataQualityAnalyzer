@@ -28,7 +28,7 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
   the summaries against the core's result (in job order, with its counts);
   `LayerTests.TheAppNeverCopiesAStreamResultToManagedMemory` fails if any source of the app calls `.ToProcessed(`.
   `ToProcessed` stays on the binding, for tests (the follow-up audit's D7), and one processing test now disposes its
-  outcome, which it had not.
+  outcome, which it had not. `run-log-order.json` M4 names the moved line and is re-anchored (CAUGHT again).
 - **Checked.** Mutation check, `eng\mutate.ps1`, app, `eng/mutants/stream-summary.json` (new): **5 of 5 CAUGHT** (the
   copy reintroduced, the two counts swapped, the order reversed, a log line saying samples for channels, a summary
   without its label). App **691** passed / 34 not run, managed and native not affected, zero warnings. No speed claim:
