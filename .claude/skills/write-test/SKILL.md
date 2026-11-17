@@ -50,7 +50,7 @@ each suite has its house style and helpers. Build and run with the **build-and-t
 - **Numbers from the recordings** are compared with what v2.14.2's pipeline produced; a new expected
   number states where it came from.
 - **A file the library just wrote or opened is read back and deleted through `TempFiles`** (`Delete`,
-  `DeleteDirectory`, `ReadAllBytes`, `ReadAllText`; `tests/TmDq.Core.Tests/TempFiles.cs`, linked into the
+  `DeleteDirectory`, `ReadAllBytes`, `ReadAllText`; `tests/TmDq.Core.Tests/Support/TempFiles.cs`, linked into the
   app tests), never a bare `File.Delete` in a `finally`: a virus scanner's hold on a new file fails a test
   whose every check passes, and `TempFiles` retries for a few seconds yet still throws on a handle the
   library leaked. A scratch folder of a test that runs a build tool or a script goes through
@@ -78,7 +78,7 @@ each suite has its house style and helpers. Build and run with the **build-and-t
   a list's items do not exist; a submenu's items follow their commands only once it is open, which `Menus.Entries`
   does as the user would. The plot's menu opens by a context request, as a right-click opens it:
   `ContextMenu.Open` alone skips its `Opening`.
-- **Never await a modal dialog in a test.** Give the code under test a fake (`StreamFakes.cs` and the
+- **Never await a modal dialog in a test.** Give the code under test a fake (`Support/StreamFakes.cs` and the
   `I*` services in `src/TmDq.App/Services`) and assert on what it was asked.
 - **Classes that load the native core** join `[Collection(NativeCoreCollection.Name)]`, which runs them
   one at a time (one of them points `TMDQ_CORE_DLL` at a missing file for a moment).
