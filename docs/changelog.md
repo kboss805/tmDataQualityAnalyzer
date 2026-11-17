@@ -12,6 +12,24 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The developer guide is docs/guide.md (follow-up audit T4)
+
+`docs/claude.md` was loaded as instructions, as a nested CLAUDE.md (Windows names are case-insensitive): the first Read
+  of any file under `docs/` put its 81 KB into the session, and into every subagent's. Renamed with `git mv`, so its
+  history follows; the other documents there are `changelog.md`, `framesync_logic.md` and `snr_logic.md`.
+
+- **Every live reference** says `docs/guide.md`: `.claude/CLAUDE.md`, the five skills, `README.md` (and its tree),
+  `.pymarkdown`, `eng/check_release_consistency.ps1` (the Project Version line it holds) and two comments in
+  `LayerTests`. The changelog, `docs/records/`, `docs/future_plans/` and `docs/design/` keep the old name where they say
+  what it was called when they were written.
+- **A test keeps it that way.**
+  `RepoFilesTests.NoFileButTheProjectsOwnIsNamedClaudeMdWhereClaudeCodeWouldLoadItAsInstructions` fails when any
+  markdown file in the repository but the instructions file is named `claude.md` in any case, and when `docs/guide.md`
+  is not there.
+- **Checked.** The release-consistency check agrees on 3.1.0 (it reads `docs\guide.md` now); every path the docs cite
+  resolves; managed **390** passed / 1 skipped. No product source changed, so no mutation check, and the app and native
+  suites are not affected. Baseline moved: managed 389 to 390.
+
 #### The composition root has a test (follow-up audit)
 
 `App.OnFrameworkInitializationCompleted` is where the application is put together, and nothing ran it: the headless

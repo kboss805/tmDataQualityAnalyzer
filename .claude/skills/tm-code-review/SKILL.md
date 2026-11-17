@@ -116,7 +116,7 @@ Correctness/edge cases (off-by-one, overflow in the bit math — note `uint64_t`
 `UINT64_MAX` sentinels), input validation, ownership across the ABI (every handle freed once: the C
 functions' `*_free`, the binding's `IDisposable`), threading (the core reports on its own threads; the app
 posts to the UI thread), naming and
-convention adherence (`docs/claude.md` "Coding Conventions"), and DRY against the single-source
+convention adherence (`docs/guide.md` "Coding Conventions"), and DRY against the single-source
 helpers (`FrameSetup::buildDefaultReceiverMap`, `channelPrefix`, `receiverParameterName`).
 
 ## After review

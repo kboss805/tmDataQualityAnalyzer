@@ -49,7 +49,7 @@ In `docs/changelog.md`, turn the `### Unreleased` section at the top into `### v
 short lead saying what the release is, and keep the entries under it. Add tight, factual bullets for
 anything that landed without an entry, saying what changed and which user story (US#) it serves — match
 the voice of the existing entries (they reference concrete classes/methods). Then bump the
-**Project Version** line near the top of `docs/claude.md`.
+**Project Version** line near the top of `docs/guide.md`.
 
 ## Step 4 — Update the user-facing "What's New"
 

@@ -121,7 +121,7 @@ powershell -ExecutionPolicy Bypass -File eng\test_app.ps1 -Configuration Release
 powershell -ExecutionPolicy Bypass -File deploy\avalonia\build_avalonia_package.ps1
 ```
 
-The scripts find MSVC themselves (`eng\env.ps1`). `.claude/CLAUDE.md` and `docs/claude.md` describe each one, the
+The scripts find MSVC themselves (`eng\env.ps1`). `.claude/CLAUDE.md` and `docs/guide.md` describe each one, the
 test baselines and the release process.
 
 ## Usage
@@ -158,7 +158,7 @@ tmDataQualityAnalyzer/
 │   ├── avalonia/               # build_avalonia_package.ps1, the Inno Setup script, signing
 │   ├── sandbox/                # Windows Sandbox install-and-upgrade test (Smart App Control)
 │   └── RELEASENOTES.txt        # The installer's "What's New" page
-├── docs/                       # Developer guide (claude.md), changelog, logic notes, records, manual sources
+├── docs/                       # Developer guide (guide.md), changelog, logic notes, records, manual sources
 ├── eng/                        # Build, test, manual and release-check scripts, and the MSBuild props and targets
 ├── settings/                   # The shipped TOML settings: frame sync patterns, receiver parameters, step files
 ├── src/                        # The product code
@@ -190,7 +190,7 @@ GPL v3
 ## Contributing
 
 [Building the Project](#building-the-project) says how to build and run the three test suites. The developer guide,
-`docs/claude.md`, describes the architecture, the conventions and the test catalog. A change:
+`docs/guide.md`, describes the architecture, the conventions and the test catalog. A change:
 
 - comes with tests in the suite its code belongs to, and leaves all three green with no compiler warnings;
 - gets an entry under `### Unreleased` at the top of `docs/changelog.md`, saying what changed and why;

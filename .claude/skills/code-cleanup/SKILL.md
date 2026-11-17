@@ -4,14 +4,14 @@ description: >-
   Run a whole-codebase cleanup sweep of tmDataQualityAnalyzer: find orphaned/dead code (unreferenced
   functions, classes, files, includes, constants), readability and naming-convention drift, MVVM
   layering violations, and documentation that has fallen out of sync with the code (the test catalog
-  in docs/claude.md, User Story acceptance criteria). Use this WHENEVER the user asks for a "code
+  in docs/guide.md, User Story acceptance criteria). Use this WHENEVER the user asks for a "code
   cleanup", "cleanup pass", "find dead code", "check for orphans", "tidy up the codebase", or wants a
   periodic health check of the project as a whole — as opposed to reviewing one change, which is
   tm-code-review's job. This is repo-wide and diff-independent: it looks at the whole tree, not just
   what changed recently. The main hazard is false positives — several things in this codebase look
   orphaned but are deliberately kept (see ExportCsv in PlotViewModel and its partner LoadCsv /
   LoadCsvAsync, the CSV import's matched pair, kept together) — so this skill's first move is always checking
-  docs/claude.md and the project's auto-loaded MEMORY.md for a documented reason before flagging
+  docs/guide.md and the project's auto-loaded MEMORY.md for a documented reason before flagging
   anything as dead.
 ---
 
@@ -35,7 +35,7 @@ re-broken.
 
 Before flagging a function, class, file, or constant as unused:
 
-1. **Search `docs/claude.md`.** The Architecture/Component sections document a number of
+1. **Search `docs/guide.md`.** The Architecture/Component sections document a number of
    intentionally-kept, low-call-count paths and explain *why* they exist.
 2. **Search the auto-loaded `MEMORY.md`** (this session's persistent project memory, described in
    `.claude/CLAUDE.md`'s "Memory" section). Design decisions and prior review remediation live
@@ -78,12 +78,12 @@ v2.8.0 cleanup found ~20 unreferenced constants and 37 unused Qt includes that h
 time, so this class of drift is real and recurring here, not hypothetical.
 
 **Unused includes**: a header pulled in but nothing from it referenced in that translation unit.
-`clangd --check=<file>` (see `docs/claude.md` → clangd / IntelliSense) can surface some of this
+`clangd --check=<file>` (see `docs/guide.md` → clangd / IntelliSense) can surface some of this
 directly, once `compile_flags.txt` is regenerated and current.
 
 ## Readability and coding-standard drift
 
-Don't restate the rules here — `docs/claude.md`'s **Coding Conventions** section (naming, the `m_`
+Don't restate the rules here — `docs/guide.md`'s **Coding Conventions** section (naming, the `m_`
 prefix, include ordering, the working method) is the single source of truth, and copying it into this
 skill risks the copy going stale while the real rules move on. Read it, then check the tree against
 it:
@@ -95,12 +95,12 @@ it:
 - **MVVM layering**: views (`src/TmDq.App/Views`) hold no rules — look for code-behind that computes
   rather than displays; view models reach no Avalonia control; the core knows no UI at all, and the
   presentation state is C# while the data and file formats are the core's (plan decision D3). This
-  project is explicit about the boundary (see `docs/claude.md` Architecture section), and a leak here
+  project is explicit about the boundary (see `docs/guide.md` Architecture section), and a leak here
   is worth flagging even without an accompanying functional bug.
 
 ## Stale documentation
 
-`docs/claude.md` describes the codebase in prose, and prose drifts silently in a way code doesn't
+`docs/guide.md` describes the codebase in prose, and prose drifts silently in a way code doesn't
 (nothing fails to compile when a comment goes stale). Two spots worth checking every sweep:
 
 - **The Test Suites catalog.** Compare its list of suites and coverage claims against the test files
