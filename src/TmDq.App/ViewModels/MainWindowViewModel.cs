@@ -391,6 +391,10 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         IReadOnlyList<string> picked = await _templateFiles.OpenRecordingsAsync(LastFolder);
         if (picked.Count == 0) return;
         IReadOnlyList<FileCheck> checks;
+        // The check runs off the UI thread with no dialog up, so Open, a drop and the rest would still be there to start
+        // another load; one that did would leave the batch, once confirmed, to refuse itself (RunBatchAsync) and say nothing.
+        // Busy for the check; not for the confirmation, whose dialog is modal, nor for the batch, which is busy itself.
+        IsBusy = true;
         try
         {
             NativeCore.EnsureLoaded();
@@ -403,6 +407,10 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
             Report(error, LogLevel.Error);
             Log.Error(error);
             return;
+        }
+        finally
+        {
+            IsBusy = false;
         }
         var confirm = new BatchApplyViewModel(checks, LastFolder ?? AppContext.BaseDirectory, _templateFiles);
         await _templateDialogs!.ConfirmBatchAsync(confirm);

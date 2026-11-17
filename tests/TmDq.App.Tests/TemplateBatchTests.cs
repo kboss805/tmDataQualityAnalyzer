@@ -391,6 +391,36 @@ public sealed class TemplateBatchTests : IDisposable
     }
 
     [Fact]
+    public async Task ApplyTemplateIsBusyWhileItChecksTheFilesAndNotWhileItsDialogIsUp()
+    {
+        // The check runs off the UI thread with no dialog up: were the window not busy, Open or a drop could start another
+        // load meanwhile, and the batch the user then confirmed would refuse itself and say nothing.
+        string one = Copy("flight 1.ch10");
+        var files = new FakeTemplateFiles { Template = Fixture("prn-sample.json"), Recordings = new[] { one, StepCal } };
+        var dialogs = new FakeTemplateDialogs();
+        var vm = new MainWindowViewModel(new MainWindowServices { TemplateFiles = files, TemplateDialogs = dialogs, AppRoot = Repo.Root });
+        var busy = new List<bool>();
+        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(MainWindowViewModel.IsBusy)) busy.Add(vm.IsBusy); };
+        bool busyAtTheDialog = true;
+        dialogs.OnConfirm = _ => busyAtTheDialog = vm.IsBusy;
+
+        // Cancelled at the confirmation: busy for the check, and no longer when the dialog is up.
+        await vm.ApplyTemplateCommand.ExecuteAsync(null);
+        Assert.Equal(new[] { true, false }, busy);
+        Assert.False(busyAtTheDialog);
+        Assert.True(vm.ApplyTemplateCommand.CanExecute(null));
+
+        // Confirmed: the batch is then busy on its own account, and the window is free when it ends.
+        busy.Clear();
+        dialogs.OnConfirm = c => { busyAtTheDialog = vm.IsBusy; c.ProcessCommand.Execute(null); };
+        await vm.ApplyTemplateCommand.ExecuteAsync(null);
+        Assert.Equal(new[] { true, false, true, false }, busy);
+        Assert.False(busyAtTheDialog);
+        Assert.Equal("Batch complete: 1 processed, 0 skipped.", vm.Status);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
     public async Task ApplyTemplateWithoutTheNativeCoreSaysSoAndStops()
     {
         // As Open, Import CSV and the batch say it: in the status and the log, not thrown out of the command. The

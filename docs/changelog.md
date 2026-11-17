@@ -12,6 +12,31 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Apply Template is busy while it checks the files, and the follow-up audit's small leftovers
+
+- **The defect.** `ApplyTemplateAsync` checks the chosen recordings off the UI thread with no dialog up, and did not
+  mark the window busy meanwhile, so Open, a drop and Recent Files were still there. A load started in that window made
+  the batch the user then confirmed refuse itself (`RunBatchAsync` returns when busy) and say nothing. The window is
+  busy for the check, and not while the confirmation dialog is up (it is modal) nor in the batch (busy on its own
+  account); the check's `finally` frees it on every way out, including a missing core.
+- **A pointer array #313 missed.** `ImportedStreams.AssignOrders` still cast `arena.Alloc(count * sizeof(void*))`, boxed
+  each struct by hand and kept a second array of the same pointers; it uses `Arena.AllocPointers` and `Arena.Box` and
+  reads the orders back through the one array.
+- **A comment** in `App.axaml.cs` ("What is remembered between sessions...") sat above the `Prompts = ...` line #309 had
+  inserted; it is above its own code again.
+- **`StatusBarTests`** imports CSV files, which checks the core's DLL path on every call, and was outside the collection
+  that keeps two other classes from pointing that path at a missing file meanwhile; it is in `NativeCoreCollection` now.
+- **Two names nothing pinned.** `"preferences.json"` and `"portable"` were compared only with the constants that hold
+  them, so a rename would have started every user from the defaults and turned every portable copy into an installed
+  one: `TheFileAndTheMarkerAreNamedAsEveryUsersFolderAlreadyHasThem`.
+- **Checked.** Mutation check, `eng\mutate.ps1`, `eng/mutants/apply-template-busy.json` (app, 7 mutants) and
+  `eng/mutants/imported-stream-orders.json` (managed, 2): 9 of 9 **CAUGHT**: the check not busy, the window left busy
+  after it or for good, busy while the confirmation dialog is up, each of the three names changed, the orders neither
+  sent nor read back. New: `ApplyTemplateIsBusyWhileItChecksTheFilesAndNotWhileItsDialogIsUp`. Managed **389** passed /
+  1 skipped, app **679** passed / 34 not run, zero warnings; native not affected. Baseline moved: app 677 to 679. Not
+  done: the composition root in `App.axaml.cs` still has no test, and the binding still disposes a run's
+  `ObserverBridge` after a free the library refused (both listed in the follow-up report).
+
 #### The manual and the README say what the application does now (follow-up audit)
 
 Prose only; no product source changed. The follow-up audit read both against the code and the `.axaml` files.

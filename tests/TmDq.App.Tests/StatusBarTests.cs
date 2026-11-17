@@ -24,6 +24,7 @@ namespace TmDq.App.Tests;
 /// The status bar under the log and the chart: one short sentence for the last thing that happened, marked and coloured
 /// by how it went, there with the log hidden. (What each action says is held where the action is tested.)
 /// </summary>
+[Collection(NativeCoreCollection.Name)]
 public class StatusBarTests
 {
     public StatusBarTests() => NativeCore.EnsureLoaded();
