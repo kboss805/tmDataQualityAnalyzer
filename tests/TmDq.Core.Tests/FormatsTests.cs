@@ -364,7 +364,10 @@ public class FormatsTests
     public void ParsedCsvsGiveTheirNativeMemoryBack()
     {
         // 100,000 rows of four series is about 6 MB of native arrays per parse: thirty parses never freed would be
-        // some 190 MB more than thirty that were.
+        // some 190 MB more than thirty that were. The process's private memory also holds the managed copies each parse
+        // makes (as many bytes again, on the large object heap), which the collector keeps committed for as long as it
+        // likes - 15 MB on one machine and 116 MB on the CI runner (the test failed there, with nothing leaked) - so
+        // what is measured is what the private memory grew by that the managed heap's own commitment does not account for.
         string path = TempFiles.NewPath("bigcsv", ".csv");
         try
         {
@@ -376,6 +379,7 @@ public class FormatsTests
             GC.Collect();
             GC.WaitForPendingFinalizers();
             long before = System.Diagnostics.Process.GetCurrentProcess().PrivateMemorySize64;
+            long managedBefore = GC.GetGCMemoryInfo(GCKind.FullBlocking).TotalCommittedBytes;
             for (int i = 0; i < 30; i++)
             {
                 Assert.Equal(100_000, CsvFile.Parse(path).Series[0].X.Length);
@@ -383,7 +387,10 @@ public class FormatsTests
             GC.Collect();
             GC.WaitForPendingFinalizers();
             long grown = System.Diagnostics.Process.GetCurrentProcess().PrivateMemorySize64 - before;
-            Assert.True(grown < 100L * 1024 * 1024, $"private memory grew by {grown / (1024 * 1024)} MiB over thirty parses");
+            long managed = Math.Max(0, GC.GetGCMemoryInfo(GCKind.FullBlocking).TotalCommittedBytes - managedBefore);
+            long native = grown - managed;
+            Assert.True(native < 100L * 1024 * 1024,
+                        $"private memory grew by {grown / (1024 * 1024)} MiB over thirty parses, {managed / (1024 * 1024)} MiB of it the managed heap's commitment, leaving {native / (1024 * 1024)} MiB");
         }
         finally
         {
