@@ -44,9 +44,9 @@ Before flagging a function, class, file, or constant as unused:
    (`tests/core`, `tests/*.Tests`) is not orphaned — it's doing its job. Grep them
    explicitly rather than trusting a search of the product code alone.
 4. **Check for uses no C# or C++ call site shows.** A property or command bound by name in `.axaml`
-   (`{Binding Name}`), a member CommunityToolkit.Mvvm generates (`[ObservableProperty]`, `[RelayCommand]`),
-   an ABI export reached by P/Invoke (`Interop/Native.cs`), and a test discovered by its attribute all look
-   unreferenced to a plain grep for a call.
+   (`{Binding Name}`), an ABI export reached by P/Invoke (`Interop/Native.cs`), and a test discovered by its
+   attribute all look unreferenced to a plain grep for a call. (The toolkit's source generators are not used
+   here: a view model's properties and commands are written out, so they are in the source.)
 
 If none of the four account for it, it's a real candidate — but report it as "no caller found in
 the product or the tests, and no documented reason in `.claude/CLAUDE.md`/`MEMORY.md`" rather than a flat

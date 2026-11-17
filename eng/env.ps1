@@ -3,7 +3,7 @@
 #
 # Imports the Visual Studio 2022 C++ environment (cl, msbuild, mt, dumpbin, the Windows
 # SDK) from vcvars64.bat, located via vswhere, then a direct path probe. The build and
-# test scripts dot-source it when msbuild or mt is not already on PATH:
+# test scripts dot-source it when msbuild is not already on PATH:
 #   . "$PSScriptRoot\env.ps1"
 #
 # The toolset is PINNED to Visual Studio 2022 (17.x, MSVC v143). vswhere -latest used to

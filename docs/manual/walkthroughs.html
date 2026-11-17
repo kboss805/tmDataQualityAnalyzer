@@ -64,7 +64,7 @@ one, so they are worth understanding before the walkthroughs that use them.</p>
 </table>
 
 <div class="note"><strong>Lock&nbsp;% does not depend on an exact data rate.</strong> It is
-measured as a proportion of the frame-sized bit slots actually traversed, not as
+measured as the share of the bits actually scanned that lay in a locked stretch, not as
 <em>time&nbsp;×&nbsp;bitrate</em>. A slightly wrong Data Rate will not skew the percentage.
 The field is there because the value is genuinely useful elsewhere, not because the metric is
 fragile.</div>
@@ -124,7 +124,7 @@ synchronisation, and find the moments where it did not.</p>
 
 <h3>Step 1 — Open the recording</h3>
 
-<p>Use <strong>≡ → Open…</strong> (or <kbd>Ctrl</kbd>+<kbd>O</kbd>), or drag a
+<p>Use <strong>≡ → File → Open…</strong> (or <kbd>Ctrl</kbd>+<kbd>O</kbd>), or drag a
 <code>.ch10</code> file onto the window.</p>
 
 <p>The application reads the file's TMATS metadata — not the data itself, which is why this is
@@ -200,7 +200,7 @@ which is which.</p>
 
 <h3>Step 6 — Export</h3>
 
-<p>Choose <strong>&equiv; &rarr; Export…</strong>. You can produce an image, the
+<p>Choose <strong>&equiv; &rarr; Import/Export &rarr; Export…</strong>. You can produce an image, the
 underlying data as CSV, and the log text in one action; see
 <a href="#import-export">Import &amp; export</a> for exactly what each contains.</p>
 
