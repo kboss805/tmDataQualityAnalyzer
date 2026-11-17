@@ -372,9 +372,9 @@ bool TomlDocument::save(const std::filesystem::path& path) const
 
     bool first = true;
     auto valueOf = [this](const std::string& compound) -> const std::string& {
-        static const std::string empty;
+        static const std::string kEmpty;
         const auto it = m_values.find(compound);
-        return it == m_values.end() ? empty : it->second;
+        return it == m_values.end() ? kEmpty : it->second;
     };
 
     // Top-level keys first, with no header, so they stay top-level on re-read.

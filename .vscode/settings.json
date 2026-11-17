@@ -57,7 +57,7 @@
   },
   // clangd is the C++ IntelliSense (it reads the generated compile_flags.txt: eng/gen_compile_flags.py); cpptools is
   // installed for its Windows debugger (launch.json "cppvsdbg") and must not run a second engine beside it.
-  // The repository has no .clang-format, so "none" leaves a file's formatting alone instead of reflowing it as LLVM.
+  // The root .clang-format is the house style; "none" is only for a file outside it, so that it is not reflowed as LLVM.
   "clangd.arguments": [
     "--completion-style=detailed",
     "--header-insertion=never",

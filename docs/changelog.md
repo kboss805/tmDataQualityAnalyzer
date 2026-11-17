@@ -12,6 +12,53 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### C++ tooling: .clang-format, .clang-tidy, the naming rule, include order, test-case names (follow-up audit C3, C5, C7)
+
+The core had no formatter or analyser configuration (the `.clang-tidy` of #1 was deleted in #43, and `.vscode` ran clangd with `--fallback-style=none` because there was no `.clang-format`), its C++ naming
+  rule decided on 2026-11-15 was written nowhere, and the native test cases were named three ways. Everything here is
+  tuned to the code as it is: nothing is reformatted in bulk and no build or CI step runs the tools.
+
+- **`.clang-format`** (root, with `tests/core/` overriding two options and `third_party/` unformatted) holds the code's
+  structure: Allman braces with a namespace's brace left on its line, 4 spaces, 120 columns, the pointer with the type,
+  an operator that breaks a line at the head of the next, no sorting of includes (the irig106 ones are in dependency
+  order) and no comment reflow. Hand-aligned declarations and trailing comments are what it cannot hold exactly:
+  formatting a whole file changes 27% of the product's lines and 35% of the tests' (measured over 91 files, option by
+  option, which is how the options were chosen), so the guide says to format what you touch (`git clang-format`, Format
+  Selection).
+- **`.clang-tidy`** is the check list the core passes today: the old file's families, with 56 checks off, each listed in
+  the file with its reason (style the code does not follow, its own idioms, the C ABI and C library boundary, noise on
+  code that runs once per file), and the naming check on for everything the code follows. A first draft of the list
+  found 119 things in the product sources: 10 are held on purpose and carry a `NOLINT` with the reason (the ABI's
+  catch-all that must not unwind a host's thread, a destructor and a class whose constructors cannot throw, two
+  roundings that are v2.14.2's own arithmetic, a tick loop over doubles, a static list of strings, three `atoi` calls on
+  TMATS track numbers), 4 were renamed to the rule (`SeriesIndex`'s `size_`, `levels_` and `nonFinite_` became `m_size`,
+  `m_levels`, `m_non_finite`; a static `empty` became `kEmpty`), and the rest were turned off as style. The tests run
+  `bugprone-*` only, with the checks that fight their purpose off (constant seeds, replicated v2.14.2 arithmetic,
+  bit-exact comparison), and one unused variable in `test_abi.cpp` was removed. Both are clean. **Seen and not
+  changed:** two of the three `atoi` sites in `chapter10reader.cpp` do not check what they read, where
+  `ch10packetreader.cpp`'s does, and `~Ch10PacketReader` can throw if the setup mutex cannot be locked.
+- **`eng/gen_compile_flags.py`** defines `TMDQ_ABI_BUILD`: without it the header declares every ABI function `dllimport`
+  and clang reported each definition in `src/core/abi` as a redeclaration (75 findings, in the editor too).
+- **C3.** The naming rule is in the guide: PascalCase types and namespaces, camelCase functions, `m_snake_case` members,
+  `kPascalCase` constants, camelCase parameters and locals **in new code only** (319 existing snake_case ones are not
+  rewritten), the C ABI in C style. `.clang-tidy` checks all of it but the parameters and locals.
+- **C5.** `tmdq_core.cpp` put a project header before `<string>`, `frameprocessor.cpp`'s standard headers were not in
+  order and four test files kept `doctest.h` ahead of the project headers: reordered by the guide's rule (found by a
+  script over all 91 files; the ABI sources were right, their related header is `tmdq_abi.h`). The two "Static method"
+  comments, "End of file!" and the missing file header of `calibrationrequest.cpp` are gone.
+- **C7.** 90 native cases were named as identifiers (`Abi: theStructLayoutsArePinned`, `Constants: uiSamplePeriods`) or
+  had no suite (four TomlDocument cases): all are "Suite: words" now. Two guards in `RepoFilesTests` hold it: every case
+  is named that way, and every `-tc=` filter of a kept native mutant list still matches a case. Renaming had broken two
+  filters (`plot-envelope-index.json`'s `Abi: aSeries*`, `reader-lifetime.json`'s `*FinishedCallback*`) and, by the
+  kept-mutant guard, three mutants naming the renamed members: re-anchored.
+- **Checked.** Native, rebuilt with `-Rebuild`: **503** passed / 1 skipped (the benchmark), zero warnings. Managed
+  **397** passed / 1 skipped, app **686** passed / 34 not run. Mutation check, `eng\mutate.ps1`, managed,
+  `eng/mutants/native-case-names.json` (new): both filter mutants **CAUGHT** by the new guard. The harness refuses to
+  mutate a file under `tests/core` in a managed run (STALE: it takes it for a core source with an outdated DLL), so the
+  three case-name mutants (an identifier, no suite, one word) were run by hand against `RepoFilesTests` and each is
+  **CAUGHT** by the name guard. The naming rule was checked by a probe file that broke each kind of name. Baselines
+  moved: managed 395 to 397.
+
 #### The tests that read the process's memory no longer run beside other tests (follow-up audit)
 
 `ParsedCsvsGiveTheirNativeMemoryBack` (#321) was the first of a family: five tests, in `ArenaTests`, `FormatsTests`,

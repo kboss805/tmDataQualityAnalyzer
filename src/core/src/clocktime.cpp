@@ -35,6 +35,7 @@ std::string format(int baseDay, double baseTimeOffset, double elapsed, bool incl
         // total's fractional part (below one second) survived the day/hour/minute/second extraction
         // above untouched, so it can be pulled out independently without disturbing that (tested)
         // integer-field logic.
+        // NOLINTNEXTLINE(bugprone-incorrect-roundings): the fraction is not negative, and v2.14.2 rounded it this way
         const int msec = static_cast<int>((total - std::floor(total)) * 1000.0 + 0.5);
         result += std::format(".{:03}", msec);
     }

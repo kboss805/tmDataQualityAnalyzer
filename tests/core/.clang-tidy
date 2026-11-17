@@ -1,0 +1,20 @@
+# The tests are analysed for bugs only: doctest's macros and the tests' deliberate repetition raise thousands of style
+# findings under the product's checks (a test is written to read straight down, not to be modernised), so only
+# bugprone-* is on. The naming rule is not applied either: test helpers are named as the test reads. Off within it, and
+# why: constant seeds (a test must be reproducible), the generators' and tables' string lists (adjacent literals, and
+# the missing-comma heuristic cannot tell them), static test data and one-line helper structs (a failure to allocate
+# them ends the run either way), bit-for-bit memory comparison of doubles (that is the point of the comparison), and the
+# rounding and float loops that replicate v2.14.2's own arithmetic. InheritParentConfig keeps the product's header filter.
+InheritParentConfig: true
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-random-generator-seed,
+  -bugprone-suspicious-missing-comma,
+  -bugprone-throwing-static-initialization,
+  -bugprone-exception-escape,
+  -bugprone-suspicious-memory-comparison,
+  -bugprone-incorrect-roundings,
+  -bugprone-float-loop-counter

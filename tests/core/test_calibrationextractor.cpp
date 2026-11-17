@@ -17,11 +17,11 @@
 #include <thread>
 #include <vector>
 
-#include "doctest.h"
 #include "calibrationextractor.h"
 #include "calibrationprofile.h"
 #include "chapter10reader.h"
 #include "containerutil.h"
+#include "doctest.h"
 #include "framesetup.h"
 #include "framesync.h"
 #include "stepdetector.h"

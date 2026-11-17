@@ -675,10 +675,18 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
 
 ### Naming Conventions
 
-- **C++ (the core)**: classes PascalCase (`Chapter10Reader`, `FrameProcessor`); constants `kPascalCase` in namespaces
-  (`PCMConstants::kCommonWordLen`); members `m_` with snake_case (`m_frame_setup`); methods camelCase;
-  value types (`ProcessingParams`, `StreamJob`, `ProcessedStreamData`,
-  `CalibrationProfile`) camelCase fields, snake_case surviving only in the frame processor's private scan state.
+- **C++ (the core)**:
+  - Types, enums, type aliases and namespaces are PascalCase (`Chapter10Reader`, `FrameProcessor`, `PCMConstants`);
+    constants are `kPascalCase` in a namespace (`PCMConstants::kCommonWordLen`); functions and methods are camelCase;
+    private and protected members are `m_` with snake_case (`m_frame_setup`); value types (`ProcessingParams`,
+    `StreamJob`, `ProcessedStreamData`, `CalibrationProfile`) have camelCase fields.
+  - **Parameters and local variables are camelCase in new code.** The code that was there first has snake_case ones
+    (`total_bits`, `in_bit`), and they stay until the function is changed for another reason: there is no bulk rename,
+    and the frame processor's private scan state keeps its snake_case fields.
+  - The C ABI (`tmdq_*` functions and structs, `TMDQ_*` constants) is C style on purpose, and the few lower-case
+    namespaces that were there first (`tmdq`, `textformat`, `textparse`, `textfile`, `chart`, `clocktime`) are left.
+  - `.clang-tidy` (readability-identifier-naming) checks all of this except the parameters and locals, which is why
+    those are a rule for new code and not a finding.
 - **C#**: the .NET conventions - PascalCase types, members and properties, `_camelCase` private fields; tests named
   for what they hold, as sentences (`ABatchRunsEachFileInTurnKeepsEachAndExportsEachAsV214Did`). One namespace a
   file, file-scoped (`namespace X;`): `.editorconfig` makes a block one a build error. A view model writes its
@@ -709,11 +717,16 @@ cite, are items 1 to 4 below: a comment citing "plan rule 5" means item 4, one i
 
 Order includes in each `.cpp` / `.h` file as follows, with a blank line between groups:
 
-1. Related header (e.g., `#include "frameprocessor.h"` in `frameprocessor.cpp`)
-2. C system headers (e.g., `<time.h>`)
-3. C++ standard library headers (e.g., `<fstream>`, `<string>`)
+1. Related header (e.g., `#include "frameprocessor.h"` in `frameprocessor.cpp`; in the ABI's sources, `tmdq_abi.h`)
+2. C system headers (e.g., `<time.h>`) — alphabetized
+3. C++ standard library headers (e.g., `<fstream>`, `<string>`) — alphabetized
 4. irig106 library headers — keep in dependency order, not alphabetized
 5. Project headers (e.g., `"channeldata.h"`, `"constants.h"`) — alphabetized
+
+The tests follow it too, with no related header: `"doctest.h"` is one of the project headers, in its alphabetical place.
+A file with a conditional or a macro among its includes (`test_frameprocessor.cpp`'s `NOMINMAX` before `<windows.h>`)
+keeps them in groups of their own. Every source and header opens with its `@file` and `@brief` comment, and
+a function carries no "Static method" or "End of file" comment.
 
 ## Build System
 
@@ -767,9 +780,23 @@ clangd --check=src/core/src/frameprocessor.cpp
 which should report no diagnostics. (clangd 22 can still end in `1 errors` on a file where one of its own
 refactoring self-tests, a "tweak", fails: that line is not a problem in the code.)
 
-The repository has no `.clang-format`, so `.vscode/settings.json` runs clangd with `--fallback-style=none`: "Format
-Document" leaves a core file as it is, where the usual `llvm` fallback would reflow it to two-space LLVM style. The
-workspace recommends the C/C++ extension only for its Windows debugger (`cppvsdbg` in `launch.json`) and turns its
+**`.clang-format` and `.clang-tidy`** at the root (with `tests/core/` overriding both, and `third_party/` left
+unformatted) are tuned to the code as it is, not the other way round.
+- `.clang-format` holds the code's structure (Allman braces, 4 spaces, 120 columns, the pointer with the type, the
+  operator that breaks a line at the head of the next, no sorting of includes: the irig106 ones are in dependency
+  order). The code was written by hand, so what it does not hold exactly is the alignment of declarations and
+  trailing comments: formatting a whole existing file changes between a quarter and a third of its lines. Nothing is
+  formatted in bulk and no build checks it; format what you touch (`git clang-format`, or Format Selection). clangd's
+  `--fallback-style=none` in `.vscode/settings.json` applies only to a file with no `.clang-format`.
+- `.clang-tidy` is the check list the core and its tests pass today: the product has every family on but the checks
+  that are style the code does not follow or idioms of its own (each is listed in the file with its reason), the tests
+  only `bugprone-*`, and a finding the code holds on purpose carries a `NOLINT` with its reason beside it. It is analysis
+  only (`WarningsAsErrors` is empty); clangd shows it while you edit. To run it by hand, use the `clang-tidy` of Visual
+  Studio 2026's LLVM (20 or newer: the MSVC STL static-asserts on an older clang, which Visual Studio 2022's is):
+  `clang-tidy src/core/src/frameprocessor.cpp`, after `py eng/gen_compile_flags.py`. The generated flags define
+  `TMDQ_ABI_BUILD`; without it clang reports every ABI definition as redeclared without `dllimport`.
+
+The workspace recommends the C/C++ extension only for its Windows debugger (`cppvsdbg` in `launch.json`) and turns its
 IntelliSense engine off, so clangd is the only one; there is no `c_cpp_properties.json`.
 
 **Worktree trap.** The paths in `compile_flags.txt` are absolute into the checkout that
@@ -979,7 +1006,8 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
 projects' source and header lists against the files on disk (`NativeProjectTests`); the repository's own files
 (`RepoFilesTests`: the scripts, the installer script and the workflow ASCII-only, every .NET project's output out of a
 platform folder, both .NET test hosts merging the shared UTF-8 manifest, the workflow's time limit and read-only token,
-and every kept mutant in `eng/mutants` still naming text that is in its file exactly once); the recordings' channels (`FileTests`); runs of
+every kept mutant in `eng/mutants` still naming text that is in its file exactly once, every native case named
+"Suite: what it holds, in words", and every `-tc=` filter of a native mutant list still matching a case); the recordings' channels (`FileTests`); runs of
 the committed recordings against numbers v2.14.2 produced, every setting reaching the job, failures, observers, cancel
 and lifetimes (`RunTests`); calibration against the core's extractor (`CalibrationTests`, an extraction disposed from its own callback included); the file formats byte for
 byte against the core (`FormatsTests`); loading the DLL (`LibraryTests`, `IsolatedLoadTests` in a child process, the

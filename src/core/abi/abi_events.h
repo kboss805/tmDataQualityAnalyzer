@@ -99,6 +99,7 @@ private:
         {
             call();
         }
+        // NOLINTNEXTLINE(bugprone-empty-catch): nothing may unwind a host's thread, and nothing is left to tell
         catch (...)
         {
         }

@@ -111,7 +111,7 @@ public:
     explicit SeriesIndex(std::span<const double> ys);
 
     /// How many values it was built over.
-    std::size_t size() const { return size_; }
+    std::size_t size() const { return m_size; }
 
     /// The summary of @p ys[@p first, @p last), @p ys being the values the index was built over and every one in the
     /// run finite (nextNonFinite says where the first that is not lies). Requires @p first < @p last <= size().
@@ -128,9 +128,9 @@ private:
         double sum;
     };
 
-    std::size_t size_ = 0;
-    std::vector<std::vector<Node>> levels_;   ///< levels_[0]: one node a block; each level above, one a pair below.
-    std::vector<std::size_t> nonFinite_;      ///< The non-finite values' indices, in order.
+    std::size_t m_size = 0;
+    std::vector<std::vector<Node>> m_levels;      ///< m_levels[0]: one node a block; each level above, one a pair below.
+    std::vector<std::size_t> m_non_finite;        ///< The non-finite values' indices, in order.
 };
 
 /// The line and band of the series (@p xs, @p ys) in @p view. Only the paired prefix of the two is used. With

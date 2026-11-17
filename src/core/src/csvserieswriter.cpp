@@ -30,6 +30,7 @@ struct Cell
 std::int64_t toMilliseconds(double seconds)
 {
     const double ms = seconds * 1000.0;
+    // NOLINTNEXTLINE(bugprone-incorrect-roundings): half away from zero, as v2.14.2 wrote it
     return ms >= 0.0 ? static_cast<std::int64_t>(ms + 0.5) : static_cast<std::int64_t>(ms - 0.5);
 }
 

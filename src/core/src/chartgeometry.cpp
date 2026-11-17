@@ -242,17 +242,17 @@ void lookUpEnvelope(std::span<const double> xs, std::span<const double> ys, std:
 
 }  // namespace
 
-SeriesIndex::SeriesIndex(std::span<const double> ys) : size_(ys.size())
+SeriesIndex::SeriesIndex(std::span<const double> ys) : m_size(ys.size())
 {
     constexpr std::size_t kBlock = ChartConstants::kIndexBlockSamples;
     constexpr double      kInf   = std::numeric_limits<double>::infinity();
-    std::vector<Node> level((size_ + kBlock - 1) / kBlock, Node{kInf, -kInf, 0.0});
-    for (std::size_t i = 0; i < size_; ++i)
+    std::vector<Node> level((m_size + kBlock - 1) / kBlock, Node{kInf, -kInf, 0.0});
+    for (std::size_t i = 0; i < m_size; ++i)
     {
         const double v = ys[i];
         if (!std::isfinite(v))
         {
-            nonFinite_.push_back(i);
+            m_non_finite.push_back(i);
             continue;
         }
         Node& node = level[i / kBlock];
@@ -274,7 +274,7 @@ SeriesIndex::SeriesIndex(std::span<const double> ys) : size_(ys.size())
                 above[k]      = Node{std::min(a.min, b.min), std::max(a.max, b.max), a.sum + b.sum};
             }
         }
-        levels_.push_back(std::move(level));
+        m_levels.push_back(std::move(level));
         if (top)
         {
             break;
@@ -310,7 +310,7 @@ SeriesIndex::Summary SeriesIndex::summarize(std::span<const double> ys, std::siz
     std::size_t hi = tail_begin / kBlock;
     for (std::size_t level = 0; lo < hi; ++level)
     {
-        const std::vector<Node>& nodes = levels_[level];
+        const std::vector<Node>& nodes = m_levels[level];
         if (lo & 1U)
         {
             const Node& n = nodes[lo++];
@@ -333,8 +333,8 @@ SeriesIndex::Summary SeriesIndex::summarize(std::span<const double> ys, std::siz
 
 std::size_t SeriesIndex::nextNonFinite(std::size_t from) const
 {
-    const auto it = std::lower_bound(nonFinite_.begin(), nonFinite_.end(), from);
-    return it == nonFinite_.end() ? size_ : *it;
+    const auto it = std::lower_bound(m_non_finite.begin(), m_non_finite.end(), from);
+    return it == m_non_finite.end() ? m_size : *it;
 }
 
 SeriesGeometry buildSeriesGeometry(std::span<const double> xs, std::span<const double> ys, bool sortedX,
@@ -476,6 +476,7 @@ std::vector<double> timeTickValues(double lower, double upper, int count, double
     // sample, while its label is a time of day; snapping the X value puts ticks a round interval apart but starting
     // from whenever the recording happened to begin (a file starting at 10:30:17.046 produced ticks reading :17, :47).
     const double first = std::ceil((lower + origin) / step) * step;
+    // NOLINTNEXTLINE(bugprone-float-loop-counter): ticks a step apart on the clock; the bound has a tolerance for the sum
     for (double clock = first; clock <= upper + origin + step * 1e-9; clock += step)
     {
         ticks.push_back(clock - origin);

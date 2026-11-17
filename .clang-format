@@ -1,0 +1,46 @@
+# tmDataQualityAnalyzer - the C++ house style, as the core and its tests are written (docs/guide.md, Coding Conventions).
+#
+# TUNED TO THE CODE, NOT THE OTHER WAY ROUND: the structure is the code's (Allman braces, a namespace's brace left on the
+# namespace's line, 4 spaces, 120 columns, the pointer with the type, an operator that breaks an expression at the
+# head of the next line, no reflow of a comment, includes in the order the guide gives and NEVER sorted: the irig106
+# headers go in dependency order). The code was written by hand, so what it does not hold exactly is the alignment of
+# declarations and trailing comments: formatting a whole existing file still changes between a quarter and a third of its lines.
+# So nothing is formatted in bulk and no build or CI step checks it. Format what you touch:
+#
+#   git clang-format            (the lines of the staged diff)       or      Format Selection in the editor
+#
+# clang-format 19 (the one in Visual Studio 2022's LLVM) reads this file; clangd's "Format Document" uses it too.
+
+BasedOnStyle: LLVM
+Language: Cpp
+Standard: c++20
+IndentWidth: 4
+ContinuationIndentWidth: 4
+ColumnLimit: 120
+AccessModifierOffset: -4
+IndentCaseLabels: true
+PointerAlignment: Left
+ReflowComments: false
+SortIncludes: Never
+IncludeBlocks: Preserve
+
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterClass: true
+  AfterControlStatement: Always
+  AfterEnum: true
+  AfterFunction: true
+  AfterNamespace: false
+  AfterStruct: true
+  AfterUnion: true
+  AfterExternBlock: false
+  BeforeCatch: true
+  BeforeElse: true
+  BeforeWhile: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
+
+BreakBeforeBinaryOperators: NonAssignment
+AlignConsecutiveAssignments: Consecutive
+AllowShortLoopsOnASingleLine: true

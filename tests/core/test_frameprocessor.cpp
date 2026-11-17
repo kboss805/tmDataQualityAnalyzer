@@ -3,8 +3,8 @@
 
 #include <algorithm>
 #include <atomic>
-#include <cmath>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <initializer_list>
 #include <map>
@@ -21,12 +21,12 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-#include "doctest.h"
 #include "calibrationextractor.h"
 #include "calibrationprofile.h"
 #include "ch10packetreader.h"
 #include "chapter10reader.h"
 #include "constants.h"
+#include "doctest.h"
 #include "frameprocessor.h"
 #include "framesetup.h"
 #include "framesync.h"

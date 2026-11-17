@@ -1,0 +1,143 @@
+# tmDataQualityAnalyzer - static analysis of the C++ core (src/core) and its tests (tests/core).
+#
+# TUNED TO THE CODE: the checks on are the ones the code already passes or fails only in a few places that were looked at
+# (each of those carries a NOLINT with its reason, as the PCM byte-buffer walks always have), and each check that is off
+# says why. A new finding is therefore a finding about new code. The naming checks are the C++ naming rule of
+# docs/guide.md (Naming Conventions) for what the code already follows; what it does not (snake_case parameters and
+# locals, which are written camelCase in new code only) is not checked, so it is not rewritten in bulk.
+#
+# Analysis only: WarningsAsErrors is empty, nothing in the build or CI runs it. clangd runs it while you edit
+# (.vscode/settings.json passes --clang-tidy). To run it by hand over the core:
+#   py eng/gen_compile_flags.py                       (once per checkout and worktree: compile_flags.txt)
+#   clang-tidy src/core/src/frameprocessor.cpp        (the clang-tidy of Visual Studio's LLVM, 20 or newer: the MSVC STL
+#                                                      static-asserts on an older clang, which is what Visual Studio 2022's has)
+# Never --fix across the tree, and never on third_party/ (protected, and not matched by HeaderFilterRegex).
+
+# OFF, AND WHY (a check is listed here, in its group, or not at all):
+#  - Style the code does not follow and no one wants rewritten: modernize-use-trailing-return-type, -use-nodiscard,
+#    -use-designated-initializers, -use-ranges, -use-scoped-lock, -use-using (the C ABI header keeps its typedefs),
+#    -use-default-member-init, -use-auto, -use-emplace, -use-starts-ends-with, -use-integer-sign-comparison,
+#    -return-braced-init-list, -avoid-c-arrays; readability-magic-numbers (and its cppcoreguidelines twin: bit maths and
+#    the recording's constants), -identifier-length, -braces-around-statements, -implicit-bool-conversion,
+#    -math-missing-parentheses, -use-concise-preprocessor-directives, -uppercase-literal-suffix, -isolate-declaration,
+#    -use-std-min-max, -container-contains, -named-parameter, -redundant-casting, -avoid-nested-conditional-operator,
+#    -make-member-function-const, -convert-member-functions-to-static, -simplify-boolean-expr,
+#    -inconsistent-declaration-parameter-name; misc-const-correctness, -include-cleaner (the headers carry IWYU pragmas).
+#  - The code's own idioms: the core is indexed with operator[] throughout (a bounds-checked access is `at`, which the
+#    code reaches for where an index is not known good) and walks the recording's bytes by pointer
+#    (cppcoreguidelines-pro-bounds-avoid-unchecked-container-access, -pro-bounds-pointer-arithmetic,
+#    -pro-bounds-constant-array-index, -pro-bounds-array-to-pointer-decay); a struct's members are public (misc and
+#    cppcoreguidelines non-private-member-variables-in-classes); a reference member is how a helper reaches its owner
+#    (cppcoreguidelines-avoid-const-or-ref-data-members); a class with a destructor and no copy is non-copyable by its
+#    members (cppcoreguidelines-special-member-functions); a forwarding call is a plain call
+#    (cppcoreguidelines-missing-std-forward); the owner of a handle is a destructor
+#    (cppcoreguidelines-owning-memory).
+#  - Where the C ABI and the C library are the boundary: the ABI's enums are plain C and int-sized
+#    (cppcoreguidelines-use-enum-class, performance-enum-size) and its constants are macros
+#    (cppcoreguidelines-macro-usage); a handle crosses as a reinterpret_cast (cppcoreguidelines-pro-type-reinterpret-cast,
+#    -pro-type-const-cast); irig106's own structs are C (cppcoreguidelines-avoid-non-const-global-variables).
+#  - Not worth its noise on code that runs once per file or per click: performance-inefficient-string-concatenation and
+#    -inefficient-vector-operation (the settings files and the calibration text); bugprone-easily-swappable-parameters
+#    and -implicit-widening-of-multiplication-result (every (int, int) function; byte counts that are constants).
+# Everything else is on, and the code passes it: a finding is a finding about a change. The few the code does hold, on
+# purpose, carry a NOLINT with the reason beside it.
+
+Checks: >
+  bugprone-*,
+  cppcoreguidelines-*,
+  performance-*,
+  portability-*,
+  misc-*,
+  readability-*,
+  modernize-*,
+
+  -modernize-use-trailing-return-type,
+  -modernize-avoid-c-arrays,
+  -modernize-use-nodiscard,
+  -modernize-use-designated-initializers,
+  -modernize-use-ranges,
+  -modernize-use-scoped-lock,
+  -modernize-use-using,
+  -modernize-use-default-member-init,
+  -modernize-use-auto,
+  -modernize-use-emplace,
+  -modernize-use-starts-ends-with,
+  -modernize-use-integer-sign-comparison,
+  -modernize-return-braced-init-list,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-use-default-member-init,
+  -cppcoreguidelines-avoid-c-arrays,
+  -cppcoreguidelines-avoid-const-or-ref-data-members,
+  -cppcoreguidelines-non-private-member-variables-in-classes,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-type-const-cast,
+  -cppcoreguidelines-use-enum-class,
+  -cppcoreguidelines-macro-usage,
+  -cppcoreguidelines-special-member-functions,
+  -cppcoreguidelines-missing-std-forward,
+  -cppcoreguidelines-owning-memory,
+  -readability-magic-numbers,
+  -readability-identifier-length,
+  -readability-function-cognitive-complexity,
+  -readability-braces-around-statements,
+  -readability-implicit-bool-conversion,
+  -readability-math-missing-parentheses,
+  -readability-use-concise-preprocessor-directives,
+  -readability-uppercase-literal-suffix,
+  -readability-isolate-declaration,
+  -readability-use-std-min-max,
+  -readability-container-contains,
+  -readability-named-parameter,
+  -readability-redundant-casting,
+  -readability-avoid-nested-conditional-operator,
+  -readability-make-member-function-const,
+  -readability-convert-member-functions-to-static,
+  -readability-simplify-boolean-expr,
+  -readability-inconsistent-declaration-parameter-name,
+  -misc-non-private-member-variables-in-classes,
+  -misc-include-cleaner,
+  -misc-const-correctness,
+  -performance-enum-size,
+  -performance-inefficient-string-concatenation,
+  -performance-inefficient-vector-operation,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-implicit-widening-of-multiplication-result
+
+# Only this project's own headers. The path is anchored on src/core so that a vendored header (third_party/) and the
+# system's are not reported.
+HeaderFilterRegex: '[/\\]src[/\\]core[/\\](include|abi)[/\\].*\.h$'
+
+WarningsAsErrors: ''
+
+CheckOptions:
+  # The C++ naming rule (docs/guide.md, Naming Conventions): PascalCase types and namespaces, camelCase functions and
+  # methods, m_snake_case members, kPascalCase constants. The C ABI (tmdq_*, TMDQ_*) is C style on purpose, and the
+  # few lower-case namespaces that were there first are left (a namespace named for the code it holds).
+  readability-identifier-naming.ClassCase: CamelCase
+  readability-identifier-naming.StructCase: CamelCase
+  readability-identifier-naming.StructIgnoredRegexp: '^tmdq_.*'
+  readability-identifier-naming.EnumCase: CamelCase
+  readability-identifier-naming.EnumIgnoredRegexp: '^tmdq_.*'
+  readability-identifier-naming.EnumConstantCase: CamelCase
+  readability-identifier-naming.EnumConstantIgnoredRegexp: '^TMDQ_.*'
+  readability-identifier-naming.TypeAliasCase: CamelCase
+  readability-identifier-naming.NamespaceCase: CamelCase
+  readability-identifier-naming.NamespaceIgnoredRegexp: '^(tmdq|tmdq_test|textformat|textparse|textfile|chart|clocktime)$'
+  readability-identifier-naming.FunctionCase: camelBack
+  readability-identifier-naming.FunctionIgnoredRegexp: '^tmdq_.*'
+  readability-identifier-naming.MethodCase: camelBack
+  readability-identifier-naming.PrivateMemberPrefix: m_
+  readability-identifier-naming.PrivateMemberCase: lower_case
+  readability-identifier-naming.ProtectedMemberPrefix: m_
+  readability-identifier-naming.ProtectedMemberCase: lower_case
+  readability-identifier-naming.GlobalConstantPrefix: k
+  readability-identifier-naming.GlobalConstantCase: CamelCase
+  readability-identifier-naming.ConstexprVariablePrefix: k
+  readability-identifier-naming.ConstexprVariableCase: CamelCase
+  readability-identifier-naming.StaticConstantPrefix: k
+  readability-identifier-naming.StaticConstantCase: CamelCase

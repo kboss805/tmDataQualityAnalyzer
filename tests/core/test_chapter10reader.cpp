@@ -7,9 +7,9 @@
 #include <utility>
 #include <vector>
 
-#include "doctest.h"
-#include "chapter10reader.h"
 #include "channeldata.h"
+#include "chapter10reader.h"
+#include "doctest.h"
 #include "test_support.h"
 
 using namespace tmdq_test;

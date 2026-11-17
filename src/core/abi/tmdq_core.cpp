@@ -11,9 +11,9 @@
 
 #include "tmdq_abi.h"
 
-#include "abi_internal.h"
-
 #include <string>
+
+#include "abi_internal.h"
 
 namespace tmdq {
 
