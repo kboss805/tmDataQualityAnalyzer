@@ -259,6 +259,7 @@ function Run-Suite([string[]]$arguments, $variables) {
     $so = $p.StandardOutput.ReadToEndAsync(); $se = $p.StandardError.ReadToEndAsync()
     if (-not $p.WaitForExit($timeout * 1000)) {
         & taskkill /T /F /PID $p.Id 2>&1 | Out-Null
+        $p.WaitForExit(10000) | Out-Null   # the next build deletes this exe: the killed process must be gone first
         return @{ Hung = $true; Exit = -1; Failed = @(); Summary = "no result in $timeout s" }
     }
     $p.WaitForExit()

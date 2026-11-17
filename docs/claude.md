@@ -664,8 +664,8 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
     `StatusBrushes`) in `Views/Converters/`. Each folder of `Views/` mirrors the one of `ViewModels/` it shows.
   - `Services/`: the interfaces a view model asks the user through (file dialogs, dialogs, prompts, Help) and nothing
     else; `LayerTests` holds it to interfaces.
-  - `Platform/`: their Avalonia implementations, which the application hands in (`App.axaml.cs`, to the view models and
-    to `PlotView`) and a test replaces; `Modal` and `StorageDialogs` are what the hosts and the pickers share.
+  - `Platform/`: their Avalonia implementations, which the application hands in (`App.Compose` in `App.axaml.cs`, to the view models and
+    to `PlotView`; `CompositionRootTests` holds the wiring) and a test replaces; `Modal` and `StorageDialogs` are what the hosts and the pickers share.
 - **Assets**: `assets/` (the base manual, the icon, the UTF-8 manifest); the full manual, `UserManual.html`, at the
   root (Windows cannot hold it beside `usermanual.html`, whose name differs only in case); shipped settings in
   `settings/`; build and test scripts, and the props and targets every .NET project imports, in `eng/`; the vendored
@@ -988,6 +988,7 @@ helper every test cleans up and reads back through, which waits out a virus scan
 **The application** (`tests/TmDq.App.Tests`, on the headless platform with Skia drawing):
 
 - **The run:** `WalkingSkeletonTests` (Open to the drawn chart on the PRN sample, failures, the smoke report),
+  `CompositionRootTests` (`App.Compose`: every service the menu needs wired, the window's view model and the plot's prompts, the preferences read from their folder, beside the exe for a portable copy, and the theme following them and the menu; the smoke test keeping nothing and running the defaults end to end),
   `ProcessingTests` (the log, the progress dialog and its Cancel, its token source released with the run, the run's lines in the order the core promises: the job lines,
   the summary, then each thread's own lines in order, the reader's and the streams' interleaving as they come; a report the observer could not handle, said and not dropped), `SeveralStreamsTests`.
 - **Configure Streams:** `StreamRulesTests` and `StreamFilesTests` (the rules and files without a window),

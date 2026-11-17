@@ -1,0 +1,137 @@
+{
+  "suite": "app",
+  "args": [
+    "-class",
+    "TmDq.App.Tests.CompositionRootTests"
+  ],
+  "mutants": [
+    {
+      "id": "C1",
+      "file": "src/TmDq.App/App.axaml.cs",
+      "old": "        window.PlotView.Prompts = new WindowPlotPrompts(window.PlotView);\n",
+      "new": "",
+      "expect": "caught",
+      "note": "the plot is given no prompts: every question answered 'cancel'"
+    },
+    {
+      "id": "C2",
+      "file": "src/TmDq.App/App.axaml.cs",
+      "old": "            Picker = new StorageRecordingPicker(window),\n",
+      "new": "",
+      "expect": "caught",
+      "note": "Open has no file dialog"
+    },
+    {
+      "id": "C3",
+      "file": "src/TmDq.App/App.axaml.cs",
+      "old": "            Files = new StorageDataFilePicker(window),\n",
+      "new": "",
+      "expect": "caught",
+      "note": "Import CSV has no file dialog"
+    },
+    {
+      "id": "C4",
+      "file": "src/TmDq.App/App.axaml.cs",
+      "old": "            ExportDialog = new WindowExportDialog(window),\n",
+      "new": "",
+      "expect": "caught",
+      "note": "Export has no dialog"
+    },
+    {
+      "id": "C5",
+      "file": "src/TmDq.App/App.axaml.cs",
+      "old": "            TemplateFiles = new StorageTemplateFilePicker(window),\n",
+      "new": "",
+      "expect": "caught",
+      "note": "templates have no file dialogs"
+    },
+    {
+      "id": "C6",
+      "file": "src/TmDq.App/App.axaml.cs",
+      "old": "            TemplateDialogs = new WindowTemplateDialogs(window),\n",
+      "new": "",
+      "expect": "caught",
+      "note": "Apply Template has no confirmation dialog"
+    },
+    {
+      "id": "C7",
+      "file": "src/TmDq.App/App.axaml.cs",
+      "old": "            Help = new WindowHelpActions(window),\n",
+      "new": "",
+      "expect": "caught",
+      "note": "Help does nothing"
+    },
+    {
+      "id": "C8",
+      "file": "src/TmDq.App/App.axaml.cs",
+      "old": "            Preferences = preferences,\n",
+      "new": "",
+      "expect": "caught",
+      "note": "the view model keeps its own preferences, not the file's"
+    },
+    {
+      "id": "C9",
+      "file": "src/TmDq.App/App.axaml.cs",
+      "old": "        ApplyTheme(preferences.Current.IsDark);\n",
+      "new": "",
+      "expect": "caught",
+      "note": "the remembered theme is not applied at start"
+    },
+    {
+      "id": "C10",
+      "file": "src/TmDq.App/App.axaml.cs",
+      "old": "            if (e.PropertyName == nameof(MainWindowViewModel.IsDarkTheme)) ApplyTheme(vm.IsDarkTheme);",
+      "new": "            if (e.PropertyName == nameof(MainWindowViewModel.IsDarkTheme)) { }",
+      "expect": "caught",
+      "note": "the theme menu changes no window"
+    },
+    {
+      "id": "C11",
+      "file": "src/TmDq.App/App.axaml.cs",
+      "old": "        window.DataContext = vm;\n",
+      "new": "",
+      "expect": "caught",
+      "note": "the window has no view model"
+    },
+    {
+      "id": "C12",
+      "file": "src/TmDq.App/App.axaml.cs",
+      "old": "        PreferencesStore preferences = smokeReport is null\n",
+      "new": "        PreferencesStore preferences = smokeReport is not null\n",
+      "expect": "caught",
+      "note": "the smoke test reads and writes the preferences' folder, and a normal run keeps its in memory"
+    },
+    {
+      "id": "C13",
+      "file": "src/TmDq.App/App.axaml.cs",
+      "old": "        IStreamConfigurator configurator = smokeReport is null\n",
+      "new": "        IStreamConfigurator configurator = smokeReport is not null\n",
+      "expect": "caught",
+      "note": "the smoke test asks Configure Streams, which no one answers"
+    },
+    {
+      "id": "C14",
+      "file": "src/TmDq.App/App.axaml.cs",
+      "old": "            ImageExporter = new PlotViewImageExporter(window.PlotView),\n",
+      "new": "",
+      "expect": "survived",
+      "note": "an image export has no exporter: NOT held (it needs a shown plot and a file dialog's answer)"
+    },
+    {
+      "id": "C15",
+      "file": "src/TmDq.App/App.axaml.cs",
+      "old": "            ProcessingDialog = new WindowProcessingDialog(window),\n",
+      "new": "",
+      "expect": "survived",
+      "note": "no progress dialog: NOT held (a run does not need it, and the smoke run must not wait on one)"
+    },
+    {
+      "id": "C16",
+      "file": "src/TmDq.App/App.axaml.cs",
+      "old": "            AppRoot = appRoot,\n",
+      "new": "",
+      "expect": "survived",
+      "note": "the batch's settings folder is the executable's, not the one given: NOT held"
+    }
+  ]
+}
