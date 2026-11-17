@@ -1,0 +1,17 @@
+{
+  "suite": "managed",
+  "args": [
+    "-class",
+    "TmDq.Core.Tests.FormatsTests"
+  ],
+  "mutants": [
+    {
+      "id": "F1",
+      "file": "src/TmDq.Core/Formats/CsvFile.cs",
+      "old": "            Native.tmdq_csv_free(csv);",
+      "new": "            _ = csv;   // tmdq_csv_free dropped",
+      "expect": "caught",
+      "note": "a parsed CSV's native arrays are never freed: 30 parses are some 190 MB, which the managed commitment cannot account for"
+    }
+  ]
+}

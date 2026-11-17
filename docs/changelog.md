@@ -12,6 +12,25 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The CSV memory test measures what it says it does (a flake on the CI runner)
+
+`FormatsTests.ParsedCsvsGiveTheirNativeMemoryBack` failed on the CI runner of #320 ("private memory grew by 116 MiB over
+  thirty parses"; its limit was 100) and once locally after a mutation run, and passed on a rerun each time. Nothing had
+  changed in what it holds: parsing a CSV does not leak.
+
+- **Why it flaked.** The test took the process's private memory as the measure of the native arrays, but each parse also
+  makes managed copies of its arrays (about as many bytes again, on the large object heap), and how much of that garbage
+  the collector keeps committed after a full collection varies: 15 MiB on a development machine, more on a loaded
+  runner. So the managed heap's commitment was counted as a leak. **This is the explanation the numbers fit, not one
+  seen on the runner:** the runner's managed figure was not logged, so it is unconfirmed there.
+- **The fix.** The managed heap's growth in committed bytes
+  (`GC.GetGCMemoryInfo(GCKind.FullBlocking).TotalCommittedBytes`, before and after the same collections) is taken off
+  the private memory's growth, and the remainder is held to the same 100 MB. A leak of the 190 MB the arrays make is
+  still far over it; the failure message now says how the growth divides.
+- **Checked.** Mutation check, `eng\mutate.ps1`, managed (`eng/mutants/csv-parse-memory.json`): the free of a parsed
+  CSV's native arrays dropped is **CAUGHT** by this test. The test passes five times in a row alone, and the managed
+  suite: **390** passed / 1 skipped, no baseline moved. Native and app not affected.
+
 #### The developer guide is docs/guide.md (follow-up audit T4)
 
 `docs/claude.md` was loaded as instructions, as a nested CLAUDE.md (Windows names are case-insensitive): the first Read
